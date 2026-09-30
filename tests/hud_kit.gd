@@ -207,3 +207,21 @@ static func overlaps(named: Dictionary, slack: float = 0.5) -> Array:
 			if inter.size.x > slack and inter.size.y > slack:
 				out.append("%s overlaps %s by %.0fx%.0f" % [keys[i], keys[j], inter.size.x, inter.size.y])
 	return out
+
+
+## A left click at `at` (canvas coordinates: the headless window is tiny and scaled,
+## so the event goes in as already local to the viewport).
+static func click(at: Vector2) -> void:
+	var root: Window = Engine.get_main_loop().root
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.position = at
+		ev.global_position = at
+		root.push_input(ev, true)
+
+
+## A click in the middle of a control.
+static func click_on(c: Control) -> void:
+	click(c.get_global_rect().get_center())

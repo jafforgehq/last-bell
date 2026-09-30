@@ -146,3 +146,18 @@ func test_walls_and_walkers_keep_their_buttons() -> void:
 	Kit.update(ctx)
 	eq(Kit.gizmo_ids(ctx), [], "nothing selected")
 	Kit.free_all(ctx)
+
+
+func test_a_mouse_click_on_a_button_reaches_on_gizmo() -> void:
+	var ctx := Kit.build()
+	var p = Kit.person(ctx, "ana")
+	ctx.sim.medical.treat[p.id] = true
+	Kit.select(ctx, p)
+	Kit.update(ctx)
+	await Kit.settle()
+	await Kit.settle()
+	Kit.click_on(Kit.gizmo(ctx, "treat"))
+	eq(ctx.pressed, ["treat"], "a real click on Treat")
+	Kit.click_on(Kit.gizmo(ctx, "draft"))
+	eq(ctx.pressed, ["treat", "draft"], "and on Draft")
+	Kit.free_all(ctx)

@@ -1389,6 +1389,8 @@ func _away_text(p) -> String:
 
 ## [text, colour] for the Needs row, from the game hours since a meal and a drink.
 func _needs_of(p) -> Array:
+	if p.dead:
+		return ["–", INK3]
 	var bits: Array = []
 	var severe := false
 	if p.hunger_h >= STARVING_H:
@@ -1411,6 +1413,8 @@ func _needs_of(p) -> Array:
 
 ## [text, colour] for the Wounds row.
 func _wounds_of(p) -> Array:
+	if p.dead:
+		return ["–", INK3]
 	if p.wounds > 0:
 		return ["%d wound%s, bleeding" % [p.wounds, "" if p.wounds == 1 else "s"], DANGER]
 	if p.bleeding > 0.0:

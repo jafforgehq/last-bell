@@ -257,3 +257,33 @@ func test_the_dialog_fits_the_window_at_every_width() -> void:
 		eq(Kit.overlaps(inner), [], "%d px: cards and buttons apart" % size[0])
 		check(named.panel.encloses(named.send) and named.panel.encloses(named.cancel), "the buttons are inside the panel")
 		Kit.free_all(ctx)
+
+
+func test_the_mouse_picks_a_place_a_partner_and_sends() -> void:
+	var ctx := _ready_to_send()
+	ctx.hud.open_scavenge(ctx.hud.selection)
+	var d = ctx.hud.scavenge_dialog
+	await Kit.settle()
+	await Kit.settle()
+	Kit.click_on(d.site_cards.houses.card)
+	eq(d.site_id, "houses", "a click on a place chooses it")
+	Kit.click_on(d.site_cards.hardware.card)
+	eq(d.site_id, "houses", "a picked over place does not take the choice")
+	Kit.click_on(d.candidates.dez.row)
+	eq(d.second, Kit.person(ctx, "dez"), "a click on a survivor brings them")
+	Kit.click_on(d.candidates.dez.row)
+	eq(d.second, null, "and another takes them out again")
+	Kit.click_on(d.candidates.ruth.row)
+	Kit.click_on(d.send_button)
+	eq(ctx.sim.scavenge.sent, [{"ids": ["ana", "ruth"], "site": "houses"}], "the Send button sends the party")
+	Kit.free_all(ctx)
+
+
+func test_clicks_do_not_reach_the_game_behind_the_dialog() -> void:
+	var ctx := _ready_to_send()
+	ctx.hud.open_scavenge(ctx.hud.selection)
+	await Kit.settle()
+	var behind: Button = Kit.gizmo(ctx, "draft")
+	Kit.click_on(behind)
+	eq(ctx.pressed, [], "the Draft button under the dim does not fire")
+	Kit.free_all(ctx)

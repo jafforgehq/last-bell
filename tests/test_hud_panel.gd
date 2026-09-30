@@ -174,3 +174,16 @@ func test_a_wall_and_a_walker_keep_their_panels() -> void:
 	Kit.update(ctx)
 	check(Kit.texts(ctx.hud.inspect).has("Walker"), "a walker")
 	Kit.free_all(ctx)
+
+
+func test_the_dead_have_no_needs_or_wounds() -> void:
+	var ctx := Kit.build()
+	var p = _open(ctx, "walt")
+	p.hunger_h = 40.0
+	p.wounds = 2
+	p.bleeding = 4.0
+	p.dead = true
+	Kit.update(ctx)
+	eq(ctx.hud.inspect_refs.needs.text, "–", "nothing about needs")
+	eq(ctx.hud.inspect_refs.wounds.text, "–", "or wounds")
+	Kit.free_all(ctx)

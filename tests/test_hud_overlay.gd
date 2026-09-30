@@ -151,3 +151,14 @@ func test_the_overlay_fits_the_window_at_every_width() -> void:
 		var b := _button(ctx, "New game")
 		check(win.encloses(Kit.rect(b).grow(-0.5)) and r.encloses(Kit.rect(b)), "the button is inside it at %d px" % size[0])
 		Kit.free_all(ctx)
+
+
+func test_the_new_game_button_works_with_the_mouse() -> void:
+	_remove_save()
+	var ctx := _game()
+	_end(ctx, "defeat")
+	await Kit.settle()
+	await Kit.settle()
+	Kit.click_on(_button(ctx, "New game"))
+	eq(ctx.restarts.size(), 1, "a real click starts a new run")
+	Kit.free_all(ctx)

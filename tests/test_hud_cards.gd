@@ -129,3 +129,33 @@ func test_the_health_bar_stays() -> void:
 	var c := Kit.card(ctx, ruth)
 	near(c.hp.size.x, c.hp_bg.size.x * 0.5, 0.01, "half a bar")
 	Kit.free_all(ctx)
+
+
+func test_clicking_a_card_selects_the_person() -> void:
+	var ctx := Kit.build()
+	var ana = Kit.person(ctx, "ana")
+	Kit.update(ctx)
+	await Kit.settle()
+	var c := Kit.card(ctx, ana)
+	var r: Rect2 = c.card.get_global_rect()
+	Kit.click(r.position + Vector2(r.size.x * 0.5, 8.0))
+	await Kit.settle()
+	eq(ctx.selected.size(), 1, "one selection came through")
+	Kit.free_all(ctx)
+
+
+func test_clicking_a_status_mark_still_selects_the_person() -> void:
+	var ctx := Kit.build()
+	var ana = Kit.person(ctx, "ana")
+	ctx.sim.medical.marks[ana.id] = [_mark("wound", Hud.DANGER, "Bleeding")]
+	Kit.update(ctx)
+	await Kit.settle()
+	var c := Kit.card(ctx, ana)
+	var mark: Control = c.marks.get_child(0)
+	check(mark.get_global_rect().size.x > 4.0, "the mark has a size: %s" % str(mark.get_global_rect()))
+	Kit.click(mark.get_global_rect().get_center())
+	await Kit.settle()
+	eq(ctx.selected.size(), 1, "one selection came through")
+	if ctx.selected.size() == 1:
+		eq(ctx.selected[0].ref, ana, "it is Ana")
+	Kit.free_all(ctx)
