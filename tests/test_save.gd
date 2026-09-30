@@ -12,9 +12,10 @@ const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 const TMP_A := "user://test_save_a.json"
 const TMP_B := "user://test_save_b.json"
-## Reading a save back through JSON text loses about 1e-13 of a float (Godot's
-## own number parser), so the file round trips are compared to within this.
-const FILE_TOL := 1e-6
+## Saved data read back from text must be the very same numbers; a whole number
+## may come back as a float (JSON has one kind of number), so compare with a
+## tolerance too small to hide anything.
+const EXACT := 1e-300
 
 
 # ----------------------------------------------------------------- helpers --
@@ -224,11 +225,42 @@ func test_a_save_is_versioned_plain_json_data() -> void:
 		check(d.modules.has(name), "the %s module has a place" % name)
 	eq(_not_plain(d), "", "only plain data")
 	# through real JSON text
-	var text := JSON.stringify(d, "", true, true)
-	var back = JSON.parse_string(text)
-	eq(typeof(back), TYPE_DICTIONARY, "it is JSON")
-	eq(_diff(d, back, FILE_TOL), "", "and reads back the same")
+	var text := SaveGame.to_text(d)
+	check(JSON.new().parse(text) == OK, "the text is JSON")
+	eq(_diff(d, SaveGame.from_text(text), EXACT), "", "and reads back exactly the same")
 	g.world.free()
+
+
+func test_floats_survive_the_text_bit_for_bit() -> void:
+	var r := RandomNumberGenerator.new()
+	r.seed = 99
+	var floats: Array = [0.1 + 0.2, 1.0 / 3.0, PI, 1e300, 1e-300, 5e-324, 123456789012.34567, -17.25, 0.0, -0.0, 1.0e15, 2.0e15 + 0.5, 4503599627370497.0]
+	for i in 3000:
+		floats.append(r.randf() * pow(10.0, r.randi_range(-8, 8)))
+		floats.append(r.randfn(40.0, 15.0))
+		floats.append(float(r.randi_range(-1000, 1000)))
+	var data := {"list": floats, "nested": {"a": [floats.slice(0, 5)], "n": 7, "s": "text", "t": true, "z": null}}
+	var text := SaveGame.to_text(data)
+	check(JSON.new().parse(text) == OK, "the text is JSON")
+	var back := SaveGame.from_text(text)
+	var bad := 0
+	for i in floats.size():
+		var x: float = floats[i]
+		var y = back.list[i]
+		if typeof(y) != TYPE_FLOAT or y != x or (x == 0.0 and (1.0 / x) != (1.0 / y)):
+			bad += 1
+	eq(bad, 0, "every float comes back the very same (of %d)" % floats.size())
+	eq(back.nested.n, 7.0, "whole numbers come back as numbers")
+	eq(back.nested.s, "text", "text is text")
+	eq(back.nested.t, true, "and booleans booleans")
+	eq(back.nested.z, null, "and null null")
+	# numbers that cannot be in JSON are kept too (a save with one is refused when loaded)
+	var odd := SaveGame.from_text(SaveGame.to_text({"a": INF, "b": -INF, "c": NAN}))
+	check(is_inf(odd.a) and odd.a > 0.0 and is_inf(odd.b) and odd.b < 0.0 and is_nan(odd.c), "infinity and not-a-number survive")
+	# most numbers stay readable: only those a JSON reader cannot give back exactly are wrapped
+	check(text.count("$f") < floats.size() / 2, "most floats are plain numbers")
+	eq(SaveGame.from_text("not json"), {}, "text that is not JSON is nothing")
+	eq(SaveGame.from_text("[1, 2]"), {}, "and so is a list")
 
 
 func test_people_and_zombies_are_saved_in_the_documented_shape() -> void:
@@ -325,10 +357,10 @@ func test_a_busy_night_loads_and_plays_out_identically() -> void:
 	var b := _bare()
 	var c := _bare()
 	check(SaveGame.apply(b.sim, d), "it applies")
-	var text := JSON.stringify(d, "", true, true)
-	check(SaveGame.apply(c.sim, JSON.parse_string(text)), "it applies from JSON text")
+	var text := SaveGame.to_text(d)
+	check(SaveGame.apply(c.sim, SaveGame.from_text(text)), "it applies from JSON text")
 	eq(_diff(SaveGame.to_dict(b.sim), d), "", "the loaded sim saves exactly the same")
-	eq(_diff(SaveGame.to_dict(c.sim), d, FILE_TOL), "", "and the one read from text to within float rounding")
+	eq(_diff(SaveGame.to_dict(c.sim), d, EXACT), "", "and so does the one read from text")
 	# slots, targets, orders and tiles follow
 	eq(_slot_holders(b.sim), _slot_holders(sim_a), "the wall slots are held by the same walkers")
 	eq(b.world.solid_z, a.world.solid_z, "the breach has opened the same tiles for walkers")
@@ -351,9 +383,9 @@ func test_a_busy_night_loads_and_plays_out_identically() -> void:
 		if exact != "":
 			failures.append("after %d s the loaded game differs: %s" % [second + 1, exact])
 			break
-		if second < 20 and when_c == "":
+		if second < 30 and when_c == "":
 			Helpers.run(c.sim, 1.0)
-			when_c = _diff(da, SaveGame.to_dict(c.sim), FILE_TOL)
+			when_c = _diff(da, SaveGame.to_dict(c.sim), EXACT)
 			if when_c != "":
 				failures.append("after %d s the game loaded from text differs: %s" % [second + 1, when_c])
 	eq(_diff(sim_a.events, b.sim.events), "", "they made the same sounds and banners")
@@ -371,8 +403,8 @@ func test_a_day_with_a_party_out_loads_and_plays_out_identically() -> void:
 			check(_by_id(sim_a)[id].away != null, "%s is off the map" % id)
 	var d := SaveGame.to_dict(sim_a)
 	var b := _bare()
-	check(SaveGame.apply(b.sim, JSON.parse_string(JSON.stringify(d, "", true, true))), "it applies from JSON text")
-	eq(_diff(SaveGame.to_dict(b.sim), d, FILE_TOL), "", "the same state")
+	check(SaveGame.apply(b.sim, SaveGame.from_text(SaveGame.to_text(d))), "it applies from JSON text")
+	eq(_diff(SaveGame.to_dict(b.sim), d, EXACT), "", "the same state")
 	var ppl_a := _by_id(sim_a)
 	var ppl_b := _by_id(b.sim)
 	for id in ppl_a:
@@ -385,11 +417,11 @@ func test_a_day_with_a_party_out_loads_and_plays_out_identically() -> void:
 				linked = linked or is_same(party, ppl_b[id].away)
 			check(linked, "%s's away record is one of the loaded parties" % id)
 	for i in sim_a.people.size():
-		_same_fields(sim_a.people[i], b.sim.people[i], ["def", "look", "gun", "target", "repair", "away"], "person %s" % sim_a.people[i].id, FILE_TOL)
+		_same_fields(sim_a.people[i], b.sim.people[i], ["def", "look", "gun", "target", "repair", "away"], "person %s" % sim_a.people[i].id, EXACT)
 	for second in 40:
 		Helpers.run(sim_a, 1.0)
 		Helpers.run(b.sim, 1.0)
-		var diff := _diff(SaveGame.to_dict(sim_a), SaveGame.to_dict(b.sim), FILE_TOL)
+		var diff := _diff(SaveGame.to_dict(sim_a), SaveGame.to_dict(b.sim), EXACT)
 		if diff != "":
 			failures.append("after %d s the loaded game differs: %s" % [second + 1, diff])
 			break
@@ -417,12 +449,12 @@ func test_saving_at_arbitrary_moments_loads_to_the_same_game() -> void:
 			a.sim.toggle_draft(a.sim.people[0])
 		var b := _bare()
 		var d := SaveGame.to_dict(a.sim)
-		check(SaveGame.apply(b.sim, d), "seed %d: it applies" % m[0])
-		eq(_diff(SaveGame.to_dict(b.sim), d), "", "seed %d: same state after the load" % m[0])
+		check(SaveGame.apply(b.sim, SaveGame.from_text(SaveGame.to_text(d))), "seed %d: it applies from text" % m[0])
+		eq(_diff(SaveGame.to_dict(b.sim), d, EXACT), "", "seed %d: same state after the load" % m[0])
 		for second in 10:
 			Helpers.run(a.sim, 1.0)
 			Helpers.run(b.sim, 1.0)
-			var diff := _diff(SaveGame.to_dict(a.sim), SaveGame.to_dict(b.sim))
+			var diff := _diff(SaveGame.to_dict(a.sim), SaveGame.to_dict(b.sim), EXACT)
 			if diff != "":
 				failures.append("seed %d: after %d s the loaded game differs: %s" % [m[0], second + 1, diff])
 				break
@@ -492,7 +524,7 @@ func test_someone_who_left_or_was_lost_stays_gone_after_a_load() -> void:
 	ppl.ana.turned = true
 	Helpers.run(a.sim, 2.0)
 	var b := _bare()
-	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a.sim), "", true, true))
+	var d := SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(a.sim)))
 	check(SaveGame.apply(b.sim, d), "it applies")
 	var pb := _by_id(b.sim)
 	eq(pb.walt.away, {"kind": "exile"}, "the exile record is back")
@@ -509,11 +541,11 @@ func test_modules_keep_their_own_state_through_a_save() -> void:
 	var a := _rich_night(12, 1)
 	var b := _bare()
 	var d := SaveGame.to_dict(a.sim)
-	check(SaveGame.apply(b.sim, JSON.parse_string(JSON.stringify(d, "", true, true))), "it applies")
+	check(SaveGame.apply(b.sim, SaveGame.from_text(SaveGame.to_text(d))), "it applies")
 	for name in ["supplies", "medical", "scavenge", "scenario"]:
 		var saved: Dictionary = a.sim.get(name).save()
 		eq(_not_plain(saved), "", "%s saves plain data" % name)
-		eq(_diff(saved, b.sim.get(name).save(), FILE_TOL), "", "%s comes back as it was" % name)
+		eq(_diff(saved, b.sim.get(name).save(), EXACT), "", "%s comes back as it was" % name)
 	a.world.free()
 	b.world.free()
 
@@ -616,7 +648,7 @@ func test_files_are_written_and_read_back() -> void:
 	check(not FileAccess.file_exists(TMP_A + ".tmp"), "without a temporary file left behind")
 	var back := SaveGame.read(TMP_A)
 	eq(back.get("version"), 1, "it reads back as a save")
-	eq(_diff(SaveGame.to_dict(a.sim), back, FILE_TOL), "", "with the same content")
+	eq(_diff(SaveGame.to_dict(a.sim), back, EXACT), "", "with exactly the same content")
 	check(SaveGame.is_loadable(TMP_A), "it can be loaded")
 	var b := _bare()
 	check(SaveGame.apply(b.sim, back), "and applied")

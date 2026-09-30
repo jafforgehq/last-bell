@@ -20,9 +20,12 @@
 ## those classes is saved and loaded without a change here (a new kind of value
 ## in an untyped field may need a line in _person_in).
 ##
-## Godot's JSON reader is not exact to the last digit (about 1e-13 of a float is
-## lost in a round trip through text), which is far below anything the game
-## shows; a save loaded from the same data in memory is exact.
+## On disk it is JSON (to_text and from_text). Godot's own JSON reader is not
+## exact to the last digit (about 1e-13 of a float is lost), and a game loaded
+## with such a hair's difference can tip a timer over a step too soon and play
+## on differently. So a float that the reader would not give back exactly is
+## written as {"$f": "<its 64 bits as a whole number>"} and every other float as
+## the plain number it reads back as: a saved game reloads bit for bit.
 extends RefCounted
 
 const Sim := preload("res://scripts/sim/sim.gd")
@@ -160,15 +163,80 @@ static func _zombie_out(z) -> Dictionary:
 	return out
 
 
+## The text of saved data (see to_dict) as JSON: every float that Godot's reader
+## would not give back exactly is written as {"$f": "<its bits>"}, so that
+## from_text returns the very same numbers.
+static func to_text(data: Dictionary) -> String:
+	return JSON.stringify(_exact(data, JSON.new()), "", true, true)
+
+
+## The data in `text` as to_text wrote it, or an empty dictionary if it is not
+## JSON or not a dictionary. (Numbers that were whole come back as floats.)
+static func from_text(text: String) -> Dictionary:
+	var json := JSON.new()
+	if json.parse(text) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return {}
+	return _unwrap(json.data)
+
+
+static func _exact(value, json: JSON):
+	match typeof(value):
+		TYPE_FLOAT:
+			if is_finite(value):
+				if value == floorf(value) and absf(value) < 1.0e15 and (value != 0.0 or _bits(value) == 0):
+					return value
+				if json.parse(JSON.stringify(value, "", true, true)) == OK and json.data == value:
+					return value
+			return {"$f": str(_bits(value))}
+		TYPE_ARRAY:
+			var list: Array = []
+			for e in value:
+				list.append(_exact(e, json))
+			return list
+		TYPE_DICTIONARY:
+			var dict := {}
+			for k in value:
+				dict[k] = _exact(value[k], json)
+			return dict
+	return value
+
+
+static func _unwrap(value):
+	match typeof(value):
+		TYPE_DICTIONARY:
+			if value.size() == 1 and typeof(value.get("$f")) == TYPE_STRING and String(value["$f"]).is_valid_int():
+				return _from_bits(String(value["$f"]).to_int())
+			var dict := {}
+			for k in value:
+				dict[k] = _unwrap(value[k])
+			return dict
+		TYPE_ARRAY:
+			var list: Array = []
+			for e in value:
+				list.append(_unwrap(e))
+			return list
+	return value
+
+
+static func _bits(x: float) -> int:
+	return PackedFloat64Array([x]).to_byte_array().decode_s64(0)
+
+
+static func _from_bits(bits: int) -> float:
+	var buffer := PackedByteArray()
+	buffer.resize(8)
+	buffer.encode_s64(0, bits)
+	return buffer.decode_double(0)
+
+
 ## Writes the state of `sim` to `path`; false if it cannot (or the state is not
 ## one that could be loaded back). The file is written beside it first and moved
 ## into place, so a crash half way never leaves a broken save.
 static func write(sim, path: String) -> bool:
-	var text := JSON.stringify(to_dict(sim), "", true, true)
+	var text := to_text(to_dict(sim))
 	# never replace a good save with one that could not be loaded back (a bad
-	# number in the game turns into null in the text)
-	var check := JSON.new()
-	if check.parse(text) != OK or typeof(check.data) != TYPE_DICTIONARY or _parse(sim, check.data) == null:
+	# number in the game would not survive the text)
+	if _parse(sim, from_text(text)) == null:
 		return false
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
@@ -195,10 +263,7 @@ static func write(sim, path: String) -> bool:
 static func read(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(path)) != OK:
-		return {}
-	return json.data if typeof(json.data) == TYPE_DICTIONARY else {}
+	return from_text(FileAccess.get_file_as_string(path))
 
 
 ## Whether the file at `path` is a save this version can load (right version and
