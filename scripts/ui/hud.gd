@@ -5,6 +5,9 @@ extends Control
 
 const GD := preload("res://scripts/game_data.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
+const GameOver := preload("res://scripts/ui/game_over.gd")
+const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 const INK := Color("#ece6d8")
 const INK2 := Color("#b7af9e")
@@ -100,6 +103,17 @@ var on_speed: Callable
 var on_gizmo: Callable
 var on_alert: Callable
 var on_sound: Callable
+## Starting a new run or loading a save takes a scene reload, which is the
+## game's business: by default the choice is put in Engine meta ("run") for
+## main.gd and the scene is reloaded; a test sets this to see the choice instead.
+var restart: Callable
+## Where the game's saves are (the newest one is offered when a run is lost).
+var save_paths: Array = [SaveGame.AUTO_PATH, SaveGame.QUICK_PATH]
+## The open scavenging dialog and the game-over overlay, or null.
+var scavenge_dialog = null
+var game_over = null
+var _paused_for_dialog := false
+var _speed_before_dialog := 0
 
 var res_panel: PanelContainer
 var res_grid: GridContainer
@@ -908,6 +922,8 @@ func _gizmo_sig() -> String:
 ## Whether `p` could be sent scavenging now: on the map, on their feet, not held
 ## by an order and not too ill to travel. (The scavenging module has the last say.)
 func is_free_to_go(p) -> bool:
+	if sim_ref != null and sim_ref.scavenge.has_method("can_go"):
+		return sim_ref.scavenge.can_go(p)
 	if p.dead or p.downed or p.away != null:
 		return false
 	if p.drafted and p.order != null:
@@ -1017,6 +1033,94 @@ func _build_hint() -> void:
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hint.offset_bottom = -96
+
+
+# ----------------------------------------------- dialog and game over --
+
+## Opens the "Send a scavenging party" dialog for the selection (a person, or
+## nothing: then the first free survivor leads). The game is paused meanwhile.
+func open_scavenge(sel) -> void:
+	if scavenge_dialog != null or game_over != null or sim_ref == null:
+		return
+	var who = sel.ref if sel != null and sel.kind == "person" else null
+	var d := Dialog.new()
+	scavenge_dialog = d
+	add_child(d)
+	d.closed.connect(_on_dialog_closed)
+	d.setup(self, sim_ref, who)
+	_speed_before_dialog = last_speed
+	_paused_for_dialog = last_speed > 0
+	if _paused_for_dialog and on_speed.is_valid():
+		on_speed.call(0)
+
+
+func _on_dialog_closed() -> void:
+	scavenge_dialog = null
+	if _paused_for_dialog and on_speed.is_valid():
+		on_speed.call(_speed_before_dialog)
+	_paused_for_dialog = false
+
+
+func _show_game_over(sim) -> void:
+	if scavenge_dialog != null:
+		scavenge_dialog.close()
+	game_over = GameOver.new()
+	add_child(game_over)
+	game_over.setup(self, sim)
+
+
+## Begins a new run or loads a save: `meta` is what main.gd reads from Engine
+## meta "run" ({"difficulty", "seed"} or {"load": path}) when the scene reloads.
+func start_run(meta: Dictionary) -> void:
+	if restart.is_valid():
+		restart.call(meta)
+		return
+	Engine.set_meta("run", meta)
+	var tree := get_tree()
+	if tree != null and tree.current_scene != null:
+		tree.reload_current_scene()
+
+
+## The newest save that exists, or "".
+func last_save() -> String:
+	var best := ""
+	var best_time := -1
+	for path in save_paths:
+		if FileAccess.file_exists(path):
+			var t := FileAccess.get_modified_time(path)
+			if t > best_time:
+				best_time = t
+				best = path
+	return best
+
+
+## A button in the game's style for the dialog and the game-over screen: the main
+## choice in gold, the others dark.
+func _button(text: String, primary: bool = false) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(112, 40)
+	b.add_theme_font_override("font", Fonts.cond(700, 1))
+	b.add_theme_font_size_override("font_size", 15)
+	var ink := ACCENT_INK if primary else INK
+	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
+		b.add_theme_color_override(state, ink)
+	b.add_theme_color_override("font_disabled_color", Color(ink, 0.5))
+	var looks := {
+		"normal": ACCENT if primary else PANEL,
+		"hover": ACCENT.lightened(0.14) if primary else PANEL_HI,
+		"pressed": ACCENT.darkened(0.08) if primary else PANEL_HI,
+		"disabled": Color(ACCENT, 0.28) if primary else PANEL,
+	}
+	for state in looks:
+		var st := _style(looks[state], 6, ACCENT if primary else (LINE2 if state == "hover" else LINE), false)
+		st.set_content_margin_all(0)
+		st.content_margin_left = 16
+		st.content_margin_right = 16
+		b.add_theme_stylebox_override(state, st)
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	return b
 
 
 # ------------------------------------------------------------------ layout --
@@ -1145,6 +1249,8 @@ func _fill_marks(c: Dictionary, marks: Array) -> void:
 
 func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	sim_ref = sim
+	if sim.over != "" and game_over == null:
+		_show_game_over(sim)
 	for s in STORES:
 		var v := roundi(float(sim.stock[s[0]]))
 		var lbl: Label = res_values[s[0]]

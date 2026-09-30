@@ -11,6 +11,7 @@ func _color(label: Label) -> Color:
 func test_food_and_water_show_the_days_left_under_the_number() -> void:
 	var ctx := Kit.build()
 	ctx.sim.supplies.days = {"food": 6.4, "water": 13.9}
+	ctx.sim.stock.food = 41.0
 	Kit.update(ctx)
 	eq(ctx.hud.res_days.food.text, "6 d", "food days, rounded down")
 	eq(ctx.hud.res_days.water.text, "13 d", "water days")
@@ -45,6 +46,7 @@ func test_medicine_and_ammo_keep_their_warning_colours() -> void:
 	var sim = ctx.sim
 	sim.stock.meds = 2.0
 	sim.stock.ammo = 59.0
+	sim.stock.scrap = 24.0
 	Kit.update(ctx)
 	eq(_color(ctx.hud.res_values.meds), Hud.WARN, "meds under 3")
 	eq(_color(ctx.hud.res_values.ammo), Hud.WARN, "ammo under 60")

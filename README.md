@@ -13,7 +13,7 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`.
 | Drag, or W A S D | Pan |
 | Scroll or pinch | Zoom |
 | R / P / F / C | Draft or release / to post / repair / follow |
-| T / X | Treat the wounded or infected / send an infected person out |
+| T / X / G | Treat the wounded or infected / send an infected person out / send a scavenging party |
 | Space, 1, 2, 3 | Pause, normal, fast, fastest |
 | Tab | Next person |
 | Esc | Clear selection |

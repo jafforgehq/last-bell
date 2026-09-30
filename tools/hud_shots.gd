@@ -2,7 +2,8 @@
 ## the real game, swaps in the test kit's fake modules, sets a state by hand and
 ## saves the window. Windowed, from the repo root:
 ##   Godot --path . --script res://tools/hud_shots.gd -- --case=cards --out=/tmp/cards.png [--size=980x700]
-## Cases: cards, panel, dialog, over (see the _case_ functions).
+## Cases: cards, panel, down, dialog, over (see the _case_ functions); add --real to keep the
+## game's own modules instead of the fakes (then a case must not touch the fakes' tables).
 extends SceneTree
 
 const Kit := preload("res://tests/hud_kit.gd")
@@ -27,12 +28,14 @@ func _run() -> void:
 	root.add_child(_main)
 	await process_frame
 	var sim = _main.sim
-	sim.supplies = Kit.FakeSupplies.new()
-	sim.medical = Kit.FakeMedical.new()
-	sim.scavenge = Kit.FakeScavenge.new()
-	sim.scenario = Kit.FakeScenario.new()
-	for m in [sim.supplies, sim.medical, sim.scavenge, sim.scenario]:
-		m.setup(sim)
+	# the fakes let a case set what the modules report by hand; --real keeps the game's own modules
+	if not "--real" in OS.get_cmdline_user_args():
+		sim.supplies = Kit.FakeSupplies.new()
+		sim.medical = Kit.FakeMedical.new()
+		sim.scavenge = Kit.FakeScavenge.new()
+		sim.scenario = Kit.FakeScenario.new()
+		for m in [sim.supplies, sim.medical, sim.scavenge, sim.scenario]:
+			m.setup(sim)
 	_main.speed = 0
 	for i in 12:
 		await process_frame
@@ -112,3 +115,45 @@ func _case_down() -> void:
 	marcus.activity = "Resting in the infirmary"
 	sim.medical.marks["marcus"] = [_mark("down", hud.DANGER, "Down"), _mark("resting", hud.INFO, "Resting")]
 	_select("marcus")
+
+
+## The scavenging dialog with a place chosen and a second person along.
+func _case_dialog() -> void:
+	var sim = _main.sim
+	var fake: bool = sim.scavenge is Kit.FakeScavenge
+	if fake:
+		sim.scavenge.can = true
+		sim.scavenge.list = Kit.sample_sites()
+	else:
+		sim.scavenge._record_raid("hardware")
+	_select("ana")
+	_main.hud.open_scavenge(_main.hud.selection)
+	var d = _main.hud.scavenge_dialog
+	d.choose_site("houses")
+	d.toggle_second(_person("dez"))
+
+
+## The same dialog when nobody can go.
+func _case_dialog_no() -> void:
+	var sim = _main.sim
+	sim.scavenge.can = false
+	sim.scavenge.reason = "Too late: parties leave between 06:30 and 10:00."
+	_select("ana")
+	_main.hud.open_scavenge(_main.hud.selection)
+
+
+## The end of the run.
+func _case_over() -> void:
+	var sim = _main.sim
+	sim.kills = 57
+	sim.scenario.today = 9
+	sim.phase = "night"
+	_person("dez").dead = true
+	_person("walt").dead = true
+	_person("walt").turned = true
+	_person("hector").dead = true
+	_person("hector").away = {"kind": "exile"}
+	_person("marcus").dead = true
+	_person("ana").dead = true
+	_person("ruth").dead = true
+	sim.over = "defeat"

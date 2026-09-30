@@ -335,6 +335,9 @@ func _pick(w: Vector2):
 
 
 func _gizmo(g: String) -> void:
+	if g == "scavenge":
+		hud.open_scavenge(selection)
+		return
 	var sel = selection
 	if sel == null:
 		return
@@ -471,6 +474,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("treat")
 			KEY_X:
 				_gizmo("sendout")
+			KEY_G:
+				_gizmo("scavenge")
 			KEY_F5:
 				_quick_save()
 			KEY_F9:
