@@ -59,7 +59,7 @@ func _draw() -> void:
 	# selection
 	if sel != null and (sel.kind == "person" or sel.kind == "zombie"):
 		var e = sel.ref
-		if not (sel.kind == "zombie" and e.state == "dead"):
+		if not (sel.kind == "zombie" and e.state == "dead") and not (sel.kind == "person" and e.away != null):
 			var a := _screen(e.x - 0.48, e.y - 0.92)
 			var b := _screen(e.x + 0.48, e.y + 0.42)
 			var L := maxf(5.0, (b.x - a.x) * 0.22)
@@ -92,6 +92,8 @@ func _draw() -> void:
 		var font := Fonts.cond(600)
 		var fs := 12 if z >= 34.0 else 11
 		for p in sim.people:
+			if p.away != null:
+				continue # off the map on a trip: nothing to label
 			var pos := _screen(p.x, p.y + 0.52)
 			if pos.x < -40 or pos.x > vp.x + 40 or pos.y < -20 or pos.y > vp.y + 20:
 				continue
