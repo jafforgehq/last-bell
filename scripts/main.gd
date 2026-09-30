@@ -320,7 +320,7 @@ func _pick(w: Vector2):
 	var ppl: Array = sim.people.duplicate()
 	ppl.sort_custom(func(a, b): return a.y > b.y)
 	for p in ppl:
-		if p.away == null and hit.call(p):
+		if p.away == null and not p.turned and hit.call(p):
 			return {"kind": "person", "ref": p}
 	var zs: Array = []
 	for z in sim.zombies:

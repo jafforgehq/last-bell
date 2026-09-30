@@ -1078,6 +1078,23 @@ func test_a_new_order_cancels_a_send_out() -> void:
 	g.world.free()
 
 
+func test_ordering_treatment_cancels_a_send_out() -> void:
+	var g := _clinic()
+	var sim = g.sim
+	var walt = _who(sim, "walt")
+	_put(sim, walt, 28.0, 32.0, false)
+	_infect(sim, walt, 7.0, 10.0)
+	sim.medical.gizmo("sendout", _sel(walt))
+	Helpers.run(sim, 0.5)
+	eq(sim.medical.sendouts.size(), 1, "on his way out")
+	check(sim.medical.gizmo("treat", _sel(walt)), "then the player decides to treat him instead")
+	eq(sim.medical.sendouts.size(), 0, "he is not leaving any more")
+	check(sim.medical.treat_orders.has("walt"), "and a treatment is ordered")
+	Helpers.run(sim, 20.0)
+	check(walt.away == null and not walt.dead, "he is still here")
+	g.world.free()
+
+
 func test_a_resting_infected_person_can_be_sent_out_and_gets_up() -> void:
 	var g := _clinic()
 	var sim = g.sim
