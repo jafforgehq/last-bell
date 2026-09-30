@@ -12,6 +12,9 @@
 ##   --seed=N         the first seed                                      default 1
 ##   --fast           step the rules at 15 Hz instead of 30 (about twice as fast)
 ##   --hz=N           step at N Hz (overrides --fast)
+##   --jobs=N         play N games at a time in worker processes (default 1; a
+##                    game that collapses is slow, so a batch is worth spreading)
+##   --seeds=a,b,c    play exactly these seeds instead of --games and --seed
 ##   --policy=none    nobody gives any order: what the colony does alone
 ##   --verbose        print what the policy did and who was lost, game by game
 ##   --out=path.json  also write everything (every game, every day) as JSON
@@ -365,8 +368,9 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var opts := {"games": "8", "days": "10", "difficulty": "1", "seed": "1", "out": "", "hz": "30", "policy": "default"}
+	var opts := {"games": "8", "days": "10", "difficulty": "1", "seed": "1", "out": "", "hz": "30", "policy": "default", "jobs": "1", "seeds": ""}
 	var verbose := false
+	var quiet := false
 	for arg in OS.get_cmdline_user_args():
 		var text := String(arg).trim_prefix("--")
 		var kv := text.split("=", true, 1)
@@ -374,33 +378,129 @@ func _run() -> void:
 			opts["hz"] = "15"
 		elif kv[0] == "verbose":
 			verbose = true
+		elif kv[0] == "quiet":
+			quiet = true
 		elif opts.has(kv[0]) and kv.size() > 1:
 			opts[kv[0]] = kv[1]
 			if kv[0] == "hz":
 				opts["hz_set"] = "1"
-	var games_n := maxi(1, int(opts.games))
 	var days := maxi(1, int(opts.days))
 	var difficulty := clampi(int(opts.difficulty), 0, 2)
-	var first_seed := int(opts.seed)
 	var hz := clampf(float(opts.hz), 5.0, 60.0)
 	var orders: bool = opts.policy != "none"
-	var names := ["Story", "Standard", "Brutal"]
-	print("Last Bell balance: %d games of %d days, %s, seeds from %d, %d Hz, %s" % [games_n, days, names[difficulty], first_seed, roundi(hz), "default policy" if orders else "no orders"])
-	print("")
-	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats  secs")
+	var jobs := clampi(int(opts.jobs), 1, 32)
+	var seeds: Array = []
+	if String(opts.seeds) != "":
+		for t in String(opts.seeds).split(","):
+			if t.is_valid_int():
+				seeds.append(t.to_int())
+	else:
+		for i in maxi(1, int(opts.games)):
+			seeds.append(int(opts.seed) + i)
+	if not quiet:
+		var names := ["Story", "Standard", "Brutal"]
+		print("Last Bell balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
+			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), "default policy" if orders else "no orders",
+			(", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
+		print("")
+		if jobs == 1 or seeds.size() == 1:
+			_print_header()
 	var games: Array = []
-	for i in games_n:
-		var r := play(first_seed + i, difficulty, days, hz, orders)
-		games.append(r)
-		var last: Dictionary = r.rows[r.rows.size() - 1]
-		print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5.1f" % [
-			i + 1, r.seed, r.outcome, r.day, last.alive, last.dead, last.turned, last.left,
-			last.food, last.water, last.scrap, last.meds, last.ammo,
-			100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.took])
-		if verbose:
-			for note in r.notes:
-				print("        day %2d %05.2f  %s" % [note.day, note.hour, note.text])
+	if jobs > 1 and seeds.size() > 1 and not quiet:
+		games = _play_in_workers(seeds, jobs, days, difficulty, hz, orders)
+		_print_header()
+		for i in games.size():
+			_print_game(i + 1, games[i], verbose)
+	else:
+		for i in seeds.size():
+			var r := play(seeds[i], difficulty, days, hz, orders)
+			games.append(r)
+			if not quiet:
+				_print_game(i + 1, r, verbose)
 	var summary := summarise(games)
+	if not quiet:
+		_print_summary(summary)
+	if opts.out != "":
+		var f := FileAccess.open(String(opts.out), FileAccess.WRITE)
+		if f == null:
+			printerr("Could not write %s" % opts.out)
+		else:
+			f.store_string(JSON.stringify({"args": opts, "games": games, "summary": summary}, "  ", true, true))
+			f.close()
+			if not quiet:
+				print("")
+				print("Wrote %s" % opts.out)
+	quit(0)
+
+
+## Plays the seeds in `jobs` worker processes (this same script, with --quiet)
+## and gathers their games in seed order. A worker that cannot be started or
+## leaves no result has its seeds played here instead.
+func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: float, orders: bool) -> Array:
+	var exe := OS.get_executable_path()
+	var project := ProjectSettings.globalize_path("res://")
+	var scratch := ProjectSettings.globalize_path("user://")
+	var workers: Array = []
+	for w in mini(jobs, seeds.size()):
+		var mine: Array = []
+		var i := w
+		while i < seeds.size():
+			mine.append(seeds[i])
+			i += jobs
+		var out := scratch.path_join("balance_worker_%d_%d.json" % [OS.get_process_id(), w])
+		var names: Array = []
+		for sd in mine:
+			names.append(str(sd))
+		var args := ["--headless", "--quiet", "--path", project, "--script", "res://tools/balance.gd", "--",
+			"--seeds=%s" % ",".join(names), "--days=%d" % days, "--difficulty=%d" % difficulty, "--hz=%s" % str(hz),
+			"--policy=%s" % ("default" if orders else "none"), "--quiet", "--out=%s" % out]
+		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
+	while true:
+		var running := 0
+		for w in workers:
+			if w.pid > 0 and OS.is_process_running(w.pid):
+				running += 1
+		if running == 0:
+			break
+		OS.delay_msec(300)
+	var games: Array = []
+	for w in workers:
+		var got := 0
+		if FileAccess.file_exists(w.out):
+			var json := JSON.new()
+			if json.parse(FileAccess.get_file_as_string(w.out)) == OK and typeof(json.data) == TYPE_DICTIONARY:
+				for g in json.data.get("games", []):
+					games.append(g)
+					got += 1
+			DirAccess.remove_absolute(w.out)
+		if got != w.seeds.size():
+			printerr("A worker gave %d of its %d games; playing the seeds here" % [got, w.seeds.size()])
+			var have := {}
+			for g in games:
+				have[int(g.seed)] = true
+			for sd in w.seeds:
+				if not have.has(sd):
+					games.append(play(sd, difficulty, days, hz, orders))
+	games.sort_custom(func(a, b): return a.seed < b.seed)
+	return games
+
+
+func _print_header() -> void:
+	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats  secs")
+
+
+func _print_game(n: int, r: Dictionary, verbose: bool) -> void:
+	var last: Dictionary = r.rows[r.rows.size() - 1]
+	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5.1f" % [
+		n, r.seed, r.outcome, r.day, last.alive, last.dead, last.turned, last.left,
+		last.food, last.water, last.scrap, last.meds, last.ammo,
+		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.took])
+	if verbose:
+		for note in r.notes:
+			print("        day %2d %05.2f  %s" % [note.day, note.hour, note.text])
+
+
+func _print_summary(summary: Dictionary) -> void:
 	print("")
 	print("Survived %d of %d games; median day reached %d; lost per game: %.2f died, %.2f turned, %.2f sent out" % [
 		summary.survived, summary.games, summary.median_day, summary.mean_lost.dead, summary.mean_lost.turned, summary.mean_lost.left])
@@ -412,13 +512,3 @@ func _run() -> void:
 	for c in summary.curve:
 		print("%4d %5d %5.1f | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %8.1f %5.0f" % [
 			c.day, c.games, c.alive, c.food, c.water, c.scrap, c.meds, c.ammo, 100.0 * c.wall_hp / maxf(1.0, c.wall_max), c.walkers, c.kills])
-	if opts.out != "":
-		var f := FileAccess.open(String(opts.out), FileAccess.WRITE)
-		if f == null:
-			printerr("Could not write %s" % opts.out)
-		else:
-			f.store_string(JSON.stringify({"args": opts, "games": games, "summary": summary}, "  ", true, true))
-			f.close()
-			print("")
-			print("Wrote %s" % opts.out)
-	quit(0)
