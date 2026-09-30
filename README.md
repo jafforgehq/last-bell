@@ -91,7 +91,36 @@ given moment without touching the game:
 | `--cam=x,y,zoom` | Place the camera (tiles, px per tile) |
 | `--select=ruth` | Select a person |
 | `--breach=N` | Break wall segment N |
+| `--damage=N:F` | Leave wall segment N at the fraction F of its health |
+| `--new=D` | Start a new run at difficulty D (0 story, 1 standard, 2 brutal) |
+| `--seed=N` | The seed of the new run (the same seed plays the same game) |
+| `--load=path` | Load a save (a file path, or `user://quicksave.json`) |
 | `--selftest` | Drive the real input handlers once |
 | `--frames` | Frames to wait before the shot |
 
 The run prints average fps.
+
+## Saving
+
+F5 saves to `user://quicksave.json` and F9 loads it. The game also saves to
+`user://autosave.json` at each dawn (not in screenshot runs). A save is JSON and
+holds the whole state of the rules, so a loaded game carries on the way the
+saved one would have. A save that cannot be loaded (damaged, or from another
+version) is refused and the game carries on.
+
+## Balance harness
+
+`tools/balance.gd` plays whole games without a window, with a sensible default
+policy (repair the worn walls by day, send the best shooters scavenging when a
+stock runs low, treat the infected), and prints one row per game and the average
+colony day by day:
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --script res://tools/balance.gd -- --games=8 --days=10 --difficulty=1 --seed=1 [--fast] [--jobs=4] [--out=result.json]
+```
+
+`--fast` steps the rules at 15 Hz instead of 30, `--jobs=N` plays N games at a
+time in worker processes, `--policy=none` gives no orders, `--verbose` lists what
+the policy did and who was lost; see the top of the file for the rest. A game
+whose colony collapses is slow to play (the walkers inside the yard re-path
+every second).
