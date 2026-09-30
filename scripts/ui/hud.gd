@@ -444,7 +444,7 @@ func _build_bar() -> void:
 		card.add_child(marks_box)
 		card.gui_input.connect(_on_card_input.bind(p))
 		bar.add_child(card)
-		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "state": ""})
+		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": ""})
 	_size_cards(60)
 
 
@@ -470,7 +470,7 @@ func _size_cards(w: int) -> void:
 		c.fight.position = Vector2(w - 12, 5)
 		c.marks_box.position = Vector2(3, w - 2 - mark_px - 4)
 		if was != mark_px:
-			c.marks_sig = ""
+			_fill_marks(c, c.marks_data)
 
 
 func _on_card_input(ev: InputEvent, p) -> void:
@@ -1248,6 +1248,7 @@ func _update_card(c: Dictionary, sim) -> void:
 		sig += "%s|%s|%s;" % [m.get("icon", ""), Color(m.get("color", INK2)).to_html(), m.get("tip", "")]
 	if sig != c.marks_sig:
 		c.marks_sig = sig
+		c.marks_data = marks
 		_fill_marks(c, marks)
 
 

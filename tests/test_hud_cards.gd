@@ -159,3 +159,22 @@ func test_clicking_a_status_mark_still_selects_the_person() -> void:
 	if ctx.selected.size() == 1:
 		eq(ctx.selected[0].ref, ana, "it is Ana")
 	Kit.free_all(ctx)
+
+
+func test_marks_stay_right_across_a_resize() -> void:
+	var ctx := Kit.build(1280, 800)
+	var ana = Kit.person(ctx, "ana")
+	var many: Array = []
+	for icon in ["hungry", "thirsty", "wound", "fever"]:
+		many.append(_mark(icon, Hud.WARN, icon))
+	ctx.sim.medical.marks[ana.id] = many
+	Kit.update(ctx)
+	eq(Kit.card(ctx, ana).marks.get_child_count(), 4, "four fit on a wide card")
+	Kit.resize(ctx, 700, 700)
+	await Kit.settle()
+	eq(Kit.card(ctx, ana).marks.get_child_count(), 3, "three on a narrow one, at once")
+	ctx.sim.medical.marks[ana.id] = []
+	Kit.update(ctx)
+	eq(Kit.card(ctx, ana).marks.get_child_count(), 0, "and none when they are gone, even after the resize")
+	check(not Kit.card(ctx, ana).marks_box.visible, "with the row hidden")
+	Kit.free_all(ctx)

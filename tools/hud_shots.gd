@@ -1,9 +1,12 @@
 ## Screenshots of the HUD in states that are awkward to reach by playing: loads
 ## the real game, swaps in the test kit's fake modules, sets a state by hand and
-## saves the window. Windowed, from the repo root:
+## saves the window. Windowed (headless cannot render), from the repo root:
 ##   Godot --path . --script res://tools/hud_shots.gd -- --case=cards --out=/tmp/cards.png [--size=980x700]
-## Cases: cards, panel, down, dialog, over (see the _case_ functions); add --real to keep the
-## game's own modules instead of the fakes (then a case must not touch the fakes' tables).
+## Cases: cards (stores, clock, marks, dimmed cards), panel (every row and
+## button), down (someone resting in bed), dead, dialog (scavenging dialog),
+## dialog_no (nobody can go), over (the end of the run), real (the game's own
+## modules). Add --real to keep the game's own modules instead of the fakes
+## (then a case must not touch the fakes' tables).
 extends SceneTree
 
 const Kit := preload("res://tests/hud_kit.gd")
@@ -180,3 +183,15 @@ func _case_real() -> void:
 	sim.stock.water = 20.0
 	sim.stock.meds = 2.0
 	_select("marcus")
+
+
+## The panel of someone who has died (only Follow is left to press), and of one who turned.
+func _case_dead() -> void:
+	var dez = _person("dez")
+	dez.dead = true
+	dez.downed = true
+	dez.hp = 0.0
+	var walt = _person("walt")
+	walt.dead = true
+	walt.turned = true
+	_select("dez")

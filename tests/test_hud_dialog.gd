@@ -287,3 +287,28 @@ func test_clicks_do_not_reach_the_game_behind_the_dialog() -> void:
 	Kit.click_on(behind)
 	eq(ctx.pressed, [], "the Draft button under the dim does not fire")
 	Kit.free_all(ctx)
+
+
+func test_a_bare_site_entry_still_shows_and_sends() -> void:
+	var ctx := _ready_to_send()
+	ctx.sim.scavenge.list = [{"id": "x", "name": "Somewhere"}, {"id": "y", "name": "Elsewhere", "loot_hint": "Scrap, sometimes ammo", "danger": 7, "available": true}]
+	ctx.hud.open_scavenge(ctx.hud.selection)
+	var d = ctx.hud.scavenge_dialog
+	check(Kit.texts(d).has("Somewhere") and Kit.texts(d).has("Elsewhere"), "both are listed")
+	check(Kit.texts(d).has("Scrap, sometimes ammo"), "the module's own hint stands in for the loot")
+	eq(d.site_cards.y.pips, 3, "danger is capped at three pips")
+	d.choose_site("x")
+	d.send_button.pressed.emit()
+	eq(ctx.sim.scavenge.sent, [{"ids": ["ana"], "site": "x"}], "and it can be chosen")
+	Kit.free_all(ctx)
+
+
+func test_no_sites_at_all_leaves_nothing_to_send() -> void:
+	var ctx := _ready_to_send()
+	ctx.sim.scavenge.list = []
+	ctx.hud.open_scavenge(ctx.hud.selection)
+	var d = ctx.hud.scavenge_dialog
+	check(d.send_button.disabled, "Send stays off")
+	d.send()
+	eq(ctx.sim.scavenge.sent, [], "and sending does nothing")
+	Kit.free_all(ctx)
