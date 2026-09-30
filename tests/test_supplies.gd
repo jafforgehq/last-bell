@@ -704,7 +704,7 @@ func test_a_low_stock_raises_an_alert_no_more_often_than_every_game_hour() -> vo
 
 func test_the_low_stock_alerts_say_how_bad_it_is() -> void:
 	var cases := [
-		[9.0, "warn", "about 2 days left"],       # 1.5 days
+		[11.0, "warn", "about 1 day left"],       # 1.83 days: whole days, rounded down
 		[7.0, "warn", "about 1 day left"],        # 1.17 days
 		[3.0, "danger", "less than a day left"],  # half a day
 		[0.0, "danger", "none left"],
@@ -725,9 +725,21 @@ func test_the_low_stock_alerts_say_how_bad_it_is() -> void:
 	_run(sim, 0.5)
 	var w: Dictionary = sim.alerts.get("low-water", {})
 	eq(w.get("text", ""), "Water is running out", "the water's words")
-	eq(w.get("sub", ""), "about 2 days left", "the water's days")
+	eq(w.get("sub", ""), "about 1 day left", "the water's days")
 	check(w.get("at") is Vector2 and absf(w.at.x - 60.9) < 1.0, "the alert points at the rain barrels")
 	check(not sim.alerts.has("low-food"), "with food to spare there is no food alert")
+	g.world.free()
+
+
+func test_the_days_left_line_counts_whole_days_rounded_down() -> void:
+	var g := _calm()
+	var sup = g.sim.supplies
+	eq(sup._days_text(0.0), "none left", "no days")
+	eq(sup._days_text(0.4), "less than a day left", "under a day")
+	eq(sup._days_text(1.0), "about 1 day left", "one day")
+	eq(sup._days_text(1.99), "about 1 day left", "just under two days is still one")
+	eq(sup._days_text(2.0), "about 2 days left", "two days")
+	eq(sup._days_text(5.7), "about 5 days left", "five and a bit")
 	g.world.free()
 
 

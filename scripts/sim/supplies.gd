@@ -119,7 +119,7 @@ func roll_dawn() -> void:
 	var water := BARREL_WATER_RAIN if rain else BARREL_WATER
 	sim.stock.water += water
 	if rain:
-		sim.alert("rain", "info", "It rained in the night", "The barrels gave %d water" % roundi(water), _spot("water"), 10.0)
+		sim.alert("rain", "info", "It rained in the night", "Barrels gave %d water" % roundi(water), _spot("water"), 10.0)
 
 
 ## How much of `amount` (health points of repair wanted this step) the scrap pays
@@ -134,7 +134,7 @@ func repair_budget(amount: float) -> float:
 		sim.stock.scrap = scrap - cost
 		return amount
 	sim.stock.scrap = 0.0
-	sim.alert("no-scrap", "warn", "No scrap: repairs stopped", "Bring some back from the hardware store", null, 8.0)
+	sim.alert("no-scrap", "warn", "No scrap: repairs stopped", "Try the hardware store", null, 8.0)
 	return maxf(0.0, scrap) * REPAIR_PER_SCRAP
 
 
@@ -309,12 +309,14 @@ func _low_stock_alerts() -> void:
 			sim.alert(id, "danger" if days < 1.0 else "warn", "%s is running out" % kind.capitalize(), _days_text(days), _spot(kind), LOW_TTL)
 
 
+## The alert's second line: whole days, rounded down like the stores panel does,
+## so the two never disagree.
 func _days_text(days: float) -> String:
 	if days <= 0.0:
 		return "none left"
 	if days < 1.0:
 		return "less than a day left"
-	var n := roundi(days)
+	var n := floori(days)
 	return "about %d day%s left" % [n, "" if n == 1 else "s"]
 
 
