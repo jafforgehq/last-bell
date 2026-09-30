@@ -1,0 +1,216 @@
+# Last Bell: Colony Defense Sandbox — Design
+
+Status: draft for review. Branch: `feature/colony-sandbox` (`main` stays the published game until the owner says merge).
+
+## 1. Vision
+
+Last Bell becomes a **colony-defense sandbox with a storyteller**: you lead a small group of survivors in a walled schoolyard, keep them fed, healthy and sane, build up the defences, and survive escalating zombie hordes until a rescue arrives on a final day.
+
+Inspirations, for the feel and not the content: RimWorld (people with needs and traits, a storyteller that paces events, stories that come out of the systems), They Are Billions (base defence against escalating hordes, a survival map that ends in a huge final wave), Prison Architect (placing structures, rooms that do something, management UI).
+
+**Audience and ambition:** a paid release, reached in stages: a free public demo on itch.io, then a Steam page, then Steam Early Access once the core is fun. Until the owner decides otherwise, the itch page stays private and `main` stays the published game.
+
+**What "great" means here** (how we will know):
+- A first-time player can play 45 minutes after a short tutorial and wants to keep going.
+- A 30-day run produces at least three moments the player remembers and retells: a dilemma, a close call, a loss.
+- Defence is a puzzle: each zombie type has a counter, and what the player builds changes how the dead move.
+- Losing feels earned, and the median run on Standard difficulty ends between day 18 and the final night.
+- 60 fps on a 2020 laptop in the web build with up to 120 live zombies; no crash in a ten-hour soak.
+
+**Non-goals for now:** 3D or first person (tried and dropped), multiplayer, mobile, mod support, a roguelite unlock tree, a large open world.
+
+## 2. What exists today (the starting point)
+
+The 2D game on `main` is about 4,100 lines of GDScript in Godot 4.7.
+
+| Part | Where | Notes |
+| --- | --- | --- |
+| Rules | `scripts/sim/sim.gd` (835 lines), `pathfinder.gd` | Everything in tile units, one tile about a metre. `Person`, `Zombie`, `Segment` (14 damageable wall sections with attack `Slot`s), `stock` (ammo, scrap, food, water, meds), day and night phases, the bell at 19:00, night spawning (up to 50 alive), alerts and events. |
+| Drawing | `scripts/render/*`, `scripts/world.gd` | Sprites in draw order, PointLight2D lighting, fire, effects. Art is baked PNGs in `assets/`, made by code from the original web prototype. |
+| HUD | `scripts/ui/hud.gd` (1,031 lines) | Stores panel, portrait cards, clock, alerts, gizmos (draft, post, repair, focus), speed controls, help. |
+| Data | `assets/data/map.json` | Map 84×64 tiles, terrain, solid grids, 376 objects, wall sections, lights, rooms (hall, gym, bunks, infirmary, kitchen), spawn points, six people with skills, posts and jobs. |
+| Sound | `scripts/audio/sound.gd`, `assets/audio` | One-shots and ambience loops. No music. |
+
+**Strong:** readable art and lighting, six named people with faces and roles, the bell, day and night rhythm, walls that take damage and are repaired.
+
+**Thin (the work of this design):**
+- Only ammo is ever spent. Food, water, scrap and medicine are shown but nothing uses or produces them.
+- Only Shooting and Building are used; Melee, Medicine and Leading are just numbers.
+- A downed person is out for good; the alert says "Get them to Ana" but nothing revives anyone. The infirmary, kitchen, bunks and gym on the map do nothing.
+- One zombie type, no director, no goal, no save.
+
+## 3. Structure of a game
+
+- **Scenario:** "The Long Night": survive 30 days. The night of day 30 is the final wave; if the compound and at least one survivor hold until dawn, the rescue arrives and the run ends in victory. Defeat: every survivor is dead or turned (someone who is downed but can still be stabilised counts as alive). Later scenarios change the start (crew, stocks, length, map).
+- **Time:** as today, a game day is 8 minutes at normal speed (3 game minutes per second); speeds 1, 2 and 3 and pause-and-plan. A 30-day run is about 4 hours at normal speed and 80 to 120 minutes at the speeds players will use.
+- **Difficulty** (chosen at start): Story (forgiving), Standard, Brutal. It scales the director's budget, supply drops and how harsh injuries and infection are. Permadeath is on by default; a setting turns it off, so the downed always recover in the end.
+- **Save and load:** manual and an autosave at each dawn. Versioned JSON. A run can be resumed after closing the game.
+- **Seeds:** every run has a seed; the director, survivor generation and events all use one seeded random source, so a run can be reproduced in tests and shared.
+
+## 4. People and survival
+
+Everything here is a **starting value, to be tuned by the balance harness** (section 9).
+
+### 4.1 Needs
+
+Each person has four needs from 0 to 100.
+
+| Need | Falls by | Restored by | When low |
+| --- | --- | --- | --- |
+| Hunger | 1 food unit a day, eaten at meal times (07:00, 13:00, 19:00) | Eating food or a cooked meal | Below 25: slower work, worse aim. At 0: loses health, morale drops fast. |
+| Thirst | 1.5 water units a day | Drinking | Same, and twice as fast to become deadly. |
+| Rest | About 6 points an hour awake | Sleeping in a bunk (fast) or on the floor (slow) | Below 25: mistakes (slower, misses more). At 0: collapses asleep where they stand. |
+| Morale | Set by modifiers (below) | Modifiers recover with time | Below 25: shaken (aim and work penalties). Below 10: breakdown for one to two hours (freezes, flees or wanders). |
+
+Morale modifiers: a hot meal (+), a bed (+), a leader nearby (+, scales with Leading), zombies at the wall (−, worse at night, worse for the Nervous), someone hurt or dead (−, bigger for friends), a recent kill streak or repaired wall (+), sleeping on the floor (−), a dirty infirmary (−).
+
+### 4.2 Supplies and the economy
+
+Stock items: **ammo, scrap, food, water, meds** (bandages), **antibiotics**, and **meals** (cooked food). Starting stock follows today's numbers and is tuned later.
+
+| Source | Gives | Needs |
+| --- | --- | --- |
+| Garden plot | Food, slowly (about 3 a day per plot at full attention) | A builder to place it, a person with the Garden job |
+| Rain barrel | Water when it rains | Scrap to build |
+| Kitchen (stove) | Turns 1 food into 1 meal; a meal feeds as 1.25 food and gives morale | A cook |
+| Workshop (bench) | Scrap to ammo (2 scrap to 10 rounds), scrap to bandages | A crafter |
+| Scavenging trip | Loot from a nearby site | See below |
+
+**Scavenging trips (abstract, not a second map).** At dawn the player can send one or two survivors through the gate to a site from a list of nearby places (a pharmacy, a hardware store, a bus depot, a neighbour's house), each with a loot type, a distance and a danger. They are away for a number of hours, must be back before dusk, and the result is settled by skills, gear and luck with a short event text; they can come back with loot, hurt, bitten, or not at all.
+
+### 4.3 Injuries, healing and infection
+
+- Each person has health 0 to 100. Claws and bites cause **wounds**: a wound bleeds a little health an hour until bandaged. A bandage costs 1 meds and takes a person with Medicine a short while; skill changes the speed and the chance of a clean job.
+- At 0 health a person is **downed** and starts a bleed-out timer of one game hour. Someone with Medicine can stabilise them; they are then carried to a bed (best in the infirmary) and heal slowly. If the timer runs out, they die.
+- A **bite** infects the person with a chance set by difficulty (Story 30%, Standard 60%, Brutal 100%). An infected person turns into a zombie between 12 and 24 game hours later unless treated with antibiotics (the chance depends on Medicine). The player sees the timer only as a fever stage (chills, sweating, delirium), not an exact clock. The player decides what to do: treat them, tell them to keep away from the others, or send them out through the gate. The game does not judge.
+- A turned survivor appears as a zombie at that spot, with the survivor's name, and the crew who knew them take a morale hit.
+- **Permadeath** is on by default. When someone dies, friends and family take a morale penalty and the portrait card shows a memorial.
+
+### 4.4 Skills, traits and relationships
+
+- **Skills** 0 to 10 (as today) all matter and grow with use (slowly, with diminishing returns):
+  - Shooting: accuracy and rate of fire.
+  - Melee: damage and speed with melee weapons and when cornered.
+  - Building: build and repair speed, and quality.
+  - Medicine: treatment speed and success, survival of the downed.
+  - Leading: morale aura within about 8 tiles, and calmer under pressure.
+- **Traits:** each person has two or three from a launch list of about 14 (for example Nervous, Tough, Insomniac, Optimist, Claustrophobic, Green thumb, Steady hand, Heavy sleeper, Loner, Quick learner, Cook, Coward, Hothead, Gentle). Traits give modifiers to needs, morale, skills or behaviour, and they are visible on the person's panel.
+- **Relationships:** each survivor has one or two links to others (friend, rival, family) defined in data. Links change who takes the loss hardest and who works well together.
+- **Crew generation (later):** in scenario starts a random crew is drawn from a pool of survivors with their own skills, traits and links.
+
+### 4.5 Jobs
+
+Work types: **Doctor, Cook, Build and repair, Scavenge, Haul, Garden, Craft, Guard.** Each person has a priority from 0 (never) to 4 (first) for each, set in a small table, with sensible defaults from their role. Each tick an idle person takes the highest-priority job that is available and reachable. **Guard** is automatic at night for people with Shooting, unless they are too tired. The existing orders stay: draft a person, send them somewhere, post them at the wall, order a repair.
+
+## 5. Threats and the director
+
+### 5.1 Zombie types
+
+| Type | Health | Speed | What it does | Counter | Appears from |
+| --- | --- | --- | --- | --- | --- |
+| Walker | 4 to 7 | 0.5 to 0.85 tiles/s | The current zombie; claws at walls and people | Anything | Day 1 |
+| Runner | 3 | 1.8 | Fast and fragile; arrives before the defences are manned | Walls and traps; hard to shoot in time | Day 6 |
+| Brute | 40 | 0.4 | Does four times the damage to structures; shrugs off small rounds | Focus fire, spike strips, fire | Day 10 |
+| Screamer | 4 | 0.6 | Screams every 20 seconds: zombies within 40 tiles head for the noise and move 20% faster | Kill it first; sneak past | Day 8 |
+| Crawler | 6 | 0.6 | Low to the ground: much harder to hit; slips under low barricades | Melee, spike strips | Day 12 |
+
+Values are starting points. Each type has its own drawing (sprites in the existing style), sound, hit reaction and state machine in data.
+
+### 5.2 The director (storyteller)
+
+- **Night waves.** Every night the director has a **threat budget**: `base × (1 + 0.12 × day) × difficulty × (1 + 0.5 × colony strength)`. The base is 12 points (about twelve walkers on the first night), difficulty is 0.7, 1.0 or 1.4 (Story, Standard, Brutal), and colony strength is a number from 0 to 1 that grows with able people, their combined Shooting, wall health and what has been built. It spends the budget on units (walker 1, runner 2, crawler 2, screamer 4, brute 8) in a composition set by the day and the storyteller.
+- **Day events** (about 12 at launch), drawn from a weighted table with cooldowns:
+  - Threats: extra horde at dusk, daytime stragglers at the wall, fire in a tent or barrel, a structure weakens.
+  - Hardship: sickness in one person, a heatwave (thirst ×1.5), a breakdown, theft of food.
+  - Opportunity: a supply drop (a crate at the edge of the yard), a storm (rain fills barrels, sight is shorter), a stranger at the gate (join, steal or trap; the player decides), a radio message (lore, and hints at the rescue timeline).
+- **Tension:** a hidden tension value rises with threat events and falls with time and rest; the director avoids stacking spikes. The player picks the **style** at the start: Calm (fast recovery, few spikes), Steady (balanced), Brutal (frequent, doubled spikes).
+- **Final wave:** the night of day 30 spends three times the usual budget and always includes brutes and screamers.
+
+## 6. Building and the compound
+
+### 6.1 Build mode
+
+Press B (or use the build menu): place blueprints on free tiles of the compound. Builders (the Build job, scaled by Building skill) carry scrap to a blueprint and build it; it can be cancelled or deconstructed for a partial refund. Structures at launch (costs are starting values):
+
+| Structure | Cost | Notes |
+| --- | --- | --- |
+| Wooden barricade | 4 scrap | 120 health |
+| Sandbag wall | 6 scrap | 160 health, low: shooters fire over it |
+| Metal wall | 12 scrap | 300 health |
+| Gate | 15 scrap | Opens for people, blocks the dead |
+| Spike strip | 5 scrap | Damages the dead that cross it; wears out |
+| Noise trap | 3 scrap | Draws the dead away for about a minute |
+| Watchtower | 25 scrap | Platform with longer sight and cover |
+| Rain barrel | 4 scrap | Fills when it rains |
+| Garden plot | 2 scrap | Grows food |
+| Bunk | 6 scrap | Rest |
+| Stove | 10 scrap | Kitchen |
+| Med table | 8 scrap | Infirmary |
+| Workbench | 10 scrap | Workshop |
+
+The 14 existing wall sections (containers, buses, cars, pallets, chain-link, cinderblock, the gate) stay as pre-built structures, with their damage states, and work with the same rules as the new ones.
+
+### 6.2 How the dead move (changes the rules)
+
+Today the dead walk to fixed attack slots on predefined wall sections. With player-built structures this must generalise: the zombie pathfinder runs on a cost map in which a structure is **passable at a cost equal to its health**, so the dead go around through an opening if one is cheap and otherwise break through the weakest or cheapest line. They attack whatever blocks the path. This gives chokepoints, gates and kill corridors and is the core of the defence puzzle. Attack slots become simply positions around a blocking structure.
+
+### 6.3 Rooms that work
+
+The map's rooms get a purpose. A room becomes effective when it has its furniture, and its effectiveness scales with how much:
+- Infirmary: a med table and beds; speeds healing and treatment.
+- Kitchen: a stove; makes meals.
+- Bunks: beds; faster rest and better morale.
+- Workshop (new room): a workbench; crafting.
+- Gym: equipment (later); slow skill growth and morale.
+- Hall: the common room; a meal together lifts morale.
+
+### 6.4 Noise and light
+
+Gunfire, hammering, screams and traps make noise that the dead walk toward. Light is partly cosmetic: lamps and fires help morale at night (less fear) and the player's view; a floodlight structure comes with a power system later.
+
+### 6.5 Expansion (later)
+
+Reach neighbouring buildings to clear and claim them for more space and supplies. Out of scope for the first releases.
+
+## 7. Interface
+
+Keep the current look (dark panels, the same type and colours) and extend it:
+- **Stores panel:** ammo, scrap, food, water, meds, antibiotics, meals, with a line for days of food and water left.
+- **Portrait cards:** small icons for hunger, thirst, rest and mood; a red dot for a wound; a fever mark for infection.
+- **Person panel:** needs, mood and its reasons, health and wounds, skills, traits, relationships, the work-priority table.
+- **Build menu** (bottom) with costs and a blueprint cursor; rooms highlight what they lack.
+- **Event log and alerts** as today, with choices for events that ask for a decision.
+- **Scavenging dialog** (sites, party, return time) and a **storyteller indicator**.
+- **Menus:** new game (scenario, difficulty, storyteller, seed), save and load, settings (volume, fullscreen, key help).
+- **Tutorial:** a guided first three days, dismissable.
+
+## 8. Architecture
+
+- **Keep the split** between the rules (`scripts/sim`) and the drawing (`scripts/render`). The rules never touch nodes; the drawing reads the rules' state. This is what makes the rules testable without a window.
+- **New rule modules** in `scripts/sim`, each small and with headless tests: `needs.gd`, `medical.gd`, `jobs.gd`, `economy.gd`, `rooms.gd`, `build.gd` (blueprints, structures, the cost map), `scavenge.gd`, `director.gd`, `events.gd`, `scenario.gd`, `save.gd`. `sim.gd` becomes the coordinator that steps them in a fixed order; it is split as it grows.
+- **Data-driven content** in `assets/data`: `zombies.json`, `structures.json`, `traits.json`, `events.json`, `sites.json`, `scenarios.json`, next to `map.json`. Adding a zombie type, a structure or an event should be a data change plus art and sound.
+- **One seeded random source** in the rules; never the global random functions.
+- **Save format:** versioned JSON of the rules' state (people, zombies, structures, stocks, director state, clock, seed). Loading rebuilds the drawing from it. A round-trip test guards it.
+- **Testing:** a headless test runner (`tests/run.gd`, which fails on any logged error) with tests next to each module; a **balance harness** (`tools/balance.gd`) that plays whole 30-day games with a default AI across many seeds at simulation speed and reports the day reached, losses, stock curves and wave times, used to tune the numbers in this document; windowed screenshot checks for the drawing.
+- **Performance budget:** up to 120 live zombies, 60 fps on a 2020 laptop in the web build; drawing is culled to the camera, animation slows at a distance, and the zombie pathfinder uses a shared flow field rather than one path each.
+- **Art and sound:** new sprites (zombie types, furniture, structures, icons) follow the existing illustrated style by extending the drawing code; new sounds match the current set. Music is needed for release.
+
+## 9. Milestones
+
+Each milestone ends in a game you can play, with tests passing and a short note of what was tuned. Each milestone gets its own implementation plan; this document is the umbrella. Work happens on `feature/colony-sandbox`.
+
+1. **Survival.** Needs and their effects; stocks used and produced, from a garden and rain barrels placed in the map data and from simple scavenging trips (three sites); injuries, bleeding, bandages, the downed and bleed-out; infection and treatment; all five skills used and growing; traits and relationships; the work-priority table (Doctor, Cook, Garden, Repair, Haul, Guard, Scavenge; Build and Craft join in milestone 3); the infirmary, kitchen and bunks working as rooms using the furniture already on the map; save and load with autosave; the new panels. *Done when:* a scripted ten-day run shows food and water falling and being managed, a bitten person can be saved or lost, a save reloads to the identical state, and the balance harness reports a sensible attrition curve.
+2. **Threats.** The four new zombie types with art and sound; the director (budget, events, tension, styles); the 30-day scenario with its final wave, victory and defeat screens; difficulty levels. *Done when:* the harness shows median Standard runs ending between day 18 and the final night, and every zombie type has a counter that visibly works.
+3. **Building.** Build mode with blueprints and builders; the structures table; the generalised zombie pathing and breakable structures; traps; the workshop and crafting; more scavenging sites, gear and risks. *Done when:* a player can wall off the gate, leave a gap, and watch the dead funnel through it, and can build a new garden or bunk that is used.
+4. **Scenarios and variety.** New-game menu; two more scenarios; random crews from a survivor pool; more events and traits; a second map or map variant; the tutorial.
+5. **Polish and release.** Balance pass with the harness; interface pass; music and sound; performance and web build; settings and accessibility basics; controller support to be decided; an asset rights audit and a name check; the public demo on itch; then the Steam page and Early Access decision.
+
+## 10. Risks and open questions
+
+- **Scope.** This is a large game. Mitigation: milestones that each stand alone, the harness to tune early, and a go or no-go after the demo.
+- **Art consistency.** New sprites must match the existing look. Decide between extending the drawing code and commissioning an artist for the set of zombie types and furniture.
+- **Rights.** Before any paid release: list every sound, font and image with its licence or origin; replace or clear anything unclear. Check that the name "Last Bell" is free to use on Steam and in trademark databases.
+- **Music.** No soundtrack exists; decide between a composer and licensed tracks.
+- **Steam and platform work** (Steamworks, achievements, cloud saves, Steam Deck and controller support, store page assets): research current requirements and fees before milestone 5.
+- **Balance and feel.** Infection, morale and the director are the parts most likely to feel unfair or dull; playtests and the harness catch this early, and the difficulty levels and storyteller styles are the safety valves.
+- **Tests on `main`.** `main` currently has no tests folder. They live on this branch; the owner decides whether they go back to `main` at merge.
