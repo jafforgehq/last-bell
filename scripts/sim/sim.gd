@@ -87,7 +87,7 @@ class Person:
 	## Game hours left to be stabilised while downed, or -1 when that does not apply.
 	var bleed_out := -1.0
 	var stabilised := false
-	## When (in game minutes since the run began) they were infected and will turn, or -1.
+	## When (in sim.clock_min game minutes) they were infected and will turn, or -1.
 	var infected_at := -1.0
 	var turn_at := -1.0
 	## Where they are healing in bed (a Vector2), or null.
@@ -134,6 +134,8 @@ var H: int
 var path_z
 var path_p
 var minutes := 18.0 * 60.0 + 46.0
+## Game minutes since the run began (never wraps at midnight), for timers.
+var clock_min := 0.0
 var min_per_sec := 3.0
 var day := 3
 var phase := "day"
@@ -382,6 +384,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	rng.seed = seed_value
 	day = 1
 	minutes = 7.0 * 60.0
+	clock_min = 0.0
 	phase = phase_at(minutes)
 	bell_rung = false
 	spawn_t = 6.0
@@ -409,6 +412,7 @@ func update(dt: float) -> void:
 	t += dt
 	var before := phase
 	minutes += dt * min_per_sec
+	clock_min += dt * min_per_sec
 	if minutes >= 24.0 * 60.0:
 		minutes -= 24.0 * 60.0
 	phase = phase_at(minutes)
