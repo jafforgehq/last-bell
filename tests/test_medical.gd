@@ -1403,7 +1403,9 @@ func test_a_game_saved_mid_treatment_plays_out_the_same_when_loaded() -> void:
 	Helpers.run(sim, 40.0)
 	Helpers.run(b.sim, 40.0)
 	var after := _people_line(sim)
-	check(after != _people_line(Helpers.make(3, 1).sim), "something happened in those 40 seconds")
+	var fresh := Helpers.make(3, 1)
+	check(after != _people_line(fresh.sim), "something happened in those 40 seconds")
+	fresh.world.free()
 	var got := _people_line(b.sim).split(" | ")
 	var want := after.split(" | ")
 	for i in want.size():
