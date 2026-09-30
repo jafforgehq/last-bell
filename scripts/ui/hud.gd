@@ -1370,8 +1370,8 @@ func _doing_person(p) -> String:
 	if p.away != null:
 		return _away_text(p)
 	if p.downed:
-		# resting in bed or stabilised: the medical module says what; else still bleeding
-		return p.activity if (p.stabilised or p.resting_bed != null) and p.activity != "" else "Down and bleeding"
+		# the medical module says what ("Down and bleeding", "Collapsed from hunger", "Resting in the infirmary")
+		return p.activity if p.activity != "" else "Down and bleeding"
 	if p.reloading > 0.0:
 		return "Reloading"
 	if p.target != null:
@@ -1379,13 +1379,13 @@ func _doing_person(p) -> String:
 	return p.activity
 
 
-## "Away at the pharmacy" for someone out with a scavenging party.
+## "Scavenging at the pharmacy" for someone out with a scavenging party.
 func _away_text(p) -> String:
 	if p.away is Dictionary and sim_ref != null:
 		var id := String(p.away.get("site", ""))
 		for site in sim_ref.scavenge.sites:
 			if String(site.get("id", "")) == id:
-				return "Away at %s" % String(site.get("name", "")).to_lower()
+				return "Scavenging at %s" % String(site.get("where", String(site.get("name", "")).to_lower()))
 	return "Away scavenging"
 
 

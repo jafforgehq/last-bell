@@ -94,14 +94,18 @@ func test_the_doing_row_tells_what_someone_is_doing_or_why_not() -> void:
 	Kit.update(ctx)
 	eq(doing.text, "Sweeping the hall", "the activity")
 	p.downed = true
+	p.activity = "Down and bleeding"
 	Kit.update(ctx)
-	eq(doing.text, "Down and bleeding", "downed and not yet stabilised")
+	eq(doing.text, "Down and bleeding", "downed: what the medical module says")
+	p.activity = "Collapsed from hunger"
+	Kit.update(ctx)
+	eq(doing.text, "Collapsed from hunger", "and not always the same words")
+	p.activity = ""
+	Kit.update(ctx)
+	eq(doing.text, "Down and bleeding", "with nothing said, the plain words")
 	p.stabilised = true
-	p.activity = "Resting in the infirmary"
-	Kit.update(ctx)
-	eq(doing.text, "Resting in the infirmary", "stabilised: what the medical module says")
-	p.stabilised = false
 	p.resting_bed = Vector2(47.0, 56.9)
+	p.activity = "Resting in the infirmary"
 	Kit.update(ctx)
 	eq(doing.text, "Resting in the infirmary", "in a bed")
 	p.downed = false
@@ -120,9 +124,9 @@ func test_the_doing_row_for_the_dead_and_the_away() -> void:
 	p.away = {"kind": "party", "site": "pharmacy"}
 	Kit.update(ctx)
 	eq(doing.text, "Away scavenging", "a party member with no site name known")
-	ctx.sim.scavenge.sites = [{"id": "pharmacy", "name": "The pharmacy"}]
+	ctx.sim.scavenge.sites = [{"id": "pharmacy", "name": "The pharmacy", "where": "the pharmacy"}]
 	Kit.update(ctx)
-	eq(doing.text, "Away at the pharmacy", "with the site's name")
+	eq(doing.text, "Scavenging at the pharmacy", "with the site's name")
 	p.away = null
 	p.dead = true
 	Kit.update(ctx)
