@@ -76,6 +76,7 @@ func _calm(seed_value: int = 1, difficulty: int = 1) -> Dictionary:
 	var sim = g.sim
 	sim.zombies.clear()
 	sim.spawn_t = 1.0e9
+	sim.waves.enabled = false
 	sim.medical = MedSpy.new()
 	sim.scavenge = Quiet.new()
 	sim.scenario = Quiet.new()
@@ -933,6 +934,7 @@ func test_a_day_and_a_half_with_every_module_keeps_the_books_straight() -> void:
 	var sim = g.sim
 	sim.zombies.clear()
 	sim.spawn_t = 1.0e9
+	sim.waves.enabled = false
 	var food: float = sim.stock.food
 	var bad := ""
 	var guard := 0

@@ -477,6 +477,14 @@ func test_saving_at_arbitrary_moments_loads_to_the_same_game() -> void:
 			a.sim._damage_segment(a.sim.segments[11], 1000.0)
 			_advance(a.sim, 4.0)
 		if m[0] == 33:
+			# catch the night with walkers still on their way in
+			for i in 120:
+				var coming := false
+				for z in a.sim.zombies:
+					coming = coming or z.state == "approach"
+				if coming:
+					break
+				_advance(a.sim, 1.0)
 			var states := {}
 			for z in a.sim.zombies:
 				states[z.state] = true

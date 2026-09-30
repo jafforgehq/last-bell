@@ -7,6 +7,7 @@ const Supplies := preload("res://scripts/sim/supplies.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Scenario := preload("res://scripts/sim/scenario.gd")
+const Waves := preload("res://scripts/sim/waves.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
 ## water are six days of full rations for the crew of six (6 x 1 x 6 food, 6 x
@@ -171,6 +172,7 @@ var supplies
 var medical
 var scavenge
 var scenario
+var waves
 
 
 func _init(data: Dictionary, w, effects) -> void:
@@ -217,7 +219,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	medical = Medical.new()
 	scavenge = Scavenge.new()
 	scenario = Scenario.new()
-	for m in [supplies, medical, scavenge, scenario]:
+	waves = Waves.new()
+	for m in [supplies, medical, scavenge, scenario, waves]:
 		m.setup(self)
 	_seed()
 
@@ -402,7 +405,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario]:
+	for m in [supplies, medical, scavenge, scenario, waves]:
 		m.start()
 
 
@@ -443,21 +446,7 @@ func update(dt: float) -> void:
 	supplies.update(dt)
 	medical.update(dt)
 	scavenge.update(dt)
-
-	# spawning: a trickle at dusk, groups of two or three at night
-	if phase == "dusk" or phase == "night":
-		spawn_t -= dt
-		var alive := 0
-		for z in zombies:
-			if z.state != "dead" and z.state != "dying":
-				alive += 1
-		var night := phase == "night"
-		if spawn_t <= 0.0 and alive < (50 if night else 30):
-			var sp: Vector2 = spawns[rng.randi() % spawns.size()]
-			var n := (2 + rng.randi() % 2) if night else 1
-			for i in n:
-				spawn(sp.x + (rng.randf() - 0.5) * 1.6, sp.y + (rng.randf() - 0.5) * 1.6, "approach")
-			spawn_t = (2.6 + rng.randf() * 1.6) if night else (4.0 + rng.randf() * 2.5)
+	waves.update(dt)
 
 	for p in people:
 		_update_person(p, dt)
