@@ -28,6 +28,20 @@ const LEVEL_COLOR := {"danger": DANGER, "warn": WARN, "info": INFO}
 const SIDE := {"N": "North wall", "W": "West wall", "E": "East wall"}
 const MATERIAL := {"container": "shipping container", "bus": "school bus", "car": "wrecked car", "pallets": "pallets and stakes", "gate": "steel gate", "chainlink": "fence and wire", "blocks": "cinderblock"}
 const STORES := [["ammo", "Ammo"], ["scrap", "Scrap"], ["food", "Food"], ["water", "Water"], ["meds", "Medicine"]]
+## The stores that also show how many days of them are left.
+const DAYS_STORES := ["food", "water"]
+## Only the skills that do something in version 1 are listed in the person panel.
+const SKILLS_SHOWN := ["Shooting", "Building", "Medicine"]
+## Game hours without a meal or a drink at which a person is called hungry,
+## starving, thirsty and dehydrated (the supplies module penalises at these).
+const HUNGRY_H := 18.0
+const STARVING_H := 36.0
+const THIRSTY_H := 14.0
+const DEHYDRATED_H := 24.0
+## The selection panel's width and the gizmo buttons' size and gap.
+const INSPECT_W := 300
+const GIZMO_W := 66
+const GIZMO_GAP := 6
 
 
 ## A rounded meter: background track and a coloured fill.
@@ -90,9 +104,15 @@ var on_sound: Callable
 var res_panel: PanelContainer
 var res_grid: GridContainer
 var res_values := {}
+var res_days := {}
 var res_labels: Array = []
 var bar: HBoxContainer
 var cards: Array = []
+## The size of the status marks on a card and how many fit (set with the card size).
+var mark_px := 0
+var mark_max := 4
+## The last sim the HUD was updated from (for the things it opens itself).
+var sim_ref = null
 var clock: PanelContainer
 var day_label: Label
 var phase_chip: PanelContainer
@@ -110,10 +130,13 @@ var banner: VBoxContainer
 var banner_title: Label
 var banner_sub: Label
 var banner_tween: Tween
-var dock: HBoxContainer
+var dock: BoxContainer
 var inspect: PanelContainer
 var inspect_refs := {}
-var gizmos: HBoxContainer
+var gizmos: GridContainer
+## How many buttons are in the dock now (children being freed still count in the tree).
+var gizmo_count := 0
+var speed_panel: PanelContainer
 var speed_buttons: Array = []
 var sound_button: Button
 var help: PanelContainer
@@ -268,19 +291,44 @@ func _build_stores() -> void:
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for s in STORES:
 		var ic := _icon(s[0], 14, INK3)
-		ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		grid.add_child(ic)
 		var k := _label(s[1], Fonts.sans(400), 13, INK2)
-		res_labels.append(k)
-		grid.add_child(k)
 		var v := _label("0", Fonts.cond(600), 15, INK)
 		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		v.custom_minimum_size.x = 34
-		grid.add_child(v)
 		res_values[s[0]] = v
+		if s[0] in DAYS_STORES:
+			# the days left sit under the number; the icon and name stay level with it
+			var d := _label("", Fonts.cond(600), 12, INK3)
+			d.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			res_days[s[0]] = d
+			var cell := _vbox(0)
+			cell.add_child(v)
+			cell.add_child(d)
+			var line_h := v.get_minimum_size().y
+			grid.add_child(_padded(ic, int((line_h - 14.0) * 0.5)))
+			var kp := _padded(k, int((line_h - k.get_minimum_size().y) * 0.5))
+			res_labels.append(kp)
+			grid.add_child(kp)
+			grid.add_child(cell)
+		else:
+			ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			grid.add_child(ic)
+			res_labels.append(k)
+			grid.add_child(k)
+			grid.add_child(v)
 	res_panel.add_child(grid)
 	add_child(res_panel)
 	_corner(res_panel, false, false, 12, 12)
+
+
+## `c` with `top` pixels of space above it, so it can sit level with a taller neighbour.
+func _padded(c: Control, top: int) -> MarginContainer:
+	var m := MarginContainer.new()
+	m.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	m.add_theme_constant_override("margin_top", maxi(0, top))
+	m.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	m.add_child(c)
+	return m
 
 
 # ---------------------------------------------------------- colonist bar --
@@ -313,6 +361,16 @@ func _build_bar() -> void:
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(pic)
+		# a dark veil and a word over the picture of someone who is gone or away
+		var veil := ColorRect.new()
+		veil.color = Color(0.06, 0.05, 0.05, 0.62)
+		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		veil.visible = false
+		card.add_child(veil)
+		var word := _label("", Fonts.cond(700, 1), 12, INK2)
+		word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		card.add_child(word)
 		var nm := _label(p.first, Fonts.cond(600), 13, INK)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		card.add_child(nm)
@@ -349,18 +407,41 @@ func _build_bar() -> void:
 		fight.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		fight.visible = false
 		card.add_child(fight)
+		# the status marks (hungry, bleeding, feverish...) along the foot of the picture
+		var marks_box := PanelContainer.new()
+		var ms := StyleBoxFlat.new()
+		ms.bg_color = Color(0.06, 0.05, 0.05, 0.72)
+		ms.set_corner_radius_all(7)
+		ms.content_margin_left = 2
+		ms.content_margin_right = 2
+		ms.content_margin_top = 2
+		ms.content_margin_bottom = 2
+		ms.anti_aliasing = true
+		marks_box.add_theme_stylebox_override("panel", ms)
+		marks_box.mouse_filter = Control.MOUSE_FILTER_PASS
+		marks_box.visible = false
+		var marks := _hbox(0)
+		marks_box.add_child(marks)
+		card.add_child(marks_box)
 		card.gui_input.connect(_on_card_input.bind(p))
 		bar.add_child(card)
-		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false})
+		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "state": ""})
 	_size_cards(60)
 
 
 func _size_cards(w: int) -> void:
 	var h := w + 20
+	var was := mark_px
+	mark_px = 12 if w >= 56 else 11
+	mark_max = 4 if w >= 56 else 3
 	for c in cards:
 		c.card.custom_minimum_size = Vector2(w, h)
 		c.pic.position = Vector2(1, 1)
 		c.pic.size = Vector2(w - 2, w - 2)
+		c.veil.position = c.pic.position
+		c.veil.size = c.pic.size
+		c.word.position = c.pic.position
+		c.word.size = c.pic.size
 		c.name.position = Vector2(0, w - 1)
 		c.name.size = Vector2(w, 18)
 		c.name.add_theme_font_size_override("font_size", 13 if w >= 56 else 11)
@@ -368,6 +449,9 @@ func _size_cards(w: int) -> void:
 		c.hp_bg.size = Vector2(w - 2, 3)
 		c.hp.position = c.hp_bg.position
 		c.fight.position = Vector2(w - 12, 5)
+		c.marks_box.position = Vector2(3, w - 2 - mark_px - 4)
+		if was != mark_px:
+			c.marks_sig = ""
 
 
 func _on_card_input(ev: InputEvent, p) -> void:
@@ -524,17 +608,45 @@ func show_banner(text: String, sub: String) -> void:
 # ------------------------------------------------------------ dock / inspect --
 
 func _build_dock() -> void:
-	dock = _hbox(8)
+	# a row (the buttons beside the selection panel) or a column (the buttons
+	# above it) depending on the room: see _layout_dock
+	dock = BoxContainer.new()
+	dock.add_theme_constant_override("separation", 8)
+	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dock)
 	_corner(dock, false, true, 12, 12)
 	inspect = _panel(_style())
-	inspect.custom_minimum_size.x = 300
+	inspect.custom_minimum_size.x = INSPECT_W
 	inspect.size_flags_vertical = Control.SIZE_SHRINK_END
 	inspect.visible = false
 	dock.add_child(inspect)
-	gizmos = _hbox(6)
+	gizmos = GridContainer.new()
+	gizmos.add_theme_constant_override("h_separation", GIZMO_GAP)
+	gizmos.add_theme_constant_override("v_separation", GIZMO_GAP)
+	gizmos.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	gizmos.size_flags_vertical = Control.SIZE_SHRINK_END
 	dock.add_child(gizmos)
+
+
+## The buttons go to the right of the selection panel when that leaves room
+## clear of the speed controls and the help panel, else in rows above the panel.
+func _layout_dock() -> void:
+	if dock == null or speed_panel == null or help == null:
+		return
+	var n := gizmo_count
+	var panel_w := maxf(float(INSPECT_W), inspect.get_combined_minimum_size().x)
+	var beside := float(n * GIZMO_W + maxi(0, n - 1) * GIZMO_GAP)
+	var reserve := maxf(speed_panel.get_combined_minimum_size().x, help.get_combined_minimum_size().x) + 8.0
+	var fits := n == 0 or panel_w + 8.0 + beside <= size.x - 24.0 - reserve
+	dock.vertical = not fits
+	if fits:
+		dock.move_child(inspect, 0)
+		gizmos.columns = maxi(1, n)
+		gizmos.size_flags_vertical = Control.SIZE_SHRINK_END
+	else:
+		dock.move_child(gizmos, 0)
+		gizmos.columns = maxi(1, int((panel_w + GIZMO_GAP) / (GIZMO_W + GIZMO_GAP)))
+		gizmos.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 
 
 func _meter() -> Array:
@@ -555,12 +667,13 @@ func _meter() -> Array:
 func select(sel) -> void:
 	selection = sel
 	for c in inspect.get_children():
+		inspect.remove_child(c)
 		c.queue_free()
-	for c in gizmos.get_children():
-		c.queue_free()
+	_clear_gizmos()
 	inspect_refs = {}
 	if sel == null:
 		inspect.visible = false
+		_layout_dock()
 		return
 	inspect.visible = true
 	if hint != null:
@@ -600,6 +713,19 @@ func select(sel) -> void:
 		doing.custom_minimum_size.x = 200
 		_row(grid, "Doing", doing)
 		inspect_refs.doing = doing
+		var needs := _label("Fed", Fonts.sans(400), 13, INK)
+		_row(grid, "Needs", needs)
+		inspect_refs.needs = needs
+		var wounds := _label("None", Fonts.sans(400), 13, INK2)
+		_row(grid, "Wounds", wounds)
+		inspect_refs.wounds = wounds
+		# only a fever shows: the row is there but hidden until the medical module names a stage
+		var infection := _label("", Fonts.sans(400), 13, WARN)
+		var infection_head := _row(grid, "Infection", infection)
+		infection.visible = false
+		infection_head.visible = false
+		inspect_refs.infection = infection
+		inspect_refs.infection_head = infection_head
 	elif sel.kind == "zombie":
 		var z = sel.ref
 		head.add_child(_pic(GD.tex(data.portraits["z%d" % z.look_index])))
@@ -650,8 +776,8 @@ func select(sel) -> void:
 		sk.add_theme_constant_override("h_separation", 14)
 		sk.add_theme_constant_override("v_separation", 5)
 		sk.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		for skill_name in sel.ref.def.skills:
-			var val := int(sel.ref.def.skills[skill_name])
+		for skill_name in SKILLS_SHOWN:
+			var val := int(sel.ref.def.skills.get(skill_name, 0))
 			var row := _hbox(6)
 			var n := _label(skill_name, Fonts.sans(400), 12, INK2)
 			n.custom_minimum_size.x = 58
@@ -673,6 +799,7 @@ func select(sel) -> void:
 		v.add_child(sk)
 	inspect.add_child(v)
 	_build_gizmos()
+	_refresh_selection()
 
 
 func _pic(t: Texture2D) -> TextureRect:
@@ -685,19 +812,21 @@ func _pic(t: Texture2D) -> TextureRect:
 	return r
 
 
-func _row(grid: GridContainer, label: String, value: Control) -> void:
+func _row(grid: GridContainer, label: String, value: Control) -> Label:
 	var l := _caps(label)
 	l.custom_minimum_size.x = 58
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_child(l)
 	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.add_child(value)
+	return l
 
 
 func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(66, 66)
+	b.custom_minimum_size = Vector2(GIZMO_W, GIZMO_W)
 	b.focus_mode = Control.FOCUS_NONE
+	b.set_meta("id", id)
 	var normal := _style(ACCENT if on else PANEL, 6, ACCENT if on else LINE)
 	normal.set_content_margin_all(0)
 	var hover := _style(ACCENT if on else PANEL_HI, 6, ACCENT if on else LINE2)
@@ -724,23 +853,71 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	return b
 
 
-func _build_gizmos() -> void:
+func _clear_gizmos() -> void:
 	for c in gizmos.get_children():
+		gizmos.remove_child(c)
 		c.queue_free()
+	gizmo_count = 0
+
+
+## The buttons for the selection: the usual ones, and for a person Treat, Send
+## out and Scavenge when the modules offer them.
+func _build_gizmos() -> void:
+	_clear_gizmos()
 	if selection == null:
+		_layout_dock()
 		return
 	if selection.kind == "person":
 		var p = selection.ref
-		gizmos.add_child(_gizmo("draft", "Release" if p.drafted else "Draft", "R", p.drafted))
-		gizmos.add_child(_gizmo("post", "To post", "P", false))
-		gizmos.add_child(_gizmo("repair", "Repair", "F", false))
-		gizmos.add_child(_gizmo("focus", "Follow", "C", false))
+		if p.away != null:
+			pass # off the map: nothing to order
+		elif p.dead:
+			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
+		else:
+			gizmos.add_child(_gizmo("draft", "Release" if p.drafted else "Draft", "R", p.drafted))
+			gizmos.add_child(_gizmo("post", "To post", "P", false))
+			gizmos.add_child(_gizmo("repair", "Repair", "F", false))
+			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
+			if sim_ref != null and sim_ref.medical.can_treat(p):
+				gizmos.add_child(_gizmo("treat", "Treat", "T", false))
+			if sim_ref != null and sim_ref.medical.can_send_out(p):
+				gizmos.add_child(_gizmo("sendout", "Send out", "X", false))
+			if _can_scavenge(p):
+				gizmos.add_child(_gizmo("scavenge", "Scavenge", "G", false))
 	elif selection.kind == "segment":
 		gizmos.add_child(_gizmo("repair", "Repair", "F", false))
 		gizmos.add_child(_gizmo("focus", "Focus", "C", false))
 	else:
 		gizmos.add_child(_gizmo("focus", "Focus", "C", false))
-	inspect_refs.drafted = selection.kind == "person" and selection.ref.drafted
+	gizmo_count = gizmos.get_child_count()
+	inspect_refs.gizmo_sig = _gizmo_sig()
+	_layout_dock()
+
+
+## What decides which buttons the selection gets: when it changes they are rebuilt.
+func _gizmo_sig() -> String:
+	if selection == null or selection.kind != "person":
+		return "" if selection == null else String(selection.kind)
+	var p = selection.ref
+	var sig := "%s|%s|%s" % [p.drafted, p.dead, p.away != null]
+	if sim_ref != null and not p.dead and p.away == null:
+		sig += "|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p)]
+	return sig
+
+
+## Whether `p` could be sent scavenging now: on the map, on their feet, not held
+## by an order and not too ill to travel. (The scavenging module has the last say.)
+func is_free_to_go(p) -> bool:
+	if p.dead or p.downed or p.away != null:
+		return false
+	if p.drafted and p.order != null:
+		return false
+	return sim_ref == null or sim_ref.medical.infection_stage(p) != "delirious"
+
+
+## Whether the Scavenge button is offered for `p`.
+func _can_scavenge(p) -> bool:
+	return sim_ref != null and sim_ref.scavenge.can_send() and is_free_to_go(p)
 
 
 # ------------------------------------------------------------ time controls --
@@ -772,6 +949,7 @@ func _build_speed() -> void:
 	var s := _style()
 	s.set_content_margin_all(4)
 	var panel := _panel(s)
+	speed_panel = panel
 	var row := _hbox(2)
 	var tips := ["Pause (Space)", "Normal speed (1)", "Fast (2)", "Fastest (3)"]
 	var names := ["pause", "play", "ff", "fff"]
@@ -813,7 +991,7 @@ func _build_help() -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 6)
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for pair in [["Click", "Select a person, walker or wall piece"], ["Right-click", "Send the selected person there"], ["Drag", "Pan the map (or W A S D)"], ["Scroll", "Zoom"], ["R", "Draft or release"], ["Space", "Pause"], ["Tab", "Next person"]]:
+	for pair in [["Click", "Select a person, walker or wall piece"], ["Right-click", "Send the selected person there"], ["Drag", "Pan the map (or W A S D)"], ["Scroll", "Zoom"], ["R", "Draft or release"], ["T", "Treat the wounded or infected"], ["X", "Send an infected person out"], ["G", "Send a scavenging party"], ["Space", "Pause"], ["Tab", "Next person"]]:
 		grid.add_child(_kbd(pair[0]))
 		var l := _label(pair[1], Fonts.sans(400), 12, INK2)
 		grid.add_child(l)
@@ -872,6 +1050,7 @@ func _on_resized() -> void:
 		bar.offset_bottom = 10
 		alerts_box.visible = true
 	_center_h(bar)
+	_layout_dock()
 
 
 func _center_h(c: Control) -> void:
@@ -888,31 +1067,101 @@ func _hp_color(f: float) -> Color:
 	return DANGER if f < 0.34 else (WARN if f < 0.67 else OK)
 
 
+## "6 d": whole days left, rounded down, and "<1 d" under a day.
+func _days_text(days: float) -> String:
+	if not is_finite(days) or days >= 99.0:
+		return "99+ d"
+	if days < 1.0:
+		return "<1 d"
+	return "%d d" % int(days)
+
+
+## The word over the card of someone who is gone or away, or "".
+func _card_word(p) -> String:
+	if p.turned:
+		return "Turned"
+	if p.dead:
+		return "Left" if p.away is Dictionary and String(p.away.get("kind", "")) == "exile" else "Died"
+	if p.away != null:
+		return "Away"
+	return ""
+
+
+func _update_card(c: Dictionary, sim) -> void:
+	var p = c.p
+	var sel: bool = selection != null and selection.ref == p
+	if sel != c.sel:
+		c.sel = sel
+		c.card.add_theme_stylebox_override("panel", _card_style(sel))
+	var word := _card_word(p)
+	var state := "%s|%s" % [word, p.downed]
+	if state != c.state:
+		c.state = state
+		c.veil.visible = word != ""
+		c.veil.color.a = 0.66 if p.dead else 0.48
+		c.word.text = word
+		c.word.add_theme_color_override("font_color", DANGER if word == "Turned" else (INFO if word == "Away" else INK2))
+		c.name.add_theme_color_override("font_color", INK3 if p.dead else INK)
+		var dim := 0.4 if p.dead else (0.7 if p.away != null else (0.45 if p.downed else 1.0))
+		c.pic.modulate = Color(dim, dim, dim)
+	var f: float = clampf(p.hp / 100.0, 0.0, 1.0)
+	c.hp.size = Vector2(c.hp_bg.size.x * f, 3)
+	c.hp.color = _hp_color(f)
+	var present: bool = not p.dead and p.away == null
+	c.badge.visible = p.drafted and present
+	c.fight.visible = p.target != null and not p.downed and present
+	if c.fight.visible:
+		c.fight.modulate.a = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
+	var marks: Array = [] if p.dead else sim.status_of(p)
+	var sig := ""
+	for m in marks:
+		sig += "%s|%s|%s;" % [m.get("icon", ""), Color(m.get("color", INK2)).to_html(), m.get("tip", "")]
+	if sig != c.marks_sig:
+		c.marks_sig = sig
+		_fill_marks(c, marks)
+
+
+## The little row of status icons on a card: what the modules say is wrong with
+## the person (hungry, bleeding, feverish...), each with its tip as a tooltip.
+func _fill_marks(c: Dictionary, marks: Array) -> void:
+	var row: HBoxContainer = c.marks
+	for ch in row.get_children():
+		row.remove_child(ch)
+		ch.queue_free()
+	var shown := mini(marks.size(), mark_max)
+	for i in shown:
+		var m: Dictionary = marks[i]
+		var t := TextureRect.new()
+		t.texture = icons.get(String(m.get("icon", "")), icons.get("help"))
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t.custom_minimum_size = Vector2(mark_px, mark_px)
+		t.modulate = Color(m.get("color", INK2))
+		t.tooltip_text = String(m.get("tip", ""))
+		t.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.add_child(t)
+	c.marks_box.visible = shown > 0
+
+
 func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
+	sim_ref = sim
 	for s in STORES:
 		var v := roundi(float(sim.stock[s[0]]))
 		var lbl: Label = res_values[s[0]]
 		lbl.text = str(v)
 		var low: bool = (s[0] == "ammo" and v < 60) or (s[0] == "meds" and v < 3)
 		lbl.add_theme_color_override("font_color", WARN if low else INK)
+	for kind in res_days:
+		var days: float = sim.supplies.days_left(kind)
+		var dl: Label = res_days[kind]
+		dl.text = _days_text(days)
+		dl.add_theme_color_override("font_color", DANGER if days < 1.0 else (WARN if days < 3.0 else INK3))
 	for c in cards:
-		var p = c.p
-		var sel: bool = selection != null and selection.ref == p
-		if sel != c.sel:
-			c.sel = sel
-			c.card.add_theme_stylebox_override("panel", _card_style(sel))
-		c.pic.modulate = Color(0.45, 0.45, 0.45) if p.downed else Color.WHITE
-		var f: float = p.hp / 100.0
-		c.hp.size = Vector2(c.hp_bg.size.x * f, 3)
-		c.hp.color = _hp_color(f)
-		c.badge.visible = p.drafted
-		c.fight.visible = p.target != null and not p.downed
-		if c.fight.visible:
-			c.fight.modulate.a = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
+		_update_card(c, sim)
 	# clock
 	var m := int(sim.minutes)
 	var h: float = sim.hour
-	day_label.text = "DAY %d" % sim.day
+	day_label.text = ("DAY %d/%d" if compact else "DAY %d OF %d") % [sim.scenario.day(), sim.scenario.total_days()]
 	var pc: Color = PHASE_COLOR[sim.phase]
 	phase_chip.add_theme_stylebox_override("panel", _chip_style(pc))
 	phase_icon.texture = icons[PHASE_ICON[sim.phase]]
@@ -929,7 +1178,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	strip.queue_redraw()
 	var temp := roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
 	temp_icon.texture = icons[PHASE_ICON[sim.phase]]
-	temp_label.text = "%d°C, clear" % temp
+	temp_label.text = "%d°C, %s" % [temp, sim.weather]
 	walkers_label.text = "%d walkers" % walkers
 	# speed and sound
 	if speed != last_speed:
@@ -978,6 +1227,72 @@ func _doing_zombie(z) -> String:
 	return "Wandering the street"
 
 
+## What a person is doing, or why they are not.
+func _doing_person(p) -> String:
+	if p.dead:
+		if p.turned:
+			return "Turned into one of the dead"
+		return "Left through the gate" if p.away is Dictionary and String(p.away.get("kind", "")) == "exile" else "Dead"
+	if p.away != null:
+		return _away_text(p)
+	if p.downed:
+		# resting in bed or stabilised: the medical module says what; else still bleeding
+		return p.activity if (p.stabilised or p.resting_bed != null) and p.activity != "" else "Down and bleeding"
+	if p.reloading > 0.0:
+		return "Reloading"
+	if p.target != null:
+		return "Shooting at a walker"
+	return p.activity
+
+
+## "Away at the pharmacy" for someone out with a scavenging party.
+func _away_text(p) -> String:
+	if p.away is Dictionary and sim_ref != null:
+		var id := String(p.away.get("site", ""))
+		for site in sim_ref.scavenge.sites:
+			if String(site.get("id", "")) == id:
+				return "Away at %s" % String(site.get("name", "")).to_lower()
+	return "Away scavenging"
+
+
+## [text, colour] for the Needs row, from the game hours since a meal and a drink.
+func _needs_of(p) -> Array:
+	var bits: Array = []
+	var severe := false
+	if p.hunger_h >= STARVING_H:
+		bits.append("Starving")
+		severe = true
+	elif p.hunger_h >= HUNGRY_H:
+		bits.append("Hungry")
+	if p.thirst_h >= DEHYDRATED_H:
+		bits.append("Dehydrated")
+		severe = true
+	elif p.thirst_h >= THIRSTY_H:
+		bits.append("Thirsty")
+	if bits.is_empty():
+		return ["Fed", INK]
+	var text: String = bits[0]
+	for i in range(1, bits.size()):
+		text += ", " + String(bits[i]).to_lower()
+	return [text, DANGER if severe else WARN]
+
+
+## [text, colour] for the Wounds row.
+func _wounds_of(p) -> Array:
+	if p.wounds > 0:
+		return ["%d wound%s, bleeding" % [p.wounds, "" if p.wounds == 1 else "s"], DANGER]
+	if p.bleeding > 0.0:
+		return ["Bleeding", DANGER]
+	return ["None", INK2]
+
+
+func _set_text(label: Label, text: String, color: Color) -> void:
+	if label.text != text:
+		label.text = text
+	if label.get_theme_color("font_color") != color:
+		label.add_theme_color_override("font_color", color)
+
+
 func _refresh_selection() -> void:
 	if selection == null or inspect_refs.is_empty():
 		return
@@ -986,14 +1301,15 @@ func _refresh_selection() -> void:
 	if selection.kind == "person":
 		var p = selection.ref
 		f = p.hp / 100.0
-		if p.downed:
-			doing = "Down and bleeding"
-		elif p.reloading > 0.0:
-			doing = "Reloading"
-		elif p.target != null:
-			doing = "Shooting at a walker"
-		else:
-			doing = p.activity
+		doing = _doing_person(p)
+		var need := _needs_of(p)
+		_set_text(inspect_refs.needs, need[0], need[1])
+		var wound := _wounds_of(p)
+		_set_text(inspect_refs.wounds, wound[0], wound[1])
+		var stage: String = sim_ref.medical.infection_stage(p) if sim_ref != null else ""
+		inspect_refs.infection.visible = stage != ""
+		inspect_refs.infection_head.visible = stage != ""
+		_set_text(inspect_refs.infection, stage.capitalize(), WARN)
 		var pips: HBoxContainer = inspect_refs.pips
 		var n := pips.get_child_count()
 		if n > 0:
@@ -1001,7 +1317,7 @@ func _refresh_selection() -> void:
 			for i in n:
 				var pip: ColorRect = pips.get_child(i)
 				pip.color = ACCENT if i < full else Color(1, 1, 1, 0.14)
-		if inspect_refs.get("drafted") != p.drafted:
+		if inspect_refs.get("gizmo_sig") != _gizmo_sig():
 			_build_gizmos()
 	elif selection.kind == "zombie":
 		var z = selection.ref

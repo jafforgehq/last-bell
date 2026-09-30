@@ -467,6 +467,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("repair")
 			KEY_C:
 				_gizmo("focus")
+			KEY_T:
+				_gizmo("treat")
+			KEY_X:
+				_gizmo("sendout")
 			KEY_F5:
 				_quick_save()
 			KEY_F9:
