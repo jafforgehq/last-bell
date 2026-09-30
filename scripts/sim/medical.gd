@@ -74,6 +74,9 @@ const EXILE_REACH := 1.0
 const EXILE_TIMEOUT_H := 1.5
 ## The no-medicine alert comes at most this often (game hours).
 const NO_MEDS_EVERY_H := 2.0
+## Thresholds that fall on exact multiples of a step are met with this much to
+## spare, so a save that lost the last digit of a float plays out the same.
+const EPS := 1e-6
 
 const DANGER := Color("#e0584a")
 const WARN := Color("#e8953a")
@@ -153,7 +156,7 @@ func _tick(p, gh: float) -> void:
 	if p.downed:
 		if p.stabilised:
 			p.hp = minf(100.0, p.hp + REST_HEAL_H * gh)
-			if p.hp >= GET_UP_HP:
+			if p.hp + EPS >= GET_UP_HP:
 				_get_up(p)
 			elif p.resting_bed == null:
 				_carry_to_bed(p)
@@ -161,7 +164,7 @@ func _tick(p, gh: float) -> void:
 			if p.bleed_out < 0.0:
 				p.bleed_out = BLEED_OUT_H # downed by some other code
 			p.bleed_out -= gh
-			if p.bleed_out <= 0.0:
+			if p.bleed_out <= EPS:
 				_bled_out(p)
 	if treat_orders.has(p.id) and not _needs_bandage(p) and p.infected_at < 0.0:
 		treat_orders.erase(p.id)
@@ -187,7 +190,7 @@ func add_wound(p, kind: String) -> void:
 func _roll_infection(p) -> void:
 	if p.infected_at >= 0.0:
 		return
-	if sim.clock_min - float(last_roll.get(p.id, -1.0e9)) < INFECT_GAP_H * 60.0:
+	if sim.clock_min - float(last_roll.get(p.id, -1.0e9)) < INFECT_GAP_H * 60.0 - EPS:
 		return # the same fight
 	last_roll[p.id] = sim.clock_min
 	var chance: float = INFECT_CHANCE[clampi(sim.difficulty, 0, 2)]
@@ -357,9 +360,9 @@ func infection_stage(p) -> String:
 	if p.dead or p.infected_at < 0.0:
 		return ""
 	var hours: float = (sim.clock_min - p.infected_at) / 60.0
-	if hours >= DELIRIUM_H:
+	if hours + EPS >= DELIRIUM_H:
 		return "delirious"
-	if hours >= FEVER_H:
+	if hours + EPS >= FEVER_H:
 		return "feverish"
 	return ""
 
@@ -546,7 +549,7 @@ func _assign() -> void:
 			jobs.append({"healer": healer, "patient": p, "kind": item.kind, "work": 0.0, "stand": null, "anchor": Vector2.ZERO})
 		elif item.rank < 2:
 			_turn_a_healer_to(p, item.rank)
-	if not short.is_empty() and sim.clock_min - no_meds_at >= NO_MEDS_EVERY_H * 60.0:
+	if not short.is_empty() and sim.clock_min - no_meds_at + EPS >= NO_MEDS_EVERY_H * 60.0:
 		no_meds_at = sim.clock_min
 		var p = short[0]
 		var dying: bool = p.downed and not p.stabilised
@@ -614,7 +617,7 @@ func _update_jobs(dt: float) -> void:
 				j.stand = null # they are at their spot and the patient is not: find a new one
 			continue
 		j.work += minutes
-		if j.work >= (BANDAGE_MIN if j.kind == "bandage" else CURE_MIN):
+		if j.work + EPS >= (BANDAGE_MIN if j.kind == "bandage" else CURE_MIN):
 			jobs.erase(j)
 			_finish(j)
 
@@ -655,7 +658,13 @@ func goal_for(p):
 		word = "Treating"
 	elif patient.downed and not patient.stabilised:
 		word = "Stabilising"
-	return {"x": stand.x, "y": stand.y, "face": sim.facing_of(patient.x - stand.x, patient.y - stand.y), "what": "%s %s" % [word, patient.first]}
+	return {"x": stand.x, "y": stand.y, "face": _face(patient.x - stand.x, patient.y - stand.y), "what": "%s %s" % [word, patient.first]}
+
+
+func _face(dx: float, dy: float) -> String:
+	if absf(dx) > absf(dy):
+		return "E" if dx > 0.0 else "W"
+	return "S" if dy > 0.0 else "N"
 
 
 ## Where the healer waits: not on top of the patient. For someone lying on the
@@ -785,7 +794,7 @@ func _update_sendouts() -> void:
 			sendouts.erase(id)
 			continue
 		var waited: float = (sim.clock_min - float(sendouts[id])) / 60.0
-		if Vector2(p.x, p.y).distance_to(gate) <= EXILE_REACH or waited >= EXILE_TIMEOUT_H:
+		if Vector2(p.x, p.y).distance_to(gate) <= EXILE_REACH or waited + EPS >= EXILE_TIMEOUT_H:
 			_exile(p)
 
 

@@ -2,6 +2,7 @@ extends "res://tests/case.gd"
 
 const Helpers := preload("res://tests/helpers.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
+const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 ## An open spot in the hall, a short walk from the infirmary door.
 const HALL := Vector2(46.0, 46.5)
@@ -757,7 +758,7 @@ func test_a_downed_person_is_stabilised_put_to_bed_and_gets_up() -> void:
 	near(hector.hp, 10.0, 0.6, "10 health an hour in bed")
 	var up := _run_until(sim, 70.0, func(): return not hector.downed)
 	check(up > 0.0, "gets up")
-	check(hector.hp >= 40.0 and hector.hp < 41.0, "at 40 health: %s" % hector.hp)
+	near(hector.hp, 40.0, 0.02, "at 40 health")
 	eq(hector.resting_bed, null, "out of bed")
 	eq(hector.dead, false, "alive")
 	check(sim.alerts.has("up-hector"), "an alert that he is up")
@@ -1312,6 +1313,57 @@ func test_save_and_load_state_round_trip() -> void:
 		near(q.y, p.y, 0.001, "%s y" % p.id)
 	near(other.stock.meds, sim.stock.meds, 0.0001, "the same medicine")
 	check(sim.stock.meds < 7.0, "and something was used")
+	a.world.free()
+	b.world.free()
+
+
+## A line for every person's state that matters to the medical rules.
+func _people_line(sim) -> String:
+	var s := "%.3f meds | " % sim.stock.meds
+	for p in sim.people:
+		s += "%s %.3f,%.3f hp %.3f w %d b %.1f d %d st %d bo %.3f bed %s dead %d turned %d away %s inf %.2f | " % [p.id, p.x, p.y, p.hp, p.wounds, p.bleeding, int(p.downed), int(p.stabilised), p.bleed_out, str(p.resting_bed), int(p.dead), int(p.turned), str(p.away), p.infected_at]
+	return s
+
+
+func test_a_game_saved_mid_treatment_plays_out_the_same_when_loaded() -> void:
+	var a := _clinic(3, 1)
+	var sim = a.sim
+	_only_free(sim, ["ana"])
+	var hector = _who(sim, "hector")
+	var marcus = _who(sim, "marcus")
+	var ruth = _who(sim, "ruth")
+	var walt = _who(sim, "walt")
+	_put(sim, hector, HALL.x, HALL.y)
+	_put(sim, marcus, HALL.x - 5.0, HALL.y)
+	sim.medical.add_wound(hector, "bite")
+	_infect(sim, marcus, 8.0, 9.0)
+	sim.medical.gizmo("treat", _sel(marcus))
+	ruth.hp = 0.0
+	sim.medical.on_downed(ruth, "bite")
+	sim.medical.stabilise(ruth)
+	ruth.hp = 12.0
+	_put(sim, walt, 28.0, 32.0, false) # a long walk to the gate
+	sim.toggle_draft(walt)
+	sim.toggle_draft(walt)
+	sim.toggle_draft(walt)
+	_infect(sim, walt, 7.0, 10.0)
+	sim.medical.gizmo("sendout", _sel(walt))
+	Helpers.run(sim, 2.0) # Ana and Walt are on the way
+	check(sim.medical.jobs.size() >= 1 and sim.medical.sendouts.size() == 1, "work is under way")
+	# in memory, not through text: JSON loses the last digit of a float, and a walker
+	# that is exactly one step from a waypoint can then arrive a step later
+	var data := SaveGame.to_dict(sim)
+	var b := Helpers.make(99, 0) # another seed and difficulty: the load replaces them
+	check(SaveGame.apply(b.sim, data), "the save loads")
+	eq(_people_line(b.sim), _people_line(sim), "the same people after loading")
+	Helpers.run(sim, 40.0)
+	Helpers.run(b.sim, 40.0)
+	var after := _people_line(sim)
+	check(after != _people_line(Helpers.make(3, 1).sim), "something happened in those 40 seconds")
+	var got := _people_line(b.sim).split(" | ")
+	var want := after.split(" | ")
+	for i in want.size():
+		eq(got[i], want[i], "after 40 seconds, part %d" % i)
 	a.world.free()
 	b.world.free()
 
