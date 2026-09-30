@@ -7,6 +7,7 @@ const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
+const Scenario := preload("res://scripts/sim/scenario.gd")
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const FireNode := preload("res://scripts/render/fire_node.gd")
@@ -51,6 +52,8 @@ var fire_t := 0.0
 var hud_t := 0.0
 var drag = null
 var walkers := 0
+## A save was asked for at start-up but could not be loaded (a new run began instead).
+var load_failed := false
 
 # screenshot mode (used for automated checks): --shot=path.png
 var shot_path := ""
@@ -114,13 +117,17 @@ func _ready() -> void:
 	sim = Sim.new(data, world, fx)
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
 	# a run is started (or a save loaded) by reloading the scene with the
-	# choice kept in Engine meta: {"difficulty": int, "seed": int, "load": path}
-	var run: Dictionary = Engine.get_meta("run", {})
+	# choice kept in Engine meta: {"difficulty": int, "seed": int, "load": path};
+	# the first run of a process takes it from the command line instead:
+	# --new=<difficulty 0-2> --seed=<n> --load=<path>
+	var run: Dictionary = Scenario.run_from_args(OS.get_cmdline_user_args())
 	if Engine.has_meta("run"):
+		run = Engine.get_meta("run")
 		Engine.remove_meta("run")
 	var loaded := false
 	if String(run.get("load", "")) != "":
 		loaded = SaveGame.apply(sim, SaveGame.read(String(run.load)))
+		load_failed = not loaded
 	if not loaded:
 		sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 
@@ -197,6 +204,8 @@ func _ready() -> void:
 	_parse_args()
 	_clamp_camera()
 	_apply_camera()
+	if load_failed:
+		hud.show_banner("Could not load that save", "A new game was started instead")
 	print("Last Bell ready in %d ms" % (Time.get_ticks_msec() - t0))
 
 
@@ -389,7 +398,9 @@ func _on_alert(id: String) -> void:
 
 
 func _quick_save() -> void:
-	if SaveGame.write(sim, SaveGame.QUICK_PATH):
+	if sim.over != "":
+		hud.show_banner("The run is over", "Start a new game or load a save")
+	elif SaveGame.write(sim, SaveGame.QUICK_PATH):
 		hud.show_banner("Game saved", "Quick save (F9 loads it)")
 	else:
 		hud.show_banner("Could not save", "Nothing was written")
@@ -398,6 +409,10 @@ func _quick_save() -> void:
 func _quick_load() -> void:
 	if not FileAccess.file_exists(SaveGame.QUICK_PATH):
 		hud.show_banner("No quick save yet", "Press F5 to save")
+		return
+	# check it before the current game is thrown away for it
+	if not SaveGame.is_loadable(SaveGame.QUICK_PATH):
+		hud.show_banner("Could not load", "The quick save is damaged or from another version")
 		return
 	Engine.set_meta("run", {"load": SaveGame.QUICK_PATH})
 	get_tree().reload_current_scene()
@@ -649,7 +664,16 @@ func _handle_events() -> void:
 				sound.play("thud", _vol_at(e.x, e.y))
 			"banner":
 				hud.show_banner(e.text, e.sub)
+			"day_start":
+				_autosave()
 	sim.events.clear()
+
+
+## The dawn save: one file, written over at each new day. Not in a screenshot
+## run, and not once the run is lost (that would replace the last good one).
+func _autosave() -> void:
+	if shot_path == "" and sim.over == "":
+		SaveGame.write(sim, SaveGame.AUTO_PATH)
 
 
 # ------------------------------------------------------------- automation --
@@ -670,6 +694,8 @@ func _parse_args() -> void:
 				sim.phase = Sim.phase_at(sim.minutes)
 				var hh := float(v)
 				sim.bell_rung = hh >= 19.0 or hh < 6.0
+				# the game clock follows: it counts minutes from 07:00 on day 1
+				sim.clock_min = (sim.day - 1) * 1440.0 + fposmod(sim.minutes - 420.0, 1440.0)
 			"advance":
 				advance = float(v)
 			"cam":
