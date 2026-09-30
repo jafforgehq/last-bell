@@ -5,7 +5,10 @@ extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
+const S := preload("res://scripts/render/shapes.gd")
 const TILE := GD.TILE
+## How the dead are dimmed (a person who died lies where they fell).
+const DEAD_TINT := Color(0.62, 0.6, 0.6)
 const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vector2(0.26, -0.22)}
 
 var entity # Sim.Person or Sim.Zombie
@@ -17,6 +20,9 @@ var weapon_rect: Rect2
 var gun_front = null
 var anim_t := 0.0
 var pal: Dictionary
+var beds: Array = [] # the cots and mattresses of the map, to find the blanket colour
+var _bed_key := ""
+var _bed_col := Color("#9a9070")
 var _m := Transform2D.IDENTITY
 
 
@@ -33,11 +39,17 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
 		weapon_tex = GD.tex(data.weaponArt.files[e.weapon])
 		gun_front = data.guns[e.weapon].front
+		for o in data.objects:
+			if o.kind == "cot" or o.kind == "mattress":
+				beds.append(o)
 	sync()
 
 
 func sync(redraw: bool = true) -> void:
 	position = Vector2(entity.x, entity.y) * TILE
+	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
+	if modulate != tint:
+		modulate = tint
 	if redraw:
 		queue_redraw()
 
@@ -71,6 +83,10 @@ func _draw() -> void:
 			_draw_dead()
 		else:
 			_draw_zombie()
+	elif entity.turned:
+		return # the walker standing there now is drawn instead
+	elif entity.resting_bed != null:
+		_draw_resting()
 	elif entity.downed:
 		_draw_downed()
 	else:
@@ -177,3 +193,35 @@ func _draw_downed() -> void:
 	_apply()
 	Art.legs(self, pal, "S", 0.0, false, false)
 	draw_texture_rect(tex["S"], pawn_rect, false)
+
+
+## In bed: the head and shoulders on the pillow and the bed's own blanket over
+## the rest (the body is drawn upright, so it lies along the bed, not across it).
+func _draw_resting() -> void:
+	var blanket := _blanket_color()
+	_reset()
+	_tr(0, -0.16) # the head lands on the pillow
+	_apply()
+	draw_texture_rect(tex["S"], pawn_rect, false)
+	_reset()
+	_apply()
+	var hump := S.rrect(-0.34, -0.3, 0.68, 1.22, 0.2, 4)
+	draw_colored_polygon(hump, blanket.lightened(0.05))
+	draw_polyline(S.closed(hump), Color(S.INK.r, S.INK.g, S.INK.b, 0.5), S.LW, true)
+	draw_line(Vector2(-0.29, -0.27), Vector2(0.29, -0.27), blanket.lightened(0.28), 0.06, true)
+
+
+## The colour of the blanket of the bed they lie in, read from the bed's art.
+func _blanket_color() -> Color:
+	var bed: Vector2 = entity.resting_bed
+	var key := "%.2f,%.2f" % [bed.x, bed.y]
+	if key == _bed_key:
+		return _bed_col
+	_bed_key = key
+	for o in beds:
+		if absf(float(o.cx) - bed.x) < 0.05 and absf(float(o.cy) - bed.y) < 0.05 and not o.pieces.is_empty():
+			var img: Image = GD.tex(o.pieces[0].file).get_image()
+			if img != null:
+				_bed_col = img.get_pixel(int(img.get_width() * 0.5), int(img.get_height() * 0.6))
+			break
+	return _bed_col

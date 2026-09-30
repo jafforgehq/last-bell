@@ -54,10 +54,12 @@ const CURE_MEDS := 2.0
 const CURE_BASE := 0.3
 const CURE_PER_POINT := 0.1
 const CURE_MAX := 0.9
-## A healer works while within REACH tiles of the patient and waits STAND tiles
-## away from them, not on top of them.
+## A healer works while within REACH tiles of the patient and waits a little
+## way off them (at most 0.8 tiles), not on top of them. The waiting spot is
+## worked out again once the patient has moved ANCHOR_SLACK from where it was.
 const REACH := 0.9
-const STAND := 0.6
+const STAND := 0.55
+const ANCHOR_SLACK := 0.1
 ## Choosing a healer: each point of Medicine is worth this many tiles of walk.
 const SKILL_TILES := 3.0
 ## Health a person regains an hour lying stabilised, and where they get up.
@@ -400,11 +402,16 @@ func _turn(p) -> void:
 	sim.events.append({"type": "turned", "x": p.x, "y": p.y})
 
 
+## The chance that `healer` clears an infection: 30% plus 10% a point of
+## Medicine, at most 90%.
+func cure_chance(healer) -> float:
+	return minf(CURE_MAX, CURE_BASE + CURE_PER_POINT * float(healer.def.skills.Medicine))
+
+
 ## Takes 2 medicine and rolls the healer's chance; true if the infection is gone.
 func try_cure(healer, patient) -> bool:
 	_use_meds(CURE_MEDS)
-	var chance := minf(CURE_MAX, CURE_BASE + CURE_PER_POINT * float(healer.def.skills.Medicine))
-	if sim.rng.randf() < chance:
+	if sim.rng.randf() < cure_chance(healer):
 		patient.infected_at = -1.0
 		patient.turn_at = -1.0
 		stage_seen.erase(patient.id)
@@ -603,6 +610,8 @@ func _update_jobs(dt: float) -> void:
 			jobs.erase(j)
 			continue
 		if Vector2(j.healer.x, j.healer.y).distance_to(Vector2(j.patient.x, j.patient.y)) > REACH:
+			if j.stand != null and Vector2(j.healer.x, j.healer.y).distance_to(j.stand) < 0.15:
+				j.stand = null # they are at their spot and the patient is not: find a new one
 			continue
 		j.work += minutes
 		if j.work >= (BANDAGE_MIN if j.kind == "bandage" else CURE_MIN):
@@ -649,21 +658,37 @@ func goal_for(p):
 	return {"x": stand.x, "y": stand.y, "face": sim.facing_of(patient.x - stand.x, patient.y - stand.y), "what": "%s %s" % [word, patient.first]}
 
 
-## Where the healer waits: beside the patient on the side they come from. Kept
-## until the patient moves, so the rules do not plan a new path every step.
+## Where the healer waits: not on top of the patient. For someone lying on the
+## ground (drawn with the head to the east) that is at their feet; for someone
+## in bed, at the bedside; else beside them, on the side the healer comes from.
+## Kept until the patient moves, so the rules do not plan a new path every step.
 func _stand_for(j) -> Vector2:
 	var pv := Vector2(j.patient.x, j.patient.y)
-	if j.stand == null or pv.distance_to(j.anchor) > 0.4:
-		var hv := Vector2(j.healer.x, j.healer.y)
-		var off := hv - pv
-		var spot := hv
-		if off.length() > STAND + 0.1:
-			spot = pv + off.normalized() * STAND
-			if sim.world.is_solid(sim.world.solid_p, spot.x, spot.y):
-				spot = pv
-		j.stand = spot
+	if j.stand == null or pv.distance_to(j.anchor) > ANCHOR_SLACK:
+		j.stand = _work_out_stand(j.healer, j.patient)
 		j.anchor = pv
 	return j.stand
+
+
+func _work_out_stand(healer, patient) -> Vector2:
+	var pv := Vector2(patient.x, patient.y)
+	var hv := Vector2(healer.x, healer.y)
+	var options: Array = []
+	if patient.resting_bed != null:
+		var side := -1.0 if hv.x < pv.x else 1.0
+		options = [pv + Vector2(0.75 * side, -0.2), pv + Vector2(-0.75 * side, -0.2)]
+	elif patient.downed:
+		options = [pv + Vector2(-0.6, 0.25)]
+	else:
+		var off := hv - pv
+		if off.length() <= 0.7:
+			return hv
+		var side := -1.0 if off.x < 0.0 else 1.0
+		options = [pv + Vector2(0.65 * side, 0.1), pv + Vector2(-0.65 * side, 0.1), pv + off.normalized() * STAND]
+	for spot in options:
+		if not sim.world.is_solid(sim.world.solid_p, spot.x, spot.y):
+			return spot
+	return pv
 
 
 # -------------------------------------------------------------------- buttons --

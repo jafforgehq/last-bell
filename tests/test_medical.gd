@@ -435,9 +435,10 @@ func test_the_nurse_bandages_a_bleeding_person() -> void:
 	check(goal != null and goal.what == "Bandaging Marcus", "her goal says what she is doing")
 	check(Vector2(goal.x, goal.y).distance_to(Vector2(marcus.x, marcus.y)) <= 0.9, "and is within reach of him")
 	eq(sim.medical.goal_for(marcus), null, "he has no duty of his own")
-	var took := _run_until(sim, 30.0, func(): return marcus.wounds == 0)
-	check(took > 0.0, "she got there and finished")
-	check(took >= 10.0 / 3.0, "a bandage takes 10 game minutes (3.3 seconds): took %s" % took)
+	var began := _run_until(sim, 30.0, func(): return sim.medical.jobs.size() == 1 and sim.medical.jobs[0].work > 0.0)
+	check(began >= 0.0, "she got there and began")
+	var worked := _run_until(sim, 10.0, func(): return marcus.wounds == 0)
+	near(worked, 10.0 / 3.0, 0.15, "a bandage takes 10 game minutes, 3.3 seconds at normal speed")
 	eq(marcus.bleeding, 0.0, "the bleeding stopped")
 	eq(marcus.wounds, 0, "no wounds left")
 	near(sim.stock.meds, meds - 1.0, 0.0001, "one medicine used")
@@ -453,7 +454,7 @@ func test_the_nearest_healer_with_medicine_goes_and_the_best_is_preferred() -> v
 	var hector = _who(sim, "hector")
 	var marcus = _who(sim, "marcus")
 	_put(sim, hector, HALL.x, HALL.y)
-	_put(sim, marcus, HALL.x + 1.0, HALL.y) # right beside him, but no Medicine
+	_put(sim, marcus, HALL.x + 1.0, HALL.y, false) # right beside him, free, but no Medicine
 	sim.medical.add_wound(hector, "scratch")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.jobs.size(), 1, "one job")
@@ -462,7 +463,7 @@ func test_the_nearest_healer_with_medicine_goes_and_the_best_is_preferred() -> v
 	var g2 := _clinic()
 	var s2 = g2.sim
 	_put(s2, _who(s2, "hector"), HALL.x, HALL.y)
-	_put(s2, _who(s2, "marcus"), HALL.x + 1.0, HALL.y)
+	_put(s2, _who(s2, "marcus"), HALL.x + 1.0, HALL.y, false)
 	s2.order_move(_who(s2, "ana"), 48.5, 53.5)
 	s2.medical.add_wound(_who(s2, "hector"), "scratch")
 	Helpers.run(s2, 0.1)
@@ -472,9 +473,20 @@ func test_the_nearest_healer_with_medicine_goes_and_the_best_is_preferred() -> v
 	for id in ["ruth", "dez", "walt"]:
 		s2.order_move(_who(s2, id), _who(s2, id).x, _who(s2, id).y)
 	Helpers.run(s2, 0.1)
-	eq(s2.medical.jobs.size(), 0, "no free healer, no job (Marcus has no Medicine)")
+	eq(s2.medical.jobs.size(), 0, "no free healer, no job (Marcus is free and right there, but has no Medicine)")
+	# skill beats distance: Dez stands beside the patient, Ana is twelve tiles away, Ana goes
+	var g3 := _clinic()
+	var s3 = g3.sim
+	_put(s3, _who(s3, "hector"), 43.5, 30.4)
+	_put(s3, _who(s3, "dez"), 43.5, 29.4, false) # at his generator, a tile away
+	_put(s3, _who(s3, "ana"), 43.5, 41.0, false)
+	s3.medical.add_wound(_who(s3, "hector"), "scratch")
+	Helpers.run(s3, 0.1)
+	eq(s3.medical.jobs.size(), 1, "one job")
+	eq(s3.medical.jobs[0].healer.id, "ana", "the better healer is worth a walk")
 	g.world.free()
 	g2.world.free()
+	g3.world.free()
 
 
 func test_a_drafted_healer_is_not_free_until_released() -> void:
@@ -661,6 +673,42 @@ func test_a_bandage_in_progress_is_not_taken_away() -> void:
 	g.world.free()
 
 
+func test_a_patient_who_shifts_a_little_is_still_reached() -> void:
+	var g := _clinic()
+	var sim = g.sim
+	_only_free(sim, ["ana"])
+	var hector = _who(sim, "hector")
+	_put(sim, hector, HALL.x, HALL.y)
+	sim.medical.add_wound(hector, "bite")
+	Helpers.run(sim, 0.3) # she has set out, and worked out where to wait
+	_put(sim, hector, HALL.x - 0.35, HALL.y) # he steps aside
+	var done := _run_until(sim, 30.0, func(): return hector.wounds == 0)
+	check(done > 0.0, "she still gets to him and bandages him")
+	g.world.free()
+
+
+func test_a_healer_at_a_spot_out_of_reach_finds_a_new_one() -> void:
+	var g := _clinic()
+	var sim = g.sim
+	_only_free(sim, ["ana"])
+	var ana = _who(sim, "ana")
+	var hector = _who(sim, "hector")
+	_put(sim, hector, HALL.x, HALL.y)
+	sim.medical.add_wound(hector, "bite")
+	Helpers.run(sim, 0.2)
+	var job = sim.medical.jobs[0]
+	var bad := Vector2(HALL.x + 1.6, HALL.y) # a waiting spot that is too far off
+	job.stand = bad
+	job.anchor = Vector2(hector.x, hector.y)
+	ana.x = bad.x
+	ana.y = bad.y
+	ana.path = []
+	ana.goal_key = ""
+	var done := _run_until(sim, 30.0, func(): return hector.wounds == 0)
+	check(done > 0.0, "she works out a better spot and finishes")
+	g.world.free()
+
+
 func test_a_healer_who_goes_down_drops_the_job() -> void:
 	var g := _clinic()
 	var sim = g.sim
@@ -815,6 +863,21 @@ func test_the_down_alert_names_ana_only_while_she_can_help() -> void:
 	g3.world.free()
 
 
+func test_nobody_bleeds_while_resting() -> void:
+	var g := _clinic()
+	var sim = g.sim
+	sim.stock.meds = 0.0
+	var hector = _who(sim, "hector")
+	hector.hp = 10.0
+	hector.downed = true
+	hector.stabilised = true
+	hector.bleeding = 8.0
+	hector.wounds = 2
+	Helpers.run(sim, 20.0)
+	near(hector.hp, 20.0, 0.6, "it only heals")
+	g.world.free()
+
+
 func test_going_down_twice_changes_nothing() -> void:
 	var g := _clinic()
 	var sim = g.sim
@@ -863,9 +926,10 @@ func test_treating_an_infection_costs_two_medicines_and_takes_fifteen_minutes() 
 	eq(sim.medical.jobs.size(), 1, "Ana is sent")
 	eq(sim.medical.jobs[0].kind, "infection", "to treat the infection")
 	eq(_who(sim, "ana").activity, "Treating Hector", "what she is doing")
-	var took := _run_until(sim, 40.0, func(): return sim.medical.jobs.is_empty())
-	check(took > 0.0, "it finishes")
-	check(took >= 15.0 / 3.0, "15 game minutes is 5 seconds at least: %s" % took)
+	var began := _run_until(sim, 40.0, func(): return sim.medical.jobs.size() == 1 and sim.medical.jobs[0].work > 0.0)
+	check(began >= 0.0, "Ana gets there and begins")
+	var worked := _run_until(sim, 10.0, func(): return sim.medical.jobs.is_empty())
+	near(worked, 5.0, 0.15, "15 game minutes is 5 seconds at normal speed")
 	near(sim.stock.meds, meds - 2.0, 0.0001, "two medicines used, win or lose")
 	check(not sim.medical.treat_orders.has("hector"), "the order is used up")
 	if hector.infected_at < 0.0:
@@ -873,6 +937,17 @@ func test_treating_an_infection_costs_two_medicines_and_takes_fifteen_minutes() 
 		eq(sim.medical.infection_stage(hector), "", "and no fever")
 	else:
 		check(sim.medical.can_treat(hector), "failed: it can be ordered again")
+	g.world.free()
+
+
+func test_the_cure_chance_is_thirty_percent_plus_ten_a_point_of_medicine() -> void:
+	var g := _clinic()
+	var m = g.sim.medical
+	near(m.cure_chance(_who(g.sim, "ana")), 0.9, 0.0001, "Ana, Medicine 10: capped at 90%")
+	near(m.cure_chance(_who(g.sim, "ruth")), 0.5, 0.0001, "Ruth, Medicine 2")
+	near(m.cure_chance(_who(g.sim, "walt")), 0.5, 0.0001, "Walt, Medicine 2")
+	near(m.cure_chance(_who(g.sim, "dez")), 0.4, 0.0001, "Dez, Medicine 1")
+	near(m.cure_chance(_who(g.sim, "marcus")), 0.3, 0.0001, "Medicine 0")
 	g.world.free()
 
 
@@ -1038,8 +1113,12 @@ func test_the_buttons_follow_the_state() -> void:
 	p.stabilised = false
 	check(m.can_treat(p), "down and not stabilised: treat")
 	check(not m.can_send_out(p), "but not send out")
-	p.downed = false
 	_infect(sim, p, 1.0, 14.0)
+	check(not m.can_send_out(p), "and not when infected and down: they cannot walk")
+	p.stabilised = true
+	check(m.can_send_out(p), "stabilised, they can be sent out")
+	p.downed = false
+	p.stabilised = false
 	check(m.can_treat(p) and m.can_send_out(p), "infected: both")
 	p.away = {"kind": "party"}
 	check(not m.can_treat(p) and not m.can_send_out(p), "away: neither")
@@ -1324,6 +1403,9 @@ func _soak(seed_value: int, difficulty: int, days: int, permadeath: bool = true)
 			alive_jobs[key] = true
 			job_h[key] = float(job_h.get(key, 0.0)) + gh
 			out.worst_job = maxf(out.worst_job, job_h[key])
+			if job_h[key] > 2.5 and not out.has("stuck"):
+				var stand = sim.medical.goal_for(j.healer)
+				out["stuck"] = "%s -> %s (%s) after %.1f h: healer at %.2f,%.2f moving %s path %d/%d goal %s; patient at %.2f,%.2f downed %s bed %s; work %.1f; day %d hour %.1f; order %s repair %s" % [j.healer.id, j.patient.id, j.kind, job_h[key], j.healer.x, j.healer.y, j.healer.moving, j.healer.path_i, j.healer.path.size(), str(stand), j.patient.x, j.patient.y, j.patient.downed, str(j.patient.resting_bed), j.work, sim.day, sim.hour, str(j.healer.order), str(j.healer.repair)]
 			if j.healer.dead or j.patient.dead or j.healer.away != null or j.patient.away != null:
 				out.bad.append("job with a dead or away person: %s" % key)
 		for key in job_h.keys():
@@ -1364,7 +1446,7 @@ func test_a_ten_day_run_with_injuries_never_leaves_anyone_stuck() -> void:
 	check(r.worst_down <= 3.02, "nobody lay unstabilised for more than three hours: %s" % r.worst_down)
 	check(r.worst_rest <= 4.2, "nobody rested for more than it takes to reach 40 health: %s" % r.worst_rest)
 	check(r.worst_infected <= 24.05, "every infection ended within 24 hours: %s" % r.worst_infected)
-	check(r.worst_job <= 2.5, "no job dragged on: %s game hours" % r.worst_job)
+	check(r.worst_job <= 2.5, "no job dragged on: %s game hours (%s)" % [r.worst_job, r.get("stuck", "")])
 	check(r.worst_sendout <= 1.6, "nobody walked to the gate for ever: %s" % r.worst_sendout)
 	check(r.bites > 5, "it did test something: %d bites" % r.bites)
 
