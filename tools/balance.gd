@@ -10,7 +10,7 @@
 ##                    dawns, or when everyone is gone
 ##   --difficulty=N   0 story, 1 standard, 2 brutal                       default 1
 ##   --seed=N         the first seed                                      default 1
-##   --fast           step the rules at 15 Hz instead of 30 (about twice as fast)
+##   --fast           step the rules at 15 Hz instead of 30 (faster, a little coarser)
 ##   --hz=N           step at N Hz (overrides --fast)
 ##   --jobs=N         play N games at a time in worker processes (default 1; a
 ##                    game that collapses is slow, so a batch is worth spreading)
