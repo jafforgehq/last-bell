@@ -1369,9 +1369,8 @@ func test_a_game_saved_mid_treatment_plays_out_the_same_when_loaded() -> void:
 	sim.medical.gizmo("sendout", _sel(walt))
 	Helpers.run(sim, 2.0) # Ana and Walt are on the way
 	check(sim.medical.jobs.size() >= 1 and sim.medical.sendouts.size() == 1, "work is under way")
-	# in memory, not through text: JSON loses the last digit of a float, and a walker
-	# that is exactly one step from a waypoint can then arrive a step later
-	var data := SaveGame.to_dict(sim)
+	# through text, as a file on disk would be
+	var data := SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(sim)))
 	var b := Helpers.make(99, 0) # another seed and difficulty: the load replaces them
 	check(SaveGame.apply(b.sim, data), "the save loads")
 	eq(_people_line(b.sim), _people_line(sim), "the same people after loading")
