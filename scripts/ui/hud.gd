@@ -664,7 +664,8 @@ func _layout_dock() -> void:
 		var per_row := maxi(1, int((panel_w + GIZMO_GAP) / (GIZMO_W + GIZMO_GAP)))
 		var rows := ceili(float(n) / float(per_row))
 		var tall := float(rows * GIZMO_W + (rows - 1) * GIZMO_GAP) + 8.0 + inspect.get_combined_minimum_size().y
-		var room := size.y - 12.0 - (12.0 + res_panel.get_combined_minimum_size().y + 8.0)
+		# measured with a little to spare: a font can make a panel a few pixels taller than its minimum
+		var room := size.y - 12.0 - (12.0 + res_panel.get_combined_minimum_size().y + 24.0)
 		mini = tall > room
 	if mini != gizmo_mini:
 		gizmo_mini = mini
