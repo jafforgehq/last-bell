@@ -132,10 +132,16 @@ func _run_until_back(sim, max_seconds: float) -> Dictionary:
 
 
 func _banner_with(sim, text: String) -> bool:
+	return not _banner(sim, text).is_empty()
+
+
+## The last banner event whose title contains `text`, or {}.
+func _banner(sim, text: String) -> Dictionary:
+	var found := {}
 	for e in sim.events:
 		if e.type == "banner" and String(e.text).contains(text):
-			return true
-	return false
+			found = e
+	return found
 
 
 # -------------------------------------------------------------------- sites --
@@ -593,7 +599,9 @@ func test_wounds_and_losses_reach_the_medical_module() -> void:
 	check(String(a.text).contains("Marcus was bitten"), "a bite is called a bite: '%s'" % a.text)
 	check(String(a.text).contains("Hector did not come back"), "and the loss is told: '%s'" % a.text)
 	eq(a.level, "danger", "a death is a danger alert")
-	check(_banner_with(sim, "Hector"), "and the banner names him")
+	var banner := _banner(sim, "Hector")
+	eq(banner.get("text", ""), "Hector did not come back", "the banner names him")
+	eq(banner.get("sub", ""), "Marcus is home with 14 scrap and 35 ammo. Marcus was bitten.", "and says who is home and hurt")
 	g.world.free()
 
 
@@ -610,6 +618,7 @@ func test_a_scratch_is_reported_as_bleeding() -> void:
 	var a: Dictionary = sim.alerts["scav-1"]
 	check(String(a.text).contains("Dez and Marcus are back from the pharmacy with 5 meds. Marcus is bleeding."), "the story: '%s'" % a.text)
 	eq(a.level, "warn", "a wound is a warning")
+	eq(_banner(sim, "Back from").get("sub", ""), "5 meds. Marcus is bleeding.", "the banner in short")
 	g.world.free()
 
 
@@ -638,6 +647,7 @@ func test_a_party_that_is_all_lost_brings_nothing_back() -> void:
 		near(sim.stock[k], before[k], 0.0001, "no %s came with nobody" % k)
 	var a: Dictionary = sim.alerts["scav-1"]
 	check(String(a.text).contains("Hector did not come back from the hardware store"), "the story: '%s'" % a.text)
+	eq(_banner(sim, "Hector").get("sub", ""), "Lost at the hardware store.", "and the banner says where")
 	g.world.free()
 
 
@@ -957,6 +967,12 @@ func test_a_damaged_save_is_ignored_without_harm() -> void:
 	eq(sc.parties.size(), 1, "the party of nobody is loaded")
 	Helpers.run(g.sim, 2.0)
 	check(sc.parties.is_empty(), "a party of people who do not exist is dissolved, not a crash")
+	# a party for a site that is not in the data, one member called back
+	sc.load_state({"parties": [{"n": 2, "members": ["dez", "hector"], "through": [], "site": "nowhere", "state": "out", "return_at": 900.0, "result": {}}]})
+	check(g.sim.order_move(_p(g.sim, "hector"), 54.0, 30.0), "Hector is called back")
+	Helpers.run(g.sim, 2.0)
+	eq(sc.parties[0].members, ["dez"], "the party goes on without him")
+	eq(sc.parties[0].result, {"loot": {}, "hurt": {}, "lost": []}, "and brings nothing from nowhere")
 	g.world.free()
 
 

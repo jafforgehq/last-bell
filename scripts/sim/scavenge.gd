@@ -526,11 +526,14 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 	sim.alert("scav-%d" % int(party.n), level, text, sub, gate_center(), RETURN_ALERT_TTL)
 	var title := "Back from %s" % where
 	var line := _capitalise(_loot_text(brought)) + "."
-	if not hurt_lines.is_empty():
-		line += " " + " ".join(hurt_lines)
 	if not lost.is_empty():
 		title = "%s did not come back" % _join(lost_names)
-		line = "Lost at %s." % where if came.is_empty() else line + " The rest are home."
+		if came.is_empty():
+			line = "Lost at %s." % where
+		else:
+			line = "%s %s home with %s." % [_join(came_names), "is" if came.size() == 1 else "are", _loot_text(brought)]
+	for hurt_line in hurt_lines:
+		line += " " + hurt_line
 	sim.events.append({"type": "banner", "text": title, "sub": line})
 
 
@@ -541,6 +544,8 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 ## up, so a run's dice stay in step.
 func _decide(party: Dictionary) -> Dictionary:
 	var site := _site(String(party.site))
+	if site.is_empty():
+		return {"loot": {}, "hurt": {}, "lost": []} # a site that is not in the data (a damaged save)
 	var members: Array = []
 	for id in party.members:
 		var p = _person(String(id))
