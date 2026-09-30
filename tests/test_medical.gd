@@ -1510,6 +1510,113 @@ func test_with_the_permadeath_off_nobody_bleeds_to_death_in_ten_days() -> void:
 	check(r.worst_down <= 3.02, "and nobody lay unstabilised for more than three hours: %s" % r.worst_down)
 
 
+## Invariants that must hold at every moment, whatever was done to the people.
+func _broken(sim) -> Array:
+	var bad: Array = []
+	if sim.stock.meds < 0.0:
+		bad.append("negative medicine")
+	var healers := {}
+	var patients := {}
+	for j in sim.medical.jobs:
+		if healers.has(j.healer.id):
+			bad.append("%s has two jobs" % j.healer.id)
+		if patients.has(j.patient.id):
+			bad.append("%s has two healers" % j.patient.id)
+		healers[j.healer.id] = true
+		patients[j.patient.id] = true
+		if j.healer == j.patient:
+			bad.append("%s treats themselves" % j.healer.id)
+		if j.healer.dead or j.patient.dead or j.healer.away != null or j.patient.away != null or j.healer.downed:
+			bad.append("a job with %s and %s" % [j.healer.id, j.patient.id])
+	for p in sim.people:
+		if is_nan(p.hp) or p.hp < 0.0 or p.hp > 100.0:
+			bad.append("%s hp %s" % [p.id, p.hp])
+		if p.bleeding < 0.0 or p.wounds < 0 or (p.wounds == 0 and p.bleeding > 0.0 and not p.dead):
+			bad.append("%s wounds %d bleeding %s" % [p.id, p.wounds, p.bleeding])
+		if p.resting_bed != null and not (p.downed and p.stabilised and not p.dead):
+			bad.append("%s in bed but not resting" % p.id)
+		if p.dead and (p.bleeding != 0.0 or p.resting_bed != null):
+			bad.append("%s dead but bleeding or in bed" % p.id)
+		if p.turned and not p.dead:
+			bad.append("%s turned but not dead" % p.id)
+		if p.downed and not p.stabilised and not p.dead and (p.bleed_out < 0.0 or p.bleed_out > 3.0001):
+			bad.append("%s down with %s hours" % [p.id, p.bleed_out])
+	for id in sim.medical.sendouts.keys():
+		var q = _who(sim, String(id))
+		if q == null or q.dead or q.away != null:
+			bad.append("a send-out for %s who is gone" % id)
+	return bad
+
+
+func test_random_orders_and_accidents_never_break_the_rules() -> void:
+	var problems: Array = []
+	var steps := 0
+	var ops := 0
+	var seen := {"down": 0, "dead": 0, "turned": 0, "away": 0, "bed": 0, "jobs": 0, "sendouts": 0}
+	for seed_value in range(1, 11):
+		var g := _clinic(seed_value, seed_value % 3)
+		var sim = g.sim
+		var dice := RandomNumberGenerator.new()
+		dice.seed = seed_value * 104729
+		for i in int(2 * 480.0 / 0.1):
+			sim.zombies.clear()
+			# something happens, then the rules take a step and put things right
+			if dice.randf() < 0.1 / 0.6:
+				ops += 1
+				var p = sim.people[dice.randi() % sim.people.size()]
+				match dice.randi() % 12:
+					0:
+						sim.medical.add_wound(p, "bite")
+					1:
+						sim.medical.add_wound(p, "scratch")
+					2:
+						p.hp = 0.0
+						sim.medical.on_downed(p, "bite")
+					3:
+						sim.medical.gizmo("treat", _sel(p))
+					4:
+						sim.medical.gizmo("sendout", _sel(p))
+					5:
+						sim.toggle_draft(p)
+					6:
+						if p.away == null and not p.dead:
+							p.away = {"kind": "party"}
+						else:
+							p.away = null
+					7:
+						if dice.randf() < 0.15:
+							sim.medical.kill(p, "scavenging")
+					8:
+						sim.stock.meds = float(dice.randi() % 6)
+					9:
+						sim.order_move(p, 40.0 + dice.randf() * 10.0, 46.5)
+					10:
+						_infect(sim, p, dice.randf() * 10.0, dice.randf() * 12.0)
+					11:
+						sim.permadeath = dice.randf() < 0.5
+			sim.update(0.1)
+			steps += 1
+			if i % 10 == 0:
+				for q in sim.people:
+					seen.down += int(q.downed and not q.dead)
+					seen.dead += int(q.dead and not q.turned and q.away == null)
+					seen.turned += int(q.turned)
+					seen.away += int(q.away != null)
+					seen.bed += int(q.resting_bed != null)
+				seen.jobs += sim.medical.jobs.size()
+				seen.sendouts += sim.medical.sendouts.size()
+				var bad := _broken(sim)
+				if not bad.is_empty():
+					problems.append("seed %d, step %d: %s" % [seed_value, i, str(bad)])
+					break
+		g.world.free()
+	eq(problems, [], "no broken state")
+	eq(steps, 96000, "all the steps were played")
+	check(ops > 1500, "and plenty was done to the people: %d" % ops)
+	for k in seen:
+		check(seen[k] > 0, "%s was seen at some point" % k)
+
+
 func test_a_seeded_run_with_injuries_is_identical_twice() -> void:
 	var a := _soak(5, 1, 3)
 	var b := _soak(5, 1, 3)

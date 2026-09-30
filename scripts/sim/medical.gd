@@ -219,7 +219,7 @@ func on_wall_claw(z, seg) -> void:
 		return
 	add_wound(victim, "scratch")
 	sim.fx.blood(victim.x, victim.y - 0.25, victim.x - z.x, victim.y - z.y, 5)
-	sim.alert("scratch-%s" % victim.id, "warn", "%s was scratched" % victim.first, "Bleeding: a bandage will stop it", Vector2(victim.x, victim.y), 6.0)
+	sim.alert("scratch-%s" % victim.id, "warn", "%s was scratched" % victim.first, "It bleeds until it is bandaged", Vector2(victim.x, victim.y), 6.0)
 
 
 ## 0.85 when badly hurt, else 1.0.
@@ -321,7 +321,7 @@ func _get_up(p) -> void:
 	p.moving = false
 	p.path = []
 	p.goal_key = ""
-	sim.alert("up-%s" % p.id, "info", "%s is back on their feet" % p.first, "Back at work, %d%% health" % roundi(p.hp), Vector2(p.x, p.y), 6.0)
+	sim.alert("up-%s" % p.id, "info", "%s is back up" % p.first, "Back at work, %d%% health" % roundi(p.hp), Vector2(p.x, p.y), 6.0)
 
 
 ## `p` dies for good (cause is a short word such as "scavenging").
