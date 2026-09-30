@@ -34,7 +34,6 @@ const AUTO_PATH := "user://autosave.json"
 ## The rule modules, in the order the rules step them.
 const MODULES := ["scenario", "supplies", "medical", "scavenge"]
 const PHASES := ["day", "dusk", "night", "dawn"]
-const ZOMBIE_STATES := ["wander", "retreat", "approach", "attack", "breach", "dying", "dead"]
 ## Variables that come from the map data, not from play.
 const FIXED := ["def", "look", "gun", "name", "first", "id"]
 ## Variables with their own handling (references to other objects and lists of points).
@@ -161,10 +160,16 @@ static func _zombie_out(z) -> Dictionary:
 	return out
 
 
-## Writes the state of `sim` to `path`. The file is written beside it first and
-## moved into place, so a crash half way never leaves a broken save.
+## Writes the state of `sim` to `path`; false if it cannot (or the state is not
+## one that could be loaded back). The file is written beside it first and moved
+## into place, so a crash half way never leaves a broken save.
 static func write(sim, path: String) -> bool:
 	var text := JSON.stringify(to_dict(sim), "", true, true)
+	# never replace a good save with one that could not be loaded back (a bad
+	# number in the game turns into null in the text)
+	var check := JSON.new()
+	if check.parse(text) != OK or typeof(check.data) != TYPE_DICTIONARY or _parse(sim, check.data) == null:
+		return false
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
@@ -471,7 +476,7 @@ static func _zombie_in(sim, r: Reader, zd: Dictionary, by_seg: Dictionary, claim
 		return null
 	for k in f:
 		z.set(k, f[k])
-	if not z.state in ZOMBIE_STATES or z.look_index < 0 or z.look_index >= sim.looks.size():
+	if z.state == "" or z.look_index < 0 or z.look_index >= sim.looks.size():
 		return null
 	z.look = sim.looks[z.look_index]
 	z.path = r.points(zd.get("path", []))

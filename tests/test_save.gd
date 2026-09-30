@@ -66,9 +66,15 @@ func _rich_night(seed_value: int, difficulty: int) -> Dictionary:
 	var hector = ppl.hector
 	hector.hp = 0.0
 	sim.medical.on_downed(hector, "bite")
+	# Walt is infected and Ana is to treat him; Marcus is infected and on his
+	# way out through the gate
 	ppl.walt.infected_at = sim.clock_min
 	ppl.walt.turn_at = sim.clock_min + 14.0 * 60.0
+	sim.medical.gizmo("treat", {"kind": "person", "ref": ppl.walt})
 	_advance(sim, 8.0)
+	ppl.marcus.infected_at = sim.clock_min - 60.0
+	ppl.marcus.turn_at = sim.clock_min + 10.0 * 60.0
+	sim.medical.gizmo("sendout", {"kind": "person", "ref": ppl.marcus})
 	sim._damage_segment(sim.segments[3], 1000.0)
 	_advance(sim, 2.5)
 	return g
@@ -84,8 +90,10 @@ func _rich_day(seed_value: int) -> Dictionary:
 	sim._segment_state(sim.segments[4])
 	sim.order_repair(ppl.hector, sim.segments[4])
 	sim.order_post(ppl.ruth)
+	var sent := false
 	if sim.scavenge.can_send():
-		sim.scavenge.send([ppl.marcus, ppl.walt], "houses")
+		sent = sim.scavenge.send([ppl.marcus, ppl.walt], "houses")
+	g["sent"] = sent
 	_to_hour(sim, 11.0)
 	return g
 
@@ -306,8 +314,14 @@ func test_a_busy_night_loads_and_plays_out_identically() -> void:
 		breached = breached or s.state == 3
 	check(breached, "a section is down")
 	var d := SaveGame.to_dict(sim_a)
+	# the modules have state in play: a healer with a patient, a treatment
+	# ordered, someone walking to the gate to leave
+	var med: Dictionary = sim_a.medical.save()
+	check(med.jobs.size() >= 1, "a healer has a patient: %s" % str(med.jobs))
+	check(med.orders.size() >= 1 or med.jobs.size() >= 2, "a treatment is ordered or under way")
+	check(med.sendouts.size() >= 1, "someone is on their way out: %s" % str(med.sendouts))
 	# one copy straight from the data, one through JSON text, both onto sims
-	# that did not start from this run (other seed and difficulty)
+	# that start from no run at all, as in main.gd
 	var b := _bare()
 	var c := _bare()
 	check(SaveGame.apply(b.sim, d), "it applies")
@@ -351,6 +365,10 @@ func test_a_busy_night_loads_and_plays_out_identically() -> void:
 func test_a_day_with_a_party_out_loads_and_plays_out_identically() -> void:
 	var a := _rich_day(6)
 	var sim_a = a.sim
+	if a.sent:
+		eq(sim_a.scavenge.parties.size(), 1, "a party is out")
+		for id in ["marcus", "walt"]:
+			check(_by_id(sim_a)[id].away != null, "%s is off the map" % id)
 	var d := SaveGame.to_dict(sim_a)
 	var b := _bare()
 	check(SaveGame.apply(b.sim, JSON.parse_string(JSON.stringify(d, "", true, true))), "it applies from JSON text")
@@ -463,6 +481,30 @@ func test_a_defeated_run_loads_as_defeated() -> void:
 	b.world.free()
 
 
+func test_someone_who_left_or_was_lost_stays_gone_after_a_load() -> void:
+	var a := Helpers.make(18, 1)
+	var ppl := _by_id(a.sim)
+	ppl.walt.dead = true
+	ppl.walt.away = {"kind": "exile"}
+	ppl.hector.dead = true
+	ppl.hector.away = {"kind": "lost", "site": "houses"}
+	ppl.ana.dead = true
+	ppl.ana.turned = true
+	Helpers.run(a.sim, 2.0)
+	var b := _bare()
+	var d: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(a.sim), "", true, true))
+	check(SaveGame.apply(b.sim, d), "it applies")
+	var pb := _by_id(b.sim)
+	eq(pb.walt.away, {"kind": "exile"}, "the exile record is back")
+	eq(pb.walt.dead, true, "and he is gone")
+	eq(pb.hector.away.get("kind"), "lost", "the lost record is back")
+	eq(pb.hector.away.get("site"), "houses", "with the site")
+	eq(pb.ana.turned, true, "the turned stay turned")
+	eq(pb.ana.away, null, "and were never away")
+	a.world.free()
+	b.world.free()
+
+
 func test_modules_keep_their_own_state_through_a_save() -> void:
 	var a := _rich_night(12, 1)
 	var b := _bare()
@@ -505,7 +547,8 @@ func test_a_wrong_version_or_damaged_data_is_refused_without_a_change() -> void:
 		["order the wrong shape", [[["people", 0, "order"], [1.0, 2.0]]]],
 		["repair names no section", [[["people", 0, "repair"], 99]]],
 		["target beyond the walkers", [[["people", 0, "target"], 9999]]],
-		["a walker's state is nonsense", [[["zombies", 0, "state"], "flying"]]],
+		["a walker's state is not text", [[["zombies", 0, "state"], 5]]],
+		["a walker's state is empty", [[["zombies", 0, "state"], ""]]],
 		["a walker at the wall without a slot", [[["zombies", 0, "state"], "attack"], [["zombies", 0, "slot"], null]]],
 		["a walker without a position", [[["zombies", 0, "x"], ERASE]]],
 		["a walker's look is out of range", [[["zombies", 0, "look_index"], 500]]],
@@ -584,6 +627,25 @@ func test_files_are_written_and_read_back() -> void:
 	_cleanup()
 	a.world.free()
 	b.world.free()
+
+
+func test_a_game_that_could_not_be_loaded_back_does_not_replace_a_good_save() -> void:
+	_cleanup()
+	var g := Helpers.make(17, 1)
+	Helpers.run(g.sim, 4.0)
+	check(SaveGame.write(g.sim, TMP_A), "a good save is written")
+	var before := FileAccess.get_file_as_string(TMP_A)
+	Helpers.run(g.sim, 4.0)
+	g.sim.people[2].hp = NAN
+	check(not SaveGame.write(g.sim, TMP_A), "a game with a bad number is not written")
+	eq(FileAccess.get_file_as_string(TMP_A), before, "and the good file stays as it was")
+	check(not FileAccess.file_exists(TMP_A + ".tmp"), "without a temporary file left behind")
+	g.sim.people[2].hp = 50.0
+	g.sim.zombies[0].state = "attack"
+	g.sim.zombies[0].slot = null
+	check(not SaveGame.write(g.sim, TMP_A), "nor is a walker at the wall with no place there")
+	_cleanup()
+	g.world.free()
 
 
 func test_a_missing_or_damaged_file_is_refused_quietly() -> void:
