@@ -8,8 +8,10 @@ const Medical := preload("res://scripts/sim/medical.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Scenario := preload("res://scripts/sim/scenario.gd")
 
-## What a new run starts with (tuned later with the balance harness).
-const START_STOCK := {"ammo": 212.0, "scrap": 24.0, "food": 41.0, "water": 120.0, "meds": 7.0}
+## What a new run starts with (tuned later with the balance harness). Food and
+## water are six days of full rations for the crew of six (6 x 1 x 6 food, 6 x
+## 1.5 x 6 water): with no income the first person is hungry or thirsty on day 7.
+const START_STOCK := {"ammo": 212.0, "scrap": 24.0, "food": 36.0, "water": 54.0, "meds": 7.0}
 ## The story, standard and brutal difficulties.
 const DIFFICULTY_NAMES := ["Story", "Standard", "Brutal"]
 
