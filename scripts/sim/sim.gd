@@ -436,6 +436,7 @@ func update(dt: float) -> void:
 		elif phase == "day":
 			day += 1
 			bell_rung = false
+			events.append({"type": "day_start", "day": day})
 			events.append({"type": "banner", "text": "Day %d" % day, "sub": "Repair the wall before dusk"})
 
 	scenario.update(dt)
