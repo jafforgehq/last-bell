@@ -854,7 +854,12 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 				return
 			if z.repath <= 0.0 or z.path.is_empty():
 				z.repath = 1.0
-				z.path = path_z.find(world.solid_z, z.x, z.y, prey.x, prey.y)
+				if world.is_solid(world.solid_z, z.x, z.y):
+					# a survivor who turned inside the school stands where the dead
+					# cannot walk: there they hunt by the people's paths
+					z.path = path_p.find(world.solid_p, z.x, z.y, prey.x, prey.y)
+				else:
+					z.path = path_z.find(world.solid_z, z.x, z.y, prey.x, prey.y)
 				z.path_i = 0
 			_follow(z, slow * 1.1, dt)
 

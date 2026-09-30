@@ -332,6 +332,32 @@ func test_a_person_resting_in_bed_turns_in_bed() -> void:
 	g.world.free()
 
 
+func test_a_walker_that_was_a_survivor_hunts_inside_the_school_too() -> void:
+	# the school is solid ground for walkers coming in from outside; one who
+	# turned in its infirmary must still go for the people there
+	var g := _clinic(3, 1)
+	var sim = g.sim
+	var ana = _who(sim, "ana")
+	_put(sim, ana, 48.5, 53.5, false) # at her work, not drafted: she does not shoot by day
+	var walt = _who(sim, "walt")
+	walt.x = COT_A.x
+	walt.y = COT_A.y
+	walt.hp = 12.0
+	walt.downed = true
+	walt.stabilised = true
+	walt.resting_bed = COT_A
+	_infect(sim, walt, 11.0, 0.05)
+	Helpers.run(sim, 1.0)
+	check(walt.turned, "he turned")
+	eq(sim.zombies.size(), 1, "one walker")
+	var z = sim.zombies[0]
+	var moved := _run_until(sim, 20.0, func(): return Vector2(z.x, z.y).distance_to(COT_A) > 1.5)
+	check(moved >= 0.0, "it gets out of the bed")
+	var got_her := _run_until(sim, 30.0, func(): return ana.wounds > 0 or ana.downed)
+	check(got_her >= 0.0, "and gets to Ana")
+	g.world.free()
+
+
 func test_an_infected_person_away_turns_when_back() -> void:
 	var g := _clinic(3, 1)
 	var sim = g.sim
