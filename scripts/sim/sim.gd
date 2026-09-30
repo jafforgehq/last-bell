@@ -3,6 +3,15 @@
 extends RefCounted
 
 const Pathfinder := preload("res://scripts/sim/pathfinder.gd")
+const Supplies := preload("res://scripts/sim/supplies.gd")
+const Medical := preload("res://scripts/sim/medical.gd")
+const Scavenge := preload("res://scripts/sim/scavenge.gd")
+const Scenario := preload("res://scripts/sim/scenario.gd")
+
+## What a new run starts with (tuned later with the balance harness).
+const START_STOCK := {"ammo": 212.0, "scrap": 24.0, "food": 41.0, "water": 120.0, "meds": 7.0}
+## The story, standard and brutal difficulties.
+const DIFFICULTY_NAMES := ["Story", "Standard", "Brutal"]
 
 const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vector2(0.26, -0.22)}
 
@@ -66,6 +75,25 @@ class Person:
 	var thrust := 0.0
 	var downed := false
 	var hammer_t := 0.0
+	## Died (bled out, starved...) or turned: out of the game for good.
+	var dead := false
+	var turned := false
+	## Game hours since they last ate a proper meal or drank.
+	var hunger_h := 0.0
+	var thirst_h := 0.0
+	## Health lost per game hour from open wounds, and how many wounds are open.
+	var bleeding := 0.0
+	var wounds := 0
+	## Game hours left to be stabilised while downed, or -1 when that does not apply.
+	var bleed_out := -1.0
+	var stabilised := false
+	## When (in game minutes since the run began) they were infected and will turn, or -1.
+	var infected_at := -1.0
+	var turn_at := -1.0
+	## Where they are healing in bed (a Vector2), or null.
+	var resting_bed = null
+	## The scavenging party they are away with (they are off the map), or null.
+	var away = null
 
 
 class Zombie:
@@ -94,6 +122,8 @@ class Zombie:
 	var wander_t := 0.0
 	var dead_t := 0.0
 	var remove := false
+	## The name of the survivor this used to be, for one who turned.
+	var turned_name := ""
 
 
 var world
@@ -122,6 +152,21 @@ var on_segment_change: Callable
 var spawns: Array = []
 var guns: Dictionary
 var weapons: Dictionary
+## The one random source of the rules, seeded per run.
+var rng := RandomNumberGenerator.new()
+var run_seed := 0
+## 0 story, 1 standard, 2 brutal.
+var difficulty := 1
+## Whether a person who bleeds out dies for good.
+var permadeath := true
+## "clear" or "rain" (set each dawn by the supplies module).
+var weather := "clear"
+## "" while the run goes on, then "defeat" or "victory". The rules stop stepping.
+var over := ""
+var supplies
+var medical
+var scavenge
+var scenario
 
 
 func _init(data: Dictionary, w, effects) -> void:
@@ -164,6 +209,12 @@ func _init(data: Dictionary, w, effects) -> void:
 		segments.append(seg)
 	for def in d.people:
 		people.append(_make_person(def))
+	supplies = Supplies.new()
+	medical = Medical.new()
+	scavenge = Scavenge.new()
+	scenario = Scenario.new()
+	for m in [supplies, medical, scavenge, scenario]:
+		m.setup(self)
 	_seed()
 
 
@@ -186,9 +237,9 @@ func _make_person(def: Dictionary) -> Person:
 	p.x = def.job.x
 	p.y = def.job.y
 	p.mag = int(p.gun.get("mag", 0))
-	p.cooldown = randf()
+	p.cooldown = rng.randf()
 	p.aim = guns[def.weapon].rest
-	p.walk_phase = randf() * 6.0
+	p.walk_phase = rng.randf() * 6.0
 	p.activity = def.job.what
 	return p
 
@@ -242,16 +293,16 @@ func spawn(x: float, y: float, state: String) -> Zombie:
 	var z := Zombie.new()
 	z.x = x
 	z.y = y
-	z.look_index = randi() % looks.size()
+	z.look_index = rng.randi() % looks.size()
 	z.look = looks[z.look_index]
 	z.state = state
-	z.hp = 4 + randi() % 4
-	z.speed = 0.5 + randf() * 0.35
-	z.limp = randf() < 0.4
-	z.walk_phase = randf() * 6.0
-	z.t = randf() * 10.0
-	z.attack_t = randf()
-	z.groan_t = 2.0 + randf() * 10.0
+	z.hp = 4 + rng.randi() % 4
+	z.speed = 0.5 + rng.randf() * 0.35
+	z.limp = rng.randf() < 0.4
+	z.walk_phase = rng.randf() * 6.0
+	z.t = rng.randf() * 10.0
+	z.attack_t = rng.randf()
+	z.groan_t = 2.0 + rng.randf() * 10.0
 	zombies.append(z)
 	return z
 
@@ -272,7 +323,7 @@ func toggle_draft(p: Person) -> void:
 
 
 func order_move(p: Person, x: float, y: float) -> bool:
-	if p.downed:
+	if p.downed or p.dead or p.away != null:
 		return false
 	if world.is_solid(world.solid_p, x, y):
 		return false
@@ -297,9 +348,64 @@ func order_repair(p: Person, seg: Segment) -> void:
 	p.goal_key = ""
 
 
+## How well a person does things right now (shooting, repairing): 1.0 normal,
+## less when hungry, thirsty or hurt.
+func perf(p: Person) -> float:
+	return supplies.perf(p) * medical.perf(p)
+
+
+## Small status marks for a person's card and panel, from every module:
+## [{"icon": String, "color": Color, "tip": String}].
+func status_of(p: Person) -> Array:
+	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p)
+
+
+## Game hours that pass in `dt` seconds of the rules' time.
+func game_hours(dt: float) -> float:
+	return dt * min_per_sec / 60.0
+
+
+## A button the HUD offers for the selection (see the modules' gizmo()):
+## true if a module took it.
+func handle_gizmo(id: String, sel) -> bool:
+	for m in [medical, scavenge, supplies, scenario]:
+		if m.has_method("gizmo") and m.gizmo(id, sel):
+			return true
+	return false
+
+
+## Sets up a fresh run on a newly built Sim: day 1 at 07:00, the starting
+## stocks, a quiet yard, the seed and difficulty.
+func start_run(difficulty_index: int, seed_value: int) -> void:
+	difficulty = clampi(difficulty_index, 0, 2)
+	run_seed = seed_value
+	rng.seed = seed_value
+	day = 1
+	minutes = 7.0 * 60.0
+	phase = phase_at(minutes)
+	bell_rung = false
+	spawn_t = 6.0
+	kills = 0
+	over = ""
+	weather = "clear"
+	stock = START_STOCK.duplicate()
+	events.clear()
+	alerts.clear()
+	zombies.clear()
+	for seg in segments:
+		for sl in seg.slots:
+			sl.who = null
+	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
+		spawn(pos[0], pos[1], "wander")
+	for m in [supplies, medical, scavenge, scenario]:
+		m.start()
+
+
 # ------------------------------------------------------------------ update --
 
 func update(dt: float) -> void:
+	if over != "":
+		return
 	t += dt
 	var before := phase
 	minutes += dt * min_per_sec
@@ -326,6 +432,11 @@ func update(dt: float) -> void:
 			bell_rung = false
 			events.append({"type": "banner", "text": "Day %d" % day, "sub": "Repair the wall before dusk"})
 
+	scenario.update(dt)
+	supplies.update(dt)
+	medical.update(dt)
+	scavenge.update(dt)
+
 	# spawning: a trickle at dusk, groups of two or three at night
 	if phase == "dusk" or phase == "night":
 		spawn_t -= dt
@@ -335,11 +446,11 @@ func update(dt: float) -> void:
 				alive += 1
 		var night := phase == "night"
 		if spawn_t <= 0.0 and alive < (50 if night else 30):
-			var sp: Vector2 = spawns[randi() % spawns.size()]
-			var n := (2 + randi() % 2) if night else 1
+			var sp: Vector2 = spawns[rng.randi() % spawns.size()]
+			var n := (2 + rng.randi() % 2) if night else 1
 			for i in n:
-				spawn(sp.x + (randf() - 0.5) * 1.6, sp.y + (randf() - 0.5) * 1.6, "approach")
-			spawn_t = (2.6 + randf() * 1.6) if night else (4.0 + randf() * 2.5)
+				spawn(sp.x + (rng.randf() - 0.5) * 1.6, sp.y + (rng.randf() - 0.5) * 1.6, "approach")
+			spawn_t = (2.6 + rng.randf() * 1.6) if night else (4.0 + rng.randf() * 2.5)
 
 	for p in people:
 		_update_person(p, dt)
@@ -360,11 +471,16 @@ func update(dt: float) -> void:
 # ------------------------------------------------------------------ people --
 
 func _goal_for(p: Person):
-	if p.downed:
+	if p.downed or p.dead or p.away != null:
 		return null
 	if p.order != null:
 		var is_post: bool = p.order.z > 0.5
 		return {"x": p.order.x, "y": p.order.y, "face": _post_face(p) if is_post else "", "what": p.def.post.what if is_post else "Holding position"}
+	var duty = medical.goal_for(p)
+	if duty == null:
+		duty = scavenge.goal_for(p)
+	if duty != null:
+		return duty
 	if p.repair != null:
 		var s: Segment = p.repair
 		return {"x": s.center.x, "y": s.center.y, "face": s.side, "what": "Repairing the %s" % s.name.to_lower()}
@@ -387,7 +503,7 @@ func _post_face(p: Person) -> String:
 func _update_person(p: Person, dt: float) -> void:
 	p.recoil = maxf(0.0, p.recoil - dt * 8.0)
 	p.thrust = maxf(0.0, p.thrust - dt * 4.0)
-	if p.downed:
+	if p.downed or p.dead or p.away != null:
 		return
 	var goal = _goal_for(p)
 	if goal != null:
@@ -417,7 +533,9 @@ func _update_person(p: Person, dt: float) -> void:
 			var hx := s.center.x + (-0.8 if s.side == "W" else (0.8 if s.side == "E" else 0.0))
 			var hy := s.center.y - (0.8 if s.side == "N" else 0.0)
 			fx.hit_material(hx, hy, "metal")
-		_repair_segment(s, dt * 9.0)
+		var done: float = supplies.repair_budget(dt * 9.0 * perf(p))
+		if done > 0.0:
+			_repair_segment(s, done)
 		if s.hp >= s.max_hp:
 			p.repair = null
 	_combat(p, dt)
@@ -519,33 +637,33 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	var dist := Vector2(z.x - p.x, z.y - p.y).length()
 	if gun.get("melee", false):
 		p.thrust = 1.0
-		p.cooldown = float(gun.cooldown) * (0.9 + randf() * 0.2)
+		p.cooldown = float(gun.cooldown) * (0.9 + rng.randf() * 0.2)
 		events.append({"type": "stab", "x": p.x, "y": p.y})
-		if randf() < float(gun.acc):
+		if rng.randf() < float(gun.acc):
 			_hurt_zombie(z, float(gun.dmg), ang)
 		return
 	p.mag -= 1
 	p.recoil = 1.0
-	p.cooldown = float(gun.cooldown) * (0.85 + randf() * 0.3)
+	p.cooldown = float(gun.cooldown) * (0.85 + rng.randf() * 0.3)
 	var m := muzzle(p, ang)
 	fx.muzzle(m.x, m.y, ang, p.weapon == "shotgun" or p.weapon == "hunting")
 	fx.casing(p.x, p.y - 0.15, ang, p.weapon == "shotgun")
 	events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
 	stock.ammo = maxf(0.0, stock.ammo - (0.34 if p.weapon == "shotgun" else 0.2))
 	var pellets := int(gun.get("pellets", 1))
-	var skill: float = float(p.def.skills.Shooting) / 10.0
+	var skill: float = float(p.def.skills.Shooting) / 10.0 * perf(p)
 	var dealt := 0.0
 	for k in pellets:
-		var pa := ang + (randf() - 0.5) * float(gun.get("spread", 0.05))
+		var pa := ang + (rng.randf() - 0.5) * float(gun.get("spread", 0.05))
 		var p_hit := float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / float(gun.range), 2.0))
-		var hit := randf() < (p_hit * 0.7 if pellets > 1 else p_hit)
+		var hit := rng.randf() < (p_hit * 0.7 if pellets > 1 else p_hit)
 		var e: Vector2
 		if hit:
-			e = Vector2(z.x + (randf() - 0.5) * 0.2, z.y - 0.3 + (randf() - 0.5) * 0.3)
+			e = Vector2(z.x + (rng.randf() - 0.5) * 0.2, z.y - 0.3 + (rng.randf() - 0.5) * 0.3)
 			dealt += float(gun.dmg)
 		else:
-			var over := dist + 1.0 + randf() * 3.0
-			var a2 := pa + (randf() - 0.5) * 0.12
+			var over := dist + 1.0 + rng.randf() * 3.0
+			var a2 := pa + (rng.randf() - 0.5) * 0.12
 			e = Vector2(p.x + cos(a2) * over, p.y - 0.15 + sin(a2) * over)
 			fx.smoke(e.x, e.y, 0.12, false)
 		fx.tracer(m.x, m.y, e.x, e.y)
@@ -592,7 +710,7 @@ func _assign_slot(z: Zombie) -> bool:
 		for sl in s.slots:
 			if sl.who != null:
 				continue
-			var score := Vector2(sl.ax - z.x, sl.ay - z.y).length() + crowd * 1.2 + randf() * 4.0
+			var score := Vector2(sl.ax - z.x, sl.ay - z.y).length() + crowd * 1.2 + rng.randf() * 4.0
 			if score < best_score:
 				best_score = score
 				best = sl
@@ -647,7 +765,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 		return
 	z.groan_t -= dt
 	if z.groan_t <= 0.0:
-		z.groan_t = 5.0 + randf() * 12.0
+		z.groan_t = 5.0 + rng.randf() * 12.0
 		events.append({"type": "groan", "x": z.x, "y": z.y})
 	if z.stagger > 0.0:
 		z.stagger -= dt
@@ -657,22 +775,22 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 		"wander":
 			z.wander_t -= dt
 			if z.wander_t <= 0.0 or z.path.is_empty() or z.path_i >= z.path.size():
-				z.wander_t = 6.0 + randf() * 8.0
+				z.wander_t = 6.0 + rng.randf() * 8.0
 				for k in 6:
-					var tx := z.x + (randf() - 0.5) * 10.0
-					var ty := z.y + (randf() - 0.5) * 10.0
+					var tx := z.x + (rng.randf() - 0.5) * 10.0
+					var ty := z.y + (rng.randf() - 0.5) * 10.0
 					if tx > 0 and ty > 0 and tx < W and ty < H and not world.is_solid(world.solid_z, tx, ty):
 						z.path = path_z.find(world.solid_z, z.x, z.y, tx, ty)
 						z.path_i = 0
 						break
 			_follow(z, slow * 0.55, dt)
-			if bell_rung and randf() < dt * 0.1:
+			if bell_rung and rng.randf() < dt * 0.1:
 				z.state = "approach"
 		"retreat":
 			if _follow(z, slow, dt):
 				z.remove = true
 		"approach":
-			if _breached() and randf() < dt:
+			if _breached() and rng.randf() < dt:
 				z.state = "breach"
 				return
 			if z.slot == null and not _assign_slot(z):
@@ -705,14 +823,14 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 				return
 			z.attack_t -= dt
 			if z.attack_t <= 0.0:
-				z.attack_t = 1.1 + randf() * 0.6
+				z.attack_t = 1.1 + rng.randf() * 0.6
 				_claw(z, s)
 		"breach":
 			z.repath -= dt
 			var prey: Person = null
 			var pd := INF
 			for p in people:
-				if p.downed:
+				if p.downed or p.dead or p.away != null:
 					continue
 				var dist := Vector2(p.x - z.x, p.y - z.y).length()
 				if dist < pd:
@@ -735,15 +853,16 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 
 
 func _claw(z: Zombie, s: Segment) -> void:
-	_damage_segment(s, 1.0 + randf() * 1.3)
+	_damage_segment(s, 1.0 + rng.randf() * 1.3)
 	var mat := "wood" if s.kind == "pallets" else ("stone" if s.kind == "blocks" else "metal")
 	var nx := 0.0 if s.side == "N" else (1.0 if s.side == "W" else -1.0)
 	var ny := 1.0 if s.side == "N" else 0.0
-	if randf() < 0.6:
+	if rng.randf() < 0.6:
 		fx.hit_material(z.x + nx * 0.35, z.y + ny * 0.25, mat)
 	events.append({"type": "claw", "material": mat, "x": z.x, "y": z.y})
 	var pct := roundi(s.hp / s.max_hp * 100.0)
 	alert("seg-%d" % s.id, "danger" if pct < 34 else "warn", "%s under attack" % s.name, "%d%% intact" % pct, s.center, 4.0)
+	medical.on_wall_claw(z, s)
 
 
 func _damage_segment(s: Segment, amount: float) -> void:
@@ -783,14 +902,13 @@ func _segment_state(s: Segment) -> void:
 
 
 func _bite(z: Zombie, p: Person) -> void:
-	p.hp = maxf(0.0, p.hp - (9.0 + randf() * 6.0))
+	p.hp = maxf(0.0, p.hp - (9.0 + rng.randf() * 6.0))
 	fx.blood(p.x, p.y - 0.25, p.x - z.x, p.y - z.y, 8)
 	events.append({"type": "bite", "x": p.x, "y": p.y})
 	alert("hurt-%s" % p.id, "danger", "%s is being bitten" % p.first, "%d%% health" % roundi(p.hp), Vector2(p.x, p.y), 6.0)
-	if p.hp <= 0.0:
-		p.downed = true
-		p.moving = false
-		alert("down-%s" % p.id, "danger", "%s is down" % p.first, "Get them to Ana", Vector2(p.x, p.y), 60.0)
+	medical.after_bite(z, p)
+	if p.hp <= 0.0 and not p.downed:
+		medical.on_downed(p, "bite")
 
 
 func _separate() -> void:

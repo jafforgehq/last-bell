@@ -6,6 +6,7 @@ extends Node2D
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
+const SaveGame := preload("res://scripts/sim/save_game.gd")
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const FireNode := preload("res://scripts/render/fire_node.gd")
@@ -112,6 +113,16 @@ func _ready() -> void:
 
 	sim = Sim.new(data, world, fx)
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
+	# a run is started (or a save loaded) by reloading the scene with the
+	# choice kept in Engine meta: {"difficulty": int, "seed": int, "load": path}
+	var run: Dictionary = Engine.get_meta("run", {})
+	if Engine.has_meta("run"):
+		Engine.remove_meta("run")
+	var loaded := false
+	if String(run.get("load", "")) != "":
+		loaded = SaveGame.apply(sim, SaveGame.read(String(run.load)))
+	if not loaded:
+		sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 
 	for tr in data.trees:
 		var s := Sprite2D.new()
@@ -327,6 +338,9 @@ func _gizmo(g: String) -> void:
 	var sel = selection
 	if sel == null:
 		return
+	if sim.handle_gizmo(g, sel):
+		hud.select(selection)
+		return
 	if g == "draft" and sel.kind == "person":
 		sim.toggle_draft(sel.ref)
 	elif g == "post" and sel.kind == "person":
@@ -356,7 +370,7 @@ func _pick_repairer(seg):
 	var best = null
 	var bd := INF
 	for p in sim.people:
-		if p.downed:
+		if p.downed or p.dead or p.away != null:
 			continue
 		var dist: float = Vector2(p.x - seg.center.x, p.y - seg.center.y).length() - float(p.def.skills.Building) * 3.0
 		if dist < bd:
@@ -369,6 +383,21 @@ func _on_alert(id: String) -> void:
 	var a = sim.alerts.get(id)
 	if a != null and a.at != null:
 		_focus(a.at)
+
+
+func _quick_save() -> void:
+	if SaveGame.write(sim, SaveGame.QUICK_PATH):
+		hud.show_banner("Game saved", "Quick save (F9 loads it)")
+	else:
+		hud.show_banner("Could not save", "Nothing was written")
+
+
+func _quick_load() -> void:
+	if not FileAccess.file_exists(SaveGame.QUICK_PATH):
+		hud.show_banner("No quick save yet", "Press F5 to save")
+		return
+	Engine.set_meta("run", {"load": SaveGame.QUICK_PATH})
+	get_tree().reload_current_scene()
 
 
 func _toggle_sound() -> void:
@@ -438,6 +467,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("repair")
 			KEY_C:
 				_gizmo("focus")
+			KEY_F5:
+				_quick_save()
+			KEY_F9:
+				_quick_load()
 			KEY_TAB:
 				var i: int = sim.people.find(selection.ref) if selection != null and selection.kind == "person" else -1
 				var p = sim.people[(i + 1) % sim.people.size()]
@@ -551,7 +584,7 @@ func _sync_views() -> void:
 	for p in sim.people:
 		var n = pawn_nodes[p]
 		n.anim_t = clock
-		n.visible = view.has_point(Vector2(p.x, p.y))
+		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null
 		if n.visible:
 			n.sync()
 	var fire_view := view_rect().grow(4.0)
