@@ -73,7 +73,7 @@ func _case_cards() -> void:
 	sim.stock.meds = 2.0
 	sim.supplies.marks["ana"] = [_mark("hungry", hud.WARN, "Hungry")]
 	sim.medical.marks["ana"] = [_mark("wound", hud.DANGER, "Bleeding"), _mark("fever", hud.WARN, "Feverish")]
-	sim.supplies.marks["marcus"] = [_mark("thirsty", hud.DANGER, "Dehydrated"), _mark("starving", hud.DANGER, "Starving"), _mark("down", hud.DANGER, "Down"), _mark("resting", hud.INFO, "Resting")]
+	sim.supplies.marks["marcus"] = [_mark("thirsty", hud.DANGER, "Parched"), _mark("starving", hud.DANGER, "Starving"), _mark("down", hud.DANGER, "Down"), _mark("resting", hud.INFO, "Resting")]
 	_person("dez").dead = true
 	var walt = _person("walt")
 	walt.dead = true
@@ -94,7 +94,7 @@ func _case_panel() -> void:
 	ana.bleeding = 6.0
 	ana.hp = 62.0
 	sim.supplies.days = {"food": 4.0, "water": 2.0}
-	sim.supplies.marks["ana"] = [_mark("hungry", hud.WARN, "Hungry"), _mark("thirsty", hud.DANGER, "Dehydrated")]
+	sim.supplies.marks["ana"] = [_mark("hungry", hud.WARN, "Hungry"), _mark("thirsty", hud.DANGER, "Parched")]
 	sim.medical.marks["ana"] = [_mark("wound", hud.DANGER, "Bleeding"), _mark("fever", hud.WARN, "Feverish")]
 	sim.medical.treat["ana"] = true
 	sim.medical.sendout["ana"] = true
@@ -157,3 +157,26 @@ func _case_over() -> void:
 	_person("ana").dead = true
 	_person("ruth").dead = true
 	sim.over = "defeat"
+
+
+## The game's own modules (run with --real): needs, a bite that has gone to fever,
+## someone downed, and someone off with a scavenging party.
+func _case_real() -> void:
+	var sim = _main.sim
+	var ana = _person("ana")
+	ana.hunger_h = 20.0
+	ana.thirst_h = 26.0
+	var marcus = _person("marcus")
+	sim.medical.add_wound(marcus, "bite")
+	marcus.infected_at = sim.clock_min - 7.0 * 60.0
+	marcus.turn_at = sim.clock_min + 10.0 * 60.0
+	var dez = _person("dez")
+	dez.hp = 0.0
+	sim.medical.on_downed(dez, "bite")
+	var hector = _person("hector")
+	if sim.scavenge.send([hector], "houses"):
+		sim.scavenge._go_through(hector, sim.scavenge.parties[0])
+	sim.stock.food = 9.0
+	sim.stock.water = 20.0
+	sim.stock.meds = 2.0
+	_select("marcus")

@@ -36,15 +36,18 @@ const DAYS_STORES := ["food", "water"]
 ## Only the skills that do something in version 1 are listed in the person panel.
 const SKILLS_SHOWN := ["Shooting", "Building", "Medicine"]
 ## Game hours without a meal or a drink at which a person is called hungry,
-## starving, thirsty and dehydrated (the supplies module penalises at these).
+## starving, thirsty and parched (the supplies module penalises at these).
 const HUNGRY_H := 18.0
 const STARVING_H := 36.0
 const THIRSTY_H := 14.0
-const DEHYDRATED_H := 24.0
+const PARCHED_H := 24.0
 ## The selection panel's width and the gizmo buttons' size and gap.
 const INSPECT_W := 300
 const GIZMO_W := 66
 const GIZMO_GAP := 6
+## In a window too short for two rows of buttons above the selection panel they
+## shrink to a single row of icons (the name and key are in the tooltip).
+const GIZMO_MINI := 44
 
 
 ## A rounded meter: background track and a coloured fill.
@@ -150,6 +153,8 @@ var inspect_refs := {}
 var gizmos: GridContainer
 ## How many buttons are in the dock now (children being freed still count in the tree).
 var gizmo_count := 0
+## Whether the buttons are the small icon-only kind (see GIZMO_MINI).
+var gizmo_mini := false
 var speed_panel: PanelContainer
 var speed_buttons: Array = []
 var sound_button: Button
@@ -643,9 +648,10 @@ func _build_dock() -> void:
 
 
 ## The buttons go to the right of the selection panel when that leaves room
-## clear of the speed controls and the help panel, else in rows above the panel.
+## clear of the speed controls and the help panel; else in rows above the panel,
+## and if that would run into the stores panel, as one row of small buttons.
 func _layout_dock() -> void:
-	if dock == null or speed_panel == null or help == null:
+	if dock == null or speed_panel == null or help == null or res_panel == null:
 		return
 	var n := gizmo_count
 	var panel_w := maxf(float(INSPECT_W), inspect.get_combined_minimum_size().x)
@@ -653,13 +659,27 @@ func _layout_dock() -> void:
 	var reserve := maxf(speed_panel.get_combined_minimum_size().x, help.get_combined_minimum_size().x) + 8.0
 	var fits := n == 0 or panel_w + 8.0 + beside <= size.x - 24.0 - reserve
 	dock.vertical = not fits
+	var mini := false
+	if not fits:
+		var per_row := maxi(1, int((panel_w + GIZMO_GAP) / (GIZMO_W + GIZMO_GAP)))
+		var rows := ceili(float(n) / float(per_row))
+		var tall := float(rows * GIZMO_W + (rows - 1) * GIZMO_GAP) + 8.0 + inspect.get_combined_minimum_size().y
+		var room := size.y - 12.0 - (12.0 + res_panel.get_combined_minimum_size().y + 8.0)
+		mini = tall > room
+	if mini != gizmo_mini:
+		gizmo_mini = mini
+		_build_gizmos()
+		return
 	if fits:
 		dock.move_child(inspect, 0)
 		gizmos.columns = maxi(1, n)
 		gizmos.size_flags_vertical = Control.SIZE_SHRINK_END
 	else:
 		dock.move_child(gizmos, 0)
-		gizmos.columns = maxi(1, int((panel_w + GIZMO_GAP) / (GIZMO_W + GIZMO_GAP)))
+		# big buttons stack as wide as the panel; small ones take the room there is
+		var across := (size.x - 24.0 - reserve) if gizmo_mini else panel_w
+		var side := GIZMO_MINI if gizmo_mini else GIZMO_W
+		gizmos.columns = maxi(1, int((across + GIZMO_GAP) / (side + GIZMO_GAP)))
 		gizmos.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 
 
@@ -838,7 +858,8 @@ func _row(grid: GridContainer, label: String, value: Control) -> Label:
 
 func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(GIZMO_W, GIZMO_W)
+	var side := GIZMO_MINI if gizmo_mini else GIZMO_W
+	b.custom_minimum_size = Vector2(side, side)
 	b.focus_mode = Control.FOCUS_NONE
 	b.set_meta("id", id)
 	var normal := _style(ACCENT if on else PANEL, 6, ACCENT if on else LINE)
@@ -853,16 +874,20 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	var inner := _vbox(7)
 	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	var ic := _icon(id, 22, col)
+	var ic := _icon(id, 20 if gizmo_mini else 22, col)
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	inner.add_child(ic)
-	var l := _label(text.to_upper(), Fonts.cond(600, 1), 11, col)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	inner.add_child(l)
+	if gizmo_mini:
+		b.tooltip_text = "%s (%s)" % [text, key]
+	else:
+		var l := _label(text.to_upper(), Fonts.cond(600, 1), 11, col)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		inner.add_child(l)
 	b.add_child(inner)
-	var k := _label(key, Fonts.cond(600), 10, Color(ACCENT_INK, 0.55) if on else INK3)
-	k.position = Vector2(52, 3)
-	b.add_child(k)
+	if not gizmo_mini:
+		var k := _label(key, Fonts.cond(600), 10, Color(ACCENT_INK, 0.55) if on else INK3)
+		k.position = Vector2(52, 3)
+		b.add_child(k)
 	b.pressed.connect(func(): on_gizmo.call(id))
 	return b
 
@@ -1064,6 +1089,7 @@ func _on_dialog_closed() -> void:
 func _show_game_over(sim) -> void:
 	if scavenge_dialog != null:
 		scavenge_dialog.close()
+	hint.visible = false
 	game_over = GameOver.new()
 	add_child(game_over)
 	game_over.setup(self, sim)
@@ -1370,8 +1396,8 @@ func _needs_of(p) -> Array:
 		severe = true
 	elif p.hunger_h >= HUNGRY_H:
 		bits.append("Hungry")
-	if p.thirst_h >= DEHYDRATED_H:
-		bits.append("Dehydrated")
+	if p.thirst_h >= PARCHED_H:
+		bits.append("Parched")
 		severe = true
 	elif p.thirst_h >= THIRSTY_H:
 		bits.append("Thirsty")

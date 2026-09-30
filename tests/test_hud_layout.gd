@@ -108,3 +108,25 @@ func test_resizing_the_window_relays_the_dock() -> void:
 	var r := _rects(ctx)
 	check(r.buttons.position.x >= r.selection.end.x, "and the buttons are beside the panel again")
 	Kit.free_all(ctx)
+
+
+func test_a_short_window_gets_small_buttons_that_still_clear_the_stores() -> void:
+	for size in [[960, 600], [700, 560]]:
+		var ctx: Dictionary = await _busy(size[0], size[1])
+		check(ctx.hud.gizmo_mini, "small buttons at %d x %d" % [size[0], size[1]])
+		eq(Kit.gizmo_ids(ctx).size(), 7, "all seven are still there")
+		eq(Kit.gizmo(ctx, "treat").tooltip_text, "Treat (T)", "named in the tooltip")
+		eq(Kit.overlaps(_rects(ctx)), [], "%d x %d" % [size[0], size[1]])
+		Kit.free_all(ctx)
+
+
+func test_the_big_buttons_come_back_when_the_window_grows() -> void:
+	var ctx: Dictionary = await _busy(700, 560)
+	check(ctx.hud.gizmo_mini, "small at first")
+	Kit.resize(ctx, 700, 700)
+	await Kit.settle()
+	await Kit.settle()
+	check(not ctx.hud.gizmo_mini, "big again")
+	check(Kit.texts(Kit.gizmo(ctx, "treat")).has("TREAT"), "with their names")
+	eq(Kit.overlaps(_rects(ctx)), [], "and nothing overlaps")
+	Kit.free_all(ctx)

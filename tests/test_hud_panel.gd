@@ -25,10 +25,10 @@ func test_the_needs_row_reads_hunger_and_thirst() -> void:
 		[18.0, 0.0, "Hungry", Hud.WARN],
 		[0.0, 14.0, "Thirsty", Hud.WARN],
 		[36.0, 0.0, "Starving", Hud.DANGER],
-		[0.0, 24.0, "Dehydrated", Hud.DANGER],
+		[0.0, 24.0, "Parched", Hud.DANGER],
 		[20.0, 15.0, "Hungry, thirsty", Hud.WARN],
 		[40.0, 15.0, "Starving, thirsty", Hud.DANGER],
-		[20.0, 30.0, "Hungry, dehydrated", Hud.DANGER],
+		[20.0, 30.0, "Hungry, parched", Hud.DANGER],
 	]
 	for c in cases:
 		p.hunger_h = c[0]
