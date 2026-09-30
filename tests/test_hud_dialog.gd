@@ -312,3 +312,21 @@ func test_no_sites_at_all_leaves_nothing_to_send() -> void:
 	d.send()
 	eq(ctx.sim.scavenge.sent, [], "and sending does nothing")
 	Kit.free_all(ctx)
+
+
+func test_a_picture_that_is_not_imported_yet_still_shows() -> void:
+	# a plain PNG that Godot has not imported (as in a fresh checkout before the editor has run)
+	var path := "user://hud_test_site.png"
+	var img := Image.create(32, 18, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.4, 0.3, 0.2))
+	img.save_png(path)
+	var ctx := _ready_to_send()
+	var sites := Kit.sample_sites()
+	sites[0]["image"] = path
+	ctx.sim.scavenge.list = sites
+	ctx.hud.open_scavenge(ctx.hud.selection)
+	var d = ctx.hud.scavenge_dialog
+	check(d.site_cards.pharmacy.image.texture != null, "the raw PNG is read")
+	check(not d.site_cards.pharmacy.placeholder.visible, "so no placeholder")
+	Kit.free_all(ctx)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
