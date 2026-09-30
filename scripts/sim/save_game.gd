@@ -14,7 +14,9 @@
 ##   zombies         in order: every variable of the Zombie, "slot" as
 ##                   [wall section id, slot index] or null
 ##   segments        by id: hp, max_hp, state
-##   modules         each module's save() under its name
+##   modules         each rule module's save() under its name (supplies, medical, ...;
+##                   any variable of the Sim that holds an object with save() and
+##                   load_state() counts, so a module added later is saved too)
 ##   alerts          the alerts by id, "at" as [x, y] or null
 ## The variables of Person and Zombie are read by reflection, so a field added to
 ## those classes is saved and loaded without a change here (a new kind of value
@@ -34,8 +36,6 @@ const VERSION := 1
 const QUICK_PATH := "user://quicksave.json"
 const AUTO_PATH := "user://autosave.json"
 
-## The rule modules, in the order the rules step them.
-const MODULES := ["scenario", "supplies", "medical", "scavenge"]
 const PHASES := ["day", "dusk", "night", "dawn"]
 ## Variables that come from the map data, not from play.
 const FIXED := ["def", "look", "gun", "name", "first", "id"]
@@ -61,7 +61,7 @@ static func to_dict(sim) -> Dictionary:
 	for s in sim.segments:
 		segments.append({"id": s.id, "hp": s.hp, "max_hp": s.max_hp, "state": s.state})
 	var modules := {}
-	for name in MODULES:
+	for name in _modules(sim):
 		var saved = sim.get(name).save()
 		modules[name] = _plain(saved) if typeof(saved) == TYPE_DICTIONARY else {}
 	var alerts := {}
@@ -114,6 +114,19 @@ static func _plain(value):
 		TYPE_OBJECT:
 			return null
 	return value
+
+
+## The names of the rule modules of `sim`: its variables holding an object that
+## can save() and load_state().
+static func _modules(sim) -> Array:
+	var names: Array = []
+	for prop in sim.get_property_list():
+		if not (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		var m = sim.get(prop.name)
+		if typeof(m) == TYPE_OBJECT and m != null and m.has_method("save") and m.has_method("load_state"):
+			names.append(prop.name)
+	return names
 
 
 static func _vars(obj) -> Array:
@@ -522,7 +535,7 @@ static func _parse(sim, data: Dictionary):
 
 	# the modules' own data
 	var modules := {}
-	for name in MODULES:
+	for name in _modules(sim):
 		var md = data.modules.get(name, {})
 		if typeof(md) != TYPE_DICTIONARY:
 			return null
@@ -672,7 +685,7 @@ static func _commit(sim, plan: Dictionary) -> void:
 	for id in plan.alerts:
 		sim.alerts[id] = plan.alerts[id]
 
-	for name in MODULES:
+	for name in plan.modules:
 		sim.get(name).load_state(plan.modules[name])
 
 	# a party member's `away` is the party itself, which the scavenging module

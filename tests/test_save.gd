@@ -10,12 +10,37 @@ const Sim := preload("res://scripts/sim/sim.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
-const TMP_A := "user://test_save_a.json"
-const TMP_B := "user://test_save_b.json"
+## Scratch files of the file tests, named by process so that two test runs at
+## the same time (several people share this checkout) never meet.
+var tmp_a := "user://test_save_a_%d.json" % OS.get_process_id()
+var tmp_b := "user://test_save_b_%d.json" % OS.get_process_id()
 ## Saved data read back from text must be the very same numbers; a whole number
 ## may come back as a float (JSON has one kind of number), so compare with a
 ## tolerance too small to hide anything.
 const EXACT := 1e-300
+
+
+class FakeModule:
+	extends RefCounted
+	var state := {"n": 1}
+
+	func save() -> Dictionary:
+		return state
+
+	func load_state(d: Dictionary) -> void:
+		state = d
+
+
+## Something shaped like a Sim with two modules (one untyped, one typed) and
+## variables that are not modules.
+class FakeSim:
+	extends RefCounted
+	var waves = FakeModule.new()
+	var upgrades: FakeModule = FakeModule.new()
+	var stock := {"food": 1.0}
+	var world = RefCounted.new()
+	var nothing = null
+	var speed := 3
 
 
 # ----------------------------------------------------------------- helpers --
@@ -203,7 +228,7 @@ func _slot_holders(sim) -> Array:
 
 
 func _cleanup() -> void:
-	for path in [TMP_A, TMP_B, TMP_A + ".tmp", TMP_B + ".tmp"]:
+	for path in [tmp_a, tmp_b, tmp_a + ".tmp", tmp_b + ".tmp"]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 
@@ -228,6 +253,18 @@ func test_a_save_is_versioned_plain_json_data() -> void:
 	var text := SaveGame.to_text(d)
 	check(JSON.new().parse(text) == OK, "the text is JSON")
 	eq(_diff(d, SaveGame.from_text(text), EXACT), "", "and reads back exactly the same")
+	g.world.free()
+
+
+func test_every_module_of_the_sim_is_saved_whatever_it_is_called() -> void:
+	eq(SaveGame._modules(FakeSim.new()), ["waves", "upgrades"], "the modules are found by what they can do")
+	var g := Helpers.make(3, 1)
+	var found: Array = SaveGame._modules(g.sim)
+	for name in ["supplies", "medical", "scavenge", "scenario"]:
+		check(found.has(name), "the %s module is found" % name)
+	for name in found:
+		check(["supplies", "medical", "scavenge", "scenario"].has(name) or g.sim.get(name).has_method("save"), "%s is a module" % name)
+	check(not found.has("world") and not found.has("fx") and not found.has("path_z"), "and the rest of the sim is not")
 	g.world.free()
 
 
@@ -643,19 +680,19 @@ func test_files_are_written_and_read_back() -> void:
 	_cleanup()
 	var a := Helpers.make(15, 1)
 	Helpers.run(a.sim, 30.0)
-	check(SaveGame.write(a.sim, TMP_A), "it writes")
-	check(FileAccess.file_exists(TMP_A), "the file is there")
-	check(not FileAccess.file_exists(TMP_A + ".tmp"), "without a temporary file left behind")
-	var back := SaveGame.read(TMP_A)
+	check(SaveGame.write(a.sim, tmp_a), "it writes")
+	check(FileAccess.file_exists(tmp_a), "the file is there")
+	check(not FileAccess.file_exists(tmp_a + ".tmp"), "without a temporary file left behind")
+	var back := SaveGame.read(tmp_a)
 	eq(back.get("version"), 1, "it reads back as a save")
 	eq(_diff(SaveGame.to_dict(a.sim), back, EXACT), "", "with exactly the same content")
-	check(SaveGame.is_loadable(TMP_A), "it can be loaded")
+	check(SaveGame.is_loadable(tmp_a), "it can be loaded")
 	var b := _bare()
 	check(SaveGame.apply(b.sim, back), "and applied")
 	# writing again replaces it
 	Helpers.run(a.sim, 5.0)
-	check(SaveGame.write(a.sim, TMP_A), "it writes over the old one")
-	eq(SaveGame.read(TMP_A).get("t"), a.sim.t, "the new state")
+	check(SaveGame.write(a.sim, tmp_a), "it writes over the old one")
+	eq(SaveGame.read(tmp_a).get("t"), a.sim.t, "the new state")
 	_cleanup()
 	a.world.free()
 	b.world.free()
@@ -665,32 +702,32 @@ func test_a_game_that_could_not_be_loaded_back_does_not_replace_a_good_save() ->
 	_cleanup()
 	var g := Helpers.make(17, 1)
 	Helpers.run(g.sim, 4.0)
-	check(SaveGame.write(g.sim, TMP_A), "a good save is written")
-	var before := FileAccess.get_file_as_string(TMP_A)
+	check(SaveGame.write(g.sim, tmp_a), "a good save is written")
+	var before := FileAccess.get_file_as_string(tmp_a)
 	Helpers.run(g.sim, 4.0)
 	g.sim.people[2].hp = NAN
-	check(not SaveGame.write(g.sim, TMP_A), "a game with a bad number is not written")
-	eq(FileAccess.get_file_as_string(TMP_A), before, "and the good file stays as it was")
-	check(not FileAccess.file_exists(TMP_A + ".tmp"), "without a temporary file left behind")
+	check(not SaveGame.write(g.sim, tmp_a), "a game with a bad number is not written")
+	eq(FileAccess.get_file_as_string(tmp_a), before, "and the good file stays as it was")
+	check(not FileAccess.file_exists(tmp_a + ".tmp"), "without a temporary file left behind")
 	g.sim.people[2].hp = 50.0
 	g.sim.zombies[0].state = "attack"
 	g.sim.zombies[0].slot = null
-	check(not SaveGame.write(g.sim, TMP_A), "nor is a walker at the wall with no place there")
+	check(not SaveGame.write(g.sim, tmp_a), "nor is a walker at the wall with no place there")
 	_cleanup()
 	g.world.free()
 
 
 func test_a_missing_or_damaged_file_is_refused_quietly() -> void:
 	_cleanup()
-	eq(SaveGame.read(TMP_A), {}, "nothing at a missing path")
-	check(not SaveGame.is_loadable(TMP_A), "and nothing to load")
+	eq(SaveGame.read(tmp_a), {}, "nothing at a missing path")
+	check(not SaveGame.is_loadable(tmp_a), "and nothing to load")
 	for text in ["", "not json at all", "{\"version\": 1,", "[1, 2, 3]", "{\"version\": 1}", "{\"version\": 9, \"people\": []}"]:
-		var f := FileAccess.open(TMP_B, FileAccess.WRITE)
+		var f := FileAccess.open(tmp_b, FileAccess.WRITE)
 		f.store_string(text)
 		f.close()
-		check(not SaveGame.is_loadable(TMP_B), "not loadable: %s" % text)
+		check(not SaveGame.is_loadable(tmp_b), "not loadable: %s" % text)
 		var b := _bare()
-		check(not SaveGame.apply(b.sim, SaveGame.read(TMP_B)), "not applied: %s" % text)
+		check(not SaveGame.apply(b.sim, SaveGame.read(tmp_b)), "not applied: %s" % text)
 		b.world.free()
 	_cleanup()
 	var g := Helpers.make(16, 1)
