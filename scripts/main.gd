@@ -712,6 +712,13 @@ func _parse_args() -> void:
 			"breach":
 				var seg = sim.segments[int(v)]
 				sim._damage_segment(seg, seg.hp + 1.0)
+			"damage":
+				# --damage=N:F leaves wall section N at the fraction F of its health
+				var nf := v.split(":")
+				if nf.size() == 2 and int(nf[0]) >= 0 and int(nf[0]) < sim.segments.size():
+					var worn = sim.segments[int(nf[0])]
+					worn.hp = worn.max_hp * clampf(float(nf[1]), 0.0, 1.0)
+					sim._segment_state(worn)
 			"nohud":
 				hud.visible = false
 			"msaa":
