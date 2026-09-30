@@ -744,6 +744,8 @@ func test_a_downed_person_is_stabilised_put_to_bed_and_gets_up() -> void:
 	eq(sim.alerts["down-hector"].sub, "Get them to Ana", "the alert names Ana")
 	eq(hector.activity, "Down and bleeding", "what the panel says")
 	var meds: float = sim.stock.meds
+	Helpers.run(sim, 0.3)
+	eq(_who(sim, "ana").activity, "Stabilising Hector", "Ana sets out, and the panel says what for")
 	var took := _run_until(sim, 40.0, func(): return hector.stabilised)
 	check(took > 0.0, "stabilised in time")
 	eq(hector.bleed_out, -1.0, "the clock stops")
