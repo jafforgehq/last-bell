@@ -1,0 +1,34 @@
+{
+	"sites": [
+		{
+			"id": "pharmacy",
+			"name": "The pharmacy",
+			"where": "the pharmacy",
+			"blurb": "Boarded up the first week. The stock room might still be full.",
+			"danger": 2,
+			"loot": {"meds": [3, 6]},
+			"extra": {"food": [0.5, 4]},
+			"image": "res://assets/ui/sites/pharmacy.png"
+		},
+		{
+			"id": "hardware",
+			"name": "The hardware store",
+			"where": "the hardware store",
+			"blurb": "Shutter dented, ladder left out. Sheet steel, nails, and shells under the counter.",
+			"danger": 2,
+			"loot": {"scrap": [10, 20], "ammo": [20, 60]},
+			"extra": {},
+			"image": "res://assets/ui/sites/hardware.png"
+		},
+		{
+			"id": "houses",
+			"name": "Neighbourhood houses",
+			"where": "the houses",
+			"blurb": "Doors shut, curtains drawn. Somebody has to go through the cupboards.",
+			"danger": 1,
+			"loot": {"food": [8, 14], "water": [10, 20]},
+			"extra": {"meds": [0.35, 1]},
+			"image": "res://assets/ui/sites/houses.png"
+		}
+	]
+}
