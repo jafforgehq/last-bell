@@ -134,8 +134,10 @@ colony day by day:
 ```
 
 `--fast` steps the rules at 15 Hz instead of 30, `--jobs=N` plays N games at a
-time in worker processes, `--policy=none` gives no orders, `--verbose` lists what
-the policy did and who was lost; see the top of the file for the rest. A game
+time in worker processes, `--policy=none` gives no orders, `--policy=keep` hides the
+crew in the school gym from the bell to dawn (the check that hiding does not beat
+defending), `--verbose` lists what the policy did and who was lost; see the top of
+the file for the rest. A game
 whose colony collapses is slow to play (the walkers inside the yard re-path
 every second).
 

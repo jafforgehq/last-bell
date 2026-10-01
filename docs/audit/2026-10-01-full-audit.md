@@ -1,5 +1,7 @@
 # Last Bell: full audit and roadmap
 
+> **Status, same day (2026-10-01).** Round 0 ("truth and foundation") is done and committed; see [the plan](../superpowers/plans/2026-10-01-round-0.md) and section 7c of [the spec](../superpowers/specs/2026-09-30-colony-sandbox-design.md). Of this audit's five headline findings: **ammo is real** now (a shot needs a whole shot in the stock); **hiding in the school no longer wins** (two attackable doors, stores ruined by the dead in the yard; harness medians over 16 seeds: 19 defending against 15.5 hiding, it was 8 of 8 alive on day 20 before); **there is a goal** (victory at the dawn of day 31) but still no title screen, menus or tutorial (rounds 3-4); **the name is changed** (working title Thirty Bells; the itch.io page and the GitHub repository still carry the old one); the **prototype source is rescued**. Also done from section 6: the fixed 30 Hz rules loop, bounded path smoothing, and the quick UI fixes (tooltips, 12 px floor, contrast, alert leak, PAUSED, help, refusal toasts). The rest of the roadmap is unchanged.
+
 2026-10-01 · repo HEAD `e4fa379` on `feature/colony-sandbox` · written by Claude with four read-only reviewers (code, game design, UI/UX, assets and rights). Their full reports are the appendices; this document is the synthesis, plus the things I measured myself.
 
 How to read the tags: **(tested)** I ran it this session. **(verified)** I read the code and it says so. **(review)** a reviewer's finding I did not re-run.
