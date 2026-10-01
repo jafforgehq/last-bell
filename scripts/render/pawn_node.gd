@@ -10,6 +10,9 @@ const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
 const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vector2(0.26, -0.22)}
+## A jump of more than this many tiles between two steps (back from a trip, a
+## walker risen where a survivor fell) is a jump, not a walk: no sliding.
+const SNAP_TILES := 3.0
 
 var entity # Sim.Person or Sim.Zombie
 var zombie := false
@@ -24,6 +27,12 @@ var beds: Array = [] # the cots and mattresses of the map, to find the blanket c
 var _bed_key := ""
 var _bed_col := Color("#9a9070")
 var _m := Transform2D.IDENTITY
+## Where the rules had the character at their last two steps, in tiles: they
+## move once per step, and the node is drawn between the two (see sync).
+var _prev := Vector2.ZERO
+var _cur := Vector2.ZERO
+var _steps_seen := -1
+var _frame_seen := 0
 
 
 func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
@@ -45,13 +54,34 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	sync()
 
 
-func sync(redraw: bool = true) -> void:
-	position = Vector2(entity.x, entity.y) * TILE
+## `steps` is how many steps the rules have taken, `alpha` how far the time has
+## run into the next one: the node is drawn that far from where the character
+## stood one step ago to where they stand now, so a 144 Hz screen shows smooth
+## walking though the rules move 30 times a second. Called without them it is
+## drawn where the character is, as it is on a first look, when the node was out
+## of sight a frame ago, and after a jump of more than SNAP_TILES.
+func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
+	var now := Vector2(entity.x, entity.y)
+	var frame := Engine.get_process_frames()
+	if _steps_seen < 0 or frame - _frame_seen > 1 or now.distance_to(_cur) > SNAP_TILES:
+		_prev = now
+		_cur = now
+	elif steps != _steps_seen:
+		_prev = _cur
+		_cur = now
+	_steps_seen = steps
+	_frame_seen = frame
+	position = _prev.lerp(_cur, alpha) * TILE
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
 	if modulate != tint:
 		modulate = tint
 	if redraw:
 		queue_redraw()
+
+
+## Where the node is drawn, in tiles: the overlay's brackets and names go here.
+func tile_pos() -> Vector2:
+	return position / TILE
 
 
 # a tiny canvas-context emulation: translate / rotate / scale in local units

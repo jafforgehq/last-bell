@@ -24,11 +24,11 @@ func test_the_needs_row_reads_hunger_and_thirst() -> void:
 		[17.9, 13.9, "Fed", Hud.INK],
 		[18.0, 0.0, "Hungry", Hud.WARN],
 		[0.0, 14.0, "Thirsty", Hud.WARN],
-		[36.0, 0.0, "Starving", Hud.DANGER],
-		[0.0, 24.0, "Parched", Hud.DANGER],
+		[36.0, 0.0, "Starving", Hud.DANGER_TEXT],
+		[0.0, 24.0, "Parched", Hud.DANGER_TEXT],
 		[20.0, 15.0, "Hungry, thirsty", Hud.WARN],
-		[40.0, 15.0, "Starving, thirsty", Hud.DANGER],
-		[20.0, 30.0, "Hungry, parched", Hud.DANGER],
+		[40.0, 15.0, "Starving, thirsty", Hud.DANGER_TEXT],
+		[20.0, 30.0, "Hungry, parched", Hud.DANGER_TEXT],
 	]
 	for c in cases:
 		p.hunger_h = c[0]
@@ -48,7 +48,7 @@ func test_the_wounds_row_counts_open_wounds() -> void:
 	p.bleeding = 2.0
 	Kit.update(ctx)
 	eq(wounds.text, "1 wound, bleeding", "one wound")
-	eq(_color(wounds), Hud.DANGER, "in red")
+	eq(_color(wounds), Hud.DANGER_TEXT, "in red (the brighter red that words use)")
 	p.wounds = 3
 	p.bleeding = 10.0
 	Kit.update(ctx)

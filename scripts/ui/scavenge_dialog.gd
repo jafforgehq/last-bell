@@ -139,7 +139,7 @@ func _build(free_people: Array) -> void:
 		body.add_child(msg)
 
 	var foot: VBoxContainer = hud._vbox(8)
-	error_label = hud._label("", Fonts.sans(600), 13, hud.DANGER)
+	error_label = hud._label("", Fonts.sans(600), 13, hud.DANGER_TEXT)
 	error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	error_label.visible = false
 	foot.add_child(error_label)

@@ -115,7 +115,10 @@ func test_a_short_window_gets_small_buttons_that_still_clear_the_stores() -> voi
 		var ctx: Dictionary = await _busy(size[0], size[1])
 		check(ctx.hud.gizmo_mini, "small buttons at %d x %d" % [size[0], size[1]])
 		eq(Kit.gizmo_ids(ctx).size(), 7, "all seven are still there")
-		eq(Kit.gizmo(ctx, "treat").tooltip_text, "Treat (T)", "named in the tooltip")
+		# the small buttons show no names: the tooltip carries the name, what it does, and the key
+		var tip: PackedStringArray = Kit.gizmo(ctx, "treat").tooltip_text.split("\n")
+		check(tip[0].begins_with("Treat"), "named in the tooltip: '%s'" % tip[0])
+		eq(tip[1], "Key: T", "with its key")
 		eq(Kit.overlaps(_rects(ctx)), [], "%d x %d" % [size[0], size[1]])
 		Kit.free_all(ctx)
 

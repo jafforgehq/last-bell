@@ -22,7 +22,8 @@ func test_food_and_water_show_the_days_left_under_the_number() -> void:
 
 func test_days_left_are_grey_then_orange_under_three_then_red_under_one() -> void:
 	var ctx := Kit.build()
-	var cases := [[6.0, "6 d", Hud.INK3], [3.0, "3 d", Hud.INK3], [2.9, "2 d", Hud.WARN], [1.0, "1 d", Hud.WARN], [0.99, "<1 d", Hud.DANGER], [0.0, "<1 d", Hud.DANGER]]
+	# the red is DANGER_TEXT, the brighter one for words (DANGER is for bars and icons)
+	var cases := [[6.0, "6 d", Hud.INK3], [3.0, "3 d", Hud.INK3], [2.9, "2 d", Hud.WARN], [1.0, "1 d", Hud.WARN], [0.99, "<1 d", Hud.DANGER_TEXT], [0.0, "<1 d", Hud.DANGER_TEXT]]
 	for c in cases:
 		ctx.sim.supplies.days = {"food": c[0], "water": c[0]}
 		Kit.update(ctx)

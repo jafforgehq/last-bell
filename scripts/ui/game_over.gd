@@ -7,9 +7,12 @@ extends Control
 const GD := preload("res://scripts/game_data.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 
-const TITLES := {"defeat": "Everyone is gone", "victory": "Rescued"}
-const SUBTITLES := {"defeat": "Nobody is left to ring the bell.", "victory": "The rescue came at dawn. You held the wall."}
+const TITLES := {"defeat": "Everyone is gone"}
+const SUBTITLES := {"defeat": "Nobody is left to ring the bell.", "victory": "A convoy is on the road at dawn. You held."}
 const MAX_W := 560.0
+## The numbers a run's length is spoken in: "The thirty days are over".
+const ONES := ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+const TENS := ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
 
 var hud
 var sim
@@ -50,7 +53,7 @@ func _build() -> void:
 	panel.add_child(col)
 
 	var result := String(sim.over)
-	title_label = hud._label(TITLES.get(result, "The run is over"), Fonts.cond(700), 38, hud.INK)
+	title_label = hud._label(_title(result), Fonts.cond(700), 38, hud.INK)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title_label)
 	var sub: Label = hud._label(SUBTITLES.get(result, ""), Fonts.sans(400), 15, hud.INK2)
@@ -131,7 +134,7 @@ func _survivor(p) -> Control:
 	var name_label: Label = hud._label(p.first, Fonts.cond(600), 13, hud.INK if fate == "Alive" else hud.INK3)
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(name_label)
-	var color: Color = hud.OK if fate == "Alive" else (hud.DANGER if fate == "Turned" else hud.INK2)
+	var color: Color = hud.OK if fate == "Alive" else (hud.DANGER_TEXT if fate == "Turned" else hud.INK2)
 	var fate_label: Label = hud._label(fate, Fonts.sans(600), 12, color)
 	fate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(fate_label)
@@ -147,7 +150,25 @@ func _fate(p) -> String:
 	return "Alive"
 
 
-## A day counts as survived once it has reached the night; a rescue is the whole run.
+## The headline for how the run ended. A win names the length of the run ("The
+## thirty days are over"), which is the scenario's, not a fixed number.
+func _title(result: String) -> String:
+	if result == "victory":
+		return "The %s days are over" % _number_word(int(sim.scenario.total_days()))
+	return String(TITLES.get(result, "The run is over"))
+
+
+## 30 -> "thirty", 21 -> "twenty-one"; a number past 99 stays in digits.
+func _number_word(n: int) -> String:
+	if n < 1 or n > 99:
+		return str(n)
+	if n < 20:
+		return ONES[n]
+	var word: String = TENS[floori(n / 10.0)]
+	return word if n % 10 == 0 else "%s-%s" % [word, ONES[n % 10]]
+
+
+## A day counts as survived once it has reached the night; a win is the whole run.
 func _days_survived() -> int:
 	var total: int = sim.scenario.total_days()
 	if sim.over == "victory":

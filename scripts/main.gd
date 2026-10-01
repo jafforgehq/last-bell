@@ -1,4 +1,4 @@
-## Last Bell: six survivors hold a walled schoolyard against the dead.
+## Thirty Bells: six survivors hold a walled schoolyard against the dead.
 ## Builds the world from the baked data, runs the simulation, the camera,
 ## input, sound and HUD.
 extends Node2D
@@ -6,6 +6,7 @@ extends Node2D
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
+const StepClock := preload("res://scripts/sim/step_clock.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Scenario := preload("res://scripts/sim/scenario.gd")
 const FX := preload("res://scripts/render/fx.gd")
@@ -38,6 +39,11 @@ var lanterns_node
 var glow
 var overlay
 var pawn_nodes := {} # entity -> node
+## Turns frames into whole 1/30 s steps of the rules, and says how far the time
+## has run into the next one (the drawing blends between the last two steps).
+var step_clock := StepClock.new()
+## How many steps the rules have taken, for the pawn nodes' interpolation.
+var sim_steps := 0
 
 var cam_center := Vector2(41, 21)
 var zoom_px := 32.0
@@ -206,7 +212,7 @@ func _ready() -> void:
 	_apply_camera()
 	if load_failed:
 		hud.show_banner("Could not load that save", "A new game was started instead")
-	print("Last Bell ready in %d ms" % (Time.get_ticks_msec() - t0))
+	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0))
 
 
 func _add_pawn(e, is_zombie: bool, key: String) -> void:
@@ -349,26 +355,35 @@ func _gizmo(g: String) -> void:
 		return
 	var sel = selection
 	if sel == null:
+		hud.toast("Click someone first")
 		return
 	if sim.handle_gizmo(g, sel):
 		hud.select(selection)
 		return
+	if g == "treat" or g == "sendout":
+		var why: String = hud.why_not(g)
+		hud.toast("Not now: %s" % why if why != "" else "That can't be done right now", "warn")
 	if g == "draft" and sel.kind == "person":
 		sim.toggle_draft(sel.ref)
 	elif g == "post" and sel.kind == "person":
 		sim.order_post(sel.ref)
 	elif g == "repair":
+		var no_go: String = hud.why_not("repair")
 		if sel.kind == "segment":
 			var p = _pick_repairer(sel.ref)
-			if p != null:
+			if p != null and no_go == "":
 				sim.order_repair(p, sel.ref)
+			else:
+				hud.toast("Not now: %s" % (no_go if no_go != "" else "nobody is free to repair it"), "warn")
 		elif sel.kind == "person":
 			var worst = null
 			for s in sim.segments:
 				if s.hp < s.max_hp and (worst == null or s.hp / s.max_hp < worst.hp / worst.max_hp):
 					worst = s
-			if worst != null:
+			if worst != null and no_go == "":
 				sim.order_repair(sel.ref, worst)
+			else:
+				hud.toast("Not now: %s" % (no_go if no_go != "" else "nothing is damaged"), "warn")
 	elif g == "focus":
 		if sel.kind == "segment":
 			_focus(sel.ref.center)
@@ -376,6 +391,19 @@ func _gizmo(g: String) -> void:
 			_focus(Vector2(sel.ref.x, sel.ref.y))
 			follow = sel.ref
 	hud.select(selection)
+
+
+## Why an order to walk to `w` was refused, in a few words.
+func _why_not_there(p, w: Vector2) -> String:
+	if p.dead:
+		return "%s is gone" % p.first
+	if p.downed:
+		return "%s is down" % p.first
+	if p.away != null:
+		return "%s is away" % p.first
+	if world.is_solid(world.solid_p, w.x, w.y):
+		return "Nobody can stand there"
+	return "%s can't go there" % p.first
 
 
 func _pick_repairer(seg):
@@ -437,7 +465,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 				var w := _screen_to_tile(mb.position)
 				if sim.order_move(selection.ref, w.x, w.y):
 					order_mark = {"x": w.x, "y": w.y, "t": clock}
+				else:
+					hud.toast(_why_not_there(selection.ref, w), "warn")
 				hud.select(selection)
+			else:
+				hud.toast("Click someone first, then right-click where they should go")
 		elif mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_MIDDLE:
 			if mb.pressed:
 				drag = {"pos": mb.position, "center": cam_center, "moved": false, "button": mb.button_index}
@@ -496,22 +528,33 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_F9:
 				_quick_load()
 			KEY_TAB:
-				var i: int = sim.people.find(selection.ref) if selection != null and selection.kind == "person" else -1
-				var p = sim.people[(i + 1) % sim.people.size()]
-				_select({"kind": "person", "ref": p})
-				_focus(Vector2(p.x, p.y))
+				# Tab goes round the people who are here and alive: not the lost, not those away
+				var here: Array = []
+				for q in sim.people:
+					if not q.dead and q.away == null:
+						here.append(q)
+				if not here.is_empty():
+					var i: int = here.find(selection.ref) if selection != null and selection.kind == "person" else -1
+					var p = here[(i + 1) % here.size()]
+					_select({"kind": "person", "ref": p})
+					_focus(Vector2(p.x, p.y))
 		get_viewport().set_input_as_handled()
 
 
 # ------------------------------------------------------------------- loop --
 
 func _process(delta: float) -> void:
-	var dt := clampf(delta, 0.0, 0.1)
+	var dt := clampf(delta, 0.0, StepClock.MAX_FRAME)
 	clock += dt
+	# The rules only ever take whole steps of 1/30 s, however long the frame was,
+	# so a seed plays the same game at any frame rate. Everything that is only
+	# drawn (effects, flames, light, camera) runs on the frame's own time.
+	for i in step_clock.advance(dt, speed):
+		_sim_step()
 	var rem := dt * speed
 	while rem > 1e-6:
-		var h := minf(rem, 1.0 / 30.0)
-		_step(h)
+		var h := minf(rem, StepClock.STEP)
+		_visual_step(h)
 		rem -= h
 
 	var kx := int(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - int(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT))
@@ -555,8 +598,16 @@ func _process(delta: float) -> void:
 			_take_shot()
 
 
-func _step(h: float) -> void:
-	sim.update(h)
+## One step of the rules.
+func _sim_step() -> void:
+	sim.update(StepClock.STEP)
+	sim_steps += 1
+
+
+## The effects and the flames for `h` seconds of the game's time (a frame's time
+## at the game's speed, in pieces of at most one step so a long frame at the top
+## speed still moves the particles in small steps).
+func _visual_step(h: float) -> void:
 	fx.update(h)
 	fire_t += h
 	for f in fire_nodes:
@@ -568,13 +619,24 @@ func _step(h: float) -> void:
 			fx.ember(p.x + ((randf() - 0.5) * 2.4 if big else 0.0), p.y - 0.4)
 
 
+## Where an entity is drawn right now, in tiles: the interpolated position of
+## its node (the rules' own position is up to a step ahead of it). The overlay
+## puts its brackets, names and bars here so they stay on the character. A node
+## that is out of sight is not moved, so its entity's own position is used.
+func view_pos(e) -> Vector2:
+	var n = pawn_nodes.get(e)
+	return n.tile_pos() if n != null and n.visible else Vector2(e.x, e.y)
+
+
 ## Create, move and retire the nodes that draw people and walkers. Corpses
 ## that have settled are not redrawn, and when zoomed far out characters
-## animate every other frame.
+## animate every other frame. Characters are drawn between their last two
+## steps: the rules move them 30 times a second, the screen shows every frame.
 func _sync_views() -> void:
 	var view := view_rect().grow(3.0)
 	var frame := Engine.get_process_frames()
 	var lod := zoom_px < 26.0
+	var alpha := step_clock.alpha()
 	walkers = 0
 	var alive := {}
 	var i := 0
@@ -598,7 +660,7 @@ func _sync_views() -> void:
 			redraw = z.dead_t < 0.2 or (z.dead_t > 55.0 and frame % 3 == 0)
 		elif lod:
 			redraw = (frame + i) % 2 == 0
-		n.sync(redraw)
+		n.sync(redraw, sim_steps, alpha)
 	for e in pawn_nodes.keys():
 		if pawn_nodes[e].zombie and not alive.has(e):
 			pawn_nodes[e].queue_free()
@@ -610,7 +672,7 @@ func _sync_views() -> void:
 		n.anim_t = clock
 		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null
 		if n.visible:
-			n.sync()
+			n.sync(true, sim_steps, alpha)
 	var fire_view := view_rect().grow(4.0)
 	for f in fire_nodes:
 		f.visible = fire_view.has_point(f.position / TILE)
@@ -728,7 +790,8 @@ func _parse_args() -> void:
 	if advance > 0.0:
 		var steps := int(advance * 30.0)
 		for i in steps:
-			_step(1.0 / 30.0)
+			_sim_step()
+			_visual_step(StepClock.STEP)
 		for e in sim.events:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)

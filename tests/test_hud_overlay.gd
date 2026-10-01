@@ -71,12 +71,67 @@ func test_days_survived_counts_only_days_that_reached_the_night() -> void:
 	Kit.free_all(ctx)
 
 
-func test_victory_says_rescued() -> void:
+func test_victory_says_the_thirty_days_are_over() -> void:
 	var ctx := _game()
 	_end(ctx, "victory")
-	check(Kit.texts(ctx.hud.game_over).has("Rescued"), "the title")
-	eq(ctx.hud.game_over.stat_values.days.text, "30", "a rescue is the whole run")
+	var all := Kit.texts(ctx.hud.game_over)
+	check(all.has("The thirty days are over"), "the title: %s" % str(all))
+	check(all.has("A convoy is on the road at dawn. You held."), "and a plain line under it")
+	check(not all.has("Rescued"), "the old title is gone")
+	check(not all.has("Everyone is gone"), "and it is not the defeat screen")
+	eq(ctx.hud.game_over.stat_values.days.text, "30", "the whole run counts as survived")
 	Kit.free_all(ctx)
+
+
+func test_victory_still_shows_the_days_the_kills_and_the_fates() -> void:
+	_remove_save()
+	var ctx := _game()
+	# the dawn that starts day 31, with four of the six alive
+	ctx.sim.scenario.today = 31
+	ctx.sim.phase = "day"
+	Kit.person(ctx, "dez").dead = true
+	Kit.person(ctx, "walt").dead = true
+	Kit.person(ctx, "walt").turned = true
+	Kit.person(ctx, "hector").away = {"kind": "exile"}
+	Kit.person(ctx, "hector").dead = true
+	_end(ctx, "victory")
+	var go = ctx.hud.game_over
+	eq(go.stat_values.days.text, "30", "days survived")
+	eq(go.stat_values.kills.text, "42", "walkers put down")
+	eq(go.stat_values.lost.text, "2 of 6", "two died or turned, one was sent out")
+	var all := Kit.texts(go)
+	for fate in ["Alive", "Died", "Turned", "Left"]:
+		check(all.has(fate), "a survivor who is %s is listed" % fate.to_lower())
+	var b := _button(ctx, "New game")
+	check(b != null, "there is still a New game button")
+	b.pressed.emit()
+	eq(ctx.restarts.size(), 1, "and it works")
+	Kit.free_all(ctx)
+
+
+func test_the_victory_title_follows_the_length_of_the_run() -> void:
+	var cases := {7: "The seven days are over", 10: "The ten days are over", 21: "The twenty-one days are over", 30: "The thirty days are over", 45: "The forty-five days are over", 100: "The 100 days are over"}
+	for total in cases:
+		var ctx := _game()
+		ctx.sim.scenario.total = total
+		_end(ctx, "victory")
+		check(Kit.texts(ctx.hud.game_over).has(cases[total]), "%d days: %s" % [total, cases[total]])
+		Kit.free_all(ctx)
+
+
+func test_the_victory_screen_fits_the_window_at_every_width() -> void:
+	_remove_save()
+	for size in SIZES:
+		var ctx := _game(size[0], size[1])
+		_end(ctx, "victory")
+		await Kit.settle()
+		await Kit.settle()
+		var win := Rect2(0, 0, size[0], size[1])
+		var r := Kit.rect(ctx.hud.game_over.panel)
+		check(r.size != Vector2.ZERO and win.encloses(r.grow(-0.5)), "the panel is inside the %d px window: %s" % [size[0], str(r)])
+		var b := _button(ctx, "New game")
+		check(win.encloses(Kit.rect(b).grow(-0.5)) and r.encloses(Kit.rect(b)), "the button is inside it at %d px" % size[0])
+		Kit.free_all(ctx)
 
 
 func test_the_overlay_shows_once() -> void:

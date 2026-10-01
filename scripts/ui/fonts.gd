@@ -6,6 +6,11 @@ extends RefCounted
 const SANS := {400: "res://assets/fonts/Barlow-Regular.ttf", 500: "res://assets/fonts/Barlow-Medium.ttf", 600: "res://assets/fonts/Barlow-SemiBold.ttf"}
 const COND := {600: "res://assets/fonts/BarlowCondensed-SemiBold.ttf", 700: "res://assets/fonts/BarlowCondensed-Bold.ttf"}
 
+## Nothing the player has to read is set smaller than this (HUD, dialogs, the
+## game-over screen and the labels over the world). The HUD's label factory
+## raises anything smaller to it.
+const MIN_PX := 12
+
 static var _cache := {}
 
 

@@ -57,6 +57,13 @@ func test_random_states_never_break_the_hud() -> void:
 				hud.select(null)
 		if rng.randf() < 0.3:
 			Kit.resize(ctx, 640 + rng.randi() % 700, 500 + rng.randi() % 400)
+		# the toast, the controls help and the alerts take part too
+		if rng.randf() < 0.2:
+			hud.toast("Toast %d" % round, ["info", "warn", "danger", "no-such-level"][rng.randi() % 4])
+		if rng.randf() < 0.1:
+			hud.help.visible = not hud.help.visible
+		if rng.randf() < 0.3:
+			sim.alert("fz%d" % (rng.randi() % 8), ["danger", "warn", "info"][rng.randi() % 3], "Alert %d" % round, "line %d" % round, null, 60.0)
 		Kit.update(ctx, rng.randi() % 4)
 		_check_what_is_shown(ctx, round)
 		if round % 10 == 0:

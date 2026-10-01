@@ -7,6 +7,8 @@ const S := preload("res://scripts/render/shapes.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
+## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
+const NAME_PX := 12
 
 var main
 
@@ -60,14 +62,15 @@ func _draw() -> void:
 	if sel != null and (sel.kind == "person" or sel.kind == "zombie"):
 		var e = sel.ref
 		if not (sel.kind == "zombie" and e.state == "dead") and not (sel.kind == "person" and e.away != null):
-			var a := _screen(e.x - 0.48, e.y - 0.92)
-			var b := _screen(e.x + 0.48, e.y + 0.42)
+			var ep: Vector2 = main.view_pos(e)
+			var a := _screen(ep.x - 0.48, ep.y - 0.92)
+			var b := _screen(ep.x + 0.48, ep.y + 0.42)
 			var L := maxf(5.0, (b.x - a.x) * 0.22)
 			var col := ACCENT if sel.kind == "person" else Color("#e2685a")
 			for c in [[a.x, a.y, 1, 1], [b.x, a.y, -1, 1], [a.x, b.y, 1, -1], [b.x, b.y, -1, -1]]:
 				draw_polyline(PackedVector2Array([Vector2(c[0] + c[2] * L, c[1]), Vector2(c[0], c[1]), Vector2(c[0], c[1] + c[3] * L)]), col, 2.0, true)
 			if sel.kind == "person" and not e.downed:
-				_dashed_circle(_screen(e.x, e.y), float(e.gun.range) * z, Color(ACCENT, 0.35), 1.2)
+				_dashed_circle(_screen(ep.x, ep.y), float(e.gun.range) * z, Color(ACCENT, 0.35), 1.2)
 	elif sel != null and sel.kind == "segment":
 		var o: Dictionary = sel.ref.obj
 		var hw: float = absf(cos(o.a)) * o.w / 2.0 + absf(sin(o.a)) * o.h / 2.0
@@ -78,7 +81,8 @@ func _draw() -> void:
 			_dashed_line(edge[0], edge[1], ACCENT, 2.0)
 	var hover = main.hover
 	if hover != null and (sel == null or hover != sel.ref):
-		var a := _screen(hover.x - 0.45, hover.y - 0.88)
+		var hp: Vector2 = main.view_pos(hover)
+		var a := _screen(hp.x - 0.45, hp.y - 0.88)
 		draw_rect(Rect2(a, Vector2(0.9, 1.28) * z), Color(1, 1, 1, 0.35), false, 1.0)
 
 	# move order marker
@@ -90,11 +94,12 @@ func _draw() -> void:
 	# names under people
 	if z >= 16.0:
 		var font := Fonts.cond(600)
-		var fs := 12 if z >= 34.0 else 11
+		var fs := maxi(NAME_PX, Fonts.MIN_PX)
 		for p in sim.people:
 			if p.away != null:
 				continue # off the map on a trip: nothing to label
-			var pos := _screen(p.x, p.y + 0.52)
+			var pp: Vector2 = main.view_pos(p)
+			var pos := _screen(pp.x, pp.y + 0.52)
 			if pos.x < -40 or pos.x > vp.x + 40 or pos.y < -20 or pos.y > vp.y + 20:
 				continue
 			var label: String = p.first
@@ -109,6 +114,6 @@ func _draw() -> void:
 				draw_rect(Rect2(pos.x - 13.5, pos.y + 10.5, 27.0 * p.hp / 100.0, 3), Color("#d0493a") if p.hp < 35 else Color("#8fb85a"))
 			if p.reloading > 0.0:
 				var k: float = 1.0 - p.reloading / float(p.gun.reload)
-				var hy := _screen(p.x, p.y - 0.53 - 0.45).y
+				var hy := _screen(pp.x, pp.y - 0.53 - 0.45).y
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(14 / 255.0, 12 / 255.0, 10 / 255.0, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
