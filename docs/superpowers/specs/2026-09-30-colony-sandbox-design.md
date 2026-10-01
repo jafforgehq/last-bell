@@ -166,6 +166,36 @@ The harness got a second policy, `--policy=keep` (everyone hides in the school g
 
 Before round 0 the same default policy reached day 17 with 0 of 8 (and ammo that did nothing), and the hiding crew had all six alive and unhurt on day 20 in every seed tried; with real ammo and the old numbers the default policy fell to day 14 to 15. Hiding no longer wins, but the harness's default crew is naive (it never repositions anyone), so the margin is modest; the informed policy of round 2 should widen it.
 
+## 7d. After round 2 (2026-10-01)
+
+Round 2 made the night something to read and solve (plan: `docs/superpowers/plans/2026-10-01-round-2.md`). The dead now come in three kinds, a night has a plan that the lookout can forecast, the player can see where the guns reach, steer the dead with an alarm and hand the chores to standing orders, and the thirtieth night is a climax.
+
+- **Kinds** (`scripts/sim/kinds.gd`). Walker as before. **Runner** from night 4: hit points 2 to 4, speed 1.5 to 2.1, claws a wall at 0.8, never limps, counts 2 in a night's budget. **Brute** from night 8: hit points 22 to 30, speed 0.42 to 0.6, claws a wall at 3.5 times a walker, counts 9. Runners are 6% of a night's budget on night 4, rising 3 points a night to 30%; brutes 8% on night 8, rising 2 points a night to 20%. A kind that has started brings at least one. The guns shoot a brute before a runner before a walker.
+- **Tonight's plan** (`waves.gd`). At dusk the night gets a queue of kinds and one or two main spawn points that bring 65% of the dead; the brutes are placed in the later 60% of the night. The plan comes from a generator seeded by the run's seed and the day, never from the rules' own dice, so the forecast at 17:00 and the dusk that spends it agree, and a loaded game carries on with the same night.
+- **The forecast** (`tactics.gd`). At 17:00 the lookout (Marcus), if he is alive, here and up, reports a number (within 15%), a direction and whether runners or a brute are among them. Without him the crew gets "No forecast".
+- **The alarm.** A wall section can be set as the alarm (key L): 3 scrap, three game hours, one at a time, not on the school doors. Its places score 40 tiles better when the dead choose where to go, and 70% of those already on their way and not yet at a wall switch to it when a place is free.
+- **Standing orders.** Auto-repair (key B) mends the most worn section under 70% by day while the stock has 5 scrap or more; Dez and Hector start with it on. A repair now mends 5 points a second plus the person's Building skill (was a flat 9), so Dez does 14 and Marcus 6.
+- **Fields of fire** (key V, view only). Each wall section shows how many guns reach at least half its places from where their owners stand at night: none red, one amber, two or more green.
+- **Decks.** A person on a walkway or a tower is scratched by a wall claw a fifth as often as one on the ground (11% becomes about 2%).
+- **The Big Night.** Night 30 brings 2.4 times its budget, 30% of it runners and 25% brutes, with up to 90 of the dead alive at once; a banner and an alert say so at dusk, and the dawn is the victory.
+
+| Value | Before round 2 | Now | Why |
+| --- | --- | --- | --- |
+| Starting scrap | 30 | 40 | With brutes tearing walls the stock was gone by day 5. |
+| Hardware store scrap | 14 to 28 | 18 to 34 | The same. |
+| Repair speed | 9 a second | 5 + Building | Skill should count. |
+| Scratch on a deck | 11% | 11% of 20% | The raised places have to be worth something. |
+
+**What the harness shows now** (Standard, 30 days, 8 games per row):
+
+| Crew | Seeds 1-8 | Seeds 9-16 | Both |
+| --- | --- | --- | --- |
+| Gives no orders (`--policy=none`) | median day 11 | not run | |
+| The default policy | median day 16.5 | median day 17 | **17**, best 27 |
+| The informed policy (reads the plan, places the guns, sets the alarm) | median day 22 | median day 24 | **24**, none reaches 30 |
+
+The informed crew outlasts the default one by seven days, so knowing the night pays. On Story (the dead at 0.7 times) the informed policy wins 5 of 8 games and the default one 2 of 8, and the Big Night is what ends the runs that reach day 30 and fall. What ends a Standard run: the default crew is out of scrap from about day 6 (the walls stop being mended and fall); the informed crew has the walls and runs out of ammo (about 1000 to 1150 kills, empty around day 22 to 26). Ammo has no source except the hardware store, so the workshop of round 3 is where the Standard win comes from.
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.
