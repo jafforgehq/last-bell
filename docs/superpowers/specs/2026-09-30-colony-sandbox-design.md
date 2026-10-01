@@ -1,5 +1,7 @@
 # Last Bell: The Thirty Days — Design (version 1)
 
+> **Renamed 2026-10-01:** the working title is now **Thirty Bells** (a Steam game called The Last Bell is coming; see [the audit](../../audit/2026-10-01-full-audit.md)). The text below keeps the old name as written.
+
 Status: draft for review. Branch: `feature/colony-sandbox` (`main` stays the published game until the owner says merge). This replaces the first draft of this document; that full design is kept as the appendix, as the long-term roadmap.
 
 ## 1. Vision and scope

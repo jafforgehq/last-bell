@@ -1,6 +1,6 @@
-# Last Bell (Godot)
+# Thirty Bells (Godot)
 
-Six survivors hold a walled schoolyard against the dead. Built in Godot 4.7.
+Six survivors hold a walled schoolyard against the dead for thirty nights. Built in Godot 4.7. (Working title; it was Last Bell until 2026-10-01, when it turned out a Steam game called The Last Bell is coming. The itch.io page and the GitHub repository still carry the old name.)
 
 Open the project and press **F5**. The main scene is `scenes/main.tscn`.
 
@@ -15,16 +15,18 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`.
 | R / P / F / C | Draft or release / to post / repair / follow |
 | T / X / G | Treat the wounded or infected / send an infected person out / send a scavenging party |
 | Space, 1, 2, 3 | Pause, normal, fast, fastest |
-| Tab | Next person |
+| Tab | Next person (skips the lost and those away) |
 | Esc | Clear selection |
 
 ## Playing
 
 A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, more each night.
 
-- **Supplies.** At 07:00, 13:00 and 19:00 everyone eats and drinks. The stores panel shows how many days of food and water are left. The vegetable beds and rain barrels give a little each dawn. Repairs cost scrap (1 for every 10 points of wall health), bandages cost medicine, and shooting costs ammo.
+- **Supplies.** At 07:00, 13:00 and 19:00 everyone eats and drinks. The stores panel shows how many days of food and water are left. The vegetable beds and rain barrels give a little each dawn. Repairs cost scrap (1 for every 10 points of wall health), bandages cost medicine, and shooting costs ammo: when the stock cannot pay for another shot the guns stay silent and people fight with the butt of the gun (a pike never runs dry), and an alert says so.
 - **Wounds.** A bite or scratch bleeds until someone bandages it (Ana first); at 0 health a person is downed and must be stabilised within three game hours, then rests in bed. A **bite** can infect: a feverish person turns into a walker 12 to 24 hours later unless treated (**T**, two medicine, better with Medicine skill) or sent out through the gate (**X**).
 - **Scavenging.** Select someone and press **G** to send one or two survivors through the gate between 06:30 and 10:00. They come back at 16:00 with loot, hurt, or not at all. A raided site is picked over for three days.
+- **The school.** The dead cannot walk into the school while its two north doors hold. They go for the doors once the yard has fallen and a person is hiding inside; a door that is down opens the whole building to them. Falling back is a last stand with a clock, not a bunker.
+- **The goal.** Hold thirty nights. At the dawn that starts day 31 a convoy is on the road and the run is won.
 - **Save and load.** **F5** saves, **F9** loads; the game also autosaves at each dawn. When everyone is gone the game over screen offers a new game.
 
 ## How it fits together
@@ -36,6 +38,8 @@ A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, mo
   walkability grids.
 - `scripts/sim/`: the simulation. `sim.gd` holds the clock, people, walkers,
   combat and wall damage. `pathfinder.gd` wraps `AStarGrid2D` and smooths paths.
+  `step_clock.gd` hands out whole 1/30 s steps, so the rules run at 30 Hz at any
+  frame rate and a seed plays the same game everywhere; the drawing interpolates.
 - `scripts/render/`: drawing.
   - `pawn_node.gd` draws one person or walker (y-sorted).
   - `pawn_art.gd` has the live legs, arms and hands.
