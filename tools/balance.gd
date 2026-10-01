@@ -18,6 +18,9 @@
 ##   --policy=none    nobody gives any order: what the colony does alone
 ##   --policy=keep    the default policy, but everyone hides in the school gym from the bell
 ##                    to dawn (the exploit check: hiding must not beat defending)
+##   --policy=informed the default policy plus what the game tells a player: at dusk the crew
+##                    is stood on the decks where its guns cover the walls tonight's dead
+##                    will come to, and the alarm is set on the best-covered section
 ##   --verbose        print what the policy did and who was lost, game by game
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
@@ -57,6 +60,11 @@ class Policy:
 	var sim
 	## Hide in the school gym from the bell to dawn instead of holding the posts.
 	var hide := false
+	## Use the forecast and the coverage: place the crew and set the alarm at dusk.
+	var informed := false
+	var _placed_day := -1
+	var _lured_day := -1
+	var _placed: Dictionary = {}
 	## What it has done: trips sent, treatments ordered, people sent out, repairs ordered.
 	var trips := 0
 	var treats := 0
@@ -75,6 +83,8 @@ class Policy:
 			return
 		if hide:
 			_hide()
+		if informed:
+			_inform()
 		_scavenge()
 		_repair()
 		_infection()
@@ -101,6 +111,115 @@ class Policy:
 				p.drafted = false
 				p.order = null
 				p.goal_key = ""
+
+	# ------------------------------------------------------------- informed --
+
+	## Where the informed crew may stand: the raised decks and the towers.
+	func _spots() -> Array:
+		var out: Array = []
+		for x in range(22, 63, 3):
+			out.append(Vector2(float(x) + 0.5, 18.6))
+		for y in range(21, 43, 3):
+			out.append(Vector2(20.6, float(y) + 0.5))
+			out.append(Vector2(63.4, float(y) + 0.5))
+		out.append(Vector2(18.9, 16.9))
+		out.append(Vector2(65.2, 16.9))
+		var ok: Array = []
+		for v in out:
+			if sim.world.on_deck(v.x, v.y):
+				ok.append(v)
+		return ok
+
+	## How much a wall section matters tonight: more the nearer it is to where the
+	## dead come from (the forecast), and a little for all of them.
+	func _weight(seg, spawns: Array) -> float:
+		var d := 80.0
+		for sp in spawns:
+			d = minf(d, Vector2(sp).distance_to(seg.center))
+		return 1.0 + 4.0 * maxf(0.0, 1.0 - d / 45.0)
+
+	func _inform() -> void:
+		var hour: float = sim.hour
+		var dusky: bool = sim.phase == "day" and hour >= 17.0 or sim.phase == "dusk"
+		if not dusky and sim.phase != "night":
+			# by day the crew goes back to its jobs
+			if not _placed.is_empty():
+				for p in sim.people:
+					if _placed.has(p.id) and p.drafted:
+						p.drafted = false
+						p.order = null
+						p.goal_key = ""
+				_placed.clear()
+			return
+		if _placed_day != sim.day and dusky:
+			_placed_day = sim.day
+			_place_the_crew()
+		if _lured_day != sim.day and sim.phase == "dusk":
+			_lured_day = sim.day
+			_set_the_alarm()
+
+	func _place_the_crew() -> void:
+		var f: Dictionary = sim.tactics.forecast()
+		var spawns: Array = f.spawns if f.get("given", false) else []
+		var spots := _spots()
+		var count := {}
+		for s in sim.segments:
+			count[s.id] = 0
+		var crew: Array = []
+		for p in sim.people:
+			if not (p.dead or p.downed or p.away != null):
+				crew.append(p)
+		crew.sort_custom(func(a, b): return a.def.skills.Shooting > b.def.skills.Shooting)
+		var used := {}
+		for p in crew:
+			var best = null
+			var best_gain := -1.0
+			for v in spots:
+				if used.has(v):
+					continue
+				var gain := 0.0
+				var reach := float(p.gun.range)
+				for s in sim.segments:
+					var within := 0
+					for sl in s.slots:
+						if v.distance_to(Vector2(sl.x, sl.y)) <= reach:
+							within += 1
+					if within * 2 >= s.slots.size():
+						gain += _weight(s, spawns) / float(1 + int(count[s.id]))
+				gain -= Vector2(p.x, p.y).distance_to(v) * 0.01
+				if gain > best_gain:
+					best_gain = gain
+					best = v
+			if best == null:
+				continue
+			used[best] = true
+			var reach2 := float(p.gun.range)
+			for s in sim.segments:
+				var within2 := 0
+				for sl in s.slots:
+					if best.distance_to(Vector2(sl.x, sl.y)) <= reach2:
+						within2 += 1
+				if within2 * 2 >= s.slots.size():
+					count[s.id] = int(count[s.id]) + 1
+			if sim.order_move(p, best.x, best.y):
+				_placed[p.id] = true
+		_note("places the crew for the %s" % (sim.waves.heading_text(sim.waves.plan_for(sim.day)) if f.get("given", false) else "night"))
+
+	## The alarm goes on the best-covered section that is still whole, if scrap allows.
+	func _set_the_alarm() -> void:
+		if float(sim.stock.scrap) < 8.0 or sim.tactics.lure_seg() != null:
+			return
+		var best = null
+		var best_score := 0.0
+		for s in sim.segments:
+			if s.state == 3 or s.kind == "door":
+				continue
+			var score := float(sim.tactics.coverage_of(s)) * 3.0 + minf(s.hp / 100.0, 3.0)
+			if sim.tactics.coverage_of(s) >= 3 and score > best_score:
+				best_score = score
+				best = s
+		if best != null and sim.tactics.order_lure(best):
+			_note("sets the alarm at the %s" % best.name.to_lower())
 
 	## Free to be given a job: on the map, on their feet, on no order, and not busy treating someone.
 	func _free(p) -> bool:
@@ -230,7 +349,7 @@ class Policy:
 ## `hz` is how many steps of the rules a second; `orders` false plays with no
 ## orders given at all; `hide` makes the crew spend every night in the school gym; `setup`, if given, is called with the new Sim before the
 ## first step (the tests use it to play a cheap game).
-static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false) -> Dictionary:
+static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false, informed: bool = false) -> Dictionary:
 	var started := Time.get_ticks_msec()
 	var g := Helpers.make(seed_value, difficulty)
 	var sim = g.sim
@@ -238,6 +357,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		setup.call(sim)
 	var policy := Policy.new(sim)
 	policy.hide = hide
+	policy.informed = informed
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
 	var rows: Array = [_row(sim)]
@@ -311,9 +431,15 @@ static func _row(sim) -> Dictionary:
 		if s.state == 3:
 			down += 1
 	var walkers := 0
+	var runners := 0
+	var brutes := 0
 	for z in sim.zombies:
 		if z.state != "dead" and z.state != "dying":
 			walkers += 1
+			if z.kind == "runner":
+				runners += 1
+			elif z.kind == "brute":
+				brutes += 1
 	return {
 		"day": sim.day,
 		"hour": snappedf(sim.hour, 0.01),
@@ -332,6 +458,8 @@ static func _row(sim) -> Dictionary:
 		"breached": down,
 		"kills": sim.kills,
 		"walkers": walkers,
+		"runners": runners,
+		"brutes": brutes,
 	}
 
 
@@ -416,6 +544,7 @@ func _run() -> void:
 	var hz := clampf(float(opts.hz), 5.0, 60.0)
 	var orders: bool = opts.policy != "none"
 	var hide: bool = opts.policy == "keep"
+	var informed: bool = opts.policy == "informed"
 	var jobs := clampi(int(opts.jobs), 1, 32)
 	var seeds: Array = []
 	if String(opts.seeds) != "":
@@ -428,20 +557,20 @@ func _run() -> void:
 	if not quiet:
 		var names := ["Story", "Standard", "Brutal"]
 		print("Thirty Bells balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
-			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else "default policy") if orders else "no orders",
+			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else ("informed policy" if informed else "default policy")) if orders else "no orders",
 			(", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
 		print("")
 		if jobs == 1 or seeds.size() == 1:
 			_print_header()
 	var games: Array = []
 	if jobs > 1 and seeds.size() > 1 and not quiet:
-		games = _play_in_workers(seeds, jobs, days, difficulty, hz, orders, hide)
+		games = _play_in_workers(seeds, jobs, days, difficulty, hz, orders, hide, informed)
 		_print_header()
 		for i in games.size():
 			_print_game(i + 1, games[i], verbose)
 	else:
 		for i in seeds.size():
-			var r := play(seeds[i], difficulty, days, hz, orders, Callable(), hide)
+			var r := play(seeds[i], difficulty, days, hz, orders, Callable(), hide, informed)
 			games.append(r)
 			if not quiet:
 				_print_game(i + 1, r, verbose)
@@ -464,7 +593,7 @@ func _run() -> void:
 ## Plays the seeds in `jobs` worker processes (this same script, with --quiet)
 ## and gathers their games in seed order. A worker that cannot be started or
 ## leaves no result has its seeds played here instead.
-func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: float, orders: bool, hide: bool = false) -> Array:
+func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: float, orders: bool, hide: bool = false, informed: bool = false) -> Array:
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
 	var scratch := ProjectSettings.globalize_path("user://")
@@ -481,7 +610,7 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			names.append(str(sd))
 		var args := ["--headless", "--quiet", "--path", project, "--script", "res://tools/balance.gd", "--",
 			"--seeds=%s" % ",".join(names), "--days=%d" % days, "--difficulty=%d" % difficulty, "--hz=%s" % str(hz),
-			"--policy=%s" % ("keep" if hide else ("default" if orders else "none")), "--quiet", "--out=%s" % out]
+			"--policy=%s" % ("keep" if hide else ("informed" if informed else ("default" if orders else "none"))), "--quiet", "--out=%s" % out]
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0
