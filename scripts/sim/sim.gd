@@ -10,6 +10,12 @@ const Scenario := preload("res://scripts/sim/scenario.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Workshop := preload("res://scripts/sim/workshop.gd")
+const Traits := preload("res://scripts/sim/traits.gd")
+const Morale := preload("res://scripts/sim/morale.gd")
+const Bonds := preload("res://scripts/sim/bonds.gd")
+const Skills := preload("res://scripts/sim/skills.gd")
+const Barks := preload("res://scripts/sim/barks.gd")
+const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -201,6 +207,12 @@ var scenario
 var waves
 var tactics
 var workshop
+var traits
+var morale
+var bonds
+var skills
+var barks
+var storyteller
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -263,7 +275,13 @@ func _init(data: Dictionary, w, effects) -> void:
 	waves = Waves.new()
 	tactics = Tactics.new()
 	workshop = Workshop.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop]:
+	traits = Traits.new()
+	morale = Morale.new()
+	bonds = Bonds.new()
+	skills = Skills.new()
+	barks = Barks.new()
+	storyteller = Storyteller.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller]:
 		m.setup(self)
 	_seed()
 
@@ -415,7 +433,7 @@ func perf(p: Person) -> float:
 ## Small status marks for a person's card and panel, from every module:
 ## [{"icon": String, "color": Color, "tip": String}].
 func status_of(p: Person) -> Array:
-	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p) + workshop.status_of(p)
+	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p) + workshop.status_of(p) + morale.status_of(p)
 
 
 ## Game hours that pass in `dt` seconds of the rules' time.
@@ -460,7 +478,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller]:
 		m.start()
 
 
@@ -501,6 +519,9 @@ func update(dt: float) -> void:
 	waves.update(dt)
 	tactics.update(dt)
 	workshop.update(dt)
+	morale.update(dt)
+	barks.update(dt)
+	storyteller.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
