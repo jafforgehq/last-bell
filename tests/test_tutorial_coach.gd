@@ -174,7 +174,7 @@ func test_the_game_waits_while_a_card_is_up_and_goes_on_at_the_speed_it_had() ->
 func test_the_first_cards_ask_for_a_pause_and_the_run_steps_do_not_pause_after_the_order() -> void:
 	for s in Coach.load_steps():
 		var pauses: bool = bool(s.get("pause", false)) or s.has("pause_until")
-		if ["look", "release", "stores", "scavenge", "report", "fields", "alarm", "save", "wrap"].has(String(s.id)):
+		if ["look", "release", "stores", "scavenge", "report", "fields", "alarm", "save", "jobs", "wrap"].has(String(s.id)):
 			check(pauses, "%s waits for the player" % s.id)
 		if ["scratch"].has(String(s.id)):
 			check(not pauses, "%s needs time to pass" % s.id)
@@ -217,7 +217,7 @@ func test_after_forty_five_seconds_the_arrow_comes_by_itself() -> void:
 # ------------------------------------------------------------- the last card --
 
 func test_the_last_card_offers_a_real_run_a_replay_and_staying() -> void:
-	var main = Tut.game(15)
+	var main = Tut.game(_index_of("wrap"))
 	var picked: Array = []
 	main.restart = func(meta): picked.append(meta)
 	await Tut.frames(main, 40)
@@ -638,3 +638,219 @@ func test_a_lesson_the_player_does_is_done_at_once_and_one_that_was_done_already
 	await Tut.frames(main2, 40)
 	check(coach2.phase != "active", "and goes on after a second")
 	await Tut.leave(main2)
+
+
+# ------------------------------------------------------------ the duty roster --
+
+func _index_of(id: String) -> int:
+	var steps := Coach.load_steps()
+	for i in steps.size():
+		if String(steps[i].id) == id:
+			return i
+	return -1
+
+
+## The short line a step's goal (the one whose condition is `when`) has for the card over a page of the HUD.
+func _line_of(step: Dictionary, when: String) -> String:
+	for g in step.get("goals", []):
+		if String(g.get("when", "")) == when:
+			return String(g.get("line", ""))
+	return ""
+
+
+## The real game on the lesson about the Duty roster (key J), in a window of `width` x `height`, after its first frames.
+func _roster_game(width: int = 1280, height: int = 800) -> Node:
+	var at := _index_of("jobs")
+	check(at >= 0, "there is a lesson on the duty roster")
+	if at < 0:
+		return null
+	var main = Tut.game(at, width, height)
+	await Tut.frames(main, 12)
+	return main
+
+
+func test_the_duty_roster_lesson_asks_for_the_page_then_a_job_then_the_page_shut() -> void:
+	var main = await _roster_game()
+	if main == null:
+		return
+	var coach = main.coach
+	var sim = main.sim
+	eq(coach.step_id(), "jobs", "the lesson is up")
+	eq(coach.phase, "active", "and begun")
+	check(coach.held and main.speed == 0, "the game waits while the card is read")
+	# the world the lesson expects: Walt and Hector have no day job to begin with
+	check(sim.jobs.job_of(Bot.person(main, "walt")) == "" and sim.jobs.job_of(Bot.person(main, "hector")) == "", "Walt and Hector have no day job")
+	eq(coach.target_name, "jobs", "the clipboard in the toolbar is lit")
+	check(coach.target_rect.size.x > 0.0, "and it is on the screen")
+	check(coach.dim_rect.visible, "with the screen dimmed round it, as for any part of the HUD")
+	_check_words(coach.card, "the roster lesson")
+	eq(float(coach.state.events.get("assigned:job", 0.0)), 0.0, "(the three jobs taken off at the very start are not jobs given)")
+	# the lock: the Jobs screen is the one thing allowed
+	check(main._allows("jobs"), "the Jobs screen is allowed")
+	check(not main._allows("gizmo", "job_bench"), "M is not: a job is given on the page")
+	check(main.hud.jobs_button.modulate.a > 0.9, "the clipboard is not a ghost")
+	# J opens it
+	main._key(KEY_J)
+	await Tut.frames(main, 8)
+	check(main.hud.jobs_screen != null, "J opens the Duty roster")
+	var screen = main.hud.jobs_screen
+	eq(float(coach.state.did.get("jobs", 0.0)), 1.0, "the coach saw it opened")
+	eq(coach.phase, "active", "opening it is not the whole lesson")
+	eq(coach.target_name, "jobs.auto", "Auto-assign is lit now")
+	var step: Dictionary = coach.current_step()
+	check(_line_of(step, "jobs_open") != "", "(the lesson has a line for the page)")
+	eq(coach.text_label.text, _line_of(step, "jobs_open"), "the card says its short line for this part")
+	check(not coach.title_label.visible and not coach.goal_label.visible, "and no more: a line at the top")
+	_check_words(coach.card, "the line over the Duty roster")
+	check(not coach.dim_rect.visible, "the page is not dimmed a second time")
+	var small: Rect2 = coach.card.get_global_rect()
+	check(small.position.y <= 20.0, "at the top of the window, over the page's heading")
+	check(not small.intersects(coach.target_rect), "off Auto-assign")
+	# a job given on the page
+	check(screen.choose_job(Bot.person(main, "walt"), "garden"), "Walt is given the vegetable beds")
+	await Tut.frames(main, 4)
+	eq(float(coach.state.events.get("assigned:job", 0.0)), 1.0, "the coach counted the job given")
+	eq(coach.target_name, "jobs.close", "Close is lit now")
+	check(_line_of(step, "jobs_given") != "" and _line_of(step, "jobs_given") != _line_of(step, "jobs_open"), "(the lesson has another line for that)")
+	eq(coach.text_label.text, _line_of(step, "jobs_given"), "and the card says so: the line is not the one for a job to be given")
+	eq(coach.phase, "active", "but the page is still open: not done")
+	# Close
+	screen.close_button.pressed.emit()
+	await Tut.frames(main, 6)
+	eq(coach.phase, "done", "the page shut after a job: the lesson is done")
+	await Tut.frames(main, 40)
+	eq(coach.step_id(), "wrap", "and the last card comes")
+	await Tut.leave(main)
+
+
+func test_over_the_duty_roster_a_slow_player_gets_the_ring_and_the_arrow_but_the_card_stays_one_line() -> void:
+	var main = await _roster_game(700, 560)
+	if main == null:
+		return
+	var coach = main.coach
+	main._key(KEY_J)
+	await Tut.frames(main, 8)
+	check(main.hud.jobs_screen != null, "the page is open")
+	var one_line: float = coach.card.get_global_rect().size.y
+	check(not coach.show_button.visible and not coach.spot.pulse and not coach.spot.arrow, "at first there is only the ring")
+	coach.idle_t = 21.0
+	await Tut.frames(main, 8)
+	check(coach.spot.pulse, "after twenty seconds the ring pulses")
+	check(not coach.show_button.visible, "but Show me is not offered: it would make the line a card that hides the first rows of the page")
+	check(coach.card.get_global_rect().size.y <= one_line + 1.0, "the card is still one line (%.0f px)" % coach.card.get_global_rect().size.y)
+	_check_rows_are_free(main, "after twenty seconds")
+	coach.idle_t = 46.0
+	await Tut.frames(main, 8)
+	check(coach.spot.arrow, "after forty-five the arrow comes by itself")
+	check(not coach.show_button.visible, "still without Show me")
+	await Tut.leave(main)
+
+
+func test_looking_at_the_page_or_taking_a_job_away_is_not_the_lesson() -> void:
+	var main = await _roster_game()
+	if main == null:
+		return
+	var coach = main.coach
+	# opened and shut with nothing done
+	main._key(KEY_J)
+	await Tut.frames(main, 6)
+	main.hud.jobs_screen.close_button.pressed.emit()
+	await Tut.frames(main, 40)
+	eq(coach.step_id(), "jobs", "a look at the page does not finish the lesson")
+	eq(coach.phase, "active", "it is still up")
+	eq(coach.target_name, "jobs", "and points at the button again")
+	# a job taken away is not a job given
+	main._key(KEY_J)
+	await Tut.frames(main, 6)
+	var screen = main.hud.jobs_screen
+	check(screen.choose_job(Bot.person(main, "marcus"), ""), "Marcus is taken off the lookout post")
+	await Tut.frames(main, 4)
+	check(float(coach.state.events.get("assigned", 0.0)) >= 1.0, "the rules said so")
+	eq(float(coach.state.events.get("assigned:job", 0.0)), 0.0, "but it is not a job given")
+	eq(coach.target_name, "jobs.auto", "Auto-assign is still what is lit")
+	screen.close_button.pressed.emit()
+	await Tut.frames(main, 40)
+	eq(coach.step_id(), "jobs", "so the lesson goes on")
+	await Tut.leave(main)
+
+
+func test_auto_assign_is_a_job_given_too() -> void:
+	var main = await _roster_game()
+	if main == null:
+		return
+	var coach = main.coach
+	main._key(KEY_J)
+	await Tut.frames(main, 6)
+	var screen = main.hud.jobs_screen
+	screen.auto_button.pressed.emit()
+	await Tut.frames(main, 4)
+	check(float(coach.state.events.get("assigned:job", 0.0)) >= 1.0, "Auto-assign gave jobs: the coach counted them")
+	for id in ["walt", "hector"]:
+		check(main.sim.jobs.job_of(Bot.person(main, id)) != "", "%s has a job now" % id)
+	eq(coach.target_name, "jobs.close", "Close is lit")
+	screen.close_button.pressed.emit()
+	await Tut.frames(main, 6)
+	eq(coach.phase, "done", "and the page shut: done")
+	await Tut.leave(main)
+
+
+func test_the_duty_roster_is_refused_in_the_lessons_that_do_not_teach_it() -> void:
+	var main = Tut.game(0)
+	await Tut.frames(main, 12)
+	var coach = main.coach
+	check(main.hud.jobs_button.modulate.a < 0.5, "the clipboard is a ghost in the first lesson")
+	main._key(KEY_J)
+	check(main.hud.jobs_screen == null, "J does not open the page")
+	eq(_toast(main), "Not yet: first pan and zoom the view.", "and says what comes first")
+	eq(float(coach.state.did.get("jobs", 0.0)), 0.0, "and the coach was not told it was opened")
+	# the toolbar's button asks the same gate
+	_clear_toast(main)
+	main.hud.jobs_button.pressed.emit()
+	check(main.hud.jobs_screen == null, "so does the clipboard")
+	check(_toast(main).begins_with("Not yet"), "with the same toast")
+	await Tut.leave(main)
+
+
+func test_the_rules_events_that_give_a_job_are_counted_for_the_coach() -> void:
+	var main = Tut.game(1)
+	await Tut.frames(main, 4)
+	var coach = main.coach
+	var before := float(coach.state.events.get("assigned", 0.0))
+	main.sim.events.append({"type": "assigned", "who": "walt", "station": "garden"})
+	main.sim.events.append({"type": "assigned", "who": "dez", "station": ""})
+	main._handle_events()
+	eq(float(coach.state.events.get("assigned", 0.0)) - before, 2.0, "both are counted as the events they are")
+	eq(float(coach.state.events.get("assigned:job", 0.0)), 1.0, "and the one that names a station is a job given")
+	await Tut.leave(main)
+
+
+## The card over the Duty roster is a line at the top of the window: it hides no one's Day job or Night post.
+func _check_rows_are_free(main, label: String) -> void:
+	var card: Rect2 = main.coach.card.get_global_rect()
+	for id in main.hud.jobs_screen.rows:
+		var row: Dictionary = main.hud.jobs_screen.rows[id]
+		for key in ["job", "post"]:
+			var button: Rect2 = row[key].get_global_rect()
+			check(not card.intersects(button), "%s: the card does not hide %s's %s button (%s over %s)" % [label, id, key, str(card), str(button)])
+
+
+func test_the_card_over_the_duty_roster_stays_in_the_window_and_off_the_buttons() -> void:
+	for size in [Vector2i(1280, 800), Vector2i(980, 700), Vector2i(1920, 1080), Vector2i(900, 640), Vector2i(700, 560)]:
+		var main = await _roster_game(size.x, size.y)
+		if main == null:
+			return
+		var coach = main.coach
+		var label := "%dx%d" % [size.x, size.y]
+		_check_picture(main, label + " (the button)", size.x, size.y)
+		main._key(KEY_J)
+		await Tut.frames(main, 12)
+		check(main.hud.jobs_screen != null, "%s: the page is open" % label)
+		eq(coach.target_name, "jobs.auto", "%s: Auto-assign is lit" % label)
+		_check_picture(main, label + " (Auto-assign)", size.x, size.y)
+		_check_rows_are_free(main, label + " (Auto-assign)")
+		main.hud.jobs_screen.choose_job(Bot.person(main, "hector"), "builders")
+		await Tut.frames(main, 12)
+		eq(coach.target_name, "jobs.close", "%s: Close is lit" % label)
+		_check_picture(main, label + " (Close)", size.x, size.y)
+		_check_rows_are_free(main, label + " (Close)")
+		await Tut.leave(main)

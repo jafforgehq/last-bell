@@ -1,8 +1,9 @@
 extends "res://tests/case.gd"
-## The night tools in the HUD: the Lure (alarm) and Auto-repair buttons and the tag in the
-## person panel, the lookout's forecast under the clock, the fields-of-fire button and its
+## The night tools in the HUD: the Lure (alarm) button, the Wall crew job (key B) and the job tag in
+## the person panel, the lookout's forecast under the clock, the fields-of-fire button and its
 ## legend, the icons of the new alerts, and the kind of the dead in their panel. (The drawing
-## in the world is in test_hud_fields.gd, the keys in test_hud_keys.gd.)
+## in the world is in test_hud_fields.gd, the keys in test_hud_keys.gd, the Workbench job in
+## test_hud_workshop.gd and the Jobs screen in test_jobs_screen.gd.)
 
 const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
@@ -106,95 +107,151 @@ func test_a_person_and_a_walker_get_no_lure_button() -> void:
 	check(Kit.gizmo(ctx, "lure") == null, "not for a person")
 	ctx.hud.select({"kind": "zombie", "ref": ctx.sim.zombies[0]})
 	Kit.update(ctx)
-	check(Kit.gizmo(ctx, "lure") == null and Kit.gizmo(ctx, "auto") == null, "nor for a walker")
+	check(Kit.gizmo(ctx, "lure") == null and Kit.gizmo(ctx, "job_builders") == null, "nor for a walker")
 	Kit.free_all(ctx)
 
 
-# ----------------------------------------------------------------- auto-repair --
+# --------------------------------------------------------------- the wall crew --
 
-func test_a_person_gets_an_auto_button_that_lights_while_it_is_on() -> void:
+func test_a_person_gets_a_wall_crew_button_that_lights_while_they_are_on_it() -> void:
 	var ctx := Kit.build()
 	var ana = _person(ctx, "ana")
-	var b: Button = Kit.gizmo(ctx, "auto")
-	check(b != null, "the Auto button is there")
-	check(Kit.texts(b).has("AUTO") and Kit.texts(b).has("B"), "named, with its key B (A pans the view)")
-	eq(b.get_meta("on"), false, "off at first")
+	var b: Button = Kit.gizmo(ctx, "job_builders")
+	check(b != null, "the Wall crew button is there")
+	check(Kit.texts(b).has("WALL CREW") and Kit.texts(b).has("B"), "named, with its key B (A pans the view)")
+	var icons: Array = b.find_children("*", "TextureRect", true, false)
+	check(not icons.is_empty() and icons[0].texture == ctx.hud.icons["wall"], "wearing the wall's icon (the hammer is Repair's)")
+	eq(Hud.GIZMO_ICON.get("job_builders"), "wall", "by the icon table")
+	eq(b.get_meta("on"), false, "dark at first: Ana is the nurse")
 	var off_box: StyleBox = b.get_theme_stylebox("normal")
 	if off_box is StyleBoxFlat:
 		eq(off_box.bg_color, Hud.PANEL, "dark like the others")
-	ctx.sim.tactics.toggle_auto(ana)
+	ctx.sim.jobs.assign(ana, "builders")
 	Kit.update(ctx)
-	b = Kit.gizmo(ctx, "auto")
-	eq(b.get_meta("on"), true, "on once the order is on")
+	b = Kit.gizmo(ctx, "job_builders")
+	eq(b.get_meta("on"), true, "lit once they are on the wall crew")
 	var on_box: StyleBox = b.get_theme_stylebox("normal")
 	if on_box is StyleBoxFlat:
 		eq(on_box.bg_color, Hud.ACCENT, "lit gold, like a drafted person's Release")
 	else:
 		# a frame: the gold one is another picture (or the same one tinted another way)
 		check(on_box is StyleBoxTexture and (on_box.texture != off_box.texture or on_box.modulate_color != off_box.modulate_color), "lit: made of the main-choice frame, not the dark one")
-	check(Kit.texts(b).has("AUTO"), "still named Auto")
-	ctx.sim.tactics.toggle_auto(ana)
+	check(Kit.texts(b).has("WALL CREW"), "still named")
+	ctx.sim.jobs.unassign(ana)
 	Kit.update(ctx)
-	eq(Kit.gizmo(ctx, "auto").get_meta("on"), false, "and dark again when it is turned off")
+	eq(Kit.gizmo(ctx, "job_builders").get_meta("on"), false, "and dark again when they are taken off")
 	Kit.free_all(ctx)
 
 
-func test_the_auto_tooltip_says_what_it_does_and_its_key() -> void:
+func test_the_wall_crew_tooltip_says_what_it_does_what_it_is_set_to_and_its_key() -> void:
 	var ctx := Kit.build()
-	_person(ctx, "dez")
-	var lines := _lines(Kit.gizmo(ctx, "auto"))
-	eq(lines.size(), 3, "three lines: '%s'" % Kit.gizmo(ctx, "auto").tooltip_text)
-	eq(lines[0], "Auto-repair: by day, mends the most worn wall under %d%%" % roundi(Tactics.AUTO_BELOW * 100.0), "what it does")
-	eq(lines[1], "while scrap is %d or more." % int(Tactics.AUTO_MIN_SCRAP), "and when")
-	eq(lines[2], "Key: B", "the key")
+	var ana = _person(ctx, "ana")
+	var lines := _lines(Kit.gizmo(ctx, "job_builders"))
+	eq(lines.size(), 2, "two lines: '%s'" % Kit.gizmo(ctx, "job_builders").tooltip_text)
+	eq(lines[0], "Wall crew: mends the most worn wall under %d%% by day while there is scrap" % int(ctx.sim.jobs.setting("builders", "repair_below")), "what it does, with the threshold the Jobs screen sets")
+	eq(lines[1], "Key: B", "and the key")
+	ctx.sim.jobs.set_setting("builders", "repair_below", 50)
+	Kit.update(ctx)
+	eq(_lines(Kit.gizmo(ctx, "job_builders"))[0], "Wall crew: mends the most worn wall under 50% by day while there is scrap", "the words follow the setting")
+	ctx.sim.jobs.assign(ana, "builders")
+	Kit.update(ctx)
+	lines = _lines(Kit.gizmo(ctx, "job_builders"))
+	eq(lines[0], "Wall crew: Ana is on it. Press again to take them off", "someone on it is told how to leave")
+	eq(lines[lines.size() - 1], "Key: B", "the key is still the last line")
 	Kit.free_all(ctx)
 
 
-func test_pressing_auto_reaches_main() -> void:
+func test_the_wall_crew_says_why_not_when_it_is_full_and_someone_on_it_can_always_leave() -> void:
+	var ctx := Kit.build()
+	ctx.sim.jobs.assign(Kit.person(ctx, "ruth"), "builders")
+	ctx.sim.jobs.assign(Kit.person(ctx, "dez"), "builders")
+	eq(ctx.sim.jobs.seats_left("builders"), 0, "Walt, Ruth and Dez fill the three seats")
+	_person(ctx, "ana")
+	var b: Button = Kit.gizmo(ctx, "job_builders")
+	var lines := _lines(b)
+	eq(lines.size(), 3, "a third line when there is no seat: '%s'" % b.tooltip_text)
+	eq(lines[1], "Key: B", "the key stays where it was")
+	eq(lines[2], "Not now: the Wall crew is full.", "and the reason is the jobs module's own")
+	check(b.modulate.a < 0.9, "ghosted")
+	check(not b.disabled, "but not disabled: the order goes through and the game says why")
+	eq(ctx.hud.why_not("job_builders"), "the Wall crew is full", "the HUD's why is the rules' why")
+	_person(ctx, "walt")
+	b = Kit.gizmo(ctx, "job_builders")
+	check(b.modulate.a > 0.99 and not b.tooltip_text.contains("Not now"), "Walt is on the crew: he can always be taken off")
+	ctx.sim.jobs.unassign(Kit.person(ctx, "dez"))
+	_person(ctx, "ana")
+	check(Kit.gizmo(ctx, "job_builders").modulate.a > 0.99, "and a seat that comes free brightens it")
+	Kit.free_all(ctx)
+
+
+func test_pressing_the_wall_crew_reaches_main() -> void:
 	var ctx := Kit.build()
 	_person(ctx, "hector")
-	Kit.gizmo(ctx, "auto").pressed.emit()
-	eq(ctx.pressed, ["auto"], "by its id")
+	Kit.gizmo(ctx, "job_builders").pressed.emit()
+	eq(ctx.pressed, ["job_builders"], "by its id")
 	Kit.free_all(ctx)
 
 
-func test_the_person_panel_tags_auto_repair_while_it_is_on() -> void:
+# ---------------------------------------------------------------- the job tag --
+
+func test_the_person_panel_tags_the_day_job_and_a_click_opens_the_jobs_screen() -> void:
 	var ctx := Kit.build()
 	var dez = _person(ctx, "dez")
-	var tag: PanelContainer = ctx.hud.inspect_refs.auto_tag
-	check(not tag.visible, "no tag while it is off")
-	check(not Kit.texts(ctx.hud.inspect).has("Auto-repair: on") or not tag.visible, "and no words")
-	ctx.sim.tactics.toggle_auto(dez)
+	var tag: PanelContainer = ctx.hud.inspect_refs.job_tag
+	check(tag.visible and Kit.texts(tag) == ["Job: Workbench"], "Dez's tag says so: %s" % str(Kit.texts(tag)))
+	check(tag.tooltip_text.begins_with("Day job: Workbench (the worktable)"), "the tooltip names the station and where it is: '%s'" % tag.tooltip_text)
+	check(tag.tooltip_text.contains("Click to open the Jobs screen. Key: J"), "and says what a click does")
+	_person(ctx, "hector")
+	eq(Kit.texts(ctx.hud.inspect_refs.job_tag), ["Job: Vegetable beds"], "each person's own")
+	ctx.sim.jobs.unassign(Kit.person(ctx, "hector"))
 	Kit.update(ctx)
-	tag = ctx.hud.inspect_refs.auto_tag
-	check(tag.visible, "the tag shows when it is on")
-	check(Kit.texts(tag).has("Auto-repair: on"), "and says so: %s" % str(Kit.texts(tag)))
+	eq(Kit.texts(ctx.hud.inspect_refs.job_tag), ["Job: none"], "with no job it says so")
+	check(ctx.hud.inspect_refs.job_tag.tooltip_text.begins_with("Day job: none"), "and the tooltip too")
 	dez.dead = true
+	Kit.select(ctx, dez)
 	Kit.update(ctx)
-	check(not ctx.hud.inspect_refs.auto_tag.visible, "not for someone who is gone")
+	check(not ctx.hud.inspect_refs.job_tag.visible, "no tag for someone who is gone")
+	dez.dead = false
+	Kit.select(ctx, dez)
+	Kit.update(ctx)
+	await Kit.settle()
+	await Kit.settle()
+	check(ctx.hud.jobs_screen == null, "the screen is shut")
+	Kit.click_on(ctx.hud.inspect_refs.job_tag)
+	check(ctx.hud.jobs_screen != null, "a click on the tag opens the Jobs screen")
+	ctx.hud.close_jobs()
+	# with main.gd listening, the click is asked of main instead (it checks the tutorial's lock)
+	var asked: Array = []
+	ctx.hud.on_jobs = func(): asked.append(true)
+	Kit.click_on(ctx.hud.inspect_refs.job_tag)
+	eq(asked.size(), 1, "main is asked")
+	check(ctx.hud.jobs_screen == null, "and the HUD leaves it to main")
 	Kit.free_all(ctx)
 
 
-func test_the_tag_fits_beside_every_name_in_the_panel() -> void:
+func test_the_job_tag_fits_beside_every_name_in_the_panel() -> void:
 	var ctx := Kit.build()
 	for p in ctx.sim.people:
-		ctx.sim.tactics.autos[p.id] = true
+		ctx.sim.workshop.at_bench[p.id] = true
 	for p in ctx.sim.people:
-		Kit.select(ctx, p)
-		Kit.update(ctx)
-		await Kit.settle()
-		Kit.update(ctx)
-		await Kit.settle()
-		var tag: Rect2 = Kit.rect(ctx.hud.inspect_refs.auto_tag)
-		var panel: Rect2 = Kit.rect(ctx.hud.inspect)
-		check(tag.size != Vector2.ZERO and panel.encloses(tag), "%s: the tag is inside the panel" % p.first)
-		var names: Array = []
-		for l in ctx.hud.inspect.find_children("*", "Label", true, false):
-			if l.text == p.name or l.text.begins_with(p.def.role):
-				names.append(Kit.rect(l))
-		for r in names:
-			check(r.end.x <= tag.position.x + 0.5, "%s: the tag clears '%s' (%s, %s)" % [p.first, p.name, str(r), str(tag)])
-		eq(panel.size.x, float(Hud.INSPECT_W), "%s: the tag does not widen the panel" % p.first)
+		for st in ctx.sim.jobs.stations():
+			# (every station for every person: the longest names are the test, whoever has them)
+			ctx.sim.jobs.assignments[p.id] = String(st.id)
+			Kit.select(ctx, p)
+			Kit.update(ctx)
+			await Kit.settle()
+			Kit.update(ctx)
+			await Kit.settle()
+			var tag: Rect2 = Kit.rect(ctx.hud.inspect_refs.job_tag)
+			var panel: Rect2 = Kit.rect(ctx.hud.inspect)
+			var where := "%s on %s" % [p.first, st.name]
+			check(tag.size != Vector2.ZERO and panel.encloses(tag), "%s: the tag is inside the panel" % where)
+			for l in ctx.hud.inspect.find_children("*", "Label", true, false):
+				if l.text == p.name or l.text.begins_with(p.def.role):
+					var r := Kit.rect(l)
+					check(r.end.x <= tag.position.x + 0.5, "%s: the tag clears '%s' (%s, %s)" % [where, l.text, str(r), str(tag)])
+			eq(panel.size.x, float(Hud.INSPECT_W), "%s: the tag does not widen the panel" % where)
+		ctx.sim.jobs._defaults()
 	Kit.free_all(ctx)
 
 

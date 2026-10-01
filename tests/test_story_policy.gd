@@ -26,6 +26,7 @@ func _noon(seed_value: int = 5) -> Dictionary:
 	sim.supplies.meals_done = 1
 	sim.storyteller.radio_day = 8
 	sim.stock = {"ammo": 300.0, "scrap": 30.0, "food": 40.0, "water": 50.0, "meds": 10.0}
+	Helpers.idle_stores(sim)    # the bench and the beds would change the stores the cards are measured by
 	sim.events.clear()
 	return g
 
@@ -92,6 +93,15 @@ func test_a_card_with_no_choice_is_read() -> void:
 	g.world.free()
 
 
+## How many of the policy's notes are about the radio (it also notes the jobs it gives).
+func _radio_notes(policy) -> int:
+	var n := 0
+	for note in policy.notes:
+		if String(note.text).contains("radio"):
+			n += 1
+	return n
+
+
 func test_each_card_is_answered_once() -> void:
 	var g := _noon()
 	var sim = g.sim
@@ -101,7 +111,7 @@ func test_each_card_is_answered_once() -> void:
 	policy.tick()
 	policy.tick()
 	eq(policy.cards, 1, "three ticks, one answer")
-	eq(policy.notes.size(), 1, "and one note")
+	eq(_radio_notes(policy), 1, "and one note about it")
 	g.world.free()
 
 
@@ -116,7 +126,7 @@ func test_a_choice_that_cannot_be_made_is_left_to_the_default_and_not_tried_agai
 	policy.tick()
 	check(not sim.storyteller.pending().is_empty(), "the card still waits")
 	eq(policy.cards, 0, "nothing was answered")
-	eq(policy.notes.size(), 1, "it said so once")
+	eq(_radio_notes(policy), 1, "it said so once")
 	g.world.free()
 
 

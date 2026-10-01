@@ -79,12 +79,41 @@ func test_every_hud_part_the_lessons_point_at_can_be_found() -> void:
 		hud.open_scavenge(hud.selection)
 		await Kit.settle()
 		_found(ctx, names, found)
+		hud.scavenge_dialog.cancel()
+		await Kit.settle()
+		# the Duty roster open (its buttons are the lessons' targets while it is)
+		hud.open_jobs()
+		await Kit.settle()
+		_found(ctx, names, found)
 		var where := "at %dx%d" % [size.x, size.y]
 		for name in names:
 			check(found.has(name), "%s resolves %s" % [name, where])
 		var screen := Rect2(0, 0, size.x, size.y).grow(2.0)
 		for name in found:
 			check(screen.encloses(found[name]), "%s is inside the window %s: %s" % [name, where, str(found[name])])
+		Kit.free_all(ctx)
+
+
+func test_the_duty_rosters_parts_are_found_while_its_page_is_open_and_not_before_or_after() -> void:
+	for size in [Vector2i(1280, 800), Vector2i(700, 560)]:
+		var ctx: Dictionary = await _hud(size.x, size.y)
+		var hud = ctx.hud
+		var where := "at %dx%d" % [size.x, size.y]
+		var screen := Rect2(0, 0, size.x, size.y).grow(2.0)
+		var none := Rect2()
+		check(hud.anchor_rect("jobs").size.x > 0.0 and screen.encloses(hud.anchor_rect("jobs")), "the toolbar's button is there %s" % where)
+		eq(hud.anchor_rect("jobs.auto"), none, "no Auto-assign with no page %s" % where)
+		eq(hud.anchor_rect("jobs.close"), none, "and no Close %s" % where)
+		hud.open_jobs()
+		await Kit.settle()
+		for part in ["jobs.auto", "jobs.close", "jobs.screen"]:
+			var r: Rect2 = hud.anchor_rect(part)
+			check(r.size.x > 0.0 and r.size.y > 0.0, "%s is there with the page open %s" % [part, where])
+			check(screen.encloses(r), "%s is inside the window %s: %s" % [part, where, str(r)])
+		check(not hud.anchor_rect("jobs.auto").intersects(hud.anchor_rect("jobs.close")), "the two buttons do not overlap %s" % where)
+		hud.close_jobs()
+		await Kit.settle()
+		eq(hud.anchor_rect("jobs.auto"), none, "gone again once the page is shut %s" % where)
 		Kit.free_all(ctx)
 
 

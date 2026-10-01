@@ -768,6 +768,7 @@ func test_a_downed_person_is_stabilised_put_to_bed_and_gets_up() -> void:
 	var g := _clinic()
 	var sim = g.sim
 	_only_free(sim, ["ana"])
+	sim.jobs.unassign(_who(sim, "ana"))   # nobody on duty in the infirmary: the plain rate of healing
 	var hector = _who(sim, "hector")
 	_put(sim, hector, HALL.x, HALL.y)
 	hector.hp = 0.0
@@ -903,6 +904,7 @@ func test_nobody_bleeds_while_resting() -> void:
 	var g := _clinic()
 	var sim = g.sim
 	sim.stock.meds = 0.0
+	sim.jobs.unassign(_who(sim, "ana"))   # nobody on duty in the infirmary: the plain rate of healing
 	var hector = _who(sim, "hector")
 	hector.hp = 10.0
 	hector.downed = true

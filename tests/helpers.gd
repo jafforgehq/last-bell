@@ -38,6 +38,37 @@ static func run_to_hour(sim, hour: float) -> void:
 		guard += 1
 
 
+## Puts `p` at their seat at their station, still, so that the station's work starts at once with
+## no walk to it (the radio desk for Ruth, the bench for Dez...). With `station_id` they are given
+## that job first (false, and nobody is moved, when the station is full).
+static func seat(sim, p, station_id: String = "") -> bool:
+	if station_id != "" and not sim.jobs.assign(p, station_id):
+		return false
+	var at: Vector2 = sim.jobs.seat_pos(p)
+	p.x = at.x
+	p.y = at.y
+	p.moving = false
+	p.path = []
+	p.goal_key = ""
+	return true
+
+
+## Takes the people off the jobs that change the stores by themselves (the bench turns scrap into
+## ammo, the beds grow food), so that a test that measures the stores sees only what it does itself.
+## The wall crew, the radio desk, the lookout post and the infirmary are left as they are.
+static func idle_stores(sim) -> void:
+	for p in sim.people:
+		var id: String = sim.jobs.job_of(p)
+		if id == "bench" or id == "garden":
+			sim.jobs.unassign(p)
+
+
+## Nobody works: no jobs and no chores, so nobody makes ammo, grows food or mends a wall unasked.
+static func no_work(sim) -> void:
+	sim.jobs.clear()
+	sim.tactics.chores = false
+
+
 ## The number the trait `id` carries for `key` in assets/data/traits.json: its multiplier (or, for
 ## `cure` and `bond`, the amount it adds). A test that quotes what a trait does asks here, so that a
 ## retune of the data does not break it. Read from the file itself, not from the rules' copy of it.

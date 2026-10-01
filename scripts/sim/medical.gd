@@ -17,7 +17,9 @@
 ##   the patient and works while standing within reach. The medicine is used
 ##   when the job is done, and no job is given out that the stock cannot pay.
 ## - A stabilised person is carried to a bed (cots, then the bunks) and heals
-##   10 health an hour; at 40 they get up.
+##   10 health an hour, half as fast again while someone is on duty at the
+##   Infirmary station; at 40 they get up. The people on the infirmary job are
+##   preferred as healers.
 ## - An infected person turns into a walker 12 to 24 game hours after the bite
 ##   unless cured or sent out through the gate.
 ##
@@ -63,10 +65,16 @@ const CURE_MAX := 0.9
 const REACH := 0.9
 const STAND := 0.55
 const ANCHOR_SLACK := 0.1
-## Choosing a healer: each point of Medicine is worth this many tiles of walk.
+## Choosing a healer: each point of Medicine is worth this many tiles of walk, and a person on the
+## Infirmary job is worth this many tiles more (the infirmary's crew is who the player has put there
+## to treat the hurt).
 const SKILL_TILES := 3.0
-## Health a person regains an hour lying stabilised, and where they get up.
+const INFIRMARY_PREFERENCE := 6.0
+## Health a person regains an hour lying stabilised, and where they get up. While someone is on
+## duty in the infirmary (`jobs.working("infirmary")`) a patient in a bed heals this many times
+## as fast.
 const REST_HEAL_H := 10.0
+const INFIRMARY_HEAL_MULT := 1.5
 const GET_UP_HP := 40.0
 ## Below this health people work and shoot worse.
 const HURT_HP := 40.0
@@ -144,6 +152,14 @@ func update(dt: float) -> void:
 	_assign()
 
 
+## How much faster than plain rest a patient heals: a patient in a bed heals INFIRMARY_HEAL_MULT
+## times as fast while someone is on duty in the infirmary.
+func _care_mult(p) -> float:
+	if p.resting_bed != null and not sim.jobs.working("infirmary").is_empty():
+		return INFIRMARY_HEAL_MULT
+	return 1.0
+
+
 func _tick(p, gh: float) -> void:
 	if p.infected_at >= 0.0:
 		if p.turn_at < 0.0:
@@ -158,7 +174,7 @@ func _tick(p, gh: float) -> void:
 			on_downed(p, "bleeding")
 	if p.downed:
 		if p.stabilised:
-			p.hp = minf(100.0, p.hp + REST_HEAL_H * gh)
+			p.hp = minf(100.0, p.hp + REST_HEAL_H * gh * _care_mult(p))
 			if p.hp + EPS >= GET_UP_HP:
 				_get_up(p)
 			elif p.resting_bed == null:
@@ -579,16 +595,25 @@ func _assign() -> void:
 		sim.alert("no-meds", "danger" if dying else "warn", "No medicine", sub, Vector2(p.x, p.y), 8.0)
 
 
+## How good a choice `h` is as the healer of `patient` (lower is better): the tiles to walk, less a
+## few for each point of Medicine and a few more for being on the Infirmary job.
+func _healer_score(h, patient) -> float:
+	var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.skills.Medicine)
+	if sim.jobs.job_of(h) == "infirmary":
+		score -= INFIRMARY_PREFERENCE
+	return score
+
+
 ## The free healer for `patient`: the nearest, with each point of Medicine
-## worth a few tiles, so Ana goes first. Never the patient, never someone with
-## no Medicine, never someone on an order.
+## worth a few tiles, so Ana goes first, and the infirmary's crew preferred. Never the patient,
+## never someone with no Medicine, never someone on an order.
 func _best_healer(patient):
 	var best = null
 	var best_score := INF
 	for h in sim.people:
 		if h == patient or not _is_free(h):
 			continue
-		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.skills.Medicine)
+		var score := _healer_score(h, patient)
 		if score < best_score:
 			best_score = score
 			best = h
@@ -614,7 +639,7 @@ func _turn_a_healer_to(patient, rank: int) -> void:
 		var h = j.healer
 		if Vector2(h.x, h.y).distance_to(Vector2(j.patient.x, j.patient.y)) <= REACH:
 			continue
-		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.skills.Medicine)
+		var score := _healer_score(h, patient)
 		if score < best_score:
 			best_score = score
 			best = j

@@ -34,9 +34,12 @@ func test_orientation_day_starts_the_way_it_was_designed() -> void:
 	eq(sim.people.size(), 6, "the whole crew")
 	for p in sim.people:
 		check(not p.dead and not p.downed and not p.drafted and p.away == null, "%s is well and free" % p.first)
-	check(not sim.tactics.auto.is_empty(), "the roster's standing orders are there before the first step")
+	check(sim.tactics.auto_repair(Kit.person(sim, "walt")) and sim.jobs.job_of(Kit.person(sim, "dez")) == "bench", "the roster's jobs are there before the first step")
 	Kit.run(sim, 0.1)
-	check(sim.tactics.auto.is_empty() or not sim.tactics.auto.values().has(true), "auto-repair is off after the first step: nobody mends the wall unasked")
+	for p in sim.people:
+		check(not sim.tactics.auto_repair(p) and not sim.workshop.crafting(p), "%s is not on the wall crew or the bench after the first step" % p.first)
+	check(sim.jobs.job_of(Kit.person(sim, "hector")) == "" and not sim.tactics.chores, "nor in the garden, and nobody mends a wall as a chore: nobody mends the wall unasked")
+	eq(sim.jobs.job_of(Kit.person(sim, "marcus")), "watch", "but the lookout keeps his post: his forecast is a lesson")
 	eq(sim.zombies.size(), 4, "a quiet yard: four of the dead wander far off")
 	g.world.free()
 
@@ -46,13 +49,57 @@ func test_the_bus_stays_worn_until_someone_is_told_to_mend_it() -> void:
 	var sim = g.sim
 	var bus = sim.segments[Orientation.BUS_ID]
 	Kit.run(sim, 20.0)
-	near(bus.hp / bus.max_hp, Orientation.BUS_START, 0.001, "twenty seconds on, still worn: auto-repair did not touch it")
+	near(bus.hp / bus.max_hp, Orientation.BUS_START, 0.001, "twenty seconds on, still worn: nobody mended it unasked")
 	for p in sim.people:
 		check(p.repair == null, "%s has no repair job" % p.first)
 	var dez = Kit.person(sim, "dez")
 	sim.order_repair(dez, bus)
 	Kit.run(sim, 40.0)
 	check(bus.hp >= bus.max_hp - 0.001, "told to, Dez mends it (%.0f of %.0f)" % [bus.hp, bus.max_hp])
+	g.world.free()
+
+
+func test_the_chores_are_back_when_the_lesson_is_over() -> void:
+	var g := Kit.make()
+	var sim = g.sim
+	Kit.run(sim, 0.1)
+	check(not sim.tactics.chores, "nobody mends a wall as a chore while the lesson is on")
+	sim.scenario.finish()
+	Kit.run(sim, 0.1)
+	check(sim.tactics.chores, "but they do when the lesson is over")
+	g.world.free()
+
+
+## A lesson started in the middle (--tutorial=N, a test) has the world the earlier lessons would have left: the
+## self-working jobs are off before the rules take their first step, as they are after it. (The duty roster's
+## lesson holds the game from its first frame, so the rules never step before the page opens.)
+func test_a_jump_leaves_the_self_working_jobs_off_before_the_rules_ever_step() -> void:
+	var g := Kit.make()
+	var sim = g.sim
+	eq(sim.jobs.job_of(Kit.person(sim, "walt")), "builders", "(Walt is on the wall crew to begin with)")
+	sim.scenario.jump({"hour": 7.0, "day": 2, "bus": 1.0})
+	for id in ["dez", "walt", "hector"]:
+		eq(sim.jobs.job_of(Kit.person(sim, id)), "", "%s has no day job after the jump" % id)
+	eq(sim.jobs.job_of(Kit.person(sim, "marcus")), "watch", "but the lookout keeps his post")
+	check(sim.tactics.auto_jobs.is_empty(), "and nobody is sent to a wall by the crew")
+	# the first step of the rules neither undoes nor repeats it: what the player gives is kept
+	sim.jobs.assign(Kit.person(sim, "hector"), "garden")
+	Kit.run(sim, 0.2)
+	eq(sim.jobs.job_of(Kit.person(sim, "hector")), "garden", "a job given before the first step stays")
+	g.world.free()
+
+
+## Skipping the lesson before the rules ever stepped (the cards hold the game) and then playing on is a normal
+## game: the crew has the jobs the roster gave it, and what the player changes is not undone by the first step.
+func test_a_lesson_that_ends_before_the_rules_ever_stepped_leaves_the_crew_their_jobs() -> void:
+	var g := Kit.make()
+	var sim = g.sim
+	sim.jobs.assign(Kit.person(sim, "hector"), "bench")
+	sim.scenario.finish()
+	Kit.run(sim, 0.2)
+	eq(sim.jobs.job_of(Kit.person(sim, "walt")), "builders", "Walt is on the wall crew")
+	eq(sim.jobs.job_of(Kit.person(sim, "dez")), "bench", "Dez is at the bench")
+	eq(sim.jobs.job_of(Kit.person(sim, "hector")), "bench", "and Hector is where the player put him")
 	g.world.free()
 
 

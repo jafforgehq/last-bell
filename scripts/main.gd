@@ -89,10 +89,14 @@ var shell
 ## The title screen is up instead of a run: the clock is held, the HUD is hidden and the
 ## input is the menu's. (A cold start with no run chosen; see wants_title.)
 var title_mode := false
-## A menu screen is open over the game: the camera keys are the menu's, not the camera's.
+## A menu screen is open over the game: the camera keys are the menu's, not the camera's. (The Jobs screen,
+## the HUD's own page, counts: it has the keys while it is up, and the cards of the radio and the tips wait.)
 var menu_open: bool:
 	get:
-		return title_mode or (shell != null and shell.is_open())
+		return title_mode or (shell != null and shell.is_open()) or (hud != null and hud.jobs_screen != null)
+## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
+## "post": id, "person": id} (each "" when nothing of the kind is marked). The overlay draws the marks.
+var jobs_hover := {}
 ## A test's way of watching a new run, a load or the return to the title without a scene
 ## reload: when set, it is called with the choice ({"difficulty", "seed"}, {"load": path} or
 ## {"title": true}) instead.
@@ -277,6 +281,9 @@ func _ready() -> void:
 	hud.on_fields = _toggle_fields
 	hud.on_menu = show_title
 	hud.on_open_menu = open_pause
+	hud.on_jobs = toggle_jobs
+	hud.on_jobs_hover = func(marks): jobs_hover = marks
+	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
 	story_ui = StoryUi.new()
@@ -471,7 +478,7 @@ func _allows(kind: String, arg = null) -> bool:
 	return coach.allows(kind, arg)
 
 
-## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields), told
+## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs), told
 ## to the coach so the lesson's conditions can use it.
 func _did(kind: String, arg = null) -> void:
 	if coach != null:
@@ -520,10 +527,15 @@ func _gizmo(g: String) -> void:
 	if sel == null:
 		hud.toast("Click a wall section first" if g == "lure" else "Click someone first")
 		return
+	# the jobs (M and B) are for the crew who are here: the page of jobs says the same of the gone and the away
+	if (g == "job_bench" or g == "job_builders") and sel.kind == "person" and (sel.ref.dead or sel.ref.turned or sel.ref.away != null):
+		var gone_why: String = hud.why_not(g)
+		hud.toast("Not now: %s" % gone_why if gone_why != "" else "That can't be done right now", "warn")
+		return
 	if sim.handle_gizmo(g, sel):
 		hud.select(selection)
 		return
-	if g == "treat" or g == "sendout" or g == "craft":
+	if g == "treat" or g == "sendout" or g == "job_bench" or g == "job_builders":
 		var why: String = hud.why_not(g)
 		hud.toast("Not now: %s" % why if why != "" else "That can't be done right now", "warn")
 	# the night tools (the rules module took them, or refused): the alarm names its reason
@@ -651,6 +663,23 @@ func _toggle_fields() -> void:
 	fields = not fields
 	hud.set_fields(fields)
 	_did("fields", fields)
+
+
+## The Jobs screen (key J, the clipboard in the toolbar, the job tag in a person's panel): opens it, or closes it
+## when it is up. It is not there in the title, nor while a menu or another page (the radio card, the scavenging
+## dialog, the end screen) has the screen, and the tutorial's lock may refuse it. (With the screen up J reaches
+## the screen itself, which closes; the rules wait while it is open.)
+func toggle_jobs() -> void:
+	if hud.jobs_screen != null:
+		hud.close_jobs()
+		return
+	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	if not _allows("jobs"):
+		return
+	hud.open_jobs(sim)
+	if hud.jobs_screen != null:
+		_did("jobs")
 
 
 # ------------------------------------------------------------------ shell --
@@ -897,8 +926,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_L:
 				_gizmo("lure")
 			KEY_B:
-				_gizmo("auto")
-			KEY_M: _gizmo("craft")
+				_gizmo("job_builders")
+			KEY_M:
+				_gizmo("job_bench")
+			KEY_J:
+				toggle_jobs()
 			KEY_V:
 				_toggle_fields()
 			KEY_F5:
@@ -1213,6 +1245,18 @@ func _parse_args() -> void:
 				# the fields-of-fire view starts on
 				fields = true
 				hud.set_fields(true)
+			"jobs":
+				# --jobs opens the Jobs screen (give --speed before it: the rules wait while it is open)
+				hud.last_speed = speed
+				hud.open_jobs(sim)
+			"jobs-hover":
+				# --jobs-hover=station:bench (or post:gate, person:dez) opens it with that place marked in the world
+				var what := v.split(":")
+				if hud.jobs_screen == null:
+					hud.last_speed = speed
+					hud.open_jobs(sim)
+				if hud.jobs_screen != null and what.size() == 2:
+					hud.jobs_screen.show_marks(what[1] if what[0] == "station" else "", what[1] if what[0] == "post" else "", what[1] if what[0] == "person" else "", true)
 			"lure":
 				# --lure=N sets the alarm on wall section N (scrap is given, the clock settled first)
 				lure_seg = int(v)

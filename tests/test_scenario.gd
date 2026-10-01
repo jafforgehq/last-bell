@@ -197,42 +197,114 @@ func test_the_harness_is_reproducible() -> void:
 	check(a.rows.size() >= 1, "and it is a game")
 
 
-func test_the_policy_repairs_the_worst_wall_with_the_best_builder() -> void:
+func _job_of(sim, first: String) -> String:
+	for p in sim.people:
+		if p.first == first:
+			return sim.jobs.job_of(p)
+	return "?"
+
+
+func test_the_policy_sets_the_stations_the_way_a_sensible_player_does() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim
-	sim.segments[4].hp = sim.segments[4].max_hp * 0.5
-	sim.segments[8].hp = sim.segments[8].max_hp * 0.3
-	sim.segments[11].hp = sim.segments[11].max_hp * 0.9
 	var policy = Balance.Policy.new(sim)
 	policy.tick()
-	var by_id := {}
-	for p in sim.people:
-		by_id[p.id] = p
-	check(by_id.dez.repair == sim.segments[8], "Dez (Building 9) repairs the most damaged section")
-	check(by_id.hector.repair == sim.segments[4], "Hector (Building 6) takes the next one")
-	var repairing := 0
-	for p in sim.people:
-		if p.repair != null:
-			repairing += 1
-	eq(repairing, 2, "no more than two repairers at a time")
-	for p in sim.people:
-		check(p.repair != sim.segments[11], "a wall above 80 percent is left alone")
+	eq(float(sim.jobs.setting("bench", "ammo_target")), Balance.Policy.BENCH_TARGET, "the bench makes ammo up to the target")
+	eq(float(sim.jobs.setting("bench", "scrap_reserve")), Balance.Policy.BENCH_RESERVE, "keeping scrap for the walls")
+	eq(float(sim.jobs.setting("builders", "repair_below")), Balance.Policy.WALL_BELOW, "and the wall crew mends what is under the threshold")
+	eq(_job_of(sim, "Ruth"), "radio", "the radio desk stays staffed")
+	eq(_job_of(sim, "Marcus"), "watch", "and the lookout post")
+	eq(_job_of(sim, "Ana"), "infirmary", "and the infirmary")
+	for first in ["Dez", "Walt", "Hector"]:
+		check(_job_of(sim, first) in ["bench", "builders", "garden"], "%s is on one of the three stations that are moved by need: %s" % [first, _job_of(sim, first)])
+	eq(sim.jobs.crew_of("garden").size() + sim.jobs.crew_of("builders").size() + sim.jobs.crew_of("bench").size(), 3, "all three are placed")
 	g.world.free()
 
 
-func test_the_policy_stops_repairs_at_the_bell() -> void:
+## How many people are on the three stations the policy moves by need (the bench, the wall crew, the beds).
+func _on_the_moving_stations(sim) -> int:
+	return sim.jobs.crew_of("garden").size() + sim.jobs.crew_of("builders").size() + sim.jobs.crew_of("bench").size()
+
+
+func test_the_policy_staffs_a_vacant_desk_from_the_rest_and_lets_the_radio_go_first() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim
-	sim.segments[8].hp = sim.segments[8].max_hp * 0.3
+	for p in sim.people:
+		if p.first == "Ana":
+			p.dead = true
 	var policy = Balance.Policy.new(sim)
 	policy.tick()
-	check(sim.people[1].repair != null, "a repair is ordered by day")
-	sim.minutes = 19.2 * 60.0
-	sim.phase = Sim.phase_at(sim.minutes)
-	sim.bell_rung = true
-	policy.tick()
+	check(sim.jobs.crew_of("infirmary").size() == 1, "someone takes the infirmary when the nurse is gone")
+	eq(_job_of(sim, "Marcus"), "watch", "the lookout stays where he is")
+	eq(sim.jobs.crew_of("radio").size(), 0, "with five left the radio desk is the first to go unstaffed")
+	eq(_on_the_moving_stations(sim), 3, "and three hands stay on the bench, the wall crew and the beds")
+	g.world.free()
+
+
+func test_the_policy_keeps_no_desk_when_only_three_are_left() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
 	for p in sim.people:
-		check(p.repair == null, "%s is back at the post once the bell has rung" % p.first)
+		if p.first in ["Ana", "Marcus", "Walt"]:
+			p.dead = true
+	sim.stock.scrap = 40.0
+	sim.stock.ammo = 100.0
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	for id in ["radio", "watch", "infirmary"]:
+		eq(sim.jobs.crew_of(id).size(), 0, "nobody is kept at the %s with three people left" % id)
+	eq(_on_the_moving_stations(sim), 3, "all three work: the bench, the wall crew and the beds")
+	check(sim.jobs.crew_of("bench").size() >= 1, "and the bench has somebody to make the ammo from the scrap")
+	g.world.free()
+
+
+func test_the_policy_gives_the_bench_to_the_best_builder() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	sim.stock.ammo = 120.0
+	sim.stock.scrap = 40.0
+	sim.segments[8].hp = sim.segments[8].max_hp * 0.2    # the walls want hands too, and more than the bench does
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	var best = null
+	for first in ["Dez", "Walt", "Hector"]:
+		for p in sim.people:
+			if p.first == first and (best == null or p.skills.Building > best.skills.Building):
+				best = p
+	eq(sim.jobs.job_of(best), "bench", "%s, the best builder of the three, makes the ammo" % best.first)
+	g.world.free()
+
+
+func test_the_policy_puts_two_people_on_the_beds_when_the_food_runs_short() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	sim.stock.food = 4.0
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	eq(sim.jobs.crew_of("garden").size(), 2, "two gardeners")
+	g.world.free()
+
+
+func test_the_policy_sends_the_wall_crew_where_the_walls_are_worn() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	sim.segments[8].hp = sim.segments[8].max_hp * 0.2
+	sim.stock.ammo = 500.0
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	check(sim.jobs.crew_of("builders").size() >= 1, "the wall crew has someone")
+	g.world.free()
+
+
+func test_the_policy_moves_people_once_a_morning() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	var moves: int = policy.moves
+	policy.tick()
+	policy.tick()
+	eq(policy.moves, moves, "not again the same morning")
 	g.world.free()
 
 

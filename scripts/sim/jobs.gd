@@ -35,8 +35,10 @@ const SEAT_OFFSETS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0),
 const RADIO_ALERT_HOUR := 11.5
 const WATCH_ALERT_HOUR := 16.5
 const ALERT_TTL := 20.0
-## The order Auto-assign fills the stations in (one seat each first, then what is left over).
-const AUTO_ORDER := ["radio", "watch", "infirmary", "bench", "builders", "garden"]
+## The order Auto-assign fills the stations in (one seat each first, then what is left over): the
+## work first (the bench, the wall crew, the beds), then the desks, the radio last, so a crew that is
+## short-handed works before it listens.
+const AUTO_ORDER := ["bench", "builders", "garden", "watch", "infirmary", "radio"]
 const AUTO_SECOND_PASS := ["builders", "garden", "bench", "infirmary"]
 ## Traits that make a person a better fit for a station.
 const AUTO_TRAITS := {"bench": "tinkerer", "builders": "tinkerer", "infirmary": "triage", "watch": "sharp_eyed"}
@@ -153,7 +155,7 @@ func job_of(p) -> String:
 	return id if _station_by_id.has(id) else ""
 
 
-## The people assigned to a station who are alive.
+## The people assigned to a station who are alive (those away on a trip still hold their seat).
 func crew_of(id: String) -> Array:
 	var out: Array = []
 	for p in sim.people:
@@ -162,10 +164,17 @@ func crew_of(id: String) -> Array:
 	return out
 
 
+## The seats of a station that someone who is here could sit in: a seat held by a person away on a
+## trip counts as free (assigning someone else to it sends the holder back without a job, so a desk
+## can be kept staffed through a trip).
 func seats_left(id: String) -> int:
 	if not _station_by_id.has(id):
 		return 0
-	return int(_station_by_id[id].seats) - crew_of(id).size()
+	var here := 0
+	for p in crew_of(id):
+		if p.away == null:
+			here += 1
+	return int(_station_by_id[id].seats) - here
 
 
 ## Why this person cannot be given this job ("" when they can).
@@ -192,16 +201,31 @@ func assign(p, id: String) -> bool:
 	if why_not(p, id) != "":
 		return false
 	if job_of(p) != id:
+		_make_room(id)
 		assignments[String(p.id)] = id
 		p.goal_key = ""
+		sim.tactics.call_back(p)    # a new job ends the trip the wall crew had sent them on
 		sim.events.append({"type": "assigned", "who": p.id, "station": id})
 	return true
+
+
+## Before a seat is given: if the station holds as many people as it has seats (some of them away on a
+## trip, or `why_not` would have refused), those away give up theirs, so a station never holds more
+## people than it has seats.
+func _make_room(id: String) -> void:
+	var seats := int(_station_by_id[id].seats)
+	for q in crew_of(id):
+		if crew_of(id).size() < seats:
+			break
+		if q.away != null:
+			unassign(q)
 
 
 func unassign(p) -> void:
 	if job_of(p) != "":
 		assignments[String(p.id)] = ""
 		p.goal_key = ""
+		sim.tactics.call_back(p)
 		sim.events.append({"type": "assigned", "who": p.id, "station": ""})
 
 
@@ -210,6 +234,7 @@ func clear() -> void:
 	for p in sim.people:
 		assignments[String(p.id)] = ""
 		p.goal_key = ""
+		sim.tactics.call_back(p)
 
 
 ## Which seat of their station this person has (0, 1, ...).
@@ -363,24 +388,28 @@ func goal_for(p) -> Dictionary:
 ## then the rest into whatever seats are left.
 func auto_assign() -> void:
 	clear()
-	for id in AUTO_ORDER:
-		_fill_one(String(id))
-	for id in AUTO_SECOND_PASS:
-		while seats_left(String(id)) > 0 and _fill_one(String(id)):
-			pass
+	# the people who are here first; whoever is away on a trip gets the seats that are left, to be back to
+	for away in [false, true]:
+		for id in AUTO_ORDER:
+			if crew_of(String(id)).is_empty():
+				_fill_one(String(id), away)
+		for id in AUTO_SECOND_PASS:
+			while _fill_one(String(id), away):
+				pass
 
 
-func _fill_one(id: String) -> bool:
+func _fill_one(id: String, away := false) -> bool:
 	var best = null
 	var best_score := -1.0e9
 	for p in sim.people:
-		if p.dead or p.turned or job_of(p) != "":
+		if p.dead or p.turned or job_of(p) != "" or (p.away != null) != away:
 			continue
 		var s := _fit(p, id)
 		if s > best_score:
 			best_score = s
 			best = p
-	if best == null or seats_left(id) <= 0:
+	# a seat that is really open (not one held by somebody away: Auto-assign does not take those)
+	if best == null or crew_of(id).size() >= int(_station_by_id[id].seats):
 		return false
 	return assign(best, id)
 

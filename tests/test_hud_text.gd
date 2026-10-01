@@ -326,11 +326,10 @@ func test_the_names_in_the_world_are_twelve_pixels() -> void:
 
 
 ## The HUD with the night tools showing: the forecast under the clock, the fields-of-fire legend,
-## the Auto tag in a person's panel, and alerts for the alarm and the forecast.
+## the job tag in a person's panel, and alerts for the alarm and the forecast.
 func _night_tools(width: int, height: int) -> Dictionary:
 	var ctx := Kit.build(width, height)
 	var dez = Kit.person(ctx, "dez")
-	ctx.sim.tactics.autos[dez.id] = true
 	ctx.sim.tactics.told = Kit.forecast({"brutes": 2, "heading": "north and west"})
 	ctx.sim.alert("lure", "info", "Alarm at the school bus", "The dead are drawn to it for 3 hours", null, 60.0)
 	ctx.sim.alert("forecast", "info", "Tonight's forecast", "About 55 tonight, mostly from the north and west", null, 60.0)
@@ -354,7 +353,7 @@ func test_nothing_in_the_night_tools_is_under_twelve_pixels() -> void:
 func test_the_night_tools_read_on_the_background_they_sit_on() -> void:
 	var ground := Color.WHITE
 	var ctx := _night_tools(1280, 800)
-	check(ctx.hud.forecast_label.visible and ctx.hud.fields_legend.visible and ctx.hud.inspect_refs.auto_tag.visible, "all three are up")
+	check(ctx.hud.forecast_label.visible and ctx.hud.fields_legend.visible and ctx.hud.inspect_refs.job_tag.visible, "all three are up")
 	eq(_hard_to_read(ctx.hud, ground), [], "the forecast, the legend, the tag and the alerts")
 	ctx.hud.select({"kind": "segment", "ref": ctx.sim.segments[3]})
 	Kit.update(ctx)
@@ -374,7 +373,7 @@ func test_a_label_asked_for_a_smaller_size_gets_the_floor() -> void:
 func test_the_key_chips_on_the_buttons_are_twelve_pixels() -> void:
 	var ctx := _busy(1280, 800)
 	var seen := 0
-	for id in ["draft", "post", "repair", "focus", "auto", "craft", "treat", "sendout", "scavenge"]:
+	for id in ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge"]:
 		var b: Button = Kit.gizmo(ctx, id)
 		for l in b.find_children("*", "Label", true, false):
 			check(l.get_theme_font_size("font_size") >= 12, "%s: '%s'" % [id, l.text])

@@ -7,12 +7,15 @@ const Conditions := preload("res://scripts/tutorial_conditions.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 
 ## The order buttons' ids, and the orders and intents a step's allow list may name.
-const GIZMOS := ["draft", "post", "repair", "focus", "auto", "treat", "sendout", "scavenge", "lure", "craft"]
-const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed"]
+const GIZMOS := ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge", "lure"]
+const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed", "jobs"]
 ## What the HUD's anchor_rect understands (the part before a ":" or a "."), and the world anchors.
-const HUD_ANCHORS := ["stores", "stores.ammo", "stores.scrap", "stores.food", "stores.water", "stores.meds", "bar", "clock", "clock.time", "clock.forecast", "alerts", "inspect", "inspect.weapon", "speed", "fields", "help", "sound", "legend", "toast", "banner", "dialog.send", "dialog.cancel", "dialog.party"]
+const HUD_ANCHORS := ["stores", "stores.ammo", "stores.scrap", "stores.food", "stores.water", "stores.meds", "bar", "clock", "clock.time", "clock.forecast", "alerts", "inspect", "inspect.weapon", "speed", "fields", "help", "sound", "jobs", "legend", "toast", "banner", "dialog.send", "dialog.cancel", "dialog.party"]
 const OPTIONAL_KEYS := ["goal", "goals", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed"]
 const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select"]
+## The parts of the Duty roster's page (while it is open) that an anchor may name, and the stations a card is for.
+const JOBS_PARTS := ["screen", "auto", "clear", "close", "list"]
+const STATIONS := ["bench", "builders", "garden", "infirmary", "radio", "watch"]
 
 
 func _steps() -> Array:
@@ -67,6 +70,8 @@ func test_the_cards_are_short() -> void:
 		for g in s.get("goals", []):
 			goals.append(String(g.get("text", "")))
 			check(String(g.get("when", "")) != "", "%s: a goal says when it is the one" % s.id)
+			if g.has("line"):
+				check(Coach.words(String(g.line)) <= 10, "%s: the line '%s' is one short line over a page" % [s.id, g.line])
 		for g in goals:
 			check(Coach.words(g) <= 12 and Coach.words(g) >= 2, "%s's goal '%s' is a few words" % [s.id, g])
 			check(g.substr(0, 1) == g.substr(0, 1).to_lower(), "%s's goal '%s' starts in lower case (it follows 'first')" % [s.id, g])
@@ -133,6 +138,18 @@ func test_anchor_names_are_the_ones_the_hud_and_the_world_know() -> void:
 			check(int(n.split(".")[1]) >= 0 and int(n.split(".")[1]) <= 3, "%s is a speed" % n)
 		elif n.begins_with("dialog.site:"):
 			check(["pharmacy", "hardware", "houses", "scrapyard"].has(n.split(":")[1]), "%s names a place" % n)
+		elif n.begins_with("jobs."):
+			var part := n.trim_prefix("jobs.")
+			var kind := part.get_slice(":", 0)
+			var which := part.get_slice(":", 1)
+			if JOBS_PARTS.has(part):
+				pass
+			elif kind == "row" or kind == "job" or kind == "post":
+				check(people.has(which), "%s names someone in the crew" % n)
+			elif kind == "station":
+				check(STATIONS.has(which), "%s names a station" % n)
+			else:
+				check(kind == "item" and which != "", "%s is a part of the Duty roster's page" % n)
 		elif n == "bench" or n.begins_with("spot:"):
 			pass
 		else:
@@ -147,6 +164,48 @@ func test_the_jump_blocks_only_ask_for_what_the_scenario_can_do() -> void:
 			check(JUMP_KEYS.has(key), "%s: '%s' is something jump can do" % [s.id, key])
 		for id in jump.get("fired", []):
 			check(["dusk", "more", "scratch", "fever"].has(String(id)), "%s: '%s' is a beat" % [s.id, id])
+
+
+## Round 5's Duty roster (key J) is taught after the worktable, which gives a person the Workbench job, and
+## before the wrap-up, which lists what the player now knows.
+func test_the_duty_roster_lesson_comes_after_the_worktable_and_before_the_wrap_up() -> void:
+	var steps := _steps()
+	var ids: Array = []
+	for s in steps:
+		ids.append(String(s.id))
+	var at := ids.find("jobs")
+	check(at > 0, "there is a lesson on the duty roster")
+	if at <= 0:
+		return
+	eq(ids.slice(at - 1, at + 2), ["workshop", "jobs", "wrap"], "right after the worktable and right before the wrap-up")
+	var s: Dictionary = steps[at]
+	eq(String(s.title), "The duty roster", "its title")
+	eq(s.get("allow"), ["jobs"], "it allows the Jobs screen and nothing else (the clicks inside the page are the page's own)")
+	check(bool(s.get("pause", false)), "the game waits while it is taught (the page pauses the rules anyway)")
+	var lines: Array = []
+	for g in s.get("goals", []):
+		if g.has("line"):
+			lines.append(String(g.line))
+	eq(lines.size(), 2, "each part of the page stage has its own short line for the card over the page")
+	for line in lines:
+		check(Coach.words(line) >= 3 and Coach.words(line) <= 10, "'%s' is one short line" % line)
+	check(String(s.get("goal", "")).contains("J") and String(s.goal).contains("Duty roster"), "its goal says what to press and what opens: %s" % s.get("goal", ""))
+	# the lit part is the toolbar's button until the page is up, then the page's own buttons
+	var anchors: Array = s.get("anchor", [])
+	check(not anchors.is_empty() and String(anchors[anchors.size() - 1]) == "jobs", "the toolbar's Jobs button is what it points at to begin with (the last of the choices)")
+	var names: Array = []
+	for entry in anchors:
+		names.append(String(entry.name) if typeof(entry) == TYPE_DICTIONARY else String(entry))
+	check(names.has("jobs.auto") and names.has("jobs.close"), "then Auto-assign, and Close once a job is given: %s" % str(names))
+	# the wrap-up lists it among the things the player can now do
+	var wrap: Dictionary = steps[ids.find("wrap")]
+	check(String(wrap.text).to_lower().contains("duty roster"), "the wrap-up names the duty roster")
+	# the jump block for starting there (--tutorial=N): a calm morning of day two. The night's beats are not brought
+	# (the walkers, the alerts, the wound and the fever would all be there, as the night's work has been done)
+	var jump: Dictionary = s.get("jump", {})
+	eq(int(jump.get("day", 0)), 2, "it starts on the morning of day two")
+	check(float(jump.get("hour", 0.0)) >= 6.5 and float(jump.get("hour", 0.0)) <= 10.0, "in the morning")
+	check(not jump.has("fired") or (jump.fired as Array).is_empty(), "with no beat of the night brought into it")
 
 
 func test_the_helpers_of_the_gate_match_what_the_data_means() -> void:

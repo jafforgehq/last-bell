@@ -851,7 +851,6 @@ func _packed(width: int, height: int, id: String) -> Dictionary:
 	ctx.sim.medical.sendout[p.id] = true
 	ctx.sim.medical.stage[p.id] = "feverish"
 	ctx.sim.scavenge.can = true
-	ctx.sim.tactics.autos[p.id] = true
 	ctx.sim.workshop.at_bench[p.id] = true
 	ctx.sim.morale.values[p.id] = 30.0
 	ctx.sim.skills.table[p.id] = {"Shooting": 3, "Building": 3, "Medicine": 3}
@@ -902,7 +901,7 @@ func test_every_row_is_in_the_panel_in_its_worst_state() -> void:
 	var refs := _refs(ctx)
 	for part in [refs.mood_head, refs.traits_head, refs.bonds_head, refs.infection_head]:
 		check(part.visible, "%s shows" % part.text)
-	check(refs.auto_tag.visible and refs.craft_tag.visible, "both tags")
+	check(refs.job_tag.visible and refs.craft_tag.visible, "both tags")
 	var all := Kit.texts(ctx.hud.inspect)
 	for caption in ["HEALTH", "MOOD", "WEAPON", "DOING", "NEEDS", "WOUNDS", "INFECTION", "TRAITS", "BONDS"]:
 		check(all.has(caption), "%s has its row" % caption)

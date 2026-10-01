@@ -277,6 +277,7 @@ func test_tinkerer_makes_ammo_faster() -> void:
 		var h := _quiet(9.0)
 		var s2 = h.sim
 		s2.stock.scrap = 60.0
+		s2.stock.ammo = 100.0    # under the bench's target
 		var d2 = _person(s2, "Dez")
 		s2.traits.give(d2, ["tinkerer"] if with_trait else [])
 		var b: Vector2 = s2.workshop.bench()

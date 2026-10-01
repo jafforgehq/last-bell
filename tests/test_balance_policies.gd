@@ -61,6 +61,10 @@ func test_the_informed_policy_stands_the_crew_on_the_decks_and_rings_the_alarm_a
 	policy.informed = true
 	_at(sim, 17.2)
 	_play_seconds(sim, policy, 4)
+	for p in sim.people:
+		check(not p.drafted, "%s is left at their station while there is daylight to work" % p.first)
+	_at(sim, 18.3)
+	_play_seconds(sim, policy, 4)
 	var on_decks := 0
 	for p in sim.people:
 		if p.drafted and p.order != null and sim.world.on_deck(p.order.x, p.order.y):

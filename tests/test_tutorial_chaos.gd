@@ -10,7 +10,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 
 ## Every key the game answers to, but F9 (which would load the scene again) and Esc (which opens
 ## the pause menu when nothing is selected: it is added below, only with a selection).
-const KEYS := [KEY_R, KEY_P, KEY_F, KEY_C, KEY_T, KEY_X, KEY_G, KEY_L, KEY_B, KEY_M, KEY_V, KEY_TAB, KEY_1, KEY_2, KEY_3, KEY_SPACE, KEY_F5, KEY_W, KEY_A, KEY_S, KEY_D]
+const KEYS := [KEY_R, KEY_P, KEY_F, KEY_C, KEY_T, KEY_X, KEY_G, KEY_L, KEY_B, KEY_M, KEY_V, KEY_J, KEY_TAB, KEY_1, KEY_2, KEY_3, KEY_SPACE, KEY_F5, KEY_W, KEY_A, KEY_S, KEY_D]
 
 
 func _random_point(main, rng: RandomNumberGenerator) -> Vector2:
@@ -66,8 +66,26 @@ func _random_input(main, rng: RandomNumberGenerator) -> void:
 				d.send()
 			else:
 				d.cancel()
+		_press_on_the_page(main, rng)
 	elif main.selection != null:
 		main._key(KEY_ESCAPE)
+
+
+## A button of the Duty roster's page, if it is open: Auto-assign, Clear, Close, someone's Day job or Night
+## post (which opens a list), or a line of the list that is open.
+func _press_on_the_page(main, rng: RandomNumberGenerator) -> void:
+	var page = main.hud.jobs_screen
+	if page == null or not is_instance_valid(page):
+		return
+	var buttons: Array = [page.auto_button, page.clear_button, page.close_button]
+	for id in page.rows:
+		buttons.append(page.rows[id].job)
+		buttons.append(page.rows[id].post)
+	for id in page.list_items:
+		buttons.append(page.list_items[id])
+	var b: Button = buttons[rng.randi() % buttons.size()]
+	if not b.disabled:
+		b.pressed.emit()
 
 
 ## Nothing the player does may end the lesson badly.
@@ -114,7 +132,9 @@ func test_a_player_who_mashes_buttons_cannot_break_or_trap_the_lesson() -> void:
 		await _mash(main, rng, 240, id)
 		if main.coach != null:
 			refused_total += int(main.coach.refused) - before
-	check(refused_total >= 100, "the mashing ran into the lock a good many times (%d)" % refused_total)
+	# (about a hundred with the seed as it is; the Duty roster's page swallows the keys and clicks of the last lesson's
+	# mash, which the lock never sees, so the count depends on the seed: it only has to say the lock was met often)
+	check(refused_total >= 60, "the mashing ran into the lock a good many times (%d)" % refused_total)
 	var finish: Dictionary = await Bot.play(main)
 	eq(finish.stuck, "", "after all that the bot could still finish (at %s)" % finish.stuck)
 	check(main.coach == null, "the lesson ended")

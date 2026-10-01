@@ -28,6 +28,7 @@ func _keys(h) -> Dictionary:
 	out["fields"] = Kit.rect(h.fields_button)
 	out["sound"] = Kit.rect(h.sound_button)
 	out["help"] = Kit.rect(h.help_button)
+	out["jobs"] = Kit.rect(h.jobs_button)
 	out["menu"] = Kit.rect(h.menu_button)
 	return out
 
@@ -40,7 +41,9 @@ func test_the_menu_button_is_the_last_key_of_the_toolbar_and_says_what_it_is() -
 	check(h.menu_button != null, "there is a Menu button")
 	var row: Node = h.menu_button.get_parent()
 	eq(h.sound_button.get_parent(), row, "in the toolbar's row, with the sound and the help")
-	eq(h.menu_button.get_index(), h.help_button.get_index() + 1, "right after the help")
+	eq(h.jobs_button.get_parent(), row, "and the Jobs key")
+	eq(h.jobs_button.get_index(), h.help_button.get_index() + 1, "the Jobs key is right after the help")
+	eq(h.menu_button.get_index(), h.jobs_button.get_index() + 1, "and the menu right after the Jobs key")
 	eq(h.menu_button.get_index(), row.get_child_count() - 1, "and last")
 	eq(h.menu_button.tooltip_text, "Menu\nKey: Esc", "named, with its key")
 	eq(h.menu_button.custom_minimum_size, h.help_button.custom_minimum_size, "as big as its neighbours")

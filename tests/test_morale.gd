@@ -673,7 +673,11 @@ func test_a_broken_person_stops_what_they_were_doing() -> void:
 	check(dez.repair != null, "Dez has a repair order")
 	_break(sim, dez)
 	check(dez.repair == null and dez.order == null and not dez.drafted, "all his orders are gone")
-	check(not sim.workshop.order_craft(dez), "and he cannot be sent to the bench")
+	sim.stock.ammo = 100.0    # something to make
+	Helpers.seat(sim, dez)    # at the bench, where his job is
+	check(sim.jobs.job_of(dez) == "bench", "his job is still the bench")
+	check(not sim.workshop.crafting(dez), "but he does not work it")
+	eq(sim.workshop.why_not_craft(dez), "they cannot work right now", "and the bench says why")
 	check(not sim.scavenge.can_go(dez), "or on a trip")
 	var before := Vector2(dez.x, dez.y)
 	Helpers.run(sim, 3.0)

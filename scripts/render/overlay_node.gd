@@ -3,7 +3,9 @@
 ## move-order marker. And the night tools' drawings: the fields-of-fire view (key V:
 ## every wall section tinted by how many guns reach it, each gun's reach, and on the
 ## forecast night where the dead come in) and the marker of the alarm (the lure) on
-## the wall section it rings at. And (round 4) what people say: speech bubbles over their heads.
+## the wall section it rings at. And (round 4) what people say: speech bubbles over their heads. And
+## (round 5) the marks of the Jobs screen while it is open (`main.jobs_hover`): a faint ring and the seats
+## at every station, a firm ring and name at what the page points at, a ring at a night post, a box round a person.
 ## All of it is a view: nothing here changes the rules.
 extends Node2D
 
@@ -61,6 +63,17 @@ const BUBBLE_TAIL := [8.5, 8.0]
 ## The way the dead face at a wall's attack places (towards the wall), as a step in tiles:
 ## a step the other way is out in front of the wall.
 const FACE := {"N": Vector2(0, -1), "S": Vector2(0, 1), "E": Vector2(1, 0), "W": Vector2(-1, 0)}
+## The Jobs screen's marks (round 5; main.gd's `jobs_hover`, set by scripts/ui/jobs_screen.gd): while the page is up every
+## station wears a faint ring in the HUD's gold with its seats under it; the one the page points at (a row's station, a
+## station card, a station on a list) a firm one with its name and who is on it, and a night post the same in the
+## blue of the night; a person a gold box. A place that is out of the window has an arrow at its edge instead.
+const JOB_STATION := ACCENT
+const JOB_POST := ALARM
+const JOB_FAINT := 0.4
+const JOB_LIT := 0.95
+## How far in from the window's edge the arrows are kept, and the size of the seat marks.
+const JOB_EDGE := 48.0
+const JOB_SEAT := 4.5
 
 var main
 ## What the last draw put on the screen (for the tests: a section, a gun's reach or an arrow
@@ -69,6 +82,12 @@ var drawn_sections := 0
 var drawn_reach := 0
 var drawn_spawns := 0
 var drew_alarm := false
+## The Jobs screen's marks of the last draw: the stations drawn (and how many of them were lit), whether a night post
+## was, how many arrows were drawn at the window's edge for a place that is out of it.
+var drawn_job_stations := 0
+var drawn_job_lit := 0
+var drew_job_post := false
+var drawn_job_edges := 0
 ## What people are saying: [{"p": Person, "text", "born": main.clock}], the oldest first; and how many bubbles
 ## the last draw put on the screen.
 var bubbles: Array = []
@@ -294,6 +313,118 @@ func _draw_alarm(sim, z: float, vp: Vector2) -> void:
 	_tag(c + Vector2(0.0, 28.0), time_text(sim.tactics.lure_left_min()), Fonts.cond(700), ALARM)
 
 
+# ----------------------------------------------------- the Jobs screen's marks --
+
+## What the Jobs screen has marked ({"station", "post", "person"}: main.gd's `jobs_hover`), or {} while it is shut
+## (or for a main that has no such thing).
+func _jobs_marks() -> Dictionary:
+	var m = main.get("jobs_hover") if main != null else null
+	return m if m is Dictionary else {}
+
+
+## The marks of the Jobs screen: every station faintly, with its seats; what the page points at firmly, with its name
+## and who is on it. Nothing at all while the page is shut. A view only: nothing here changes the rules.
+func _draw_jobs(sim, z: float, vp: Vector2) -> void:
+	var marks := _jobs_marks()
+	var jobs = sim.get("jobs")
+	if marks.is_empty() or jobs == null:
+		return
+	var font := Fonts.cond(700)
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 5.0)
+	var view := Rect2(-24.0, -24.0, vp.x + 48.0, vp.y + 48.0)
+	var lit_station := String(marks.get("station", ""))
+	var r := clampf(z * 0.9, 16.0, 46.0)
+	for st in jobs.stations():
+		var id := String(st.id)
+		var lit := id == lit_station
+		var at: Vector2 = st.pos
+		var c := _screen(at.x, at.y)
+		var crew: Array = jobs.crew_of(id)
+		var names: Array = []
+		for p in crew:
+			names.append(String(p.first))
+		var who := ", ".join(names) if not names.is_empty() else "empty"
+		if not view.has_point(c):
+			if lit:
+				_edge_mark(c, vp, JOB_STATION, "%s · %s" % [String(st.name), who], font)
+			continue
+		drawn_job_stations += 1
+		var a := JOB_LIT if lit else JOB_FAINT
+		if lit:
+			drawn_job_lit += 1
+			draw_circle(c, r, Color(JOB_STATION, 0.14))
+			draw_arc(c, r, 0.0, TAU, 48, Color(JOB_STATION, a), 3.0, true)
+			draw_arc(c, r + 3.0 + pulse * 5.0, 0.0, TAU, 48, Color(JOB_STATION, 0.55 * (1.0 - pulse * 0.6)), 2.0, true)
+		else:
+			draw_arc(c, r, 0.0, TAU, 48, Color(JOB_STATION, a), 2.0, true)
+		_job_seats(c + Vector2(0.0, r + 12.0), int(st.seats), crew.size(), a)
+		var label := "%s · %s" % [String(st.name), who] if lit else String(st.name)
+		_tag(c + Vector2(0.0, -r - 13.0), label, font, Color(INK, 1.0 if lit else 0.85), Color(PILL, 0.9 if lit else 0.6), Color(JOB_STATION, a * 0.7) if lit else Color(0, 0, 0, 0))
+	var post_id := String(marks.get("post", ""))
+	var po: Dictionary = jobs.post(post_id) if post_id != "" else {}
+	if not po.is_empty():
+		var at: Vector2 = po.pos
+		var c := _screen(at.x, at.y)
+		var holder := "free"
+		for p in sim.people:
+			if not (p.dead or p.turned) and String(jobs.post_of(p).get("id", "")) == post_id:
+				holder = String(p.first)
+		var text := "Night post: %s · %s" % [String(po.name), holder]
+		if view.has_point(c):
+			drew_job_post = true
+			var pr := clampf(z * 0.65, 12.0, 34.0)
+			draw_circle(c, pr, Color(JOB_POST, 0.16))
+			draw_arc(c, pr, 0.0, TAU, 40, Color(JOB_POST, JOB_LIT), 3.0, true)
+			draw_arc(c, pr + 3.0 + pulse * 5.0, 0.0, TAU, 40, Color(JOB_POST, 0.55 * (1.0 - pulse * 0.6)), 2.0, true)
+			_tag(c + Vector2(0.0, -pr - 13.0), text, font, INK, Color(PILL, 0.9), Color(JOB_POST, 0.7))
+		else:
+			_edge_mark(c, vp, JOB_POST, text, font)
+	var person_id := String(marks.get("person", ""))
+	if person_id != "":
+		var who = _person(person_id)
+		if who != null and who.away == null and not who.dead:
+			var pp: Vector2 = main.view_pos(who)
+			var corner := _screen(pp.x - 0.48, pp.y - 0.92)
+			draw_rect(Rect2(corner, Vector2(0.96, 1.34) * z), Color(JOB_STATION, 0.9), false, 2.0)
+
+
+## `seats` small marks in a row about `c`, the first `filled` of them solid.
+func _job_seats(c: Vector2, seats: int, filled: int, alpha: float) -> void:
+	var step := JOB_SEAT * 2.0 + 4.0
+	var x0 := c.x - step * float(seats - 1) / 2.0
+	for i in seats:
+		var at := Vector2(x0 + step * float(i), c.y)
+		draw_circle(at, JOB_SEAT + 1.5, Color(0.04, 0.07, 0.06, 0.7 * alpha))
+		if i < filled:
+			draw_circle(at, JOB_SEAT, Color(JOB_STATION, alpha))
+		else:
+			draw_arc(at, JOB_SEAT - 0.5, 0.0, TAU, 16, Color(JOB_STATION, alpha), 1.5, true)
+
+
+## A place that is out of the window: an arrow at the window's edge on the way to it, with its words beside it.
+func _edge_mark(target: Vector2, vp: Vector2, color: Color, text: String, font: Font) -> void:
+	var mid := vp * 0.5
+	var d := target - mid
+	if d.length() < 1.0:
+		return
+	var half := mid - Vector2(JOB_EDGE, JOB_EDGE)
+	var k := minf(minf(half.x / maxf(absf(d.x), 0.001), half.y / maxf(absf(d.y), 0.001)), 1.0)
+	var dir := d.normalized()
+	var at := mid + d * k
+	var side := Vector2(-dir.y, dir.x)
+	var tip := at + dir * 14.0
+	var pts := PackedVector2Array([tip, at - dir * 4.0 + side * 9.0, at - dir * 4.0 - side * 9.0])
+	draw_colored_polygon(pts, Color(color, 0.95))
+	draw_polyline(S.closed(pts), Color(0.1, 0.07, 0.04, 0.85), 1.5, true)
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 10.0
+	var label := at - Vector2(dir.x * (tw * 0.5 + 22.0), dir.y * 24.0)
+	label.x = clampf(label.x, tw * 0.5 + 6.0, maxf(tw * 0.5 + 6.0, vp.x - tw * 0.5 - 6.0))
+	label.y = clampf(label.y, 14.0, maxf(14.0, vp.y - 14.0))
+	_tag(label, text, font, INK, Color(PILL, 0.92), Color(color, 0.7))
+	drawn_job_edges += 1
+
+
 # ------------------------------------------------------------- speech bubbles --
 
 ## A person said something (the `bark` event {"who": id, "text", "context"}): a bubble over their head.
@@ -471,9 +602,14 @@ func _draw() -> void:
 	drawn_reach = 0
 	drawn_spawns = 0
 	drew_alarm = false
+	drawn_job_stations = 0
+	drawn_job_lit = 0
+	drew_job_post = false
+	drawn_job_edges = 0
 	if main.fields:
 		_draw_fields(sim, z, vp)
 	_draw_alarm(sim, z, vp)
+	_draw_jobs(sim, z, vp)
 
 	# wall damage bars across the damaged piece
 	for s in sim.segments:

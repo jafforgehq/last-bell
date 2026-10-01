@@ -1,12 +1,13 @@
 ## The storyteller: a hidden tension, a card a day at the radio hour (12:00), and the dawn
 ## assembly that tells the story of the night.
 ##
-## THE RADIO HOUR. At noon each day the person at the radio (Ruth, else the best Leading among
-## those who are up) may bring a card from assets/data/events.json: a boon, a threat or a choice.
-## About two days in three have one; never day 1 (a quiet start) or the last day (the Big Night);
-## at most two threats in a row; the same card not again within six days. The draw leans on a
-## hidden tension (0 to 100) that rises with trouble (a breach, a death, someone downed, a threat
-## card, a bad night) and falls eight on a quiet day: under 20 threats are twice as likely, over
+## THE RADIO HOUR. At noon each day the person at the radio desk (whoever works the Radio desk
+## station, Ruth to begin with; with nobody there the radio is silent that day) may bring a card
+## from assets/data/events.json: a boon, a threat or a choice. About two days in three have one;
+## never day 1 (a quiet start) or the last day (the Big Night); at most two threats in a row; the
+## same card not again within six days. The draw leans on a hidden tension (0 to 100) that rises
+## with trouble (a breach, a death, someone downed, a threat card, a bad night) and falls eight
+## on a quiet day: under 20 threats are twice as likely, over
 ## 70 boons are. Story is calm (threats x0.6), Brutal brings more threats and fewer boons. The draw
 ## has its own generator, seeded from the run's seed and the day (tomorrow cannot be known, and the
 ## same run and orders always tell the same story); the rules' own dice (`sim.rng`) are only used
@@ -393,7 +394,7 @@ func _needs_ok(needs: Dictionary) -> bool:
 			var p = _person(String(id))
 			if p == null or not _up(p):
 				return false
-	if needs.has("people") and _ups().size() < int(needs.people):
+	if needs.has("people") and _well().size() < int(needs.people):
 		return false
 	if needs.get("wall", false) and _rot_candidates().is_empty():
 		return false
@@ -437,17 +438,10 @@ func _dusk_word() -> void:
 		sim.alert("story-fog-night", "warn", "Fog tonight", "The guns reach %d%% less far" % roundi((1.0 - FOG_REACH) * 100.0), null, 16.0)
 
 
-## The person at the radio: Ruth if she is up, else the best Leading of those who are; null if
-## nobody is up.
+## The person at the radio: whoever is working the Radio desk right now (assigned to it, at their
+## seat, up and free); null when nobody is, and then there is no card.
 func speaker():
-	var ruth = _person("ruth")
-	if ruth != null and _up(ruth):
-		return ruth
-	var best = null
-	for p in sim.people:
-		if _up(p) and (best == null or _skill(p, "Leading") > _skill(best, "Leading")):
-			best = p
-	return best
+	return sim.jobs.operator("radio")
 
 
 ## Puts a card up now whatever the rules say: for tests and screenshots.
@@ -623,16 +617,20 @@ func _context(card: Dictionary) -> Dictionary:
 	for what in card.pick:
 		match String(what):
 			"person":
+				# (a card the rules draw has somebody well to name; one forced on a crew who are all down has not:
+				# it is then about "someone", with the line anybody would have)
 				var chosen = _random_up(rng)
+				var flavor: Dictionary = card.flavor
+				var by_role = flavor.get("by_role", {})
+				var line := String(flavor.get("default", ""))
 				if chosen != null:
 					ctx["person"] = chosen.id
 					ctx["name"] = chosen.first
-					var flavor: Dictionary = card.flavor
-					var by_role = flavor.get("by_role", {})
-					var line := String(flavor.get("default", ""))
 					if by_role is Dictionary and by_role.has(String(chosen.def.get("role", ""))):
 						line = String(by_role[String(chosen.def.get("role", ""))])
-					ctx["flavor"] = line
+				else:
+					ctx["name"] = "Someone"
+				ctx["flavor"] = line
 			"pair":
 				var ids: Array = []
 				var names: Array = []
@@ -648,8 +646,13 @@ func _context(card: Dictionary) -> Dictionary:
 					ctx["section"] = seg.id
 					ctx["section_name"] = _where(seg)
 			"lookout":
-				var look = _person("marcus")
-				ctx["lookout"] = look.first if look != null and not look.dead else "The lookout"
+				# whoever is on the Lookout post (the first of them who is up), else only "the lookout"
+				var look = null
+				for p in sim.jobs.crew_of("watch"):
+					if not p.dead and not p.downed:
+						look = p
+						break
+				ctx["lookout"] = look.first if look != null else "The lookout"
 	return ctx
 
 
@@ -1677,6 +1680,15 @@ func _ups() -> Array:
 	var out: Array = []
 	for p in sim.people:
 		if _up(p):
+			out.append(p)
+	return out
+
+
+## The people who are up and not sick: whom a card can name.
+func _well() -> Array:
+	var out: Array = []
+	for p in _ups():
+		if not is_sick(p):
 			out.append(p)
 	return out
 

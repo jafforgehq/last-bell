@@ -29,15 +29,15 @@
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
 ## The default policy is what a sensible player does without thinking:
-##  - in the daytime the two best builders repair any wall under 80% (repairs
-##    are not automatic in the game) while there is scrap; at the bell everyone
-##    goes back to their post;
+##  - every morning the jobs are set by need: three hands are kept for the workbench (ammo up
+##    to 350, keeping 10 scrap), the wall crew (walls under 80%) and the vegetable beds, spread
+##    by what is short, and the people beyond those three keep the lookout post, the
+##    infirmary and the radio desk (a crew of six keeps all three, five lose the radio first,
+##    three keep none); at the bell everyone goes to their post;
 ##  - in the morning (06:30 to 10:00), when food or water is under 4 days, or
 ##    meds under 3, or scrap under 10, or ammo under 60, the best two free
 ##    shooters go scavenging to the site that helps;
-##  - by day, with ammo under 250 and 10 scrap or more to spare, the best free builder
-##    makes ammo at the worktable until there is 450 (the scrapyard is the site
-##    for scrap, then the hardware store);
+##  - the scrapyard is the site for scrap, then the hardware store;
 ##  - the infected are treated while there is medicine, and sent out through the
 ##    gate once delirious with none left;
 ##  - when the radio brings a card at noon it takes the answer the card names as its default
@@ -73,13 +73,27 @@ class Policy:
 	## Sites that help with each need, most useful first (a site that is not in the
 	## game, or is picked over, is skipped).
 	const SITE_FOR := {"food": ["houses"], "water": ["houses"], "meds": ["pharmacy"], "scrap": ["scrapyard", "hardware"], "ammo": ["hardware", "scrapyard"]}
-	## The workshop: one person makes ammo by day while the stock is under CRAFT_BELOW_AMMO
-	## and there is scrap to spare, until it is over CRAFT_UNTIL_AMMO.
-	const CRAFT_BELOW_AMMO := 250.0
-	const CRAFT_UNTIL_AMMO := 450.0
-	const CRAFT_MIN_SCRAP := 10.0
+	## The stations' settings of a sensible player: make ammo up to BENCH_TARGET keeping BENCH_RESERVE scrap
+	## for the walls, mend the walls that are under WALL_BELOW percent. These stations stay staffed.
+	const BENCH_TARGET := 350.0
+	const BENCH_RESERVE := 10.0
+	const WALL_BELOW := 80.0
+	## The desks, in the order a short-handed crew gives them up last: the lookout post, the infirmary, the
+	## radio. Three hands are kept for the bench, the wall crew and the beds (FLEX_HANDS); only the people
+	## beyond those keep a desk, so a crew of six keeps all three and a crew of three keeps none.
+	const DESKS := ["watch", "infirmary", "radio"]
+	const FLEX_HANDS := 3
+	## Who is given which of the three moving stations first: the bench wants the best builder (ammo from scrap
+	## scales with Building as nothing else does), the wall crew the next, the beds whoever is left.
+	const PICK_ORDER := ["bench", "builders", "garden"]
+	## One shortage moves at most this much of a person towards a station.
+	const NEED_MAX := 1.5
 	## Against dead at the wall by day this many of the best shooters stand to at their posts.
 	const STAND_TO := 3
+	## The informed policy places the crew on the decks from this hour (the forecast is there from 17:00, the bell
+	## rings at 19:00): people at their stations work until they are called, so a player who knows the night's
+	## plan leaves them at it as long as the walk to the decks allows.
+	const PLACE_HOUR := 18.25
 
 	var sim
 	## Hide in the school gym from the bell to dawn instead of holding the posts.
@@ -87,14 +101,15 @@ class Policy:
 	## Use the forecast and the coverage: place the crew and set the alarm at dusk.
 	var informed := false
 	var _placed_day := -1
+	var _jobs_day := -1
+	var _last_jobs: Dictionary = {}
 	var _lured_day := -1
 	var _placed: Dictionary = {}
-	## What it has done: trips sent, treatments ordered, people sent out, repairs ordered.
+	## What it has done: trips sent, treatments ordered, people sent out, jobs given.
 	var trips := 0
 	var treats := 0
 	var sendouts := 0
-	var repairs := 0
-	var crafts := 0
+	var moves := 0
 	## Lines of what it did: [{"day", "hour", "text"}].
 	var notes: Array = []
 	var _sent_day := 0
@@ -117,10 +132,9 @@ class Policy:
 			_inform()
 		_story()
 		_alarm()
+		_jobs()
 		_scavenge()
-		_repair()
 		_infection()
-		_craft()
 
 	func _note(text: String) -> void:
 		notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": text})
@@ -224,7 +238,7 @@ class Policy:
 
 	func _inform() -> void:
 		var hour: float = sim.hour
-		var dusky: bool = sim.phase == "day" and hour >= 17.0 or sim.phase == "dusk"
+		var dusky: bool = sim.phase == "day" and hour >= PLACE_HOUR or sim.phase == "dusk"
 		if not dusky and sim.phase != "night":
 			# by day the crew goes back to its jobs
 			if not _placed.is_empty():
@@ -366,80 +380,94 @@ class Policy:
 		var n := 2 if free.size() >= 3 else (1 if free.size() == 2 else 0)
 		return free.slice(0, n)
 
-	# --------------------------------------------------------------- repairs --
+	# ------------------------------------------------------------------ jobs --
 
-	func _repair() -> void:
-		# by night the wall is held from the posts
-		if sim.phase != "day":
-			for p in sim.people:
-				if p.repair != null:
-					p.repair = null
+	## Every morning the crew's jobs are set by what the colony needs: three hands (FLEX_HANDS) are spread over
+	## the workbench, the wall crew and the vegetable beds by need (the garden when the food runs short, the
+	## bench when the ammo does, the wall crew when the walls are worn), and the people beyond them keep the
+	## desks (DESKS: the game starts with all three staffed; a shrinking crew gives up the radio first, then
+	## the infirmary). The stations' settings are a sensible player's: make ammo to BENCH_TARGET while keeping
+	## BENCH_RESERVE scrap, mend walls under WALL_BELOW.
+	func _jobs() -> void:
+		if sim.phase != "day" or _jobs_day == sim.day or sim.hour < 6.6:
 			return
-		if float(sim.stock.scrap) < 1.0:
-			return
-		var busy := 0
-		var taken: Array = []
+		_jobs_day = sim.day
+		sim.jobs.set_setting("bench", "ammo_target", BENCH_TARGET)
+		sim.jobs.set_setting("bench", "scrap_reserve", BENCH_RESERVE)
+		sim.jobs.set_setting("builders", "repair_below", WALL_BELOW)
+		var alive: Array = []
 		for p in sim.people:
-			if p.repair != null and not p.dead:
-				busy += 1
-				taken.append(p.repair)
-		var worn: Array = []
-		for s in sim.segments:
-			if s.hp / s.max_hp < REPAIR_BELOW and not taken.has(s):
-				worn.append(s)
-		worn.sort_custom(func(a, b): return a.hp / a.max_hp < b.hp / b.max_hp)
-		while busy < REPAIRERS and not worn.is_empty():
-			var builder = _best_builder()
-			if builder == null:
-				return
-			var s = worn.pop_front()
-			sim.order_repair(builder, s)
-			busy += 1
-			repairs += 1
-			_note("%s repairs the %s" % [builder.first, s.name.to_lower()])
-
-	func _best_builder():
-		var best = null
-		var best_key := -1.0e9
-		for p in sim.people:
-			if p.repair != null or not _free(p):
-				continue
-			# walls come before ammo, but a repair takes someone off the bench only if nobody else is free
-			var key: float = float(p.skills.Building) - (100.0 if sim.workshop.crafting(p) else 0.0)
-			if best == null or key > best_key:
-				best = p
-				best_key = key
-		return best
-
-	# -------------------------------------------------------------- workshop --
-
-	## By day, while ammo is low and scrap can be spared, the best builder who is free
-	## makes ammo at the worktable; they are called off when the stock is back up.
-	func _craft() -> void:
-		if sim.phase != "day":
+			if not (p.dead or p.turned):
+				alive.append(p)
+		# the desks that are kept for a crew this size: whoever is on them stays; a vacancy goes to the best fit
+		var kept: Array = DESKS.slice(0, clampi(alive.size() - FLEX_HANDS, 0, DESKS.size()))
+		for id in kept:
+			if sim.jobs.crew_of(id).is_empty():
+				var best = null
+				var best_score := -1.0e9
+				for p in alive:
+					var j: String = sim.jobs.job_of(p)
+					if j in kept and sim.jobs.crew_of(j).size() <= 1:
+						continue
+					var score: float = sim.jobs._fit(p, id)
+					if score > best_score:
+						best_score = score
+						best = p
+				if best != null and sim.jobs.assign(best, id):
+					moves += 1
+					_note("%s takes the %s" % [best.first, String(sim.jobs.station(id).name).to_lower()])
+		var flex: Array = []
+		for p in alive:
+			if not (sim.jobs.job_of(p) in kept):
+				flex.append(p)
+		if flex.is_empty():
 			return
-		var workers: Array = []
-		for p in sim.people:
-			if sim.workshop.crafting(p):
-				workers.append(p)
-		var ammo := float(sim.stock.ammo)
-		if not workers.is_empty():
-			if ammo >= CRAFT_UNTIL_AMMO:
-				for p in workers:
-					sim.workshop.stop(p)
-					_note("%s is back from the worktable" % p.first)
-			return
-		if ammo >= CRAFT_BELOW_AMMO or float(sim.stock.scrap) < CRAFT_MIN_SCRAP:
-			return
-		var best = null
-		for p in sim.people:
-			if p.repair != null or not _free(p) or sim.workshop.why_not_craft(p) != "":
-				continue
-			if best == null or p.skills.Building > best.skills.Building:
-				best = p
-		if best != null and sim.workshop.order_craft(best):
-			crafts += 1
-			_note("%s makes ammo at the worktable" % best.first)
+		var food_need := clampf(5.0 - sim.supplies.days_left("food"), 0.0, NEED_MAX)
+		var ammo_need := 0.0
+		if float(sim.stock.scrap) > BENCH_RESERVE:
+			ammo_need = clampf((BENCH_TARGET - float(sim.stock.ammo)) / 100.0, 0.0, NEED_MAX)
+		var worst := 100.0
+		for seg in sim.segments:
+			worst = minf(worst, 100.0 * seg.hp / seg.max_hp)
+		var wall_need := clampf((WALL_BELOW - worst) / 10.0, 0.0, NEED_MAX)
+		var score := {"garden": 1.0 + food_need, "builders": 1.0 + wall_need, "bench": 0.5 + ammo_need}
+		# the stations in the order the colony needs a person at them (each person placed lowers a station's need)
+		var picks: Array = []
+		for i in flex.size():
+			var pick := "builders"
+			for id in ["garden", "bench"]:
+				if float(score[id]) > float(score[pick]):
+					pick = id
+			picks.append(pick)
+			score[pick] = float(score[pick]) - 1.0
+		# the two best shooters are the ones the morning trips take away: the people who stay home get the
+		# stations that need someone there all day, and those who go are given the last of them
+		var shooters := alive.duplicate()
+		shooters.sort_custom(func(a, b): return a.skills.Shooting > b.skills.Shooting)
+		var away_pair: Array = shooters.slice(0, 2)
+		var stayers: Array = []
+		var goers: Array = []
+		for p in flex:
+			sim.jobs.unassign(p)
+			if p in away_pair:
+				goers.append(p)
+			else:
+				stayers.append(p)
+		picks.sort_custom(func(a, b): return PICK_ORDER.find(a) < PICK_ORDER.find(b))
+		for pick in picks:
+			var pool: Array = stayers if not stayers.is_empty() else goers
+			var chosen = pool[0]
+			for p in pool:
+				# the beds suit whoever is least wanted at the bench or the wall; those want the best builders
+				var better: bool = p.skills.Building < chosen.skills.Building if pick == "garden" else p.skills.Building > chosen.skills.Building
+				if better:
+					chosen = p
+			pool.erase(chosen)
+			if sim.jobs.assign(chosen, pick):
+				if pick != String(_last_jobs.get(chosen.id, "")):
+					moves += 1
+					_note("%s goes to the %s" % [chosen.first, String(sim.jobs.station(pick).name).to_lower()])
+				_last_jobs[chosen.id] = pick
 
 	# ------------------------------------------------------------- infection --
 
@@ -462,7 +490,7 @@ class Policy:
 
 ## Plays one game and returns {"seed", "difficulty", "days", "outcome"
 ## ("survived" or "defeat"), "day" (the day reached, at most `days`), "rows",
-## "trips", "treats", "sendouts", "repairs", "crafts", "notes", "took"}. `rows` has one
+## "trips", "treats", "sendouts", "moves", "notes", "took"}. `rows` has one
 ## entry for the start of each day (and one at the end of a lost game): see _row.
 ## `hz` is how many steps of the rules a second; `orders` false plays with no
 ## orders given at all; `hide` makes the crew spend every night in the school gym; `setup`, if given, is called with the new Sim before the
@@ -515,8 +543,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"trips": policy.trips,
 		"treats": policy.treats,
 		"sendouts": policy.sendouts,
-		"repairs": policy.repairs,
-		"crafts": policy.crafts,
+		"moves": policy.moves,
 		"cards": policy.cards,
 		"notes": all_notes,
 		"took": snappedf((Time.get_ticks_msec() - started) / 1000.0, 0.1),
@@ -781,7 +808,7 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 
 
 func _print_header() -> void:
-	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats makes  secs")
+	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats moves  secs")
 
 
 func _print_game(n: int, r: Dictionary, verbose: bool) -> void:
@@ -789,7 +816,7 @@ func _print_game(n: int, r: Dictionary, verbose: bool) -> void:
 	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5d %5.1f" % [
 		n, r.seed, r.outcome, r.day, last.alive, last.dead, last.turned, last.left,
 		last.food, last.water, last.scrap, last.meds, last.ammo,
-		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.get("crafts", 0), r.took])
+		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.get("moves", 0), r.took])
 	if verbose:
 		for note in r.notes:
 			print("        day %2d %05.2f  %s" % [note.day, note.hour, note.text])

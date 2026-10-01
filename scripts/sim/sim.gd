@@ -404,7 +404,6 @@ func toggle_draft(p: Person) -> void:
 		return
 	p.drafted = not p.drafted
 	p.repair = null
-	workshop.stop(p)
 	p.order = Vector3(p.x, p.y, 0) if p.drafted else null
 
 
@@ -415,7 +414,6 @@ func order_move(p: Person, x: float, y: float) -> bool:
 		return false
 	p.drafted = true
 	p.repair = null
-	workshop.stop(p)
 	p.order = Vector3(x, y, 0)
 	p.goal_key = ""
 	return true
@@ -426,7 +424,6 @@ func order_post(p: Person) -> void:
 		return
 	p.drafted = true
 	p.repair = null
-	workshop.stop(p)
 	var at: Vector2 = jobs.post_pos(p)
 	p.order = Vector3(at.x, at.y, 1)
 	p.goal_key = ""
@@ -438,8 +435,8 @@ func order_repair(p: Person, seg: Segment) -> void:
 	p.drafted = false
 	p.order = null
 	p.repair = seg
-	workshop.stop(p)
 	p.goal_key = ""
+	tactics.forget_trip(p)    # this repair is an order now (the wall crew sets its own mark after sending someone)
 
 
 ## How well a person does things right now (shooting, repairing): 1.0 normal,

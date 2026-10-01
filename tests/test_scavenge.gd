@@ -701,6 +701,7 @@ func test_dusk_brings_a_party_home_at_once() -> void:
 func test_a_party_that_never_left_is_dissolved_at_the_return_time() -> void:
 	var g := Helpers.make(9, 1)
 	var sim = g.sim
+	Helpers.idle_stores(sim)    # the beds would grow food: "nothing came back" is measured on the stores
 	var sc = sim.scavenge
 	var dez = _p(sim, "dez")
 	var party := _send_with(sim, [dez], "houses", {"food": 7}, {}, [])

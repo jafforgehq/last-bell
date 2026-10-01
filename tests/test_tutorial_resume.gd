@@ -5,6 +5,7 @@ extends "res://tests/case.gd"
 
 const Tut := preload("res://tests/tutorial_kit.gd")
 const Bot := preload("res://tests/tutorial_bot.gd")
+const Coach := preload("res://scripts/ui/coach.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 
@@ -120,3 +121,50 @@ func test_a_lesson_late_in_the_night_resumes_too() -> void:
 			break
 	check(main.sim.people[5].infected_at < 0.0, "Ana treats him after the load as she would have before it")
 	await Tut.leave(main)
+
+
+## The duty roster's lesson (the page is not saved, what the coach noted of it is): a save made after a look
+## at the page, with the page shut, resumes the lesson, which still remembers the look and can be finished.
+func test_a_save_in_the_duty_roster_lesson_resumes_it_with_what_was_done() -> void:
+	var at := -1
+	var steps := Coach.load_steps()
+	for i in steps.size():
+		if String(steps[i].id) == "jobs":
+			at = i
+	check(at >= 0, "there is a lesson on the duty roster")
+	if at < 0:
+		return
+	var main = Tut.game(at)
+	await Tut.frames(main, 12)
+	main._key(KEY_J)
+	await Tut.frames(main, 6)
+	check(main.hud.jobs_screen != null, "the page is open")
+	main.hud.jobs_screen.close_button.pressed.emit()
+	await Tut.frames(main, 4)
+	main._key(KEY_F5)
+	var path: String = main.tutorial_save_path
+	check(FileAccess.file_exists(path), "F5 wrote the tutorial's save")
+	await Tut.leave(main, true)
+	var again = Tut.start({"load": path})
+	await Engine.get_main_loop().process_frame
+	var coach = again.coach
+	check(again.tutorial and coach != null, "the tutorial is back, with its coach")
+	if coach == null:
+		await Tut.leave(again)
+		return
+	eq(coach.step_id(), "jobs", "at the same lesson")
+	eq(float(coach.state.did.get("jobs", 0.0)), 1.0, "it remembers that the page was opened")
+	await Tut.frames(again, 12)
+	eq(coach.phase, "active", "the lesson is up")
+	eq(coach.target_name, "jobs", "with the clipboard lit again")
+	check(coach.held and again.speed == 0, "and the game held as it was")
+	# the rest of it plays out: the page, Auto-assign, Close
+	again._key(KEY_J)
+	await Tut.frames(again, 6)
+	check(again.hud.jobs_screen != null, "J opens the page again")
+	again.hud.jobs_screen.auto_button.pressed.emit()
+	await Tut.frames(again, 4)
+	again.hud.jobs_screen.close_button.pressed.emit()
+	await Tut.frames(again, 60)
+	eq(coach.step_id(), "wrap", "and the lesson ends with the last card")
+	await Tut.leave(again)

@@ -46,6 +46,7 @@ func _noon(day: int = 8, seed_value: int = 5) -> Dictionary:
 	sim.morale = SpyMorale.new()
 	sim.morale.setup(sim)
 	sim.storyteller.radio_day = day
+	Helpers.idle_stores(sim)    # the bench and the beds would change the stores the cards are measured by
 	sim.events.clear()
 	return g
 
@@ -1191,6 +1192,35 @@ func test_a_card_that_comes_later_is_delayed_while_another_is_up() -> void:
 	sim.storyteller.choose(0)
 	Helpers.run(sim, 12.0)
 	eq(sim.storyteller.pending().get("id", ""), "cry_at_gate", "it comes when the first is put away")
+	g.world.free()
+
+
+func test_a_card_forced_when_nobody_is_up_to_name_leaves_no_braces() -> void:
+	var g := _noon()
+	var sim = g.sim
+	for p in sim.people:
+		p.downed = true
+	for id in ["old_friends", "fever", "argument", "radio_trade"]:
+		sim.storyteller.force(id)
+		var up: Dictionary = sim.storyteller.pending()
+		if up.is_empty():
+			continue
+		check(not String(up.text).contains("{") and not String(up.title).contains("{"), "%s: no braces are left in '%s'" % [id, String(up.text)])
+		sim.storyteller._close()
+	g.world.free()
+
+
+func test_a_card_that_names_someone_is_not_drawn_when_the_only_one_about_is_sick() -> void:
+	var g := _noon()
+	var sim = g.sim
+	for p in sim.people:
+		if p.first != "Ruth":
+			p.dead = true
+	var card: Dictionary = sim.storyteller.card_named("old_friends")
+	check(sim.storyteller._needs_ok(card.needs), "with Ruth well it can be drawn")
+	sim.storyteller.sick["ruth"] = sim.clock_min + 600.0
+	check(sim.storyteller.is_sick(_person(sim, "Ruth")), "Ruth has a fever")
+	check(not sim.storyteller._needs_ok(card.needs), "with her sick there is nobody well enough to name, and the card is not drawn")
 	g.world.free()
 
 

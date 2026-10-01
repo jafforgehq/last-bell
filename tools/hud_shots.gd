@@ -4,9 +4,10 @@
 ##   Godot --path . --script res://tools/hud_shots.gd -- --case=cards --out=/tmp/cards.png [--size=980x700]
 ## Cases: cards (stores, clock, marks, dimmed cards), panel (every row and
 ## button), down (someone resting in bed), dead, dialog (scavenging dialog),
-## dialog_no (nobody can go), over (the end of the run), real (the game's own
-## modules). Add --real to keep the game's own modules instead of the fakes
-## (then a case must not touch the fakes' tables).
+## dialog_no (nobody can go), over (the end of the run), jobs, jobs_job_list and
+## jobs_post_list (the Jobs screen: plain, with a station list open, with the night
+## posts open), real (the game's own modules). Add --real to keep the game's own modules
+## instead of the fakes (then a case must not touch the fakes' tables).
 extends SceneTree
 
 const Kit := preload("res://tests/hud_kit.gd")
@@ -143,6 +144,35 @@ func _case_dialog_no() -> void:
 	sim.scavenge.reason = "Too late: parties leave between 06:30 and 10:00."
 	_select("ana")
 	_main.hud.open_scavenge(_main.hud.selection)
+
+
+## The Jobs screen (the Duty roster), with a person away, one gone and one with no job, and the line at the foot.
+func _case_jobs() -> void:
+	var sim = _main.sim
+	_main.hud.update_hud(sim, 0, true, 4)
+	_person("dez").away = {"kind": "party", "site": "pharmacy"}
+	var walt = _person("walt")
+	walt.dead = true
+	walt.turned = true
+	sim.jobs.unassign(_person("ana"))
+	_main.toggle_jobs()
+	_main.hud.jobs_screen.choose_job(_person("hector"), "radio")
+
+
+## The Jobs screen with the list of day jobs open (the full stations are off).
+func _case_jobs_job_list() -> void:
+	_main.hud.update_hud(_main.sim, 0, true, 4)
+	_main.toggle_jobs()
+	_main.hud.jobs_screen.open_job_list(_person("walt"))
+
+
+## The Jobs screen with the list of night posts open, a post under the mouse (the yard shows through the page).
+func _case_jobs_post_list() -> void:
+	_main.hud.update_hud(_main.sim, 0, true, 4)
+	_main.toggle_jobs()
+	var s = _main.hud.jobs_screen
+	s.open_post_list(_person("ruth"))
+	s.list_items.north_middle.mouse_entered.emit()
 
 
 ## The end of the run.

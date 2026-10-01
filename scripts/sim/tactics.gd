@@ -1,7 +1,20 @@
-## The player's tools for a night: the lure (an alarm on one wall section that
-## draws the dead to it), the standing order "auto-repair", how well the crew's
-## guns cover each wall section, and the lookout's forecast of tonight. Rules only;
-## the view draws them.
+## The player's tools for a night and the work of two stations: the lure (an alarm on one wall
+## section that draws the dead to it), the wall crew (the Wall crew station mends the walls by
+## day, and anyone with nothing to do mends a badly worn one), how well the crew's guns cover each
+## wall section, and the forecast the lookout post gives of tonight. Rules only; the view draws
+## them.
+##
+## THE WALL CREW. Every second by day the people on the Wall crew job (`jobs.crew_of("builders")`)
+## who are free (not on an order, not mending, not treating) are sent to the most worn wall
+## section under the station's threshold (its `repair_below` setting, 70% to begin with) while the
+## stock has scrap to spare. The people with nothing to do (`jobs.idle`: no job, or a bench worker
+## with nothing to make) mend a section only if it is under half (CHORE_WALL_BELOW). At the bell
+## they leave the wall for their posts.
+##
+## THE FORECAST. At 17:00 the person working the Lookout post (`jobs.operator("watch")`: there, up
+## and free) tells the crew what tonight looks like; with nobody there the crew is told there is
+## no forecast. The forecast, once given, is that night's: it stays after the lookout has left the
+## post (and at night, when nobody works it).
 ##
 ## Events: {"type": "lure", "seg": id}. Alerts: `lure`, `forecast`.
 extends RefCounted
@@ -16,23 +29,29 @@ const LURE_COST := 3.0
 const LURE_HOURS := 3.0
 const LURE_PULL := 40.0
 const LURE_SWITCH := 0.7
-## Auto-repair mends the most worn section under this share of its health, while
-## the stock has at least this much scrap.
+## The wall crew mends the most worn section under this share of its health by default (the
+## station's `repair_below` setting is the one used), while the stock has at least this much scrap.
 const AUTO_BELOW := 0.7
 const AUTO_MIN_SCRAP := 5.0
+## Whoever is idle mends a section under this share of its health, and no other.
+const CHORE_WALL_BELOW := 0.5
 ## The hour the lookout tells the crew what tonight looks like.
 const FORECAST_HOUR := 17.0
-const LOOKOUT_ROLE := "Lookout"
 
 var sim
 ## The section the alarm is set on (-1: none) and when it stops (sim.clock_min).
 var lure_id := -1
 var lure_until := 0.0
-## Who has auto-repair on, and whom it has sent to which section (id to id).
-var auto := {}
+## Whom the wall crew (or a chore) has sent to which section (id to id): they are called back
+## at the bell.
 var auto_jobs := {}
-## The day whose forecast has been given.
+## Whether people with nothing to do mend a badly worn wall (the tutorial's lessons switch it off:
+## nobody mends the wall unasked while the player is learning to ask). Not saved: whoever turns it
+## off turns it off again.
+var chores := true
+## The day whose forecast has been given, and who gave it (a person's id; "" when nobody did).
 var forecast_day := 0
+var forecast_who := ""
 var _t := 0.0
 
 
@@ -40,17 +59,14 @@ func setup(s) -> void:
 	sim = s
 
 
-## A fresh run: no alarm, and auto-repair on for those whose entry in the roster says so.
+## A fresh run: no alarm.
 func start() -> void:
 	lure_id = -1
 	lure_until = 0.0
 	forecast_day = 0
-	auto.clear()
+	forecast_who = ""
 	auto_jobs.clear()
 	_t = 0.0
-	for def in sim.d.people:
-		if def.get("auto_repair", false):
-			auto[String(def.id)] = true
 
 
 func update(dt: float) -> void:
@@ -62,7 +78,7 @@ func update(dt: float) -> void:
 	_t -= dt
 	if _t <= 0.0:
 		_t = 1.0
-		_auto_repairs()
+		_mend_walls()
 
 
 # ------------------------------------------------------------------- lure --
@@ -118,52 +134,89 @@ func order_lure(seg) -> bool:
 	return true
 
 
-# ------------------------------------------------------- standing orders --
+# --------------------------------------------------------- the wall crew --
 
+## Whether this person is on the wall crew (the old standing order "auto-repair", now a job).
 func auto_repair(p) -> bool:
-	return bool(auto.get(String(p.id), false))
+	return sim.jobs.job_of(p) == "builders"
 
 
+## Puts this person on the wall crew, or takes them off it.
 func toggle_auto(p) -> void:
-	auto[String(p.id)] = not auto_repair(p)
+	if auto_repair(p):
+		sim.jobs.unassign(p)
+	else:
+		sim.jobs.assign(p, "builders")
 
 
-func _auto_repairs() -> void:
-	var by_day: bool = sim.phase == "day"
+## The share of its health under which the wall crew mends a section (the station's setting).
+func repair_below() -> float:
+	return float(sim.jobs.setting("builders", "repair_below")) / 100.0
+
+
+## Once a second: by day the wall crew goes to the most worn section under its threshold, and
+## whoever is idle to one that is under half; by night they hold their posts, and whoever was
+## sent to a wall is called off it, as they are when the scrap is gone (a hammer with nothing to
+## pay for the blows is no work: they go back to their jobs).
+func _mend_walls() -> void:
+	# the sections somebody is mending (a person who is gone is not: they were never relieved)
 	var taken := {}
 	for q in sim.people:
-		if q.repair != null:
+		if q.repair != null and not q.dead and not q.turned:
 			taken[q.repair.id] = true
+	if sim.phase != "day":
+		for p in sim.people:
+			call_back(p)
+		return
+	if float(sim.stock.scrap) <= 0.0:
+		for p in sim.people:
+			call_back(p)
+		return
+	if float(sim.stock.scrap) < AUTO_MIN_SCRAP:
+		return
+	for p in sim.jobs.crew_of("builders"):
+		_send_to_the_wall(p, repair_below(), taken)
+	if not chores:
+		return
 	for p in sim.people:
-		if p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
+		if sim.jobs.idle(p):
+			_send_to_the_wall(p, CHORE_WALL_BELOW, taken)
+
+
+## Takes `p` off the wall the crew sent them to, if they are still on it (a repair the player
+## ordered, even of the same section, is not the crew's and stays).
+func call_back(p) -> void:
+	var id := String(p.id)
+	if p.repair != null and auto_jobs.has(id) and int(p.repair.id) == int(auto_jobs[id]):
+		p.repair = null
+		p.goal_key = ""
+	auto_jobs.erase(id)
+
+
+## An order to repair (`sim.order_repair`) makes the repair the player's, not the crew's.
+func forget_trip(p) -> void:
+	auto_jobs.erase(String(p.id))
+
+
+## Sends `p`, if they are free, to the most worn section under `below` of its health that
+## nobody is mending.
+func _send_to_the_wall(p, below: float, taken: Dictionary) -> void:
+	if p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
+		return
+	if p.repair != null or p.drafted or p.order != null:
+		return
+	if sim.medical.goal_for(p) != null:
+		return
+	var worst = null
+	for s in sim.segments:
+		if taken.has(s.id) or s.hp >= s.max_hp * below:
 			continue
-		if not auto_repair(p):
-			continue
-		if not by_day:
-			# by night they hold their post: a job they were sent on stops
-			if p.repair != null and auto_jobs.has(String(p.id)):
-				p.repair = null
-				p.goal_key = ""
-			auto_jobs.erase(String(p.id))
-			continue
-		if p.repair != null or p.drafted or p.order != null:
-			continue
-		if sim.workshop.crafting(p):
-			continue
-		if sim.medical.goal_for(p) != null:
-			continue
-		if float(sim.stock.scrap) < AUTO_MIN_SCRAP:
-			continue
-		var worst = null
-		for s in sim.segments:
-			if taken.has(s.id) or s.hp >= s.max_hp * AUTO_BELOW:
-				continue
-			if worst == null or s.hp / s.max_hp < worst.hp / worst.max_hp:
-				worst = s
-		if worst != null:
-			sim.order_repair(p, worst)
-			auto_jobs[String(p.id)] = worst.id
-			taken[worst.id] = true
+		if worst == null or s.hp / s.max_hp < worst.hp / worst.max_hp:
+			worst = s
+	if worst != null:
+		sim.order_repair(p, worst)
+		auto_jobs[String(p.id)] = worst.id
+		taken[worst.id] = true
 
 
 # --------------------------------------------------------------- coverage --
@@ -204,21 +257,19 @@ func coverage_map() -> Dictionary:
 
 # --------------------------------------------------------------- forecast --
 
-## The person on the lookout, if they are here, up and alive.
+## The person on the lookout: working the Lookout post right now (there, up and free), or null.
 func lookout():
-	for p in sim.people:
-		if p.def.get("role", "") == LOOKOUT_ROLE and not p.dead and not p.downed and p.away == null:
-			return p
-	return null
+	return sim.jobs.operator("watch")
 
 
-## What the lookout can tell about tonight, once it is time and while he is able:
+## What the lookout told about tonight, from 17:00 until dawn:
 ## {"given", "total", "low", "high", "heading", "spawns" (Vectors), "runners",
-## "brutes", "big", "who"}; {"given": false} before 17:00 or without a lookout.
+## "brutes", "big", "who"}; {"given": false} before 17:00 and when nobody was on watch at 17:00.
+## It is the night's whoever has left the post since, and `who` is the one who reported it.
 func forecast() -> Dictionary:
-	if forecast_day != sim.day:
+	if forecast_day != sim.day or forecast_who == "":
 		return {"given": false}
-	var who = lookout()
+	var who = _person(forecast_who)
 	if who == null:
 		return {"given": false}
 	var plan: Dictionary = sim.waves.plan_for(sim.day)
@@ -240,11 +291,20 @@ func forecast() -> Dictionary:
 	}
 
 
+func _person(id: String):
+	for p in sim.people:
+		if String(p.id) == id:
+			return p
+	return null
+
+
 func _tell_the_forecast() -> void:
 	var who = lookout()
 	if who == null:
+		forecast_who = ""
 		sim.alert("forecast", "warn", "No forecast", "Nobody is watching the road", null, 12.0)
 		return
+	forecast_who = String(who.id)
 	var f := forecast()
 	var text := "About %d tonight, mostly from the %s" % [int(f.total), String(f.heading)]
 	if int(f.brutes) > 0:
@@ -259,13 +319,11 @@ func _tell_the_forecast() -> void:
 
 # ------------------------------------------------------------------ gizmos --
 
-## The orders this module owns: "lure" on a wall section, "auto" on a person.
+## The order this module owns: "lure" on a wall section (the key for the wall crew, "auto", is
+## the jobs': it puts the person on the crew or takes them off it).
 func gizmo(id: String, sel) -> bool:
 	if id == "lure" and sel.kind == "segment":
 		return order_lure(sel.ref)
-	if id == "auto" and sel.kind == "person":
-		toggle_auto(sel.ref)
-		return true
 	return false
 
 
@@ -275,9 +333,10 @@ func save() -> Dictionary:
 	return {
 		"lure_id": lure_id,
 		"lure_until": lure_until,
-		"auto": auto.duplicate(),
 		"auto_jobs": auto_jobs.duplicate(),
 		"forecast_day": forecast_day,
+		"forecast_who": forecast_who,
+		"t": _t,
 	}
 
 
@@ -285,11 +344,14 @@ func load_state(d: Dictionary) -> void:
 	lure_id = int(d.get("lure_id", -1))
 	lure_until = float(d.get("lure_until", 0.0))
 	forecast_day = int(d.get("forecast_day", 0))
-	auto.clear()
-	var a = d.get("auto", {})
-	if a is Dictionary:
-		for k in a:
-			auto[String(k)] = a[k] == true
+	forecast_who = String(d.get("forecast_who", ""))
+	_t = float(d.get("t", 0.0))
+	if not d.has("forecast_who") and forecast_day == sim.day:
+		# a save from before the lookout post: the forecast was the Lookout's, if he was up
+		for p in sim.people:
+			if p.def.get("role", "") == "Lookout" and not p.dead and not p.downed and p.away == null:
+				forecast_who = String(p.id)
+	# (the standing orders "auto" of an older save are not read: the jobs say who mends the walls)
 	auto_jobs.clear()
 	var j = d.get("auto_jobs", {})
 	if j is Dictionary:

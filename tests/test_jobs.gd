@@ -198,6 +198,92 @@ func test_auto_assign_fills_the_seats_by_skill() -> void:
 	g.world.free()
 
 
+func test_auto_assign_puts_a_small_crew_to_work_before_it_staffs_the_desks() -> void:
+	var g := _game()
+	var sim = g.sim
+	for p in sim.people:
+		if p.first in ["Ana", "Walt", "Hector"]:
+			p.dead = true
+	sim.jobs.auto_assign()
+	for id in ["radio", "watch", "infirmary"]:
+		eq(sim.jobs.crew_of(id).size(), 0, "nobody is kept at the %s with three people left" % id)
+	eq(sim.jobs.job_of(_person(sim, "Dez")), "bench", "Dez makes the ammo")
+	var working := 0
+	for id in ["bench", "builders", "garden"]:
+		working += sim.jobs.crew_of(id).size()
+	eq(working, 3, "and all three are at work on the bench, the walls and the beds")
+	g.world.free()
+
+
+func test_auto_assign_gives_up_the_radio_first_when_the_crew_is_short() -> void:
+	var g := _game()
+	var sim = g.sim
+	for p in sim.people:
+		if p.first == "Walt":
+			p.dead = true
+	sim.jobs.auto_assign()
+	eq(sim.jobs.crew_of("radio").size(), 0, "with five the radio desk is the one left empty")
+	eq(sim.jobs.crew_of("watch").size(), 1, "the lookout post is kept")
+	eq(sim.jobs.crew_of("infirmary").size(), 1, "and the infirmary")
+	g.world.free()
+
+
+func _send_away(p) -> void:
+	p.away = {"kind": "trip"}
+
+
+func test_a_seat_held_by_someone_on_a_trip_is_free_to_whoever_is_here() -> void:
+	var g := _game()
+	var sim = g.sim
+	var ruth = _person(sim, "Ruth")
+	var walt = _person(sim, "Walt")
+	eq(sim.jobs.job_of(ruth), "radio", "Ruth has the desk to begin with")
+	eq(sim.jobs.seats_left("radio"), 0, "and it is full")
+	_send_away(ruth)
+	eq(sim.jobs.seats_left("radio"), 1, "with Ruth on a trip the seat is free to someone who is here")
+	eq(sim.jobs.why_not(walt, "radio"), "", "so Walt can have it")
+	check(sim.jobs.assign(walt, "radio"), "he takes it")
+	eq(sim.jobs.job_of(walt), "radio", "he has the desk")
+	eq(sim.jobs.job_of(ruth), "", "and Ruth, away, has lost it")
+	eq(sim.jobs.crew_of("radio").size(), 1, "the desk never holds more people than it has seats")
+	g.world.free()
+
+
+func test_a_trip_does_not_cost_a_seat_that_has_room() -> void:
+	var g := _game()
+	var sim = g.sim
+	var dez = _person(sim, "Dez")
+	var walt = _person(sim, "Walt")
+	var hector = _person(sim, "Hector")
+	check(sim.jobs.assign(dez, "bench"), "Dez is at the bench (two seats)")
+	_send_away(dez)
+	check(sim.jobs.assign(walt, "bench"), "Walt takes the second seat")
+	eq(sim.jobs.job_of(dez), "bench", "Dez, away, keeps his: there was room for both")
+	check(sim.jobs.assign(hector, "bench"), "Hector wants it too: only one of the two seats is held by someone here")
+	eq(sim.jobs.job_of(dez), "", "so Dez, away, is the one who gives his up")
+	eq(sim.jobs.crew_of("bench").size(), 2, "and there are two at the bench")
+	g.world.free()
+
+
+func test_auto_assign_puts_the_people_who_are_here_to_work_and_the_away_get_what_is_left() -> void:
+	var g := _game()
+	var sim = g.sim
+	for first in ["Ana", "Marcus", "Walt"]:
+		_send_away(_person(sim, first))
+	sim.jobs.auto_assign()
+	var present_working := 0
+	for first in ["Ruth", "Dez", "Hector"]:
+		if sim.jobs.job_of(_person(sim, first)) in ["bench", "builders", "garden"]:
+			present_working += 1
+	eq(present_working, 3, "the three who are here are put to work at the bench, the walls and the beds")
+	eq(sim.jobs.job_of(_person(sim, "Marcus")), "watch", "and the three who are away have the desks they will be back to")
+	eq(sim.jobs.job_of(_person(sim, "Ana")), "infirmary", "the nurse")
+	eq(sim.jobs.job_of(_person(sim, "Walt")), "radio", "the radio, the best leader of the three")
+	for st in sim.jobs.stations():
+		check(sim.jobs.crew_of(st.id).size() <= int(st.seats), "%s is not over its seats" % st.name)
+	g.world.free()
+
+
 func test_the_jobs_posts_and_settings_are_saved() -> void:
 	var a := _game()
 	var sim_a = a.sim

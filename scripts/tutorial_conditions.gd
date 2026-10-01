@@ -12,12 +12,15 @@
 ##                of each factor, added up)
 ##   "did"        what the player did since it began, counted: "select:person:ruth",
 ##                "gizmo:draft", "move", "speed:3", "save", "fields"...
-##   "events"     the rules' events since it began, counted by type: "shot", "bell"...
+##   "events"     the rules' events since it began, counted by type: "shot", "bell"... (an "assigned"
+##                event that names a station, a job given, also counts as "assigned:job": one that
+##                takes a job away does not)
 ##   "next"       the card's Got it was pressed
 ##   "base"       the world as the step began: {"ammo": n, "kills": n, "pos": {person id: [x, y]}}
 ##   "selection"  {"kind": "person", "id": "ruth"}, {"kind": "segment", "id": 3} or {}
 ##   "speed"      the game's speed (0 to 3), "fields": the fields-of-fire view is on
 ##   "dialog"     {"open": bool, "site": the place chosen in the scavenging dialog or ""}
+##   "jobs"       {"open": bool}: the Duty roster's page (key J) is open
 ## A condition may note something in `state` (a wound seen, say), but never reads the
 ## screen: anything it needs the coach has put in `state`, so the tests can drive it.
 extends RefCounted
@@ -61,6 +64,8 @@ static func registry() -> Dictionary:
 			"saved": _saved,
 			"day_started": _day_started,
 			"crafting": _crafting,
+			"jobs_open": _jobs_open,
+			"jobs_given": _jobs_given,
 			"low_stores": _low_stores,
 			"low_ammo": _low_ammo,
 			"wounded": _wounded,
@@ -311,18 +316,34 @@ static func _day_started(sim, p, _st) -> bool:
 	return sim.day >= int(p.get("day", 2)) and sim.phase == "day"
 
 
-## Somebody (or {"who": id}) is at the worktable's job. Without a workshop it never is.
+## Somebody (or {"who": id}) has the worktable's job (the Workbench: the key M gives it). It is the
+## job that counts, not the work: a lesson that waits for it holds the game still, and nobody
+## walks to the bench while it does. Without a workshop it never is.
 static func _crafting(sim, p, _st) -> bool:
 	var shop = sim.get("workshop")
 	if shop == null:
 		return false
+	var has_it := func(who) -> bool:
+		return sim.jobs.job_of(who) == "bench" if sim.get("jobs") != null else bool(shop.crafting(who))
 	if p.has("who"):
 		var who = _person(sim, String(p.who))
-		return who != null and shop.crafting(who)
+		return who != null and has_it.call(who)
 	for who in sim.people:
-		if shop.crafting(who):
+		if has_it.call(who):
 			return true
 	return false
+
+
+# ----------------------------------------------------------- the duty roster --
+
+## The Duty roster's page (key J) is open.
+static func _jobs_open(_sim, _p, st) -> bool:
+	return bool(st.get("jobs", {}).get("open", false))
+
+
+## Somebody was given a job since the step began (the coach counts those as "assigned:job").
+static func _jobs_given(_sim, _p, st) -> bool:
+	return _counted(st.get("events", {}), "assigned:job") >= 1.0
 
 
 # -------------------------------------------- the hints' triggers (normal runs) --

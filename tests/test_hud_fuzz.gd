@@ -40,10 +40,11 @@ func test_random_states_never_break_the_hud() -> void:
 			sim.medical.treat[p.id] = rng.randf() < 0.3
 			sim.medical.sendout[p.id] = rng.randf() < 0.3
 			sim.medical.stage[p.id] = STAGES[rng.randi() % 3]
-		# the night tools: the forecast, who has auto-repair, whether the alarm can be set, the view
+		# the night tools: the forecast, who has which job, whether the alarm can be set, the view
 		sim.tactics.told = Kit.forecast({"total": rng.randi() % 200, "brutes": rng.randi() % 3, "runners": rng.randf() < 0.5, "big": rng.randf() < 0.1, "heading": ["north", "south east", "north and west"][rng.randi() % 3]}) if rng.randf() < 0.6 else {"given": false}
 		for p in sim.people:
-			sim.tactics.autos[p.id] = rng.randf() < 0.5
+			# (any job for anyone: the seats are not the HUD's business)
+			sim.jobs.assignments[p.id] = ["", "bench", "builders", "garden", "infirmary", "radio", "watch"][rng.randi() % 7]
 		sim.tactics.why = ["", "an alarm is already ringing", "it takes 3 scrap"][rng.randi() % 3]
 		sim.tactics.ringing = rng.randi() % 16 if rng.randf() < 0.3 else -1
 		sim.tactics.left_min = rng.randf() * 180.0
@@ -127,12 +128,14 @@ func _check_what_is_shown(ctx: Dictionary, round: int) -> void:
 		var p = sel.ref
 		var ids := Kit.gizmo_ids(ctx)
 		if p.away == null and not p.dead:
-			var auto: bool = ctx.sim.tactics.auto_repair(p)
-			if not ids.has("auto") or Kit.gizmo(ctx, "auto").get_meta("on") != auto:
-				failures.append("round %d: %s's Auto button %s does not follow auto-repair %s" % [round, p.id, str(ids), auto])
-			if hud.inspect_refs.auto_tag.visible != auto:
-				failures.append("round %d: %s's tag is %s with auto-repair %s" % [round, p.id, hud.inspect_refs.auto_tag.visible, auto])
-		elif p.away == null and p.dead and hud.inspect_refs.auto_tag.visible:
+			var job: String = ctx.sim.jobs.job_of(p)
+			for pair in [["job_builders", "builders"], ["job_bench", "bench"]]:
+				if not ids.has(pair[0]) or Kit.gizmo(ctx, pair[0]).get_meta("on") != (job == pair[1]):
+					failures.append("round %d: %s's %s button %s does not follow the job '%s'" % [round, p.id, pair[0], str(ids), job])
+			var want_tag: String = "Job: %s" % ctx.sim.jobs.station(job).name if job != "" else "Job: none"
+			if not hud.inspect_refs.job_tag.visible or Kit.texts(hud.inspect_refs.job_tag) != [want_tag]:
+				failures.append("round %d: %s's tag is %s '%s' with the job '%s'" % [round, p.id, hud.inspect_refs.job_tag.visible, str(Kit.texts(hud.inspect_refs.job_tag)), job])
+		elif p.away == null and p.dead and hud.inspect_refs.job_tag.visible:
 			failures.append("round %d: a tag for the dead %s" % [round, p.id])
 		if p.away != null and not ids.is_empty():
 			failures.append("round %d: buttons for someone who is away: %s" % [round, str(ids)])

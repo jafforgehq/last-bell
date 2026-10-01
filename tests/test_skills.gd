@@ -387,6 +387,7 @@ func test_the_bench_credits_the_scrap_made_into_ammo() -> void:
 	var g := _quiet(9.0)
 	var sim = g.sim
 	sim.stock.scrap = 40.0
+	sim.stock.ammo = 100.0    # under the bench's target, so there is ammo to make
 	var dez = _person(sim, "Dez")
 	var b: Vector2 = sim.workshop.bench()
 	dez.x = b.x

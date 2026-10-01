@@ -4,7 +4,7 @@ const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 
 ## The order buttons and their keys (main.gd's _unhandled_input).
-const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "auto": "B", "craft": "M", "treat": "T", "sendout": "X", "scavenge": "G"}
+const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "job_builders": "B", "job_bench": "M", "treat": "T", "sendout": "X", "scavenge": "G"}
 
 
 ## Ana selected with every button on offer.
@@ -35,7 +35,7 @@ func _check_all_nine(ctx: Dictionary, where: String) -> void:
 		if lines.size() < 2:
 			continue
 		check(lines[0].length() > 8 and not lines[0].begins_with("Key"), "%s: %s says what it does: '%s'" % [where, id, lines[0]])
-		# the key is its own line: the second one, or the third when the order has a second line of its own (auto-repair)
+		# the key is its own line: the second one, or a later one when the order has lines of its own (the jobs, the alarm)
 		check(lines.has("Key: %s" % KEYS[id]), "%s: %s names its key: '%s'" % [where, id, b.tooltip_text])
 
 
@@ -55,7 +55,7 @@ func test_and_in_the_small_size() -> void:
 
 func test_the_first_line_names_the_order_in_plain_words() -> void:
 	var ctx := _everything()
-	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "auto": "Auto-repair", "craft": "Make ammo", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
+	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "job_builders": "Wall crew", "job_bench": "Workbench", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
 	for id in words:
 		var first: String = _lines(Kit.gizmo(ctx, id))[0]
 		check(first.begins_with(words[id]), "%s starts with its name: '%s'" % [id, first])

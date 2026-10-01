@@ -10,10 +10,10 @@ func _open(ctx: Dictionary, id: String):
 	return p
 
 
-func test_a_person_gets_the_four_usual_buttons_the_auto_toggle_and_make_ammo() -> void:
+func test_a_person_gets_the_four_usual_buttons_and_the_two_jobs_the_keys_give() -> void:
 	var ctx := Kit.build()
 	_open(ctx, "ruth")
-	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "auto", "craft"], "the usual four in their old order, then the standing order and the worktable")
+	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "job_builders", "job_bench"], "the usual four in their old order, then the wall crew (B) and the workbench (M)")
 	Kit.free_all(ctx)
 
 
@@ -76,7 +76,7 @@ func test_the_modules_buttons_follow_the_usual_ones() -> void:
 	ctx.sim.medical.sendout[p.id] = true
 	ctx.sim.scavenge.can = true
 	Kit.update(ctx)
-	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "auto", "craft", "treat", "sendout", "scavenge"], "all nine")
+	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge"], "all nine")
 	Kit.free_all(ctx)
 
 
@@ -89,7 +89,7 @@ func test_each_button_calls_on_gizmo_with_its_id() -> void:
 	Kit.update(ctx)
 	for id in Kit.gizmo_ids(ctx):
 		Kit.gizmo(ctx, id).pressed.emit()
-	eq(ctx.pressed, ["draft", "post", "repair", "focus", "auto", "craft", "treat", "sendout", "scavenge"], "every press reaches main.gd")
+	eq(ctx.pressed, ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge"], "every press reaches main.gd")
 	Kit.free_all(ctx)
 
 

@@ -243,10 +243,10 @@
 			"goal": "select Dez, then press M",
 			"goals": [{"when": "selected", "params": {"who": "dez"}, "text": "press M"}],
 			"anchor": [
-				{"name": "gizmo:craft", "when": "selected", "params": {"who": "dez"}},
+				{"name": "gizmo:job_bench", "when": "selected", "params": {"who": "dez"}},
 				"card:dez"
 			],
-			"allow": ["select:person:dez", "gizmo:craft", "fields"],
+			"allow": ["select:person:dez", "gizmo:job_bench", "fields"],
 			"done": {"cond": "ammo_gained", "params": {"min": 8}},
 			"pause_until": {"cond": "crafting"},
 			"start": {"cond": "day_started", "params": {"day": 2}},
@@ -259,10 +259,34 @@
 			"jump": {"hour": 6.6, "day": 2, "bus": 1.0, "fired": ["dusk", "more", "scratch", "fever"]}
 		},
 		{
+			"id": "jobs",
+			"title": "The duty roster",
+			"text": "Between your orders, everyone does a job: at a station by day, at a post on the wall by night. Press J, or click the clipboard, to open the Duty roster.",
+			"goal": "press J to open the Duty roster",
+			"goals": [
+				{"when": "jobs_given", "text": "close the page with J or the Close button", "line": "Now close the page: press J or Close."},
+				{"when": "jobs_open", "text": "give someone a job, or press Auto-assign", "line": "Give someone a job, or press Auto-assign."}
+			],
+			"anchor": [
+				{"name": "jobs.close", "when": "jobs_given"},
+				{"name": "jobs.auto", "when": "jobs_open"},
+				"jobs"
+			],
+			"allow": ["jobs"],
+			"done": {"cond": "all", "params": {"of": [
+				{"cond": "did", "params": {"what": "jobs"}},
+				{"cond": "jobs_given"},
+				{"cond": "not", "params": {"of": {"cond": "jobs_open"}}}
+			]}},
+			"pause": true,
+			"clear_selection": true,
+			"jump": {"hour": 7.0, "day": 2, "bus": 1.0}
+		},
+		{
 			"id": "wrap",
 			"type": "wrap",
 			"title": "Well done",
-			"text": "You know how to give orders, hold a post, mend a wall, keep the stores, send a trip and tend the hurt. The ? button lists every key. A real run lasts thirty nights. Ready?",
+			"text": "You can give orders, hold a post, mend a wall, keep the stores, send a trip, tend the hurt and set the duty roster. The ? button lists every key. Ready for thirty nights?",
 			"anchor": ["help"],
 			"skipped_title": "Skipped",
 			"skipped_text": "No problem. The ? button lists every key, and you can play Orientation Day again from the main menu whenever you like.",

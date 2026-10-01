@@ -6,8 +6,9 @@
 ## What it is:
 ## - Story difficulty, a fixed seed, day 1 at 07:00, the school bus on the north wall
 ##   worn to 45% (the wall piece to mend) and a smaller store of ammo, so that the
-##   number moves when the guns shoot. Auto-repair starts off, or Dez and Hector would
-##   mend the bus before the player gets to.
+##   number moves when the guns shoot. The jobs that work by themselves start off (nobody
+##   is on the wall crew, the bench or the garden, and nobody mends a wall as a chore), or
+##   Walt would mend the bus before the player gets to.
 ## - It can never be lost. Nobody dies (`permadeath` is off: someone who bleeds out is
 ##   stabilised instead), nobody turns (the turn of anyone infected is kept far off),
 ##   nobody leaves for good (a send-out is cancelled), a trip never loses or hurts
@@ -213,16 +214,33 @@ func start() -> void:
 ## with no coach the beats that are due.
 func update(_dt: float) -> void:
 	_safety()
-	if not prepared:
-		prepared = true
-		# nobody mends the wall unasked: the lesson is to ask
-		sim.tactics.auto.clear()
-		sim.tactics.auto_jobs.clear()
+	# nobody mends a wall unasked while the lesson is on (not even as a chore): the lesson is to ask
+	sim.tactics.chores = finished
+	_prepare()
 	if finished or coached:
 		return
 	for beat in BEATS:
 		if not fired.has(beat.id) and sim.clock_min >= float(beat.at):
 			fire(String(beat.id))
+
+
+## What is put right once, before the first lesson that needs it (by the first step of the rules, or by a
+## jump, which starts a lesson in the middle: the rules may not step at all before the duty roster's page,
+## because the card holds the game): the jobs that would work on their own are off, so the lessons are to
+## ask: nobody is on the wall crew, the bench or the garden (the radio desk, the lookout post and the
+## infirmary change nothing the lessons measure, and the lookout's forecast is a lesson). A lesson that is
+## over by then (it was skipped before the rules ever stepped) leaves the crew its jobs.
+func _prepare() -> void:
+	if prepared:
+		return
+	prepared = true
+	if finished:
+		return
+	for id in ["dez", "walt", "hector"]:
+		var p = _person(id)
+		if p != null:
+			sim.jobs.unassign(p)
+	sim.tactics.auto_jobs.clear()
 
 
 ## It cannot be lost: nobody dies or turns or leaves, no wall falls, no trip goes wrong.
@@ -349,6 +367,7 @@ func jump(spec: Dictionary) -> void:
 			p.y = float(p.def.post.y)
 	for id in spec.get("fired", []):
 		fire(String(id))
+	_prepare()
 
 
 ## Sets the time of day (and the day), the way the `--hour` flag does: the phase, the bell

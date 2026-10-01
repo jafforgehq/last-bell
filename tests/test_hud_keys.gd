@@ -1,8 +1,9 @@
 extends "res://tests/case.gd"
 ## The keys and clicks of the night tools in main.gd, on the real game scene (driven by hand
 ## like test_step_clock does): V flips the fields-of-fire view, L sets the alarm on the
-## selected wall section or says why not, B flips auto-repair, a brute is easier to click, and
-## the pitch of a groan follows the kind of the dead.
+## selected wall section or says why not, B and M give the selected person the wall crew and the
+## workbench jobs (or take them off, or say why not), J opens the Jobs screen, a brute is easier to
+## click, and the pitch of a groan follows the kind of the dead.
 
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
@@ -208,30 +209,45 @@ func test_l_without_a_wall_selected_asks_for_one() -> void:
 
 # ------------------------------------------------------------------- B --
 
-func test_b_flips_auto_repair_for_the_selected_person() -> void:
+func test_b_puts_the_selected_person_on_the_wall_crew_and_takes_them_off_again() -> void:
 	var main = _game()
 	var sim = main.sim
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
-	check(not sim.tactics.auto_repair(ana), "off for the nurse at the start")
+	eq(sim.jobs.job_of(ana), "infirmary", "the nurse is in the infirmary at the start")
 	main._key(KEY_B)
-	check(sim.tactics.auto_repair(ana), "B turns it on for the selected person")
+	eq(sim.jobs.job_of(ana), "builders", "B puts the selected person on the wall crew")
 	main._key(KEY_B)
-	check(not sim.tactics.auto_repair(ana), "and off again")
-	check(sim.tactics.auto_repair(_person(main, "dez")), "nobody else was touched")
+	eq(sim.jobs.job_of(ana), "", "and takes them off it")
+	eq(sim.jobs.job_of(_person(main, "walt")), "builders", "nobody else was touched")
 	main._select(null)
 	main._key(KEY_B)
 	eq(main.hud.toast_label.text, "Click someone first", "with nobody selected it says so")
 	await _leave(main)
 
 
-func test_a_pans_the_view_and_does_not_flip_auto_repair() -> void:
+func test_b_says_why_when_the_wall_crew_is_full() -> void:
+	var main = _game()
+	_hud_up(main)
+	var sim = main.sim
+	var ana = _person(main, "ana")
+	sim.jobs.assign(_person(main, "ruth"), "builders")
+	sim.jobs.assign(_person(main, "dez"), "builders")
+	main._select({"kind": "person", "ref": ana})
+	main._key(KEY_B)
+	eq(sim.jobs.job_of(ana), "infirmary", "the three seats are taken: Ana stays where she is")
+	eq(main.hud.toast_label.text, "Not now: the Wall crew is full", "and a toast says why, in the rules' own words")
+	eq(main.hud.toast_label.get_theme_color("font_color"), Hud.TOAST_COLOR.warn, "as a warning")
+	await _leave(main)
+
+
+func test_a_pans_the_view_and_does_not_give_a_job() -> void:
 	# A is the camera's key; B is the order's
 	var main = _game()
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
 	main._key(KEY_A)
-	check(not main.sim.tactics.auto_repair(ana), "A leaves auto-repair alone")
+	eq(main.sim.jobs.job_of(ana), "infirmary", "A leaves her job alone")
 	await _leave(main)
 
 
@@ -243,55 +259,48 @@ func _hud_up(main: Node) -> void:
 	main.hud.update_hud(main.sim, main.speed, true, 0)
 
 
-func _craft_button(main: Node):
+func _job_button(main: Node, id: String = "job_bench"):
 	for b in main.hud.gizmos.get_children():
-		if b is Button and b.has_meta("id") and b.get_meta("id") == "craft":
+		if b is Button and b.has_meta("id") and b.get_meta("id") == id:
 			return b
 	return null
 
 
-func test_m_sends_the_selected_person_to_the_worktable_and_calls_them_back() -> void:
+func test_m_puts_the_selected_person_on_the_workbench_and_takes_them_off_again() -> void:
 	var main = _game()
 	_hud_up(main)
 	var sim = main.sim
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
-	check(not sim.workshop.crafting(ana), "not at the bench at the start")
-	check(_craft_button(main) != null and _craft_button(main).get_meta("on") == false, "and the button is dark")
+	eq(sim.jobs.job_of(ana), "infirmary", "the nurse is in the infirmary")
+	check(_job_button(main) != null and _job_button(main).get_meta("on") == false, "and the Workbench button is dark")
 	main._key(KEY_M)
-	check(sim.workshop.crafting(ana), "M sends the selected person to make ammo")
-	check(_craft_button(main) != null and _craft_button(main).get_meta("on") == true, "and the button is lit")
+	eq(sim.jobs.job_of(ana), "bench", "M puts the selected person on the workbench")
+	check(_job_button(main) != null and _job_button(main).get_meta("on") == true, "and the button is lit")
 	main._key(KEY_M)
-	check(not sim.workshop.crafting(ana), "M again calls them back")
-	check(not sim.workshop.crafting(_person(main, "dez")), "nobody else was touched")
+	eq(sim.jobs.job_of(ana), "", "M again takes them off it")
+	eq(sim.jobs.job_of(_person(main, "dez")), "bench", "nobody else was touched")
 	main._select(null)
 	main._key(KEY_M)
 	eq(main.hud.toast_label.text, "Click someone first", "with nobody selected it says so")
 	await _leave(main)
 
 
-func test_m_says_why_when_they_cannot_go() -> void:
+func test_m_says_why_when_the_bench_is_full() -> void:
 	var main = _game()
 	_hud_up(main)
 	var sim = main.sim
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
-	sim.stock.scrap = 2.0
+	sim.jobs.assign(_person(main, "hector"), "bench")
 	main._key(KEY_M)
-	check(not sim.workshop.crafting(ana), "no scrap to spare: they stay where they are")
-	var why: String = sim.workshop.why_not_craft(ana)
-	check(why.contains("scrap"), "the rules' reason is about scrap: '%s'" % why)
+	eq(sim.jobs.job_of(ana), "infirmary", "both seats are taken: Ana stays where she is")
+	var why: String = sim.jobs.why_not(ana, "bench")
+	eq(why, "the Workbench is full", "the rules' reason")
 	check(main.hud.toast_panel.visible, "a toast says so")
 	eq(main.hud.toast_label.text, "Not now: " + why, "with the rules' own words")
 	eq(main.hud.toast_label.get_theme_color("font_color"), Hud.TOAST_COLOR.warn, "as a warning")
-	# at night
-	sim.stock.scrap = 20.0
-	sim.minutes = 22.0 * 60.0
-	sim.phase = sim.phase_at(sim.minutes)
-	main._key(KEY_M)
-	check(not sim.workshop.crafting(ana), "nobody goes to the bench at night")
-	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(ana), "night: the rules' words again")
-	check(main.hud.toast_label.text.contains("night"), "and it is about the night: '%s'" % main.hud.toast_label.text)
+	check(_job_button(main).tooltip_text.contains("Not now: the Workbench is full."), "and the button said so before: '%s'" % _job_button(main).tooltip_text)
 	await _leave(main)
 
 
@@ -302,16 +311,15 @@ func test_m_for_someone_who_is_away_or_gone_says_why_too() -> void:
 	var dez = _person(main, "dez")
 	dez.away = {"kind": "party", "site": "houses"}
 	main._select({"kind": "person", "ref": dez})
-	check(_craft_button(main) == null, "no button for someone off the map")
+	check(_job_button(main) == null, "no button for someone off the map")
 	main._key(KEY_M)
-	check(not sim.workshop.crafting(dez), "they cannot go to the bench")
-	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(dez), "and the rules say why: '%s'" % main.hud.toast_label.text)
-	check(main.hud.toast_label.text.contains("away"), "they are away")
+	eq(sim.jobs.job_of(dez), "bench", "they keep their job")
+	eq(main.hud.toast_label.text, "Not now: Dez is away", "and a toast says they are away")
 	dez.away = null
 	dez.dead = true
 	main._select({"kind": "person", "ref": dez})
 	main._key(KEY_M)
-	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(dez), "gone: the same")
+	eq(main.hud.toast_label.text, "Not now: Dez is gone", "gone: the same")
 	await _leave(main)
 
 
@@ -320,8 +328,139 @@ func test_m_with_a_wall_selected_asks_for_one_of_the_crew() -> void:
 	_hud_up(main)
 	main._select({"kind": "segment", "ref": main.sim.segments[NORTH_BUS]})
 	main._key(KEY_M)
-	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "a wall piece cannot make ammo")
+	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "a wall piece has no job")
+	main._key(KEY_B)
+	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "nor does it join the wall crew")
 	await _leave(main)
+
+
+# ------------------------------------------------------------------- J --
+
+func test_j_opens_the_jobs_screen_and_the_rules_wait() -> void:
+	var main = _game()
+	_hud_up(main)
+	check(main.hud.jobs_screen == null and not main.menu_open and main.jobs_hover.is_empty(), "shut at the start")
+	main._key(KEY_J)
+	check(main.hud.jobs_screen != null, "J opens the Jobs screen")
+	eq(main.speed, 0, "the rules wait while it is open")
+	check(main.menu_open, "and it has the keys: the game's own are not heard")
+	eq(main.jobs_hover, {"station": "", "post": "", "person": ""}, "every station is marked in the world")
+	await _leave(main)
+
+
+func test_j_again_esc_and_close_give_the_speed_back() -> void:
+	for how in ["j", "esc", "close", "toolbar", "toggle"]:
+		var main = _game()
+		main.speed = 2
+		_hud_up(main)
+		main._key(KEY_J)
+		check(main.hud.jobs_screen != null and main.speed == 0, "%s: open and paused" % how)
+		var screen = main.hud.jobs_screen
+		match how:
+			"j":
+				# with the page up J reaches the page itself (the game's own handler is not asked)
+				screen._input(_key_event(KEY_J))
+			"esc":
+				screen._input(_key_event(KEY_ESCAPE))
+			"close":
+				screen.close_button.pressed.emit()
+			"toolbar":
+				main.hud.jobs_button.pressed.emit()
+			"toggle":
+				main.toggle_jobs()
+		check(main.hud.jobs_screen == null, "%s: shut" % how)
+		eq(main.speed, 2, "%s: and the speed is back" % how)
+		eq(main.jobs_hover, {}, "%s: nothing is marked any more" % how)
+		await _leave(main)
+
+
+func _key_event(code: Key) -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.pressed = true
+	return ev
+
+
+func test_the_toolbar_button_and_the_job_tag_open_the_screen_too() -> void:
+	var main = _game()
+	_hud_up(main)
+	main.hud.jobs_button.pressed.emit()
+	check(main.hud.jobs_screen != null, "the clipboard in the toolbar opens it")
+	main.hud.close_jobs()
+	main._select({"kind": "person", "ref": _person(main, "dez")})
+	_hud_up(main)
+	var tag: PanelContainer = main.hud.inspect_refs.job_tag
+	check(tag.visible and Hud.JOBS_TIP != "", "Dez has a job tag")
+	main.hud._on_job_tag_input(_click_event())
+	check(main.hud.jobs_screen != null, "and a click on it opens the screen")
+	await _leave(main)
+
+
+func _click_event() -> InputEventMouseButton:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_LEFT
+	ev.pressed = true
+	return ev
+
+
+func test_j_is_not_there_in_the_title_over_a_menu_or_another_page() -> void:
+	var main = _game()
+	_hud_up(main)
+	main.open_pause()
+	main._key(KEY_J)
+	check(main.hud.jobs_screen == null, "not over the pause menu")
+	main.shell.close_all()
+	main.resume()
+	# another page: the radio card (a modal)
+	var page := Control.new()
+	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	page.mouse_filter = Control.MOUSE_FILTER_STOP
+	main.hud.add_child(page)
+	main._key(KEY_J)
+	check(main.hud.jobs_screen == null, "nor over a page that covers the game")
+	page.free()
+	main.title_mode = true
+	main._key(KEY_J)
+	main.toggle_jobs()
+	check(main.hud.jobs_screen == null, "nor on the title")
+	main.title_mode = false
+	main._key(KEY_J)
+	check(main.hud.jobs_screen != null, "but it opens once nothing is in the way")
+	await _leave(main)
+
+
+func test_the_tutorials_lock_may_refuse_the_jobs_screen() -> void:
+	var main = _game()
+	_hud_up(main)
+	# a coach that allows nothing but says so (the real one is in test_tutorial_coach.gd)
+	var coach := FakeCoach.new()
+	main.coach = coach
+	main._key(KEY_J)
+	check(main.hud.jobs_screen == null, "the lock refuses it")
+	eq(coach.asked, [["jobs", null]], "having asked the gate about 'jobs'")
+	coach.open = true
+	main._key(KEY_J)
+	check(main.hud.jobs_screen != null, "an open gate lets it through")
+	check(coach.did.has(["jobs", null]), "and the coach is told the player did it: %s" % str(coach.did))
+	main.hud.close_jobs()
+	main.coach = null
+	coach.free()
+	await _leave(main)
+
+
+## What main.gd asks of the tutorial's coach: the gate, and what the player did.
+class FakeCoach:
+	extends Node
+	var open := false
+	var asked: Array = []
+	var did: Array = []
+
+	func allows(kind: String, arg = null) -> bool:
+		asked.append([kind, arg])
+		return open
+
+	func on_did(kind: String, arg = null) -> void:
+		did.append([kind, arg])
 
 
 # --------------------------------------------------------------- the Menu button --

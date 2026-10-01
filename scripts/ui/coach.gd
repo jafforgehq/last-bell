@@ -21,6 +21,10 @@
 ##   main.gd asks (`_allows`) in its input handlers while a coach exists.
 ## - Steps may wait for their moment (`start`), bring a beat of the scenario when they begin
 ##   (`fire`), move the camera (`focus`, `follow`) and clear the selection.
+## - Over a page of the HUD (the scavenging dialog, the Duty roster) a step that has a line for it (a
+##   `dialog_text`, or a `line` on its goals) shrinks its card to that one line at the top of the window,
+##   and the coach adds no dim of its own (the page has its veil) and offers no Show me (the ring pulses
+##   and the arrow comes by itself); the ring goes on the page's own buttons (`jobs.auto`, `dialog.send`...).
 ## - It is the scenario that remembers where it is (`step`, `coach_state`), so a save made in the
 ##   middle resumes the same step.
 ##
@@ -695,6 +699,8 @@ func _refresh_state() -> void:
 	var d = hud.scavenge_dialog
 	var open: bool = d != null and is_instance_valid(d)
 	state["dialog"] = {"open": open, "site": String(d.site_id) if open else ""}
+	var page = hud.get("jobs_screen")
+	state["jobs"] = {"open": page != null and is_instance_valid(page)}
 
 
 ## The player did something (main.gd's _did): `kind` is "select" (with the selection), "move",
@@ -723,7 +729,11 @@ func on_did(kind: String, arg = null) -> void:
 func on_event(e: Dictionary) -> void:
 	if phase == "ended" or state.is_empty():
 		return
-	_count(state["events"], String(e.get("type", "")))
+	var type := String(e.get("type", ""))
+	_count(state["events"], type)
+	# a job given (an "assigned" event that names a station) counts on its own: taking one away is not giving one
+	if type == "assigned" and String(e.get("station", "")) != "":
+		_count(state["events"], "assigned:job")
 
 
 func _count(table: Dictionary, key: String) -> void:
@@ -1058,8 +1068,10 @@ func _update_ui(delta: float) -> void:
 	spot.avoid = _card_rect
 	spot.t += delta
 	var next_type := String(step.get("done", {}).get("cond", "")) == "next"
-	show_button.visible = phase == "active" and idle_t >= IDLE_PULSE_S and not next_type and target_rect.size.x > 0.0 and not arrow_asked
-	var dimmed: bool = target_rect.size.x > 0.0 and not bool(hit.world) and bool(step.get("dim", true)) and phase == "active"
+	# (over a page the card is a line and stays one: the button would make it a card that hides the page's first
+	# rows, and the ring pulses and the arrow comes by itself anyway)
+	show_button.visible = phase == "active" and idle_t >= IDLE_PULSE_S and not next_type and target_rect.size.x > 0.0 and not arrow_asked and not _over_page()
+	var dimmed: bool = target_rect.size.x > 0.0 and not bool(hit.world) and bool(step.get("dim", true)) and phase == "active" and not _page_open()
 	dim_rect.visible = dimmed
 	if dimmed:
 		_dim_material.set_shader_parameter("hole", Vector4(target_rect.position.x, target_rect.position.y, target_rect.size.x, target_rect.size.y))
@@ -1073,9 +1085,9 @@ func _update_ui(delta: float) -> void:
 
 ## Writes the card's words when the step, its phase or what it shows changes.
 func _fill_card() -> void:
-	var dialog_open: bool = bool(state.get("dialog", {}).get("open", false)) and step.has("dialog_text")
+	var line := _page_line() if _page_open() else ""
 	var now_goal := _goal_text()
-	var key := "%s|%s|%s|%s|%s" % [step_id(), phase, dialog_open, skipped, now_goal]
+	var key := "%s|%s|%s|%s|%s" % [step_id(), phase, line, skipped, now_goal]
 	if key == _card_key:
 		return
 	_card_key = key
@@ -1102,9 +1114,9 @@ func _fill_card() -> void:
 			if skipped:
 				title = String(step.get("skipped_title", title))
 				text = String(step.get("skipped_text", text))
-	if dialog_open:
+	if line != "":
 		title = ""
-		text = String(step.get("dialog_text", text))
+		text = line
 		goal = ""
 	title_label.text = title
 	title_label.visible = title != ""
@@ -1122,6 +1134,27 @@ func _fill_card() -> void:
 		l.size.x = inner
 	_fade = 0.0
 	card.reset_size()
+
+
+## Whether a page of the HUD is open over the game: the scavenging dialog or the Duty roster. Each has its
+## own veil, so the coach adds no dim of its own over it.
+func _page_open() -> bool:
+	return bool(state.get("dialog", {}).get("open", false)) or bool(state.get("jobs", {}).get("open", false))
+
+
+## The one line the card says over a page of the HUD: the `line` of the first goal that has one and whose
+## moment it is (a lesson whose line changes as it goes: the roster's, a job to give and then Close), else the
+## step's `dialog_text`; "" for none (the card keeps its size).
+func _page_line() -> String:
+	for g in step.get("goals", []):
+		if g.has("line") and Conditions.check({"cond": String(g.get("when", "")), "params": g.get("params", {})}, sim, state):
+			return String(g.line)
+	return String(step.get("dialog_text", ""))
+
+
+## Whether the card is the short line over a page: one is open, and the step has a line for it.
+func _over_page() -> bool:
+	return _page_open() and _page_line() != ""
 
 
 ## What the card says to do right now: the first of the step's `goals` whose `when` holds (the
@@ -1152,8 +1185,7 @@ func _place_card(delta: float, vp: Vector2) -> void:
 	var sz := card.get_combined_minimum_size()
 	sz.x = maxf(sz.x, CARD_W)
 	card.size = sz
-	var dialog_open: bool = bool(state.get("dialog", {}).get("open", false)) and step.has("dialog_text")
-	var want := _best_rect(sz, vp, target_rect, dialog_open)
+	var want := _best_rect(sz, vp, target_rect, _over_page())
 	var at := want.position
 	_card_rect = Rect2(at, sz)
 	if card.position.distance_to(at) > 2.0 and not calm:
@@ -1171,7 +1203,7 @@ func _best_rect(sz: Vector2, vp: Vector2, t: Rect2, compact_top: bool) -> Rect2:
 ## The rectangle for a card of size `sz` in a window of size `vp`: round the target `t` (a rectangle
 ## on the screen, empty for none) if there is one, else where `place` says ("top" under the crew,
 ## "center", "bottom"); the one that covers none of the target and least of the HUD's own panels.
-## `compact_top` is the small card at the very top (over the scavenging dialog). Used by the hints too.
+## `compact_top` is the small card at the very top (over a page of the HUD). Used by the hints too.
 static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, compact_top: bool, centered: bool = false) -> Rect2:
 	var bounds := Rect2(Vector2(EDGE, EDGE), vp - Vector2(EDGE, EDGE) * 2.0)
 	var bar: Rect2 = hud.anchor_rect("bar")

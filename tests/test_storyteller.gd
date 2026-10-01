@@ -307,21 +307,23 @@ func test_ruth_takes_the_radio_at_noon_and_the_card_waits_for_an_answer() -> voi
 	g.world.free()
 
 
-func test_without_ruth_the_best_leader_speaks() -> void:
+func test_the_speaker_is_the_person_at_the_radio_desk() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	eq(sim.storyteller.speaker(), ruth, "Ruth, when she is up")
+	var walt = _person(sim, "Walt")
+	eq(sim.storyteller.speaker(), ruth, "Ruth, at the desk she is given to begin with")
 	ruth.downed = true
-	eq(sim.storyteller.speaker(), _person(sim, "Walt"), "Walt has the best Leading once she is down")
-	_person(sim, "Walt").away = {"kind": "party"}
-	eq(sim.storyteller.speaker(), _person(sim, "Ana"), "then Ana")
+	eq(sim.storyteller.speaker(), null, "with her down nobody is at the radio: the best leader does not take her place")
 	ruth.downed = false
-	ruth.dead = true
-	eq(sim.storyteller.speaker(), _person(sim, "Ana"), "Ruth gone")
-	for p in sim.people:
-		p.downed = true
-	eq(sim.storyteller.speaker(), null, "and with everybody down nobody is at the radio")
+	sim.jobs.unassign(ruth)
+	Helpers.seat(sim, walt, "radio")
+	eq(sim.storyteller.speaker(), walt, "put Walt at the desk and he speaks")
+	walt.away = {"kind": "party"}
+	eq(sim.storyteller.speaker(), null, "away, he cannot")
+	walt.away = null
+	walt.dead = true
+	eq(sim.storyteller.speaker(), null, "nor can the dead")
 	g.world.free()
 
 
@@ -707,6 +709,7 @@ func test_the_assembly_comes_at_dawn_with_an_event_and_an_alert() -> void:
 func test_the_numbers_of_the_night_match_the_counters() -> void:
 	# a wall piece that is worn before dusk, so that it can be mended in the night
 	var g := _evening(5, func(sim):
+		Helpers.no_work(sim)    # nobody mends it before the night: only what the test mends counts
 		sim.segments[3].hp = sim.segments[3].max_hp - 100.0
 		sim._segment_state(sim.segments[3]))
 	var sim = g.sim

@@ -246,6 +246,36 @@ Round 4 made the six survivors people and gave the days a storyteller (plan: `do
 
 A crew has about 0.6 to 0.9 breakdowns a game on Standard (none on Story), and 4 to 8% of the time somebody is Shaken or Breaking.
 
+## 7g. After round 5 (2026-10-02)
+
+Round 5 made management a real activity: jobs and stations (plan: `docs/superpowers/plans/2026-10-02-round-5.md`). The direction behind it (the user's, 2026-10-02): the game grows from a small crew into a settlement, in the order jobs and stations (this round), buildings you really build (round 6), a small start with recruits who join over the radio (round 7); the Town Board stays a later, separate round.
+
+- **A day job and a night post for everyone.** A person has a day job (a station, or none) and a night post (one of 19 named places on the decks and towers, one person to a post, kept from night to night). What a person does, first that applies: not able (dead, downed, away, in a breakdown) nothing; an order (right-click, R, P, F) until released; medical duty and a scavenging trip; at night the post; by day the station's seat; with no work the chores (mend a wall under half) or standing at ease.
+- **Six stations** (`assets/data/stations.json`, the module is `scripts/sim/jobs.gd`; the work is done in the module that owns it, through `jobs.working(id)`, the people assigned who are at their seat and free):
+
+| Station | Seats | Skill | What it does |
+| --- | --- | --- | --- |
+| Workbench | 2 | Building | Ammo from scrap (8 a scrap; 2 + Building/2 scrap an hour) while the ammo is under the station's target (300) and the scrap above its reserve (3) |
+| Wall crew | 3 | Building | Mends the most worn wall under the threshold (70%) while there are 5 scrap; a trip ends when the scrap does, and a new job calls the person off the wall |
+| Vegetable beds | 2 | none | 0.2 food for every hour of work and 0.6 a dawn unattended: one gardener all day is about 3.1 food, what the beds gave when they paid a fixed 3 |
+| Infirmary | 2 | Medicine | The people here are the preferred healers; patients in beds heal 1.5 times as fast while someone is on duty |
+| Radio desk | 1 | Leading | The noon call comes only if someone is at the desk at 12:00, and that person speaks; otherwise it is silent and an alert says so |
+| Lookout post | 1 | Shooting | The 17:00 forecast comes only from someone on watch; it is theirs for the night |
+
+- **The Jobs screen** (key J, a toolbar button, the job tag in the person panel; the rules wait while it is open): everyone's day job and night post as lists with the seats left, their skills with the station's skill marked, the stations with seats, a line of what they do and their settings as sliders, **Auto-assign** (the work first, the lookout post, the infirmary and the radio desk after: a crew of five leaves the radio empty, a crew of three all three desks) and **Clear**. Hovering a row, a station or a post marks its place in the yard. M and B (the keys of the old orders) give or take the Workbench and the Wall crew; F stays a one-off repair.
+- **Compatibility.** The default jobs (Ruth at the radio, Dez at the bench, Ana in the infirmary, Marcus on watch, Walt on the wall crew, Hector in the beds) and the posts they had reproduce what the crew did before; a save from round 4 loads with them (checked on a real round 4 save). Orientation Day switches the self-working jobs off and teaches the roster in a step of its own.
+- **What the harness taught.** The first policy for the new model (the three desks always staffed, the crew called to the decks at 17:00 as before) won 2 informed games of 16 where round 4 won 6 of 16: hours at a station are worth something now. A day job runs from 06:30 to the bell at 19:00, and a crew called in at 17:00 loses two hours a day, so the beds gave 1.9 food and not 3.1, and the policy went to the houses nearly twice as often. A player's answer, and the policy's now: call the crew in at 18:15 (the walk to the decks is about half an hour), put the best builder on the bench (ammo from scrap scales with Building), keep three hands on the bench, the wall crew and the beds and let only the rest keep desks (the radio goes first). The policy and the game were otherwise left as they were.
+
+**What the harness shows now** (Standard, 30 days, 16 seeds unless noted):
+
+| Crew | Result |
+| --- | --- |
+| Gives no orders (8 seeds) | median day 9 (11 in round 4; the default jobs only) |
+| The default policy | median day 18 (the same as round 4) |
+| The informed policy | 12 wins of 32 (38%, the same as round 4), median day 29 |
+| Story, informed (8 seeds) | 8 wins of 8 |
+| Brutal, informed (8 seeds) | 0 wins of 8, mean day 16.9 (17.8) |
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.

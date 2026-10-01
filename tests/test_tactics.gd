@@ -1,5 +1,5 @@
 extends "res://tests/case.gd"
-## The player's tools for a night: the alarm that draws the dead, auto-repair,
+## The player's tools for a night: the alarm that draws the dead, the wall crew's repairs,
 ## how well the guns cover the wall, and the lookout's forecast.
 
 const Helpers := preload("res://tests/helpers.gd")
@@ -110,7 +110,7 @@ func test_the_dead_already_on_their_way_switch_to_a_new_alarm() -> void:
 	g.world.free()
 
 
-func test_the_alarm_and_auto_repair_survive_a_save() -> void:
+func test_the_alarm_and_the_wall_crew_survive_a_save() -> void:
 	var g := Helpers.make(15, 1)
 	var sim = g.sim
 	sim.tactics.order_lure(_seg(sim, NORTH_BUS))
@@ -124,19 +124,21 @@ func test_the_alarm_and_auto_repair_survive_a_save() -> void:
 	check(SaveGame.apply(other, saved), "the save loads")
 	eq(other.tactics.lure_id, NORTH_BUS, "the alarm is still on the north bus")
 	near(other.tactics.lure_left_min(), sim.tactics.lure_left_min(), 0.001, "with the same time left")
-	check(other.tactics.auto_repair(_person(other, "Ana")), "and Ana's auto-repair is on")
-	check(other.tactics.auto_repair(_person(other, "Dez")), "and Dez's still is")
+	check(other.tactics.auto_repair(_person(other, "Ana")), "and Ana is on the wall crew")
+	check(other.tactics.auto_repair(_person(other, "Walt")), "and Walt still is")
 	world.free()
 	g.world.free()
 
 
 # ------------------------------------------------------- standing orders --
 
-func test_dez_and_hector_start_with_auto_repair_and_ana_does_not() -> void:
+func test_walt_starts_on_the_wall_crew_and_the_others_do_not() -> void:
 	var g := Helpers.make(16, 1)
 	var sim = g.sim
-	check(sim.tactics.auto_repair(_person(sim, "Dez")) and sim.tactics.auto_repair(_person(sim, "Hector")), "the builders")
+	check(sim.tactics.auto_repair(_person(sim, "Walt")), "Walt walks the wall")
+	check(not sim.tactics.auto_repair(_person(sim, "Dez")) and not sim.tactics.auto_repair(_person(sim, "Hector")), "not the mechanic and the custodian, who have the bench and the garden")
 	check(not sim.tactics.auto_repair(_person(sim, "Ana")), "not the nurse")
+	check(not sim.d.people.any(func(def): return def.has("auto_repair")), "and the roster no longer has a standing order for it")
 	g.world.free()
 
 
@@ -178,7 +180,7 @@ func test_a_repair_goes_faster_with_the_building_skill() -> void:
 	var g := Helpers.make(19, 1)
 	var sim = g.sim
 	sim.waves.enabled = false
-	sim.tactics.auto.clear()
+	sim.jobs.clear()    # nobody mends a wall on their own
 	var gained := {}
 	for who in ["Dez", "Marcus"]:
 		var p = _person(sim, who)

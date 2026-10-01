@@ -507,8 +507,6 @@ func _start_breakdown(p) -> void:
 	p.path = []
 	p.goal_key = ""
 	p.activity = "Having a breakdown"
-	if sim.workshop.has_method("stop"):
-		sim.workshop.stop(p)
 	sim.alert("breakdown-%s" % p.id, "danger", "%s has broken down" % p.first, "They cannot shoot or take orders for an hour", Vector2(p.x, p.y), 12.0)
 	sim.barks.say(p, "breakdown")
 

@@ -4,6 +4,7 @@ extends "res://tests/case.gd"
 
 const Tut := preload("res://tests/tutorial_kit.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
+const Coach := preload("res://scripts/ui/coach.gd")
 
 
 func _ok(spec: Dictionary, sim, st: Dictionary = {}) -> bool:
@@ -207,9 +208,59 @@ func test_the_alarm_the_wound_the_fever_and_the_bench() -> void:
 	var dez = Tut.person(sim, "dez")
 	sim.scenario.set_time(8.0, 2)
 	check(not _ok(_c("crafting"), sim), "nobody at the worktable")
-	check(sim.workshop.order_craft(dez), "Dez is sent to the bench")
-	check(_ok(_c("crafting"), sim) and _ok(_c("crafting", {"who": "dez"}), sim), "someone is making ammo, and it is Dez")
+	check(sim.workshop.order_craft(dez), "Dez is given the bench")
+	check(_ok(_c("crafting"), sim) and _ok(_c("crafting", {"who": "dez"}), sim), "someone has the worktable's job, and it is Dez: at once, before he has walked there (a lesson waiting for it holds the game still)")
+	check(not sim.workshop.crafting(dez), "though he is not at work until he gets there")
+	Tut.run(sim, 5.0)
+	check(sim.workshop.crafting(dez), "and then he is")
 	check(not _ok(_c("crafting", {"who": "ruth"}), sim), "not Ruth")
+	g.world.free()
+
+
+## The duty roster: whether its page is open (the coach notes that in `state.jobs`) and whether a job was
+## given (the coach counts the rules' `assigned` events that name a station as `assigned:job`: one that
+## takes a job away does not count, and the three at the very start of Orientation Day, which take the
+## self-working jobs off, are of that kind).
+func test_the_duty_roster_page_is_open_and_a_job_is_given() -> void:
+	var g := Tut.make()
+	var sim = g.sim
+	check(Conditions.has("jobs_open") and Conditions.has("jobs_given"), "the registry knows both")
+	check(not _ok(_c("jobs_open"), sim, {}), "no page is noted: it is not open")
+	check(not _ok(_c("jobs_open"), sim, {"jobs": {"open": false}}), "a page that is shut")
+	check(_ok(_c("jobs_open"), sim, {"jobs": {"open": true}}), "a page that is open")
+	check(not _ok(_c("jobs_given"), sim, {}), "no events: nothing was given")
+	check(not _ok(_c("jobs_given"), sim, {"events": {}}), "an empty list of events")
+	check(not _ok(_c("jobs_given"), sim, {"events": {"assigned": 3.0}}), "assigned events by themselves are not enough: some take a job away")
+	check(_ok(_c("jobs_given"), sim, {"events": {"assigned": 1.0, "assigned:job": 1.0}}), "one that names a station is")
+	g.world.free()
+
+
+## The lesson's own `done`, read from the data: the page was opened, a job was given and the page is shut again.
+func test_the_duty_roster_lesson_is_done_when_a_job_was_given_and_the_page_is_closed() -> void:
+	var step := {}
+	for s in Coach.load_steps():
+		if String(s.id) == "jobs":
+			step = s
+	check(not step.is_empty(), "there is a lesson on the duty roster")
+	if step.is_empty():
+		return
+	var g := Tut.make()
+	var sim = g.sim
+	var done: Dictionary = step.done
+	var st := {"did": {}, "events": {}, "jobs": {"open": false}}
+	check(not _ok(done, sim, st), "nothing done yet")
+	st.did["jobs"] = 1.0
+	st.jobs.open = true
+	check(not _ok(done, sim, st), "the page is open, and nobody has been given anything")
+	st.events["assigned"] = 1.0
+	check(not _ok(done, sim, st), "a job was taken away, which is not what was asked")
+	st.events["assigned:job"] = 1.0
+	check(not _ok(done, sim, st), "a job was given, but the page is still open")
+	st.jobs.open = false
+	check(_ok(done, sim, st), "the page is shut again after a job was given: done")
+	# opened and shut again with nothing given
+	var looked := {"did": {"jobs": 1.0}, "events": {}, "jobs": {"open": false}}
+	check(not _ok(done, sim, looked), "a look at the page and no job is not the lesson")
 	g.world.free()
 
 

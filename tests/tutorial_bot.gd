@@ -161,12 +161,31 @@ static func act(main, id: String, bot: Dictionary) -> void:
 		"save":
 			main._key(KEY_F5)
 		"workshop":
-			if sim.workshop.crafting(person(main, "dez")):
+			# M gives him the bench job (and takes it away again), so it is pressed until he has it
+			if sim.jobs.job_of(person(main, "dez")) == "bench":
 				did = false
 			elif not selected(main, "dez"):
 				card_click(main, "dez")
 			else:
 				main._key(KEY_M)
+		"jobs":
+			# J opens the Duty roster; a job is given with the page's own buttons (Hector's Day job, then the
+			# Wall crew line of the list that opens); Close shuts the page again
+			var page = main.hud.jobs_screen
+			var given: bool = float(coach.state.events.get("assigned:job", 0.0)) > 0.0
+			if page == null:
+				if given:
+					did = false
+				else:
+					main._key(KEY_J)
+			elif given:
+				page.close_button.pressed.emit()
+			elif page.list != null and page.list_kind == "job":
+				page.list_items["builders"].pressed.emit()
+			elif page.list != null:
+				page.close_list()
+			else:
+				page.rows["hector"].job.pressed.emit()
 		"wrap":
 			coach.stay_button.pressed.emit()
 		_:

@@ -26,11 +26,16 @@ const PARCHED_H := 24.0
 const WEAK_PERF := 0.8
 ## Health lost per game hour while starving or parched.
 const STARVE_LOSS_PER_H := 1.0
-## The hour the day turns over and the garden and barrels pay out.
+## The hour the day turns over and the garden's small share and the barrels pay out.
 const DAWN_HOUR := 6.5
-## What the vegetable beds give each dawn, and the two rain barrels on a clear
-## day and on a rainy one (the chance of rain is for each day).
-const GARDEN_FOOD := 3.0
+## The vegetable beds (the Vegetable beds station): a small share grows unattended and is paid each
+## dawn (if anyone is home), and each person working the beds (`jobs.working("garden")`) grows this
+## much food for every game hour of work. Hector alone (about twelve hours a day) is worth the 3
+## food the beds used to pay each dawn, two gardeners about 5.4.
+const GARDEN_BASE := 0.6
+const GARDEN_FOOD_PER_HOUR := 0.2
+## The two rain barrels give this much on a clear day and on a rainy one (the chance of rain is
+## for each day).
 const BARREL_WATER := 2.0
 const BARREL_WATER_RAIN := 10.0
 const RAIN_CHANCE := 1.0 / 3.0
@@ -100,6 +105,7 @@ func start() -> void:
 func update(dt: float) -> void:
 	if sim.day != sources_day:
 		roll_dawn()
+	_garden(sim.game_hours(dt))
 	_serve_meals(dt)
 	_needs(sim.game_hours(dt))
 	_low_stock_alerts()
@@ -125,16 +131,26 @@ func perf(p) -> float:
 	return 1.0
 
 
+## The people working the vegetable beds grow food for the hours they work (`hours` game hours
+## have passed): GARDEN_FOOD_PER_HOUR each, from the moment they are at the beds.
+func _garden(hours: float) -> void:
+	if not sources_on or hours <= 0.0:
+		return
+	var hands: int = sim.jobs.working("garden").size()
+	if hands > 0:
+		sim.stock.food += GARDEN_FOOD_PER_HOUR * float(hands) * hours
+
+
 ## The day begins: rolls the day's weather (from the run's one random source) and,
-## if anyone is on the map to tend them, the vegetable beds and the rain barrels
-## pay out. Called by update() once a day; public so tests can call it.
+## if anyone is on the map to tend them, the vegetable beds' small unattended share and the
+## rain barrels pay out. Called by update() once a day; public so tests can call it.
 func roll_dawn() -> void:
 	sources_day = sim.day
 	var rain: bool = sim.rng.randf() < RAIN_CHANCE
 	sim.weather = "rain" if rain else "clear"
 	if not sources_on or not _someone_home():
 		return
-	sim.stock.food += GARDEN_FOOD
+	sim.stock.food += GARDEN_BASE
 	var water := BARREL_WATER_RAIN if rain else BARREL_WATER
 	sim.stock.water += water
 	if rain:

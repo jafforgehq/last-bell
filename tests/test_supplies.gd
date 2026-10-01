@@ -27,6 +27,14 @@ class Quiet:
 	func perf(_p) -> float:
 		return 1.0
 
+	## The jobs call it when a person's job changes (it ends the wall crew's trips), and an order to
+	## repair makes the repair the player's.
+	func call_back(_p) -> void:
+		pass
+
+	func forget_trip(_p) -> void:
+		pass
+
 	func goal_for(_p):
 		return null
 
@@ -87,6 +95,8 @@ func _calm(seed_value: int = 1, difficulty: int = 1) -> Dictionary:
 	sim.scavenge = Quiet.new()
 	sim.scenario = Quiet.new()
 	sim.tactics = Quiet.new()
+	# nobody grows food or makes ammo by themselves: the stores move only by the supplies rules
+	Helpers.idle_stores(sim)
 	return g
 
 
@@ -437,7 +447,7 @@ func test_the_dead_do_not_starve() -> void:
 
 # ----------------------------------------------------------------- sources --
 
-func test_the_beds_and_barrels_pay_out_once_a_day_at_dawn() -> void:
+func test_the_beds_small_share_and_the_barrels_pay_out_once_a_day_at_dawn() -> void:
 	var g := _calm(4)
 	var sim = g.sim
 	var food: float = sim.stock.food
@@ -449,12 +459,13 @@ func test_the_beds_and_barrels_pay_out_once_a_day_at_dawn() -> void:
 	_run(sim, 6.0)            # past 06:30
 	eq(sim.day, 2, "day 2 has begun")
 	var rain: bool = sim.weather == "rain"
-	near(sim.stock.food, food - 4.0 + 3.0, 1e-6, "the vegetable beds gave 3 food")
+	var share: float = sim.supplies.GARDEN_BASE
+	near(sim.stock.food, food - 4.0 + share, 1e-6, "the vegetable beds gave their small share, %.1f food, with nobody at work on them" % share)
 	near(sim.stock.water, water - 6.0 + (10.0 if rain else 2.0), 1e-6, "the barrels gave 2 water, 10 in the rain")
 	var weather: String = sim.weather
 	_run(sim, 100.0)          # five more hours, with the 07:00 meal in them
 	eq(sim.weather, weather, "the weather holds all day")
-	near(sim.stock.food, food - 4.0 + 3.0 - 2.0, 1e-6, "no second payout in the same day")
+	near(sim.stock.food, food - 4.0 + share - 2.0, 1e-6, "no second payout in the same day")
 	near(sim.stock.water, water - 6.0 + (10.0 if rain else 2.0) - 3.0, 1e-6, "nor for the water")
 	g.world.free()
 
@@ -495,7 +506,7 @@ func test_without_anyone_on_the_map_the_beds_and_barrels_give_nothing() -> void:
 	eq(sim.stock.food, food, "everyone dead: nobody tends the garden")
 	sim.people[3].dead = false       # one living person on the map is enough
 	sim.supplies.roll_dawn()
-	near(sim.stock.food, food + 3.0, 1e-9, "one person tends the garden")
+	near(sim.stock.food, food + sim.supplies.GARDEN_BASE, 1e-9, "one person tends the garden")
 	check(sim.stock.water >= water + 2.0 - 1e-9, "and the barrels")
 	g.world.free()
 
@@ -512,7 +523,7 @@ func test_rain_is_about_one_day_in_three() -> void:
 		var wet: bool = sim.weather == "rain"
 		if wet:
 			rain += 1
-		near(sim.stock.food - food, 3.0, 1e-9, "the garden gives 3 (seed %d)" % s)
+		near(sim.stock.food - food, sim.supplies.GARDEN_BASE, 1e-9, "the garden gives its small share (seed %d)" % s)
 		near(sim.stock.water - water, 10.0 if wet else 2.0, 1e-9, "the barrels give 10 in the rain, else 2 (seed %d)" % s)
 	check(rain >= 105 and rain <= 162, "about a third of 400 seeds are rainy, got %d" % rain)
 	# one stream of days, as a run sees them
@@ -923,6 +934,9 @@ func test_an_unmanaged_crew_goes_short_about_a_week_in_and_income_alone_does_not
 	# The garden and the barrels but no trips: the stores still run dry.
 	var h := _calm()
 	var sim2 = h.sim
+	for p in sim2.people:
+		if p.id == "hector":
+			sim2.jobs.assign(p, "garden")    # one gardener works the beds, as the crew's custodian does
 	var dry_day := 0
 	guard = 0
 	while dry_day == 0 and sim2.day < 30 and guard < 100000:
