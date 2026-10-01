@@ -1,10 +1,12 @@
 extends "res://tests/case.gd"
 ## Bonds (scripts/sim/bonds.gd, map.json `bonds`): who is close to whom. Ruth and Marcus
 ## (family), Walt and Marcus (mentor), Dez and Hector and Ana and Ruth (friends). A friend
-## within six tiles makes a person aim 8 percent better (the Loyal trait adds 4 more); and
-## a bonded person downed, dead, turned or gone is a shock (see morale.gd).
+## within six tiles makes a person aim 8 percent better (the Loyal trait adds a little more);
+## and a bonded person downed, dead, turned or gone is a shock (see morale.gd, whose numbers
+## these tests read: Morale.FRIEND_DOWN and the rest).
 
 const Helpers := preload("res://tests/helpers.gd")
+const Morale := preload("res://scripts/sim/morale.gd")
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
@@ -214,8 +216,8 @@ func test_a_friend_going_down_shakes_those_who_are_close_to_them() -> void:
 		before[p.id] = sim.morale.value(p)
 	marcus.hp = 0.0
 	sim.medical.on_downed(marcus, "bite")
-	near(before.ruth - sim.morale.value(ruth), 10.0, 0.001, "Ruth, his family: 10 points")
-	near(before.walt - sim.morale.value(walt), 10.0, 0.001, "Walt, his mentor: 10 points")
+	near(before.ruth - sim.morale.value(ruth), -Morale.FRIEND_DOWN, 0.001, "Ruth, his family: %s points" % -Morale.FRIEND_DOWN)
+	near(before.walt - sim.morale.value(walt), -Morale.FRIEND_DOWN, 0.001, "Walt, his mentor: %s points" % -Morale.FRIEND_DOWN)
 	near(before.hector - sim.morale.value(hector), 0.0, 0.001, "Hector did not know him that well")
 	near(before.marcus - sim.morale.value(marcus), 0.0, 0.001, "and the one who is down has no shock for it (his state is in his mood)")
 	g.world.free()
@@ -236,8 +238,8 @@ func test_a_friend_dying_or_turning_is_a_far_bigger_shock_than_a_stranger() -> v
 			sim.medical._turn(_person(sim, "Ana"))
 		else:
 			sim.medical.kill(_person(sim, "Ana"), how)
-		near(before_ruth - sim.morale.value(ruth), 25.0, 0.001, "%s: Ana's friend Ruth loses 25" % how)
-		near(before_dez - sim.morale.value(dez), 8.0, 0.001, "%s: Dez, who knew her less, 8" % how)
+		near(before_ruth - sim.morale.value(ruth), -Morale.FRIEND_LOST, 0.001, "%s: Ana's friend Ruth loses %s" % [how, -Morale.FRIEND_LOST])
+		near(before_dez - sim.morale.value(dez), -Morale.OTHER_LOST, 0.001, "%s: Dez, who knew her less, %s" % [how, -Morale.OTHER_LOST])
 		g.world.free()
 
 

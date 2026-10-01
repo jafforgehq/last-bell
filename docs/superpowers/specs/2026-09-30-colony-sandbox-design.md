@@ -221,6 +221,31 @@ Round 3 made Thirty Bells a game a stranger can start, learn and win (plan: `doc
 
 On Story the informed policy wins 7 of 8; on Brutal 0 of 8 (median day 18). So the Standard win is reachable by a crew that reads the night, places its guns, rings the alarm and keeps the bench busy, and it is not easy. Still open: a harness bot is not a player, so the real win rate is for playtests to say.
 
+## 7f. After round 4 (2026-10-01)
+
+Round 4 made the six survivors people and gave the days a storyteller (plan: `docs/superpowers/plans/2026-10-01-round-4.md`).
+
+- **Skills grow.** Each person has their own copy of the roster's skills (`Person.skills`) and counters (`Person.stats`). Shooting gains a point per 100 kills the person makes, Melee per 40 melee kills, Medicine per 6 treatments, Building per 400 HP mended and per 60 scrap made into ammo; at most three points over where they started, never past 10, Leading does not grow.
+- **Ten traits** (`assets/data/traits.json`, two to a person in `map.json`): Steady, Nervous, Tinkerer, Triage, Sharp-eyed, Steady hands, Tough, Optimist, Loyal, Quick learner, each a small number on one or two things (shown in the person panel with its blurb). **Four bonds** (Ruth and Marcus family, Walt and Marcus mentor, Dez and Hector friends, Ana and Ruth friends): a person aims 8% better within 6 tiles of a bonded one, and loses more when one falls.
+- **Morale** (0 to 100, start 70): drifts 2.5 points an hour toward 60 plus the continuous modifiers (fed and watered +5, hunger and thirst, bleeding, fever, being down, a bonded person near +5, the leader near, the dead clawing at the wall -0.7 each up to -20 times the trait, a quiet night +2); shocks are instant and fade (a kill +0.2 up to +10 a night, a breach -8 for all, a friend down -14, a friend dead or turned -30 times grief, anyone else lost -12, an exile). Inspired from 75, Shaken under 50 (work and aim a tenth worse), Breaking under 30; under 15 a person has a one-hour breakdown (they stop shooting and cannot be ordered), from day 4 and not on Story. The mood's tooltip lists every reason with its sign.
+- **Barks.** About 280 short lines in `assets/data/barks.json`, one voice for each person, said at the bell, a wound, a kill streak, low ammo, a friend down, a breach, the dawn, a skill gain and a breakdown, and an epitaph by the others after a death; drawn as bubbles above the pawn (at most two, never in a modal).
+- **The storyteller** (`scripts/sim/storyteller.gd`, `assets/data/events.json`). At 12:00 each day Ruth (or the best Leading) may have a card: about two days in three, never day 1 or day 30, at most two threats in a row, no card again within six days; the draw leans on a hidden tension (a death +20, a bad night +10, a breach +8, a threat +6; a quiet day -8; under 20 threats twice as likely, over 70 boons) and comes from its own generator seeded from the run seed and the day. Fifteen cards: heavy rain, fog, a blackout, a horde warning (tonight x1.3), stragglers at the wall by day, a fever, mould, wall rot, a quiet day, old friends, supplies falling from the sky, a stranger at the gate, a cry at the gate, a trade on the radio and an argument. A card with a choice waits for the player and states its risk; if unanswered it takes its default two game hours later. Fog shortens the guns' reach by 30% for a night; a blackout puts the lamps out until Dez has mended the generator (aim -25% beyond 6 tiles). Story is calm (threat weights x0.6), Brutal x1.5 threats and x0.7 boons.
+- **The morning assembly** (a card that does not pause the game): the night's number, who put down how many (the most), the wall's loss and repairs, who was lost with the others' words, what was learned, the day's events and the crew's mood.
+
+**Tuning.** As first built the round made the game easier by about three days and 12 points of wins (informed wins 8 of 16, default median 21). Ablations on the informed policy (16 seeds, wins of 16): storyteller off 10, skill growth off 8 (no change), traits off 5: the traits were worth about three wins. So the traits were cut to roughly half (Steady hands reload x0.85 and not 0.75, Tinkerer 1.2 and 1.1, Triage 1.2 and +0.05, Sharp-eyed 1.05, Tough 0.85, Optimist 1.3, Loyal +0.03, Quick learner 1.3), Shooting growth slowed from 60 to 100 kills a point, and morale was made to matter (the numbers above; the first draft was inert: nobody was ever Shaken).
+
+**What the harness shows now** (Standard, 30 days, 16 seeds unless noted):
+
+| Crew | Result |
+| --- | --- |
+| Gives no orders (8 seeds) | median day 11 |
+| The default policy | median day 17.5 |
+| The informed policy | 6 wins of 16 (37.5%), median day 28.5 |
+| Story, informed (8 seeds) | 7 wins of 8 |
+| Brutal, informed (8 seeds) | 0 wins of 8, median day 20 |
+
+A crew has about 0.6 to 0.9 breakdowns a game on Standard (none on Story), and 4 to 8% of the time somebody is Shaken or Breaking.
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.

@@ -21,7 +21,7 @@ extends RefCounted
 const SKILLS := ["Shooting", "Melee", "Building", "Medicine", "Leading"]
 ## What each kind of work is worth: the skill it feeds and how much of it makes a point.
 const KINDS := {
-	"kills": {"skill": "Shooting", "per": 60.0},
+	"kills": {"skill": "Shooting", "per": 100.0},
 	"melee": {"skill": "Melee", "per": 40.0},
 	"treated": {"skill": "Medicine", "per": 6.0},
 	"mended": {"skill": "Building", "per": 400.0},

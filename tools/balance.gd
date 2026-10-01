@@ -552,6 +552,10 @@ static func _row(sim) -> Dictionary:
 		wall_max += s.max_hp
 		if s.state == 3:
 			down += 1
+	var shaken := 0
+	for p in sim.people:
+		if not p.dead and (sim.morale.mood(p) == "Shaken" or sim.morale.mood(p) == "Breaking"):
+			shaken += 1
 	var walkers := 0
 	var runners := 0
 	var brutes := 0
@@ -580,6 +584,8 @@ static func _row(sim) -> Dictionary:
 		"breached": down,
 		"kills": sim.kills,
 		"tension": snappedf(sim.storyteller.tension, 0.1),
+		"shaken": shaken,
+		"breakdowns": sim.morale.breakdown_count,
 		"walkers": walkers,
 		"runners": runners,
 		"brutes": brutes,

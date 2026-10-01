@@ -36,3 +36,15 @@ static func run_to_hour(sim, hour: float) -> void:
 	while absf(fposmod(sim.hour - hour + 12.0, 24.0) - 12.0) > 0.01 and guard < 100000:
 		sim.update(1.0 / 30.0)
 		guard += 1
+
+
+## The number the trait `id` carries for `key` in assets/data/traits.json: its multiplier (or, for
+## `cure` and `bond`, the amount it adds). A test that quotes what a trait does asks here, so that a
+## retune of the data does not break it. Read from the file itself, not from the rules' copy of it.
+static func trait_effect(id: String, key: String) -> float:
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/traits.json"))
+	for t in parsed.get("traits", []):
+		if String(t.get("id", "")) == id:
+			return float(t.effects[key])
+	push_error("assets/data/traits.json has no trait '%s'" % id)
+	return NAN

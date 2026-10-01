@@ -571,10 +571,10 @@ func test_the_in_memory_word_fits_a_card_at_both_sizes() -> void:
 
 func test_the_new_alerts_wear_their_icons() -> void:
 	var ctx := Kit.build()
-	var cases := {"skill-ana": "star", "breakdown-marcus": "mood", "story": "bell", "story-fog": "bell", "dawn": "sun"}
+	var cases := {"skill-ana": "star", "breakdown-marcus": "mood", "story": "radio", "story-fog": "radio", "dawn": "sun"}
 	for id in cases:
 		eq(ctx.hud._alert_icon_name({"id": id, "level": "info"}), cases[id], id)
-	check(ctx.hud.icons.has("star") and ctx.hud.icons.has("mood"), "the two new pictures are loaded")
+	check(ctx.hud.icons.has("star") and ctx.hud.icons.has("mood") and ctx.hud.icons.has("radio"), "the three new pictures are loaded")
 	# and in the feed
 	ctx.sim.alert("skill-ana", "info", "Ana is a better healer now", "Medicine 5", null, 60.0)
 	ctx.sim.alert("breakdown-marcus", "danger", "Marcus is having a breakdown", "He cannot shoot until it passes", null, 60.0)

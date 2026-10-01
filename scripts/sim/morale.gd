@@ -26,7 +26,7 @@ const Supplies := preload("res://scripts/sim/supplies.gd")
 ## --- the value ---
 const START_VALUE := 70.0
 const BASE_TARGET := 60.0
-const DRIFT_PER_HOUR := 4.0
+const DRIFT_PER_HOUR := 2.5
 ## How often (seconds of rules time) the target is worked out and the value moves.
 const STEP := 0.5
 ## A shock that has faded to less than this is no longer listed.
@@ -54,8 +54,8 @@ const LEADER_MAX := 6.0
 ## The dead clawing at a wall within this many tiles weigh on a person by this much each, at
 ## most DEAD_MAX in all, times the `dead_morale` trait.
 const DEAD_TILES := 10.0
-const DEAD_EACH := -0.4
-const DEAD_MAX := -12.0
+const DEAD_EACH := -0.7
+const DEAD_MAX := -20.0
 ## After the bell, with none of the dead within this many tiles, the night is quiet: +QUIET.
 const QUIET_TILES := 15.0
 const QUIET := 2.0
@@ -63,24 +63,24 @@ const QUIET := 2.0
 ## --- shocks ---
 ## A kill lifts the one who made it, at most KILL_MAX points a night.
 const KILL := 0.2
-const KILL_MAX := 6.0
+const KILL_MAX := 10.0
 ## A wall section falling shakes everyone.
-const BREACH := -5.0
+const BREACH := -8.0
 ## A repair finished lifts the repairer.
 const REPAIRED := 2.0
 ## A friend (anyone bonded) downed, or dead or turned (times the `grief` trait).
-const FRIEND_DOWN := -10.0
-const FRIEND_LOST := -25.0
+const FRIEND_DOWN := -14.0
+const FRIEND_LOST := -30.0
 ## Anyone else dead or turned, for all the rest.
-const OTHER_LOST := -8.0
+const OTHER_LOST := -12.0
 ## Someone sent out through the gate: for friends, and for all the rest.
 const EXILE_FRIEND := -15.0
 const EXILE_OTHER := -6.0
 
 ## --- moods ---
-const INSPIRED_AT := 80.0
-const SHAKEN_BELOW := 40.0
-const BREAKING_BELOW := 20.0
+const INSPIRED_AT := 75.0
+const SHAKEN_BELOW := 50.0
+const BREAKING_BELOW := 30.0
 const PERF_INSPIRED := 1.05
 const PERF_SHAKEN := 0.9
 const PERF_BREAKING := 0.75
@@ -91,7 +91,7 @@ const AIM_SHAKEN := 0.9
 const AIM_BREAKING := 0.9
 
 ## --- breakdowns ---
-const BREAKDOWN_BELOW := 10.0
+const BREAKDOWN_BELOW := 15.0
 const BREAKDOWN_HOURS := 1.0
 const BREAKDOWN_AFTER := 35.0
 const BREAKDOWN_FROM_DAY := 4
@@ -109,6 +109,8 @@ var sim
 var levels := {}
 ## Person id -> sim.clock_min at which their breakdown ends.
 var until := {}
+## How many breakdowns this run has had (the harness reports it).
+var breakdown_count := 0
 ## Person id -> the shocks still listed: [{"label": String, "value": float}].
 var shocks := {}
 var _acc := 0.0
@@ -494,6 +496,7 @@ func _check_breakdown(p) -> void:
 
 
 func _start_breakdown(p) -> void:
+	breakdown_count += 1
 	until[p.id] = sim.clock_min + BREAKDOWN_HOURS * 60.0
 	# they drop everything and stand where they are
 	p.drafted = false

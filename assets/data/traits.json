@@ -3,63 +3,92 @@
     {
       "id": "steady",
       "name": "Steady",
-      "blurb": "Keeps a level head. The dead at the wall shake them half as much.",
-      "effects": {"dead_morale": 0.5}
+      "blurb": "Keeps a level head. The dead at the wall shake them 40% less.",
+      "effects": {
+        "dead_morale": 0.6
+      }
     },
     {
       "id": "nervous",
       "name": "Nervous",
       "blurb": "Jumpy. The dead at the wall shake them half again as much, and with six or more of them within ten tiles their aim is a tenth worse.",
-      "effects": {"dead_morale": 1.5},
-      "crowded": {"dead": 6, "tiles": 10, "effects": {"aim": 0.9}}
+      "effects": {
+        "dead_morale": 1.5
+      },
+      "crowded": {
+        "dead": 6,
+        "tiles": 10,
+        "effects": {
+          "aim": 0.9
+        }
+      }
     },
     {
       "id": "tinkerer",
       "name": "Tinkerer",
-      "blurb": "Good with their hands. Mends walls 30% faster and makes ammo 20% faster.",
-      "effects": {"repair": 1.3, "craft": 1.2}
+      "blurb": "Good with their hands. Mends walls 20% faster and makes ammo 10% faster.",
+      "effects": {
+        "repair": 1.2,
+        "craft": 1.1
+      }
     },
     {
       "id": "triage",
       "name": "Triage",
-      "blurb": "Knows what to do first. Bandages 30% faster, and a cure is 10% more likely to work.",
-      "effects": {"bandage": 1.3, "cure": 0.1}
+      "blurb": "Knows what to do first. Bandages 20% faster, and a cure is 5% more likely to work.",
+      "effects": {
+        "bandage": 1.2,
+        "cure": 0.05
+      }
     },
     {
       "id": "sharp_eyed",
       "name": "Sharp-eyed",
-      "blurb": "Picks a target and hits it. Shots land 8% more often.",
-      "effects": {"aim": 1.08}
+      "blurb": "Picks a target and hits it. Shots land 5% more often.",
+      "effects": {
+        "aim": 1.05
+      }
     },
     {
       "id": "steady_hands",
       "name": "Steady hands",
-      "blurb": "Reloads without fumbling, in three quarters of the time.",
-      "effects": {"reload": 0.75}
+      "blurb": "Reloads without fumbling, 15% faster.",
+      "effects": {
+        "reload": 0.85
+      }
     },
     {
       "id": "tough",
       "name": "Tough",
-      "blurb": "Shrugs it off. A claw or a bite is a quarter less likely to leave a wound.",
-      "effects": {"wound": 0.75}
+      "blurb": "Shrugs it off. A claw or a bite is 15% less likely to leave a wound.",
+      "effects": {
+        "wound": 0.85
+      }
     },
     {
       "id": "optimist",
       "name": "Optimist",
-      "blurb": "Bounces back. Their spirits recover half again as fast.",
-      "effects": {"morale_recover": 1.5}
+      "blurb": "Bounces back. Their spirits recover 30% faster.",
+      "effects": {
+        "morale_recover": 1.3
+      }
     },
     {
       "id": "loyal",
       "name": "Loyal",
-      "blurb": "Stands by their people. Aims 4% better beside a friend, and takes a loss half again as hard.",
-      "effects": {"grief": 1.5, "bond": 0.04}
+      "blurb": "Stands by their people. Aims 3% better beside a friend, and takes a loss half again as hard.",
+      "effects": {
+        "grief": 1.5,
+        "bond": 0.03
+      }
     },
     {
       "id": "quick_learner",
       "name": "Quick learner",
-      "blurb": "Picks things up. Skills grow half as fast again.",
-      "effects": {"xp": 1.5}
+      "blurb": "Picks things up. Skills grow 30% faster.",
+      "effects": {
+        "xp": 1.3
+      }
     }
   ]
 }

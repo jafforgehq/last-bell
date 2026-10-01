@@ -12,6 +12,7 @@ const Sim := preload("res://scripts/sim/sim.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
+const Skills := preload("res://scripts/sim/skills.gd")
 
 const PEOPLE := ["ruth", "dez", "ana", "marcus", "walt", "hector"]
 ## The contexts with at least four lines each, and the two that are written differently.
@@ -378,7 +379,7 @@ func test_a_better_skill_is_remarked_on_by_the_one_who_gained_it() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	for i in 60:
+	for i in ceili(float(Skills.KINDS.kills.per) - Skills.EPS):   # the kills that make a point
 		sim.skills.credit(ruth, "kills", 1.0)
 	var got := _said(sim, "skill_up")
 	eq(got.size(), 1, "one bark")

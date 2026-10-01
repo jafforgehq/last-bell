@@ -86,7 +86,7 @@ const ALERT_ICONS := [
 	["workshop-", "ammo"],
 	# round 4: a skill went up (a star), someone broke down (a face), the radio hour and the
 	# storyteller's cards (the bell: someone is calling), the dawn assembly (the sun)
-	["skill-", "star"], ["breakdown-", "mood"], ["story", "bell"], ["story-", "bell"], ["dawn", "sun"],
+	["skill-", "star"], ["breakdown-", "mood"], ["story", "radio"], ["story-", "radio"], ["dawn", "sun"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
 ## bell, auto-repair the wall (the hammer is Repair's own, and in the small size, where only the
@@ -97,7 +97,7 @@ const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
 ## Icons the HUD adds to the baked ones (assets/data/map.json): white on clear, 64 px, like the rest
 ## (tools/make_menu_icon.py draws the menu's; tools/make_people_icons.py the star, a skill that went
 ## up, and the face, someone who is Shaken or Breaking).
-const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png"}
+const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
@@ -1833,6 +1833,11 @@ func _someone_free_to_work() -> bool:
 ## The medicine treating `p` takes: a bandage first if they need one, else the cure.
 func _meds_needed(p) -> float:
 	var bandage: bool = (p.downed and not p.stabilised) or p.bleeding > 0.0
+	if not bandage and p.infected_at < 0.0:
+		# a passing fever (a radio card's) takes one medicine, not the two of a cure
+		var story = sim_ref.get("storyteller")
+		if story != null and story.has_method("is_sick") and story.is_sick(p):
+			return float(story.SICK_MEDS)
 	return float(sim_ref.medical.BANDAGE_MEDS if bandage else sim_ref.medical.CURE_MEDS)
 
 

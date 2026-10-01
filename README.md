@@ -36,6 +36,8 @@ A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, mo
 - **Fields of fire (V).** The shooters stand at their night posts, and a wall section is only defended if their guns reach it. The view shows each section's cover; people on the walkways and towers can be scratched far less often than people on the ground.
 - **The alarm (L).** Select a wall section and set the alarm: it costs 3 scrap, rings for three game hours, and draws the dead already on their way to that section, where the guns are. One alarm at a time; not on the school doors.
 - **Standing orders (B).** A person with auto-repair mends the most worn wall section by day without being told, while the stock has 5 scrap or more. Dez and Hector start with it on. A repair mends 5 points a second plus the person's Building skill.
+- **People.** Each survivor has two traits (Steady, Nervous, Tinkerer, Triage, Sharp-eyed, Steady hands, Tough, Optimist, Loyal, Quick learner), bonds with some of the others (family, mentor, friend), a mood and skills that grow with use. The person panel shows all of it; the mood's tooltip lists every reason with its sign. Mood runs from Inspired through Steady and Shaken to Breaking (a shaken person works and aims a little worse); someone who breaks down stops shooting and cannot be ordered for an hour (from day 4, not on Story). A loss hurts the ones who knew them most. Shooting, Melee, Medicine and Building each gain a point with enough use, at most three over where they started. People speak up when something happens (the bell, a wound, a friend down) and the others say a few words when one is lost.
+- **The radio hour.** At noon Ruth (or whoever leads, if she is gone) has news on the radio: about two days in three there is a card (never on the first day or the last). Fifteen cards: heavy rain, fog, a blackout that Dez must mend, a horde warning, stragglers at the wall by day, a fever, supplies falling from the sky, a stranger at the gate, a cry for help, a trade offer, an argument... A card with a choice waits for you and states its risk plainly; if nobody answers within two game hours its default is taken. A hidden tension leans the draw: after a bad stretch the radio is kinder. The morning after each night an assembly card says how many were put down and by whom, what the wall lost and gained, who was lost (and what the others said), what was learned and how the crew is.
 - **Orientation Day.** A guided first run (about ten minutes, a Story game that cannot be lost): sixteen short steps teach selecting and moving, posts on the decks, repairs, the stores, a scavenging trip, the bell, shooting, the fields-of-fire view and the alarm, wounds and fever, saving and making ammo. Offered on the first launch; replay it from the title screen. After that a few one-line tips show once each in real runs (first dusk, low stores, the first wound, the first runner and brute); switch them off in Settings.
 - **Menus and settings.** The title screen offers Continue (the newest save), New game (difficulty and seed), Orientation Day, Load, Settings and Credits; **Esc** with nothing selected opens the pause menu, and so does the menu button next to the sound button. Settings keep four volumes (effects, ambience, interface, master), the interface size, hints, reduced motion and fullscreen in `user://prefs.cfg`.
 - **The goal.** Hold thirty nights. Night 30 is the Big Night: more than twice the usual number of the dead, a third of them runners and brutes, coming from everywhere. At the dawn that starts day 31 a convoy is on the road and the run is won.
@@ -67,6 +69,7 @@ A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, mo
 - `scripts/ui/shell.gd` and its siblings (`title_menu.gd`, `pause_menu.gd`, `settings_menu.gd`, `new_game_menu.gd`, `load_menu.gd`, `credits.gd`): the title screen and the menus. `scripts/prefs.gd` keeps the settings in `user://prefs.cfg`.
 - `scripts/ui/coach.gd`, `scripts/sim/orientation.gd`, `assets/data/tutorial.json`, `assets/data/hints.json`: Orientation Day (a scripted scenario and the coach overlay) and the one-line tips.
 - `scripts/sim/workshop.gd`: scrap into ammo at the worktable.
+- `scripts/sim/{skills,traits,bonds,morale,barks}.gd` (data in `assets/data/{traits,barks}.json`): the people. `scripts/sim/storyteller.gd` and `assets/data/events.json`: the radio hour, the cards and the morning assembly; `scripts/ui/{radio_card,dawn_card,story_ui}.gd` show them.
 - `scripts/audio/sound.gd`: one-shot sounds and the ambience loops.
 
 ## Art and sound
@@ -126,6 +129,10 @@ given moment without touching the game:
 | `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
 | `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours) |
 | `--tutorial[=N]` | Start Orientation Day (at step N) |
+| `--card=id` | Show a radio card (see `assets/data/events.json`) |
+| `--weather=fog` | Start with fog (or `rain`, `clear`) |
+| `--blackout` | Start in a blackout |
+| `--dawn` | Show the morning assembly |
 | `--wall=N` | Select wall section N |
 | `--fields` | Start with the fields-of-fire view on |
 | `--lure=N` | Set the alarm on wall section N (gives scrap if needed) |
@@ -163,7 +170,7 @@ time in worker processes, `--policy=none` gives no orders, `--policy=keep` hides
 crew in the school gym from the bell to dawn (the check that hiding does not beat
 defending), `--policy=informed` plays the default policy and also reads the plan:
 it stands the shooters where their guns cover the thinnest section and sets the alarm
-(the check that knowing the night pays), `--sites=path` reads the scavenging sites from another file (to try a site before it is in the game), `--verbose` lists what the policy did and who was lost; see the top of
+(the check that knowing the night pays), `--sites=path` reads the scavenging sites from another file (to try a site before it is in the game), `--nostory` plays with the storyteller off (to see what the radio changes), `--verbose` lists what the policy did and who was lost; see the top of
 the file for the rest. A game
 whose colony collapses is slow to play (the walkers inside the yard re-path
 every second).

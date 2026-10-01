@@ -11,6 +11,8 @@ const FxNull := preload("res://scripts/sim/fx_null.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const Workshop := preload("res://scripts/sim/workshop.gd")
+const Morale := preload("res://scripts/sim/morale.gd")
+const Skills := preload("res://scripts/sim/skills.gd")
 
 ## The keys the rules ask for (see traits.gd), and the two that are added, not multiplied.
 const KEYS := ["aim", "reload", "repair", "craft", "bandage", "wound", "dead_morale", "morale_recover", "grief", "xp", "cure", "bond"]
@@ -143,17 +145,24 @@ func test_effects_multiply_and_add_up() -> void:
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
 	sim.traits.give(dez, ["tinkerer"])
-	near(sim.traits.mult(dez, "repair"), 1.3, 1e-9, "Tinkerer: repair 1.3")
-	near(sim.traits.mult(dez, "craft"), 1.2, 1e-9, "Tinkerer: craft 1.2")
+	var repair := Helpers.trait_effect("tinkerer", "repair")
+	var craft := Helpers.trait_effect("tinkerer", "craft")
+	near(sim.traits.mult(dez, "repair"), repair, 1e-9, "Tinkerer: repair %s" % repair)
+	near(sim.traits.mult(dez, "craft"), craft, 1e-9, "Tinkerer: craft %s" % craft)
 	eq(sim.traits.mult(dez, "aim"), 1.0, "and nothing else")
 	sim.traits.give(dez, ["steady", "nervous"])
-	near(sim.traits.mult(dez, "dead_morale"), 0.75, 1e-9, "two traits on one key multiply: 0.5 x 1.5")
+	var calm := Helpers.trait_effect("steady", "dead_morale")
+	var jumpy := Helpers.trait_effect("nervous", "dead_morale")
+	near(sim.traits.mult(dez, "dead_morale"), calm * jumpy, 1e-9, "two traits on one key multiply: %s x %s" % [calm, jumpy])
 	sim.traits.give(dez, ["triage", "loyal"])
-	near(sim.traits.add(dez, "cure"), 0.1, 1e-9, "Triage adds 0.1 to the cure")
-	near(sim.traits.add(dez, "bond"), 0.04, 1e-9, "Loyal adds 0.04 to the bond")
+	var cure := Helpers.trait_effect("triage", "cure")
+	var bond := Helpers.trait_effect("loyal", "bond")
+	near(sim.traits.add(dez, "cure"), cure, 1e-9, "Triage adds %s to the cure" % cure)
+	near(sim.traits.add(dez, "bond"), bond, 1e-9, "Loyal adds %s to the bond" % bond)
 	sim.traits.give(dez, ["tough", "tough", "nonsense"])
 	eq(_ids(sim.traits.of(dez)), ["tough"], "a trait is had once, and one that does not exist is not had")
-	near(sim.traits.mult(dez, "wound"), 0.75, 1e-9, "Tough: wound 0.75")
+	var wound := Helpers.trait_effect("tough", "wound")
+	near(sim.traits.mult(dez, "wound"), wound, 1e-9, "Tough: wound %s" % wound)
 	eq(sim.traits.mult(null, "aim"), 1.0, "nobody has no effect")
 	g.world.free()
 
@@ -191,16 +200,19 @@ func test_steady_and_nervous_scale_what_the_dead_at_the_wall_do_to_morale() -> v
 	ruth.y = 20.0
 	_clawing(sim, [1, 2, 3], 10)
 	sim.traits.give(ruth, [])
+	# (the reasons morale lists are rounded to a tenth of a point, hence the tolerances)
 	var plain := _dead_cost(sim, ruth)
-	near(plain, 4.0, 0.001, "ten of the dead cost 0.4 each")
+	near(plain, minf(-Morale.DEAD_MAX, -Morale.DEAD_EACH * 10.0), 0.06, "ten of the dead cost %s each" % -Morale.DEAD_EACH)
 	sim.traits.give(ruth, ["steady"])
-	near(_dead_cost(sim, ruth), plain * 0.5, 0.001, "Steady: half")
+	var calm := Helpers.trait_effect("steady", "dead_morale")
+	near(_dead_cost(sim, ruth), plain * calm, 0.1, "Steady: %s of it" % calm)
 	var tagged := false
 	for line in sim.morale.explain(ruth):
 		tagged = tagged or String(line.label) == "The dead at the wall (Steady)"
 	check(tagged, "and the line says which trait: %s" % str(sim.morale.explain(ruth)))
 	sim.traits.give(ruth, ["nervous"])
-	near(_dead_cost(sim, ruth), plain * 1.5, 0.001, "Nervous: half again")
+	var jumpy := Helpers.trait_effect("nervous", "dead_morale")
+	near(_dead_cost(sim, ruth), plain * jumpy, 0.1, "Nervous: %s times it" % jumpy)
 	g.world.free()
 
 
@@ -245,7 +257,8 @@ func test_tinkerer_mends_walls_faster() -> void:
 		rates.append(seg.hp - hp0)
 		g.world.free()
 	check(rates[0] > 30.0, "Dez mends a good deal in three seconds: %.1f" % rates[0])
-	near(rates[1] / rates[0], 1.3, 0.01, "a Tinkerer mends 30 percent faster: %.1f against %.1f" % [rates[1], rates[0]])
+	var faster := Helpers.trait_effect("tinkerer", "repair")
+	near(rates[1] / rates[0], faster, 0.01, "a Tinkerer mends %d percent faster: %.1f against %.1f" % [roundi((faster - 1.0) * 100.0), rates[1], rates[0]])
 
 
 func test_tinkerer_makes_ammo_faster() -> void:
@@ -255,7 +268,9 @@ func test_tinkerer_makes_ammo_faster() -> void:
 	sim.traits.give(dez, [])
 	var plain: float = sim.workshop.scrap_per_hour(dez)
 	sim.traits.give(dez, ["tinkerer"])
-	near(sim.workshop.scrap_per_hour(dez), plain * 1.2, 1e-9, "20% more scrap an hour")
+	var faster := Helpers.trait_effect("tinkerer", "craft")
+	var more := roundi((faster - 1.0) * 100.0)
+	near(sim.workshop.scrap_per_hour(dez), plain * faster, 1e-9, "%d%% more scrap an hour" % more)
 	# and really: an hour at the bench
 	var used: Array = []
 	for with_trait in [false, true]:
@@ -271,7 +286,7 @@ func test_tinkerer_makes_ammo_faster() -> void:
 		Helpers.run(s2, 20.0)
 		used.append(60.0 - float(s2.stock.scrap))
 		h.world.free()
-	near(used[1] / used[0], 1.2, 0.03, "an hour at the bench uses 20 percent more scrap: %.2f against %.2f" % [used[1], used[0]])
+	near(used[1] / used[0], faster, 0.03, "an hour at the bench uses %d percent more scrap: %.2f against %.2f" % [more, used[1], used[0]])
 	g.world.free()
 
 
@@ -293,7 +308,8 @@ func test_triage_bandages_faster() -> void:
 		worked.append(float(sim.medical.jobs[0].work))
 		g.world.free()
 	near(worked[0], 3.0, 0.001, "a second of work is three game minutes")
-	near(worked[1] / worked[0], 1.3, 0.001, "a Triage nurse gets through a bandage 30% faster")
+	var faster := Helpers.trait_effect("triage", "bandage")
+	near(worked[1] / worked[0], faster, 0.001, "a Triage nurse gets through a bandage %d%% faster" % roundi((faster - 1.0) * 100.0))
 
 
 func test_triage_makes_a_cure_more_likely() -> void:
@@ -304,12 +320,14 @@ func test_triage_makes_a_cure_more_likely() -> void:
 	var plain: float = sim.medical.cure_chance(walt)
 	near(plain, Medical.CURE_BASE + 0.2, 1e-9, "Walt, Medicine 2")
 	sim.traits.give(walt, ["triage"])
-	near(sim.medical.cure_chance(walt), plain + 0.1, 1e-9, "Triage adds ten points")
+	var cure := Helpers.trait_effect("triage", "cure")
+	var points := roundi(cure * 100.0)
+	near(sim.medical.cure_chance(walt), plain + cure, 1e-9, "Triage adds %d points" % points)
 	var ana = _person(sim, "Ana")
 	sim.traits.give(ana, [])
-	near(sim.medical.cure_chance(ana), Medical.CURE_MAX, 1e-9, "Ana's Medicine alone is capped at 90%")
+	near(sim.medical.cure_chance(ana), Medical.CURE_MAX, 1e-9, "Ana's Medicine alone is capped at %d%%" % roundi(Medical.CURE_MAX * 100.0))
 	sim.traits.give(ana, ["triage"])
-	near(sim.medical.cure_chance(ana), Medical.CURE_MAX + 0.1, 1e-9, "and the trait is on top of the cap")
+	near(sim.medical.cure_chance(ana), minf(1.0, Medical.CURE_MAX + cure), 1e-9, "and the trait is on top of the cap (a chance is at most 1)")
 	g.world.free()
 
 
@@ -339,14 +357,16 @@ func test_sharp_eyed_hits_more_often() -> void:
 	g.sim.traits.give(walt, [])
 	eq(g.sim.aim_factor(walt), 1.0, "no trait, no change")
 	g.sim.traits.give(walt, ["sharp_eyed"])
-	near(g.sim.aim_factor(walt), 1.08, 1e-9, "Sharp-eyed: 8% better aim")
+	var better := Helpers.trait_effect("sharp_eyed", "aim")
+	var percent := roundi((better - 1.0) * 100.0)
+	near(g.sim.aim_factor(walt), better, 1e-9, "Sharp-eyed: %d%% better aim" % percent)
 	g.world.free()
 	# really: Ana's pistol hits about half the time, so the difference shows
 	var shots := 6000
 	var plain := _hits("Ana", [], shots, 3)
 	var sharp := _hits("Ana", ["sharp_eyed"], shots, 3)
 	var gain := float(sharp) / float(plain)
-	check(gain > 1.03 and gain < 1.13, "8 percent more of the shots hit: %d against %d (x%.3f)" % [sharp, plain, gain])
+	check(absf(gain - better) < 0.03, "%d percent more of the shots hit: %d against %d (x%.3f, wanted x%.3f)" % [percent, sharp, plain, gain, better])
 
 
 func test_steady_hands_reload_faster() -> void:
@@ -365,7 +385,8 @@ func test_steady_hands_reload_faster() -> void:
 		times.append(walt.reloading)
 		g.world.free()
 	near(times[0], 2.4, 1e-9, "an M1 takes 2.4 seconds to reload")
-	near(times[1], 1.8, 1e-9, "Steady hands: three quarters of that")
+	var quicker := Helpers.trait_effect("steady_hands", "reload")
+	near(times[1], times[0] * quicker, 1e-9, "Steady hands: %s of that" % quicker)
 
 
 func _scratches(id: String, traits: Array, claws: int) -> int:
@@ -390,7 +411,8 @@ func test_tough_is_scratched_less_by_claws() -> void:
 	var plain := _scratches("Dez", [], 4000)
 	var tough := _scratches("Dez", ["tough"], 4000)
 	check(plain > 300, "without it about 11 percent of claws scratch: %d of 4000" % plain)
-	near(float(tough) / float(plain), 0.75, 0.08, "Tough: a quarter fewer wounds: %d against %d" % [tough, plain])
+	var factor := Helpers.trait_effect("tough", "wound")
+	near(float(tough) / float(plain), factor, 0.08, "Tough: %d percent fewer wounds: %d against %d" % [roundi((1.0 - factor) * 100.0), tough, plain])
 	check(tough < plain, "and fewer, not just about as many")
 
 
@@ -411,7 +433,8 @@ func test_tough_is_bitten_less_often_too() -> void:
 		counts.append(wounds)
 		g.world.free()
 	eq(counts[0], 2000, "a bite always wounds a person with no trait")
-	near(float(counts[1]) / 2000.0, 0.75, 0.04, "Tough: three bites in four wound: %d of 2000" % counts[1])
+	var factor := Helpers.trait_effect("tough", "wound")
+	near(float(counts[1]) / 2000.0, factor, 0.04, "Tough: %d bites in 100 wound: %d of 2000" % [roundi(factor * 100.0), counts[1]])
 
 
 func test_optimist_recovers_faster() -> void:
@@ -426,8 +449,9 @@ func test_optimist_recovers_faster() -> void:
 		Helpers.run(sim, 20.0)   # one game hour
 		gains.append(sim.morale.value(ana) - before)
 		g.world.free()
-	near(gains[0], 4.0, 0.2, "most people recover four points an hour: %.2f" % gains[0])
-	near(gains[1] / gains[0], 1.5, 0.05, "an Optimist half as fast again: %.2f" % gains[1])
+	near(gains[0], Morale.DRIFT_PER_HOUR, 0.2, "most people recover %s points an hour: %.2f" % [Morale.DRIFT_PER_HOUR, gains[0]])
+	var faster := Helpers.trait_effect("optimist", "morale_recover")
+	near(gains[1] / gains[0], faster, 0.05, "an Optimist recovers %s times as fast: %.2f" % [faster, gains[1]])
 
 
 func test_loyal_takes_a_friends_death_harder() -> void:
@@ -442,8 +466,9 @@ func test_loyal_takes_a_friends_death_harder() -> void:
 		sim.medical.kill(marcus, "bled out")
 		drops.append(before - sim.morale.value(ruth))
 		g.world.free()
-	near(drops[0], 25.0, 0.01, "a friend's death is 25 points")
-	near(drops[1], 37.5, 0.01, "to a Loyal person half as much again")
+	near(drops[0], -Morale.FRIEND_LOST, 0.01, "a friend's death is %s points" % -Morale.FRIEND_LOST)
+	var harder := Helpers.trait_effect("loyal", "grief")
+	near(drops[1], -Morale.FRIEND_LOST * harder, 0.01, "to a Loyal person %s times as much" % harder)
 
 
 func test_loyal_aims_better_beside_a_friend() -> void:
@@ -456,22 +481,28 @@ func test_loyal_aims_better_beside_a_friend() -> void:
 	sim.traits.give(ruth, [])
 	near(sim.aim_factor(ruth), 1.08, 1e-9, "beside a friend: 8% better")
 	sim.traits.give(ruth, ["loyal"])
-	near(sim.aim_factor(ruth), 1.12, 1e-9, "Loyal: 4 more points")
+	var bond := Helpers.trait_effect("loyal", "bond")
+	near(sim.aim_factor(ruth), 1.08 + bond, 1e-9, "Loyal: %d more points" % roundi(bond * 100.0))
 	marcus.x = ruth.x + 30.0
 	near(sim.aim_factor(ruth), 1.0, 1e-9, "and nothing when the friend is far")
 	g.world.free()
 
 
-func test_a_quick_learner_learns_half_as_fast_again() -> void:
+func test_a_quick_learner_learns_faster_by_the_traits_factor() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var marcus = _person(sim, "Marcus")
-	near(sim.traits.mult(marcus, "xp"), 1.5, 1e-9, "Quick learner: xp 1.5")
+	var xp := Helpers.trait_effect("quick_learner", "xp")
+	near(sim.traits.mult(marcus, "xp"), xp, 1e-9, "Quick learner: xp %s" % xp)
 	sim.traits.give(marcus, [])
 	eq(sim.traits.mult(marcus, "xp"), 1.0, "without it: 1")
-	for i in 40:
+	# the kills it takes for a point: anyone else's (the rules' table) and a quick learner's
+	var per := ceili(float(Skills.KINDS.kills.per) - Skills.EPS)
+	var quick := ceili(float(Skills.KINDS.kills.per) / xp - Skills.EPS)
+	check(quick < per, "a quick learner needs fewer kills than the %d it takes anyone else" % per)
+	for i in quick:
 		sim.skills.credit(marcus, "kills", 1.0)
-	eq(marcus.skills.Shooting, 8, "forty kills are not a point without it")
+	eq(marcus.skills.Shooting, 8, "%d kills are not a point without it" % quick)
 	g.world.free()
 
 

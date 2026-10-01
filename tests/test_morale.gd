@@ -1,12 +1,15 @@
 extends "res://tests/case.gd"
 ## Morale (scripts/sim/morale.gd): a value 0 to 100 for each person (70 to start) that
-## drifts 4 points an hour toward 60 plus the continuous modifiers (fed, hungry, bleeding,
-## near a friend, the leader, the dead at the wall, a quiet night); shocks (a kill, a
-## breach, a friend down or dead...) move it at once and then drift away. Under 40 a
-## person is Shaken, under 20 Breaking, under 10 (from day 4, not on Story) they break
-## down for an hour. `enabled = false` switches the whole thing off.
+## drifts DRIFT_PER_HOUR points an hour toward 60 plus the continuous modifiers (fed, hungry,
+## bleeding, near a friend, the leader, the dead at the wall, a quiet night); shocks (a kill, a
+## breach, a friend down or dead...) move it at once and then drift away. Under SHAKEN_BELOW a
+## person is Shaken, under BREAKING_BELOW Breaking, under BREAKDOWN_BELOW (from day 4, not on
+## Story) they break down for an hour. `enabled = false` switches the whole thing off. The
+## numbers the tests quote are read from the module (Morale.DRIFT_PER_HOUR and the rest), so a
+## retune does not break them.
 
 const Helpers := preload("res://tests/helpers.gd")
+const Morale := preload("res://scripts/sim/morale.gd")
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
@@ -68,6 +71,23 @@ func _has(sim, p, label: String) -> bool:
 func _val(sim, p, label: String) -> float:
 	var e = _line(sim, p, label)
 	return float(e.value) if e != null else 0.0
+
+
+## A value well inside each mood, whatever the thresholds are: the middle of its band.
+func _inspired_value() -> float:
+	return (Morale.INSPIRED_AT + 100.0) / 2.0
+
+
+func _steady_value() -> float:
+	return (Morale.SHAKEN_BELOW + Morale.INSPIRED_AT) / 2.0
+
+
+func _shaken_value() -> float:
+	return (Morale.BREAKING_BELOW + Morale.SHAKEN_BELOW) / 2.0
+
+
+func _breaking_value() -> float:
+	return Morale.BREAKING_BELOW / 2.0
 
 
 ## `n` of the dead clawing at the wall sections `segs`, each in a real place at the wall.
@@ -217,22 +237,25 @@ func test_the_dead_clawing_at_the_wall_weigh_on_those_within_ten_tiles() -> void
 	ruth.y = 20.0
 	sim.traits.give(ruth, [])
 	_clawing(sim, [1, 2, 3], 10)
-	near(_val(sim, ruth, "The dead at the wall"), -4.0, 0.001, "ten of them: 0.4 each")
+	# (the reasons morale lists are rounded to a tenth of a point, hence the tolerances)
+	var ten := maxf(Morale.DEAD_MAX, Morale.DEAD_EACH * 10.0)
+	near(_val(sim, ruth, "The dead at the wall"), ten, 0.06, "ten of them: %s each" % -Morale.DEAD_EACH)
 	# those not at the wall, and those far off, do not count
 	for i in 5:
 		sim.spawn(39.0 + float(i), 25.0, "approach")
 	for i in 5:
 		sim.spawn(39.0, 40.0 + float(i) * 0.1, "attack").slot = null
-	near(_val(sim, ruth, "The dead at the wall"), -4.0, 0.001, "walkers on their way, or ten tiles off, add nothing")
+	near(_val(sim, ruth, "The dead at the wall"), ten, 0.06, "walkers on their way, or ten tiles off, add nothing")
 	var more: Array = _clawing(sim, [0, 4, 5], 40)
 	for z in more:
 		z.x = 39.0
 		z.y = 18.0
-	check(more.size() > 20, "enough walkers for the cap")
-	near(_val(sim, ruth, "The dead at the wall"), -12.0, 0.001, "at most 12")
+	var for_the_cap := ceili(Morale.DEAD_MAX / Morale.DEAD_EACH)
+	check(10 + more.size() > for_the_cap, "enough walkers for the cap, and one to spare: %d of the %d it takes" % [10 + more.size(), for_the_cap])
+	near(_val(sim, ruth, "The dead at the wall"), Morale.DEAD_MAX, 0.06, "at most %s" % -Morale.DEAD_MAX)
 	var one = sim.zombies[0]
 	one.state = "dying"
-	near(_val(sim, ruth, "The dead at the wall"), -12.0, 0.001, "still the cap with one less")
+	near(_val(sim, ruth, "The dead at the wall"), Morale.DEAD_MAX, 0.06, "still the cap with one less")
 	g.world.free()
 
 
@@ -254,19 +277,20 @@ func test_a_quiet_night_lifts_morale_by_two() -> void:
 
 # ----------------------------------------------------------------------- drift --
 
-func test_the_value_drifts_four_points_an_hour_toward_the_target() -> void:
+func test_the_value_drifts_toward_the_target_at_the_drift_rate_an_hour() -> void:
 	var g := _alone()
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
+	var rate: float = Morale.DRIFT_PER_HOUR
 	sim.morale.set_value(dez, 40.0)
 	Helpers.run(sim, 20.0)   # one game hour
-	near(sim.morale.value(dez), 44.0, 0.1, "up four in an hour")
+	near(sim.morale.value(dez), 40.0 + rate, 0.1, "up %s in an hour" % rate)
 	Helpers.run(sim, 10.0)
-	near(sim.morale.value(dez), 46.0, 0.1, "and two in half an hour")
+	near(sim.morale.value(dez), 40.0 + rate * 1.5, 0.1, "and half as much again in half an hour more")
 	sim.morale.set_value(dez, 100.0)
 	var before: float = sim.morale.value(dez)
 	Helpers.run(sim, 20.0)
-	near(before - sim.morale.value(dez), 4.0, 0.15, "and down four from above")
+	near(before - sim.morale.value(dez), rate, 0.15, "and down %s from above" % rate)
 	g.world.free()
 
 
@@ -327,12 +351,14 @@ func test_a_shock_fades_out_of_the_list_as_the_value_comes_back() -> void:
 	var g := _alone()
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
-	sim.morale.shock(dez, -20.0, "A bad moment")
+	# a shock the size of five hours of drift: it fades by the drift rate, so it is gone in five
+	var rate: float = Morale.DRIFT_PER_HOUR
+	sim.morale.shock(dez, -5.0 * rate, "A bad moment")
 	Helpers.run(sim, 20.0 * 2.0)   # two game hours
 	var e = _line(sim, dez, "A bad moment")
 	check(e != null, "still listed after two hours")
 	if e != null:
-		near(float(e.value), -12.0, 0.4, "eight of the twenty have gone: %.1f" % float(e.value))
+		near(float(e.value), -3.0 * rate, 0.4, "two hours' worth of the five have gone: %.1f" % float(e.value))
 	Helpers.run(sim, 20.0 * 4.0)
 	check(_line(sim, dez, "A bad moment") == null, "gone after six hours")
 	g.world.free()
@@ -358,23 +384,26 @@ func test_explain_is_biggest_first_with_signs() -> void:
 	g.world.free()
 
 
-func test_a_kill_is_a_small_lift_and_at_most_six_points_a_night() -> void:
+func test_a_kill_is_a_small_lift_but_only_up_to_a_cap_a_night() -> void:
 	var g := _alone(22.0)
 	var sim = g.sim
 	var marcus = _person(sim, "Marcus")
+	# the kills that still count in a night, and what they add up to
+	var counted := int(floorf(Morale.KILL_MAX / Morale.KILL + 1.0e-6))
+	var cap: float = float(counted) * Morale.KILL
 	sim.morale.set_value(marcus, 30.0)
 	var z = sim.spawn(marcus.x + 8.0, marcus.y, "wander")
 	sim._hurt_zombie(z, 1000.0, 0.0, marcus)
-	near(sim.morale.value(marcus), 30.2, 0.0001, "a kill: +0.2")
+	near(sim.morale.value(marcus), 30.0 + Morale.KILL, 0.0001, "a kill: +%s" % Morale.KILL)
 	check(_has(sim, marcus, "Put the dead down"), "it is listed")
-	for i in 50:
+	for i in counted + 20:
 		var w = sim.spawn(marcus.x + 8.0, marcus.y, "wander")
 		sim._hurt_zombie(w, 1000.0, 0.0, marcus)
-	near(sim.morale.value(marcus), 36.0, 0.0001, "after 51 kills: only +6 for the night")
+	near(sim.morale.value(marcus), 30.0 + cap, 0.0001, "after %d kills: only +%s for the night" % [counted + 21, cap])
 	sim.skills.on_bell()
 	var more = sim.spawn(marcus.x + 8.0, marcus.y, "wander")
 	sim._hurt_zombie(more, 1000.0, 0.0, marcus)
-	near(sim.morale.value(marcus), 36.2, 0.0001, "the next night counts again")
+	near(sim.morale.value(marcus), 30.0 + cap + Morale.KILL, 0.0001, "the next night counts again")
 	var ruth = _person(sim, "Ruth")
 	near(sim.morale.value(ruth), 70.0, 0.0001, "and only the one who shot is lifted")
 	g.world.free()
@@ -384,11 +413,12 @@ func test_a_breach_shakes_everyone() -> void:
 	var g := _alone()
 	var sim = g.sim
 	sim._damage_segment(sim.segments[4], 1000.0)
+	var shaken: float = Morale.START_VALUE + Morale.BREACH
 	for p in sim.people:
-		near(sim.morale.value(p), 65.0, 0.0001, "%s: -5" % p.first)
+		near(sim.morale.value(p), shaken, 0.0001, "%s: %s" % [p.first, Morale.BREACH])
 		check(_has(sim, p, "The wall was breached"), "%s: listed" % p.first)
 	sim._damage_segment(sim.segments[4], 1000.0)
-	near(sim.morale.value(_person(sim, "Dez")), 65.0, 0.0001, "a section that is already down is not a new breach")
+	near(sim.morale.value(_person(sim, "Dez")), shaken, 0.0001, "a section that is already down is not a new breach")
 	g.world.free()
 
 
@@ -431,12 +461,13 @@ func test_a_friend_down_dead_turned_or_gone_shakes_those_who_knew_them() -> void
 	var ruth = _person(sim, "Ruth")
 	hector.hp = 0.0
 	sim.medical.on_downed(hector, "bite")
-	near(sim.morale.value(dez), 60.0, 0.001, "Dez, his friend, is down ten")
-	near(sim.morale.value(ruth), 70.0, 0.001, "Ruth is not")
+	var down: float = Morale.START_VALUE + Morale.FRIEND_DOWN
+	near(sim.morale.value(dez), down, 0.001, "Dez, his friend, is down %s" % -Morale.FRIEND_DOWN)
+	near(sim.morale.value(ruth), Morale.START_VALUE, 0.001, "Ruth is not")
 	check(_has(sim, dez, "Hector is down"), "and it says why")
 	sim.medical.kill(hector, "bled out")
-	near(sim.morale.value(dez), 60.0 - 25.0 * sim.traits.mult(dez, "grief"), 0.001, "then he dies: 25 more")
-	near(sim.morale.value(ruth), 62.0, 0.001, "and Ruth, who was not close, loses 8")
+	near(sim.morale.value(dez), down + Morale.FRIEND_LOST * sim.traits.mult(dez, "grief"), 0.001, "then he dies: %s more" % -Morale.FRIEND_LOST)
+	near(sim.morale.value(ruth), Morale.START_VALUE + Morale.OTHER_LOST, 0.001, "and Ruth, who was not close, loses %s" % -Morale.OTHER_LOST)
 	check(_has(sim, dez, "Hector died"), "the line says so")
 	g.world.free()
 
@@ -447,8 +478,8 @@ func test_the_mood_words_and_what_they_do_to_work() -> void:
 	var g := _alone()
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
-	# value, word, work, aim
-	var cases := [[100.0, "Inspired", 1.05, 1.05], [80.0, "Inspired", 1.05, 1.05], [79.9, "Steady", 1.0, 1.0], [40.0, "Steady", 1.0, 1.0], [39.9, "Shaken", 0.9, 0.9], [20.0, "Shaken", 0.9, 0.9], [19.9, "Breaking", 0.75, 0.9], [10.0, "Breaking", 0.75, 0.9], [0.0, "Breaking", 0.75, 0.9]]
+	# value, word, work, aim: each word starts at its threshold and holds just under the next one
+	var cases := [[100.0, "Inspired", 1.05, 1.05], [Morale.INSPIRED_AT, "Inspired", 1.05, 1.05], [Morale.INSPIRED_AT - 0.1, "Steady", 1.0, 1.0], [Morale.SHAKEN_BELOW, "Steady", 1.0, 1.0], [Morale.SHAKEN_BELOW - 0.1, "Shaken", 0.9, 0.9], [Morale.BREAKING_BELOW, "Shaken", 0.9, 0.9], [Morale.BREAKING_BELOW - 0.1, "Breaking", 0.75, 0.9], [Morale.BREAKDOWN_BELOW, "Breaking", 0.75, 0.9], [0.0, "Breaking", 0.75, 0.9]]
 	for c in cases:
 		sim.morale.set_value(dez, c[0])
 		eq(sim.morale.mood(dez), c[1], "%.1f is %s" % [c[0], c[1]])
@@ -460,7 +491,7 @@ func test_the_mood_words_and_what_they_do_to_work() -> void:
 
 func test_a_shaken_person_hits_less_often() -> void:
 	var hits: Array = []
-	for value in [70.0, 30.0]:
+	for value in [Morale.START_VALUE, _shaken_value()]:
 		var g := _alone(22.0, 5)
 		var sim = g.sim
 		sim.stock.ammo = 100000.0
@@ -485,19 +516,19 @@ func test_morale_goes_into_the_rules_perf() -> void:
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
 	near(sim.perf(dez), 1.0, 1e-9, "a steady, fed, whole person")
-	sim.morale.set_value(dez, 30.0)
+	sim.morale.set_value(dez, _shaken_value())
 	near(sim.perf(dez), 0.9, 1e-9, "shaken: 0.9")
 	dez.hunger_h = 20.0
 	near(sim.perf(dez), 0.9 * 0.8, 1e-9, "and hungry too: they multiply")
 	dez.hunger_h = 0.0
-	sim.morale.set_value(dez, 85.0)
+	sim.morale.set_value(dez, _inspired_value())
 	near(sim.perf(dez), 1.05, 1e-9, "inspired: 1.05")
 	g.world.free()
 
 
 func test_a_shaken_person_mends_more_slowly() -> void:
 	var mended: Array = []
-	for value in [70.0, 30.0]:
+	for value in [Morale.START_VALUE, _shaken_value()]:
 		var g := _alone(9.0)
 		var sim = g.sim
 		sim.stock.scrap = 100.0
@@ -520,18 +551,18 @@ func test_status_marks_show_while_shaken_breaking_or_broken() -> void:
 	var g := _alone()
 	var sim = g.sim
 	var dez = _person(sim, "Dez")
-	sim.morale.set_value(dez, 90.0)
+	sim.morale.set_value(dez, _inspired_value())
 	eq(sim.morale.status_of(dez), [], "inspired: no mark")
-	sim.morale.set_value(dez, 50.0)
+	sim.morale.set_value(dez, _steady_value())
 	eq(sim.morale.status_of(dez), [], "steady: no mark")
-	sim.morale.set_value(dez, 30.0)
+	sim.morale.set_value(dez, _shaken_value())
 	var marks: Array = sim.morale.status_of(dez)
 	eq(marks.size(), 1, "shaken: one mark")
 	if marks.size() == 1:
 		eq(marks[0].icon, "mood", "the mood icon")
 		check(String(marks[0].tip).begins_with("Shaken"), "its tip says Shaken: %s" % marks[0].tip)
 		check(marks[0].has("color"), "and has a colour")
-	sim.morale.set_value(dez, 15.0)
+	sim.morale.set_value(dez, _breaking_value())
 	marks = sim.morale.status_of(dez)
 	check(marks.size() == 1 and String(marks[0].tip).begins_with("Breaking"), "breaking: Breaking")
 	eq(sim.status_of(dez).filter(func(m): return m.icon == "mood").size(), 1, "and the rules' marks carry it")
@@ -545,14 +576,16 @@ func test_the_crews_mood_in_a_few_words() -> void:
 	var sim = g.sim
 	near(sim.morale.crew_value(), 70.0, 0.0001, "the crew starts at 70")
 	eq(sim.morale.crew_mood(), "Steady", "steady")
+	var high := _inspired_value()
 	for p in sim.people:
-		sim.morale.set_value(p, 85.0)
+		sim.morale.set_value(p, high)
 	eq(sim.morale.crew_mood(), "Inspired", "everyone high: inspired")
 	sim.people[0].dead = true
 	sim.morale.set_value(sim.people[0], 0.0)
-	near(sim.morale.crew_value(), 85.0, 0.0001, "the dead do not count")
+	near(sim.morale.crew_value(), high, 0.0001, "the dead do not count")
+	var low := _shaken_value()
 	for p in sim.people:
-		sim.morale.set_value(p, 25.0)
+		sim.morale.set_value(p, low)
 	eq(sim.morale.crew_mood(), "Shaken", "everyone low: shaken")
 	sim.morale.enabled = false
 	eq(sim.morale.crew_mood(), "Steady", "and steady when it is off")
@@ -576,7 +609,7 @@ func _break(sim, p) -> void:
 	sim.morale.shock(p, -35.0, "Too much")
 
 
-func test_under_ten_a_person_has_a_breakdown_for_an_hour_and_then_sits_at_thirty_five() -> void:
+func test_under_the_breakdown_line_a_person_has_a_breakdown_for_an_hour_and_then_sits_at_thirty_five() -> void:
 	var g := _alone(22.0)
 	var sim = g.sim
 	sim.day = 5
@@ -695,7 +728,7 @@ func test_no_breakdowns_on_story_or_before_day_four() -> void:
 	_break(m.sim, w3)
 	m.sim.day = 4
 	Helpers.run(m.sim, 1.0)
-	check(m.sim.morale.breakdown(w3), "someone still under ten when day four begins breaks")
+	check(m.sim.morale.breakdown(w3), "someone still under the breakdown line when day four begins breaks")
 	m.world.free()
 
 

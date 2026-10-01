@@ -1,11 +1,13 @@
 extends "res://tests/case.gd"
 ## Skills grow with use (scripts/sim/skills.gd): each person has their own copy of the
-## roster's skills (`Person.skills`) and counters (`Person.stats`). Shooting +1 per 60
-## kills, Melee +1 per 40 melee kills, Medicine +1 per 6 treatments, Building +1 per 400
-## HP mended and +1 per 60 scrap made into ammo; at most 3 points over the start and never
-## past 10; Leading does not grow; a quick learner is 1.5 times faster.
+## roster's skills (`Person.skills`) and counters (`Person.stats`). Shooting +1 per so many
+## kills, Melee +1 per so many melee kills, Medicine +1 per so many treatments, Building +1 per
+## so many HP mended and +1 per so much scrap made into ammo (the table is Skills.KINDS, and
+## where a test quotes how much makes a point it reads it from there); at most 3 points over the
+## start and never past 10; Leading does not grow; a quick learner is faster by the trait's factor.
 
 const Helpers := preload("res://tests/helpers.gd")
+const Skills := preload("res://scripts/sim/skills.gd")
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/world.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
@@ -45,6 +47,12 @@ func _bare() -> Dictionary:
 func _credit(sim, p, kind: String, times: int, amount: float = 1.0) -> void:
 	for i in times:
 		sim.skills.credit(p, kind, amount)
+
+
+## How many single credits of `kind` it takes to make a point of its skill, from the rules' own
+## table (Skills.KINDS), as a whole number.
+func _per(kind: String) -> int:
+	return ceili(float(Skills.KINDS[kind].per) - Skills.EPS)
 
 
 ## Whether two lists of skills are the same numbers (the roster's are floats from JSON, a
@@ -112,15 +120,16 @@ func test_the_rules_read_the_persons_own_skills() -> void:
 
 # ------------------------------------------------------------- the thresholds --
 
-func test_sixty_kills_make_a_better_shot() -> void:
+func test_enough_kills_make_a_better_shot() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	_credit(sim, ruth, "kills", 59)
-	eq(ruth.skills.Shooting, 5, "59 kills are not enough")
+	var per := _per("kills")
+	_credit(sim, ruth, "kills", per - 1)
+	eq(ruth.skills.Shooting, 5, "%d kills are not enough" % (per - 1))
 	eq(_events_of(sim, "skill_up").size(), 0, "and nothing is announced")
 	sim.skills.credit(ruth, "kills", 1.0)
-	eq(ruth.skills.Shooting, 6, "the 60th makes Shooting 6")
+	eq(ruth.skills.Shooting, 6, "the last of the %d makes Shooting 6" % per)
 	var ups := _events_of(sim, "skill_up")
 	eq(ups.size(), 1, "one skill_up event")
 	if ups.size() == 1:
@@ -204,15 +213,19 @@ func test_at_most_three_points_over_the_start_and_never_past_ten() -> void:
 	g.world.free()
 
 
-func test_a_quick_learner_is_one_and_a_half_times_faster() -> void:
+func test_a_quick_learner_is_faster_by_the_traits_factor() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var marcus = _person(sim, "Marcus")
-	check(sim.traits.mult(marcus, "xp") > 1.4, "Marcus is a quick learner")
-	_credit(sim, marcus, "kills", 39)
-	eq(marcus.skills.Shooting, 8, "39 kills are not enough even for him")
+	var xp := Helpers.trait_effect("quick_learner", "xp")
+	near(sim.traits.mult(marcus, "xp"), xp, 1e-9, "Marcus is a quick learner (xp %s)" % xp)
+	# the kills that make a point for him: the table's, divided by the factor
+	var needed := ceili(float(Skills.KINDS.kills.per) / xp - Skills.EPS)
+	check(needed < _per("kills"), "he needs fewer kills than the %d it takes anyone else" % _per("kills"))
+	_credit(sim, marcus, "kills", needed - 1)
+	eq(marcus.skills.Shooting, 8, "%d kills are not enough even for him" % (needed - 1))
 	sim.skills.credit(marcus, "kills", 1.0)
-	eq(marcus.skills.Shooting, 9, "the 40th is (60 / 1.5)")
+	eq(marcus.skills.Shooting, 9, "the last of the %d is (%d / %s)" % [needed, _per("kills"), xp])
 	g.world.free()
 
 
@@ -221,8 +234,8 @@ func test_gained_says_how_many_points_each_skill_has_gained() -> void:
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
 	eq(sim.skills.gained(ruth), {}, "nothing gained at the start")
-	_credit(sim, ruth, "kills", 120)
-	_credit(sim, ruth, "treated", 6)
+	_credit(sim, ruth, "kills", 2 * _per("kills"))
+	_credit(sim, ruth, "treated", _per("treated"))
 	var gained: Dictionary = sim.skills.gained(ruth)
 	eq(gained.get("Shooting", 0), 2, "two points of Shooting")
 	eq(gained.get("Medicine", 0), 1, "one of Medicine")
@@ -247,17 +260,17 @@ func test_a_gain_is_announced_in_words() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	_credit(sim, ruth, "kills", 60)
+	_credit(sim, ruth, "kills", _per("kills"))
 	var a: Dictionary = sim.alerts.get("skill-ruth", {})
 	check(not a.is_empty(), "an alert skill-ruth")
 	eq(a.get("text"), "Ruth is a better shot now", "it says who and what")
 	eq(a.get("sub"), "Shooting 6", "and the new value")
-	_credit(sim, ruth, "treated", 6)
+	_credit(sim, ruth, "treated", _per("treated"))
 	eq(sim.alerts.get("skill-ruth", {}).get("text"), "Ruth is a better healer now", "Medicine is a healer")
 	eq(sim.alerts.get("skill-ruth", {}).get("sub"), "Medicine 3", "and its value")
-	_credit(sim, ruth, "mended", 400, 1.0)
+	_credit(sim, ruth, "mended", _per("mended"), 1.0)
 	eq(sim.alerts.get("skill-ruth", {}).get("text"), "Ruth is a better builder now", "Building is a builder")
-	_credit(sim, ruth, "melee", 40)
+	_credit(sim, ruth, "melee", _per("melee"))
 	eq(sim.alerts.get("skill-ruth", {}).get("text"), "Ruth is a better fighter now", "Melee is a fighter")
 	g.world.free()
 
@@ -408,14 +421,16 @@ func test_a_new_run_puts_skills_and_counters_back() -> void:
 	var g := _quiet()
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	_credit(sim, ruth, "kills", 70)
+	var per := _per("kills")
+	_credit(sim, ruth, "kills", per + 10)   # a point of Shooting, and a little of the next
 	sim.skills.credit(ruth, "mended", 100.0)
+	check(not _same_skills(ruth.skills, ruth.def.skills), "Ruth has gained a point before the new run")
 	sim.start_run(1, 3)
 	check(_same_skills(ruth.skills, ruth.def.skills), "Ruth is back on the roster's skills")
 	eq(ruth.stats.kills, 0, "with no kills")
 	eq(float(ruth.stats.mended), 0.0, "and nothing mended")
 	eq(sim.skills.gained(ruth), {}, "and nothing gained")
-	_credit(sim, ruth, "kills", 59)
+	_credit(sim, ruth, "kills", per - 1)
 	eq(ruth.skills.Shooting, 5, "and the progress starts again from nothing")
 	g.world.free()
 
@@ -426,7 +441,9 @@ func test_skills_stats_and_progress_survive_a_save() -> void:
 	var g := _quiet(10.0)
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")
-	_credit(sim, ruth, "kills", 70)
+	var per := _per("kills")
+	var over := 10   # kills into the next point
+	_credit(sim, ruth, "kills", per + over)
 	sim.skills.credit(ruth, "mended", 150.0)
 	ruth.stats.shots = 33
 	var d := SaveGame.to_dict(sim)
@@ -434,15 +451,15 @@ func test_skills_stats_and_progress_survive_a_save() -> void:
 	check(SaveGame.apply(b.sim, d), "it applies")
 	var rb = _person(b.sim, "Ruth")
 	eq(rb.skills.Shooting, 6, "the skill came back")
-	eq(rb.stats.kills, 70, "and the counters")
+	eq(rb.stats.kills, per + over, "and the counters")
 	eq(rb.stats.shots, 33, "all of them")
 	near(float(rb.stats.mended), 150.0, 0.0001, "even the HP")
 	eq(b.sim.skills.gained(rb), {"Shooting": 1}, "and the gain")
-	# 10 of 60 kills into the next point and 150 of 400 HP: the progress is kept
-	_credit(b.sim, rb, "kills", 49)
-	eq(rb.skills.Shooting, 6, "49 more kills are not yet the next point")
+	# `over` kills into the next point, and some HP mended: the progress is kept
+	_credit(b.sim, rb, "kills", per - over - 1)
+	eq(rb.skills.Shooting, 6, "%d more kills are not yet the next point" % (per - over - 1))
 	b.sim.skills.credit(rb, "kills", 1.0)
-	eq(rb.skills.Shooting, 7, "the 50th more is (the 10 over were kept)")
+	eq(rb.skills.Shooting, 7, "the last of the %d more is (the %d over were kept)" % [per - over, over])
 	# through JSON text too
 	var c := _bare()
 	check(SaveGame.apply(c.sim, SaveGame.from_text(SaveGame.to_text(d))), "it applies from text")
