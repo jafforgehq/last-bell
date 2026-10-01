@@ -53,7 +53,7 @@ The files in `assets/` are the source art. Edit or replace them directly; a
 replacement PNG at the same size drops straight in.
 
 - `assets/objects`, `walls`, `terrain`: props, the school walls, ground textures.
-- `scripts/render/deck_faces.gd`: draws the front face, posts, braces, shadow and ladders that make the walkways and towers look raised (their heights are two constants at the top of the file).
+- `scripts/render/deck_faces.gd`: draws what makes the walkways and towers look raised: the scaffold face under the planks, the tower bases, the supports along the side walkways, the shadows and the ladders (their sizes are constants at the top of the file). The pieces it draws are `assets/objects/deck_*.png`, made by `tools/make_deck_art.py` (Python with Pillow and NumPy) from three reference pictures in `tools/art_src/` (a scaffold front, a tower base and a ladder, made with Meshy and kept so the pieces can be rebuilt). The walkways can only be climbed at the ladders; `world.gd` shuts the tiles under the face for people and for the dead.
 - `assets/pawns`, `portraits`, `weapons`, `trees`, `fx`: characters and effects.
 - `assets/ui/icons`: HUD icons.
 - `assets/audio`: sound effects and ambience loops.

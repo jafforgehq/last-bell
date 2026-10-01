@@ -9,6 +9,8 @@ const DeckFaces := preload("res://scripts/render/deck_faces.gd")
 const TILE := GD.TILE
 
 enum Layer { MARK = 1, LOW = 2, BIG = 4 }
+## A ladder opens a barrier tile it comes within this many tiles of.
+const LADDER_SLACK := 0.12
 
 var d: Dictionary
 var W: int
@@ -33,6 +35,7 @@ func build(data: Dictionary) -> void:
 		solid_z[i] = int(d.solidZ[i])
 		solid_p[i] = int(d.solidP[i])
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_apply_deck_barriers()
 
 	_build_ground()
 	var details := GroundDetails.new()
@@ -60,8 +63,10 @@ func build(data: Dictionary) -> void:
 		else:
 			_add_pieces(parent, o.pieces)
 	_add_pieces(layers[3], d.walls)
-	# the raised platforms get a front face, posts and a shadow; first in their
-	# layer, so the planks and the taller things in front draw over them
+	# the raised platforms get a front face, a shadow and their ladders. The
+	# walkways' faces come first in their layer, so the planks draw over their top
+	# edge; a tower stands in front of the wall it is built against, so its base
+	# comes last in the big layer, over the containers beside it
 	var low_faces := DeckFaces.new()
 	low_faces.name = "DeckFacesLow"
 	low_faces.setup(d, ["walkway"])
@@ -71,7 +76,67 @@ func build(data: Dictionary) -> void:
 	big_faces.name = "DeckFacesBig"
 	big_faces.setup(d, ["tower"])
 	layers[4].add_child(big_faces)
-	layers[4].move_child(big_faces, 0)
+
+
+## The raised walkways can only be climbed at a ladder. The tiles in front of a
+## walkway, where its rail and then its face hang (two rows for the north one),
+## are blocked, for people and for the dead, except where a ladder stands; the
+## tiles behind them are the deck. The same goes for the column along the inner
+## edge of the west and east walkways and the tiles under their south ends. (A
+## corner where two walkways meet stays open: it is deck.)
+func _apply_deck_barriers() -> void:
+	var usable := {}
+	var barrier := {}
+	for o in d.objects:
+		if o.kind != "walkway":
+			continue
+		var x0 := float(o.cx) - float(o.w) / 2.0
+		var x1 := float(o.cx) + float(o.w) / 2.0
+		var y0 := float(o.cy) - float(o.h) / 2.0
+		var y1 := float(o.cy) + float(o.h) / 2.0
+		var c0 := floori(x0)
+		var c1 := floori(x1 - 0.001)
+		var r0 := floori(y0)
+		var r1 := floori(y1 - 0.001)
+		if float(o.w) >= float(o.h):
+			# along the north wall: the rail is at the south edge and the face hangs
+			# below it, down to the ground
+			var rail := floori(y1 - 0.05)
+			var foot := floori(y1 + DeckFaces.WALKWAY_HEIGHT - 0.2)
+			for tx in range(c0, c1 + 1):
+				for ty in range(r0, rail):
+					usable[ty * W + tx] = true
+				for ty in range(rail, foot + 1):
+					barrier[ty * W + tx] = true
+		else:
+			# along the west or east wall: the rail is at the inner edge
+			var west: bool = float(o.cx) < float(W) / 2.0
+			var rail_c := floori(x1 - 0.05) if west else floori(x0 + 0.05)
+			for ty in range(r0, r1 + 1):
+				for tx in range(c0, c1 + 1):
+					if (west and tx < rail_c) or (not west and tx > rail_c):
+						usable[ty * W + tx] = true
+				barrier[ty * W + rail_c] = true
+			# the short face under its south end
+			for ty in range(r1 + 1, floori(y1 + DeckFaces.WALKWAY_HEIGHT - 0.2) + 1):
+				for tx in range(c0, c1 + 1):
+					barrier[ty * W + tx] = true
+	# a ladder opens the barrier wherever its picture reaches
+	for o in d.objects:
+		if o.kind != "ladder":
+			continue
+		# w across and h along the ladder as laid out on the map (the ladders on the
+		# side walkways lie east to west, so they are the other way round)
+		var ex := float(o.w) / 2.0 + LADDER_SLACK
+		var ey := float(o.h) / 2.0 + LADDER_SLACK
+		for ty in range(floori(float(o.cy) - ey), floori(float(o.cy) + ey) + 1):
+			for tx in range(floori(float(o.cx) - ex), floori(float(o.cx) + ex) + 1):
+				barrier.erase(ty * W + tx)
+	for i in barrier:
+		if usable.has(i):
+			continue
+		solid_p[i] = 1
+		solid_z[i] = 1
 
 
 func _build_ground() -> void:
