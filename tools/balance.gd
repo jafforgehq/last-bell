@@ -16,6 +16,8 @@
 ##                    game that collapses is slow, so a batch is worth spreading)
 ##   --seeds=a,b,c    play exactly these seeds instead of --games and --seed
 ##   --policy=none    nobody gives any order: what the colony does alone
+##   --policy=keep    the default policy, but everyone hides in the school gym from the bell
+##                    to dawn (the exploit check: hiding must not beat defending)
 ##   --verbose        print what the policy did and who was lost, game by game
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
@@ -53,6 +55,8 @@ class Policy:
 	const SITE_FOR := {"food": "houses", "water": "houses", "meds": "pharmacy", "scrap": "hardware", "ammo": "hardware"}
 
 	var sim
+	## Hide in the school gym from the bell to dawn instead of holding the posts.
+	var hide := false
 	## What it has done: trips sent, treatments ordered, people sent out, repairs ordered.
 	var trips := 0
 	var treats := 0
@@ -69,12 +73,34 @@ class Policy:
 	func tick() -> void:
 		if sim.over != "":
 			return
+		if hide:
+			_hide()
 		_scavenge()
 		_repair()
 		_infection()
 
 	func _note(text: String) -> void:
 		notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": text})
+
+	## Where a hiding crew stands: deep in the school gym.
+	const KEEP_SPOTS := [Vector2(24.5, 52.5), Vector2(27.5, 52.5), Vector2(30.5, 52.5), Vector2(24.5, 55.5), Vector2(27.5, 55.5), Vector2(30.5, 55.5)]
+
+	## From dusk to dawn everyone able goes into the school and stays; at dawn they are released.
+	func _hide() -> void:
+		var night: bool = sim.phase == "dusk" or sim.phase == "night"
+		var i := 0
+		for p in sim.people:
+			var spot: Vector2 = KEEP_SPOTS[i % KEEP_SPOTS.size()]
+			i += 1
+			if p.dead or p.downed or p.away != null:
+				continue
+			if night:
+				if not p.drafted or p.order == null:
+					sim.order_move(p, spot.x, spot.y)
+			elif p.drafted and p.y > 44.5:
+				p.drafted = false
+				p.order = null
+				p.goal_key = ""
 
 	## Free to be given a job: on the map, on their feet, on no order, and not busy treating someone.
 	func _free(p) -> bool:
@@ -202,15 +228,16 @@ class Policy:
 ## "trips", "treats", "sendouts", "repairs", "notes", "took"}. `rows` has one
 ## entry for the start of each day (and one at the end of a lost game): see _row.
 ## `hz` is how many steps of the rules a second; `orders` false plays with no
-## orders given at all; `setup`, if given, is called with the new Sim before the
+## orders given at all; `hide` makes the crew spend every night in the school gym; `setup`, if given, is called with the new Sim before the
 ## first step (the tests use it to play a cheap game).
-static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable()) -> Dictionary:
+static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false) -> Dictionary:
 	var started := Time.get_ticks_msec()
 	var g := Helpers.make(seed_value, difficulty)
 	var sim = g.sim
 	if setup.is_valid():
 		setup.call(sim)
 	var policy := Policy.new(sim)
+	policy.hide = hide
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
 	var rows: Array = [_row(sim)]
@@ -235,7 +262,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 				notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": "%s %s" % [p.first, how]})
 	if sim.over != "":
 		rows.append(_row(sim))
-	var survived: bool = sim.over == "" and sim.day > days
+	var survived: bool = (sim.over == "" and sim.day > days) or sim.over == "victory"
 	var all_notes: Array = policy.notes + notes
 	all_notes.sort_custom(func(a, b): return a.day < b.day or (a.day == b.day and a.hour < b.hour))
 	var result := {
@@ -388,6 +415,7 @@ func _run() -> void:
 	var difficulty := clampi(int(opts.difficulty), 0, 2)
 	var hz := clampf(float(opts.hz), 5.0, 60.0)
 	var orders: bool = opts.policy != "none"
+	var hide: bool = opts.policy == "keep"
 	var jobs := clampi(int(opts.jobs), 1, 32)
 	var seeds: Array = []
 	if String(opts.seeds) != "":
@@ -399,21 +427,21 @@ func _run() -> void:
 			seeds.append(int(opts.seed) + i)
 	if not quiet:
 		var names := ["Story", "Standard", "Brutal"]
-		print("Last Bell balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
-			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), "default policy" if orders else "no orders",
+		print("Thirty Bells balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
+			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else "default policy") if orders else "no orders",
 			(", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
 		print("")
 		if jobs == 1 or seeds.size() == 1:
 			_print_header()
 	var games: Array = []
 	if jobs > 1 and seeds.size() > 1 and not quiet:
-		games = _play_in_workers(seeds, jobs, days, difficulty, hz, orders)
+		games = _play_in_workers(seeds, jobs, days, difficulty, hz, orders, hide)
 		_print_header()
 		for i in games.size():
 			_print_game(i + 1, games[i], verbose)
 	else:
 		for i in seeds.size():
-			var r := play(seeds[i], difficulty, days, hz, orders)
+			var r := play(seeds[i], difficulty, days, hz, orders, Callable(), hide)
 			games.append(r)
 			if not quiet:
 				_print_game(i + 1, r, verbose)
@@ -436,7 +464,7 @@ func _run() -> void:
 ## Plays the seeds in `jobs` worker processes (this same script, with --quiet)
 ## and gathers their games in seed order. A worker that cannot be started or
 ## leaves no result has its seeds played here instead.
-func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: float, orders: bool) -> Array:
+func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: float, orders: bool, hide: bool = false) -> Array:
 	var exe := OS.get_executable_path()
 	var project := ProjectSettings.globalize_path("res://")
 	var scratch := ProjectSettings.globalize_path("user://")
@@ -453,7 +481,7 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			names.append(str(sd))
 		var args := ["--headless", "--quiet", "--path", project, "--script", "res://tools/balance.gd", "--",
 			"--seeds=%s" % ",".join(names), "--days=%d" % days, "--difficulty=%d" % difficulty, "--hz=%s" % str(hz),
-			"--policy=%s" % ("default" if orders else "none"), "--quiet", "--out=%s" % out]
+			"--policy=%s" % ("keep" if hide else ("default" if orders else "none")), "--quiet", "--out=%s" % out]
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0

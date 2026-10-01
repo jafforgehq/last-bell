@@ -1,9 +1,9 @@
-## The run: its length, the goal, and when it is over. Round 1 needs the start
-## of a run, the day count and defeat when nobody is left; round 2 adds the Big
-## Night and the rescue.
+## The run: its length, the goal, and when it is over. The run starts on day 1,
+## is lost when nobody is left and won at the dawn of day 31; round 2 adds the Big
+## Night before that dawn.
 ##
 ## Events this module adds to sim.events:
-##   {"type": "over", "result": "defeat"}   the run has ended (sim.over is set)
+##   {"type": "over", "result": "defeat" or "victory"}   the run has ended (sim.over is set)
 ## (sim.gd adds {"type": "day_start", "day": N} at each dawn; main.gd autosaves on it.)
 extends RefCounted
 
@@ -22,18 +22,27 @@ func start() -> void:
 	pass
 
 
-## Every step: the run is lost when every survivor is dead or turned. Someone
+## Every step: the run is lost when every survivor is dead or turned, and won at
+## the dawn that starts day 31 (thirty nights held) if anyone is left. Someone
 ## downed but not dead, or away on a trip, still counts as alive. Sets sim.over
 ## once; the rules stop stepping after that.
 func update(_dt: float) -> void:
 	if sim.over != "" or sim.people.is_empty():
 		return
+	var anyone := false
 	for p in sim.people:
 		if not p.dead:
-			return
-	sim.over = "defeat"
-	sim.events.append({"type": "over", "result": "defeat"})
-	sim.events.append({"type": "banner", "text": "Everyone is gone", "sub": "Nobody is left to hold the wall"})
+			anyone = true
+			break
+	if not anyone:
+		sim.over = "defeat"
+		sim.events.append({"type": "over", "result": "defeat"})
+		sim.events.append({"type": "banner", "text": "Everyone is gone", "sub": "Nobody is left to hold the wall"})
+		return
+	if sim.day > TOTAL_DAYS:
+		sim.over = "victory"
+		sim.events.append({"type": "over", "result": "victory"})
+		sim.events.append({"type": "banner", "text": "Thirty nights held", "sub": "A convoy is on the road at dawn"})
 
 
 ## "DAY 7 OF 30" style numbers for the HUD.

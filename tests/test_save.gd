@@ -239,12 +239,12 @@ func test_a_save_is_versioned_plain_json_data() -> void:
 	var g := Helpers.make(3, 1)
 	Helpers.run(g.sim, 3.0)
 	var d := SaveGame.to_dict(g.sim)
-	eq(d.get("version"), 1, "version 1")
+	eq(d.get("version"), SaveGame.VERSION, "the current version")
 	for key in ["day", "minutes", "clock_min", "t", "phase", "bell_rung", "spawn_t", "kills", "weather", "over", "stock", "difficulty", "permadeath", "run_seed", "rng_state", "rng_seed", "people", "zombies", "segments", "modules", "alerts"]:
 		check(d.has(key), "the save has %s" % key)
 	eq(typeof(d.get("rng_state")), TYPE_STRING, "the 64-bit rng state is text")
 	eq(d.people.size(), 6, "six people")
-	eq(d.segments.size(), 14, "fourteen wall sections")
+	eq(d.segments.size(), 16, "sixteen wall sections: fourteen walls and the two school doors")
 	eq(d.zombies.size(), g.sim.zombies.size(), "every zombie")
 	for name in ["supplies", "medical", "scavenge", "scenario"]:
 		check(d.modules.has(name), "the %s module has a place" % name)
@@ -610,7 +610,7 @@ func test_a_wrong_version_or_damaged_data_is_refused_without_a_change() -> void:
 	# element of the list
 	var cases := [
 		["empty", [[[], EMPTY]]],
-		["future version", [[["version"], 2]]],
+		["future version", [[["version"], SaveGame.VERSION + 1]]],
 		["no version", [[["version"], ERASE]]],
 		["version as text", [[["version"], "1"]]],
 		["no people", [[["people"], ERASE]]],
@@ -692,7 +692,7 @@ func test_files_are_written_and_read_back() -> void:
 	check(FileAccess.file_exists(tmp_a), "the file is there")
 	check(not FileAccess.file_exists(tmp_a + ".tmp"), "without a temporary file left behind")
 	var back := SaveGame.read(tmp_a)
-	eq(back.get("version"), 1, "it reads back as a save")
+	near(float(back.get("version")), float(SaveGame.VERSION), 0.0001, "it reads back as a save")
 	eq(_diff(SaveGame.to_dict(a.sim), back, EXACT), "", "with exactly the same content")
 	check(SaveGame.is_loadable(tmp_a), "it can be loaded")
 	var b := _bare()

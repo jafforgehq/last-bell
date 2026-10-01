@@ -32,7 +32,7 @@ extends RefCounted
 
 const Sim := preload("res://scripts/sim/sim.gd")
 
-const VERSION := 1
+const VERSION := 2
 const QUICK_PATH := "user://quicksave.json"
 const AUTO_PATH := "user://autosave.json"
 
@@ -644,10 +644,7 @@ static func _commit(sim, plan: Dictionary) -> void:
 		var was_open: bool = s.state == 3
 		var now_open: bool = w.state == 3
 		if was_open != now_open:
-			sim.world.set_walkable(s.tiles, now_open)
-			for i in s.tiles:
-				sim.path_z.set_solid(int(i), not now_open)
-				sim.path_p.set_solid(int(i), not now_open)
+			sim.open_segment(s, now_open)
 		var changed: bool = s.state != w.state
 		s.hp = w.hp
 		s.max_hp = w.max_hp
@@ -664,6 +661,8 @@ static func _commit(sim, plan: Dictionary) -> void:
 	for z in sim.zombies:
 		if z.slot != null:
 			z.slot.who = z
+	# the school is open to the dead if a door is down or one of them is inside
+	sim.refresh_school()
 
 	# people
 	for e in plan.people:

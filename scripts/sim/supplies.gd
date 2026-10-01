@@ -51,6 +51,10 @@ const DANGER := Color("#e0584a")
 ## within a step is on time to within this many game hours.
 const EPS := 1.0e-9
 const LATE_SLACK_H := 1.0e-4
+## The stores live in the yard. While the dead are in it they ruin what is there:
+## each of them takes this share of every stock each second (20 of them for two
+## minutes cost about 13% of everything). This is what falling back costs.
+const LOOT_RATE := 6.0e-5
 ## "Never raised" for the alert timers (game minutes since the run began).
 const NEVER := -1.0e9
 
@@ -96,6 +100,18 @@ func update(dt: float) -> void:
 	_serve_meals(dt)
 	_needs(sim.game_hours(dt))
 	_low_stock_alerts()
+	_ruin(dt)
+
+
+## The dead inside the compound ruin a share of every stock (see LOOT_RATE).
+func _ruin(dt: float) -> void:
+	var n: int = sim.dead_inside()
+	if n == 0:
+		return
+	var keep := exp(-LOOT_RATE * float(n) * dt)
+	for kind in sim.stock:
+		sim.stock[kind] = maxf(0.0, float(sim.stock[kind]) * keep)
+	sim.alert("ruin", "danger", "The dead are in the stores", "Stocks are being ruined", null, 6.0)
 
 
 ## How well a person shoots and works right now: less once they are hungry or

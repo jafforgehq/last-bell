@@ -16,6 +16,21 @@ const START_STOCK := {"ammo": 300.0, "scrap": 30.0, "food": 36.0, "water": 54.0,
 ## The story, standard and brutal difficulties.
 const DIFFICULTY_NAMES := ["Story", "Standard", "Brutal"]
 
+## What one shot costs from the stock of ammo (a shotgun shell is a bigger share).
+const SHOT_COST := 0.2
+const SHELL_COST := 0.34
+## The school's two north doors are wall sections of this kind. The building is
+## shut to the dead until one is broken (see `refresh_school`).
+const DOOR_KIND := "door"
+## The school's tiles start at this row (its north wall).
+const SCHOOL_TOP_ROW := 44
+## The most of the dead sent back to the city in one step at dawn (each one is a
+## path search).
+const DAWN_LEAVES_PER_STEP := 6
+## What someone fights with when the stock cannot pay for another shot: the butt
+## of their gun.
+const BUTT := {"name": "Butt of the gun", "range": 1.9, "cooldown": 1.25, "melee": true, "dmg": 1.1, "acc": 0.7}
+
 const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vector2(0.26, -0.22)}
 
 
@@ -173,6 +188,10 @@ var medical
 var scavenge
 var scenario
 var waves
+## Whether the school's inside is open to the dead right now: a door is down or one
+## of the dead is already in there.
+var school_open := false
+var _school_inner: Array = []
 
 
 func _init(data: Dictionary, w, effects) -> void:
@@ -213,6 +232,15 @@ func _init(data: Dictionary, w, effects) -> void:
 			slot.seg = seg
 			seg.slots.append(slot)
 		segments.append(seg)
+	var door_tiles := {}
+	for seg in segments:
+		if seg.kind == DOOR_KIND:
+			for i in seg.tiles:
+				door_tiles[int(i)] = true
+	for i in W * H:
+		@warning_ignore("integer_division")
+		if int(d.solidZ[i]) == 1 and int(d.solidP[i]) == 0 and i / W >= SCHOOL_TOP_ROW and not door_tiles.has(i):
+			_school_inner.append(i)
 	for def in d.people:
 		people.append(_make_person(def))
 	supplies = Supplies.new()
@@ -436,9 +464,6 @@ func update(dt: float) -> void:
 			events.append({"type": "banner", "text": "Night %d" % day, "sub": "Hold the wall until dawn"})
 			alert("horde", "warn", "The dead are coming", "More walkers every hour until dawn", null, 12.0)
 		elif phase == "dawn":
-			for z in zombies:
-				if z.state != "dying" and z.state != "dead":
-					retreat(z)
 			events.append({"type": "banner", "text": "Dawn", "sub": "The dead drift back into the city"})
 		elif phase == "day":
 			day += 1
@@ -452,10 +477,13 @@ func update(dt: float) -> void:
 	scavenge.update(dt)
 	waves.update(dt)
 
+	if phase == "dawn":
+		_dawn_sweep()
 	for p in people:
 		_update_person(p, dt)
 	for z in zombies:
 		_update_zombie(z, dt)
+	refresh_school()
 	_separate()
 	var kept: Array = []
 	for z in zombies:
@@ -483,7 +511,7 @@ func _goal_for(p: Person):
 		return duty
 	if p.repair != null:
 		var s: Segment = p.repair
-		return {"x": s.center.x, "y": s.center.y, "face": s.side, "what": "Repairing the %s" % s.name.to_lower()}
+		return {"x": s.center.x, "y": s.center.y, "face": "N" if s.side == "S" else s.side, "what": "Repairing the %s" % s.name.to_lower()}
 	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
 	if night:
 		return {"x": float(p.def.post.x), "y": float(p.def.post.y), "face": _post_face(p), "what": p.def.post.what}
@@ -567,8 +595,21 @@ func _follow(a, speed: float, dt: float) -> bool:
 	return false
 
 
+## What one shot costs this person's gun from the stock.
+func shot_cost(p: Person) -> float:
+	return SHELL_COST if p.weapon == "shotgun" else SHOT_COST
+
+
+## The weapon someone fights with right now: their own, or the butt of it when the
+## stock is too low for another shot (a pike never runs dry).
+func gun_of(p: Person) -> Dictionary:
+	if p.gun.get("melee", false) or stock.ammo >= shot_cost(p):
+		return p.gun
+	return BUTT
+
+
 func _find_target(p: Person):
-	var rng: float = p.gun.range
+	var rng: float = float(gun_of(p).range)
 	var best = null
 	var best_score := INF
 	for z in zombies:
@@ -586,11 +627,10 @@ func _find_target(p: Person):
 
 
 func _combat(p: Person, dt: float) -> void:
-	var gun := p.gun
 	if p.reloading > 0.0:
 		p.reloading -= dt
 		if p.reloading <= 0.0:
-			p.mag = int(gun.mag)
+			p.mag = int(p.gun.mag)
 			p.reloading = 0.0
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
@@ -599,6 +639,9 @@ func _combat(p: Person, dt: float) -> void:
 		p.target = null
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
+	var gun := gun_of(p)
+	if gun == BUTT and (phase == "night" or phase == "dusk" or p.drafted):
+		alert("ammo-out", "danger", "Out of ammo", "The guns are silent. Send a party for more.", null, 20.0)
 	var tz = p.target
 	if tz == null or tz.state == "dying" or tz.state == "dead" or Vector2(tz.x - p.x, tz.y - p.y).length() > float(gun.range):
 		p.target = _find_target(p)
@@ -633,7 +676,7 @@ func muzzle(p: Person, ang: float) -> Vector2:
 
 
 func _fire(p: Person, z: Zombie, ang: float) -> void:
-	var gun := p.gun
+	var gun := gun_of(p)
 	var dist := Vector2(z.x - p.x, z.y - p.y).length()
 	if gun.get("melee", false):
 		p.thrust = 1.0
@@ -649,7 +692,7 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	fx.muzzle(m.x, m.y, ang, p.weapon == "shotgun" or p.weapon == "hunting")
 	fx.casing(p.x, p.y - 0.15, ang, p.weapon == "shotgun")
 	events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
-	stock.ammo = maxf(0.0, stock.ammo - (0.34 if p.weapon == "shotgun" else 0.2))
+	stock.ammo = maxf(0.0, stock.ammo - shot_cost(p))
 	var pellets := int(gun.get("pellets", 1))
 	var skill: float = float(p.def.skills.Shooting) / 10.0 * perf(p)
 	var dealt := 0.0
@@ -700,8 +743,11 @@ func _hurt_zombie(z: Zombie, dmg: float, ang: float) -> void:
 func _assign_slot(z: Zombie) -> bool:
 	var best: Slot = null
 	var best_score := INF
+	var yard_down := yard_open()
 	for s in segments:
 		if s.state == 3:
+			continue
+		if s.kind == DOOR_KIND and not yard_down:
 			continue
 		var crowd := 0
 		for sl in s.slots:
@@ -724,6 +770,111 @@ func _assign_slot(z: Zombie) -> bool:
 	z.path = path
 	z.path_i = 0
 	return true
+
+
+## Whether a wall section of the yard (not a school door) is down.
+func yard_open() -> bool:
+	for s in segments:
+		if s.kind != DOOR_KIND and s.state == 3:
+			return true
+	return false
+
+
+## A free place at a school door that is still up, for one of the dead who cannot
+## get at a person hiding in the school: the nearest, if there is a way to it.
+func _assign_door_slot(z: Zombie) -> bool:
+	var best: Slot = null
+	var best_score := INF
+	for s in segments:
+		if s.kind != DOOR_KIND or s.state == 3:
+			continue
+		for sl in s.slots:
+			if sl.who != null:
+				continue
+			var score := Vector2(sl.ax - z.x, sl.ay - z.y).length() + rng.randf() * 2.0
+			if score < best_score:
+				best_score = score
+				best = sl
+	if best == null:
+		return false
+	var path: Array = path_z.find(world.solid_z, z.x, z.y, best.ax, best.ay)
+	if path.is_empty():
+		return false
+	best.who = z
+	z.slot = best
+	z.path = path
+	z.path_i = 0
+	return true
+
+
+## Whether a point is inside the school building (not the street around it).
+func inside_school(x: float, y: float) -> bool:
+	return y >= float(SCHOOL_TOP_ROW) + 0.5 and y < float(H) - 5.0 and x > 20.0 and x < 64.0
+
+
+## How many of the dead are inside the compound, the yard or the school (not
+## counting those on their way out): the stores are theirs to ruin.
+func dead_inside() -> int:
+	var n := 0
+	for z in zombies:
+		if z.state == "dying" or z.state == "dead" or z.state == "retreat":
+			continue
+		if (z.x > 20.0 and z.x < 64.0 and z.y > 18.0 and z.y < 44.0) or inside_school(z.x, z.y):
+			n += 1
+	return n
+
+
+## Whether this person is inside the school building.
+func in_school(p: Person) -> bool:
+	return inside_school(p.x, p.y)
+
+
+## The school's inside is open to the dead while a door is down or one of them is
+## already in there (so nobody is walled in with the dead). Cheap: called every step.
+func refresh_school() -> void:
+	var want := false
+	for s in segments:
+		if s.kind == DOOR_KIND and s.state == 3:
+			want = true
+			break
+	if not want and school_open:
+		for z in zombies:
+			if z.state != "dying" and z.state != "dead" and inside_school(z.x, z.y):
+				want = true
+				break
+	if want == school_open:
+		return
+	school_open = want
+	for i in _school_inner:
+		world.solid_z[int(i)] = 0 if want else 1
+		path_z.set_solid(int(i), not want)
+	if want:
+		events.append({"type": "banner", "text": "The school is open", "sub": "The dead are inside"})
+
+
+## The ground a wall section stands on, open or shut. A school door opens to the
+## dead only: people walk through it whole.
+func open_segment(s: Segment, open: bool) -> void:
+	if s.kind == DOOR_KIND:
+		for i in s.tiles:
+			world.solid_z[int(i)] = 0 if open else 1
+			path_z.set_solid(int(i), not open)
+		return
+	world.set_walkable(s.tiles, open)
+	for i in s.tiles:
+		path_z.set_solid(int(i), not open)
+		path_p.set_solid(int(i), not open)
+
+
+## At dawn the dead go back to the city, a few a step (each is a path search).
+func _dawn_sweep() -> void:
+	var left := DAWN_LEAVES_PER_STEP
+	for z in zombies:
+		if left <= 0:
+			return
+		if z.state != "dying" and z.state != "dead" and z.state != "retreat":
+			retreat(z)
+			left -= 1
 
 
 func retreat(z: Zombie) -> void:
@@ -790,7 +941,10 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 			if _follow(z, slow, dt):
 				z.remove = true
 		"approach":
-			if _breached() and rng.randf() < dt:
+			if _breached() and rng.randf() < dt and not (z.slot != null and z.slot.seg.kind == DOOR_KIND):
+				if z.slot != null:
+					z.slot.who = null
+					z.slot = null
 				z.state = "breach"
 				return
 			if z.slot == null and not _assign_slot(z):
@@ -854,14 +1008,18 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 				else:
 					z.path = path_z.find(world.solid_z, z.x, z.y, prey.x, prey.y)
 				z.path_i = 0
+				if z.path.is_empty() and not school_open and in_school(prey) and _assign_door_slot(z):
+					z.state = "approach"
+					return
 			_follow(z, slow * 1.1, dt)
 
 
 func _claw(z: Zombie, s: Segment) -> void:
 	_damage_segment(s, 1.0 + rng.randf() * 1.3)
-	var mat := "wood" if s.kind == "pallets" else ("stone" if s.kind == "blocks" else "metal")
-	var nx := 0.0 if s.side == "N" else (1.0 if s.side == "W" else -1.0)
-	var ny := 1.0 if s.side == "N" else 0.0
+	var mat := "wood" if (s.kind == "pallets" or s.kind == DOOR_KIND) else ("stone" if s.kind == "blocks" else "metal")
+	var from_north := s.side == "N" or s.side == "S"
+	var nx := 0.0 if from_north else (1.0 if s.side == "W" else -1.0)
+	var ny := 1.0 if from_north else 0.0
 	if rng.randf() < 0.6:
 		fx.hit_material(z.x + nx * 0.35, z.y + ny * 0.25, mat)
 	events.append({"type": "claw", "material": mat, "x": z.x, "y": z.y})
@@ -890,18 +1048,12 @@ func _segment_state(s: Segment) -> void:
 	var was := s.state
 	s.state = st
 	if st == 3:
-		world.set_walkable(s.tiles, true)
-		for i in s.tiles:
-			path_z.set_solid(int(i), false)
-			path_p.set_solid(int(i), false)
+		open_segment(s, true)
 		events.append({"type": "crash", "x": s.center.x, "y": s.center.y})
 		events.append({"type": "banner", "text": "Breach!", "sub": "The %s is down" % s.name.to_lower()})
 		alert("breach-%d" % s.id, "danger", "Breach at the %s" % s.name.to_lower(), "Walkers are getting in", s.center, 30.0)
 	elif was == 3:
-		world.set_walkable(s.tiles, false)
-		for i in s.tiles:
-			path_z.set_solid(int(i), true)
-			path_p.set_solid(int(i), true)
+		open_segment(s, false)
 	if on_segment_change.is_valid():
 		on_segment_change.call(s)
 
