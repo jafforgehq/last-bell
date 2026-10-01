@@ -33,6 +33,8 @@
 extends RefCounted
 
 const SITES_PATH := "res://assets/data/sites.json"
+## Where the sites are read from (the harness and the tests may point it at another file).
+static var sites_path := SITES_PATH
 
 ## The gate is wall section 2 ("Main gate"): parties leave and return through it.
 const GATE_SEGMENT := 2
@@ -713,10 +715,10 @@ func _capitalise(text: String) -> String:
 
 func _load_sites() -> void:
 	sites = []
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(SITES_PATH))
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(sites_path))
 	var list = parsed.get("sites", []) if parsed is Dictionary else parsed
 	if not list is Array:
-		push_error("Could not read the scavenging sites from %s" % SITES_PATH)
+		push_error("Could not read the scavenging sites from %s" % sites_path)
 		return
 	for raw in list:
 		var loot := {}

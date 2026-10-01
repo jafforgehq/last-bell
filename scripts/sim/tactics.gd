@@ -148,6 +148,8 @@ func _auto_repairs() -> void:
 			continue
 		if p.repair != null or p.drafted or p.order != null:
 			continue
+		if sim.workshop.crafting(p):
+			continue
 		if sim.medical.goal_for(p) != null:
 			continue
 		if float(sim.stock.scrap) < AUTO_MIN_SCRAP:

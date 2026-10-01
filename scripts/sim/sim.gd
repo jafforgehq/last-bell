@@ -9,6 +9,7 @@ const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Scenario := preload("res://scripts/sim/scenario.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
+const Workshop := preload("res://scripts/sim/workshop.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -199,6 +200,7 @@ var scavenge
 var scenario
 var waves
 var tactics
+var workshop
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -260,7 +262,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	scenario = Scenario.new()
 	waves = Waves.new()
 	tactics = Tactics.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics]:
+	workshop = Workshop.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop]:
 		m.setup(self)
 	_seed()
 
@@ -370,6 +373,7 @@ func alert(id: String, level: String, text: String, sub: String, at, ttl: float 
 func toggle_draft(p: Person) -> void:
 	p.drafted = not p.drafted
 	p.repair = null
+	workshop.stop(p)
 	p.order = Vector3(p.x, p.y, 0) if p.drafted else null
 
 
@@ -380,6 +384,7 @@ func order_move(p: Person, x: float, y: float) -> bool:
 		return false
 	p.drafted = true
 	p.repair = null
+	workshop.stop(p)
 	p.order = Vector3(x, y, 0)
 	p.goal_key = ""
 	return true
@@ -388,6 +393,7 @@ func order_move(p: Person, x: float, y: float) -> bool:
 func order_post(p: Person) -> void:
 	p.drafted = true
 	p.repair = null
+	workshop.stop(p)
 	p.order = Vector3(p.def.post.x, p.def.post.y, 1)
 	p.goal_key = ""
 
@@ -396,6 +402,7 @@ func order_repair(p: Person, seg: Segment) -> void:
 	p.drafted = false
 	p.order = null
 	p.repair = seg
+	workshop.stop(p)
 	p.goal_key = ""
 
 
@@ -408,7 +415,7 @@ func perf(p: Person) -> float:
 ## Small status marks for a person's card and panel, from every module:
 ## [{"icon": String, "color": Color, "tip": String}].
 func status_of(p: Person) -> Array:
-	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p)
+	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p) + workshop.status_of(p)
 
 
 ## Game hours that pass in `dt` seconds of the rules' time.
@@ -419,7 +426,7 @@ func game_hours(dt: float) -> float:
 ## A button the HUD offers for the selection (see the modules' gizmo()):
 ## true if a module took it.
 func handle_gizmo(id: String, sel) -> bool:
-	for m in [medical, scavenge, supplies, scenario, tactics]:
+	for m in [medical, scavenge, supplies, scenario, tactics, workshop]:
 		if m.has_method("gizmo") and m.gizmo(id, sel):
 			return true
 	return false
@@ -453,7 +460,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop]:
 		m.start()
 
 
@@ -493,6 +500,7 @@ func update(dt: float) -> void:
 	scavenge.update(dt)
 	waves.update(dt)
 	tactics.update(dt)
+	workshop.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -524,6 +532,8 @@ func _goal_for(p: Person):
 	var duty = medical.goal_for(p)
 	if duty == null:
 		duty = scavenge.goal_for(p)
+	if duty == null:
+		duty = workshop.goal_for(p)
 	if duty != null:
 		return duty
 	if p.repair != null:

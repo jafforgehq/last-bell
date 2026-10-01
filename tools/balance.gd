@@ -15,6 +15,7 @@
 ##   --jobs=N         play N games at a time in worker processes (default 1; a
 ##                    game that collapses is slow, so a batch is worth spreading)
 ##   --seeds=a,b,c    play exactly these seeds instead of --games and --seed
+##   --sites=path     read the scavenging sites from another file (to try a site before it is in the game)
 ##   --policy=none    nobody gives any order: what the colony does alone
 ##   --policy=keep    the default policy, but everyone hides in the school gym from the bell
 ##                    to dawn (the exploit check: hiding must not beat defending)
@@ -31,12 +32,19 @@
 ##  - in the morning (06:30 to 10:00), when food or water is under 4 days, or
 ##    meds under 3, or scrap under 10, or ammo under 60, the best two free
 ##    shooters go scavenging to the site that helps;
+##  - by day, with ammo under 250 and 10 scrap or more to spare, the best free builder
+##    makes ammo at the worktable until there is 450 (the scrapyard is the site
+##    for scrap, then the hardware store);
 ##  - the infected are treated while there is medicine, and sent out through the
 ##    gate once delirious with none left.
 ## Bandages, stabilising and healing in bed are automatic in the game.
 extends SceneTree
 
 const Helpers := preload("res://tests/helpers.gd")
+const Scavenge := preload("res://scripts/sim/scavenge.gd")
+
+## Another sites file for the whole run (--sites=path): to try a site before it is in the game.
+static var sites_override := ""
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -54,8 +62,14 @@ class Policy:
 	const LOW_AMMO := 60.0
 	## An infected person is treated again no sooner than this many game minutes after the last try.
 	const TREAT_GAP_MIN := 45.0
-	## Sites that help with each need, most useful first.
-	const SITE_FOR := {"food": "houses", "water": "houses", "meds": "pharmacy", "scrap": "hardware", "ammo": "hardware"}
+	## Sites that help with each need, most useful first (a site that is not in the
+	## game, or is picked over, is skipped).
+	const SITE_FOR := {"food": ["houses"], "water": ["houses"], "meds": ["pharmacy"], "scrap": ["scrapyard", "hardware"], "ammo": ["hardware", "scrapyard"]}
+	## The workshop: one person makes ammo by day while the stock is under CRAFT_BELOW_AMMO
+	## and there is scrap to spare, until it is over CRAFT_UNTIL_AMMO.
+	const CRAFT_BELOW_AMMO := 250.0
+	const CRAFT_UNTIL_AMMO := 450.0
+	const CRAFT_MIN_SCRAP := 10.0
 
 	var sim
 	## Hide in the school gym from the bell to dawn instead of holding the posts.
@@ -70,6 +84,7 @@ class Policy:
 	var treats := 0
 	var sendouts := 0
 	var repairs := 0
+	var crafts := 0
 	## Lines of what it did: [{"day", "hour", "text"}].
 	var notes: Array = []
 	var _sent_day := 0
@@ -88,6 +103,7 @@ class Policy:
 		_scavenge()
 		_repair()
 		_infection()
+		_craft()
 
 	func _note(text: String) -> void:
 		notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": text})
@@ -263,9 +279,9 @@ class Policy:
 		for site in sim.scavenge.available_sites():
 			open[site.id] = site.available
 		for need in needs:
-			var id: String = SITE_FOR[need]
-			if open.get(id, false):
-				return id
+			for id in SITE_FOR[need]:
+				if open.get(id, false):
+					return id
 		return ""
 
 	## The best two free shooters (Leading breaks a tie), or one if the colony
@@ -316,12 +332,46 @@ class Policy:
 
 	func _best_builder():
 		var best = null
+		var best_key := -1.0e9
 		for p in sim.people:
 			if p.repair != null or not _free(p):
 				continue
+			# walls come before ammo, but a repair takes someone off the bench only if nobody else is free
+			var key: float = float(p.def.skills.Building) - (100.0 if sim.workshop.crafting(p) else 0.0)
+			if best == null or key > best_key:
+				best = p
+				best_key = key
+		return best
+
+	# -------------------------------------------------------------- workshop --
+
+	## By day, while ammo is low and scrap can be spared, the best builder who is free
+	## makes ammo at the worktable; they are called off when the stock is back up.
+	func _craft() -> void:
+		if sim.phase != "day":
+			return
+		var workers: Array = []
+		for p in sim.people:
+			if sim.workshop.crafting(p):
+				workers.append(p)
+		var ammo := float(sim.stock.ammo)
+		if not workers.is_empty():
+			if ammo >= CRAFT_UNTIL_AMMO:
+				for p in workers:
+					sim.workshop.stop(p)
+					_note("%s is back from the worktable" % p.first)
+			return
+		if ammo >= CRAFT_BELOW_AMMO or float(sim.stock.scrap) < CRAFT_MIN_SCRAP:
+			return
+		var best = null
+		for p in sim.people:
+			if p.repair != null or not _free(p) or sim.workshop.why_not_craft(p) != "":
+				continue
 			if best == null or p.def.skills.Building > best.def.skills.Building:
 				best = p
-		return best
+		if best != null and sim.workshop.order_craft(best):
+			crafts += 1
+			_note("%s makes ammo at the worktable" % best.first)
 
 	# ------------------------------------------------------------- infection --
 
@@ -344,7 +394,7 @@ class Policy:
 
 ## Plays one game and returns {"seed", "difficulty", "days", "outcome"
 ## ("survived" or "defeat"), "day" (the day reached, at most `days`), "rows",
-## "trips", "treats", "sendouts", "repairs", "notes", "took"}. `rows` has one
+## "trips", "treats", "sendouts", "repairs", "crafts", "notes", "took"}. `rows` has one
 ## entry for the start of each day (and one at the end of a lost game): see _row.
 ## `hz` is how many steps of the rules a second; `orders` false plays with no
 ## orders given at all; `hide` makes the crew spend every night in the school gym; `setup`, if given, is called with the new Sim before the
@@ -396,6 +446,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"treats": policy.treats,
 		"sendouts": policy.sendouts,
 		"repairs": policy.repairs,
+		"crafts": policy.crafts,
 		"notes": all_notes,
 		"took": snappedf((Time.get_ticks_msec() - started) / 1000.0, 0.1),
 	}
@@ -523,7 +574,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var opts := {"games": "8", "days": "10", "difficulty": "1", "seed": "1", "out": "", "hz": "30", "policy": "default", "jobs": "1", "seeds": ""}
+	var opts := {"games": "8", "days": "10", "difficulty": "1", "seed": "1", "out": "", "hz": "30", "policy": "default", "jobs": "1", "seeds": "", "sites": ""}
 	var verbose := false
 	var quiet := false
 	for arg in OS.get_cmdline_user_args():
@@ -539,6 +590,9 @@ func _run() -> void:
 			opts[kv[0]] = kv[1]
 			if kv[0] == "hz":
 				opts["hz_set"] = "1"
+	if String(opts.sites) != "":
+		sites_override = String(opts.sites)
+		Scavenge.sites_path = sites_override
 	var days := maxi(1, int(opts.days))
 	var difficulty := clampi(int(opts.difficulty), 0, 2)
 	var hz := clampf(float(opts.hz), 5.0, 60.0)
@@ -611,6 +665,8 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 		var args := ["--headless", "--quiet", "--path", project, "--script", "res://tools/balance.gd", "--",
 			"--seeds=%s" % ",".join(names), "--days=%d" % days, "--difficulty=%d" % difficulty, "--hz=%s" % str(hz),
 			"--policy=%s" % ("keep" if hide else ("informed" if informed else ("default" if orders else "none"))), "--quiet", "--out=%s" % out]
+		if sites_override != "":
+			args.append("--sites=%s" % sites_override)
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0
@@ -643,15 +699,15 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 
 
 func _print_header() -> void:
-	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats  secs")
+	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats makes  secs")
 
 
 func _print_game(n: int, r: Dictionary, verbose: bool) -> void:
 	var last: Dictionary = r.rows[r.rows.size() - 1]
-	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5.1f" % [
+	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5d %5.1f" % [
 		n, r.seed, r.outcome, r.day, last.alive, last.dead, last.turned, last.left,
 		last.food, last.water, last.scrap, last.meds, last.ammo,
-		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.took])
+		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.get("crafts", 0), r.took])
 	if verbose:
 		for note in r.notes:
 			print("        day %2d %05.2f  %s" % [note.day, note.hour, note.text])
