@@ -5,6 +5,7 @@ extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
 const GroundDetails := preload("res://scripts/render/ground_details.gd")
+const DeckFaces := preload("res://scripts/render/deck_faces.gd")
 const TILE := GD.TILE
 
 enum Layer { MARK = 1, LOW = 2, BIG = 4 }
@@ -59,6 +60,18 @@ func build(data: Dictionary) -> void:
 		else:
 			_add_pieces(parent, o.pieces)
 	_add_pieces(layers[3], d.walls)
+	# the raised platforms get a front face, posts and a shadow; first in their
+	# layer, so the planks and the taller things in front draw over them
+	var low_faces := DeckFaces.new()
+	low_faces.name = "DeckFacesLow"
+	low_faces.setup(d, ["walkway"])
+	layers[2].add_child(low_faces)
+	layers[2].move_child(low_faces, 0)
+	var big_faces := DeckFaces.new()
+	big_faces.name = "DeckFacesBig"
+	big_faces.setup(d, ["tower"])
+	layers[4].add_child(big_faces)
+	layers[4].move_child(big_faces, 0)
 
 
 func _build_ground() -> void:

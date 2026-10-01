@@ -53,6 +53,7 @@ The files in `assets/` are the source art. Edit or replace them directly; a
 replacement PNG at the same size drops straight in.
 
 - `assets/objects`, `walls`, `terrain`: props, the school walls, ground textures.
+- `scripts/render/deck_faces.gd`: draws the front face, posts, braces, shadow and ladders that make the walkways and towers look raised (their heights are two constants at the top of the file).
 - `assets/pawns`, `portraits`, `weapons`, `trees`, `fx`: characters and effects.
 - `assets/ui/icons`: HUD icons.
 - `assets/audio`: sound effects and ambience loops.
