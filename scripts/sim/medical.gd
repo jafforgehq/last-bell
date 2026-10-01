@@ -177,6 +177,10 @@ func _tick(p, gh: float) -> void:
 
 ## A zombie just bit `p` (health already reduced, blood and alert done).
 func after_bite(_z, p) -> void:
+	# a tough person is sometimes spared the wound (and so the infection): the Tough trait
+	var tough: float = sim.traits.mult(p, "wound")
+	if tough < 1.0 and sim.rng.randf() >= tough:
+		return
 	add_wound(p, "bite")
 
 
@@ -188,6 +192,7 @@ func add_wound(p, kind: String) -> void:
 	p.bleeding += BITE_BLEED if kind == "bite" else SCRATCH_BLEED
 	if kind == "bite":
 		_roll_infection(p)
+	sim.barks.say(p, "wounded")
 
 
 func _roll_infection(p) -> void:
@@ -206,7 +211,8 @@ func _roll_infection(p) -> void:
 ## someone within SCRATCH_REACH of the spot just inside the wall, level with
 ## the walker. The wound is light and never infects.
 func on_wall_claw(z, seg) -> void:
-	if sim.rng.randf() >= SCRATCH_CHANCE:
+	var roll: float = sim.rng.randf()
+	if roll >= SCRATCH_CHANCE:
 		return
 	var behind := Vector2(z.x, seg.center.y) if seg.side == "N" or seg.side == "S" else Vector2(seg.center.x, z.y)
 	var victim = null
@@ -222,6 +228,8 @@ func on_wall_claw(z, seg) -> void:
 		return
 	if sim.world.on_deck(victim.x, victim.y) and sim.rng.randf() >= DECK_SCRATCH:
 		return
+	if roll >= SCRATCH_CHANCE * sim.traits.mult(victim, "wound"):
+		return # a tough person shrugs it off (the Tough trait)
 	add_wound(victim, "scratch")
 	sim.fx.blood(victim.x, victim.y - 0.25, victim.x - z.x, victim.y - z.y, 5)
 	sim.alert("scratch-%s" % victim.id, "warn", "%s was scratched" % victim.first, "It bleeds until it is bandaged", Vector2(victim.x, victim.y), 6.0)
@@ -255,6 +263,8 @@ func on_downed(p, cause: String) -> void:
 	var ana = _person("ana")
 	var able: bool = ana != null and ana != p and not ana.dead and not ana.downed and ana.away == null
 	sim.alert("down-%s" % p.id, "danger", "%s is down" % p.first, "Get them to Ana" if able else "Stabilise them", Vector2(p.x, p.y), 60.0)
+	sim.morale.on_downed(p)
+	sim.barks.on_friend_down(p)
 
 
 func _bled_out(p) -> void:
@@ -349,6 +359,8 @@ func kill(p, cause: String) -> void:
 	sim.alert("dead-%s" % p.id, "danger", "%s died" % p.first, _cause_text(cause), at, 60.0)
 	if cause != "scavenging": # a lost party tells its own story
 		sim.events.append({"type": "banner", "text": "%s died" % p.first, "sub": _cause_text(cause)})
+	sim.morale.on_lost(p, "died")
+	sim.barks.on_lost(p)
 
 
 func _cause_text(cause: String) -> String:
@@ -408,12 +420,15 @@ func _turn(p) -> void:
 	sim.alert("turned-%s" % p.id, "danger", "%s has turned" % p.first, "Put them down", at, 30.0)
 	sim.events.append({"type": "banner", "text": "%s has turned" % p.first, "sub": "Put them down"})
 	sim.events.append({"type": "turned", "x": p.x, "y": p.y})
+	sim.morale.on_lost(p, "turned")
+	sim.barks.on_lost(p)
 
 
 ## The chance that `healer` clears an infection: 30% plus 10% a point of
-## Medicine, at most 90%.
+## Medicine, at most 90%, and on top of that what the healer's traits add (Triage: 10%).
 func cure_chance(healer) -> float:
-	return minf(CURE_MAX, CURE_BASE + CURE_PER_POINT * float(healer.def.skills.Medicine))
+	var by_skill := minf(CURE_MAX, CURE_BASE + CURE_PER_POINT * float(healer.skills.Medicine))
+	return clampf(by_skill + sim.traits.add(healer, "cure"), 0.0, 1.0)
 
 
 ## Takes 2 medicine and rolls the healer's chance; true if the infection is gone.
@@ -462,9 +477,9 @@ func _job_of_patient(p):
 ## Free to go and treat someone: able, off orders, not already busy, and with
 ## at least a little Medicine.
 func _is_free(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null:
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h):
 		return false
-	if int(h.def.skills.Medicine) < 1 or sendouts.has(h.id):
+	if int(h.skills.Medicine) < 1 or sendouts.has(h.id):
 		return false
 	if _job_of_healer(h) != null or _job_of_patient(h) != null:
 		return false
@@ -485,7 +500,7 @@ func _job_ok(j) -> bool:
 
 ## Like _is_free, for a healer who already holds a job.
 func _is_free_for_job(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null:
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h):
 		return false
 	return not sendouts.has(h.id) and sim.scavenge.goal_for(h) == null
 
@@ -573,7 +588,7 @@ func _best_healer(patient):
 	for h in sim.people:
 		if h == patient or not _is_free(h):
 			continue
-		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.def.skills.Medicine)
+		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.skills.Medicine)
 		if score < best_score:
 			best_score = score
 			best = h
@@ -599,7 +614,7 @@ func _turn_a_healer_to(patient, rank: int) -> void:
 		var h = j.healer
 		if Vector2(h.x, h.y).distance_to(Vector2(j.patient.x, j.patient.y)) <= REACH:
 			continue
-		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.def.skills.Medicine)
+		var score: float = Vector2(h.x, h.y).distance_to(Vector2(patient.x, patient.y)) - SKILL_TILES * float(h.skills.Medicine)
 		if score < best_score:
 			best_score = score
 			best = j
@@ -621,7 +636,7 @@ func _update_jobs(dt: float) -> void:
 			if j.stand != null and Vector2(j.healer.x, j.healer.y).distance_to(j.stand) < 0.15:
 				j.stand = null # they are at their spot and the patient is not: find a new one
 			continue
-		j.work += minutes
+		j.work += minutes * (sim.traits.mult(j.healer, "bandage") if j.kind == "bandage" else 1.0)
 		if j.work + EPS >= (BANDAGE_MIN if j.kind == "bandage" else CURE_MIN):
 			jobs.erase(j)
 			_finish(j)
@@ -636,6 +651,7 @@ func _finish(j) -> void:
 		p.wounds = 0
 		if p.downed and not p.stabilised:
 			stabilise(p)
+		sim.skills.credit(healer, "treated", 1.0)
 		return
 	treat_orders.erase(p.id)
 	var at := Vector2(p.x, p.y)
@@ -643,6 +659,7 @@ func _finish(j) -> void:
 		sim.alert("treated-%s" % p.id, "info", "%s's infection is gone" % p.first, "%s's treatment worked" % healer.first, at, 12.0)
 	else:
 		sim.alert("treated-%s" % p.id, "warn", "The treatment did not take", "%s is still infected. Try again (2 medicine)" % p.first, at, 12.0)
+	sim.skills.credit(healer, "treated", 1.0)
 
 
 ## A goal the rules walk a person to, {"x", "y", "face", "what"}: to the gate
@@ -712,7 +729,7 @@ func _work_out_stand(healer, patient) -> Vector2:
 func can_treat(p) -> bool:
 	if p.dead or p.turned or p.away != null:
 		return false
-	return _needs_bandage(p) or p.infected_at >= 0.0
+	return _needs_bandage(p) or p.infected_at >= 0.0 or sim.storyteller.is_sick(p)
 
 
 ## Whether the HUD should offer "Send out" for `p` (infected, and able to walk
@@ -751,6 +768,9 @@ func gizmo(id: String, sel) -> bool:
 	if id == "treat":
 		if not can_treat(p):
 			return false
+		# a passing fever (a card of the storyteller's) is treated at once, for one medicine
+		if sim.storyteller.is_sick(p) and not _needs_bandage(p) and p.infected_at < 0.0:
+			return sim.storyteller.treat(p)
 		sendouts.erase(p.id) # they changed their mind
 		treat_orders[p.id] = true
 		no_meds_at = -1.0e9 # the player asked: tell them if it cannot be done
@@ -814,6 +834,7 @@ func _exile(p) -> void:
 	p.turn_at = -1.0
 	p.activity = "Left through the gate"
 	sim.alert("exile-%s" % p.id, "warn", "%s left through the gate" % p.first, "", null, 10.0)
+	sim.morale.on_lost(p, "left")
 
 
 # ---------------------------------------------------------------------- save --

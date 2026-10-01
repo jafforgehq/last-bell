@@ -1,0 +1,502 @@
+extends "res://tests/case.gd"
+## Traits (scripts/sim/traits.gd, assets/data/traits.json): ten small quirks, two to a
+## person (map.json), each changing a number the rules use. Every test here compares a
+## person with the trait and the same person without it, in the same state.
+
+const Helpers := preload("res://tests/helpers.gd")
+const GD := preload("res://scripts/game_data.gd")
+const World := preload("res://scripts/world.gd")
+const Sim := preload("res://scripts/sim/sim.gd")
+const FxNull := preload("res://scripts/sim/fx_null.gd")
+const SaveGame := preload("res://scripts/sim/save_game.gd")
+const Medical := preload("res://scripts/sim/medical.gd")
+const Workshop := preload("res://scripts/sim/workshop.gd")
+
+## The keys the rules ask for (see traits.gd), and the two that are added, not multiplied.
+const KEYS := ["aim", "reload", "repair", "craft", "bandage", "wound", "dead_morale", "morale_recover", "grief", "xp", "cure", "bond"]
+const ADDED := ["cure", "bond"]
+## Who has which, from map.json.
+const ROSTER := {
+	"ruth": ["steady", "loyal"],
+	"dez": ["tinkerer", "tough"],
+	"ana": ["triage", "optimist"],
+	"marcus": ["nervous", "quick_learner"],
+	"walt": ["steady_hands", "sharp_eyed"],
+	"hector": ["tough", "steady"],
+}
+
+
+func _person(sim, first: String):
+	for p in sim.people:
+		if p.first == first:
+			return p
+	return null
+
+
+## A quiet day: no dead about, no nights, 09:00.
+func _quiet(hour: float = 9.0, seed_value: int = 7) -> Dictionary:
+	var g := Helpers.make(seed_value, 1)
+	var sim = g.sim
+	sim.waves.enabled = false
+	sim.zombies.clear()
+	sim.minutes = hour * 60.0
+	sim.phase = sim.phase_at(sim.minutes)
+	sim.bell_rung = hour >= 19.0 or hour < 6.0
+	sim.events.clear()
+	return g
+
+
+func _bare() -> Dictionary:
+	var data := GD.load_all()
+	var world := World.new()
+	Engine.get_main_loop().root.add_child(world)
+	world.build(data)
+	var sim := Sim.new(data, world, FxNull.new())
+	return {"sim": sim, "world": world, "data": data}
+
+
+func _ids(list: Array) -> Array:
+	var out: Array = []
+	for t in list:
+		out.append(t.id)
+	return out
+
+
+## `n` of the dead clawing at the wall sections `segs`, each in a real place at the wall.
+func _clawing(sim, segs: Array, n: int) -> void:
+	var placed := 0
+	for seg in sim.segments:
+		if not segs.has(seg.id):
+			continue
+		for sl in seg.slots:
+			if placed >= n:
+				return
+			if sl.who != null:
+				continue
+			var z = sim.spawn(sl.x, sl.y, "attack")
+			z.slot = sl
+			sl.who = z
+			z.facing = sl.face
+			placed += 1
+
+
+## What the dead at the wall cost this person's morale, as a positive number.
+func _dead_cost(sim, p) -> float:
+	for line in sim.morale.explain(p):
+		if String(line.label).begins_with("The dead at the wall"):
+			return absf(float(line.value))
+	return 0.0
+
+
+# ------------------------------------------------------------------- the data --
+
+func test_there_are_ten_traits_with_a_name_a_blurb_and_numbers() -> void:
+	var g := _quiet()
+	var all: Array = g.sim.traits.all()
+	eq(all.size(), 10, "ten traits")
+	var seen := {}
+	var used := {}
+	for t in all:
+		check(not seen.has(t.id), "%s is listed once" % t.id)
+		seen[t.id] = true
+		check(String(t.name).length() >= 4, "%s has a name" % t.id)
+		check(String(t.blurb).length() >= 30, "%s says what it does" % t.id)
+		check(not t.effects.is_empty(), "%s has an effect" % t.id)
+		for k in t.effects:
+			check(KEYS.has(k), "%s: %s is a key the rules know" % [t.id, k])
+			check(typeof(t.effects[k]) == TYPE_FLOAT or typeof(t.effects[k]) == TYPE_INT, "%s: %s is a number" % [t.id, k])
+			used[k] = true
+	for k in KEYS:
+		check(used.has(k), "some trait uses %s" % k)
+	g.world.free()
+
+
+func test_everyone_has_two_traits_as_the_roster_says() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	for p in sim.people:
+		var got: Array = sim.traits.of(p)
+		eq(got.size(), 2, "%s has two traits" % p.first)
+		eq(_ids(got), ROSTER[p.id], "%s has %s" % [p.first, str(ROSTER[p.id])])
+		for t in got:
+			check(t.has("id") and t.has("name") and t.has("blurb"), "a trait carries its id, name and blurb")
+			check(String(t.blurb) != "", "and the blurb is words")
+		eq(p.def.get("traits"), ROSTER[p.id], "map.json says the same")
+	g.world.free()
+
+
+func test_a_person_with_none_has_no_effects() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var dez = _person(sim, "Dez")
+	sim.traits.give(dez, [])
+	eq(sim.traits.of(dez), [], "no traits")
+	for k in KEYS:
+		eq(sim.traits.mult(dez, k), 1.0, "%s: nothing multiplies" % k)
+		eq(sim.traits.add(dez, k), 0.0, "%s: nothing adds" % k)
+	eq(sim.traits.of(_person(sim, "Ruth")).size(), 2, "and the others keep theirs")
+	g.world.free()
+
+
+func test_effects_multiply_and_add_up() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var dez = _person(sim, "Dez")
+	sim.traits.give(dez, ["tinkerer"])
+	near(sim.traits.mult(dez, "repair"), 1.3, 1e-9, "Tinkerer: repair 1.3")
+	near(sim.traits.mult(dez, "craft"), 1.2, 1e-9, "Tinkerer: craft 1.2")
+	eq(sim.traits.mult(dez, "aim"), 1.0, "and nothing else")
+	sim.traits.give(dez, ["steady", "nervous"])
+	near(sim.traits.mult(dez, "dead_morale"), 0.75, 1e-9, "two traits on one key multiply: 0.5 x 1.5")
+	sim.traits.give(dez, ["triage", "loyal"])
+	near(sim.traits.add(dez, "cure"), 0.1, 1e-9, "Triage adds 0.1 to the cure")
+	near(sim.traits.add(dez, "bond"), 0.04, 1e-9, "Loyal adds 0.04 to the bond")
+	sim.traits.give(dez, ["tough", "tough", "nonsense"])
+	eq(_ids(sim.traits.of(dez)), ["tough"], "a trait is had once, and one that does not exist is not had")
+	near(sim.traits.mult(dez, "wound"), 0.75, 1e-9, "Tough: wound 0.75")
+	eq(sim.traits.mult(null, "aim"), 1.0, "nobody has no effect")
+	g.world.free()
+
+
+func test_names_for_lists_the_traits_that_carry_a_key() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	eq(sim.traits.names_for(_person(sim, "Marcus"), "dead_morale"), ["Nervous"], "Marcus: Nervous shakes him")
+	eq(sim.traits.names_for(_person(sim, "Marcus"), "aim"), ["Nervous"], "and costs him aim in a crowd")
+	eq(sim.traits.names_for(_person(sim, "Hector"), "dead_morale"), ["Steady"], "Hector: Steady")
+	eq(sim.traits.names_for(_person(sim, "Hector"), "xp"), [], "nothing else")
+	eq(sim.traits.names_for(null, "xp"), [], "nobody has none")
+	g.world.free()
+
+
+func test_giving_traits_does_not_touch_the_roster() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var dez = _person(sim, "Dez")
+	sim.traits.give(dez, [])
+	eq(dez.def.get("traits"), ROSTER.dez, "map.json's list is as it was")
+	var h := _quiet()
+	eq(_ids(h.sim.traits.of(_person(h.sim, "Dez"))), ROSTER.dez, "and the next game starts from it")
+	g.world.free()
+	h.world.free()
+
+
+# ------------------------------------------------------- each trait, its number --
+
+func test_steady_and_nervous_scale_what_the_dead_at_the_wall_do_to_morale() -> void:
+	var g := _quiet(22.0)
+	var sim = g.sim
+	var ruth = _person(sim, "Ruth")
+	ruth.x = 39.0
+	ruth.y = 20.0
+	_clawing(sim, [1, 2, 3], 10)
+	sim.traits.give(ruth, [])
+	var plain := _dead_cost(sim, ruth)
+	near(plain, 4.0, 0.001, "ten of the dead cost 0.4 each")
+	sim.traits.give(ruth, ["steady"])
+	near(_dead_cost(sim, ruth), plain * 0.5, 0.001, "Steady: half")
+	var tagged := false
+	for line in sim.morale.explain(ruth):
+		tagged = tagged or String(line.label) == "The dead at the wall (Steady)"
+	check(tagged, "and the line says which trait: %s" % str(sim.morale.explain(ruth)))
+	sim.traits.give(ruth, ["nervous"])
+	near(_dead_cost(sim, ruth), plain * 1.5, 0.001, "Nervous: half again")
+	g.world.free()
+
+
+func test_nervous_aims_worse_among_a_crowd_of_the_dead() -> void:
+	var g := _quiet(22.0)
+	var sim = g.sim
+	var marcus = _person(sim, "Marcus")
+	var crowd: Array = []
+	for i in 6:
+		crowd.append(sim.spawn(marcus.x + 5.0, marcus.y + float(i) * 0.4, "wander"))
+	near(sim.traits.mult(marcus, "aim"), 0.9, 1e-9, "six of the dead within ten tiles: a tenth worse")
+	near(sim.aim_factor(marcus), 0.9, 1e-9, "and the rules' aim says so")
+	crowd[0].state = "dying"
+	eq(sim.traits.mult(marcus, "aim"), 1.0, "one of them going down: five are not enough")
+	crowd[0].state = "wander"
+	near(sim.traits.mult(marcus, "aim"), 0.9, 1e-9, "back to six")
+	crowd[1].x = marcus.x + 40.0
+	eq(sim.traits.mult(marcus, "aim"), 1.0, "one of them far away: five within ten")
+	crowd[1].x = marcus.x + 9.5
+	crowd[1].y = marcus.y
+	near(sim.traits.mult(marcus, "aim"), 0.9, 1e-9, "nine and a half tiles is within ten")
+	sim.traits.give(marcus, [])
+	eq(sim.aim_factor(marcus), 1.0, "and without the trait it never changes")
+	g.world.free()
+
+
+func test_tinkerer_mends_walls_faster() -> void:
+	var rates: Array = []
+	for with_trait in [false, true]:
+		var g := _quiet(9.0)
+		var sim = g.sim
+		sim.stock.scrap = 200.0
+		var dez = _person(sim, "Dez")
+		sim.traits.give(dez, ["tinkerer"] if with_trait else [])
+		var seg = sim.segments[4]
+		sim._damage_segment(seg, 150.0)
+		var hp0: float = seg.hp
+		dez.x = seg.center.x
+		dez.y = seg.center.y
+		sim.order_repair(dez, seg)
+		Helpers.run(sim, 3.0)
+		rates.append(seg.hp - hp0)
+		g.world.free()
+	check(rates[0] > 30.0, "Dez mends a good deal in three seconds: %.1f" % rates[0])
+	near(rates[1] / rates[0], 1.3, 0.01, "a Tinkerer mends 30 percent faster: %.1f against %.1f" % [rates[1], rates[0]])
+
+
+func test_tinkerer_makes_ammo_faster() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var dez = _person(sim, "Dez")
+	sim.traits.give(dez, [])
+	var plain: float = sim.workshop.scrap_per_hour(dez)
+	sim.traits.give(dez, ["tinkerer"])
+	near(sim.workshop.scrap_per_hour(dez), plain * 1.2, 1e-9, "20% more scrap an hour")
+	# and really: an hour at the bench
+	var used: Array = []
+	for with_trait in [false, true]:
+		var h := _quiet(9.0)
+		var s2 = h.sim
+		s2.stock.scrap = 60.0
+		var d2 = _person(s2, "Dez")
+		s2.traits.give(d2, ["tinkerer"] if with_trait else [])
+		var b: Vector2 = s2.workshop.bench()
+		d2.x = b.x
+		d2.y = b.y
+		s2.workshop.order_craft(d2)
+		Helpers.run(s2, 20.0)
+		used.append(60.0 - float(s2.stock.scrap))
+		h.world.free()
+	near(used[1] / used[0], 1.2, 0.03, "an hour at the bench uses 20 percent more scrap: %.2f against %.2f" % [used[1], used[0]])
+	g.world.free()
+
+
+func test_triage_bandages_faster() -> void:
+	var worked: Array = []
+	for with_trait in [false, true]:
+		var g := _quiet(9.0)
+		var sim = g.sim
+		sim.stock.meds = 10.0
+		var ana = _person(sim, "Ana")
+		var hector = _person(sim, "Hector")
+		sim.traits.give(ana, ["triage"] if with_trait else [])
+		hector.x = ana.x + 0.3
+		hector.y = ana.y
+		sim.medical.add_wound(hector, "scratch")
+		sim.medical.jobs.append({"healer": ana, "patient": hector, "kind": "bandage", "work": 0.0, "stand": null, "anchor": Vector2.ZERO})
+		sim.medical._update_jobs(1.0)
+		check(not sim.medical.jobs.is_empty(), "the job is still going")
+		worked.append(float(sim.medical.jobs[0].work))
+		g.world.free()
+	near(worked[0], 3.0, 0.001, "a second of work is three game minutes")
+	near(worked[1] / worked[0], 1.3, 0.001, "a Triage nurse gets through a bandage 30% faster")
+
+
+func test_triage_makes_a_cure_more_likely() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var walt = _person(sim, "Walt")
+	sim.traits.give(walt, [])
+	var plain: float = sim.medical.cure_chance(walt)
+	near(plain, Medical.CURE_BASE + 0.2, 1e-9, "Walt, Medicine 2")
+	sim.traits.give(walt, ["triage"])
+	near(sim.medical.cure_chance(walt), plain + 0.1, 1e-9, "Triage adds ten points")
+	var ana = _person(sim, "Ana")
+	sim.traits.give(ana, [])
+	near(sim.medical.cure_chance(ana), Medical.CURE_MAX, 1e-9, "Ana's Medicine alone is capped at 90%")
+	sim.traits.give(ana, ["triage"])
+	near(sim.medical.cure_chance(ana), Medical.CURE_MAX + 0.1, 1e-9, "and the trait is on top of the cap")
+	g.world.free()
+
+
+## How many of `shots` shots at a walker that cannot die hit, for `p` with `traits`.
+func _hits(p_id: String, traits: Array, shots: int, seed_value: int) -> int:
+	var g := _quiet(22.0, seed_value)
+	var sim = g.sim
+	sim.stock.ammo = 100000.0
+	var p = _person(sim, p_id)
+	sim.traits.give(p, traits)
+	var z = sim.spawn(p.x + 4.0, p.y, "wander")
+	z.hp = 1.0e9
+	var start_hp: float = z.hp
+	var dmg: float = float(p.gun.dmg)
+	for i in shots:
+		p.mag = int(p.gun.mag)
+		p.cooldown = 0.0
+		sim._fire(p, z, 0.0)
+	var hits := roundi((start_hp - z.hp) / dmg)
+	g.world.free()
+	return hits
+
+
+func test_sharp_eyed_hits_more_often() -> void:
+	var g := _quiet()
+	var walt = _person(g.sim, "Walt")
+	g.sim.traits.give(walt, [])
+	eq(g.sim.aim_factor(walt), 1.0, "no trait, no change")
+	g.sim.traits.give(walt, ["sharp_eyed"])
+	near(g.sim.aim_factor(walt), 1.08, 1e-9, "Sharp-eyed: 8% better aim")
+	g.world.free()
+	# really: Ana's pistol hits about half the time, so the difference shows
+	var shots := 6000
+	var plain := _hits("Ana", [], shots, 3)
+	var sharp := _hits("Ana", ["sharp_eyed"], shots, 3)
+	var gain := float(sharp) / float(plain)
+	check(gain > 1.03 and gain < 1.13, "8 percent more of the shots hit: %d against %d (x%.3f)" % [sharp, plain, gain])
+
+
+func test_steady_hands_reload_faster() -> void:
+	var times: Array = []
+	for traits in [[], ["steady_hands"]]:
+		var g := _quiet(22.0)
+		var sim = g.sim
+		sim.stock.ammo = 1000.0
+		var walt = _person(sim, "Walt")
+		sim.traits.give(walt, traits)
+		var z = sim.spawn(walt.x + 4.0, walt.y, "wander")
+		z.hp = 1.0e9
+		walt.mag = 1
+		walt.cooldown = 0.0
+		sim._fire(walt, z, 0.0)
+		times.append(walt.reloading)
+		g.world.free()
+	near(times[0], 2.4, 1e-9, "an M1 takes 2.4 seconds to reload")
+	near(times[1], 1.8, 1e-9, "Steady hands: three quarters of that")
+
+
+func _scratches(id: String, traits: Array, claws: int) -> int:
+	var g := _quiet(22.0, 6)
+	var sim = g.sim
+	var gate = sim.segments[2]
+	var slot = gate.slots[3]
+	var z = sim.spawn(slot.x, slot.y, "attack")
+	var p = _person(sim, id)
+	sim.traits.give(p, traits)
+	p.x = z.x
+	p.y = gate.center.y + 1.6
+	p.path = []
+	for i in claws:
+		sim.medical.on_wall_claw(z, gate)
+	var wounds: int = p.wounds
+	g.world.free()
+	return wounds
+
+
+func test_tough_is_scratched_less_by_claws() -> void:
+	var plain := _scratches("Dez", [], 4000)
+	var tough := _scratches("Dez", ["tough"], 4000)
+	check(plain > 300, "without it about 11 percent of claws scratch: %d of 4000" % plain)
+	near(float(tough) / float(plain), 0.75, 0.08, "Tough: a quarter fewer wounds: %d against %d" % [tough, plain])
+	check(tough < plain, "and fewer, not just about as many")
+
+
+func test_tough_is_bitten_less_often_too() -> void:
+	var counts: Array = []
+	for traits in [[], ["tough"]]:
+		var g := _quiet(22.0, 8)
+		var sim = g.sim
+		var z = sim.spawn(30.0, 30.0, "wander")
+		var hector = _person(sim, "Hector")
+		sim.traits.give(hector, traits)
+		var wounds := 0
+		for i in 2000:
+			hector.wounds = 0
+			hector.bleeding = 0.0
+			sim.medical.after_bite(z, hector)
+			wounds += hector.wounds
+		counts.append(wounds)
+		g.world.free()
+	eq(counts[0], 2000, "a bite always wounds a person with no trait")
+	near(float(counts[1]) / 2000.0, 0.75, 0.04, "Tough: three bites in four wound: %d of 2000" % counts[1])
+
+
+func test_optimist_recovers_faster() -> void:
+	var gains: Array = []
+	for traits in [[], ["optimist"]]:
+		var g := _quiet(9.0)
+		var sim = g.sim
+		var ana = _person(sim, "Ana")
+		sim.traits.give(ana, traits)
+		sim.morale.shock(ana, -40.0, "A bad moment")
+		var before: float = sim.morale.value(ana)
+		Helpers.run(sim, 20.0)   # one game hour
+		gains.append(sim.morale.value(ana) - before)
+		g.world.free()
+	near(gains[0], 4.0, 0.2, "most people recover four points an hour: %.2f" % gains[0])
+	near(gains[1] / gains[0], 1.5, 0.05, "an Optimist half as fast again: %.2f" % gains[1])
+
+
+func test_loyal_takes_a_friends_death_harder() -> void:
+	var drops: Array = []
+	for traits in [[], ["loyal"]]:
+		var g := _quiet(9.0)
+		var sim = g.sim
+		var ruth = _person(sim, "Ruth")
+		var marcus = _person(sim, "Marcus")
+		sim.traits.give(ruth, traits)
+		var before: float = sim.morale.value(ruth)
+		sim.medical.kill(marcus, "bled out")
+		drops.append(before - sim.morale.value(ruth))
+		g.world.free()
+	near(drops[0], 25.0, 0.01, "a friend's death is 25 points")
+	near(drops[1], 37.5, 0.01, "to a Loyal person half as much again")
+
+
+func test_loyal_aims_better_beside_a_friend() -> void:
+	var g := _quiet(22.0)
+	var sim = g.sim
+	var ruth = _person(sim, "Ruth")
+	var marcus = _person(sim, "Marcus")
+	marcus.x = ruth.x + 3.0
+	marcus.y = ruth.y
+	sim.traits.give(ruth, [])
+	near(sim.aim_factor(ruth), 1.08, 1e-9, "beside a friend: 8% better")
+	sim.traits.give(ruth, ["loyal"])
+	near(sim.aim_factor(ruth), 1.12, 1e-9, "Loyal: 4 more points")
+	marcus.x = ruth.x + 30.0
+	near(sim.aim_factor(ruth), 1.0, 1e-9, "and nothing when the friend is far")
+	g.world.free()
+
+
+func test_a_quick_learner_learns_half_as_fast_again() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	var marcus = _person(sim, "Marcus")
+	near(sim.traits.mult(marcus, "xp"), 1.5, 1e-9, "Quick learner: xp 1.5")
+	sim.traits.give(marcus, [])
+	eq(sim.traits.mult(marcus, "xp"), 1.0, "without it: 1")
+	for i in 40:
+		sim.skills.credit(marcus, "kills", 1.0)
+	eq(marcus.skills.Shooting, 8, "forty kills are not a point without it")
+	g.world.free()
+
+
+# --------------------------------------------------------------------- saves --
+
+func test_traits_are_saved_and_an_old_save_keeps_the_roster() -> void:
+	var g := _quiet()
+	var sim = g.sim
+	sim.traits.give(_person(sim, "Dez"), ["sharp_eyed", "optimist"])
+	var d := SaveGame.to_dict(sim)
+	var b := _bare()
+	check(SaveGame.apply(b.sim, SaveGame.from_text(SaveGame.to_text(d))), "it applies")
+	eq(_ids(b.sim.traits.of(_person(b.sim, "Dez"))), ["sharp_eyed", "optimist"], "Dez has what he was given")
+	eq(_ids(b.sim.traits.of(_person(b.sim, "Ruth"))), ROSTER.ruth, "the others as before")
+	# a save from before traits
+	d.modules.erase("traits")
+	var c := _bare()
+	check(SaveGame.apply(c.sim, d), "an old save loads")
+	eq(_ids(c.sim.traits.of(_person(c.sim, "Dez"))), ROSTER.dez, "with the roster's traits")
+	# damaged module data is ignored
+	d.modules["traits"] = {"assigned": {"dez": ["nonsense"], "nobody": ["tough"], "ruth": 5}}
+	var e := _bare()
+	check(SaveGame.apply(e.sim, d), "damaged trait data does not refuse the save")
+	eq(_ids(e.sim.traits.of(_person(e.sim, "Ruth"))), ROSTER.ruth, "the roster fills what could not be read")
+	g.world.free()
+	b.world.free()
+	c.world.free()
+	e.world.free()

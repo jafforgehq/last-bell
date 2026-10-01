@@ -9,6 +9,8 @@ paper slips for the alerts, notebook paper for the modals, buttons, chips and so
                                               # stretched to sizes the HUD uses (sheet.png, f_<name>.png)
     UI_SHEET=panel,card UI_DEBUG=... ...      # also sel.png: those frames only
     UI_DRY=1 ...                              # do not write the pictures, only check and draw sheets
+    UI_ONLY=bubble python3 tools/make_ui_theme.py   # write only those frames' pictures and their entries in
+                                              # frames.json (the others, and the scrapyard picture, are left as they are)
 
 Then run `Godot --headless --path . --import` once: the pictures are imported like any other.
 The output is the same bytes every time (all the noise is seeded).
@@ -59,6 +61,11 @@ The frames, and what each is for:
                    bottom right. Tint it with the colour of the level; dark ink
     paper          a modal page of ruled notebook paper: a red margin line (text starts 33 px
                    from the left), punch holes, rules every 14 px. Dark ink
+    bubble         a speech bubble for what someone says in the world (round 4): a slip of pale paper
+                   with a tail at the bottom left, tail tip at frames.json "tail" ([x from the
+                   bubble's left edge, how far below its foot], logical px). The tail lies inside
+                   the left margin, so the middle stretches without bending it; a bubble that
+                   wants its tail at the right is drawn mirrored. Dark ink
     tooltip        a hover tip: small slate plaque
     toast          a one-line message: slate plaque
     chip           a key (R, Space): a small keycap
@@ -373,6 +380,27 @@ def circle_sdf(w, h, cx, cy, r):
     return (np.hypot(xx - cx, yy - cy) - r).astype(np.float32)
 
 
+def tri_sdf(w, h, p0, p1, p2):
+    """Signed distance (negative inside) to the triangle p0 p1 p2 (points in picture pixels)."""
+    xx, yy = grid(w, h)
+    best = None
+    for a, b in ((p0, p1), (p1, p2), (p2, p0)):
+        abx, aby = b[0] - a[0], b[1] - a[1]
+        t = np.clip(((xx - a[0]) * abx + (yy - a[1]) * aby) / (abx * abx + aby * aby), 0.0, 1.0)
+        d = np.hypot(xx - (a[0] + t * abx), yy - (a[1] + t * aby))
+        best = d if best is None else np.minimum(best, d)
+    cr = [(b[0] - a[0]) * (yy - a[1]) - (b[1] - a[1]) * (xx - a[0]) for a, b in ((p0, p1), (p1, p2), (p2, p0))]
+    inside = ((cr[0] >= 0) & (cr[1] >= 0) & (cr[2] >= 0)) | ((cr[0] <= 0) & (cr[1] <= 0) & (cr[2] <= 0))
+    return np.where(inside, -best, best).astype(np.float32)
+
+
+def smooth_union(a, b, k):
+    """The union of two shapes given as signed distances, with the concave joint between them
+    rounded over about `k` pixels."""
+    hh = np.clip(0.5 + 0.5 * (b - a) / k, 0.0, 1.0)
+    return (b * (1.0 - hh) + a * hh - k * hh * (1.0 - hh)).astype(np.float32)
+
+
 def cov(sd, soft=1.0):
     """Coverage of a shape for a signed distance, with a 1 pixel edge."""
     return np.clip(0.5 - np.asarray(sd, np.float32) / soft, 0.0, 1.0)
@@ -424,8 +452,9 @@ def _lin_arr(c):
 
 
 class Frame:
-    def __init__(self, name, img, margin, content, expand, stretch=(TILE_FIT, TILE_FIT), ink=INK, check=(INK, INK2, INK3)):
+    def __init__(self, name, img, margin, content, expand, stretch=(TILE_FIT, TILE_FIT), ink=INK, check=(INK, INK2, INK3), extra=None):
         self.name = name
+        self.extra = dict(extra or {})      # more keys for the entry in frames.json
         self.img = img                      # a PIL RGBA image, at 2x
         need_even(img.width, img.height, name)
         self.margin = [int(v) for v in margin]
@@ -448,7 +477,7 @@ class Frame:
 
     def entry(self):
         r = lambda v: [round(float(x), 2) for x in v]
-        return {
+        out = {
             "file": RES + self.name + ".png",
             "margin": self.margin,
             "content": r(self.content),
@@ -457,6 +486,8 @@ class Frame:
             "avg": hexcolor(self.avg),
             "ink": hexcolor(self.ink),
         }
+        out.update(self.extra)
+        return out
 
     def seam_ratio(self):
         """How much the picture jumps where one tile of a tiled middle ends and the next begins
@@ -957,6 +988,51 @@ def make_slip(mats):
     return Frame("slip", cv.image(), (ml, mt, mr, mb), (9, 8, 10, 8), (sl, st, sr, sb), (TILE_FIT, TILE_FIT), ink=(0x17, 0x13, 0x0a), check=((0x17, 0x13, 0x0a),))
 
 
+def make_bubble(mats):
+    """A speech bubble for what someone says in the world: a slip of pale paper with a rounded
+    outline and a tail at the bottom left, in a soft shadow. Dark ink.
+
+    The tail lies wholly inside the left margin of the nine-patch (the left margin is 44 pixels past
+    the bubble's edge, the tail ends 36 out), so the middle can stretch to any width without bending
+    it. Where the tail's tip is, measured from the bubble's left edge and below its foot, is given in
+    frames.json as "tail" (logical px); the HUD puts the tip on the speaker's head, and draws the
+    picture mirrored when the speaker is nearer the bubble's right end."""
+    sl, st, sr, sb = 6, 4, 6, 26                # where the bubble is in the picture: the shadow outside it; the foot has the tail (16) and its shadow (10)
+    ml, mt, mr, mb = 50, 18, 20, 38             # the nine-patch margins
+    cx, cy = 16, 8
+    w, h = ml + cx + mr, mt + cy + mb
+    need_even(w, h, "bubble")
+    outer = (sl, st, w - sr, h - sb)
+    r = 10.0
+    tail = ((outer[0] + 14.0, outer[3] - 3.0), (outer[0] + 36.0, outer[3] - 3.0), (outer[0] + 17.0, outer[3] + 16.0))
+    tip = (tail[2][0] - outer[0], tail[2][1] - outer[3])
+
+    def union(dy=0.0):
+        body = rr_sdf(w, h, (outer[0], outer[1] + dy, outer[2], outer[3] + dy), r)
+        t = tri_sdf(w, h, *[(x, y + dy) for x, y in tail])
+        return smooth_union(body, t, 3.0)
+
+    cv = Canvas(w, h)
+    xx, yy = grid(w, h)
+    reach = 5.0
+    for dy_, rc, al in ((3.0, reach, 0.46), (1.0, 3.0, 0.34)):
+        t = 1.0 - smoothstep(0.0, rc, union(dy_))
+        cv.over((6, 5, 4), al * t * t)
+    sd = union()
+    ty, tx = tile_xy(w, h, ml, mt)
+    fibre = wrap_at(periodic_noise(cx, cy, seed=6), ty, tx)[..., None]
+    paper = np.asarray((251, 247, 237), np.float32)[None, None, :] + fibre * 0.7
+    # lighter at the top, a little darker toward the foot of the body, in the shade of its own edge
+    paper = paper * (1.0 + 0.018 * (1.0 - smoothstep(0.0, 12.0, yy - outer[1])) - 0.04 * (1.0 - smoothstep(0.0, 14.0, outer[3] - yy)))[..., None]
+    paper = paper * (1.0 - 0.05 * np.exp(-np.maximum(-sd, 0.0) / 2.0))[..., None]
+    cv.over(paper, cov(sd))
+    # the edge: a dark brown line all round the bubble and its tail, and a pale lip along the top
+    cv.over((70, 58, 40), cov(np.abs(sd + 0.8) - 0.8) * 0.78)
+    cv.over((255, 255, 250), cov(np.abs(sd + 2.2) - 0.7) * 0.40 * (yy < outer[1] + 6) * (xx > outer[0] + 8) * (xx < outer[2] - 8))
+    return Frame("bubble", cv.image(), (ml, mt, mr, mb), (8, 5, 8, 6), (sl, st, sr, sb), (STRETCH, STRETCH), ink=ACCENT_INK, check=(ACCENT_INK, PAPER_INK),
+                 extra={"tail": [round(tip[0] * LOGICAL, 2), round(tip[1] * LOGICAL, 2)]})
+
+
 def make_paper(mats):
     """A page of ruled notebook paper for a modal: pale rules, a red margin line, three-hole
     punch holes down the left edge (the rules, the holes and the paper repeat every four
@@ -1009,6 +1085,7 @@ def make_paper(mats):
 def build_all(mats):
     """Every frame, the ones the HUD needs first."""
     out = [make_panel(mats), make_card(mats), make_card(mats, True), make_slip(mats), make_paper(mats)]
+    out.append(make_bubble(mats))
     out += make_buttons(mats)
     out += [make_panel_inset(mats), make_clock(mats), make_tooltip(mats), make_toast(mats), make_chip(mats), make_bar_track(mats),
             make_pill(mats), make_banner(mats), make_panel_slim(mats), make_bar_fill(mats)]
@@ -1102,6 +1179,7 @@ PREVIEW = {
     "card_selected": [(60, 80), (72, 96), (48, 68)],
     "slip": [(248, 52), (248, 70), (164, 52)],
     "paper": [(320, 220), (460, 300), (560, 160)],
+    "bubble": [(70, 22), (140, 32), (200, 46)],
 }
 for _n in ("button", "button_hover", "button_pressed", "button_off", "button_primary", "button_primary_hover", "button_primary_pressed"):
     PREVIEW[_n] = [(66, 66), (112, 40), (200, 36), (44, 44)]
@@ -1166,13 +1244,21 @@ def build_sites():
     return path
 
 
-def write_all(frames):
+def write_all(frames, only=None):
+    """Writes the pictures and frames.json. With `only` (a list of names) just those frames are
+    written, and their entries are put into the frames.json that is there, the rest left as it is."""
     os.makedirs(OUT, exist_ok=True)
     table = {}
+    path = os.path.join(OUT, "frames.json")
+    if only and os.path.exists(path):
+        with open(path) as fh:
+            table = json.load(fh)
     for f in frames:
+        if only and f.name not in only:
+            continue
         f.img.save(os.path.join(OUT, f.name + ".png"), optimize=True)
         table[f.name] = f.entry()
-    with open(os.path.join(OUT, "frames.json"), "w") as fh:
+    with open(path, "w") as fh:
         json.dump(table, fh, indent=1)
         fh.write("\n")
     return table
@@ -1193,10 +1279,14 @@ def main():
         if pick:
             contact_sheet([f for f in frames if f.name in pick], os.path.join(out, "sel.png"))
     if not os.environ.get("UI_DRY"):
-        print("wrote", build_sites())
-        table = write_all(frames)
-        print("wrote %d frames to %s" % (len(table), OUT))
+        only = [n for n in os.environ.get("UI_ONLY", "").split(",") if n]
+        if not only:
+            print("wrote", build_sites())
+        table = write_all(frames, only)
+        print("wrote %d frames to %s" % (len(only) if only else len(table), OUT))
         for f in frames:
+            if only and f.name not in only:
+                continue
             print("  %-22s %4dx%-4d avg %s  %d bytes" % (f.name, f.img.width, f.img.height, hexcolor(f.avg), os.path.getsize(os.path.join(OUT, f.name + ".png"))))
 
 

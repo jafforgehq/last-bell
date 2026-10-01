@@ -86,6 +86,9 @@ var parties: Array = []
 var raids := {}
 ## Trips made in this run: numbers the trips and their alerts.
 var trips := 0
+## Errands the storyteller made up (a crate in the road): site id to a site shaped like those
+## above. They are not offered in the dialog; `send` takes them at any hour of the day.
+var errands := {}
 
 
 func setup(s) -> void:
@@ -97,6 +100,7 @@ func start() -> void:
 	parties.clear()
 	raids.clear()
 	trips = 0
+	errands.clear()
 
 
 ## Every step: parties walking to the gate, away, and coming back.
@@ -175,7 +179,7 @@ func available_sites() -> Array:
 ## Sends the survivors (Person objects, one or two) to the site (its id). True
 ## if it went. The party's result is decided here.
 func send(people: Array, site_id: String) -> bool:
-	if not can_send():
+	if not (can_send() or _errand_ok(site_id)):
 		return false
 	if people.is_empty() or people.size() > MAX_PARTY:
 		return false
@@ -229,7 +233,7 @@ func gizmo(_id: String, _sel) -> bool:
 ## drafted with an order, not already out, not busy treating someone or leaving
 ## through the gate, not delirious with fever.
 func can_go(p) -> bool:
-	if p == null or p.dead or p.downed or p.away != null:
+	if p == null or p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
 		return false
 	if p.drafted or p.order != null:
 		return false
@@ -274,7 +278,7 @@ func loot_scale(site_id: String, people: Array) -> float:
 	if people.size() == 1:
 		scale *= LONE_FACTOR
 	for p in people:
-		if int(p.def.skills.Leading) >= LEADER_SKILL:
+		if int(p.skills.Leading) >= LEADER_SKILL:
 			scale *= LEADER_BONUS
 			break
 	return scale
@@ -577,7 +581,7 @@ func _decide(party: Dictionary) -> Dictionary:
 		if danger >= LOSS_MIN_DANGER and roll_loss < LOSS_BASE * mult:
 			lost.append(p.id)
 			continue
-		var shooting := float(p.def.skills.Shooting)
+		var shooting := float(p.skills.Shooting)
 		if roll_wound < WOUND_BASE * danger * mult * (1.0 - shooting / 15.0):
 			hurt[p.id] = "bite" if roll_kind < BITE_SHARE else "scratch"
 	var loot := {}
@@ -665,11 +669,18 @@ func _first(id: String) -> String:
 	return String(p.first) if p != null else id
 
 
+## Whether an errand of the storyteller's (a site in `errands`) may go out now: by day and at
+## least an hour before the parties are due back, whatever else is out, unless too many of the
+## dead stand at the gate.
+func _errand_ok(site_id: String) -> bool:
+	return errands.has(site_id) and sim.over == "" and sim.phase == "day" and sim.hour < RETURN_H - 1.0 and dead_at_gate() < DEAD_LIMIT
+
+
 func _site(id: String) -> Dictionary:
 	for s in sites:
 		if s.id == id:
 			return s
-	return {}
+	return errands.get(id, {})
 
 
 ## "the pharmacy": how the site reads in a sentence.

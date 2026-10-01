@@ -1,0 +1,365 @@
+{
+  "version": 1,
+  "cards": [
+    {
+      "id": "heavy_rain",
+      "kind": "boon",
+      "weight": 1.4,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "Heavy rain",
+      "text": "It has been coming down in sheets since morning. Every barrel in the yard is full to the brim and the gutters are running over. We will have water to spare for a good while.",
+      "effects": [
+        {"weather": "rain"},
+        {"stock": {"water": 20}}
+      ],
+      "result": "The barrels are full."
+    },
+    {
+      "id": "quiet_day",
+      "kind": "boon",
+      "weight": 1.4,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "A quiet day",
+      "text": "Nothing on the wall, nothing on the road. The sun is out, somebody found a guitar with two strings, and for an afternoon it almost feels like before. Take it while it lasts.",
+      "effects": [
+        {"morale": {"who": "all", "delta": 8, "label": "A quiet day"}}
+      ],
+      "result": "Everyone could breathe for an afternoon."
+    },
+    {
+      "id": "old_friends",
+      "kind": "boon",
+      "weight": 1.1,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "Old friends on the radio",
+      "text": "{flavor}",
+      "pick": ["person"],
+      "needs": {"people": 1},
+      "flavor": {
+        "by_role": {
+          "Principal": "A voice from the district office crackles through: the old superintendent, alive and sitting in a bunker with forty teachers. They talk for an hour about nothing at all. Ruth is smiling when she puts the headset down.",
+          "Mechanic": "A trucker on channel nineteen used to bring parts to Dez's garage. They argue about carburettors for an hour as if it were still a Saturday, and Dez is humming when it is over.",
+          "Nurse": "A nurse from the county hospital found our frequency by accident. Ana learns that three of her old ward are alive and running a clinic upriver. She cries a little, and then she looks lighter.",
+          "Lookout": "A boy Marcus used to sit behind in maths is on the radio from a rooftop across the river. They shout jokes at each other until his battery dies, and Marcus is grinning all afternoon.",
+          "Retired cop": "Walt's old partner from the precinct is on the line: alive, grumpy, and still owed him lunch. They go over the old cases, and Walt has not laughed like that in years.",
+          "Custodian": "Hector's sister calls from a church two towns over. She is well, and the kids are well. He holds the handset in both hands long after she has gone."
+        },
+        "default": "A friendly voice comes through the static, someone from before, and for an hour the radio feels like a telephone."
+      },
+      "effects": [
+        {"morale": {"who": "@person", "delta": 12, "label": "Old friends on the radio"}}
+      ],
+      "result": "{name} came away from the radio lighter."
+    },
+    {
+      "id": "fog",
+      "kind": "threat",
+      "weight": 1.0,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "Fog",
+      "text": "A wall of fog is rolling in off the river. By dusk it will be thick enough that nobody on the wall will see the road. The guns will reach about 30% less far tonight.",
+      "effects": [
+        {"weather": "fog"}
+      ],
+      "result": "The far end of the road has already gone."
+    },
+    {
+      "id": "fever",
+      "kind": "threat",
+      "weight": 1.0,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "A fever in the house",
+      "text": "{name} woke up burning and can hardly stand. It looks like one of the ordinary fevers, nothing to do with the dead, and it should pass in a day. A dose of medicine, given by Ana or anyone who knows how, would break it sooner.",
+      "pick": ["person"],
+      "needs": {"people": 2},
+      "effects": [
+        {"sick": {"who": "@person", "hours": 20}}
+      ],
+      "result": "{name} is in no state to work."
+    },
+    {
+      "id": "mould",
+      "kind": "threat",
+      "weight": 0.9,
+      "min_day": 3,
+      "max_day": 29,
+      "title": "Mould in the pantry",
+      "text": "Somebody opened the back of the pantry and the smell reached the whole hall. A damp patch got into the sacks overnight. We are throwing out about a seventh of the food.",
+      "effects": [
+        {"stock": {"food": {"pct": -15}}}
+      ],
+      "result": "Into the compost it goes."
+    },
+    {
+      "id": "wall_rot",
+      "kind": "threat",
+      "weight": 0.9,
+      "min_day": 3,
+      "max_day": 29,
+      "title": "Rot in the wall",
+      "text": "Somebody put a boot through a board of {section_name} this morning, and the whole frame behind it is soft. It is about 30% weaker than it was, and it will want scrap and a hammer.",
+      "pick": ["section"],
+      "needs": {"wall": true},
+      "effects": [
+        {"wall_damage": {"section": "@section", "fraction": 0.3}}
+      ],
+      "result": "The carpenter's verdict: rotten right through."
+    },
+    {
+      "id": "stragglers",
+      "kind": "threat",
+      "weight": 1.0,
+      "min_day": 4,
+      "max_day": 29,
+      "title": "Stragglers on the road",
+      "text": "{lookout} on the roof says a long, ragged line of the dead is coming down the north road, shuffling toward the wall. They will be at it by two o'clock, in broad daylight, with nobody at their posts.",
+      "pick": ["lookout"],
+      "effects": [
+        {"at_hour": {"hour": 14, "note": "At 14:00 the dead reach the north wall", "do": [
+          {"spawn_day": {"count": 6, "plus_day_div": 3, "at": "north", "sub": "By day. Draft shooters to the wall"}}
+        ]}}
+      ],
+      "result": "Draft some shooters before two o'clock."
+    },
+    {
+      "id": "horde_warning",
+      "kind": "threat",
+      "weight": 0.8,
+      "min_day": 5,
+      "max_day": 29,
+      "title": "A warning on the radio",
+      "text": "A thin voice on the old emergency band: a big herd has been moving along the highway all day, our way. About 30% more than we are used to, tonight. Count your shells and be ready.",
+      "effects": [
+        {"night_budget": {"multiplier": 1.3}}
+      ],
+      "result": "The lookout's forecast at five will say how many."
+    },
+    {
+      "id": "supply_drop",
+      "kind": "choice",
+      "weight": 1.0,
+      "min_day": 3,
+      "max_day": 28,
+      "title": "A crate in the road",
+      "text": "Something came down on a parachute at first light: a crate in the road past the gate, a few hundred metres off. {pair} could fetch it and be back by four. Or we leave it where it lies and hope nobody else has seen it.",
+      "pick": ["pair"],
+      "needs": {"free": 2},
+      "choices": [
+        {
+          "label": "Send {pair}",
+          "hint": "Away until 16:00, back with ammo and medicine. One chance in three that some of the dead follow them home; a small chance someone is hurt.",
+          "result": "{pair} went out through the gate with a handcart. They will be back around four.",
+          "effects": [
+            {"party": {
+              "size": 2,
+              "site": {"id": "crate", "name": "The supply crate", "where": "the crate in the road", "danger": 1, "loot": {"ammo": [30, 50], "meds": [2, 4]}, "extra": {"food": [0.5, 6]}},
+              "followed": {"p": 0.33, "count": 3}
+            }}
+          ]
+        },
+        {
+          "label": "Leave it",
+          "hint": "Nothing gained, nothing risked.",
+          "result": "We left it where it fell. By morning it was gone.",
+          "effects": []
+        }
+      ],
+      "bot": 0
+    },
+    {
+      "id": "stranger",
+      "kind": "choice",
+      "weight": 1.0,
+      "min_day": 4,
+      "max_day": 28,
+      "title": "Someone at the gate",
+      "text": "A stranger is standing in the road with both hands up, calling for whoever is on the wall. Thin, filthy, one bag. They say they walked in from the east and have not eaten in two days. We cannot see what is under the coat.",
+      "choices": [
+        {
+          "label": "Let them in",
+          "hint": "Four chances in ten they bring medicine. A little over three in ten they steal food and water and are gone by morning. One in four they were bitten, and turn tonight inside the yard.",
+          "result": "The gate opened and closed again.",
+          "effects": [
+            {"chance": {"p": 0.4,
+              "then": [
+                {"stock": {"meds": 4}},
+                {"say": "She carried four doses in her bag and would take nothing for them."}
+              ],
+              "else": [
+                {"chance": {"p": 0.583,
+                  "then": [
+                    {"stock": {"food": -10, "water": -10}},
+                    {"say": "By morning the stranger was gone, and so were ten of food and ten of water."}
+                  ],
+                  "else": [
+                    {"at_hour": {"hour": 2, "do": [
+                      {"spawn_day": {"count": 1, "at": "gate", "inside": true, "name": "The stranger", "alert": "A scream in the yard: the stranger has turned", "sub": "Put them down"}}
+                    ]}},
+                    {"say": "They sat by the fire, shivering. Nobody looked at the bandage under the coat until it was too late."}
+                  ]
+                }}
+              ]
+            }}
+          ]
+        },
+        {
+          "label": "Trade across the gate",
+          "hint": "Hand over 15 ammo through the bars for 3 medicine. No risk.",
+          "result": "A bag changed hands over the gate. The stranger walked on.",
+          "effects": [
+            {"stock": {"ammo": -15, "meds": 3}}
+          ]
+        },
+        {
+          "label": "Send them away",
+          "hint": "Nothing is spent, but everyone will feel it: morale falls by 3.",
+          "result": "The stranger stood in the road a long while before walking on.",
+          "effects": [
+            {"morale": {"who": "all", "delta": -3, "label": "A stranger turned away"}}
+          ]
+        }
+      ],
+      "bot": 1
+    },
+    {
+      "id": "cry_at_gate",
+      "kind": "choice",
+      "weight": 0.8,
+      "min_day": 5,
+      "max_day": 28,
+      "hour": 18,
+      "wait": 0.5,
+      "title": "A cry at the gate",
+      "text": "Someone is running down the road toward the gate, screaming for it to be opened. Two of the dead are twenty paces behind, and closing. There is no time to think about it.",
+      "choices": [
+        {
+          "label": "Open the gate",
+          "hint": "They get in, and so do the two behind them: someone may be bitten before they are put down. Morale rises by 4.",
+          "result": "The gate swung wide. The runner got through, and so did the dead.",
+          "effects": [
+            {"morale": {"who": "all", "delta": 4, "label": "We opened the gate"}},
+            {"spawn_day": {"count": 2, "at": "gate", "inside": true, "alert": "Two of the dead came in with the runner", "sub": "Put them down"}}
+          ]
+        },
+        {
+          "label": "Cover them from the wall",
+          "hint": "Costs 14 ammo. Three chances in four they make it; if not, morale falls by 5.",
+          "result": "The wall opened fire.",
+          "effects": [
+            {"stock": {"ammo": -14}},
+            {"chance": {"p": 0.75,
+              "then": [
+                {"say": "Both of the dead dropped in the road, and the runner stumbled through the gate, shaking."}
+              ],
+              "else": [
+                {"morale": {"who": "all", "delta": -5, "label": "We lost them at the gate"}},
+                {"say": "The shots were too late. We watched them go down in the road."}
+              ]
+            }}
+          ]
+        },
+        {
+          "label": "Leave them",
+          "hint": "Nothing is spent, but we will hear it for a long time. Morale falls by 8.",
+          "result": "The shouting stopped after a while.",
+          "effects": [
+            {"morale": {"who": "all", "delta": -8, "label": "We left them at the gate"}}
+          ]
+        }
+      ],
+      "bot": 1
+    },
+    {
+      "id": "radio_trade",
+      "kind": "choice",
+      "weight": 1.0,
+      "min_day": 3,
+      "max_day": 28,
+      "title": "Trade on the radio",
+      "text": "A trader on the old band says she has crates of ammunition and is short of medicine. Five doses for sixty rounds, left at the gate by a boy who will not come closer than twenty paces. She says it is the best offer we will get.",
+      "needs": {"stock": {"meds": 5}},
+      "choices": [
+        {
+          "label": "Make the trade",
+          "hint": "Costs 5 medicine and brings 60 ammo.",
+          "result": "The boy left the box at the gate and ran. Sixty rounds, all there.",
+          "effects": [
+            {"stock": {"meds": -5, "ammo": 60}}
+          ],
+          "needs": {"stock": {"meds": 5}}
+        },
+        {
+          "label": "Not today",
+          "hint": "Nothing changes.",
+          "result": "We told her no. She said she would call again.",
+          "effects": []
+        }
+      ],
+      "bot": 1
+    },
+    {
+      "id": "blackout",
+      "kind": "choice",
+      "weight": 0.8,
+      "min_day": 4,
+      "max_day": 28,
+      "title": "The generator is dying",
+      "text": "Dez has been listening to the generator all morning and he does not like what he hears. He says it will quit around nine tonight, in the thick of it, and take the floodlights and every lamp with it.",
+      "needs": {"alive": ["dez"]},
+      "choices": [
+        {
+          "label": "Send Dez when it fails",
+          "hint": "At nine the lights go out and Dez leaves his post to mend it: the walk, then forty minutes of work. Until then aim is 25% worse beyond 6 tiles.",
+          "result": "Dez will go the moment it quits.",
+          "effects": [
+            {"blackout": {"from_hour": 21, "until": "fixed", "send": true}}
+          ]
+        },
+        {
+          "label": "Hold the wall in the dark",
+          "hint": "Nobody leaves their post. The lights stay out until morning, and aim is 25% worse beyond 6 tiles all night.",
+          "result": "Nobody will leave the wall tonight.",
+          "effects": [
+            {"blackout": {"from_hour": 21, "until": "fixed", "send": false}}
+          ]
+        }
+      ],
+      "bot": 0
+    },
+    {
+      "id": "argument",
+      "kind": "choice",
+      "weight": 0.7,
+      "min_day": 3,
+      "max_day": 28,
+      "title": "An argument in the yard",
+      "text": "Dez and Hector have been shouting at each other over the same wrench for ten minutes. It started being about a wrench and then it stopped being about a wrench. {speaker} can step in, or we can let them wear themselves out.",
+      "needs": {"alive": ["dez", "hector"]},
+      "choices": [
+        {
+          "label": "Step in and settle it",
+          "hint": "Costs {speaker} an afternoon of refereeing: morale falls by 3. Dez and Hector are fine.",
+          "result": "It took an hour and two mugs of tea, but they shook hands.",
+          "effects": [
+            {"morale": {"who": "speaker", "delta": -3, "label": "Refereeing"}}
+          ]
+        },
+        {
+          "label": "Let them cool off",
+          "hint": "Dez and Hector are both 5 points lower in morale.",
+          "result": "They did not speak to each other for the rest of the day.",
+          "effects": [
+            {"morale": {"who": "dez", "delta": -5, "label": "An argument"}},
+            {"morale": {"who": "hector", "delta": -5, "label": "An argument"}}
+          ]
+        }
+      ],
+      "bot": 0
+    }
+  ]
+}

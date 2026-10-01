@@ -176,6 +176,158 @@ class FakeWorkshop:
 		return [{"icon": "ammo", "color": Color("#f0c24a"), "tip": "Making ammo at the worktable"}]
 
 
+## Round 4, the people. Like the others, each fake extends the real module (so every hook the rules
+## call still exists) and answers what the HUD reads of it from tables a test fills in. The defaults are
+## rich on purpose (two traits each, a bond or two, a mood with its reasons, a skill that has gained),
+## so the panel is tested at its fullest without the real modules.
+
+## Who has which traits, and what they say (the wording of the real ones is the rules' own).
+class FakeTraits:
+	extends "res://scripts/sim/traits.gd"
+	const NAMES := {
+		"steady": ["Steady", "Keeps a level head. The dead at the wall shake them half as much."],
+		"nervous": ["Nervous", "Jumpy. The dead at the wall shake them half again as much, and their aim suffers when many are close."],
+		"tinkerer": ["Tinkerer", "Good with their hands. Mends walls 30% faster and makes ammo 20% faster."],
+		"triage": ["Triage", "Knows what to do first. Bandages 30% faster."],
+		"sharp_eyed": ["Sharp-eyed", "Picks a target and hits it. Shots land 8% more often."],
+		"steady_hands": ["Steady hands", "Reloads without fumbling, in three quarters of the time."],
+		"tough": ["Tough", "Shrugs it off. A claw or a bite is a quarter less likely to leave a wound."],
+		"optimist": ["Optimist", "Bounces back. Their spirits recover half again as fast."],
+		"loyal": ["Loyal", "Stands by their people. Aims better beside a friend, and takes a loss harder."],
+		"quick_learner": ["Quick learner", "Picks things up. Skills grow half as fast again."],
+	}
+	const DEFAULT := {
+		"ruth": ["steady", "loyal"], "dez": ["tinkerer", "tough"], "ana": ["triage", "optimist"],
+		"marcus": ["nervous", "quick_learner"], "walt": ["steady_hands", "sharp_eyed"], "hector": ["tough", "steady"],
+	}
+	## Person id -> the ids of their traits (what a test sets; the default is DEFAULT).
+	var table := {}
+
+	func start() -> void:
+		pass
+
+	func of(p) -> Array:
+		var out: Array = []
+		for id in table.get(p.id, DEFAULT.get(p.id, [])):
+			var n: Array = NAMES.get(id, [String(id).capitalize(), ""])
+			out.append({"id": id, "name": n[0], "blurb": n[1]})
+		return out
+
+
+## How they are holding up: a value, a word, the reasons, whether they are in a breakdown, and the
+## marks for the cards (by default the ones the real module gives: one while Shaken or Breaking).
+class FakeMorale:
+	extends "res://scripts/sim/morale.gd"
+	## Person id -> 0 to 100 (default 70), the word (default: from the value), the lines explain()
+	## gives (default: three) and whether they are in a breakdown.
+	var values := {}
+	var moods := {}
+	var reasons := {}
+	var broke := {}
+	## How well morale lets them work (default 1.0).
+	var perfs := {}
+	## Marks by person id; when a person has none here, the marks follow their mood.
+	var marks := {}
+
+	func start() -> void:
+		pass
+
+	func update(_dt: float) -> void:
+		pass
+
+	func value(p) -> float:
+		return float(values.get(p.id, 70.0))
+
+	func mood(p) -> String:
+		if moods.has(p.id):
+			return String(moods[p.id])
+		var v := value(p)
+		return "Inspired" if v >= 80.0 else ("Steady" if v >= 40.0 else ("Shaken" if v >= 20.0 else "Breaking"))
+
+	func explain(p) -> Array:
+		return reasons.get(p.id, [{"label": "fed and watered", "value": 5.0}, {"label": "near Marcus", "value": 5.0}, {"label": "the dead at the wall", "value": -8.0}])
+
+	func breakdown(p) -> bool:
+		return bool(broke.get(p.id, false))
+
+	func perf(p) -> float:
+		return float(perfs.get(p.id, 1.0))
+
+	## Where it is settling: 60 and the reasons.
+	func target(p) -> float:
+		var t := 60.0
+		for r in explain(p):
+			t += float(r.value)
+		return t
+
+	func status_of(p) -> Array:
+		if marks.has(p.id):
+			return marks[p.id]
+		match mood(p):
+			"Shaken":
+				return [{"icon": "mood", "color": Color("#e8953a"), "tip": "Shaken: aims and works a little worse"}]
+			"Breaking":
+				return [{"icon": "mood", "color": Color("#e0584a"), "tip": "Breaking: close to a breakdown"}]
+		return []
+
+
+## Who is close to whom: person id -> [[the other's id, kind, what the other is to them], ...] (what a test
+## sets; the third is the kind when left out; the default is the crew's own: Ruth and Marcus family, Walt
+## mentors Marcus, Dez and Hector, Ana and Ruth friends).
+class FakeBonds:
+	extends "res://scripts/sim/bonds.gd"
+	const DEFAULT := {
+		"ruth": [["marcus", "family"], ["ana", "friend"]], "marcus": [["ruth", "family"], ["walt", "mentor"]],
+		"walt": [["marcus", "mentor", "student"]], "dez": [["hector", "friend"]], "hector": [["dez", "friend"]], "ana": [["ruth", "friend"]],
+	}
+	var table := {}
+	## What aim_bonus gives (0 for nobody near).
+	var aim := {}
+
+	func start() -> void:
+		pass
+
+	func of(p) -> Array:
+		var out: Array = []
+		for pair in table.get(p.id, DEFAULT.get(p.id, [])):
+			for q in sim.people:
+				if q.id == pair[0]:
+					out.append({"who": q, "kind": pair[1], "role": pair[2] if pair.size() > 2 else pair[1]})
+		return out
+
+	func aim_bonus(p) -> float:
+		return float(aim.get(p.id, 0.0))
+
+
+## What each person has gained: person id -> {skill: points} (default: Marcus a point of Shooting
+## and Dez two of Building).
+class FakeSkills:
+	extends "res://scripts/sim/skills.gd"
+	const DEFAULT := {"marcus": {"Shooting": 1}, "dez": {"Building": 2}}
+	var table := {}
+
+	func start() -> void:
+		pass
+
+	func gained(p) -> Dictionary:
+		return table.get(p.id, DEFAULT.get(p.id, {}))
+
+
+## What is said about the dead: person id -> the line (default: one for anyone).
+class FakeBarks:
+	extends "res://scripts/sim/barks.gd"
+	var epitaphs := {}
+
+	func start() -> void:
+		pass
+
+	func update(_dt: float) -> void:
+		pass
+
+	func epitaph(p) -> String:
+		return String(epitaphs.get(p.id, "%s kept the wall standing." % p.first))
+
+
 ## A forecast as tactics.forecast() gives one, given: tonight about 55 from the north east.
 ## `with` overrides any of its fields.
 static func forecast(with: Dictionary = {}) -> Dictionary:
@@ -199,8 +351,9 @@ static func sample_sites(with_scrapyard: bool = false) -> Array:
 
 
 ## {"g", "sim", "holder", "hud", "pressed": ids of gizmo presses, "speeds",
-## "selected"}: a new run on day 1 with fake modules and the HUD set up.
-static func build(width: int = 1280, height: int = 800, seed_value: int = 1) -> Dictionary:
+## "selected"}: a new run on day 1 with fake modules and the HUD set up. With `real_people` the game's own
+## traits, morale, bonds, skills and barks stay (the other modules are still the fakes).
+static func build(width: int = 1280, height: int = 800, seed_value: int = 1, real_people: bool = false) -> Dictionary:
 	var g := Helpers.make(seed_value, 1)
 	var sim = g.sim
 	sim.supplies = FakeSupplies.new()
@@ -213,6 +366,14 @@ static func build(width: int = 1280, height: int = 800, seed_value: int = 1) -> 
 	if sim.get("workshop") != null:
 		sim.workshop = FakeWorkshop.new()
 		modules.append(sim.workshop)
+	# the people (a sim from before round 4 has none of these: the HUD copes with that too)
+	if sim.get("traits") != null and not real_people:
+		sim.traits = FakeTraits.new()
+		sim.morale = FakeMorale.new()
+		sim.bonds = FakeBonds.new()
+		sim.skills = FakeSkills.new()
+		sim.barks = FakeBarks.new()
+		modules.append_array([sim.traits, sim.morale, sim.bonds, sim.skills, sim.barks])
 	for m in modules:
 		m.setup(sim)
 	var ctx := {"g": g, "sim": sim, "pressed": [], "speeds": [], "selected": []}

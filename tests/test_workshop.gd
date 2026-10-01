@@ -55,7 +55,7 @@ func test_a_person_at_the_bench_turns_scrap_into_ammo_at_the_stated_rate() -> vo
 	check(sim.workshop.crafting(dez), "and he is on it")
 	Helpers.run(sim, 20.0)   # one game hour
 	var rate: float = sim.workshop.scrap_per_hour(dez)
-	near(rate, 2.0 + 0.5 * float(dez.def.skills.Building), 0.0001, "an hour of Dez's work is 2 + Building/2 scrap")
+	near(rate, (2.0 + 0.5 * float(dez.def.skills.Building)) * 1.2, 0.0001, "an hour of Dez's work is 2 + Building/2 scrap, and a Tinkerer (Dez) gets through 20% more")
 	near(40.0 - float(sim.stock.scrap), rate, 0.35, "he used that much scrap in an hour: %.2f" % (40.0 - float(sim.stock.scrap)))
 	near(float(sim.stock.ammo) - 100.0, rate * Workshop.AMMO_PER_SCRAP, 3.0, "and made %d ammo from each: %.1f" % [Workshop.AMMO_PER_SCRAP, float(sim.stock.ammo) - 100.0])
 	eq(dez.activity, "Making ammo", "the card says what he is doing")

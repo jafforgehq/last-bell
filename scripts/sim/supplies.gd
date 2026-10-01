@@ -325,6 +325,7 @@ func _low_stock_alerts() -> void:
 	elif rounds > 0.0 and sim.clock_min - float(low_alert_min["ammo"]) >= LOW_REPEAT_MIN * 6.0:
 		low_alert_min["ammo"] = sim.clock_min
 		sim.alert("low-ammo", "danger" if rounds < 20.0 else "warn", "Ammo is running low", "%d left" % roundi(rounds), null, LOW_TTL)
+		sim.barks.on_low_ammo()
 	for kind in ["food", "water"]:
 		var id := "low-%s" % kind
 		var days := days_left(kind)

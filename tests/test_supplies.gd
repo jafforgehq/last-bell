@@ -613,7 +613,7 @@ func test_a_hungry_person_repairs_slower_but_the_scrap_per_point_is_the_same() -
 	sim.order_repair(p, seg)
 	_run(sim, 5.0)
 	var mended: float = seg.hp - hp0
-	near(mended, 5.0 * (Sim.REPAIR_BASE + float(p.def.skills.Building)) * 0.8, 0.5, "a hungry person mends at 0.8 of the rate")
+	near(mended, 5.0 * (Sim.REPAIR_BASE + float(p.def.skills.Building)) * sim.traits.mult(p, "repair") * 0.8, 0.5, "a hungry person mends at 0.8 of the rate (Dez, a Tinkerer, 1.3 of it)")
 	near(100.0 - sim.stock.scrap, mended / 10.0, 1e-6, "and pays one scrap per ten points mended")
 	g.world.free()
 

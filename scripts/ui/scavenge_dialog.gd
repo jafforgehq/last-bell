@@ -246,7 +246,7 @@ func _person_card(p, leader: bool) -> PanelContainer:
 		tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		top.add_child(tag)
 	text.add_child(top)
-	text.add_child(hud._label("Shooting %d · Leading %d" % [int(p.def.skills.get("Shooting", 0)), int(p.def.skills.get("Leading", 0))], Fonts.sans(400), 12, hud.PAPER_INK2))
+	text.add_child(hud._label("Shooting %d · Leading %d" % [int(p.skills.get("Shooting", 0)), int(p.skills.get("Leading", 0))], Fonts.sans(400), 12, hud.PAPER_INK2))
 	row.add_child(text)
 	card.add_child(row)
 	return card

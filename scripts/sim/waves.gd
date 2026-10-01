@@ -51,6 +51,9 @@ var spawned := 0
 var runners_told_day := -1
 var _plan := {}
 var _plan_day := -1
+## What the plan was made with besides the day: the storyteller's multiplier of tonight's budget
+## (a warning of a horde), so the plan and the forecast are made again when it changes.
+var _plan_mult := 1.0
 
 
 func setup(s) -> void:
@@ -80,14 +83,15 @@ func is_big(day: int) -> bool:
 
 ## What the night brings in points: `budget_for`, times the bonus on the last night.
 func night_budget(day: int) -> float:
-	return budget_for(day) * (BIG_FACTOR if is_big(day) else 1.0)
+	return budget_for(day) * (BIG_FACTOR if is_big(day) else 1.0) * sim.storyteller.budget_mult(day)
 
 
 ## The plan of the night that follows `day`: {"day", "big", "budget", "queue" (the
 ## kinds in the order they come), "counts", "heading" (indices into sim.spawns of
 ## the main spawn points), "shown" (the number a forecast gives, off by up to 15%)}.
 func plan_for(day: int) -> Dictionary:
-	if _plan_day == day and not _plan.is_empty():
+	var mult: float = sim.storyteller.budget_mult(day)
+	if _plan_day == day and not _plan.is_empty() and is_equal_approx(_plan_mult, mult):
 		return _plan
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (sim.run_seed * 2654435761 + day * 40503 + 12345) & 0x7fffffff
@@ -117,6 +121,7 @@ func plan_for(day: int) -> Dictionary:
 	var shown := roundi(float(queue.size()) * (0.85 + 0.3 * rng.randf()) / 5.0) * 5
 	_plan = {"day": day, "big": big, "budget": budget, "queue": queue, "counts": counts, "heading": heading, "shown": maxi(shown, 5)}
 	_plan_day = day
+	_plan_mult = mult
 	return _plan
 
 

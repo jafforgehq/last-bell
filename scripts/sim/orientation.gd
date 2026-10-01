@@ -147,6 +147,9 @@ static func install(game):
 	var module = script.new()
 	game.scenario = module
 	module.setup(game)
+	# the lesson is scripted: nobody's mood moves and no radio card is drawn
+	game.storyteller.enabled = false
+	game.morale.enabled = false
 	var waves := OrientationWaves.new()
 	game.waves = waves
 	waves.setup(game)

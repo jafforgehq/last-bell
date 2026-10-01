@@ -25,6 +25,7 @@ const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
 const Hints := preload("res://scripts/ui/hints.gd")
+const StoryUi := preload("res://scripts/ui/story_ui.gd")
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -109,6 +110,9 @@ var tutorial_save_path := "user://tutorial_save.json"
 ## The tips of a normal run (scripts/ui/hints.gd): null in the tutorial, on the title and in a
 ## screenshot run, and they stay quiet in a headless one.
 var hints = null
+## The storyteller's cards (scripts/ui/story_ui.gd): the radio card, which holds the game still while it is
+## up, and the dawn assembly.
+var story_ui = null
 
 # screenshot mode (used for automated checks): --shot=path.png
 var shot_path := ""
@@ -275,6 +279,12 @@ func _ready() -> void:
 	hud.on_open_menu = open_pause
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
+	story_ui = StoryUi.new()
+	add_child(story_ui)
+	story_ui.blocked = func(): return menu_open
+	story_ui.speed_of = func(): return speed
+	story_ui.ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
+	story_ui.setup(hud, sim)
 
 	sound = Sound.new()
 	add_child(sound)
@@ -576,7 +586,7 @@ func _pick_repairer(seg):
 	for p in sim.people:
 		if p.downed or p.dead or p.away != null:
 			continue
-		var dist: float = Vector2(p.x - seg.center.x, p.y - seg.center.y).length() - float(p.def.skills.Building) * 3.0
+		var dist: float = Vector2(p.x - seg.center.x, p.y - seg.center.y).length() - float(p.skills.Building) * 3.0
 		if dist < bd:
 			bd = dist
 			best = p
@@ -584,6 +594,8 @@ func _pick_repairer(seg):
 
 
 func _on_alert(id: String) -> void:
+	if story_ui != null and story_ui.on_alert(id):
+		return
 	var a = sim.alerts.get(id)
 	if a != null and a.at != null:
 		_focus(a.at)
@@ -943,7 +955,7 @@ func _process(delta: float) -> void:
 	_apply_camera()
 	_handle_events()
 	_sync_views()
-	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights())
+	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), sim.storyteller.look())
 	glow.t = clock
 	glow.queue_redraw()
 	overlay.queue_redraw()
@@ -1113,6 +1125,13 @@ func _handle_events() -> void:
 				sound.play("thud", _vol_at(e.x, e.y))
 			"banner":
 				hud.show_banner(e.text, e.sub)
+			"bark":
+				# what someone said: a speech bubble over their head (the overlay keeps quiet under a menu)
+				overlay.add_bark(e)
+			"story_card":
+				story_ui.on_story_card()
+			"dawn_report":
+				story_ui.on_dawn_report()
 			"day_start":
 				_autosave()
 	sim.events.clear()
@@ -1217,6 +1236,21 @@ func _parse_args() -> void:
 				get_viewport().msaa_2d = int(v) as Viewport.MSAA
 			"nolights":
 				lighting.visible = false
+			"card":
+				# --card=<id> puts a card of the storyteller's up (the radio card opens)
+				sim.storyteller.force(v)
+			"weather":
+				# --weather=fog (or rain) for the coming night, as a card would set it
+				sim.weather = v
+			"blackout":
+				# --blackout: the generator is dead (see the storyteller)
+				sim.storyteller.blackout = {"state": "dark", "at": sim.clock_min, "send": false, "fixer": "", "work": 0.0}
+			"dawn":
+				# --dawn shows a sample of the morning assembly
+				sim.storyteller._report = {"day": 8, "night": 7, "kills": 41, "mvp": {"who": "Walt", "kills": 12}, "wall_lost": 310, "wall_mended": 180, "breaches": 0,
+					"lost": [{"who": "Ana", "epitaph": "She would have wanted the lamp left on.", "how": "died"}], "hurt": ["Marcus"], "skill_ups": [{"who": "Dez", "skill": "Building", "value": 10}],
+					"events": ["Heavy rain: The barrels are full."], "mood": "Mostly steady; Marcus is shaken.", "alive": 5}
+				story_ui.show_dawn()
 	if lure_seg >= 0:
 		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
 		for s in sim.segments:

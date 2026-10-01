@@ -12,6 +12,14 @@
 ## paper use PAPER_INK and its greys). `frame(kind)`, `has_frame(kind)` and `use_frames` (off
 ## shows the flat look) are static; FRAME_KINDS lists what the HUD wears. Text colours read at
 ## 4.5:1 on the frame they sit on (tests/test_hud_text.gd lays each label over the frame's pixels).
+##
+## The person panel (the selection dock, built in `select`, kept in line in `_refresh_selection`) has,
+## besides the health, weapon, doing, needs and wounds rows of before, the round 4 rows from the people's
+## modules: Mood (a bar and a word, the reasons in a tooltip), Traits (chips, a blurb each), Bonds (who they
+## are close to) and the skills with what they have gained; their record (kills, walls mended...) is the
+## tooltip of their name. Each is read through `_mod`, so a game without a module has no row for it. A
+## person's rows sit close (PERSON_ROW_GAP): the dock, with its nine buttons, has to fit beside or above the
+## panel in a 700 x 560 window (tests/test_hud_layout.gd and tests/test_hud_people.gd sweep the sizes).
 extends Control
 
 const GD := preload("res://scripts/game_data.gd")
@@ -76,6 +84,9 @@ const ALERT_ICONS := [
 	["brute", "walker"], ["runners", "walker"], ["lure", "bell"], ["forecast", "bell"], ["bignight", "bell"],
 	# round 3: the worktable (`workshop-idle`) is about ammo
 	["workshop-", "ammo"],
+	# round 4: a skill went up (a star), someone broke down (a face), the radio hour and the
+	# storyteller's cards (the bell: someone is calling), the dawn assembly (the sun)
+	["skill-", "star"], ["breakdown-", "mood"], ["story", "bell"], ["story-", "bell"], ["dawn", "sun"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
 ## bell, auto-repair the wall (the hammer is Repair's own, and in the small size, where only the
@@ -84,8 +95,9 @@ const ALERT_ICONS := [
 const GIZMO_ICON := {"lure": "bell", "auto": "wall", "craft": "ammo"}
 const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
 ## Icons the HUD adds to the baked ones (assets/data/map.json): white on clear, 64 px, like the rest
-## (tools/make_menu_icon.py draws the menu's).
-const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png"}
+## (tools/make_menu_icon.py draws the menu's; tools/make_people_icons.py the star, a skill that went
+## up, and the face, someone who is Shaken or Breaking).
+const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
@@ -98,6 +110,36 @@ const STORES := [["ammo", "Ammo"], ["scrap", "Scrap"], ["food", "Food"], ["water
 const DAYS_STORES := ["food", "water"]
 ## Only the skills that do something in version 1 are listed in the person panel.
 const SKILLS_SHOWN := ["Shooting", "Building", "Medicine"]
+## The colour of a skill's bar (the part it has gained is the accent's gold).
+const SKILL_COLOR := Color("#b3a57f")
+## What each skill grows with, for its tooltip when the skills module does not say how much (and what a
+## unit of each kind of work is, when it does).
+const SKILL_FED := {
+	"Shooting": "kills", "Melee": "kills with the pike or the butt of the gun",
+	"Building": "walls mended and scrap made into ammo", "Medicine": "people treated",
+}
+const SKILL_UNITS := {
+	"kills": "kills", "melee": "kills with the pike or the butt of the gun", "treated": "people treated",
+	"mended": "HP of wall mended", "crafted": "scrap made into ammo",
+}
+## A person's mood (round 4, sim.morale.mood) in colours: the bar's, a graphic (3:1 on the board), and
+## the word's, a text colour (4.5:1; tests/test_hud_people.gd computes both). A breakdown wears Breaking's.
+const MOOD_COLORS := {"Inspired": ACCENT, "Steady": INFO, "Shaken": WARN, "Breaking": DANGER}
+const MOOD_TEXT := {"Inspired": ACCENT, "Steady": INK, "Shaken": WARN, "Breaking": DANGER_TEXT}
+## How wide the word at the end of the Health and the Mood rows is ("Breakdown" is the longest), so
+## the two bars end together.
+const MOOD_W := 62
+## A person's panel has more rows than the other panels, so its rows sit closer (a row is 16 px tall)
+## and the blocks of it (the header, the rows, the skills) a little less far apart.
+const PERSON_ROW_GAP := 3
+const PERSON_BLOCK_GAP := 6
+## The stock of a card whose person is remembered: greyer than a living one's.
+const MEMORIAL_STOCK := Color(0.7, 0.7, 0.72)
+## The longest a line of a tooltip about a person is, in letters, before it is broken (the engine's
+## own wrapping of a tooltip is no help in a narrow window).
+const TIP_WRAP := 44
+## The most reasons the mood tooltip lists (the biggest first, the rest in a line).
+const MOOD_LINES := 10
 ## Game hours without a meal or a drink at which a person is called hungry,
 ## starving, thirsty and parched (the supplies module penalises at these).
 const HUNGRY_H := 18.0
@@ -160,18 +202,30 @@ class Bar:
 	## The groove frame (bar_track) the meter lies in, when the HUD has one and the bar is tall
 	## enough for it (a thin bar keeps the flat track).
 	var groove: StyleBox = null
+	## The last part of the fill, as a fraction of the whole bar, drawn in `gain_color`: what a skill
+	## has gained since the run began (0 for no such part).
+	var gain := 0.0
+	var gain_color := Color("#f0c24a")
 
 	func _draw() -> void:
 		if groove != null and size.y >= 6.0:
 			draw_style_box(groove, Rect2(Vector2.ZERO, size))
 			if value > 0.0:
 				var h := size.y - 2.0
-				_rr(Rect2(1, 1, maxf(h, (size.x - 2.0) * clampf(value, 0.0, 1.0)), h), h * 0.5, color)
+				var fill_w := maxf(h, (size.x - 2.0) * clampf(value, 0.0, 1.0))
+				_rr(Rect2(1, 1, fill_w, h), h * 0.5, color)
+				if gain > 0.0:
+					var g := minf(fill_w, (size.x - 2.0) * clampf(gain, 0.0, 1.0))
+					_rr(Rect2(1 + fill_w - g, 1, g, h), h * 0.5, gain_color)
 			return
 		var r := size.y * 0.5
 		_rr(Rect2(Vector2.ZERO, size), r, track)
 		if value > 0.0:
-			_rr(Rect2(0, 0, maxf(size.y, size.x * clampf(value, 0.0, 1.0)), size.y), r, color)
+			var fill_w := maxf(size.y, size.x * clampf(value, 0.0, 1.0))
+			_rr(Rect2(0, 0, fill_w, size.y), r, color)
+			if gain > 0.0:
+				var g := minf(fill_w, size.x * clampf(gain, 0.0, 1.0))
+				_rr(Rect2(fill_w - g, 0, g, size.y), r, gain_color)
 
 	func _rr(rect: Rect2, r: float, c: Color) -> void:
 		var sb := StyleBoxFlat.new()
@@ -352,10 +406,12 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 ## checkout without the frames still runs. A test switches the frames off to see the flat look.
 const FRAMES_PATH := "res://scripts/ui/frames.gd"
 ## The frames the HUD, the dialog and the report card wear, where each is used (tests/test_hud_look.gd
-## checks that the theme has them all).
+## checks that the theme has them all). `bubble` is worn by what people say in the world: the speech
+## bubbles of scripts/render/overlay_node.gd ask for it through `frame`.
 const FRAME_KINDS := [
 	"panel", "panel_slim", "panel_inset", "clock", "card", "card_selected", "slip", "paper", "tooltip", "toast", "banner",
 	"chip", "pill", "bar_track", "button", "button_hover", "button_pressed", "button_off", "button_primary", "button_primary_hover",
+	"bubble",
 ]
 static var use_frames := true
 static var _frames_script = null
@@ -768,7 +824,7 @@ func _build_bar() -> void:
 		card.add_child(marks_box)
 		card.gui_input.connect(_on_card_input.bind(p))
 		bar.add_child(card)
-		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": ""})
+		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""})
 	_size_cards(60)
 
 
@@ -1305,6 +1361,83 @@ func _meter() -> Array:
 	return [row, b, v]
 
 
+## The Mood row of the person panel: [row, bar, word, memo]. The bar is the Health meter's twin and the word
+## ("Steady") ends the row in the same column as the health figure. For one who is remembered the bar and the
+## word give way to the memo, a line in memory (see _refresh_mood).
+func _mood_row() -> Array:
+	var row := _hbox(8)
+	var b := Bar.new()
+	b.custom_minimum_size = Vector2(60, 6)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
+	b.groove = frame("bar_track")
+	b.value = 0.7
+	b.color = MOOD_COLORS.Steady
+	row.add_child(b)
+	var word := _label("Steady", Fonts.cond(600), 13, INK)
+	word.custom_minimum_size.x = MOOD_W
+	word.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	word.mouse_filter = Control.MOUSE_FILTER_PASS
+	row.add_child(word)
+	var memo := _label("", Fonts.sans(400), 13, INK2)
+	memo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	memo.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	memo.mouse_filter = Control.MOUSE_FILTER_PASS
+	memo.visible = false
+	row.add_child(memo)
+	return [row, b, word, memo]
+
+
+## A small chip of paper with a few words on it (a trait): the pill frame, or flat a pale pill; dark ink, so
+## it stands out on the chalkboard like a name tag. `tip` is its tooltip.
+func _chip(text: String, tip: String) -> PanelContainer:
+	var st: StyleBox = frame("pill")
+	if st == null:
+		var f := StyleBoxFlat.new()
+		f.bg_color = Color("#e4ddc6")
+		f.border_color = Color(PAPER_INK, 0.45)
+		f.set_border_width_all(1)
+		f.set_corner_radius_all(8)
+		f.anti_aliasing = true
+		st = f
+	st.content_margin_left = 7
+	st.content_margin_right = 7
+	st.content_margin_top = 0
+	st.content_margin_bottom = 1
+	var chip := PanelContainer.new()
+	chip.add_theme_stylebox_override("panel", st)
+	chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.tooltip_text = tip
+	chip.add_child(_label(text, Fonts.cond(700), 12, ACCENT_INK))
+	return chip
+
+
+## One skill of the person panel, three to a row: its name, its number, what it has gained (gold, "+1") and a
+## thin bar under them. {"box", "name", "value", "gain", "bar"}; _refresh_skills fills it.
+func _skill_cell(skill_name: String) -> Dictionary:
+	var box := _vbox(2)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.mouse_filter = Control.MOUSE_FILTER_PASS
+	var top := _hbox(4)
+	var n := _label(skill_name, Fonts.sans(400), 12, INK2)
+	top.add_child(n)
+	var num := _label("0", Fonts.cond(600), 12, INK)
+	top.add_child(num)
+	var gain := _label("", Fonts.cond(600), 12, ACCENT)
+	gain.visible = false
+	top.add_child(gain)
+	box.add_child(top)
+	var b := Bar.new()
+	b.custom_minimum_size = Vector2(20, 3)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.color = SKILL_COLOR
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(b)
+	return {"box": box, "name": n, "value": num, "gain": gain, "bar": b}
+
+
 func select(sel) -> void:
 	selection = sel
 	for c in inspect.get_children():
@@ -1321,23 +1454,37 @@ func select(sel) -> void:
 	hint_spent = true
 	_refresh_hint()
 	_layout_toast()
-	var v := _vbox(10)
+	var tight: bool = sel.kind == "person"
+	var v := _vbox(PERSON_BLOCK_GAP if tight else 10)
 	var head := _hbox(11)
 	var titles := _vbox(1)
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("v_separation", PERSON_ROW_GAP if tight else 8)
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if sel.kind == "person":
 		var p = sel.ref
 		head.add_child(_pic(GD.tex(data.portraits[p.id])))
-		titles.add_child(_label(p.name, Fonts.cond(700), 21, INK))
+		# the name carries the person's record (kills, walls mended...) in a tooltip, so it takes the mouse
+		var pname := _label(p.name, Fonts.cond(700), 21, INK)
+		pname.mouse_filter = Control.MOUSE_FILTER_PASS
+		titles.add_child(pname)
+		inspect_refs.name = pname
 		titles.add_child(_label("%s · %d" % [p.def.role, int(p.def.age)], Fonts.sans(400), 13, INK2))
 		var m := _meter()
+		m[2].custom_minimum_size.x = MOOD_W
 		_row(grid, "Health", m[0])
 		inspect_refs.hp = m[1]
 		inspect_refs.hpv = m[2]
+		# how they are holding up: a bar and a word, and the reasons in a tooltip (round 4)
+		var mood := _mood_row()
+		inspect_refs.mood_head = _row(grid, "Mood", mood[0])
+		inspect_refs.mood_head.mouse_filter = Control.MOUSE_FILTER_PASS
+		inspect_refs.mood_row = mood[0]
+		inspect_refs.mood_bar = mood[1]
+		inspect_refs.mood_word = mood[2]
+		inspect_refs.mood_memo = mood[3]
 		var wrow := _hbox(6)
 		wrow.add_child(_label(p.gun.name, Fonts.sans(400), 13, INK))
 		var pips := _hbox(2)
@@ -1369,6 +1516,18 @@ func select(sel) -> void:
 		infection_head.visible = false
 		inspect_refs.infection = infection
 		inspect_refs.infection_head = infection_head
+		# who they are: their traits as chips, and who they are close to (round 4)
+		var chips := _hbox(4)
+		chips.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		inspect_refs.traits_head = _row(grid, "Traits", chips)
+		inspect_refs.traits_box = chips
+		inspect_refs.traits_sig = ""
+		var bonds := _label("", Fonts.sans(400), 13, INK)
+		bonds.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		bonds.mouse_filter = Control.MOUSE_FILTER_PASS
+		inspect_refs.bonds_head = _row(grid, "Bonds", bonds)
+		inspect_refs.bonds_head.mouse_filter = Control.MOUSE_FILTER_PASS
+		inspect_refs.bonds = bonds
 		# the standing order auto-repair shows as a gold tag at the right of the header while it is on
 		inspect_refs.auto_tag = _auto_tag()
 		# so does the worktable's: "Making ammo" while the workshop's mark is on them
@@ -1427,38 +1586,18 @@ func select(sel) -> void:
 	v.add_child(head)
 	v.add_child(grid)
 	if sel.kind == "person":
-		var line := ColorRect.new()
-		line.color = LINE
-		line.custom_minimum_size = Vector2(0, 1)
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		v.add_child(line)
-		var sk := GridContainer.new()
-		sk.columns = 2
-		sk.add_theme_constant_override("h_separation", 14)
-		sk.add_theme_constant_override("v_separation", 5)
-		sk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# the skills in one row: a name, its number, what it has gained and a bar under them
+		var sk := _hbox(10)
+		inspect_refs.skills = {}
 		for skill_name in SKILLS_SHOWN:
-			var val := int(sel.ref.def.skills.get(skill_name, 0))
-			var row := _hbox(6)
-			var n := _label(skill_name, Fonts.sans(400), 12, INK2)
-			n.custom_minimum_size.x = 58
-			row.add_child(n)
-			var b := Bar.new()
-			b.custom_minimum_size = Vector2(44, 4)
-			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			b.value = val / 10.0
-			b.color = Color("#b3a57f")
-			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			row.add_child(b)
-			var num := _label(str(val), Fonts.cond(600), 12, INK)
-			num.custom_minimum_size.x = 14
-			num.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			row.add_child(num)
-			row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			sk.add_child(row)
+			var cell := _skill_cell(skill_name)
+			sk.add_child(cell.box)
+			inspect_refs.skills[skill_name] = cell
 		v.add_child(sk)
 	inspect.add_child(v)
+	if sel.kind == "person":
+		# the rows of round 4 are filled in first, so the dock is laid out for a panel as tall as it will be
+		_refresh_people_rows(sel.ref)
 	_build_gizmos()
 	_refresh_selection()
 
@@ -1629,6 +1768,9 @@ func _order_blocker(id: String) -> String:
 		return "pick one of the crew first"
 	if selection.kind == "person":
 		var p = selection.ref
+		# in a breakdown they cannot be ordered (looking at them is always fine)
+		if id != "focus" and not p.dead and p.away == null and _breakdown(p):
+			return "%s is having a breakdown" % p.first
 		if id == "craft":
 			# the workshop says why (night, no scrap to spare, they are down, gone or away: the key can
 			# be pressed for anyone); someone at the bench can always be called back
@@ -2085,6 +2227,25 @@ func _layout_toast() -> void:
 
 # ----------------------------------------------- dialog and game over --
 
+## Whether a modal is up over the game: the scavenging dialog, the end screen, or any page of the HUD that covers
+## the whole window and stops the mouse (the storyteller's radio card is one) or says so with the meta "modal". A
+## menu is the shell's (main.gd's `menu_open`). The speech bubbles keep quiet while one is up.
+func modal_open() -> bool:
+	if scavenge_dialog != null or game_over != null:
+		return true
+	for c in get_children():
+		if not (c is Control) or not c.visible:
+			continue
+		if c.has_meta("modal") or (c.mouse_filter == Control.MOUSE_FILTER_STOP and _covers_window(c)):
+			return true
+	return false
+
+
+## Whether a control is anchored over the whole of its parent (a page, not one of the HUD's boards).
+func _covers_window(c: Control) -> bool:
+	return c.anchor_left == 0.0 and c.anchor_top == 0.0 and c.anchor_right == 1.0 and c.anchor_bottom == 1.0
+
+
 ## Opens the "Send a scavenging party" dialog for the selection (a person, or
 ## nothing: then the first free survivor leads). The game is paused meanwhile.
 func open_scavenge(sel) -> void:
@@ -2275,15 +2436,27 @@ func _days_text(days: float) -> String:
 	return "%d d" % int(days)
 
 
-## The word over the card of someone who is gone or away, or "".
+## The word over the card of someone who is gone or away, or "". One who died is "In memory" (round 4: the
+## card's tooltip says what was said about them); one who turned is "Turned" and one who was sent out "Left".
 func _card_word(p) -> String:
 	if p.turned:
 		return "Turned"
 	if p.dead:
-		return "Left" if p.away is Dictionary and String(p.away.get("kind", "")) == "exile" else "Died"
+		return "Left" if p.away is Dictionary and String(p.away.get("kind", "")) == "exile" else "In memory"
 	if p.away != null:
 		return "Away"
 	return ""
+
+
+## The tooltip of a card: the name and the job; for one who died, that and what was said of them (for one who
+## turned, what was said too).
+func _card_tip(p, word: String, epitaph: String) -> String:
+	var tip := "%s, %s" % [p.name, String(p.def.role).to_lower()]
+	if word == "In memory" or word == "Turned":
+		tip += "\nIn memory" if word == "In memory" else "\nTurned into one of the dead"
+		if epitaph != "":
+			tip += "\n" + _wrap(epitaph)
+	return tip
 
 
 func _update_card(c: Dictionary, sim) -> void:
@@ -2299,10 +2472,24 @@ func _update_card(c: Dictionary, sim) -> void:
 		c.veil.visible = word != ""
 		c.veil.color.a = 0.66 if p.dead else 0.48
 		c.word.text = word
+		# "In memory" is the longest word a card carries: set without the spread letters, and broken into
+		# two lines where the picture is narrow
+		c.word.add_theme_font_override("font", Fonts.cond(700, 0 if word == "In memory" else 1))
+		c.word.autowrap_mode = TextServer.AUTOWRAP_WORD
+		c.card.self_modulate = MEMORIAL_STOCK if word == "In memory" else Color.WHITE
 		c.word.add_theme_color_override("font_color", DANGER_TEXT if word == "Turned" else (INFO if word == "Away" else INK2))
 		c.name.add_theme_color_override("font_color", INK3 if p.dead else INK)
 		var dim := 0.4 if p.dead else (0.7 if p.away != null else (0.45 if p.downed else 1.0))
 		c.pic.modulate = Color(dim, dim, dim)
+	# the tooltip: the name and the job, and for the remembered the epitaph (asked for until there is one)
+	if word == "In memory" or word == "Turned":
+		if c.epitaph == "":
+			c.epitaph = _epitaph(p)
+	else:
+		c.epitaph = ""
+	var tip := _card_tip(p, word, c.epitaph)
+	if c.card.tooltip_text != tip:
+		c.card.tooltip_text = tip
 	var f: float = clampf(p.hp / 100.0, 0.0, 1.0)
 	c.hp.size = Vector2(c.hp_bg.size.x * f, 3)
 	c.hp.color = _hp_color(f)
@@ -2311,7 +2498,7 @@ func _update_card(c: Dictionary, sim) -> void:
 	c.fight.visible = p.target != null and not p.downed and present
 	if c.fight.visible:
 		c.fight.modulate.a = 1.0 if _calm() else 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
-	var marks: Array = [] if p.dead else sim.status_of(p)
+	var marks: Array = [] if p.dead else _fit_marks(sim.status_of(p))
 	var sig := ""
 	for m in marks:
 		sig += "%s|%s|%s;" % [m.get("icon", ""), Color(m.get("color", INK2)).to_html(), m.get("tip", "")]
@@ -2319,6 +2506,24 @@ func _update_card(c: Dictionary, sim) -> void:
 		c.marks_sig = sig
 		c.marks_data = marks
 		_fill_marks(c, marks)
+
+
+## `marks` as the modules give them, with the mood mark (a person about to break) kept among the first
+## `mark_max` when there are more marks than the card has room for: the modules' order puts it last, and it
+## would be the first to be cut.
+func _fit_marks(marks: Array) -> Array:
+	if marks.size() <= mark_max:
+		return marks
+	var i := 0
+	while i < marks.size() and String(marks[i].get("icon", "")) != "mood":
+		i += 1
+	if i < mark_max or i >= marks.size():
+		return marks
+	var out := marks.duplicate()
+	var keep = out[i]
+	out[i] = out[mark_max - 1]
+	out[mark_max - 1] = keep
+	return out
 
 
 ## The little row of status icons on a card: what the modules say is wrong with
@@ -2475,6 +2680,8 @@ func _doing_person(p) -> String:
 	if p.downed:
 		# the medical module says what ("Down and bleeding", "Collapsed from hunger", "Resting in the infirmary")
 		return p.activity if p.activity != "" else "Down and bleeding"
+	if _breakdown(p):
+		return "Having a breakdown"
 	if p.reloading > 0.0:
 		return "Reloading"
 	if p.target != null:
@@ -2534,6 +2741,309 @@ func _set_text(label: Label, text: String, color: Color) -> void:
 		label.add_theme_color_override("font_color", color)
 
 
+# --------------------------------------------------------------- the people --
+# Round 4: the rows of the person panel that come from the people's modules (sim.morale, traits, bonds,
+# skills and barks). Each is read through `_mod`, so a game that has none of them (an older fake) just has
+# no such row; every modifier the rules apply to a person is in a tooltip here.
+
+## A module of the game by name, or null in a game that has none.
+func _mod(name: String):
+	return null if sim_ref == null else sim_ref.get(name)
+
+
+## `text` broken at spaces into lines of about `width` letters: a tooltip is as wide as its longest line.
+static func _wrap(text: String, width: int = TIP_WRAP) -> String:
+	var lines: Array = []
+	var line := ""
+	for word in text.split(" "):
+		if line != "" and line.length() + 1 + word.length() > width:
+			lines.append(line)
+			line = word
+		else:
+			line = word if line == "" else line + " " + word
+	if line != "":
+		lines.append(line)
+	return "\n".join(lines)
+
+
+## "+5", "-8", "+0.4", "+5.4": a number with its sign, whole when it is.
+static func _signed(x: float) -> String:
+	if absf(x) < 0.0001:
+		return "0"
+	if absf(x - roundf(x)) < 0.05:
+		return "%+d" % roundi(x)
+	return "%+.1f" % x
+
+
+## Whether `p` is in a breakdown just now: they cannot shoot or be ordered (the morale module says; a game
+## without one has none).
+func _breakdown(p) -> bool:
+	var m = _mod("morale")
+	return m != null and m.get("enabled") != false and m.has_method("breakdown") and bool(m.breakdown(p))
+
+
+## Whether `p` is dead and remembered (as against turned, or sent out through the gate).
+func _remembered(p) -> bool:
+	return p.dead and not p.turned and not (p.away is Dictionary and String(p.away.get("kind", "")) == "exile")
+
+
+## The line said about `p` now that they are gone (the barks' epitaph), or "" when nothing is said.
+func _epitaph(p) -> String:
+	var b = _mod("barks")
+	if b == null or not b.has_method("epitaph"):
+		return ""
+	var line = b.epitaph(p)
+	return String(line).strip_edges() if line is String else ""
+
+
+## How many points each skill of `p` has gained: what the skills module says, else what they hold over the roster.
+func _gained(p) -> Dictionary:
+	var sk = _mod("skills")
+	if sk != null and sk.has_method("gained"):
+		var g = sk.gained(p)
+		if g is Dictionary:
+			return g
+	var out := {}
+	var mine = p.get("skills")
+	if mine is Dictionary:
+		for k in mine:
+			var n := int(mine[k]) - int(p.def.skills.get(k, mine[k]))
+			if n > 0:
+				out[k] = n
+	return out
+
+
+## The tooltip of a skill: its number and where it started, and what makes it grow (the skills module's own
+## table: a point for so many kills, so much wall mended...), how far, and what a trait adds.
+func _skill_tip(p, skill_name: String, now: int, up: int) -> String:
+	var tip := "%s %d" % [skill_name, now]
+	if up > 0:
+		tip += " (started at %d, +%d from practice)" % [now - up, up]
+	var sk = _mod("skills")
+	var kinds = sk.get("KINDS") if sk != null else null
+	var feeds: Array = []
+	if kinds is Dictionary:
+		for kind in kinds:
+			if kinds[kind] is Dictionary and String(kinds[kind].get("skill", "")) == skill_name:
+				feeds.append("%d %s" % [roundi(float(kinds[kind].get("per", 0.0))), SKILL_UNITS.get(kind, String(kind))])
+	if feeds.is_empty():
+		tip += "\nGrows with use: %s." % String(SKILL_FED.get(skill_name, "practice"))
+	else:
+		tip += "\nA point for every " + " or ".join(feeds) + "."
+		var cap = sk.get("MAX_GAIN")
+		if cap != null:
+			tip += "\nAt most %d over where they started." % int(cap)
+	var t = _mod("traits")
+	var xp: float = float(t.mult(p, "xp")) if t != null and t.has_method("mult") else 1.0
+	if absf(xp - 1.0) > 0.01:
+		tip += "\nLearns %d%% %s." % [roundi(absf(xp - 1.0) * 100.0), "faster" if xp > 1.0 else "slower"]
+	return tip
+
+
+## The record on a person's name: kills (and tonight's), shots, walls mended, people treated, scrap made into
+## ammo; only what is more than nothing, except the kills. "" when the game keeps no counters.
+func _stats_tip(p) -> String:
+	var st = p.get("stats")
+	if not (st is Dictionary):
+		return ""
+	var kills := int(st.get("kills", 0))
+	var tonight := int(st.get("kills_night", 0))
+	var lines: Array = ["Kills: %d (%d tonight)" % [kills, tonight] if tonight > 0 else "Kills: %d" % kills]
+	if int(st.get("shots", 0)) > 0:
+		lines.append("Shots fired: %d" % int(st.get("shots", 0)))
+	if roundi(float(st.get("mended", 0.0))) > 0:
+		lines.append("Wall mended: %d HP" % roundi(float(st.get("mended", 0.0))))
+	if int(st.get("treated", 0)) > 0:
+		lines.append("Treated: %d" % int(st.get("treated", 0)))
+	if roundi(float(st.get("crafted", 0.0))) > 0:
+		lines.append("Scrap made into ammo: %d" % roundi(float(st.get("crafted", 0.0))))
+	return "\n".join(lines)
+
+
+## What a bond does, in words: with the rules' own numbers (bonds.AIM_TILES, AIM_BONUS, morale.NEAR_BOND and the
+## Loyal trait's addition) when the modules have them, in general words when they do not.
+func _bond_words(p) -> String:
+	var b = _mod("bonds")
+	var m = _mod("morale")
+	var t = _mod("traits")
+	var tiles = b.get("AIM_TILES") if b != null else null
+	var bonus = b.get("AIM_BONUS") if b != null else null
+	var steady = m.get("NEAR_BOND") if m != null else null
+	if tiles == null or bonus == null or steady == null:
+		return "Steadier near them, and a loss hits hard."
+	var aim: float = float(bonus) + (float(t.add(p, "bond")) if t != null and t.has_method("add") else 0.0)
+	return "Within %d tiles: steadier (%s mood) and aims %d%% better.\nA loss hits hard." % [roundi(float(tiles)), _signed(float(steady)), roundi(aim * 100.0)]
+
+
+## The tooltip of the mood row: how they are (or the breakdown), every reason with its sign, and what it costs
+## or gives in work and aim.
+func _mood_tip(p, m, word: String, value: float, broke: bool) -> String:
+	var lines: Array = []
+	if broke:
+		lines.append(_wrap("Having a breakdown: %s cannot shoot or be ordered until it passes" % p.first))
+		lines.append("Mood %d out of 100" % roundi(value))
+	else:
+		lines.append("%s (%d out of 100)" % [word, roundi(value)])
+	var reasons: Array = []
+	if m.has_method("explain"):
+		var got = m.explain(p)
+		if got is Array:
+			reasons = got
+	for i in mini(reasons.size(), MOOD_LINES):
+		var r: Dictionary = reasons[i]
+		# a shock (a kill, a friend lost) fades away; what they are now stays while it is so
+		lines.append("%s %s%s" % [_signed(float(r.get("value", 0.0))), String(r.get("label", "")), " (fading)" if bool(r.get("recent", false)) else ""])
+	if reasons.size() > MOOD_LINES:
+		lines.append("and %d smaller" % (reasons.size() - MOOD_LINES))
+	if reasons.is_empty():
+		lines.append("Nothing is moving it right now")
+	elif m.has_method("target"):
+		lines.append("Settling toward %d" % roundi(float(m.target(p))))
+	var perf: float = float(m.perf(p)) if m.has_method("perf") else 1.0
+	if absf(perf - 1.0) > 0.004:
+		lines.append("Works and aims at %d%% of their best" % roundi(perf * 100.0))
+	return "\n".join(lines)
+
+
+## The mood row, in line with the game: the bar, the word (a breakdown is its own word), the tooltip. For a
+## person who is remembered the row is a memorial (the epitaph); for one who turned or left there is none; with
+## no morale module, or while the tutorial has morale off, there is none for the living.
+func _refresh_mood(p) -> void:
+	var refs := inspect_refs
+	var m = _mod("morale")
+	var mood_on: bool = m != null and m.get("enabled") != false and not p.dead
+	var memo_on := _remembered(p)
+	refs.mood_head.visible = mood_on or memo_on
+	refs.mood_row.visible = mood_on or memo_on
+	refs.mood_bar.visible = mood_on
+	refs.mood_word.visible = mood_on
+	refs.mood_memo.visible = memo_on
+	if memo_on:
+		var line := _epitaph(p)
+		if line == "":
+			line = "%s will not be forgotten" % p.first
+		if refs.mood_head.text != "MEMORY":
+			refs.mood_head.text = "MEMORY"
+		if refs.mood_memo.text != line:
+			refs.mood_memo.text = line
+			refs.mood_memo.tooltip_text = _wrap(line)
+		return
+	if refs.mood_head.text != "MOOD":
+		refs.mood_head.text = "MOOD"
+	if not mood_on:
+		return
+	var broke := _breakdown(p)
+	var word := String(m.mood(p))
+	var value := float(m.value(p))
+	var key := "Breaking" if broke else word
+	var bar_value := clampf(value / 100.0, 0.0, 1.0)
+	var bar_color: Color = MOOD_COLORS.get(key, OK)
+	if not is_equal_approx(refs.mood_bar.value, bar_value) or refs.mood_bar.color != bar_color:
+		refs.mood_bar.value = bar_value
+		refs.mood_bar.color = bar_color
+		refs.mood_bar.queue_redraw()
+	_set_text(refs.mood_word, "Breakdown" if broke else word, MOOD_TEXT.get(key, INK))
+	var tip := _mood_tip(p, m, word, value, broke)
+	for c in [refs.mood_head, refs.mood_bar, refs.mood_word]:
+		if c.tooltip_text != tip:
+			c.tooltip_text = tip
+
+
+## The chips of the person's traits (rebuilt when they change), each with its blurb as the tooltip.
+func _refresh_traits(p) -> void:
+	var refs := inspect_refs
+	var t = _mod("traits")
+	var list: Array = []
+	if t != null and t.has_method("of"):
+		var got = t.of(p)
+		if got is Array:
+			list = got
+	refs.traits_head.visible = not list.is_empty()
+	refs.traits_box.visible = not list.is_empty()
+	var sig := ""
+	for tr in list:
+		sig += "%s|%s|%s;" % [tr.get("id", ""), tr.get("name", ""), tr.get("blurb", "")]
+	if sig == refs.traits_sig:
+		return
+	refs.traits_sig = sig
+	for c in refs.traits_box.get_children():
+		refs.traits_box.remove_child(c)
+		c.queue_free()
+	for tr in list:
+		var blurb := String(tr.get("blurb", ""))
+		refs.traits_box.add_child(_chip(String(tr.get("name", "")), _wrap(blurb if blurb != "" else String(tr.get("name", "")))))
+
+
+## "Marcus (family), Ana (friend)" and the tooltip with the full names, what a bond is for and, while a friend
+## is close, what it is doing for their aim.
+func _refresh_bonds(p) -> void:
+	var refs := inspect_refs
+	var b = _mod("bonds")
+	var list: Array = []
+	if b != null and b.has_method("of"):
+		var got = b.of(p)
+		if got is Array:
+			list = got
+	refs.bonds_head.visible = not list.is_empty()
+	refs.bonds.visible = not list.is_empty()
+	if list.is_empty():
+		return
+	var short: Array = []
+	var full: Array = []
+	for e in list:
+		var who = e.who
+		# what the other is to them (a mentor's student is "student"); the kind when the module does not say
+		var role := String(e.get("role", e.get("kind", "friend")))
+		# one who is gone (dead, turned or sent out) is still on the line, and says so
+		short.append("%s (%s%s)" % [who.first, role, ", gone" if who.dead else ""])
+		full.append("%s (%s%s)" % [who.name, role, ", gone" if who.dead else ""])
+	var tip := "Close to:\n" + "\n".join(full) + "\n" + _bond_words(p)
+	if b.has_method("aim_bonus") and not p.dead and float(b.aim_bonus(p)) > 0.0:
+		tip += "\nA friend is close now: aims %d%% better." % roundi(float(b.aim_bonus(p)) * 100.0)
+	_set_text(refs.bonds, ", ".join(short), INK)
+	for c in [refs.bonds, refs.bonds_head]:
+		if c.tooltip_text != tip:
+			c.tooltip_text = tip
+
+
+## Each skill's number (the person's own copy, never the roster's), what it has gained, its bar and its tooltip.
+func _refresh_skills(p) -> void:
+	var cells = inspect_refs.get("skills")
+	if not (cells is Dictionary):
+		return
+	var gained := _gained(p)
+	var mine = p.get("skills")
+	for skill_name in cells:
+		var cell: Dictionary = cells[skill_name]
+		var base := int(p.def.skills.get(skill_name, 0))
+		var now: int = int(mine.get(skill_name, base)) if mine is Dictionary else base
+		var up := int(gained.get(skill_name, 0))
+		_set_text(cell.value, str(now), INK)
+		var gain_text := "+%d" % up if up > 0 else ""
+		if cell.gain.text != gain_text:
+			cell.gain.text = gain_text
+		cell.gain.visible = up > 0
+		var bar: Bar = cell.bar
+		if not is_equal_approx(bar.value, now / 10.0) or not is_equal_approx(bar.gain, up / 10.0):
+			bar.value = now / 10.0
+			bar.gain = up / 10.0
+			bar.queue_redraw()
+		var tip := _skill_tip(p, skill_name, now, up)
+		if cell.box.tooltip_text != tip:
+			cell.box.tooltip_text = tip
+
+
+## The person's rows that come from round 4's modules, in line with the game as it is now.
+func _refresh_people_rows(p) -> void:
+	_refresh_mood(p)
+	_refresh_traits(p)
+	_refresh_bonds(p)
+	_refresh_skills(p)
+	var record := _stats_tip(p)
+	if inspect_refs.name.tooltip_text != record:
+		inspect_refs.name.tooltip_text = record
+
+
 func _refresh_selection() -> void:
 	if selection == null or inspect_refs.is_empty():
 		return
@@ -2557,6 +3067,7 @@ func _refresh_selection() -> void:
 		inspect_refs.craft_tag.visible = ammo_tip != ""
 		if ammo_tip != "" and inspect_refs.craft_tag.tooltip_text != ammo_tip:
 			inspect_refs.craft_tag.tooltip_text = ammo_tip
+		_refresh_people_rows(p)
 		var pips: HBoxContainer = inspect_refs.pips
 		var n := pips.get_child_count()
 		if n > 0:

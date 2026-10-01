@@ -135,7 +135,7 @@ func _auto_repairs() -> void:
 		if q.repair != null:
 			taken[q.repair.id] = true
 	for p in sim.people:
-		if p.dead or p.downed or p.away != null:
+		if p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
 			continue
 		if not auto_repair(p):
 			continue
@@ -184,7 +184,7 @@ func coverage_of(seg) -> int:
 		if p.dead or p.downed or p.away != null:
 			continue
 		var at := post_pos(p)
-		var reach := float(p.gun.range)
+		var reach: float = sim.reach_of(p.gun)
 		var within := 0
 		for sl in seg.slots:
 			if at.distance_to(Vector2(sl.x, sl.y)) <= reach:

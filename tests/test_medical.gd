@@ -472,7 +472,7 @@ func test_the_nurse_bandages_a_bleeding_person() -> void:
 	var began := _run_until(sim, 30.0, func(): return sim.medical.jobs.size() == 1 and sim.medical.jobs[0].work > 0.0)
 	check(began >= 0.0, "she got there and began")
 	var worked := _run_until(sim, 10.0, func(): return marcus.wounds == 0)
-	near(worked, 10.0 / 3.0, 0.15, "a bandage takes 10 game minutes, 3.3 seconds at normal speed")
+	near(worked, 10.0 / 3.0 / sim.traits.mult(ana, "bandage"), 0.15, "a bandage takes 10 game minutes, 3.3 seconds at normal speed, and Ana (Triage) gets through it 30% faster")
 	eq(marcus.bleeding, 0.0, "the bleeding stopped")
 	eq(marcus.wounds, 0, "no wounds left")
 	near(sim.stock.meds, meds - 1.0, 0.0001, "one medicine used")
@@ -980,7 +980,7 @@ func test_the_cure_chance_is_a_base_plus_ten_a_point_of_medicine() -> void:
 	var g := _clinic()
 	var m = g.sim.medical
 	var b: float = Medical.CURE_BASE
-	near(m.cure_chance(_who(g.sim, "ana")), 0.9, 0.0001, "Ana, Medicine 10: capped at 90%")
+	near(m.cure_chance(_who(g.sim, "ana")), 0.9 + 0.1, 0.0001, "Ana, Medicine 10: capped at 90%, and Triage (a trait) adds ten points")
 	near(m.cure_chance(_who(g.sim, "ruth")), b + 0.2, 0.0001, "Ruth, Medicine 2")
 	near(m.cure_chance(_who(g.sim, "walt")), b + 0.2, 0.0001, "Walt, Medicine 2")
 	near(m.cure_chance(_who(g.sim, "dez")), b + 0.1, 0.0001, "Dez, Medicine 1")
@@ -993,7 +993,8 @@ func test_the_cure_rate_follows_the_healers_medicine() -> void:
 	var sim = g.sim
 	var hector = _who(sim, "hector")
 	var base: float = Medical.CURE_BASE
-	for spec in [["ana", 0.9], ["ruth", base + 0.2], ["walt", base + 0.2], ["dez", base + 0.1]]:
+	# (Ana: 90% by her skill, and Triage, her trait, adds ten points)
+	for spec in [["ana", 0.9 + 0.1], ["ruth", base + 0.2], ["walt", base + 0.2], ["dez", base + 0.1]]:
 		var healer = _who(sim, spec[0])
 		var ok := 0
 		var n := 400

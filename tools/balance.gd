@@ -22,6 +22,9 @@
 ##   --policy=informed the default policy plus what the game tells a player: at dusk the crew
 ##                    is stood on the decks where its guns cover the walls tonight's dead
 ##                    will come to, and the alarm is set on the best-covered section
+##   --nostory        play with the storyteller off (no card at noon, no assembly at dawn), to see
+##                    what the radio changes; by default it is on and the policy answers each card
+##                    with the choice the card names as its default
 ##   --verbose        print what the policy did and who was lost, game by game
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
@@ -36,7 +39,10 @@
 ##    makes ammo at the worktable until there is 450 (the scrapyard is the site
 ##    for scrap, then the hardware store);
 ##  - the infected are treated while there is medicine, and sent out through the
-##    gate once delirious with none left.
+##    gate once delirious with none left;
+##  - when the radio brings a card at noon it takes the answer the card names as its default
+##    (a card with no choice is read); and when the dead come to the wall by day (stragglers)
+##    the three best shooters stand to at their posts until they are put down.
 ## Bandages, stabilising and healing in bed are automatic in the game.
 extends SceneTree
 
@@ -45,6 +51,8 @@ const Scavenge := preload("res://scripts/sim/scavenge.gd")
 
 ## Another sites file for the whole run (--sites=path): to try a site before it is in the game.
 static var sites_override := ""
+## The storyteller is on (see --nostory).
+static var story_on := true
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -70,6 +78,8 @@ class Policy:
 	const CRAFT_BELOW_AMMO := 250.0
 	const CRAFT_UNTIL_AMMO := 450.0
 	const CRAFT_MIN_SCRAP := 10.0
+	## Against dead at the wall by day this many of the best shooters stand to at their posts.
+	const STAND_TO := 3
 
 	var sim
 	## Hide in the school gym from the bell to dawn instead of holding the posts.
@@ -89,6 +99,11 @@ class Policy:
 	var notes: Array = []
 	var _sent_day := 0
 	var _last_treat := {}
+	## Radio cards answered, the one answered last ("day:id": a card is answered once), and who was
+	## stood to the wall against dead by day (person id to true).
+	var cards := 0
+	var _answered := ""
+	var _standing: Dictionary = {}
 
 	func _init(s) -> void:
 		sim = s
@@ -100,6 +115,8 @@ class Policy:
 			_hide()
 		if informed:
 			_inform()
+		_story()
+		_alarm()
 		_scavenge()
 		_repair()
 		_infection()
@@ -107,6 +124,57 @@ class Policy:
 
 	func _note(text: String) -> void:
 		notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": text})
+
+	# ----------------------------------------------------------------------- the radio --
+
+	## A card is waiting: the answer it names as its default is taken, once for each card (a card with no
+	## choice is read). A choice that cannot be made is left to the card's own two hours.
+	func _story() -> void:
+		var card: Dictionary = sim.storyteller.pending()
+		if card.is_empty():
+			return
+		var key := "%d:%s" % [sim.day, card.id]
+		if key == _answered:
+			return
+		_answered = key
+		var i := int(card.bot)
+		var label := String(card.choices[i].label) if i >= 0 and i < card.choices.size() else ""
+		if sim.storyteller.choose(i):
+			cards += 1
+			_note("answers the radio, %s: %s" % [String(card.title), label] if not bool(card.resolved) else "reads the radio: %s" % String(card.title))
+		else:
+			_note("leaves the radio's %s to its default" % String(card.title))
+
+	## Dead at the wall by day (stragglers): the best shooters stand to at their posts until the dead are
+	## put down, then they go back to what they were doing. (By night the posts are held anyway.)
+	func _alarm() -> void:
+		var threat := 0
+		if sim.phase == "day":
+			for z in sim.zombies:
+				if z.state == "attack" or z.state == "breach" or (z.state == "approach" and z.slot != null):
+					threat += 1
+		if threat > 0:
+			if _standing.is_empty():
+				var crew: Array = []
+				for p in sim.people:
+					if _free(p):
+						crew.append(p)
+				crew.sort_custom(func(a, b): return a.skills.Shooting > b.skills.Shooting)
+				for p in crew.slice(0, STAND_TO):
+					sim.order_post(p)
+					_standing[p.id] = true
+				if not _standing.is_empty():
+					_note("stands %d to the wall: %d of the dead at it by day" % [_standing.size(), threat])
+			return
+		if _standing.is_empty():
+			return
+		for p in sim.people:
+			if _standing.has(p.id) and p.drafted:
+				p.drafted = false
+				p.order = null
+				p.goal_key = ""
+		_standing.clear()
+		_note("stands down: the wall is clear")
 
 	## Where a hiding crew stands: deep in the school gym.
 	const KEEP_SPOTS := [Vector2(24.5, 52.5), Vector2(27.5, 52.5), Vector2(30.5, 52.5), Vector2(24.5, 55.5), Vector2(27.5, 55.5), Vector2(30.5, 55.5)]
@@ -185,7 +253,7 @@ class Policy:
 		for p in sim.people:
 			if not (p.dead or p.downed or p.away != null):
 				crew.append(p)
-		crew.sort_custom(func(a, b): return a.def.skills.Shooting > b.def.skills.Shooting)
+		crew.sort_custom(func(a, b): return a.skills.Shooting > b.skills.Shooting)
 		var used := {}
 		for p in crew:
 			var best = null
@@ -239,7 +307,7 @@ class Policy:
 
 	## Free to be given a job: on the map, on their feet, on no order, and not busy treating someone.
 	func _free(p) -> bool:
-		if p.dead or p.downed or p.away != null or p.drafted or p.order != null:
+		if p.dead or p.downed or p.away != null or p.drafted or p.order != null or sim.morale.breakdown(p):
 			return false
 		return sim.medical.goal_for(p) == null
 
@@ -292,9 +360,9 @@ class Policy:
 			if _free(p) and sim.scavenge.can_go(p):
 				free.append(p)
 		free.sort_custom(func(a, b):
-			if a.def.skills.Shooting != b.def.skills.Shooting:
-				return a.def.skills.Shooting > b.def.skills.Shooting
-			return a.def.skills.Leading > b.def.skills.Leading)
+			if a.skills.Shooting != b.skills.Shooting:
+				return a.skills.Shooting > b.skills.Shooting
+			return a.skills.Leading > b.skills.Leading)
 		var n := 2 if free.size() >= 3 else (1 if free.size() == 2 else 0)
 		return free.slice(0, n)
 
@@ -337,7 +405,7 @@ class Policy:
 			if p.repair != null or not _free(p):
 				continue
 			# walls come before ammo, but a repair takes someone off the bench only if nobody else is free
-			var key: float = float(p.def.skills.Building) - (100.0 if sim.workshop.crafting(p) else 0.0)
+			var key: float = float(p.skills.Building) - (100.0 if sim.workshop.crafting(p) else 0.0)
 			if best == null or key > best_key:
 				best = p
 				best_key = key
@@ -367,7 +435,7 @@ class Policy:
 		for p in sim.people:
 			if p.repair != null or not _free(p) or sim.workshop.why_not_craft(p) != "":
 				continue
-			if best == null or p.def.skills.Building > best.def.skills.Building:
+			if best == null or p.skills.Building > best.skills.Building:
 				best = p
 		if best != null and sim.workshop.order_craft(best):
 			crafts += 1
@@ -399,10 +467,12 @@ class Policy:
 ## `hz` is how many steps of the rules a second; `orders` false plays with no
 ## orders given at all; `hide` makes the crew spend every night in the school gym; `setup`, if given, is called with the new Sim before the
 ## first step (the tests use it to play a cheap game).
-static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false, informed: bool = false) -> Dictionary:
+static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false, informed: bool = false, story: bool = true) -> Dictionary:
 	var started := Time.get_ticks_msec()
 	var g := Helpers.make(seed_value, difficulty)
 	var sim = g.sim
+	# the storyteller: on (the radio brings its cards, the dawn has its assembly) unless asked not to
+	sim.storyteller.enabled = story
 	if setup.is_valid():
 		setup.call(sim)
 	var policy := Policy.new(sim)
@@ -447,6 +517,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"sendouts": policy.sendouts,
 		"repairs": policy.repairs,
 		"crafts": policy.crafts,
+		"cards": policy.cards,
 		"notes": all_notes,
 		"took": snappedf((Time.get_ticks_msec() - started) / 1000.0, 0.1),
 	}
@@ -508,6 +579,7 @@ static func _row(sim) -> Dictionary:
 		"wall_max": wall_max,
 		"breached": down,
 		"kills": sim.kills,
+		"tension": snappedf(sim.storyteller.tension, 0.1),
 		"walkers": walkers,
 		"runners": runners,
 		"brutes": brutes,
@@ -586,6 +658,8 @@ func _run() -> void:
 			verbose = true
 		elif kv[0] == "quiet":
 			quiet = true
+		elif kv[0] == "nostory":
+			story_on = false
 		elif opts.has(kv[0]) and kv.size() > 1:
 			opts[kv[0]] = kv[1]
 			if kv[0] == "hz":
@@ -612,7 +686,7 @@ func _run() -> void:
 		var names := ["Story", "Standard", "Brutal"]
 		print("Thirty Bells balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
 			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else ("informed policy" if informed else "default policy")) if orders else "no orders",
-			(", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
+			((", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else "") + ("" if story_on else ", storyteller off")])
 		print("")
 		if jobs == 1 or seeds.size() == 1:
 			_print_header()
@@ -624,7 +698,7 @@ func _run() -> void:
 			_print_game(i + 1, games[i], verbose)
 	else:
 		for i in seeds.size():
-			var r := play(seeds[i], difficulty, days, hz, orders, Callable(), hide, informed)
+			var r := play(seeds[i], difficulty, days, hz, orders, Callable(), hide, informed, story_on)
 			games.append(r)
 			if not quiet:
 				_print_game(i + 1, r, verbose)
@@ -667,6 +741,8 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			"--policy=%s" % ("keep" if hide else ("informed" if informed else ("default" if orders else "none"))), "--quiet", "--out=%s" % out]
 		if sites_override != "":
 			args.append("--sites=%s" % sites_override)
+		if not story_on:
+			args.append("--nostory")
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0
@@ -693,7 +769,7 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 				have[int(g.seed)] = true
 			for sd in w.seeds:
 				if not have.has(sd):
-					games.append(play(sd, difficulty, days, hz, orders))
+					games.append(play(sd, difficulty, days, hz, orders, Callable(), false, false, story_on))
 	games.sort_custom(func(a, b): return a.seed < b.seed)
 	return games
 

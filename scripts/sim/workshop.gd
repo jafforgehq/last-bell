@@ -17,7 +17,8 @@ const AMMO_PER_SCRAP := 8.0
 ## The scrap the bench leaves in the stock, for the walls.
 const RESERVE_SCRAP := 3.0
 ## A person works through this much scrap an hour, plus half their Building skill
-## (Dez 6.5, Ruth 3.5, Marcus 2.5), times how well they are (`sim.perf`).
+## (Dez 6.5, Ruth 3.5, Marcus 2.5), times their `craft` traits (Dez, a Tinkerer: 1.2) and
+## how well they are (`sim.perf`).
 const BASE_SCRAP_PER_HOUR := 2.0
 const BUILDING_SHARE := 0.5
 ## Someone is at the bench when this close to its spot.
@@ -51,7 +52,7 @@ func bench() -> Vector2:
 
 ## How much scrap this person works through in a game hour when well.
 func scrap_per_hour(p) -> float:
-	return BASE_SCRAP_PER_HOUR + BUILDING_SHARE * float(p.def.skills.Building)
+	return (BASE_SCRAP_PER_HOUR + BUILDING_SHARE * float(p.skills.Building)) * sim.traits.mult(p, "craft")
 
 
 func crafting(p) -> bool:
@@ -72,6 +73,8 @@ func why_not_craft(p) -> String:
 		return "they are down"
 	if p.away != null:
 		return "they are away"
+	if sim.morale.breakdown(p):
+		return "they cannot work right now"
 	if _night():
 		return "it is night: everyone is at their post"
 	if float(sim.stock.scrap) < RESERVE_SCRAP + 1.0:
@@ -135,6 +138,7 @@ func update(dt: float) -> void:
 		var use := minf(want, spare)
 		sim.stock.scrap = float(sim.stock.scrap) - use
 		sim.stock.ammo = float(sim.stock.ammo) + use * AMMO_PER_SCRAP
+		sim.skills.credit(p, "crafted", use)
 		st.scrap = float(st.scrap) + use
 		st.hammer = float(st.hammer) - dt
 		st.since = float(st.since) + dt

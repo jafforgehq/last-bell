@@ -124,6 +124,12 @@ class Person:
 	var resting_bed = null
 	## The scavenging party they are away with (they are off the map), or null.
 	var away = null
+	## Their own copy of the roster's skills, which grow with use (skills.gd): the rules
+	## read these, never `def.skills`.
+	var skills: Dictionary = {}
+	## What they have done: kills, kills_night (since the last dusk), mended (HP), treated,
+	## crafted (scrap) and shots.
+	var stats: Dictionary = {}
 
 
 class Zombie:
@@ -309,6 +315,8 @@ func _make_person(def: Dictionary) -> Person:
 	p.aim = guns[def.weapon].rest
 	p.walk_phase = rng.randf() * 6.0
 	p.activity = def.job.what
+	p.skills = Skills.copy_of(def.skills)
+	p.stats = Skills.new_stats()
 	return p
 
 
@@ -389,6 +397,8 @@ func alert(id: String, level: String, text: String, sub: String, at, ttl: float 
 # ------------------------------------------------------------------ orders --
 
 func toggle_draft(p: Person) -> void:
+	if morale.breakdown(p):
+		return
 	p.drafted = not p.drafted
 	p.repair = null
 	workshop.stop(p)
@@ -396,7 +406,7 @@ func toggle_draft(p: Person) -> void:
 
 
 func order_move(p: Person, x: float, y: float) -> bool:
-	if p.downed or p.dead or p.away != null:
+	if p.downed or p.dead or p.away != null or morale.breakdown(p):
 		return false
 	if world.is_solid(world.solid_p, x, y):
 		return false
@@ -409,6 +419,8 @@ func order_move(p: Person, x: float, y: float) -> bool:
 
 
 func order_post(p: Person) -> void:
+	if morale.breakdown(p):
+		return
 	p.drafted = true
 	p.repair = null
 	workshop.stop(p)
@@ -417,6 +429,8 @@ func order_post(p: Person) -> void:
 
 
 func order_repair(p: Person, seg: Segment) -> void:
+	if morale.breakdown(p):
+		return
 	p.drafted = false
 	p.order = null
 	p.repair = seg
@@ -427,13 +441,20 @@ func order_repair(p: Person, seg: Segment) -> void:
 ## How well a person does things right now (shooting, repairing): 1.0 normal,
 ## less when hungry, thirsty or hurt.
 func perf(p: Person) -> float:
-	return supplies.perf(p) * medical.perf(p)
+	return supplies.perf(p) * medical.perf(p) * morale.perf(p) * storyteller.perf(p)
+
+
+## How much a person's traits, company and mood change their aim right now (1.0 normally): a
+## trait (Sharp-eyed, Nervous among a crowd of the dead), a friend close by (see bonds.gd) and
+## being Shaken (see morale.gd).
+func aim_factor(p: Person) -> float:
+	return traits.mult(p, "aim") * (1.0 + bonds.aim_bonus(p)) * morale.aim_mult(p)
 
 
 ## Small status marks for a person's card and panel, from every module:
 ## [{"icon": String, "color": Color, "tip": String}].
 func status_of(p: Person) -> Array:
-	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p) + workshop.status_of(p) + morale.status_of(p)
+	return supplies.status_of(p) + medical.status_of(p) + scavenge.status_of(p) + workshop.status_of(p) + morale.status_of(p) + storyteller.status_of(p)
 
 
 ## Game hours that pass in `dt` seconds of the rules' time.
@@ -500,6 +521,8 @@ func update(dt: float) -> void:
 		events.append({"type": "bell"})
 		events.append({"type": "banner", "text": "The bell rings", "sub": "Everyone to the wall"})
 		alert("bell", "info", "The bell has rung", "Everyone is heading to their posts", null, 14.0)
+		skills.on_bell()
+		barks.on_bell()
 	if before != phase:
 		if phase == "night":
 			events.append({"type": "banner", "text": "Night %d" % day, "sub": "Hold the wall until dawn"})
@@ -545,7 +568,7 @@ func update(dt: float) -> void:
 # ------------------------------------------------------------------ people --
 
 func _goal_for(p: Person):
-	if p.downed or p.dead or p.away != null:
+	if p.downed or p.dead or p.away != null or morale.breakdown(p):
 		return null
 	if p.order != null:
 		var is_post: bool = p.order.z > 0.5
@@ -609,9 +632,13 @@ func _update_person(p: Person, dt: float) -> void:
 			var hx := s.center.x + (-0.8 if s.side == "W" else (0.8 if s.side == "E" else 0.0))
 			var hy := s.center.y - (0.8 if s.side == "N" else 0.0)
 			fx.hit_material(hx, hy, "metal")
-		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.def.skills.Building)) * perf(p))
+		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.skills.Building)) * perf(p) * traits.mult(p, "repair"))
 		if done > 0.0:
+			var before_hp := s.hp
 			_repair_segment(s, done)
+			skills.credit(p, "mended", s.hp - before_hp)
+			if s.hp >= s.max_hp and s.hp > before_hp:
+				morale.on_repaired(p)
 		if s.hp >= s.max_hp:
 			p.repair = null
 	_combat(p, dt)
@@ -656,8 +683,16 @@ func gun_of(p: Person) -> Dictionary:
 	return BUTT
 
 
+## How far a gun reaches right now, in tiles: its own range, less in a fog (a card of the
+## storyteller's); a weapon in the hand never reaches less far.
+func reach_of(gun: Dictionary) -> float:
+	if gun.get("melee", false):
+		return float(gun.range)
+	return float(gun.range) * storyteller.reach_mult()
+
+
 func _find_target(p: Person):
-	var rng: float = float(gun_of(p).range)
+	var rng: float = reach_of(gun_of(p))
 	var best = null
 	var best_score := INF
 	for z in zombies:
@@ -683,7 +718,7 @@ func _combat(p: Person, dt: float) -> void:
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
 	p.cooldown -= dt
-	if p.moving or (phase == "day" and not p.drafted):
+	if p.moving or (phase == "day" and not p.drafted) or morale.breakdown(p):
 		p.target = null
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
@@ -691,7 +726,7 @@ func _combat(p: Person, dt: float) -> void:
 	if gun == BUTT and (phase == "night" or phase == "dusk" or p.drafted):
 		alert("ammo-out", "danger", "Out of ammo", "The guns are silent. Send a party for more.", null, 20.0)
 	var tz = p.target
-	if tz == null or tz.state == "dying" or tz.state == "dead" or Vector2(tz.x - p.x, tz.y - p.y).length() > float(gun.range):
+	if tz == null or tz.state == "dying" or tz.state == "dead" or Vector2(tz.x - p.x, tz.y - p.y).length() > reach_of(gun):
 		p.target = _find_target(p)
 	if p.target == null:
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 4.0)
@@ -731,9 +766,10 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 		p.cooldown = float(gun.cooldown) * (0.9 + rng.randf() * 0.2)
 		events.append({"type": "stab", "x": p.x, "y": p.y})
 		if rng.randf() < float(gun.acc):
-			_hurt_zombie(z, float(gun.dmg), ang)
+			_hurt_zombie(z, float(gun.dmg), ang, p, true)
 		return
 	p.mag -= 1
+	p.stats.shots += 1
 	p.recoil = 1.0
 	p.cooldown = float(gun.cooldown) * (0.85 + rng.randf() * 0.3)
 	var m := muzzle(p, ang)
@@ -742,11 +778,12 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
 	stock.ammo = maxf(0.0, stock.ammo - shot_cost(p))
 	var pellets := int(gun.get("pellets", 1))
-	var skill: float = float(p.def.skills.Shooting) / 10.0 * perf(p)
+	var skill: float = float(p.skills.Shooting) / 10.0 * perf(p)
+	var aim_f: float = aim_factor(p) * storyteller.aim_mult(dist)
 	var dealt := 0.0
 	for k in pellets:
 		var pa := ang + (rng.randf() - 0.5) * float(gun.get("spread", 0.05))
-		var p_hit := float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / float(gun.range), 2.0))
+		var p_hit := float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / float(gun.range), 2.0)) * aim_f
 		var hit := rng.randf() < (p_hit * 0.7 if pellets > 1 else p_hit)
 		var e: Vector2
 		if hit:
@@ -759,9 +796,9 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 			fx.smoke(e.x, e.y, 0.12, false)
 		fx.tracer(m.x, m.y, e.x, e.y)
 	if dealt > 0.0:
-		_hurt_zombie(z, dealt, ang)
+		_hurt_zombie(z, dealt, ang, p)
 	if p.mag <= 0:
-		p.reloading = float(gun.reload)
+		p.reloading = float(gun.reload) * traits.mult(p, "reload")
 		p.target = null
 		events.append({"type": "reload", "x": p.x, "y": p.y})
 	# gunfire draws the dead
@@ -770,7 +807,8 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 			w.state = "approach"
 
 
-func _hurt_zombie(z: Zombie, dmg: float, ang: float) -> void:
+## `shooter` is whoever struck the blow (it is credited with the kill, `melee` or not).
+func _hurt_zombie(z: Zombie, dmg: float, ang: float, shooter: Person = null, melee := false) -> void:
 	z.hp -= dmg
 	z.stagger = 0.25
 	fx.blood(z.x, z.y - 0.25, cos(ang), sin(ang), 9)
@@ -782,6 +820,10 @@ func _hurt_zombie(z: Zombie, dmg: float, ang: float) -> void:
 			z.slot.who = null
 			z.slot = null
 		kills += 1
+		if shooter != null:
+			skills.credit(shooter, "melee" if melee else "kills", 1.0)
+			morale.on_kill(shooter)
+			barks.on_kill(shooter)
 		fx.decal(z.x + z.fall_dir * 0.35, z.y + 0.2, 0.25, 0.9)
 		events.append({"type": "thud", "x": z.x, "y": z.y})
 
@@ -1112,6 +1154,8 @@ func _segment_state(s: Segment) -> void:
 		events.append({"type": "crash", "x": s.center.x, "y": s.center.y})
 		events.append({"type": "banner", "text": "Breach!", "sub": "The %s is down" % s.name.to_lower()})
 		alert("breach-%d" % s.id, "danger", "Breach at the %s" % s.name.to_lower(), "Walkers are getting in", s.center, 30.0)
+		morale.on_breach()
+		barks.on_breach(s)
 	elif was == 3:
 		open_segment(s, false)
 	if on_segment_change.is_valid():

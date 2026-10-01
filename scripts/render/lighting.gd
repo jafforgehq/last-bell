@@ -1,7 +1,15 @@
 ## Day and night. A CanvasModulate carries the sky colour; every lamp, fire
 ## barrel, lantern and floodlight is a PointLight2D whose texture has its
 ## falloff, cone and room clipping baked in (like the web version's light map).
+##
+## The storyteller's cards change the night (`update` is given `sim.storyteller.look()`): in a
+## fog a soft veil drifts over the yard, thicker toward the edges, and every light looks shorter
+## and weaker; in a blackout the generator is dead: the lamps, the lanterns and the floodlights
+## go out (the fire barrels burn on) and the sky takes a cooler, darker tint. Both ease in and
+## out, and under "reduce motion" they simply switch (and the fog does not drift).
 extends Node2D
+
+const Prefs := preload("res://scripts/prefs.gd")
 
 const TILE := 64.0
 const SKY := [
@@ -19,14 +27,74 @@ const SKY := [
 	[24.0, Color8(68, 76, 116)],
 ]
 const FLASH_POOL := 10
+## A blackout multiplies the sky by this, a cooler and darker blue, as the power goes.
+const BLACKOUT_TINT := Color(0.70, 0.79, 0.97)
+## The colour of the fog by day, and how fast it comes and goes (a share a second); the lights in a
+## fog keep this much of their energy and of their reach.
+const FOG_DAY := Color(0.80, 0.83, 0.87)
+const FOG_RATE := 0.35
+const FOG_LIGHT_ENERGY := 0.72
+const FOG_LIGHT_REACH := 0.78
+## How fast the power goes out and comes back (a share a second).
+const POWER_DOWN := 1.8
+const POWER_UP := 0.8
+
+## A soft, drifting veil: value noise in four octaves, stronger toward the edges of the screen.
+const FOG_SHADER := "
+shader_type canvas_item;
+uniform vec4 tint : source_color = vec4(0.8, 0.83, 0.87, 1.0);
+uniform float density = 0.0;
+uniform float drift = 0.0;
+
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+float fbm(vec2 p) {
+	float v = 0.0;
+	float a = 0.5;
+	for (int k = 0; k < 4; k++) {
+		v += a * vnoise(p);
+		p = p * 2.03 + vec2(17.0, 9.0);
+		a *= 0.5;
+	}
+	return v;
+}
+
+void fragment() {
+	vec2 uv = UV;
+	float n = fbm(uv * vec2(3.4, 2.2) + vec2(drift * 0.020, drift * 0.007));
+	float m = fbm(uv * vec2(6.5, 4.5) - vec2(drift * 0.031, -drift * 0.011) + vec2(31.0, 5.0));
+	float edge = smoothstep(0.10, 0.85, distance(uv, vec2(0.5)) * 1.5);
+	float a = density * (0.34 + 0.36 * n + 0.14 * m + 0.30 * edge);
+	COLOR = vec4(tint.rgb, clamp(a, 0.0, 0.88));
+}
+"
 
 var modulate_node: CanvasModulate
-var lights: Array = [] # {def, node}
+var lights: Array = [] # {def, node, scale}
 var flash_nodes: Array = []
 var flash_tex: Texture2D
 var dark := 0.0
 var lamp_level := 0.0
 var floods_on := false
+## How thick the fog is now (0 to 1), and how much power the lamps have (1 on, 0 a blackout): both
+## eased towards what the storyteller says.
+var fog := 0.0
+var power := 1.0
+## The fog's veil (a full screen of its own, under the glow layer and over the world).
+var veil_layer: CanvasLayer
+var veil: ColorRect
+var _veil_material: ShaderMaterial
+var _last_t := -1.0
+var _drift := 0.0
 
 
 static func sky_at(hour: float) -> Color:
@@ -52,7 +120,7 @@ func setup(data: Dictionary, canvas_modulate: CanvasModulate) -> void:
 		node.energy = 0.0
 		node.visible = false
 		add_child(node)
-		lights.append({"def": def, "node": node})
+		lights.append({"def": def, "node": node, "scale": node.texture_scale})
 	flash_tex = _light_texture({"x": 0.0, "y": 0.0, "r": 1.0}, 64)
 	for i in FLASH_POOL:
 		var f := PointLight2D.new()
@@ -62,6 +130,24 @@ func setup(data: Dictionary, canvas_modulate: CanvasModulate) -> void:
 		f.visible = false
 		add_child(f)
 		flash_nodes.append(f)
+	_build_veil()
+
+
+## The fog's veil: a full-screen rectangle with the shader above, on a layer of its own.
+func _build_veil() -> void:
+	veil_layer = CanvasLayer.new()
+	veil_layer.layer = 1
+	add_child(veil_layer)
+	veil = ColorRect.new()
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shader := Shader.new()
+	shader.code = FOG_SHADER
+	_veil_material = ShaderMaterial.new()
+	_veil_material.shader = shader
+	veil.material = _veil_material
+	veil.visible = false
+	veil_layer.add_child(veil)
 
 
 ## Falloff stops match the web version: 0 -> 1, 0.3 -> 0.72, 0.65 -> 0.28, 1 -> 0.
@@ -113,19 +199,31 @@ static func _light_texture(def: Dictionary, size: int) -> Texture2D:
 	return ImageTexture.create_from_image(img)
 
 
-func update(hour: float, bell_rung: bool, t: float, flashes: Array) -> void:
+## `look` is what the storyteller's cards are doing: {"fog": 0 to 1, "blackout": bool} (see
+## storyteller.look()); none of it when it is empty.
+func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictionary = {}) -> void:
+	var dt := 0.0 if _last_t < 0.0 else clampf(t - _last_t, 0.0, 0.25)
+	_last_t = t
+	_follow(look, dt)
 	var sky := sky_at(hour)
 	dark = 1.0 - (sky.r + sky.g + sky.b) / 3.0
-	lamp_level = clampf((dark - 0.08) * 4.0, 0.0, 1.0)
+	var flicker := 1.0
+	if power > 0.0 and power < 1.0 and not Prefs.on("ui", "reduce_motion"):
+		# the lamps stutter as the power goes
+		flicker = 0.62 + 0.38 * sin(t * 43.0)
+	lamp_level = clampf((dark - 0.08) * 4.0, 0.0, 1.0) * power * flicker
+	_set_veil(sky)
 	if dark <= 0.02:
-		modulate_node.color = Color.WHITE
+		modulate_node.color = Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)
 		for l in lights:
 			l.node.visible = false
 		for f in flash_nodes:
 			f.visible = false
 		return
-	modulate_node.color = sky
+	modulate_node.color = _tinted(sky)
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
+	var energy_k := lerpf(1.0, FOG_LIGHT_ENERGY, fog)
+	var reach_k := lerpf(1.0, FOG_LIGHT_REACH, fog)
 	for l in lights:
 		var def: Dictionary = l.def
 		var level := 1.0
@@ -139,8 +237,9 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array) -> void:
 		var k: float = def.get("flicker", 0.0)
 		if k > 0.0:
 			f = 1.0 - 0.1 * k * (0.5 + 0.5 * sin(t * 13.7 + float(def.x) * 3.1)) - 0.06 * k * sin(t * 23.3 + float(def.y))
-		var energy: float = minf(1.0, float(def.get("i", 1.0)) * level * f)
+		var energy: float = minf(1.0, float(def.get("i", 1.0)) * level * f) * energy_k
 		l.node.energy = energy
+		l.node.texture_scale = float(l.scale) * reach_k
 		l.node.visible = energy > 0.01
 	for i in flash_nodes.size():
 		var node: PointLight2D = flash_nodes[i]
@@ -152,3 +251,49 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array) -> void:
 			node.visible = true
 		else:
 			node.visible = false
+
+
+## The fog and the power come and go over a second or two (at once under reduce motion).
+func _follow(look: Dictionary, dt: float) -> void:
+	var fog_to := clampf(float(look.get("fog", 0.0)), 0.0, 1.0)
+	var dark_to := bool(look.get("blackout", false))
+	if Prefs.on("ui", "reduce_motion"):
+		fog = fog_to
+		power = 0.0 if dark_to else 1.0
+		return
+	_drift += dt
+	fog = move_toward(fog, fog_to, FOG_RATE * dt)
+	power = maxf(0.0, power - POWER_DOWN * dt) if dark_to else minf(1.0, power + POWER_UP * dt)
+
+
+## The sky as the world sees it: cooler and darker in a blackout, a little greyer in a fog.
+func _tinted(sky: Color) -> Color:
+	var c := sky
+	if power < 1.0:
+		c = c * Color(1, 1, 1).lerp(BLACKOUT_TINT, 1.0 - power)
+	if fog > 0.0:
+		c = _grey(c, fog * 0.3)
+	return c
+
+
+## `c` a share `k` of the way to grey of the same brightness (a touch blue).
+func _grey(c: Color, k: float) -> Color:
+	var g := (c.r + c.g + c.b) / 3.0
+	return c.lerp(Color(g, g, minf(1.0, g * 1.06)), k)
+
+
+## The veil: the colour of the ambient light (the fog is lit by it), thick as the fog is, a little
+## thinner at night (the dark is dark enough).
+func _set_veil(sky: Color) -> void:
+	if veil == null:
+		return
+	veil.visible = fog > 0.01
+	if not veil.visible:
+		return
+	var bright := (sky.r + sky.g + sky.b) / 3.0
+	var tint := FOG_DAY * (0.30 + 0.70 * bright)
+	if power < 1.0:
+		tint = tint * Color(1, 1, 1).lerp(BLACKOUT_TINT, 1.0 - power)
+	_veil_material.set_shader_parameter("tint", Color(tint.r, tint.g, tint.b, 1.0))
+	_veil_material.set_shader_parameter("density", fog * lerpf(0.95, 0.62, dark))
+	_veil_material.set_shader_parameter("drift", _drift)

@@ -630,12 +630,27 @@ static func _zombie_in(sim, r: Reader, zd: Dictionary, by_seg: Dictionary, claim
 	return z
 
 
+## Whether `v` is a dictionary of finite numbers (a person's skills or counters).
+static func _numbers_only(v) -> bool:
+	if typeof(v) != TYPE_DICTIONARY:
+		return false
+	for k in v:
+		var n = v[k]
+		if typeof(k) != TYPE_STRING or (typeof(n) != TYPE_INT and typeof(n) != TYPE_FLOAT) or not is_finite(float(n)):
+			return false
+	return true
+
+
 ## Everything to set on one person, read and checked; null if damaged.
 static func _person_in(sim, r: Reader, p, pd: Dictionary, by_seg: Dictionary, zombie_count: int):
 	for key in ["x", "y", "hp"]:
 		if not pd.has(key):
 			return null
 	var f := r.fields(p, pd, FIXED + PERSON_OWN)
+	# skills and counters: a list of numbers (a save from before them has none: the roster's stay)
+	for key in ["skills", "stats"]:
+		if f.has(key) and not _numbers_only(f[key]):
+			return null
 	var weapon: String = f.get("weapon", p.weapon)
 	if not sim.weapons.has(weapon):
 		return null

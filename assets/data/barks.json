@@ -1,0 +1,416 @@
+{
+  "ruth": {
+    "bell": [
+      "That's the bell. Posts, everyone.",
+      "Bell's rung. You know where to stand.",
+      "Evening, all. Let's keep it orderly.",
+      "Lights low, voices lower. Posts.",
+      "Same as every night. Don't get clever."
+    ],
+    "kill_streak": [
+      "Keep that up and I'll stop worrying.",
+      "Good. Don't stop to admire it.",
+      "That's the way. Steady now.",
+      "Tidy work. Next.",
+      "Nobody cheer. There are more."
+    ],
+    "wounded": [
+      "I've had worse in the cafeteria.",
+      "Scratch. Don't fuss.",
+      "That one wants a bandage, not a speech.",
+      "Hm. Somebody mend that.",
+      "Noted. Moving on."
+    ],
+    "low_ammo": [
+      "We're running short. Count every round.",
+      "Ammo's thin. Make each shot a lesson.",
+      "We need more rounds. Somebody see to the bench.",
+      "Low on shells. Fix that by morning.",
+      "Don't waste what we have."
+    ],
+    "friend_down": [
+      "Somebody get Ana. Now.",
+      "Hold on. Help is coming.",
+      "Get them to the cots. Move!",
+      "Stay with me. That's an order.",
+      "Not tonight. You hear me? Not tonight."
+    ],
+    "breach": [
+      "Section's down! Fall back to the next one!",
+      "They're in. Hold the line!",
+      "Breach! Mend it or fill it!",
+      "That wall just quit. Close up, everyone.",
+      "Mind the gap. Mind it hard."
+    ],
+    "dawn": [
+      "Morning. We're still here.",
+      "Dawn. Count heads, count rounds.",
+      "Another night down. Don't get used to it.",
+      "Sun's up. Eat something, then work.",
+      "Good. Everyone who's left, breakfast."
+    ],
+    "skill_up": [
+      "Better. I'd like to stop needing it.",
+      "Learned something. Again.",
+      "Not bad, Okafor. Not bad.",
+      "A little sharper. I'll take it.",
+      "Practice. It counts, even now."
+    ],
+    "breakdown": [
+      "Give me a minute. Just a minute.",
+      "I can't. Not right now.",
+      "Don't look at me. Look at the wall.",
+      "I need to sit down."
+    ],
+    "epitaph": [
+      "She kept the bell ringing as long as she could.",
+      "Ruth never let a night begin without a plan.",
+      "She ran this school like it would outlast us."
+    ]
+  },
+  "dez": {
+    "bell": [
+      "Bell's up. Tools down, guns up.",
+      "That's our whistle. Everybody on the wall.",
+      "Night shift. Bring coffee, if we had any.",
+      "Okay, wall. Don't fall over tonight.",
+      "Clocking in."
+    ],
+    "kill_streak": [
+      "Look at that, a whole assembly line.",
+      "Nice run. Let's not jinx it.",
+      "That's five. Anyone counting? I'm counting.",
+      "Smooth as a new bearing.",
+      "Beats fixing the generator, anyway."
+    ],
+    "wounded": [
+      "Ow. Okay. Rude.",
+      "That wants a bandage. And a drink.",
+      "Not the hands, not the hands.",
+      "I've nicked myself worse on a bumper.",
+      "Fine. Fine. I'm fine. Mostly."
+    ],
+    "low_ammo": [
+      "We're nearly out. Bench, anyone?",
+      "I can make more rounds. I need scrap.",
+      "Rounds are low. Don't spray, people.",
+      "Running on fumes over here.",
+      "Tell me we've got scrap. Please."
+    ],
+    "friend_down": [
+      "Hey. Hey! Stay with me.",
+      "Man down! Somebody get the kit!",
+      "Don't you quit on me. Not on my shift.",
+      "Hold still. I've got you.",
+      "Come on, come on. Breathe."
+    ],
+    "breach": [
+      "Well, that's not supposed to move.",
+      "Wall's gone! Patch it or plug it!",
+      "They're through! Anyone got a bigger bus?",
+      "Section down! I'm coming with a hammer.",
+      "That's going to be a long repair."
+    ],
+    "dawn": [
+      "Sun's up. Wall's mostly up. Good enough.",
+      "We made it. I'm holding that against the universe.",
+      "Morning. Somebody's making breakfast, right?",
+      "Another night. Another pile of patches.",
+      "I'll take a quiet morning."
+    ],
+    "skill_up": [
+      "Huh. I'm getting good at this.",
+      "Practice makes less terrible.",
+      "Learned a trick. Don't tell anyone.",
+      "Look at me, improving.",
+      "Another tool in the box."
+    ],
+    "breakdown": [
+      "Give me a second. Just a second.",
+      "I can't fix this one.",
+      "Too much. Too loud. I need a minute.",
+      "I'm fine. I'm not. I'm sitting down."
+    ],
+    "epitaph": [
+      "He could fix anything with a motor. Even us, for a while.",
+      "Dez kept the lights on as long as the lights would stay.",
+      "He'd have made a joke right now. We'll make it for him."
+    ]
+  },
+  "ana": {
+    "bell": [
+      "The bell. All right. Everyone safe, please.",
+      "Another night. Be careful, all of you.",
+      "Stay together. Please.",
+      "I'll keep the kit close. Be careful.",
+      "Okay. Deep breath. Posts."
+    ],
+    "kill_streak": [
+      "That's a lot of them. Be careful.",
+      "Keep your head down. You're doing well.",
+      "I hate that we're good at this.",
+      "That's enough for now. Rest a second.",
+      "Good, good. Steady."
+    ],
+    "wounded": [
+      "It's just a scratch. I'll look at it.",
+      "Ow. Okay. I know what to do.",
+      "I'm all right. I'm all right.",
+      "That stings. I'd tell a patient to sit down.",
+      "Nurses shouldn't bleed. Rude."
+    ],
+    "low_ammo": [
+      "We're running low. I'm worried.",
+      "Please be careful with what's left.",
+      "Not much left. Not much at all.",
+      "Someone should check the bench.",
+      "I can't heal an empty magazine."
+    ],
+    "friend_down": [
+      "Oh no. No, no. Stay with me.",
+      "I'm coming. Keep pressure on it.",
+      "Hold on. I'm right here.",
+      "Please don't close your eyes.",
+      "Breathe. Slowly. I've got you."
+    ],
+    "breach": [
+      "They're coming through!",
+      "The wall! Get back!",
+      "Move away from there! Please!",
+      "That's a way in. Close it!",
+      "Careful! They'll be on us."
+    ],
+    "dawn": [
+      "We're still here. Thank goodness.",
+      "Morning. Let me look at everyone.",
+      "Sunrise. Let's see who needs a bandage.",
+      "I'll take a quiet breakfast.",
+      "Everyone alive? Good. That's enough."
+    ],
+    "skill_up": [
+      "I think I'm getting better at this. I wish I wasn't needed.",
+      "I learned something today.",
+      "A little steadier. Good.",
+      "Practice. That's all it is.",
+      "More skill, less sleep. Fair trade."
+    ],
+    "breakdown": [
+      "I can't. I just can't.",
+      "Please. I need a minute. Alone.",
+      "It's too much. I'm sorry.",
+      "I have to sit down."
+    ],
+    "epitaph": [
+      "She sat up with the wounded every night, until she couldn't.",
+      "Ana never turned anyone away. Not once.",
+      "Gentle hands, tired eyes. We were lucky to have her."
+    ]
+  },
+  "marcus": {
+    "bell": [
+      "Bell! Okay, okay, I'm up the tower.",
+      "Here we go again.",
+      "Night shift. I've got the best view.",
+      "Okay. Eyes open. Eyes open.",
+      "I can see them gathering. Lots."
+    ],
+    "kill_streak": [
+      "Did you see that? Did you SEE that?",
+      "Five! That's five!",
+      "Yes! Okay, okay, keep going.",
+      "I'm on fire! Not literally.",
+      "Ha! Next!"
+    ],
+    "wounded": [
+      "Ow ow ow! Okay, I'm okay.",
+      "It got me! Just a scratch!",
+      "That hurt. That actually hurt.",
+      "I'm fine! Don't tell the principal.",
+      "Okay, that's bleeding. Is that bleeding?"
+    ],
+    "low_ammo": [
+      "I'm almost out! Who's got rounds?",
+      "Running low! Seriously low!",
+      "Can somebody make more bullets? Please?",
+      "I'm counting every shot now.",
+      "Uh, how many shots do we have left?"
+    ],
+    "friend_down": [
+      "No no no! Somebody help!",
+      "They're down! They're down!",
+      "Get up! Please get up!",
+      "Help! Anyone!",
+      "Hold on! I'm coming!"
+    ],
+    "breach": [
+      "They broke through! Wall's down!",
+      "The wall! The wall!",
+      "They're coming in! Fall back!",
+      "That section's gone! Gone!",
+      "Oh no. That's bad. That's really bad."
+    ],
+    "dawn": [
+      "We made it! Yeah!",
+      "Sun's up! Is it over? It's over.",
+      "Morning. I could eat a horse.",
+      "Still here. Still here. Good.",
+      "Another night. I'm getting used to it. Is that bad?"
+    ],
+    "skill_up": [
+      "Whoa, I'm getting good at this!",
+      "Hey, that's new. I like it.",
+      "Okay! Leveling up.",
+      "I'd say I'm better now. A bit.",
+      "I think I just got better. For real."
+    ],
+    "breakdown": [
+      "I can't do this. I can't.",
+      "Make it stop. Please make it stop.",
+      "I need to get out of here. I need to-",
+      "It's all going to go wrong. All of it."
+    ],
+    "epitaph": [
+      "He was sixteen. He still climbed the tower every night.",
+      "Marcus saw them coming before any of us did.",
+      "He laughed too loud and ran too fast. We miss it."
+    ]
+  },
+  "walt": {
+    "bell": [
+      "Bell's rung. Evening, folks.",
+      "Right. Take your posts. Quietly.",
+      "Another night on patrol.",
+      "I've worked worse shifts. Not many.",
+      "Eyes up, mouths shut."
+    ],
+    "kill_streak": [
+      "Steady hands. That's all it takes.",
+      "That's five. Don't get cocky.",
+      "Old training, still good.",
+      "Fish in a barrel. Reload.",
+      "Not bad for an old man."
+    ],
+    "wounded": [
+      "Huh. That's a first this week.",
+      "Just a nick. Keep working.",
+      "I've been shot at by professionals. This is nothing.",
+      "Somebody pass me a bandage.",
+      "Well. That's inconvenient."
+    ],
+    "low_ammo": [
+      "We're low on rounds. Count 'em.",
+      "Make every shot count.",
+      "Ammo's down. Time to be choosy.",
+      "I've got a magazine and a half. Think about that.",
+      "Somebody go see about the bench."
+    ],
+    "friend_down": [
+      "Officer down! Somebody get the nurse!",
+      "Stay still. Help's on the way.",
+      "Hold on. I've seen worse. You'll be fine.",
+      "Keep your eyes on me. Good.",
+      "Get the kit! Now!"
+    ],
+    "breach": [
+      "Wall's gone! Fall back and hold!",
+      "They're through. Tighten up!",
+      "Breach! You know what to do.",
+      "That's a hole. Plug it.",
+      "Contact inside the wire!"
+    ],
+    "dawn": [
+      "Sun's up. Still standing.",
+      "Dawn. Count noses.",
+      "Quiet now. Rest while you can.",
+      "Another one in the books.",
+      "Good night's work. Coffee, if there is any."
+    ],
+    "skill_up": [
+      "Never too old to learn something.",
+      "Still got it. A bit more of it.",
+      "Practice. Nothing else works.",
+      "Sharper. Good. It'll be needed.",
+      "Huh. Learned something. At my age."
+    ],
+    "breakdown": [
+      "I need to sit. Just sit.",
+      "Thirty years, and this is the one.",
+      "Leave me a minute. Just a minute.",
+      "Not now. Give me a minute."
+    ],
+    "epitaph": [
+      "He walked the wall every night and never once complained.",
+      "Walt taught us how to stand a post. We'll keep standing.",
+      "A good cop. A better neighbour."
+    ]
+  },
+  "hector": {
+    "bell": [
+      "Bell's rung. I'll go to my spot.",
+      "It's time. I'm ready.",
+      "Evening. Tell me if you need anything.",
+      "I'll hold the barricade.",
+      "A quiet night, I hope."
+    ],
+    "kill_streak": [
+      "That's a lot. Sorry.",
+      "I just do what I have to.",
+      "Keep them off the wall. That's all.",
+      "Almost over, I think.",
+      "Careful. There's more."
+    ],
+    "wounded": [
+      "It's nothing. Please keep going.",
+      "I'm all right. It's only a cut.",
+      "Hm. That's bleeding a bit.",
+      "Don't worry about me.",
+      "Ah. That one hurt."
+    ],
+    "low_ammo": [
+      "We don't have much left.",
+      "I have the pike. Save the rounds.",
+      "Low on bullets. I'll do what I can.",
+      "Does anyone have more?",
+      "I'll check the bench in the morning."
+    ],
+    "friend_down": [
+      "Hold on. I'm here.",
+      "It's okay. It's okay. Stay with me.",
+      "Someone, please! Help!",
+      "I've got you. Don't try to talk.",
+      "Please, please be all right."
+    ],
+    "breach": [
+      "The wall! It's gone!",
+      "They're coming in. Everyone back.",
+      "I'll hold it as long as I can.",
+      "Oh no. We need to fix this.",
+      "Stay behind me."
+    ],
+    "dawn": [
+      "The sun's out. Thank you.",
+      "We're alive. That's enough.",
+      "Good morning. I'll sweep up.",
+      "Another morning. I'm grateful.",
+      "I'll see to the garden."
+    ],
+    "skill_up": [
+      "I think I'm getting better. Good.",
+      "Learned something. Quietly.",
+      "Practice helps. Even now.",
+      "A little better. That's all I want.",
+      "Hm. Good. I'll keep at it."
+    ],
+    "breakdown": [
+      "I can't. I'm sorry. I can't.",
+      "Please. I need to be alone.",
+      "I'm so tired. So tired.",
+      "I just need a moment."
+    ],
+    "epitaph": [
+      "Hector kept the school clean and the people kind.",
+      "He never asked for anything. We should have asked what he needed.",
+      "He tended the garden until the very end."
+    ]
+  }
+}

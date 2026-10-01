@@ -3,12 +3,16 @@
 ## move-order marker. And the night tools' drawings: the fields-of-fire view (key V:
 ## every wall section tinted by how many guns reach it, each gun's reach, and on the
 ## forecast night where the dead come in) and the marker of the alarm (the lure) on
-## the wall section it rings at. All of it is a view: nothing here changes the rules.
+## the wall section it rings at. And (round 4) what people say: speech bubbles over their heads.
+## All of it is a view: nothing here changes the rules.
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
 const S := preload("res://scripts/render/shapes.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Hud := preload("res://scripts/ui/hud.gd")
+const Frames := preload("res://scripts/ui/frames.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -32,6 +36,28 @@ const INK := Color("#eeeadd")
 const FIELD_PX := 13
 ## The slate of the HUD's boards under a word or a bar in the world.
 const PILL := Color(11 / 255.0, 20 / 255.0, 17 / 255.0, 0.8)
+## Speech bubbles (round 4): what a person says (a `bark` event from the rules, passed on by main.gd's
+## _handle_events to `add_bark`) shows for BUBBLE_SECONDS in a bubble above their head: the `bubble` frame
+## of the HUD's paper (flat when the theme has none), in the HUD's font, in screen space (it does not grow
+## with the world's zoom), kept BUBBLE_MARGIN inside the view, faded in and out and drifting up a little (not
+## with reduced motion), at most BUBBLE_MAX at once, none while a modal is open or for someone off the screen.
+const BUBBLE_FRAME_KIND := "bubble"
+## The size of the words: the HUD's floor for text (Fonts.MIN_PX) or more.
+const BUBBLE_PX := 13
+const BUBBLE_SECONDS := 3.0
+const BUBBLE_FADE_IN := 0.18
+const BUBBLE_FADE_OUT := 0.5
+## How far a bubble drifts up over its life, in pixels.
+const BUBBLE_FLOAT := 7.0
+const BUBBLE_MAX := 2
+## The widest a line of words is before it wraps, and how far a bubble keeps in from the edge of the view.
+const BUBBLE_MAX_W := 190.0
+const BUBBLE_MARGIN := 8.0
+## How far over the head the tail's tip is, and how high the head is above the feet, in tiles.
+const BUBBLE_GAP := 3.0
+const BUBBLE_HEAD := 0.95
+## Where the tail's tip is when the frame does not say (frames.json "tail"): [from the bubble's left edge, below its foot].
+const BUBBLE_TAIL := [8.5, 8.0]
 ## The way the dead face at a wall's attack places (towards the wall), as a step in tiles:
 ## a step the other way is out in front of the wall.
 const FACE := {"N": Vector2(0, -1), "S": Vector2(0, 1), "E": Vector2(1, 0), "W": Vector2(-1, 0)}
@@ -43,6 +69,12 @@ var drawn_sections := 0
 var drawn_reach := 0
 var drawn_spawns := 0
 var drew_alarm := false
+## What people are saying: [{"p": Person, "text", "born": main.clock}], the oldest first; and how many bubbles
+## the last draw put on the screen.
+var bubbles: Array = []
+var drawn_bubbles := 0
+var _bubble_sb: StyleBox = null
+var _bubble_framed := false
 
 
 func _screen(x: float, y: float) -> Vector2:
@@ -262,6 +294,171 @@ func _draw_alarm(sim, z: float, vp: Vector2) -> void:
 	_tag(c + Vector2(0.0, 28.0), time_text(sim.tactics.lure_left_min()), Fonts.cond(700), ALARM)
 
 
+# ------------------------------------------------------------- speech bubbles --
+
+## A person said something (the `bark` event {"who": id, "text", "context"}): a bubble over their head.
+## One a person (a new line takes the place of their old one) and BUBBLE_MAX at most (the oldest goes);
+## none for the dead or the away and none is made while a modal is open.
+func add_bark(e: Dictionary) -> void:
+	if main == null or main.sim == null or _modal_open():
+		return
+	var text := String(e.get("text", "")).strip_edges()
+	var who = _person(String(e.get("who", "")))
+	if text == "" or who == null or who.dead or who.away != null:
+		return
+	for i in range(bubbles.size() - 1, -1, -1):
+		if bubbles[i].p == who:
+			bubbles.remove_at(i)
+	bubbles.append({"p": who, "text": text, "born": float(main.clock)})
+	while bubbles.size() > BUBBLE_MAX:
+		bubbles.pop_front()
+
+
+func _person(id: String):
+	for p in main.sim.people:
+		if p.id == id:
+			return p
+	return null
+
+
+## Whether a menu or the HUD's dialog is open over the game (the game's `menu_open`, the HUD's `modal_open`):
+## main.gd and the HUD answer; a stand-in for either that has no such thing means none.
+func _modal_open() -> bool:
+	if main == null:
+		return false
+	if bool(main.get("menu_open")):
+		return true
+	var hud = main.get("hud")
+	return hud != null and hud.has_method("modal_open") and bool(hud.modal_open())
+
+
+## How solid a bubble is `age` seconds after it was said: it fades in and out, not with reduced motion.
+static func bubble_alpha(age: float, calm: bool) -> float:
+	if calm:
+		return 1.0
+	return clampf(minf(age / BUBBLE_FADE_IN, (BUBBLE_SECONDS - age) / BUBBLE_FADE_OUT), 0.0, 1.0)
+
+
+## The look of a bubble: the `bubble` frame of the theme, else a flat sheet of paper. (Kept until the frames
+## are switched on or off.)
+func _bubble_box() -> StyleBox:
+	var framed := Hud.has_frame(BUBBLE_FRAME_KIND)
+	if _bubble_sb == null or framed != _bubble_framed:
+		_bubble_framed = framed
+		_bubble_sb = Hud.frame(BUBBLE_FRAME_KIND) if framed else null
+		if _bubble_sb == null:
+			var f := StyleBoxFlat.new()
+			f.bg_color = Hud.PAPER
+			f.border_color = Color(Hud.PAPER_INK, 0.55)
+			f.set_border_width_all(1)
+			f.set_corner_radius_all(5)
+			f.anti_aliasing = true
+			f.content_margin_left = 8
+			f.content_margin_right = 8
+			f.content_margin_top = 5
+			f.content_margin_bottom = 6
+			_bubble_sb = f
+	return _bubble_sb
+
+
+## [from the bubble's left edge, below its foot]: where the tail's tip is, from frames.json.
+func _bubble_tail() -> Array:
+	if Hud.has_frame(BUBBLE_FRAME_KIND):
+		var t = Frames.info(BUBBLE_FRAME_KIND).get("tail")
+		if t is Array and t.size() >= 2:
+			return [float(t[0]), float(t[1])]
+	return BUBBLE_TAIL
+
+
+## What the bubbles look like now, for the window `vp` big: [{"who", "text", "lines", "size" (the words'
+## pixel size), "rect" (the bubble's body, in screen pixels), "tip" (where its tail's tip is: over the
+## speaker's head, unless the view's edge pushed the bubble aside), "flip" (the picture is mirrored, the tail
+## at the right), "alpha", "framed"}]. A bubble that has had its time is forgotten here. None while a modal is
+## open, and none for a speaker who is gone, away or off the screen.
+func bubble_plan(vp: Vector2) -> Array:
+	var plan: Array = []
+	if main == null or main.sim == null:
+		return plan
+	var now: float = main.clock
+	for i in range(bubbles.size() - 1, -1, -1):
+		if now - float(bubbles[i].born) >= BUBBLE_SECONDS:
+			bubbles.remove_at(i)
+	if bubbles.is_empty() or _modal_open():
+		return plan
+	var calm := Prefs.on("ui", "reduce_motion")
+	var sb := _bubble_box()
+	var inset := Vector4(sb.get_margin(SIDE_LEFT), sb.get_margin(SIDE_TOP), sb.get_margin(SIDE_RIGHT), sb.get_margin(SIDE_BOTTOM))
+	var tail := _bubble_tail()
+	var font := Fonts.sans(500)
+	var fs := maxi(BUBBLE_PX, Fonts.MIN_PX)
+	for b in bubbles:
+		var p = b.p
+		if p.dead or p.away != null:
+			continue
+		var pp: Vector2 = main.view_pos(p)
+		var head := _screen(pp.x, pp.y - BUBBLE_HEAD)
+		if head.x < -40.0 or head.x > vp.x + 40.0 or head.y < -40.0 or head.y > vp.y + 40.0:
+			continue
+		var age := now - float(b.born)
+		var words: Vector2 = font.get_multiline_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, BUBBLE_MAX_W, fs)
+		var size := Vector2(maxf(words.x + inset.x + inset.z, 44.0), words.y + inset.y + inset.w)
+		var lift := 0.0 if calm else BUBBLE_FLOAT * clampf(age / BUBBLE_SECONDS, 0.0, 1.0)
+		var tip := head + Vector2(0.0, -BUBBLE_GAP - lift)
+		# the tail is at the left of the picture: a speaker too near the right edge gets it turned round
+		var left := tip.x - float(tail[0])
+		var flip := false
+		if left + size.x > vp.x - BUBBLE_MARGIN:
+			var mirrored := tip.x + float(tail[0]) - size.x
+			if mirrored >= BUBBLE_MARGIN:
+				left = mirrored
+				flip = true
+		var x := clampf(left, BUBBLE_MARGIN, maxf(BUBBLE_MARGIN, vp.x - BUBBLE_MARGIN - size.x))
+		var y := maxf(BUBBLE_MARGIN, tip.y - float(tail[1]) - size.y)
+		var rect := Rect2(x, y, size.x, size.y)
+		plan.append({
+			"who": p.id, "text": b.text, "lines": maxi(1, roundi(words.y / font.get_height(fs))), "size": fs, "rect": rect,
+			"tip": Vector2(rect.end.x - float(tail[0]) if flip else rect.position.x + float(tail[0]), rect.end.y + float(tail[1])),
+			"flip": flip, "alpha": bubble_alpha(age, calm), "framed": _bubble_framed,
+		})
+	return plan
+
+
+## Puts the bubbles on the screen (see bubble_plan): the frame, mirrored when its tail is at the right, and the
+## words in the dark ink of paper.
+func _draw_bubbles(vp: Vector2) -> void:
+	drawn_bubbles = 0
+	var plan := bubble_plan(vp)
+	if plan.is_empty():
+		return
+	var sb := _bubble_box()
+	var font := Fonts.sans(500)
+	var tail := _bubble_tail()
+	for b in plan:
+		var rect: Rect2 = b.rect
+		var a: float = b.alpha
+		var flip: bool = b.flip
+		if flip:
+			draw_set_transform_matrix(Transform2D(Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2(rect.position.x * 2.0 + rect.size.x, 0.0)))
+		if sb is StyleBoxTexture:
+			sb.modulate_color = Color(1, 1, 1, a)
+			draw_style_box(sb, rect)
+		else:
+			(sb as StyleBoxFlat).bg_color = Color(Hud.PAPER, a)
+			(sb as StyleBoxFlat).border_color = Color(Hud.PAPER_INK, 0.55 * a)
+			draw_style_box(sb, rect)
+			# the tail: a small triangle under the foot, with its two sides in the edge's colour
+			var base := rect.end.y - 1.0
+			var tri := PackedVector2Array([Vector2(rect.position.x + float(tail[0]) - 3.0, base), Vector2(rect.position.x + float(tail[0]) + 9.0, base), Vector2(rect.position.x + float(tail[0]), rect.end.y + float(tail[1]))])
+			draw_colored_polygon(tri, Color(Hud.PAPER, a))
+			draw_polyline(PackedVector2Array([tri[0], tri[2], tri[1]]), Color(Hud.PAPER_INK, 0.55 * a), 1.0, true)
+		if flip:
+			draw_set_transform_matrix(Transform2D.IDENTITY)
+		var fs: int = b.size
+		var inset := Vector2(sb.get_margin(SIDE_LEFT), sb.get_margin(SIDE_TOP))
+		draw_multiline_string(font, rect.position + inset + Vector2(0.0, font.get_ascent(fs)), b.text, HORIZONTAL_ALIGNMENT_LEFT, BUBBLE_MAX_W, fs, -1, Color(Hud.PAPER_INK, a))
+		drawn_bubbles += 1
+
+
 func _draw() -> void:
 	if main == null or main.sim == null:
 		return
@@ -348,3 +545,6 @@ func _draw() -> void:
 				var hy := _screen(pp.x, pp.y - 0.53 - 0.45).y
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
+
+	# what people say, over everything else
+	_draw_bubbles(vp)

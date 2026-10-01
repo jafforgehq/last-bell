@@ -77,7 +77,7 @@ func test_a_dead_person_has_a_dimmed_card_with_a_word() -> void:
 	walt.dead = true
 	Kit.update(ctx)
 	check(c.veil.visible, "a dead person's card is dimmed")
-	eq(c.word.text, "Died", "died")
+	eq(c.word.text, "In memory", "died: round 4 remembers them (the card's tooltip has what was said; tests/test_hud_people.gd)")
 	walt.turned = true
 	Kit.update(ctx)
 	eq(c.word.text, "Turned", "turned")
