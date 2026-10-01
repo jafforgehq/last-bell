@@ -83,6 +83,67 @@ class FakeScenario:
 		return total
 
 
+## The night tools' module (tactics.gd): the alarm, auto-repair, the guns' coverage and the
+## lookout's forecast. What the HUD reads of it is table-driven, so a test sets by hand
+## what it says; the module's own clock-driven work (updating, starting a run) is switched off.
+class FakeTactics:
+	extends "res://scripts/sim/tactics.gd"
+	## What forecast() says: {"given": false} until a test sets it (see Kit.forecast).
+	var told := {"given": false}
+	## How many guns reach each wall section, by the section's id (absent: none).
+	var cover := {}
+	## Who has auto-repair on, by person id.
+	var autos := {}
+	## The section the alarm rings at (-1: none) and the minutes it has left.
+	var ringing := -1
+	var left_min := 0.0
+	## Why the alarm cannot be set on any section ("" when it can) and where it was set.
+	var why := ""
+	var set_on: Array = []
+
+	func start() -> void:
+		pass
+
+	func update(_dt: float) -> void:
+		pass
+
+	func forecast() -> Dictionary:
+		return told
+
+	func coverage_of(seg) -> int:
+		return int(cover.get(seg.id, 0))
+
+	func lure_seg():
+		for s in sim.segments:
+			if s.id == ringing:
+				return s
+		return null
+
+	func lure_left_min() -> float:
+		return left_min if ringing >= 0 else 0.0
+
+	func why_not_lure(_seg) -> String:
+		return why
+
+	func order_lure(seg) -> bool:
+		set_on.append(seg.id)
+		return why == ""
+
+	func auto_repair(p) -> bool:
+		return bool(autos.get(p.id, false))
+
+	func toggle_auto(p) -> void:
+		autos[p.id] = not auto_repair(p)
+
+
+## A forecast as tactics.forecast() gives one, given: tonight about 55 from the north east.
+## `with` overrides any of its fields.
+static func forecast(with: Dictionary = {}) -> Dictionary:
+	var f := {"given": true, "total": 55, "low": 47, "high": 63, "heading": "north east", "spawns": [Vector2(75.5, 0.5)], "runners": false, "brutes": 0, "big": false, "who": "Marcus"}
+	f.merge(with, true)
+	return f
+
+
 ## Three sites shaped like the ones the scavenging module returns.
 static func sample_sites() -> Array:
 	return [
@@ -101,7 +162,8 @@ static func build(width: int = 1280, height: int = 800, seed_value: int = 1) -> 
 	sim.medical = FakeMedical.new()
 	sim.scavenge = FakeScavenge.new()
 	sim.scenario = FakeScenario.new()
-	for m in [sim.supplies, sim.medical, sim.scavenge, sim.scenario]:
+	sim.tactics = FakeTactics.new()
+	for m in [sim.supplies, sim.medical, sim.scavenge, sim.scenario, sim.tactics]:
 		m.setup(sim)
 	var ctx := {"g": g, "sim": sim, "pressed": [], "speeds": [], "selected": []}
 	var holder := Control.new()

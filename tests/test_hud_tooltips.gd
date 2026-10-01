@@ -4,7 +4,7 @@ const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 
 ## The order buttons and their keys (main.gd's _unhandled_input).
-const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "treat": "T", "sendout": "X", "scavenge": "G"}
+const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "auto": "B", "treat": "T", "sendout": "X", "scavenge": "G"}
 
 
 ## Ana selected with every button on offer.
@@ -23,8 +23,8 @@ func _lines(b: Button) -> PackedStringArray:
 	return b.tooltip_text.split("\n")
 
 
-func _check_all_seven(ctx: Dictionary, where: String) -> void:
-	eq(Kit.gizmo_ids(ctx).size(), 7, "%s: all seven buttons" % where)
+func _check_all_eight(ctx: Dictionary, where: String) -> void:
+	eq(Kit.gizmo_ids(ctx).size(), 8, "%s: all eight buttons" % where)
 	for id in KEYS:
 		var b: Button = Kit.gizmo(ctx, id)
 		if b == null:
@@ -35,26 +35,27 @@ func _check_all_seven(ctx: Dictionary, where: String) -> void:
 		if lines.size() < 2:
 			continue
 		check(lines[0].length() > 8 and not lines[0].begins_with("Key"), "%s: %s says what it does: '%s'" % [where, id, lines[0]])
-		eq(lines[1], "Key: %s" % KEYS[id], "%s: %s names its key" % [where, id])
+		# the key is its own line: the second one, or the third when the order has a second line of its own (auto-repair)
+		check(lines.has("Key: %s" % KEYS[id]), "%s: %s names its key: '%s'" % [where, id, b.tooltip_text])
 
 
 func test_every_order_button_has_a_tooltip_in_the_full_size_too() -> void:
 	var ctx := _everything()
 	check(not ctx.hud.gizmo_mini, "the big buttons")
-	_check_all_seven(ctx, "big")
+	_check_all_eight(ctx, "big")
 	Kit.free_all(ctx)
 
 
 func test_and_in_the_small_size() -> void:
 	var ctx := _everything(700, 560)
 	check(ctx.hud.gizmo_mini, "the small buttons")
-	_check_all_seven(ctx, "small")
+	_check_all_eight(ctx, "small")
 	Kit.free_all(ctx)
 
 
 func test_the_first_line_names_the_order_in_plain_words() -> void:
 	var ctx := _everything()
-	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
+	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "auto": "Auto-repair", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
 	for id in words:
 		var first: String = _lines(Kit.gizmo(ctx, id))[0]
 		check(first.begins_with(words[id]), "%s starts with its name: '%s'" % [id, first])

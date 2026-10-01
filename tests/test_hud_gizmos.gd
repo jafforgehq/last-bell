@@ -10,10 +10,10 @@ func _open(ctx: Dictionary, id: String):
 	return p
 
 
-func test_a_person_gets_the_four_usual_buttons() -> void:
+func test_a_person_gets_the_four_usual_buttons_and_the_auto_toggle() -> void:
 	var ctx := Kit.build()
 	_open(ctx, "ruth")
-	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus"], "the usual four, in their old order")
+	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "auto"], "the usual four in their old order, then the standing order")
 	Kit.free_all(ctx)
 
 
@@ -69,14 +69,14 @@ func test_scavenge_shows_when_a_party_can_go_and_this_person_is_free() -> void:
 	Kit.free_all(ctx)
 
 
-func test_the_new_buttons_follow_the_four_usual_ones() -> void:
+func test_the_modules_buttons_follow_the_usual_ones() -> void:
 	var ctx := Kit.build()
 	var p = _open(ctx, "ana")
 	ctx.sim.medical.treat[p.id] = true
 	ctx.sim.medical.sendout[p.id] = true
 	ctx.sim.scavenge.can = true
 	Kit.update(ctx)
-	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "treat", "sendout", "scavenge"], "all seven")
+	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "auto", "treat", "sendout", "scavenge"], "all eight")
 	Kit.free_all(ctx)
 
 
@@ -89,7 +89,7 @@ func test_each_button_calls_on_gizmo_with_its_id() -> void:
 	Kit.update(ctx)
 	for id in Kit.gizmo_ids(ctx):
 		Kit.gizmo(ctx, id).pressed.emit()
-	eq(ctx.pressed, ["draft", "post", "repair", "focus", "treat", "sendout", "scavenge"], "every press reaches main.gd")
+	eq(ctx.pressed, ["draft", "post", "repair", "focus", "auto", "treat", "sendout", "scavenge"], "every press reaches main.gd")
 	Kit.free_all(ctx)
 
 
@@ -138,7 +138,7 @@ func test_walls_and_walkers_keep_their_buttons() -> void:
 	ctx.sim.scavenge.can = true
 	ctx.hud.select({"kind": "segment", "ref": ctx.sim.segments[3]})
 	Kit.update(ctx)
-	eq(Kit.gizmo_ids(ctx), ["repair", "focus"], "a wall piece")
+	eq(Kit.gizmo_ids(ctx), ["repair", "focus", "lure"], "a wall piece: repair, focus and the alarm")
 	ctx.hud.select({"kind": "zombie", "ref": ctx.sim.zombies[0]})
 	Kit.update(ctx)
 	eq(Kit.gizmo_ids(ctx), ["focus"], "a walker")

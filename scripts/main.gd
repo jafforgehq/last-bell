@@ -58,6 +58,9 @@ var fire_t := 0.0
 var hud_t := 0.0
 var drag = null
 var walkers := 0
+## The fields-of-fire view (key V) is on: the overlay tints every wall section by how
+## many guns reach it. A view only; the rules never read it.
+var fields := false
 ## A save was asked for at start-up but could not be loaded (a new run began instead).
 var load_failed := false
 
@@ -198,6 +201,7 @@ func _ready() -> void:
 	hud.on_gizmo = _gizmo
 	hud.on_alert = _on_alert
 	hud.on_sound = _toggle_sound
+	hud.on_fields = _toggle_fields
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
 
@@ -321,8 +325,11 @@ func _select(sel) -> void:
 	hud.select(sel)
 
 
+## What is under a point of the world (in tiles): a person, a walker or a wall section, or null.
+## The box round a figure is drawn at its size: a brute (drawn bigger) is easier to hit,
+## and a runner (a little smaller) is no harder than a walker.
 func _pick(w: Vector2):
-	var hit := func(e): return w.x > e.x - 0.42 and w.x < e.x + 0.42 and w.y > e.y - 0.95 and w.y < e.y + 0.42
+	var hit := func(e, k: float = 1.0): return w.x > e.x - 0.42 * k and w.x < e.x + 0.42 * k and w.y > e.y - 0.95 * k and w.y < e.y + 0.42 * k
 	var ppl: Array = sim.people.duplicate()
 	ppl.sort_custom(func(a, b): return a.y > b.y)
 	for p in ppl:
@@ -334,7 +341,7 @@ func _pick(w: Vector2):
 			zs.append(z)
 	zs.sort_custom(func(a, b): return a.y > b.y)
 	for z in zs:
-		if hit.call(z):
+		if hit.call(z, maxf(1.0, float(z.size))):
 			return {"kind": "zombie", "ref": z}
 	for s in sim.segments:
 		var o: Dictionary = s.obj
@@ -355,7 +362,7 @@ func _gizmo(g: String) -> void:
 		return
 	var sel = selection
 	if sel == null:
-		hud.toast("Click someone first")
+		hud.toast("Click a wall section first" if g == "lure" else "Click someone first")
 		return
 	if sim.handle_gizmo(g, sel):
 		hud.select(selection)
@@ -363,6 +370,17 @@ func _gizmo(g: String) -> void:
 	if g == "treat" or g == "sendout":
 		var why: String = hud.why_not(g)
 		hud.toast("Not now: %s" % why if why != "" else "That can't be done right now", "warn")
+	# the night tools (the rules module took them, or refused): the alarm names its reason
+	if g == "lure":
+		if sel.kind == "segment":
+			var why_not: String = sim.tactics.why_not_lure(sel.ref)
+			hud.toast("Not now: " + why_not if why_not != "" else "That can't be done right now", "warn")
+		else:
+			hud.toast("Click a wall section first")
+		return
+	if g == "auto":
+		hud.toast("Click someone first")
+		return
 	if g == "draft" and sel.kind == "person":
 		sim.toggle_draft(sel.ref)
 	elif g == "post" and sel.kind == "person":
@@ -451,6 +469,12 @@ func _toggle_sound() -> void:
 	sound.set_muted(not sound_on)
 
 
+## The fields-of-fire view on or off (key V, or the button by the speed controls).
+func _toggle_fields() -> void:
+	fields = not fields
+	hud.set_fields(fields)
+
+
 # ------------------------------------------------------------------ input --
 
 func _unhandled_input(ev: InputEvent) -> void:
@@ -523,6 +547,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("sendout")
 			KEY_G:
 				_gizmo("scavenge")
+			KEY_L:
+				_gizmo("lure")
+			KEY_B:
+				_gizmo("auto")
+			KEY_V:
+				_toggle_fields()
 			KEY_F5:
 				_quick_save()
 			KEY_F9:
@@ -708,7 +738,14 @@ func _handle_events() -> void:
 			"groan":
 				if randf() < 0.6:
 					var d := Vector2(e.x, e.y).distance_to(cam_center)
-					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3), 0.12)
+					# a brute groans deep and a little louder, a runner thin and high
+					var kind: String = String(e.get("kind", "walker"))
+					var pitch := 0.72 if kind == "brute" else (1.3 if kind == "runner" else 1.0)
+					var loud := 1.3 if kind == "brute" else 1.0
+					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3) * loud, 0.12, pitch)
+			"lure":
+				# the alarm goes off: the bell, higher and thinner than the dusk bell
+				sound.play("bell", 0.6, 0.02, 1.4)
 			"claw":
 				if randf() < 0.35:
 					sound.play("scrape_%s" % e.material, _vol_at(e.x, e.y))
@@ -742,6 +779,7 @@ func _autosave() -> void:
 
 func _parse_args() -> void:
 	var advance := 0.0
+	var lure_seg := -1
 	for arg in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = arg.trim_prefix("--").split("=", true, 1)
 		var k := kv[0]
@@ -769,6 +807,18 @@ func _parse_args() -> void:
 				for p in sim.people:
 					if p.id == v:
 						_select({"kind": "person", "ref": p})
+			"wall":
+				# --wall=N selects wall section N (by its id)
+				for s in sim.segments:
+					if s.id == int(v):
+						_select({"kind": "segment", "ref": s})
+			"fields":
+				# the fields-of-fire view starts on
+				fields = true
+				hud.set_fields(true)
+			"lure":
+				# --lure=N sets the alarm on wall section N (scrap is given, the clock settled first)
+				lure_seg = int(v)
 			"speed":
 				speed = int(v)
 			"breach":
@@ -787,6 +837,11 @@ func _parse_args() -> void:
 				get_viewport().msaa_2d = int(v) as Viewport.MSAA
 			"nolights":
 				lighting.visible = false
+	if lure_seg >= 0:
+		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
+		for s in sim.segments:
+			if s.id == lure_seg:
+				sim.tactics.order_lure(s)
 	if advance > 0.0:
 		var steps := int(advance * 30.0)
 		for i in steps:

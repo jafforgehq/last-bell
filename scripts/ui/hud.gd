@@ -8,6 +8,8 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
 const GameOver := preload("res://scripts/ui/game_over.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
+const Tactics := preload("res://scripts/sim/tactics.gd")
+const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## The text colours all read at 4.5:1 or better on the panel, even over the
 ## brightest ground (tests/test_hud_text.gd computes it). DANGER is for bars,
@@ -41,8 +43,17 @@ const ALERT_ICONS := [
 	["seg-", "wall"], ["breach-", "wall"], ["fever-", "fever"], ["scav-", "scavenge"], ["hurt-", "wound"],
 	["scratch-", "wound"], ["down-", "down"], ["turned-", "turned"], ["treated-", "treat"], ["nohealer-", "treat"],
 	["exile-", "sendout"], ["bell", "bell"], ["horde", "walker"], ["rain", "water"],
+	# round 2: a brute and runners are the dead; the alarm, the forecast and the last night ring a bell
+	["brute", "walker"], ["runners", "walker"], ["lure", "bell"], ["forecast", "bell"], ["bignight", "bell"],
 ]
+## The order buttons with no icon of their own wear one that is already there: the alarm a
+## bell, auto-repair the wall (the hammer is Repair's own, and in the small size, where only the
+## icons show, two hammers side by side could not be told apart).
+const GIZMO_ICON := {"lure": "bell", "auto": "wall"}
 const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
+## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
+const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
+const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
 ## Walls and doors, by side and by what they are made of. A piece the HUD has no
 ## name for (a new kind of wall or door) shows its own words instead of failing.
 const SIDE := {"N": "North wall", "W": "West wall", "E": "East wall", "S": "School"}
@@ -80,16 +91,24 @@ const ALERTS_MAX_COMPACT := 3
 const TOAST_SECONDS := 2.5
 const TOAST_FADE := 0.4
 const TOAST_COLOR := {"danger": DANGER_TEXT, "warn": WARN, "info": INK}
+## The window must be this tall for the fields-of-fire legend to show: in a shorter one the
+## stores, the legend and the smallest selection dock would not all fit down the left side.
+const LEGEND_MIN_H := 600.0
+## The tooltip of the fields-of-fire button.
+const FIELDS_TIP := "Fields of fire: which wall pieces your guns reach at night\nKey: V"
 ## What the speed buttons do and their keys, for the tooltips: [words, key].
 const SPEED_TIPS := [["Pause the game", "Space"], ["Play at normal speed", "1"], ["Play twice as fast", "2"], ["Play three times as fast", "3"]]
 ## The controls panel: [caption, entries to a row, [[keys, what it does], ...]]. `keys` is
 ## one entry's chips, one chip for each word ("W A S D" is four). Every key and mouse
 ## button main.gd's _unhandled_input answers to is here.
 const HELP := [
-	["Orders for the selected person", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"]]],
+	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Auto-repair"], ["L", "Lure the dead"]]],
 	["Mouse", 2, [["Click", "Select"], ["Right-click", "Move there"], ["Drag", "Pan"], ["Scroll", "Zoom"]]],
-	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["Esc", "Deselect"], ["F5", "Save"], ["F9", "Load"]]],
+	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["Esc", "Deselect"], ["V", "Fields of fire"], ["F5", "Save"], ["F9", "Load"]]],
 ]
+## The legend of the fields-of-fire view: the tint of a wall section by how many guns
+## reach it, [colour, words] (the overlay tints with the same colours).
+const FIELDS_LEGEND := [[DANGER, "Red: no gun reaches it"], [WARN, "Amber: one gun"], [OK, "Green: two or more"]]
 
 
 ## A rounded meter: background track and a coloured fill.
@@ -148,6 +167,8 @@ var on_speed: Callable
 var on_gizmo: Callable
 var on_alert: Callable
 var on_sound: Callable
+## The fields-of-fire button was pressed (main.gd flips the view and calls set_fields).
+var on_fields: Callable
 ## Starting a new run or loading a save takes a scene reload, which is the
 ## game's business: by default the choice is put in Engine meta ("run") for
 ## main.gd and the scene is reloaded; a test sets this to see the choice instead.
@@ -160,6 +181,9 @@ var game_over = null
 var _paused_for_dialog := false
 var _speed_before_dialog := 0
 
+## The column at the top left: the stores, and under them the fields-of-fire legend
+## while that view is on.
+var left_col: VBoxContainer
 var res_panel: PanelContainer
 var res_grid: GridContainer
 var res_values := {}
@@ -172,6 +196,8 @@ var mark_px := 0
 var mark_max := 4
 ## The last sim the HUD was updated from (for the things it opens itself).
 var sim_ref = null
+## The column at the top right: the clock, and under it the alerts.
+var right_col: VBoxContainer
 var clock: PanelContainer
 var day_label: Label
 var phase_chip: PanelContainer
@@ -183,6 +209,8 @@ var strip: Strip
 var temp_icon: TextureRect
 var temp_label: Label
 var walkers_label: Label
+## The lookout's forecast of tonight, in the clock from 17:00 until dawn (hidden before).
+var forecast_label: Label
 var alerts_box: VBoxContainer
 ## The order the feed shows its alerts in ("id:level|..."): the panels are moved only when it changes.
 var alert_sig := ""
@@ -212,6 +240,10 @@ var gizmo_mini := false
 var speed_panel: PanelContainer
 var speed_buttons: Array = []
 var sound_button: Button
+## The fields-of-fire view's button (lit while the view is on) and its legend.
+var fields_button: Button
+var fields_on := false
+var fields_legend: PanelContainer
 var help_button: Button
 var help: PanelContainer
 var hint: PanelContainer
@@ -420,8 +452,41 @@ func _build_stores() -> void:
 			grid.add_child(k)
 			grid.add_child(v)
 	res_panel.add_child(grid)
-	add_child(res_panel)
-	_corner(res_panel, false, false, 12, 12)
+	res_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	left_col = _vbox(8)
+	left_col.add_child(res_panel)
+	left_col.add_child(_build_legend())
+	add_child(left_col)
+	_corner(left_col, false, false, 12, 12)
+
+
+## The legend of the fields-of-fire view: a swatch for each tint and what it means.
+## Hidden until the view is on (see set_fields).
+func _build_legend() -> PanelContainer:
+	fields_legend = _panel(_style())
+	fields_legend.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	# a legend is read, not pressed: clicks pass through it to the world
+	fields_legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col := _vbox(5)
+	col.add_child(_caps("Fields of fire"))
+	for entry in FIELDS_LEGEND:
+		var row := _hbox(8)
+		var swatch := Panel.new()
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(entry[0], 0.55)
+		st.border_color = entry[0]
+		st.set_border_width_all(1)
+		st.set_corner_radius_all(3)
+		swatch.add_theme_stylebox_override("panel", st)
+		swatch.custom_minimum_size = Vector2(16, 12)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(swatch)
+		row.add_child(_label(String(entry[1]), Fonts.sans(400), 12, INK2))
+		col.add_child(row)
+	fields_legend.add_child(col)
+	fields_legend.visible = false
+	return fields_legend
 
 
 ## `c` with `top` pixels of space above it, so it can sit level with a taller neighbour.
@@ -653,10 +718,18 @@ func _build_clock() -> void:
 	walkers_label = _label("", Fonts.sans(400), 12, INK2)
 	r4.add_child(walkers_label)
 	v.add_child(r4)
+	# the lookout's forecast, once it is given (see update_hud); a long one wraps
+	forecast_label = _label("", Fonts.sans(400), 12, INK2)
+	forecast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	forecast_label.visible = false
+	v.add_child(forecast_label)
 	clock.add_child(v)
 	clock.custom_minimum_size.x = CLOCK_W
-	add_child(clock)
-	_corner(clock, true, false, 12, 12)
+	# the alerts hang from the clock, so a taller clock pushes them down
+	right_col = _vbox(13)
+	right_col.add_child(clock)
+	add_child(right_col)
+	_corner(right_col, true, false, 12, 12)
 
 
 # ----------------------------------------------------------------- alerts --
@@ -664,8 +737,7 @@ func _build_clock() -> void:
 func _build_alerts() -> void:
 	alerts_box = _vbox(6)
 	alerts_box.custom_minimum_size.x = CLOCK_W
-	add_child(alerts_box)
-	_corner(alerts_box, true, false, 12, 150)
+	right_col.add_child(alerts_box)
 
 
 ## The icon an alert gets: for what it is about (ALERT_ICONS, then a store named in
@@ -890,8 +962,10 @@ func _build_dock() -> void:
 ## clear of the speed controls and the help panel; else in rows above the panel,
 ## and if that would run into the stores panel, as one row of small buttons.
 func _layout_dock() -> void:
-	if dock == null or speed_panel == null or help == null or res_panel == null:
+	if dock == null or speed_panel == null or help == null or left_col == null:
 		return
+	# the legend takes room down the left side (it gives way in a short window)
+	fields_legend.visible = fields_on and size.y >= LEGEND_MIN_H
 	var n := gizmo_count
 	var panel_w := maxf(float(INSPECT_W), inspect.get_combined_minimum_size().x)
 	var beside := float(n * GIZMO_W + maxi(0, n - 1) * GIZMO_GAP)
@@ -903,8 +977,9 @@ func _layout_dock() -> void:
 		var per_row := maxi(1, int((panel_w + GIZMO_GAP) / (GIZMO_W + GIZMO_GAP)))
 		var rows := ceili(float(n) / float(per_row))
 		var tall := float(rows * GIZMO_W + (rows - 1) * GIZMO_GAP) + 8.0 + inspect.get_combined_minimum_size().y
-		# measured with a little to spare: a font can make a panel a few pixels taller than its minimum
-		var room := size.y - 12.0 - (12.0 + res_panel.get_combined_minimum_size().y + 24.0)
+		# measured with a little to spare: a font can make a panel a few pixels taller than its minimum;
+		# the column at the top left is the stores and, while the fields-of-fire view is on, its legend
+		var room := size.y - 12.0 - (12.0 + left_col.get_combined_minimum_size().y + 24.0)
 		mini = tall > room
 	if mini != gizmo_mini:
 		gizmo_mini = mini
@@ -1002,11 +1077,14 @@ func select(sel) -> void:
 		infection_head.visible = false
 		inspect_refs.infection = infection
 		inspect_refs.infection_head = infection_head
+		# the standing order auto-repair shows as a gold tag at the right of the header while it is on
+		inspect_refs.auto_tag = _auto_tag()
 	elif sel.kind == "zombie":
 		var z = sel.ref
 		head.add_child(_pic(GD.tex(data.portraits["z%d" % z.look_index])))
-		titles.add_child(_label("Walker", Fonts.cond(700), 21, INK))
-		titles.add_child(_label("One of the dead", Fonts.sans(400), 13, INK2))
+		var names: Array = ZOMBIE_NAMES.get(String(z.kind), ZOMBIE_NAMES.walker)
+		titles.add_child(_label(String(names[0]), Fonts.cond(700), 21, INK))
+		titles.add_child(_label(String(names[1]), Fonts.sans(400), 13, INK2))
 		var m := _meter()
 		_row(grid, "Health", m[0])
 		inspect_refs.hp = m[1]
@@ -1039,6 +1117,9 @@ func select(sel) -> void:
 		inspect_refs.doing = doing
 	titles.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(titles)
+	if inspect_refs.has("auto_tag"):
+		head.add_child(_spacer())
+		head.add_child(inspect_refs.auto_tag)
 	v.add_child(head)
 	v.add_child(grid)
 	if sel.kind == "person":
@@ -1078,6 +1159,28 @@ func select(sel) -> void:
 	_refresh_selection()
 
 
+## The tag "Auto-repair: on" in the person panel's header: a small gold pill, shown while
+## the standing order is on (see _refresh_selection).
+func _auto_tag() -> PanelContainer:
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(ACCENT, 0.14)
+	st.border_color = Color(ACCENT, 0.55)
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(3)
+	st.content_margin_left = 6
+	st.content_margin_right = 6
+	st.content_margin_top = 1
+	st.content_margin_bottom = 2
+	var tag := PanelContainer.new()
+	tag.add_theme_stylebox_override("panel", st)
+	tag.mouse_filter = Control.MOUSE_FILTER_PASS
+	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	tag.tooltip_text = "Auto-repair is on: by day they mend worn walls on their own (key B turns it off)"
+	tag.add_child(_label("Auto-repair: on", Fonts.cond(700, 1), 12, ACCENT))
+	tag.visible = false
+	return tag
+
+
 func _pic(t: Texture2D) -> TextureRect:
 	var r := TextureRect.new()
 	r.texture = t
@@ -1106,6 +1209,7 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	b.set_meta("id", id)
 	b.set_meta("label", text)
 	b.set_meta("key", key)
+	b.set_meta("on", on)
 	var normal := _style(ACCENT if on else PANEL, 6, ACCENT if on else LINE)
 	normal.set_content_margin_all(0)
 	var hover := _style(ACCENT if on else PANEL_HI, 6, ACCENT if on else LINE2)
@@ -1118,7 +1222,7 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	var inner := _vbox(7)
 	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	inner.alignment = BoxContainer.ALIGNMENT_CENTER
-	var ic := _icon(id, 20 if gizmo_mini else 22, col)
+	var ic := _icon(String(GIZMO_ICON.get(id, id)), 20 if gizmo_mini else 22, col)
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	inner.add_child(ic)
 	if not gizmo_mini:
@@ -1164,6 +1268,10 @@ func _order_words(id: String, label: String) -> String:
 			return "Send out: they leave through the gate for good"
 		"scavenge":
 			return "Scavenge: send a party out for supplies"
+		"lure":
+			return "Alarm: draws the dead to this wall for %d hours\nCosts %d scrap. One at a time." % [int(Tactics.LURE_HOURS), int(Tactics.LURE_COST)]
+		"auto":
+			return "Auto-repair: by day, mends the most worn wall under %d%%\nwhile scrap is %d or more." % [roundi(Tactics.AUTO_BELOW * 100.0), int(Tactics.AUTO_MIN_SCRAP)]
 	return label
 
 
@@ -1202,6 +1310,9 @@ func _order_blocker(id: String) -> String:
 			return "nobody is free to repair it"
 		if float(sim_ref.stock.scrap) <= 0.0:
 			return "no scrap left"
+	elif selection.kind == "segment" and id == "lure":
+		# the rules say why (a door, a section that is down, an alarm already ringing, too little scrap)
+		return String(sim_ref.tactics.why_not_lure(selection.ref))
 	return ""
 
 
@@ -1283,6 +1394,8 @@ func _build_gizmos() -> void:
 			gizmos.add_child(_gizmo("post", "To post", "P", false))
 			gizmos.add_child(_gizmo("repair", "Repair", "F", false))
 			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
+			# a standing order, lit while it is on
+			gizmos.add_child(_gizmo("auto", "Auto", "B", _auto_on(p)))
 			if sim_ref != null and sim_ref.medical.can_treat(p):
 				gizmos.add_child(_gizmo("treat", "Treat", "T", false))
 			if sim_ref != null and sim_ref.medical.can_send_out(p):
@@ -1292,6 +1405,7 @@ func _build_gizmos() -> void:
 	elif selection.kind == "segment":
 		gizmos.add_child(_gizmo("repair", "Repair", "F", false))
 		gizmos.add_child(_gizmo("focus", "Focus", "C", false))
+		gizmos.add_child(_gizmo("lure", "Lure", "L", false))
 	else:
 		gizmos.add_child(_gizmo("focus", "Focus", "C", false))
 	gizmo_count = gizmos.get_child_count()
@@ -1306,8 +1420,13 @@ func _gizmo_sig() -> String:
 	var p = selection.ref
 	var sig := "%s|%s|%s" % [p.drafted, p.dead, p.away != null]
 	if sim_ref != null and not p.dead and p.away == null:
-		sig += "|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p)]
+		sig += "|%s|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p), _auto_on(p)]
 	return sig
+
+
+## Whether `p` has the standing order auto-repair on.
+func _auto_on(p) -> bool:
+	return sim_ref != null and sim_ref.tactics.auto_repair(p)
 
 
 ## Whether `p` could be sent scavenging now: on the map, on their feet, not held
@@ -1372,6 +1491,9 @@ func _build_speed() -> void:
 	row.add_child(_spacer_fixed(3))
 	row.add_child(sep)
 	row.add_child(_spacer_fixed(3))
+	fields_button = _speed_button("draft", FIELDS_TIP)
+	fields_button.pressed.connect(func(): if on_fields.is_valid(): on_fields.call())
+	row.add_child(fields_button)
 	sound_button = _speed_button("soundOn", "Turn the sound off")
 	sound_button.pressed.connect(func(): on_sound.call())
 	row.add_child(sound_button)
@@ -1381,6 +1503,19 @@ func _build_speed() -> void:
 	panel.add_child(row)
 	add_child(panel)
 	_corner(panel, true, true, 12, 12)
+
+
+## The fields-of-fire view lit or dark: its button by the speed controls and its legend.
+## (main.gd flips the view; the overlay draws it.)
+func set_fields(on: bool) -> void:
+	fields_on = on
+	if fields_button != null:
+		var st := StyleBoxFlat.new()
+		st.bg_color = Color(ACCENT, 0.16) if on else Color(0, 0, 0, 0)
+		st.set_corner_radius_all(4)
+		fields_button.add_theme_stylebox_override("normal", st)
+		fields_button.get_meta("icon").modulate = ACCENT if on else INK2
+	_layout_dock()
 
 
 func _spacer_fixed(w: int) -> Control:
@@ -1779,6 +1914,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	temp_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
 	temp_label.text = "%d°C, %s" % [temp, sim.weather]
 	walkers_label.text = "%d walkers" % walkers
+	_update_forecast(sim)
 	# speed and sound
 	if speed != last_speed:
 		last_speed = speed
@@ -1798,8 +1934,46 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	_refresh_selection()
 
 
+## The lookout's forecast under the clock: from the hour he tells it (17:00) until dawn,
+## and only while he can tell it; at other times the line is not there.
+func _update_forecast(sim) -> void:
+	var f: Dictionary = sim.tactics.forecast()
+	var text := ""
+	if bool(f.get("given", false)) and sim.phase != "dawn":
+		text = _forecast_text(f)
+	if forecast_label.text != text:
+		forecast_label.text = text
+	forecast_label.visible = text != ""
+
+
+## "Tonight: about 55 from the north east, a brute"; "..., runners"; on the last night
+## "The last night: about 120, from everywhere".
+func _forecast_text(f: Dictionary) -> String:
+	if bool(f.get("big", false)):
+		return "The last night: about %d, from everywhere" % int(f.get("total", 0))
+	var text := "Tonight: about %d" % int(f.get("total", 0))
+	var heading := String(f.get("heading", ""))
+	if heading != "":
+		text += " from the %s" % heading
+	var brutes := int(f.get("brutes", 0))
+	if brutes > 0:
+		text += ", a brute" if brutes == 1 else ", %d brutes" % brutes
+	elif bool(f.get("runners", false)):
+		text += ", runners"
+	return text
+
+
 func _rank(a: Dictionary) -> int:
 	return 3 if a.level == "danger" else (2 if a.level == "warn" else 1)
+
+
+## About how much health a fresh one of this kind has, for the meter: a walker's is
+## five, the others the middle of their range (see kinds.gd).
+func _zombie_hp(z) -> float:
+	var k: Dictionary = Kinds.KINDS.get(String(z.kind), Kinds.KINDS.walker)
+	if z.kind == Kinds.WALKER:
+		return 5.0
+	return maxf(1.0, (float(k.hp[0]) + float(k.hp[1])) / 2.0)
 
 
 func _doing_zombie(z) -> String:
@@ -1809,7 +1983,7 @@ func _doing_zombie(z) -> String:
 		"attack":
 			return "Clawing at the %s" % String(z.slot.seg.name).to_lower()
 		"approach":
-			return "Shambling toward the wall"
+			return String(ZOMBIE_VERBS.get(String(z.kind), ZOMBIE_VERBS.walker))
 		"breach":
 			return "Inside the yard, hunting"
 		"retreat":
@@ -1904,6 +2078,7 @@ func _refresh_selection() -> void:
 		inspect_refs.infection.visible = stage != ""
 		inspect_refs.infection_head.visible = stage != ""
 		_set_text(inspect_refs.infection, stage.capitalize(), WARN)
+		inspect_refs.auto_tag.visible = not p.dead and _auto_on(p)
 		var pips: HBoxContainer = inspect_refs.pips
 		var n := pips.get_child_count()
 		if n > 0:
@@ -1915,7 +2090,7 @@ func _refresh_selection() -> void:
 			_build_gizmos()
 	elif selection.kind == "zombie":
 		var z = selection.ref
-		f = maxf(0.0, z.hp) / 5.0
+		f = maxf(0.0, z.hp) / _zombie_hp(z)
 		doing = _doing_zombie(z)
 	else:
 		var s = selection.ref

@@ -48,7 +48,9 @@ func _loop(name: String, level: float) -> AudioStreamPlayer:
 	return p
 
 
-func play(name: String, level: float = 1.0, pitch_var: float = 0.04) -> void:
+## `pitch_var` is the random wobble round the normal pitch; `pitch_scale` moves the
+## whole sound up or down (0.72 is the deep groan of a brute, 1.3 a runner's thin one).
+func play(name: String, level: float = 1.0, pitch_var: float = 0.04, pitch_scale: float = 1.0) -> void:
 	if muted or not streams.has(name):
 		return
 	var list: Array = streams[name]
@@ -58,7 +60,7 @@ func play(name: String, level: float = 1.0, pitch_var: float = 0.04) -> void:
 	next = (next + 1) % players.size()
 	p.stream = list[randi() % list.size()]
 	p.volume_db = linear_to_db(maxf(level, 0.0001))
-	p.pitch_scale = 1.0 + (randf() - 0.5) * 2.0 * pitch_var
+	p.pitch_scale = maxf(0.05, (1.0 + (randf() - 0.5) * 2.0 * pitch_var) * pitch_scale)
 	p.play()
 
 

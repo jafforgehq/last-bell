@@ -40,6 +40,15 @@ func test_random_states_never_break_the_hud() -> void:
 			sim.medical.treat[p.id] = rng.randf() < 0.3
 			sim.medical.sendout[p.id] = rng.randf() < 0.3
 			sim.medical.stage[p.id] = STAGES[rng.randi() % 3]
+		# the night tools: the forecast, who has auto-repair, whether the alarm can be set, the view
+		sim.tactics.told = Kit.forecast({"total": rng.randi() % 200, "brutes": rng.randi() % 3, "runners": rng.randf() < 0.5, "big": rng.randf() < 0.1, "heading": ["north", "south east", "north and west"][rng.randi() % 3]}) if rng.randf() < 0.6 else {"given": false}
+		for p in sim.people:
+			sim.tactics.autos[p.id] = rng.randf() < 0.5
+		sim.tactics.why = ["", "an alarm is already ringing", "it takes 3 scrap"][rng.randi() % 3]
+		sim.tactics.ringing = rng.randi() % 16 if rng.randf() < 0.3 else -1
+		sim.tactics.left_min = rng.randf() * 180.0
+		sim.phase = ["day", "dusk", "night", "dawn"][rng.randi() % 4]
+		hud.set_fields(rng.randf() < 0.5)
 		sim.scavenge.can = rng.randf() < 0.5
 		sim.scavenge.reason = "because %d" % round
 		sim.supplies.days = {"food": rng.randf() * 120.0, "water": rng.randf() * 120.0}
@@ -96,10 +105,35 @@ func _check_what_is_shown(ctx: Dictionary, round: int) -> void:
 			failures.append("round %d: the dead %s has marks" % [round, p.id])
 		if (p.dead or p.away != null) and (c.badge.visible or c.fight.visible):
 			failures.append("round %d: %s is gone but has a badge" % [round, p.id])
+	# the line under the clock follows the forecast, until dawn
+	var told: Dictionary = ctx.sim.tactics.told
+	var want_line: bool = bool(told.get("given", false)) and ctx.sim.phase != "dawn"
+	if hud.forecast_label.visible != want_line or (want_line and not hud.forecast_label.text.begins_with("T") and not hud.forecast_label.text.begins_with("The last night")):
+		failures.append("round %d: the forecast line is '%s' (visible %s), the forecast %s in the %s" % [round, hud.forecast_label.text, hud.forecast_label.visible, told.get("given"), ctx.sim.phase])
+	# the legend is up with the view, in a window tall enough
+	if hud.fields_legend.visible != (hud.fields_on and hud.size.y >= hud.LEGEND_MIN_H):
+		failures.append("round %d: the legend is %s with the view %s in a window %d tall" % [round, hud.fields_legend.visible, hud.fields_on, int(hud.size.y)])
 	var sel = hud.selection
+	if sel != null and sel.kind == "segment":
+		var ids_w := Kit.gizmo_ids(ctx)
+		if ids_w != ["repair", "focus", "lure"]:
+			failures.append("round %d: a wall section has the buttons %s" % [round, str(ids_w)])
+		else:
+			var lure: Button = Kit.gizmo(ctx, "lure")
+			var why: String = ctx.sim.tactics.why
+			if (lure.modulate.a < 0.9) != (why != "") or lure.tooltip_text.contains("Not now: %s." % why) != (why != ""):
+				failures.append("round %d: the Lure button is '%s' with the rules saying '%s'" % [round, lure.tooltip_text, why])
 	if sel != null and sel.kind == "person":
 		var p = sel.ref
 		var ids := Kit.gizmo_ids(ctx)
+		if p.away == null and not p.dead:
+			var auto: bool = ctx.sim.tactics.auto_repair(p)
+			if not ids.has("auto") or Kit.gizmo(ctx, "auto").get_meta("on") != auto:
+				failures.append("round %d: %s's Auto button %s does not follow auto-repair %s" % [round, p.id, str(ids), auto])
+			if hud.inspect_refs.auto_tag.visible != auto:
+				failures.append("round %d: %s's tag is %s with auto-repair %s" % [round, p.id, hud.inspect_refs.auto_tag.visible, auto])
+		elif p.away == null and p.dead and hud.inspect_refs.auto_tag.visible:
+			failures.append("round %d: a tag for the dead %s" % [round, p.id])
 		if p.away != null and not ids.is_empty():
 			failures.append("round %d: buttons for someone who is away: %s" % [round, str(ids)])
 		elif p.away == null and p.dead and ids != ["focus"]:
