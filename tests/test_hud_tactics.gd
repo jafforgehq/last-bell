@@ -119,12 +119,19 @@ func test_a_person_gets_an_auto_button_that_lights_while_it_is_on() -> void:
 	check(b != null, "the Auto button is there")
 	check(Kit.texts(b).has("AUTO") and Kit.texts(b).has("B"), "named, with its key B (A pans the view)")
 	eq(b.get_meta("on"), false, "off at first")
-	eq((b.get_theme_stylebox("normal") as StyleBoxFlat).bg_color, Hud.PANEL, "dark like the others")
+	var off_box: StyleBox = b.get_theme_stylebox("normal")
+	if off_box is StyleBoxFlat:
+		eq(off_box.bg_color, Hud.PANEL, "dark like the others")
 	ctx.sim.tactics.toggle_auto(ana)
 	Kit.update(ctx)
 	b = Kit.gizmo(ctx, "auto")
 	eq(b.get_meta("on"), true, "on once the order is on")
-	eq((b.get_theme_stylebox("normal") as StyleBoxFlat).bg_color, Hud.ACCENT, "lit gold, like a drafted person's Release")
+	var on_box: StyleBox = b.get_theme_stylebox("normal")
+	if on_box is StyleBoxFlat:
+		eq(on_box.bg_color, Hud.ACCENT, "lit gold, like a drafted person's Release")
+	else:
+		# a frame: the gold one is another picture (or the same one tinted another way)
+		check(on_box is StyleBoxTexture and (on_box.texture != off_box.texture or on_box.modulate_color != off_box.modulate_color), "lit: made of the main-choice frame, not the dark one")
 	check(Kit.texts(b).has("AUTO"), "still named Auto")
 	ctx.sim.tactics.toggle_auto(ana)
 	Kit.update(ctx)
@@ -340,7 +347,11 @@ func test_the_fields_view_lights_its_button_and_shows_the_legend() -> void:
 	ctx.hud.set_fields(true)
 	check(ctx.hud.fields_legend.visible, "the legend is up with the view")
 	eq(b.get_meta("icon").modulate, Hud.ACCENT, "and the button is lit")
-	eq((b.get_theme_stylebox("normal") as StyleBoxFlat).bg_color, Color(Hud.ACCENT, 0.16), "with the glow of the active speed")
+	var lit: StyleBox = b.get_theme_stylebox("normal")
+	if lit is StyleBoxFlat:
+		eq(lit.bg_color, Color(Hud.ACCENT, 0.16), "with the glow of the active speed")
+	else:
+		check(lit is StyleBoxTexture and String(lit.get_meta("frame", "")) == "button_primary", "lit as a faint gold key, the glow of the active speed")
 	ctx.hud.set_fields(false)
 	check(not ctx.hud.fields_legend.visible, "gone with it")
 	eq(b.get_meta("icon").modulate, Hud.INK2, "dark again")

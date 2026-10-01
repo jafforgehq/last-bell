@@ -49,13 +49,18 @@ func test_info_and_warn_have_their_own_colours() -> void:
 	var ctx := Kit.build()
 	ctx.hud.toast("Game saved", "info")
 	var info: Color = ctx.hud.toast_label.get_theme_color("font_color")
-	var info_box: StyleBoxFlat = ctx.hud.toast_panel.get_theme_stylebox("panel")
+	var info_edge: Color = ctx.hud.toast_col
+	var info_box: StyleBox = ctx.hud.toast_panel.get_theme_stylebox("panel")
 	ctx.hud.toast("Nothing is damaged", "warn")
 	var warn: Color = ctx.hud.toast_label.get_theme_color("font_color")
-	var warn_box: StyleBoxFlat = ctx.hud.toast_panel.get_theme_stylebox("panel")
+	var warn_edge: Color = ctx.hud.toast_col
+	var warn_box: StyleBox = ctx.hud.toast_panel.get_theme_stylebox("panel")
 	check(info != warn, "the words differ")
 	eq(warn, Hud.WARN, "warn is the HUD's orange")
-	check(info_box.border_color != warn_box.border_color, "and the edge too")
+	check(info_edge != warn_edge, "and the edge too: the bar down the side (on a frame) or the board's edge (flat)")
+	if info_box is StyleBoxFlat and warn_box is StyleBoxFlat:
+		check(info_box.border_color != warn_box.border_color, "flat: the whole edge differs")
+		eq(warn_box.border_color, Hud.LEVEL_COLOR.warn, "in the level's colour")
 	ctx.hud.toast("Game saved")
 	eq(ctx.hud.toast_label.get_theme_color("font_color"), info, "the default is info")
 	ctx.hud.toast("Something odd", "no-such-level")

@@ -136,6 +136,46 @@ class FakeTactics:
 		autos[p.id] = not auto_repair(p)
 
 
+## The worktable's module (workshop.gd): who is at the bench and why nobody else can be
+## sent. What the HUD reads of it is table-driven, so a test sets by hand what it says; the
+## module's own clock-driven work (updating, starting a run) is switched off. The rates
+## (AMMO_PER_SCRAP, scrap_per_hour) are the real module's.
+class FakeWorkshop:
+	extends "res://scripts/sim/workshop.gd"
+	## Who is at the bench, by person id.
+	var at_bench := {}
+	## Why nobody can be sent to the bench ("" when they can), and who was sent.
+	var why := ""
+	var ordered: Array = []
+
+	func start() -> void:
+		pass
+
+	func update(_dt: float) -> void:
+		pass
+
+	func crafting(p) -> bool:
+		return bool(at_bench.get(p.id, false))
+
+	func why_not_craft(_p) -> String:
+		return why
+
+	func order_craft(p) -> bool:
+		ordered.append(p.id)
+		if why != "":
+			return false
+		at_bench[p.id] = true
+		return true
+
+	func stop(p) -> void:
+		at_bench.erase(p.id)
+
+	func status_of(p) -> Array:
+		if not crafting(p):
+			return []
+		return [{"icon": "ammo", "color": Color("#f0c24a"), "tip": "Making ammo at the worktable"}]
+
+
 ## A forecast as tactics.forecast() gives one, given: tonight about 55 from the north east.
 ## `with` overrides any of its fields.
 static func forecast(with: Dictionary = {}) -> Dictionary:
@@ -145,12 +185,17 @@ static func forecast(with: Dictionary = {}) -> Dictionary:
 
 
 ## Three sites shaped like the ones the scavenging module returns.
-static func sample_sites() -> Array:
-	return [
+## The sites of a sim whose scavenging module offers them; `with_scrapyard` adds the fourth
+## place of round 3 (the owner's data has its own: this one stands in for it).
+static func sample_sites(with_scrapyard: bool = false) -> Array:
+	var sites := [
 		{"id": "pharmacy", "name": "The pharmacy", "blurb": "Shelves stripped, but the back room was locked.", "danger": 2, "loot": {"meds": [3, 6]}, "extra": {"food": [0.4, 2]}, "image": "res://assets/ui/sites/pharmacy.png", "available": true, "note": ""},
 		{"id": "hardware", "name": "The hardware store", "blurb": "Crowbars, nails, boxes of shells.", "danger": 2, "loot": {"scrap": [10, 20], "ammo": [20, 60]}, "extra": {}, "image": "res://assets/ui/sites/hardware.png", "available": false, "note": "Picked over"},
 		{"id": "houses", "name": "Neighbourhood houses", "blurb": "Somebody's pantry is somebody's pantry.", "danger": 1, "loot": {"food": [8, 14], "water": [10, 20]}, "extra": {"meds": [0.3, 1]}, "image": "res://assets/ui/sites/houses.png", "available": true, "note": ""},
 	]
+	if with_scrapyard:
+		sites.append({"id": "scrapyard", "name": "The scrapyard", "blurb": "Stacks of cars and a dog that is not a dog any more. Plenty of scrap, for anyone who can carry it.", "danger": 3, "loot": {"scrap": [35, 60]}, "extra": {"food": [0.3, 2]}, "image": "res://assets/ui/sites/scrapyard.png", "available": true, "note": ""})
+	return sites
 
 
 ## {"g", "sim", "holder", "hud", "pressed": ids of gizmo presses, "speeds",
@@ -163,7 +208,12 @@ static func build(width: int = 1280, height: int = 800, seed_value: int = 1) -> 
 	sim.scavenge = FakeScavenge.new()
 	sim.scenario = FakeScenario.new()
 	sim.tactics = FakeTactics.new()
-	for m in [sim.supplies, sim.medical, sim.scavenge, sim.scenario, sim.tactics]:
+	var modules: Array = [sim.supplies, sim.medical, sim.scavenge, sim.scenario, sim.tactics]
+	# the worktable (a sim from before the workshop has none: the HUD copes with that too)
+	if sim.get("workshop") != null:
+		sim.workshop = FakeWorkshop.new()
+		modules.append(sim.workshop)
+	for m in modules:
 		m.setup(sim)
 	var ctx := {"g": g, "sim": sim, "pressed": [], "speeds": [], "selected": []}
 	var holder := Control.new()
@@ -246,6 +296,65 @@ static func gizmo(ctx: Dictionary, id: String) -> Button:
 		if b is Button and b.has_meta("id") and b.get_meta("id") == id:
 			return b
 	return null
+
+
+## The picture of a frame style box and the part of it inside its margins (the part text sits
+## on), as {"image", "inner"}, or {} when its pixels cannot be had. A frame made by Hud.frame is
+## read from its PNG on disk (a headless renderer keeps no pixels of an imported texture), any
+## other texture from the texture itself.
+static func _frame_pixels(sb: StyleBoxTexture) -> Dictionary:
+	var name := String(sb.get_meta("frame", ""))
+	if name != "":
+		var frames = load("res://scripts/ui/frames.gd")
+		var info: Dictionary = frames.info(name)
+		if not info.is_empty() and info.has("file") and info.has("margin"):
+			# read from the file on disk (the project path, so that no warning about export is logged)
+			var img := Image.load_from_file(ProjectSettings.globalize_path(String(info.file)))
+			if img != null and not img.is_empty():
+				var m: Array = info.margin
+				var inner := Rect2(float(m[0]), float(m[1]), img.get_width() - float(m[0]) - float(m[2]), img.get_height() - float(m[1]) - float(m[3]))
+				if inner.size.x < 2.0 or inner.size.y < 2.0:
+					inner = Rect2(Vector2.ZERO, Vector2(img.get_size()))
+				return {"image": img, "inner": inner}
+	var img2: Image = sb.texture.get_image()
+	if img2 == null or img2.is_empty():
+		return {}
+	if img2.is_compressed():
+		img2.decompress()
+	var whole := Rect2(Vector2.ZERO, Vector2(img2.get_size()))
+	var r: Rect2 = sb.region_rect if sb.region_rect.size != Vector2.ZERO else whole
+	var inner2 := Rect2(r.position + Vector2(sb.texture_margin_left, sb.texture_margin_top), r.size - Vector2(sb.texture_margin_left + sb.texture_margin_right, sb.texture_margin_top + sb.texture_margin_bottom))
+	if inner2.size.x < 2.0 or inner2.size.y < 2.0:
+		inner2 = r
+	return {"image": img2, "inner": inner2}
+
+
+## What a style box looks like behind text, as [darkest, lightest] colours (each may be
+## translucent): a flat box is its colour; a frame is the darkest and the lightest of the
+## picture's middle (the part inside its margins, where text sits) as the box tints it. A box
+## with nothing to say (none, or a picture that cannot be read) is [transparent, transparent].
+static func fills(sb) -> Array:
+	var none := Color(0, 0, 0, 0)
+	if sb is StyleBoxFlat:
+		return [sb.bg_color, sb.bg_color]
+	if sb is StyleBoxTexture and sb.texture != null:
+		var px := _frame_pixels(sb)
+		if px.is_empty():
+			return [none, none]
+		var img: Image = px.image
+		var inner: Rect2 = px.inner
+		var samples: Array = []
+		var n := 14
+		for iy in n:
+			for ix in n:
+				var at := inner.position + Vector2(inner.size.x * (ix + 0.5) / n, inner.size.y * (iy + 0.5) / n)
+				var c := img.get_pixel(clampi(int(at.x), 0, img.get_width() - 1), clampi(int(at.y), 0, img.get_height() - 1))
+				samples.append(Color(c.r * sb.modulate_color.r, c.g * sb.modulate_color.g, c.b * sb.modulate_color.b, c.a * sb.modulate_color.a))
+		samples.sort_custom(func(a, b): return a.get_luminance() < b.get_luminance())
+		var lo: Color = samples[int(samples.size() * 0.05)]
+		var hi: Color = samples[mini(samples.size() - 1, int(samples.size() * 0.95))]
+		return [lo, hi]
+	return [none, none]
 
 
 ## The on-screen rectangle of a control, or an empty one if it is hidden.

@@ -1,6 +1,7 @@
 ## The screen over the game when the run is over (sim.over is "defeat" or
-## "victory"): a dimmed window, a title, the run's numbers, how each survivor
-## ended, and the choice to start again or pick up the last save. Built once by
+## "victory"): a dimmed window and, on notebook paper, the REPORT CARD: the verdict, the
+## run's numbers as ruled lines, how each survivor ended (a hall-pass badge each), and the
+## choice to start again, pick up the last save or go back to the main menu. Built once by
 ## the HUD when it first sees sim.over set; it borrows the HUD's styles.
 extends Control
 
@@ -13,6 +14,8 @@ const MAX_W := 560.0
 ## The numbers a run's length is spoken in: "The thirty days are over".
 const ONES := ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
 const TENS := ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+## The green of "Alive" on paper (the board's green is too pale for it).
+const ALIVE_INK := Color("#3b6a1e")
 
 var hud
 var sim
@@ -34,7 +37,7 @@ func setup(h, s) -> void:
 
 func _build() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.025, 0.02, 0.72)
+	dim.color = Color(0.02, 0.04, 0.035, 0.7)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
@@ -42,28 +45,31 @@ func _build() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
-	var style: StyleBoxFlat = hud._style(Color(hud.PANEL, 0.97), 8, hud.LINE2)
-	style.content_margin_left = 24
-	style.content_margin_right = 24
-	style.content_margin_top = 22
-	style.content_margin_bottom = 22
+	var style: StyleBox = hud._paper_style()
+	if style is StyleBoxFlat:
+		style.content_margin_left = 28
+		style.content_margin_right = 28
+		style.content_margin_top = 22
+		style.content_margin_bottom = 24
 	panel = hud._panel(style)
 	center.add_child(panel)
-	var col: VBoxContainer = hud._vbox(14)
+	var col: VBoxContainer = hud._vbox(12)
 	panel.add_child(col)
 
+	# the head of the form, then the verdict
+	var header: Label = hud._caps("Report card", hud.PAPER_INK3)
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(header)
 	var result := String(sim.over)
-	title_label = hud._label(_title(result), Fonts.cond(700), 38, hud.INK)
+	title_label = hud._label(_title(result), Fonts.cond(700), 38, hud.PAPER_INK)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title_label)
-	var sub: Label = hud._label(SUBTITLES.get(result, ""), Fonts.sans(400), 15, hud.INK2)
+	var sub: Label = hud._label(SUBTITLES.get(result, ""), Fonts.sans(400), 15, hud.PAPER_INK2)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(sub)
-	col.add_child(_line())
 
-	var stats: HBoxContainer = hud._hbox(14)
-	stats.alignment = BoxContainer.ALIGNMENT_CENTER
+	# the numbers, as the ruled lines of the card
 	var died := 0
 	for p in sim.people:
 		if _fate(p) == "Died" or _fate(p) == "Turned":
@@ -73,19 +79,11 @@ func _build() -> void:
 		["kills", str(int(sim.kills)), "Walkers put down"],
 		["lost", "%d of %d" % [died, sim.people.size()], "Died or turned"],
 	]
+	var lines: VBoxContainer = hud._vbox(0)
+	lines.add_child(_line(hud.PAPER_INK))
 	for n in numbers:
-		var block: VBoxContainer = hud._vbox(2)
-		block.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var value: Label = hud._label(n[1], Fonts.cond(700), 34, hud.INK)
-		value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		block.add_child(value)
-		var cap: Label = hud._caps(n[2])
-		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		block.add_child(cap)
-		stats.add_child(block)
-		stat_values[n[0]] = value
-	col.add_child(stats)
-	col.add_child(_line())
+		lines.add_child(_stat_line(n[0], n[1], n[2]))
+	col.add_child(lines)
 
 	# how each of them ended
 	var crew := HFlowContainer.new()
@@ -99,28 +97,52 @@ func _build() -> void:
 
 	var buttons: HBoxContainer = hud._hbox(10)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	var again: Button = hud._button("New game", true)
+	var again: Button = hud._button("New game", true, true)
 	again.pressed.connect(_new_game)
 	buttons.add_child(again)
 	var save: String = hud.last_save()
 	if save != "":
-		var load_button: Button = hud._button("Load last save", false)
+		var load_button: Button = hud._button("Load last save", false, true)
 		load_button.pressed.connect(_load_save.bind(save))
 		buttons.add_child(load_button)
+	var menu_button: Button = hud._button("Main menu", false, true)
+	menu_button.pressed.connect(_main_menu)
+	buttons.add_child(menu_button)
 	col.add_child(buttons)
 
 
-func _line() -> Control:
+## A ruled line across the card (the notebook's), in the paper's ink.
+func _line(color: Color = Color(0, 0, 0, 0)) -> Control:
 	var line := ColorRect.new()
-	line.color = hud.LINE
+	line.color = color if color.a > 0.0 else hud.PAPER_LINE
 	line.custom_minimum_size = Vector2(0, 1)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return line
 
 
-## One survivor: their picture (dim if they are gone), name and how they ended.
+## One line of the card: the name of the number at the left, the number at the right, a rule
+## under it. The number's Label is kept in stat_values[key].
+func _stat_line(key: String, value: String, caption: String) -> Control:
+	var box: VBoxContainer = hud._vbox(0)
+	var row: HBoxContainer = hud._hbox(10)
+	var cap: Label = hud._caps(caption, hud.PAPER_INK2)
+	cap.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(cap)
+	row.add_child(hud._spacer())
+	var number: Label = hud._label(value, Fonts.cond(700), 32, hud.PAPER_INK)
+	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	row.add_child(number)
+	box.add_child(row)
+	box.add_child(_line())
+	stat_values[key] = number
+	return box
+
+
+## One survivor on a hall-pass badge: their picture (dim if they are gone), name and how they ended.
 func _survivor(p) -> Control:
 	var fate := _fate(p)
+	var badge: PanelContainer = hud._panel(_badge_style(hud._card_inset()))
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col: VBoxContainer = hud._vbox(3)
 	var pic := TextureRect.new()
 	pic.texture = GD.tex(hud.data.portraits[p.id])
@@ -138,7 +160,18 @@ func _survivor(p) -> Control:
 	var fate_label: Label = hud._label(fate, Fonts.sans(600), 12, color)
 	fate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(fate_label)
-	return col
+	badge.add_child(col)
+	return badge
+
+
+## The badge's style with room round its contents: the rim of the frame, or a few pixels flat.
+func _badge_style(inset: Vector4) -> StyleBox:
+	var s: StyleBox = hud._card_style(false)
+	s.content_margin_left = maxf(inset.x, 4.0) + 2.0
+	s.content_margin_right = maxf(inset.z, 4.0) + 2.0
+	s.content_margin_top = maxf(inset.y, 4.0) + 2.0
+	s.content_margin_bottom = maxf(inset.w, 4.0) + 3.0
+	return s
 
 
 ## "Alive", "Died", "Turned" or "Left" (sent out through the gate).
@@ -183,6 +216,13 @@ func _new_game() -> void:
 
 func _load_save(path: String) -> void:
 	hud.start_run({"load": path})
+
+
+## Back to the title screen: the shell's business (it sets hud.on_menu); with nobody
+## listening the button does nothing.
+func _main_menu() -> void:
+	if hud.on_menu.is_valid():
+		hud.on_menu.call()
 
 
 func _layout() -> void:

@@ -4,7 +4,7 @@ const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 
 ## The order buttons and their keys (main.gd's _unhandled_input).
-const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "auto": "B", "treat": "T", "sendout": "X", "scavenge": "G"}
+const KEYS := {"draft": "R", "post": "P", "repair": "F", "focus": "C", "auto": "B", "craft": "M", "treat": "T", "sendout": "X", "scavenge": "G"}
 
 
 ## Ana selected with every button on offer.
@@ -23,8 +23,8 @@ func _lines(b: Button) -> PackedStringArray:
 	return b.tooltip_text.split("\n")
 
 
-func _check_all_eight(ctx: Dictionary, where: String) -> void:
-	eq(Kit.gizmo_ids(ctx).size(), 8, "%s: all eight buttons" % where)
+func _check_all_nine(ctx: Dictionary, where: String) -> void:
+	eq(Kit.gizmo_ids(ctx).size(), 9, "%s: all nine buttons" % where)
 	for id in KEYS:
 		var b: Button = Kit.gizmo(ctx, id)
 		if b == null:
@@ -42,20 +42,20 @@ func _check_all_eight(ctx: Dictionary, where: String) -> void:
 func test_every_order_button_has_a_tooltip_in_the_full_size_too() -> void:
 	var ctx := _everything()
 	check(not ctx.hud.gizmo_mini, "the big buttons")
-	_check_all_eight(ctx, "big")
+	_check_all_nine(ctx, "big")
 	Kit.free_all(ctx)
 
 
 func test_and_in_the_small_size() -> void:
 	var ctx := _everything(700, 560)
 	check(ctx.hud.gizmo_mini, "the small buttons")
-	_check_all_eight(ctx, "small")
+	_check_all_nine(ctx, "small")
 	Kit.free_all(ctx)
 
 
 func test_the_first_line_names_the_order_in_plain_words() -> void:
 	var ctx := _everything()
-	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "auto": "Auto-repair", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
+	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "auto": "Auto-repair", "craft": "Make ammo", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
 	for id in words:
 		var first: String = _lines(Kit.gizmo(ctx, id))[0]
 		check(first.begins_with(words[id]), "%s starts with its name: '%s'" % [id, first])
@@ -201,7 +201,7 @@ func test_the_tooltip_looks_like_the_hud() -> void:
 	if theme != null:
 		check(theme.has_stylebox("panel", "TooltipPanel"), "a panel look")
 		var sb = theme.get_stylebox("panel", "TooltipPanel")
-		check(sb is StyleBoxFlat and sb.bg_color.a >= 0.9, "dark and solid enough to read")
+		check(sb is StyleBoxTexture or (sb is StyleBoxFlat and sb.bg_color.a >= 0.9), "dark and solid enough to read (a frame, or a flat board)")
 		check(theme.get_font_size("font_size", "TooltipLabel") >= 12, "at least 12 px")
 		eq(theme.get_color("font_color", "TooltipLabel"), Hud.INK, "in the HUD's ink")
 		check(theme.has_font("font", "TooltipLabel"), "in the HUD's font")
@@ -247,7 +247,10 @@ func test_resting_the_mouse_on_a_button_shows_its_tooltip_in_the_huds_look() -> 
 		check(label.get_theme_font_size("font_size") >= 12, "at 12 px or more")
 		eq(label.get_theme_color("font_color"), Hud.INK, "in the HUD's ink")
 		var box = popup.get_theme_stylebox("panel")
-		check(box is StyleBoxFlat and box.bg_color.a >= 0.9 and box.bg_color.v < 0.2, "on a dark, solid panel like the HUD's")
+		check(box is StyleBoxTexture or (box is StyleBoxFlat and box.bg_color.a >= 0.9 and box.bg_color.v < 0.2), "on a dark, solid panel like the HUD's")
+		var fill: Array = Kit.fills(box)
+		if fill[1].a > 0.0:
+			check(fill[1].a >= 0.9 and fill[1].v < 0.4, "whatever it is made of: %s" % str(fill))
 	Kit.free_all(ctx)
 	await Kit.settle()
 

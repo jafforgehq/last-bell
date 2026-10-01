@@ -3,6 +3,11 @@
 ## Test methods may await (for example a few process frames).
 extends SceneTree
 
+const Prefs := preload("res://scripts/prefs.gd")
+## The settings file the tests use: the player's own (user://prefs.cfg) is never read or
+## written by a test run, whatever a test starts (the game scene reads the settings).
+const TEST_PREFS := "user://prefs_test.cfg"
+
 
 ## Counts errors logged while tests run, so a test that crashes before its
 ## first check still fails. Warnings do not count.
@@ -19,6 +24,8 @@ var errors := ErrorCounter.new()
 
 
 func _initialize() -> void:
+	Prefs.path = TEST_PREFS
+	Prefs.reset()
 	OS.add_logger(errors)
 	_run.call_deferred()
 

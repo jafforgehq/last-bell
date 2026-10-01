@@ -235,6 +235,108 @@ func test_a_pans_the_view_and_does_not_flip_auto_repair() -> void:
 	await _leave(main)
 
 
+# ------------------------------------------------------------------- M --
+
+## The HUD has had its first update, as main.gd's frames give it (the buttons that depend on the
+## modules are only offered once it has seen the game).
+func _hud_up(main: Node) -> void:
+	main.hud.update_hud(main.sim, main.speed, true, 0)
+
+
+func _craft_button(main: Node):
+	for b in main.hud.gizmos.get_children():
+		if b is Button and b.has_meta("id") and b.get_meta("id") == "craft":
+			return b
+	return null
+
+
+func test_m_sends_the_selected_person_to_the_worktable_and_calls_them_back() -> void:
+	var main = _game()
+	_hud_up(main)
+	var sim = main.sim
+	var ana = _person(main, "ana")
+	main._select({"kind": "person", "ref": ana})
+	check(not sim.workshop.crafting(ana), "not at the bench at the start")
+	check(_craft_button(main) != null and _craft_button(main).get_meta("on") == false, "and the button is dark")
+	main._key(KEY_M)
+	check(sim.workshop.crafting(ana), "M sends the selected person to make ammo")
+	check(_craft_button(main) != null and _craft_button(main).get_meta("on") == true, "and the button is lit")
+	main._key(KEY_M)
+	check(not sim.workshop.crafting(ana), "M again calls them back")
+	check(not sim.workshop.crafting(_person(main, "dez")), "nobody else was touched")
+	main._select(null)
+	main._key(KEY_M)
+	eq(main.hud.toast_label.text, "Click someone first", "with nobody selected it says so")
+	await _leave(main)
+
+
+func test_m_says_why_when_they_cannot_go() -> void:
+	var main = _game()
+	_hud_up(main)
+	var sim = main.sim
+	var ana = _person(main, "ana")
+	main._select({"kind": "person", "ref": ana})
+	sim.stock.scrap = 2.0
+	main._key(KEY_M)
+	check(not sim.workshop.crafting(ana), "no scrap to spare: they stay where they are")
+	var why: String = sim.workshop.why_not_craft(ana)
+	check(why.contains("scrap"), "the rules' reason is about scrap: '%s'" % why)
+	check(main.hud.toast_panel.visible, "a toast says so")
+	eq(main.hud.toast_label.text, "Not now: " + why, "with the rules' own words")
+	eq(main.hud.toast_label.get_theme_color("font_color"), Hud.TOAST_COLOR.warn, "as a warning")
+	# at night
+	sim.stock.scrap = 20.0
+	sim.minutes = 22.0 * 60.0
+	sim.phase = sim.phase_at(sim.minutes)
+	main._key(KEY_M)
+	check(not sim.workshop.crafting(ana), "nobody goes to the bench at night")
+	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(ana), "night: the rules' words again")
+	check(main.hud.toast_label.text.contains("night"), "and it is about the night: '%s'" % main.hud.toast_label.text)
+	await _leave(main)
+
+
+func test_m_for_someone_who_is_away_or_gone_says_why_too() -> void:
+	var main = _game()
+	_hud_up(main)
+	var sim = main.sim
+	var dez = _person(main, "dez")
+	dez.away = {"kind": "party", "site": "houses"}
+	main._select({"kind": "person", "ref": dez})
+	check(_craft_button(main) == null, "no button for someone off the map")
+	main._key(KEY_M)
+	check(not sim.workshop.crafting(dez), "they cannot go to the bench")
+	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(dez), "and the rules say why: '%s'" % main.hud.toast_label.text)
+	check(main.hud.toast_label.text.contains("away"), "they are away")
+	dez.away = null
+	dez.dead = true
+	main._select({"kind": "person", "ref": dez})
+	main._key(KEY_M)
+	eq(main.hud.toast_label.text, "Not now: " + sim.workshop.why_not_craft(dez), "gone: the same")
+	await _leave(main)
+
+
+func test_m_with_a_wall_selected_asks_for_one_of_the_crew() -> void:
+	var main = _game()
+	_hud_up(main)
+	main._select({"kind": "segment", "ref": main.sim.segments[NORTH_BUS]})
+	main._key(KEY_M)
+	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "a wall piece cannot make ammo")
+	await _leave(main)
+
+
+# --------------------------------------------------------------- the Menu button --
+
+func test_the_menu_button_opens_the_pause_menu_like_esc_with_nothing_selected() -> void:
+	var main = _game()
+	_hud_up(main)
+	check(main.hud.on_open_menu.is_valid(), "main hands the HUD the pause menu")
+	check(not main.shell.is_open(), "closed at first")
+	main.hud.menu_button.pressed.emit()
+	check(main.shell.is_open(), "the toolbar's Menu button opens it")
+	eq(main.speed, 0, "and the game waits")
+	await _leave(main)
+
+
 # ------------------------------------------------------------------- clicking --
 
 func test_a_brute_is_easier_to_click_than_a_walker_and_a_runner_no_harder() -> void:

@@ -287,6 +287,59 @@ static func is_loadable(path: String) -> bool:
 	return _top_ok(read(path))
 
 
+## What the save at `path` says about itself, for the menus (Continue, Load): read
+## from the file alone and never applied to anything. For a save this version can
+## load: {"ok": true, "day", "hour" (0 to 24), "difficulty" (0 to 2), "people" (how
+## many are alive: not dead, not turned), "crew" (all of them), "over" ("" while the
+## run goes on), "version", "modified" (the file's time, seconds), "exists": true}.
+## For anything else {"ok": false, "exists", "reason" (a few words: "Empty", "Damaged",
+## "Saved by another version"), "modified", "version" (-1 when it cannot be read)}.
+## The checks are those of `is_loadable` and the clock and the run's own numbers; a
+## save that passes can still be refused when it is applied (a wall section the map
+## does not have, say), and then the game says so and carries on.
+static func peek(path: String) -> Dictionary:
+	var out := {"ok": false, "exists": FileAccess.file_exists(path), "reason": "Empty", "modified": 0, "version": -1}
+	if not out.exists:
+		return out
+	out["modified"] = int(FileAccess.get_modified_time(path))
+	out["reason"] = "Damaged"
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) != OK or typeof(json.data) != TYPE_DICTIONARY:
+		return out
+	var raw: Dictionary = json.data
+	var version = raw.get("version")
+	if typeof(version) == TYPE_INT or typeof(version) == TYPE_FLOAT:
+		out["version"] = int(version)
+		if float(version) != float(VERSION):
+			out["reason"] = "Saved by another version"
+			return out
+	if not _top_ok(raw):
+		return out
+	# only the few numbers the menus show are read (and turned back from their text form)
+	var r := Reader.new()
+	var day := r.whole(raw.get("day"))
+	var minutes := r.number(_unwrap(raw.get("minutes")))
+	var difficulty := r.whole(raw.get("difficulty"))
+	var over := r.text(raw.get("over"))
+	if not r.ok or day < 1 or minutes < 0.0 or minutes >= 24.0 * 60.0 or difficulty < 0 or difficulty > 2:
+		return out
+	var alive := 0
+	for pd in raw.people:
+		if typeof(pd) != TYPE_DICTIONARY or typeof(pd.get("dead")) != TYPE_BOOL or typeof(pd.get("turned")) != TYPE_BOOL:
+			return out
+		if not pd.dead and not pd.turned:
+			alive += 1
+	out["ok"] = true
+	out["reason"] = ""
+	out["day"] = day
+	out["hour"] = minutes / 60.0
+	out["difficulty"] = difficulty
+	out["people"] = alive
+	out["crew"] = raw.people.size()
+	out["over"] = over
+	return out
+
+
 # ------------------------------------------------------------------ reading --
 
 static func _top_ok(data: Dictionary) -> bool:

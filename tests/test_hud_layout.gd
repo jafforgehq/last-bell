@@ -42,7 +42,7 @@ func _rects(ctx: Dictionary) -> Dictionary:
 func test_nothing_overlaps_with_everything_showing() -> void:
 	for size in SIZES:
 		var ctx: Dictionary = await _busy(size[0], size[1])
-		eq(Kit.gizmo_ids(ctx).size(), 8, "%d wide: all eight buttons" % size[0])
+		eq(Kit.gizmo_ids(ctx).size(), 9, "%d wide: all nine buttons" % size[0])
 		var over := Kit.overlaps(_rects(ctx))
 		eq(over, [], "%d x %d" % [size[0], size[1]])
 		Kit.free_all(ctx)
@@ -115,7 +115,7 @@ func test_a_short_window_gets_small_buttons_that_still_clear_the_stores() -> voi
 	for size in [[960, 600], [700, 560]]:
 		var ctx: Dictionary = await _busy(size[0], size[1])
 		check(ctx.hud.gizmo_mini, "small buttons at %d x %d" % [size[0], size[1]])
-		eq(Kit.gizmo_ids(ctx).size(), 8, "all eight are still there")
+		eq(Kit.gizmo_ids(ctx).size(), 9, "all nine are still there")
 		# the small buttons show no names: the tooltip carries the name, what it does, and the key
 		var tip: PackedStringArray = Kit.gizmo(ctx, "treat").tooltip_text.split("\n")
 		check(tip[0].begins_with("Treat"), "named in the tooltip: '%s'" % tip[0])
@@ -136,7 +136,7 @@ func test_the_big_buttons_come_back_when_the_window_grows() -> void:
 	Kit.free_all(ctx)
 
 
-## A sweep: every width from 700 to 1400, with 5 to 8 buttons and the help panel
+## A sweep: every width from 700 to 1400, with 6 to 9 buttons and the help panel
 ## open or shut, the fields-of-fire legend up and the forecast under the clock, and
 ## nothing on the screen overlaps anything else.
 func test_nothing_overlaps_at_any_width_with_any_number_of_buttons() -> void:
@@ -162,6 +162,6 @@ func test_nothing_overlaps_at_any_width_with_any_number_of_buttons() -> void:
 				rects["help"] = Kit.rect(ctx.hud.help)
 				var found := Kit.overlaps(rects)
 				if not found.is_empty():
-					bad.append("%d px, %d buttons, help %s: %s" % [width, 5 + extra, help_open, found])
+					bad.append("%d px, %d buttons, help %s: %s" % [width, 6 + extra, help_open, found])
 	eq(bad, [], "overlaps found")
 	Kit.free_all(ctx)

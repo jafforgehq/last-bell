@@ -57,16 +57,22 @@ func total_days() -> int:
 ## What the command line asks of a run, from the user arguments of the process:
 ## {} (no choice: the caller starts its default run), {"difficulty": 0 to 2,
 ## "seed": n} for `--new=<difficulty>` and `--seed=<n>` (a seed alone means a
-## standard run), or {"load": path} for `--load=<path>`, which wins over the
-## others. Values that are not whole numbers are ignored.
+## standard run), {"tutorial": true, "step": n} for `--tutorial[=<step>]` (Orientation
+## Day, from a step of it; it wins over a new run), or {"load": path} for
+## `--load=<path>`, which wins over the others. Values that are not whole numbers
+## are ignored.
 static func run_from_args(args: Array) -> Dictionary:
 	var out := {}
 	var load_path := ""
+	var tutorial_step := -1
 	for arg in args:
 		var text := String(arg)
 		if not text.begins_with("--"):
 			continue
 		var kv := text.trim_prefix("--").split("=", true, 1)
+		if kv[0] == "tutorial":
+			tutorial_step = maxi(0, kv[1].to_int()) if kv.size() > 1 and kv[1].is_valid_int() else 0
+			continue
 		if kv.size() < 2:
 			continue
 		var value := kv[1]
@@ -84,6 +90,8 @@ static func run_from_args(args: Array) -> Dictionary:
 					load_path = value
 	if load_path != "":
 		return {"load": load_path}
+	if tutorial_step >= 0:
+		return {"tutorial": true, "step": tutorial_step}
 	return out
 
 

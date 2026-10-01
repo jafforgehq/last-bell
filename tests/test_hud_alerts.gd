@@ -78,11 +78,11 @@ func test_a_change_of_level_shows_in_the_panel() -> void:
 	_raise(ctx, "seg-1", "warn", "North wall under attack", "60% intact")
 	Kit.update(ctx)
 	var item: Dictionary = ctx.hud.alert_items["seg-1"]
-	eq(item.icon.modulate, Hud.LEVEL_COLOR.warn, "orange at first")
+	eq(item.icon.modulate, Hud.SLIP_MARK.warn, "the dark orange of a warning slip at first")
 	_raise(ctx, "seg-1", "danger", "North wall under attack", "30% intact")
 	Kit.update(ctx)
 	item = ctx.hud.alert_items["seg-1"]
-	eq(item.icon.modulate, Hud.LEVEL_COLOR.danger, "red once it is in danger")
+	eq(item.icon.modulate, Hud.SLIP_MARK.danger, "the dark red once it is in danger")
 	eq(String(_panels(ctx)[0].get_meta("level")), "danger", "and the panel says so")
 	Kit.free_all(ctx)
 

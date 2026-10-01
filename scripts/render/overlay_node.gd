@@ -27,10 +27,11 @@ const SPAWN := Color("#e0584a")
 const SPAWN_TEXT := Color("#ef6c5d")
 ## The alarm: the colour of the HUD's info (the alert says it in the same blue).
 const ALARM := Color("#7fa6c9")
-const INK := Color("#ece6d8")
+const INK := Color("#eeeadd")
 ## The size of the numbers and words of these drawings: not under the floor (Fonts.MIN_PX).
 const FIELD_PX := 13
-const PILL := Color(14 / 255.0, 12 / 255.0, 10 / 255.0, 0.78)
+## The slate of the HUD's boards under a word or a bar in the world.
+const PILL := Color(11 / 255.0, 20 / 255.0, 17 / 255.0, 0.8)
 ## The way the dead face at a wall's attack places (towards the wall), as a step in tiles:
 ## a step the other way is out in front of the wall.
 const FACE := {"N": Vector2(0, -1), "S": Vector2(0, 1), "E": Vector2(1, 0), "W": Vector2(-1, 0)}
@@ -286,7 +287,7 @@ func _draw() -> void:
 			continue
 		var w := clampf((s.to - s.from) * z * 0.45, 28.0, 80.0)
 		var f: float = s.hp / s.max_hp
-		_pill(Rect2(p.x - w / 2 - 2, p.y - 3.5, w + 4, 7), Color(14 / 255.0, 12 / 255.0, 10 / 255.0, 0.78))
+		_pill(Rect2(p.x - w / 2 - 2, p.y - 3.5, w + 4, 7), PILL)
 		var col := Color("#e0584a") if f < 0.34 else (Color("#e8953a") if f < 0.67 else Color("#9cc46a"))
 		_pill(Rect2(p.x - w / 2, p.y - 1.5, maxf(3.0, w * f), 3), col)
 
@@ -335,15 +336,15 @@ func _draw() -> void:
 			var label: String = p.first
 			var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0
 			var selected: bool = sel != null and sel.ref == p
-			var bg := Color(ACCENT, 0.92) if selected else (Color(46 / 255.0, 40 / 255.0, 24 / 255.0, 0.86) if p.drafted else Color(16 / 255.0, 14 / 255.0, 12 / 255.0, 0.72))
+			var bg := Color(ACCENT, 0.92) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
 			_pill(Rect2(pos.x - tw / 2, pos.y - 8, tw, 16), bg)
-			var fg := Color("#1a1610") if selected else (ACCENT if p.drafted else Color("#ece6d8"))
+			var fg := Color("#1a1508") if selected else (ACCENT if p.drafted else INK)
 			draw_string(font, Vector2(pos.x - tw / 2, pos.y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, fg)
 			if p.hp < 100.0:
-				draw_rect(Rect2(pos.x - 14, pos.y + 10, 28, 4), Color(14 / 255.0, 12 / 255.0, 10 / 255.0, 0.8))
+				draw_rect(Rect2(pos.x - 14, pos.y + 10, 28, 4), PILL)
 				draw_rect(Rect2(pos.x - 13.5, pos.y + 10.5, 27.0 * p.hp / 100.0, 3), Color("#d0493a") if p.hp < 35 else Color("#8fb85a"))
 			if p.reloading > 0.0:
 				var k: float = 1.0 - p.reloading / float(p.gun.reload)
 				var hy := _screen(pp.x, pp.y - 0.53 - 0.45).y
-				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(14 / 255.0, 12 / 255.0, 10 / 255.0, 0.7), 3.5, true)
+				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)

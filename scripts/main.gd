@@ -18,9 +18,29 @@ const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
+const Prefs := preload("res://scripts/prefs.gd")
+const Buses := preload("res://scripts/audio/buses.gd")
+const Shell := preload("res://scripts/ui/shell.gd")
+const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
+const Orientation := preload("res://scripts/sim/orientation.gd")
+const Coach := preload("res://scripts/ui/coach.gd")
+const Hints := preload("res://scripts/ui/hints.gd")
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
+## The title screen's yard: the clock is held at this hour (a warm dusk with the lamps and
+## the fires lit, before the bell), the camera drifts about this point, and a few of the
+## dead shuffle about in the street north of the wall.
+const TITLE_HOUR := 18.0 + 40.0 / 60.0
+const TITLE_CAM := Vector2(36.5, 18.8)
+const TITLE_SEED := 11
+const TITLE_DEAD := [Vector2(35.5, 14.2), Vector2(41.0, 13.0), Vector2(46.5, 15.6), Vector2(30.5, 15.0), Vector2(51.0, 13.4)]
+## The interface size the settings offer, and the smallest window (in points at the normal
+## size) a bigger interface may still be given: a size that would squeeze the HUD below
+## this is held back.
+const UI_SCALE_MIN := 0.8
+const UI_SCALE_MAX := 1.5
+const MIN_LOGICAL := Vector2(700.0, 560.0)
 
 var data: Dictionary
 var world
@@ -63,6 +83,32 @@ var walkers := 0
 var fields := false
 ## A save was asked for at start-up but could not be loaded (a new run began instead).
 var load_failed := false
+## The shell: the title screen, the pause menu and the screens they open (scripts/ui/shell.gd).
+var shell
+## The title screen is up instead of a run: the clock is held, the HUD is hidden and the
+## input is the menu's. (A cold start with no run chosen; see wants_title.)
+var title_mode := false
+## A menu screen is open over the game: the camera keys are the menu's, not the camera's.
+var menu_open: bool:
+	get:
+		return title_mode or (shell != null and shell.is_open())
+## A test's way of watching a new run, a load or the return to the title without a scene
+## reload: when set, it is called with the choice ({"difficulty", "seed"}, {"load": path} or
+## {"title": true}) instead.
+var restart: Callable
+var _speed_before_pause := 1
+var _title_t := 0.0
+## Orientation Day, the tutorial, is the run: its scenario (scripts/sim/orientation.gd) cannot be
+## lost, and `coach` (scripts/ui/coach.gd) teaches it. `coach` is null in every other run, and once
+## the lesson is over; while it is null nothing below asks it anything. The tutorial's F5 writes its
+## own file, never the real quick save, and it never autosaves.
+var tutorial := false
+var coach = null
+var tutorial_step := 0
+var tutorial_save_path := "user://tutorial_save.json"
+## The tips of a normal run (scripts/ui/hints.gd): null in the tutorial, on the title and in a
+## screenshot run, and they stay quiet in a headless one.
+var hints = null
 
 # screenshot mode (used for automated checks): --shot=path.png
 var shot_path := ""
@@ -76,12 +122,19 @@ var bench_proc := 0.0
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
+	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
+	if prefs_path != "":
+		Prefs.path = prefs_path
+		Prefs.forget()
+		if prefs_path == SHOT_PREFS:
+			Prefs.reset()
 	data = GD.load_all()
 	var logical := Vector2i(1280, 800)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--size="):
 			var wh := arg.trim_prefix("--size=").split("x")
 			logical = Vector2i(int(wh[0]), int(wh[1]))
+	SettingsMenu.apply_fullscreen()
 	_fit_window(logical)
 	get_window().size_changed.connect(_update_scale)
 	_update_scale()
@@ -130,15 +183,31 @@ func _ready() -> void:
 	# the first run of a process takes it from the command line instead:
 	# --new=<difficulty 0-2> --seed=<n> --load=<path>
 	var run: Dictionary = Scenario.run_from_args(OS.get_cmdline_user_args())
-	if Engine.has_meta("run"):
+	var had_meta := Engine.has_meta("run")
+	if had_meta:
 		run = Engine.get_meta("run")
 		Engine.remove_meta("run")
+	# with no run chosen at all the title is shown, over a quiet run of its own
+	title_mode = bool(run.get("title", false)) or wants_title(OS.get_cmdline_user_args(), had_meta)
+	if title_mode:
+		run = {"difficulty": 1, "seed": TITLE_SEED}
+	# Orientation Day (the tutorial): chosen from a menu or the command line, or because the save
+	# being loaded is one of its own
+	tutorial = bool(run.get("tutorial", false)) and not title_mode
+	tutorial_step = int(run.get("step", 0))
 	var loaded := false
 	if String(run.get("load", "")) != "":
-		loaded = SaveGame.apply(sim, SaveGame.read(String(run.load)))
+		var saved := SaveGame.read(String(run.load))
+		if Orientation.is_save(saved) and SaveGame.is_loadable(String(run.load)):
+			Orientation.install(sim)
+			tutorial = true
+		loaded = SaveGame.apply(sim, saved)
 		load_failed = not loaded
 	if not loaded:
-		sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
+		if tutorial:
+			Orientation.begin(sim)
+		else:
+			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 
 	for tr in data.trees:
 		var s := Sprite2D.new()
@@ -195,13 +264,15 @@ func _ready() -> void:
 	hud_layer.layer = 3
 	add_child(hud_layer)
 	hud = Hud.new()
-	hud.on_select = func(sel): _select(sel)
+	hud.on_select = func(sel): _try_select(sel)
 	hud.on_focus = func(p): _focus(Vector2(p.x, p.y))
-	hud.on_speed = func(s): speed = s
+	hud.on_speed = func(s): _set_speed(s)
 	hud.on_gizmo = _gizmo
 	hud.on_alert = _on_alert
 	hud.on_sound = _toggle_sound
 	hud.on_fields = _toggle_fields
+	hud.on_menu = show_title
+	hud.on_open_menu = open_pause
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
 
@@ -209,11 +280,25 @@ func _ready() -> void:
 	add_child(sound)
 	sound.setup(data.sounds)
 
+	# the menus: one layer above the HUD (and the coach), built once, shown when they are asked for
+	var shell_layer := CanvasLayer.new()
+	shell_layer.layer = 5
+	add_child(shell_layer)
+	shell = Shell.new()
+	shell_layer.add_child(shell)
+	shell.setup(self, hud)
+	apply_settings()
+	# the coach of Orientation Day, over the HUD and under the menus (none once the lesson is over)
+	if tutorial and not bool(sim.scenario.get("finished")):
+		_build_coach()
+
 	var vp := _vp()
 	zoom_px = clampf(vp.x / 26.0, 28.0, 52.0)
 	_parse_args()
 	_clamp_camera()
 	_apply_camera()
+	_start_shell()
+	_start_hints()
 	if load_failed:
 		hud.show_banner("Could not load that save", "A new game was started instead")
 	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0))
@@ -256,15 +341,37 @@ func _fit_window(logical: Vector2i) -> void:
 	win.position = usable.position + (usable.size - want) / 2
 
 
-## Keep the UI at a constant size in points on any display and window size.
+## Keep the UI at a constant size in points on any display and window size, times the size
+## the player chose in the settings (80% to 150%).
 func _update_scale() -> void:
 	var win := get_window()
 	var s := DisplayServer.screen_get_scale()
 	if s <= 0.0:
 		s = 1.0
+	var k := ui_scale_in_use()
 	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	win.content_scale_size = Vector2i(maxi(1, int(win.size.x / s)), maxi(1, int(win.size.y / s)))
+	win.content_scale_size = Vector2i(maxi(1, int(win.size.x / (s * k))), maxi(1, int(win.size.y / (s * k))))
+
+
+## The interface size the settings ask for, as far as this window can give it. Smaller is always
+## possible; a bigger one is held back when the window, at that size, would be narrower or
+## shorter than the smallest the HUD is laid out for (MIN_LOGICAL). `window_px` is the window's
+## size in pixels, `os_scale` the display's scale factor, `pref` the setting (1.0 is normal).
+static func effective_ui_scale(window_px: Vector2, os_scale: float, pref: float) -> float:
+	var want := clampf(pref, UI_SCALE_MIN, UI_SCALE_MAX)
+	if want <= 1.0:
+		return want
+	var base := window_px / maxf(os_scale, 0.01)
+	var room := minf(base.x / MIN_LOGICAL.x, base.y / MIN_LOGICAL.y)
+	return clampf(minf(want, room), 1.0, UI_SCALE_MAX)
+
+
+## The interface size in use now (the setting, held back if the window is too small for it).
+func ui_scale_in_use() -> float:
+	var win := get_window()
+	var s := DisplayServer.screen_get_scale()
+	return effective_ui_scale(Vector2(win.size), s if s > 0.0 else 1.0, Prefs.number("ui", "scale"))
 
 
 func _vp() -> Vector2:
@@ -301,10 +408,12 @@ func _screen_to_tile(p: Vector2) -> Vector2:
 
 func _zoom_at(factor: float, screen: Vector2) -> void:
 	var before := _screen_to_tile(screen)
+	var zoom_was := zoom_px
 	zoom_px = clampf(zoom_px * factor, _min_zoom(), MAX_ZOOM)
 	var after := _screen_to_tile(screen)
 	cam_center += before - after
 	_clamp_camera()
+	_did("zoom", absf(log(zoom_px / zoom_was)))
 
 
 func _focus(at: Vector2) -> void:
@@ -323,6 +432,40 @@ func _select(sel) -> void:
 	selection = sel
 	follow = null
 	hud.select(sel)
+
+
+## What the player does about the selection (a click, a crew card, Tab): the tutorial's soft lock may
+## refuse it; the coach is told when it goes through.
+func _try_select(sel) -> void:
+	if not _allows("select", Coach.sel_key(sel)):
+		return
+	_select(sel)
+	_did("select", sel)
+
+
+## A speed asked for with the keys or the buttons (and by the dialogs, which pause the game while
+## they are open): the tutorial's coach may hold the game still while a card is up.
+func _set_speed(n: int) -> void:
+	if not _allows("speed", n):
+		return
+	speed = n
+	_did("speed", n)
+
+
+## The tutorial's soft lock: whether the player may do `kind` (an `arg` of it) now. Always true
+## without a coach, so a normal run and every test are as they were. With one, a step that does not
+## teach it refuses with a gentle toast (see coach.gd).
+func _allows(kind: String, arg = null) -> bool:
+	if coach == null:
+		return true
+	return coach.allows(kind, arg)
+
+
+## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields), told
+## to the coach so the lesson's conditions can use it.
+func _did(kind: String, arg = null) -> void:
+	if coach != null:
+		coach.on_did(kind, arg)
 
 
 ## What is under a point of the world (in tiles): a person, a walker or a wall section, or null.
@@ -357,6 +500,9 @@ func _pick(w: Vector2):
 
 
 func _gizmo(g: String) -> void:
+	if not _allows("gizmo", g):
+		return
+	_did("gizmo", g)
 	if g == "scavenge":
 		hud.open_scavenge(selection)
 		return
@@ -367,7 +513,7 @@ func _gizmo(g: String) -> void:
 	if sim.handle_gizmo(g, sel):
 		hud.select(selection)
 		return
-	if g == "treat" or g == "sendout":
+	if g == "treat" or g == "sendout" or g == "craft":
 		var why: String = hud.why_not(g)
 		hud.toast("Not now: %s" % why if why != "" else "That can't be done right now", "warn")
 	# the night tools (the rules module took them, or refused): the alarm names its reason
@@ -444,23 +590,40 @@ func _on_alert(id: String) -> void:
 
 
 func _quick_save() -> void:
+	quick_save()
+
+
+## Writes the quick save and says how it went in a banner; true if it was written. (The
+## pause menu's Save is this.)
+func quick_save() -> bool:
 	if sim.over != "":
 		hud.show_banner("The run is over", "Start a new game or load a save")
-	elif SaveGame.write(sim, SaveGame.QUICK_PATH):
+	elif SaveGame.write(sim, _save_path()):
 		hud.show_banner("Game saved", "Quick save (F9 loads it)")
+		_did("save")
+		return true
 	else:
 		hud.show_banner("Could not save", "Nothing was written")
+	return false
+
+
+## Where F5 saves and F9 loads: the quick save, or in the tutorial a file of its own (so the
+## player's real quick save is never touched by a lesson).
+func _save_path() -> String:
+	return tutorial_save_path if tutorial else SaveGame.QUICK_PATH
 
 
 func _quick_load() -> void:
-	if not FileAccess.file_exists(SaveGame.QUICK_PATH):
+	var path := _save_path()
+	if not FileAccess.file_exists(path):
 		hud.show_banner("No quick save yet", "Press F5 to save")
 		return
 	# check it before the current game is thrown away for it
-	if not SaveGame.is_loadable(SaveGame.QUICK_PATH):
+	if not SaveGame.is_loadable(path):
 		hud.show_banner("Could not load", "The quick save is damaged or from another version")
 		return
-	Engine.set_meta("run", {"load": SaveGame.QUICK_PATH})
+	_did("load")
+	Engine.set_meta("run", {"load": path})
 	get_tree().reload_current_scene()
 
 
@@ -471,13 +634,176 @@ func _toggle_sound() -> void:
 
 ## The fields-of-fire view on or off (key V, or the button by the speed controls).
 func _toggle_fields() -> void:
+	if not _allows("fields"):
+		return
 	fields = not fields
 	hud.set_fields(fields)
+	_did("fields", fields)
+
+
+# ------------------------------------------------------------------ shell --
+# The title, the pause menu and the settings (scripts/ui/shell.gd), and how a run is begun.
+
+## Whether a start with these user arguments (the ones after `--`) shows the title instead of
+## a run. It does when no run was chosen: nothing in Engine meta (`has_meta`) and no argument
+## that starts with `--` (those are all for the tests and the screenshots, so anything the game
+## might understand counts as a choice: --new, --seed, --load, --shot, --tutorial, ...).
+## `--title` asks for it outright (for a screenshot of the title).
+static func wants_title(args: Array, has_meta: bool) -> bool:
+	if "--title" in args:
+		return true
+	if has_meta:
+		return false
+	for a in args:
+		if String(a).begins_with("--"):
+			return false
+	return true
+
+
+## The settings file a screenshot run uses when it names none: it starts from the defaults
+## every time and keeps its settings and tips apart from the player's own.
+const SHOT_PREFS := "user://prefs_shot.cfg"
+
+
+## The settings file these user arguments ask for: the one `--prefs=` names, else a file of
+## their own for a screenshot run (`--shot=`), else "" (the player's own file).
+static func prefs_file_for(args: Array) -> String:
+	var shot := false
+	for a in args:
+		var text := String(a)
+		if text.begins_with("--prefs="):
+			return text.trim_prefix("--prefs=")
+		if text.begins_with("--shot="):
+			shot = true
+	return SHOT_PREFS if shot else ""
+
+
+## The value of a `--name=value` user argument, or "".
+func _shell_arg(arg_name: String) -> String:
+	var prefix := "--%s=" % arg_name
+	for a in OS.get_cmdline_user_args():
+		if String(a).begins_with(prefix):
+			return String(a).trim_prefix(prefix)
+	return ""
+
+
+## Begins a run, or loads a save: the choice goes in Engine meta and the scene reloads, as it
+## does for the first run of a process (see _ready). `restart`, if set, is called with the choice
+## instead (a test's way of watching it without a reload).
+func _begin(meta: Dictionary) -> void:
+	if restart.is_valid():
+		restart.call(meta)
+		return
+	Engine.set_meta("run", meta)
+	var tree := get_tree()
+	if tree != null and tree.current_scene != null:
+		tree.reload_current_scene()
+
+
+## A new run at difficulty 0 (Story), 1 (Standard) or 2 (Brutal) with this seed.
+func start_run(difficulty: int, seed_value: int) -> void:
+	_begin({"difficulty": clampi(difficulty, 0, 2), "seed": seed_value})
+
+
+## Loads the save at `path`. A save that cannot be loaded is refused (false) and the game that
+## is running goes on.
+func load_run(path: String) -> bool:
+	if not SaveGame.peek(path).ok:
+		return false
+	_begin({"load": path})
+	return true
+
+
+## Back to the title screen.
+func show_title() -> void:
+	_begin({"title": true})
+
+
+func quit_game() -> void:
+	get_tree().quit()
+
+
+## The pause menu (Esc with nothing selected): the rules stand still while it is open.
+func open_pause() -> void:
+	if title_mode or shell == null or shell.is_open():
+		return
+	if hud.game_over != null or hud.scavenge_dialog != null:
+		return
+	_speed_before_pause = speed
+	speed = 0
+	shell.open_pause()
+
+
+## The pause menu is closed: the rules go on at the speed they had. (It was closed to show the
+## controls: then the game stays paused, and says so.)
+func resume(keep_paused: bool = false) -> void:
+	if keep_paused:
+		hud.toast("Paused. Press Space to go on.")
+	else:
+		speed = _speed_before_pause
+
+
+## Reads the settings again and puts them to work: volumes, fullscreen, the size of the
+## interface and the hints. Called at start and each time the settings screen changes one.
+func apply_settings() -> void:
+	Buses.apply_all()
+	SettingsMenu.apply_fullscreen()
+	_update_scale()
+	if hud != null and not Prefs.on("ui", "hints") and hud.hint != null:
+		hud.hint.visible = false
+		if hud.has_method("_layout_toast"):
+			hud._layout_toast()
+
+
+## At the end of _ready: the title if no run was chosen (or `--title`), and the screen `--menu=`
+## asks for (pause, settings, new, load, credits, confirm or orientation: for a screenshot of it, over
+## the title or, for pause, over the run). `--prefs=user://x.cfg` keeps a screenshot run's settings
+## in a file of its own (read at the top of _ready).
+func _start_shell() -> void:
+	if title_mode:
+		_enter_title()
+		shell.show_title()
+	var named := _shell_arg("menu")
+	if named == "pause" and not title_mode:
+		open_pause()
+	elif named != "":
+		shell.open_named(named)
+
+
+## The title's yard: the clock stands still at dusk (so the lamps and the fires are lit and the
+## bell never rings), the HUD and the names are hidden, the rules run on (the crew goes about the
+## yard, a few of the dead shuffle in the street) and the camera drifts. Nothing is saved or ordered.
+func _enter_title() -> void:
+	title_mode = true
+	sim.min_per_sec = 0.0
+	sim.minutes = TITLE_HOUR * 60.0
+	sim.clock_min = fposmod(sim.minutes - 420.0, 1440.0)
+	sim.phase = Sim.phase_at(sim.minutes)
+	sim.bell_rung = false
+	for at in TITLE_DEAD:
+		sim.spawn(at.x, at.y, "wander")
+	hud.visible = false
+	overlay.visible = false
+	selection = null
+	speed = 1
+	_title_t = 0.0
+	_title_camera(0.0)
+
+
+## A slow drift of the camera about TITLE_CAM (still, if the settings ask for less motion).
+func _title_camera(dt: float) -> void:
+	if not Prefs.on("ui", "reduce_motion"):
+		_title_t += dt
+	zoom_px = clampf(_vp().x / 36.0, 28.0, 64.0)
+	cam_center = TITLE_CAM + Vector2(sin(_title_t * 0.05) * 3.2, sin(_title_t * 0.033 + 1.1) * 1.4)
 
 
 # ------------------------------------------------------------------ input --
 
 func _unhandled_input(ev: InputEvent) -> void:
+	# the title and the menus have the keys and the mouse: nothing here reaches the yard
+	if menu_open:
+		return
 	if ev is InputEventMouseButton:
 		var mb: InputEventMouseButton = ev
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
@@ -487,8 +813,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			if selection != null and selection.kind == "person":
 				var w := _screen_to_tile(mb.position)
+				if not _allows("move", w):
+					return
 				if sim.order_move(selection.ref, w.x, w.y):
 					order_mark = {"x": w.x, "y": w.y, "t": clock}
+					_did("move")
 				else:
 					hud.toast(_why_not_there(selection.ref, w), "warn")
 				hud.select(selection)
@@ -499,7 +828,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 				drag = {"pos": mb.position, "center": cam_center, "moved": false, "button": mb.button_index}
 			else:
 				if drag != null and not drag.moved and drag.button == MOUSE_BUTTON_LEFT:
-					_select(_pick(_screen_to_tile(mb.position)))
+					_try_select(_pick(_screen_to_tile(mb.position)))
 				drag = null
 				Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	elif ev is InputEventMouseMotion:
@@ -511,8 +840,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				Input.set_default_cursor_shape(Input.CURSOR_DRAG)
 			if drag.moved:
 				follow = null
+				var was_at := cam_center
 				cam_center = drag.center - dv / zoom_px
 				_clamp_camera()
+				_did("pan", cam_center.distance_to(was_at))
 		else:
 			var h = _pick(_screen_to_tile(mm.position))
 			hover = h.ref if h != null and h.kind == "person" else null
@@ -524,15 +855,19 @@ func _unhandled_input(ev: InputEvent) -> void:
 	elif ev is InputEventKey and ev.pressed and not ev.echo:
 		match ev.keycode:
 			KEY_SPACE:
-				speed = 1 if speed == 0 else 0
+				_set_speed(1 if speed == 0 else 0)
 			KEY_1:
-				speed = 1
+				_set_speed(1)
 			KEY_2:
-				speed = 2
+				_set_speed(2)
 			KEY_3:
-				speed = 3
+				_set_speed(3)
 			KEY_ESCAPE:
-				_select(null)
+				# Esc lets go of the selection first; with nothing selected it opens the pause menu
+				if selection != null:
+					_select(null)
+				else:
+					open_pause()
 			KEY_R:
 				_gizmo("draft")
 			KEY_P:
@@ -551,6 +886,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("lure")
 			KEY_B:
 				_gizmo("auto")
+			KEY_M: _gizmo("craft")
 			KEY_V:
 				_toggle_fields()
 			KEY_F5:
@@ -566,7 +902,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 				if not here.is_empty():
 					var i: int = here.find(selection.ref) if selection != null and selection.kind == "person" else -1
 					var p = here[(i + 1) % here.size()]
-					_select({"kind": "person", "ref": p})
+					_try_select({"kind": "person", "ref": p})
 					_focus(Vector2(p.x, p.y))
 		get_viewport().set_input_as_handled()
 
@@ -576,6 +912,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 func _process(delta: float) -> void:
 	var dt := clampf(delta, 0.0, StepClock.MAX_FRAME)
 	clock += dt
+	# the tutorial's coach looks at the lesson first: it may hold the game still for this frame
+	if coach != null:
+		coach.tick(dt)
+	if hints != null:
+		hints.tick(dt)
 	# The rules only ever take whole steps of 1/30 s, however long the frame was,
 	# so a seed plays the same game at any frame rate. Everything that is only
 	# drawn (effects, flames, light, camera) runs on the frame's own time.
@@ -587,11 +928,15 @@ func _process(delta: float) -> void:
 		_visual_step(h)
 		rem -= h
 
+	if title_mode:
+		_title_camera(dt)
 	var kx := int(Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT)) - int(Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT))
 	var ky := int(Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)) - int(Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP))
-	if kx != 0 or ky != 0:
+	# (the arrow keys are the menu's while one is open)
+	if (kx != 0 or ky != 0) and not menu_open:
 		follow = null
 		cam_center += Vector2(kx, ky) * dt * 700.0 / zoom_px
+		_did("pan", Vector2(kx, ky).length() * dt * 700.0 / zoom_px)
 	if follow != null:
 		cam_center += (Vector2(follow.x, follow.y) - cam_center) * minf(1.0, dt * 5.0)
 	_clamp_camera()
@@ -605,7 +950,10 @@ func _process(delta: float) -> void:
 	hud_t -= dt
 	if hud_t <= 0.0:
 		hud_t = 0.1
-		hud.update_hud(sim, speed, sound_on, walkers)
+		if not title_mode:
+			hud.update_hud(sim, speed, sound_on, walkers)
+			if coach != null:
+				coach.after_hud()
 		var near := 0
 		for z in sim.zombies:
 			if (z.state == "attack" or z.state == "approach") and Vector2(z.x, z.y).distance_to(cam_center) < 30.0:
@@ -730,6 +1078,8 @@ func _vol_at(x: float, y: float) -> float:
 
 func _handle_events() -> void:
 	for e in sim.events:
+		if coach != null:
+			coach.on_event(e)
 		match e.type:
 			"shot":
 				sound.play("shot_%s" % e.weapon, _vol_at(e.x, e.y) * 0.8)
@@ -771,8 +1121,36 @@ func _handle_events() -> void:
 ## The dawn save: one file, written over at each new day. Not in a screenshot
 ## run, and not once the run is lost (that would replace the last good one).
 func _autosave() -> void:
-	if shot_path == "" and sim.over == "":
+	if shot_path == "" and sim.over == "" and not title_mode and not tutorial:
 		SaveGame.write(sim, SaveGame.AUTO_PATH)
+
+
+# ----------------------------------------------------------------- tutorial --
+# Orientation Day: the scenario (scripts/sim/orientation.gd) and its coach (scripts/ui/coach.gd).
+
+## Starts Orientation Day: the scene reloads on the tutorial's scenario (Story, a fixed seed, a run
+## that cannot be lost) with a coach teaching it. The title's Orientation Day button and the
+## wrap-up's Replay call this.
+func start_tutorial() -> void:
+	_begin({"tutorial": true})
+
+
+## The tips of a normal run, over the HUD (none in the tutorial, on the title or in a screenshot).
+func _start_hints() -> void:
+	if tutorial or title_mode or shot_path != "":
+		return
+	hints = Hints.new()
+	add_child(hints)
+	hints.setup(self, hud, sim, Hints.load_hints())
+
+
+## Builds the coach over the HUD and starts it where the scenario was left (a new run: the first
+## step; a loaded save: the step it was on), or at `tutorial_step` (--tutorial=N).
+func _build_coach() -> void:
+	coach = Coach.new()
+	add_child(coach)
+	coach.setup(self, hud, sim, Coach.load_steps())
+	coach.begin(tutorial_step)
 
 
 # ------------------------------------------------------------- automation --
@@ -831,6 +1209,8 @@ func _parse_args() -> void:
 					var worn = sim.segments[int(nf[0])]
 					worn.hp = worn.max_hp * clampf(float(nf[1]), 0.0, 1.0)
 					sim._segment_state(worn)
+			"tutorial":
+				pass # --tutorial[=N] picks the scenario, before the run starts (see _ready and Scenario.run_from_args)
 			"nohud":
 				hud.visible = false
 			"msaa":

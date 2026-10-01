@@ -1,6 +1,17 @@
 ## The HUD, laid out the way colony games do it: people across the top, stores
 ## top left, clock and alerts top right, the selection bottom left, time
 ## controls bottom right. Mirrors the web version's HUD.
+##
+## The look (round 3) is the schoolyard noticeboard: slate chalkboards in oak trim, hall-pass
+## badges for the crew, paper slips for alerts, notebook paper for modals, brass for the clock.
+## Every surface asks for a frame by name (Frames, scripts/ui/frames.gd, made by tools/
+## make_ui_theme.py) and falls back to a flat chalkboard of the same colours where the theme
+## does not have it: `_style(bg, radius, border, shadow, kind, tint)` (a StyleBox: the frame
+## `kind` when there is one, else the flat style), `_panel()` (a board), `_paper_style()` (a
+## page), `_button(text, primary, paper)`, `_kbd(key)` and `_label` / `_caps` (chalk ink; on
+## paper use PAPER_INK and its greys). `frame(kind)`, `has_frame(kind)` and `use_frames` (off
+## shows the flat look) are static; FRAME_KINDS lists what the HUD wears. Text colours read at
+## 4.5:1 on the frame they sit on (tests/test_hud_text.gd lays each label over the frame's pixels).
 extends Control
 
 const GD := preload("res://scripts/game_data.gd")
@@ -10,25 +21,43 @@ const GameOver := preload("res://scripts/ui/game_over.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 
-## The text colours all read at 4.5:1 or better on the panel, even over the
-## brightest ground (tests/test_hud_text.gd computes it). DANGER is for bars,
-## dots and icons; words in red use DANGER_TEXT.
-const INK := Color("#ece6d8")
-const INK2 := Color("#b7af9e")
-const INK3 := Color("#9a937f")
-const PANEL := Color(21 / 255.0, 20 / 255.0, 17 / 255.0, 0.94)
-const PANEL_HI := Color(36 / 255.0, 34 / 255.0, 30 / 255.0, 0.94)
-const LINE := Color(1.0, 238 / 255.0, 205 / 255.0, 0.09)
-const LINE2 := Color(1.0, 238 / 255.0, 205 / 255.0, 0.18)
+## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
+## for the accent, brass for the clock, paper for slips and modal pages. The text colours
+## all read at 4.5:1 or better on the panel, even over the brightest ground
+## (tests/test_hud_text.gd computes it). DANGER is for bars, dots and icons; words in red
+## use DANGER_TEXT.
+const INK := Color("#eeeadd")
+const INK2 := Color("#c1c5b5")
+const INK3 := Color("#a8ae9d")
+const PANEL := Color(27 / 255.0, 42 / 255.0, 38 / 255.0, 0.94)
+const PANEL_HI := Color(40 / 255.0, 58 / 255.0, 52 / 255.0, 0.94)
+const LINE := Color(0.93, 0.96, 0.89, 0.10)
+const LINE2 := Color(0.93, 0.96, 0.89, 0.20)
 const ACCENT := Color("#f0c24a")
 const ACCENT_INK := Color("#1a1508")
 const DANGER := Color("#e0584a")
-const DANGER_TEXT := Color("#ef6c5d")
+const DANGER_TEXT := Color("#f27f72")
 const WARN := Color("#e8953a")
 const OK := Color("#8fb85a")
 const INFO := Color("#7fa6c9")
 const DAWN := Color("#e2a3b6")
+## The trim of a board (oak) and the brass of the clock and the bell.
+const OAK := Color("#8a6238")
+const OAK_DARK := Color("#56391f")
+const BRASS := Color("#d2a94e")
+## Paper (alert slips, the notebook page of a dialog): dark ink on it, each at 4.5:1 or
+## better on the palest and on the tinted slips (tests/test_hud_text.gd computes it).
+const PAPER := Color("#efe9d6")
+const PAPER_INK := Color("#26241c")
+const PAPER_INK2 := Color("#47443a")
+const PAPER_INK3 := Color("#575443")
+const PAPER_LINE := Color(0.16, 0.14, 0.1, 0.16)
+## The slips an alert is written on, by its level, and the dark colour of its icon and
+## its edge on that paper (the level colours are for the dark boards).
+const SLIP := {"danger": Color("#f0c4b8"), "warn": Color("#f2dc9c"), "info": Color("#cfe0dc")}
+const SLIP_MARK := {"danger": Color("#a8301f"), "warn": Color("#92500c"), "info": Color("#2a6488")}
 
 const PHASE_ICON := {"day": "sun", "dusk": "sun", "night": "moon", "dawn": "sun"}
 const PHASE_COLOR := {"day": ACCENT, "dusk": WARN, "night": INFO, "dawn": DAWN}
@@ -45,12 +74,18 @@ const ALERT_ICONS := [
 	["exile-", "sendout"], ["bell", "bell"], ["horde", "walker"], ["rain", "water"],
 	# round 2: a brute and runners are the dead; the alarm, the forecast and the last night ring a bell
 	["brute", "walker"], ["runners", "walker"], ["lure", "bell"], ["forecast", "bell"], ["bignight", "bell"],
+	# round 3: the worktable (`workshop-idle`) is about ammo
+	["workshop-", "ammo"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
 ## bell, auto-repair the wall (the hammer is Repair's own, and in the small size, where only the
 ## icons show, two hammers side by side could not be told apart).
-const GIZMO_ICON := {"lure": "bell", "auto": "wall"}
+## Make ammo wears the ammo store's icon.
+const GIZMO_ICON := {"lure": "bell", "auto": "wall", "craft": "ammo"}
 const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
+## Icons the HUD adds to the baked ones (assets/data/map.json): white on clear, 64 px, like the rest
+## (tools/make_menu_icon.py draws the menu's).
+const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
@@ -87,6 +122,9 @@ const ALERT_HOLD_MS := 6000
 ## The most alerts shown at once (fewer in a narrow window).
 const ALERTS_MAX := 5
 const ALERTS_MAX_COMPACT := 3
+## The banner fades in and out over BANNER_FADE seconds and stays up BANNER_HOLD between.
+const BANNER_FADE := 0.7
+const BANNER_HOLD := 3.0
 ## A toast is up this many real seconds, fading over the last TOAST_FADE of them.
 const TOAST_SECONDS := 2.5
 const TOAST_FADE := 0.4
@@ -102,9 +140,11 @@ const SPEED_TIPS := [["Pause the game", "Space"], ["Play at normal speed", "1"],
 ## one entry's chips, one chip for each word ("W A S D" is four). Every key and mouse
 ## button main.gd's _unhandled_input answers to is here.
 const HELP := [
-	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Auto-repair"], ["L", "Lure the dead"]]],
+	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Auto-repair"], ["L", "Lure the dead"], ["M", "Make ammo"]]],
 	["Mouse", 2, [["Click", "Select"], ["Right-click", "Move there"], ["Drag", "Pan"], ["Scroll", "Zoom"]]],
-	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["Esc", "Deselect"], ["V", "Fields of fire"], ["F5", "Save"], ["F9", "Load"]]],
+	# (Esc, the longest, is last on a row of its own and wraps in as little as 76 px, so in the width
+	# of the column ("Fields of fire") as "Deselect, or" and "the menu": it does not widen the panel)
+	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["F5", "Save"], ["V", "Fields of fire"], ["F9", "Load"], ["Esc", "Deselect, or the menu", 76]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
@@ -116,9 +156,18 @@ class Bar:
 	extends Control
 	var value := 1.0
 	var color := Color("#8fb85a")
-	var track := Color(1, 1, 1, 0.08)
+	var track := Color(0.93, 0.96, 0.89, 0.12)
+	## The groove frame (bar_track) the meter lies in, when the HUD has one and the bar is tall
+	## enough for it (a thin bar keeps the flat track).
+	var groove: StyleBox = null
 
 	func _draw() -> void:
+		if groove != null and size.y >= 6.0:
+			draw_style_box(groove, Rect2(Vector2.ZERO, size))
+			if value > 0.0:
+				var h := size.y - 2.0
+				_rr(Rect2(1, 1, maxf(h, (size.x - 2.0) * clampf(value, 0.0, 1.0)), h), h * 0.5, color)
+			return
 		var r := size.y * 0.5
 		_rr(Rect2(Vector2.ZERO, size), r, track)
 		if value > 0.0:
@@ -169,6 +218,10 @@ var on_alert: Callable
 var on_sound: Callable
 ## The fields-of-fire button was pressed (main.gd flips the view and calls set_fields).
 var on_fields: Callable
+## The report card's Main menu button was pressed (the shell sets it; nothing happens while it is not).
+var on_menu: Callable
+## The toolbar's Menu button was pressed: main.gd opens the pause menu (nothing happens while it is not set).
+var on_open_menu: Callable
 ## Starting a new run or loading a save takes a scene reload, which is the
 ## game's business: by default the choice is put in Engine meta ("run") for
 ## main.gd and the scene is reloaded; a test sets this to see the choice instead.
@@ -199,6 +252,8 @@ var sim_ref = null
 ## The column at the top right: the clock, and under it the alerts.
 var right_col: VBoxContainer
 var clock: PanelContainer
+## The small brass bell on the clock's top edge: there while the dusk bell has rung (until dawn).
+var clock_bell: TextureRect
 var day_label: Label
 var phase_chip: PanelContainer
 var phase_icon: TextureRect
@@ -225,7 +280,7 @@ var alert_seq := 0
 ## The "PAUSED" pill in the clock, shown while the game is paused.
 var paused_pill: PanelContainer
 var paused_label: Label
-var banner: VBoxContainer
+var banner: PanelContainer
 var banner_title: Label
 var banner_sub: Label
 var banner_tween: Tween
@@ -245,12 +300,20 @@ var fields_button: Button
 var fields_on := false
 var fields_legend: PanelContainer
 var help_button: Button
+## The Menu button at the right end of the toolbar (the pause menu: Esc).
+var menu_button: Button
 var help: PanelContainer
 var hint: PanelContainer
+## The one-line hint's job is done (the first selection, the end of the run, or a window too
+## narrow for it): it does not come back. Whether it shows now also depends on the player's
+## settings (hints on: Prefs ui/hints), see _refresh_hint.
+var hint_spent := false
 ## The one-line message near the bottom centre (see toast()).
 var toast_panel: PanelContainer
 var toast_label: Label
 var toast_tween: Tween
+## The colour of the level of the toast now up (its bar, with the frame).
+var toast_col := INFO
 var toast_seconds := TOAST_SECONDS
 var last_speed := -1
 
@@ -263,6 +326,10 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	theme = _tooltip_theme()
 	for key in data.icons:
 		icons[key] = GD.tex(data.icons[key])
+	# the icons the HUD brought itself (not in the baked data): the menu button's three bars
+	for key in EXTRA_ICONS:
+		if not icons.has(key):
+			icons[key] = GD.tex(EXTRA_ICONS[key])
 	_build_stores()
 	_build_bar()
 	_build_clock()
@@ -277,18 +344,73 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	_on_resized()
 
 
+# ----------------------------------------------------------------- frames --
+
+## The noticeboard's pictures (scripts/ui/frames.gd, made by ART from assets/ui/theme) are
+## used wherever the one a surface asks for is there; the flat chalkboard look below is what
+## every surface falls back on when it is not. It is loaded when first asked for, so a
+## checkout without the frames still runs. A test switches the frames off to see the flat look.
+const FRAMES_PATH := "res://scripts/ui/frames.gd"
+## The frames the HUD, the dialog and the report card wear, where each is used (tests/test_hud_look.gd
+## checks that the theme has them all).
+const FRAME_KINDS := [
+	"panel", "panel_slim", "panel_inset", "clock", "card", "card_selected", "slip", "paper", "tooltip", "toast", "banner",
+	"chip", "pill", "bar_track", "button", "button_hover", "button_pressed", "button_off", "button_primary", "button_primary_hover",
+]
+static var use_frames := true
+static var _frames_script = null
+static var _frames_looked := false
+
+
+static func _frames():
+	if not _frames_looked:
+		_frames_looked = true
+		if ResourceLoader.exists(FRAMES_PATH):
+			_frames_script = load(FRAMES_PATH)
+	return _frames_script
+
+
+## Whether the frame `kind` ("panel", "clock", "slip"...) is there to use.
+static func has_frame(kind: String) -> bool:
+	if not use_frames or kind == "":
+		return false
+	var f = _frames()
+	return f != null and bool(f.has(kind))
+
+
+## A new style box of the frame `kind` tinted `tint`, or null when there is none. The box
+## remembers which frame it is (meta "frame"), which the tests read the colours behind text from.
+static func frame(kind: String, tint: Color = Color.WHITE) -> StyleBox:
+	if not has_frame(kind):
+		return null
+	var box = _frames().box(kind, tint)
+	if box != null:
+		box.set_meta("frame", kind)
+	return box
+
+
+## The average colour of the middle of the frame `kind`, as frames.json says it; `fallback`
+## when there is no such frame.
+static func frame_avg(kind: String, fallback: Color) -> Color:
+	if not has_frame(kind):
+		return fallback
+	var text := String(_frames().info(kind).get("avg", ""))
+	return Color.html(text) if text.is_valid_html_color() else fallback
+
+
 # ---------------------------------------------------------------- helpers --
 
-## The look of a tooltip: the HUD's dark panel, ink and font. Only the two
-## tooltip types are set (the controls under the HUD find them through their
+## The look of a tooltip: the noticeboard's panel (or the flat slate one), ink and font.
+## Only the two tooltip types are set (the controls under the HUD find them through their
 ## parents; the rest of the look is still set control by control).
 func _tooltip_theme() -> Theme:
 	var t := Theme.new()
-	var sb := _style(Color(PANEL_HI, 0.98), 6, LINE2, false)
-	sb.content_margin_left = 10
-	sb.content_margin_right = 10
-	sb.content_margin_top = 7
-	sb.content_margin_bottom = 7
+	var sb := _style(Color(32 / 255.0, 48 / 255.0, 43 / 255.0, 0.98), 6, LINE2, false, "tooltip")
+	if sb is StyleBoxFlat:
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 7
+		sb.content_margin_bottom = 7
 	t.set_stylebox("panel", "TooltipPanel", sb)
 	t.set_font("font", "TooltipLabel", Fonts.sans(400))
 	t.set_font_size("font_size", "TooltipLabel", 13)
@@ -296,7 +418,8 @@ func _tooltip_theme() -> Theme:
 	return t
 
 
-func _style(bg: Color = PANEL, radius: int = 6, border: Color = LINE, shadow: bool = true) -> StyleBoxFlat:
+## The flat look of a surface: a slate board with a thin chalk edge (and a shadow).
+func _flat(bg: Color = PANEL, radius: int = 6, border: Color = LINE, shadow: bool = true) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
 	s.bg_color = bg
 	s.border_color = border
@@ -314,9 +437,32 @@ func _style(bg: Color = PANEL, radius: int = 6, border: Color = LINE, shadow: bo
 	return s
 
 
+## The look of a panel. With `kind` (the name of a frame: "panel", "clock", "slip"...) and that
+## frame there, the frame (tinted `tint`); else the flat style of `bg`, `radius`, `border` and
+## `shadow`, as before. Without a `kind` it is always the flat style.
+func _style(bg: Color = PANEL, radius: int = 6, border: Color = LINE, shadow: bool = true, kind: String = "", tint: Color = Color.WHITE) -> StyleBox:
+	if kind != "":
+		var f := frame(kind, tint)
+		if f != null:
+			return f
+	return _flat(bg, radius, border, shadow)
+
+
+## A page of notebook paper for a modal: the 'paper' frame, or flat a sheet of paper with a
+## dark edge. The ink on it is PAPER_INK and its greys (never the chalk colours).
+func _paper_style() -> StyleBox:
+	var f := frame("paper")
+	if f != null:
+		return f
+	var s := _flat(PAPER, 6, Color(PAPER_INK, 0.55), true)
+	s.shadow_color = Color(0, 0, 0, 0.5)
+	return s
+
+
+## A panel container; without a style it is a noticeboard panel.
 func _panel(style: StyleBox = null) -> PanelContainer:
 	var p := PanelContainer.new()
-	p.add_theme_stylebox_override("panel", style if style != null else _style())
+	p.add_theme_stylebox_override("panel", style if style != null else _style(PANEL, 6, LINE, true, "panel"))
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	return p
 
@@ -332,8 +478,9 @@ func _label(text: String, font: Font, size: int, color: Color) -> Label:
 	return l
 
 
-func _caps(text: String) -> Label:
-	return _label(text.to_upper(), Fonts.cond(600, 1), 12, INK3)
+## A small heading in capitals; `color` is INK3, the dim chalk, unless it is on paper.
+func _caps(text: String, color: Color = INK3) -> Label:
+	return _label(text.to_upper(), Fonts.cond(600, 1), 12, color)
 
 
 func _icon(name: String, size: int, color: Color = Color.WHITE) -> TextureRect:
@@ -371,15 +518,19 @@ func _spacer() -> Control:
 ## A key chip: the key's name (a letter, "Tab", "Right-click") in a small
 ## rounded box, 12 px. `on_gold` is for a chip on a gold button.
 func _kbd(text: String, on_gold: bool = false) -> PanelContainer:
-	var s := StyleBoxFlat.new()
-	s.bg_color = Color(ACCENT_INK, 0.12) if on_gold else Color(1, 1, 1, 0.08)
-	s.border_color = Color(ACCENT_INK, 0.35) if on_gold else LINE2
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(3)
-	s.content_margin_left = 4
-	s.content_margin_right = 4
-	s.content_margin_top = 0
-	s.content_margin_bottom = 1
+	# a keycap: the chip frame on the dark boards; flat on a gold button, where it is only a wash of dark
+	var s: StyleBox = null if on_gold else frame("chip")
+	if s == null:
+		var f := StyleBoxFlat.new()
+		f.bg_color = Color(ACCENT_INK, 0.12) if on_gold else Color(0.93, 0.96, 0.89, 0.1)
+		f.border_color = Color(ACCENT_INK, 0.35) if on_gold else LINE2
+		f.set_border_width_all(1)
+		f.set_corner_radius_all(3)
+		f.content_margin_left = 4
+		f.content_margin_right = 4
+		f.content_margin_top = 0
+		f.content_margin_bottom = 1
+		s = f
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", s)
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -417,7 +568,7 @@ func _center_top(c: Control, y: float) -> void:
 # ----------------------------------------------------------------- stores --
 
 func _build_stores() -> void:
-	res_panel = _panel(_style())
+	res_panel = _panel()
 	var grid := GridContainer.new()
 	res_grid = grid
 	grid.columns = 3
@@ -463,7 +614,7 @@ func _build_stores() -> void:
 ## The legend of the fields-of-fire view: a swatch for each tint and what it means.
 ## Hidden until the view is on (see set_fields).
 func _build_legend() -> PanelContainer:
-	fields_legend = _panel(_style())
+	fields_legend = _panel()
 	fields_legend.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	# a legend is read, not pressed: clicks pass through it to the world
 	fields_legend.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -501,10 +652,15 @@ func _padded(c: Control, top: int) -> MarginContainer:
 
 # ---------------------------------------------------------- colonist bar --
 
-func _card_style(selected: bool) -> StyleBoxFlat:
+## The hall-pass badge of a crew card: the frame (card, card_selected) or, flat, a slate
+## card with a pale laminate edge, gold while it is the selected one.
+func _card_style(selected: bool) -> StyleBox:
+	var f := frame("card_selected" if selected else "card")
+	if f != null:
+		return f
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color("#1c1a17")
-	s.border_color = ACCENT if selected else LINE
+	s.bg_color = Color("#16221f")
+	s.border_color = ACCENT if selected else Color(0.82, 0.78, 0.64, 0.5)
 	s.set_border_width_all(2 if selected else 1)
 	s.set_corner_radius_all(5)
 	s.shadow_color = Color(0, 0, 0, 0.35)
@@ -512,6 +668,21 @@ func _card_style(selected: bool) -> StyleBoxFlat:
 	s.shadow_offset = Vector2(0, 4)
 	s.anti_aliasing = true
 	return s
+
+
+## How far in from the card's edge its contents sit (left, top, right, bottom): the dark window
+## of the hall-pass badge, which is what the frame's content margins are (the badge's rim is
+## drawn outside the card's rectangle, by the frame's expand margins), a pixel for the flat card.
+func _card_inset() -> Vector4:
+	var sb := _card_style(false)
+	return Vector4(sb.get_margin(SIDE_LEFT), sb.get_margin(SIDE_TOP), sb.get_margin(SIDE_RIGHT), sb.get_margin(SIDE_BOTTOM))
+
+
+## The height of a card `w` wide: inside its rim a square picture, a line for the name and the
+## health bar (80 for a 60 flat card, as it always was; a badge with a thick rim is taller).
+func _card_height(w: int) -> int:
+	var inset := _card_inset()
+	return ceili(inset.y + (float(w) - inset.x - inset.z) + 17.0 + 3.0 + inset.w)
 
 
 func _build_bar() -> void:
@@ -522,7 +693,8 @@ func _build_bar() -> void:
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		card.tooltip_text = "%s, %s" % [p.name, String(p.def.role).to_lower()]
 		card.add_theme_stylebox_override("panel", _card_style(false))
-		card.clip_contents = true
+		# nothing sticks out of the picture's window, and the badge's glow reaches outside the card
+		card.clip_contents = false
 		var pic := TextureRect.new()
 		pic.texture = GD.tex(data.portraits[p.id])
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -531,7 +703,7 @@ func _build_bar() -> void:
 		card.add_child(pic)
 		# a dark veil and a word over the picture of someone who is gone or away
 		var veil := ColorRect.new()
-		veil.color = Color(0.06, 0.05, 0.05, 0.62)
+		veil.color = Color(0.03, 0.06, 0.05, 0.62)
 		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		veil.visible = false
 		card.add_child(veil)
@@ -539,14 +711,14 @@ func _build_bar() -> void:
 		word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		# it sits on a picture: a dark edge keeps it readable over any face
-		word.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.9))
+		word.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.035, 0.9))
 		word.add_theme_constant_override("outline_size", 3)
 		card.add_child(word)
 		var nm := _label(p.first, Fonts.cond(600), 13, INK)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		card.add_child(nm)
 		var hp_bg := ColorRect.new()
-		hp_bg.color = Color(0, 0, 0, 0.55)
+		hp_bg.color = Color(0, 0.03, 0.02, 0.55)
 		hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(hp_bg)
 		var hp := ColorRect.new()
@@ -581,7 +753,7 @@ func _build_bar() -> void:
 		# the status marks (hungry, bleeding, feverish...) along the foot of the picture
 		var marks_box := PanelContainer.new()
 		var ms := StyleBoxFlat.new()
-		ms.bg_color = Color(0.06, 0.05, 0.05, 0.72)
+		ms.bg_color = Color(0.03, 0.06, 0.05, 0.74)
 		ms.set_corner_radius_all(7)
 		ms.content_margin_left = 2
 		ms.content_margin_right = 2
@@ -601,26 +773,32 @@ func _build_bar() -> void:
 
 
 func _size_cards(w: int) -> void:
-	var h := w + 20
+	var h := _card_height(w)
 	var was := mark_px
 	mark_px = 12 if w >= 56 else 11
 	mark_max = 4 if w >= 56 else 3
+	# the picture, the name and the health bar sit inside the badge's rim (a pixel on the flat card)
+	var inset := _card_inset()
+	var pw := float(w) - inset.x - inset.z
 	for c in cards:
 		c.card.custom_minimum_size = Vector2(w, h)
-		c.pic.position = Vector2(1, 1)
-		c.pic.size = Vector2(w - 2, w - 2)
+		c.pic.position = Vector2(inset.x, inset.y)
+		c.pic.size = Vector2(pw, pw)
 		c.veil.position = c.pic.position
 		c.veil.size = c.pic.size
 		c.word.position = c.pic.position
 		c.word.size = c.pic.size
-		c.name.position = Vector2(0, w - 1)
-		c.name.size = Vector2(w, 18)
+		# the name takes the room between the picture and the health bar
+		var bar_top := h - inset.w - 3.0
+		c.name.position = Vector2(inset.x, inset.y + pw)
+		c.name.size = Vector2(pw, bar_top - (inset.y + pw))
 		c.name.add_theme_font_size_override("font_size", 13 if w >= 56 else 12)
-		c.hp_bg.position = Vector2(1, h - 4)
-		c.hp_bg.size = Vector2(w - 2, 3)
+		c.hp_bg.position = Vector2(inset.x, bar_top)
+		c.hp_bg.size = Vector2(pw, 3)
 		c.hp.position = c.hp_bg.position
-		c.fight.position = Vector2(w - 12, 5)
-		c.marks_box.position = Vector2(3, w - 2 - mark_px - 4)
+		c.fight.position = Vector2(inset.x + pw - 11.0, inset.y + 4.0)
+		c.badge.position = Vector2(inset.x + 2.0, inset.y + 2.0)
+		c.marks_box.position = Vector2(inset.x + 2.0, inset.y + pw - 1.0 - mark_px - 4.0)
 		if was != mark_px:
 			_fill_marks(c, c.marks_data)
 
@@ -636,7 +814,12 @@ func _on_card_input(ev: InputEvent, p) -> void:
 
 # ------------------------------------------------------------------ clock --
 
-func _chip_style(c: Color) -> StyleBoxFlat:
+## The phase chip's look: a faint stamp of the phase's colour (the pill frame tinted by it, or
+## flat a wash of it).
+func _chip_style(c: Color) -> StyleBox:
+	var f := frame("pill", Color(c, 0.2))
+	if f != null:
+		return f
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(c, 0.17)
 	s.set_corner_radius_all(3)
@@ -647,17 +830,35 @@ func _chip_style(c: Color) -> StyleBoxFlat:
 	return s
 
 
+## The look of a small toolbar button that may be lit (the speed in use, the fields view): clear
+## while it is off; lit, a faint gold key (the main-choice button frame, mostly clear) or flat a
+## wash of gold.
+func _lit_look(on: bool) -> StyleBox:
+	if on:
+		var f := frame("button_primary", Color(1, 1, 1, 0.34))
+		if f != null:
+			return f
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(ACCENT, 0.16) if on else Color(0, 0, 0, 0)
+	st.set_corner_radius_all(4)
+	return st
+
+
 ## The "PAUSED" stamp in the clock's top row, beside the phase chip: a pale pill
 ## with a pause mark and the word, shown while the game is paused (update_hud).
 func _build_paused_pill() -> PanelContainer:
-	var s := StyleBoxFlat.new()
-	s.bg_color = INK
-	s.set_corner_radius_all(9)
-	s.anti_aliasing = true
-	s.content_margin_left = 6
-	s.content_margin_right = 7
-	s.content_margin_top = 1
-	s.content_margin_bottom = 2
+	# a pale stamp: the pill frame, or a flat pale pill
+	var s: StyleBox = frame("pill")
+	if s == null:
+		var f := StyleBoxFlat.new()
+		f.bg_color = INK
+		f.set_corner_radius_all(9)
+		f.anti_aliasing = true
+		f.content_margin_left = 6
+		f.content_margin_right = 7
+		f.content_margin_top = 1
+		f.content_margin_bottom = 2
+		s = f
 	paused_pill = PanelContainer.new()
 	paused_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	paused_pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -674,7 +875,11 @@ func _build_paused_pill() -> PanelContainer:
 
 
 func _build_clock() -> void:
-	clock = _panel(_style())
+	# a brass-rimmed face: the frame, or flat a slate board with a brass edge
+	var face := _style(PANEL, 6, Color(BRASS, 0.75), true, "clock")
+	if face is StyleBoxFlat:
+		face.set_border_width_all(2)
+	clock = _panel(face)
 	var v := _vbox(6)
 	var r1 := _hbox(8)
 	day_label = _caps("Day 3")
@@ -724,12 +929,50 @@ func _build_clock() -> void:
 	forecast_label.visible = false
 	v.add_child(forecast_label)
 	clock.add_child(v)
+	# a small brass bell on the clock's top edge once the dusk bell has rung (see update_hud); it is
+	# set by hand in a layer of its own, so it takes no room in the clock
+	var bell_layer := Control.new()
+	bell_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	clock.add_child(bell_layer)
+	clock_bell = _icon("bell", 20, BRASS)
+	clock_bell.size = Vector2(20, 20)
+	clock_bell.mouse_filter = Control.MOUSE_FILTER_PASS
+	clock_bell.tooltip_text = "The bell has rung: everyone is at their post for the night"
+	clock_bell.visible = false
+	bell_layer.add_child(clock_bell)
+	clock.resized.connect(_place_bell)
 	clock.custom_minimum_size.x = CLOCK_W
+	_place_bell()
 	# the alerts hang from the clock, so a taller clock pushes them down
 	right_col = _vbox(13)
 	right_col.add_child(clock)
 	add_child(right_col)
 	_corner(right_col, true, false, 12, 12)
+
+
+## The bell sits across the clock's top edge, a little in from the left. Its layer starts at the
+## clock's inner corner (inside the frame's margins), so the margins are taken off.
+func _place_bell() -> void:
+	if clock == null or clock_bell == null:
+		return
+	var sb := clock.get_theme_stylebox("panel")
+	clock_bell.position = Vector2(15.0 - sb.get_margin(SIDE_LEFT), -10.0 - sb.get_margin(SIDE_TOP))
+
+
+## Whether the player asked for less motion (Prefs ui/reduce_motion): the banner and the toast
+## come and go with no fade, the bell does not swing and the fight badge does not pulse.
+func _calm() -> bool:
+	return Prefs.on("ui", "reduce_motion")
+
+
+## The bell swings on its hook when the dusk bell first rings (not with reduced motion).
+func _swing_bell() -> void:
+	if _calm():
+		return
+	clock_bell.pivot_offset = Vector2(clock_bell.size.x * 0.5, 2.0)
+	var t := create_tween()
+	for angle in [0.38, -0.3, 0.2, -0.12, 0.06, 0.0]:
+		t.tween_property(clock_bell, "rotation", angle, 0.16).set_trans(Tween.TRANS_SINE)
 
 
 # ----------------------------------------------------------------- alerts --
@@ -765,51 +1008,80 @@ func _alert_before(a: Dictionary, b: Dictionary) -> bool:
 	return a.seq > b.seq
 
 
-## Makes the panel for an alert and puts it at the end of the feed (see
-## _sync_alerts): the level's colour down the left edge, the icon of what it is
-## about, a headline and a second line. Both lines wrap, so a long one makes the
-## panel taller, not wider. Click it to look at the place.
-func _make_alert_panel(it: Dictionary) -> void:
-	var s := _style(PANEL, 6, LINE, true)
-	s.border_width_left = 3
-	s.content_margin_left = 9
+## The tint that turns the paper of the slip frame into the slip of `level`: the slip's colour
+## over the colour of the paper.
+func _slip_tint(level: String) -> Color:
+	var c: Color = SLIP.get(level, SLIP.warn)
+	var base := frame_avg("slip", PAPER)
+	return Color(c.r / base.r, c.g / base.g, c.b / base.b)
+
+
+## The slip an alert of `level` is written on: the frame tinted for the level, or flat a small
+## sheet of the level's paper with a darker edge; a shade lighter while the mouse is on it.
+func _slip_style(level: String, hover: bool = false) -> StyleBox:
+	var c: Color = SLIP.get(level, SLIP.warn)
+	var lift := 1.05 if hover else 1.0
+	var f := frame("slip", Color(_slip_tint(level) * lift, 1.0))
+	if f != null:
+		# the pin is in the top right corner and the page is folded at the bottom right: keep the words clear
+		f.content_margin_right = maxf(f.content_margin_right, 15.0)
+		f.content_margin_left = maxf(f.content_margin_left, 13.0)
+		return f
+	var s := _flat(c.lightened(0.07) if hover else c, 3, Color(SLIP_MARK.get(level, SLIP_MARK.warn), 0.45), true)
+	s.content_margin_left = 13
+	s.content_margin_right = 10
 	s.content_margin_top = 8
 	s.content_margin_bottom = 8
-	s.content_margin_right = 10
-	var p := _panel(s)
+	return s
+
+
+## Makes the panel for an alert and puts it at the end of the feed (see
+## _sync_alerts): a paper slip, tinted by the level, with a bar of the level's dark colour
+## down the left edge, the icon of what it is about, a headline and a second line (dark ink).
+## Both lines wrap, so a long one makes the panel taller, not wider. Click it to look at
+## the place.
+func _make_alert_panel(it: Dictionary) -> void:
+	var p := _panel(_slip_style("warn"))
 	var row := _hbox(9)
-	var ic := _icon("warn", 16, WARN)
+	var ic := _icon("warn", 16, SLIP_MARK.warn)
 	ic.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(ic)
 	var col := _vbox(1)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var title := _label("", Fonts.sans(600), 13, INK)
+	var title := _label("", Fonts.sans(600), 13, PAPER_INK)
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(title)
-	var subl := _label("", Fonts.sans(400), 12, INK2)
+	var subl := _label("", Fonts.sans(400), 12, PAPER_INK2)
 	subl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	col.add_child(subl)
 	row.add_child(col)
 	p.add_child(row)
 	p.set_meta("id", String(it.id))
 	p.gui_input.connect(_on_alert_input.bind(String(it.id)))
-	p.mouse_entered.connect(func(): s.bg_color = PANEL_HI)
-	p.mouse_exited.connect(func(): s.bg_color = PANEL)
-	# a coloured bar down the left edge
-	p.draw.connect(func(): p.draw_rect(Rect2(0, 3, 3, p.size.y - 6), it.col))
+	p.mouse_entered.connect(_slip_hover.bind(it, true))
+	p.mouse_exited.connect(_slip_hover.bind(it, false))
+	# a bar of the level's colour down the left edge
+	p.draw.connect(func(): p.draw_rect(Rect2(4, 4, 3, p.size.y - 8), it.col))
 	it.panel = p
 	it.icon = ic
 	it.title = title
 	it.subl = subl
 	it.shown_level = ""
-	it.col = WARN
+	it.col = SLIP_MARK.warn
 	alerts_box.add_child(p)
 	_update_alert_panel(it)
 
 
+## The slip turns a shade lighter while the mouse is on it (it can be clicked).
+func _slip_hover(it: Dictionary, on: bool) -> void:
+	var p = it.panel
+	if p != null and is_instance_valid(p):
+		p.add_theme_stylebox_override("panel", _slip_style(String(it.shown_level), on))
+
+
 ## Brings a shown panel in line with its alert: new words go into the labels it
-## already has, and a new level re-colours the edge and the icon. Nothing is rebuilt
-## (a wall's "86% intact" changes with every claw).
+## already has, and a new level re-colours the slip, its edge and the icon. Nothing is
+## rebuilt (a wall's "86% intact" changes with every claw).
 func _update_alert_panel(it: Dictionary) -> void:
 	var title: Label = it.title
 	if title.text != it.text:
@@ -820,11 +1092,12 @@ func _update_alert_panel(it: Dictionary) -> void:
 	subl.visible = it.sub != ""
 	if it.shown_level != it.level:
 		it.shown_level = it.level
-		it.col = LEVEL_COLOR.get(it.level, WARN)
+		it.col = SLIP_MARK.get(it.level, SLIP_MARK.warn)
 		var ic: TextureRect = it.icon
 		ic.texture = icons.get(_alert_icon_name(it))
 		ic.modulate = it.col
 		var p: Control = it.panel
+		p.add_theme_stylebox_override("panel", _slip_style(String(it.level)))
 		p.set_meta("level", String(it.level))
 		p.queue_redraw()
 
@@ -907,18 +1180,29 @@ func _on_alert_input(ev: InputEvent, id: String) -> void:
 # ----------------------------------------------------------------- banner --
 
 func _build_banner() -> void:
-	banner = _vbox(2)
+	# the announcement hangs on a sign: the banner frame, or flat a slate board
+	banner = PanelContainer.new()
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sign_box := _style(PANEL, 6, LINE2, true, "banner")
+	if sign_box is StyleBoxFlat:
+		sign_box.content_margin_left = 28
+		sign_box.content_margin_right = 28
+		sign_box.content_margin_top = 10
+		sign_box.content_margin_bottom = 12
+	banner.add_theme_stylebox_override("panel", sign_box)
+	var words := _vbox(2)
+	banner.add_child(words)
 	banner_title = _label("", Fonts.cond(700, 5), 34, INK)
 	banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_title.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	banner_title.add_theme_constant_override("shadow_offset_y", 2)
 	banner_title.add_theme_constant_override("shadow_outline_size", 10)
-	banner.add_child(banner_title)
+	words.add_child(banner_title)
 	banner_sub = _label("", Fonts.sans(400), 14, INK2)
 	banner_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	banner_sub.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.8))
 	banner_sub.add_theme_constant_override("shadow_outline_size", 8)
-	banner.add_child(banner_sub)
+	words.add_child(banner_sub)
 	banner.modulate.a = 0.0
 	add_child(banner)
 	_center_top(banner, 118)
@@ -930,9 +1214,15 @@ func show_banner(text: String, sub: String) -> void:
 	if banner_tween != null:
 		banner_tween.kill()
 	banner_tween = create_tween()
-	banner_tween.tween_property(banner, "modulate:a", 1.0, 0.7)
-	banner_tween.tween_interval(3.0)
-	banner_tween.tween_property(banner, "modulate:a", 0.0, 0.7)
+	if _calm():
+		# reduced motion: no fades, the sign is simply there, and gone after as long as it would have been
+		banner.modulate.a = 1.0
+		banner_tween.tween_interval(BANNER_HOLD + BANNER_FADE)
+		banner_tween.tween_callback(func(): banner.modulate.a = 0.0)
+		return
+	banner_tween.tween_property(banner, "modulate:a", 1.0, BANNER_FADE)
+	banner_tween.tween_interval(BANNER_HOLD)
+	banner_tween.tween_property(banner, "modulate:a", 0.0, BANNER_FADE)
 
 
 # ------------------------------------------------------------ dock / inspect --
@@ -945,7 +1235,7 @@ func _build_dock() -> void:
 	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dock)
 	_corner(dock, false, true, 12, 12)
-	inspect = _panel(_style())
+	inspect = _panel()
 	inspect.custom_minimum_size.x = INSPECT_W
 	inspect.size_flags_vertical = Control.SIZE_SHRINK_END
 	inspect.visible = false
@@ -964,6 +1254,7 @@ func _build_dock() -> void:
 func _layout_dock() -> void:
 	if dock == null or speed_panel == null or help == null or left_col == null:
 		return
+	help.offset_bottom = -_help_lift()
 	# the legend takes room down the left side (it gives way in a short window)
 	fields_legend.visible = fields_on and size.y >= LEGEND_MIN_H
 	var n := gizmo_count
@@ -1005,6 +1296,7 @@ func _meter() -> Array:
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.groove = frame("bar_track")
 	row.add_child(b)
 	var v := _label("100%", Fonts.cond(600), 13, INK)
 	v.custom_minimum_size.x = 36
@@ -1026,8 +1318,8 @@ func select(sel) -> void:
 		_layout_toast()
 		return
 	inspect.visible = true
-	if hint != null:
-		hint.visible = false
+	hint_spent = true
+	_refresh_hint()
 	_layout_toast()
 	var v := _vbox(10)
 	var head := _hbox(11)
@@ -1079,6 +1371,8 @@ func select(sel) -> void:
 		inspect_refs.infection_head = infection_head
 		# the standing order auto-repair shows as a gold tag at the right of the header while it is on
 		inspect_refs.auto_tag = _auto_tag()
+		# so does the worktable's: "Making ammo" while the workshop's mark is on them
+		inspect_refs.craft_tag = _craft_tag()
 	elif sel.kind == "zombie":
 		var z = sel.ref
 		head.add_child(_pic(GD.tex(data.portraits["z%d" % z.look_index])))
@@ -1095,9 +1389,13 @@ func select(sel) -> void:
 	else:
 		var s = sel.ref
 		var box := Panel.new()
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = Color("#2a2723")
-		bs.set_corner_radius_all(4)
+		# the wall piece's picture sits in a block let into the board
+		var bs: StyleBox = frame("panel_inset")
+		if bs == null:
+			var flat := StyleBoxFlat.new()
+			flat.bg_color = Color("#243833")
+			flat.set_corner_radius_all(4)
+			bs = flat
 		box.add_theme_stylebox_override("panel", bs)
 		box.custom_minimum_size = Vector2(46, 46)
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1119,7 +1417,13 @@ func select(sel) -> void:
 	head.add_child(titles)
 	if inspect_refs.has("auto_tag"):
 		head.add_child(_spacer())
-		head.add_child(inspect_refs.auto_tag)
+		# the tags are stacked at the right of the header (each takes no room while it is hidden)
+		var tags := _vbox(3)
+		tags.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		for tag in [inspect_refs.auto_tag, inspect_refs.craft_tag]:
+			tag.size_flags_horizontal = Control.SIZE_SHRINK_END
+			tags.add_child(tag)
+		head.add_child(tags)
 	v.add_child(head)
 	v.add_child(grid)
 	if sel.kind == "person":
@@ -1159,9 +1463,9 @@ func select(sel) -> void:
 	_refresh_selection()
 
 
-## The tag "Auto-repair: on" in the person panel's header: a small gold pill, shown while
-## the standing order is on (see _refresh_selection).
-func _auto_tag() -> PanelContainer:
+## A small gold pill with a few words for the person panel's header, hidden until
+## _refresh_selection says what it stands for is the case.
+func _gold_tag(text: String, tip: String) -> PanelContainer:
 	var st := StyleBoxFlat.new()
 	st.bg_color = Color(ACCENT, 0.14)
 	st.border_color = Color(ACCENT, 0.55)
@@ -1175,10 +1479,21 @@ func _auto_tag() -> PanelContainer:
 	tag.add_theme_stylebox_override("panel", st)
 	tag.mouse_filter = Control.MOUSE_FILTER_PASS
 	tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	tag.tooltip_text = "Auto-repair is on: by day they mend worn walls on their own (key B turns it off)"
-	tag.add_child(_label("Auto-repair: on", Fonts.cond(700, 1), 12, ACCENT))
+	tag.tooltip_text = tip
+	tag.add_child(_label(text, Fonts.cond(700, 1), 12, ACCENT))
 	tag.visible = false
 	return tag
+
+
+## The tag "Auto-repair: on" in the person panel's header, shown while the standing order is on.
+func _auto_tag() -> PanelContainer:
+	return _gold_tag("Auto-repair: on", "Auto-repair is on: by day they mend worn walls on their own (key B turns it off)")
+
+
+## The tag "Making ammo", shown while the workshop's mark is on the person (its tooltip is
+## the mark's own words).
+func _craft_tag() -> PanelContainer:
+	return _gold_tag("Making ammo", "At the worktable: scrap becomes ammo (key M calls them back)")
 
 
 func _pic(t: Texture2D) -> TextureRect:
@@ -1210,13 +1525,16 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	b.set_meta("label", text)
 	b.set_meta("key", key)
 	b.set_meta("on", on)
-	var normal := _style(ACCENT if on else PANEL, 6, ACCENT if on else LINE)
+	# a lit order (a drafted person's Release, Auto while it is on) is the gold one
+	var normal := _button_style("normal", on, true)
 	normal.set_content_margin_all(0)
-	var hover := _style(ACCENT if on else PANEL_HI, 6, ACCENT if on else LINE2)
+	var hover := _button_style("hover", on, true)
 	hover.set_content_margin_all(0)
+	var pressed := _button_style("pressed", on, true)
+	pressed.set_content_margin_all(0)
 	b.add_theme_stylebox_override("normal", normal)
 	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", hover)
+	b.add_theme_stylebox_override("pressed", pressed)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var col := ACCENT_INK if on else INK
 	var inner := _vbox(7)
@@ -1226,7 +1544,8 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 	ic.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	inner.add_child(ic)
 	if not gizmo_mini:
-		var l := _label(text.to_upper(), Fonts.cond(600, 1), 12, col)
+		# a long name (Make ammo) is set without the letters spread, so it keeps clear of the frame
+		var l := _label(text.to_upper(), Fonts.cond(600, 1 if text.length() <= 8 else 0), 12, col)
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		inner.add_child(l)
 	b.add_child(inner)
@@ -1272,7 +1591,31 @@ func _order_words(id: String, label: String) -> String:
 			return "Alarm: draws the dead to this wall for %d hours\nCosts %d scrap. One at a time." % [int(Tactics.LURE_HOURS), int(Tactics.LURE_COST)]
 		"auto":
 			return "Auto-repair: by day, mends the most worn wall under %d%%\nwhile scrap is %d or more." % [roundi(Tactics.AUTO_BELOW * 100.0), int(Tactics.AUTO_MIN_SCRAP)]
+		"craft":
+			return _craft_words()
 	return label
+
+
+## The tooltip of Make ammo above its key line: what it does, and what the person at it would
+## make (the workshop's rates, slower when they are hungry or hurt). "Make ammo: ..." leads
+## either way, so the first line names the order.
+func _craft_words() -> String:
+	var w = _workshop()
+	var p = selection.ref if selection != null and selection.kind == "person" else null
+	var on: bool = p != null and _crafting_on(p)
+	var text := "Make ammo: they are at the worktable. Press again to call them back" if on else "Make ammo: turns scrap into ammo at the worktable"
+	if w != null:
+		var per: float = float(w.AMMO_PER_SCRAP)
+		text += "\n1 scrap makes %s ammo" % _num(per)
+		if p != null:
+			var scrap_h: float = float(w.scrap_per_hour(p)) * float(sim_ref.perf(p))
+			text += ". %s makes about %s ammo an hour." % [p.first, _num(scrap_h * per)]
+	return text
+
+
+## A number for words: whole when it is, else one decimal.
+func _num(x: float) -> String:
+	return str(roundi(x)) if absf(x - roundf(x)) < 0.05 else "%.1f" % x
 
 
 ## Why the order would do nothing right now, in a few words ("nothing is damaged"),
@@ -1282,8 +1625,17 @@ func _order_words(id: String, label: String) -> String:
 func _order_blocker(id: String) -> String:
 	if sim_ref == null or selection == null:
 		return ""
+	if id == "craft" and selection.kind != "person":
+		return "pick one of the crew first"
 	if selection.kind == "person":
 		var p = selection.ref
+		if id == "craft":
+			# the workshop says why (night, no scrap to spare, they are down, gone or away: the key can
+			# be pressed for anyone); someone at the bench can always be called back
+			var w = _workshop()
+			if w != null and not w.crafting(p):
+				return String(w.why_not_craft(p))
+			return ""
 		if p.dead or p.away != null:
 			return ""
 		match id:
@@ -1396,6 +1748,9 @@ func _build_gizmos() -> void:
 			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
 			# a standing order, lit while it is on
 			gizmos.add_child(_gizmo("auto", "Auto", "B", _auto_on(p)))
+			# the worktable (a game with no workshop has no button), lit while they are at it
+			if _workshop() != null:
+				gizmos.add_child(_gizmo("craft", "Make ammo", "M", _crafting_on(p)))
 			if sim_ref != null and sim_ref.medical.can_treat(p):
 				gizmos.add_child(_gizmo("treat", "Treat", "T", false))
 			if sim_ref != null and sim_ref.medical.can_send_out(p):
@@ -1420,13 +1775,35 @@ func _gizmo_sig() -> String:
 	var p = selection.ref
 	var sig := "%s|%s|%s" % [p.drafted, p.dead, p.away != null]
 	if sim_ref != null and not p.dead and p.away == null:
-		sig += "|%s|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p), _auto_on(p)]
+		sig += "|%s|%s|%s|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p), _auto_on(p), _workshop() != null, _crafting_on(p)]
 	return sig
 
 
 ## Whether `p` has the standing order auto-repair on.
 func _auto_on(p) -> bool:
 	return sim_ref != null and sim_ref.tactics.auto_repair(p)
+
+
+## The worktable's module (sim.workshop), or null in a game that has none (an older fake).
+func _workshop():
+	return null if sim_ref == null else sim_ref.get("workshop")
+
+
+## Whether `p` is at the worktable making ammo (the Make ammo button is lit while they are).
+func _crafting_on(p) -> bool:
+	var w = _workshop()
+	return w != null and bool(w.crafting(p))
+
+
+## The tip of the workshop's mark on `p` ("Making ammo at the worktable") when the modules'
+## status marks (sim.status_of) carry the ammo mark, else "".
+func _ammo_mark_tip(p) -> String:
+	if sim_ref == null or p.dead:
+		return ""
+	for m in sim_ref.status_of(p):
+		if String(m.get("icon", "")) == "ammo":
+			return String(m.get("tip", "Making ammo"))
+	return ""
 
 
 ## Whether `p` could be sent scavenging now: on the map, on their feet, not held
@@ -1450,21 +1827,23 @@ func _can_scavenge(p) -> bool:
 
 func _speed_button(icon_name: String, tip: String) -> Button:
 	var b := Button.new()
-	b.custom_minimum_size = Vector2(34, 30)
+	b.custom_minimum_size = Vector2(32, 30)
 	b.focus_mode = Control.FOCUS_NONE
 	b.tooltip_text = tip
-	var n := StyleBoxFlat.new()
-	n.bg_color = Color(0, 0, 0, 0)
-	n.set_corner_radius_all(4)
-	var h := StyleBoxFlat.new()
-	h.bg_color = Color(1, 1, 1, 0.07)
-	h.set_corner_radius_all(4)
+	var n := _lit_look(false)
+	# under the mouse the button shows as a key (the button frame, half clear), or flat a pale wash
+	var h: StyleBox = frame("button_hover", Color(1, 1, 1, 0.55))
+	if h == null:
+		var wash := StyleBoxFlat.new()
+		wash.bg_color = Color(1, 1, 1, 0.07)
+		wash.set_corner_radius_all(4)
+		h = wash
 	b.add_theme_stylebox_override("normal", n)
 	b.add_theme_stylebox_override("hover", h)
 	b.add_theme_stylebox_override("pressed", h)
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	var ic := _icon(icon_name, 16, INK2)
-	ic.position = Vector2(9, 7)
+	ic.position = Vector2(8, 7)
 	ic.size = Vector2(16, 16)
 	b.add_child(ic)
 	b.set_meta("icon", ic)
@@ -1472,11 +1851,18 @@ func _speed_button(icon_name: String, tip: String) -> Button:
 
 
 func _build_speed() -> void:
-	var s := _style()
-	s.set_content_margin_all(4)
+	# the controls sit in the slim board when there is one; the full board at its slimmest if not
+	var slim := has_frame("panel_slim")
+	var s := _style(PANEL, 6, LINE, true, "panel_slim" if slim else "panel")
+	if s is StyleBoxFlat:
+		s.set_content_margin_all(4)
+	elif not slim:
+		s.set_content_margin_all(7)
 	var panel := _panel(s)
 	speed_panel = panel
-	var row := _hbox(2)
+	# the keys are close (a pixel apart): with the menu button the toolbar must stay narrow enough
+	# for a full row of order buttons to sit beside the selection panel in a 1280 window
+	var row := _hbox(1)
 	var names := ["pause", "play", "ff", "fff"]
 	for i in 4:
 		var b := _speed_button(names[i], "%s\nKey: %s" % SPEED_TIPS[i])
@@ -1500,6 +1886,10 @@ func _build_speed() -> void:
 	help_button = _speed_button("help", "Show or hide the controls: every key and mouse button")
 	help_button.pressed.connect(func(): help.visible = not help.visible)
 	row.add_child(help_button)
+	# the menu (what Esc opens when nothing is selected) at the right end
+	menu_button = _speed_button("menu", "Menu\nKey: Esc")
+	menu_button.pressed.connect(func(): if on_open_menu.is_valid(): on_open_menu.call())
+	row.add_child(menu_button)
 	panel.add_child(row)
 	add_child(panel)
 	_corner(panel, true, true, 12, 12)
@@ -1510,10 +1900,7 @@ func _build_speed() -> void:
 func set_fields(on: bool) -> void:
 	fields_on = on
 	if fields_button != null:
-		var st := StyleBoxFlat.new()
-		st.bg_color = Color(ACCENT, 0.16) if on else Color(0, 0, 0, 0)
-		st.set_corner_radius_all(4)
-		fields_button.add_theme_stylebox_override("normal", st)
+		fields_button.add_theme_stylebox_override("normal", _lit_look(on))
 		fields_button.get_meta("icon").modulate = ACCENT if on else INK2
 	_layout_dock()
 
@@ -1529,7 +1916,7 @@ func _spacer_fixed(w: int) -> Control:
 ## game answers to. In a group of single keys the chips of a column are all as wide
 ## as its widest, like a row of keycaps.
 func _build_help() -> void:
-	help = _panel(_style())
+	help = _panel()
 	var col := _vbox(10)
 	for group in HELP:
 		var g := _vbox(4)
@@ -1542,7 +1929,9 @@ func _build_help() -> void:
 		var grid := GridContainer.new()
 		grid.columns = per_row * 2
 		grid.add_theme_constant_override("h_separation", 8)
-		grid.add_theme_constant_override("v_separation", 4)
+		# the rows are close: the Esc entry takes two lines, and in a 560 px window the panel
+		# must still clear the clock
+		grid.add_theme_constant_override("v_separation", 2)
 		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var n := 0
 		for entry in group[2]:
@@ -1564,6 +1953,10 @@ func _build_help() -> void:
 			grid.add_child(cell)
 			var what := _label(String(entry[1]), Fonts.sans(400), 12, INK2)
 			what.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			if entry.size() > 2:
+				# a long entry (its third number is the width it wraps at) takes two lines, not a wider panel
+				what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				what.custom_minimum_size.x = float(entry[2])
 			grid.add_child(what)
 			n += 1
 		g.add_child(grid)
@@ -1571,11 +1964,17 @@ func _build_help() -> void:
 	help.add_child(col)
 	help.visible = false
 	add_child(help)
-	_corner(help, true, true, 12, 58)
+	_corner(help, true, true, 12, _help_lift())
+
+
+## How far above the window's foot the controls help sits: clear of the speed controls under
+## it (their panel is taller or shorter with the frame it wears), with a gap.
+func _help_lift() -> float:
+	return 12.0 + (speed_panel.get_combined_minimum_size().y if speed_panel != null else 38.0) + 8.0
 
 
 func _build_hint() -> void:
-	hint = _panel(_style())
+	hint = _panel()
 	var row := _hbox(5)
 	row.add_child(_label("Click someone in the yard", Fonts.sans(400), 13, INK2))
 	for part in [["Right-click", "to move them"], ["Drag", "to pan"], ["Scroll", "to zoom"], ["Space", "to pause"]]:
@@ -1590,6 +1989,19 @@ func _build_hint() -> void:
 	hint.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	hint.offset_bottom = -96
+	_refresh_hint()
+
+
+## Shows or hides the one-line hint: it shows until its job is done, unless the player has turned
+## hints off in the settings (it follows the setting each time the HUD is updated, so switching
+## hints on or off takes effect at once). The toast is moved to suit.
+func _refresh_hint() -> void:
+	if hint == null:
+		return
+	var show := not hint_spent and Prefs.on("ui", "hints")
+	if hint.visible != show:
+		hint.visible = show
+		_layout_toast()
 
 
 # ------------------------------------------------------------------ toast --
@@ -1600,6 +2012,8 @@ func _build_toast() -> void:
 	toast_label = _label("", Fonts.sans(600), 14, INK)
 	toast_panel.add_child(toast_label)
 	toast_panel.visible = false
+	# on the frame the level is a bar of its colour down the left edge (flat, the edge says it)
+	toast_panel.draw.connect(_draw_toast_bar)
 	add_child(toast_panel)
 	toast_panel.anchor_left = 0.5
 	toast_panel.anchor_right = 0.5
@@ -1610,6 +2024,11 @@ func _build_toast() -> void:
 	_layout_toast()
 
 
+func _draw_toast_bar() -> void:
+	if not (toast_panel.get_theme_stylebox("panel") is StyleBoxFlat):
+		toast_panel.draw_rect(Rect2(5, 6, 3, toast_panel.size.y - 12), toast_col)
+
+
 ## A short message near the bottom centre for something that did not happen
 ## ("Nothing is damaged"): one line, up for toast_seconds of real time with a fade
 ## at the end, replaced by the next one. `level` is "info" (the default), "warn"
@@ -1617,13 +2036,17 @@ func _build_toast() -> void:
 func toast(text: String, level: String = "info") -> void:
 	if toast_panel == null or text.strip_edges() == "":
 		return
-	var st := _style(PANEL, 6, LEVEL_COLOR.get(level, INFO), true)
-	st.border_width_left = 3
-	st.content_margin_left = 12
-	st.content_margin_right = 14
-	st.content_margin_top = 7
-	st.content_margin_bottom = 8
+	var st := _style(PANEL, 6, LEVEL_COLOR.get(level, INFO), true, "toast")
+	toast_col = LEVEL_COLOR.get(level, INFO)
+	if st is StyleBoxFlat:
+		# flat: the level's colour is the edge, heavy on the left; with the frame a bar is drawn
+		st.border_width_left = 3
+		st.content_margin_left = 12
+		st.content_margin_right = 14
+		st.content_margin_top = 7
+		st.content_margin_bottom = 8
 	toast_panel.add_theme_stylebox_override("panel", st)
+	toast_panel.queue_redraw()
 	toast_label.text = text
 	toast_label.add_theme_color_override("font_color", TOAST_COLOR.get(level, INK))
 	if toast_tween != null:
@@ -1632,8 +2055,12 @@ func toast(text: String, level: String = "info") -> void:
 	toast_panel.visible = true
 	_layout_toast()
 	toast_tween = create_tween()
-	toast_tween.tween_interval(maxf(0.0, toast_seconds - TOAST_FADE))
-	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, minf(TOAST_FADE, toast_seconds))
+	if _calm():
+		# reduced motion: it stays as it is and goes at the end, with no fade
+		toast_tween.tween_interval(toast_seconds)
+	else:
+		toast_tween.tween_interval(maxf(0.0, toast_seconds - TOAST_FADE))
+		toast_tween.tween_property(toast_panel, "modulate:a", 0.0, minf(TOAST_FADE, toast_seconds))
 	toast_tween.tween_callback(func(): toast_panel.visible = false)
 
 
@@ -1685,7 +2112,8 @@ func _on_dialog_closed() -> void:
 func _show_game_over(sim) -> void:
 	if scavenge_dialog != null:
 		scavenge_dialog.close()
-	hint.visible = false
+	hint_spent = true
+	_refresh_hint()
 	game_over = GameOver.new()
 	add_child(game_over)
 	game_over.setup(self, sim)
@@ -1716,9 +2144,51 @@ func last_save() -> String:
 	return best
 
 
-## A button in the game's style for the dialog and the game-over screen: the main
-## choice in gold, the others dark.
-func _button(text: String, primary: bool = false) -> Button:
+## One look of a button: the frame for the state (button, button_hover, button_pressed,
+## button_off; button_primary and button_primary_hover for the main choice and a lit order),
+## or flat a slate board, gold for the main choice. `state` is normal, hover, pressed or
+## disabled. `paper` is for a button on a notebook page: a disabled main choice is then a
+## pale gold with dark ink (on the dark boards it is a dimmed gold with gold ink).
+func _button_style(state: String, primary: bool = false, shadow: bool = false, paper: bool = false) -> StyleBox:
+	var kind := "button"
+	var tint := Color.WHITE
+	if primary:
+		kind = "button_primary_hover" if state == "hover" else "button_primary"
+		if state == "pressed":
+			# the pressed gold has its own picture when the theme has one, else the gold a shade darker
+			if has_frame("button_primary_pressed"):
+				kind = "button_primary_pressed"
+			else:
+				tint = Color(0.9, 0.9, 0.9, 1.0)
+		elif state == "disabled":
+			tint = Color(1, 1, 1, 0.45)
+	else:
+		kind = {"normal": "button", "hover": "button_hover", "pressed": "button_pressed", "disabled": "button_off"}.get(state, "button")
+	var f := frame(kind, tint)
+	if f != null:
+		return f
+	var bg := PANEL
+	var edge := LINE
+	if primary:
+		edge = ACCENT
+		match state:
+			"hover":
+				bg = ACCENT.lightened(0.14)
+			"pressed":
+				bg = ACCENT.darkened(0.08)
+			"disabled":
+				bg = Color(ACCENT, 0.35 if paper else 0.28)
+			_:
+				bg = ACCENT
+	elif state == "hover" or state == "pressed":
+		bg = PANEL_HI
+		edge = LINE2 if state == "hover" else LINE
+	return _flat(bg, 6, edge, shadow)
+
+
+## A button in the game's style for the dialog, the game-over screen and the menus: the main
+## choice in gold, the others dark (chalkboard slate). `paper` says it sits on a notebook page.
+func _button(text: String, primary: bool = false, paper: bool = false) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
@@ -1728,17 +2198,16 @@ func _button(text: String, primary: bool = false) -> Button:
 	var ink := ACCENT_INK if primary else INK
 	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
 		b.add_theme_color_override(state, ink)
-	# a disabled button's word still reads (gold on the dimmed gold, cream on the dark): it is the main choice
-	b.add_theme_color_override("font_disabled_color", Color(ACCENT, 0.9) if primary else Color(ink, 0.6))
-	var looks := {
-		"normal": ACCENT if primary else PANEL,
-		"hover": ACCENT.lightened(0.14) if primary else PANEL_HI,
-		"pressed": ACCENT.darkened(0.08) if primary else PANEL_HI,
-		"disabled": Color(ACCENT, 0.28) if primary else PANEL,
-	}
-	for state in looks:
-		var st := _style(looks[state], 6, ACCENT if primary else (LINE2 if state == "hover" else LINE), false)
-		st.set_content_margin_all(0)
+	# a disabled button's word still reads (gold on the dimmed gold, cream on the dark, dark on the
+	# pale gold of a notebook page): it is the main choice
+	var off_ink := Color(ink, 0.6)
+	if primary:
+		off_ink = Color(ACCENT_INK, 0.85) if paper else Color(ACCENT, 0.9)
+	b.add_theme_color_override("font_disabled_color", off_ink)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		var st := _button_style(state, primary, false, paper)
+		st.content_margin_top = 0
+		st.content_margin_bottom = 0
 		st.content_margin_left = 16
 		st.content_margin_right = 16
 		b.add_theme_stylebox_override(state, st)
@@ -1761,7 +2230,9 @@ func _on_resized() -> void:
 		clock.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
 		alerts_box.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
 		time_label.add_theme_font_size_override("font_size", 24 if compact else 30)
-		hint.visible = hint.visible and not compact
+		# a window too narrow for the hint loses it for good (as it always did)
+		hint_spent = hint_spent or compact
+		_refresh_hint()
 	if bottom_bar:
 		bar.anchor_top = 1.0
 		bar.anchor_bottom = 1.0
@@ -1839,7 +2310,7 @@ func _update_card(c: Dictionary, sim) -> void:
 	c.badge.visible = p.drafted and present
 	c.fight.visible = p.target != null and not p.downed and present
 	if c.fight.visible:
-		c.fight.modulate.a = 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
+		c.fight.modulate.a = 1.0 if _calm() else 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
 	var marks: Array = [] if p.dead else sim.status_of(p)
 	var sig := ""
 	for m in marks:
@@ -1874,6 +2345,7 @@ func _fill_marks(c: Dictionary, marks: Array) -> void:
 
 func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	sim_ref = sim
+	_refresh_hint()
 	if sim.over != "" and game_over == null:
 		_show_game_over(sim)
 	for s in STORES:
@@ -1898,6 +2370,10 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	phase_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
 	phase_icon.modulate = pc
 	paused_pill.visible = speed == 0
+	var rung := bool(sim.bell_rung)
+	if rung and not clock_bell.visible:
+		_swing_bell()
+	clock_bell.visible = rung
 	# in a narrow window the clock has no room for the day as well as the pill: the pill takes its place
 	day_label.visible = not (speed == 0 and compact)
 	phase_label.text = String(sim.phase).to_upper()
@@ -1921,10 +2397,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		for i in speed_buttons.size():
 			var b: Button = speed_buttons[i]
 			var on := i == speed
-			var st := StyleBoxFlat.new()
-			st.bg_color = Color(ACCENT, 0.16) if on else Color(0, 0, 0, 0)
-			st.set_corner_radius_all(4)
-			b.add_theme_stylebox_override("normal", st)
+			b.add_theme_stylebox_override("normal", _lit_look(on))
 			b.get_meta("icon").modulate = ACCENT if on else INK2
 	sound_button.get_meta("icon").texture = icons["soundOn" if sound_on else "soundOff"]
 	var sound_tip := "Turn the sound off" if sound_on else "Turn the sound on"
@@ -2079,6 +2552,11 @@ func _refresh_selection() -> void:
 		inspect_refs.infection_head.visible = stage != ""
 		_set_text(inspect_refs.infection, stage.capitalize(), WARN)
 		inspect_refs.auto_tag.visible = not p.dead and _auto_on(p)
+		# "Making ammo" while the workshop's mark is on them, with the mark's own tip
+		var ammo_tip := _ammo_mark_tip(p)
+		inspect_refs.craft_tag.visible = ammo_tip != ""
+		if ammo_tip != "" and inspect_refs.craft_tag.tooltip_text != ammo_tip:
+			inspect_refs.craft_tag.tooltip_text = ammo_tip
 		var pips: HBoxContainer = inspect_refs.pips
 		var n := pips.get_child_count()
 		if n > 0:
@@ -2115,3 +2593,171 @@ func _refresh_selection() -> void:
 	if inspect_refs.doing.text != doing:
 		inspect_refs.doing.text = doing
 	_refresh_gizmo_tips()
+
+
+# ---- coach hooks (tutorial) ----
+# For the tutorial's coach (scripts/ui/coach.gd) and nothing else: they read the HUD's parts and
+# ghost buttons, and change nothing the HUD does. Written by TUTORIAL: leave this block at the end.
+
+## What the tutorial step allows right now, as a Callable(kind, arg) -> bool (kinds "gizmo" with
+## an order's id, "speed" with 0 to 3 and "fields"), or an invalid Callable when nothing is locked.
+var lock_allowed: Callable
+
+
+## The global rectangle of a named part of the HUD, or an empty Rect2 when it is not there (not
+## built, hidden, or the selection has no such button). Looked up by name each time: the cards,
+## the order buttons and the dialog are rebuilt. Names: `stores`, `stores.<ammo|scrap|food|water|
+## meds>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `alerts`, `inspect`,
+## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`,
+## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
+## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`.
+func anchor_rect(name: String) -> Rect2:
+	if name.begins_with("stores."):
+		return _anchor_store(name.trim_prefix("stores."))
+	if name == "alerts":
+		return _anchor_alerts()
+	var c = _anchor_control(name)
+	if c == null or not is_instance_valid(c) or not (c is Control) or not c.is_visible_in_tree():
+		return Rect2()
+	var r: Rect2 = c.get_global_rect()
+	return r if r.size.x > 0.0 and r.size.y > 0.0 else Rect2()
+
+
+func _anchor_control(name: String):
+	if name.begins_with("card:"):
+		var id := name.trim_prefix("card:")
+		for c in cards:
+			if c.p.id == id:
+				return c.card
+		return null
+	if name.begins_with("gizmo:"):
+		var gid := name.trim_prefix("gizmo:")
+		if gizmos == null:
+			return null
+		for b in gizmos.get_children():
+			if b is Button and b.has_meta("id") and String(b.get_meta("id")) == gid and not b.is_queued_for_deletion():
+				return b
+		return null
+	if name.begins_with("speed."):
+		var i := name.trim_prefix("speed.").to_int()
+		return speed_buttons[i] if i >= 0 and i < speed_buttons.size() else null
+	if name.begins_with("dialog."):
+		return _anchor_dialog(name.trim_prefix("dialog."))
+	match name:
+		"stores":
+			return res_panel
+		"bar":
+			return bar
+		"clock":
+			return clock
+		"clock.time":
+			return time_label
+		"clock.forecast":
+			return forecast_label
+		"inspect":
+			return inspect
+		"inspect.weapon":
+			# the "Weapon" row of a person's panel: the gun's name and the pips of its magazine
+			var pips = inspect_refs.get("pips") if selection != null and selection.kind == "person" else null
+			return pips.get_parent() if pips != null and is_instance_valid(pips) else null
+		"speed":
+			return speed_panel
+		"fields":
+			return fields_button
+		"help":
+			return help_button
+		"sound":
+			return sound_button
+		"legend":
+			return fields_legend
+		"toast":
+			return toast_panel
+		"banner":
+			return banner
+	return null
+
+
+## One store's row in the stores panel: as wide as the panel, as tall as its number (and, for
+## food and water, the days left under it).
+func _anchor_store(kind: String) -> Rect2:
+	var v = res_values.get(kind)
+	if v == null or res_panel == null or not is_instance_valid(v) or not res_panel.is_visible_in_tree():
+		return Rect2()
+	var r: Rect2 = v.get_global_rect()
+	var d = res_days.get(kind)
+	if d != null and is_instance_valid(d):
+		r = r.merge(d.get_global_rect())
+	var panel: Rect2 = res_panel.get_global_rect()
+	return Rect2(panel.position.x + 6.0, r.position.y - 3.0, panel.size.x - 12.0, r.size.y + 6.0)
+
+
+## Where the alerts are: their column, or, with none up, the space under the clock where
+## they appear.
+func _anchor_alerts() -> Rect2:
+	if alerts_box == null or clock == null or not alerts_box.is_visible_in_tree():
+		return Rect2()
+	var r: Rect2 = alerts_box.get_global_rect()
+	if r.size.y >= 8.0:
+		return r
+	var c: Rect2 = clock.get_global_rect()
+	return Rect2(c.position.x, c.end.y + 10.0, c.size.x, 60.0)
+
+
+func _anchor_dialog(part: String):
+	var d = scavenge_dialog
+	if d == null or not is_instance_valid(d):
+		return null
+	if part == "send":
+		return d.get("send_button")
+	if part == "cancel":
+		return d.get("cancel_button")
+	if part == "party":
+		return d.get("party_box")
+	if part.begins_with("site:"):
+		var cards_of = d.get("site_cards")
+		var entry = cards_of.get(part.trim_prefix("site:")) if typeof(cards_of) == TYPE_DICTIONARY else null
+		return entry.card if entry != null else null
+	return null
+
+
+## Ghosts the order buttons, the speed buttons and the fields button that the tutorial step
+## does not allow: dimmed, no hover look, a cursor that says no. They can still be pressed (the
+## game refuses the order and says why in a toast). An invalid Callable lifts the lock.
+func set_locked(allowed: Callable) -> void:
+	lock_allowed = allowed
+	apply_lock()
+
+
+## Puts the lock's look on the buttons as they are now. The order buttons are rebuilt with
+## the selection and the HUD brightens them every tenth of a second, so the coach calls this
+## every frame while a lock is on.
+func apply_lock() -> void:
+	var locking := lock_allowed.is_valid()
+	if gizmos != null:
+		for b in gizmos.get_children():
+			if b is Button and b.has_meta("id") and not b.is_queued_for_deletion():
+				_ghost(b, locking and not bool(lock_allowed.call("gizmo", String(b.get_meta("id")))))
+	for i in speed_buttons.size():
+		_ghost(speed_buttons[i], locking and not bool(lock_allowed.call("speed", i)))
+	if fields_button != null:
+		_ghost(fields_button, locking and not bool(lock_allowed.call("fields", null)))
+
+
+func _ghost(b: Button, locked: bool) -> void:
+	var was := bool(b.get_meta("coach_ghost", false))
+	if locked:
+		if not was:
+			b.set_meta("coach_ghost", true)
+			b.set_meta("coach_hover", b.get_theme_stylebox("hover"))
+			b.set_meta("coach_pressed", b.get_theme_stylebox("pressed"))
+			var plain: StyleBox = b.get_theme_stylebox("normal") if b.has_meta("id") else StyleBoxEmpty.new()
+			b.add_theme_stylebox_override("hover", plain)
+			b.add_theme_stylebox_override("pressed", plain)
+			b.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN
+		b.modulate.a = 0.35
+	elif was:
+		b.set_meta("coach_ghost", false)
+		b.add_theme_stylebox_override("hover", b.get_meta("coach_hover"))
+		b.add_theme_stylebox_override("pressed", b.get_meta("coach_pressed"))
+		b.mouse_default_cursor_shape = Control.CURSOR_ARROW
+		b.modulate.a = 1.0

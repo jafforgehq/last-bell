@@ -76,18 +76,25 @@ func test_the_send_button_still_reads_while_it_is_off() -> void:
 	ctx.hud.open_scavenge(ctx.hud.selection)
 	var send: Button = ctx.hud.scavenge_dialog.send_button
 	check(send.disabled, "Send is off until a place is chosen")
-	var box: StyleBoxFlat = send.get_theme_stylebox("disabled")
-	var bg := over(box.bg_color, Color(Hud.PANEL, 1.0))
-	var word := over(send.get_theme_color("font_disabled_color"), bg)
-	var ratio := contrast(word, bg)
-	check(ratio >= AA, "the disabled Send reads at %.2f:1" % ratio)
+	var box: StyleBox = send.get_theme_stylebox("disabled")
+	var word_colour: Color = send.get_theme_color("font_disabled_color")
+	# the button as drawn, over the page behind it, at the worst of the picture it is made of
+	var worst := 99.0
+	var behind := _backdrops(send, Color.WHITE)
+	var fills: Array = Kit.fills(box)
+	for i in 2:
+		var bg := over(fills[i], behind[i])
+		worst = minf(worst, contrast(over(word_colour, bg), bg))
+	check(worst >= AA, "the disabled Send reads at %.2f:1" % worst)
 	ctx.hud.scavenge_dialog.cancel()
 	Kit.free_all(ctx)
 
 
-## The colour behind a label: the backgrounds of the panels, cards, buttons and bars
-## it sits in, laid one over the next on top of `ground` (the world under the HUD).
-func _backdrop(n: Node, ground: Color) -> Color:
+## The colours behind a label, as [darkest, lightest]: the backgrounds of the panels, cards,
+## buttons and bars it sits in, laid one over the next on top of `ground` (the world under the
+## HUD). A frame is a picture, so it has a darkest and a lightest (see Kit.fills): text has to
+## read on both.
+func _backdrops(n: Node, ground: Color) -> Array:
 	var chain: Array = []
 	var stop: Node = Engine.get_main_loop().root
 	var p := n.get_parent()
@@ -98,21 +105,32 @@ func _backdrop(n: Node, ground: Color) -> Color:
 		elif p is Button:
 			box = p.get_theme_stylebox("disabled") if p.disabled else p.get_theme_stylebox("normal")
 		elif p is ColorRect:
-			chain.append(p.color)
-		if box is StyleBoxFlat:
-			chain.append(box.bg_color)
+			chain.append([p.color, p.color])
+		if box != null:
+			var f: Array = Kit.fills(box)
+			if f[0].a > 0.0 or f[1].a > 0.0:
+				chain.append(f)
 		p = p.get_parent()
 	chain.reverse()
-	var c := ground
-	for bg in chain:
-		c = over(bg, c)
-	return c
+	var lo := ground
+	var hi := ground
+	for layer in chain:
+		lo = over(layer[0], lo)
+		hi = over(layer[1], hi)
+	return [lo, hi]
+
+
+## The worst contrast of `color` on what is behind `node` (see _backdrops).
+func _worst_contrast(node: Node, color: Color, ground: Color) -> float:
+	var worst := 99.0
+	for bg in _backdrops(node, ground):
+		worst = minf(worst, contrast(over(color, bg), bg))
+	return worst
 
 
 func _hard_to_read(node: Node, ground: Color, out: Array = []) -> Array:
 	if node is Label and node.text != "":
-		var bg := _backdrop(node, ground)
-		var ratio := contrast(over(node.get_theme_color("font_color"), bg), bg)
+		var ratio := _worst_contrast(node, node.get_theme_color("font_color"), ground)
 		if ratio < AA:
 			out.append("'%s' is %.2f:1" % [str(node.text).left(30), ratio])
 	for c in node.get_children():
@@ -121,8 +139,20 @@ func _hard_to_read(node: Node, ground: Color, out: Array = []) -> Array:
 
 
 func test_every_label_reads_on_the_background_it_sits_on() -> void:
-	# the whole tree in a busy state, over the brightest ground: the stores, the clock, the
-	# alerts, the cards, the help, the toast, the dialog and the end screen
+	# with the frames the theme has (the pictures of the noticeboard)
+	await _every_label_reads(true)
+
+
+func test_every_label_reads_on_the_flat_boards_too() -> void:
+	# and with no frames at all: the flat chalkboards and paper every surface falls back on
+	await _every_label_reads(false)
+
+
+## The whole tree in a busy state, over the brightest ground: the stores, the clock, the alerts,
+## the cards, the help, the toast, the dialog (four places) and the end screen.
+func _every_label_reads(frames: bool) -> void:
+	Hud.use_frames = frames
+	var look := "frames" if frames else "flat"
 	var ground := Color.WHITE
 	var ctx := Kit.build(1280, 800)
 	var ana = Kit.person(ctx, "ana")
@@ -133,7 +163,7 @@ func test_every_label_reads_on_the_background_it_sits_on() -> void:
 	ctx.sim.medical.sendout[ana.id] = true
 	ctx.sim.medical.stage[ana.id] = "feverish"
 	ctx.sim.scavenge.can = true
-	ctx.sim.scavenge.list = Kit.sample_sites()
+	ctx.sim.scavenge.list = Kit.sample_sites(true)
 	ctx.sim.supplies.days = {"food": 0.5, "water": 2.0}
 	Kit.person(ctx, "walt").dead = true
 	Kit.person(ctx, "walt").turned = true
@@ -141,19 +171,23 @@ func test_every_label_reads_on_the_background_it_sits_on() -> void:
 	ctx.sim.alert("a1", "danger", "Marcus is down", "Get them to Ana", null, 60.0)
 	ctx.sim.alert("a2", "warn", "Food is running out", "about 2 days left", null, 60.0)
 	ctx.sim.alert("a3", "info", "The bell has rung", "Everyone is heading to their posts", null, 60.0)
+	ctx.sim.workshop.at_bench[ana.id] = true
+	ctx.sim.bell_rung = true
 	ctx.hud.help.visible = true
 	Kit.select(ctx, ana)
 	Kit.update(ctx, 0)
 	ctx.hud.toast("Nothing is damaged", "warn")
-	eq(_hard_to_read(ctx.hud, ground), [], "the HUD")
+	ctx.hud.show_banner("Dusk falls", "The bell has rung")
+	eq(_hard_to_read(ctx.hud, ground), [], "%s: the HUD" % look)
 	ctx.hud.open_scavenge(ctx.hud.selection)
 	ctx.hud.scavenge_dialog.choose_site("houses")
-	eq(_hard_to_read(ctx.hud.scavenge_dialog, ground), [], "the scavenging dialog")
+	eq(_hard_to_read(ctx.hud.scavenge_dialog, ground), [], "%s: the scavenging dialog" % look)
 	ctx.hud.scavenge_dialog.cancel()
 	ctx.sim.over = "victory"
 	Kit.update(ctx, 0)
-	eq(_hard_to_read(ctx.hud.game_over, ground), [], "the end screen")
+	eq(_hard_to_read(ctx.hud.game_over, ground), [], "%s: the end screen" % look)
 	Kit.free_all(ctx)
+	Hud.use_frames = true
 
 
 func test_the_label_check_does_catch_dim_text() -> void:
@@ -340,12 +374,12 @@ func test_a_label_asked_for_a_smaller_size_gets_the_floor() -> void:
 func test_the_key_chips_on_the_buttons_are_twelve_pixels() -> void:
 	var ctx := _busy(1280, 800)
 	var seen := 0
-	for id in ["draft", "post", "repair", "focus", "auto", "treat", "sendout", "scavenge"]:
+	for id in ["draft", "post", "repair", "focus", "auto", "craft", "treat", "sendout", "scavenge"]:
 		var b: Button = Kit.gizmo(ctx, id)
 		for l in b.find_children("*", "Label", true, false):
 			check(l.get_theme_font_size("font_size") >= 12, "%s: '%s'" % [id, l.text])
 			seen += 1
-	check(seen >= 16, "each button has its name and its key: %d labels" % seen)
+	check(seen >= 18, "each button has its name and its key: %d labels" % seen)
 	Kit.free_all(ctx)
 
 
