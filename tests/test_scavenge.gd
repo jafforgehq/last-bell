@@ -162,9 +162,9 @@ func test_the_three_sites_load_from_data() -> void:
 	eq(by.hardware.name, "The hardware store", "the hardware store's name")
 	eq(by.houses.name, "Neighbourhood houses", "the houses' name")
 	eq([by.pharmacy.danger, by.hardware.danger, by.houses.danger], [2, 2, 1], "danger 2, 2 and 1")
-	eq(by.pharmacy.loot.meds, [4, 8], "4 to 8 meds")
-	eq(by.hardware.loot.scrap, [12, 24], "12 to 24 scrap")
-	eq(by.hardware.loot.ammo, [40, 90], "40 to 90 ammo")
+	eq(by.pharmacy.loot.meds, [6, 11], "6 to 11 meds")
+	eq(by.hardware.loot.scrap, [14, 28], "14 to 28 scrap")
+	eq(by.hardware.loot.ammo, [70, 130], "70 to 130 ammo")
 	eq(by.houses.loot.food, [8, 14], "8 to 14 food")
 	eq(by.houses.loot.water, [10, 20], "10 to 20 water")
 	check(by.pharmacy.extra.has("food"), "the pharmacy sometimes has food")
@@ -563,8 +563,8 @@ func test_injury_and_loss_rates_follow_the_formula() -> void:
 				_rate(counts[k].scratch, n, want_hurt * 0.75, "scratched, " + label)
 				_rate(counts[k].bite, n, want_hurt * 0.25, "bitten, " + label)
 			if site_id == "hardware":
-				near(scrap_sum / paid, 18.0, 0.5, "average scrap, difficulty %d" % d)
-				near(ammo_sum / paid, 65.0, 1.6, "average ammo, difficulty %d" % d)
+				near(scrap_sum / paid, 21.0, 0.6, "average scrap, difficulty %d" % d)
+				near(ammo_sum / paid, 100.0, 2.5, "average ammo, difficulty %d" % d)
 			else:
 				eq(counts[0].lost + counts[1].lost, 0, "nobody is lost at the houses (difficulty %d)" % d)
 	g.world.free()

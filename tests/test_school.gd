@@ -71,7 +71,7 @@ func test_the_doors_are_wall_sections_with_slots_in_front() -> void:
 	for s in doors:
 		eq(s.side, "S", "%s is the school's" % s.name)
 		eq(s.slots.size(), 10, "ten of the dead can crowd at it")
-		check(s.hp >= 300.0, "and it takes some breaking: %d" % int(s.hp))
+		check(s.hp >= 100.0, "and it takes some breaking: %d" % int(s.hp))
 		eq(s.state, 0, "whole")
 		for sl in s.slots:
 			check(sl.y < 44.0, "the slots are on the yard side")

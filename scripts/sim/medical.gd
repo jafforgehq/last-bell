@@ -30,7 +30,7 @@ const BITE_BLEED := 4.0
 const SCRATCH_BLEED := 2.0
 ## A claw at the wall scratches someone behind it with this chance, if anyone
 ## stands within SCRATCH_REACH tiles of the spot behind the wall.
-const SCRATCH_CHANCE := 0.15
+const SCRATCH_CHANCE := 0.11
 const SCRATCH_REACH := 2.5
 ## A bite infects with this chance by difficulty (story, standard, brutal).
 const INFECT_CHANCE := [0.3, 0.6, 1.0]

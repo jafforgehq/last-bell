@@ -5,7 +5,7 @@
 ## turns over at 06:30, so a "day" here runs from 06:30 to 06:30 and holds the
 ## day's three meals (07:00, 13:00, 19:00).
 ##
-## Alerts raised: `low-food`, `low-water`, `no-scrap`, `rain`. The only event
+## Alerts raised: `low-food`, `low-water`, `low-ammo`, `no-scrap`, `rain`. The only event
 ## added is the ordinary {"type": "banner", "text", "sub"}, "Short rations".
 extends RefCounted
 
@@ -47,14 +47,17 @@ const LOW_TTL := 10.0
 ## The marks on a person's card (the same orange and red as the HUD).
 const WARN := Color("#e8953a")
 const DANGER := Color("#e0584a")
+## Less ammo than this in the stock is low: an alert (raised at most every six
+## times LOW_REPEAT_MIN).
+const LOW_AMMO := 60.0
 ## Slack for float noise: a stock under this is empty; a meal time that came up
 ## within a step is on time to within this many game hours.
 const EPS := 1.0e-9
 const LATE_SLACK_H := 1.0e-4
 ## The stores live in the yard. While the dead are in it they ruin what is there:
 ## each of them takes this share of every stock each second (20 of them for two
-## minutes cost about 13% of everything). This is what falling back costs.
-const LOOT_RATE := 6.0e-5
+## minutes cost about 21% of everything). This is what falling back costs.
+const LOOT_RATE := 1.0e-4
 ## "Never raised" for the alert timers (game minutes since the run began).
 const NEVER := -1.0e9
 
@@ -72,7 +75,7 @@ var sources_day := 0
 ## per shortage and not at every meal.
 var short_of := {"food": false, "water": false}
 ## When (sim.clock_min) each low-stock alert was last raised.
-var low_alert_min := {"food": NEVER, "water": NEVER}
+var low_alert_min := {"food": NEVER, "water": NEVER, "ammo": NEVER}
 var _spots := {}
 
 
@@ -89,7 +92,7 @@ func start() -> void:
 		p.hunger_h = 0.0
 		p.thirst_h = 0.0
 	short_of = {"food": false, "water": false}
-	low_alert_min = {"food": NEVER, "water": NEVER}
+	low_alert_min = {"food": NEVER, "water": NEVER, "ammo": NEVER}
 	_sync_clock()
 
 
@@ -208,6 +211,7 @@ func load_state(d: Dictionary) -> void:
 	var times = d.get("low_alert_min", {})
 	for kind in ["food", "water"]:
 		short_of[kind] = shorts is Dictionary and shorts.get(kind, false) == true
+	for kind in ["food", "water", "ammo"]:
 		low_alert_min[kind] = _num(times, kind, NEVER) if times is Dictionary else NEVER
 
 
@@ -315,6 +319,12 @@ func _needs(gh: float) -> void:
 
 
 func _low_stock_alerts() -> void:
+	var rounds := float(sim.stock.ammo)
+	if rounds >= LOW_AMMO:
+		sim.alerts.erase("low-ammo")
+	elif rounds > 0.0 and sim.clock_min - float(low_alert_min["ammo"]) >= LOW_REPEAT_MIN * 6.0:
+		low_alert_min["ammo"] = sim.clock_min
+		sim.alert("low-ammo", "danger" if rounds < 20.0 else "warn", "Ammo is running low", "%d left" % roundi(rounds), null, LOW_TTL)
 	for kind in ["food", "water"]:
 		var id := "low-%s" % kind
 		var days := days_left(kind)

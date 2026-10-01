@@ -111,3 +111,15 @@ func test_a_melee_weapon_does_not_need_ammo() -> void:
 			break
 	check(z.state == "dying" or z.state == "dead", "the pike killed it with no ammo in the stock")
 	g.world.free()
+
+
+func test_low_ammo_is_flagged_before_it_runs_out() -> void:
+	var g := Helpers.make(18, 1)
+	var sim = g.sim
+	sim.stock.ammo = 50.0
+	Helpers.run(sim, 2.0)
+	check(sim.alerts.has("low-ammo"), "an alert says the ammo is low")
+	sim.stock.ammo = 200.0
+	Helpers.run(sim, 1.0)
+	check(not sim.alerts.has("low-ammo"), "and it goes once the stock is back up")
+	g.world.free()

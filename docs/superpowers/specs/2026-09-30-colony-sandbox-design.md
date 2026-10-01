@@ -137,6 +137,35 @@ Round 1 was tuned with `tools/balance.gd` (Standard, 8 games, 20 days, the defau
 
 **What the harness shows now:** a hands-off crew stays at full strength for the first ten days, then loses people as ammo and medicine run out; the median run ends on day 16 and one in eight reaches day 20. Food and water are managed (the vegetable beds, the barrels and scavenging keep them level); scrap is spent as fast as it comes; ammo has no source yet except the hardware store, which is what round 3's workshop is for.
 
+## 7c. After round 0 (2026-10-01)
+
+Round 0 made the numbers bind (plan: `docs/superpowers/plans/2026-10-01-round-0.md`; findings: `docs/audit/`). **A correction to 7b:** the note "ammo was the binding constraint around day 10" was wrong. The stock went down when someone shot, but nothing stopped the shooting, so a crew with 0 ammo killed exactly as many walkers as one with 300. Now a shot needs a whole shot in the stock; with less the gun is silent, people fight with the butt of it (a pike never runs dry) and an alert says so. Ammo is therefore a real limit, and the values were retuned on top of that.
+
+The harness got a second policy, `--policy=keep` (everyone hides in the school gym from the bell to dawn and does the default daytime jobs), because the audit found that hiding in the school beat everything: all six alive and unhurt on day 20 in 3 of 3 seeds, since the dead could not enter the building at all. The school now has two attackable boarded doors; the dead go for them once the yard has fallen and someone is inside, a door that is down opens the building, and the dead in the yard ruin a share of every stock each second (the stores are in the yard).
+
+| Value | Before round 0 | Now | Why |
+| --- | --- | --- | --- |
+| Shot cost | free | 0.2 ammo (shotgun 0.34) | Ammo has to bind. |
+| Starting ammo | 300 | 400 | The first nights with real ammo. |
+| Hardware store loot | scrap 12 to 24, ammo 40 to 90 | scrap 14 to 28, ammo 70 to 130 | The only source of both. |
+| Pharmacy loot | meds 4 to 8 | meds 6 to 11 | Medicine became the limit once ammo was real. |
+| Houses, medicine on the side | 0.35 to 1 | 0.5 to 1.5 | The same. |
+| Scratch from a wall claw | 15% | 11% | Fewer scratches means fewer bandages and fevers. |
+| School doors | none (the building was sealed) | 2 doors, 160 HP, 10 places each | Hiding must not be free. |
+| Stores ruined by the dead in the yard | none | 1.0e-4 of each stock a second per walker inside | Falling back has a cost and a clock. |
+| The dead leaving at dawn | all in one step | 6 a step | Each is a path search. |
+| Victory | none | at the dawn that starts day 31, if anyone is left | A goal. |
+
+**What the harness shows now** (Standard, 20 days, 8 games per row):
+
+| Crew | Seeds 1-8 | Seeds 9-16 |
+| --- | --- | --- |
+| Gives no orders (`--policy=none`) | median day 12, 0 of 8 reach day 20 | not run |
+| The default policy (posts, repairs, scavenging, treating) | median day 19, 3 of 8 | median day 19, 3 of 8 |
+| Hides in the school from the bell to dawn (`--policy=keep`) | median day 18, 3 of 8 | median day 16, 2 of 8 |
+
+Before round 0 the same default policy reached day 17 with 0 of 8 (and ammo that did nothing), and the hiding crew had all six alive and unhurt on day 20 in every seed tried; with real ammo and the old numbers the default policy fell to day 14 to 15. Hiding no longer wins, but the harness's default crew is naive (it never repositions anyone), so the margin is modest; the informed policy of round 2 should widen it.
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.
