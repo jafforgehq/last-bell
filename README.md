@@ -18,6 +18,15 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`.
 | Tab | Next person |
 | Esc | Clear selection |
 
+## Playing
+
+A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, more each night.
+
+- **Supplies.** At 07:00, 13:00 and 19:00 everyone eats and drinks. The stores panel shows how many days of food and water are left. The vegetable beds and rain barrels give a little each dawn. Repairs cost scrap (1 for every 10 points of wall health), bandages cost medicine, and shooting costs ammo.
+- **Wounds.** A bite or scratch bleeds until someone bandages it (Ana first); at 0 health a person is downed and must be stabilised within three game hours, then rests in bed. A **bite** can infect: a feverish person turns into a walker 12 to 24 hours later unless treated (**T**, two medicine, better with Medicine skill) or sent out through the gate (**X**).
+- **Scavenging.** Select someone and press **G** to send one or two survivors through the gate between 06:30 and 10:00. They come back at 16:00 with loot, hurt, or not at all. A raided site is picked over for three days.
+- **Save and load.** **F5** saves, **F9** loads; the game also autosaves at each dawn. When everyone is gone the game over screen offers a new game.
+
 ## How it fits together
 
 - `scripts/main.gd`: builds everything at startup, then runs the camera,
@@ -124,3 +133,11 @@ time in worker processes, `--policy=none` gives no orders, `--verbose` lists wha
 the policy did and who was lost; see the top of the file for the rest. A game
 whose colony collapses is slow to play (the walkers inside the yard re-path
 every second).
+
+## Tests
+
+```bash
+/Applications/Godot.app/Contents/MacOS/Godot --headless --path . --script res://tests/run.gd [-- --only=text]
+```
+
+Every `tests/test_*.gd` file is run; a test fails if it fails a check or logs an error. `tests/helpers.gd` builds a headless game for tests.

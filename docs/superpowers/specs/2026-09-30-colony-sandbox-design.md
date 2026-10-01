@@ -71,7 +71,7 @@ Each trip is settled when the party comes back: the loot shrinks if the party is
 | Runner | 3 | 1.8 | Fast and fragile: reaches the wall before the defenders are in place | Walls; shoot early | Day 6 |
 | Brute | 40 | 0.4 | Does four times the damage to walls and shrugs off small rounds | Focus fire, upgraded walls | Day 10 |
 
-- **Night budget:** `12 × (1 + 0.12 × day) × difficulty` points a night, spent on units (walker 1, runner 2, brute 8) by day: walkers only until day 5; from day 6 up to a quarter of the budget in runners; from day 10 one brute a night and from day 20 two; the Big Night spends three times the budget and always includes three brutes. The current dusk trickle and night groups stay, driven by the budget instead of a fixed rate; the cap on live zombies is raised to 60.
+- **Night budget:** `30 × (1 + 0.10 × (day - 1)) × difficulty` points a night, spent on units (walker 1, runner 2, brute 8) by day: walkers only until day 5; from day 6 up to a quarter of the budget in runners; from day 10 one brute a night and from day 20 two; the Big Night spends three times the budget and always includes three brutes. The current dusk trickle and night groups stay, driven by the budget instead of a fixed rate; the cap on live zombies is raised to 60.
 - **A few random events** (about six): supply drop (a crate at the edge of the yard), storm (rain fills the barrels, shorter sight), a stranger at the gate (let in: a helper or a thief; the player decides), a straggler group at the wall in daytime, sickness in one person, a radio message (at the radio desk already on the map: a line of story, and a hint of the rescue). One event at most a day, never on the night before the Big Night.
 - **Art and sound without new assets:** the runner is the walker drawn leaner, tinted and animating faster; the brute is the walker scaled up 1.35 times, darker and slow; their sounds are the current groan and thud pitched up and down. Dedicated art can replace these later.
 
@@ -115,6 +115,25 @@ Each round ends in a game you can play, with tests passing and a short note of w
 2. **Enemies and the goal.** Section 4.3 and 4.4. *Done when:* runners and brutes arrive on their days and each has a counter that works; the Big Night and the victory and defeat screens work; the harness shows median Standard runs ending between day 18 and the final night.
 3. **Upgrades and the basics.** Section 4.5 and 4.6. *Done when:* a section can be upgraded and visibly changes, brutes are slowed by it, the start and Esc menus and tutorial work, and a new player can finish the first three days unaided.
 4. **Balance, the demo and release prep.** Tune with the harness across difficulties; performance and the web build; an asset rights audit and a name check; music and sound plan; the public itch demo. Then decide about Steam and Early Access from what players say.
+
+## 7b. Tuned values after round 1
+
+Round 1 was tuned with `tools/balance.gd` (Standard, 8 games, 20 days, the default policy). Where a number differs from the text above, this table wins.
+
+| Value | First draft | Now | Why |
+| --- | --- | --- | --- |
+| Night budget | 12 × (1 + 0.12 × day) | 30 × (1 + 0.10 × (day − 1)) | The original night spawner brought about 130 walkers a night from the first night, so no default crew lived past day 9; 12 would have felt empty. |
+| Most walkers alive at once | 60 | 50 (30 at dusk) | As the game was before; raising it belongs with the performance work of round 4. |
+| Starting food, water | 41, 120 | 36, 54 | Six days of full rations for six people, so water matters like food. |
+| Starting ammo, scrap, meds | 212, 24, 7 | 300, 30, 10 | A little more runway: the first nights spend most of the medicine. |
+| Hardware store loot | scrap 10 to 20, ammo 20 to 60 | scrap 12 to 24, ammo 40 to 90 | Ammo was the binding constraint around day 10. |
+| Pharmacy loot | meds 3 to 6 | meds 4 to 8 | The same, for medicine. |
+| Scratch from a wall claw | 4% a claw, reach 1.5 tiles | 15%, reach 2.5 tiles | With the first numbers a defender was scratched about once in ten nights. |
+| Cure chance | 30% + 10% per Medicine point | 45% + 10% per point (at most 90%) | Most healers have Medicine 1 or 2, and a nurse who is herself infected cannot treat herself. |
+| Scavenger lost at a danger 2 site | 2% a trip | 1% a trip | Two early deaths in five trips ended runs by luck. |
+| Infection roll | each bite | once per encounter (at least one game hour apart) | Six bites in one fight would have made 30% into about 88%. |
+
+**What the harness shows now:** a hands-off crew stays at full strength for the first ten days, then loses people as ammo and medicine run out; the median run ends on day 16 and one in eight reaches day 20. Food and water are managed (the vegetable beds, the barrels and scavenging keep them level); scrap is spent as fast as it comes; ammo has no source yet except the hardware store, which is what round 3's workshop is for.
 
 ## 8. Risks and open questions
 

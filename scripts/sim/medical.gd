@@ -30,8 +30,8 @@ const BITE_BLEED := 4.0
 const SCRATCH_BLEED := 2.0
 ## A claw at the wall scratches someone behind it with this chance, if anyone
 ## stands within SCRATCH_REACH tiles of the spot behind the wall.
-const SCRATCH_CHANCE := 0.04
-const SCRATCH_REACH := 1.5
+const SCRATCH_CHANCE := 0.15
+const SCRATCH_REACH := 2.5
 ## A bite infects with this chance by difficulty (story, standard, brutal).
 const INFECT_CHANCE := [0.3, 0.6, 1.0]
 ## Bites within this many game hours of the last roll are the same encounter.
@@ -51,7 +51,7 @@ const BANDAGE_MEDS := 1.0
 ## 30% plus 10% a point of Medicine, at most 90%.
 const CURE_MIN := 15.0
 const CURE_MEDS := 2.0
-const CURE_BASE := 0.3
+const CURE_BASE := 0.45
 const CURE_PER_POINT := 0.1
 const CURE_MAX := 0.9
 ## A healer works while within REACH tiles of the patient and waits a little

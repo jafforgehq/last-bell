@@ -387,7 +387,9 @@ func test_a_claw_sometimes_scratches_a_defender_behind_the_wall() -> void:
 	var n := 2000
 	for i in n:
 		sim.medical.on_wall_claw(z, gate)
-	check(ruth.wounds >= 50 and ruth.wounds <= 115, "about 4%% of claws: %d in %d" % [ruth.wounds, n])
+	var want := float(n) * Medical.SCRATCH_CHANCE
+	var sigma := sqrt(want * (1.0 - Medical.SCRATCH_CHANCE))
+	check(absf(float(ruth.wounds) - want) <= 4.0 * sigma, "about %d%% of claws: %d in %d" % [roundi(Medical.SCRATCH_CHANCE * 100.0), ruth.wounds, n])
 	near(ruth.bleeding, 2.0 * ruth.wounds, 0.001, "each one bleeds 2 an hour")
 	eq(ruth.infected_at, -1.0, "a scratch never infects")
 	check(sim.alerts.has("scratch-ruth"), "the alert")
@@ -440,7 +442,9 @@ func test_the_rules_claw_reaches_the_medical_module() -> void:
 	for i in 1500:
 		gate.hp = gate.max_hp
 		sim._claw(z, gate)
-	check(ruth.wounds >= 35 and ruth.wounds <= 90, "about 4%% of 1500 claws: %d" % ruth.wounds)
+	var want := 1500.0 * Medical.SCRATCH_CHANCE
+	var sigma := sqrt(want * (1.0 - Medical.SCRATCH_CHANCE))
+	check(absf(float(ruth.wounds) - want) <= 4.0 * sigma, "about %d%% of 1500 claws: %d" % [roundi(Medical.SCRATCH_CHANCE * 100.0), ruth.wounds])
 	g.world.free()
 
 
@@ -969,14 +973,15 @@ func test_treating_an_infection_costs_two_medicines_and_takes_fifteen_minutes() 
 	g.world.free()
 
 
-func test_the_cure_chance_is_thirty_percent_plus_ten_a_point_of_medicine() -> void:
+func test_the_cure_chance_is_a_base_plus_ten_a_point_of_medicine() -> void:
 	var g := _clinic()
 	var m = g.sim.medical
+	var b: float = Medical.CURE_BASE
 	near(m.cure_chance(_who(g.sim, "ana")), 0.9, 0.0001, "Ana, Medicine 10: capped at 90%")
-	near(m.cure_chance(_who(g.sim, "ruth")), 0.5, 0.0001, "Ruth, Medicine 2")
-	near(m.cure_chance(_who(g.sim, "walt")), 0.5, 0.0001, "Walt, Medicine 2")
-	near(m.cure_chance(_who(g.sim, "dez")), 0.4, 0.0001, "Dez, Medicine 1")
-	near(m.cure_chance(_who(g.sim, "marcus")), 0.3, 0.0001, "Medicine 0")
+	near(m.cure_chance(_who(g.sim, "ruth")), b + 0.2, 0.0001, "Ruth, Medicine 2")
+	near(m.cure_chance(_who(g.sim, "walt")), b + 0.2, 0.0001, "Walt, Medicine 2")
+	near(m.cure_chance(_who(g.sim, "dez")), b + 0.1, 0.0001, "Dez, Medicine 1")
+	near(m.cure_chance(_who(g.sim, "marcus")), b, 0.0001, "Medicine 0")
 	g.world.free()
 
 
@@ -984,7 +989,8 @@ func test_the_cure_rate_follows_the_healers_medicine() -> void:
 	var g := _clinic(9, 1)
 	var sim = g.sim
 	var hector = _who(sim, "hector")
-	for spec in [["ana", 0.9], ["ruth", 0.5], ["walt", 0.5], ["dez", 0.4]]:
+	var base: float = Medical.CURE_BASE
+	for spec in [["ana", 0.9], ["ruth", base + 0.2], ["walt", base + 0.2], ["dez", base + 0.1]]:
 		var healer = _who(sim, spec[0])
 		var ok := 0
 		var n := 400
@@ -995,7 +1001,7 @@ func test_the_cure_rate_follows_the_healers_medicine() -> void:
 				ok += 1
 				eq(hector.infected_at, -1.0, "cured means not infected")
 			near(sim.stock.meds, 8.0, 0.0001, "each try costs 2")
-		near(float(ok) / float(n), spec[1], 0.07, "%s: 30%% plus 10%% a point, at most 90%%" % spec[0])
+		near(float(ok) / float(n), spec[1], 0.07, "%s: the base plus 10%% a point, at most 90%%" % spec[0])
 	g.world.free()
 
 

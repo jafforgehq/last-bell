@@ -35,6 +35,26 @@ func test_the_rules_are_reproducible_from_a_seed() -> void:
 	c.world.free()
 
 
+func test_a_whole_night_is_reproducible_from_a_seed() -> void:
+	# shooting, killing and ammo depend on every random roll, including each
+	# survivor's first shot timer: two runs of one seed must agree to the round
+	var a := Helpers.make(17, 1)
+	var b := Helpers.make(17, 1)
+	for g in [a, b]:
+		Helpers.run_to_hour(g.sim, 3.0)
+	eq(a.sim.kills, b.sim.kills, "the same number of the dead put down")
+	eq(a.sim.stock, b.sim.stock, "the same stocks")
+	var sig := func(sim) -> String:
+		var out := ""
+		for p in sim.people:
+			out += "%s:%.2f,%.2f,%.1f;" % [p.id, p.x, p.y, p.hp]
+		return out
+	eq(sig.call(a.sim), sig.call(b.sim), "the same people in the same places")
+	check(a.sim.kills > 0, "and the night was not empty")
+	a.world.free()
+	b.world.free()
+
+
 func test_a_game_day_passes_without_errors_with_the_stub_modules() -> void:
 	var g := Helpers.make(5, 1)
 	Helpers.run(g.sim, 480.0)

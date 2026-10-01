@@ -72,12 +72,13 @@ func update(dt: float) -> void:
 		if z.state != "dead" and z.state != "dying":
 			alive += 1
 	var night: bool = sim.phase == "night"
-	if alive >= (CAP_NIGHT if night else CAP_DUSK):
+	var room: int = (CAP_NIGHT if night else CAP_DUSK) - alive
+	if room <= 0:
 		sim.spawn_t = 1.0
 		return
 	var at: Vector2 = sim.spawns[sim.rng.randi() % sim.spawns.size()]
 	var group: int = (2 + sim.rng.randi() % 2) if night else 1
-	group = mini(group, int(budget_left))
+	group = mini(mini(group, int(budget_left)), room)
 	for i in group:
 		sim.spawn(at.x + (sim.rng.randf() - 0.5) * 1.6, at.y + (sim.rng.randf() - 0.5) * 1.6, "approach")
 	budget_left -= float(group)

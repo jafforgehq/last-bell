@@ -162,9 +162,9 @@ func test_the_three_sites_load_from_data() -> void:
 	eq(by.hardware.name, "The hardware store", "the hardware store's name")
 	eq(by.houses.name, "Neighbourhood houses", "the houses' name")
 	eq([by.pharmacy.danger, by.hardware.danger, by.houses.danger], [2, 2, 1], "danger 2, 2 and 1")
-	eq(by.pharmacy.loot.meds, [3, 6], "3 to 6 meds")
-	eq(by.hardware.loot.scrap, [10, 20], "10 to 20 scrap")
-	eq(by.hardware.loot.ammo, [20, 60], "20 to 60 ammo")
+	eq(by.pharmacy.loot.meds, [4, 8], "4 to 8 meds")
+	eq(by.hardware.loot.scrap, [12, 24], "12 to 24 scrap")
+	eq(by.hardware.loot.ammo, [40, 90], "40 to 90 ammo")
 	eq(by.houses.loot.food, [8, 14], "8 to 14 food")
 	eq(by.houses.loot.water, [10, 20], "10 to 20 water")
 	check(by.pharmacy.extra.has("food"), "the pharmacy sometimes has food")
@@ -556,15 +556,15 @@ func test_injury_and_loss_rates_follow_the_formula() -> void:
 			for k in 2:
 				var skill: float = float(who[k].def.skills.Shooting)
 				var w := 0.12 * danger * mult * (1.0 - skill / 15.0)
-				var l := 0.02 * mult if danger >= 2 else 0.0
+				var l := 0.01 * mult if danger >= 2 else 0.0
 				var want_hurt := (1.0 - l) * w
 				var label := "difficulty %d, %s, %s" % [d, site_id, who[k].first]
 				_rate(counts[k].lost, n, l, "lost, " + label)
 				_rate(counts[k].scratch, n, want_hurt * 0.75, "scratched, " + label)
 				_rate(counts[k].bite, n, want_hurt * 0.25, "bitten, " + label)
 			if site_id == "hardware":
-				near(scrap_sum / paid, 15.0, 0.4, "average scrap, difficulty %d" % d)
-				near(ammo_sum / paid, 40.0, 1.2, "average ammo, difficulty %d" % d)
+				near(scrap_sum / paid, 18.0, 0.5, "average scrap, difficulty %d" % d)
+				near(ammo_sum / paid, 65.0, 1.6, "average ammo, difficulty %d" % d)
 			else:
 				eq(counts[0].lost + counts[1].lost, 0, "nobody is lost at the houses (difficulty %d)" % d)
 	g.world.free()

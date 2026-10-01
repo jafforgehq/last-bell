@@ -6,7 +6,7 @@
 			"where": "the pharmacy",
 			"blurb": "Boarded up the first week. The stock room might still be full.",
 			"danger": 2,
-			"loot": {"meds": [3, 6]},
+			"loot": {"meds": [4, 8]},
 			"extra": {"food": [0.5, 4]},
 			"image": "res://assets/ui/sites/pharmacy.png"
 		},
@@ -16,7 +16,7 @@
 			"where": "the hardware store",
 			"blurb": "Shutter dented, ladder left out. Sheet steel, nails, and shells under the counter.",
 			"danger": 2,
-			"loot": {"scrap": [10, 20], "ammo": [20, 60]},
+			"loot": {"scrap": [12, 24], "ammo": [40, 90]},
 			"extra": {},
 			"image": "res://assets/ui/sites/hardware.png"
 		},

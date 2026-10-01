@@ -62,7 +62,7 @@ const WOUND_BASE := 0.12
 const BITE_SHARE := 0.25
 ## A member's chance of not coming back at a site of danger LOSS_MIN_DANGER or more:
 ## LOSS_BASE x difficulty.
-const LOSS_BASE := 0.02
+const LOSS_BASE := 0.01
 const LOSS_MIN_DANGER := 2
 ## The danger multiplier for story, standard and brutal.
 const DANGER_MULT := [0.5, 1.0, 1.6]
