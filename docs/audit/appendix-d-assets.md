@@ -43,6 +43,10 @@
 ## 5. Name
 "Last Bell" appears in README.md:1, project.godot `config/name="LastBell"` (window, web title, save folder), scripts/main.gd:1,209, tools/balance.gd:402, docs spec (twice: "check the name"), jafforge.itch.io/last-bell, github.com/jafforgehq/last-bell. Not on any screen or asset; "bell" is a mechanic. Collisions not checked.
 
+**Name check, 2026-10-01 (after the rename to Thirty Bells).** Three web searches ("Thirty Bells" with Steam, with zombie and schoolyard, with trademark or itch.io) found no game, product or trademark called Thirty Bells. Near neighbours: [Ten Bells](https://store.steampowered.com/app/3044030/Ten_Bells/) (Steam, 2024, an anomaly horror game in a pub; thirty anomalies are in its blurb), [The Silent Bells](https://store.steampowered.com/app/2166870/The_Silent_Bells/) and [Dream of Bells](https://store.steampowered.com/app/1602770/Dream_of_Bells/). They are different titles in different genres, but "Bells" is a crowded word, so the name will share search results with them. A web search is not a trademark search: before the Steam page, search the USPTO and EUIPO databases for classes 9 and 41 and look the name up in Steam's own store search.
+
+**Status after rounds 3 and 4 (2026-10-01).** Done from the list below: items 3 (credits screen with the Godot and Barlow lines; the AI-pictures line says so plainly), 5 in part (the name; a custom user directory `ThirtyBells` was set; icon and splash are still Godot's), 6 in part (the web export leaves out tests, tools and docs), 7 (a pause menu, settings with volumes, interface size and fullscreen, saved in `user://prefs.cfg`). Round 3 added seven Meshy pictures (six materials and the scrapyard picture, 63 credits), all logged in `docs/assets-log.md`; the count of AI-made pictures to prove is now 22, not 15.
+
 ## 6. Before the Steam page (effort)
 1. Prove Meshy plan; keep task IDs and prompts for the 15 images, or redraw (S).
 2. Back up the transcript generator source and the art (S).
