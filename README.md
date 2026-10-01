@@ -2,7 +2,7 @@
 
 Six survivors hold a walled schoolyard against the dead for thirty nights. Built in Godot 4.7. (Working title; it was Last Bell until 2026-10-01, when it turned out a Steam game called The Last Bell is coming. The itch.io page and the GitHub repository still carry the old name.)
 
-Open the project and press **F5**. The main scene is `scenes/main.tscn`.
+Open the project and press **F5**. The main scene is `scenes/main.tscn`; a cold start shows the title screen (Continue, New game, Orientation Day, Load, Settings, Credits, Quit). A start with a run choice on the command line (`--new=1`, `--seed=N`, `--load=path`, `--shot=...`) goes straight into the yard.
 
 ## Controls
 
@@ -14,12 +14,13 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`.
 | Scroll or pinch | Zoom |
 | R / P / F / C | Draft or release / to post / repair / follow |
 | T / X / G | Treat the wounded or infected / send an infected person out / send a scavenging party |
+| M | Send the selected person to make ammo at the worktable (again to call them back) |
 | V | Show how many guns reach each wall section from where the crew stands at night (red none, amber one, green two or more) |
 | L | Set the alarm on the selected wall section |
 | B | Switch auto-repair on or off for the selected person |
 | Space, 1, 2, 3 | Pause, normal, fast, fastest |
 | Tab | Next person (skips the lost and those away) |
-| Esc | Clear selection |
+| Esc | Clear the selection; with nothing selected, the menu (resume, save, load, settings, how to play, main menu, quit) |
 
 ## Playing
 
@@ -27,13 +28,16 @@ A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, mo
 
 - **Supplies.** At 07:00, 13:00 and 19:00 everyone eats and drinks. The stores panel shows how many days of food and water are left. The vegetable beds and rain barrels give a little each dawn. Repairs cost scrap (1 for every 10 points of wall health), bandages cost medicine, and shooting costs ammo: when the stock cannot pay for another shot the guns stay silent and people fight with the butt of the gun (a pike never runs dry), and an alert says so.
 - **Wounds.** A bite or scratch bleeds until someone bandages it (Ana first); at 0 health a person is downed and must be stabilised within three game hours, then rests in bed. A **bite** can infect: a feverish person turns into a walker 12 to 24 hours later unless treated (**T**, two medicine, better with Medicine skill) or sent out through the gate (**X**).
-- **Scavenging.** Select someone and press **G** to send one or two survivors through the gate between 06:30 and 10:00. They come back at 16:00 with loot, hurt, or not at all. A raided site is picked over for three days.
+- **Scavenging.** Select someone and press **G** to send one or two survivors through the gate between 06:30 and 10:00, to the houses (food and water), the pharmacy (medicine), the hardware store (scrap and ammo) or the scrapyard (a great deal of scrap, and the most dangerous). They come back at 16:00 with loot, hurt, or not at all. A raided site is picked over for three days.
+- **The workshop.** Ammo is what runs out first. By day select a person and press **M**: they walk to the worktable in the yard and turn scrap into ammo, 8 ammo for each scrap (Dez gets through 6.5 scrap an hour, Marcus 2.5), and keep 3 scrap back for the walls. They go back to their jobs at the bell, or when you give them another order. Scrap is what the walls, the bench and the scrapyard trips are all about.
 - **The school.** The dead cannot walk into the school while its two north doors hold. They go for the doors once the yard has fallen and a person is hiding inside; a door that is down opens the whole building to them. Falling back is a last stand with a clock, not a bunker.
 - **The dead.** Walkers come from the first night. From night 4 some are **runners**: quick and frail, they cross the yard in a third of the time and give the crew little warning. From night 8 a **brute** comes among them: slow, huge, many shots to bring down, and it tears at a wall several times as hard as a walker. The guns shoot a brute first and a runner second. Each night is planned at dusk: most of the dead come from one or two spawn points, the later part of the night is where the brutes are.
 - **The lookout.** At 17:00 Marcus, if he is alive and about, reports what tonight looks like: about how many (give or take 15%), from which way, and whether a brute or runners are among them. Without him nobody tells the crew.
 - **Fields of fire (V).** The shooters stand at their night posts, and a wall section is only defended if their guns reach it. The view shows each section's cover; people on the walkways and towers can be scratched far less often than people on the ground.
 - **The alarm (L).** Select a wall section and set the alarm: it costs 3 scrap, rings for three game hours, and draws the dead already on their way to that section, where the guns are. One alarm at a time; not on the school doors.
 - **Standing orders (B).** A person with auto-repair mends the most worn wall section by day without being told, while the stock has 5 scrap or more. Dez and Hector start with it on. A repair mends 5 points a second plus the person's Building skill.
+- **Orientation Day.** A guided first run (about ten minutes, a Story game that cannot be lost): sixteen short steps teach selecting and moving, posts on the decks, repairs, the stores, a scavenging trip, the bell, shooting, the fields-of-fire view and the alarm, wounds and fever, saving and making ammo. Offered on the first launch; replay it from the title screen. After that a few one-line tips show once each in real runs (first dusk, low stores, the first wound, the first runner and brute); switch them off in Settings.
+- **Menus and settings.** The title screen offers Continue (the newest save), New game (difficulty and seed), Orientation Day, Load, Settings and Credits; **Esc** with nothing selected opens the pause menu, and so does the menu button next to the sound button. Settings keep four volumes (effects, ambience, interface, master), the interface size, hints, reduced motion and fullscreen in `user://prefs.cfg`.
 - **The goal.** Hold thirty nights. Night 30 is the Big Night: more than twice the usual number of the dead, a third of them runners and brutes, coming from everywhere. At the dawn that starts day 31 a convoy is on the road and the run is won.
 - **Save and load.** **F5** saves, **F9** loads; the game also autosaves at each dawn. When everyone is gone the game over screen offers a new game.
 
@@ -59,7 +63,10 @@ A new game starts on day 1 at 07:00 with a quiet yard. The dead come at dusk, mo
   - `lighting.gd` covers the day/night sky (`CanvasModulate`) and every lamp (`PointLight2D`).
   - `glow_node.gd` draws additive glows.
   - `overlay_node.gd` draws the names, bars and brackets, the fields-of-fire view and the alarm's marker.
-- `scripts/ui/hud.gd`: the HUD, built from Controls.
+- `scripts/ui/hud.gd`: the HUD, built from Controls; `scavenge_dialog.gd` and `game_over.gd` are its modals. Their surfaces come from `frames.gd` (nine-slice frames in `assets/ui/theme`).
+- `scripts/ui/shell.gd` and its siblings (`title_menu.gd`, `pause_menu.gd`, `settings_menu.gd`, `new_game_menu.gd`, `load_menu.gd`, `credits.gd`): the title screen and the menus. `scripts/prefs.gd` keeps the settings in `user://prefs.cfg`.
+- `scripts/ui/coach.gd`, `scripts/sim/orientation.gd`, `assets/data/tutorial.json`, `assets/data/hints.json`: Orientation Day (a scripted scenario and the coach overlay) and the one-line tips.
+- `scripts/sim/workshop.gd`: scrap into ammo at the worktable.
 - `scripts/audio/sound.gd`: one-shot sounds and the ambience loops.
 
 ## Art and sound
@@ -70,8 +77,8 @@ replacement PNG at the same size drops straight in.
 - `assets/objects`, `walls`, `terrain`: props, the school walls, ground textures.
 - `scripts/render/deck_faces.gd`: draws what makes the walkways and towers look raised: the scaffold face under the planks, the tower bases, the supports along the side walkways, the shadows and the ladders (their sizes are constants at the top of the file). The pieces it draws are `assets/objects/deck_*.png`, made by `tools/make_deck_art.py` (Python with Pillow and NumPy) from three reference pictures in `tools/art_src/` (a scaffold front, a tower base and a ladder, made with Meshy and kept so the pieces can be rebuilt). The walkways can only be climbed at the ladders; `world.gd` shuts the tiles under the face for people and for the dead.
 - `assets/pawns`, `portraits`, `weapons`, `trees`, `fx`: characters and effects.
-- `assets/ui/icons`: HUD icons.
-- `assets/audio`: sound effects and ambience loops.
+- `assets/ui/icons`: HUD icons. `assets/ui/theme`: the noticeboard frames, built by `tools/make_ui_theme.py` from Meshy material pictures kept in `tools/ui_src/` (`docs/assets-log.md` records every AI-made picture).
+- `assets/audio`: sound effects and ambience loops; the UI sounds (`ui_*.wav`) are synthesised by `tools/make_ui_sounds.py`.
 - `assets/data/map.json`: the map layout, lights, wall segments and roster.
 
 They were generated once from the original web prototype, which has since
@@ -115,6 +122,10 @@ given moment without touching the game:
 | `--advance` | Simulate N seconds first |
 | `--cam=x,y,zoom` | Place the camera (tiles, px per tile) |
 | `--select=ruth` | Select a person |
+| `--title` | Show the title screen |
+| `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
+| `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours) |
+| `--tutorial[=N]` | Start Orientation Day (at step N) |
 | `--wall=N` | Select wall section N |
 | `--fields` | Start with the fields-of-fire view on |
 | `--lure=N` | Set the alarm on wall section N (gives scrap if needed) |
@@ -152,7 +163,7 @@ time in worker processes, `--policy=none` gives no orders, `--policy=keep` hides
 crew in the school gym from the bell to dawn (the check that hiding does not beat
 defending), `--policy=informed` plays the default policy and also reads the plan:
 it stands the shooters where their guns cover the thinnest section and sets the alarm
-(the check that knowing the night pays), `--verbose` lists what the policy did and who was lost; see the top of
+(the check that knowing the night pays), `--sites=path` reads the scavenging sites from another file (to try a site before it is in the game), `--verbose` lists what the policy did and who was lost; see the top of
 the file for the rest. A game
 whose colony collapses is slow to play (the walkers inside the yard re-path
 every second).

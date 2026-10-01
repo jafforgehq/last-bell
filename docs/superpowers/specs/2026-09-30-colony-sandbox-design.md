@@ -196,6 +196,31 @@ Round 2 made the night something to read and solve (plan: `docs/superpowers/plan
 
 The informed crew outlasts the default one by seven days, so knowing the night pays. On Story (the dead at 0.7 times) the informed policy wins 5 of 8 games and the default one 2 of 8, and the Big Night is what ends the runs that reach day 30 and fall. What ends a Standard run: the default crew is out of scrap from about day 6 (the walls stop being mended and fall); the informed crew has the walls and runs out of ammo (about 1000 to 1150 kills, empty around day 22 to 26). Ammo has no source except the hardware store, so the workshop of round 3 is where the Standard win comes from.
 
+## 7e. After round 3 (2026-10-01)
+
+Round 3 made Thirty Bells a game a stranger can start, learn and win (plan: `docs/superpowers/plans/2026-10-01-round-3.md`; the art is logged in `docs/assets-log.md`).
+
+- **The workshop** (`scripts/sim/workshop.gd`). By day a person ordered to make ammo (key M) walks to the yard's worktable and turns scrap into ammo: 8 ammo for each scrap, 2 + Building/2 scrap an hour (Dez 6.5, Ruth 3.5, Marcus 2.5) times how well they are, keeping 3 scrap back for the walls. The bell, any other order or a refusal ends it. Auto-repair leaves a worker at the bench.
+- **A fourth site, the scrapyard.** Danger 3, 35 to 60 scrap, a little food now and then, no ammo. Scrap is what the walls and the bench both eat; before it, scrap ran out around day 6 in every run.
+- **The shell.** A cold start shows the title over the living yard; Continue (the newest save), New game (Story, Standard or Brutal, and a seed), Orientation Day, Load, Settings, Credits, Quit. Esc with nothing selected, or the menu button, opens the pause menu. Settings: four volumes on audio buses, interface size 80 to 150%, hints, reduced motion, fullscreen, kept in `user://prefs.cfg`. A save is read cheaply by `SaveGame.peek`. A screenshot run keeps its settings in its own file.
+- **Orientation Day.** A Story scenario that cannot be lost, taught by a coach overlay through sixteen steps (`assets/data/tutorial.json`): a card, a ring on the thing to use, a soft lock that refuses what is off-lesson, Show me after 20 s idle, Skip always. A headless bot plays it through the real handlers in the tests. Eight one-line tips show once each in real runs (`assets/data/hints.json`).
+- **The look.** The HUD, the dialogs and the game-over report card wear 22 nine-slice frames (chalkboard slate in oak trim, hall-pass badges, paper slips, notebook paper) made by `tools/make_ui_theme.py` from six Meshy material pictures (63 credits with the scrapyard picture); the flat style remains as a fallback. The world art is unchanged.
+
+| Value | Before round 3 | Now | Why |
+| --- | --- | --- | --- |
+| Ammo source | the hardware store only | + the workshop, 8 ammo for a scrap | The best crew ran out of ammo around day 24 in every run. |
+| Scavenging sites | 3 | 4 (the scrapyard) | Scrap was the scarcest stock. |
+
+**What the harness shows now** (Standard, 30 days, 8 games per row; the informed crew wins when it reaches the dawn of day 31):
+
+| Crew | Seeds 1-8 | Seeds 9-16 | Both |
+| --- | --- | --- | --- |
+| Gives no orders | median day 11 | not run | |
+| The default policy (now also makes ammo) | median day 19.5 | median day 16 | **18**, best 24 |
+| The informed policy | 2 wins, median day 29 | 4 wins, median day 30 | **6 wins of 16**, median 29.5 |
+
+On Story the informed policy wins 7 of 8; on Brutal 0 of 8 (median day 18). So the Standard win is reachable by a crew that reads the night, places its guns, rings the alarm and keeps the bench busy, and it is not easy. Still open: a harness bot is not a player, so the real win rate is for playtests to say.
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.
