@@ -163,7 +163,7 @@ func test_the_three_sites_load_from_data() -> void:
 	eq(by.houses.name, "Neighbourhood houses", "the houses' name")
 	eq([by.pharmacy.danger, by.hardware.danger, by.houses.danger], [2, 2, 1], "danger 2, 2 and 1")
 	eq(by.pharmacy.loot.meds, [6, 11], "6 to 11 meds")
-	eq(by.hardware.loot.scrap, [14, 28], "14 to 28 scrap")
+	eq(by.hardware.loot.scrap, [18, 34], "18 to 34 scrap")
 	eq(by.hardware.loot.ammo, [70, 130], "70 to 130 ammo")
 	eq(by.houses.loot.food, [8, 14], "8 to 14 food")
 	eq(by.houses.loot.water, [10, 20], "10 to 20 water")
@@ -563,7 +563,7 @@ func test_injury_and_loss_rates_follow_the_formula() -> void:
 				_rate(counts[k].scratch, n, want_hurt * 0.75, "scratched, " + label)
 				_rate(counts[k].bite, n, want_hurt * 0.25, "bitten, " + label)
 			if site_id == "hardware":
-				near(scrap_sum / paid, 21.0, 0.6, "average scrap, difficulty %d" % d)
+				near(scrap_sum / paid, 26.0, 0.6, "average scrap, difficulty %d" % d)
 				near(ammo_sum / paid, 100.0, 2.5, "average ammo, difficulty %d" % d)
 			else:
 				eq(counts[0].lost + counts[1].lost, 0, "nobody is lost at the houses (difficulty %d)" % d)

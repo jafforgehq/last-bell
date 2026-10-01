@@ -8,17 +8,22 @@ const Medical := preload("res://scripts/sim/medical.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Scenario := preload("res://scripts/sim/scenario.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
+const Tactics := preload("res://scripts/sim/tactics.gd")
+const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
 ## water are six days of full rations for the crew of six (6 x 1 x 6 food, 6 x
 ## 1.5 x 6 water): with no income the first person is hungry or thirsty on day 7.
-const START_STOCK := {"ammo": 400.0, "scrap": 30.0, "food": 36.0, "water": 54.0, "meds": 10.0}
+const START_STOCK := {"ammo": 400.0, "scrap": 40.0, "food": 36.0, "water": 54.0, "meds": 10.0}
 ## The story, standard and brutal difficulties.
 const DIFFICULTY_NAMES := ["Story", "Standard", "Brutal"]
 
 ## What one shot costs from the stock of ammo (a shotgun shell is a bigger share).
 const SHOT_COST := 0.2
 const SHELL_COST := 0.34
+## A repair mends this many health points a second plus the repairer's Building
+## skill (Dez 14, Marcus 6): it was a flat 9.
+const REPAIR_BASE := 5.0
 ## The school's two north doors are wall sections of this kind. The building is
 ## shut to the dead until one is broken (see `refresh_school`).
 const DOOR_KIND := "door"
@@ -142,6 +147,11 @@ class Zombie:
 	var remove := false
 	## The name of the survivor this used to be, for one who turned.
 	var turned_name := ""
+	## Walker, runner or brute (see kinds.gd), how big it is drawn, and the damage
+	## of its claw on walls as a multiple of a walker's.
+	var kind := "walker"
+	var size := 1.0
+	var claw := 1.0
 
 
 var world
@@ -188,6 +198,7 @@ var medical
 var scavenge
 var scenario
 var waves
+var tactics
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -248,7 +259,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	scavenge = Scavenge.new()
 	scenario = Scenario.new()
 	waves = Waves.new()
-	for m in [supplies, medical, scavenge, scenario, waves]:
+	tactics = Tactics.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics]:
 		m.setup(self)
 	_seed()
 
@@ -324,16 +336,20 @@ func _seed() -> void:
 		spawn(p[0], p[1], "wander")
 
 
-func spawn(x: float, y: float, state: String) -> Zombie:
+func spawn(x: float, y: float, state: String, kind: String = "walker") -> Zombie:
 	var z := Zombie.new()
 	z.x = x
 	z.y = y
 	z.look_index = rng.randi() % looks.size()
 	z.look = looks[z.look_index]
 	z.state = state
-	z.hp = 4 + rng.randi() % 4
-	z.speed = 0.5 + rng.randf() * 0.35
-	z.limp = rng.randf() < 0.4
+	var k: Dictionary = Kinds.KINDS[kind]
+	z.kind = kind
+	z.size = float(k.size)
+	z.claw = float(k.claw)
+	z.hp = int(k.hp[0]) + rng.randi() % (int(k.hp[1]) - int(k.hp[0]) + 1)
+	z.speed = float(k.speed[0]) + rng.randf() * (float(k.speed[1]) - float(k.speed[0]))
+	z.limp = rng.randf() < 0.4 and kind == "walker"
 	z.walk_phase = rng.randf() * 6.0
 	z.t = rng.randf() * 10.0
 	z.attack_t = rng.randf()
@@ -403,7 +419,7 @@ func game_hours(dt: float) -> float:
 ## A button the HUD offers for the selection (see the modules' gizmo()):
 ## true if a module took it.
 func handle_gizmo(id: String, sel) -> bool:
-	for m in [medical, scavenge, supplies, scenario]:
+	for m in [medical, scavenge, supplies, scenario, tactics]:
 		if m.has_method("gizmo") and m.gizmo(id, sel):
 			return true
 	return false
@@ -437,7 +453,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics]:
 		m.start()
 
 
@@ -476,6 +492,7 @@ func update(dt: float) -> void:
 	medical.update(dt)
 	scavenge.update(dt)
 	waves.update(dt)
+	tactics.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -561,7 +578,7 @@ func _update_person(p: Person, dt: float) -> void:
 			var hx := s.center.x + (-0.8 if s.side == "W" else (0.8 if s.side == "E" else 0.0))
 			var hy := s.center.y - (0.8 if s.side == "N" else 0.0)
 			fx.hit_material(hx, hy, "metal")
-		var done: float = supplies.repair_budget(dt * 9.0 * perf(p))
+		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.def.skills.Building)) * perf(p))
 		if done > 0.0:
 			_repair_segment(s, done)
 		if s.hp >= s.max_hp:
@@ -619,7 +636,7 @@ func _find_target(p: Person):
 		if dist > rng:
 			continue
 		var inside: bool = z.x > 20 and z.x < 64 and z.y > 18 and z.y < 44
-		var score := dist - (3.0 if z.state == "attack" else 0.0) - (12.0 if inside else 0.0)
+		var score := dist - (3.0 if z.state == "attack" else 0.0) - (12.0 if inside else 0.0) + float(Kinds.PRIORITY.get(z.kind, 0.0))
 		if score < best_score:
 			best_score = score
 			best = z
@@ -741,11 +758,21 @@ func _hurt_zombie(z: Zombie, dmg: float, ang: float) -> void:
 # ----------------------------------------------------------------- zombies --
 
 func _assign_slot(z: Zombie) -> bool:
+	return assign_slot(z, null)
+
+
+## Gives one of the dead a free place at a wall section (the best by distance, how
+## crowded it is and a little luck; the section with the alarm on it scores far
+## better), or only at `only` when that is given. False if there is none or no way.
+func assign_slot(z: Zombie, only) -> bool:
 	var best: Slot = null
 	var best_score := INF
 	var yard_down := yard_open()
+	var lured = tactics.lure_seg()
 	for s in segments:
 		if s.state == 3:
+			continue
+		if only != null and s != only:
 			continue
 		if s.kind == DOOR_KIND and not yard_down:
 			continue
@@ -757,6 +784,8 @@ func _assign_slot(z: Zombie) -> bool:
 			if sl.who != null:
 				continue
 			var score := Vector2(sl.ax - z.x, sl.ay - z.y).length() + crowd * 1.2 + rng.randf() * 4.0
+			if lured != null and s == lured:
+				score -= Tactics.LURE_PULL
 			if score < best_score:
 				best_score = score
 				best = sl
@@ -917,7 +946,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 	z.groan_t -= dt
 	if z.groan_t <= 0.0:
 		z.groan_t = 5.0 + rng.randf() * 12.0
-		events.append({"type": "groan", "x": z.x, "y": z.y})
+		events.append({"type": "groan", "x": z.x, "y": z.y, "kind": z.kind})
 	if z.stagger > 0.0:
 		z.stagger -= dt
 		return
@@ -1015,7 +1044,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 
 
 func _claw(z: Zombie, s: Segment) -> void:
-	_damage_segment(s, 1.0 + rng.randf() * 1.3)
+	_damage_segment(s, (1.0 + rng.randf() * 1.3) * z.claw)
 	var mat := "wood" if (s.kind == "pallets" or s.kind == DOOR_KIND) else ("stone" if s.kind == "blocks" else "metal")
 	var from_north := s.side == "N" or s.side == "S"
 	var nx := 0.0 if from_north else (1.0 if s.side == "W" else -1.0)

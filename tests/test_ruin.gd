@@ -11,6 +11,8 @@ func _quiet() -> Dictionary:
 	var g := Helpers.make(61, 1)
 	var sim = g.sim
 	sim.waves.enabled = false
+	# nobody mends a wall on their own: that would spend scrap
+	sim.tactics.auto.clear()
 	sim.zombies.clear()
 	sim.minutes = 8.0 * 60.0
 	sim.phase = sim.phase_at(sim.minutes)

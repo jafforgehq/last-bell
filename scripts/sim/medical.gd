@@ -32,6 +32,9 @@ const SCRATCH_BLEED := 2.0
 ## stands within SCRATCH_REACH tiles of the spot behind the wall.
 const SCRATCH_CHANCE := 0.11
 const SCRATCH_REACH := 2.5
+## A defender on a raised deck (a walkway or a tower) is only reached by this share
+## of the scratches that would have found them on the ground.
+const DECK_SCRATCH := 0.2
 ## A bite infects with this chance by difficulty (story, standard, brutal).
 const INFECT_CHANCE := [0.3, 0.6, 1.0]
 ## Bites within this many game hours of the last roll are the same encounter.
@@ -216,6 +219,8 @@ func on_wall_claw(z, seg) -> void:
 			best = d
 			victim = p
 	if victim == null:
+		return
+	if sim.world.on_deck(victim.x, victim.y) and sim.rng.randf() >= DECK_SCRATCH:
 		return
 	add_wound(victim, "scratch")
 	sim.fx.blood(victim.x, victim.y - 0.25, victim.x - z.x, victim.y - z.y, 5)

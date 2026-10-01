@@ -51,6 +51,12 @@ class Quiet:
 	func gizmo(_id: String, _sel) -> bool:
 		return false
 
+	func lure_seg():
+		return null
+
+	func total_days() -> int:
+		return 30
+
 	func save() -> Dictionary:
 		return {}
 
@@ -80,6 +86,7 @@ func _calm(seed_value: int = 1, difficulty: int = 1) -> Dictionary:
 	sim.medical = MedSpy.new()
 	sim.scavenge = Quiet.new()
 	sim.scenario = Quiet.new()
+	sim.tactics = Quiet.new()
 	return g
 
 
@@ -606,7 +613,7 @@ func test_a_hungry_person_repairs_slower_but_the_scrap_per_point_is_the_same() -
 	sim.order_repair(p, seg)
 	_run(sim, 5.0)
 	var mended: float = seg.hp - hp0
-	near(mended, 5.0 * 9.0 * 0.8, 0.5, "a hungry person mends at 0.8 of the rate")
+	near(mended, 5.0 * (Sim.REPAIR_BASE + float(p.def.skills.Building)) * 0.8, 0.5, "a hungry person mends at 0.8 of the rate")
 	near(100.0 - sim.stock.scrap, mended / 10.0, 1e-6, "and pays one scrap per ten points mended")
 	g.world.free()
 

@@ -16,7 +16,7 @@
 			"where": "the hardware store",
 			"blurb": "Shutter dented, ladder left out. Sheet steel, nails, and shells under the counter.",
 			"danger": 2,
-			"loot": {"scrap": [14, 28], "ammo": [70, 130]},
+			"loot": {"scrap": [18, 34], "ammo": [70, 130]},
 			"extra": {},
 			"image": "res://assets/ui/sites/hardware.png"
 		},

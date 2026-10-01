@@ -31,8 +31,9 @@
 extends RefCounted
 
 const Sim := preload("res://scripts/sim/sim.gd")
+const Kinds := preload("res://scripts/sim/kinds.gd")
 
-const VERSION := 2
+const VERSION := 3
 const QUICK_PATH := "user://quicksave.json"
 const AUTO_PATH := "user://autosave.json"
 
@@ -557,6 +558,8 @@ static func _zombie_in(sim, r: Reader, zd: Dictionary, by_seg: Dictionary, claim
 	if z.state == "" or z.look_index < 0 or z.look_index >= sim.looks.size():
 		return null
 	z.look = sim.looks[z.look_index]
+	if not Kinds.KINDS.has(String(z.kind)):
+		return null
 	z.path = r.points(zd.get("path", []))
 	var slot = zd.get("slot")
 	z.slot = null

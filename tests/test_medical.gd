@@ -383,7 +383,9 @@ func test_a_claw_sometimes_scratches_a_defender_behind_the_wall() -> void:
 	var slot = gate.slots[3]
 	var z = sim.spawn(slot.x, slot.y, "attack")
 	var ruth = _who(sim, "ruth")
-	_put(sim, ruth, z.x, gate.center.y)
+	# on the ground behind the wall: people up on the walkway are scratched far less (see the tactics tests)
+	_put(sim, ruth, z.x, gate.center.y + 1.6)
+	check(not sim.world.on_deck(ruth.x, ruth.y), "Ruth stands on the ground")
 	var n := 2000
 	for i in n:
 		sim.medical.on_wall_claw(z, gate)
@@ -431,14 +433,15 @@ func test_nobody_is_scratched_unless_right_behind_the_wall() -> void:
 
 
 func test_the_rules_claw_reaches_the_medical_module() -> void:
-	# the rules' own claw, with the gate kept whole: Ruth at her post behind it
+	# the rules' own claw, with the gate kept whole: Ruth on the ground behind it
 	var g := _clinic(8, 1)
 	var sim = g.sim
 	sim.stock.meds = 0.0
 	var gate = sim.segments[2]
 	var z = sim.spawn(gate.slots[3].x, gate.slots[3].y, "attack")
 	var ruth = _who(sim, "ruth")
-	_put(sim, ruth, 39.25, 18.8)
+	_put(sim, ruth, 39.25, 20.4)
+	check(not sim.world.on_deck(ruth.x, ruth.y), "Ruth stands on the ground")
 	for i in 1500:
 		gate.hp = gate.max_hp
 		sim._claw(z, gate)

@@ -19,6 +19,8 @@ var terrain := PackedByteArray()
 var solid_z := PackedByteArray()
 var solid_p := PackedByteArray()
 var layers := {}
+## The tiles of the raised decks (walkways and towers): index to true.
+var deck_tiles := {}
 var segment_holders := {} # segment id -> Node2D holding its current sprite pieces
 var segment_states := {} # segment id -> Array of piece lists, one per damage state
 
@@ -137,6 +139,14 @@ func _apply_deck_barriers() -> void:
 			continue
 		solid_p[i] = 1
 		solid_z[i] = 1
+	# the towers are raised too
+	for o in d.objects:
+		if o.kind != "tower":
+			continue
+		for ty in range(floori(float(o.cy) - float(o.h) / 2.0), floori(float(o.cy) + float(o.h) / 2.0 - 0.001) + 1):
+			for tx in range(floori(float(o.cx) - float(o.w) / 2.0), floori(float(o.cx) + float(o.w) / 2.0 - 0.001) + 1):
+				usable[ty * W + tx] = true
+	deck_tiles = usable
 
 
 func _build_ground() -> void:
@@ -185,6 +195,11 @@ func set_walkable(tiles: Array, open: bool) -> void:
 	for i in tiles:
 		solid_z[int(i)] = 0 if open else 1
 		solid_p[int(i)] = 0 if open else 1
+
+
+## Whether a point is on a raised deck (a walkway or a tower).
+func on_deck(x: float, y: float) -> bool:
+	return deck_tiles.has(floori(y) * W + floori(x))
 
 
 func is_solid(solid: PackedByteArray, x: float, y: float) -> bool:
