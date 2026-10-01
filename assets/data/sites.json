@@ -29,6 +29,16 @@
 			"loot": {"food": [8, 14], "water": [10, 20]},
 			"extra": {"meds": [0.5, 1.5]},
 			"image": "res://assets/ui/sites/houses.png"
+		},
+		{
+			"id": "scrapyard",
+			"name": "The scrapyard",
+			"where": "the scrapyard",
+			"blurb": "A wrecker's yard: crushed cars, sheet metal, a crane that still has its hook. Nothing here is small.",
+			"danger": 3,
+			"loot": {"scrap": [35, 60]},
+			"extra": {"food": [0.3, 3]},
+			"image": "res://assets/ui/sites/scrapyard.png"
 		}
 	]
 }

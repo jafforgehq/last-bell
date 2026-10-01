@@ -146,10 +146,10 @@ func _banner(sim, text: String) -> Dictionary:
 
 # -------------------------------------------------------------------- sites --
 
-func test_the_three_sites_load_from_data() -> void:
+func test_the_four_sites_load_from_data() -> void:
 	var g := Helpers.make(1, 1)
 	var sites: Array = g.sim.scavenge.sites
-	eq(sites.size(), 3, "three sites")
+	eq(sites.size(), 4, "four sites")
 	var by := {}
 	for s in sites:
 		by[s.id] = s
@@ -157,16 +157,19 @@ func test_the_three_sites_load_from_data() -> void:
 		check(String(s.blurb).length() > 20, "%s has a line of flavour" % s.id)
 		check(String(s.image) == "res://assets/ui/sites/%s.png" % s.id, "%s has its picture path" % s.id)
 		check(FileAccess.file_exists(String(s.image)), "%s has its picture" % s.id)
-	check(by.has("pharmacy") and by.has("hardware") and by.has("houses"), "pharmacy, hardware and houses")
+	check(by.has("pharmacy") and by.has("hardware") and by.has("houses") and by.has("scrapyard"), "pharmacy, hardware, houses and the scrapyard")
 	eq(by.pharmacy.name, "The pharmacy", "the pharmacy's name")
 	eq(by.hardware.name, "The hardware store", "the hardware store's name")
 	eq(by.houses.name, "Neighbourhood houses", "the houses' name")
-	eq([by.pharmacy.danger, by.hardware.danger, by.houses.danger], [2, 2, 1], "danger 2, 2 and 1")
+	eq(by.scrapyard.name, "The scrapyard", "the scrapyard's name")
+	eq([by.pharmacy.danger, by.hardware.danger, by.houses.danger, by.scrapyard.danger], [2, 2, 1, 3], "danger 2, 2, 1 and 3")
 	eq(by.pharmacy.loot.meds, [6, 11], "6 to 11 meds")
 	eq(by.hardware.loot.scrap, [18, 34], "18 to 34 scrap")
 	eq(by.hardware.loot.ammo, [70, 130], "70 to 130 ammo")
 	eq(by.houses.loot.food, [8, 14], "8 to 14 food")
 	eq(by.houses.loot.water, [10, 20], "10 to 20 water")
+	eq(by.scrapyard.loot.scrap, [35, 60], "35 to 60 scrap at the scrapyard")
+	check(not by.scrapyard.loot.has("ammo"), "and no ammo: that is the workshop's")
 	check(by.pharmacy.extra.has("food"), "the pharmacy sometimes has food")
 	check(by.houses.extra.has("meds"), "the houses sometimes have a med")
 	eq(by.houses.extra.meds[1], 1, "and it is one med")
@@ -176,7 +179,7 @@ func test_the_three_sites_load_from_data() -> void:
 func test_available_sites_carry_what_the_hud_needs() -> void:
 	var g := Helpers.make(1, 1)
 	var list: Array = g.sim.scavenge.available_sites()
-	eq(list.size(), 3, "three sites to pick from")
+	eq(list.size(), 4, "four sites to pick from")
 	var hints := {}
 	for s in list:
 		for k in ["id", "name", "blurb", "danger", "loot_hint", "available", "note", "image"]:
@@ -186,6 +189,7 @@ func test_available_sites_carry_what_the_hud_needs() -> void:
 	check(hints.pharmacy.contains("meds"), "the pharmacy is good for meds: " + hints.pharmacy)
 	check(hints.hardware.contains("scrap") and hints.hardware.contains("ammo"), "the hardware store for scrap and ammo: " + hints.hardware)
 	check(hints.houses.contains("food") and hints.houses.contains("water"), "the houses for food and water: " + hints.houses)
+	check(hints.scrapyard.contains("scrap") and not hints.scrapyard.contains("ammo"), "the scrapyard for scrap alone: " + hints.scrapyard)
 	g.world.free()
 
 

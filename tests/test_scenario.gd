@@ -236,11 +236,25 @@ func test_the_policy_stops_repairs_at_the_bell() -> void:
 	g.world.free()
 
 
+func test_the_policy_goes_to_the_hardware_store_for_scrap_when_the_scrapyard_is_picked_over() -> void:
+	var g := Helpers.make(8, 1)
+	var sim = g.sim
+	sim.stock = {"ammo": 200.0, "scrap": 4.0, "food": 100.0, "water": 200.0, "meds": 20.0}
+	sim.scavenge.raids["scrapyard"] = [sim.day]
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	eq(sim.scavenge.parties.size(), 1, "a party goes")
+	if sim.scavenge.parties.size() == 1:
+		eq(sim.scavenge.parties[0].site, "hardware", "to the hardware store, which has scrap too")
+	g.world.free()
+
+
 func test_the_policy_sends_scavengers_when_a_stock_runs_low() -> void:
 	var cases := [
 		{"stock": "food", "value": 3.0, "site": "houses"},
 		{"stock": "water", "value": 5.0, "site": "houses"},
-		{"stock": "scrap", "value": 4.0, "site": "hardware"},
+		{"stock": "scrap", "value": 4.0, "site": "scrapyard"},
+		{"stock": "ammo", "value": 20.0, "site": "hardware"},
 		{"stock": "meds", "value": 1.0, "site": "pharmacy"},
 	]
 	for c in cases:
