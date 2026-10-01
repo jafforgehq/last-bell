@@ -173,7 +173,7 @@ func _auto_repairs() -> void:
 func post_pos(p) -> Vector2:
 	if p.drafted and p.order != null:
 		return Vector2(p.order.x, p.order.y)
-	return Vector2(float(p.def.post.x), float(p.def.post.y))
+	return sim.jobs.post_pos(p)
 
 
 ## How many of the crew's guns reach at least half of this section's places from

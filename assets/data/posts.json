@@ -1,0 +1,175 @@
+{
+  "posts": [
+    {
+      "id": "north_west_end",
+      "name": "North wall, west end",
+      "pos": [
+        25.0,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "north_west",
+      "name": "North wall, west",
+      "pos": [
+        30.0,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "barricade",
+      "name": "The barricade",
+      "pos": [
+        34.2,
+        18.8
+      ],
+      "what": "Stabbing through the barricade"
+    },
+    {
+      "id": "gate",
+      "name": "The gate",
+      "pos": [
+        39.0,
+        18.8
+      ],
+      "what": "Holding the gate"
+    },
+    {
+      "id": "north_middle",
+      "name": "North wall, middle",
+      "pos": [
+        43.5,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "bus",
+      "name": "The school bus",
+      "pos": [
+        47.5,
+        18.8
+      ],
+      "what": "Covering the bus"
+    },
+    {
+      "id": "north_east",
+      "name": "North wall, east",
+      "pos": [
+        52.0,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "north_far_east",
+      "name": "North wall, far east",
+      "pos": [
+        57.0,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "north_east_end",
+      "name": "North wall, east end",
+      "pos": [
+        61.0,
+        18.8
+      ],
+      "what": "Holding the north wall"
+    },
+    {
+      "id": "west_north",
+      "name": "West wall, north",
+      "pos": [
+        20.8,
+        24.0
+      ],
+      "what": "Watching the west wall"
+    },
+    {
+      "id": "west_middle",
+      "name": "West wall, middle",
+      "pos": [
+        20.8,
+        28.5
+      ],
+      "what": "Watching the west wall"
+    },
+    {
+      "id": "west_fence",
+      "name": "The west fence",
+      "pos": [
+        20.8,
+        33.0
+      ],
+      "what": "Watching the west fence"
+    },
+    {
+      "id": "west_south",
+      "name": "West wall, south",
+      "pos": [
+        20.8,
+        38.0
+      ],
+      "what": "Watching the west wall"
+    },
+    {
+      "id": "east_north",
+      "name": "East wall, north",
+      "pos": [
+        63.4,
+        24.0
+      ],
+      "what": "Watching the east wall"
+    },
+    {
+      "id": "east_middle",
+      "name": "East wall, middle",
+      "pos": [
+        63.4,
+        28.5
+      ],
+      "what": "Watching the east wall"
+    },
+    {
+      "id": "east_south",
+      "name": "East wall, south",
+      "pos": [
+        63.4,
+        33.0
+      ],
+      "what": "Watching the east wall"
+    },
+    {
+      "id": "east_far_south",
+      "name": "East wall, far south",
+      "pos": [
+        63.4,
+        38.0
+      ],
+      "what": "Watching the east wall"
+    },
+    {
+      "id": "tower_nw",
+      "name": "North-west tower",
+      "pos": [
+        18.9,
+        16.9
+      ],
+      "what": "Lookout, northwest tower"
+    },
+    {
+      "id": "tower_ne",
+      "name": "North-east tower",
+      "pos": [
+        65.2,
+        16.9
+      ],
+      "what": "Northeast tower"
+    }
+  ]
+}

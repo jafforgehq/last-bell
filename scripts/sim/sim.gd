@@ -16,6 +16,7 @@ const Bonds := preload("res://scripts/sim/bonds.gd")
 const Skills := preload("res://scripts/sim/skills.gd")
 const Barks := preload("res://scripts/sim/barks.gd")
 const Storyteller := preload("res://scripts/sim/storyteller.gd")
+const Jobs := preload("res://scripts/sim/jobs.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -219,6 +220,7 @@ var bonds
 var skills
 var barks
 var storyteller
+var jobs
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -287,7 +289,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	skills = Skills.new()
 	barks = Barks.new()
 	storyteller = Storyteller.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller]:
+	jobs = Jobs.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, jobs]:
 		m.setup(self)
 	_seed()
 
@@ -424,7 +427,8 @@ func order_post(p: Person) -> void:
 	p.drafted = true
 	p.repair = null
 	workshop.stop(p)
-	p.order = Vector3(p.def.post.x, p.def.post.y, 1)
+	var at: Vector2 = jobs.post_pos(p)
+	p.order = Vector3(at.x, at.y, 1)
 	p.goal_key = ""
 
 
@@ -465,7 +469,7 @@ func game_hours(dt: float) -> float:
 ## A button the HUD offers for the selection (see the modules' gizmo()):
 ## true if a module took it.
 func handle_gizmo(id: String, sel) -> bool:
-	for m in [medical, scavenge, supplies, scenario, tactics, workshop]:
+	for m in [medical, scavenge, supplies, scenario, tactics, workshop, jobs]:
 		if m.has_method("gizmo") and m.gizmo(id, sel):
 			return true
 	return false
@@ -499,7 +503,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, jobs]:
 		m.start()
 
 
@@ -545,6 +549,7 @@ func update(dt: float) -> void:
 	morale.update(dt)
 	barks.update(dt)
 	storyteller.update(dt)
+	jobs.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -572,7 +577,7 @@ func _goal_for(p: Person):
 		return null
 	if p.order != null:
 		var is_post: bool = p.order.z > 0.5
-		return {"x": p.order.x, "y": p.order.y, "face": _post_face(p) if is_post else "", "what": p.def.post.what if is_post else "Holding position"}
+		return {"x": p.order.x, "y": p.order.y, "face": _post_face(p) if is_post else "", "what": String(jobs.post_of(p).get("what", "Holding the wall")) if is_post else "Holding position"}
 	var duty = medical.goal_for(p)
 	if duty == null:
 		duty = scavenge.goal_for(p)
@@ -585,18 +590,12 @@ func _goal_for(p: Person):
 		return {"x": s.center.x, "y": s.center.y, "face": "N" if s.side == "S" else s.side, "what": "Repairing the %s" % s.name.to_lower()}
 	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
 	if night:
-		return {"x": float(p.def.post.x), "y": float(p.def.post.y), "face": _post_face(p), "what": p.def.post.what}
-	return {"x": float(p.def.job.x), "y": float(p.def.job.y), "face": "N" if p.id == "ruth" else "", "what": p.def.job.what}
+		return jobs.post_goal(p)
+	return jobs.goal_for(p)
 
 
 func _post_face(p: Person) -> String:
-	var x: float = p.def.post.x
-	var y: float = p.def.post.y
-	if x < 22.0:
-		return "N" if y < 19.0 else "W"
-	if x > 62.0:
-		return "N" if y < 19.0 else "E"
-	return "N"
+	return String(jobs.post_of(p).get("face", "N"))
 
 
 func _update_person(p: Person, dt: float) -> void:

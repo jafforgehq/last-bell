@@ -1,0 +1,120 @@
+{
+  "stations": [
+    {
+      "id": "bench",
+      "name": "Workbench",
+      "where": "the worktable",
+      "pos": [
+        43.9,
+        27.1
+      ],
+      "seats": 2,
+      "skill": "Building",
+      "icon": "ammo",
+      "blurb": "Makes ammo from scrap while the stock is under the target; mends walls when there is nothing to make.",
+      "what": "At the workbench",
+      "settings": {
+        "ammo_target": {
+          "label": "Make ammo until the stock reaches",
+          "default": 300,
+          "min": 0,
+          "max": 800,
+          "step": 25,
+          "unit": "ammo"
+        },
+        "scrap_reserve": {
+          "label": "Keep this much scrap for the walls",
+          "default": 3,
+          "min": 0,
+          "max": 20,
+          "step": 1,
+          "unit": "scrap"
+        }
+      }
+    },
+    {
+      "id": "builders",
+      "name": "Wall crew",
+      "where": "the walkway by the gate",
+      "pos": [
+        45.5,
+        18.8
+      ],
+      "seats": 3,
+      "skill": "Building",
+      "icon": "repair",
+      "blurb": "Mends the most worn wall section by day while there is scrap.",
+      "what": "Walking the wall",
+      "settings": {
+        "repair_below": {
+          "label": "Mend walls that are under",
+          "default": 70,
+          "min": 30,
+          "max": 95,
+          "step": 5,
+          "unit": "%"
+        }
+      }
+    },
+    {
+      "id": "garden",
+      "name": "Vegetable beds",
+      "where": "the garden",
+      "pos": [
+        53.5,
+        31.5
+      ],
+      "seats": 2,
+      "skill": "",
+      "icon": "food",
+      "blurb": "Each hour of work grows food.",
+      "what": "Tending the garden",
+      "settings": {}
+    },
+    {
+      "id": "infirmary",
+      "name": "Infirmary",
+      "where": "the infirmary",
+      "pos": [
+        48.5,
+        53.5
+      ],
+      "seats": 2,
+      "skill": "Medicine",
+      "icon": "meds",
+      "blurb": "Treats the hurt and the sick first; patients in the beds heal faster while someone is on duty.",
+      "what": "Sorting medicine",
+      "settings": {}
+    },
+    {
+      "id": "radio",
+      "name": "Radio desk",
+      "where": "the radio in the hall",
+      "pos": [
+        60.5,
+        46.6
+      ],
+      "seats": 1,
+      "skill": "Leading",
+      "icon": "radio",
+      "blurb": "Takes the noon call. With nobody at the desk the radio stays silent.",
+      "what": "Working the radio",
+      "settings": {}
+    },
+    {
+      "id": "watch",
+      "name": "Lookout post",
+      "where": "the north-west tower",
+      "pos": [
+        18.9,
+        16.9
+      ],
+      "seats": 1,
+      "skill": "Shooting",
+      "icon": "post",
+      "blurb": "Watches the road and tells the crew at 17:00 what tonight looks like.",
+      "what": "Keeping watch",
+      "settings": {}
+    }
+  ]
+}
