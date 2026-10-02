@@ -1,36 +1,44 @@
 ## The Build screen, a page of notebook paper over the game (key N, the hammer in the toolbar, or a click on a
-## plot's sign in the yard). At the left the plots of the compound (seven: five in the yard and two on the wall) as a list of
-## slips: the name, a tag for the kind of lot (yard or wall) and what is on it (Empty; the building going up with how far
-## along it is; the building that stands). At the right the plot that is chosen:
-##   - an empty one lists what its kind of lot allows, each with what it gives, its scrap and its builder-hours, and the
-##     reason it cannot be ordered now (not enough scrap, the most there may be, a building it needs first) written
-##     out under it, its Order button off with the same words as its tooltip; Order pays the scrap and puts a site up;
+## building's sign in the yard). Round 15: no more choosing of plots. Every building has its own HOME, a place where it
+## belongs (assets/data/plots.json: each plot is the home of one building, with a name that says where and a sentence of why),
+## and the page is a short list of BUILDINGS. At the left a slip for each (nine in the compound: a building that may stand
+## twice, the bunk house and the watchtower, has two, numbered "1 of 2" and "2 of 2", and the second is ordered after the
+## first): the building's name and what it is now (what it costs; or why it cannot be had now, "Can't: it needs 30 scrap"; the
+## building going up with how far along it is; Built). At the right the building that is chosen:
+##   - one not built lists what it does, what it costs in scrap and in builder-hours, where it goes (the home's name and why)
+##     and the reason it cannot be ordered now (not enough scrap, the most there may be, a building it needs first, the
+##     first of two not ordered yet) written out under it, its **Build** button off with the same words as its tooltip; Build
+##     pays the scrap and puts a site on its home, which the player never chooses (`build.home_for`);
 ##   - a site shows how far along it is, who is building it and about how long it will take at the present pace
 ##     (the Builders' rates and the work left; "nobody is on the Builders job" with a button for the Jobs screen when
 ##     it is nobody), and Cancel, with the refund on the button (all of it before any work is done, else half);
 ##   - a building shows what it gives, and Demolish (half the scrap back): the first click arms the button, which
 ##     says so, and the second, within CONFIRM_S seconds, takes the building down.
-## The foot says how much scrap is in the stores and how many people the compound has beds for (round 7's cap).
+## Over the detail is a small **map** of the yard with a pin for each building's home, the chosen one lit (the classic start
+## has it too, the yard only). The foot says how much scrap is in the stores and how many people the compound has beds for
+## (round 7's cap).
 ##
 ## In a settlement game (round 9: `sim.lots.on`) the page has more. The list begins with a slip for the **Lots page** (a card for
 ## each lot of the ring: its terms and Claim with the reason it cannot be pressed yet, and, once claimed, **one switch**, "Wall the
 ## streets as the scrap allows" (the lot's standing order), the street that is next and its price, how many of its walls stand and
-## whether it is sealed; scripts/ui/build_lots.gd) and goes on with the yard's plots and, for each lot that is claimed, its ring
-## plots (buildings stand on them as in the yard). A street's **mouth** (a wall across it) has no slip (round 11, the cut: twelve walls
+## whether it is sealed; scripts/ui/build_lots.gd) and goes on with the compound's buildings and, for each lot that is claimed, the
+## buildings whose homes are in its streets (the scrap yard, twice: round 15). A street's **mouth** (a wall across it) has no slip (round 11, the cut: twelve walls
 ## are one decision, not twelve): it is a pin on the **map** (scripts/ui/build_map.gd: the yard, or the whole block once a lot is
-## claimed, a toggle chooses, with the plots as pins that the pointer and the keyboard can have), and the pin's card says what is
+## claimed, a toggle chooses, with the homes as pins that the pointer and the keyboard can have; until the player chooses, the yard
+## shows while a building of the yard is chosen), and the pin's card says what is
 ## there: the street open (with the one wall the standing order would put across it and a button to order it now, no list of kits),
 ## the wall going up, the wall that stands and how well it stands (walls are not demolished), the wall that is down (the Builders
 ## mend it by day while there is scrap). Nothing of this is there in the classic start.
 ##
-## Hovering (or putting the keyboard on) a plot's slip marks the lot in the world: the HUD hands `{"plot": id}` to
-## main.gd (`set_build_hover`, `hud.on_build_hover`), `{}` when the pointer leaves or the page closes, and main.gd
-## says the page is up with `build_open`: the yard shows every plot's sign then (and otherwise only near the pointer: round 11).
+## Hovering (or putting the keyboard on) a building's slip marks its home in the world: the HUD hands `{"plot": id}` to
+## main.gd (`set_build_hover`, `hud.on_build_hover`), and the chosen building's home stays marked when the pointer leaves
+## (`{}` only when the page closes); main.gd says the page is up with `build_open`: the yard shows every home's sign then (and
+## otherwise only near the pointer: round 11).
 ##
-## Everything is read from the buildings module (sim.build: plots, plot, catalogue, building, why_not, order, cancel,
-## demolish, why_not_demolish, progress_of, active_site, rate, housing) and changed through it. The page follows the
+## Everything is read from the buildings module (sim.build: plots, plot, home_for, title_of, catalogue, building, why_not,
+## why_not_build, order, cancel, demolish, why_not_demolish, progress_of, active_site, rate, housing) and changed through it. The page follows the
 ## game while it is up (`refresh`, when the HUD is updated). Mouse and keyboard: every control can have the keyboard
-## (Tab, Shift+Tab and the arrows go between them; Up and Down on the slips choose the plot, Right or Enter goes to
+## (Tab, Shift+Tab and the arrows go between them; Up and Down on the slips choose the building, Right or Enter goes to
 ## the buttons of its detail, Left comes back; Enter on a street's pin on the map chooses it and goes to its card; Enter or Space presses a button; Esc, or N, closes the screen, Esc
 ## first putting away a Demolish that was armed). Opened by hud.open_build, which also pauses the rules while it is
 ## open and gives the speed back.
@@ -182,6 +190,8 @@ func setup(h, s, plot_id: String = "") -> void:
 	_layout.call_deferred()
 	_reveal_selected.call_deferred()
 	set_process(false)
+	# the chosen building's home is marked in the world from the start (and while the pointer is off every slip)
+	show_mark(selected)
 
 
 ## The plot to show when none was asked for: the site being built, else the first lot with nothing on it.
@@ -224,7 +234,7 @@ func _build() -> void:
 	head.add_theme_constant_override("v_separation", 0)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(hud._label("Build", Fonts.cond(700), 26, hud.PAPER_INK))
-	var sub: Label = hud._caps("Order buildings and claim the streets; the Builders raise them by day" if lots_on else "Pick a plot and order a building; the Builders raise it by day", hud.PAPER_INK2)
+	var sub: Label = hud._caps("Pick a building and press Build; the Builders raise it where it belongs, by day" if not lots_on else "Pick a building and press Build, or claim the streets; the Builders raise it by day", hud.PAPER_INK2)
 	sub.size_flags_vertical = Control.SIZE_SHRINK_END
 	head.add_child(sub)
 	_head = head
@@ -237,7 +247,7 @@ func _build() -> void:
 	list_scroll = _scroll()
 	list_box = _scroll_box(list_scroll)
 	list_box.add_theme_constant_override("separation", ROW_GAP)
-	list_box.add_child(hud._caps("Plots", hud.PAPER_INK2))
+	list_box.add_child(hud._caps("Buildings", hud.PAPER_INK2))
 	if lots_on:
 		_build_lots_list()
 	else:
@@ -279,7 +289,7 @@ func _build() -> void:
 	housing_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	counts.add_child(housing_label)
 	facts.add_child(counts)
-	hint_label = hud._label("Up and Down choose a plot, Enter goes to its buttons. N or Esc closes.", Fonts.sans(400), 13, hud.PAPER_INK2)
+	hint_label = hud._label("Up and Down choose a building, Enter goes to its buttons. N or Esc closes.", Fonts.sans(400), 13, hud.PAPER_INK2)
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint_label.custom_minimum_size.x = 120
 	facts.add_child(hint_label)
@@ -400,7 +410,7 @@ func _build_lots_list() -> void:
 	var lots_slip := _build_row({"id": LOTS_PAGE, "name": "Claim the streets", "kind": "lots"}, "Lots")
 	lots_row = lots_slip
 	list_box.add_child(lots_slip)
-	yard_header = hud._caps("The compound", hud.PAPER_INK2)
+	yard_header = hud._caps("In the compound", hud.PAPER_INK2)
 	list_box.add_child(yard_header)
 	for pl in build.plots():
 		if String(pl.get("lot", "")) == "":
@@ -419,8 +429,8 @@ func _build_lots_list() -> void:
 			list_box.add_child(slip)
 
 
-## One plot's slip: a button with the name and the tag on one line and what is on the plot on the next (and, while
-## a site goes up, a meter of how far along it is).
+## One building's slip (a home's: the building's name, numbered when it has two homes, and what it is now on the line below,
+## with a meter while a site goes up). The Lots slip has the tag "Lots".
 func _build_row(pl: Dictionary, tag_text: String = "") -> Button:
 	var id := String(pl.id)
 	var b := Button.new()
@@ -441,9 +451,10 @@ func _build_row(pl: Dictionary, tag_text: String = "") -> Button:
 	var inner: VBoxContainer = hud._vbox(0)
 	inner.alignment = BoxContainer.ALIGNMENT_CENTER
 	var top: HBoxContainer = hud._hbox(6)
-	var name_label: Label = hud._label(String(pl.name), Fonts.cond(700), 17, hud.PAPER_INK)
+	var shown := String(build.title_of(id))
+	var name_label: Label = hud._label(shown if shown != "" else String(pl.name), Fonts.cond(700), 17, hud.PAPER_INK)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var street: bool = String(pl.kind) == "ring" or String(pl.kind) == "mouth"
+	var street: bool = String(pl.kind) == "mouth"
 	if street:
 		# (the streets' names are long: a name that does not fit goes on to a second line, and the slip grows to hold it, see `_fit_rows`)
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -453,8 +464,8 @@ func _build_row(pl: Dictionary, tag_text: String = "") -> Button:
 		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(name_label)
 	var tag := _tag(tag_text if tag_text != "" else String(KIND_TAGS.get(String(pl.kind), String(pl.kind).capitalize())))
-	# (a slip of the streets has no room for a tag beside what is on it: its caption and its words say what it is)
-	tag.visible = not street
+	# (only the Lots slip has a tag: a building's slip is its name and what it is now, nothing about a kind of plot)
+	tag.visible = tag_text != ""
 	top.add_child(tag)
 	inner.add_child(top)
 	var bottom: HBoxContainer = hud._hbox(8)
@@ -512,12 +523,13 @@ func _on_row_focus(id: String) -> void:
 	_on_row_hover(id, true)
 
 
-## The pointer or the keyboard is on a slip (or has left it): the lot is marked in the world.
+## The pointer or the keyboard is on a slip (or has left it): its home is marked in the world; when it has left, the home of
+## the building that is chosen stays marked.
 func _on_row_hover(id: String, on: bool) -> void:
 	if on:
 		show_mark(id)
 	elif _marked == id:
-		show_mark("")
+		show_mark(selected)
 
 
 ## The lot of this plot is marked in the world (the yard draws it); "" marks nothing. A page that is closed marks
@@ -579,6 +591,7 @@ func select_plot(id: String) -> bool:
 	refresh(changed)
 	if changed:
 		_reveal_selected.call_deferred()
+		show_mark(id)
 	return true
 
 
@@ -591,7 +604,8 @@ func _reveal_selected() -> void:
 
 # ------------------------------------------------------------------------- map --
 
-## The map card (a settlement game): the yard or the whole block (a toggle says which), the plots as pins, and what the colours are.
+## The map card: the yard (in a settlement game also the whole block: a toggle says which), the homes as pins, the chosen one lit,
+## and (in a settlement game) what the colours are. The classic start has the yard only and no legend.
 func _build_map_card() -> Control:
 	map_card = hud._panel(_card_style())
 	map_card.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -601,16 +615,17 @@ func _build_map_card() -> Control:
 	head.add_theme_constant_override("h_separation", 8)
 	head.add_theme_constant_override("v_separation", 4)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var caption: Label = hud._caps("The map", hud.PAPER_INK2)
+	var caption: Label = hud._caps("The map" if lots_on else "Where it goes", hud.PAPER_INK2)
 	caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	head.add_child(caption)
-	var group := ButtonGroup.new()
-	map_yard_button = _toggle("The yard", group)
-	map_yard_button.pressed.connect(_on_map_zoom.bind(false))
-	head.add_child(map_yard_button)
-	map_block_button = _toggle("The whole block", group)
-	map_block_button.pressed.connect(_on_map_zoom.bind(true))
-	head.add_child(map_block_button)
+	if lots_on:
+		var group := ButtonGroup.new()
+		map_yard_button = _toggle("The yard", group)
+		map_yard_button.pressed.connect(_on_map_zoom.bind(false))
+		head.add_child(map_yard_button)
+		map_block_button = _toggle("The whole block", group)
+		map_block_button.pressed.connect(_on_map_zoom.bind(true))
+		head.add_child(map_block_button)
 	col.add_child(head)
 	# the map, and at its right what its colours are
 	var body: HBoxContainer = hud._hbox(10)
@@ -623,7 +638,8 @@ func _build_map_card() -> Control:
 	var legend: VBoxContainer = hud._vbox(6)
 	legend.custom_minimum_size.x = LEGEND_W
 	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	for item in MAP_LEGEND:
+	legend.visible = lots_on
+	for item in (MAP_LEGEND if lots_on else []):
 		var entry: HBoxContainer = hud._hbox(5)
 		var swatch := ColorRect.new()
 		swatch.color = item[0]
@@ -637,7 +653,7 @@ func _build_map_card() -> Control:
 	col.add_child(body)
 	map_card.add_child(col)
 	# the whole block as soon as there is something out in it, the yard before
-	_set_map_whole(not sim.lots.claimed_on.is_empty())
+	_set_map_whole(lots_on and not sim.lots.claimed_on.is_empty())
 	return map_card
 
 
@@ -662,8 +678,9 @@ func _toggle(text: String, group: ButtonGroup) -> Button:
 
 func _set_map_whole(on: bool) -> void:
 	map.set_whole(on)
-	map_block_button.set_pressed_no_signal(on)
-	map_yard_button.set_pressed_no_signal(not on)
+	if map_block_button != null:
+		map_block_button.set_pressed_no_signal(on)
+		map_yard_button.set_pressed_no_signal(not on)
 
 
 ## One of the two buttons: the player has chosen what the map shows.
@@ -679,9 +696,9 @@ func _on_map_picked(id: String) -> void:
 	select_plot(id)
 
 
-## The pointer or the keyboard came to a pin (or left it): the plot is marked in the world.
+## The pointer or the keyboard came to a pin (or left it): its home is marked in the world (the chosen one's again when it has left).
 func _on_map_pointed(id: String) -> void:
-	show_mark(id)
+	show_mark(id if id != "" else selected)
 
 
 # ---------------------------------------------------------------------- detail --
@@ -722,9 +739,8 @@ func _build_detail() -> void:
 		lot_cards = lots_page.cards
 		col.add_child(lots_view)
 	detail.add_child(col)
-	if lots_on:
-		detail_box.add_child(_build_map_card())
 	detail_box.add_child(detail)
+	detail_box.add_child(_build_map_card())
 
 
 ## What can be built here: a slip for each building of the catalogue (the ones of the plot's kind are shown).
@@ -796,7 +812,7 @@ func _build_entry(b: Dictionary) -> Control:
 	why.visible = false
 	left.add_child(why)
 	row.add_child(left)
-	var order_button := _button("Order", true)
+	var order_button := _button("Build", true)
 	order_button.custom_minimum_size = Vector2(ORDER_W, BUTTON_H)
 	order_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	order_button.pressed.connect(order.bind(id))
@@ -1002,8 +1018,7 @@ func refresh(force: bool = false) -> void:
 		if rows.has(String(pl.id)):
 			_refresh_row(pl)
 	_refresh_detail()
-	if lots_on:
-		_refresh_map()
+	_refresh_map()
 
 
 ## The lots' part of the list: the slips and captions of the lots that are claimed, the Lots slip's words, the page.
@@ -1012,7 +1027,7 @@ func _refresh_lots() -> void:
 		var id := String(l.id)
 		var open: bool = sim.lots.claimed(id)
 		if lot_headers.has(id):
-			lot_headers[id].visible = open
+			lot_headers[id].visible = open and not (l.get("plots", []) as Array).is_empty()
 		for pid in l.get("plots", []):
 			if rows.has(String(pid)):
 				rows[String(pid)].row.visible = open
@@ -1033,7 +1048,10 @@ func _refresh_map() -> void:
 	var pl: Dictionary = build.plot(selected)
 	map.selected = selected if selected != LOTS_PAGE else ""
 	if not _map_chosen:
-		_set_map_whole(not sim.lots.claimed_on.is_empty())
+		# (round 15) the yard while a building of the yard is chosen, the block for a home or a street out in the streets and for the
+		# Lots page once there is a lot claimed
+		var out_in_the_streets: bool = not pl.is_empty() and String(pl.get("lot", "")) != ""
+		_set_map_whole(lots_on and not sim.lots.claimed_on.is_empty() and (out_in_the_streets or selected == LOTS_PAGE))
 	# a plot out in the streets is not on the map of the yard: the map shows the block
 	if not pl.is_empty() and String(pl.get("lot", "")) != "" and not map.whole:
 		_set_map_whole(true)
@@ -1055,7 +1073,7 @@ func _refresh_row(pl: Dictionary) -> void:
 	meter.visible = false
 	var mouth: bool = String(pl.kind) == "mouth"
 	if pl.building != "":
-		status = String(build.building(String(pl.building)).name)
+		status = "Built" if not mouth else String(build.building(String(pl.building)).name)
 		if mouth:
 			var seg = sim.lots.segment_at(id)
 			if seg != null:
@@ -1063,19 +1081,40 @@ func _refresh_row(pl: Dictionary) -> void:
 		ink = hud.PAPER_INK
 	elif not pl.site.is_empty():
 		var share: float = build.progress_of(id)
-		status = "%s: %d%%" % [String(build.building(String(pl.site.building)).name), mini(99, floori(share * 100.0))]
+		status = "Going up: %d%%" % mini(99, floori(share * 100.0))
 		ink = hud.PAPER_INK
 		meter.visible = true
 		meter.value = share
 		meter.queue_redraw()
+	elif mouth:
+		status = "Open street"
 	else:
-		status = "Open street" if mouth else "Empty"
+		var b: Dictionary = build.building(String(pl.get("home", "")))
+		var why := String(build.why_not(id, String(b.get("id", ""))))
+		if why == "":
+			status = "%s scrap, %s builder-hours" % [_num(float(b.scrap)), _num(float(b.work))]
+		else:
+			# (what is wrong is said in the slip itself: "Can't: it needs 30 scrap")
+			status = "Can't: %s" % _short_why(why)
+			ink = Color(hud.SLIP_MARK.warn).darkened(0.3)
 	_set_text(r.status, status, ink)
 	var chosen := id == selected
 	if bool(r.row.get_meta("chosen", false)) != chosen:
 		r.row.set_meta("chosen", chosen)
 		_style_row(r.row, chosen)
-	r.row.tooltip_text = "%s: %s" % [String(pl.name), status.to_lower() if status == "Empty" or status == "Open street" else status]
+	r.row.tooltip_text = "%s: %s" % [String(build.title_of(id)) if not mouth else String(pl.name), status.to_lower() if status == "Open street" else status]
+
+
+## A reason said short enough for a slip: "it needs 30 scrap" is "needs 30 scrap", "order the first watchtower first" is "after the
+## first one"; what is left is the reason as the module says it.
+static func _short_why(why: String) -> String:
+	if why.begins_with("order the first "):
+		return "after the first one"
+	if why.begins_with("it "):
+		return why.substr(3)
+	if why.begins_with("claim "):
+		return "claim its street first"
+	return why
 
 
 func _set_text(label: Label, text: String, color: Color) -> void:
@@ -1087,11 +1126,6 @@ func _set_text(label: Label, text: String, color: Color) -> void:
 
 ## The detail for the plot that is chosen.
 func _refresh_detail() -> void:
-	# (the Lots page is the cards first, and the map under them; a plot has the map over it)
-	if map_card != null:
-		var at := 1 if selected == LOTS_PAGE else 0
-		if map_card.get_index() != at:
-			detail_box.move_child(map_card, at)
 	if selected == LOTS_PAGE:
 		_refresh_lots_detail()
 		return
@@ -1102,13 +1136,17 @@ func _refresh_detail() -> void:
 	if lots_on:
 		lots_view.visible = false
 		mouth_info.visible = kind == "mouth"
-	plot_title.text = String(pl.name)
-	plot_tag.text = String(KIND_TAGS.get(kind, kind.capitalize())).to_upper()
-	if kind == "mouth":
+	var mouth: bool = kind == "mouth"
+	plot_tag.get_parent().visible = mouth
+	if mouth:
+		plot_title.text = String(pl.name)
+		plot_tag.text = String(KIND_TAGS.get(kind, kind.capitalize())).to_upper()
 		plot_sub.text = "A wall across a street, %s tiles wide" % _num(maxf(float(pl.size.x), float(pl.size.y)))
 		mouth_info.text = _mouth_text(pl)
 	else:
-		plot_sub.text = "%s lot, %s by %s tiles" % [String(KIND_TAGS.get(kind, kind.capitalize())), _num(float(pl.size.x)), _num(float(pl.size.y))]
+		# a building: its name (numbered when it has two homes), and the one place it goes, said in words
+		plot_title.text = String(build.title_of(selected))
+		plot_sub.text = "Where it goes: %s. %s" % [String(pl.name), String(pl.get("why", ""))]
 	var standing := String(pl.building) != ""
 	var going_up: bool = not pl.site.is_empty()
 	empty_view.visible = not standing and not going_up
@@ -1158,8 +1196,7 @@ func _refresh_empty(pl: Dictionary) -> void:
 	var mouth: bool = String(pl.kind) == "mouth"
 	# (a street has no list of kits: the one wall the standing order would put across it, to order now)
 	var best: String = String(sim.lots.best_kit(String(pl.id))) if mouth and lots_on else ""
-	if lots_on:
-		empty_caption.text = "The street is open: wall it now" if mouth else "What can be built here"
+	empty_caption.text = "The street is open: wall it now" if mouth else "Not built yet"
 	for b in build.catalogue():
 		var id := String(b.id)
 		var e: Dictionary = entries[id]
@@ -1167,9 +1204,10 @@ func _refresh_empty(pl: Dictionary) -> void:
 		if b.has("wall_kit"):
 			allowed = mouth and id == best
 		else:
-			# (a ring plot takes what is for the yard, and what is only for the streets: `ring`)
-			allowed = b.plots.has(String(pl.kind)) or (String(pl.kind) == "ring" and b.plots.has("yard"))
+			# a building shows where its own home is, and no other
+			allowed = not mouth and String(pl.get("home", "")) == id
 		e.card.visible = allowed
+		e.name.visible = mouth    # (the title over the card is the building's name)
 		if not allowed:
 			continue
 		var why := String(build.why_not(String(pl.id), id))
@@ -1177,7 +1215,7 @@ func _refresh_empty(pl: Dictionary) -> void:
 		order_button.disabled = why != ""
 		order_button.focus_mode = Control.FOCUS_NONE if why != "" else Control.FOCUS_ALL
 		order_button.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN if why != "" else Control.CURSOR_POINTING_HAND
-		order_button.tooltip_text = _sentence(why) if why != "" else "Order the %s: %s scrap now, then the Builders raise it" % [String(b.name).to_lower(), _num(float(b.scrap))]
+		order_button.tooltip_text = _sentence(why) if why != "" else "Build the %s where it goes: %s scrap now, then the Builders raise it" % [String(b.name).to_lower(), _num(float(b.scrap))]
 		var why_label: Label = e.why
 		why_label.text = _sentence(why)
 		why_label.visible = why != ""
@@ -1188,7 +1226,7 @@ func _refresh_site(pl: Dictionary) -> void:
 	var b: Dictionary = build.building(String(pl.site.building))
 	var share: float = build.progress_of(id)
 	# (a name may be a plural: Floodlights, Greenhouse beds)
-	site_title.text = "%s: going up" % String(b.name)
+	site_title.text = "%s: going up" % (String(build.title_of(id)) if String(pl.kind) != "mouth" else String(b.name))
 	site_meter.value = share
 	site_meter.queue_redraw()
 	site_percent.text = "%d%%" % mini(99, floori(share * 100.0))
@@ -1214,7 +1252,7 @@ func _refund_of_site(pl: Dictionary) -> float:
 
 func _refresh_built(pl: Dictionary) -> void:
 	var b: Dictionary = build.building(String(pl.building))
-	built_title.text = String(b.name)
+	built_title.text = String(build.title_of(String(pl.id))) if String(pl.kind) != "mouth" else String(b.name)
 	built_blurb.text = String(b.get("blurb", ""))
 	var back := float(b.scrap) * float(build.REFUND_SHARE)
 	var why := String(build.why_not_demolish(String(pl.id)))
@@ -1336,15 +1374,18 @@ static func _sentence(text: String) -> String:
 
 # ---------------------------------------------------------------------- acting --
 
-## Orders `building_id` on the chosen plot: the scrap is paid and a site goes up. False, and the page says why, if it
-## cannot be ordered.
+## Orders `building_id`: the scrap is paid and a site goes up at its home (the first of its homes that is free: nobody picks a
+## plot), or, for a wall kit, across the street whose pin is chosen. False, and the page says why, if it cannot be ordered.
 func order(building_id: String) -> bool:
 	error_label.visible = false
-	var why := String(build.why_not(selected, building_id))
+	var target := selected
+	if not build.building(building_id).has("wall_kit"):
+		target = String(build.home_for(building_id))
+	var why := String(build.why_not(target, building_id)) if target != "" else String(build.why_not_build(building_id))
 	if why != "":
 		_say(why)
 		return false
-	if not build.order(selected, building_id):
+	if not build.order(target, building_id):
 		_say("it cannot be ordered")
 		return false
 	hud.ui_sound("ui_confirm")

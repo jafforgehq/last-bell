@@ -22,6 +22,15 @@ const UI_SOUNDS := {
 	"ui_open": ["res://assets/audio/ui_open_0.wav"],
 	"ui_close": ["res://assets/audio/ui_close_0.wav"],
 }
+## The sounds of a car trip (round 15, made by tools/make_car_sounds.py): a door opening and closing, the engine
+## starting, the gate's motor. Declared here like the menu sounds and played the same way as the game's own one-shots,
+## on the SFX bus: sound.play("car_door_open").
+const CAR_SOUNDS := {
+	"car_door_open": ["res://assets/audio/car_door_open.wav"],
+	"car_door_close": ["res://assets/audio/car_door_close.wav"],
+	"car_engine_start": ["res://assets/audio/car_engine_start.wav"],
+	"car_gate_motor": ["res://assets/audio/car_gate_motor.wav"],
+}
 
 var streams := {} # name -> Array[AudioStream]
 var players: Array = []
@@ -50,6 +59,9 @@ func setup(sounds: Dictionary) -> void:
 	for name in UI_SOUNDS:
 		if not streams.has(name):
 			streams[name] = _load_list(UI_SOUNDS[name])
+	for name in CAR_SOUNDS:
+		if not streams.has(name):
+			streams[name] = _load_list(CAR_SOUNDS[name])
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"

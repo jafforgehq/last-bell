@@ -1,9 +1,11 @@
-## Buildings. The compound has fixed plots (assets/data/plots.json); on each the player may order
-## one of a catalogue of buildings (assets/data/buildings.json). Ordering pays the scrap and puts a
-## site on the plot; by day the people on the Builders job work the oldest site (the progress is in
-## builder-hours: a good builder is worth two); a finished site becomes the building, whose effects
-## the other modules read through `bonus(key)` and `factor(key)`. A building may be demolished
-## (half the scrap back) and a site cancelled (all the scrap back if no work was done, else half).
+## Buildings. The compound has fixed plots (assets/data/plots.json), and since round 15 each plot is the HOME of one
+## building (`home`, with a number `n` when the building may stand more than once, a `name` that says where it is and a
+## `why` sentence): the player picks a building and never a plot, and `home_for(building)` is the first home that is free.
+## Ordering pays the scrap (assets/data/buildings.json) and puts a site on the home; by day the people on the Builders job
+## work the oldest site (the progress is in builder-hours: a good builder is worth two); a finished site becomes the
+## building, whose effects the other modules read through `bonus(key)` and `factor(key)`. A building may be demolished
+## (half the scrap back) and a site cancelled (all the scrap back if no work was done, else half). A second home waits
+## for the first (`why_not`), so the order the homes are built in is not a choice either.
 ##
 ## The Builders' goal while a site is up is the plot's work spot (`jobs.seat_pos`), so the people
 ## "working" the Builders station are the ones building; a wall under the crew's threshold still
@@ -12,10 +14,13 @@
 ##
 ## Round 7 asks `housing()` and `radio_range()`.
 ##
-## Round 9 adds the lots' plots (assets/data/lots.json, `lots.gd`): ring plots (`kind` "ring": buildings stand on
-## them as in the yard) and mouths (`kind` "mouth": a wall across a street, ordered like a building from the wall
+## Round 9 adds the lots' plots (assets/data/lots.json, `lots.gd`): ring plots (`kind` "ring": the homes of the scrap yard)
+## and mouths (`kind` "mouth": a wall across a street, ordered like a building from the wall
 ## kits, which are catalogue entries with a `wall_kit`; when finished `lots.on_wall_built` makes the wall section).
 ## They are seen (`plots()`) only once their lot is claimed.
+##
+## Round 15 (the homes): a save from before has what it had refunded when its plot is no more or is another building's home
+## (`load_state`); a tower reaches from its own body, the nearest point of its footprint, not from the middle of its lot.
 ##
 ## Events: {"type": "site"|"built"|"cancelled"|"demolished", "plot": id, "building": id}.
 ## Alerts: `built-<plot id>` when a building is finished.
@@ -78,6 +83,7 @@ func _load_data() -> void:
 		for r in (rawp.get("plots", []) if rawp is Dictionary else []):
 			var p: Dictionary = {
 				"id": String(r.id), "name": String(r.name), "kind": String(r.get("kind", "yard")),
+				"home": String(r.get("home", "")), "n": int(r.get("n", 1)), "why": String(r.get("why", "")),
 				"pos": Vector2(float(r.pos[0]), float(r.pos[1])), "size": Vector2(float(r.size[0]), float(r.size[1])),
 				"work": Vector2(float(r.work[0]), float(r.work[1])),
 			}
@@ -90,7 +96,6 @@ func _load_data() -> void:
 			b["work"] = float(r.get("work", 1.0))
 			b["max"] = int(r.get("max", 1))
 			b["requires"] = String(r.get("requires", ""))
-			b["plots"] = r.get("plots", [])
 			b["effects"] = r.get("effects", {})
 			buildings.append(b)
 		_add_lots_data(plots, buildings)
@@ -125,6 +130,7 @@ func _add_lots_data(plots: Array, buildings: Array) -> void:
 	for r in d.plots:
 		plots.append({
 			"id": String(r.id), "name": String(r.get("name", r.id)), "kind": String(r.get("kind", "ring")), "lot": String(r.get("lot", "")),
+			"home": String(r.get("home", "")), "n": int(r.get("n", 1)), "why": String(r.get("why", "")),
 			"pos": Vector2(float(r.pos[0]), float(r.pos[1])), "size": Vector2(float(r.size[0]), float(r.size[1])),
 			"work": Vector2(float(r.work[0]), float(r.work[1])),
 		})
@@ -137,7 +143,7 @@ func _add_lots_data(plots: Array, buildings: Array) -> void:
 			kit_ids.append(String(k))
 		var rect: Array = m.rect
 		plots.append({
-			"id": String(m.id), "name": String(m.name), "kind": "mouth", "lot": String(m.get("lot", "")),
+			"id": String(m.id), "name": String(m.name), "kind": "mouth", "lot": String(m.get("lot", "")), "home": "", "n": 1, "why": "",
 			"pos": at, "size": Vector2(float(rect[2]) - float(rect[0]) + 1.0, float(rect[3]) - float(rect[1]) + 1.0), "work": spot,
 			"kits": kit_ids, "dir": String(m.dir),
 		})
@@ -145,7 +151,7 @@ func _add_lots_data(plots: Array, buildings: Array) -> void:
 		var kit: Dictionary = d.kits[k]
 		buildings.append({
 			"id": "wall_%s" % String(k), "name": String(kit.get("name", k)), "blurb": String(kit.get("blurb", "A wall across a street.")),
-			"plots": ["mouth"], "scrap": int(kit.scrap), "work": float(kit.work), "max": 99, "requires": "", "effects": {},
+			"scrap": int(kit.scrap), "work": float(kit.work), "max": 99, "requires": "", "effects": {},
 			"wall_kit": String(k), "hp": float(kit.hp), "dir": String(kit.get("dir", "h")), "length": float(kit.length),
 		})
 
@@ -194,6 +200,42 @@ func plot_at(at: Vector2) -> String:
 		if absf(at.x - p.pos.x) <= half.x and absf(at.y - p.pos.y) <= half.y:
 			return String(p.id)
 	return ""
+
+
+# ------------------------------------------------------------------- homes --
+
+## The homes of a building (the plots that are for it), in their order (1, 2, ...): all of them, whether their lot is
+## claimed or not. Empty for a building with no home (a wall kit) or one that is not known.
+func homes_of(building_id: String) -> Array:
+	var out: Array = []
+	for p in _plots:
+		if String(p.get("home", "")) == building_id and building_id != "":
+			out.append(p)
+	out.sort_custom(func(a, b): return int(a.n) < int(b.n))
+	return out
+
+
+## Where a building goes if it is ordered now: the first of its homes that has nothing on it and no site and whose lot is
+## claimed ("" when there is none). The player never chooses: the Build screen's Order is `order(home_for(id), id)`.
+func home_for(building_id: String) -> String:
+	for p in homes_of(building_id):
+		if p.building == "" and p.site.is_empty() and sim.lots.plot_open(p):
+			return String(p.id)
+	return ""
+
+
+## What a plot is called to a player: its building's name, numbered when the building has more than one home
+## ("Watchtower 2 of 2"); the plot's own name for a wall across a street.
+func title_of(plot_id: String) -> String:
+	var pl := plot(plot_id)
+	if pl.is_empty():
+		return ""
+	var home := String(pl.get("home", ""))
+	if home == "" or not _building_by_id.has(home):
+		return String(pl.name)
+	var n := homes_of(home).size()
+	var label := String(building(home).name)
+	return "%s %d of %d" % [label, int(pl.n), n] if n > 1 else label
 
 
 # --------------------------------------------------------------- catalogue --
@@ -318,22 +360,43 @@ func bed_spots() -> Array:
 
 
 ## How many tiles further the guns of someone standing at `at` reach for a building near them (a
-## watchtower): the best of the standing buildings with a `reach_bonus` whose plot is within their
-## `reach_radius` of the point (towers do not add up).
+## watchtower): the best of the standing buildings with a `reach_bonus` that are within their `reach_radius` of the point
+## (towers do not add up). Near means near the building itself (round 15): the nearest point of its footprint, as a
+## shooter on the walkway sees the tower, not the middle of its lot, so a tower on the north wall reaches the two
+## posts either side of it.
 func reach_bonus_at(at: Vector2) -> float:
 	var best := 0.0
 	for pl in _plots:
 		if pl.building == "":
 			continue
 		var e: Dictionary = building(String(pl.building)).effects
-		if e.has("reach_bonus") and at.distance_to(Vector2(pl.pos)) <= float(e.get("reach_radius", 0.0)):
+		if e.has("reach_bonus") and distance_to_body(String(pl.id), at) <= float(e.get("reach_radius", 0.0)):
 			best = maxf(best, float(e.reach_bonus))
 	return best
 
 
+## The tiles a building's body covers (its `solid` rectangle in building_art.json, from the plot's centre), else its lot.
+func body_rect(plot_id: String) -> Rect2:
+	var pl := plot(plot_id)
+	if pl.is_empty():
+		return Rect2()
+	var rect = _art.get(String(pl.building), {}).get("solid", []) if pl.building != "" else []
+	if rect is Array and rect.size() >= 4:
+		return Rect2(float(pl.pos.x) + float(rect[0]), float(pl.pos.y) + float(rect[1]), float(rect[2]) - float(rect[0]), float(rect[3]) - float(rect[1]))
+	return Rect2(Vector2(pl.pos) - Vector2(pl.size) / 2.0, Vector2(pl.size))
+
+
+## How far a point is from a plot's body (tiles): nothing inside it.
+func distance_to_body(plot_id: String, at: Vector2) -> float:
+	var r := body_rect(plot_id)
+	var d := (at - r.get_center()).abs() - r.size / 2.0
+	return Vector2(maxf(d.x, 0.0), maxf(d.y, 0.0)).length()
+
+
 # ------------------------------------------------------------------ orders --
 
-## Why this building cannot be ordered on this plot now ("" when it can).
+## Why this building cannot be ordered on this plot now ("" when it can). A plot is the home of one building: another
+## building is told what the place is for, and the second home of a building waits for the first.
 func why_not(plot_id: String, building_id: String) -> String:
 	var pl := plot(plot_id)
 	if pl.is_empty():
@@ -352,8 +415,13 @@ func why_not(plot_id: String, building_id: String) -> String:
 			return "it does not fit across this street"
 	elif pl.kind == "mouth":
 		return "only a wall goes across a street"
-	elif not (b.plots.has(pl.kind) or (pl.kind == "ring" and b.plots.has("yard"))):
-		return "it cannot stand on %s" % ("the wall" if pl.kind == "wall" else "the yard")
+	elif String(pl.get("home", "")) != building_id:
+		var of := String(pl.get("home", ""))
+		return "this place is for the %s" % String(building(of).get("name", "")).to_lower() if _building_by_id.has(of) else "nothing is built here"
+	else:
+		for q in homes_of(building_id):
+			if int(q.n) < int(pl.n) and q.building == "" and q.site.is_empty() and sim.lots.plot_open(q):
+				return "order the first %s first" % String(b.name).to_lower()
 	if _count_with_sites(building_id) >= _max_of(b):
 		return "there is already %s" % ("one" if _max_of(b) == 1 else "the most (%d)" % _max_of(b))
 	if String(b.requires) != "" and not built(String(b.requires)):
@@ -361,6 +429,23 @@ func why_not(plot_id: String, building_id: String) -> String:
 	if float(sim.stock.scrap) + 1.0e-9 < float(b.scrap):
 		return "it needs %d scrap" % int(b.scrap)
 	return ""
+
+
+## Why this building cannot be ordered now, on its home ("" when it can): what the Build screen writes under a building.
+func why_not_build(building_id: String) -> String:
+	var b := building(building_id)
+	if b.is_empty():
+		return "there is no such building"
+	var home := home_for(building_id)
+	if home != "":
+		return why_not(home, building_id)
+	if _count_with_sites(building_id) >= _max_of(b):
+		return "there is already %s" % ("one" if _max_of(b) == 1 else "the most (%d)" % _max_of(b))
+	for p in homes_of(building_id):
+		if p.building == "" and p.site.is_empty() and not sim.lots.plot_open(p):
+			var lot: Dictionary = sim.lots.lot(String(p.get("lot", "")))
+			return "claim %s first" % String(lot.get("name", "its lot")).to_lower()
+	return "there is no room for it"
 
 
 ## How many of a building may stand: its `max`, and each claimed lot allows its `lot_max` more.
@@ -571,6 +656,11 @@ func save() -> Dictionary:
 const LEGACY_COSTS := {"orchard": 24, "cistern": 20}
 
 
+## Whether a building is the one a plot is for (a wall across a street takes its kits, which the lots module checks).
+func _belongs(pl: Dictionary, building_id: String) -> bool:
+	return String(pl.kind) == "mouth" or String(pl.get("home", "")) == building_id
+
+
 func load_state(d: Dictionary) -> void:
 	_reset()
 	var saved = d.get("plots", {})
@@ -583,20 +673,21 @@ func load_state(d: Dictionary) -> void:
 				continue
 			var b := String(r.get("building", ""))
 			var s = r.get("site", {})
-			# a plot or a building that is no more (an older game had more of them): the scrap comes back, a site in
+			var site_b := String(s.get("building", "")) if s is Dictionary else ""
+			# a plot that is no more (an older game had other ones: round 11 cut some, round 15 gave every building a home of its
+			# own), a building that is no more, or one on a plot that is another building's home: the scrap comes back, a site in
 			# full and a standing building by REFUND_SHARE
-			if pl.is_empty() or (b != "" and not _building_by_id.has(b)) or (s is Dictionary and not s.is_empty() and not _building_by_id.has(String(s.get("building", "")))):
-				if s is Dictionary and not s.is_empty():
-					refund += float(s.get("scrap", 0.0))
-				if b != "":
-					refund += float(LEGACY_COSTS.get(b, building(b).get("scrap", 0))) * REFUND_SHARE
-				if pl.is_empty():
-					continue
-			if _building_by_id.has(b):
+			var keep_b := not pl.is_empty() and b != "" and _building_by_id.has(b) and _belongs(pl, b)
+			if b != "" and not keep_b:
+				refund += float(LEGACY_COSTS.get(b, building(b).get("scrap", 0))) * REFUND_SHARE
+			var keep_s := not pl.is_empty() and not keep_b and site_b != "" and _building_by_id.has(site_b) and _belongs(pl, site_b)
+			if site_b != "" and not keep_s:
+				refund += float(s.get("scrap", 0.0))
+			if keep_b:
 				pl.building = b
-			if s is Dictionary and _building_by_id.has(String(s.get("building", ""))) and pl.building == "":
-				var data := building(String(s.building))
-				pl.site = {"building": String(s.building), "progress": float(s.get("progress", 0.0)),
+			elif keep_s:
+				var data := building(site_b)
+				pl.site = {"building": site_b, "progress": float(s.get("progress", 0.0)),
 					"work": float(s.get("work", data.work)), "scrap": float(s.get("scrap", data.scrap))}
 	if refund > 0.0:
 		sim.stock.scrap = float(sim.stock.scrap) + refund

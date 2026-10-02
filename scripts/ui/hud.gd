@@ -213,7 +213,7 @@ const TOOL_W := 26
 ## The tooltip of the Jobs button.
 const JOBS_TIP := "Jobs: who works where by day and holds which post at night\nKey: J"
 ## The tooltip of the Build button.
-const BUILD_TIP := "Build: pick a plot and order a building for the Builders to raise\nKey: N"
+const BUILD_TIP := "Build: pick a building, and the Builders raise it where it belongs\nKey: N"
 ## The same in a settlement game, where the screen also claims the streets round the school and walls them in.
 const BUILD_LOTS_TIP := "Build: order a building for the Builders to raise, claim the streets round the school and wall them in\nKey: N"
 ## What the help's N says when pointed at in a settlement game.
@@ -231,13 +231,13 @@ const SPEED_TIPS := [["Pause the game", "Space"], ["Play at normal speed", "1"],
 ## one entry's chips, one chip for each word ("W A S D" is four). Every key and mouse
 ## button main.gd's _unhandled_input answers to is here.
 const HELP := [
-	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Builders"], ["L", "Lure the dead"], ["M", "Workbench"]]],
-	["Mouse", 2, [["Click", "Select"], ["Right-click", "Move there"], ["Drag", "Pan"], ["Scroll", "Zoom"]]],
+	["Orders for the selection", 3, [["R", "Draft"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Builders"], ["L", "Lure"], ["M", "Workbench"]]],
+	["Mouse", 2, [["Click Drag", "Select a box"], ["Right-click", "Send"], ["Shift", "Add to it"], ["Middle Drag", "Pan"], ["Alt Drag", "Pan"], ["Scroll", "Zoom"]]],
 	# (Esc, the longest, wraps in as little as 76 px, so in the width of the column ("Fields of fire") as
 	# "Deselect, or" and "the menu": it does not widen the panel; J, the Jobs screen, is "Jobs" and N, the Build
 	# screen, "Build" so that the other column, which has "Speed" in it, stays as narrow: the order buttons must still
 	# sit beside the selection panel in a 1280 window)
-	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["F5", "Save"], ["V", "Fields of fire"], ["J", "Jobs"], ["Esc", "Deselect, or the menu", 76], ["N", "Build"], ["F9", "Load"]]],
+	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Ctrl A", "Everyone"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["F5", "Save"], ["V", "Fields of fire"], ["J", "Jobs"], ["Esc", "Deselect, or the menu", 76], ["N", "Build"], ["F9", "Load"]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
@@ -322,9 +322,20 @@ var data: Dictionary
 var icons := {}
 var people: Array = []
 var selection = null
+## Everyone selected (round 15, main.gd's `selected_people`: the primary, `selection`, among them): two or more get the
+## strip of badges at the top of the person panel. `group_strip` is that strip (null while there is none) and
+## `group_badges` its badges, [{"p": person, "node": the badge's control}], in the group's order.
+var group: Array = []
+var group_strip: Control = null
+var group_badges: Array = []
 var compact := false
 
 var on_select: Callable
+## A badge of the strip was clicked (the person is the new primary), shift-clicked (they leave the group), or a crew card
+## was shift-clicked (they join the group, or leave it): each is called with the person.
+var on_group_pick: Callable
+var on_group_drop: Callable
+var on_group_toggle: Callable
 var on_focus: Callable
 var on_speed: Callable
 var on_gizmo: Callable
@@ -1133,6 +1144,9 @@ func _on_card_input(ev: InputEvent, p) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		if ev.double_click:
 			on_focus.call(p)
+		elif ev.shift_pressed and on_group_toggle.is_valid():
+			# shift and a card: they join the group, or leave it
+			on_group_toggle.call(p)
 		else:
 			on_select.call({"kind": "person", "ref": p})
 		accept_event()
@@ -1708,8 +1722,19 @@ func _skill_cell(skill_name: String) -> Dictionary:
 	return {"box": box, "name": n, "value": num, "gain": gain, "bar": b}
 
 
-func select(sel) -> void:
+## Shows `sel` (a person, a walker, a wall section, or null) in the panel and the buttons. `people` is everyone selected
+## with the primary `sel` (round 15): two or more get the strip at the top of the panel, and the buttons that are for all of
+## them say so. Left out (null), the group is as it was while the primary is in it, else it is just the person.
+func select(sel, people = null) -> void:
 	selection = sel
+	if people != null:
+		group = people.duplicate()
+	if sel == null or sel.kind != "person":
+		group = []
+	elif not group.has(sel.ref):
+		group = [sel.ref]
+	group_strip = null
+	group_badges = []
 	for c in inspect.get_children():
 		inspect.remove_child(c)
 		c.queue_free()
@@ -1855,6 +1880,7 @@ func select(sel) -> void:
 		head.add_child(tags)
 	v.add_child(head)
 	v.add_child(grid)
+	inspect_refs.v = v
 	if sel.kind == "person":
 		# the skills in one row: a name, its number, what it has gained and a bar under them
 		var sk := _hbox(10)
@@ -1864,12 +1890,134 @@ func select(sel) -> void:
 			sk.add_child(cell.box)
 			inspect_refs.skills[skill_name] = cell
 		v.add_child(sk)
+	_build_group_strip(v)
 	inspect.add_child(v)
 	if sel.kind == "person":
 		# the rows of round 4 are filled in first, so the dock is laid out for a panel as tall as it will be
 		_refresh_people_rows(sel.ref)
 	_build_gizmos()
 	_refresh_selection()
+
+
+## The size of a badge of the selection strip, in pixels (a face to hit with the mouse, and twelve pixels of room round it).
+const BADGE_PX := 28
+## A window shorter than this (in points) has no room for the strip over the whole person panel: while a group is selected
+## the panel gives up the two rows about character, the traits and the bonds, for it.
+const GROUP_SHORT_H := 640.0
+
+
+## Whether the person panel is without its traits and bonds rows, to make room for the strip (see GROUP_SHORT_H).
+func _squeezed() -> bool:
+	return group.size() > 1 and size.y < GROUP_SHORT_H
+
+
+## The group is now `people` (main.gd's `selected_people`) with no change of the primary: the strip and the buttons follow.
+## (`select` is the way to change the primary.)
+func set_group(people: Array) -> void:
+	group = people.duplicate()
+	if selection == null or selection.kind != "person":
+		group = []
+	elif not group.has(selection.ref):
+		group = [selection.ref]
+	if inspect_refs.has("v"):
+		if group_strip != null and is_instance_valid(group_strip):
+			group_strip.get_parent().remove_child(group_strip)
+			group_strip.queue_free()
+		_build_group_strip(inspect_refs.v)
+		if selection != null and selection.kind == "person" and inspect_refs.has("traits_head"):
+			_refresh_people_rows(selection.ref)
+		_build_gizmos()
+
+
+## The strip at the top of the person panel while two or more are selected: the words "3 selected" and a badge (the face,
+## and a bar of health under it) for each, the primary's in gold. A click on a badge makes that person the primary
+## (`on_group_pick`), a shift-click takes them out of the group (`on_group_drop`).
+func _build_group_strip(v: VBoxContainer) -> void:
+	group_strip = null
+	group_badges = []
+	if selection == null or selection.kind != "person" or group.size() < 2:
+		return
+	var strip := HFlowContainer.new()
+	strip.add_theme_constant_override("h_separation", 4)
+	strip.add_theme_constant_override("v_separation", 4)
+	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var count := _label("%d selected" % group.size(), Fonts.cond(700, 0), 13, ACCENT)
+	count.custom_minimum_size = Vector2(0, BADGE_PX)
+	count.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	count.mouse_filter = Control.MOUSE_FILTER_PASS
+	count.tooltip_text = "Drag a box in the yard to pick people. Shift adds or takes one away.\nRight-click sends them all. Esc lets go."
+	strip.add_child(count)
+	for p in group:
+		var badge := _make_badge(p, p == selection.ref)
+		strip.add_child(badge.node)
+		group_badges.append(badge)
+	v.add_child(strip)
+	v.move_child(strip, 0)
+	group_strip = strip
+
+
+## One badge of the strip: {"p", "node", "hp"}.
+func _make_badge(p, primary: bool) -> Dictionary:
+	var b := Panel.new()
+	b.custom_minimum_size = Vector2(BADGE_PX, BADGE_PX)
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.clip_contents = true
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color("#16221f")
+	st.border_color = ACCENT if primary else Color(0.82, 0.78, 0.64, 0.5)
+	st.set_border_width_all(2 if primary else 1)
+	st.set_corner_radius_all(4)
+	st.anti_aliasing = true
+	b.add_theme_stylebox_override("panel", st)
+	var pic := TextureRect.new()
+	pic.texture = portrait_of(p)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pic.position = Vector2(2, 2)
+	pic.size = Vector2(BADGE_PX - 4, BADGE_PX - 4)
+	b.add_child(pic)
+	var track := ColorRect.new()
+	track.color = Color(0, 0.03, 0.02, 0.6)
+	track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	track.position = Vector2(2, BADGE_PX - 6)
+	track.size = Vector2(BADGE_PX - 4, 4)
+	b.add_child(track)
+	var hp := ColorRect.new()
+	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp.position = Vector2(2, BADGE_PX - 5)
+	hp.size = Vector2(BADGE_PX - 4, 2)
+	b.add_child(hp)
+	if primary:
+		b.tooltip_text = "%s is the main pick: the panel below, and the keys C, T, X, G, B and M, are about them\nShift-click: leave them out of the group" % p.name
+	else:
+		b.tooltip_text = "%s, %s\nClick: make them the main pick\nShift-click: leave them out of the group" % [p.name, String(p.def.role).to_lower()]
+	b.gui_input.connect(_on_badge_input.bind(p))
+	var badge := {"p": p, "node": b, "hp": hp}
+	_fill_badge(badge)
+	return badge
+
+
+## A badge's bar of health (and a dimmed face for someone who is down).
+func _fill_badge(badge: Dictionary) -> void:
+	var p = badge.p
+	var f: float = clampf(p.hp / 100.0, 0.0, 1.0)
+	var hp: ColorRect = badge.hp
+	hp.size = Vector2((BADGE_PX - 4) * f, 2)
+	hp.color = _hp_color(f)
+	var dim := 0.45 if p.downed else 1.0
+	badge.node.get_child(0).modulate = Color(dim, dim, dim)
+
+
+func _on_badge_input(ev: InputEvent, p) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		if ev.shift_pressed:
+			if on_group_drop.is_valid():
+				on_group_drop.call(p)
+		elif on_group_pick.is_valid():
+			on_group_pick.call(p)
+		accept_event()
 
 
 ## A small gold pill with a few words for the person panel's header, hidden until
@@ -1984,22 +2132,33 @@ func _gizmo(id: String, text: String, key: String, on: bool) -> Button:
 ## Repair and Follow.
 func _order_words(id: String, label: String) -> String:
 	var kind: String = String(selection.kind) if selection != null else ""
+	var n := _group_n()
 	match id:
 		"draft":
+			if n > 1:
+				if label == "Release":
+					return "Release: all %d back to their usual routine" % n
+				return "Draft: take control of all %d, they hold their place" % n
 			if label == "Release":
 				return "Release: back to their usual routine"
 			return "Draft: take control, they hold their place"
 		"post":
+			if n > 1:
+				return "To post: each goes to their own post on the wall and holds it"
 			return "To post: go to their post on the wall and hold it"
 		"repair":
 			if kind == "segment":
 				return "Repair: a builder fixes this wall piece (costs scrap)"
+			if n > 1:
+				return "Repair: they mend the most damaged wall pieces, the worst first (costs scrap)"
 			return "Repair: fix the most damaged wall piece (costs scrap)"
 		"focus":
 			if kind == "segment":
 				return "Focus: centre the view on this wall piece"
 			if kind == "zombie":
 				return "Focus: keep the view on this walker"
+			if n > 1:
+				return "Follow: keep the view on %s, the main pick" % selection.ref.first
 			return "Follow: keep the view on this person"
 		"treat":
 			return "Treat: bandage or cure them (uses medicine)"
@@ -2014,6 +2173,8 @@ func _order_words(id: String, label: String) -> String:
 	return label
 
 
+## The orders that are for the primary only when a group is selected (the others, R, P and F, are for all of them).
+const PRIMARY_ONLY := ["treat", "sendout", "scavenge", "job_bench", "job_builders"]
 ## The jobs the M and B keys give (and take away): the order button's id -> the station's id (assets/data/stations.json).
 const JOB_OF_GIZMO := {"job_bench": "bench", "job_builders": "builders"}
 
@@ -2057,14 +2218,14 @@ func _num(x: float) -> String:
 ## or "" when it is fine or the HUD cannot tell. Only what the HUD can see: the
 ## person's state, the walls and the stores. (The buttons for treating, sending out
 ## and scavenging only show when the modules offer them.)
-func _order_blocker(id: String) -> String:
-	if sim_ref == null or selection == null:
+func _blocker_for(id: String, sel) -> String:
+	if sim_ref == null or sel == null:
 		return ""
 	var job_id := String(JOB_OF_GIZMO.get(id, ""))
-	if job_id != "" and selection.kind != "person":
+	if job_id != "" and sel.kind != "person":
 		return "pick one of the crew first"
-	if selection.kind == "person":
-		var p = selection.ref
+	if sel.kind == "person":
+		var p = sel.ref
 		if job_id != "":
 			# the gone and the away are given nothing (the key can be pressed for anyone); the jobs module says the
 			# rest (the seats are taken); someone who has the job can always be taken off it
@@ -2095,18 +2256,33 @@ func _order_blocker(id: String) -> String:
 				var have := float(sim_ref.stock.meds)
 				if have < need:
 					return "not enough medicine (needs %d, have %d)" % [int(need), int(have)]
-	elif selection.kind == "segment" and id == "repair":
-		var seg = selection.ref
+	elif sel.kind == "segment" and id == "repair":
+		var seg = sel.ref
 		if seg.hp >= seg.max_hp:
 			return "this wall piece is not damaged"
 		if not _someone_free_to_work():
 			return "nobody is free to repair it"
 		if float(sim_ref.stock.scrap) <= 0.0:
 			return "no scrap left"
-	elif selection.kind == "segment" and id == "lure":
+	elif sel.kind == "segment" and id == "lure":
 		# the rules say why (a door, a section that is down, an alarm already ringing, too little scrap)
-		return String(sim_ref.tactics.why_not_lure(selection.ref))
+		return String(sim_ref.tactics.why_not_lure(sel.ref))
 	return ""
+
+
+## The order button `id`'s blocker for the selection: for the primary, as `_blocker_for` says; for R, P and F with a group
+## selected (round 15), the order does nothing only when it does nothing for each of them: the first of them says why.
+func _order_blocker(id: String) -> String:
+	if selection != null and selection.kind == "person" and group.size() > 1 and (id == "draft" or id == "post" or id == "repair"):
+		var first := ""
+		for p in group:
+			var why := _blocker_for(id, {"kind": "person", "ref": p})
+			if why == "":
+				return ""
+			if first == "":
+				first = why
+		return first
+	return _blocker_for(id, selection)
 
 
 ## Why the order `id` would do nothing right now ("" when it is fine or the HUD
@@ -2144,6 +2320,9 @@ func _meds_needed(p) -> float:
 ## third line "Not now: why."
 func _gizmo_tip(id: String, label: String, key: String, why: String) -> String:
 	var tip := "%s\nKey: %s" % [_order_words(id, label), key]
+	# with a group selected, the orders that are for one person say whom (the first pick: the panel's)
+	if _group_n() > 1 and PRIMARY_ONLY.has(id):
+		tip = "%s\nOnly for %s, the main pick of the %d selected\nKey: %s" % [_order_words(id, label), selection.ref.first, _group_n(), key]
 	if why != "":
 		tip += "\nNot now: %s." % why
 	return tip
@@ -2188,7 +2367,9 @@ func _build_gizmos() -> void:
 		elif p.dead:
 			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
 		else:
-			gizmos.add_child(_gizmo("draft", "Release" if p.drafted else "Draft", "R", p.drafted))
+			# (for a group the button reads Release when all of them are drafted, Draft when anyone is not: main.gd's R)
+			var all_drafted := _group_drafted()
+			gizmos.add_child(_gizmo("draft", "Release" if all_drafted else "Draft", "R", all_drafted))
 			gizmos.add_child(_gizmo("post", "To post", "P", false))
 			gizmos.add_child(_gizmo("repair", "Repair", "F", false))
 			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
@@ -2218,10 +2399,25 @@ func _gizmo_sig() -> String:
 	if selection == null or selection.kind != "person":
 		return "" if selection == null else String(selection.kind)
 	var p = selection.ref
-	var sig := "%s|%s|%s" % [p.drafted, p.dead, p.away != null]
+	var sig := "%s|%s|%s|%d" % [_group_drafted(), p.dead, p.away != null, group.size()]
 	if sim_ref != null and not p.dead and p.away == null:
 		sig += "|%s|%s|%s|%s|%s" % [sim_ref.medical.can_treat(p), sim_ref.medical.can_send_out(p), _can_scavenge(p), _jobs() != null, _job_of(p)]
 	return sig
+
+
+## Whether everyone selected is drafted (for one person, whether they are).
+func _group_drafted() -> bool:
+	if selection == null or selection.kind != "person":
+		return false
+	for p in (group if group.size() > 1 else [selection.ref]):
+		if not p.drafted:
+			return false
+	return true
+
+
+## How many people the order buttons are for: the group's size (1 for a single selection).
+func _group_n() -> int:
+	return group.size() if selection != null and selection.kind == "person" and group.size() > 1 else 1
 
 
 ## The jobs module (sim.jobs), or null in a game that has none (an older fake).
@@ -2441,7 +2637,7 @@ func _build_hint() -> void:
 	hint = _panel()
 	var row := _hbox(5)
 	row.add_child(_label("Click someone in the yard", Fonts.sans(400), 13, INK2))
-	for part in [["Right-click", "to move them"], ["Drag", "to pan"], ["Scroll", "to zoom"], ["Space", "to pause"]]:
+	for part in [["Drag", "to pick a group"], ["Right-click", "to send them"], ["Scroll", "to zoom"], ["Space", "to pause"]]:
 		row.add_child(_kbd(part[0]))
 		row.add_child(_label(part[1], Fonts.sans(400), 13, INK2))
 	hint.add_child(row)
@@ -2933,6 +3129,8 @@ func _on_resized() -> void:
 	_center_h(bar)
 	_bar_sig = ""
 	_layout_bar()
+	if selection != null and selection.kind == "person" and inspect_refs.has("traits_head"):
+		_refresh_people_rows(selection.ref)
 	_layout_dock()
 	_layout_toast()
 
@@ -2985,7 +3183,7 @@ func _card_tip(p, word: String, epitaph: String) -> String:
 
 func _update_card(c: Dictionary, sim) -> void:
 	var p = c.p
-	var sel: bool = selection != null and selection.ref == p
+	var sel: bool = (selection != null and selection.ref == p) or (group.size() > 1 and group.has(p))
 	if sel != c.sel:
 		c.sel = sel
 		c.card.add_theme_stylebox_override("panel", _card_style(sel))
@@ -3569,8 +3767,8 @@ func _refresh_traits(p) -> void:
 		var got = t.of(p)
 		if got is Array:
 			list = got
-	refs.traits_head.visible = not list.is_empty()
-	refs.traits_box.visible = not list.is_empty()
+	refs.traits_head.visible = not list.is_empty() and not _squeezed()
+	refs.traits_box.visible = not list.is_empty() and not _squeezed()
 	var sig := ""
 	for tr in list:
 		sig += "%s|%s|%s;" % [tr.get("id", ""), tr.get("name", ""), tr.get("blurb", "")]
@@ -3595,8 +3793,8 @@ func _refresh_bonds(p) -> void:
 		var got = b.of(p)
 		if got is Array:
 			list = got
-	refs.bonds_head.visible = not list.is_empty()
-	refs.bonds.visible = not list.is_empty()
+	refs.bonds_head.visible = not list.is_empty() and not _squeezed()
+	refs.bonds.visible = not list.is_empty() and not _squeezed()
 	if list.is_empty():
 		return
 	var short: Array = []
@@ -3737,6 +3935,8 @@ func _refresh_selection() -> void:
 	inspect_refs.hpv.text = "%d%%" % roundi(clampf(f, 0.0, 1.0) * 100.0)
 	if inspect_refs.doing.text != doing:
 		inspect_refs.doing.text = doing
+	for badge in group_badges:
+		_fill_badge(badge)
 	_refresh_gizmo_tips()
 
 

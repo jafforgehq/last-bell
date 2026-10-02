@@ -1,8 +1,10 @@
 extends "res://tests/case.gd"
-## The yard's view of the buildings (round 6): where the plots lie (inside the yard, on open ground, clear of every
-## prop, ladder, door and the gate's lane, apart from one another, with a work spot the crew can walk to), what the
-## buildings shut when they stand (never a lane, never another plot's work spot), the art each building is drawn
-## from, and the node that draws the plots, the sites and the buildings (scripts/render/build_node.gd).
+## The yard's view of the buildings (round 6): what the buildings shut when they stand (never a lane, never another home's
+## work spot), the art each building is drawn from, and the node that draws the plots, the sites and the buildings
+## (scripts/render/build_node.gd). Where the homes lie (on free ground, never on the court, the garden, the playground, the
+## apron, a door's approach, a ladder's landing, the workbench's set, a prop, another home) is guarded by
+## tests/test_build_homes.gd since round 15, which lists everything a home must avoid; round 11 had the guard here and it
+## listed too few things (a lot on the basketball court passed it, and so did one in the middle of the playground).
 
 const Helpers := preload("res://tests/helpers.gd")
 const Build := preload("res://scripts/sim/build.gd")
@@ -10,15 +12,10 @@ const BuildNode := preload("res://scripts/render/build_node.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const MenuFakes := preload("res://tests/menu_fakes.gd")
 
-## The ground the plots must leave alone, in tiles (see the map: world.gd's `_apply_deck_barriers` shuts the rows and
-## columns in front of the walkways). The yard is x 22 to 62 and y 21 to 44; the gate's lane is where the dead come
-## in and the crew goes out, x 36 to 42 and y 19.6 to 27.
-const YARD := Rect2(22.0, 21.0, 40.0, 23.0)
-const GATE_LANE := Rect2(36.0, 19.6, 6.0, 7.4)
-## The kinds of prop that are not solid but are real things the lots must not sit on (the art of the world stays).
-const PROP_KINDS := ["tent", "tarp", "clothesline", "hoop", "bell", "sandbags", "shrub", "picnic", "bed", "pickup"]
-## How far apart two lots are kept (tiles): a person fits between them.
-const LOT_GAP := 0.9
+## The ground the buildings must leave open, in tiles (see the map: world.gd's `_apply_deck_barriers` shuts the rows and
+## columns in front of the walkways). The gate's lane, where the dead come in and the crew and the vehicles go out: the motor
+## pool's apron (x 35.2 to 42.8, y 19.8 to 32) with a margin.
+const GATE_LANE := Rect2(35.0, 19.6, 8.0, 12.6)
 ## The people at a site stand at the work spot and a step either side (build.gd's STAND_OFFSETS).
 const STANDS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0)]
 
@@ -79,83 +76,6 @@ func _shut_tiles_in(g: Dictionary, r: Rect2) -> Array:
 	return out
 
 
-## What is wrong with the plots of this game, as sentences (none when they are all right): each lot is in the yard, on
-## open ground, clear of the props and the lanes and of the other lots, with a sign that can be seen and a work spot
-## the crew can stand at (with a step either side) and walk to from the gate.
-func _plot_problems(g: Dictionary) -> Array:
-	var out: Array = []
-	var sim = g.sim
-	var plots: Array = sim.build.plots()
-	var things: Array = []
-	var ladders: Array = []
-	var doors: Array = []
-	for o in g.data.objects:
-		var kind := String(o.kind)
-		if bool(o.solid) or kind in PROP_KINDS:
-			things.append(o)
-		elif kind == "ladder":
-			ladders.append(o)
-		elif kind == "door":
-			doors.append(o)
-	for pl in plots:
-		var id := String(pl.id)
-		var lot := _lot(pl)
-		if not YARD.encloses(lot):
-			out.append("%s: the lot is not inside the yard %s" % [id, str(lot)])
-		var shut := _shut_tiles_in(g, lot)
-		if not shut.is_empty():
-			out.append("%s: the lot covers shut ground %s" % [id, str(shut)])
-		var hit := ""
-		var y := lot.position.y
-		while y <= lot.end.y and hit == "":
-			var x := lot.position.x
-			while x <= lot.end.x and hit == "":
-				var at := Vector2(x, y)
-				for o in things:
-					if _in_object(o, at):
-						hit = String(o.kind)
-						break
-				x += 0.3
-			y += 0.3
-		if hit != "":
-			out.append("%s: the lot lies on a %s" % [id, hit])
-		if lot.intersects(GATE_LANE):
-			out.append("%s: the lot is in the gate's lane" % id)
-		for o in ladders:
-			if lot.intersects(_landing(o)):
-				out.append("%s: the lot is where the ladder at (%.1f, %.1f) lets people off" % [id, float(o.cx), float(o.cy)])
-		for o in doors:
-			if lot.intersects(_apron(o)):
-				out.append("%s: the lot is in front of the school door at (%.1f, %.1f)" % [id, float(o.cx), float(o.cy)])
-		for q in plots:
-			if String(q.id) < id and _lot(q).grow(LOT_GAP / 2.0).intersects(lot.grow(LOT_GAP / 2.0)):
-				out.append("%s and %s lie closer than %.1f tiles" % [id, String(q.id), LOT_GAP])
-		var sign_at: Vector2 = sim.build.sign_pos(id)
-		if not lot.has_point(sign_at) or world_shut(g, sign_at):
-			out.append("%s: the sign at %s is not on open ground inside the lot" % [id, str(sign_at)])
-		for off in STANDS:
-			var spot: Vector2 = Vector2(pl.work) + off
-			if world_shut(g, spot):
-				out.append("%s: nobody can stand at %s" % [id, str(spot)])
-		if Vector2(pl.work).distance_to(lot.get_center()) > 2.6:
-			out.append("%s: the work spot %s is far from the lot" % [id, str(pl.work)])
-		if String(pl.kind) == "wall":
-			var against := lot.position.y <= YARD.position.y + 1.0 or lot.position.x <= YARD.position.x + 1.0 or lot.end.x >= YARD.end.x - 1.0
-			if not against:
-				out.append("%s: a wall plot is not against a deck" % id)
-			var reach := float(sim.build.building("watchtower").effects.get("reach_radius", 4.0))
-			var helps := false
-			for post in sim.jobs.posts():
-				helps = helps or Vector2(post.pos).distance_to(Vector2(pl.pos)) <= reach
-			if not helps:
-				out.append("%s: no night post lies within %.1f tiles of the plot, so a tower there would help nobody" % [id, reach])
-	for pl in plots:
-		var reach := _reaches_gate(g, Vector2(pl.work))
-		if not reach:
-			out.append("%s: the crew cannot walk from the gate to the work spot %s" % [String(pl.id), str(pl.work)])
-	return out
-
-
 func world_shut(g: Dictionary, at: Vector2) -> bool:
 	return g.world.is_solid(g.world.solid_p, at.x, at.y)
 
@@ -171,43 +91,9 @@ func _reaches_gate(g: Dictionary, to: Vector2) -> bool:
 
 # -------------------------------------------------------------------- the plots --
 
-func test_every_plot_lies_in_the_yard_on_open_ground_with_a_work_spot_the_crew_can_reach() -> void:
+func test_the_homes_are_guarded_by_the_homes_test() -> void:
 	var g := _game()
-	var problems := _plot_problems(g)
-	eq(problems, [], "the plots are all right: %s" % "; ".join(problems))
-	eq(g.sim.build.plots().size(), 7, "seven plots: five in the yard and two on the wall")
-	g.world.free()
-
-
-func test_a_lot_on_a_barrel_or_over_the_gate_lane_or_on_another_lot_is_found() -> void:
-	var g := _game()
-	var plots: Array = g.sim.build.plots()
-	var original: Array = []
-	for pl in plots:
-		original.append({"pos": pl.pos, "size": pl.size, "work": pl.work})
-	var first := String(plots[0].id)
-	# a lot on the fire barrel at (44.8, 21.5)
-	plots[0].pos = Vector2(44.5, 21.5)
-	plots[0].size = Vector2(3.0, 3.0)
-	var text := "; ".join(_plot_problems(g))
-	check(text.contains("%s: the lot lies on a barrel" % first) or text.contains("%s: the lot covers shut ground" % first), "a lot on a barrel is found: %s" % text)
-	# a lot in the gate's lane
-	plots[0].pos = Vector2(39.5, 21.5)
-	text = "; ".join(_plot_problems(g))
-	check(text.contains("%s: the lot is in the gate's lane" % first), "a lot in the lane is found: %s" % text)
-	# two lots on one another
-	plots[0].pos = Vector2(plots[1].pos)
-	text = "; ".join(_plot_problems(g))
-	check(text.contains("lie closer than"), "two lots on one another are found: %s" % text)
-	# a work spot inside a prop (the tarp's table) and one that cannot be walked to
-	plots[0].pos = original[0].pos
-	plots[0].size = original[0].size
-	plots[0].work = Vector2(43.9, 25.7)
-	text = "; ".join(_plot_problems(g))
-	check(text.contains("%s: nobody can stand at" % first), "a work spot on the worktable is found: %s" % text)
-	plots[0].work = Vector2(21.0, 22.0)
-	text = "; ".join(_plot_problems(g))
-	check(text.contains("%s: nobody can stand at" % first) or text.contains("cannot walk from the gate"), "a work spot on the wall is found: %s" % text)
+	eq(g.sim.build.plots().size(), 9, "nine homes: the guard of where they lie is tests/test_build_homes.gd")
 	g.world.free()
 
 
@@ -269,42 +155,44 @@ func _footprint_problems(g: Dictionary, base: PackedByteArray) -> Array:
 	return out
 
 
-func test_every_building_on_every_plot_it_may_stand_on_leaves_the_crews_places_and_the_lanes_open() -> void:
+func test_every_building_on_each_of_its_homes_leaves_the_crews_places_and_the_lanes_open() -> void:
 	var g := _game()
 	var sim = g.sim
 	var base: PackedByteArray = g.world.solid_p.duplicate()
 	var stood := 0
 	for b in sim.build.catalogue():
-		for pl in sim.build.plots():
-			if not b.plots.has(String(pl.kind)):
-				continue
-			_finish_on(sim, String(pl.id), String(b.id))
+		for pl in sim.build.homes_of(String(b.id)):
+			_stand(sim, String(pl.id), String(b.id))
 			stood += 1
 			var problems := _footprint_problems(g, base)
 			eq(problems, [], "%s on %s: %s" % [String(b.id), String(pl.id), "; ".join(problems)])
 			check(sim.build.demolish(String(pl.id)), "and it comes down again")
 			eq(g.world.solid_p, base, "%s on %s: the ground is as it was after it comes down" % [String(b.id), String(pl.id)])
-	check(stood >= 30, "a good many pairs were tried: %d" % stood)
+	eq(stood, 9, "every home was tried")
 	g.world.free()
 
 
-func test_with_every_plot_built_over_as_far_as_footprints_go_the_crews_places_and_the_lanes_are_still_open() -> void:
+func test_with_every_home_built_over_the_crews_places_and_the_lanes_are_still_open() -> void:
 	var g := _game()
 	var sim = g.sim
 	var base: PackedByteArray = g.world.solid_p.duplicate()
+	var area := 0.0
+	var art: Dictionary = _art_file().buildings
 	for pl in sim.build.plots():
-		# the biggest footprint of each kind of plot (three tiles by two), on every one of them at once
-		_stand(sim, String(pl.id), "watchtower" if String(pl.kind) == "wall" else "workshop")
+		_stand(sim, String(pl.id), String(pl.home))
+		var rect: Array = art.get(String(pl.home), {}).get("solid", [])
+		if rect.size() == 4:
+			area += (float(rect[2]) - float(rect[0])) * (float(rect[3]) - float(rect[1]))
 	var problems := _footprint_problems(g, base)
 	eq(problems, [], "all of them standing: %s" % "; ".join(problems))
 	var shut := 0
 	for i in base.size():
 		shut += 1 if g.world.solid_p[i] != base[i] else 0
-	eq(shut, sim.build.plots().size() * 6, "a footprint of six tiles for each plot, no tile shared")
+	eq(shut, roundi(area), "the footprints add up (%d tiles) and no tile is shared" % roundi(area))
 	g.world.free()
 
 
-func test_the_builders_walk_to_every_plot_even_with_every_other_one_built_over() -> void:
+func test_the_builders_walk_to_every_home_even_with_every_other_one_built_over() -> void:
 	var worst := 0.0
 	var probe := _game()
 	var targets: Array = []
@@ -321,9 +209,8 @@ func test_the_builders_walk_to_every_plot_even_with_every_other_one_built_over()
 		Helpers.idle_stores(sim)
 		for pl in sim.build.plots():
 			if String(pl.id) != target:
-				_stand(sim, String(pl.id), "watchtower" if String(pl.kind) == "wall" else "workshop")
-		var kind := String(sim.build.plot(target).kind)
-		var building := "floodlights" if kind == "wall" else "salvage_bench"
+				_stand(sim, String(pl.id), String(pl.home))
+		var building := String(sim.build.plot(target).home)
 		check(sim.build.order(target, building), "%s is ordered on %s: %s" % [building, target, sim.build.why_not(target, building)])
 		var seconds := 0
 		while sim.build.progress_of(target) <= 0.0 and seconds < 90:
@@ -337,7 +224,7 @@ func test_the_builders_walk_to_every_plot_even_with_every_other_one_built_over()
 				walt = p
 		check(walt != null and Vector2(walt.x, walt.y).distance_to(Vector2(sim.build.plot(target).work)) < 2.5, "%s: Walt is at the site" % target)
 		g.world.free()
-	check(worst < 80.0, "the farthest plot took %d seconds to reach" % int(worst))
+	check(worst < 80.0, "the farthest home took %d seconds to reach" % int(worst))
 
 
 func test_a_footprint_that_shuts_a_work_spot_or_walls_one_in_is_found() -> void:
@@ -350,7 +237,7 @@ func test_a_footprint_that_shuts_a_work_spot_or_walls_one_in_is_found() -> void:
 	var g := _game()
 	var sim = g.sim
 	var base: PackedByteArray = g.world.solid_p.duplicate()
-	var first := String(sim.build.plots()[0].id)
+	var first := "workshop_home"
 	_finish_on(sim, first, "workshop")
 	var text := "; ".join(_footprint_problems(g, base))
 	check(text.contains("where the crew of %s stands" % first), "a footprint on the work spot is found: %s" % text)
@@ -359,7 +246,7 @@ func test_a_footprint_that_shuts_a_work_spot_or_walls_one_in_is_found() -> void:
 	Build.art_path = Build.ART_PATH
 	# a ring of shut tiles round another plot's work spot
 	var h := _game()
-	var spot: Vector2 = h.sim.build.plot("junk_corner").work
+	var spot: Vector2 = h.sim.build.plot("salvage_bench_home").work
 	var ring: Array = []
 	for dy in range(-2, 3):
 		for dx in range(-3, 4):
@@ -376,10 +263,8 @@ func test_each_footprint_is_whole_tiles_in_the_back_two_rows() -> void:
 	var sim = g.sim
 	for b in sim.build.catalogue():
 		var rect = _art_file().buildings.get(String(b.id), {}).get("solid", [])
-		for pl in sim.build.plots():
-			if not b.plots.has(String(pl.kind)):
-				continue
-			_finish_on(sim, String(pl.id), String(b.id))
+		for pl in sim.build.homes_of(String(b.id)):
+			_stand(sim, String(pl.id), String(b.id))
 			var tiles: Array = sim.build.footprint_tiles(String(pl.id))
 			if rect is Array and rect.size() == 4:
 				var area := (float(rect[2]) - float(rect[0])) * (float(rect[3]) - float(rect[1]))
@@ -442,10 +327,8 @@ func test_every_building_has_its_art_and_every_picture_in_it_exists() -> void:
 func test_the_bunk_house_has_four_beds_on_open_ground_inside_its_lot() -> void:
 	var g := _game()
 	var sim = g.sim
-	for pl in sim.build.plots():
-		if not sim.build.building("bunk_house").plots.has(String(pl.kind)):
-			continue
-		_finish_on(sim, String(pl.id), "bunk_house")
+	for pl in sim.build.homes_of("bunk_house"):
+		_stand(sim, String(pl.id), "bunk_house")
 		var beds: Array = sim.build.bed_spots()
 		eq(beds.size(), 4, "four beds on %s" % String(pl.id))
 		var lot := _lot(pl)
@@ -545,35 +428,35 @@ func test_the_node_makes_its_sprites_once_and_again_only_when_a_plot_changes() -
 	n.update(0.1)
 	eq(n.rebuilds, 1, "and not again while nothing changes")
 	sim.stock.scrap = 100.0
-	check(sim.build.order("junk_corner", "salvage_bench"), "a site is ordered")
+	check(sim.build.order("salvage_bench_home", "salvage_bench"), "a site is ordered")
 	n.update(0.2)
 	eq(n.rebuilds, 2, "a site makes them again")
 	var heap: int = n.sprite_count()
 	check(heap >= 3, "a heap of planks, a crate and sandbags: %d" % heap)
 	check("164_pallets_s3" in n.files(), "the first stage has the planks: %s" % str(n.files()))
-	sim.build.plot("junk_corner").site.progress = 1.0
+	sim.build.plot("salvage_bench_home").site.progress = 1.0
 	n.update(0.3)
 	eq(n.rebuilds, 2, "work within a stage does not make them again")
-	sim.build.plot("junk_corner").site.progress = 7.5
+	sim.build.plot("salvage_bench_home").site.progress = 7.5
 	n.update(0.4)
 	eq(n.rebuilds, 3, "a stage further on does")
-	sim.build.plot("junk_corner").site.progress = 13.5
+	sim.build.plot("salvage_bench_home").site.progress = 13.5
 	n.update(0.5)
 	eq(n.rebuilds, 4, "and the last stage")
 	check("058_workbench" in n.files() and "142_scrap" in n.files(), "a site far along shows the bench it will be, faintly: %s" % str(n.files()))
-	sim.build._finish(sim.build.plot("junk_corner"))
+	sim.build._finish(sim.build.plot("salvage_bench_home"))
 	n.update(0.6)
 	eq(n.rebuilds, 5, "a finished building makes them again")
 	check("058_workbench" in n.files() and not ("164_pallets_s3" in n.files()), "the bench stands and the planks are gone: %s" % str(n.files()))
 	var standing: int = n.sprite_count()
 	check(standing >= 4, "a bench with its heap, crates and tyres: %d" % standing)
-	check(sim.build.demolish("junk_corner"), "it comes down")
+	check(sim.build.demolish("salvage_bench_home"), "it comes down")
 	n.update(0.7)
 	eq(n.sprite_count(), 0, "and nothing of it is left")
-	sim.build.order("east_lot", "workshop")
+	sim.build.order("workshop_home", "workshop")
 	n.update(0.8)
 	check(n.sprite_count() > 0, "a site again")
-	check(sim.build.cancel("east_lot"), "cancelled")
+	check(sim.build.cancel("workshop_home"), "cancelled")
 	n.update(0.9)
 	eq(n.sprite_count(), 0, "and the site is gone")
 	g.world.free()
@@ -584,8 +467,8 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	var sim = g.sim
 	var h := _node(g)
 	var n = h.node
-	_stand(sim, "south_east_corner", "radio_mast")
-	_stand(sim, "south_lot", "bunk_house")
+	_stand(sim, "radio_mast_home", "radio_mast")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	n.update(0.0)
 	var standing: Array = []
 	for c in h.tall.get_children():
@@ -596,7 +479,7 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	for c in h.tall.get_children():
 		if String(c.texture.resource_path).get_file().get_basename() == "392_mast":
 			mast = c
-	var at: Vector2 = Vector2(sim.build.plot("south_east_corner").pos)
+	var at: Vector2 = Vector2(sim.build.plot("radio_mast_home").pos)
 	near(mast.position.y / 64.0, at.y + 0.2, 1.0e-3, "its feet, which the people are sorted by, are on the ground at the foot of the mast")
 	near(mast.position.x / 64.0, at.x + 0.38, 1.0e-3, "and it stands on the plot")
 	var flat := 0
@@ -608,8 +491,8 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 
 func test_the_node_follows_a_load_and_a_new_run() -> void:
 	var a := _game()
-	_stand(a.sim, "south_lot", "greenhouse")
-	a.sim.build.order("junk_corner", "salvage_bench")
+	_stand(a.sim, "greenhouse_home", "greenhouse")
+	a.sim.build.order("salvage_bench_home", "salvage_bench")
 	var d: Dictionary = SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(a.sim)))
 	var b := _game(99)
 	var h := _node(b)
@@ -635,8 +518,9 @@ func test_an_empty_plot_shows_no_sign_and_no_outline_until_the_screen_is_open_th
 	var h := _node(g)
 	var n = h.node
 	var plots: Array = sim.build.plots()
-	var a: Dictionary = plots[0]
-	var b: Dictionary = plots[1]
+	var a: Dictionary = sim.build.plot("greenhouse_home")
+	var b: Dictionary = sim.build.plot("salvage_bench_home")
+	var c: Dictionary = sim.build.plot("workshop_home")
 	n.pointer = FAR_FROM_PLOTS
 	var pen := Pen.new()
 	n._paint_ground(pen)
@@ -679,11 +563,11 @@ func test_an_empty_plot_shows_no_sign_and_no_outline_until_the_screen_is_open_th
 	n._paint_air(air)
 	eq(n.drawn_bars, 1, "and its bar over it")
 	# a building has none of its own, near or not
-	_stand(sim, String(plots[2].id), "bunk_house")
-	n.pointer = Vector2(plots[2].pos)
+	_stand(sim, String(c.id), "workshop")
+	n.pointer = Vector2(c.pos)
 	n._paint_ground(pen)
-	near(n.outline_alpha(plots[2]), 0.0, 1.0e-9, "a building's outline is none, with the pointer on it too")
-	near(n.sign_alpha(plots[2]), 0.0, 1.0e-9, "and its sign")
+	near(n.outline_alpha(c), 0.0, 1.0e-9, "a building's outline is none, with the pointer on it too")
+	near(n.sign_alpha(c), 0.0, 1.0e-9, "and its sign")
 	n.pointer = FAR_FROM_PLOTS
 	# the Build screen open: every plot is outlined and signed, a building's too
 	h.main.build_open = true
@@ -691,7 +575,7 @@ func test_an_empty_plot_shows_no_sign_and_no_outline_until_the_screen_is_open_th
 	n._paint_ground(pen)
 	eq(n.drawn_outlines, plots.size(), "with the Build screen open every plot is outlined")
 	eq(n.drawn_signs, plots.size(), "and signed")
-	near(n.outline_alpha(plots[2]), BuildNode.ALPHA_OPEN, 1.0e-9, "brighter, a building's too")
+	near(n.outline_alpha(c), BuildNode.ALPHA_OPEN, 1.0e-9, "brighter, a building's too")
 	h.main.build_hover = {"plot": String(a.id)}
 	near(n.outline_alpha(a), BuildNode.ALPHA_HOVER, 1.0e-9, "and the one it points at brightest")
 	near(n.sign_alpha(a), 1.0, 1.0e-9, "with its sign")
@@ -702,7 +586,7 @@ func test_an_empty_plot_shows_no_sign_and_no_outline_until_the_screen_is_open_th
 	pen = Pen.new()
 	n._paint_ground(pen)
 	eq(n.drawn_outlines, plots.size(), "the flag lights every plot with the screen shut")
-	near(n.outline_alpha(plots[2]), BuildNode.ALPHA_OPEN, 1.0e-9, "as the screen does")
+	near(n.outline_alpha(c), BuildNode.ALPHA_OPEN, 1.0e-9, "as the screen does")
 	n.show_plots = false
 	pen = Pen.new()
 	n._paint_ground(pen)
@@ -739,12 +623,12 @@ func test_a_site_has_a_bar_that_fills_with_the_work_and_waits_at_night() -> void
 	n._paint_air(pen)
 	eq(n.drawn_bars, 0, "no site, no bar")
 	sim.stock.scrap = 100.0
-	sim.build.order("junk_corner", "salvage_bench")
-	sim.build.order("east_lot", "workshop")
+	sim.build.order("salvage_bench_home", "salvage_bench")
+	sim.build.order("workshop_home", "workshop")
 	n._paint_air(pen)
 	eq(n.drawn_bars, 2, "a bar for each site")
 	var rects := pen.rects
-	sim.build.plot("junk_corner").site.progress = 7.0
+	sim.build.plot("salvage_bench_home").site.progress = 7.0
 	pen.rects = 0
 	n._paint_air(pen)
 	check(pen.rects > 0, "and a fill for the one with work done")
@@ -762,7 +646,7 @@ func test_the_floodlights_burn_while_they_stand_and_it_is_dark_blackout_or_not()
 	var h := _node(g)
 	var n = h.node
 	eq(n.lamp_count(), 0, "no floodlights, no lamps")
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	n.update(0.0)
 	eq(n.lamp_count(), 2, "two lamps")
 	var lamps: Array = []
@@ -776,7 +660,7 @@ func test_the_floodlights_burn_while_they_stand_and_it_is_dark_blackout_or_not()
 	n.update(0.1)
 	for l in lamps:
 		check(l.visible and l.energy > 0.85, "at night they burn: %.2f" % l.energy)
-		var home: Vector2 = Vector2(sim.build.plot("north_east_lot").pos) * 64.0
+		var home: Vector2 = Vector2(sim.build.plot("floodlights_home").pos) * 64.0
 		check(l.position.distance_to(home) < 5.0 * 64.0, "from the plot")
 	h.light.dark = 0.2
 	n.update(0.2)
@@ -788,7 +672,7 @@ func test_the_floodlights_burn_while_they_stand_and_it_is_dark_blackout_or_not()
 	for l in lamps:
 		check(l.energy < 0.8, "a fog dims them: %.2f" % l.energy)
 	h.light.fog = 0.0
-	check(sim.build.demolish("north_east_lot"), "the floodlights come down")
+	check(sim.build.demolish("floodlights_home"), "the floodlights come down")
 	n.update(0.4)
 	eq(n.lamp_count(), 0, "and the lamps with them")
 	g.world.free()
@@ -800,7 +684,7 @@ func test_the_lamps_have_a_glow_at_night_and_none_by_day_or_without_the_lights()
 	var h := _node(g)
 	var n = h.node
 	var pen := Pen.new()
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	n.update(0.0)
 	n._paint_glow(pen)
 	eq(pen.pictures, 0, "no glow by day")
@@ -828,18 +712,18 @@ func test_the_game_has_the_node_and_a_finished_building_makes_a_noise_and_some_d
 	check(main.build_view.get_parent() == main.world, "in the world's space")
 	check(main.build_view._tall == main.entities, "and tall things are sorted among the people")
 	var dust: int = main.fx.parts.size()
-	main.sim.events.append({"type": "built", "plot": "junk_corner", "building": "salvage_bench"})
+	main.sim.events.append({"type": "built", "plot": "salvage_bench_home", "building": "salvage_bench"})
 	main._handle_events()
 	eq(main.sim.events.size(), 0, "the event is dealt with")
 	check(main.fx.parts.size() > dust, "dust where it stands: %d" % (main.fx.parts.size() - dust))
 	dust = main.fx.parts.size()
-	main.sim.events.append({"type": "demolished", "plot": "junk_corner", "building": "salvage_bench"})
+	main.sim.events.append({"type": "demolished", "plot": "salvage_bench_home", "building": "salvage_bench"})
 	main._handle_events()
 	check(main.fx.parts.size() > dust, "and where it came down")
 	main.sim.stock.scrap = 100.0
-	main.sim.build.order("junk_corner", "salvage_bench")
+	main.sim.build.order("salvage_bench_home", "salvage_bench")
 	var chips: int = main.fx.parts.size()
-	var at: Vector2 = main.sim.build.plot("junk_corner").work
+	var at: Vector2 = main.sim.build.plot("salvage_bench_home").work
 	main.sim.events.append({"type": "hammer", "x": at.x + 0.5, "y": at.y})
 	main._handle_events()
 	check(main.fx.parts.size() > chips, "wood chips fly where the builders hammer")

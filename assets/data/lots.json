@@ -1,6 +1,6 @@
 {
 	"version": 1,
-	"_doc": "The lots of the ring (round 9). The map is a block: the compound stands in a ring of streets (the north street, the west and east roads, with their sidewalks and verges) closed by rows of buildings at the map's edge and open at ten mouths, where the ten spawn points of the dead stand. A lot is a part of the ring the colony can claim; a mouth is a wall plot that closes one of its streets; ring plots are 3 by 3 places to build on; kits are the walls a mouth is closed with. Everything is in tiles, x to the east and y to the south. tests/test_lots_data.gd checks every number against assets/data/map.json: the walls on open ground clear of props and of the old walls, a flood fill of the dead's grid from each spawn point that does not get past the ten walls (with the other mouths shut too), every post and work spot that can be walked to from the tile outside the Main gate, (39, 14), with every lot built over. passage: the id of the old wall section that people may walk through once a lot is claimed (2, the Main gate): its tiles open on the people's grid, never on the dead's. lots: id, name, blurb; claim {scrap, cleared, day}: the scrap it costs, how many places of the town board must be cleared, and the earliest day; mouths and plots: the ids of its wall plots and its ring plots; sealed_bonus: the morale it lifts everyone by when every mouth of it has a wall that stands. The north lot is the north street, the tops of the two roads, the two alleys on the north row and the two ends of the street (six spawn points); the west and the east lot are the foot of one road and the alley at its side (two each). The ring is one open space: the dead who get in at any mouth that is not shut reach every lot, so the streets are free of them only when all ten stand. mouths: one entry for each wall plot. A spawn point has one, or two (ids ending _a and _b, end to end) where its street is wider than the longest kit (12 tiles). id, name, lot; spawn: the index in map.json of the spawn point whose dead it keeps out (0 to 9); dir: h for a wall that runs east to west (the dead come from the north or the south), v for one that runs north to south (from the west or the east); side: the compass side the dead come from; rect [x0, y0, x1, y1]: the tiles it shuts, whole tiles, three thick, all of them open ground and the whole of the street where it crosses it (a wall that is wider than the street, at an alley, still shuts the street's tiles); the wall's outer face is on the side of the dead, at least 2.5 tiles from the spawn point (the first tile of the street at a map edge is the third, so the wall cannot stand further out at the ends of the north street and the alleys at the sides). length: the long side of the rect, in tiles; center: the middle of the rect (the plot's place); anchor: where the old wall sections have their center, the middle of the wall and 0.9 tile inside its inner face, where people stand to mend it and where the pictures of a kit's template are fixed (their offsets from it kept, stretched along the wall by length over the kit's length). kits: the ids of the kits that fit it (those that run its way and are within 15 percent of its length). slots: the places of the dead on the outer face, as at the old sections: x, y where one stands against the wall (0.26 tile inside the outer face), ax, ay where it is met on the way (0.5 tile outside the face), face the way it looks, 0.9 apart along the open ground in front of the wall. post {pos, what}: where a shooter stands behind the wall (0.8 tile inside the inner face, 1.2 for a wall that runs north to south so that a step either side of it is open ground), and what the night job says; the builders' work spot is the same place. outside and inside: the tile across the outer face from the middle of the open ground in front of it, and the tile across the inner face: a built wall must keep the dead from getting to inside. plots: the ring plots, in the format of plots.json: kind is ring; lot is the lot they are claimed with (the north lot's are in the north street, the rows above 30, the others by the side of the map); pos is the middle of a 3 by 3 lot, on the middle of a tile; size is [3, 3]; work is where the builders stand, the middle of the front (south) row, which a building leaves open. There are six (round 11 cut the seventeen of round 9 to the best placed): three in the north street, by the Main gate, two by the west road and one by the east road, each the nearest good ground to the compound for its lot, with the sidewalk, the road and the verge among them. Each lies on open ground clear of props, tree crowns, awnings, the gate's lane and the posts, a person's width from the next. kits: the walls a mouth is closed with, the compound's own kinds moved and scaled: name and blurb; dir, the way of the mouths it fits; template, the id of the old wall section whose four damage-state pictures it moves and scales; length, hp, thick and stand are that section's (the length and thickness in tiles, the health, and how far in front of its inner face the dead stand: a slot's depth for this kit); scrap and work: the price and the builders' hours. A kit is stretched or squeezed along its length by at most 15 percent to fit a mouth. The short container of the east wall (section 10, six tiles) fits no street of this map and is left out. Every mouth offers at least two kits except north_alley_east: the sidewalk there is three tiles wide between a tree trunk and a bench, which only the pallets fit.",
+	"_doc": "The lots of the ring (round 9). The map is a block: the compound stands in a ring of streets (the north street, the west and east roads, with their sidewalks and verges) closed by rows of buildings at the map's edge and open at ten mouths, where the ten spawn points of the dead stand. A lot is a part of the ring the colony can claim; a mouth is a wall plot that closes one of its streets; ring plots are 3 by 3 places to build on; kits are the walls a mouth is closed with. Everything is in tiles, x to the east and y to the south. tests/test_lots_data.gd checks every number against assets/data/map.json: the walls on open ground clear of props and of the old walls, a flood fill of the dead's grid from each spawn point that does not get past the ten walls (with the other mouths shut too), every post and work spot that can be walked to from the tile outside the Main gate, (39, 14), with every lot built over. passage: the id of the old wall section that people may walk through once a lot is claimed (2, the Main gate): its tiles open on the people's grid, never on the dead's. lots: id, name, blurb; claim {scrap, cleared, day}: the scrap it costs, how many places of the town board must be cleared, and the earliest day; mouths and plots: the ids of its wall plots and its ring plots; sealed_bonus: the morale it lifts everyone by when every mouth of it has a wall that stands. The north lot is the north street, the tops of the two roads, the two alleys on the north row and the two ends of the street (six spawn points); the west and the east lot are the foot of one road and the alley at its side (two each). The ring is one open space: the dead who get in at any mouth that is not shut reach every lot, so the streets are free of them only when all ten stand. mouths: one entry for each wall plot. A spawn point has one, or two (ids ending _a and _b, end to end) where its street is wider than the longest kit (12 tiles). id, name, lot; spawn: the index in map.json of the spawn point whose dead it keeps out (0 to 9); dir: h for a wall that runs east to west (the dead come from the north or the south), v for one that runs north to south (from the west or the east); side: the compass side the dead come from; rect [x0, y0, x1, y1]: the tiles it shuts, whole tiles, three thick, all of them open ground and the whole of the street where it crosses it (a wall that is wider than the street, at an alley, still shuts the street's tiles); the wall's outer face is on the side of the dead, at least 2.5 tiles from the spawn point (the first tile of the street at a map edge is the third, so the wall cannot stand further out at the ends of the north street and the alleys at the sides). length: the long side of the rect, in tiles; center: the middle of the rect (the plot's place); anchor: where the old wall sections have their center, the middle of the wall and 0.9 tile inside its inner face, where people stand to mend it and where the pictures of a kit's template are fixed (their offsets from it kept, stretched along the wall by length over the kit's length). kits: the ids of the kits that fit it (those that run its way and are within 15 percent of its length). slots: the places of the dead on the outer face, as at the old sections: x, y where one stands against the wall (0.26 tile inside the outer face), ax, ay where it is met on the way (0.5 tile outside the face), face the way it looks, 0.9 apart along the open ground in front of the wall. post {pos, what}: where a shooter stands behind the wall (0.8 tile inside the inner face, 1.2 for a wall that runs north to south so that a step either side of it is open ground), and what the night job says; the builders' work spot is the same place. outside and inside: the tile across the outer face from the middle of the open ground in front of it, and the tile across the inner face: a built wall must keep the dead from getting to inside. plots: the ring plots, in the format of plots.json: kind is ring; lot is the lot they are claimed with (the north lot's are in the north street, the rows above 30, the others by the side of the map); pos is the middle of a 3 by 3 lot, on the middle of a tile; size is [3, 3]; work is where the builders stand, the middle of the front (south) row, which a building leaves open. There are two (round 15: no more choosing of plots, every building has its own home; round 11 had cut the seventeen of round 9 to six): the homes of the scrap yard, the one building made for the streets and the one that may stand twice, the first on the grass verge by the north-east corner (the north lot) and the second on the west verge (the west lot); the east lot has walls and no plot. Each is on the verge, on grass, outside the wall and not in a road, the sidewalk or the lane of the gate, and carries `home` (the building it is the home of), `n` (its number), `name` (where it is) and `why` (the sentence the Build screen shows). Each lies on open ground clear of props, tree crowns, awnings, the gate's lane and the posts, a person's width from the next. kits: the walls a mouth is closed with, the compound's own kinds moved and scaled: name and blurb; dir, the way of the mouths it fits; template, the id of the old wall section whose four damage-state pictures it moves and scales; length, hp, thick and stand are that section's (the length and thickness in tiles, the health, and how far in front of its inner face the dead stand: a slot's depth for this kit); scrap and work: the price and the builders' hours. A kit is stretched or squeezed along its length by at most 15 percent to fit a mouth. The short container of the east wall (section 10, six tiles) fits no street of this map and is left out. Every mouth offers at least two kits except north_alley_east: the sidewalk there is three tiles wide between a tree trunk and a bench, which only the pallets fit.",
 	"passage": 2,
 	"lots": [
 		{
@@ -16,7 +16,7 @@
 				"north_alley_west",
 				"north_alley_east"
 			],
-			"plots": ["street_wreck", "street_gate", "street_mid"],
+			"plots": ["scrap_yard_home_1"],
 			"sealed_bonus": 3
 		},
 		{
@@ -25,7 +25,7 @@
 			"blurb": "The west road below the alley, and the block beside the school. Two ways in to shut: the alley and the foot of the road.",
 			"claim": {"scrap": 35, "cleared": 2, "day": 6},
 			"mouths": ["west_alley", "south_west_a", "south_west_b"],
-			"plots": ["west_verge", "west_corner"],
+			"plots": ["scrap_yard_home_2"],
 			"sealed_bonus": 2
 		},
 		{
@@ -34,7 +34,7 @@
 			"blurb": "The east road below the alley, and the block beside the school. Two ways in to shut: the alley and the foot of the road.",
 			"claim": {"scrap": 35, "cleared": 3, "day": 9},
 			"mouths": ["east_alley", "south_east_a", "south_east_b"],
-			"plots": ["east_verge"],
+			"plots": [],
 			"sealed_bonus": 2
 		}
 	],
@@ -342,58 +342,28 @@
 	],
 	"plots": [
 		{
-			"id": "street_wreck",
-			"name": "North street, by the wreck",
+			"id": "scrap_yard_home_1",
+			"home": "scrap_yard",
+			"n": 1,
+			"name": "North-east verge",
+			"why": "On the grass beside the north-east tower, outside the wall: a heap of the street's wrecks to pick over.",
 			"kind": "ring",
 			"lot": "north",
-			"pos": [30.5, 13.5],
+			"pos": [68.5, 20.5],
 			"size": [3.0, 3.0],
-			"work": [30.5, 14.5]
+			"work": [68.5, 21.5]
 		},
 		{
-			"id": "street_gate",
-			"name": "North street, past the gate",
-			"kind": "ring",
-			"lot": "north",
-			"pos": [43.5, 6.5],
-			"size": [3.0, 3.0],
-			"work": [43.5, 7.5]
-		},
-		{
-			"id": "street_mid",
-			"name": "North street, middle",
-			"kind": "ring",
-			"lot": "north",
-			"pos": [50.5, 12.5],
-			"size": [3.0, 3.0],
-			"work": [50.5, 13.5]
-		},
-		{
-			"id": "west_verge",
+			"id": "scrap_yard_home_2",
+			"home": "scrap_yard",
+			"n": 2,
 			"name": "The west verge",
+			"why": "On the grass strip beside the west road, outside the wall, where the street's wrecks lie.",
 			"kind": "ring",
 			"lot": "west",
 			"pos": [15.5, 36.5],
 			"size": [3.0, 3.0],
 			"work": [15.5, 37.5]
-		},
-		{
-			"id": "west_corner",
-			"name": "The west road, south",
-			"kind": "ring",
-			"lot": "west",
-			"pos": [6.5, 42.5],
-			"size": [3.0, 3.0],
-			"work": [6.5, 43.5]
-		},
-		{
-			"id": "east_verge",
-			"name": "The east road, by the alley",
-			"kind": "ring",
-			"lot": "east",
-			"pos": [72.5, 40.5],
-			"size": [3.0, 3.0],
-			"work": [72.5, 41.5]
 		}
 	],
 	"kits": {

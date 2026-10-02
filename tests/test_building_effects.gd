@@ -102,7 +102,7 @@ func _near_spot(at: Vector2, spots: Array) -> bool:
 func test_the_greenhouse_beds_pay_a_little_more_each_dawn() -> void:
 	var g := _game(6.4)
 	var sim = g.sim
-	_stand(sim, "east_lot", "greenhouse")
+	_stand(sim, "greenhouse_home", "greenhouse")
 	var food: float = sim.stock.food
 	sim.supplies.roll_dawn()
 	near(float(sim.stock.food) - food, Supplies.GARDEN_BASE + _fx(sim, "greenhouse", "garden_base"), 1.0e-9, "the beds' own share and the greenhouse's")
@@ -117,7 +117,7 @@ func test_the_greenhouse_beds_pay_a_little_more_each_dawn() -> void:
 func test_the_greenhouse_pays_when_the_day_turns_over_in_a_real_run() -> void:
 	var g := _game(6.45)
 	var sim = g.sim
-	_stand(sim, "east_lot", "greenhouse")
+	_stand(sim, "greenhouse_home", "greenhouse")
 	var food: float = sim.stock.food
 	Helpers.run(sim, 4.0)    # across 06:30, twelve game minutes
 	eq(sim.day, 2, "the day turned over")
@@ -141,7 +141,7 @@ func _bench_hour(with_workshop: bool) -> Dictionary:
 	var g := _game()
 	var sim = g.sim
 	if with_workshop:
-		_stand(sim, "south_lot", "workshop")
+		_stand(sim, "workshop_home", "workshop")
 	var dez = _person(sim, "Dez")
 	check(Helpers.seat(sim, dez, "bench"), "Dez is at the bench")
 	sim.stock.ammo = 100.0
@@ -166,7 +166,7 @@ func test_the_workshop_quickens_the_bench() -> void:
 func test_the_workshop_makes_more_ammo_from_a_scrap_and_stops_at_the_target() -> void:
 	var g := _game()
 	var sim = g.sim
-	_stand(sim, "south_lot", "workshop")
+	_stand(sim, "workshop_home", "workshop")
 	var per: float = Workshop.AMMO_PER_SCRAP + _fx(sim, "workshop", "ammo_per_scrap")
 	near(float(sim.workshop.ammo_per_scrap()), per, 1.0e-9, "the module says what a scrap makes now")
 	check(per > Workshop.AMMO_PER_SCRAP, "more than before")
@@ -205,7 +205,7 @@ func test_the_workbench_tooltip_follows_the_workshop() -> void:
 	Kit.update(ctx)
 	var before: String = Kit.gizmo(ctx, "job_bench").tooltip_text.split("\n")[2]
 	check(before.begins_with("1 scrap makes %d ammo." % int(Workshop.AMMO_PER_SCRAP)), "nothing built: '%s'" % before)
-	_stand(sim, "south_lot", "workshop")
+	_stand(sim, "workshop_home", "workshop")
 	Kit.update(ctx)
 	var per: float = Workshop.AMMO_PER_SCRAP + _fx(sim, "workshop", "ammo_per_scrap")
 	var hourly: float = sim.workshop.scrap_per_hour(ana) * sim.perf(ana) * per
@@ -229,7 +229,7 @@ func test_the_bunk_house_adds_four_beds_after_the_others() -> void:
 	var sim = g.sim
 	var before: Array = sim.medical.beds.duplicate()
 	eq(before.size(), 6, "two cots and four bunks to begin with")
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	Helpers.run(sim, 0.1)
 	var beds: Array = sim.medical.beds
 	eq(beds.size(), 6 + int(_fx(sim, "bunk_house", "beds")), "four more")
@@ -240,13 +240,13 @@ func test_the_bunk_house_adds_four_beds_after_the_others() -> void:
 	for i in spots.size():
 		eq(String(beds[6 + i].kind), "bunk house", "bed %d is a bunk house bed" % i)
 		eq(Vector2(beds[6 + i].pos), Vector2(spots[i]), "at the spot the building gives")
-	_stand(sim, "north_east_lot", "bunk_house")
+	_stand(sim, "bunk_house_home_2", "bunk_house")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds.size(), 14, "a second bunk house has four more")
-	sim.build.demolish("south_east_corner")
+	sim.build.demolish("bunk_house_home_1")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds.size(), 10, "and when one comes down its beds go")
-	sim.build.demolish("north_east_lot")
+	sim.build.demolish("bunk_house_home_2")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds, before, "with both gone the beds are the old six")
 	g.world.free()
@@ -257,7 +257,7 @@ func test_a_patient_goes_to_the_bunk_house_when_the_other_beds_are_full() -> voi
 	var sim = g.sim
 	var cot = sim.medical.beds[0]
 	sim.medical.beds = [cot]    # one cot is all the infirmary has
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var walt = _patient(sim, "Walt")
 	eq(_at(walt.resting_bed), Vector2(cot.pos), "the first goes to the cot")
 	eq(String(walt.activity), "Resting in the infirmary", "and says so")
@@ -273,7 +273,7 @@ func test_a_patient_goes_to_the_bunk_house_when_the_other_beds_are_full() -> voi
 func test_the_cots_and_the_bunks_come_before_the_bunk_house_whatever_the_distance() -> void:
 	var g := _game()
 	var sim = g.sim
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var walt = _person(sim, "Walt")
 	var spot: Vector2 = sim.build.bed_spots()[0]
 	walt.x = spot.x
@@ -290,14 +290,14 @@ func test_a_patient_in_a_bed_that_comes_down_is_put_in_another_one() -> void:
 	var sim = g.sim
 	var cot = sim.medical.beds[0]
 	sim.medical.beds = [cot]
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var walt = _patient(sim, "Walt")
 	var hector = _patient(sim, "Hector")
 	check(_near_spot(_at(hector.resting_bed), sim.build.bed_spots()), "Hector is in the bunk house")
 	walt.hp = 100.0
 	Helpers.run(sim, 0.1)
 	check(not walt.downed and walt.resting_bed == null, "Walt is up and the cot is free")
-	check(sim.build.demolish("south_east_corner"), "the bunk house comes down")
+	check(sim.build.demolish("bunk_house_home_1"), "the bunk house comes down")
 	Helpers.run(sim, 0.1)
 	check(hector.downed and hector.stabilised, "Hector is still a patient")
 	eq(_at(hector.resting_bed), Vector2(cot.pos), "and he is in the cot")
@@ -311,11 +311,11 @@ func test_a_patient_whose_bunk_house_comes_down_with_no_bed_free_rests_where_he_
 	var sim = g.sim
 	sim.medical.beds = []
 	sim.jobs.unassign(_person(sim, "Ana"))    # nobody on duty in the infirmary: plain rest
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var hector = _patient(sim, "Hector")
 	check(hector.resting_bed != null, "Hector is in a bed of the bunk house")
 	var at := Vector2(hector.x, hector.y)
-	check(sim.build.demolish("south_east_corner"), "the bunk house comes down")
+	check(sim.build.demolish("bunk_house_home_1"), "the bunk house comes down")
 	Helpers.run(sim, 0.1)
 	eq(hector.resting_bed, null, "he is out of a bed that is gone")
 	eq(String(hector.activity), "Resting", "and rests where he lies")
@@ -337,7 +337,7 @@ func test_a_patient_in_the_bunk_house_heals_like_any_other_and_gets_up() -> void
 	var sim = g.sim
 	sim.medical.beds = []
 	sim.jobs.unassign(_person(sim, "Ana"))
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var hector = _patient(sim, "Hector")
 	check(hector.resting_bed != null, "in a bunk house bed")
 	Helpers.run(sim, 20.0)    # one game hour
@@ -355,7 +355,7 @@ func test_a_patient_in_the_bunk_house_is_still_there_after_a_save() -> void:
 	var a := _game()
 	var sim_a = a.sim
 	sim_a.medical.beds = []
-	_stand(sim_a, "south_east_corner", "bunk_house")
+	_stand(sim_a, "bunk_house_home_1", "bunk_house")
 	var hector = _patient(sim_a, "Hector")
 	check(hector.resting_bed != null, "Hector is in a bed of the bunk house")
 	var bed: Vector2 = _at(hector.resting_bed)
@@ -403,7 +403,7 @@ func test_putting_up_and_pulling_down_bunk_houses_among_the_hurt_leaves_nobody_s
 	sim.medical.beds = [sim.medical.beds[0], sim.medical.beds[1]]    # two cots: the bunk houses are needed
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20261002
-	var plots := ["south_east_corner", "north_east_lot"]
+	var plots := ["bunk_house_home_1", "bunk_house_home_2"]
 	var ups := 0
 	var downs := 0
 	var rehomed := 0
@@ -468,7 +468,7 @@ func test_the_bunk_house_steadies_everyones_mood() -> void:
 	for p in sim.people:
 		before[p.id] = float(sim.morale.target(p))
 		check(_line(sim, p, "A proper bed") == null, "%s has no bed to be glad of yet" % p.first)
-	_stand(sim, "south_east_corner", "bunk_house")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
 	var lift: float = _fx(sim, "bunk_house", "morale")
 	for p in sim.people:
 		near(float(sim.morale.target(p)), float(before[p.id]) + lift, 1.0e-9, "%s's mood heads %.0f higher" % [p.first, lift])
@@ -477,15 +477,15 @@ func test_the_bunk_house_steadies_everyones_mood() -> void:
 		if line != null:
 			near(float(line.value), lift, 0.05, "with its sign: +%.0f" % lift)
 			eq(bool(line.recent), false, "a steady thing, not a shock that fades")
-	_stand(sim, "north_east_lot", "bunk_house")
+	_stand(sim, "bunk_house_home_2", "bunk_house")
 	for p in sim.people:
 		near(float(sim.morale.target(p)), float(before[p.id]) + 2.0 * lift, 1.0e-9, "a second bunk house, a second bed each")
 	var ruth = _person(sim, "Ruth")
 	ruth.dead = true
 	near(float(sim.morale.target(ruth)), Morale.BASE_TARGET, 1.0e-9, "the dead have no mood to lift")
 	ruth.dead = false
-	sim.build.demolish("south_east_corner")
-	sim.build.demolish("north_east_lot")
+	sim.build.demolish("bunk_house_home_1")
+	sim.build.demolish("bunk_house_home_2")
 	for p in sim.people:
 		eq(float(sim.morale.target(p)), float(before[p.id]), "%s's target is exactly what it was once the beds are gone" % p.first)
 		check(_line(sim, p, "A proper bed") == null, "and the line is gone")
@@ -504,7 +504,7 @@ func test_the_bunk_house_moves_the_mood_to_its_new_target() -> void:
 			from[p.id] = float(sim.morale.target(p))
 		lift = _fx(sim, "bunk_house", "morale")
 		if built:
-			_stand(sim, "south_east_corner", "bunk_house")
+			_stand(sim, "bunk_house_home_1", "bunk_house")
 		for p in sim.people:
 			sim.morale.set_value(p, float(from[p.id]))    # each rests exactly at the plain target
 		Helpers.run(sim, 30.0)    # one and a half game hours: drift is 2.5 an hour
@@ -553,7 +553,7 @@ func test_the_floodlights_lengthen_the_guns_reach_from_the_bell_to_dawn() -> voi
 	var pike: Dictionary = sim.weapons.pike
 	var more := _fx(sim, "floodlights", "night_reach_mult")
 	near(sim.reach_of(rifle), float(rifle.range), 1.0e-9, "with no floodlights a rifle reaches its own range")
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	near(sim.reach_of(rifle), float(rifle.range) * more, 1.0e-9, "at night the floodlights lengthen it")
 	near(sim.reach_of(pike), float(pike.range), 1.0e-9, "a pike in the hand does not reach further")
 	near(sim.reach_of(sim.BUTT), float(sim.BUTT.range), 1.0e-9, "nor the butt of a gun")
@@ -586,7 +586,7 @@ func test_floodlit_guns_pick_a_target_further_out_at_night() -> void:
 	var z = sim.spawn(40.0, 19.0 - range_tiles * 1.06, "wander")
 	z.speed = 0.0
 	eq(sim._find_target(dez), null, "a walker 6% beyond the rifle's range is out of reach")
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	eq(sim._find_target(dez), z, "under the floodlights he is in reach")
 	_clock(sim, 10.0)
 	eq(sim._find_target(dez), null, "by day he is not again")
@@ -619,7 +619,7 @@ func test_the_floodlights_count_in_the_fields_of_fire() -> void:
 	var plain: Array = []
 	for at in posts:
 		plain.append(_coverage_of(sim, marcus, at))
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	for i in posts.size():
 		var lit := _coverage_of(sim, marcus, posts[i])
 		for id in plain[i].each:
@@ -640,7 +640,7 @@ func test_the_fields_view_draws_the_floodlit_reach() -> void:
 	var sim = g.sim
 	var o := OverlayNode.new()
 	var plain: Array = o.fields_plan(sim).reach
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	var lit: Array = o.fields_plan(sim).reach
 	check(not plain.is_empty() and plain.size() == lit.size(), "every gun that can shoot has a ring")
 	var longer := 0
@@ -671,12 +671,12 @@ func test_a_blackout_costs_no_aim_while_the_floodlights_stand() -> void:
 	var sim = g.sim
 	_dark(sim)
 	near(sim.storyteller.aim_mult(8.0), Storyteller.DARK_AIM, 1.0e-9, "in the dark aim is worse far off")
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	near(sim.storyteller.aim_mult(8.0), 1.0, 1.0e-9, "with the floodlights it is not")
 	near(sim.storyteller.aim_mult(20.0), 1.0, 1.0e-9, "at any distance")
 	eq(sim.storyteller.blackout_state(), "dark", "the blackout itself goes on")
 	eq(bool(sim.storyteller.look().blackout), true, "and the lamps are out")
-	sim.build.demolish("north_east_lot")
+	sim.build.demolish("floodlights_home")
 	near(sim.storyteller.aim_mult(8.0), Storyteller.DARK_AIM, 1.0e-9, "without them it costs aim again")
 	g.world.free()
 
@@ -694,7 +694,7 @@ func test_the_blackout_card_still_comes_and_says_the_floodlights_hold() -> void:
 		sim.supplies.meal_day = 8
 		sim.supplies.meals_done = 1
 		if floodlit:
-			_stand(sim, "north_east_lot", "floodlights")
+			_stand(sim, "floodlights_home", "floodlights")
 		check(sim.storyteller.force("blackout"), "the card is put up")
 		check(sim.storyteller.choose(1), "and the crew holds the wall in the dark")
 		Helpers.run_to_hour(sim, 21.1)
@@ -731,26 +731,27 @@ func test_a_watchtower_lengthens_the_reach_of_those_near_it() -> void:
 	var rifle: Dictionary = sim.weapons.rifle
 	var pike: Dictionary = sim.weapons.pike
 	var dez = _person(sim, "Dez")
-	_stand(sim, "west_wall", "watchtower")
+	_stand(sim, "watchtower_home_1", "watchtower")
 	var more := _fx(sim, "watchtower", "reach_bonus")
 	var radius := _fx(sim, "watchtower", "reach_radius")
-	var tower: Vector2 = sim.build.plot("west_wall").pos
-	dez.x = tower.x + radius - 0.5
+	var tower: Vector2 = sim.build.plot("watchtower_home_1").pos
+	var edge := tower.x + 1.5    # (the tower's body: x pos-1.5 to pos+1.5, y pos-1.5 to pos+0.5; the reach is from the nearest point of it)
+	dez.x = edge + radius - 0.5
 	dez.y = tower.y
 	near(sim.reach_of(rifle, dez), float(rifle.range) + more, 1.0e-9, "within the radius the guns reach %.0f tiles further" % more)
 	near(sim.reach_of(rifle), float(rifle.range), 1.0e-9, "asked of the gun alone, the reach is the gun's")
 	near(sim.reach_of(pike, dez), float(pike.range), 1.0e-9, "a pike does not reach further")
 	near(sim.reach_at(rifle, tower), float(rifle.range) + more, 1.0e-9, "asked for a spot (a post), the same")
-	dez.x = tower.x + radius + 0.5
+	dez.x = edge + radius + 0.5
 	near(sim.reach_of(rifle, dez), float(rifle.range), 1.0e-9, "outside it, not")
-	near(sim.reach_at(rifle, Vector2(tower.x + radius + 0.5, tower.y)), float(rifle.range), 1.0e-9, "for a spot outside, not")
-	dez.x = tower.x + radius - 0.5
+	near(sim.reach_at(rifle, Vector2(edge + radius + 0.5, tower.y)), float(rifle.range), 1.0e-9, "for a spot outside, not")
+	dez.x = edge + radius - 0.5
 	_clock(sim, 22.0)
 	near(sim.reach_of(rifle, dez), float(rifle.range) + more, 1.0e-9, "by night it is the same")
 	sim.storyteller.enabled = true
 	sim.weather = "fog"
 	near(sim.reach_of(rifle, dez), float(rifle.range) * Storyteller.FOG_REACH + more, 1.0e-9, "in a fog the tower's tiles are still tiles")
-	_stand(sim, "north_east_lot", "floodlights")
+	_stand(sim, "floodlights_home", "floodlights")
 	near(sim.reach_of(rifle, dez), float(rifle.range) * Storyteller.FOG_REACH * _fx(sim, "floodlights", "night_reach_mult") + more, 1.0e-9, "and with the floodlights too")
 	g.world.free()
 
@@ -758,8 +759,8 @@ func test_a_watchtower_lengthens_the_reach_of_those_near_it() -> void:
 func test_a_shooter_near_the_tower_picks_a_target_further_out() -> void:
 	var g := _game(22.0)
 	var sim = g.sim
-	_stand(sim, "west_wall", "watchtower")
-	var tower: Vector2 = sim.build.plot("west_wall").pos
+	_stand(sim, "watchtower_home_1", "watchtower")
+	var tower: Vector2 = sim.build.plot("watchtower_home_1").pos
 	var dez = _person(sim, "Dez")
 	dez.x = tower.x
 	dez.y = tower.y
@@ -767,7 +768,7 @@ func test_a_shooter_near_the_tower_picks_a_target_further_out() -> void:
 	var z = sim.spawn(tower.x, tower.y - range_tiles - 2.0, "wander")
 	z.speed = 0.0
 	eq(sim._find_target(dez), z, "a walker two tiles beyond the rifle's range is in reach from the tower")
-	dez.x = tower.x + _fx(sim, "watchtower", "reach_radius") + 1.0
+	dez.x = tower.x + 1.5 + _fx(sim, "watchtower", "reach_radius") + 1.0
 	z.x = dez.x
 	z.y = dez.y - range_tiles - 2.0
 	eq(sim._find_target(dez), null, "from beyond its radius he is not")
@@ -778,20 +779,21 @@ func test_the_watchtower_counts_in_the_fields_of_fire() -> void:
 	var g := _game(22.0)
 	var sim = g.sim
 	var ruth = _person(sim, "Ruth")    # a shotgun reaches 7.5 tiles: three more is a great deal
-	var tower: Vector2 = sim.build.plot("west_wall").pos
+	var tower: Vector2 = sim.build.plot("watchtower_home_1").pos
 	var radius := _fx(sim, "watchtower", "reach_radius")
 	# places within the tower's radius, a tile apart (where the plots are is the view's business: wherever it is, some
 	# place near it has a section the tower brings into the shotgun's reach)
 	var spots: Array = []
-	for dx in range(-3, 4):
-		for dy in range(-3, 4):
+	for dx in range(-6, 7):
+		for dy in range(-6, 7):
 			var at := tower + Vector2(float(dx), float(dy))
-			if at.distance_to(tower) <= radius - 0.1:
+			var d := (at - (tower + Vector2(0.0, -0.5))).abs() - Vector2(1.5, 1.0)    # (from the tower's body)
+			if Vector2(maxf(d.x, 0.0), maxf(d.y, 0.0)).length() <= radius - 0.1:
 				spots.append(at)
 	var plain: Array = []
 	for at in spots:
 		plain.append(_coverage_of(sim, ruth, at))
-	_stand(sim, "west_wall", "watchtower")
+	_stand(sim, "watchtower_home_1", "watchtower")
 	var gained := 0
 	for i in spots.size():
 		var raised := _coverage_of(sim, ruth, spots[i])
@@ -799,11 +801,11 @@ func test_the_watchtower_counts_in_the_fields_of_fire() -> void:
 			check(int(raised.each[id]) >= int(plain[i].each[id]), "section %s is never covered by fewer with the tower (spot %s)" % [str(id), str(spots[i])])
 		gained += 1 if int(raised.total) > int(plain[i].total) else 0
 	check(gained >= 1, "from some place near the tower the shotgun covers more of the wall: %d of %d places" % [gained, spots.size()])
-	var far := _coverage_of(sim, ruth, tower + Vector2(radius + 3.0, 0.0))
+	var far := _coverage_of(sim, ruth, tower + Vector2(radius + 4.5, 0.0))
 	var far_with: int = int(far.total)
-	sim.build.demolish("west_wall")
-	eq(int(_coverage_of(sim, ruth, tower + Vector2(radius + 3.0, 0.0)).total), far_with, "far from the tower it made no difference")
-	_stand(sim, "west_wall", "watchtower")
+	sim.build.demolish("watchtower_home_1")
+	eq(int(_coverage_of(sim, ruth, tower + Vector2(radius + 4.5, 0.0)).total), far_with, "far from the tower it made no difference")
+	_stand(sim, "watchtower_home_1", "watchtower")
 	_coverage_of(sim, ruth, tower)
 	var o := OverlayNode.new()
 	var rings: Array = o.fields_plan(sim).reach
@@ -849,11 +851,11 @@ func test_the_radio_mast_weighs_the_boons_and_the_threats_of_the_draw() -> void:
 	var t0: float = sim.storyteller._weight(threat)
 	var b0: float = sim.storyteller._weight(boon)
 	var c0: float = sim.storyteller._weight(choice)
-	_stand(sim, "south_lot", "radio_mast")
+	_stand(sim, "radio_mast_home", "radio_mast")
 	near(float(sim.storyteller._weight(threat)), t0 * _fx(sim, "radio_mast", "threat_mult"), 1.0e-9, "a threat is less likely")
 	near(float(sim.storyteller._weight(boon)), b0 * _fx(sim, "radio_mast", "boon_mult"), 1.0e-9, "a boon is more")
 	near(float(sim.storyteller._weight(choice)), c0, 1.0e-9, "a choice is as it was")
-	sim.build.demolish("south_lot")
+	sim.build.demolish("radio_mast_home")
 	eq(float(sim.storyteller._weight(threat)), t0, "with the mast gone the weights are as they were (threat)")
 	eq(float(sim.storyteller._weight(boon)), b0, "(boon)")
 	g.world.free()
@@ -867,7 +869,7 @@ func test_the_radio_mast_shifts_what_the_radio_brings() -> void:
 	var share := {}
 	for built in [false, true]:
 		if built:
-			_stand(sim, "south_lot", "radio_mast")
+			_stand(sim, "radio_mast_home", "radio_mast")
 		var threats := 0
 		var cards := 0
 		for s in 400:
@@ -915,7 +917,7 @@ func _numbers(sim) -> Dictionary:
 	var out := {}
 	var dez = _person(sim, "Dez")
 	var marcus = _person(sim, "Marcus")
-	var tower: Vector2 = sim.build.plot("west_wall").pos    # Dez stands where a tower would help him
+	var tower: Vector2 = sim.build.plot("watchtower_home_1").pos    # Dez stands where a tower would help him
 	dez.x = tower.x
 	dez.y = tower.y
 	_clock(sim, 22.0)
@@ -944,7 +946,7 @@ func test_pulling_every_building_down_puts_every_number_back() -> void:
 	a.world.free()
 	var b := _game()
 	var sim = b.sim
-	var plots := {"south_east_corner": "workshop", "north_east_lot": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_wall": "floodlights", "west_wall": "watchtower"}
+	var plots := {"workshop_home": "workshop", "bunk_house_home_1": "bunk_house", "greenhouse_home": "greenhouse", "salvage_bench_home": "salvage_bench", "radio_mast_home": "radio_mast", "floodlights_home": "floodlights", "watchtower_home_1": "watchtower"}
 	for id in plots:
 		_stand(sim, id, plots[id])
 	var built := _numbers(sim)
@@ -974,7 +976,7 @@ func test_with_everything_built_a_day_and_a_night_run_without_errors() -> void:
 	sim.supplies.meal_day = 3
 	sim.supplies.meals_done = 1
 	sim.storyteller.radio_day = 2
-	var plots := {"south_east_corner": "workshop", "north_east_lot": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_wall": "floodlights", "west_wall": "watchtower"}
+	var plots := {"workshop_home": "workshop", "bunk_house_home_1": "bunk_house", "greenhouse_home": "greenhouse", "salvage_bench_home": "salvage_bench", "radio_mast_home": "radio_mast", "floodlights_home": "floodlights", "watchtower_home_1": "watchtower"}
 	for id in plots:
 		_build_now(sim, id, plots[id])
 	sim.medical.beds = [sim.medical.beds[0]]    # a one-cot infirmary: the second patient goes to the bunk house
@@ -1027,9 +1029,9 @@ func test_the_reach_a_tower_or_the_floodlights_add_is_shot_at_a_fair_accuracy() 
 	var g := _game(22.0)
 	var sim = g.sim
 	var marcus = _person(sim, "Marcus")
-	_stand(sim, "west_wall", "watchtower")
-	_stand(sim, "north_east_lot", "floodlights")
-	var tower: Vector2 = sim.build.plot("west_wall").pos
+	_stand(sim, "watchtower_home_1", "watchtower")
+	_stand(sim, "floodlights_home", "floodlights")
+	var tower: Vector2 = sim.build.plot("watchtower_home_1").pos
 	marcus.x = tower.x + 1.0
 	marcus.y = tower.y
 	for name in ["rifle", "shotgun", "pistol", "hunting", "service"]:

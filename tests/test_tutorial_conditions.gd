@@ -295,9 +295,9 @@ func test_can_build_wants_the_day_the_scrap_and_nothing_built_or_going_up() -> v
 	sim.stock.scrap = 100.0
 	check(_ok(_c("can_build"), sim), "with no numbers it asks day 3 and 30 scrap")
 	check(not _ok(_c("can_build", {"scrap": 101}), sim), "and takes the numbers it is given")
-	sim.build.plot("east_lot").site = {"building": "workshop", "progress": 0.0, "work": 24.0, "scrap": 30.0}
+	sim.build.plot("workshop_home").site = {"building": "workshop", "progress": 0.0, "work": 24.0, "scrap": 30.0}
 	check(not _ok(spec, sim), "not with a site going up")
-	sim.build.plot("east_lot").site = {}
-	sim.build.plot("east_lot").building = "workshop"
+	sim.build.plot("workshop_home").site = {}
+	sim.build.plot("workshop_home").building = "workshop"
 	check(not _ok(spec, sim), "nor with a building standing")
 	g.world.free()

@@ -88,6 +88,11 @@ var drawn_job_stations := 0
 var drawn_job_lit := 0
 var drew_job_post := false
 var drawn_job_edges := 0
+## The selection of the last draw (round 15): how many people wear the brackets and the ring, whether a box was being
+## dragged, and how many people it holds at the moment (they show a ring of their own).
+var drawn_selected := 0
+var drew_box := false
+var drawn_box_hits := 0
 ## What people are saying: [{"p": Person, "text", "born": main.clock}], the oldest first; and how many bubbles
 ## the last draw put on the screen.
 var bubbles: Array = []
@@ -591,6 +596,52 @@ func _draw_bubbles(vp: Vector2) -> void:
 		drawn_bubbles += 1
 
 
+## Everyone selected with `sel` (a person): main.gd's `selected_people` when it has one that holds them, else just them.
+func _selected_people(sel) -> Array:
+	if sel == null or sel.kind != "person":
+		return []
+	var g = main.get("selected_people")
+	return g if g is Array and g.has(sel.ref) else [sel.ref]
+
+
+## A selected person's marks: the ellipse of a ring at their feet (the primary's heavier), the four corner brackets, and for
+## one person alone the dashed circle of how far their gun reaches.
+func _mark_person(e, primary: bool, alone: bool, z: float) -> void:
+	drawn_selected += 1
+	var ep: Vector2 = main.view_pos(e)
+	var a := _screen(ep.x - 0.48, ep.y - 0.92)
+	var b := _screen(ep.x + 0.48, ep.y + 0.42)
+	var L := maxf(5.0, (b.x - a.x) * 0.22)
+	draw_set_transform(_screen(ep.x, ep.y), 0.0, Vector2(1.0, 0.45))
+	draw_arc(Vector2.ZERO, 0.42 * z, 0, TAU, 28, Color(ACCENT, 0.95 if primary else 0.8), 2.5 if primary else 1.8, true)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	for c in [[a.x, a.y, 1, 1], [b.x, a.y, -1, 1], [a.x, b.y, 1, -1], [b.x, b.y, -1, -1]]:
+		draw_polyline(PackedVector2Array([Vector2(c[0] + c[2] * L, c[1]), Vector2(c[0], c[1]), Vector2(c[0], c[1] + c[3] * L)]), ACCENT, 2.0, true)
+	if alone and not e.downed:
+		_dashed_circle(_screen(ep.x, ep.y), main.sim.reach_of(e.gun, e) * z, Color(ACCENT, 0.35), 1.2)
+
+
+## The box a left-drag is drawing (main.gd's `drag`: not for a pan): a pale fill and an outline in the HUD's gold, and a ring
+## at the feet of each person it holds now.
+func _draw_box() -> void:
+	var d = main.get("drag")
+	if d == null or not bool(d.get("moved", false)) or int(d.get("button", 0)) != MOUSE_BUTTON_LEFT or bool(d.get("pan", false)):
+		return
+	var box: Rect2 = d.get("box", Rect2())
+	drew_box = true
+	draw_rect(box, Color(ACCENT, 0.12))
+	draw_rect(box, Color(ACCENT, 0.85), false, 1.5)
+	if not main.has_method("box_people"):
+		return
+	var z: float = main.zoom_px
+	for e in main.box_people(box):
+		drawn_box_hits += 1
+		var ep: Vector2 = main.view_pos(e)
+		draw_set_transform(_screen(ep.x, ep.y), 0.0, Vector2(1.0, 0.45))
+		draw_arc(Vector2.ZERO, 0.42 * z, 0, TAU, 28, Color(ACCENT, 0.7), 1.5, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
 func _draw() -> void:
 	if main == null or main.sim == null:
 		return
@@ -607,6 +658,9 @@ func _draw() -> void:
 	drawn_job_lit = 0
 	drew_job_post = false
 	drawn_job_edges = 0
+	drawn_selected = 0
+	drew_box = false
+	drawn_box_hits = 0
 	if main.fields:
 		_draw_fields(sim, z, vp)
 	_draw_alarm(sim, z, vp)
@@ -625,19 +679,22 @@ func _draw() -> void:
 		var col := Color("#e0584a") if f < 0.34 else (Color("#e8953a") if f < 0.67 else Color("#9cc46a"))
 		_pill(Rect2(p.x - w / 2, p.y - 1.5, maxf(3.0, w * f), 3), col)
 
-	# selection
-	if sel != null and (sel.kind == "person" or sel.kind == "zombie"):
+	# selection: a person (or the group of them) wears the corner brackets and a ring at their feet, the primary's ring
+	# the heavier; the reach circle is for one person alone
+	var group := _selected_people(sel)
+	if sel != null and sel.kind == "person":
+		for e in group:
+			if e.away == null:
+				_mark_person(e, e == sel.ref, group.size() == 1, z)
+	elif sel != null and sel.kind == "zombie":
 		var e = sel.ref
-		if not (sel.kind == "zombie" and e.state == "dead") and not (sel.kind == "person" and e.away != null):
+		if e.state != "dead":
 			var ep: Vector2 = main.view_pos(e)
 			var a := _screen(ep.x - 0.48, ep.y - 0.92)
 			var b := _screen(ep.x + 0.48, ep.y + 0.42)
 			var L := maxf(5.0, (b.x - a.x) * 0.22)
-			var col := ACCENT if sel.kind == "person" else Color("#e2685a")
 			for c in [[a.x, a.y, 1, 1], [b.x, a.y, -1, 1], [a.x, b.y, 1, -1], [b.x, b.y, -1, -1]]:
-				draw_polyline(PackedVector2Array([Vector2(c[0] + c[2] * L, c[1]), Vector2(c[0], c[1]), Vector2(c[0], c[1] + c[3] * L)]), col, 2.0, true)
-			if sel.kind == "person" and not e.downed:
-				_dashed_circle(_screen(ep.x, ep.y), main.sim.reach_of(e.gun, e) * z, Color(ACCENT, 0.35), 1.2)
+				draw_polyline(PackedVector2Array([Vector2(c[0] + c[2] * L, c[1]), Vector2(c[0], c[1]), Vector2(c[0], c[1] + c[3] * L)]), Color("#e2685a"), 2.0, true)
 	elif sel != null and sel.kind == "segment":
 		var box := section_rect(sel.ref)
 		var a := _screen(box.position.x, box.position.y)
@@ -645,7 +702,7 @@ func _draw() -> void:
 		for edge in [[a, Vector2(b.x, a.y)], [Vector2(b.x, a.y), b], [b, Vector2(a.x, b.y)], [Vector2(a.x, b.y), a]]:
 			_dashed_line(edge[0], edge[1], ACCENT, 2.0)
 	var hover = main.hover
-	if hover != null and (sel == null or hover != sel.ref):
+	if hover != null and (sel == null or hover != sel.ref) and not group.has(hover):
 		var hp: Vector2 = main.view_pos(hover)
 		var a := _screen(hp.x - 0.45, hp.y - 0.88)
 		draw_rect(Rect2(a, Vector2(0.9, 1.28) * z), Color(1, 1, 1, 0.35), false, 1.0)
@@ -669,8 +726,9 @@ func _draw() -> void:
 				continue
 			var label: String = p.first
 			var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0
-			var selected: bool = sel != null and sel.ref == p
-			var bg := Color(ACCENT, 0.92) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
+			var primary: bool = sel != null and sel.ref == p
+			var selected: bool = primary or group.has(p)
+			var bg := Color(ACCENT, 0.92 if primary else 0.62) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
 			_pill(Rect2(pos.x - tw / 2, pos.y - 8, tw, 16), bg)
 			var fg := Color("#1a1508") if selected else (ACCENT if p.drafted else INK)
 			draw_string(font, Vector2(pos.x - tw / 2, pos.y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, fg)
@@ -682,6 +740,9 @@ func _draw() -> void:
 				var hy := _screen(pp.x, pp.y - 0.53 - 0.45).y
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
+
+	# the box being dragged (a left-drag that is not a pan): the raid's own colours, and a ring on those it holds now
+	_draw_box()
 
 	# what people say, over everything else
 	_draw_bubbles(vp)

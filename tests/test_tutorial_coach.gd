@@ -81,6 +81,21 @@ func test_the_soft_lock_refuses_what_the_step_does_not_teach_and_allows_what_it_
 	check(float(coach.state.pan) > 0.0 and float(coach.state.zoom) > 0.0, "and the coach saw the camera move")
 	main._key(KEY_ESCAPE)
 	check(main.selection == null, "Esc lets go of the selection")
+	# a left-drag draws a box (round 15) and is no pan: the lesson does not count it
+	var pan_was: float = float(coach.state.pan)
+	var vp: Vector2 = main._vp()
+	for step in [[true, Vector2(vp.x * 0.7, vp.y * 0.5)], [null, Vector2(vp.x * 0.2, vp.y * 0.3)], [false, Vector2(vp.x * 0.2, vp.y * 0.3)]]:
+		if step[0] == null:
+			var move := InputEventMouseMotion.new()
+			move.position = step[1]
+			main._unhandled_input(move)
+		else:
+			var button := InputEventMouseButton.new()
+			button.button_index = MOUSE_BUTTON_LEFT
+			button.pressed = step[0]
+			button.position = step[1]
+			main._unhandled_input(button)
+	eq(float(coach.state.pan), pan_was, "a left-drag is no pan")
 	# an order to walk, outside the walls or far off, is refused; a few steps away is taken
 	Bot.card_click(main, "ruth")
 	main._focus(Vector2(ruth.x, ruth.y))

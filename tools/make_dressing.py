@@ -68,6 +68,9 @@ RESERVED_LOTS = [
 ]
 # What is left alone for the gate's parked vehicles (round 13): x0, y0, x1, y1.
 GATE_PARKING = (33.5, 6.0, 44.5, 15.0)
+# The eastbound lane (round 15: the colony's vehicles drive out and in along it, from x -8 to 92): nothing of the dressing stands in it
+# (tools/edit_gate.py moved what the dresser had put there; run again, this keeps it clear).
+VEHICLE_LANE = (-12.0, 9.9, 96.0, 12.6)
 # How many pieces at most, so that a change of the map cannot flood the street.
 MAX_PIECES = 175
 
@@ -180,6 +183,7 @@ class Ground:
         for sp in self.map["spawns"]:
             self.forbidden.append((sp[0] - 1.0, sp[1] - 1.0, sp[0] + 1.0, sp[1] + 1.0, "spawn"))
         self.forbidden.append(GATE_PARKING + ("the gate",))
+        self.forbidden.append(VEHICLE_LANE + ("the vehicles' lane",))
 
     def _obstacles(self):
         for o in self.map["objects"]:

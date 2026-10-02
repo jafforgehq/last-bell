@@ -1060,8 +1060,8 @@ func _party_markers() -> Array:
 			depart = float(party_out.depart)
 		elif _departures.has(n):
 			depart = float(_departures[n])
-		elif String(party_out.state) == "out":
-			depart = float(sim.clock_min)    # still walking to the gate: they have only just been sent
+		elif String(party_out.state) == "out" or String(party_out.state) == "driving_out":
+			depart = float(sim.clock_min)    # still walking to the gate (or driving out): they have only just been sent
 		else:
 			depart = float(party_out.return_at) - trip_h * 60.0
 		_departures[n] = depart
@@ -1071,8 +1071,8 @@ func _party_markers() -> Array:
 		var searched := (one_way + search) / trip_h
 		var at := 0.0
 		var mode := "out"
-		if String(party_out.state) == "out":
-			at = 0.0
+		if String(party_out.state) == "out" or String(party_out.state) == "driving_out":
+			at = 0.0    # (the car's drive out is not on the map: the trip's hours start when it has left)
 		elif share < there:
 			at = share / maxf(there, 0.0001)
 		elif share < searched:

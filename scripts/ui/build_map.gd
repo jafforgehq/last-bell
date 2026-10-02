@@ -1,6 +1,7 @@
-## The map on the Build screen of a settlement game (round 9, the lots): the yard, or the whole block (84 by 64 tiles: the
-## compound in its ring of streets), drawn from the world's own ground (a small picture of the terrain made when the screen opens),
-## the compound's walls, the ten places where the dead come in, and the plots as pins:
+## The map on the Build screen (round 9, the lots; round 15: the classic start has it too, the yard only): the yard, or the whole
+## block (84 by 64 tiles: the compound in its ring of streets), drawn from the world's own ground (a small picture of the terrain
+## made when the screen opens), the compound's walls, the ten places where the dead come in, and the plots as pins (round 15: a
+## plot of the yard or the ring is the home of a building, and the chosen building's is the one that is lit):
 ##   - a plot of the yard or of the ring: a lot drawn at its size, faint while empty, gold with a bar along its foot while a site is
 ##     going up (the share done), oak when a building stands;
 ##   - a mouth (a wall across a street, in the lot's streets): a line across the street, amber and dashed while it is open, gold
@@ -241,13 +242,13 @@ func health_of(id: String) -> float:
 	return 1.0 if seg == null else clampf(float(seg.hp) / maxf(1.0, float(seg.max_hp)), 0.0, 1.0)
 
 
-## The words of a plot's tooltip: its name and what is on it.
+## The words of a plot's tooltip: for a building's home, the building and where it goes, and what is on it.
 func tooltip_of(id: String) -> String:
 	var pl: Dictionary = build.plot(id)
 	var what := ""
 	match state_of(id):
 		"empty":
-			what = "empty"
+			what = "not built yet"
 		"open":
 			what = "open street"
 		"site":
@@ -260,6 +261,8 @@ func tooltip_of(id: String) -> String:
 			what = "wall down: the street is open"
 		_:
 			what = "not claimed yet"
+	if String(pl.get("home", "")) != "":
+		return "%s, %s: %s" % [String(build.title_of(id)), String(pl.name), what]
 	return "%s: %s" % [String(pl.name), what]
 
 

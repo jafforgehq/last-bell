@@ -97,7 +97,7 @@
 		{
 			"id": "build",
 			"title": "Time to build",
-			"text": "The crew can build now. Press N for the plots: a salvage bench pays for itself.",
+			"text": "The crew can build now. Press N and pick a building: a salvage bench pays for itself.",
 			"anchor": ["build"],
 			"start": {"cond": "can_build", "params": {"day": 3, "scrap": 30}}
 		}

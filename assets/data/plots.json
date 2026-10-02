@@ -1,125 +1,105 @@
 {
- "version": 1,
- "_doc": "Fixed lots in the compound: seven, five in the yard and two at the wall (round 11 cut the nine and three of the first rounds: the player chooses what to build first). kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, a step either side too, outside the footprint, reachable from the gate). Every lot is three tiles by three and centred on the middle of a tile, so that what a building shuts (assets/data/building_art.json, 'solid') is whole tiles: the back two rows of the lot, the front row (where the work spot is) is always open. The positions were checked against the map (tests/test_build_view.gd): on open ground inside the yard, clear of every prop, ladder, school door and the gate's lane, a person's width apart, and every work spot reachable. The seven that stay are spread round the edge of the yard and leave the middle free: none stands on the basketball court or in the garden, the school doors' ground stays open, and the two at the wall (the north wall's and the west wall's, for a watchtower or the floodlights) sit by the posts they would help.",
+ "version": 2,
+ "_doc": "The homes of the compound's buildings (round 15: no more choosing a plot; every building has a place where it belongs). Each plot is the HOME of one building: `home` is the building's id (assets/data/buildings.json) and `n` its number among that building's homes (a building that may stand twice has two: n 1 and 2, and the second is built after the first: `sim.build.home_for(id)` is the first home that is free). `name` says where the home is, in words a player would use for the place; `why` is the one sentence the Build screen shows as the building's 'where' line. kind: yard (on the yard's ground) or wall (against the north walkway). pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, a step either side too, outside the footprint, reachable from the gate). Every lot is three tiles by three and centred on the middle of a tile, so that what a building shuts (assets/data/building_art.json, 'solid') is whole tiles: the back two rows of the lot, the front row (where the work spot is) is always open. The ground each home may not take is listed, and checked against the map's own object rectangles, in tests/test_build_homes.gd: the basketball court and its hoop, the garden's beds, the hopscotch and the four-square, the motor pool's apron (assets/data/motor_pool.json: the vehicle gate's room), the workbench's tarp, table and generator, a ladder's landing and the ground in front of the school's doors, every solid tile and every prop, and each other. Where they stand and why: the salvage bench by the crates and the scrap pile in the south-west corner; the greenhouse against the garden's southern edge; the workshop under the workbench's tarp; the two bunk houses against the school's front wall, outside the bunk room; the floodlights on the north wall over the garden; the two watchtowers on the north wall either side of the gate, where the night posts they would help are (tests/test_build_homes.gd counts the posts each one reaches); the radio mast at the school's east end by the radio desk. Round 11 had seven plots that the player chose among (a salvage bench on 'the junk corner' or 'the north wall' alike, which made the choice one without consequence); a save from before has what it had refunded (sim.build.load_state).",
  "plots": [
   {
-   "id": "north_east_lot",
-   "name": "The north-east lot",
+   "id": "salvage_bench_home",
+   "home": "salvage_bench",
+   "n": 1,
+   "name": "By the junk pile",
+   "why": "Next to the crates and the scrap in the south-west corner, where the yard's junk already piles up.",
    "kind": "yard",
-   "pos": [
-    52.5,
-    22.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    52.5,
-    23.5
-   ]
+   "pos": [26.5, 37.5],
+   "size": [3.0, 3.0],
+   "work": [26.5, 38.5]
   },
   {
-   "id": "junk_corner",
-   "name": "The junk corner",
+   "id": "greenhouse_home",
+   "home": "greenhouse",
+   "n": 1,
+   "name": "South of the garden",
+   "why": "Against the garden's lower edge, by the compost, so the new beds are tended with the old.",
    "kind": "yard",
-   "pos": [
-    26.5,
-    37.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    26.5,
-    38.5
-   ]
+   "pos": [55.5, 39.5],
+   "size": [3.0, 3.0],
+   "work": [55.5, 40.5]
   },
   {
-   "id": "south_lot",
-   "name": "The south lot",
+   "id": "workshop_home",
+   "home": "workshop",
+   "n": 1,
+   "name": "Beside the workbench",
+   "why": "Just under the workbench's tarp, so the tools and the scrap are a few steps apart.",
    "kind": "yard",
-   "pos": [
-    35.5,
-    41.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    35.5,
-    42.5
-   ]
+   "pos": [48.5, 32.5],
+   "size": [3.0, 3.0],
+   "work": [48.5, 33.5]
   },
   {
-   "id": "east_lot",
-   "name": "The east lot",
+   "id": "bunk_house_home_1",
+   "home": "bunk_house",
+   "n": 1,
+   "name": "By the school's west door",
+   "why": "Against the school's front wall beside the bunk room, so the hurt are carried only a few steps.",
    "kind": "yard",
-   "pos": [
-    47.5,
-    35.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    47.5,
-    36.5
-   ]
+   "pos": [34.5, 41.5],
+   "size": [3.0, 3.0],
+   "work": [34.5, 42.5]
   },
   {
-   "id": "south_east_corner",
-   "name": "The south-east corner",
+   "id": "bunk_house_home_2",
+   "home": "bunk_house",
+   "n": 2,
+   "name": "Under the school's front wall",
+   "why": "Next to the first bunk house, against the school's front wall.",
    "kind": "yard",
-   "pos": [
-    56.5,
-    39.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    56.5,
-    40.5
-   ]
+   "pos": [38.5, 42.5],
+   "size": [3.0, 3.0],
+   "work": [38.5, 43.5]
   },
   {
-   "id": "north_wall",
-   "name": "The north wall",
+   "id": "floodlights_home",
+   "home": "floodlights",
+   "n": 1,
+   "name": "North wall, over the garden",
+   "why": "At the east end of the north wall: its lamps light the street, the wall and the garden.",
    "kind": "wall",
-   "pos": [
-    30.5,
-    22.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    30.5,
-    23.5
-   ]
+   "pos": [55.5, 22.5],
+   "size": [3.0, 3.0],
+   "work": [55.5, 23.5]
   },
   {
-   "id": "west_wall",
-   "name": "The west wall",
+   "id": "watchtower_home_1",
+   "home": "watchtower",
+   "n": 1,
+   "name": "North wall, west of the gate",
+   "why": "Against the north walkway west of the gate: it reaches the barricade and the posts beside it.",
    "kind": "wall",
-   "pos": [
-    23.5,
-    27.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    23.5,
-    28.5
-   ]
+   "pos": [31.5, 22.5],
+   "size": [3.0, 3.0],
+   "work": [31.5, 23.5]
+  },
+  {
+   "id": "watchtower_home_2",
+   "home": "watchtower",
+   "n": 2,
+   "name": "North wall, east of the gate",
+   "why": "Against the north walkway east of the gate: it reaches the bus and the north-east post.",
+   "kind": "wall",
+   "pos": [51.5, 22.5],
+   "size": [3.0, 3.0],
+   "work": [51.5, 23.5]
+  },
+  {
+   "id": "radio_mast_home",
+   "home": "radio_mast",
+   "n": 1,
+   "name": "By the radio room",
+   "why": "At the school's east end, a few steps from the radio desk: a tall mast and a short cable.",
+   "kind": "yard",
+   "pos": [59.5, 39.5],
+   "size": [3.0, 3.0],
+   "work": [59.5, 40.5]
   }
  ]
 }

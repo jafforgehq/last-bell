@@ -7,7 +7,7 @@ extends "res://tests/case.gd"
 ##   - the map (scripts/ui/town_map.gd): fitted to what is known, widening when the bridge and the city are found, the
 ##     chip across the river, the picture of every kind of place of the city;
 ##   - the Fuel line of the stores (scripts/ui/hud.gd), the alerts of a vehicle found or lost;
-##   - the parked vehicles at the gate (scripts/render/parking_node.gd) and a click on one;
+##   - the vehicles in the motor pool (scripts/render/parking_node.gd) and a click on one;
 ##   - the tip, once.
 ## The picker is looked at on a small town of its own (FIX); the map on the real one.
 
@@ -15,7 +15,6 @@ const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Helpers := preload("res://tests/helpers.gd")
 const Town := preload("res://scripts/sim/town.gd")
-const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const TownBoard := preload("res://scripts/ui/town_board.gd")
 const TownMap := preload("res://scripts/ui/town_map.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
@@ -28,7 +27,6 @@ const Prefs := preload("res://scripts/prefs.gd")
 const Tut := preload("res://tests/tutorial_kit.gd")
 
 const FIXTURE := "user://test_vehicles_view.json"
-const KINDS_FIXTURE := "user://test_vehicles_view_kinds.json"
 const SIZES := [[700, 700], [980, 700], [1280, 800], [1920, 1080]]
 
 ## Home is at (50, 35). The houses are near; the garage holds a pickup; the gas station has fuel; the hospital is across
@@ -728,7 +726,17 @@ func test_a_vehicle_that_is_lost_or_found_shows_in_the_alerts_with_an_icon() -> 
 	Kit.free_all(ctx)
 
 
-# ---------------------------------------------------------------- the parked vehicles --
+# ------------------------------------------------------------ the vehicles in the motor pool --
+# (round 15: the street parking is gone; the vehicles stand in the motor pool, inside the main gate, and drive in and
+# out of it. Their poses, doors, gate and sounds are tests/test_vehicle_actor.gd's; here is what the Town Board's click
+# and the settlement game's rules see of them.)
+
+## The motor pool's apron as the file says it (x, y, w, h in tiles).
+func _apron() -> Rect2:
+	var raw = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/motor_pool.json"))
+	var a: Array = raw.apron
+	return Rect2(float(a[0]), float(a[1]), float(a[2]), float(a[3]))
+
 
 func _node_of(sim) -> Node2D:
 	var node := ParkingNode.new()
@@ -737,7 +745,7 @@ func _node_of(sim) -> Node2D:
 	return node
 
 
-func test_the_parking_draws_the_parked_vehicles_only_in_a_settlement_game() -> void:
+func test_the_motor_pool_draws_the_parked_vehicles_only_in_a_settlement_game() -> void:
 	var g := _game()
 	var sim = g.sim
 	var node := _node_of(sim)
@@ -750,48 +758,44 @@ func test_the_parking_draws_the_parked_vehicles_only_in_a_settlement_game() -> v
 	var want: Array = [sedan, pickup]
 	want.sort()
 	eq(ids, want, "the two parked are drawn")
-	eq(node.spot_of(sedan), 0, "the first on the first place")
-	eq(node.spot_of(pickup), 1, "the next on the next")
+	check(node.spot_of(sedan) >= 0 and node.spot_of(pickup) >= 0 and node.spot_of(sedan) != node.spot_of(pickup), "each on a place of its own")
+	var apron := _apron()
 	for id in ids:
 		var r: Rect2 = node.rect_of(id)
-		check(r.position.x >= ParkingNode.AREA.position.x - 0.01 and r.end.x <= ParkingNode.AREA.end.x + 0.01, "%s is in the ground that is kept clear (x %.1f to %.1f)" % [id, r.position.x, r.end.x])
-		check(r.end.y <= ParkingNode.AREA.end.y + 0.01, "%s's feet are in it (y %.1f)" % [id, r.end.y])
-	# each in the picture of its kind, at its size, sorted by its feet
-	var kinds: Dictionary = sim.vehicles.kinds()
+		check(apron.encloses(r), "%s is on the apron %s: %s" % [id, str(apron), str(r)])
+	# each in the picture of its kind, at its size
 	for id in ids:
 		var k: Dictionary = sim.vehicles.kind_of(id)
 		var s: Sprite2D = node.sprite_of(id)
 		check(s != null and String(s.texture.resource_path).ends_with("%s.png" % String(k.art)), "%s is drawn as its kind: %s" % [id, k.art])
-		var drawn := Vector2(s.texture.get_width(), s.texture.get_height()) * s.scale
-		check(absf(drawn.y - float(k.h) * ParkingNode.TILE) < 1.0 or absf(drawn.x - float(k.h) * ParkingNode.TILE) < 1.0, "%s is as long as the data says" % id)
-		var at: Node2D = s.get_parent()
-		near(at.position.y, ParkingNode.FEET_Y * ParkingNode.TILE, 0.01, "%s stands with its feet on the line the people are sorted by" % id)
+		var r: Rect2 = node.rect_of(id)
+		near(r.size.y, float(k.h), 0.01, "%s is as long as the data says" % id)
+		near(r.size.x, float(k.w), 0.01, "%s is as wide" % id)
 	# one goes out with a party: not drawn; home again: it is where it was
+	var place: int = node.spot_of(sedan)
 	sim.vehicles.vehicle(sedan)["state"] = "out"
 	node.update()
 	check(not node.drawn_ids().has(sedan) and node.drawn_ids().has(pickup), "a vehicle that is out is not drawn")
 	sim.vehicles.vehicle(pickup)["state"] = "out"
 	node.update()
 	eq(node.drawn_ids(), [], "none while both are out")
-	sim.vehicles.vehicle(pickup)["state"] = "parked"
-	node.update()
-	eq(node.spot_of(pickup), 1, "the pickup is back on its place")
 	sim.vehicles.vehicle(sedan)["state"] = "parked"
 	node.update()
-	eq(node.spot_of(sedan), 0, "and the sedan on its")
+	eq(node.spot_of(sedan), place, "the sedan is back on its place")
 	# lost: gone
 	sim.vehicles.fleet.erase(sim.vehicles.vehicle(sedan))
 	node.update()
 	check(not node.drawn_ids().has(sedan), "a vehicle that is lost is gone")
-	# only four places
-	for kind in ["sedan", "van", "bus", "pickup"]:
+	# more vehicles than places (a debug start: the game has no more than the pool holds): the rules give each a place of the pool
+	# (they share), so each is drawn on a place that exists
+	for kind in ["sedan", "van", "bus", "pickup", "sedan"]:
 		sim.vehicles.add(kind)
+	sim.vehicles.vehicle(pickup)["state"] = "parked"
 	node.update()
-	check(node.drawn_ids().size() <= ParkingNode.MAX_SPOTS, "at most four are drawn: %d" % node.drawn_ids().size())
-	var spots := {}
+	var cv = load("res://scripts/sim/convoy.gd")
 	for id in node.drawn_ids():
-		check(not spots.has(node.spot_of(id)), "no two on one place")
-		spots[node.spot_of(id)] = true
+		var where: int = node.spot_of(id)
+		check(where >= 0 and where < int(cv.spots()), "%s is on a place of the pool: %d" % [id, where])
 	node.free()
 	g.world.free()
 	# the classic start has none, whatever the fleet
@@ -804,49 +808,14 @@ func test_the_parking_draws_the_parked_vehicles_only_in_a_settlement_game() -> v
 	classic.world.free()
 
 
-func test_a_worn_vehicle_is_darker_and_a_nearly_done_one_has_a_spanner() -> void:
+func test_a_click_finds_a_parked_vehicle_by_its_box_in_the_motor_pool() -> void:
 	var g := _game()
 	var sim = g.sim
 	var node := _node_of(sim)
-	var fresh := String(sim.vehicles.add("van").id)
-	var worn := String(sim.vehicles.add("pickup").id)
-	var wreck := String(sim.vehicles.add("sedan").id)
-	sim.vehicles.vehicle(worn)["hp"] = float(sim.vehicles.kind("pickup").hp) * 0.4
-	sim.vehicles.vehicle(wreck)["hp"] = float(sim.vehicles.kind("sedan").hp) * 0.1
+	var id := String(sim.vehicles.add("van").id)
 	node.update()
-	eq(node.sprite_of(fresh).modulate, Color.WHITE, "a vehicle in good order is as drawn")
-	check(not node.has_spanner(fresh), "with no spanner")
-	var tint: Color = node.sprite_of(worn).modulate
-	check(tint.r < 1.0 and tint.g < 1.0 and tint.b < 1.0, "a worn one is darker: %s" % str(tint))
-	var darker: Color = node.sprite_of(wreck).modulate
-	check(darker.r < tint.r, "a worse one more so")
-	check(node.has_spanner(wreck) and not node.has_spanner(worn), "and only the nearly done one has the spanner")
-	# it is mended (by the rules or a harness): the look follows
-	sim.vehicles.vehicle(wreck)["hp"] = float(sim.vehicles.kind("sedan").hp)
-	node.update()
-	eq(node.sprite_of(wreck).modulate, Color.WHITE, "mended: as drawn again")
-	check(not node.has_spanner(wreck), "no spanner")
-	node.free()
-	g.world.free()
-
-
-func test_a_picture_that_lies_down_is_stood_up_and_a_click_finds_the_vehicle() -> void:
-	# a kind whose picture is wider than it is tall, though the data says it is long: it is turned
-	_write(KINDS_FIXTURE, {"version": 1, "kinds": {"sedan": {"name": "Sedan", "seats": 3, "speed": 2.4, "burn": 3.0, "cargo": 1.2, "hp": 70, "art": "203_car", "w": 1.9, "h": 4.4}}})
-	var was := Vehicles.data_path
-	Vehicles.data_path = KINDS_FIXTURE
-	var g := _game()
-	Vehicles.data_path = was
-	var sim = g.sim
-	var node := _node_of(sim)
-	var id := String(sim.vehicles.add("sedan").id)
-	node.update()
-	var s: Sprite2D = node.sprite_of(id)
-	near(absf(s.rotation), PI / 2.0, 0.001, "the picture lies down: it is turned")
-	var drawn_h: float = s.texture.get_width() * s.scale.x
-	near(drawn_h, 4.4 * ParkingNode.TILE, 1.0, "and is as long as the data says")
-	# a click
 	var r: Rect2 = node.rect_of(id)
+	check(r.size.x > 1.0 and r.size.y > 1.0, "the van has a box: %s" % str(r))
 	eq(node.vehicle_at(r.get_center()), id, "the middle of it is the vehicle")
 	eq(node.vehicle_at(r.position + Vector2(0.1, 0.1)), id, "and its corner")
 	eq(node.vehicle_at(r.position - Vector2(0.5, 0.5)), "", "beside it is not")
@@ -862,7 +831,7 @@ func test_a_click_on_a_parked_vehicle_opens_the_town_board_and_the_street_does_n
 	var sedan := String(main.sim.vehicles.add("sedan").id)
 	var bus := String(main.sim.vehicles.add("bus").id)
 	await Tut.frames(main, 3)
-	eq(main.parking_view.drawn_ids().size(), 2, "both are parked at the gate")
+	eq(main.parking_view.drawn_ids().size(), 2, "both are parked in the motor pool")
 	var r: Rect2 = main.parking_view.rect_of(sedan)
 	main._focus(r.get_center())
 	main._apply_camera()
@@ -888,7 +857,7 @@ func test_a_click_on_a_parked_vehicle_opens_the_town_board_and_the_street_does_n
 func test_the_main_scene_has_the_parking_and_the_staging_options() -> void:
 	var main = Tut.start({"difficulty": 1, "seed": 7, "crew": 3}, 1280, 800)
 	await Tut.frames(main, 2)
-	check(main.parking_view != null and main.parking_view.is_inside_tree(), "the parking is in the world")
+	check(main.parking_view != null and main.parking_view.is_inside_tree(), "the motor pool's view is in the world")
 	eq(main.sim.vehicles.fleet.size(), 0, "(no fleet at the start)")
 	await Tut.leave(main)
 

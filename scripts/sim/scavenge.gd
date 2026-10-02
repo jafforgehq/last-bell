@@ -37,8 +37,40 @@
 ## party is strong enough). The way there and back also meets the town's beats (data), decided with the
 ## rest at the send. A rescue brings a survivor home. In the classic start none of this exists.
 ##
-## Events: only the rules' own "banner" events.
+## A TRIP BY CAR (round 15, "the yard in motion"). A party sent in a vehicle does not vanish at the gate: its states are
+##   "out"          the members walk to the doors of the car (`goal_for`: `Convoy.door_spot` of the door of their seat,
+##                  "Heading for the car"). One who stands within BOARD_REACH of it is held still and the door opens:
+##                  party.doors gets {pid, door, t, dur: BOARD_MIN, dir: "in"} (game minutes); at half of `dur` they go in
+##                  (`p.away` is the party, as ever, and they are hidden), at `dur` the door shuts and the entry ends. A
+##                  door takes one at a time (a bus has the one), the others queue beside it. One who is given another
+##                  errand on the way is let go as on foot (the trip is decided again for the smaller party if nobody has
+##                  gone in yet; nobody left: the trip is called off and the vehicle and its fuel are given back).
+##   "driving_out"  everybody is aboard and every door is shut: `drive_t` of `drive_len` game minutes along the vehicle's
+##                  out route (`Convoy.route(spot, "out")`; the length of the route over CAR_SPEED_TPM, about six seconds
+##                  at the normal speed). The rules never move the car: the view takes its pose from `drive_t / drive_len`.
+##   "away"         the trip's hours, which start when the car has left the map (`return_at` and `depart` are moved to then,
+##                  so the drive out is not taken out of them).
+##   "driving_in"   at the hour the party is due the car drives in along the in route (`drive_t` of `drive_len` again).
+##   "unloading"    the car is parked. Every UNLOAD_GAP_MIN game minutes the next person gets out: {pid, door, t, dur, dir:
+##                  "out"} in party.doors; at half of `dur` they stand at their door (`p.away` is null, facing away from the
+##                  car) and are free; at `dur` the door shuts. When the last door has shut the trip is told as ever (the
+##                  loot, the wounds, the report, the vehicle home), everyone who came home already stands at their door.
+##                  A party nobody survived (the vehicle is lost with it), or that never left, does not drive home.
+## A trip on foot is as it was ("out", "away"). The party also has `seats` ({id: the seat in the vehicle}), `aboard` and
+## `unload` (the people to get out, in order) and `unload_wait` while it unloads. A played trip (`send_played`) by vehicle
+## skips the way out (the raid screen was it): it is "away" at once, and comes home the same way as the others.
+##
+## Events of a trip by car (for the view and the sounds; the rules need none of them):
+##   {"type": "board", "vehicle": id, "person": id, "door": door id}    a person goes in (the middle of the door's time)
+##   {"type": "seated", "vehicle": id, "person": id, "door": door id}   the door shuts behind them
+##   {"type": "depart", "vehicle": id}                                  everybody is in: the car starts to drive out
+##   {"type": "arrive", "vehicle": id}                                  the hour is up: the car comes back (it starts to drive in)
+##   {"type": "parked", "vehicle": id}                                  the car has driven in and stopped in its bay
+##   {"type": "alight", "vehicle": id, "person": id, "door": door id}   a person has got out (stands at their door)
+## Besides these, only the rules' own "banner" events.
 extends RefCounted
+
+const Convoy := preload("res://scripts/sim/convoy.gd")
 
 const SITES_PATH := "res://assets/data/sites.json"
 ## Where the sites are read from (the harness and the tests may point it at another file).
@@ -88,6 +120,15 @@ const LOSS_MIN_DANGER := 2
 const DANGER_MULT := [0.5, 1.0, 1.6]
 ## The stocks a trip can bring back, in the order they are rolled and told.
 const STOCKS := ["food", "water", "scrap", "ammo", "meds", "fuel"]
+## A trip by car (see the header): a person within BOARD_REACH tiles of their door starts to get in; a door takes BOARD_MIN game
+## minutes (about 1.3 seconds at the normal speed) from the start of the entry to its end; those who are unloaded get out UNLOAD_GAP_MIN
+## minutes apart; the car drives CAR_SPEED_TPM tiles in a game minute (the way out is about 70 tiles: about six seconds).
+const BOARD_REACH := 0.7
+const BOARD_MIN := 4.0
+const UNLOAD_GAP_MIN := 2.5
+const CAR_SPEED_TPM := 3.8
+## The states a party can be in.
+const STATES := ["out", "driving_out", "away", "driving_in", "unloading"]
 const AWAY_COLOR := Color("#7fa6c9")
 ## How long the departure and return alerts stay up (seconds of rules time).
 const DEPART_ALERT_TTL := 10.0
@@ -126,29 +167,45 @@ func start() -> void:
 	errands.clear()
 
 
-## Every step: parties walking to the gate, away, and coming back.
-func update(_dt: float) -> void:
+## Every step: parties walking to the gate (or to their car), away, and coming back.
+func update(dt: float) -> void:
+	sim.vehicles.sync_blocks()    # (the ground under the cars that stand in their bays: people walk round them)
 	if parties.is_empty():
 		return
+	var mins := dt * float(sim.min_per_sec)
 	var keep: Array = []
 	for party in parties:
 		var open := true
-		if party.state == "out":
-			open = _walk_out(party)
-		if open and _is_due(party):
-			_come_back(party)
-			open = false
+		var by_car := _by_car(party)
+		match String(party.state):
+			"out":
+				open = _board_out(party, mins) if by_car else _walk_out(party)
+			"driving_out":
+				_drive_out(party, mins)
+			"driving_in":
+				_drive_in(party, mins)
+			"unloading":
+				open = _unload(party, mins)
+		var waiting: bool = String(party.state) == "out" or String(party.state) == "away"
+		if open and waiting and _is_due(party):
+			if by_car and String(party.state) == "away":
+				open = _start_return(party)
+			else:
+				_come_back(party)
+				open = false
 		if open:
 			keep.append(party)
 	parties = keep
 
 
-## A goal for a party member walking to the gate, or null (once they are back
+## A goal for a party member walking to the gate (or to the door of their car), or null (once they are back
 ## the rules walk them to their post or job as usual).
 func goal_for(p):
 	var party = _party_of(p)
 	if party == null or party.state != "out" or _is_through(p, party):
 		return null
+	if _by_car(party):
+		return _car_goal(party, p)
 	var gate := gate_center()
 	return {"x": gate.x, "y": gate.y, "face": "N", "what": "Heading for the gate"}
 
@@ -244,6 +301,8 @@ func status_of(p) -> Array:
 	var party = _party_of(p)
 	if party == null:
 		return []
+	if String(party.state) == "unloading" and not _is_through(p, party):
+		return []    # out of the car: home again, though the trip is not told yet
 	var tip := "Away scavenging" if _is_through(p, party) else "Heading out to scavenge"
 	return [{"icon": "away", "color": AWAY_COLOR, "tip": tip}]
 
@@ -326,7 +385,7 @@ func save() -> Dictionary:
 			var p = _person(String(id))
 			if p != null and _is_through(p, party):
 				through.append(id)
-		saved.append({
+		var entry := {
 			"n": int(party.n),
 			"members": party.members.duplicate(),
 			"through": through,
@@ -337,7 +396,19 @@ func save() -> Dictionary:
 			"action": String(party.get("action", "loot")),
 			"depart": float(party.get("depart", -1.0)),
 			"vehicle": String(party.get("vehicle", "")),
-		})
+		}
+		if bool(party.get("played", false)):
+			entry["played"] = true
+		if _by_car(party):
+			entry["seats"] = (party.get("seats", {}) as Dictionary).duplicate()
+			entry["doors"] = _copy_doors(party.get("doors", []))
+			for key in ["drive_t", "drive_len", "unload_wait"]:
+				if party.has(key):
+					entry[key] = float(party[key])
+			for key in ["aboard", "unload"]:
+				if party.has(key):
+					entry[key] = (party[key] as Array).duplicate()
+		saved.append(entry)
 	var lost := {}
 	for p in sim.people:
 		if p.away is Dictionary and p.away.get("kind", "") == "lost":
@@ -393,6 +464,12 @@ func _restore_party(entry: Dictionary) -> void:
 		party["depart"] = float(entry.depart)
 	if String(entry.get("vehicle", "")) != "":
 		party["vehicle"] = String(entry.vehicle)
+	if bool(entry.get("played", false)):
+		party["played"] = true
+	if not STATES.has(String(party.state)) or (not _by_car(party) and String(party.state) != "out" and String(party.state) != "away"):
+		party["state"] = "away"    # (a state this version does not know, or a car's state for a party on foot)
+	if _by_car(party):
+		_restore_car(party, entry)
 	parties.append(party)
 	var through = entry.get("through", [])
 	for id in members:
@@ -489,6 +566,315 @@ func _go_through(p, party: Dictionary) -> void:
 	p.activity = "Scavenging at %s" % _where(String(party.site))
 
 
+# ------------------------------------------------------------------ the trip by car --
+
+## Whether the party travels in a vehicle.
+func _by_car(party: Dictionary) -> bool:
+	return String(party.get("vehicle", "")) != ""
+
+
+func _vehicle_of(party: Dictionary) -> Dictionary:
+	return sim.vehicles.vehicle(String(party.get("vehicle", "")))
+
+
+## The party's place in the motor pool (0 for a vehicle that is not in the fleet any more: a damaged save).
+func _spot_of(party: Dictionary) -> int:
+	var v := _vehicle_of(party)
+	return int(v.get("spot", 0)) if not v.is_empty() else 0
+
+
+func _kind_id_of(party: Dictionary) -> String:
+	return String(_vehicle_of(party).get("kind", ""))
+
+
+## The door of a member's seat (a member with no seat takes the one their place in the party says).
+func _door_of(party: Dictionary, id: String) -> String:
+	var seats: Dictionary = party.get("seats", {})
+	var seat := int(seats.get(id, party.members.find(id)))
+	return String(sim.vehicles.seat_door(_kind_id_of(party), maxi(seat, 0), _spot_of(party)))
+
+
+## Where a member stands to use their door.
+func _door_at(party: Dictionary, id: String) -> Vector2:
+	return Convoy.door_spot(_spot_of(party), _kind_id_of(party), _door_of(party, id))
+
+
+## Which way a person at a door faces to look at the car: east from the west side of it, west from the east side.
+func _face_to_car(party: Dictionary, at: Vector2) -> String:
+	return "E" if at.x < Convoy.bay(_spot_of(party)).x else "W"
+
+
+## The door entry of this person ("in" while they board, "out" as they leave), or {}.
+func _entry_of(party: Dictionary, id: String, dir: String = "in") -> Dictionary:
+	for e in party.get("doors", []):
+		if String(e.pid) == id and String(e.dir) == dir:
+			return e
+	return {}
+
+
+## A door is taken while someone who is going through it has not yet gone in (the one after them waits beside it).
+func _door_busy(party: Dictionary, door: String) -> bool:
+	for e in party.get("doors", []):
+		if String(e.door) == door and String(e.dir) == "in" and float(e.t) < float(e.dur) / 2.0:
+			return true
+	return false
+
+
+## How many of the party stand ahead of this member at their door (one door may serve several: a bus has the one).
+func _queue_index(party: Dictionary, id: String, door: String) -> int:
+	var n := 0
+	for other in party.members:
+		if String(other) == id:
+			break
+		var q = _person(String(other))
+		if q != null and not _is_through(q, party) and _door_of(party, String(other)) == door:
+			n += 1
+	return n
+
+
+## What a member walking to the car is told to do: go to the door of their seat (beside the others waiting at it); at the
+## door with the door open, stand still.
+func _car_goal(party: Dictionary, p):
+	var id := String(p.id)
+	var at := _door_at(party, id)
+	var face := _face_to_car(party, at)
+	if not _entry_of(party, id).is_empty():
+		return {"x": p.x, "y": p.y, "face": face, "what": "Getting into the car"}
+	var wait := float(_queue_index(party, id, _door_of(party, id))) * 0.6
+	return {"x": at.x, "y": at.y + wait, "face": face, "what": "Heading for the car"}
+
+
+## Moves a party walking to its car along: members who reach a door get in, members who were given other business are let
+## go. False if the trip is called off.
+func _board_out(party: Dictionary, mins: float) -> bool:
+	var someone_was_through := _any_through(party)
+	var dropped := false
+	for id in party.members.duplicate():
+		var p = _person(String(id))
+		if p != null and _is_through(p, party):
+			continue
+		if p == null or not _is_heading_out(p):
+			party.members.erase(id)
+			party.result.hurt.erase(id)
+			party.result.lost.erase(id)
+			(party.seats as Dictionary).erase(String(id))
+			for e in party.doors.duplicate():
+				if String(e.pid) == String(id):
+					party.doors.erase(e)
+			dropped = true
+	_step_doors(party, mins)
+	for id in party.members:
+		var p = _person(String(id))
+		if p == null or _is_through(p, party) or not _entry_of(party, String(id)).is_empty():
+			continue
+		var door := _door_of(party, String(id))
+		if Vector2(p.x, p.y).distance_to(_door_at(party, String(id))) <= BOARD_REACH and not _door_busy(party, door):
+			party.doors.append({"pid": String(id), "door": door, "t": 0.0, "dur": BOARD_MIN, "dir": "in"})
+	if party.members.is_empty():
+		_call_off(party)
+		return false
+	if dropped and not someone_was_through and not bool(party.get("played", false)):
+		# nobody has gone in yet, so the trip is simply a smaller one (a played trip's result stands: it was played)
+		party.result = _decide(party)
+	if _all_through(party) and party.doors.is_empty():
+		_depart(party)
+	return true
+
+
+## Runs the open doors on: a person goes in at the middle of their door's time, the door shuts at its end.
+func _step_doors(party: Dictionary, mins: float) -> void:
+	for e in party.doors.duplicate():
+		e["t"] = float(e.t) + mins
+		var p = _person(String(e.pid))
+		if p != null and String(e.dir) == "in" and not _is_through(p, party) and float(e.t) >= float(e.dur) / 2.0:
+			_go_through(p, party)
+			sim.events.append({"type": "board", "vehicle": String(party.vehicle), "person": String(e.pid), "door": String(e.door)})
+		if float(e.t) >= float(e.dur):
+			party.doors.erase(e)
+			if String(e.dir) == "in":
+				sim.events.append({"type": "seated", "vehicle": String(party.vehicle), "person": String(e.pid), "door": String(e.door)})
+
+
+## Game minutes the car takes to drive a route.
+func _drive_minutes(route: Array) -> float:
+	return maxf(Convoy.length(route) / CAR_SPEED_TPM, 0.5)
+
+
+## Everybody is in and every door is shut: the car drives out.
+func _depart(party: Dictionary) -> void:
+	party.state = "driving_out"
+	party["drive_t"] = 0.0
+	party["drive_len"] = _drive_minutes(Convoy.route(_spot_of(party), "out"))
+	sim.events.append({"type": "depart", "vehicle": String(party.vehicle)})
+
+
+func _drive_out(party: Dictionary, mins: float) -> void:
+	party["drive_t"] = float(party.get("drive_t", 0.0)) + mins
+	if float(party.drive_t) < float(party.get("drive_len", 0.0)):
+		return
+	# off the map: the trip's hours start now (the drive was not part of them)
+	party.state = "away"
+	party.erase("drive_t")
+	party.erase("drive_len")
+	if float(party.get("depart", -1.0)) >= 0.0:
+		var trip := float(party.return_at) - float(party.depart)
+		party["depart"] = sim.clock_min
+		party.return_at = snappedf(sim.clock_min + trip, 1.0)
+	_announce_departure(party)
+
+
+## A played trip by car has no way out to show (the raid screen was it): everybody is off the map at once.
+func _skip_departure(party: Dictionary) -> void:
+	for id in party.members:
+		var p = _person(String(id))
+		if p != null:
+			_go_through(p, party)
+	party.state = "away"
+	_announce_departure(party)
+
+
+## The hour of return of a trip by car: the car drives in if somebody is in it to get out. False if the trip was settled at
+## once instead (nobody lived, or nobody ever left: the vehicle is lost or was never gone).
+func _start_return(party: Dictionary) -> bool:
+	var aboard: Array = []
+	var survivors: Array = []
+	for id in party.members:
+		var p = _person(String(id))
+		if p == null or not _is_through(p, party):
+			continue
+		aboard.append(String(id))
+		if not p.dead and not party.result.lost.has(id):
+			survivors.append(String(id))
+	if survivors.is_empty():
+		_come_back(party)
+		return false
+	var v := _vehicle_of(party)
+	if not v.is_empty():
+		sim.vehicles.ensure_spot(v)    # (its place may have been taken while it was out)
+	party.state = "driving_in"
+	party["drive_t"] = 0.0
+	party["drive_len"] = _drive_minutes(Convoy.route(_spot_of(party), "in"))
+	party["aboard"] = aboard
+	party["unload"] = survivors
+	party["unload_wait"] = 0.0
+	sim.events.append({"type": "arrive", "vehicle": String(party.vehicle)})
+	return true
+
+
+func _drive_in(party: Dictionary, mins: float) -> void:
+	party["drive_t"] = float(party.get("drive_t", 0.0)) + mins
+	if float(party.drive_t) < float(party.get("drive_len", 0.0)):
+		return
+	party["drive_t"] = float(party.get("drive_len", 0.0))
+	party.state = "unloading"
+	party["unload_wait"] = 0.0
+	sim.events.append({"type": "parked", "vehicle": String(party.vehicle)})
+
+
+## The survivors get out one at a time; when the last door has shut the trip is told. False once it is.
+func _unload(party: Dictionary, mins: float) -> bool:
+	for e in party.doors.duplicate():
+		e["t"] = float(e.t) + mins
+		if String(e.dir) == "out" and float(e.t) >= float(e.dur) / 2.0:
+			var p = _person(String(e.pid))
+			if p != null and _is_through(p, party):
+				_alight(p, party, String(e.door))
+		if float(e.t) >= float(e.dur):
+			party.doors.erase(e)
+	var queue: Array = party.get("unload", [])
+	party["unload_wait"] = float(party.get("unload_wait", 0.0)) - mins
+	while not queue.is_empty() and float(party.unload_wait) <= 0.0:
+		var id := String(queue.pop_front())
+		party.doors.append({"pid": id, "door": _door_of(party, id), "t": 0.0, "dur": BOARD_MIN, "dir": "out"})
+		party["unload_wait"] = UNLOAD_GAP_MIN
+	if queue.is_empty() and party.doors.is_empty():
+		_come_back(party, true)
+		return false
+	return true
+
+
+## A person steps out of the car at their door, facing away from it, and is free.
+func _alight(p, party: Dictionary, door: String) -> void:
+	var at := Convoy.door_spot(_spot_of(party), _kind_id_of(party), door)
+	p.away = null
+	p.x = at.x
+	p.y = at.y
+	p.moving = false
+	p.path = []
+	p.path_i = 0
+	p.target = null
+	p.goal_key = ""
+	p.drafted = false
+	p.order = null
+	p.repair = null
+	p.facing = "W" if at.x < Convoy.bay(_spot_of(party)).x else "E"
+	sim.events.append({"type": "alight", "vehicle": String(party.vehicle), "person": String(p.id), "door": door})
+
+
+## Where a person who is home from the trip stands: at the gate in a row (on foot), at their door (by car).
+func _home_point(party: Dictionary, p, i: int, n: int, gate: Vector2) -> Vector2:
+	if _by_car(party):
+		return _door_at(party, String(p.id))
+	return Vector2(gate.x + (float(i) - float(n - 1) / 2.0) * 0.7, gate.y)
+
+
+## The open doors as plain data (a saved party's): only what is well formed.
+func _copy_doors(raw) -> Array:
+	var out: Array = []
+	if raw is Array:
+		for e in raw:
+			if e is Dictionary and String(e.get("pid", "")) != "" and ["in", "out"].has(String(e.get("dir", ""))):
+				out.append({"pid": String(e.pid), "door": String(e.get("door", "")), "t": float(e.get("t", 0.0)), "dur": maxf(float(e.get("dur", BOARD_MIN)), 0.1), "dir": String(e.dir)})
+	return out
+
+
+## What a saved party by car holds besides the common fields (see `_restore_party`). A save from before round 15 has none of
+## it: the seats are the party's order, no door is open, and a party that was "away" drives in when it is due.
+func _restore_car(party: Dictionary, entry: Dictionary) -> void:
+	var seats := {}
+	var raw_seats = entry.get("seats", {})
+	if raw_seats is Dictionary:
+		for id in raw_seats:
+			if party.members.has(String(id)):
+				seats[String(id)] = int(raw_seats[id])
+	for i in party.members.size():
+		var id := String(party.members[i])
+		if not seats.has(id):
+			var seat: int = i
+			while seats.values().has(seat):
+				seat += 1
+			seats[id] = seat
+	party["seats"] = seats
+	var doors := _copy_doors(entry.get("doors", []))
+	party["doors"] = doors.filter(func(e): return party.members.has(String(e.pid)))
+	var state := String(party.state)
+	if state == "driving_out" or state == "driving_in" or state == "unloading":
+		var route := Convoy.route(_spot_of(party), "in" if state != "driving_out" else "out")
+		party["drive_len"] = float(entry.get("drive_len", _drive_minutes(route)))
+		party["drive_t"] = clampf(float(entry.get("drive_t", party.drive_len if state == "unloading" else 0.0)), 0.0, float(party.drive_len))
+	if state == "driving_in" or state == "unloading":
+		var through: Array = entry.get("through", [])
+		var aboard := _ids_of(entry.get("aboard", through), party.members)
+		party["aboard"] = aboard
+		var unload: Array
+		if entry.has("unload"):
+			unload = _ids_of(entry.unload, party.members)
+		else:
+			unload = aboard.filter(func(id): return through.has(id) and not party.result.lost.has(id))
+		party["unload"] = unload
+		party["unload_wait"] = float(entry.get("unload_wait", 0.0))
+
+
+## The ids of `raw` that are in `members`, as strings, once each.
+func _ids_of(raw, members: Array) -> Array:
+	var out: Array = []
+	if raw is Array:
+		for id in raw:
+			if members.has(String(id)) and not out.has(String(id)):
+				out.append(String(id))
+	return out
+
+
 ## "06:30" for an hour of the day.
 static func _clock_text(h: float) -> String:
 	var total := roundi(h * 60.0)
@@ -502,34 +888,40 @@ func _is_due(party: Dictionary) -> bool:
 	return sim.clock_min >= float(party.return_at) or sim.phase != "day"
 
 
-## Settles the trip: the living reappear at the gate, the loot is stored,
-## injuries and losses go to the medical module, and the story is told.
-func _come_back(party: Dictionary) -> void:
+## Settles the trip: the living reappear at the gate (at their doors, for a trip by car), the loot is stored,
+## injuries and losses go to the medical module, and the story is told. `unloaded`: the survivors of a trip by car have
+## already got out (`_unload`), so they are not put anywhere and are known by `party.aboard`.
+func _come_back(party: Dictionary, unloaded: bool = false) -> void:
 	var result: Dictionary = party.result
 	var gate := gate_center()
 	var came: Array = []
 	var lost: Array = []
 	for id in party.members:
 		var p = _person(String(id))
-		if p == null or not _is_through(p, party):
+		if p == null:
+			continue
+		var aboard := _is_through(p, party) or (unloaded and (party.get("aboard", []) as Array).has(String(id)))
+		if not aboard:
 			continue # never left: still at home
 		if p.dead or result.lost.has(id):
 			lost.append(p)
 		else:
 			came.append(p)
-	for i in came.size():
-		var p = came[i]
-		p.away = null
-		p.x = gate.x + (float(i) - float(came.size() - 1) / 2.0) * 0.7
-		p.y = gate.y
-		p.moving = false
-		p.path = []
-		p.path_i = 0
-		p.target = null
-		p.goal_key = ""
-		p.drafted = false
-		p.order = null
-		p.repair = null
+	if not unloaded:
+		for i in came.size():
+			var p = came[i]
+			p.away = null
+			var at := _home_point(party, p, i, came.size(), gate)
+			p.x = at.x
+			p.y = at.y
+			p.moving = false
+			p.path = []
+			p.path_i = 0
+			p.target = null
+			p.goal_key = ""
+			p.drafted = false
+			p.order = null
+			p.repair = null
 	var brought := {}
 	if not came.is_empty():
 		for k in STOCKS:
@@ -801,6 +1193,11 @@ func _send_town(people: Array, site_id: String, action: String, vehicle_id: Stri
 		"return_at": snappedf(sim.clock_min + minutes, 1.0), "result": {}, "depart": sim.clock_min, "vehicle": vehicle_id,
 	}
 	if vehicle_id != "":
+		var seats := {}
+		for i in ids.size():
+			seats[String(ids[i])] = i
+		party["seats"] = seats
+		party["doors"] = []
 		sim.vehicles.take(vehicle_id, site_id)
 	for p in people:
 		p.drafted = false
@@ -818,6 +1215,8 @@ func _send_town(people: Array, site_id: String, action: String, vehicle_id: Stri
 	party.return_at = snappedf(float(party.return_at) + float(party.result.get("delay_h", 0.0)) * 60.0, 1.0)
 	party.result.erase("delay_h")
 	parties.append(party)
+	if vehicle_id != "" and not played.is_empty():
+		_skip_departure(party)    # (the raid screen was the way out)
 	return true
 
 

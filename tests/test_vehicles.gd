@@ -300,20 +300,41 @@ func test_a_played_result_stands_when_someone_is_let_go_and_a_trip_called_off_gi
 	sim.vehicles.fuel = 30.0
 	var crew := _crew(sim, ["dez", "marcus"])
 	var played := {"loot": {"food": 14}, "hurt": {}, "lost": ["marcus"], "clear": true, "ammo_used": 10.0, "beats": []}
-	check(sim.scavenge.send_played(crew, "houses", "loot", String(v.id), played), "the played party goes")
-	var burnt: float = 30.0 - sim.vehicles.fuel
-	check(burnt > 0.0, "fuel was burnt")
-	# Dez is ordered about before the gate: the played result is not thrown away for a dice roll
+	# on foot (a played trip by vehicle is away at once: the raid screen was the way out): Dez is ordered about before the
+	# gate and the played result is not thrown away for a dice roll
+	check(sim.scavenge.send_played(crew, "houses", "loot", "", played), "the played party goes")
 	crew[0].order = {"x": 30.0, "y": 30.0, "z": 0.0}
 	Helpers.run(sim, 1.0)
 	var party: Dictionary = sim.scavenge.parties[0] if not sim.scavenge.parties.is_empty() else {}
-	check(party.is_empty() or party.result.lost.has("marcus") or not party.members.has("marcus"), "Marcus is still lost or no longer in it: the result stands")
-	check(party.is_empty() or int(party.result.loot.get("food", 0)) == 14, "the played loot is what it was")
+	check(not party.is_empty(), "the party is still out")
+	check(not party.members.has("dez"), "Dez is let go")
+	check(party.result.lost.has("marcus"), "Marcus is still lost: the result stands")
+	eq(int(party.result.loot.get("food", 0)), 14, "the played loot is what it was")
 	# a trip that never leaves gives the vehicle and the fuel back
 	var a = sim.vehicles.vehicle(String(v.id))
+	sim.vehicles.take(String(v.id), "houses")
+	eq(String(a.state), "out", "out")
+	var fuel_left: float = sim.vehicles.fuel
+	check(fuel_left < 30.0, "with the fuel burnt")
 	sim.scavenge._call_off({"vehicle": String(v.id), "site": "houses", "n": 9})
 	eq(String(a.state), "parked", "parked again")
 	near(sim.vehicles.fuel, 30.0, 0.0001, "the fuel is given back")
+	g.world.free()
+
+
+func test_a_played_trip_by_vehicle_is_away_at_once_and_burns_the_fuel() -> void:
+	var g := _game()
+	var sim = g.sim
+	var v: Dictionary = sim.vehicles.add("sedan")
+	sim.vehicles.fuel = 30.0
+	var played := {"loot": {"food": 14}, "hurt": {}, "lost": [], "clear": true, "ammo_used": 0.0, "beats": []}
+	check(sim.scavenge.send_played(_crew(sim, ["dez", "marcus"]), "houses", "loot", String(v.id), played), "the played party goes by sedan")
+	check(30.0 - sim.vehicles.fuel > 0.0, "fuel was burnt")
+	eq(String(sim.scavenge.parties[0].state), "away", "away at once: the raid screen was the way out")
+	for p in _crew(sim, ["dez", "marcus"]):
+		check(p.away != null, "%s is off the map" % p.first)
+	_until_back(sim)
+	eq(String(sim.vehicles.vehicle(String(v.id)).state), "parked", "the sedan is home")
 	g.world.free()
 
 

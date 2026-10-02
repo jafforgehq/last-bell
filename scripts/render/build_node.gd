@@ -1,5 +1,8 @@
 ## The yard's view of the buildings (round 6): the plots, the sites and the buildings, drawn from what `sim.build`
 ## says and from assets/data/building_art.json. In the world's space, over the ground and under the people.
+## (Round 15: a plot is the home of one building and the Build screen marks it, `main.build_hover`, while that building's slip
+## is pointed at or chosen; the art of each building is drawn from the middle of its home, as a plot's lot is three tiles by
+## three, the back two rows its footprint.)
 ##
 ## - (Round 11, the cut: the yard is not covered in signs.) An empty plot is a dashed outline of its lot with a small
 ##   sign (a hammer on a plate) at its corner, the thing a click opens the Build screen on (`sim.build.sign_at`), and

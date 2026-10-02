@@ -107,8 +107,8 @@ class Policy:
 	## scales with Building as nothing else does), the wall crew the next, the beds whoever is left.
 	const PICK_ORDER := ["bench", "builders", "salvage", "garden"]
 	## Building (the informed policy only): from BUILD_FROM_DAY, on a morning with nothing going up, it orders the
-	## next building of BUILD_ORDER that it can pay for with BUILD_KEEP scrap to spare, on the first plot that takes
-	## it (it saves up for the next one rather than skipping ahead). While a site is up the Builders get a hand
+	## next building of BUILD_ORDER that it can pay for with BUILD_KEEP scrap to spare, at its home (`build.home_for`: round
+	## 15; the first free one) (it saves up for the next one rather than skipping ahead). While a site is up the Builders get a hand
 	## more, and the Salvage station, once there is one, gets people while the scrap is short (under SALVAGE_BELOW).
 	const BUILD_ORDER := ["salvage_bench", "greenhouse", "workshop", "floodlights", "watchtower", "radio_mast", "bunk_house"]
 	const BUILD_FROM_DAY := 2
@@ -891,22 +891,12 @@ class Policy:
 			var b: Dictionary = sim.build.building(String(id))
 			if float(sim.stock.scrap) < float(b.scrap) + BUILD_KEEP:
 				return
-			# what may stand on the wall as well as in the yard (the floodlights) goes on the wall first: the yard has
-			# five plots, and they are for what stands only there (the bunk house is the last of the order)
-			var spots: Array = []
-			if (b.plots as Array).has("wall") and (b.plots as Array).has("yard"):
-				for pl in sim.build.plots():
-					if String(pl.kind) == "wall":
-						spots.append(pl)
-			for pl in sim.build.plots():
-				if not spots.has(pl):
-					spots.append(pl)
-			for pl in spots:
-				if sim.build.why_not(String(pl.id), String(id)) == "":
-					if sim.build.order(String(pl.id), String(id)):
-						builds_ordered += 1
-						_note("orders the %s on %s" % [String(b.name).to_lower(), String(pl.name).to_lower()])
-					return
+			# a building goes to its own home (round 15: nobody picks a plot; the first free home of the building)
+			var home: String = sim.build.home_for(String(id))
+			if home != "" and sim.build.why_not(home, String(id)) == "":
+				if sim.build.order(home, String(id)):
+					builds_ordered += 1
+					_note("orders the %s at %s" % [String(b.name).to_lower(), String(sim.build.plot(home).name).to_lower()])
 			return
 
 	# ------------------------------------------------------------- infection --
@@ -958,9 +948,13 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	var notes: Array = []
 	var last_day: int = sim.day
 	var step := 0
+	var ride_watch := {}
+	var ride_log: Array = []
 	while sim.over == "" and sim.day <= days:
 		sim.update(dt)
 		step += 1
+		if not ride_watch.is_empty() or not sim.scavenge.parties.is_empty():
+			_watch_rides(sim, ride_watch, ride_log)
 		if sim.day != last_day:
 			last_day = sim.day
 			rows.append(_row(sim))
@@ -989,6 +983,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"treats": policy.treats,
 		"sendouts": policy.sendouts,
 		"town": _town_row(sim, policy),
+		"ride_overhead": ride_log,
 		"season": sim.seasons.index,
 		"lots": {"claimed": policy.lots_claimed, "walls": policy.walls_ordered, "standing": _walls_standing(sim)} if sim.lots.on else {},
 		"moves": policy.moves,
@@ -999,6 +994,41 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	}
 	g.world.free()
 	return result
+
+
+## Follows the parties that go by vehicle for what the animation of the trip costs (round 15: the walk to the car, the
+## doors, the drive out and in, the people getting out; scavenge.gd): when one of them is over, `log` gets {"n", "out_min"
+## (game minutes from the send to the car leaving the map), "in_min" (from the hour the party was due to the last person
+## being home), "extra_min" (how much later they are home than the plain hours of the trip said)}.
+static func _watch_rides(sim, watch: Dictionary, log: Array) -> void:
+	var live := {}
+	for party in sim.scavenge.parties:
+		if String(party.get("vehicle", "")) == "":
+			continue
+		var n := int(party.n)
+		live[n] = true
+		if not watch.has(n):
+			watch[n] = {"sent": float(sim.clock_min), "plain_due": float(party.return_at), "away": -1.0, "due": -1.0, "state": "", "due_day": -1}
+		var w: Dictionary = watch[n]
+		var st := String(party.state)
+		if st != String(w.state):
+			w["state"] = st
+			if st == "away" and float(w.away) < 0.0:
+				w["away"] = float(sim.clock_min)
+			if st == "driving_in" and float(w.due) < 0.0:
+				w["due"] = float(sim.clock_min)
+				w["due_day"] = int(floor((float(sim.clock_min) / 60.0 + 7.0) / 24.0))
+	for n in watch.keys():
+		if live.has(n):
+			continue
+		var w: Dictionary = watch[n]
+		watch.erase(n)
+		if float(w.away) >= 0.0 and float(w.due) >= 0.0:    # (a trip that went and came home by car)
+			# the hours of the day it was due by the plain hours, and whether the drives pushed it past dusk and so to the next day
+			var plain_h := fposmod(float(w.plain_due) / 60.0 + 7.0, 24.0)
+			var plain_day := int(floor((float(w.plain_due) / 60.0 + 7.0) / 24.0))
+			var pushed: bool = plain_h < float(sim.seasons.dusk_hour()) and int(w.due_day) > plain_day
+			log.append({"n": n, "out_min": snappedf(float(w.away) - float(w.sent), 0.1), "in_min": snappedf(float(sim.clock_min) - float(w.due), 0.1), "extra_min": snappedf(float(sim.clock_min) - float(w.plain_due), 0.1), "pushed_past_dusk": pushed})
 
 
 ## How many walls stand across the streets of the lots.
@@ -1150,6 +1180,19 @@ static func summarise(games: Array) -> Dictionary:
 		lost[k] = snappedf(lost[k] / n, 0.01)
 	for k in final_stock:
 		final_stock[k] = snappedf(final_stock[k] / n, 0.1)
+	var rides := {"trips": 0, "out_min": 0.0, "in_min": 0.0, "extra_min": 0.0, "max_extra_min": 0.0, "pushed_past_dusk": 0}
+	for game in games:
+		for r in game.get("ride_overhead", []):
+			rides.trips += 1
+			rides.out_min += float(r.out_min)
+			rides.in_min += float(r.in_min)
+			rides.extra_min += float(r.extra_min)
+			rides.max_extra_min = maxf(float(rides.max_extra_min), float(r.extra_min))
+			if bool(r.get("pushed_past_dusk", false)):
+				rides.pushed_past_dusk += 1
+	if int(rides.trips) > 0:
+		for k in ["out_min", "in_min", "extra_min"]:
+			rides[k] = snappedf(float(rides[k]) / float(rides.trips), 0.1)
 	return {
 		"games": games.size(),
 		"survived": survived,
@@ -1157,6 +1200,7 @@ static func summarise(games: Array) -> Dictionary:
 		"mean_lost": lost,
 		"mean_final_stock": final_stock,
 		"curve": curve,
+		"rides": rides,
 	}
 
 
@@ -1344,6 +1388,10 @@ func _print_summary(summary: Dictionary) -> void:
 		summary.survived, summary.games, summary.median_day, summary.mean_lost.dead, summary.mean_lost.turned, summary.mean_lost.left])
 	var st: Dictionary = summary.mean_final_stock
 	print("Mean stock at the end: food %.1f, water %.1f, scrap %.1f, meds %.1f, ammo %.0f" % [st.food, st.water, st.scrap, st.meds, st.ammo])
+	var rides: Dictionary = summary.get("rides", {})
+	if int(rides.get("trips", 0)) > 0:
+		print("Trips by vehicle: %d; extra game minutes for each (the walk to the car, the doors, the drives): %.0f from the send to the car leaving the map, %.0f from the due hour to everyone home; %.0f later home than the plain hours (at most %.0f); %d of them were pushed past dusk, so home the next morning" % [
+			int(rides.trips), float(rides.out_min), float(rides.in_min), float(rides.extra_min), float(rides.max_extra_min), int(rides.pushed_past_dusk)])
 	print("")
 	print("Day by day, the average over the games still standing at the start of the day:")
 	print(" day games alive |  food water scrap meds ammo | walls%  walkers kills")

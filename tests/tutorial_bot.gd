@@ -46,7 +46,8 @@ static func spot_near(main, p, reach: float) -> Vector2:
 	return Vector2(p.x, p.y)
 
 
-## What a person does to look around: scroll the wheel three times and drag the ground.
+## What a person does to look around: scroll the wheel three times and drag the ground with the middle button held (a
+## left-drag draws a box now; Alt and the left button, or W A S D, pan too).
 static func pan_and_zoom(main) -> void:
 	var vp: Vector2 = main._vp()
 	for i in 3:
@@ -57,7 +58,7 @@ static func pan_and_zoom(main) -> void:
 		wheel.position = vp / 2.0
 		main._unhandled_input(wheel)
 	var press := InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_LEFT
+	press.button_index = MOUSE_BUTTON_MIDDLE
 	press.pressed = true
 	press.position = Vector2(vp.x * 0.7, vp.y * 0.5)
 	main._unhandled_input(press)

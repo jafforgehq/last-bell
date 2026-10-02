@@ -4,7 +4,7 @@
 		{
 			"id": "look",
 			"title": "Welcome to the yard",
-			"text": "Six people hold this schoolyard against the dead. I'll show you how, one small step at a time. First, look around: drag to pan (or press W A S D) and scroll to zoom.",
+			"text": "Six people hold this schoolyard against the dead. I'll show you how. First, look around: pan with W A S D (or middle-drag, or Alt and drag) and scroll to zoom.",
 			"goal": "pan and zoom the view",
 			"allow": [],
 			"done": {"cond": "look_around", "params": {"pan": 6, "zoom": 0.15}},

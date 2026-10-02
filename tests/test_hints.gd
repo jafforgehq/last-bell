@@ -99,13 +99,13 @@ func test_the_build_tip_comes_from_the_third_day_with_the_scrap_and_nothing_buil
 	sim.stock.scrap = 30.0
 	check(_holds("build", sim), "with 30 it is")
 	sim.stock.scrap = 60.0
-	check(sim.build.order("south_east_corner", "salvage_bench"), "(a site is ordered)")
+	check(sim.build.order("salvage_bench_home", "salvage_bench"), "(a site is ordered)")
 	sim.stock.scrap = 60.0
 	check(not _holds("build", sim), "not once something is going up: the player has found the screen")
-	sim.build.cancel("south_east_corner")
+	sim.build.cancel("salvage_bench_home")
 	sim.stock.scrap = 60.0
 	check(_holds("build", sim), "a cancelled one has built nothing")
-	sim.build.plot("junk_corner").building = "workshop"
+	sim.build.plot("workshop_home").building = "workshop"
 	check(not _holds("build", sim), "not once something stands")
 	for h in Hints.load_hints():
 		if String(h.id) == "build":

@@ -326,7 +326,7 @@ func test_the_policy_saves_up_for_the_next_building_and_builds_one_at_a_time() -
 	g.world.free()
 
 
-func test_the_policy_fits_its_whole_order_on_the_seven_plots_with_the_floodlights_on_the_wall() -> void:
+func test_the_policy_builds_its_whole_order_each_building_at_its_own_home() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim
 	var policy = Balance.Policy.new(sim)
@@ -341,15 +341,12 @@ func test_the_policy_fits_its_whole_order_on_the_seven_plots_with_the_floodlight
 			sim.build._finish(site)    # (nobody waits for the builders here)
 	for id in Balance.Policy.BUILD_ORDER:
 		check(sim.build.built(String(id)), "the %s was built" % id)
-	var on_the_wall := {}
 	var standing := 0
 	for pl in sim.build.plots():
 		if pl.building != "":
 			standing += 1
-			if pl.kind == "wall":
-				on_the_wall[String(pl.building)] = true
-	eq(standing, 7, "seven buildings on seven plots")
-	check(on_the_wall.has("floodlights") and on_the_wall.has("watchtower"), "the floodlights and the tower stand on the wall: %s" % str(on_the_wall.keys()))
+			eq(String(pl.building), String(pl.home), "%s stands at its own home, %s" % [String(pl.building), String(pl.id)])
+	eq(standing, 7, "seven buildings, each at its home (the first of a bunk house and a tower: the policy builds one of each)")
 	g.world.free()
 
 
@@ -368,7 +365,7 @@ func test_with_a_site_going_up_the_policy_puts_more_hands_on_the_builders() -> v
 	var g := Helpers.make(7, 1)
 	var sim = g.sim
 	sim.stock.scrap = 60.0
-	sim.build.order("junk_corner", "salvage_bench")
+	sim.build.order("salvage_bench_home", "salvage_bench")
 	var policy = Balance.Policy.new(sim)
 	policy.tick()
 	check(sim.jobs.crew_of("builders").size() >= 2, "two or more are on the Builders job: %d" % sim.jobs.crew_of("builders").size())
@@ -378,7 +375,7 @@ func test_with_a_site_going_up_the_policy_puts_more_hands_on_the_builders() -> v
 func test_the_policy_puts_people_on_the_salvage_bench_while_the_scrap_is_short() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim
-	sim.build.plot("junk_corner").building = "salvage_bench"
+	sim.build.plot("salvage_bench_home").building = "salvage_bench"
 	sim.build.version += 1
 	sim.stock.scrap = 8.0
 	var policy = Balance.Policy.new(sim)

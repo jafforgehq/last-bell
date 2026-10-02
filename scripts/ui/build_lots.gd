@@ -243,7 +243,7 @@ func _refresh_card(l: Dictionary) -> void:
 	c.claim.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN if why != "" else Control.CURSOR_POINTING_HAND
 	c.why.text = screen._sentence(why)
 	c.why.visible = why != ""
-	c.claim.tooltip_text = screen._sentence(why) if why != "" else "Claim %s: %d scrap now, then its plots and mouths are yours to build on" % [String(l.name), int(terms.get("scrap", 0))]
+	c.claim.tooltip_text = screen._sentence(why) if why != "" else "Claim %s: %d scrap now, then its streets are yours to wall and its places to build on" % [String(l.name), int(terms.get("scrap", 0))]
 
 
 ## What the standing order has in front of it: the street that is next and its price, and whether the stores are short of it

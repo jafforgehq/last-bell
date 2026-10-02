@@ -1,14 +1,11 @@
 {
  "version": 1,
- "_doc": "plots: the kinds of plot a building may stand on (a building of the yard may stand on a ring plot too, round 9; one with lots_only stands there alone: the scrap yard, the one building of the ring, round 11 dropped the orchard and the cistern). scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count), never more than the plots it could stand on: the compound has seven, five in the yard and two on the wall, so the watchtower is at most two and the bunk house two. requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people near the building), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
+ "_doc": "Every building has its own HOME, the place where it belongs (round 15; assets/data/plots.json: a plot names the building it is the home of), so the player picks a building and never a plot; a building that may stand twice has two homes, numbered, built in order (`max` is how many homes it has). A building with lots_only has its homes out in the streets, in lots that are claimed (lots.json: the scrap yard, the one building of the ring). scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count), never more than it has homes: the watchtower and the bunk house have two each. requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people within reach_radius tiles of the building itself: the nearest point of its footprint, round 15), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
  "buildings": [
   {
    "id": "salvage_bench",
    "name": "Salvage bench",
    "blurb": "Sorts the yard's junk into scrap: a new job for two, 0.4 scrap an hour each.",
-   "plots": [
-    "yard"
-   ],
    "scrap": 18,
    "work": 14,
    "max": 1,
@@ -19,9 +16,6 @@
    "id": "greenhouse",
    "name": "Greenhouse beds",
    "blurb": "More beds for the garden: two more gardeners, and a little more food each dawn.",
-   "plots": [
-    "yard"
-   ],
    "scrap": 14,
    "work": 16,
    "max": 1,
@@ -35,9 +29,6 @@
    "id": "workshop",
    "name": "Workshop",
    "blurb": "A proper workshop: a third seat at the bench, quicker work and one more round from every scrap.",
-   "plots": [
-    "yard"
-   ],
    "scrap": 30,
    "work": 24,
    "max": 1,
@@ -52,9 +43,6 @@
    "id": "bunk_house",
    "name": "Bunk house",
    "blurb": "Four proper beds: the hurt rest in them, the crew sleeps better, and four more can be housed.",
-   "plots": [
-    "yard"
-   ],
    "scrap": 24,
    "work": 24,
    "max": 2,
@@ -69,10 +57,6 @@
    "id": "floodlights",
    "name": "Floodlights",
    "blurb": "A generator and lamps: the guns reach further by night and a blackout costs no aim.",
-   "plots": [
-    "yard",
-    "wall"
-   ],
    "scrap": 28,
    "work": 20,
    "max": 1,
@@ -86,9 +70,6 @@
    "id": "watchtower",
    "name": "Watchtower",
    "blurb": "A tower on the wall: shooters near it reach three tiles further.",
-   "plots": [
-    "wall"
-   ],
    "scrap": 36,
    "work": 32,
    "max": 2,
@@ -102,9 +83,6 @@
    "id": "radio_mast",
    "name": "Radio mast",
    "blurb": "A taller mast: better news on the radio, fewer bad surprises, and a longer reach for later.",
-   "plots": [
-    "yard"
-   ],
    "scrap": 30,
    "work": 28,
    "max": 1,
@@ -119,9 +97,6 @@
    "id": "scrap_yard",
    "name": "Scrap yard",
    "blurb": "A heap of the street's wrecks, picked over by whoever has a spare hour: a little scrap every dawn.",
-   "plots": [
-    "ring"
-   ],
    "lots_only": true,
    "scrap": 28,
    "work": 20,

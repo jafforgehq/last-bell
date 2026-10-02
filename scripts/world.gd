@@ -23,6 +23,7 @@ var layers := {}
 var deck_tiles := {}
 var segment_holders := {} # segment id -> Node2D holding its current sprite pieces
 var segment_states := {} # segment id -> Array of piece lists, one per damage state
+var segment_painters := {} # segment id -> Callable(state): a node that draws that segment's picture itself (the gate)
 
 
 func build(data: Dictionary) -> void:
@@ -213,6 +214,10 @@ func remove_segment_art(seg) -> void:
 
 
 func set_segment_state(id: int, state: int) -> void:
+	# a segment whose picture another node draws (the vehicle gate's leaves, scripts/render/gate_node.gd) is told its state
+	if segment_painters.has(id):
+		segment_painters[id].call(state)
+		return
 	if not segment_holders.has(id):
 		return
 	var holder: Node2D = segment_holders[id]

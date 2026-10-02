@@ -91,8 +91,9 @@ func test_a_classic_game_has_no_lots_page_and_no_map() -> void:
 	var s = ctx.hud.build_screen
 	check(not ctx.sim.lots.on, "(the classic start has no lots)")
 	check(s != null and not s.lots_on, "the screen knows it")
-	check(s.lots_row == null and s.map == null, "no Lots slip and no map")
-	eq(s.rows.size(), ctx.sim.build.plots().size(), "a slip for each plot of the compound and no more")
+	check(s.lots_row == null, "no Lots slip")
+	check(s.map != null and s.map_block_button == null and s.map_yard_button == null and not s.map.whole, "a small map of the yard (round 15), with no choice of the whole block")
+	eq(s.rows.size(), ctx.sim.build.plots().size(), "a slip for each building and no more")
 	check(not _has_text(s, "Lots"), "no word of lots")
 	Kit.free_all(ctx)
 
@@ -407,6 +408,7 @@ func test_the_keyboard_finds_a_mouth_without_a_slip_through_its_pin() -> void:
 ## `ids` of the lots claimed (the conditions made up for them), the screen told.
 func _claim(ctx: Dictionary, ids: Array) -> void:
 	var sim = ctx.sim
+	ctx.hud.build_screen.select_plot("@lots")    # (a lot is claimed on the Lots page: the map shows the block there)
 	_clear_places(sim, 3)
 	sim.day = maxi(int(sim.day), 12)
 	sim.stock.scrap = maxf(float(sim.stock.scrap), 400.0)
@@ -452,14 +454,20 @@ func test_the_map_shows_the_yard_until_a_lot_is_claimed_and_then_the_block() -> 
 	Kit.free_all(ctx)
 
 
-func test_after_a_claim_the_map_shows_the_block_with_the_lots_pins_unless_the_player_chose() -> void:
+func test_after_a_claim_the_map_shows_the_block_for_the_streets_and_the_yard_for_the_yards_buildings_unless_the_player_chose() -> void:
 	var ctx := _open()
 	await Kit.settle()
 	var s = ctx.hud.build_screen
 	_claim(ctx, ["north"])
 	await Kit.settle()
 	await Kit.settle()
-	check(s.map.whole and s.map_block_button.button_pressed, "the whole block once a lot is claimed")
+	check(s.map.whole and s.map_block_button.button_pressed, "claimed on the Lots page: the whole block")
+	s.select_plot(String(_yard_ids(ctx.sim)[0]))
+	await Kit.settle()
+	check(not s.map.whole and s.map_yard_button.button_pressed, "a building of the yard is chosen: the yard, whatever is claimed")
+	s.select_plot("@lots")
+	await Kit.settle()
+	check(s.map.whole and s.map_block_button.button_pressed, "the Lots page: the whole block once a lot is claimed")
 	var north: Dictionary = ctx.sim.lots.lot("north")
 	var pins: Array = s.map.visible_pins()
 	for id in north.plots + north.mouths:
@@ -467,6 +475,9 @@ func test_after_a_claim_the_map_shows_the_block_with_the_lots_pins_unless_the_pl
 	for id in ctx.sim.lots.lot("west").plots + ctx.sim.lots.lot("west").mouths:
 		check(not pins.has(String(id)), "none for %s of a lot that is not claimed" % String(id))
 	eq(pins.size(), _yard_ids(ctx.sim).size() + north.plots.size() + north.mouths.size(), "the yard's, the lot's plots and its mouths")
+	s.select_plot(String(_yard_ids(ctx.sim)[0]))
+	await Kit.settle()
+	check(not s.map.whole, "a building of the yard again: the yard")
 	# the player's own choice stands
 	s.map_yard_button.pressed.emit()
 	_claim(ctx, ["west"])
@@ -495,7 +506,7 @@ func test_a_pin_chooses_its_plot_and_points_at_it_in_the_world() -> void:
 	pin.mouse_entered.emit()
 	eq(ctx.hud.build_hover, {"plot": "west_road_top"}, "pointing at a pin marks the plot in the world")
 	pin.mouse_exited.emit()
-	eq(ctx.hud.build_hover, {}, "and leaving lets go")
+	eq(ctx.hud.build_hover, {"plot": "west_road_top"}, "and leaving marks the chosen one's again")
 	var ring := _ring(ctx.sim, "north")
 	s.map.pins[ring].pressed.emit()
 	eq(s.selected, ring, "a ring plot's pin too")
@@ -514,7 +525,7 @@ func _stage(ctx: Dictionary) -> void:
 	var pl: Dictionary = sim.build.plot("north_west_end")
 	pl.site.progress = float(pl.site.work)
 	sim.build._finish(pl)
-	sim.build.plot(_ring(sim, "north", 0)).building = "greenhouse"
+	sim.build.plot(_ring(sim, "north", 0)).building = "scrap_yard"
 	sim.build.version += 1
 	Kit.update(ctx, 1)
 	ctx.hud.build_screen.refresh(true)
@@ -530,7 +541,7 @@ func test_the_map_marks_a_mouth_open_going_up_standing_and_down() -> void:
 	eq(m.state_of("west_road_top"), "site", "with a wall going up: a site")
 	eq(m.state_of("north_west_end"), "wall", "with a wall that stands: a wall")
 	eq(m.state_of(_ring(ctx.sim, "north", 0)), "built", "a ring plot with a building")
-	eq(m.state_of(_ring(ctx.sim, "north", 1)), "empty", "and with none")
+	eq(m.state_of(_ring(ctx.sim, "west")), "empty", "and with none")
 	check(m.mouth_color("north_east_end") == m.AMBER and m.mouth_color("west_road_top") == m.GOLD and m.mouth_color("north_west_end") == m.GREEN, "amber, gold and green")
 	var seg = ctx.sim.lots.segment_at("north_west_end")
 	check(seg != null, "(the wall has a section)")
@@ -548,7 +559,7 @@ func test_the_map_marks_a_mouth_open_going_up_standing_and_down() -> void:
 
 # ------------------------------------------------------------ a ring plot and a mouth --
 
-func test_a_ring_plot_is_a_yard_plot_and_takes_the_yards_buildings_and_no_wall() -> void:
+func test_a_ring_home_is_the_scrap_yards_and_takes_no_other_building_and_no_wall() -> void:
 	var ctx := _open()
 	await Kit.settle()
 	var s = ctx.hud.build_screen
@@ -557,25 +568,20 @@ func test_a_ring_plot_is_a_yard_plot_and_takes_the_yards_buildings_and_no_wall()
 	var yard := String(_yard_ids(ctx.sim)[0])
 	s.select_plot(ring)
 	await Kit.settle()
-	check(s.empty_view.visible and not s.site_view.visible and not s.built_view.visible, "an empty ring plot offers what can be built")
-	for id in ["salvage_bench", "greenhouse", "workshop", "bunk_house", "floodlights", "radio_mast"]:
-		check(s.entries[id].card.visible, "%s fits a ring plot as it fits the yard" % id)
-	check(not s.entries.watchtower.card.visible, "the watchtower is for the wall")
-	for b in ctx.sim.build.catalogue():
-		if bool(b.get("lots_only", false)):
-			check(s.entries[String(b.id)].card.visible, "%s is for the streets: a ring plot offers it" % String(b.id))
-	s.select_plot(yard)
-	for b in ctx.sim.build.catalogue():
-		if bool(b.get("lots_only", false)):
-			check(not s.entries[String(b.id)].card.visible, "and the yard does not (%s)" % String(b.id))
-	s.select_plot(ring)
+	check(s.empty_view.visible and not s.site_view.visible and not s.built_view.visible, "a scrap yard not built is offered")
+	var shown: Array = []
 	for id in s.entries:
-		if String(id).begins_with("wall_"):
-			check(not s.entries[id].card.visible, "%s is for a street" % id)
-	check(_has_text(s.detail, "Street lot"), "its words: %s" % " ".join(_seen(s.plot_sub)))
+		if s.entries[id].card.visible:
+			shown.append(String(id))
+	eq(shown, ["scrap_yard"], "the scrap yard is the one building a ring home offers (and no wall: that is for a street)")
+	eq(Kit.texts(s.plot_title), ["Scrap yard 1 of 2"], "numbered, as it has two homes")
+	check(_has_text(s.detail, "North-east verge"), "its words say where it goes: %s" % " ".join(_seen(s.plot_sub)))
+	s.select_plot(yard)
+	check(not s.entries.scrap_yard.card.visible, "and the yard's buildings do not offer it")
+	s.select_plot(ring)
 	var before: float = float(ctx.sim.stock.scrap)
-	check(s.order("greenhouse"), "an order from the screen")
-	check(ctx.sim.build.plot(ring).site.building == "greenhouse" and float(ctx.sim.stock.scrap) < before, "reaches the module and pays")
+	check(s.order("scrap_yard"), "an order from the screen")
+	check(ctx.sim.build.plot(ring).site.building == "scrap_yard" and float(ctx.sim.stock.scrap) < before, "reaches the module and pays")
 	check(s.site_view.visible, "the card shows the site")
 	Kit.free_all(ctx)
 
@@ -680,10 +686,9 @@ func test_the_lists_slips_say_what_is_on_a_ring_plot_and_a_mouth() -> void:
 		check(not s.rows.has(String(m.id)), "(a mouth has no slip: %s)" % String(m.id))
 	check(s.map.tooltip_of("west_road_top").contains("shipping container going up, 50%"), "a wall going up, how far, is on its pin: %s" % s.map.tooltip_of("west_road_top"))
 	var yard := String(_yard_ids(ctx.sim)[0])
-	eq(Kit.texts(s.rows[_ring(ctx.sim, "north", 0)].status), ["Greenhouse beds"], "a building on a ring plot")
-	eq(Kit.texts(s.rows[_ring(ctx.sim, "north", 1)].status), ["Empty"], "an empty ring plot")
-	check(Kit.texts(s.rows[yard].tag).has("YARD") and s.rows[yard].tag.is_visible_in_tree(), "the yard's slips keep their tags")
-	check(not s.rows[_ring(ctx.sim, "north", 1)].tag.is_visible_in_tree(), "the streets' have none (there is no room for it beside what is on them)")
+	eq(Kit.texts(s.rows[_ring(ctx.sim, "north", 0)].status), ["Built"], "a building on a ring home")
+	eq(Kit.texts(s.rows[_ring(ctx.sim, "west")].status), ["28 scrap, 20 builder-hours"], "a scrap yard not built, what it costs")
+	check(not s.rows[yard].tag.is_visible_in_tree() and not s.rows[_ring(ctx.sim, "west")].tag.is_visible_in_tree(), "no slip has a tag for a kind of lot (round 15)")
 	eq(Kit.texts(s.rows["@lots"].status), ["2 of 3 claimed"], "the Lots slip says how many")
 	check(s.lot_headers.north.visible and s.lot_headers.west.visible and not s.lot_headers.east.visible, "a caption for each lot that is claimed")
 	Kit.free_all(ctx)
@@ -800,8 +805,8 @@ const TextTests := preload("res://tests/test_hud_text.gd")
 
 ## The views of a lots game's detail: the Lots page, an empty ring plot, an empty mouth, a mouth with a wall going up, a wall that stands.
 func _views(sim) -> Array:
-	return [["the Lots page", "@lots"], ["an empty ring plot", _ring(sim, "north", 1)], ["an open mouth", "north_east_end"], ["a wall going up", "west_road_top"],
-		["a wall that stands", "north_west_end"], ["a ring plot with a building", _ring(sim, "north", 0)], ["an empty yard plot", String(_yard_ids(sim)[0])]]
+	return [["the Lots page", "@lots"], ["an empty ring home", _ring(sim, "west")], ["an open mouth", "north_east_end"], ["a wall going up", "west_road_top"],
+		["a wall that stands", "north_west_end"], ["a ring home with a building", _ring(sim, "north", 0)], ["a yard home not built", String(_yard_ids(sim)[0])]]
 
 
 ## A lots game in a window `size` with everything staged, settled.
@@ -1404,8 +1409,8 @@ func test_pointing_at_a_whole_lot_lights_its_plots_and_mouths_claimed_or_not() -
 	n._paint_ground(pen)
 	var lot: Dictionary = sim.lots.lot("west")
 	eq(n.drawn_outlines, plain + lot.plots.size() + lot.mouths.size(), "a lot that is not claimed is outlined (its %d plots and %d mouths) all the same" % [lot.plots.size(), lot.mouths.size()])
-	h.main.build_hover = {"plot": _ring(sim, "north", 1)}
-	check(n.hovered() == _ring(sim, "north", 1) and n.hovered_lot() == "", "a plot is still pointed at as before")
+	h.main.build_hover = {"plot": _ring(sim, "west")}
+	check(n.hovered() == _ring(sim, "west") and n.hovered_lot() == "", "a plot is still pointed at as before")
 	h.main.build_hover = {}
 	pen = Pen.new()
 	n._paint_ground(pen)
@@ -1521,15 +1526,19 @@ func _lots_page_matches_the_game(ctx: Dictionary) -> Array:
 		if not mouth and not s.rows.has(id):
 			bad.append("no slip for %s" % id)
 			continue
-		var want := "Open street" if mouth else "Empty"
+		var want := "Open street"
+		if not mouth:
+			var home: Dictionary = build.building(String(pl.home))
+			var because: String = build.why_not(id, String(home.id))
+			want = "%s scrap, %s builder-hours" % [s._num(float(home.scrap)), s._num(float(home.work))] if because == "" else "Can't: %s" % s._short_why(because)
 		if pl.building != "":
-			want = String(build.building(String(pl.building)).name)
+			want = String(build.building(String(pl.building)).name) if mouth else "Built"
 			if mouth:
 				var seg = sim.lots.segment_at(id)
 				if seg != null:
 					want += ": down" if int(seg.state) == 3 else ": %d%%" % roundi(float(seg.hp) / float(seg.max_hp) * 100.0)
 		elif not pl.site.is_empty():
-			want = "%s: %d%%" % [String(build.building(String(pl.site.building)).name), mini(99, floori(build.progress_of(id) * 100.0))]
+			want = "Going up: %d%%" % mini(99, floori(build.progress_of(id) * 100.0)) if not mouth else "%s: %d%%" % [String(build.building(String(pl.site.building)).name), mini(99, floori(build.progress_of(id) * 100.0))]
 		if not mouth:
 			var r: Dictionary = s.rows[id]
 			if Kit.texts(r.status) != [want]:
@@ -1548,7 +1557,7 @@ func _lots_page_matches_the_game(ctx: Dictionary) -> Array:
 			bad.append("the map says %s is '%s', not '%s'" % [id, state, expect])
 	for l in sim.lots.lots():
 		var claimed: bool = sim.lots.claimed(String(l.id))
-		if s.lot_headers[String(l.id)].visible != claimed:
+		if s.lot_headers[String(l.id)].visible != (claimed and not (l.plots as Array).is_empty()):
 			bad.append("the caption of %s is %s" % [l.id, s.lot_headers[String(l.id)].visible])
 		for pid in l.plots:
 			if s.rows[String(pid)].row.visible != claimed:
@@ -1728,6 +1737,12 @@ func _lots_fuzz(seed_value: int) -> Dictionary:
 					sim.phase = "day"
 					sim.bell_rung = false
 					sim.lots.update(Lots.AUTO_EVERY + 0.1)
+			if round == 0 and step == 12:
+				# (a wall stands in every random game, whatever the dice did: the page must follow it)
+				var first: Dictionary = build.plot("north_west_end")
+				if first.building == "" and first.site.is_empty():
+					_wall(sim, "north_west_end", _first_kit(sim, "north_west_end"))
+					Kit.update(ctx, 0)
 			if ctx.hud.build_screen == null:
 				ctx.hud.open_build()
 				s = ctx.hud.build_screen

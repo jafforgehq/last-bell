@@ -34,6 +34,11 @@ LEVELS = {
     # the beds: quiet on purpose (they sit under everything), but heard
     "wind_loop": -22.0,
     "crickets_loop": -26.0,
+    # the car trip (round 15, tools/make_car_sounds.py writes them at this level already)
+    "car_door_open": -8.0,
+    "car_door_close": -8.0,
+    "car_engine_start": -8.0,
+    "car_gate_motor": -8.0,
 }
 
 

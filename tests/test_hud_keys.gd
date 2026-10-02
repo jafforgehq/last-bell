@@ -242,12 +242,20 @@ func test_b_says_why_when_the_builders_are_full() -> void:
 
 
 func test_a_pans_the_view_and_does_not_give_a_job() -> void:
-	# A is the camera's key; B is the order's
+	# A is the camera's key (W A S D pan; a left-drag draws a box now); B is the order's; Ctrl and A select everyone
 	var main = _game()
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
 	main._key(KEY_A)
 	eq(main.sim.jobs.job_of(ana), "infirmary", "A leaves her job alone")
+	check(main.selection != null and main.selection.ref == ana and main.selected_people.size() == 1, "and does not change the selection")
+	var everyone := InputEventKey.new()
+	everyone.keycode = KEY_A
+	everyone.ctrl_pressed = true
+	everyone.pressed = true
+	main._unhandled_input(everyone)
+	eq(main.selected_people.size(), 6, "Ctrl and A select the whole crew")
+	eq(main.sim.jobs.job_of(ana), "infirmary", "and give no one a job")
 	await _leave(main)
 
 
@@ -480,7 +488,7 @@ func test_the_menu_button_opens_the_pause_menu_like_esc_with_nothing_selected() 
 
 func test_a_drag_in_progress_when_a_page_opens_ends_there() -> void:
 	var main = _game()
-	main.drag = {"pos": Vector2(10.0, 10.0), "center": main.cam_center, "moved": true, "button": MOUSE_BUTTON_LEFT}
+	main.drag = {"pos": Vector2(10.0, 10.0), "center": main.cam_center, "moved": true, "button": MOUSE_BUTTON_LEFT, "box": Rect2(10.0, 10.0, 110.0, 80.0), "shift": false, "pan": false}
 	main.toggle_jobs()
 	check(main.menu_open, "the Jobs screen is up")
 	var release := InputEventMouseButton.new()
@@ -488,7 +496,20 @@ func test_a_drag_in_progress_when_a_page_opens_ends_there() -> void:
 	release.pressed = false
 	release.position = Vector2(120.0, 90.0)
 	main._unhandled_input(release)
-	check(main.drag == null, "the release the page swallowed has ended the drag: the camera is not glued to the mouse")
+	check(main.drag == null, "the release the page swallowed has ended the drag: the camera is not glued to the mouse, and no box hangs")
+	await _leave(main)
+
+
+func test_a_pan_in_progress_when_a_page_opens_ends_there_too() -> void:
+	var main = _game()
+	main.drag = {"pos": Vector2(10.0, 10.0), "center": main.cam_center, "moved": true, "button": MOUSE_BUTTON_MIDDLE, "box": Rect2(), "shift": false, "pan": true}
+	main.toggle_jobs()
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_MIDDLE
+	release.pressed = false
+	release.position = Vector2(120.0, 90.0)
+	main._unhandled_input(release)
+	check(main.drag == null, "a middle-button pan ends as well")
 	await _leave(main)
 
 

@@ -159,7 +159,7 @@ func test_the_beds_are_the_cap() -> void:
 	eq(sim.recruits.housing_free(), 0, "no bed left")
 	sim.day = 9
 	check(not sim.recruits.call_due(), "so no call comes")
-	sim.build.plot("south_east_corner").building = "bunk_house"
+	sim.build.plot("bunk_house_home_1").building = "bunk_house"
 	sim.build.version += 1
 	eq(sim.recruits.housing_free(), 4, "a bunk house gives four")
 	check(sim.recruits.call_due(), "and the calls come again")
@@ -183,7 +183,7 @@ func test_a_mast_shortens_the_wait_between_calls() -> void:
 	var g := _small()
 	var sim = g.sim
 	eq(sim.recruits.gap_days(), 3, "three days to begin with")
-	sim.build.plot("south_lot").building = "radio_mast"
+	sim.build.plot("radio_mast_home").building = "radio_mast"
 	sim.build.version += 1
 	eq(sim.recruits.gap_days(), 2, "two with a mast")
 	g.world.free()

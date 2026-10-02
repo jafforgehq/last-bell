@@ -39,7 +39,7 @@ const VEHICLES_PATH := "res://assets/data/vehicles.json"
 ## The parts of the colony's view that are hidden while a raid runs (main.gd's names for them).
 const HIDDEN := ["world", "overlay", "glow", "snow", "hints"]
 ## What of the colony's state the raid keeps and gives back (main.gd's names), and which of it may be null.
-const COLONY_KEYS := ["cam_center", "zoom_px", "selection", "follow", "speed", "hover", "drag", "order_mark"]
+const COLONY_KEYS := ["cam_center", "zoom_px", "selection", "selected_people", "follow", "speed", "hover", "drag", "order_mark"]
 const COLONY_NULLABLE := ["selection", "follow", "hover", "drag", "order_mark"]
 ## How long (real seconds) a mark of an order shows, and how far from a click the people of a group stand.
 const MARK_S := 0.8
@@ -155,7 +155,9 @@ func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_
 func _hide_colony() -> void:
 	_saved = {"visible": {}}
 	for key in COLONY_KEYS:
-		_saved[key] = main.get(key)
+		var value = main.get(key)
+		# (a list is kept as a copy: the colony's own frames go on and may change theirs)
+		_saved[key] = value.duplicate() if value is Array else value
 	for part in HIDDEN:
 		var node = main.get(part)
 		if node != null and is_instance_valid(node) and "visible" in node:

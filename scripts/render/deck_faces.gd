@@ -68,13 +68,23 @@ var _side := {}
 ## walkway wider than it is deep gets a south face; a deep one (along the west
 ## and east walls) gets only a short face at its south end.
 func setup(data: Dictionary, kinds: Array) -> void:
+	# a `bridge` object (round 15: the planks over the vehicle gate) leaves a gap in the south face: the cars drive under it
+	var gaps: Array = []
+	for o in data.objects:
+		if o.kind == "bridge":
+			gaps.append([float(o.cx) - float(o.w) / 2.0, float(o.cx) + float(o.w) / 2.0])
 	for o in data.objects:
 		if not (o.kind in kinds):
 			continue
 		var h := WALKWAY_HEIGHT if o.kind == "walkway" else TOWER_HEIGHT
 		var half_w := float(o.w) / 2.0
 		var half_h := float(o.h) / 2.0
-		decks.append({"x0": float(o.cx) - half_w, "y0": float(o.cy) - half_h, "x1": float(o.cx) + half_w, "y1": float(o.cy) + half_h, "height": h, "tower": o.kind == "tower"})
+		var mine: Array = []
+		if o.kind == "walkway" and float(o.w) >= float(o.h):
+			for g in gaps:
+				if float(g[0]) > float(o.cx) - half_w and float(g[1]) < float(o.cx) + half_w:
+					mine.append(g)
+		decks.append({"x0": float(o.cx) - half_w, "y0": float(o.cy) - half_h, "x1": float(o.cx) + half_w, "y1": float(o.cy) + half_h, "height": h, "tower": o.kind == "tower", "gaps": mine})
 	if "walkway" in kinds:
 		for o in data.objects:
 			if o.kind != "ladder":
@@ -186,23 +196,36 @@ func _draw_deck(d: Dictionary) -> void:
 		for y in leg_positions(d.y0, d.y1):
 			if not _ladder_in_the_way(west, y, d.height):
 				draw_texture_rect(_leg, Rect2(leg_x, y - 0.02, LEG_WIDTH, d.height), false)
-	_draw_face(x0, x1, d.y1, d.height)
+	# the face, in as many parts as the bridge's gaps leave (a gap's edges are ends, with their end posts: the bridge rests on them)
+	var from := x0
+	for g in d.get("gaps", []):
+		_draw_face(from, float(g[0]), d.y1, d.height, x0, x1)
+		from = float(g[1])
+	_draw_face(from, x1, d.y1, d.height, x0, x1)
 
 
 ## The front face of a walkway whose south edge is at y = ys: the shadow on the
 ## ground, then the bays of the scaffold, the posts between them and the ends.
-func _draw_face(x0: float, x1: float, ys: float, fh: float) -> void:
-	var w := x1 - x0
-	draw_texture_rect(_shadow, Rect2(x0 + SHADOW_THROW * fh, ys + fh - 0.04, w, SHADOW_REACH), false)
-	var posts := post_positions(x0, x1)
+## The face is from `a` to `b`; the posts of the whole walkway (from `whole0` to
+## `whole1`) stay where they are, and only the ends of a part that a gap cut
+## are new ones.
+func _draw_face(a: float, b: float, ys: float, fh: float, whole0: float, whole1: float) -> void:
+	var w := b - a
+	draw_texture_rect(_shadow, Rect2(a + SHADOW_THROW * fh, ys + fh - 0.04, w, SHADOW_REACH), false)
+	var posts := PackedFloat32Array([a + CAP_POST])
+	for p in post_positions(whole0, whole1):
+		if p > a + CAP_POST + 0.5 and p < b - CAP_POST - 0.5:
+			posts.append(p)
+	posts.append(b - CAP_POST)
+	var first := int(floor(a - whole0))
 	for i in posts.size() - 1:
-		var bay_tex: Texture2D = _bays[BAY_ORDER[i % BAY_ORDER.size()]]
+		var bay_tex: Texture2D = _bays[BAY_ORDER[(i + first) % BAY_ORDER.size()]]
 		draw_texture_rect(bay_tex, Rect2(posts[i], ys - 0.02, posts[i + 1] - posts[i], fh), false)
 	for i in range(1, posts.size() - 1):
 		var post_tex: Texture2D = _posts[(i * 7 + 3) % 2]
 		draw_texture_rect(post_tex, Rect2(posts[i] - POST_WIDTH / 2.0, ys - 0.02, POST_WIDTH, fh), false)
-	draw_texture_rect(_cap.w, Rect2(x0, ys - 0.02, CAP_WIDTH, fh), false)
-	draw_texture_rect(_cap.e, Rect2(x1 - CAP_WIDTH, ys - 0.02, CAP_WIDTH, fh), false)
+	draw_texture_rect(_cap.w, Rect2(a, ys - 0.02, CAP_WIDTH, fh), false)
+	draw_texture_rect(_cap.e, Rect2(b - CAP_WIDTH, ys - 0.02, CAP_WIDTH, fh), false)
 
 
 ## The base of a corner tower: legs, two tiers of braces, the footings, and a

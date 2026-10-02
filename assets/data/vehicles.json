@@ -2,9 +2,30 @@
   "version": 1,
   "_doc": "The vehicles of the town (round 13, scripts/sim/vehicles.gd). name; seats (people it carries: a party on foot is at most three); speed (the road's hours are divided by it); burn (fuel for each hour driven); cargo (what the party's loot is multiplied by); hp (its condition, 0 to 100: a bad trip takes some, a vehicle at 0 is lost); art: the picture in assets/objects the gate's parking draws, w and h in tiles (sized to the picture's own shape so that it is not squashed). A place of the town may hold one (`vehicle` in town.json, one of these ids).",
   "kinds": {
-    "sedan":  {"name": "Sedan",  "seats": 3, "speed": 2.4, "burn": 3.0, "cargo": 1.2, "hp": 70, "art": "174_car_s0",    "w": 2.2, "h": 4.4},
-    "pickup": {"name": "Pickup", "seats": 2, "speed": 2.2, "burn": 3.5, "cargo": 1.7, "hp": 90, "art": "116_pickup", "w": 2.2, "h": 4.15},
-    "van":    {"name": "Van",    "seats": 4, "speed": 2.2, "burn": 4.0, "cargo": 1.5, "hp": 80, "art": "207_pickup", "w": 2.2, "h": 4.07},
-    "bus":    {"name": "Bus",    "seats": 6, "speed": 1.8, "burn": 6.0, "cargo": 1.4, "hp": 100, "art": "175_bus_s0", "w": 2.6, "h": 8.07}
+    "sedan":  {"name": "Sedan",  "seats": 3, "speed": 2.4, "burn": 3.0, "cargo": 1.2, "hp": 70, "art": "174_car_s0",    "w": 2.2, "h": 4.4,
+      "nose": "S",
+      "doors": [
+        {"id": "L1", "side": "L", "seats": [0], "panel": [211, 242, 49, 128], "hinge": [239.5, 367.0], "open_deg": 70},
+        {"id": "R1", "side": "R", "seats": [1], "panel": [2, 242, 48, 128], "hinge": [21.5, 367.0], "open_deg": -70},
+        {"id": "L2", "side": "L", "seats": [], "panel": [211, 128, 34, 108], "hinge": [239.5, 235.0], "open_deg": 66},
+        {"id": "R2", "side": "R", "seats": [2], "panel": [17, 128, 33, 108], "hinge": [21.5, 235.0], "open_deg": -66}
+      ]},
+    "pickup": {"name": "Pickup", "seats": 2, "speed": 2.2, "burn": 3.5, "cargo": 1.7, "hp": 90, "art": "116_pickup", "w": 2.2, "h": 4.15,
+      "nose": "N",
+      "doors": [
+        {"id": "L1", "side": "L", "seats": [0], "panel": [24, 157, 52, 141], "hinge": [44.5, 158.0], "open_deg": 72},
+        {"id": "R1", "side": "R", "seats": [1], "panel": [253, 157, 53, 141], "hinge": [284.5, 158.0], "open_deg": -72}
+      ]},
+    "van":    {"name": "Van",    "seats": 4, "speed": 2.2, "burn": 4.0, "cargo": 1.5, "hp": 80, "art": "207_pickup", "w": 2.2, "h": 4.07,
+      "nose": "E",
+      "doors": [
+        {"id": "L1", "side": "L", "seats": [0, 2], "panel": [302, 20, 142, 51], "hinge": [442.9, 42.4], "open_deg": 72},
+        {"id": "R1", "side": "R", "seats": [1, 3], "panel": [291, 242, 142, 60], "hinge": [431.1, 280.5], "open_deg": -72}
+      ]},
+    "bus":    {"name": "Bus",    "seats": 6, "speed": 1.8, "burn": 6.0, "cargo": 1.4, "hp": 100, "art": "175_bus_s0", "w": 2.6, "h": 8.07,
+      "nose": "S",
+      "doors": [
+        {"id": "F", "side": "R", "seats": [0, 1, 2, 3, 4, 5], "panel": [39, 956, 34, 122], "hinge": [43.5, 1077.0], "open_deg": -80}
+      ]}
   }
 }
