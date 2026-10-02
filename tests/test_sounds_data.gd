@@ -85,17 +85,27 @@ func test_setup_loads_every_sound_and_starts_the_loops() -> void:
 	Buses.apply_all()
 
 
-func test_the_buses_are_filed_in_order_at_the_end_under_master() -> void:
-	# They are made with an explicit position (buses.gd): the web export files a bus made at the default -1 in the wrong
-	# slot and the whole mix goes silent in a browser. The order here is the order they are made in.
+func test_the_buses_come_from_a_layout_file_because_add_bus_breaks_the_web_mix() -> void:
+	# On the web export every bus made at run time with AudioServer.add_bus() is filed in the wrong slot (the engine hands
+	# the web layer -1 whatever position is given), and the mix is wired into a loop that never reaches the speakers: a
+	# browser heard nothing. A bus layout loaded at start-up does not go through that, so the buses are in the project's
+	# default layout (the web probe of 2026-10-02 measured it: the sources reach the destination only with the file).
+	var path := String(ProjectSettings.get_setting("audio/buses/default_bus_layout", ""))
+	eq(path, "res://default_bus_layout.tres", "the project loads its default layout")
+	check(ResourceLoader.exists(path), "and the file is there")
+	var layout = load(path)
+	check(layout is AudioBusLayout, "it is a bus layout")
+	if not layout is AudioBusLayout:
+		return
+	var want := ["SFX", "UI", "Ambience", "Music"]
+	for i in want.size():
+		eq(String(layout.get("bus/%d/name" % (i + 1))), want[i], "bus %d is %s" % [i + 1, want[i]])
+		eq(String(layout.get("bus/%d/send" % (i + 1))), "Master", "%s is sent to Master" % want[i])
+	# and what the running game has is the same, in the same order
 	Buses.ensure()
-	var order := []
-	for i in range(1, AudioServer.bus_count):
-		order.append(String(AudioServer.get_bus_name(i)))
-	eq(order.slice(0, 4), ["SFX", "UI", "Ambience", "Music"], "SFX, UI, Ambience and Music follow Master, in that order")
-	eq(String(AudioServer.get_bus_name(0)), "Master", "Master is first")
-	for name in Buses.NAMES:
-		eq(String(AudioServer.get_bus_send(AudioServer.get_bus_index(name))), "Master", "%s is sent to Master" % name)
+	for i in want.size():
+		eq(String(AudioServer.get_bus_name(i + 1)), want[i], "the running bus %d" % [i + 1])
+		eq(String(AudioServer.get_bus_send(i + 1)), "Master", "%s plays through Master" % want[i])
 
 
 ## The loudest sample of a 16-bit PCM wav file, in dBFS (the source files, read straight; -120 for a file it cannot read).

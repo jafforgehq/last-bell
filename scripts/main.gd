@@ -383,10 +383,15 @@ func _ready() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
-	music = Music.new()
-	music.name = "Music"
-	add_child(music)
-	music.setup()
+	# the real game keeps one music across the scene reloads of a new run, a load and the title; a test's or a
+	# screenshot's scene has its own
+	if get_tree().current_scene == self:
+		music = Music.shared(get_tree())
+	else:
+		music = Music.new()
+		music.name = "Music"
+		add_child(music)
+		music.setup()
 	street_air = StreetAir.new()
 	street_air.name = "StreetAir"
 	world.add_child(street_air)

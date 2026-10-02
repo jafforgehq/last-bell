@@ -29,6 +29,8 @@ const MIN_DANGER_S := 14.0
 ## The darkness (0 to 1) at which `night` begins, and the one it has to fall below to be `day` again.
 const NIGHT_ON := 0.4
 const NIGHT_OFF := 0.28
+## Where the one music of the running game is kept (Engine meta), so that a scene reload finds it.
+const META := "thirty_bells_music"
 
 ## mood -> AudioStreamPlayer (only for the loops that were found)
 var players := {}
@@ -39,6 +41,32 @@ var mood := ""
 var danger_s := 0.0
 var is_night := false
 var is_danger := false
+
+
+## The music of the running game: made once and hung on the tree's root, so that it outlives the scene reload that a new
+## run, a load and the way back to the title are (a music inside the scene would cut dead at the title's Start and fade
+## in again from nothing). A second ask gets the same one, still playing its mood.
+static func shared(tree: SceneTree) -> Node:
+	if Engine.has_meta(META):
+		var m = Engine.get_meta(META)
+		if is_instance_valid(m) and not m.is_queued_for_deletion():
+			return m
+	var made = load("res://scripts/audio/music.gd").new()
+	made.name = "Music"
+	made.setup()
+	Engine.set_meta(META, made)
+	# the scene that asks is still being built: the root takes it on the next idle frame
+	tree.root.add_child.call_deferred(made)
+	return made
+
+
+## Where in a track of `length` seconds to start it: a place of its own (`dice` from 0 to 1) so that the same bars are
+## not heard every time, but the top on the web, where a sample's restart reuses its start offset and a loop begun half
+## way would replay only its second half.
+static func start_offset(length: float, web: bool, dice: float) -> float:
+	if web:
+		return 0.0
+	return clampf(dice, 0.0, 1.0) * maxf(0.0, length - 1.0)
 
 
 func _ready() -> void:
@@ -114,6 +142,6 @@ func _process(dt: float) -> void:
 				p.stop()
 			continue
 		if not p.playing:
-			p.play(randf() * maxf(0.0, p.stream.get_length() - 1.0))
+			p.play(start_offset(p.stream.get_length(), OS.has_feature("web"), randf()))
 		# a quarter-power curve so two tracks cross-fading do not dip in the middle
 		p.volume_db = linear_to_db(maxf(sin(f * PI * 0.5) * LEVEL, 0.0001))

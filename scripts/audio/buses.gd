@@ -1,8 +1,13 @@
 ## The audio buses: `Master`, and under it `SFX` (the one-shot sounds), `UI` (the
-## menu sounds), `Ambience` (wind, crickets, the horde's moan) and `Music`. The project
-## has no bus layout file, so the four are made at start-up; making them twice is
-## harmless. Each bus's volume is a setting (`Prefs`, section `audio`: 0 to 1, a straight
-## amplitude slider turned into decibels here); at 0 a bus is muted outright.
+## menu sounds), `Ambience` (wind, crickets, the horde's moan) and `Music`. They are
+## defined in `res://default_bus_layout.tres`, which the project loads at start-up, and
+## NOT made at run time: on the web export a bus made with `AudioServer.add_bus()` is
+## filed in the wrong slot (the engine hands the web layer -1 whatever position is
+## given) and the mix is wired into a loop that never reaches the speakers, so a browser
+## heard nothing (measured with a Web Audio probe, 2026-10-02). `ensure()` only makes
+## what is missing, for a run without the layout (a test, a stripped export); making them
+## twice is harmless. Each bus's volume is a setting (`Prefs`, section `audio`: 0 to 1, a
+## straight amplitude slider turned into decibels here); at 0 a bus is muted outright.
 ##
 ## The HUD's sound button is a separate switch: it mutes the Master bus too, and
 ## the two never undo each other (`Master` is muted while either one asks for it).
@@ -25,9 +30,6 @@ static var hud_muted := false
 static func ensure() -> void:
 	for bus_name in NAMES:
 		if AudioServer.get_bus_index(bus_name) < 0:
-			# The position is given outright (the end), never left to the default of -1: the web export's
-			# sample-bus code takes the -1 as a slot, files every new bus in the wrong place and wires the
-			# buses into a loop that never reaches the speakers (silence in a browser, Godot 4.7.2).
 			AudioServer.add_bus(AudioServer.bus_count)
 			var i := AudioServer.bus_count - 1
 			AudioServer.set_bus_name(i, bus_name)

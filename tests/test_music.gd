@@ -239,3 +239,38 @@ func test_the_game_plays_the_title_track_on_the_title_and_the_day_track_in_a_run
 	check(main2.music.mood != "title", "and not the title's")
 	await Fakes.leave(g2)
 	_done()
+
+
+# ------------------------------------------------------- web and the reload --
+
+func test_a_track_starts_from_the_top_on_the_web_and_anywhere_in_it_elsewhere() -> void:
+	# on the web a sample's restart reuses its start offset, so a loop begun at 33 s of 64 replayed only its last half
+	near(Music.start_offset(64.0, true, 0.7), 0.0, 0.0001, "the web starts at the top whatever the dice say")
+	near(Music.start_offset(64.0, false, 0.5), 31.5, 0.0001, "elsewhere any place but the very end")
+	near(Music.start_offset(64.0, false, 0.0), 0.0, 0.0001, "the lowest throw")
+	check(Music.start_offset(64.0, false, 1.0) <= 63.0, "and never past the last second")
+	near(Music.start_offset(0.5, false, 0.9), 0.0, 0.0001, "a very short track has no room to start later")
+
+
+func test_the_music_outlives_a_scene_reload() -> void:
+	# a new run, a load and the way back to the title reload the scene; the music has to be on the tree's root, made once,
+	# or it cuts dead at the title's Start and fades in from nothing
+	var tree: SceneTree = Engine.get_main_loop()
+	var a = Music.shared(tree)
+	var b = Music.shared(tree)
+	check(a != null and a == b, "the second ask gets the same music, not a second one")
+	await tree.process_frame
+	check(a.get_parent() == tree.root, "it hangs on the root, not on a scene that is about to go")
+	eq(a.players.size(), 4, "with its four players")
+	a.set_mood("night")
+	var c = Music.shared(tree)
+	check(c == a and c.mood == "night", "after a reload the new scene finds it playing the same mood")
+	tree.root.remove_child(a)
+	Engine.remove_meta(Music.META)
+	a.free()
+	var d = Music.shared(tree)
+	check(d != a, "a music that has gone is made again")
+	await tree.process_frame
+	tree.root.remove_child(d)
+	Engine.remove_meta(Music.META)
+	d.free()
