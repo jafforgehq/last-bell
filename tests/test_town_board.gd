@@ -1195,8 +1195,8 @@ func _misfits(ctx: Dictionary, size: Array) -> Array:
 		var label: Label = board.map.home_marker.get_meta("caption") if id == "home" else board.map.pins[id].get_meta("caption")
 		if not map_rect.grow(0.5).encloses(Kit.rect(label)):
 			bad.append("the name of %s is not on the map" % id)
-	# the map keeps the board's shape
-	check(absf(map_rect.size.y / map_rect.size.x - 0.7) < 0.01, "(the map is 100 by 70: %s)" % str(map_rect.size))
+	# the map keeps the shape of what it shows (round 13: the places that are known, not the whole board)
+	check(absf(map_rect.size.y - board.map.height_for_width(map_rect.size.x)) < 1.5, "(the map has the shape of what it shows, %.2f: %s)" % [board.map.view_aspect(), str(map_rect.size)])
 	# the card: everything in it is inside it
 	var card := Kit.rect(board.card)
 	var col := Kit.rect(board.detail_col)
@@ -1782,4 +1782,58 @@ func test_the_foot_follows_the_seasons_dusk() -> void:
 	eq(board._due_text({"return_at": now + 10.5 * 60.0}), "back tomorrow", "Winter: dusk is at half past four, a party due then is in at first light")
 	sim.seasons._dusk = 21.0
 	eq(board._due_text({"return_at": now + 13.0 * 60.0}), "back about 20:00", "Summer: eight in the evening is before dusk")
+	Kit.free_all(ctx)
+
+
+# ------------------------------------------------------------------ take control (round 14) --
+
+func test_take_control_is_there_only_when_a_trip_can_be_played_and_asks_what_go_asks() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	board.select_place("houses")
+	check(not board.play_button.visible, "no played trips in a game that has nobody to open them")
+	ctx.hud.on_raid = func(_p, _pl, _v, _m, _d): return Node.new()
+	board.refresh(true)
+	check(board.play_button.visible, "the button is there once the game can open a raid")
+	eq(board.reason_for("play"), board.reason_for("loot"), "it asks what Go asks")
+	_at(ctx, 21.0)
+	eq(board.reason_for("play"), "Nobody goes out after dark.", "and is refused in the dark")
+	Kit.free_all(ctx)
+
+
+func test_taking_control_closes_the_page_opens_the_raid_and_sends_what_comes_of_it() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	board.toggle_member(_person(ctx, "dez"))
+	board.select_place("houses")
+	var got := {}
+	var holder := Node.new()
+	ctx.hud.on_raid = func(people, place, vehicle, mult, done):
+		got["people"] = people
+		got["place"] = place
+		got["vehicle"] = vehicle
+		got["mult"] = mult
+		got["done"] = done
+		return holder
+	check(board.act("play"), "taking control works")
+	check(not ctx.hud.town_board_open(), "the page is closed")
+	eq(got.people.size(), 2, "Ruth and Dez are the squad")
+	eq(String(got.place.id), "houses", "at the houses")
+	eq(got.vehicle, "", "on foot")
+	near(float(got.mult), 1.0, 1e-9, "with nothing picked over")
+	eq(ctx.sim.scavenge.parties.size(), 0, "nobody is away yet: the player plays first")
+	got.done.call({"loot": {"food": 12}, "hurt": {}, "lost": [], "ammo_used": 5.0, "beats": []})
+	eq(ctx.sim.scavenge.parties.size(), 1, "then the party is on the road")
+	check(bool(ctx.sim.scavenge.parties[0].get("played", false)), "with the played result")
+	holder.free()
+	Kit.free_all(ctx)
+
+
+func test_if_the_raid_cannot_open_the_page_says_so_and_nobody_goes() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	board.select_place("houses")
+	ctx.hud.on_raid = func(_p, _pl, _v, _m, _d): return null
+	check(not board.act("play"), "the raid did not open")
+	eq(ctx.sim.scavenge.parties.size(), 0, "nobody went")
 	Kit.free_all(ctx)

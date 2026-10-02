@@ -191,6 +191,10 @@ func update(dt: float) -> void:
 		var fresh := plan_for(sim.day)
 		budget_total = float(fresh.budget)
 		budget_left = budget_total
+		# the stragglers of the streets still about at dusk (the settlement game) are part of the night's dead, not
+		# on top of them: they come off what is spent (never more than half of it)
+		if sim.town.on:
+			budget_left = maxf(budget_total * 0.5, budget_total - float(sim.streets.street_dead()))
 		spawned = 0
 		sim.spawn_t = 2.0
 		if fresh.big:

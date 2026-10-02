@@ -1,5 +1,5 @@
 extends "res://tests/case.gd"
-## Round 6, the Build screen: the page where the twelve plots of the compound are listed and, for the one that is
+## Round 6, the Build screen: the page where the plots of the compound (seven since round 11) are listed and, for the one that is
 ## chosen, an empty plot offers what its kind of lot allows (each with what it gives, what it costs and, when it
 ## cannot be ordered now, why), a site shows how far along it is, who builds it and for how long yet (and can be
 ## cancelled), and a building shows what it gives (and can be demolished, in two clicks). Opened by N, the hammer in
@@ -14,7 +14,7 @@ const TextTests := preload("res://tests/test_hud_text.gd")
 const Build := preload("res://scripts/sim/build.gd")
 
 const SIZES := [[700, 700], [980, 700], [1280, 800], [1920, 1080]]
-const SHORT := [[700, 560], [1280, 600], [980, 480]]
+const SHORT := [[700, 480], [1280, 500], [980, 420]]    # (seven slips are 365 px tall: a window this short has to scroll them)
 
 
 ## The mouse put in a corner where no control is (a pointer left over a button by an earlier test would let its
@@ -87,12 +87,12 @@ func test_the_screen_has_a_slip_for_each_plot_and_its_words() -> void:
 	var ctx := _open()
 	var s = ctx.hud.build_screen
 	check(s != null, "it opens")
-	eq(s.rows.keys(), _plot_ids(ctx), "a slip for each of the twelve plots, in the order of the data")
-	eq(s.rows.size(), 12, "twelve")
+	eq(s.rows.keys(), _plot_ids(ctx), "a slip for each plot of the compound, in the order of the data")
+	eq(s.rows.size(), _plot_ids(ctx).size(), "and no more")
 	var all := Kit.texts(s)
-	for t in ["Build", "PLOTS", "The court, north end", "The north wall", "Empty"]:
+	for t in ["Build", "PLOTS", "The north-east lot", "The north wall", "Empty"]:
 		check(all.has(t), "shows '%s'" % t)
-	check(Kit.texts(s.rows.north_wall.row).has("WALL") and Kit.texts(s.rows.court_north.row).has("YARD"), "each slip says whether the lot is in the yard or on the wall")
+	check(Kit.texts(s.rows.north_wall.row).has("WALL") and Kit.texts(s.rows.north_east_lot.row).has("YARD"), "each slip says whether the lot is in the yard or on the wall")
 	eq(s.close_button.text, "Close", "and the button at the foot")
 	check(ctx.hud.modal_open(), "the HUD calls it a modal")
 	eq(ctx.hud.build_hover, {}, "nothing is marked in the world until a slip is pointed at")
@@ -102,11 +102,11 @@ func test_the_screen_has_a_slip_for_each_plot_and_its_words() -> void:
 func test_the_first_plot_with_nothing_on_it_is_chosen_unless_one_is_asked_for_or_going_up() -> void:
 	var ctx := _open()
 	var s = ctx.hud.build_screen
-	eq(s.selected, "court_north", "the first plot")
+	eq(s.selected, "north_east_lot", "the first plot")
 	ctx.hud.close_build()
-	_stand(ctx, "court_north", "workshop")
+	_stand(ctx, "north_east_lot", "workshop")
 	ctx.hud.open_build()
-	eq(ctx.hud.build_screen.selected, "court_south", "the first one that is empty when the first is taken")
+	eq(ctx.hud.build_screen.selected, "junk_corner", "the first one that is empty when the first is taken")
 	ctx.hud.close_build()
 	ctx.sim.build.order("east_lot", "greenhouse")
 	ctx.hud.open_build()
@@ -123,19 +123,19 @@ func test_the_first_plot_with_nothing_on_it_is_chosen_unless_one_is_asked_for_or
 func test_a_slip_shows_what_is_on_the_plot_and_how_far_along_it_is() -> void:
 	var ctx := _open()
 	var s = ctx.hud.build_screen
-	eq(Kit.texts(s.rows.court_north.status), ["Empty"], "an empty plot says so")
-	check(not s.rows.court_north.meter.visible, "with no meter")
-	_site(ctx, "court_south", "workshop", 10.8)
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Empty"], "an empty plot says so")
+	check(not s.rows.north_east_lot.meter.visible, "with no meter")
+	_site(ctx, "south_east_corner", "workshop", 10.8)
 	_stand(ctx, "east_lot", "bunk_house")
 	s.refresh()
-	eq(Kit.texts(s.rows.court_south.status), ["Workshop: 45%"], "a site says what is going up and how far it is (10.8 of 24 hours)")
-	check(s.rows.court_south.meter.visible and absf(s.rows.court_south.meter.value - 0.45) < 0.001, "with a meter of it")
+	eq(Kit.texts(s.rows.south_east_corner.status), ["Workshop: 45%"], "a site says what is going up and how far it is (10.8 of 24 hours)")
+	check(s.rows.south_east_corner.meter.visible and absf(s.rows.south_east_corner.meter.value - 0.45) < 0.001, "with a meter of it")
 	eq(Kit.texts(s.rows.east_lot.status), ["Bunk house"], "a building says what it is")
 	check(not s.rows.east_lot.meter.visible, "with no meter")
-	check(not s.rows.court_north.meter.visible and Kit.texts(s.rows.court_north.status) == ["Empty"], "the rest are as they were")
-	ctx.sim.build.plot("court_south").site.progress = 23.9
+	check(not s.rows.north_east_lot.meter.visible and Kit.texts(s.rows.north_east_lot.status) == ["Empty"], "the rest are as they were")
+	ctx.sim.build.plot("south_east_corner").site.progress = 23.9
 	s.refresh()
-	eq(Kit.texts(s.rows.court_south.status), ["Workshop: 99%"], "and it never says a hundred before it is done")
+	eq(Kit.texts(s.rows.south_east_corner.status), ["Workshop: 99%"], "and it never says a hundred before it is done")
 	Kit.free_all(ctx)
 
 
@@ -146,13 +146,13 @@ func test_the_page_follows_the_game_each_time_the_hud_is_updated() -> void:
 	ctx.sim.stock.scrap = 63.0
 	Kit.update(ctx)
 	eq(Kit.texts(s.stock_label), ["Scrap in the stores: 63"], "follow the stores")
-	_site(ctx, "court_north", "salvage_bench", 7.0)
+	_site(ctx, "north_east_lot", "salvage_bench", 7.0)
 	Kit.update(ctx)
-	eq(Kit.texts(s.rows.court_north.status), ["Salvage bench: 50%"], "a site that was put up somewhere else")
-	ctx.sim.build.plot("court_north").site.progress = 14.0 - 0.1
-	_stand(ctx, "court_south", "bunk_house")
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Salvage bench: 50%"], "a site that was put up somewhere else")
+	ctx.sim.build.plot("north_east_lot").site.progress = 14.0 - 0.1
+	_stand(ctx, "south_east_corner", "bunk_house")
 	Kit.update(ctx)
-	eq(Kit.texts(s.rows.court_south.status), ["Bunk house"], "and a building that was finished")
+	eq(Kit.texts(s.rows.south_east_corner.status), ["Bunk house"], "and a building that was finished")
 	eq(Kit.texts(s.housing_label), ["Beds for 10 people"], "with the beds it gives")
 	Kit.free_all(ctx)
 
@@ -233,7 +233,7 @@ func test_an_empty_plot_lists_what_its_kind_of_lot_allows_with_what_each_gives_a
 		check(words.has("%d scrap" % int(b.scrap)), "%s: its scrap" % id)
 		check(words.has("%d builder-hours" % int(b.work)), "%s: its builder-hours" % id)
 		eq(s.entries[id].order.text, "Order", "%s: and its Order button" % id)
-	eq(Kit.texts(s.plot_title), ["The court, north end"], "the plot is named over them")
+	eq(Kit.texts(s.plot_title), ["The north-east lot"], "the plot is named over them")
 	eq(Kit.texts(s.plot_tag), ["YARD"], "and tagged")
 	s.select_plot("west_wall")
 	eq(_shown(s), ["floodlights", "watchtower"], "the wall takes floodlights and the tower")
@@ -264,7 +264,7 @@ func test_what_cannot_be_ordered_now_is_shown_with_its_reason_and_an_off_button(
 	for id in _shown(s):
 		check(not s.entries[id].order.disabled and not s.entries[id].why.visible, "%s: with 100 scrap it can be ordered" % id)
 	# the most there may be
-	_stand(ctx, "court_south", "workshop")
+	_stand(ctx, "south_east_corner", "workshop")
 	_stand(ctx, "east_lot", "bunk_house")
 	_stand(ctx, "south_lot", "bunk_house")
 	Kit.update(ctx)
@@ -309,13 +309,13 @@ func test_ordering_pays_the_scrap_puts_a_site_up_and_the_detail_shows_it() -> vo
 	ctx.hud.on_ui_sound = func(sound_name, _level): heard.append(sound_name)
 	s.entries.workshop.order.pressed.emit()
 	near(float(ctx.sim.stock.scrap), 70.0, 1e-9, "thirty scrap are paid")
-	eq(ctx.sim.build.plot("court_north").site.building, "workshop", "a site stands on the chosen plot")
+	eq(ctx.sim.build.plot("north_east_lot").site.building, "workshop", "a site stands on the chosen plot")
 	check(s.site_view.visible and not s.empty_view.visible and not s.built_view.visible, "the detail shows a site now")
-	eq(Kit.texts(s.rows.court_north.status), ["Workshop: 0%"], "the slip says so")
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Workshop: 0%"], "the slip says so")
 	eq(Kit.texts(s.stock_label), ["Scrap in the stores: 70"], "and the foot")
 	check(not s.error_label.visible, "with nothing said against it")
 	eq(heard, ["ui_confirm"], "and the page confirms with its sound")
-	eq(s.selected, "court_north", "the same plot stays chosen")
+	eq(s.selected, "north_east_lot", "the same plot stays chosen")
 	Kit.free_all(ctx)
 
 
@@ -327,7 +327,7 @@ func test_an_order_that_gets_through_for_what_cannot_be_ordered_is_refused_and_s
 	s.entries.workshop.order.pressed.emit()
 	check(not s.order("workshop"), "ordering what cannot be")
 	near(float(ctx.sim.stock.scrap), 5.0, 1e-9, "nothing is paid")
-	check(ctx.sim.build.plot("court_north").site.is_empty(), "and no site stands")
+	check(ctx.sim.build.plot("north_east_lot").site.is_empty(), "and no site stands")
 	check(s.error_label.visible and s.error_label.text == "It needs 30 scrap.", "a line at the foot says why: '%s'" % s.error_label.text)
 	check(heard.size() == 2 and heard[0] == "ui_error", "with the error sound: %s" % str(heard))
 	ctx.sim.stock.scrap = 100.0
@@ -367,18 +367,18 @@ func _hours_in(text: String) -> float:
 
 func test_a_site_shows_how_far_along_it_is_and_what_it_will_give() -> void:
 	var ctx := _open()
-	_site(ctx, "court_north", "workshop", 6.0)
+	_site(ctx, "north_east_lot", "workshop", 6.0)
 	var s = ctx.hud.build_screen
 	s.refresh()
 	check(s.site_view.visible and not s.empty_view.visible and not s.built_view.visible, "the detail is the site's")
-	eq(Kit.texts(s.plot_title), ["The court, north end"], "the plot")
+	eq(Kit.texts(s.plot_title), ["The north-east lot"], "the plot")
 	eq(Kit.texts(s.site_title), ["Workshop: going up"], "what is going up")
 	eq(Kit.texts(s.site_percent), ["25%"], "how far along (6 of 24)")
 	near(s.site_meter.value, 0.25, 1e-6, "as a meter too")
 	eq(Kit.texts(s.site_done), ["6 of 24 builder-hours done."], "in hours")
 	eq(Kit.texts(s.site_gives), [String(ctx.sim.build.building("workshop").blurb)], "and what it will give")
 	check(Kit.texts(s.site_view).has("WHAT IT WILL GIVE"), "under its heading")
-	ctx.sim.build.plot("court_north").site.progress = 10.8
+	ctx.sim.build.plot("north_east_lot").site.progress = 10.8
 	s.refresh()
 	eq(Kit.texts(s.site_done), ["10.8 of 24 builder-hours done."], "a part of an hour shows")
 	Kit.free_all(ctx)
@@ -387,7 +387,7 @@ func test_a_site_shows_how_far_along_it_is_and_what_it_will_give() -> void:
 func test_a_site_says_who_is_building_it_and_about_how_long_it_will_take_at_their_pace() -> void:
 	var ctx := _open()
 	var sim = ctx.sim
-	_site(ctx, "court_north", "workshop", 6.0)
+	_site(ctx, "north_east_lot", "workshop", 6.0)
 	var s = ctx.hud.build_screen
 	s.refresh()
 	var walt = Kit.person(ctx, "walt")
@@ -417,20 +417,20 @@ func test_a_site_says_who_is_building_it_and_about_how_long_it_will_take_at_thei
 func test_a_short_wait_is_told_in_hours_and_a_very_short_one_in_a_word() -> void:
 	var ctx := _open()
 	var sim = ctx.sim
-	_site(ctx, "court_north", "workshop", 0.0)
+	_site(ctx, "north_east_lot", "workshop", 0.0)
 	var s = ctx.hud.build_screen
 	var walt = Kit.person(ctx, "walt")
 	var rate: float = sim.build.rate(walt)
-	sim.build.plot("court_north").site.progress = 24.0 - rate * 5.0
+	sim.build.plot("north_east_lot").site.progress = 24.0 - rate * 5.0
 	s.refresh()
 	eq(Kit.texts(s.site_crew), ["Walt: about 5 hours at the present pace."], "five hours of work is five hours")
-	sim.build.plot("court_north").site.progress = 24.0 - rate * 1.2
+	sim.build.plot("north_east_lot").site.progress = 24.0 - rate * 1.2
 	s.refresh()
 	eq(Kit.texts(s.site_crew), ["Walt: about 1 hour at the present pace."], "an hour and a bit is one hour")
-	sim.build.plot("court_north").site.progress = 24.0 - rate * 0.4
+	sim.build.plot("north_east_lot").site.progress = 24.0 - rate * 0.4
 	s.refresh()
 	eq(Kit.texts(s.site_crew), ["Walt: less than an hour at the present pace."], "less is less than an hour")
-	sim.build.plot("court_north").site.progress = 24.0 - rate * 24.0
+	sim.build.plot("north_east_lot").site.progress = 24.0 - rate * 24.0
 	s.refresh()
 	check(Kit.texts(s.site_crew)[0].contains("days"), "a day's work is told in days: '%s'" % Kit.texts(s.site_crew)[0])
 	Kit.free_all(ctx)
@@ -439,7 +439,7 @@ func test_a_short_wait_is_told_in_hours_and_a_very_short_one_in_a_word() -> void
 func test_with_nobody_on_the_builders_job_the_site_says_so_and_offers_the_jobs_screen() -> void:
 	var ctx := _open()
 	var sim = ctx.sim
-	_site(ctx, "court_north", "workshop", 6.0)
+	_site(ctx, "north_east_lot", "workshop", 6.0)
 	var s = ctx.hud.build_screen
 	sim.jobs.unassign(Kit.person(ctx, "walt"))
 	s.refresh()
@@ -462,9 +462,9 @@ func test_with_nobody_on_the_builders_job_the_site_says_so_and_offers_the_jobs_s
 func test_a_site_that_waits_its_turn_says_which_comes_first() -> void:
 	var ctx := _open()
 	_site(ctx, "junk_corner", "salvage_bench", 3.0)
-	_site(ctx, "court_north", "workshop", 0.0)
+	_site(ctx, "north_east_lot", "workshop", 0.0)
 	var s = ctx.hud.build_screen
-	s.select_plot("court_north")
+	s.select_plot("north_east_lot")
 	var line: String = Kit.texts(s.site_crew)[0]
 	check(line.begins_with("Waiting its turn: the Builders ") and line.contains("salvage bench") and line.contains("The junk corner"), "the second order waits for the first: '%s'" % line)
 	s.select_plot("junk_corner")
@@ -474,7 +474,7 @@ func test_a_site_that_waits_its_turn_says_which_comes_first() -> void:
 
 func test_the_night_note_says_the_site_waits_for_the_morning() -> void:
 	var ctx := _open()
-	_site(ctx, "court_north", "workshop", 6.0)
+	_site(ctx, "north_east_lot", "workshop", 6.0)
 	var s = ctx.hud.build_screen
 	s.refresh(true)
 	check(Kit.texts(s.site_note)[0].begins_with("The Builders work by day."), "by day: '%s'" % Kit.texts(s.site_note)[0])
@@ -491,23 +491,23 @@ func test_the_night_note_says_the_site_waits_for_the_morning() -> void:
 func test_cancel_shows_the_refund_on_the_button_all_of_it_before_any_work_and_half_after() -> void:
 	var ctx := _open()
 	var heard: Array = []
-	_site(ctx, "court_north", "workshop", 0.0)
+	_site(ctx, "north_east_lot", "workshop", 0.0)
 	var s = ctx.hud.build_screen
 	s.refresh()
 	eq(s.cancel_button.text, "Cancel the order (+30 scrap)", "no work done: all thirty scrap")
-	ctx.sim.build.plot("court_north").site.progress = 4.0
+	ctx.sim.build.plot("north_east_lot").site.progress = 4.0
 	s.refresh()
 	eq(s.cancel_button.text, "Cancel the order (+15 scrap)", "work done: half")
 	ctx.hud.on_ui_sound = func(sound_name, _level): heard.append(sound_name)
 	s.cancel_button.pressed.emit()
 	near(float(ctx.sim.stock.scrap), 85.0, 1e-9, "the half comes back (70 + 15)")
-	check(ctx.sim.build.plot("court_north").site.is_empty(), "the plot is free")
+	check(ctx.sim.build.plot("north_east_lot").site.is_empty(), "the plot is free")
 	check(s.empty_view.visible and not s.site_view.visible, "and offers the catalogue again")
-	eq(Kit.texts(s.rows.court_north.status), ["Empty"], "its slip says so")
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Empty"], "its slip says so")
 	eq(Kit.texts(s.stock_label), ["Scrap in the stores: 85"], "and the foot")
 	eq(heard, ["ui_click"], "with a click")
-	_site(ctx, "court_south", "radio_mast", 0.0)
-	s.select_plot("court_south")
+	_site(ctx, "south_east_corner", "radio_mast", 0.0)
+	s.select_plot("south_east_corner")
 	s.cancel_button.pressed.emit()
 	near(float(ctx.sim.stock.scrap), 85.0, 1e-9, "a site with no work done gives all back (55 + 30)")
 	check(not s.cancel(), "a plot with no site has nothing to cancel")
@@ -518,7 +518,7 @@ func test_cancel_shows_the_refund_on_the_button_all_of_it_before_any_work_and_ha
 func test_a_building_shows_what_it_gives_and_can_be_demolished_in_two_clicks() -> void:
 	var ctx := _open()
 	var heard: Array = []
-	_stand(ctx, "court_north", "workshop")
+	_stand(ctx, "north_east_lot", "workshop")
 	var s = ctx.hud.build_screen
 	s.refresh(true)
 	check(s.built_view.visible and not s.empty_view.visible and not s.site_view.visible, "the detail is the building's")
@@ -535,15 +535,15 @@ func test_a_building_shows_what_it_gives_and_can_be_demolished_in_two_clicks() -
 	check(not ctx.sim.build.built("workshop"), "the second takes it down")
 	near(float(ctx.sim.stock.scrap), 115.0, 1e-9, "and half of the scrap comes back")
 	check(not s.armed and s.empty_view.visible, "the plot offers the catalogue again")
-	eq(Kit.texts(s.rows.court_north.status), ["Empty"], "its slip says Empty")
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Empty"], "its slip says Empty")
 	eq(heard, ["ui_click", "ui_confirm"], "a click, then the confirmation")
 	Kit.free_all(ctx)
 
 
 func test_the_second_click_must_come_soon_and_choosing_another_plot_puts_the_first_away() -> void:
 	var ctx := _open()
-	_stand(ctx, "court_north", "workshop")
-	_stand(ctx, "court_south", "greenhouse")
+	_stand(ctx, "north_east_lot", "workshop")
+	_stand(ctx, "south_east_corner", "greenhouse")
 	var s = ctx.hud.build_screen
 	s.refresh(true)
 	s.demolish_button.pressed.emit()
@@ -555,9 +555,9 @@ func test_the_second_click_must_come_soon_and_choosing_another_plot_puts_the_fir
 	eq(s.demolish_button.text, "Demolish (+15 scrap)", "and says Demolish again")
 	s.demolish_button.pressed.emit()
 	check(ctx.sim.build.built("workshop") and s.armed, "a click after that only arms it again")
-	s.select_plot("court_south")
+	s.select_plot("south_east_corner")
 	check(not s.armed, "another plot chosen puts it away")
-	s.select_plot("court_north")
+	s.select_plot("north_east_lot")
 	eq(s.demolish_button.text, "Demolish (+15 scrap)", "so that a click on another building's button is never the second click of this one")
 	check(ctx.sim.build.built("workshop") and ctx.sim.build.built("greenhouse"), "both stand")
 	# Esc puts it away first and closes second
@@ -573,7 +573,7 @@ func test_the_second_click_must_come_soon_and_choosing_another_plot_puts_the_fir
 func test_a_building_that_another_needs_cannot_be_demolished_and_says_why() -> void:
 	var ctx := _needs_game()
 	_stand(ctx, "junk_corner", "salvage_bench")
-	_stand(ctx, "court_north", "workshop")
+	_stand(ctx, "north_east_lot", "workshop")
 	var s = ctx.hud.build_screen
 	s.select_plot("junk_corner")
 	check(s.demolish_button.disabled, "the bench is needed by the workshop: Demolish is off")
@@ -581,7 +581,7 @@ func test_a_building_that_another_needs_cannot_be_demolished_and_says_why() -> v
 	check(s.demolish_why.visible and s.demolish_why.text == "The workshop needs it.", "and under it: '%s'" % s.demolish_why.text)
 	check(not s.demolish(), "pressing it anyway does nothing")
 	check(ctx.sim.build.built("salvage_bench") and not s.armed, "the bench stands, nothing is armed")
-	s.select_plot("court_north")
+	s.select_plot("north_east_lot")
 	check(not s.demolish_button.disabled and not s.demolish_why.visible, "the workshop itself can come down")
 	Kit.free_all(ctx)
 
@@ -591,8 +591,8 @@ func test_the_foot_says_how_much_scrap_is_in_the_stores_and_how_many_the_beds_ar
 	var s = ctx.hud.build_screen
 	eq(Kit.texts(s.stock_label), ["Scrap in the stores: 100"], "the stores")
 	eq(Kit.texts(s.housing_label), ["Beds for 6 people"], "the school's own six")
-	_stand(ctx, "court_north", "bunk_house")
-	_stand(ctx, "court_south", "bunk_house")
+	_stand(ctx, "north_east_lot", "bunk_house")
+	_stand(ctx, "south_east_corner", "bunk_house")
 	Kit.update(ctx)
 	eq(Kit.texts(s.housing_label), ["Beds for 14 people"], "and four more for each bunk house")
 	ctx.sim.stock.scrap = 12.7
@@ -721,10 +721,10 @@ func test_every_control_can_have_the_keyboard_unless_it_is_off() -> void:
 		else:
 			buttons += 1
 			eq(c.focus_mode, Control.FOCUS_ALL, "the button '%s' can have the keyboard" % c.text)
-	check(buttons >= 12 + 1, "the twelve slips, the Orders that can be placed and Close: %d" % buttons)
+	check(buttons >= _plot_ids(ctx).size() + 1, "the slips, the Orders that can be placed and Close: %d" % buttons)
 	check(_focus_owner() == null, "nothing has the keyboard when the page opens")
 	_press(KEY_TAB)
-	check(_focus_owner() == s.rows.court_north.row, "the first Tab puts it on the plot that is chosen")
+	check(_focus_owner() == s.rows.north_east_lot.row, "the first Tab puts it on the plot that is chosen")
 	Kit.free_all(ctx)
 
 
@@ -734,17 +734,17 @@ func test_the_arrows_choose_a_plot_and_the_detail_follows() -> void:
 	await Kit.settle()
 	var s = ctx.hud.build_screen
 	_press(KEY_DOWN)
-	eq(_focus_owner(), s.rows.court_north.row, "an arrow with nothing focused puts it on the chosen plot")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "an arrow with nothing focused puts it on the chosen plot")
 	_press(KEY_DOWN)
-	eq(_focus_owner(), s.rows.court_south.row, "the next arrow goes down the plots")
-	eq(s.selected, "court_south", "and the plot it lands on is the one chosen")
-	eq(Kit.texts(s.plot_title), ["The court, south end"], "with the detail showing it")
+	eq(_focus_owner(), s.rows.junk_corner.row, "the next arrow goes down the plots")
+	eq(s.selected, "junk_corner", "and the plot it lands on is the one chosen")
+	eq(Kit.texts(s.plot_title), ["The junk corner"], "with the detail showing it")
 	_press(KEY_TAB)
-	eq(_focus_owner(), s.rows.east_lot.row, "Tab goes on to the next plot")
-	eq(s.selected, "east_lot", "and chooses it")
+	eq(_focus_owner(), s.rows.south_lot.row, "Tab goes on to the next plot")
+	eq(s.selected, "south_lot", "and chooses it")
 	_press(KEY_UP)
-	eq(_focus_owner(), s.rows.court_south.row, "an arrow up goes back")
-	eq(ctx.hud.build_hover, {"plot": "court_south"}, "and the plot under the keyboard is marked in the world")
+	eq(_focus_owner(), s.rows.junk_corner.row, "an arrow up goes back")
+	eq(ctx.hud.build_hover, {"plot": "junk_corner"}, "and the plot under the keyboard is marked in the world")
 	Kit.free_all(ctx)
 
 
@@ -754,30 +754,30 @@ func test_enter_or_right_goes_to_the_buttons_of_the_detail_and_enter_there_order
 	await Kit.settle()
 	var s = ctx.hud.build_screen
 	_press(KEY_TAB)
-	eq(_focus_owner(), s.rows.court_north.row, "on the first plot")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "on the first plot")
 	_press(KEY_RIGHT)
 	eq(_focus_owner(), s.entries.salvage_bench.order, "Right goes to the first Order that can be placed")
 	_press(KEY_DOWN)
 	eq(_focus_owner(), s.entries.greenhouse.order, "an arrow down goes to the next")
 	_press(KEY_LEFT)
-	eq(_focus_owner(), s.rows.court_north.row, "Left comes back to the plot's slip")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "Left comes back to the plot's slip")
 	_press(KEY_ENTER)
 	eq(_focus_owner(), s.entries.salvage_bench.order, "Enter on a slip goes to the buttons too")
 	_press(KEY_DOWN)
 	_press(KEY_ENTER)
 	await Kit.settle()
-	eq(ctx.sim.build.plot("court_north").site.building, "greenhouse", "Enter on an Order orders it")
+	eq(ctx.sim.build.plot("north_east_lot").site.building, "greenhouse", "Enter on an Order orders it")
 	near(float(ctx.sim.stock.scrap), 86.0, 1e-9, "for its scrap")
-	eq(_focus_owner(), s.rows.court_north.row, "and the keyboard is back on the slip, which says Greenhouse beds")
-	eq(Kit.texts(s.rows.court_north.status), ["Greenhouse beds: 0%"], "the slip's words")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "and the keyboard is back on the slip, which says Greenhouse beds")
+	eq(Kit.texts(s.rows.north_east_lot.status), ["Greenhouse beds: 0%"], "the slip's words")
 	# a site's buttons are for the keyboard too: Walt is on the Builders job, so the first is Cancel
 	_press(KEY_RIGHT)
 	eq(_focus_owner(), s.cancel_button, "Right goes to the site's Cancel")
 	_press(KEY_ENTER)
 	await Kit.settle()
-	check(ctx.sim.build.plot("court_north").site.is_empty(), "Enter on Cancel cancels")
+	check(ctx.sim.build.plot("north_east_lot").site.is_empty(), "Enter on Cancel cancels")
 	near(float(ctx.sim.stock.scrap), 100.0, 1e-9, "and no work was done: all the scrap is back")
-	eq(_focus_owner(), s.rows.court_north.row, "with the keyboard on the slip again")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "with the keyboard on the slip again")
 	Kit.free_all(ctx)
 
 
@@ -788,9 +788,9 @@ func test_a_plot_with_nothing_to_press_keeps_the_keyboard_on_its_slip() -> void:
 	var s = ctx.hud.build_screen
 	_press(KEY_TAB)
 	_press(KEY_RIGHT)
-	eq(_focus_owner(), s.rows.court_north.row, "with a single scrap nothing can be ordered: Right has nowhere to go")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "with a single scrap nothing can be ordered: Right has nowhere to go")
 	_press(KEY_ENTER)
-	eq(_focus_owner(), s.rows.court_north.row, "nor does Enter")
+	eq(_focus_owner(), s.rows.north_east_lot.row, "nor does Enter")
 	Kit.free_all(ctx)
 
 
@@ -890,7 +890,7 @@ func test_the_jobs_button_gives_way_to_the_jobs_screen_with_the_builders_marked_
 	var ctx := Kit.build()
 	ctx.sim.stock.scrap = 100.0
 	Kit.update(ctx, 2)
-	_site(ctx, "court_north", "workshop", 3.0)
+	_site(ctx, "north_east_lot", "workshop", 3.0)
 	ctx.sim.jobs.unassign(Kit.person(ctx, "walt"))
 	ctx.hud.open_build()
 	var s = ctx.hud.build_screen
@@ -909,7 +909,7 @@ func test_if_the_jobs_screen_will_not_open_the_speed_comes_back() -> void:
 	var ctx := Kit.build()
 	ctx.sim.stock.scrap = 100.0
 	Kit.update(ctx, 3)
-	_site(ctx, "court_north", "workshop", 3.0)
+	_site(ctx, "north_east_lot", "workshop", 3.0)
 	ctx.sim.jobs.unassign(Kit.person(ctx, "walt"))
 	ctx.hud.on_jobs = func(): pass
 	ctx.hud.open_build()
@@ -1007,7 +1007,7 @@ func test_the_parts_of_the_page_can_be_pointed_at_by_name() -> void:
 	var h = ctx.hud
 	var s = h.build_screen
 	for pair in [["build", h.build_button], ["build.screen", s.panel], ["build.close", s.close_button], ["build.detail", s.detail],
-			["build.row:court_north", s.rows.court_north.row], ["build.row:west_wall", s.rows.west_wall.row], ["build.order:workshop", s.entries.workshop.order]]:
+			["build.row:north_east_lot", s.rows.north_east_lot.row], ["build.row:west_wall", s.rows.west_wall.row], ["build.order:workshop", s.entries.workshop.order]]:
 		var r: Rect2 = h.anchor_rect(pair[0])
 		check(r.size != Vector2.ZERO and r == Kit.rect(pair[1]), "%s is found: %s" % [pair[0], str(r)])
 	eq(h.anchor_rect("build.cancel"), Rect2(), "no site, no Cancel")
@@ -1023,8 +1023,8 @@ func test_the_parts_of_the_page_can_be_pointed_at_by_name() -> void:
 	s.refresh()
 	await Kit.settle()
 	check(h.anchor_rect("build.jobs").size != Vector2.ZERO, "with nobody on it there is one")
-	_stand(ctx, "court_south", "greenhouse")
-	s.select_plot("court_south")
+	_stand(ctx, "south_east_corner", "greenhouse")
+	s.select_plot("south_east_corner")
 	await Kit.settle()
 	check(h.anchor_rect("build.demolish").size != Vector2.ZERO and h.anchor_rect("build.cancel") == Rect2(), "a building has its Demolish, and no Cancel")
 	h.close_build()
@@ -1120,7 +1120,7 @@ func _settled(width: int, height: int, plot: String = "") -> Dictionary:
 
 ## The detail in each of its three views: an empty yard plot, an empty wall plot, a site, a building.
 func _in_each_view(ctx: Dictionary) -> Array:
-	return [["an empty yard plot", "court_north"], ["an empty wall plot", "west_wall"], ["a site", "east_lot"], ["a building", "south_lot"]]
+	return [["an empty yard plot", "north_east_lot"], ["an empty wall plot", "west_wall"], ["a site", "east_lot"], ["a building", "south_lot"]]
 
 
 ## A site on the east lot (9 hours in), a workshop on the south lot, a second site waiting on the junk corner and
@@ -1158,15 +1158,15 @@ func test_the_page_fits_a_short_window_and_the_columns_scroll() -> void:
 			await Kit.settle()
 			await Kit.settle()
 			eq(_misfits(ctx, size), [], "%d x %d, %s" % [size[0], size[1], view[0]])
-		s.select_plot("court_north")
+		s.select_plot("north_east_lot")
 		await Kit.settle()
 		await Kit.settle()
 		var room: float = s.list_scroll.size.y
-		check(s.list_box.get_combined_minimum_size().y > room, "%d x %d: too short for all twelve slips, so the list scrolls (%.0f in %.0f)" % [size[0], size[1], s.list_box.get_combined_minimum_size().y, room])
+		check(s.list_box.get_combined_minimum_size().y > room, "%d x %d: too short for all the slips, so the list scrolls (%.0f in %.0f)" % [size[0], size[1], s.list_box.get_combined_minimum_size().y, room])
 		# scrolled to the end, the last slip is there
 		s.list_scroll.scroll_vertical = int(s.list_scroll.get_v_scroll_bar().max_value)
 		await Kit.settle()
-		var last := Kit.rect(s.rows.east_wall.row)
+		var last := Kit.rect(s.rows.west_wall.row)
 		var view_rect := Kit.rect(s.list_scroll)
 		check(view_rect.grow(1.0).encloses(last.grow(-0.5)), "%d x %d: the last slip is in view at the end of the scroll: %s in %s" % [size[0], size[1], str(last), str(view_rect)])
 		# the detail scrolls to the last building of the catalogue too
@@ -1182,7 +1182,7 @@ func test_the_whole_page_is_in_view_without_scrolling_in_a_window_800_tall() -> 
 	for size in [[1280, 800], [1920, 1080]]:
 		var ctx: Dictionary = await _settled(size[0], size[1])
 		var s = ctx.hud.build_screen
-		check(s.list_box.get_combined_minimum_size().y <= s.list_scroll.size.y + 0.5, "%d x %d: the twelve plots fit (%.0f in %.0f)" % [size[0], size[1], s.list_box.get_combined_minimum_size().y, s.list_scroll.size.y])
+		check(s.list_box.get_combined_minimum_size().y <= s.list_scroll.size.y + 0.5, "%d x %d: the plots fit (%.0f in %.0f)" % [size[0], size[1], s.list_box.get_combined_minimum_size().y, s.list_scroll.size.y])
 		var view := Kit.rect(s.list_scroll)
 		for id in s.rows:
 			check(view.grow(1.0).encloses(Kit.rect(s.rows[id].row).grow(-0.5)), "%d x %d: the slip of %s is in view" % [size[0], size[1], id])
@@ -1219,7 +1219,7 @@ func test_nothing_on_the_page_is_under_twelve_pixels_at_any_size() -> void:
 			s.select_plot(view[1])
 			await Kit.settle()
 			eq(tt._small_text(s), [], "%d x %d, %s" % [size[0], size[1], view[0]])
-		s.select_plot("court_north")
+		s.select_plot("north_east_lot")
 		s.order("workshop")
 		s.order("workshop")
 		eq(tt._small_text(s), [], "%d x %d, with the line at the foot" % [size[0], size[1]])
@@ -1267,7 +1267,7 @@ func test_every_word_on_the_page_reads_on_the_paper_in_either_look() -> void:
 				eq(_buttons_that_are_hard_to_read(s, tt), [], "%s, %d: the buttons of %s" % [look, size[0], view[0]])
 				eq(tt._dark_red_words(s), [], "%s, %d: no word in the dark red (%s)" % [look, size[0], view[0]])
 			# with the reasons (22 scrap pay for little), an armed Demolish and the line at the foot
-			s.select_plot("court_north")
+			s.select_plot("north_east_lot")
 			await Kit.settle()
 			check(s.entries.workshop.why.visible, "(the reasons are showing)")
 			eq(tt._hard_to_read(s, Color.WHITE), [], "%s, %d: with the reasons" % [look, size[0]])
@@ -1357,6 +1357,37 @@ func test_the_page_marks_the_plot_it_is_pointed_at_for_the_yard() -> void:
 	main.hud.close_build()
 	eq(main.build_hover, {}, "closed: nothing")
 	check(not main.build_open, "and the yard is told it is shut")
+	await Tut.leave(main)
+
+
+func test_the_yard_has_no_sign_on_it_until_the_screen_opens_or_the_pointer_comes_near() -> void:
+	var main = _game()
+	await Tut.frames(main, 3)
+	var sim = main.sim
+	var view = main.build_view
+	var far := Vector2(-40.0, -40.0)
+	view.pointer = far
+	await Tut.frames(main, 2)
+	eq(view.drawn_signs, 0, "in the plain yard, with the pointer far from every plot, there is no sign")
+	eq(view.drawn_outlines, 0, "and no outline")
+	var plots: Array = sim.build.plots()
+	view.pointer = Vector2(plots[0].pos)
+	await Tut.frames(main, 2)
+	eq(view.drawn_signs, 1, "the pointer on a plot: its sign")
+	eq(view.drawn_outlines, 1, "and its outline, and no other plot's")
+	# the sign under the pointer opens the screen as before
+	var sign_at: Vector2 = sim.build.sign_pos(String(plots[0].id))
+	main._click(_screen_of(main, sign_at), MOUSE_BUTTON_LEFT)
+	check(main.hud.build_screen != null and main.hud.build_screen.selected == String(plots[0].id), "a click on the sign opens the screen on that plot")
+	await Tut.frames(main, 2)
+	eq(view.drawn_signs, plots.size(), "with the screen open every plot has its sign")
+	eq(view.drawn_outlines, plots.size(), "and its outline")
+	main.hud.close_build()
+	await Tut.frames(main, 2)
+	eq(view.drawn_signs, 1, "closed, the pointer's own sign is all that is left")
+	view.pointer = far
+	await Tut.frames(main, 2)
+	eq(view.drawn_signs, 0, "and with the pointer gone, none")
 	await Tut.leave(main)
 
 
@@ -1574,30 +1605,30 @@ func _wheel(at: Vector2, down: bool = true) -> void:
 
 
 func test_the_wheel_scrolls_the_list_over_a_slip_and_the_detail_over_a_button() -> void:
-	var ctx: Dictionary = await _settled(700, 560)
+	var ctx: Dictionary = await _settled(700, 480)
 	var s = ctx.hud.build_screen
 	eq(s.list_scroll.scroll_vertical, 0, "the list starts at the top")
-	_wheel(Kit.rect(s.rows.court_south.row).get_center())
+	_wheel(Kit.rect(s.rows.south_lot.row).get_center())
 	await Kit.settle()
 	check(s.list_scroll.scroll_vertical > 0, "a turn of the wheel over a slip scrolls the list: %d" % s.list_scroll.scroll_vertical)
 	eq(s.detail_scroll.scroll_vertical, 0, "and not the detail")
-	eq(s.selected, "court_north", "nor does it choose a plot")
-	_wheel(Kit.rect(s.entries.workshop.order).get_center())
+	eq(s.selected, "north_east_lot", "nor does it choose a plot")
+	_wheel(Kit.rect(s.entries.salvage_bench.order).get_center())
 	await Kit.settle()
 	check(s.detail_scroll.scroll_vertical > 0, "over an Order button it scrolls the detail: %d" % s.detail_scroll.scroll_vertical)
-	check(ctx.sim.build.plot("court_north").site.is_empty(), "and orders nothing")
+	check(ctx.sim.build.plot("north_east_lot").site.is_empty(), "and orders nothing")
 	Kit.free_all(ctx)
 
 
 func test_a_plot_chosen_far_down_the_list_is_scrolled_into_view() -> void:
-	for size in [[700, 560], [1280, 600]]:
-		var ctx: Dictionary = await _settled(size[0], size[1], "east_wall")
+	for size in [[700, 480], [1280, 500]]:
+		var ctx: Dictionary = await _settled(size[0], size[1], "west_wall")
 		var s = ctx.hud.build_screen
-		eq(s.selected, "east_wall", "the plot asked for is chosen")
-		var slip := Kit.rect(s.rows.east_wall.row)
+		eq(s.selected, "west_wall", "the plot asked for is chosen")
+		var slip := Kit.rect(s.rows.west_wall.row)
 		var view := Kit.rect(s.list_scroll)
 		check(view.grow(1.0).encloses(slip.grow(-0.5)), "%d x %d: and its slip is in view: %s in %s" % [size[0], size[1], str(slip), str(view)])
-		s.select_plot("court_north")
+		s.select_plot("north_east_lot")
 		await Kit.settle()
 		await Kit.settle()
 		s.select_plot("north_wall")
@@ -1615,10 +1646,10 @@ func test_the_staging_arguments_put_sites_and_buildings_up_without_paying() -> v
 	await Tut.frames(main, 3)
 	var sim = main.sim
 	var scrap: float = sim.stock.scrap
-	main._stage_build("east_lot:bunk_house,court_south:greenhouse", true)
+	main._stage_build("east_lot:bunk_house,south_east_corner:greenhouse", true)
 	check(sim.build.built("bunk_house") and sim.build.built("greenhouse"), "buildings stand")
-	main._stage_build("court_north:workshop:0.5,junk_corner:salvage_bench", false)
-	near(float(sim.build.plot("court_north").site.progress), 12.0, 1e-6, "a site with half the work done")
+	main._stage_build("north_east_lot:workshop:0.5,junk_corner:salvage_bench", false)
+	near(float(sim.build.plot("north_east_lot").site.progress), 12.0, 1e-6, "a site with half the work done")
 	near(float(sim.build.plot("junk_corner").site.progress), 0.0, 1e-6, "and one with none")
 	near(float(sim.stock.scrap), scrap, 1e-9, "no scrap was paid")
 	check(not sim.alerts.has("built-east_lot") and sim.events.is_empty(), "and nothing is announced")
@@ -1825,12 +1856,12 @@ func test_an_order_the_builders_work_it_and_the_page_shows_it_built() -> void:
 
 
 func test_the_page_follows_a_site_the_rules_finish_under_it_and_a_demolished_building() -> void:
-	var ctx := _real_game("court_north")
+	var ctx := _real_game("north_east_lot")
 	var sim = ctx.sim
 	var hud = ctx.hud
 	var s = hud.build_screen
 	s.order("greenhouse")
-	sim.build.plot("court_north").site.progress = float(sim.build.plot("court_north").site.work) - 0.001
+	sim.build.plot("north_east_lot").site.progress = float(sim.build.plot("north_east_lot").site.work) - 0.001
 	var guard := 0
 	while not sim.build.built("greenhouse") and guard < 120:
 		Helpers.run(sim, 1.0)    # (Walt walks to the site first)
@@ -1838,7 +1869,7 @@ func test_the_page_follows_a_site_the_rules_finish_under_it_and_a_demolished_bui
 	hud.update_hud(sim, 1, true, 0)
 	check(sim.build.built("greenhouse"), "the rules finished it with the page up (after %d seconds)" % guard)
 	check(s.built_view.visible and not s.site_view.visible, "the page shows the building")
-	check(sim.alerts.has("built-court_north"), "(and the game told the crew)")
+	check(sim.alerts.has("built-north_east_lot"), "(and the game told the crew)")
 	s.demolish()
 	s.demolish()
 	check(not sim.build.built("greenhouse") and s.empty_view.visible, "demolished from the page: the plot is free again")

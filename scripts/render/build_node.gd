@@ -1,18 +1,21 @@
 ## The yard's view of the buildings (round 6): the plots, the sites and the buildings, drawn from what `sim.build`
 ## says and from assets/data/building_art.json. In the world's space, over the ground and under the people.
 ##
-## - An empty plot is a faint dashed outline of its lot with a small sign (a hammer on a plate) at its corner, the
-##   thing a click opens the Build screen on (`sim.build.sign_at`). The same outline is brighter, in the HUD's gold,
-##   while the Build screen is open (`main.build_open`) and brightest for the plot the screen points at
-##   (`main.build_hover`, {"plot": id}); `show_plots` (the --build-plots flag) keeps them lit. A plot with a site
-##   keeps its faint outline and sign; a plot with a building has neither, unless the screen is open or points at it.
+## - (Round 11, the cut: the yard is not covered in signs.) An empty plot is a dashed outline of its lot with a small
+##   sign (a hammer on a plate) at its corner, the thing a click opens the Build screen on (`sim.build.sign_at`), and
+##   it is drawn only when it is wanted: while the Build screen is open (`main.build_open`: every plot, in the HUD's
+##   gold, and brightest for the one the screen points at, `main.build_hover`, {"plot": id}), for the one empty plot
+##   nearest the pointer when it is within NEAR_PLOT tiles of it, for a plot with a site on it (faint, as ever), and
+##   while `show_plots` (the --build-plots flag) keeps them lit. With the screen shut and the pointer far from every
+##   plot the yard shows no sign at all. A plot with a building has neither, unless the screen is open or points at it.
 ## - A site is its scaffold (the art's `scaffold`: planks, crates and sandbags, a fuller heap as the work goes on)
 ##   with a thin bar above it that fills with the work done.
 ## - A finished building is its `props`. What lies on the ground (`flat`) is drawn under the people; what stands up is
 ##   drawn among them, sorted by its feet, so people walk behind a tower and in front of a bench.
 ## - (Round 9, the lots.) A wall plot across a street (a mouth, in a lot that is claimed) with no wall and no site is a dashed
-##   line across the street in amber with the words "open street" on it; one whose wall has fallen is the same in red, "wall
-##   down". A site on one is the heap of materials every few tiles along the street. The Build screen may point at a whole lot
+##   line across the street in amber with the words "open street" on it, drawn while the Build screen is open or the pointer
+##   is within NEAR_STREET tiles of it; one whose wall has fallen is the same in red, "wall down", and is always drawn. A site
+##   on one is the heap of materials every few tiles along the street. The Build screen may point at a whole lot
 ##   (`main.build_hover`, {"lot": id}): every plot and mouth of it is lit, claimed or not.
 ## - The floodlights' lamps are PointLight2D nodes that burn while the building stands and it is dark; they do not go
 ##   out in a blackout (the building brings its own generator).
@@ -35,9 +38,9 @@ const ICONS := ["res://assets/ui/icons/build.png", "res://assets/ui/icons/repair
 const GOLD := Color(0.941, 0.761, 0.29)
 const PAPER := Color(0.93, 0.9, 0.82)
 const PLATE := Color(0.043, 0.078, 0.067)
-## How strong the outline of a lot is: an empty plot's, a plot with a site's, any plot's while the screen is open or
-## points at it, and the one it points at.
-const ALPHA_EMPTY := 0.26
+## How strong the outline of a lot is: the empty plot the pointer is near, a plot with a site's, any plot's while the
+## screen is open or points at it, and the one it points at.
+const ALPHA_NEAR := 0.55
 const ALPHA_SITE := 0.3
 const ALPHA_OPEN := 0.78
 const ALPHA_HOVER := 1.0
@@ -53,8 +56,13 @@ const LINE_HOVER_PX := 3.2
 const SIGN_PX_MIN := 11.0
 const SIGN_PX_MAX := 16.0
 const SIGN_SHARE := 0.3
-## The sign of an empty plot or a site in the plain yard is this strong (the screen's, full).
-const SIGN_FAINT := 0.62
+## The sign of the empty plot the pointer is near, or of a site, in the plain yard is this strong (the screen's, full).
+const SIGN_NEAR := 0.85
+const SIGN_SITE := 0.62
+## How near the pointer must be (tiles, to the edge of the lot) for the one empty plot nearest it to show its outline and
+## its sign, and for an open street to show its line and its words.
+const NEAR_PLOT := 3.0
+const NEAR_STREET := 5.0
 ## The bar above a site: width (tiles, and never narrower than BAR_PX screen pixels), thickness (screen pixels), and
 ## how far above the lot's top edge it floats (tiles).
 const BAR_TILES := 1.7
@@ -88,6 +96,8 @@ var sim
 var lighting
 ## The plots' lit outlines are forced on (the --build-plots flag).
 var show_plots := false
+## Where the pointer is, in tiles: null reads it from the window; a test or a screenshot (--build-pointer) puts it somewhere.
+var pointer = null
 ## What the last draw put on the screen and how often the sprites were made again, for the tests.
 var drawn_outlines := 0
 var drawn_signs := 0
@@ -106,6 +116,10 @@ var _glow: Node2D
 var _sprites: Array = []
 var _lights: Array = []
 var _key := ""
+## While the marks are being painted the pointer and the plot near it are asked once, not for every plot.
+var _painting := false
+var _pointer_now := Vector2.ZERO
+var _near_now := ""
 var _rules_build = null
 var _dashes := {}
 var _icon: Texture2D
@@ -473,6 +487,45 @@ func marks_wanted() -> bool:
 	return not (bool(main.get("tutorial")) and main.get("coach") != null)
 
 
+## Where the pointer is, in tiles.
+func pointer_tile() -> Vector2:
+	if _painting:
+		return _pointer_now
+	if pointer is Vector2:
+		return pointer
+	if not is_inside_tree():
+		return Vector2(-1000.0, -1000.0)
+	return get_global_mouse_position() / float(TILE)
+
+
+## How far a point is from a plot's lot (tiles): nothing inside it.
+func gap(pl: Dictionary, at: Vector2) -> float:
+	var d := (at - Vector2(pl.pos)).abs() - Vector2(pl.size) / 2.0
+	return Vector2(maxf(d.x, 0.0), maxf(d.y, 0.0)).length()
+
+
+## The empty plot nearest the pointer, when the pointer is within NEAR_PLOT tiles of its lot ("" for none). A plot with a
+## building or a site on it is not asked: it has its own say, and would take the place of an empty one beside it.
+func near_plot() -> String:
+	if sim == null or sim.get("build") == null:
+		return ""
+	var at := pointer_tile()
+	var best := ""
+	var best_gap := NEAR_PLOT
+	for pl in sim.build.plots():
+		if pl.building != "" or not pl.site.is_empty():
+			continue
+		var g := gap(pl, at)
+		if g <= best_gap:
+			best_gap = g
+			best = String(pl.id)
+	return best
+
+
+func _near() -> String:
+	return _near_now if _painting else near_plot()
+
+
 ## How strong the outline of this plot is now (0 for none).
 func outline_alpha(pl: Dictionary) -> float:
 	if marked(pl):
@@ -481,18 +534,30 @@ func outline_alpha(pl: Dictionary) -> float:
 		return ALPHA_OPEN
 	if pl.building != "":
 		return 0.0
-	return ALPHA_SITE if not pl.site.is_empty() else ALPHA_EMPTY
+	if not pl.site.is_empty():
+		return ALPHA_SITE
+	if String(pl.get("kind", "")) == "mouth":
+		return 0.0    # (a street open to the dead has its dashed line and its words, which say it: not a box round it as well)
+	return ALPHA_NEAR if String(pl.id) == _near() else 0.0
 
 
-## How strong the sign of this plot is (0 for none): an empty plot's is faint in the plain yard.
+## How strong the sign of this plot is (0 for none): the empty plot the pointer is near has one, and a site keeps its own.
 func sign_alpha(pl: Dictionary) -> float:
 	if marked(pl):
 		return 1.0
 	if screen_open():
 		return 0.9
-	if pl.building == "":
-		return SIGN_FAINT
-	return 0.0
+	if pl.building != "":
+		return 0.0
+	if not pl.site.is_empty():
+		return SIGN_SITE
+	return SIGN_NEAR if String(pl.id) == _near() else 0.0
+
+
+## Whether an open street's line and words are drawn: the Build screen is open or points at it, or the pointer is within
+## NEAR_STREET tiles of it. (A wall that is down is always drawn: the street is open and the dead come through it.)
+func street_wanted(pl: Dictionary) -> bool:
+	return screen_open() or marked(pl) or gap(pl, pointer_tile()) <= NEAR_STREET
 
 
 func _screen_scale() -> float:
@@ -532,6 +597,10 @@ func _paint_ground(ci) -> void:
 	if sim == null or sim.get("build") == null or not marks_wanted():
 		return
 	var k := 1.0 / _screen_scale()
+	_painting = false
+	_pointer_now = pointer_tile()
+	_near_now = near_plot()
+	_painting = true
 	for pl in sim.build.plots():
 		var a := outline_alpha(pl)
 		var strong := marked(pl)
@@ -543,6 +612,7 @@ func _paint_ground(ci) -> void:
 			drawn_signs += 1
 			_paint_sign(ci, pl, sa, strong or (screen_open() and sa > 0.5), k)
 		_paint_street(ci, pl, k)
+	_painting = false
 	# a lot the screen points at that is not yet claimed: its plots and mouths are lit all the same
 	var lot := hovered_lot()
 	if lot != "" and sim.lots.on and not sim.lots.claimed(lot):
@@ -568,7 +638,7 @@ func _paint_outline(ci, pl: Dictionary, a: float, strong: bool, lit: bool, k: fl
 ## fallen), with the words on a dark pill at its middle. In the world's pixels, the words in screen pixels.
 func _paint_street(ci, pl: Dictionary, k: float) -> void:
 	var state := street_state(pl)
-	if state == "":
+	if state == "" or (state == "open" and not street_wanted(pl)):
 		return
 	var col := OPEN_STREET if state == "open" else WALL_DOWN
 	var c := Vector2(pl.pos)

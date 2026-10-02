@@ -11,7 +11,12 @@
 ##     keyboard a dark ring;
 ##   - a faint "?" for each place that is not known yet, near where it is (not on it);
 ##   - the parties that are out, a blue disc with the number of people on the route between the school and the
-##     place by how much of the trip is gone;
+##     place by how much of the trip is gone (a party that went by vehicle is a blue plate with a small car on it);
+##   - round 13: the board is 160 tiles wide and the city is across the river, so the sheet shows what is known, not the
+##     whole board: the school, the known places and the unknown ones within NEAR_KNOWN tiles of a known place (a place
+##     a scouting trip could show next), with a margin (`view`), and it grows as places are found; once the bridge is
+##     known the river is drawn through it and the road over it is a bridge, and until a place across the river is known
+##     a chip at the east edge says "Across the river"; a place that can only be reached by vehicle has a blue ring;
 ##   - the names of the places (a caption under or beside a pin when there is room; the hovered, chosen and focused
 ##     pins always have theirs) and the points of the compass (north is up).
 ##
@@ -53,11 +58,26 @@ const GOLD_EDGE := Color("#946c0c")
 const RED := Color("#a8301f")
 const GREEN := Color("#2e6b34")
 const BLUE := Color("#2a6488")
+## The wash of a place only a vehicle reaches.
+const VEHICLE_FILL := Color("#d6e4ea")
 const OAK_DARK := Color("#56391f")
 ## The decoration is laid out from this (the same in every game and every window).
 const DECOR_SEED := 20261002
 ## The unknown places' "?" sit this many tiles off the place itself, at most.
 const UNKNOWN_SHIFT := 2.2
+## What the sheet shows (round 13): the known places and the unknown ones this near to a known place (tiles), with this
+## margin (tiles), in a shape whose height over its width is kept between ASPECT_MIN and ASPECT_MAX, and at least this big.
+const NEAR_KNOWN := 25.0
+const VIEW_MARGIN := 3.0
+const ASPECT_MIN := 0.4
+const ASPECT_MAX := 0.8
+const VIEW_MIN := Vector2(30.0, 20.0)
+## Two pins are asked to be at least this far apart (pixels, centre to centre): the page gives the map the width for it.
+const CLEAR_PX := PIN_R * 2.0 + 4.0
+## The river that the bridge crosses, as wide as this (tiles); a bridge's deck reaches this far from its pin on each side.
+const RIVER_W := 5.0
+const DECK_REACH := 3.8
+const CHIP_TEXT := "ACROSS THE RIVER"
 
 ## kind (or part of one) -> glyph, the first match wins.
 const GLYPHS := [
@@ -65,6 +85,8 @@ const GLYPHS := [
 	["farm", "barn"], ["radio", "mast"], ["bakery", "loaf"], ["bunker", "dome"], ["water", "drop"], ["library", "book"],
 	["hardware", "tool"], ["garage", "car"], ["gas", "pump"], ["fuel", "pump"], ["bus", "bus"], ["scrap", "gear"],
 	["supermarket", "cart"], ["market", "cart"], ["warehouse", "box"], ["school", "school"], ["house", "house"], ["home", "house"],
+	# round 13: the city across the river
+	["bridge", "arch"], ["checkpoint", "barrier"], ["cold", "snow"], ["universit", "cap"], ["power", "bolt"], ["rail", "rails"],
 ]
 
 var hud
@@ -82,6 +104,10 @@ var streets: Array = []
 ## The parties that are out: {"n", "count", "path" (Vector2s in board tiles, from the school), "at" (0 to 1 along it),
 ## "mode" ("out", "search" or "back"), "text"}.
 var parties: Array = []
+## What the sheet shows, in board tiles (see `_fit_view`).
+var view := Rect2(0.0, 0.0, 100.0, 70.0)
+## The chip at the east edge that says there is more across the river (pixels; empty when it is not there).
+var river_chip := Rect2()
 ## The pin that is chosen, the one under the pointer, the one with the keyboard ("" for none).
 var chosen := ""
 var hovered := ""
@@ -129,6 +155,7 @@ func set_data(d: Dictionary) -> void:
 	streets = d.get("streets", [])
 	parties = d.get("parties", [])
 	chosen = String(d.get("chosen", ""))
+	_fit_view()
 	_sync_pins()
 	_decorate()
 	_layout()
@@ -185,6 +212,8 @@ func _tip(p: Dictionary) -> String:
 			words += ", cleared"
 		"claimed":
 			words += ", your outpost"
+	if bool(p.get("needs_vehicle", false)):
+		words += ". By vehicle only"
 	return words
 
 
@@ -266,19 +295,130 @@ func scale_px() -> float:
 
 func _layout() -> void:
 	var room := size - Vector2(PAD, PAD) * 2.0
-	if room.x <= 0.0 or room.y <= 0.0 or board.x <= 0.0 or board.y <= 0.0:
+	if room.x <= 0.0 or room.y <= 0.0 or view.size.x <= 0.0 or view.size.y <= 0.0:
 		return
-	_scale = minf(room.x / board.x, room.y / board.y)
-	_origin = (size - board * _scale) / 2.0
+	_scale = minf(room.x / view.size.x, room.y / view.size.y)
+	_origin = (size - view.size * _scale) / 2.0 - view.position * _scale
 	for id in pins:
 		var pin: Control = pins[id]
 		pin.size = Vector2(HIT, HIT)
 		pin.position = to_px(pin.place.pos) - pin.size / 2.0
 	home_marker.size = Vector2(HIT, HIT)
 	home_marker.position = to_px(home) - home_marker.size / 2.0
+	_fit_chip()
 	_place_captions()
 	queue_redraw()
 	_over.queue_redraw()
+
+
+## What the sheet shows (see the header): the school, the known places and the unknown places near a known one, with
+## a margin, in a shape that is neither a thin strip nor a tall slab, inside the board.
+func _fit_view() -> void:
+	var known: Array = [home]
+	for p in places:
+		known.append(Vector2(p.pos))
+	var box := Rect2(home, Vector2.ZERO)
+	for k in known:
+		box = box.expand(k)
+	for u in unknown:
+		var at := Vector2(u.pos)
+		for k in known:
+			if at.distance_to(k) <= NEAR_KNOWN:
+				box = box.expand(at)
+				break
+	box = box.grow(VIEW_MARGIN)
+	var w := maxf(box.size.x, VIEW_MIN.x)
+	var h := maxf(box.size.y, VIEW_MIN.y)
+	if h / w > ASPECT_MAX:
+		w = h / ASPECT_MAX
+	elif h / w < ASPECT_MIN:
+		h = w * ASPECT_MIN
+	w = minf(w, board.x)
+	h = minf(h, board.y)
+	var c := box.get_center()
+	view = Rect2(Vector2(clampf(c.x - w / 2.0, 0.0, maxf(board.x - w, 0.0)), clampf(c.y - h / 2.0, 0.0, maxf(board.y - h, 0.0))), Vector2(w, h))
+
+
+## Height over width of what the sheet shows: the page makes the map this shape.
+func view_aspect() -> float:
+	return view.size.y / maxf(view.size.x, 0.0001)
+
+
+## The height a map of this width needs, and the width a map of this height needs, for the sheet to be filled
+## (the pixels round the pins are not part of the shape).
+func height_for_width(w: float) -> float:
+	return maxf(w - PAD * 2.0, 1.0) * view_aspect() + PAD * 2.0
+
+
+func width_for_height(h: float) -> float:
+	return maxf(h - PAD * 2.0, 1.0) / view_aspect() + PAD * 2.0
+
+
+## The width at which the closest two pins (the school too) are CLEAR_PX apart, so that none touches another.
+func width_for_clear_pins() -> float:
+	var spots: Array = [home]
+	for p in places:
+		spots.append(Vector2(p.pos))
+	var nearest := INF
+	for i in spots.size():
+		for j in range(i + 1, spots.size()):
+			nearest = minf(nearest, Vector2(spots[i]).distance_to(spots[j]))
+	if nearest == INF or nearest < 0.01:
+		return 0.0
+	return view.size.x * CLEAR_PX / nearest + PAD * 2.0
+
+
+## The bridge of the board that is known (its place), or {}: the river is drawn through it.
+func _bridge() -> Dictionary:
+	for p in places:
+		if String(p.get("kind", "")).to_lower().contains("bridge"):
+			return p
+	return {}
+
+
+## Whether the chip "Across the river" shows: the bridge is known and no place across the river is.
+func wants_chip() -> bool:
+	if _bridge().is_empty():
+		return false
+	for p in places:
+		if bool(p.get("needs_vehicle", false)):
+			return false
+	return true
+
+
+## Where the chip goes: at the east edge, level with the bridge if that is free, else the nearest free height.
+func _fit_chip() -> void:
+	river_chip = Rect2()
+	if not wants_chip() or size.x <= 0.0 or size.y <= 0.0:
+		return
+	var font := Fonts.cond(700)
+	var w := font.get_string_size(CHIP_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, CAPTION_PX).x + 12.0 + 14.0
+	var h := 20.0
+	var bridge_y := to_px(Vector2(_bridge().pos)).y
+	var heights: Array = [bridge_y]
+	for f in [0.5, 0.3, 0.7, 0.2, 0.8]:
+		heights.append(size.y * float(f))
+	var busy: Array = []
+	for id in pins:
+		var c := pin_center(id)
+		busy.append(Rect2(c - Vector2(PIN_R, PIN_R) - Vector2(4, 4), Vector2(PIN_R, PIN_R) * 2.0 + Vector2(8, 8)))
+	busy.append(Rect2(to_px(home) - Vector2(PIN_R, PIN_R) - Vector2(4, 4), Vector2(PIN_R, PIN_R) * 2.0 + Vector2(8, 8)))
+	for u in unknown:
+		var at := to_px(Vector2(u.pos))
+		busy.append(Rect2(at - Vector2(10, 14), Vector2(20, 26)))
+	busy.append(Rect2(size.x - 52.0, 2.0, 50.0, 62.0))
+	var best := Rect2(size.x - w - 6.0, size.y - h - 6.0, w, h)
+	for y in heights:
+		var r := Rect2(size.x - w - 6.0, clampf(float(y) - h / 2.0, 4.0, size.y - h - 4.0), w, h)
+		var free := true
+		for b in busy:
+			if b.intersects(r):
+				free = false
+				break
+		if free:
+			best = r
+			break
+	river_chip = best
 
 
 ## The centre of a pin on the map (pixels); the school's for "home".
@@ -305,6 +445,10 @@ func _place_captions() -> void:
 		return
 	var many := size.x >= CAPTION_MIN_W
 	var taken: Array = []
+	if river_chip.size != Vector2.ZERO:
+		taken.append(river_chip)
+	# (the compass is not covered by a name)
+	taken.append(Rect2(size.x - 44.0, 2.0, 42.0, 58.0))
 	var discs: Dictionary = {"home": Rect2(to_px(home) - Vector2(PIN_R, PIN_R) - Vector2(3, 3), Vector2(PIN_R, PIN_R) * 2.0 + Vector2(6, 6))}
 	for id in pins:
 		var c := pin_center(id)
@@ -455,15 +599,23 @@ func _draw() -> void:
 	var sheet := Rect2(Vector2.ZERO, size)
 	draw_rect(sheet, SHEET)
 	var field := Rect2(to_px(Vector2.ZERO), board * _scale)
-	# the town: blocks and trees
+	var bridge := _bridge()
+	var river_x := float(bridge.pos.x) if not bridge.is_empty() else -1000.0
+	# the town: blocks and trees (not in the river)
 	for t in _trees:
+		if absf(float(t.at.x) - river_x) < RIVER_W * 0.5 + float(t.r):
+			continue
 		draw_circle(to_px(t.at), float(t.r) * _scale, TREE_FILL)
 	for b in _blocks:
+		if absf(b.get_center().x - river_x) < RIVER_W * 0.5 + b.size.x * 0.5:
+			continue
 		var r := Rect2(to_px(b.position), b.size * _scale)
 		draw_rect(r, BLOCK_FILL)
 		draw_rect(r, BLOCK_EDGE, false, 1.0)
 	# the border of the board, as a pencilled frame
 	draw_rect(field.grow(2.0), Color(hud.PAPER_INK, 0.28), false, 1.0)
+	if not bridge.is_empty():
+		_draw_river(river_x)
 	# the roads
 	for r in roads:
 		var a := to_px(r.a)
@@ -475,12 +627,19 @@ func _draw() -> void:
 	for r in roads:
 		if not bool(r.get("stub", false)):
 			draw_line(to_px(r.a), to_px(r.b), ROAD_FILL, 4.2, true)
+	if not bridge.is_empty():
+		_draw_deck(Vector2(bridge.pos))
 	# the places not known yet: a faint question mark
 	var font := Fonts.cond(700)
 	for u in unknown:
 		var at := to_px(Vector2(u.pos))
+		if at.x < -12.0 or at.y < -12.0 or at.x > size.x + 12.0 or at.y > size.y + 12.0:
+			continue
 		var sz := font.get_string_size("?", HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
 		draw_string(font, at + Vector2(-sz.x / 2.0, sz.y * 0.32), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, UNKNOWN_INK)
+	# the way to the city: the chip at the east edge
+	if river_chip.size != Vector2.ZERO:
+		_draw_chip(font)
 	# the compass: north is up
 	var rose := Vector2(size.x - 24.0, 36.0)
 	draw_line(rose + Vector2(0, 14), rose + Vector2(0, -8), Color(hud.PAPER_INK, 0.6), 1.5, true)
@@ -488,6 +647,72 @@ func _draw() -> void:
 	var nsz := font.get_string_size("N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12)
 	draw_string(font, rose + Vector2(-nsz.x / 2.0, -16.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, hud.PAPER_INK2)
 	draw_rect(Rect2(Vector2.ZERO, size), SHEET_EDGE, false, 1.5)
+
+
+## The river through the bridge: a wavering band down the sheet, running north to south, with a bank on each side.
+func _draw_river(x: float) -> void:
+	var left := PackedVector2Array()
+	var right := PackedVector2Array()
+	var mid := PackedVector2Array()
+	var y := view.position.y - 1.0
+	var end := view.position.y + view.size.y + 1.0
+	while y <= end:
+		var bend := sin(y * 0.28) * 0.7
+		mid.append(to_px(Vector2(x + bend, y)))
+		left.append(to_px(Vector2(x + bend - RIVER_W * 0.5, y)))
+		right.append(to_px(Vector2(x + bend + RIVER_W * 0.5, y)))
+		y += 1.0
+	if mid.size() < 2:
+		return
+	draw_polyline(mid, Color(BLUE, 0.2), RIVER_W * _scale, true)
+	draw_polyline(left, Color(BLUE, 0.45), 1.2, true)
+	draw_polyline(right, Color(BLUE, 0.45), 1.2, true)
+
+
+## The road over the river, drawn as a deck: on each bank the road that runs most nearly across the river, a wider, paler way
+## between two dark rails.
+func _draw_deck(at: Vector2) -> void:
+	var best := {-1: Vector2.ZERO, 1: Vector2.ZERO}
+	var reach := {-1: 0.0, 1: 0.0}
+	for r in roads:
+		var other := Vector2.INF
+		if Vector2(r.a).distance_to(at) < 0.01:
+			other = r.b
+		elif Vector2(r.b).distance_to(at) < 0.01:
+			other = r.a
+		if other == Vector2.INF:
+			continue
+		var dir := (other - at).normalized()
+		var side_of := 1 if dir.x >= 0.0 else -1
+		if absf(dir.x) > absf(Vector2(best[side_of]).x):
+			best[side_of] = dir
+			reach[side_of] = minf(DECK_REACH, at.distance_to(other) * 0.5)
+	for k in [-1, 1]:
+		var dir: Vector2 = best[k]
+		if dir == Vector2.ZERO:
+			continue
+		var a := to_px(at)
+		var b := to_px(at + dir * float(reach[k]))
+		var side := Vector2(-dir.y, dir.x)
+		draw_line(a, b, OAK_DARK, 10.0, true)
+		draw_line(a, b, ROAD_FILL, 6.4, true)
+		draw_line(a + side * 4.2, b + side * 4.2, OAK_DARK, 1.4, true)
+		draw_line(a - side * 4.2, b - side * 4.2, OAK_DARK, 1.4, true)
+
+
+## "Across the river" with an arrow, on a small plate (ink on paper: 4.5 to 1 and more).
+func _draw_chip(font: Font) -> void:
+	var r := river_chip
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(hud.PAPER, 0.95)
+	style.border_color = Color(BLUE, 0.9)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(9)
+	draw_style_box(style, r)
+	var base := r.position.y + r.size.y / 2.0 + (font.get_ascent(CAPTION_PX) - font.get_descent(CAPTION_PX)) * 0.5
+	draw_string(font, Vector2(r.position.x + 7.0, base), CHIP_TEXT, HORIZONTAL_ALIGNMENT_LEFT, -1, CAPTION_PX, hud.PAPER_INK)
+	var tip := Vector2(r.end.x - 4.0, r.position.y + r.size.y / 2.0)
+	draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-6, -4.5), tip + Vector2(-6, 4.5)]), BLUE)
 
 
 ## The school, drawn on the pin's own square (HomeMarker).
@@ -512,11 +737,17 @@ func _paint_pin(pin: Control) -> void:
 	elif state == "claimed":
 		fill = CLAIMED_FILL
 	var is_chosen: bool = chosen == String(pin.id)
+	# a place that only a vehicle can reach: a blue wash, and a blue ring of dashes round the dark one
+	var by_vehicle := bool(p.get("needs_vehicle", false))
+	if by_vehicle:
+		fill = fill.lerp(VEHICLE_FILL, 0.8)
 	if is_chosen:
 		fill = fill.lerp(CLAIMED_FILL, 0.55)
 	pin.draw_circle(at + Vector2(0, 1.5), PIN_R + 1.0, Color(0, 0, 0, 0.2))
 	pin.draw_circle(at, PIN_R, fill)
 	pin.draw_arc(at, PIN_R, 0.0, TAU, 40, Color(ink, 0.85), 1.6, true)
+	if by_vehicle:
+		draw_vehicle_ring(pin, at, PIN_R + 2.6)
 	draw_glyph(pin, glyph_of(String(p.get("kind", ""))), at, PIN_R * 0.6, ink, fill)
 	if is_chosen:
 		pin.draw_arc(at, PIN_R + 4.0, 0.0, TAU, 48, GOLD_EDGE, 3.0, true)
@@ -563,22 +794,60 @@ func _paint_over(c: Control) -> void:
 			c.draw_dashed_line(pts[i], pts[i + 1], Color(BLUE, 0.75), 2.5, 6.0, true, true)
 		var at := _along(pts, float(party.at))
 		var mode := String(party.mode)
-		c.draw_circle(at + Vector2(0, 1.5), 10.5, Color(0, 0, 0, 0.22))
-		c.draw_circle(at, 10.0, BLUE)
-		c.draw_arc(at, 10.0, 0.0, TAU, 28, Color("#ffffff"), 2.0, true)
 		var font := Fonts.sans(600)
 		var text := str(int(party.count))
-		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-		var base := at.y + (font.get_ascent(12) - font.get_descent(12)) * 0.5
-		c.draw_string(font, Vector2(at.x - w / 2.0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#ffffff"))
+		var kind := String(party.get("vehicle", ""))
+		var reach := 17.0
+		if kind != "":
+			# by vehicle: a blue plate with a small car on it and the number of people beside it
+			var plate := Rect2(at - Vector2(PLATE.x, PLATE.y) / 2.0, PLATE)
+			c.draw_style_box(_plate_style(Color(0, 0, 0, 0.22)), Rect2(plate.position + Vector2(0, 1.5), plate.size))
+			c.draw_style_box(_plate_style(BLUE), plate)
+			draw_glyph(c, "bus" if kind.to_lower().contains("bus") else "car", plate.position + Vector2(13.0, PLATE.y / 2.0 - 0.5), 6.0, Color("#ffffff"), BLUE)
+			var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			var tbase := at.y + (font.get_ascent(12) - font.get_descent(12)) * 0.5
+			c.draw_string(font, Vector2(plate.end.x - 7.0 - tw, tbase), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#ffffff"))
+			reach = PLATE.x / 2.0 + 7.0
+		else:
+			c.draw_circle(at + Vector2(0, 1.5), 10.5, Color(0, 0, 0, 0.22))
+			c.draw_circle(at, 10.0, BLUE)
+			c.draw_arc(at, 10.0, 0.0, TAU, 28, Color("#ffffff"), 2.0, true)
+			var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			var base := at.y + (font.get_ascent(12) - font.get_descent(12)) * 0.5
+			c.draw_string(font, Vector2(at.x - w / 2.0, base), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#ffffff"))
 		if mode != "search":
 			var ahead := _along(pts, clampf(float(party.at) + (0.04 if mode == "out" else -0.04), 0.0, 1.0))
 			var dir := (ahead - at).normalized() if ahead.distance_to(at) > 0.01 else Vector2.RIGHT
-			var tip := at + dir * 17.0
+			var tip := at + dir * reach
 			var side := Vector2(-dir.y, dir.x)
 			c.draw_colored_polygon(PackedVector2Array([tip, tip - dir * 6.0 + side * 4.5, tip - dir * 6.0 - side * 4.5]), BLUE)
+		elif kind != "":
+			c.draw_style_box(_ring_style(), Rect2(at - Vector2(PLATE.x, PLATE.y) / 2.0 - Vector2(4, 4), PLATE + Vector2(8, 8)))
 		else:
 			c.draw_arc(at, 14.0, 0.0, TAU, 28, Color(BLUE, 0.8), 1.5, true)
+
+
+## A party by vehicle: the plate on the road (pixels).
+const PLATE := Vector2(42.0, 22.0)
+
+
+static func _plate_style(color: Color) -> StyleBoxFlat:
+	var st := StyleBoxFlat.new()
+	st.bg_color = color
+	st.set_corner_radius_all(8)
+	if color.a >= 0.9:
+		st.border_color = Color("#ffffff")
+		st.set_border_width_all(2)
+	return st
+
+
+static func _ring_style() -> StyleBoxFlat:
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0, 0, 0, 0)
+	st.border_color = Color(BLUE, 0.8)
+	st.set_border_width_all(2)
+	st.set_corner_radius_all(12)
+	return st
 
 
 ## The point a fraction of the way along a polyline (by its length).
@@ -618,6 +887,14 @@ static func glyph_of(kind: String) -> String:
 		if k.contains(pair[0]):
 			return pair[1]
 	return "generic"
+
+
+## The ring of dashes of a place that only a vehicle reaches (on the pin, and in the legend's key).
+static func draw_vehicle_ring(c: CanvasItem, at: Vector2, radius: float) -> void:
+	var n := 14
+	for i in n:
+		var a0 := TAU * float(i) / float(n)
+		c.draw_arc(at, radius, a0, a0 + TAU / float(n) * 0.58, 4, BLUE, 2.2, true)
 
 
 ## A small mark on a pin (or in the legend): "tick", "flag", "figure" or "shield", on a round card of its own.
@@ -751,6 +1028,51 @@ static func draw_glyph(c: CanvasItem, glyph: String, p: Vector2, s: float, ink: 
 			for i in 3:
 				var x := -0.45 + 0.45 * float(i)
 				c.draw_line(p + Vector2(x - 0.12, 0.28) * s, p + Vector2(x + 0.12, -0.12) * s, paper, maxf(1.0, w * 0.7), true)
+		"arch":
+			# a bridge: the deck, the arch under it and the two piers
+			c.draw_rect(Rect2(p + Vector2(-1.0, -0.45) * s, Vector2(2.0, 0.3) * s), ink)
+			c.draw_arc(p + Vector2(0, 0.85) * s, 0.78 * s, PI, TAU, 16, ink, maxf(1.6, s * 0.3), true)
+			c.draw_rect(Rect2(p + Vector2(-0.95, -0.2) * s, Vector2(0.24, 1.1) * s), ink)
+			c.draw_rect(Rect2(p + Vector2(0.71, -0.2) * s, Vector2(0.24, 1.1) * s), ink)
+			c.draw_line(p + Vector2(-0.8, -0.95) * s, p + Vector2(-0.8, -0.45) * s, ink, maxf(1.0, w * 0.7), true)
+			c.draw_line(p + Vector2(0.8, -0.95) * s, p + Vector2(0.8, -0.45) * s, ink, maxf(1.0, w * 0.7), true)
+		"barrier":
+			# a checkpoint: the guard post, and the boom raised over the road, striped
+			c.draw_rect(Rect2(p + Vector2(-1.0, -0.4) * s, Vector2(0.62, 1.35) * s), ink)
+			c.draw_rect(Rect2(p + Vector2(-0.85, -0.05) * s, Vector2(0.32, 0.3) * s), paper)
+			var root := p + Vector2(-0.45, -0.3) * s
+			var tip := p + Vector2(1.0, -0.85) * s
+			var half := Vector2(0, 0.22) * s
+			for i in 5:
+				var q0 := root.lerp(tip, float(i) / 5.0)
+				var q1 := root.lerp(tip, float(i + 1) / 5.0)
+				c.draw_colored_polygon(PackedVector2Array([q0 - half, q1 - half, q1 + half, q0 + half]), ink if i % 2 == 0 else paper)
+			c.draw_polyline(PackedVector2Array([root - half, tip - half, tip + half, root + half, root - half]), ink, maxf(1.0, w * 0.6), true)
+			c.draw_line(p + Vector2(0.35, 0.95) * s, p + Vector2(0.35, 0.3) * s, ink, maxf(1.2, w * 0.9), true)
+		"snow":
+			# a cold store: a plain box with a snowflake in it
+			c.draw_rect(Rect2(p + Vector2(-0.95, -0.85) * s, Vector2(1.9, 1.75) * s), ink)
+			for i in 3:
+				var a := PI * float(i) / 3.0 + PI / 6.0
+				c.draw_line(p + Vector2(0, 0.02) * s + Vector2.from_angle(a) * 0.62 * s, p + Vector2(0, 0.02) * s - Vector2.from_angle(a) * 0.62 * s, paper, maxf(1.2, w * 0.8), true)
+		"cap":
+			# a university: a mortarboard with its tassel
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(0, -0.8) * s, p + Vector2(1.05, -0.3) * s, p + Vector2(0, 0.2) * s, p + Vector2(-1.05, -0.3) * s]), ink)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.58, 0.0) * s, p + Vector2(0, 0.28) * s, p + Vector2(0.58, 0.0) * s, p + Vector2(0.58, 0.6) * s, p + Vector2(0, 0.88) * s, p + Vector2(-0.58, 0.6) * s]), ink)
+			c.draw_line(p + Vector2(0.85, -0.2) * s, p + Vector2(0.85, 0.5) * s, ink, maxf(1.0, w * 0.7), true)
+			c.draw_circle(p + Vector2(0.85, 0.58) * s, 0.14 * s, ink)
+		"bolt":
+			# a power station: a bolt of lightning
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(0.2, -1.0) * s, p + Vector2(-0.62, 0.12) * s, p + Vector2(-0.04, 0.12) * s, p + Vector2(-0.3, 1.0) * s, p + Vector2(0.65, -0.24) * s, p + Vector2(0.04, -0.24) * s]), ink)
+		"rails":
+			# a rail yard: two rails running off, the sleepers across them
+			for i in 5:
+				var t := float(i) / 4.0
+				var y := 0.85 - 1.7 * t
+				var half := lerpf(0.62, 0.22, t)
+				c.draw_line(p + Vector2(-half - 0.18, y) * s, p + Vector2(half + 0.18, y) * s, ink, maxf(1.2, w * 0.8), true)
+			c.draw_line(p + Vector2(-0.62, 0.95) * s, p + Vector2(-0.22, -0.95) * s, ink, maxf(1.5, w * 1.1), true)
+			c.draw_line(p + Vector2(0.62, 0.95) * s, p + Vector2(0.22, -0.95) * s, ink, maxf(1.5, w * 1.1), true)
 		_:
 			c.draw_colored_polygon(PackedVector2Array([p + Vector2(0, -0.95) * s, p + Vector2(0.8, 0) * s, p + Vector2(0, 0.95) * s, p + Vector2(-0.8, 0) * s]), ink)
 			c.draw_circle(p, 0.25 * s, paper)
@@ -830,6 +1152,16 @@ class Glyph:
 			"road":
 				draw_line(Vector2(1, size.y - 4), Vector2(size.x - 1, 4), ROAD_EDGE, 6.0, true)
 				draw_line(Vector2(1, size.y - 4), Vector2(size.x - 1, 4), ROAD_FILL, 3.4, true)
+			"vehicle":
+				# a place only a vehicle reaches: the blue wash and the ring of dashes
+				draw_circle(at, 8.0, VEHICLE_FILL)
+				draw_arc(at, 8.0, 0.0, TAU, 24, Color(0.2, 0.17, 0.1, 0.85), 1.4, true)
+				Self.draw_vehicle_ring(self, at, 10.0)
+			"car":
+				# a party in a vehicle: the plate with the small car
+				var plate := Rect2(at - Vector2(10.0, 7.0), Vector2(20.0, 14.0))
+				draw_style_box(Self._plate_style(BLUE), plate)
+				Self.draw_glyph(self, "car", plate.get_center() + Vector2(0, -0.5), 4.6, Color("#ffffff"), BLUE)
 			_:
 				Self.draw_badge(self, mark, at, 8.0)
 
@@ -840,7 +1172,7 @@ static func make_legend(h, color: Color) -> HFlowContainer:
 	flow.add_theme_constant_override("h_separation", 14)
 	flow.add_theme_constant_override("v_separation", 0)
 	flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for entry in [["tick", "Cleared"], ["flag", "Your outpost"], ["nest", "Nest (strength)"], ["figure", "Someone hiding"], ["shield", "Garrison"], ["party", "Party out"], ["unknown", "Unexplored"]]:
+	for entry in [["tick", "Cleared"], ["flag", "Your outpost"], ["nest", "Nest (strength)"], ["figure", "Someone hiding"], ["shield", "Garrison"], ["party", "Party out"], ["car", "Party in a vehicle"], ["vehicle", "By vehicle only"], ["unknown", "Unexplored"]]:
 		var item := HBoxContainer.new()
 		item.add_theme_constant_override("separation", 3)
 		item.mouse_filter = Control.MOUSE_FILTER_IGNORE

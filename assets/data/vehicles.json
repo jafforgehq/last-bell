@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "_doc": "The vehicles of the town (round 13, scripts/sim/vehicles.gd). name; seats (people it carries: a party on foot is at most three); speed (the road's hours are divided by it); burn (fuel for each hour driven); cargo (what the party's loot is multiplied by); hp (its condition, 0 to 100: a bad trip takes some, a vehicle at 0 is lost); art: the picture in assets/objects the gate's parking draws, w and h in tiles (sized to the picture's own shape so that it is not squashed). A place of the town may hold one (`vehicle` in town.json, one of these ids).",
+  "kinds": {
+    "sedan":  {"name": "Sedan",  "seats": 3, "speed": 2.4, "burn": 3.0, "cargo": 1.2, "hp": 70, "art": "174_car_s0",    "w": 2.2, "h": 4.4},
+    "pickup": {"name": "Pickup", "seats": 2, "speed": 2.2, "burn": 3.5, "cargo": 1.7, "hp": 90, "art": "116_pickup", "w": 2.2, "h": 4.15},
+    "van":    {"name": "Van",    "seats": 4, "speed": 2.2, "burn": 4.0, "cargo": 1.5, "hp": 80, "art": "207_pickup", "w": 2.2, "h": 4.07},
+    "bus":    {"name": "Bus",    "seats": 6, "speed": 1.8, "burn": 6.0, "cargo": 1.4, "hp": 100, "art": "175_bus_s0", "w": 2.6, "h": 8.07}
+  }
+}

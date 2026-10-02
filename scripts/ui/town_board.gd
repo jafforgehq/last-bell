@@ -12,6 +12,11 @@
 ##   - The party is one to three people who are free to go, as in the old dialog: the leader first (the one selected
 ##     when the page was opened, or the first who is free), the others on a click. A lone scavenger brings back less and
 ##     a leader finds more; the page says so.
+##   - Round 13: when the colony has a parked vehicle there is a row (under the map's key on a wide page, under the people
+##     on a narrow one), "On foot" or one chip for each parked vehicle (its name, its seats, the fuel the trip to the chosen place burns, the trip's hours by it). The
+##     vehicle that is chosen sets the size of the party (its seats, in place of three) and the trip's hours, and goes
+##     with Go, Scout and Clear; what the rules refuse (the fuel, the seats, a place too far to walk to) is told on the
+##     buttons as the other reasons are. A place that only a vehicle reaches has a tag, and one that holds a vehicle says so.
 ##   - Go searches the place for loot. Scout looks the way over (no loot: it shows the places near). Clear turns the
 ##     dead out of the place (a nest needs two; the chance is told in words from the party's Shooting against the
 ##     place's danger, as the rules throw it). Claim makes a cleared place with an outpost yours, for scrap. Garrison
@@ -73,6 +78,12 @@ const FIRST_LIGHT_H := 6.5
 const LEAVE_BY_H := 10.0
 ## The party's tags and the effects of the party on a trip.
 const ACTION_WORDS := {"loot": "looting", "scout": "scouting", "clear": "clearing"}
+## What a place may give, in the order its chips are shown: the stocks, and the fuel of round 13.
+const LOOT_ORDER := ["food", "water", "scrap", "ammo", "meds", "fuel"]
+const LOOT_NAME := {"food": "Food", "water": "Water", "scrap": "Scrap", "ammo": "Ammo", "meds": "Medicine", "fuel": "Fuel"}
+## A vehicle's chip in the picker: its size.
+const RIDE_W := 168.0
+const RIDE_H := 62.0
 
 var hud
 var sim
@@ -82,6 +93,8 @@ var scav
 var party: Array = []
 ## The place that is chosen ("" until one is).
 var site_id := ""
+## The vehicle the party goes in (the id of one of the fleet that is parked), or "" on foot.
+var vehicle_id := ""
 ## id -> the places as the board offers them (scavenge.available_sites: the known ones).
 var sites := {}
 
@@ -107,6 +120,7 @@ var out_section: VBoxContainer
 var actions_block: VBoxContainer
 var _arranged_wide := true
 var go_button: Button
+var play_button: Button
 var scout_button: Button
 var clear_button: Button
 var claim_button: Button
@@ -127,6 +141,13 @@ var blurb_label: Label
 var facts := {}
 var pip_row: HBoxContainer
 var chips_box: HFlowContainer
+## The row of the picker for the vehicles (round 13): shown only while one is parked; "" -> the "On foot" chip, a
+## vehicle's id -> its chip.
+var ride_box: VBoxContainer
+var ride_flow: HFlowContainer
+var ride_tip: Label
+var ride_chips := {}
+var _ride_sig := ""
 ## person id -> {"chip": Button, "person": Person, "lead": Control (the star of the one who leads)}
 var chips := {}
 ## action -> its button. The lines under the buttons say why those that are off are off, those with the same
@@ -241,6 +262,8 @@ func _build() -> void:
 	detail_col.add_child(card)
 	detail_col.add_child(_build_party())
 	body.add_child(detail_col)
+	# the ride is under the map's key while the page is wide (the left column has the room), under the people when it is narrow
+	_reparent(ride_box, map_col)
 
 	# the foot, which never scrolls
 	var foot: VBoxContainer = hud._vbox(6)
@@ -428,6 +451,7 @@ func _build_card() -> PanelContainer:
 	danger_value.add_child(danger_words)
 	_fact(grid, "danger", "Danger", danger_value, danger_words)
 	_fact(grid, "trip", "Trip", _para(13, hud.PAPER_INK))
+	_fact(grid, "vehicle", "Vehicle", _para(13, hud.PAPER_INK))
 	# what it is likely to give: the hint and what each stock is worth
 	var loot_box: VBoxContainer = hud._vbox(3)
 	var loot_hint := _para(13, hud.PAPER_INK)
@@ -479,6 +503,24 @@ func _build_party() -> VBoxContainer:
 	chip_flow.add_theme_constant_override("v_separation", 6)
 	chip_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	party_box.add_child(chip_flow)
+	# the ride: on foot, or in one of the vehicles that are parked (only there when one is)
+	ride_box = hud._vbox(6)
+	var ride_caption := HFlowContainer.new()
+	ride_caption.add_theme_constant_override("h_separation", 10)
+	ride_caption.add_theme_constant_override("v_separation", 0)
+	ride_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ride_caption.add_child(hud._caps("Ride", hud.PAPER_INK2))
+	ride_tip = hud._label("", Fonts.sans(400), 12, hud.PAPER_INK3)
+	ride_tip.size_flags_vertical = Control.SIZE_SHRINK_END
+	ride_caption.add_child(ride_tip)
+	ride_box.add_child(ride_caption)
+	ride_flow = HFlowContainer.new()
+	ride_flow.add_theme_constant_override("h_separation", 8)
+	ride_flow.add_theme_constant_override("v_separation", 6)
+	ride_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ride_box.add_child(ride_flow)
+	ride_box.visible = false
+	party_box.add_child(ride_box)
 	_note_label = _para(13, WHY_INK)
 	_note_label.visible = false
 	party_box.add_child(_note_label)
@@ -493,7 +535,7 @@ func _build_actions() -> HFlowContainer:
 	flow.add_theme_constant_override("h_separation", 8)
 	flow.add_theme_constant_override("v_separation", 6)
 	flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var defs := [["loot", "Go", true], ["scout", "Scout", false], ["clear", "Clear", false], ["claim", "Claim", false], ["garrison", "Garrison", false], ["recall", "Recall", false]]
+	var defs := [["loot", "Go", true], ["play", "Take control", false], ["scout", "Scout", false], ["clear", "Clear", false], ["claim", "Claim", false], ["garrison", "Garrison", false], ["recall", "Recall", false]]
 	for d in defs:
 		var b := _button(String(d[1]), bool(d[2]))
 		b.custom_minimum_size = Vector2(BUTTON_W, BUTTON_H)
@@ -502,6 +544,7 @@ func _build_actions() -> HFlowContainer:
 		flow.add_child(b)
 		buttons[String(d[0])] = b
 	go_button = buttons.loot
+	play_button = buttons.play
 	scout_button = buttons.scout
 	clear_button = buttons.clear
 	claim_button = buttons.claim
@@ -523,16 +566,19 @@ func _layout() -> void:
 	body.vertical = not wide
 	foot_body.vertical = not wide
 	_arrange(wide)
-	var aspect: float = float(town.board.h) / maxf(float(town.board.w), 1.0)
 	var chrome: float = _head.get_combined_minimum_size().y + _foot.get_combined_minimum_size().y + frame.get_minimum_size().y + 16.0
 	var room := maxf(120.0, size.y - 2.0 * MARGIN - chrome)
 	var below: float = legend.get_combined_minimum_size().y + 6.0
 	var map_w: float
 	if wide:
 		var detail_w := clampf(inner * 0.33, DETAIL_MIN_W, DETAIL_MAX_W)
-		map_w = inner - COLUMN_GAP - detail_w
-		# the whole map in view, with its key and the parties out, if the window is tall enough for that
-		map_w = minf(map_w, (room - below) / aspect)
+		var room_w := inner - COLUMN_GAP - detail_w
+		map_w = room_w
+		# the whole map in view, with its key and the ride under it, if the window is tall enough for that (the ride wraps
+		# by the map's width, so it is asked again with the width the map came to)
+		for _i in 2:
+			var under := below + ((_ride_height(map_w) + 6.0) if ride_box.visible else 0.0)
+			map_w = minf(room_w, map.width_for_height(room - under))
 		detail_col.custom_minimum_size.x = detail_w
 		detail_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		# the buttons are under the card, at the right of the foot
@@ -540,7 +586,7 @@ func _layout() -> void:
 		foot_right.size_flags_horizontal = Control.SIZE_SHRINK_END
 	else:
 		# the card goes under the map: the map takes about half the room, so that the card is not far down
-		map_w = minf(inner, (0.55 * room - below) / aspect)
+		map_w = minf(inner, map.width_for_height(0.55 * room - below))
 		detail_col.custom_minimum_size.x = 0.0
 		detail_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		foot_right.custom_minimum_size.x = 0.0
@@ -549,11 +595,21 @@ func _layout() -> void:
 	map_col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN if wide else Control.SIZE_EXPAND_FILL
 	map.size_flags_horizontal = Control.SIZE_FILL if wide else Control.SIZE_SHRINK_CENTER
 	map_w = maxf(map_w, MAP_MIN_W)
+	# the pins keep apart: a wide town (the city across the river) gets the width it needs, and the page scrolls
+	map_w = maxf(map_w, minf(map.width_for_clear_pins(), maxf(inner, 200.0)))
 	map_w = minf(map_w, maxf(inner, 200.0))
-	map.custom_minimum_size = Vector2(map_w, map_w * aspect)
+	map.custom_minimum_size = Vector2(map_w, map.height_for_width(map_w))
 	map_col.custom_minimum_size.x = map_w if wide else 0.0
 	# the body scrolls when the window is too short for everything
 	scroll.custom_minimum_size.y = minf(body.get_combined_minimum_size().y, room)
+
+
+## How tall the ride row is when it is `width` wide: its caption, and its chips in as many rows as the width needs.
+func _ride_height(width: float) -> float:
+	var n := maxi(ride_chips.size(), 1)
+	var per_row := maxi(1, int(floorf((width + 8.0) / (RIDE_W + 8.0))))
+	var rows := ceili(float(n) / float(per_row))
+	return 22.0 + 6.0 + float(rows) * RIDE_H + float(rows - 1) * 6.0
 
 
 ## Puts the parties out where this width wants them: in the foot's left half (with the keys), or at the end of the body
@@ -563,6 +619,10 @@ func _arrange(wide: bool) -> void:
 		return
 	_arranged_wide = wide
 	_reparent(out_section, foot_left if wide else body)
+	if wide:
+		_reparent(ride_box, map_col)
+	else:
+		_reparent(ride_box, party_box, chip_flow.get_index() + 1)
 	if wide:
 		foot_left.move_child(out_section, 0)
 	foot_left.visible = wide
@@ -604,8 +664,16 @@ func _reveal_card() -> void:
 		scroll.scroll_vertical = maxi(0, int(top) - 6)
 
 
-## Puts `p` in the party, or takes them out (the first of the party leads). Three is the most, and the party
-## is never empty while someone could go. True if the party changed.
+## How many can go: three on foot, the seats of the vehicle that is chosen.
+func party_limit() -> int:
+	if vehicle_id != "":
+		return int(sim.vehicles.kind_of(vehicle_id).get("seats", scav.MAX_PARTY_TOWN))
+	return int(scav.MAX_PARTY_TOWN)
+
+
+## Puts `p` in the party, or takes them out (the first of the party leads). Three is the most on foot (a vehicle's
+## seats in a vehicle: the rules' own words say so), and the party is never empty while someone could go. True if the
+## party changed.
 func toggle_member(p) -> bool:
 	if not chips.has(p.id):
 		return false
@@ -614,14 +682,49 @@ func toggle_member(p) -> bool:
 			return false
 		party.erase(p)
 	else:
-		if party.size() >= scav.MAX_PARTY_TOWN:
-			_say("Three is the most.", "warn")
+		if party.size() >= party_limit():
+			if vehicle_id != "":
+				_say(String(sim.vehicles.why_not_use(vehicle_id, party.size() + 1, "")), "warn")
+			else:
+				_say("Three is the most.", "warn")
 			return false
 		party.append(p)
 	error_label.visible = false
 	hud.ui_sound("ui_click")
 	refresh(true)
 	return true
+
+
+## Chooses how the party goes: a parked vehicle's id, or "" for on foot. False if that vehicle is not parked (the
+## page says so). The party keeps its people: one that is too big for the seats cannot go, and the buttons say why.
+func choose_vehicle(id: String) -> bool:
+	if id != "" and not _is_parked(id):
+		_say("That vehicle is not at the gate.", "warn")
+		return false
+	if id == vehicle_id:
+		return true
+	vehicle_id = id
+	error_label.visible = false
+	hud.ui_sound("ui_click")
+	refresh(true)
+	return true
+
+
+func _is_parked(id: String) -> bool:
+	for v in sim.vehicles.parked():
+		if String(v.id) == id:
+			return true
+	return false
+
+
+## "the pickup" ("" on foot): the way the party goes, in words.
+func _ride_name(id: String) -> String:
+	return String(sim.vehicles.name_of(id)).to_lower() if id != "" else ""
+
+
+## "7" or "7.5": a number of fuel.
+static func _num(v: float) -> String:
+	return str(snappedf(v, 0.1)).trim_suffix(".0")
 
 
 # ----------------------------------------------------------------- the reasons --
@@ -639,10 +742,16 @@ func reason_for(action: String) -> String:
 				return why
 			if party.is_empty():
 				return "Pick who goes."
-			var place_why: String = scav.why_not_action(party, site_id, action)
+			if vehicle_id == "" and party.size() > int(scav.MAX_PARTY_TOWN):
+				return "Three is the most on foot: leave someone at home."
+			var place_why: String = scav.why_not_action(party, site_id, action, vehicle_id)
 			if place_why == "Picked over." and String(s.get("note", "")) != "":
 				return String(s.note)
 			return place_why
+		"play":
+			if not hud.on_raid.is_valid():
+				return "Not in this game."
+			return reason_for(_played_action(s))
 		"claim":
 			if String(s.state) == "claimed":
 				return "It is already your outpost."
@@ -655,6 +764,8 @@ func reason_for(action: String) -> String:
 		"garrison":
 			if String(s.state) != "claimed":
 				return "Only your own outpost can be held."
+			if bool(s.get("needs_vehicle", false)):
+				return "Too far to walk to and hold."
 			if party.is_empty():
 				return "Pick who stays."
 			if String(sim.phase) != "day":
@@ -708,13 +819,14 @@ func act(action: String) -> bool:
 	match action:
 		"loot", "scout", "clear":
 			var going: Array = party.duplicate()
-			var sent: bool = scav.send(going, site_id, action)
+			var ride := vehicle_id
+			var sent: bool = scav.send(going, site_id, action, ride)
 			if not sent:
 				var again: String = scav.why_not()
 				_say(again if again != "" else "They could not go out just now.", "warn")
 				hud.ui_sound("ui_error")
 				return false
-			var text := "%s set off %s." % [_names(going), _errand(action, where)]
+			var text := "%s set off %s%s." % [_names(going), _errand(action, where), " in the %s" % _ride_name(ride) if ride != "" else ""]
 			var out_party: Dictionary = _party_of(going[0])
 			if not out_party.is_empty():
 				_departures[int(out_party.n)] = float(sim.clock_min)
@@ -725,6 +837,8 @@ func act(action: String) -> bool:
 			close()
 			hud.toast(text)
 			return true
+		"play":
+			return _play(s, where)
 		"claim":
 			if not town.claim(site_id):
 				_say("It cannot be claimed.", "warn")
@@ -757,6 +871,41 @@ func act(action: String) -> bool:
 			_say("%s is on the way home from %s." % [_names(who), where] if not who.is_empty() else "Nobody was there.", "ok")
 			return true
 	return false
+
+
+## The action a played trip is sent as: looting, or clearing when there is nothing here to take but the dead.
+func _played_action(s: Dictionary) -> String:
+	return "loot" if (s.get("actions", []) as Array).has("loot") else "clear"
+
+
+## Takes control of the party: the page closes, the colony waits and the player plays the place (main.gd's
+## `open_raid`); what comes of it is sent as the trip's result (`scavenge.send_played`).
+func _play(s: Dictionary, where: String) -> bool:
+	var going: Array = party.duplicate()
+	var ride := vehicle_id
+	var action := _played_action(s)
+	var place: Dictionary = town.place(site_id).duplicate(true)
+	place["id"] = site_id
+	# a place that has been cleared has few of the dead left (the dice zero its danger and nest too)
+	if town.state_of(site_id) == "cleared" or town.state_of(site_id) == "claimed":
+		place["cleared"] = true
+	var id := site_id
+	var penalty: float = scav.raid_penalty(id)
+	var hud_ref = hud
+	var scav_ref = scav
+	var sim_ref = sim
+	hud.ui_sound("ui_confirm")
+	close()
+	var done := func(result: Dictionary) -> void:
+		if scav_ref.send_played(going, id, action, ride, result):
+			hud_ref.toast("%s set off %s." % [_names(going), _errand(action, where)])
+		else:
+			hud_ref.toast("They could not go out just now.")
+	var scene = hud_ref.on_raid.call(going, place, ride, penalty, done)
+	if scene == null:
+		hud_ref.toast("They could not go out just now.")
+		return false
+	return true
 
 
 ## "to look the place over", "to search the pharmacy": the errand in words.
@@ -796,6 +945,9 @@ func _signature() -> String:
 		sig += "f%s;" % p.id
 	for p in party:
 		sig += "m%s;" % p.id
+	sig += "|%s|%d|" % [vehicle_id, int(float(sim.vehicles.fuel))]
+	for v in sim.vehicles.fleet:
+		sig += "v%s:%s:%d;" % [v.id, v.state, int(float(v.hp))]
 	return sig
 
 
@@ -814,9 +966,11 @@ func refresh(force: bool = false) -> void:
 	if site_id != "" and not sites.has(site_id):
 		site_id = ""
 	_sync_party()
+	_sync_vehicle()
 	_refresh_map()
 	_refresh_card()
 	_refresh_party()
+	_refresh_ride()
 	_refresh_buttons()
 	_refresh_out()
 
@@ -831,6 +985,12 @@ func _sync_party() -> void:
 	if keep.is_empty() and not free_people.is_empty():
 		keep.append(free_people[0])
 	party = keep
+
+
+## The vehicle that was chosen is still parked, or the party goes on foot.
+func _sync_vehicle() -> void:
+	if vehicle_id != "" and not _is_parked(vehicle_id):
+		vehicle_id = ""
 
 
 func _refresh_map() -> void:
@@ -887,8 +1047,9 @@ func _party_markers() -> Array:
 		if not sites.has(id) and town.place(id).is_empty():
 			continue
 		var action := String(party_out.get("action", "loot"))
-		var trip_h: float = maxf(scav.action_hours(id, action), 0.01)
-		var one_way: float = town.hours_to(id)
+		var ride := String(party_out.get("vehicle", ""))
+		var trip_h: float = maxf(scav.action_hours(id, action, ride), 0.01)
+		var one_way: float = (sim.vehicles.drive_hours(id, ride) / 2.0) if ride != "" else town.hours_to(id)
 		var search := maxf(0.0, trip_h - 2.0 * one_way)
 		# how much of the trip is gone: from when they set off (the rules do not keep the hour: the page does, from
 		# the moment it sees them go; a party seen first later is taken to have set off one trip's time before it is due,
@@ -920,7 +1081,7 @@ func _party_markers() -> Array:
 		else:
 			at = 1.0 - (share - searched) / maxf(1.0 - searched, 0.0001)
 			mode = "back"
-		out.append({"n": int(party_out.n), "count": party_out.members.size(), "path": route_to(id), "at": clampf(at, 0.0, 1.0), "mode": mode})
+		out.append({"n": int(party_out.n), "count": party_out.members.size(), "path": route_to(id), "at": clampf(at, 0.0, 1.0), "mode": mode, "vehicle": String(sim.vehicles.kind_of(ride).get("name", "")) if ride != "" else ""})
 	return out
 
 
@@ -998,6 +1159,8 @@ func _refresh_card() -> void:
 	var strength := int(s.get("nest", {}).get("strength", 0)) if s.get("nest", {}) is Dictionary else 0
 	if strength > 0 and state != "cleared" and state != "claimed":
 		tag_flow.add_child(_tag("Nest %d" % strength, Map.RED))
+	if bool(s.get("needs_vehicle", false)):
+		tag_flow.add_child(_tag("By vehicle only", Map.BLUE))
 	tag_flow.visible = tag_flow.get_child_count() > 0
 	blurb_label.text = String(s.get("blurb", ""))
 
@@ -1018,6 +1181,13 @@ func _refresh_card() -> void:
 
 	# the trip
 	_fact_set("trip", _trip_text(s))
+	# a vehicle that stands in the place: looting (or clearing) it may get it running
+	var here_kind := String(s.get("vehicle_here", ""))
+	if here_kind != "" and not sim.vehicles.kind(here_kind).is_empty():
+		var kind_name := String(sim.vehicles.kind(here_kind).name).to_lower()
+		_fact_set("vehicle", "%s %s stands here: loot it to try to get it running." % ["An" if kind_name.substr(0, 1) in ["a", "e", "i", "o", "u"] else "A", kind_name])
+	else:
+		_fact_set("vehicle", "", false)
 	# what it is likely to give
 	_fact_set("loot", String(s.get("loot_hint", "")))
 	for c in chips_box.get_children():
@@ -1026,11 +1196,11 @@ func _refresh_card() -> void:
 	var loot = s.get("loot", {})
 	var extra = s.get("extra", {})
 	if loot is Dictionary:
-		for k in Dialog.STOCK_ORDER:
+		for k in LOOT_ORDER:
 			if loot.has(k):
 				chips_box.add_child(_chip(k, _range_text(loot[k]), hud.PAPER_INK))
 		if extra is Dictionary:
-			for k in Dialog.STOCK_ORDER:
+			for k in LOOT_ORDER:
 				if extra.has(k):
 					chips_box.add_child(_chip(k, "sometimes", hud.PAPER_INK3))
 	chips_box.visible = chips_box.get_child_count() > 0
@@ -1076,9 +1246,17 @@ func _nest_lean(id: String) -> String:
 
 
 func _trip_text(s: Dictionary) -> String:
+	var by_vehicle := vehicle_id != ""
+	if bool(s.get("needs_vehicle", false)) and not by_vehicle:
+		return "Too far to walk: it takes a vehicle."
 	var hours := float(s.get("trip_hours", 0.0))
+	if by_vehicle:
+		hours = scav.action_hours(site_id, "loot", vehicle_id)
 	var words := Map.hours_text(hours)
-	var text := "%s there and back." % (words.substr(0, 1).to_upper() + words.substr(1))
+	var text := "%s there and back" % (words.substr(0, 1).to_upper() + words.substr(1))
+	if by_vehicle:
+		text += " by the %s (%s fuel)" % [_ride_name(vehicle_id), _num(sim.vehicles.fuel_for(site_id, vehicle_id))]
+	text += "."
 	var start := clampf(float(sim.hour), FIRST_LIGHT_H, LEAVE_BY_H) if scav.can_send() else 7.0
 	var back := start + hours
 	if back >= float(sim.seasons.dusk_hour()):
@@ -1100,7 +1278,7 @@ func _chip(stock: String, text: String, color: Color) -> Control:
 	ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(ic)
 	row.add_child(hud._label(text, Fonts.cond(600), 14, color))
-	row.tooltip_text = Dialog.STOCK_NAME.get(stock, stock)
+	row.tooltip_text = LOOT_NAME.get(stock, stock)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
 	return row
 
@@ -1197,7 +1375,8 @@ func _refresh_party() -> void:
 	if free_people.is_empty():
 		_tip_label.text = "Nobody is free to go."
 	else:
-		_tip_label.text = "%sClick someone to bring them along. Three is the most." % ("%s leads. " % party[0].first if not party.is_empty() else "")
+		var most := "Three is the most." if vehicle_id == "" else "The %s seats %d." % [_ride_name(vehicle_id), party_limit()]
+		_tip_label.text = "%sClick someone to bring them along. %s" % ["%s leads. " % party[0].first if not party.is_empty() else "", most]
 	var effect := ""
 	if party.size() == 1:
 		effect = "A lone scavenger brings back less."
@@ -1274,13 +1453,126 @@ func _style_chip(b: Button, in_party: bool, leads: bool) -> void:
 		b.add_theme_stylebox_override(state, s)
 
 
+## The ride: "On foot" and a chip for each vehicle that is parked, with what the trip to the chosen place would take of
+## each (fuel, hours). Only there while a vehicle is parked. The chips are made again only when what they say changes.
+func _refresh_ride() -> void:
+	var parked: Array = sim.vehicles.parked()
+	ride_box.visible = not parked.is_empty()
+	if parked.is_empty():
+		for c in ride_flow.get_children():
+			ride_flow.remove_child(c)
+			c.queue_free()
+		ride_chips.clear()
+		_ride_sig = ""
+		return
+	var entries := ride_entries(parked)
+	var sig := ""
+	for e in entries:
+		sig += "%s|%s|%s|%s|%s;" % [e.id, e.name, e.l2, e.l3, str(e.warn)]
+	if sig != _ride_sig:
+		_ride_sig = sig
+		for c in ride_flow.get_children():
+			ride_flow.remove_child(c)
+			c.queue_free()
+		ride_chips.clear()
+		for e in entries:
+			var chip := _ride_chip(e)
+			ride_flow.add_child(chip)
+	for e in entries:
+		var entry: Dictionary = ride_chips.get(e.id, {})
+		if entry.is_empty():
+			continue
+		var chosen: bool = String(e.id) == vehicle_id
+		_style_chip(entry.chip, chosen, false)
+		var chip_tip := String(e.tip)
+		entry.chip.tooltip_text = ("%s\nGoing this way. Click \"On foot\" to walk." % chip_tip if String(e.id) != "" else "%s\nGoing on foot." % chip_tip) if chosen else "%s\nClick to go this way." % chip_tip
+	ride_tip.text = "The tank has %s fuel." % _num(sim.vehicles.fuel)
+
+
+## What each way to go says for the chosen place: [{"id" ("" on foot), "name", "l2", "l3", "warn", "tip", "glyph"}]. The
+## fuel and the hours are those of the trip to the place that is chosen; with none chosen the vehicle's burn is told.
+func ride_entries(parked: Array) -> Array:
+	var s: Dictionary = sites.get(site_id, {})
+	var has := site_id != "" and not s.is_empty()
+	var far: bool = has and bool(s.get("needs_vehicle", false))
+	var out: Array = []
+	var foot := {"id": "", "name": "On foot", "l2": "Up to %d people" % int(scav.MAX_PARTY_TOWN), "l3": "", "warn": far, "glyph": "foot",
+		"tip": "On foot: up to %d people, the road at a walking pace, no fuel." % int(scav.MAX_PARTY_TOWN)}
+	if far:
+		foot.l3 = "Too far to walk"
+	elif has:
+		foot.l3 = Map.hours_text(float(s.get("trip_hours", 0.0)))
+	out.append(foot)
+	for v in parked:
+		var k: Dictionary = sim.vehicles.kind_of(String(v.id))
+		var l2 := "%d seats" % int(k.seats)
+		var l3 := ""
+		var warn := false
+		if has:
+			var need: float = sim.vehicles.fuel_for(site_id, String(v.id))
+			l2 += ", fuel %s" % _num(need)
+			l3 = Map.hours_text(scav.action_hours(site_id, "loot", String(v.id)))
+			warn = float(sim.vehicles.fuel) + 1.0e-9 < need
+		else:
+			l3 = "burns %s an hour" % _num(float(k.burn))
+		if party.size() > int(k.seats):
+			warn = true
+		var worn := int(roundf(100.0 * float(v.hp) / maxf(float(k.hp), 1.0)))
+		out.append({"id": String(v.id), "name": String(k.name), "l2": l2, "l3": l3, "warn": warn, "glyph": "bus" if String(v.kind).contains("bus") else "car",
+			"tip": "%s: %d seats, %s times a walker's pace, burns %s fuel an hour, brings back %s times the loot. Condition %d%%." % [String(k.name), int(k.seats), _num(float(k.speed)), _num(float(k.burn)), _num(float(k.cargo)), worn]})
+	return out
+
+
+## A vehicle's chip, or the "On foot" one: a picture, its name, its seats and fuel, the hours.
+func _ride_chip(e: Dictionary) -> Button:
+	var b := Button.new()
+	b.focus_mode = Control.FOCUS_ALL
+	b.mouse_filter = Control.MOUSE_FILTER_PASS
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.custom_minimum_size = Vector2(RIDE_W, RIDE_H)
+	b.add_theme_stylebox_override("focus", Kit.focus_box(Dialog.GOLD_EDGE, 5))
+	var pad := MarginContainer.new()
+	pad.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pad.add_theme_constant_override("margin_left", 7)
+	pad.add_theme_constant_override("margin_right", 6)
+	pad.add_theme_constant_override("margin_top", 4)
+	pad.add_theme_constant_override("margin_bottom", 4)
+	var row: HBoxContainer = hud._hbox(7)
+	var icon := RideIcon.new()
+	icon.glyph = String(e.glyph)
+	icon.ink = hud.PAPER_INK
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
+	var text: VBoxContainer = hud._vbox(0)
+	text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var name_label: Label = hud._label(String(e.name), Fonts.cond(700), 16, hud.PAPER_INK)
+	text.add_child(name_label)
+	var warn_ink: Color = WHY_INK if bool(e.warn) else hud.PAPER_INK2
+	var l2: Label = hud._label(String(e.l2), Fonts.sans(400 if not bool(e.warn) else 600), 12, warn_ink)
+	text.add_child(l2)
+	var l3: Label = hud._label(String(e.l3), Fonts.sans(400), 12, WHY_INK if String(e.l3) == "Too far to walk" else hud.PAPER_INK2)
+	l3.visible = String(e.l3) != ""
+	text.add_child(l3)
+	row.add_child(text)
+	pad.add_child(row)
+	b.add_child(pad)
+	var id := String(e.id)
+	b.pressed.connect(choose_vehicle.bind(id))
+	b.set_meta("vehicle", id)
+	ride_chips[id] = {"chip": b, "name": name_label, "l2": l2, "l3": l3}
+	_style_chip(b, false, false)
+	return b
+
+
 func _refresh_buttons() -> void:
 	var s: Dictionary = sites.get(site_id, {})
 	var state := String(s.get("state", ""))
 	var has_outpost: bool = s.get("outpost", {}) is Dictionary and not (s.get("outpost", {}) as Dictionary).is_empty()
 	var claimed := state == "claimed"
 	var shown := {
-		"loot": true, "scout": true, "clear": true,
+		"loot": true, "scout": true, "clear": true, "play": hud.on_raid.is_valid(),
 		"claim": site_id == "" or has_outpost,
 		"garrison": site_id == "" or claimed,
 		"recall": site_id == "" or claimed,
@@ -1340,12 +1632,14 @@ func _action_tip(action: String, s: Dictionary) -> String:
 	var where := String(s.name)
 	match action:
 		"loot":
-			return "Send the party to search %s for loot: %s." % [where, Map.hours_text(scav.action_hours(site_id, "loot"))]
+			return "Send the party to search %s for loot: %s." % [where, Map.hours_text(scav.action_hours(site_id, "loot", vehicle_id))]
 		"scout":
-			return "Send the party to look the way over: it shows the places near %s, and brings nothing back: %s." % [where, Map.hours_text(scav.action_hours(site_id, "scout"))]
+			return "Send the party to look the way over: it shows the places near %s, and brings nothing back: %s." % [where, Map.hours_text(scav.action_hours(site_id, "scout", vehicle_id))]
+		"play":
+			return "Play the trip yourself: your squad goes in and you give the orders. Search what you can, shoot what you must, and get out."
 		"clear":
 			var chance := clear_chance(party, site_id)
-			return "Turn the dead out of %s (and end its nest, if it has one): %s, %s. A failed attempt hurts." % [where, chance_words(chance), Map.hours_text(scav.action_hours(site_id, "clear"))]
+			return "Turn the dead out of %s (and end its nest, if it has one): %s, %s. A failed attempt hurts." % [where, chance_words(chance), Map.hours_text(scav.action_hours(site_id, "clear", vehicle_id))]
 		"claim":
 			return "Make %s your outpost: %d scrap now, then %s a day." % [where, int(s.get("outpost", {}).get("cost", 0)), _yield_text(s.get("outpost", {}).get("yield", {}))]
 		"garrison":
@@ -1361,7 +1655,7 @@ func _action_tip(action: String, s: Dictionary) -> String:
 func _refresh_out() -> void:
 	var sig := ""
 	for party_out in scav.parties:
-		sig += "%d:%d:%s;" % [int(party_out.n), int(float(party_out.return_at)), ",".join(party_out.members)]
+		sig += "%d:%d:%s:%s;" % [int(party_out.n), int(float(party_out.return_at)), ",".join(party_out.members), String(party_out.get("vehicle", ""))]
 	for id in town.garrison:
 		sig += "g%s:%s;" % [id, ",".join(town.garrison_of(id))]
 	sig += "%d" % floori(sim.clock_min / 5.0)
@@ -1381,7 +1675,9 @@ func _refresh_out() -> void:
 					people.append(p)
 		var action := String(party_out.get("action", "loot"))
 		var where := String(town.place(String(party_out.site)).get("name", String(party_out.site)))
-		out_box.add_child(_slip(people, "%s, %s %s: %s." % [_names(people), String(ACTION_WORDS.get(action, action)), where, _due_text(party_out)]))
+		var ride := String(party_out.get("vehicle", ""))
+		var in_it := " in the %s" % _ride_name(ride) if ride != "" else ""
+		out_box.add_child(_slip(people, "%s, %s %s%s: %s." % [_names(people), String(ACTION_WORDS.get(action, action)), where, in_it, _due_text(party_out)]))
 	for id in town.garrison:
 		var holders: Array = []
 		for pid in town.garrison_of(id):
@@ -1502,3 +1798,23 @@ func _input(ev: InputEvent) -> void:
 		return
 	if is_inside_tree():
 		get_viewport().set_input_as_handled()
+
+
+# ------------------------------------------------------------------- the parts --
+
+## The little picture on a ride's chip: a car or a bus (the map's own glyphs), or the walker of "On foot".
+class RideIcon:
+	extends Control
+	var glyph := "car"
+	var ink := Color.BLACK
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(30, 30)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var at := size / 2.0
+		if glyph == "foot":
+			Map.draw_badge(self, "figure", at, 11.0)
+		else:
+			Map.draw_glyph(self, glyph, at, 12.0, ink, Dialog.CARD)

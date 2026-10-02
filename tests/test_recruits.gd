@@ -159,7 +159,7 @@ func test_the_beds_are_the_cap() -> void:
 	eq(sim.recruits.housing_free(), 0, "no bed left")
 	sim.day = 9
 	check(not sim.recruits.call_due(), "so no call comes")
-	sim.build.plot("court_north").building = "bunk_house"
+	sim.build.plot("south_east_corner").building = "bunk_house"
 	sim.build.version += 1
 	eq(sim.recruits.housing_free(), 4, "a bunk house gives four")
 	check(sim.recruits.call_due(), "and the calls come again")

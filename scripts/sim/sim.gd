@@ -22,6 +22,8 @@ const Recruits := preload("res://scripts/sim/recruits.gd")
 const Town := preload("res://scripts/sim/town.gd")
 const Lots := preload("res://scripts/sim/lots.gd")
 const Seasons := preload("res://scripts/sim/seasons.gd")
+const Streets := preload("res://scripts/sim/streets.gd")
+const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -171,6 +173,8 @@ class Zombie:
 	var remove := false
 	## The name of the survivor this used to be, for one who turned.
 	var turned_name := ""
+	## The survivor a straggler of the streets is hunting by day (their id), while its state is "hunt".
+	var hunt_id := ""
 	## Walker, runner or brute (see kinds.gd), how big it is drawn, and the damage
 	## of its claw on walls as a multiple of a walker's.
 	var kind := "walker"
@@ -239,6 +243,8 @@ var recruits
 var town
 var lots
 var seasons
+var streets
+var vehicles
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
@@ -319,7 +325,9 @@ func _init(data: Dictionary, w, effects) -> void:
 	town = Town.new()
 	lots = Lots.new()
 	seasons = Seasons.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons]:
+	streets = Streets.new()
+	vehicles = Vehicles.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, vehicles]:
 		m.setup(self)
 	_seed()
 
@@ -545,7 +553,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots]:
+	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, vehicles]:
 		m.start()
 	recruits.begin()
 	town.begin()
@@ -584,6 +592,7 @@ func update(dt: float) -> void:
 			day += 1
 			bell_rung = false
 			seasons.on_new_day()
+			streets.on_dawn()
 			events.append({"type": "day_start", "day": day})
 			events.append({"type": "banner", "text": "Day %d" % day, "sub": "Repair the wall before dusk"})
 
@@ -602,6 +611,7 @@ func update(dt: float) -> void:
 	recruits.update(dt)
 	town.update(dt)
 	lots.update(dt)
+	streets.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -782,6 +792,11 @@ func hit_chance(gun: Dictionary, p: Person, dist: float) -> float:
 	return float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / accuracy_range(gun, p), 2.0))
 
 
+## Whether a point is in the yard (the dead there are shot first); a played trip's site has no yard.
+func _in_yard(x: float, y: float) -> bool:
+	return x > 20 and x < 64 and y > 18 and y < 44
+
+
 func _find_target(p: Person):
 	var rng: float = reach_of(gun_of(p), p)
 	var best = null
@@ -792,12 +807,20 @@ func _find_target(p: Person):
 		var dist := Vector2(z.x - p.x, z.y - p.y).length()
 		if dist > rng:
 			continue
-		var inside: bool = z.x > 20 and z.x < 64 and z.y > 18 and z.y < 44
+		var inside: bool = _in_yard(z.x, z.y)
 		var score := dist - (3.0 if z.state == "attack" else 0.0) - (12.0 if inside else 0.0) + float(Kinds.PRIORITY.get(z.kind, 0.0))
 		if score < best_score:
 			best_score = score
 			best = z
 	return best
+
+
+## Whether one of the dead of the streets is hunting this person within reach of their gun: by day they defend themselves.
+func _hunted(p: Person) -> bool:
+	for z in zombies:
+		if z.state == "hunt" and z.hunt_id == String(p.id):
+			return true
+	return false
 
 
 func _combat(p: Person, dt: float) -> void:
@@ -809,7 +832,7 @@ func _combat(p: Person, dt: float) -> void:
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
 	p.cooldown -= dt
-	if p.moving or (phase == "day" and not p.drafted) or morale.breakdown(p):
+	if p.moving or (phase == "day" and not p.drafted and not _hunted(p)) or morale.breakdown(p):
 		p.target = null
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
@@ -891,9 +914,20 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 		p.reloading = float(gun.reload) * traits.mult(p, "reload")
 		p.target = null
 		events.append({"type": "reload", "x": p.x, "y": p.y})
-	# gunfire draws the dead
+	# gunfire draws the dead (by day in the settlement game only those close by, and for the shooter: a shot at a
+	# straggler of the streets does not send the whole city against the walls)
+	var shot_by_day: bool = town.on and phase == "day"
 	for w in zombies:
-		if w.state == "wander" and Vector2(w.x - p.x, w.y - p.y).length() < 30.0:
+		if w.state != "wander":
+			continue
+		var heard := Vector2(w.x - p.x, w.y - p.y).length()
+		if shot_by_day:
+			if heard < Streets.NOTICE_R + 2.0:
+				w.state = "hunt"
+				w.hunt_id = String(p.id)
+				w.path = []
+				w.repath = 0.0
+		elif heard < 30.0:
 			w.state = "approach"
 
 
@@ -1220,7 +1254,12 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 	z.groan_t -= dt
 	if z.groan_t <= 0.0:
 		z.groan_t = 5.0 + rng.randf() * 12.0
-		events.append({"type": "groan", "x": z.x, "y": z.y, "kind": z.kind})
+		# the stragglers of the streets by day (the settlement game) groan a third as often: a dozen of them
+		# every few seconds would be a wall of noise
+		var stray: bool = town.on and z.state == "wander" and phase == "day"
+		if stray:
+			z.groan_t *= 3.0
+		events.append({"type": "groan", "x": z.x, "y": z.y, "kind": z.kind, "stray": stray})
 	if z.stagger > 0.0:
 		z.stagger -= dt
 		return
@@ -1286,6 +1325,38 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 			if z.attack_t <= 0.0:
 				z.attack_t = 1.1 + rng.randf() * 0.6
 				_claw(z, s)
+		"hunt":
+			# a straggler of the streets after a survivor it saw outside the walls (round 12)
+			var prey2: Person = null
+			for p in people:
+				if String(p.id) == z.hunt_id:
+					prey2 = p
+			if prey2 == null or prey2.dead or prey2.downed or prey2.away != null or phase != "day":
+				z.state = "wander"
+				z.hunt_id = ""
+				return
+			var hd := Vector2(prey2.x - z.x, prey2.y - z.y).length()
+			if hd > Streets.GIVE_UP or region_at(prey2.x, prey2.y) != region_at(z.x, z.y):
+				z.state = "wander"
+				z.hunt_id = ""
+				return
+			if hd < 0.7:
+				z.facing = facing_of(prey2.x - z.x, prey2.y - z.y, z.facing)
+				z.attack_t -= dt
+				if z.attack_t <= 0.0:
+					z.attack_t = 1.3
+					_bite(z, prey2)
+				return
+			z.repath -= dt
+			if z.repath <= 0.0 or z.path.is_empty():
+				z.repath = 0.8
+				z.path = path_z.find(world.solid_z, z.x, z.y, prey2.x, prey2.y)
+				z.path_i = 0
+				if z.path.is_empty():
+					z.state = "wander"
+					z.hunt_id = ""
+					return
+			_follow(z, slow * 1.1, dt)
 		"breach":
 			z.repath -= dt
 			var prey: Person = null
@@ -1370,7 +1441,7 @@ func _segment_state(s: Segment) -> void:
 func _bite(z: Zombie, p: Person) -> void:
 	p.hp = maxf(0.0, p.hp - (9.0 + rng.randf() * 6.0))
 	fx.blood(p.x, p.y - 0.25, p.x - z.x, p.y - z.y, 8)
-	events.append({"type": "bite", "x": p.x, "y": p.y})
+	events.append({"type": "bite", "x": p.x, "y": p.y, "who": String(p.id)})
 	alert("hurt-%s" % p.id, "danger", "%s is being bitten" % p.first, "%d%% health" % roundi(p.hp), Vector2(p.x, p.y), 6.0)
 	medical.after_bite(z, p)
 	if p.hp <= 0.0 and not p.downed:

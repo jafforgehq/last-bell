@@ -155,9 +155,9 @@ func roll_dawn() -> void:
 	sim.weather = sim.seasons.weather_for(rain, sim.rng.randf()) if sim.seasons.snow_share() > 0.0 else ("rain" if rain else "clear")
 	if not sources_on or not _someone_home():
 		return
-	sim.stock.food += GARDEN_BASE * sim.seasons.mult("garden") + sim.build.bonus("garden_base") + sim.build.bonus("orchard") * sim.seasons.mult("garden")
+	sim.stock.food += GARDEN_BASE * sim.seasons.mult("garden") + sim.build.bonus("garden_base")
 	var water := BARREL_WATER_RAIN if rain else BARREL_WATER
-	sim.stock.water += water + sim.build.bonus("water_base") * (2.0 if rain else 1.0)
+	sim.stock.water += water
 	sim.stock.scrap += sim.build.bonus("scrap_base")
 	if rain:
 		sim.alert("rain", "info", "It %s in the night" % ("snowed" if sim.weather == "snow" else "rained"), "Barrels gave %d water" % roundi(water), _spot("water"), 10.0)

@@ -1,58 +1,7 @@
 {
  "version": 1,
- "_doc": "Fixed lots in the compound. kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, a step either side too, outside the footprint, reachable from the gate). Every lot is three tiles by three and centred on the middle of a tile, so that what a building shuts (assets/data/building_art.json, 'solid') is whole tiles: the back two rows of the lot, the front row (where the work spot is) is always open. The positions were checked against the map (tests/test_build_view.gd): on open ground inside the yard, clear of every prop, ladder, school door and the gate's lane, a person's width apart, and every work spot reachable.",
+ "_doc": "Fixed lots in the compound: seven, five in the yard and two at the wall (round 11 cut the nine and three of the first rounds: the player chooses what to build first). kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, a step either side too, outside the footprint, reachable from the gate). Every lot is three tiles by three and centred on the middle of a tile, so that what a building shuts (assets/data/building_art.json, 'solid') is whole tiles: the back two rows of the lot, the front row (where the work spot is) is always open. The positions were checked against the map (tests/test_build_view.gd): on open ground inside the yard, clear of every prop, ladder, school door and the gate's lane, a person's width apart, and every work spot reachable. The seven that stay are spread round the edge of the yard and leave the middle free: none stands on the basketball court or in the garden, the school doors' ground stays open, and the two at the wall (the north wall's and the west wall's, for a watchtower or the floodlights) sit by the posts they would help.",
  "plots": [
-  {
-   "id": "court_north",
-   "name": "The court, north end",
-   "kind": "yard",
-   "pos": [
-    28.5,
-    27.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    28.5,
-    28.5
-   ]
-  },
-  {
-   "id": "court_south",
-   "name": "The court, south end",
-   "kind": "yard",
-   "pos": [
-    28.5,
-    32.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    28.5,
-    33.5
-   ]
-  },
-  {
-   "id": "east_lot",
-   "name": "The east lot",
-   "kind": "yard",
-   "pos": [
-    47.5,
-    35.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    47.5,
-    36.5
-   ]
-  },
   {
    "id": "north_east_lot",
    "name": "The north-east lot",
@@ -68,40 +17,6 @@
    "work": [
     52.5,
     23.5
-   ]
-  },
-  {
-   "id": "south_lot",
-   "name": "The south lot",
-   "kind": "yard",
-   "pos": [
-    35.5,
-    41.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    35.5,
-    42.5
-   ]
-  },
-  {
-   "id": "south_east_lot",
-   "name": "The south-east lot",
-   "kind": "yard",
-   "pos": [
-    42.5,
-    36.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    42.5,
-    37.5
    ]
   },
   {
@@ -122,20 +37,37 @@
    ]
   },
   {
-   "id": "garden_south",
-   "name": "Beside the garden",
+   "id": "south_lot",
+   "name": "The south lot",
    "kind": "yard",
    "pos": [
-    52.5,
-    36.5
+    35.5,
+    41.5
    ],
    "size": [
     3.0,
     3.0
    ],
    "work": [
-    52.5,
-    37.5
+    35.5,
+    42.5
+   ]
+  },
+  {
+   "id": "east_lot",
+   "name": "The east lot",
+   "kind": "yard",
+   "pos": [
+    47.5,
+    35.5
+   ],
+   "size": [
+    3.0,
+    3.0
+   ],
+   "work": [
+    47.5,
+    36.5
    ]
   },
   {
@@ -187,23 +119,6 @@
    "work": [
     23.5,
     28.5
-   ]
-  },
-  {
-   "id": "east_wall",
-   "name": "The east wall",
-   "kind": "wall",
-   "pos": [
-    60.5,
-    39.5
-   ],
-   "size": [
-    3.0,
-    3.0
-   ],
-   "work": [
-    60.5,
-    40.5
    ]
   }
  ]

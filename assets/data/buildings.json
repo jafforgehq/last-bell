@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_doc": "plots: the kinds of plot a building may stand on. scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count). requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people near the building), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
+ "_doc": "plots: the kinds of plot a building may stand on (a building of the yard may stand on a ring plot too, round 9; one with lots_only stands there alone: the scrap yard, the one building of the ring, round 11 dropped the orchard and the cistern). scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count), never more than the plots it could stand on: the compound has seven, five in the yard and two on the wall, so the watchtower is at most two and the bunk house two. requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people near the building), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
  "buildings": [
   {
    "id": "salvage_bench",
@@ -91,7 +91,7 @@
    ],
    "scrap": 36,
    "work": 32,
-   "max": 3,
+   "max": 2,
    "requires": "",
    "effects": {
     "reach_bonus": 3.0,
@@ -113,38 +113,6 @@
     "boon_mult": 1.3,
     "threat_mult": 0.85,
     "radio_range": 1
-   }
-  },
-  {
-   "id": "orchard",
-   "name": "Orchard rows",
-   "blurb": "Fruit bushes and a compost heap on the street: a little food every dawn with nobody to tend it.",
-   "plots": [
-    "ring"
-   ],
-   "lots_only": true,
-   "scrap": 24,
-   "work": 20,
-   "max": 3,
-   "requires": "",
-   "effects": {
-    "orchard": 1.5
-   }
-  },
-  {
-   "id": "cistern",
-   "name": "Rain cistern",
-   "blurb": "Tanks and barrels under the gutters: water every dawn, a good deal more when it rains.",
-   "plots": [
-    "ring"
-   ],
-   "lots_only": true,
-   "scrap": 20,
-   "work": 16,
-   "max": 2,
-   "requires": "",
-   "effects": {
-    "water_base": 3.0
    }
   },
   {

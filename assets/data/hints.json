@@ -88,6 +88,13 @@
 			"start": {"cond": "lot_open"}
 		},
 		{
+			"id": "vehicle",
+			"title": "A vehicle",
+			"text": "A vehicle makes the road about half the time and carries more. It burns fuel, found at the gas stations: take it from the Town Board's party.",
+			"anchor": ["town"],
+			"start": {"cond": "has_vehicle"}
+		},
+		{
 			"id": "build",
 			"title": "Time to build",
 			"text": "The crew can build now. Press N for the plots: a salvage bench pays for itself.",

@@ -76,6 +76,7 @@ static func registry() -> Dictionary:
 			"town_on": _town_on,
 			"season": _season,
 			"lot_open": _lot_open,
+			"has_vehicle": _has_vehicle,
 			"all": _all,
 			"any": _any,
 			"not": _not,
@@ -432,6 +433,14 @@ static func _lot_open(sim, _p, _st) -> bool:
 		if String(lots.why_not_claim(String(l.id))) == "":
 			return true
 	return false
+
+
+## The colony has a vehicle (round 13: one the party has got running and driven home, parked or out). For the tip about taking it
+## from the Town Board's party, which comes once, the first time there is one.
+static func _has_vehicle(sim, _p, _st) -> bool:
+	var vehicles = sim.get("vehicles")
+	var town = sim.get("town")
+	return vehicles != null and town != null and town.on and not vehicles.fleet.is_empty()
 
 
 # ------------------------------------------------------------- combinators --

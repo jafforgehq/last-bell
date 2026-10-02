@@ -5,6 +5,13 @@ extends "res://tests/case.gd"
 ## nests towards the spawn points, the survivors, the outposts, and the beats a trip can meet. The
 ## road distances are worked out here with a small Dijkstra of the test's own, and one test at the end
 ## checks that the real module (`sim.town`) agrees with it.
+##
+## ROUND 13 widened the board to 160 by 70 and put a CITY across the river on its east side: ten places that
+## `needs_vehicle` (a party cannot walk there), a bridge (a place that can be walked to, with nothing in it, that
+## scouting the east shows), and a few vehicles and fuel in the town. The tests of the town's own shape (its ring,
+## its hours, its nests, its survivors) are about the GROUND (`_ground`: the places a party can walk to, and the
+## roads between them); the city has tests of its own near the end, and the rules that join the two (that the
+## city can only be found from the bridge, that there is fuel to get there) are test_vehicles_data.gd's.
 
 const Helpers := preload("res://tests/helpers.gd")
 
@@ -14,18 +21,31 @@ const SITES_PATH := "res://assets/data/sites.json"
 
 const KINDS := ["houses", "pharmacy", "hardware", "scrapyard", "church", "farm", "clinic", "police", "fire_station",
 	"garage", "bakery", "warehouse", "bus_depot", "radio_shop", "bunker", "supermarket", "school_annex", "water_works",
-	"gas_station", "library"]
-const STOCKS := ["food", "water", "scrap", "ammo", "meds"]
+	"gas_station", "library", "bridge"]
+## The kinds the city adds (the mall is a "supermarket", the police headquarters "police", the flats "houses": the
+## board already has icons for those). The Town Board's map has an icon for "hospital" and "fuel_depot" (a cross and
+## a pump); the others are drawn as a plain pin until the view gives them one.
+const CITY_KINDS := ["hospital", "university", "rail_yard", "power_station", "cold_store", "checkpoint", "fuel_depot"]
+## What a place's loot and extras may be made of: the five stores and fuel (round 13: it goes to the vehicles' tank).
+const STOCKS := ["food", "water", "scrap", "ammo", "meds", "fuel"]
+## What an outpost may yield (fuel is not a store: the dawn would pay it into the stocks).
+const STORES := ["food", "water", "scrap", "ammo", "meds"]
 const OLD_IDS := ["pharmacy", "hardware", "houses", "scrapyard"]
-const PLACE_KEYS := ["id", "name", "kind", "pos", "blurb", "danger", "loot", "extra", "known", "nest", "survivor", "outpost", "image"]
+const PLACE_KEYS := ["id", "name", "where", "kind", "pos", "blurb", "danger", "loot", "extra", "needs_vehicle", "vehicle",
+	"known", "nest", "survivor", "outpost", "image"]
 const BEAT_KEYS := ["id", "text", "weight", "min_hours", "effects"]
 const EFFECT_KEYS := ["loot_pct", "hurt", "delay_h", "reveal", "morale", "lost"]
 ## Tiles of the board a party walks in an hour (Town.SPEED; the last test checks the module agrees).
 const SPEED := 9.0
 ## What a unit of each stock is worth, for comparing one place's loot with another's.
-const VALUE := {"food": 1.0, "water": 1.0, "scrap": 1.0, "ammo": 0.25, "meds": 4.0}
-## The most a place may give at its best (the top of its loot plus its extras).
-const CAPS := {"scrap": 60.0, "ammo": 140.0, "food": 40.0, "water": 40.0, "meds": 15.0}
+## Fuel is worth half a meal a unit: it is not eaten, it is only the means of going farther.
+const VALUE := {"food": 1.0, "water": 1.0, "scrap": 1.0, "ammo": 0.25, "meds": 4.0, "fuel": 0.5}
+## The most a place of the town may give at its best (the top of its loot plus its extras).
+const CAPS := {"scrap": 60.0, "ammo": 140.0, "food": 40.0, "water": 40.0, "meds": 15.0, "fuel": 45.0}
+## The city is richer, so its caps are higher where the data says so: a hospital holds a hundred times what a
+## cupboard does (meds up to 40, not 15); the police headquarters is an armoury (ammo up to 160); a rail yard is
+## all steel (scrap up to 70); the fuel depot is the one place that fills a tank (fuel up to 70, and a tank holds 80).
+const CITY_CAPS := {"scrap": 70.0, "ammo": 160.0, "food": 45.0, "water": 40.0, "meds": 40.0, "fuel": 70.0}
 ## The point the spawn points are seen from, as in Town.heading_of.
 const SPAWN_CENTRE := Vector2(42.0, 32.0)
 
@@ -78,6 +98,40 @@ func _by_id(d: Dictionary) -> Dictionary:
 
 func _home(d: Dictionary) -> Vector2:
 	return _vec(d.get("home", [50, 35]))
+
+
+func _needs_vehicle(p: Dictionary) -> bool:
+	return bool(p.get("needs_vehicle", false))
+
+
+## The places of the city across the river (the ones a party cannot walk to).
+func _city_places(d: Dictionary) -> Array:
+	var out: Array = []
+	for p in _places(d):
+		if _needs_vehicle(p):
+			out.append(p)
+	return out
+
+
+## The data as a party on foot sees it: the places that can be walked to (the town, and the bridge) and the roads
+## between them. The tests of the town's own shape are about this.
+func _ground(d: Dictionary) -> Dictionary:
+	if d.is_empty():
+		return d
+	var keep := {"home": true}
+	var places: Array = []
+	for p in _places(d):
+		if not _needs_vehicle(p):
+			places.append(p)
+			keep[String(p.get("id", ""))] = true
+	var roads: Array = []
+	for r in d.get("roads", []):
+		if r is Array and r.size() == 2 and keep.has(String(r[0])) and keep.has(String(r[1])):
+			roads.append(r)
+	var out := d.duplicate(true)
+	out["places"] = places
+	out["roads"] = roads
+	return out
 
 
 ## Road distances from the school in tiles, by Dijkstra over the roads (a place with no road is missing).
@@ -254,20 +308,22 @@ func test_the_file_parses_and_has_its_parts() -> void:
 	for k in ["board", "home", "places", "roads", "beats"]:
 		check(d.has(k), "the data has '%s'" % k)
 	var b = d.get("board", {})
-	check(b is Dictionary and float(b.get("w", 0)) == 100.0 and float(b.get("h", 0)) == 70.0, "the board is 100 by 70: %s" % str(b))
+	check(b is Dictionary and float(b.get("w", 0)) == 160.0 and float(b.get("h", 0)) == 70.0, "the board is 160 by 70 (the town on the west, the city across the river on the east): %s" % str(b))
 	var h = d.get("home", [])
 	check(h is Array and h.size() == 2, "home is a point")
 	if h is Array and h.size() == 2:
-		eq(_home(d), Vector2(50.0, 35.0), "the school is near the middle of the board")
+		eq(_home(d), Vector2(50.0, 35.0), "the school is where it was: in the middle of the town, west of the river")
 	check(d.get("places", []) is Array and d.get("roads", []) is Array and d.get("beats", []) is Array, "places, roads and beats are lists")
 
 
-func test_twenty_four_places_each_with_what_the_board_needs() -> void:
+func test_thirty_five_places_each_with_what_the_board_needs() -> void:
 	var d := _town()
 	if d.is_empty():
 		return
 	var places := _places(d)
-	eq(places.size(), 24, "twenty-four places")
+	eq(places.size(), 35, "thirty-five places: the town's twenty-four, the bridge and the city's ten")
+	eq(_city_places(d).size(), 10, "ten of them need a vehicle")
+	eq(_ground(d).places.size(), 25, "and twenty-five can be walked to")
 	var re := RegEx.create_from_string("^[a-z][a-z_]*$")
 	var ids := {}
 	var kinds := {}
@@ -281,9 +337,15 @@ func test_twenty_four_places_each_with_what_the_board_needs() -> void:
 			check(k in PLACE_KEYS, "%s has only known keys, not '%s'" % [id, k])
 		for k in ["id", "name", "kind", "pos", "blurb", "danger", "loot", "extra"]:
 			check(p.has(k), "%s has '%s'" % [id, k])
+		if p.has("where"):
+			check(typeof(p.where) == TYPE_STRING and String(p.where).strip_edges() != "" and String(p.where).length() <= 40, "%s: where is a short phrase: %s" % [id, str(p.where)])
+		if p.has("needs_vehicle"):
+			check(typeof(p.needs_vehicle) == TYPE_BOOL and p.needs_vehicle == true, "%s: needs_vehicle is true when present" % id)
+		if p.has("vehicle"):
+			check(typeof(p.vehicle) == TYPE_STRING and not _needs_vehicle(p), "%s: a vehicle is a kind's name, and waits in a place a party can walk to" % id)
 		check(String(p.get("name", "")).strip_edges() != "", "%s has a name" % id)
 		var kind := String(p.get("kind", ""))
-		check(kind in KINDS, "%s has a kind from the list: %s" % [id, kind])
+		check(kind in KINDS or kind in CITY_KINDS, "%s has a kind from the list: %s" % [id, kind])
 		kinds[kind] = true
 		var danger = p.get("danger", -1)
 		check(_is_whole(danger) and int(danger) >= 0 and int(danger) <= 3, "%s: danger is 0 to 3: %s" % [id, str(danger)])
@@ -293,8 +355,8 @@ func test_twenty_four_places_each_with_what_the_board_needs() -> void:
 		check(blurb.ends_with(".") and not blurb.contains("{") and not blurb.contains("}"), "%s: the blurb is plain text ending in a full stop" % id)
 		if p.has("image"):
 			check(id in OLD_IDS and String(p.image).begins_with("res://assets/ui/sites/"), "%s: only the four old places have pictures" % id)
-	for k in KINDS:
-		check(kinds.has(k), "the town has a place of kind %s" % k)
+	for k in KINDS + CITY_KINDS:
+		check(kinds.has(k), "the board has a place of kind %s" % k)
 	for id in OLD_IDS:
 		check(ids.has(id), "the old place %s is on the board" % id)
 	var dangers := {}
@@ -385,7 +447,9 @@ func test_roads_are_well_formed() -> void:
 		return
 	var by := _by_id(d)
 	var roads: Array = d.get("roads", [])
-	check(roads.size() >= 26 and roads.size() <= 34, "about thirty roads: %d" % roads.size())
+	var in_town: int = _ground(d).roads.size()
+	check(in_town >= 26 and in_town <= 34, "about thirty roads on the ground (the town's and the one to the bridge): %d" % in_town)
+	check(roads.size() - in_town >= 12 and roads.size() - in_town <= 18, "and a short network of roads in the city: %d" % (roads.size() - in_town))
 	var seen := {}
 	var touched := {}
 	for r in roads:
@@ -440,7 +504,7 @@ func test_every_place_is_reachable_and_some_only_the_long_way_round() -> void:
 
 
 func test_the_hours_to_the_nearest_and_the_farthest_places() -> void:
-	var d := _town()
+	var d := _ground(_town())
 	if d.is_empty():
 		return
 	var hours := _hours(d)
@@ -547,7 +611,10 @@ func test_loot_is_in_the_format_of_sites_json_and_within_the_caps() -> void:
 		var id := String(p.id)
 		var loot = p.get("loot", {})
 		var extra = p.get("extra", {})
-		check(loot is Dictionary and not loot.is_empty(), "%s has loot" % id)
+		# the bridge is only a place to scout from: it is the one place with nothing in it
+		var bridge := String(p.get("kind", "")) == "bridge"
+		check(loot is Dictionary and (not loot.is_empty() or bridge), "%s has loot" % id)
+		check(not bridge or (loot is Dictionary and loot.is_empty() and extra is Dictionary and extra.is_empty()), "%s: a bridge holds nothing" % id)
 		check(extra is Dictionary, "%s has an extra (it may be empty)" % id)
 		if not (loot is Dictionary and extra is Dictionary):
 			continue
@@ -564,12 +631,15 @@ func test_loot_is_in_the_format_of_sites_json_and_within_the_caps() -> void:
 			if r is Array and r.size() == 2:
 				check(float(r[0]) > 0.0 and float(r[0]) <= 1.0 and float(r[1]) > 0.0, "%s: extra %s has a chance in (0, 1] and an amount: %s" % [id, k, str(r)])
 		var best := _best(p)
-		for k in CAPS:
-			check(float(best.get(k, 0.0)) <= float(CAPS[k]), "%s gives at most %d %s at its best: %s" % [id, int(CAPS[k]), k, str(best.get(k, 0.0))])
+		var caps: Dictionary = CITY_CAPS if _needs_vehicle(p) else CAPS
+		for k in caps:
+			check(float(best.get(k, 0.0)) <= float(caps[k]), "%s gives at most %d %s at its best: %s" % [id, int(caps[k]), k, str(best.get(k, 0.0))])
+		for k in best:
+			check(caps.has(k), "%s: %s has a cap" % [id, k])
 
 
 func test_the_farther_and_the_more_dangerous_a_place_the_richer_it_is() -> void:
-	var d := _town()
+	var d := _ground(_town())
 	if d.is_empty():
 		return
 	var hours := _hours(d)
@@ -580,6 +650,8 @@ func test_the_farther_and_the_more_dangerous_a_place_the_richer_it_is() -> void:
 	var rows: Array = []
 	for p in _places(d):
 		var id := String(p.id)
+		if p.loot.is_empty():
+			continue    # the bridge: nothing in it, and not a place to be paid for
 		var v := _value(p)
 		xs.append(float(hours[id]))
 		ds.append(float(p.danger))
@@ -611,7 +683,7 @@ func test_the_farther_and_the_more_dangerous_a_place_the_richer_it_is() -> void:
 # ---------------------------------------------------------------------- nests --
 
 func test_nests_lean_towards_every_side_of_the_map() -> void:
-	var d := _town()
+	var d := _ground(_town())
 	if d.is_empty():
 		return
 	var spawns := _spawns()
@@ -654,7 +726,7 @@ func test_nests_lean_towards_every_side_of_the_map() -> void:
 # ------------------------------------------------------------------ survivors --
 
 func test_survivors_are_hiding_in_four_to_six_places() -> void:
-	var d := _town()
+	var d := _ground(_town())
 	if d.is_empty():
 		return
 	var spawns := _spawns()
@@ -686,7 +758,8 @@ func test_outposts_have_modest_yields_and_costs() -> void:
 	if d.is_empty():
 		return
 	var ranges := {"food": [2.0, 5.0], "water": [2.0, 5.0], "scrap": [2.0, 4.0], "meds": [0.5, 1.0], "ammo": [3.0, 6.0]}
-	var fits := {"farm": "food", "garage": "scrap", "scrapyard": "scrap", "clinic": "meds", "police": "ammo", "water_works": "water", "bakery": "food"}
+	var fits := {"farm": "food", "garage": "scrap", "scrapyard": "scrap", "clinic": "meds", "police": "ammo", "water_works": "water", "bakery": "food",
+		"hospital": "meds", "cold_store": "food"}
 	var n := 0
 	var made := {}
 	for p in _places(d):
@@ -712,8 +785,8 @@ func test_outposts_have_modest_yields_and_costs() -> void:
 		var kind := String(p.kind)
 		if fits.has(kind):
 			check(y.has(fits[kind]), "%s (%s) makes sense of its yield: it gives %s" % [id, kind, fits[kind]])
-	check(n >= 6 and n <= 10, "six to ten places can become outposts: %d" % n)
-	for k in STOCKS:
+	check(n >= 6 and n <= 10, "six to ten places can become outposts (the town's eight and two in the city): %d" % n)
+	for k in STORES:
 		check(made.has(k), "some outpost makes %s" % k)
 
 
@@ -724,7 +797,7 @@ func test_beats_are_well_formed() -> void:
 	if d.is_empty():
 		return
 	var beats: Array = d.get("beats", [])
-	check(beats.size() >= 22 and beats.size() <= 28, "about twenty-four beats: %d" % beats.size())
+	check(beats.size() >= 28 and beats.size() <= 34, "about thirty beats (the town's twenty-five and six for the long road): %d" % beats.size())
 	var ids := {}
 	var texts := {}
 	var re := RegEx.create_from_string("^[a-z][a-z_]*$")
@@ -806,7 +879,7 @@ func test_the_beats_mix_good_neutral_and_bad_and_lose_people_rarely() -> void:
 			bites += 1
 	check(lost >= 1 and lost <= 2, "one or two beats may lose someone: %d" % lost)
 	for cls in count:
-		check(int(count[cls]) >= 6 and int(count[cls]) <= 10, "about a third of the beats are %s: %d of %d" % [cls, int(count[cls]), beats.size()])
+		check(int(count[cls]) >= 6 and int(count[cls]) <= 12, "about a third of the beats are %s: %d of %d" % [cls, int(count[cls]), beats.size()])
 	var g: float = float(weight.good)
 	var b: float = float(weight.bad)
 	check(g >= 0.7 * b and b >= 0.7 * g, "good and bad beats weigh about the same: %d against %d" % [int(g), int(b)])
@@ -815,6 +888,226 @@ func test_the_beats_mix_good_neutral_and_bad_and_lose_people_rarely() -> void:
 	check(mean_pct >= -8.0 and mean_pct <= 8.0, "the beats do not push the loot one way on average: %.1f percent" % mean_pct)
 	check(reveals >= 2 and reveals <= 5, "a few beats reveal a place: %d" % reveals)
 	check(bites >= 1 and bites <= 2, "a bite is rare: %d" % bites)
+
+
+# ------------------------------------------------------------------- the city --
+
+## What the city's places are, by id: [kind, danger, {stock: [lowest the loot's minimum may be, highest its maximum may be]}].
+## The hospital's medicine, the police headquarters' armoury, the rail yard's steel and the fuel depot's tanks are what
+## the trip across the river is for.
+const CITY_SPEC := {
+	"hospital": ["hospital", 3, {"meds": [20.0, 35.0]}],
+	"mall": ["supermarket", 2, {"food": [20.0, 45.0], "water": [10.0, 30.0]}],
+	"university": ["university", 2, {"scrap": [15.0, 40.0], "meds": [4.0, 15.0]}],
+	"police_hq": ["police", 3, {"ammo": [90.0, 160.0]}],
+	"rail_yard": ["rail_yard", 3, {"scrap": [40.0, 70.0]}],
+	"power_station": ["power_station", 3, {"scrap": [25.0, 60.0]}],
+	"fuel_depot": ["fuel_depot", 2, {"fuel": [40.0, 70.0]}],
+	"cold_store": ["cold_store", 2, {"food": [20.0, 35.0], "water": [8.0, 20.0]}],
+	"flats": ["houses", 2, {"food": [14.0, 30.0], "meds": [2.0, 8.0]}],
+	"checkpoint": ["checkpoint", 3, {"ammo": [50.0, 100.0]}],
+}
+
+
+func test_the_bridge_is_a_place_on_foot_that_shows_the_east() -> void:
+	var d := _town()
+	if d.is_empty():
+		return
+	var bridges: Array = []
+	for p in _places(d):
+		if String(p.get("kind", "")) == "bridge":
+			bridges.append(p)
+	eq(bridges.size(), 1, "one bridge")
+	if bridges.size() != 1:
+		return
+	var b: Dictionary = bridges[0]
+	var at := _vec(b.pos)
+	check(not _needs_vehicle(b), "the bridge can be walked to: that is how the city is found")
+	check(not bool(b.get("known", false)), "the bridge has to be found (by scouting the east)")
+	eq(int(b.danger), 1, "a bridge is danger 1")
+	check(b.loot.is_empty() and b.extra.is_empty(), "a bridge holds nothing")
+	check(at.x >= 92.0 and at.x <= 99.0, "the bridge is at about x 95, on the river: %s" % str(at))
+	check(not b.has("nest") and not b.has("survivor") and not b.has("outpost"), "no nest, survivor or outpost on a bridge")
+	# the hours on foot: an overnight walk (about five hours one way)
+	var h := float(_hours(d)[String(b.id)])
+	check(h >= 4.5 and h <= 6.0, "the bridge is about five hours away on foot: %.2f" % h)
+	# the town's east-most place shows it to a scouting party
+	var east: Dictionary = {}
+	for p in _ground(d).places:
+		if String(p.id) != String(b.id) and (east.is_empty() or _vec(p.pos).x > _vec(east.pos).x):
+			east = p
+	check(_vec(east.pos).distance_to(at) <= 20.0, "the town's east-most place (%s) is within 20 tiles of the bridge: %.1f" % [east.id, _vec(east.pos).distance_to(at)])
+	# the long road: from the town's east side over the bridge to the city's places
+	var from_town := 0
+	var to_city := 0
+	var by := _by_id(d)
+	for r in d.roads:
+		var other := ""
+		if String(r[0]) == String(b.id):
+			other = String(r[1])
+		elif String(r[1]) == String(b.id):
+			other = String(r[0])
+		if other == "":
+			continue
+		if other != "home" and by.has(other) and _needs_vehicle(by[other]):
+			to_city += 1
+		else:
+			from_town += 1
+	check(from_town >= 1 and to_city >= 2, "roads join the bridge to the town (%d) and to the city (%d)" % [from_town, to_city])
+
+
+func test_the_city_has_ten_places_across_the_river() -> void:
+	var d := _town()
+	if d.is_empty():
+		return
+	var city := _city_places(d)
+	eq(city.size(), 10, "ten places in the city")
+	var w := float(d.board.w)
+	var home := _home(d)
+	var kinds := {}
+	for p in city:
+		var id := String(p.id)
+		var at := _vec(p.pos)
+		check(at.x >= 100.0 and at.x <= w - 2.0 and at.y >= 2.0 and at.y <= float(d.board.h) - 2.0, "%s (%s) is in the city, past the river on the east side of the board" % [id, str(at)])
+		check(not bool(p.get("known", false)), "%s: no city place is known at the start" % id)
+		check(p.has("where") and String(p.where) != "", "%s has a `where` for the board's sentences" % id)
+		check(not p.has("image"), "%s: no pictures for the city" % id)
+		kinds[String(p.kind)] = true
+	check(kinds.size() >= 9, "the city is not all one kind of place: %d kinds" % kinds.size())
+	for id in CITY_SPEC:
+		var by := _by_id(d)
+		check(by.has(id), "the city has %s" % id)
+		if not by.has(id):
+			continue
+		var p: Dictionary = by[id]
+		var spec: Array = CITY_SPEC[id]
+		check(_needs_vehicle(p), "%s needs a vehicle" % id)
+		eq(String(p.kind), String(spec[0]), "%s: its kind" % id)
+		eq(int(p.danger), int(spec[1]), "%s: its danger" % id)
+		var stocks: Dictionary = spec[2]
+		for k in stocks:
+			check(p.loot.has(k), "%s has %s among its loot" % [id, k])
+			if p.loot.has(k):
+				check(float(p.loot[k][0]) >= float(stocks[k][0]) and float(p.loot[k][1]) <= float(stocks[k][1]), "%s: %s is %s (a minimum of at least %d and a maximum of at most %d)" % [id, k, str(p.loot[k]), int(stocks[k][0]), int(stocks[k][1])])
+	# the police headquarters' armoury and the hospital's medicine are the best in the board
+	var by2 := _by_id(d)
+	if by2.has("police_hq") and by2.has("hospital"):
+		check(float(by2.police_hq.loot.ammo[0]) >= 90.0 and float(by2.police_hq.loot.ammo[1]) <= 160.0, "the headquarters holds 90 to 160 ammo")
+		check(float(by2.hospital.loot.meds[0]) >= 20.0 and float(by2.hospital.loot.meds[1]) <= 35.0, "the hospital holds 20 to 35 medicine")
+	# the city is dearer to take: nobody goes there for nothing
+	var mean_danger := 0.0
+	var threes := 0
+	for p in city:
+		mean_danger += float(p.danger)
+		if int(p.danger) == 3:
+			threes += 1
+		check(int(p.danger) >= 2, "%s: the city is no place for danger 1 or less" % p.id)
+	mean_danger /= maxf(1.0, float(city.size()))
+	var ground_mean_danger := 0.0
+	var ground_n := 0
+	for p in _ground(d).places:
+		if not p.loot.is_empty():
+			ground_mean_danger += float(p.danger)
+			ground_n += 1
+	ground_mean_danger /= maxf(1.0, float(ground_n))
+	check(mean_danger >= ground_mean_danger + 0.4, "the city (%.2f) is more dangerous than the town (%.2f) on average" % [mean_danger, ground_mean_danger])
+	check(threes >= 4, "at least four places of the city are danger 3: %d" % threes)
+	var city_values: Array = []
+	var ground_values: Array = []
+	for p in city:
+		city_values.append(_value(p))
+		check(_value(p) <= 130.0, "%s is not worth more than 130 of the value scale: %.1f" % [p.id, _value(p)])
+	for p in _ground(d).places:
+		if not p.loot.is_empty():
+			ground_values.append(_value(p))
+	check(_mean(city_values) >= 1.3 * _mean(ground_values), "the city is richer: %.1f a place against the town's %.1f" % [_mean(city_values), _mean(ground_values)])
+	check(home.distance_to(Vector2(w, 35.0)) > 90.0, "(the board has room for it)")
+
+
+func test_the_city_has_two_nests_two_survivors_and_two_outposts() -> void:
+	var d := _town()
+	if d.is_empty():
+		return
+	var spawns := _spawns()
+	var city := _city_places(d)
+	var nests: Array = []
+	var survivors := 0
+	var outposts := 0
+	for p in city:
+		if p.has("nest"):
+			nests.append(p)
+		if p.has("survivor"):
+			survivors += 1
+		if p.has("outpost"):
+			outposts += 1
+	eq(nests.size(), 2, "two nests in the city")
+	eq(survivors, 2, "two survivors in the city")
+	eq(outposts, 2, "two places of the city can become outposts")
+	# each nest sends the dead from a different spawn point (the headings from the school: from there the whole city lies
+	# to the east, so only a few spawn points are in reach: the north-east, the east and the south-east ones)
+	var headings := {}
+	for p in nests:
+		check(int(p.nest.strength) >= 2 and int(p.nest.strength) <= 3, "%s: a city nest has strength 2 or 3: %s" % [p.id, str(p.nest)])
+		check(int(p.danger) >= 2, "%s: a nest is dangerous" % p.id)
+		headings[_heading(d, _vec(p.pos), spawns)] = true
+	eq(headings.size(), nests.size(), "the two nests lean towards different spawn points: %s" % str(headings.keys()))
+	# and they add to what the town's nests do: neither piles on the point that already has the most
+	var town_pressure := {}
+	for p in _nest_places(_ground(d)):
+		var h := _heading(d, _vec(p.pos), spawns)
+		town_pressure[h] = int(town_pressure.get(h, 0)) + int(p.nest.strength)
+	var top := 0
+	for h in town_pressure:
+		top = maxi(top, int(town_pressure[h]))
+	for h in headings:
+		check(int(town_pressure.get(h, 0)) < top, "a city nest does not lean on the spawn point (%d) that the town's nests already weigh on most" % h)
+
+
+func test_the_road_beats_belong_to_the_long_road() -> void:
+	var d := _town()
+	if d.is_empty():
+		return
+	var road := ["lorry_shed_its_load", "roadblock_of_cars", "clear_road", "curtain_lorry", "repainted_signs", "bridge_queue"]
+	var by := {}
+	for e in d.get("beats", []):
+		by[String(e.id)] = e
+	var delays := 0
+	var scratches := 0
+	var morale := 0
+	var finds := 0
+	var reveals := 0
+	var flavour := 0
+	for id in road:
+		check(by.has(id), "the road beat %s exists" % id)
+		if not by.has(id):
+			continue
+		var e: Dictionary = by[id]
+		# the near places' trips take 3 to 5 hours on foot: a beat of the long road is for the trips beyond them
+		check(float(e.min_hours) >= 5.0, "%s: a beat of the long road needs a trip of five hours or more: %s" % [id, str(e.min_hours)])
+		check(not e.effects.has("lost"), "%s: the road does not lose people (the old beats do, rarely)" % id)
+		if e.effects.has("delay_h"):
+			delays += 1
+		if String(e.effects.get("hurt", "")) == "scratch":
+			scratches += 1
+		if float(e.effects.get("morale", 0.0)) > 0.0:
+			morale += 1
+		if float(e.effects.get("loot_pct", 0.0)) > 0.0:
+			finds += 1
+		if e.effects.has("reveal"):
+			reveals += 1
+		if e.effects.is_empty():
+			flavour += 1
+		# a beat meets a party on foot as well as one in a car (the core does not tell them apart): its words must fit both
+		var t := String(e.text).to_lower()
+		for word in ["tyre", "tire", "petrol", "fuel", "engine", "bumper", "seat", "windscreen", "dashboard"]:
+			check(not t.contains(word), "%s: the text names a car's part ('%s'), which would be nonsense for a party on foot" % [id, word])
+	check(delays >= 2 and scratches >= 1 and morale >= 1 and finds >= 1 and reveals >= 1 and flavour >= 1, "the road has delays (%d), a scratch (%d), a lift (%d), a find (%d), a sign (%d) and a bare scene (%d)" % [delays, scratches, morale, finds, reveals, flavour])
+	# only a handful of the older beats can be met on a trip of five hours or more, so the near places keep to their own
+	var far_beats := 0
+	for e in d.get("beats", []):
+		if float(e.min_hours) >= 5.0:
+			far_beats += 1
+	check(far_beats == road.size() + 1, "the six road beats and the lit window are the only beats that need five hours or more: %d" % far_beats)
 
 
 # ------------------------------------------------------- the real module agrees --
@@ -833,7 +1126,7 @@ func test_the_module_reads_the_data_the_way_these_tests_do() -> void:
 		return
 	var town = sim.town
 	check(bool(town.on), "the small start has a board")
-	eq(town.places.size(), 24, "the module loaded all 24 places")
+	eq(town.places.size(), 35, "the module loaded all 35 places")
 	var hours := _hours(d)
 	var spawns := _spawns()
 	var known: Array = []
@@ -846,6 +1139,7 @@ func test_the_module_reads_the_data_the_way_these_tests_do() -> void:
 			continue
 		if p.has("nest"):
 			eq(int(town.heading_of(p)), _heading(d, _vec(_by_id(d)[id].pos), spawns), "the module's heading for the nest at %s" % id)
+		eq(bool(p.get("needs_vehicle", false)), _needs_vehicle(_by_id(d)[id]), "the module knows whether %s needs a vehicle" % id)
 		if bool(p.get("known", false)):
 			known.append(id)
 		eq(String(town.state_of(id)), "known" if bool(p.get("known", false)) else "unknown", "%s starts %s" % [id, "known" if bool(p.get("known", false)) else "unknown"])

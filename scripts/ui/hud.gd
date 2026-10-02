@@ -113,6 +113,8 @@ const ALERT_ICONS := [
 	["job-radio", "radio"], ["job-watch", "post"],
 	# round 9: a lot is claimed (the hammer), a wall is put up across a street (the wall), a building out in the streets is ruined
 	["lot-", "build"], ["wall-", "wall"], ["ruined-", "down"],
+	# round 13: a vehicle found or lost (the sim's `vehicle-<id>` and `vehicle-found-<place>`)
+	["vehicle-", "car"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
 ## bell; the Builders job the wall (the hammer is Repair's own, and in the small size, where only the
@@ -123,7 +125,7 @@ const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
 ## (tools/make_menu_icon.py draws the menu's; tools/make_people_icons.py the star, a skill that went
 ## up, and the face, someone who is Shaken or Breaking; tools/make_jobs_icon.py the clipboard of the
 ## Jobs screen; tools/make_build_icon.py the hammer of the Build screen).
-const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png", "jobs": "res://assets/ui/icons/jobs.png", "build": "res://assets/ui/icons/build.png"}
+const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png", "jobs": "res://assets/ui/icons/jobs.png", "build": "res://assets/ui/icons/build.png", "fuel": "res://assets/ui/icons/fuel.png", "car": "res://assets/ui/icons/car.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
@@ -216,6 +218,11 @@ const BUILD_TIP := "Build: pick a plot and order a building for the Builders to 
 const BUILD_LOTS_TIP := "Build: order a building for the Builders to raise, claim the streets round the school and wall them in\nKey: N"
 ## What the help's N says when pointed at in a settlement game.
 const HELP_N_LOTS_TIP := "The Build screen: buildings, and the streets round the school to claim and wall in"
+## The tooltip of the help's G in a settlement game (round 13: the vehicles are picked on the board).
+const HELP_G_TOWN_TIP := "The Town Board: the map of the town and the city across the river, who goes and in what: a vehicle makes the road quicker and carries more, and burns fuel"
+## The fuel store's row in the stores panel (round 13), shown in a settlement game once there is a vehicle or any fuel;
+## the fuel is in the amber below this much while there is a vehicle to burn it.
+const FUEL_LOW := 10.0
 ## The tooltip of the Town Board button (a settlement game only: the classic start has no board).
 const TOWN_TIP := "Town Board: the map of the town, the places on the road and the parties out\nKey: G"
 ## What the speed buttons do and their keys, for the tooltips: [words, key].
@@ -342,6 +349,8 @@ var on_build: Callable
 ## The toolbar's Town Board button was pressed (settlement game): main.gd opens or closes the board (it asks the
 ## tutorial's lock and the pages first). With nobody listening the HUD opens it itself.
 var on_town: Callable
+## Opens a played trip (main.gd's `open_raid(people, place, vehicle_id, loot_mult, on_done)`): the Town Board's "Take control".
+var on_raid: Callable
 ## The Build screen marks a plot in the world: called with {} when the pointer is not on a plot's slip or the screen
 ## is closed, else {"plot": id}; main.gd keeps it for the yard to draw (`build_hover`).
 var on_build_hover: Callable
@@ -382,6 +391,9 @@ var res_grid: GridContainer
 var res_values := {}
 var res_days := {}
 var res_labels: Array = []
+## The fuel row of the stores panel (round 13): [icon, name, number] and the number's label, which are shown only in a settlement
+## game once there is a vehicle or any fuel (the panel is as it always was without them).
+var fuel_cells: Array = []
 ## The crew's cards across the top: a row, or rows when there are more people than a row has room for (a crew that
 ## has grown: recruits come over the radio). `bar_plan` is how they are laid out now, see _layout_bar.
 var bar: HFlowContainer
@@ -764,6 +776,18 @@ func _build_stores() -> void:
 			res_labels.append(k)
 			grid.add_child(k)
 			grid.add_child(v)
+	# round 13: the fuel row, there only in a settlement game with a vehicle or some fuel (the grid leaves out what is hidden)
+	var fuel_ic := _icon("fuel", 14, INK3)
+	fuel_ic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var fuel_k := _label("Fuel", Fonts.sans(400), 13, INK2)
+	var fuel_v := _label("0", Fonts.cond(600), 15, INK)
+	fuel_v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fuel_v.custom_minimum_size.x = 34
+	res_values["fuel"] = fuel_v
+	fuel_cells = [fuel_ic, fuel_k, fuel_v]
+	for c in fuel_cells:
+		c.visible = false
+		grid.add_child(c)
 	res_panel.add_child(grid)
 	res_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	left_col = _vbox(8)
@@ -3062,6 +3086,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		lbl.text = str(v)
 		var low: bool = (s[0] == "ammo" and v < 60) or (s[0] == "meds" and v < 3)
 		lbl.add_theme_color_override("font_color", WARN if low else INK)
+	_update_fuel(sim)
 	for kind in res_days:
 		var days: float = sim.supplies.days_left(kind)
 		var dl: Label = res_days[kind]
@@ -3137,6 +3162,32 @@ func _day_text(sim, speed: int = 1) -> String:
 	return ("DAY %d/%d" if compact else "DAY %d OF %d") % [sim.scenario.day(), sim.scenario.total_days()]
 
 
+## The fuel row of the stores (round 13): there in a settlement game once there is a vehicle or any fuel; the number is in the
+## amber while the tank is low and there is a vehicle to burn it. Not there, the panel is as it was.
+func _update_fuel(sim) -> void:
+	var rules = sim.get("vehicles")
+	var on: bool = rules != null and sim.get("town") != null and sim.town.on and (not rules.fleet.is_empty() or float(rules.fuel) > 0.0)
+	if fuel_cells.is_empty():
+		return
+	# (the name is left out, as the others' are, in a narrow window: see _on_resized)
+	var changed: bool = on != fuel_cells[2].visible
+	fuel_cells[0].visible = on
+	fuel_cells[1].visible = on and not compact
+	fuel_cells[2].visible = on
+	if changed:
+		_layout_dock.call_deferred()
+	if not on:
+		return
+	var amount := roundi(float(rules.fuel))
+	fuel_cells[2].text = str(amount)
+	var low: bool = float(rules.fuel) < FUEL_LOW and not rules.fleet.is_empty()
+	fuel_cells[2].add_theme_color_override("font_color", WARN if low else INK)
+	var tip := "Fuel: %d. A vehicle burns it on the road; the gas stations and the fuel depot have more." % amount
+	for c in fuel_cells:
+		c.tooltip_text = tip
+		c.mouse_filter = Control.MOUSE_FILTER_PASS
+
+
 ## The Town Board's button is in the toolbar, and the G of the help says so, only in a settlement game.
 func _sync_town(sim) -> void:
 	var on: bool = sim.get("town") != null and sim.town.on
@@ -3147,6 +3198,10 @@ func _sync_town(sim) -> void:
 		var word := "Town Board" if on else "Scavenge"
 		if help_g.text != word:
 			help_g.text = word
+		var g_tip := HELP_G_TOWN_TIP if on else ""
+		if help_g.tooltip_text != g_tip:
+			help_g.tooltip_text = g_tip
+			help_g.mouse_filter = Control.MOUSE_FILTER_PASS if on else Control.MOUSE_FILTER_IGNORE
 
 
 ## In a settlement game (round 9) the Build screen has the streets round the school too: the button's tooltip and the help's N say so.
@@ -3697,13 +3752,13 @@ var lock_allowed: Callable
 ## The global rectangle of a named part of the HUD, or an empty Rect2 when it is not there (not
 ## built, hidden, or the selection has no such button). Looked up by name each time: the cards,
 ## the order buttons and the dialog are rebuilt. Names: `stores`, `stores.<ammo|scrap|food|water|
-## meds>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `alerts`, `inspect`,
+## meds|fuel>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `alerts`, `inspect`,
 ## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`, `jobs` (the
 ## toolbar's Jobs button, and while the Jobs screen is open its parts: `jobs.screen`, `jobs.auto`, `jobs.clear`,
 ## `jobs.close`, `jobs.list`, `jobs.row:<person id>`, `jobs.job:<id>`, `jobs.post:<id>`, `jobs.station:<id>` and
 ## `jobs.item:<id>`), `town` (the toolbar's Town Board button: there only in a settlement game), `build` (the toolbar's Build button, and while the Build screen is open its parts: `build.screen`,
 ## `build.close`, `build.row:<plot id>`, `build.detail`, `build.order:<building id>`, `build.cancel`, `build.demolish`
-## and `build.jobs`; in a settlement game `build.lots` (the Lots slip), `build.map`, `build.pin:<plot id>` and `build.claim:<lot id>`),
+## and `build.jobs`; in a settlement game `build.lots` (the Lots slip), `build.map`, `build.pin:<plot id>`, `build.claim:<lot id>` and `build.walling:<lot id>`, the switch of a claimed lot's standing order),
 ## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`.
 func anchor_rect(name: String) -> Rect2:
@@ -3895,6 +3950,9 @@ func _anchor_build(part: String):
 	if kind == "claim":
 		var cards = s.get("lot_cards")
 		return cards[id].claim if typeof(cards) == TYPE_DICTIONARY and cards.has(id) else null
+	if kind == "walling":
+		var cards2 = s.get("lot_cards")
+		return cards2[id].switch if typeof(cards2) == TYPE_DICTIONARY and cards2.has(id) else null
 	return null
 
 ## Ghosts the order buttons, the speed buttons and the fields button that the tutorial step

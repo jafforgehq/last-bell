@@ -305,6 +305,9 @@ func tip_place() -> String:
 	for p in places:
 		var id := String(p.id)
 		if bool(p.get("survivor", false)) and state_of(id) == "unknown" and not bool(state.get(id, {}).get("rescued", false)):
+			# (a place across the river is told of only once the colony has a vehicle to go there in)
+			if bool(p.get("needs_vehicle", false)) and sim.vehicles.fleet.is_empty():
+				continue
 			return id
 	return ""
 
@@ -340,6 +343,9 @@ func garrison_of(id: String) -> Array:
 ## someone cannot go.
 func garrison_send(id: String, people: Array) -> bool:
 	if not on or state_of(id) != "claimed" or people.is_empty() or sim.phase != "day":
+		return false
+	# a place across the river is too far to walk to and hold: it takes a trip by vehicle (round 13), not this
+	if bool(place(id).get("needs_vehicle", false)):
 		return false
 	for p in people:
 		if not sim.scavenge.can_go(p):
@@ -455,6 +461,8 @@ func load_state(d: Dictionary) -> void:
 		var s = saved.get(id, {}) if saved is Dictionary else {}
 		state[id] = {"known": bool(s.get("known", bool(p.get("known", false)))), "cleared": bool(s.get("cleared", false)),
 			"claimed": bool(s.get("claimed", false)), "rescued": bool(s.get("rescued", false))}
+		if bool(s.get("vehicle_taken", false)):
+			state[id]["vehicle_taken"] = true
 		if int(p.get("nest", {}).get("strength", 0)) > 0:
 			_nest_heading[id] = heading_of(p)
 	_dawn_day = int(d.get("dawn_day", 0))

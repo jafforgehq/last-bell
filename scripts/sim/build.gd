@@ -567,23 +567,40 @@ func save() -> Dictionary:
 	return {"plots": out, "queue": _queue.duplicate()}
 
 
+## What the buildings that were taken out of the game cost (for the refund of an old save that has one standing).
+const LEGACY_COSTS := {"orchard": 24, "cistern": 20}
+
+
 func load_state(d: Dictionary) -> void:
 	_reset()
 	var saved = d.get("plots", {})
+	var refund := 0.0
 	if saved is Dictionary:
 		for id in saved:
 			var pl := plot(String(id))
 			var r = saved[id]
-			if pl.is_empty() or not r is Dictionary:
+			if not r is Dictionary:
 				continue
 			var b := String(r.get("building", ""))
+			var s = r.get("site", {})
+			# a plot or a building that is no more (an older game had more of them): the scrap comes back, a site in
+			# full and a standing building by REFUND_SHARE
+			if pl.is_empty() or (b != "" and not _building_by_id.has(b)) or (s is Dictionary and not s.is_empty() and not _building_by_id.has(String(s.get("building", "")))):
+				if s is Dictionary and not s.is_empty():
+					refund += float(s.get("scrap", 0.0))
+				if b != "":
+					refund += float(LEGACY_COSTS.get(b, building(b).get("scrap", 0))) * REFUND_SHARE
+				if pl.is_empty():
+					continue
 			if _building_by_id.has(b):
 				pl.building = b
-			var s = r.get("site", {})
 			if s is Dictionary and _building_by_id.has(String(s.get("building", ""))) and pl.building == "":
 				var data := building(String(s.building))
 				pl.site = {"building": String(s.building), "progress": float(s.get("progress", 0.0)),
 					"work": float(s.get("work", data.work)), "scrap": float(s.get("scrap", data.scrap))}
+	if refund > 0.0:
+		sim.stock.scrap = float(sim.stock.scrap) + refund
+		sim.alert("refund", "info", "Scrap back from plots that are no more", "%d scrap" % roundi(refund), null, 20.0)
 	var q = d.get("queue", [])
 	if q is Array:
 		for id in q:

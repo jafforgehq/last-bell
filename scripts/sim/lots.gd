@@ -35,6 +35,9 @@ const RAID_RISK := 0.06
 ## How far in front of a wall's inner face the places of the dead are in the data (a container's: the data's slots
 ## are drawn for it); a thinner kit has its own `stand` and its slots move by the difference.
 const SLOT_STAND := 2.74
+## The standing order keeps this much scrap back when it pays for a wall, and looks again this often (seconds).
+const AUTO_KEEP := 5.0
+const AUTO_EVERY := 2.0
 ## A lot that has just been sealed lifts everyone's mood by this much unless the data says another figure.
 const SEALED_MORALE := 3.0
 
@@ -55,6 +58,9 @@ var _built: Array = []
 var _passage_open := false
 var _raid_day := 0
 var _sealed := {}
+## Lot id to true: the standing order to wall the lot's streets one after another as the scrap allows.
+var auto_on := {}
+var _auto_t := 0.0
 
 
 func setup(s) -> void:
@@ -131,6 +137,8 @@ func start() -> void:
 	_passage_open = false
 	_raid_day = 0
 	_sealed.clear()
+	auto_on.clear()
+	_auto_t = 0.0
 	# a run begun on a sim that had lots forgets their plots and posts
 	if sim.build != null:
 		sim.build._visible_dirty = true
@@ -143,9 +151,10 @@ func begin() -> void:
 	on = sim.recruits.small and not _lots.is_empty() and not _mouths.is_empty()
 
 
-func update(_dt: float) -> void:
+func update(dt: float) -> void:
 	if not on or claimed_on.is_empty():
 		return
+	_auto_walls(dt)
 	if sim.bell_rung and sim.day != _raid_day:
 		_raid_day = sim.day
 		_raid()
@@ -568,6 +577,78 @@ func _check_sealed() -> void:
 		_sealed[id] = now
 
 
+# ------------------------------------------------------------- the standing order --
+
+func auto_walling(lot_id: String) -> bool:
+	return bool(auto_on.get(lot_id, false))
+
+
+## Switches the standing order of a lot on or off (only a claimed lot has one).
+func set_auto_walling(lot_id: String, value: bool) -> bool:
+	if not on or not claimed_on.has(lot_id):
+		return false
+	auto_on[lot_id] = value
+	return true
+
+
+## The street of a lot that would be walled next: the first of its mouths with nothing across it, or "".
+func next_street(lot_id: String) -> String:
+	for m in mouths_of(lot_id):
+		var pl: Dictionary = sim.build.plot(String(m.id))
+		if not pl.is_empty() and String(pl.building) == "" and pl.site.is_empty():
+			return String(m.id)
+	return ""
+
+
+## The wall kit the standing order puts across a mouth: the sturdiest for its price among those that fit.
+func best_kit(mouth_id: String) -> String:
+	var best := ""
+	var best_value := -1.0
+	for kid in kits_for(mouth_id):
+		var b: Dictionary = sim.build.building(String(kid))
+		var value: float = float(b.hp) / maxf(1.0, float(b.scrap))
+		if value > best_value:
+			best_value = value
+			best = String(kid)
+	return best
+
+
+## The price of the wall the standing order would order next in this lot (0 when none is left).
+func next_price(lot_id: String) -> int:
+	var m := next_street(lot_id)
+	if m == "":
+		return 0
+	var k := best_kit(m)
+	return int(sim.build.building(k).scrap) if k != "" else 0
+
+
+## By day, with nobody building and the scrap there, the lots under the standing order get their next wall
+## ordered: the Builders do the rest, one street after another.
+func _auto_walls(dt: float) -> void:
+	if auto_on.is_empty():
+		return
+	_auto_t -= dt
+	if _auto_t > 0.0:
+		return
+	_auto_t = AUTO_EVERY
+	if sim.phase != "day" or not sim.build.active_site().is_empty():
+		return
+	for l in _lots:
+		var id := String(l.id)
+		if not auto_walling(id) or not claimed_on.has(id):
+			continue
+		var m := next_street(id)
+		if m == "":
+			continue
+		var k := best_kit(m)
+		if k == "":
+			continue
+		if float(sim.stock.scrap) < float(sim.build.building(k).scrap) + AUTO_KEEP:
+			continue
+		if sim.build.order(m, k):
+			return
+
+
 # ---------------------------------------------------------------------- raids --
 
 ## At the bell, the buildings of the lots may be ruined, the less the more of the streets are shut.
@@ -589,7 +670,7 @@ func _raid() -> void:
 # ----------------------------------------------------------------------- save --
 
 func save() -> Dictionary:
-	return {"claimed": claimed_on.duplicate(), "walls": _built.duplicate(true), "sealed": _sealed.duplicate(), "raid_day": _raid_day}
+	return {"claimed": claimed_on.duplicate(), "walls": _built.duplicate(true), "sealed": _sealed.duplicate(), "raid_day": _raid_day, "auto": auto_on.duplicate()}
 
 
 func load_state(d: Dictionary) -> void:
@@ -601,6 +682,12 @@ func load_state(d: Dictionary) -> void:
 			if _lot_by_id.has(String(id)):
 				claimed_on[String(id)] = int(c[id])
 	_raid_day = int(d.get("raid_day", 0))
+	auto_on.clear()
+	var au = d.get("auto", {})
+	if au is Dictionary:
+		for id in au:
+			if _lot_by_id.has(String(id)) and bool(au[id]):
+				auto_on[String(id)] = true
 	_sealed.clear()
 	var s = d.get("sealed", {})
 	if s is Dictionary:

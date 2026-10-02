@@ -229,7 +229,7 @@ func test_the_bunk_house_adds_four_beds_after_the_others() -> void:
 	var sim = g.sim
 	var before: Array = sim.medical.beds.duplicate()
 	eq(before.size(), 6, "two cots and four bunks to begin with")
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	Helpers.run(sim, 0.1)
 	var beds: Array = sim.medical.beds
 	eq(beds.size(), 6 + int(_fx(sim, "bunk_house", "beds")), "four more")
@@ -240,13 +240,13 @@ func test_the_bunk_house_adds_four_beds_after_the_others() -> void:
 	for i in spots.size():
 		eq(String(beds[6 + i].kind), "bunk house", "bed %d is a bunk house bed" % i)
 		eq(Vector2(beds[6 + i].pos), Vector2(spots[i]), "at the spot the building gives")
-	_stand(sim, "court_south", "bunk_house")
+	_stand(sim, "north_east_lot", "bunk_house")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds.size(), 14, "a second bunk house has four more")
-	sim.build.demolish("court_north")
+	sim.build.demolish("south_east_corner")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds.size(), 10, "and when one comes down its beds go")
-	sim.build.demolish("court_south")
+	sim.build.demolish("north_east_lot")
 	Helpers.run(sim, 0.1)
 	eq(sim.medical.beds, before, "with both gone the beds are the old six")
 	g.world.free()
@@ -257,7 +257,7 @@ func test_a_patient_goes_to_the_bunk_house_when_the_other_beds_are_full() -> voi
 	var sim = g.sim
 	var cot = sim.medical.beds[0]
 	sim.medical.beds = [cot]    # one cot is all the infirmary has
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var walt = _patient(sim, "Walt")
 	eq(_at(walt.resting_bed), Vector2(cot.pos), "the first goes to the cot")
 	eq(String(walt.activity), "Resting in the infirmary", "and says so")
@@ -273,7 +273,7 @@ func test_a_patient_goes_to_the_bunk_house_when_the_other_beds_are_full() -> voi
 func test_the_cots_and_the_bunks_come_before_the_bunk_house_whatever_the_distance() -> void:
 	var g := _game()
 	var sim = g.sim
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var walt = _person(sim, "Walt")
 	var spot: Vector2 = sim.build.bed_spots()[0]
 	walt.x = spot.x
@@ -290,14 +290,14 @@ func test_a_patient_in_a_bed_that_comes_down_is_put_in_another_one() -> void:
 	var sim = g.sim
 	var cot = sim.medical.beds[0]
 	sim.medical.beds = [cot]
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var walt = _patient(sim, "Walt")
 	var hector = _patient(sim, "Hector")
 	check(_near_spot(_at(hector.resting_bed), sim.build.bed_spots()), "Hector is in the bunk house")
 	walt.hp = 100.0
 	Helpers.run(sim, 0.1)
 	check(not walt.downed and walt.resting_bed == null, "Walt is up and the cot is free")
-	check(sim.build.demolish("court_north"), "the bunk house comes down")
+	check(sim.build.demolish("south_east_corner"), "the bunk house comes down")
 	Helpers.run(sim, 0.1)
 	check(hector.downed and hector.stabilised, "Hector is still a patient")
 	eq(_at(hector.resting_bed), Vector2(cot.pos), "and he is in the cot")
@@ -311,11 +311,11 @@ func test_a_patient_whose_bunk_house_comes_down_with_no_bed_free_rests_where_he_
 	var sim = g.sim
 	sim.medical.beds = []
 	sim.jobs.unassign(_person(sim, "Ana"))    # nobody on duty in the infirmary: plain rest
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var hector = _patient(sim, "Hector")
 	check(hector.resting_bed != null, "Hector is in a bed of the bunk house")
 	var at := Vector2(hector.x, hector.y)
-	check(sim.build.demolish("court_north"), "the bunk house comes down")
+	check(sim.build.demolish("south_east_corner"), "the bunk house comes down")
 	Helpers.run(sim, 0.1)
 	eq(hector.resting_bed, null, "he is out of a bed that is gone")
 	eq(String(hector.activity), "Resting", "and rests where he lies")
@@ -337,7 +337,7 @@ func test_a_patient_in_the_bunk_house_heals_like_any_other_and_gets_up() -> void
 	var sim = g.sim
 	sim.medical.beds = []
 	sim.jobs.unassign(_person(sim, "Ana"))
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var hector = _patient(sim, "Hector")
 	check(hector.resting_bed != null, "in a bunk house bed")
 	Helpers.run(sim, 20.0)    # one game hour
@@ -355,7 +355,7 @@ func test_a_patient_in_the_bunk_house_is_still_there_after_a_save() -> void:
 	var a := _game()
 	var sim_a = a.sim
 	sim_a.medical.beds = []
-	_stand(sim_a, "court_north", "bunk_house")
+	_stand(sim_a, "south_east_corner", "bunk_house")
 	var hector = _patient(sim_a, "Hector")
 	check(hector.resting_bed != null, "Hector is in a bed of the bunk house")
 	var bed: Vector2 = _at(hector.resting_bed)
@@ -403,7 +403,7 @@ func test_putting_up_and_pulling_down_bunk_houses_among_the_hurt_leaves_nobody_s
 	sim.medical.beds = [sim.medical.beds[0], sim.medical.beds[1]]    # two cots: the bunk houses are needed
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 20261002
-	var plots := ["court_north", "court_south"]
+	var plots := ["south_east_corner", "north_east_lot"]
 	var ups := 0
 	var downs := 0
 	var rehomed := 0
@@ -468,7 +468,7 @@ func test_the_bunk_house_steadies_everyones_mood() -> void:
 	for p in sim.people:
 		before[p.id] = float(sim.morale.target(p))
 		check(_line(sim, p, "A proper bed") == null, "%s has no bed to be glad of yet" % p.first)
-	_stand(sim, "court_north", "bunk_house")
+	_stand(sim, "south_east_corner", "bunk_house")
 	var lift: float = _fx(sim, "bunk_house", "morale")
 	for p in sim.people:
 		near(float(sim.morale.target(p)), float(before[p.id]) + lift, 1.0e-9, "%s's mood heads %.0f higher" % [p.first, lift])
@@ -477,15 +477,15 @@ func test_the_bunk_house_steadies_everyones_mood() -> void:
 		if line != null:
 			near(float(line.value), lift, 0.05, "with its sign: +%.0f" % lift)
 			eq(bool(line.recent), false, "a steady thing, not a shock that fades")
-	_stand(sim, "court_south", "bunk_house")
+	_stand(sim, "north_east_lot", "bunk_house")
 	for p in sim.people:
 		near(float(sim.morale.target(p)), float(before[p.id]) + 2.0 * lift, 1.0e-9, "a second bunk house, a second bed each")
 	var ruth = _person(sim, "Ruth")
 	ruth.dead = true
 	near(float(sim.morale.target(ruth)), Morale.BASE_TARGET, 1.0e-9, "the dead have no mood to lift")
 	ruth.dead = false
-	sim.build.demolish("court_north")
-	sim.build.demolish("court_south")
+	sim.build.demolish("south_east_corner")
+	sim.build.demolish("north_east_lot")
 	for p in sim.people:
 		eq(float(sim.morale.target(p)), float(before[p.id]), "%s's target is exactly what it was once the beds are gone" % p.first)
 		check(_line(sim, p, "A proper bed") == null, "and the line is gone")
@@ -504,7 +504,7 @@ func test_the_bunk_house_moves_the_mood_to_its_new_target() -> void:
 			from[p.id] = float(sim.morale.target(p))
 		lift = _fx(sim, "bunk_house", "morale")
 		if built:
-			_stand(sim, "court_north", "bunk_house")
+			_stand(sim, "south_east_corner", "bunk_house")
 		for p in sim.people:
 			sim.morale.set_value(p, float(from[p.id]))    # each rests exactly at the plain target
 		Helpers.run(sim, 30.0)    # one and a half game hours: drift is 2.5 an hour
@@ -944,7 +944,7 @@ func test_pulling_every_building_down_puts_every_number_back() -> void:
 	a.world.free()
 	var b := _game()
 	var sim = b.sim
-	var plots := {"court_north": "workshop", "court_south": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_east_lot": "floodlights", "west_wall": "watchtower"}
+	var plots := {"south_east_corner": "workshop", "north_east_lot": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_wall": "floodlights", "west_wall": "watchtower"}
 	for id in plots:
 		_stand(sim, id, plots[id])
 	var built := _numbers(sim)
@@ -974,7 +974,7 @@ func test_with_everything_built_a_day_and_a_night_run_without_errors() -> void:
 	sim.supplies.meal_day = 3
 	sim.supplies.meals_done = 1
 	sim.storyteller.radio_day = 2
-	var plots := {"court_north": "workshop", "court_south": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_east_lot": "floodlights", "west_wall": "watchtower"}
+	var plots := {"south_east_corner": "workshop", "north_east_lot": "bunk_house", "east_lot": "greenhouse", "junk_corner": "salvage_bench", "south_lot": "radio_mast", "north_wall": "floodlights", "west_wall": "watchtower"}
 	for id in plots:
 		_build_now(sim, id, plots[id])
 	sim.medical.beds = [sim.medical.beds[0]]    # a one-cot infirmary: the second patient goes to the bunk house

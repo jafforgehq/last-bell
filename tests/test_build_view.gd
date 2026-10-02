@@ -175,7 +175,7 @@ func test_every_plot_lies_in_the_yard_on_open_ground_with_a_work_spot_the_crew_c
 	var g := _game()
 	var problems := _plot_problems(g)
 	eq(problems, [], "the plots are all right: %s" % "; ".join(problems))
-	eq(g.sim.build.plots().size(), 12, "twelve plots")
+	eq(g.sim.build.plots().size(), 7, "seven plots: five in the yard and two on the wall")
 	g.world.free()
 
 
@@ -185,15 +185,16 @@ func test_a_lot_on_a_barrel_or_over_the_gate_lane_or_on_another_lot_is_found() -
 	var original: Array = []
 	for pl in plots:
 		original.append({"pos": pl.pos, "size": pl.size, "work": pl.work})
+	var first := String(plots[0].id)
 	# a lot on the fire barrel at (44.8, 21.5)
 	plots[0].pos = Vector2(44.5, 21.5)
 	plots[0].size = Vector2(3.0, 3.0)
 	var text := "; ".join(_plot_problems(g))
-	check(text.contains("court_north: the lot lies on a barrel") or text.contains("court_north: the lot covers shut ground"), "a lot on a barrel is found: %s" % text)
+	check(text.contains("%s: the lot lies on a barrel" % first) or text.contains("%s: the lot covers shut ground" % first), "a lot on a barrel is found: %s" % text)
 	# a lot in the gate's lane
 	plots[0].pos = Vector2(39.5, 21.5)
 	text = "; ".join(_plot_problems(g))
-	check(text.contains("court_north: the lot is in the gate's lane"), "a lot in the lane is found: %s" % text)
+	check(text.contains("%s: the lot is in the gate's lane" % first), "a lot in the lane is found: %s" % text)
 	# two lots on one another
 	plots[0].pos = Vector2(plots[1].pos)
 	text = "; ".join(_plot_problems(g))
@@ -203,10 +204,10 @@ func test_a_lot_on_a_barrel_or_over_the_gate_lane_or_on_another_lot_is_found() -
 	plots[0].size = original[0].size
 	plots[0].work = Vector2(43.9, 25.7)
 	text = "; ".join(_plot_problems(g))
-	check(text.contains("court_north: nobody can stand at"), "a work spot on the worktable is found: %s" % text)
+	check(text.contains("%s: nobody can stand at" % first), "a work spot on the worktable is found: %s" % text)
 	plots[0].work = Vector2(21.0, 22.0)
 	text = "; ".join(_plot_problems(g))
-	check(text.contains("court_north: nobody can stand at") or text.contains("cannot walk from the gate"), "a work spot on the wall is found: %s" % text)
+	check(text.contains("%s: nobody can stand at" % first) or text.contains("cannot walk from the gate"), "a work spot on the wall is found: %s" % text)
 	g.world.free()
 
 
@@ -283,7 +284,7 @@ func test_every_building_on_every_plot_it_may_stand_on_leaves_the_crews_places_a
 			eq(problems, [], "%s on %s: %s" % [String(b.id), String(pl.id), "; ".join(problems)])
 			check(sim.build.demolish(String(pl.id)), "and it comes down again")
 			eq(g.world.solid_p, base, "%s on %s: the ground is as it was after it comes down" % [String(b.id), String(pl.id)])
-	check(stood >= 40, "a good many pairs were tried: %d" % stood)
+	check(stood >= 30, "a good many pairs were tried: %d" % stood)
 	g.world.free()
 
 
@@ -295,17 +296,22 @@ func test_with_every_plot_built_over_as_far_as_footprints_go_the_crews_places_an
 		# the biggest footprint of each kind of plot (three tiles by two), on every one of them at once
 		_stand(sim, String(pl.id), "watchtower" if String(pl.kind) == "wall" else "workshop")
 	var problems := _footprint_problems(g, base)
-	eq(problems, [], "all twelve standing: %s" % "; ".join(problems))
+	eq(problems, [], "all of them standing: %s" % "; ".join(problems))
 	var shut := 0
 	for i in base.size():
 		shut += 1 if g.world.solid_p[i] != base[i] else 0
-	eq(shut, 12 * 6, "twelve footprints of six tiles each, no tile shared")
+	eq(shut, sim.build.plots().size() * 6, "a footprint of six tiles for each plot, no tile shared")
 	g.world.free()
 
 
 func test_the_builders_walk_to_every_plot_even_with_every_other_one_built_over() -> void:
 	var worst := 0.0
-	for target in ["court_north", "court_south", "east_lot", "north_east_lot", "south_lot", "south_east_lot", "junk_corner", "garden_south", "south_east_corner", "north_wall", "west_wall", "east_wall"]:
+	var probe := _game()
+	var targets: Array = []
+	for pl in probe.sim.build.plots():
+		targets.append(String(pl.id))
+	probe.world.free()
+	for target in targets:
 		var g := _game()
 		var sim = g.sim
 		sim.minutes = 8.0 * 60.0
@@ -344,9 +350,10 @@ func test_a_footprint_that_shuts_a_work_spot_or_walls_one_in_is_found() -> void:
 	var g := _game()
 	var sim = g.sim
 	var base: PackedByteArray = g.world.solid_p.duplicate()
-	_finish_on(sim, "court_north", "workshop")
+	var first := String(sim.build.plots()[0].id)
+	_finish_on(sim, first, "workshop")
 	var text := "; ".join(_footprint_problems(g, base))
-	check(text.contains("where the crew of court_north stands"), "a footprint on the work spot is found: %s" % text)
+	check(text.contains("where the crew of %s stands" % first), "a footprint on the work spot is found: %s" % text)
 	check(text.contains("nobody can walk from the gate to"), "and the work spot that can no longer be reached: %s" % text)
 	g.world.free()
 	Build.art_path = Build.ART_PATH
@@ -563,10 +570,10 @@ func test_the_node_makes_its_sprites_once_and_again_only_when_a_plot_changes() -
 	check(sim.build.demolish("junk_corner"), "it comes down")
 	n.update(0.7)
 	eq(n.sprite_count(), 0, "and nothing of it is left")
-	sim.build.order("court_north", "workshop")
+	sim.build.order("east_lot", "workshop")
 	n.update(0.8)
 	check(n.sprite_count() > 0, "a site again")
-	check(sim.build.cancel("court_north"), "cancelled")
+	check(sim.build.cancel("east_lot"), "cancelled")
 	n.update(0.9)
 	eq(n.sprite_count(), 0, "and the site is gone")
 	g.world.free()
@@ -577,8 +584,8 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	var sim = g.sim
 	var h := _node(g)
 	var n = h.node
-	_stand(sim, "south_east_lot", "radio_mast")
-	_stand(sim, "court_south", "bunk_house")
+	_stand(sim, "south_east_corner", "radio_mast")
+	_stand(sim, "south_lot", "bunk_house")
 	n.update(0.0)
 	var standing: Array = []
 	for c in h.tall.get_children():
@@ -589,7 +596,7 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	for c in h.tall.get_children():
 		if String(c.texture.resource_path).get_file().get_basename() == "392_mast":
 			mast = c
-	var at: Vector2 = Vector2(sim.build.plot("south_east_lot").pos)
+	var at: Vector2 = Vector2(sim.build.plot("south_east_corner").pos)
 	near(mast.position.y / 64.0, at.y + 0.2, 1.0e-3, "its feet, which the people are sorted by, are on the ground at the foot of the mast")
 	near(mast.position.x / 64.0, at.x + 0.38, 1.0e-3, "and it stands on the plot")
 	var flat := 0
@@ -601,7 +608,7 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 
 func test_the_node_follows_a_load_and_a_new_run() -> void:
 	var a := _game()
-	_stand(a.sim, "court_south", "greenhouse")
+	_stand(a.sim, "south_lot", "greenhouse")
 	a.sim.build.order("junk_corner", "salvage_bench")
 	var d: Dictionary = SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(a.sim)))
 	var b := _game(99)
@@ -618,40 +625,88 @@ func test_the_node_follows_a_load_and_a_new_run() -> void:
 	b.world.free()
 
 
-func test_the_plots_show_faintly_the_screen_lights_them_and_the_one_it_points_at_most() -> void:
+## A point of the yard that is nowhere near a plot (tiles): the pointer parked there shows no sign.
+const FAR_FROM_PLOTS := Vector2(-40.0, -40.0)
+
+
+func test_an_empty_plot_shows_no_sign_and_no_outline_until_the_screen_is_open_the_pointer_is_near_or_a_site_is_up() -> void:
 	var g := _game()
 	var sim = g.sim
 	var h := _node(g)
 	var n = h.node
+	var plots: Array = sim.build.plots()
+	var a: Dictionary = plots[0]
+	var b: Dictionary = plots[1]
+	n.pointer = FAR_FROM_PLOTS
 	var pen := Pen.new()
 	n._paint_ground(pen)
-	eq(n.drawn_outlines, 12, "an outline round each empty plot")
-	eq(n.drawn_signs, 12, "and its sign")
-	eq(pen.lines, 12, "each outline is one draw call")
-	var empty: Dictionary = sim.build.plot("court_north")
-	near(n.outline_alpha(empty), BuildNode.ALPHA_EMPTY, 1.0e-9, "faint")
-	check(n.outline_alpha(empty) < 0.35 and n.sign_alpha(empty) < 0.7, "an empty plot is understated")
-	_stand(sim, "court_south", "bunk_house")
+	eq(n.drawn_outlines, 0, "the yard in plain play has no outline on it")
+	eq(n.drawn_signs, 0, "and no sign")
+	eq(pen.lines, 0, "not one dashed line")
+	eq(n.near_plot(), "", "(nobody is near a plot)")
+	near(n.outline_alpha(a), 0.0, 1.0e-9, "an empty plot's outline is none")
+	near(n.sign_alpha(a), 0.0, 1.0e-9, "and its sign")
+	# the pointer in a lot: that plot, and only that one, has its outline and its sign
+	n.pointer = Vector2(a.pos)
+	eq(n.near_plot(), String(a.id), "the plot under the pointer is the near one")
+	pen = Pen.new()
+	n._paint_ground(pen)
+	eq(n.drawn_outlines, 1, "it has its outline")
+	eq(n.drawn_signs, 1, "and its sign")
+	near(n.outline_alpha(a), BuildNode.ALPHA_NEAR, 1.0e-9, "at the strength of a plot the pointer is near")
+	near(n.sign_alpha(a), BuildNode.SIGN_NEAR, 1.0e-9, "and its sign")
+	near(n.outline_alpha(b), 0.0, 1.0e-9, "the others have none")
+	# near means within NEAR_PLOT tiles of the lot's edge, the nearest plot only
+	var half := Vector2(a.size) / 2.0
+	near(n.gap(a, Vector2(a.pos) + Vector2(half.x + 2.0, 0.0)), 2.0, 1.0e-6, "the gap is measured from the lot's edge")
+	near(n.gap(a, Vector2(a.pos) + Vector2(half.x * 0.5, half.y * 0.5)), 0.0, 1.0e-9, "and is nothing inside it")
+	n.pointer = Vector2(a.pos) + Vector2(half.x + BuildNode.NEAR_PLOT + 0.5, 0.0)
+	check(n.near_plot() != String(a.id), "more than NEAR_PLOT tiles from its edge it is not near")
+	n.pointer = Vector2(a.pos) + Vector2(half.x + BuildNode.NEAR_PLOT - 0.3, 0.0)
+	var nearest: String = n.near_plot()
+	check(nearest == String(a.id) or sim.build.plot(nearest).has("pos"), "(a plot within NEAR_PLOT is found: %s)" % nearest)
+	n.pointer = Vector2(a.pos)
+	# a site keeps its outline and its sign wherever the pointer is
 	sim.stock.scrap = 100.0
-	sim.build.order("east_lot", "workshop")
+	check(sim.build.order(String(b.id), "salvage_bench"), "(a site is ordered on %s)" % String(b.id))
+	n.pointer = FAR_FROM_PLOTS
+	pen = Pen.new()
 	n._paint_ground(pen)
-	eq(n.drawn_outlines, 11, "a building has none of its own in the plain yard (a site has)")
-	eq(n.drawn_signs, 11, "nor a sign (a site keeps its: a click on it opens the screen)")
-	near(n.outline_alpha(sim.build.plot("east_lot")), BuildNode.ALPHA_SITE, 1.0e-9, "a site's is as faint")
-	near(n.outline_alpha(sim.build.plot("court_south")), 0.0, 1.0e-9, "a building's none")
+	eq(n.drawn_outlines, 1, "a plot with a site keeps its outline")
+	eq(n.drawn_signs, 1, "and its sign (a click on it opens the screen)")
+	near(n.outline_alpha(b), BuildNode.ALPHA_SITE, 1.0e-9, "as faint as before")
+	var air := Pen.new()
+	n._paint_air(air)
+	eq(n.drawn_bars, 1, "and its bar over it")
+	# a building has none of its own, near or not
+	_stand(sim, String(plots[2].id), "bunk_house")
+	n.pointer = Vector2(plots[2].pos)
+	n._paint_ground(pen)
+	near(n.outline_alpha(plots[2]), 0.0, 1.0e-9, "a building's outline is none, with the pointer on it too")
+	near(n.sign_alpha(plots[2]), 0.0, 1.0e-9, "and its sign")
+	n.pointer = FAR_FROM_PLOTS
+	# the Build screen open: every plot is outlined and signed, a building's too
 	h.main.build_open = true
+	pen = Pen.new()
 	n._paint_ground(pen)
-	eq(n.drawn_outlines, 12, "with the Build screen open every plot is outlined")
-	eq(n.drawn_signs, 12, "and signed")
-	near(n.outline_alpha(sim.build.plot("court_south")), BuildNode.ALPHA_OPEN, 1.0e-9, "brighter, a building's too")
-	h.main.build_hover = {"plot": "court_north"}
-	near(n.outline_alpha(empty), BuildNode.ALPHA_HOVER, 1.0e-9, "and the one it points at brightest")
-	near(n.sign_alpha(empty), 1.0, 1.0e-9, "with its sign")
+	eq(n.drawn_outlines, plots.size(), "with the Build screen open every plot is outlined")
+	eq(n.drawn_signs, plots.size(), "and signed")
+	near(n.outline_alpha(plots[2]), BuildNode.ALPHA_OPEN, 1.0e-9, "brighter, a building's too")
+	h.main.build_hover = {"plot": String(a.id)}
+	near(n.outline_alpha(a), BuildNode.ALPHA_HOVER, 1.0e-9, "and the one it points at brightest")
+	near(n.sign_alpha(a), 1.0, 1.0e-9, "with its sign")
 	h.main.build_open = false
 	h.main.build_hover = {}
+	# the --build-plots flag keeps them all lit, as the screen does
 	n.show_plots = true
-	near(n.outline_alpha(sim.build.plot("court_south")), BuildNode.ALPHA_OPEN, 1.0e-9, "the flag keeps them lit as the screen does")
+	pen = Pen.new()
+	n._paint_ground(pen)
+	eq(n.drawn_outlines, plots.size(), "the flag lights every plot with the screen shut")
+	near(n.outline_alpha(plots[2]), BuildNode.ALPHA_OPEN, 1.0e-9, "as the screen does")
 	n.show_plots = false
+	pen = Pen.new()
+	n._paint_ground(pen)
+	eq(n.drawn_outlines, 1, "and without it, back to the site's")
 	h.main.title_mode = true
 	n._paint_ground(pen)
 	eq(n.drawn_outlines, 0, "nothing on the title's yard")
@@ -661,6 +716,17 @@ func test_the_plots_show_faintly_the_screen_lights_them_and_the_one_it_points_at
 	n._paint_ground(pen)
 	eq(n.drawn_outlines + n.drawn_signs, 0, "nor in Orientation Day's lesson")
 	h.main.coach.free()
+	g.world.free()
+
+
+func test_the_pointer_is_read_from_the_window_unless_a_test_or_a_screenshot_puts_it_somewhere() -> void:
+	var g := _game()
+	var h := _node(g)
+	var n = h.node
+	n.pointer = Vector2(12.0, 7.5)
+	eq(n.pointer_tile(), Vector2(12.0, 7.5), "the pointer that was put is the pointer")
+	n.pointer = null
+	check(n.pointer_tile().is_finite(), "else it is where the window has the mouse: %s" % str(n.pointer_tile()))
 	g.world.free()
 
 
@@ -674,7 +740,7 @@ func test_a_site_has_a_bar_that_fills_with_the_work_and_waits_at_night() -> void
 	eq(n.drawn_bars, 0, "no site, no bar")
 	sim.stock.scrap = 100.0
 	sim.build.order("junk_corner", "salvage_bench")
-	sim.build.order("court_north", "workshop")
+	sim.build.order("east_lot", "workshop")
 	n._paint_air(pen)
 	eq(n.drawn_bars, 2, "a bar for each site")
 	var rects := pen.rects

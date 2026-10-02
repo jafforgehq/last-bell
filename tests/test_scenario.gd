@@ -326,6 +326,33 @@ func test_the_policy_saves_up_for_the_next_building_and_builds_one_at_a_time() -
 	g.world.free()
 
 
+func test_the_policy_fits_its_whole_order_on_the_seven_plots_with_the_floodlights_on_the_wall() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	for day in range(3, 3 + 14):
+		_morning_of_day(sim, day)
+		sim.stock.scrap = 300.0
+		policy.tick()
+		var site: Dictionary = sim.build.active_site()
+		if not site.is_empty():
+			sim.build._finish(site)    # (nobody waits for the builders here)
+	for id in Balance.Policy.BUILD_ORDER:
+		check(sim.build.built(String(id)), "the %s was built" % id)
+	var on_the_wall := {}
+	var standing := 0
+	for pl in sim.build.plots():
+		if pl.building != "":
+			standing += 1
+			if pl.kind == "wall":
+				on_the_wall[String(pl.building)] = true
+	eq(standing, 7, "seven buildings on seven plots")
+	check(on_the_wall.has("floodlights") and on_the_wall.has("watchtower"), "the floodlights and the tower stand on the wall: %s" % str(on_the_wall.keys()))
+	g.world.free()
+
+
 func test_the_default_policy_does_not_build() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim

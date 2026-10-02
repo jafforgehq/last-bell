@@ -60,7 +60,7 @@ class FakeScavenge:
 	func available_sites() -> Array:
 		return list
 
-	func send(people: Array, site_id: String, _action: String = "loot") -> bool:
+	func send(people: Array, site_id: String, _action: String = "loot", _vehicle_id: String = "") -> bool:
 		var ids: Array = []
 		for p in people:
 			ids.append(p.id)

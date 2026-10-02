@@ -42,6 +42,9 @@ const SLOT_SPACING := 0.9
 const STANDS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0)]
 ## How far apart two lots are kept (tiles): a person fits between them (as the yard's own plots).
 const LOT_GAP := 0.9
+## Where a second lot may stand beside "a lot": a tile of open ground between them (found by trying: the street
+## to the west of the wreck is open ground clear of everything).
+const GAP_SPOT := Vector2(-4.0, 0.0)
 ## The tile just outside the Main gate: where the people come out into the ring.
 const GATE_OUTSIDE := Vector2i(39, 14)
 ## The ground in front of the gate, where the crew goes out and the recruits come in.
@@ -1174,7 +1177,7 @@ func test_the_file_parses_and_has_its_parts() -> void:
 	eq(_dicts(d.get("lots", [])).size(), 3, "three lots")
 	eq(_dicts(d.get("mouths", [])).size(), 12, "twelve wall plots")
 	var ring := _dicts(d.get("plots", []))
-	check(ring.size() >= 14 and ring.size() <= 18, "about sixteen ring plots: %d" % ring.size())
+	eq(ring.size(), 6, "six ring plots (round 11: the ring is room for a few more buildings, not a map of signs)")
 	var kits: Dictionary = d.get("kits", {})
 	check(kits.size() >= 10 and kits.size() <= 13, "a dozen kits: %d" % kits.size())
 	eq(int(d.get("passage", -1)), 2, "the passage is the old section 2")
@@ -1200,6 +1203,10 @@ func test_the_lots_and_who_owns_what() -> void:
 	eq(_lot_spawns(d, "north"), [0, 1, 2, 4, 6, 7], "the north lot has six mouths: the ends of the street, the tops of the roads and the alleys")
 	eq(_lot_spawns(d, "west"), [3, 8], "the west lot: the foot of the west road and the west alley")
 	eq(_lot_spawns(d, "east"), [5, 9], "the east lot: the foot of the east road and the east alley")
+	var counts: Array = []
+	for l in _dicts(d.get("lots", [])):
+		counts.append((l.plots as Array).size())
+	eq(counts, [3, 2, 1], "the lots list three, two and one ring plots")
 
 
 # ----------------------------------------------------------------------- the mouths --
@@ -1353,12 +1360,12 @@ func test_the_ring_plots_are_spread_over_the_streets_and_the_lots() -> void:
 		kinds[int(terrain[int(pos.y) * _w() + int(pos.x)])] = true
 		if pos.y < 15.0:
 			street += 1
-	check(int(by_lot.north) >= 7 and int(by_lot.north) <= 10, "the north lot has seven to ten plots: %d" % int(by_lot.north))
-	check(int(by_lot.west) >= 3 and int(by_lot.west) <= 5, "the west lot has three to five: %d" % int(by_lot.west))
-	check(int(by_lot.east) >= 3 and int(by_lot.east) <= 5, "the east lot has three to five: %d" % int(by_lot.east))
+	eq(int(by_lot.north), 3, "the north lot has three plots")
+	eq(int(by_lot.west), 2, "the west lot has two")
+	eq(int(by_lot.east), 1, "the east lot has one")
 	for q in quarters:
-		check(int(quarters[q]) >= 2, "the %s quarter of the ring has at least two plots: %d" % [q, int(quarters[q])])
-	check(street >= 5, "the north street has at least five plots: %d" % street)
+		check(int(quarters[q]) >= 1, "the %s quarter of the ring has a plot: %d" % [q, int(quarters[q])])
+	eq(street, 3, "the north lot's three plots all stand in the north street, near the Main gate")
 	check(kinds.has(1) and kinds.has(2) and kinds.has(4), "the plots stand on asphalt, on sidewalk and on a verge (terrain 1, 2 and 4): %s" % str(kinds.keys()))
 	# a person can pass between any two plots and the plots do not crowd one another
 	for i in plots.size():
@@ -1727,105 +1734,114 @@ func test_plots_on_a_car_a_wall_or_each_other_or_with_no_way_to_them_are_found()
 		return
 	var base := _plot_problems(d)
 	eq(base, [], "the real data first: %s" % "; ".join(base))
+	# two of the north street's plots are taken in turn and put in the wrong places (round 11 left six: "a" is the
+	# one by the wreck, "b" the one past the gate)
+	var a := "street_wreck"
+	var b := "street_gate"
 	var c := _copy(d)
-	var p := _plot_of(c, "street_west")
+	var p := _plot_of(c, a)
 	# on the car at (14.8 to 19.2, 7.2 to 9.2)
 	p.pos = [16.5, 8.5]
 	p.work = [16.5, 9.5]
 	var text := "; ".join(_plot_problems(c))
-	check(text.contains("street_west: the lot lies on a car") or text.contains("street_west: the lot covers shut ground"), "a lot on a car is found: %s" % text)
+	check(text.contains("%s: the lot lies on a car" % a) or text.contains("%s: the lot covers shut ground" % a), "a lot on a car is found: %s" % text)
 	# in the gate's lane
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [39.5, 9.5]
 	p.work = [39.5, 10.5]
-	check(_has(_plot_problems(c), "street_west: the lot is in the gate's lane"), "a lot in the gate's lane is found")
+	check(_has(_plot_problems(c), "%s: the lot is in the gate's lane" % a), "a lot in the gate's lane is found")
 	# on shut ground and inside the compound
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [30.5, 16.5]
 	p.work = [30.5, 17.5]
 	text = "; ".join(_plot_problems(c))
-	check(text.contains("street_west: the lot covers shut ground") and text.contains("street_west: the lot is inside the compound"), "a lot on the compound's wall is found: %s" % text)
+	check(text.contains("%s: the lot covers shut ground" % a) and text.contains("%s: the lot is inside the compound" % a), "a lot on the compound's wall is found: %s" % text)
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [30.5, 25.5]
 	p.work = [30.5, 26.5]
-	check(_has(_plot_problems(c), "street_west: the lot is inside the compound"), "a lot in the yard is found")
+	check(_has(_plot_problems(c), "%s: the lot is inside the compound" % a), "a lot in the yard is found")
 	# on another lot
 	c = _copy(d)
-	p = _plot_of(c, "street_bins")
-	p.pos = [12.5, 11.5]
-	p.work = [12.5, 12.5]
+	p = _plot_of(c, b)
+	var at := _vec(_plot_of(c, a).pos) + Vector2(1.0, 0.0)
+	p.pos = [at.x, at.y]
+	p.work = [at.x, at.y + 1.0]
 	check(_has(_plot_problems(c), "lie closer than"), "two lots on each other are found")
 	# off the centre of a tile, the wrong size, the wrong kind
 	c = _copy(d)
-	_plot_of(c, "street_bins").pos = [23.0, 8.5]
-	check(_has(_plot_problems(c), "street_bins: a lot is centred on the middle of a tile"), "a lot off the middle of a tile is found")
+	_plot_of(c, b).pos = [43.0, 6.5]
+	check(_has(_plot_problems(c), "%s: a lot is centred on the middle of a tile" % b), "a lot off the middle of a tile is found")
 	c = _copy(d)
-	_plot_of(c, "street_bins").size = [3.0, 2.0]
-	check(_has(_plot_problems(c), "street_bins: a lot is three tiles by three"), "a lot of another size is found")
+	_plot_of(c, b).size = [3.0, 2.0]
+	check(_has(_plot_problems(c), "%s: a lot is three tiles by three" % b), "a lot of another size is found")
 	c = _copy(d)
-	_plot_of(c, "street_bins").kind = "yard"
-	check(_has(_plot_problems(c), "street_bins: the kind is ring"), "a lot of another kind is found")
+	_plot_of(c, b).kind = "yard"
+	check(_has(_plot_problems(c), "%s: the kind is ring" % b), "a lot of another kind is found")
 	# the work spot
 	c = _copy(d)
-	_plot_of(c, "street_bins").work = [23.5, 7.5]
-	check(_has(_plot_problems(c), "street_bins: the work spot is the middle of the front row"), "a work spot in the lot's own back rows is found")
+	p = _plot_of(c, b)
+	var mid := _vec(p.pos)
+	p.work = [mid.x, mid.y - 1.0]
+	check(_has(_plot_problems(c), "%s: the work spot is the middle of the front row" % b), "a work spot in the lot's own back rows is found")
 	c = _copy(d)
-	p = _plot_of(c, "street_bins")
-	p.work = [23.5, 12.5]
-	check(_has(_plot_problems(c), "street_bins: the work spot is the middle of the front row") and _has(_plot_problems(c), "far from the lot"), "a work spot far from the lot is found")
+	p = _plot_of(c, b)
+	p.work = [mid.x, mid.y + 5.0]
+	check(_has(_plot_problems(c), "%s: the work spot is the middle of the front row" % b) and _has(_plot_problems(c), "far from the lot"), "a work spot far from the lot is found")
 	# the lot against a wall and in the way of a post
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [9.5, 9.5]
 	p.work = [9.5, 10.5]
 	text = "; ".join(_plot_problems(c))
-	check(text.contains("street_west: the lot is up against the wall") or text.contains("street_west: the lot is in the way of the post"), "a lot against a wall or in the way of a post is found: %s" % text)
+	check(text.contains("%s: the lot is up against the wall" % a) or text.contains("%s: the lot is in the way of the post" % a), "a lot against a wall or in the way of a post is found: %s" % text)
 	# under a tree, on a lamp post, on the flat marks
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [18.5, 6.5]
 	p.work = [18.5, 7.5]
-	check(_has(_plot_problems(c), "street_west: the lot is under the tree"), "a lot under a tree is found")
+	check(_has(_plot_problems(c), "%s: the lot is under the tree" % a), "a lot under a tree is found")
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [24.5, 13.5]
 	p.work = [24.5, 14.5]
-	check(_has(_plot_problems(c), "street_west: the lot lies on a lamppost"), "a lot on a lamp post is found")
+	check(_has(_plot_problems(c), "%s: the lot lies on a lamppost" % a), "a lot on a lamp post is found")
 	# on the dead's side of a wall: a lot in the south strip
 	c = _copy(d)
-	p = _plot_of(c, "street_west")
+	p = _plot_of(c, a)
 	p.pos = [12.5, 61.5]
 	p.work = [12.5, 62.5]
 	text = "; ".join(_plot_problems(c))
-	check(text.contains("street_west: the dead of spawn point") or text.contains("people cannot walk from the gate"), "a lot outside the walls is found: %s" % text)
+	check(text.contains("%s: the dead of spawn point" % a) or text.contains("people cannot walk from the gate"), "a lot outside the walls is found: %s" % text)
 	# the wrong lot, an id twice, a missing key
 	c = _copy(d)
-	_plot_of(c, "street_west").lot = "east"
-	check(_has(_plot_problems(c), "street_west: lies in the north lot's streets but belongs to 'east'"), "a lot of the wrong lot is found")
+	_plot_of(c, a).lot = "east"
+	check(_has(_plot_problems(c), "%s: lies in the north lot's streets but belongs to 'east'" % a), "a lot of the wrong lot is found")
 	c = _copy(d)
-	_plot_of(c, "street_west").id = "court_north"
+	_plot_of(c, a).id = "junk_corner"
 	check(_has(_plot_problems(c), "the id is used twice"), "an id the yard already has is found")
 	c = _copy(d)
-	_plot_of(c, "street_west").erase("work")
-	check(_has(_plot_problems(c), "street_west: has no 'work'"), "a lot without a work spot is found")
+	_plot_of(c, a).erase("work")
+	check(_has(_plot_problems(c), "%s: has no 'work'" % a), "a lot without a work spot is found")
 	# lots that wall each other in once they are built: a lot whose back rows cover the next one's step
 	c = _copy(d)
-	var q := _plot_of(c, "street_bins")
-	q.pos = [13.5, 13.5]
-	q.work = [13.5, 14.5]
+	var step := _vec(_plot_of(c, a).work) + Vector2(1.1, 0.0)
+	var q := _plot_of(c, b)
+	q.pos = [float(floori(step.x)) + 1.5, float(floori(step.y)) + 1.5]
+	q.work = [float(floori(step.x)) + 1.5, float(floori(step.y)) + 2.5]
 	text = "; ".join(_plot_problems(c))
-	check(text.contains("street_west: with every lot built over and every wall up, nobody can walk to (12.6, 12.5)"), "a lot built over the step of another is found: %s" % text)
+	check(text.contains("%s: with every lot built over and every wall up, nobody can walk to (%.1f, %.1f)" % [a, step.x, step.y]), "a lot built over the step of another is found: %s" % text)
 	# two lots with a tile between them are fine
 	c = _copy(d)
-	q = _plot_of(c, "street_bins")
-	q.pos = [15.5, 11.5]
-	q.work = [15.5, 12.5]
+	q = _plot_of(c, b)
+	var apart := _vec(_plot_of(c, a).pos) + GAP_SPOT
+	q.pos = [apart.x, apart.y]
+	q.work = [apart.x, apart.y + 1.0]
 	eq(_plot_problems(c), [], "two lots with a tile between them are not found wrong: %s" % "; ".join(_plot_problems(c)))
-	q.pos = [14.5, 11.5]
-	q.work = [14.5, 12.5]
+	q.pos = [apart.x + 1.0, apart.y]
+	q.work = [apart.x + 1.0, apart.y + 1.0]
 	check(_has(_plot_problems(c), "lie closer than"), "and with no tile between them they are")
 
 

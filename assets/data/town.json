@@ -1,5 +1,5 @@
 {
-	"board": {"w": 100, "h": 70},
+	"board": {"w": 160, "h": 70},
 	"home": [50, 35],
 	"places": [
 		{
@@ -120,20 +120,22 @@
 			"name": "The crossing fuel stop",
 			"kind": "gas_station",
 			"pos": [75, 39],
-			"blurb": "A forecourt by the level crossing. The barrier is still down, waiting for a train, and the kiosk shutter is half up.",
+			"blurb": "A forecourt by the level crossing, a sedan at pump three and the tanks under it not yet dry. The barrier is still down, waiting for a train, and the kiosk shutter is half up.",
 			"danger": 2,
-			"loot": {"scrap": [10, 20], "food": [3, 7]},
-			"extra": {"water": [0.5, 4]}
+			"loot": {"scrap": [10, 20], "food": [3, 7], "fuel": [20, 35]},
+			"extra": {"water": [0.5, 4]},
+			"vehicle": "sedan"
 		},
 		{
 			"id": "garage",
 			"name": "Dunne's garage",
 			"kind": "garage",
 			"pos": [27, 46],
-			"blurb": "Two bays, a hoist, and tool cabinets bolted to the floor. The owner kept a shotgun under the till.",
+			"blurb": "Two bays, a hoist, and tool cabinets bolted to the floor. A pickup stands on the ramp with its keys on a hook, and the owner kept a shotgun under the till.",
 			"danger": 2,
 			"loot": {"scrap": [16, 28]},
-			"extra": {"ammo": [0.3, 25]},
+			"extra": {"ammo": [0.3, 25], "fuel": [0.5, 8]},
+			"vehicle": "pickup",
 			"outpost": {"yield": {"scrap": 3}, "cost": 30}
 		},
 		{
@@ -141,10 +143,11 @@
 			"name": "The ring road supermarket",
 			"kind": "supermarket",
 			"pos": [64, 58],
-			"blurb": "Trolleys piled against the doors, and a car park full of the dead who came to shop. The back shelves were never emptied.",
+			"blurb": "Trolleys piled against the doors, and a car park full of the dead who came to shop. A delivery van sits at the loading bay, and the back shelves were never emptied.",
 			"danger": 3,
 			"loot": {"food": [20, 34], "water": [14, 26]},
 			"extra": {"meds": [0.5, 2], "scrap": [0.3, 8]},
+			"vehicle": "van",
 			"nest": {"strength": 2}
 		},
 		{
@@ -176,9 +179,9 @@
 			"name": "The north road truck stop",
 			"kind": "gas_station",
 			"pos": [58, 5],
-			"blurb": "A café, a shower block and a lorry park, the lorries nose to tail. The drivers' lockers run along the back wall.",
+			"blurb": "A café, a shower block and a lorry park, the lorries nose to tail with their tanks full. The drivers' lockers run along the back wall.",
 			"danger": 2,
-			"loot": {"food": [8, 16], "water": [8, 18], "scrap": [10, 18]},
+			"loot": {"food": [8, 16], "water": [8, 18], "scrap": [10, 18], "fuel": [25, 40]},
 			"extra": {"ammo": [0.3, 20]},
 			"nest": {"strength": 1}
 		},
@@ -222,10 +225,11 @@
 			"name": "The bus depot",
 			"kind": "bus_depot",
 			"pos": [90, 36],
-			"blurb": "Forty buses nose to tail, the windows steamed over from the inside. The canteen is at the back, past all of them.",
+			"blurb": "Forty buses nose to tail, the windows steamed over from the inside, and the diesel tank by the gate still has some in it. The canteen is at the back, past all of them.",
 			"danger": 3,
 			"loot": {"scrap": [22, 40], "food": [6, 12], "water": [6, 12]},
-			"extra": {"meds": [0.4, 2]},
+			"extra": {"meds": [0.4, 2], "fuel": [0.5, 10]},
+			"vehicle": "bus",
 			"nest": {"strength": 3}
 		},
 		{
@@ -270,6 +274,143 @@
 			"extra": {"scrap": [0.3, 6]},
 			"nest": {"strength": 1},
 			"outpost": {"yield": {"food": 5, "water": 3}, "cost": 50}
+		},
+		{
+			"id": "river_bridge",
+			"name": "The river bridge",
+			"where": "the river bridge",
+			"kind": "bridge",
+			"pos": [98, 38],
+			"blurb": "Four lanes of concrete over slow brown water, and cars stopped on it in both directions. The city is on the far side, and nobody has walked back from it.",
+			"danger": 1,
+			"loot": {},
+			"extra": {}
+		},
+		{
+			"id": "checkpoint",
+			"name": "The army checkpoint",
+			"where": "the army checkpoint",
+			"kind": "checkpoint",
+			"pos": [111, 30],
+			"blurb": "Sandbags, a barrier arm and a tent with its flaps tied shut. The duty log is still on the table, and its last entry is in capitals.",
+			"danger": 3,
+			"loot": {"ammo": [50, 90], "scrap": [8, 14]},
+			"extra": {"meds": [0.4, 2]},
+			"needs_vehicle": true
+		},
+		{
+			"id": "flats",
+			"name": "Beech Court flats",
+			"where": "Beech Court",
+			"kind": "houses",
+			"pos": [111, 48],
+			"blurb": "Six tower blocks round a car park, a lift lobby with a dead man in it, and a lamp lit on the sixth floor every dusk. Somebody up there is still keeping house.",
+			"danger": 2,
+			"loot": {"food": [16, 28], "meds": [3, 7]},
+			"extra": {"water": [0.5, 10]},
+			"needs_vehicle": true,
+			"survivor": true
+		},
+		{
+			"id": "cold_store",
+			"name": "The harbour cold store",
+			"where": "the cold store",
+			"kind": "cold_store",
+			"pos": [104, 66],
+			"blurb": "A freezer warehouse on the harbour quay, the power long gone and the smell with it. The dry store upstairs is sealed, and the tins inside are fine.",
+			"danger": 2,
+			"loot": {"food": [20, 35], "water": [10, 18]},
+			"extra": {"scrap": [0.3, 6]},
+			"needs_vehicle": true,
+			"nest": {"strength": 2},
+			"outpost": {"yield": {"food": 5, "water": 2}, "cost": 55}
+		},
+		{
+			"id": "hospital",
+			"name": "St. Bride's hospital",
+			"where": "the hospital",
+			"kind": "hospital",
+			"pos": [122, 38],
+			"blurb": "Eleven floors and every window blank in the sun. The pharmacy is in the basement, and so, by the look of the stairs, is most of the staff.",
+			"danger": 3,
+			"loot": {"meds": [20, 35]},
+			"extra": {"food": [0.5, 8], "water": [0.4, 8]},
+			"needs_vehicle": true,
+			"outpost": {"yield": {"meds": 1.0}, "cost": 60}
+		},
+		{
+			"id": "mall",
+			"name": "Kingsmead Mall",
+			"where": "Kingsmead Mall",
+			"kind": "supermarket",
+			"pos": [121, 22],
+			"blurb": "Three floors of rolled-down shutters and a fountain full of coins. The food hall was stripped in a week; the supermarket at the back never was.",
+			"danger": 2,
+			"loot": {"food": [26, 40], "water": [14, 26]},
+			"extra": {"scrap": [0.5, 12]},
+			"needs_vehicle": true
+		},
+		{
+			"id": "university",
+			"name": "Ashgrove University",
+			"where": "the university",
+			"kind": "university",
+			"pos": [122, 55],
+			"blurb": "Lecture halls, a labs block with the chemical store standing open, and a hall of residence barred from the inside. The notice boards still say Freshers' Week.",
+			"danger": 2,
+			"loot": {"scrap": [20, 36], "meds": [6, 12]},
+			"extra": {"food": [0.4, 8]},
+			"needs_vehicle": true,
+			"survivor": true
+		},
+		{
+			"id": "police_hq",
+			"name": "The police headquarters",
+			"where": "the police headquarters",
+			"kind": "police",
+			"pos": [131, 31],
+			"blurb": "A grey block with a yard full of vans, none of them moved. The firearms store is in the basement behind two steel doors, and one of them is open.",
+			"danger": 3,
+			"loot": {"ammo": [90, 160], "scrap": [10, 20]},
+			"extra": {"meds": [0.4, 2]},
+			"needs_vehicle": true
+		},
+		{
+			"id": "power_station",
+			"name": "The Barrow power station",
+			"where": "the power station",
+			"kind": "power_station",
+			"pos": [120, 10],
+			"blurb": "Two cooling towers and a turbine hall, and over the gate a lamp that is still lit. Nobody has found out what is feeding it.",
+			"danger": 3,
+			"loot": {"scrap": [30, 55]},
+			"extra": {"water": [0.4, 10]},
+			"needs_vehicle": true,
+			"nest": {"strength": 3}
+		},
+		{
+			"id": "fuel_depot",
+			"name": "The airfield fuel depot",
+			"where": "the fuel depot",
+			"kind": "fuel_depot",
+			"pos": [133, 18],
+			"blurb": "A tank farm on the edge of the airfield, bowsers lined up at the loading bays. Whoever shut it down locked it properly, and the keys are somewhere in the admin block.",
+			"danger": 2,
+			"loot": {"fuel": [40, 70]},
+			"extra": {"scrap": [0.3, 8]},
+			"needs_vehicle": true
+		},
+		{
+			"id": "rail_yard",
+			"name": "Dunmore rail yard",
+			"where": "the rail yard",
+			"kind": "rail_yard",
+			"pos": [131, 63],
+			"blurb": "Sidings of wagons nose to tail and a signal box with its windows kicked in. Everything here is steel, and most of it is far too heavy to carry.",
+			"danger": 3,
+			"loot": {"scrap": [40, 70]},
+			"extra": {"food": [0.3, 4]},
+			"needs_vehicle": true
 		}
 	],
 	"roads": [
@@ -282,7 +423,12 @@
 		["gas_station", "bus_depot"], ["bus_depot", "estate"], ["church", "clinic"],
 		["clinic", "scrapyard"], ["scrapyard", "warehouse"], ["church", "library"],
 		["library", "water_works"], ["water_works", "bunker"], ["church", "truck_stop"],
-		["truck_stop", "scrapyard"], ["bakery", "pharmacy"], ["houses", "church"]
+		["truck_stop", "scrapyard"], ["bakery", "pharmacy"], ["houses", "church"],
+		["bus_depot", "river_bridge"], ["river_bridge", "checkpoint"], ["river_bridge", "flats"],
+		["river_bridge", "hospital"], ["checkpoint", "hospital"], ["checkpoint", "mall"],
+		["mall", "power_station"], ["mall", "fuel_depot"], ["mall", "police_hq"],
+		["police_hq", "fuel_depot"], ["hospital", "police_hq"], ["hospital", "university"],
+		["flats", "university"], ["flats", "cold_store"], ["university", "rail_yard"]
 	],
 	"beats": [
 		{
@@ -459,6 +605,48 @@
 			"weight": 1,
 			"min_hours": 6,
 			"effects": {"lost": true, "morale": -5}
+		},
+		{
+			"id": "lorry_shed_its_load",
+			"text": "A lorry had shed its load of nails and glass across both lanes, and getting through, on wheels or on boots, cost an hour.",
+			"weight": 2,
+			"min_hours": 5,
+			"effects": {"delay_h": 1}
+		},
+		{
+			"id": "roadblock_of_cars",
+			"text": "Somebody had built a roadblock out of cars and pallets, and the way round, through a hedge full of wire, cost an hour and a scratch.",
+			"weight": 1,
+			"min_hours": 5,
+			"effects": {"delay_h": 1, "hurt": "scratch"}
+		},
+		{
+			"id": "clear_road",
+			"text": "The road ran clear for mile after mile, the sun on the tarmac and not one of the dead in sight, and the party began to talk again.",
+			"weight": 2,
+			"min_hours": 5,
+			"effects": {"morale": 3}
+		},
+		{
+			"id": "curtain_lorry",
+			"text": "A lorry stood in a lay-by with its curtain side drawn back on pallets of tins, and not a footprint around it.",
+			"weight": 1,
+			"min_hours": 5,
+			"effects": {"loot_pct": 30}
+		},
+		{
+			"id": "repainted_signs",
+			"text": "Someone had repainted the road signs with the names of what was left, each with an arrow and a tally of who came back.",
+			"weight": 1,
+			"min_hours": 5,
+			"effects": {"reveal": "near"}
+		},
+		{
+			"id": "bridge_queue",
+			"text": "The queue for the bridge was a mile of cars with their windows up, and the party went down the hard shoulder with the dead watching through the glass.",
+			"weight": 2,
+			"min_hours": 6,
+			"effects": {}
 		}
 	]
 }

@@ -23,6 +23,8 @@
 ##                    is stood on the decks where its guns cover the walls tonight's dead
 ##                    will come to, and the alarm is set on the best-covered section
 ##   --crew=3         play the small start (three people, the others come over the radio); default 6
+##   --nostreets      no dead in the streets by day (to see what they change)
+##   --novehicles     the policy does not go for vehicles or fuel and walks (to see what they change)
 ##   --nolots         the informed policy does not claim lots or wall the streets (to see what they change)
 ##   --campaign       play the long game of four seasons (--days=102 plays it through)
 ##   --nobuild        the informed policy does not build (to see what the buildings change)
@@ -67,6 +69,10 @@ static var crew_start := 6
 static var campaign := false
 ## The informed policy claims lots and walls the streets (see --nolots).
 static var lots_on := true
+## The policy goes for vehicles and rides them (see --novehicles).
+static var vehicles_on := true
+## The dead in the streets by day (see --nostreets).
+static var streets_on := true
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -121,9 +127,15 @@ class Policy:
 	## Lots (the informed policy only): a lot is claimed with LOT_KEEP scrap to spare, and a mouth's wall is
 	## ordered with WALL_KEEP to spare, the one the forecast names first.
 	const LOT_KEEP := 6.0
+	## Vehicles (the settlement game): a place this many hours away on foot is worth a ride; fuel is looked for when the
+	## tank is under FUEL_LOW; a vehicle waiting in a place is gone for from VEHICLE_FROM_DAY.
+	const RIDE_FROM_H := 3.0
+	const FUEL_LOW := 25.0
+	const VEHICLE_FROM_DAY := 3
 	const WALL_KEEP := 10.0
-	## What it builds on the ring once a lot is claimed (the buildings that only stand there), after BUILD_ORDER.
-	const RING_ORDER := ["scrap_yard", "orchard", "cistern"]
+	## What it builds on the ring once a lot is claimed (the building that only stands there: the scrap yard, round 11
+	## dropped the orchard and the cistern), after BUILD_ORDER.
+	const RING_ORDER := ["scrap_yard"]
 	## Saving for a lot: the bench keeps the price of it (and LOT_KEEP) in scrap while the ammo is above this.
 	const LOT_AMMO_FLOOR := 150.0
 	## One shortage moves at most this much of a person towards a station.
@@ -149,6 +161,8 @@ class Policy:
 	var trips := 0
 	var treats := 0
 	var sendouts := 0
+	var rides := 0
+	var vehicles_enabled := true
 	var lots_enabled := true
 	var lots_claimed := 0
 	var walls_ordered := 0
@@ -483,7 +497,9 @@ class Policy:
 			if not sim.lots.claimed(id) and sim.lots.why_not_claim(id) == "" and float(sim.stock.scrap) >= float(l.claim.get("scrap", 0)) + LOT_KEEP:
 				if sim.lots.claim(id):
 					lots_claimed += 1
-					_note("claims %s" % id)
+					# one switch: the streets are walled one after another as the scrap allows
+					sim.lots.set_auto_walling(id, true)
+					_note("claims %s and turns the standing order on" % id)
 				break
 		if not sim.build.active_site().is_empty():
 			return
@@ -530,7 +546,8 @@ class Policy:
 		if pick.is_empty():
 			return
 		var crew: Array = free.slice(0, int(pick.n))
-		if sim.scavenge.send(crew, String(pick.id), String(pick.action)):
+		var vehicle := String(pick.get("vehicle", ""))
+		if sim.scavenge.send(crew, String(pick.id), String(pick.action), vehicle):
 			_sent_day = sim.day
 			trips += 1
 			match String(pick.action):
@@ -541,10 +558,12 @@ class Policy:
 					clears += 1
 			if bool(pick.get("rescue", false)):
 				rescues += 1
+			if vehicle != "":
+				rides += 1
 			var names: Array = []
 			for p in crew:
 				names.append(p.first)
-			_note("sent %s to %s (%s)" % [" and ".join(names), pick.id, pick.action])
+			_note("sent %s to %s (%s%s)" % [" and ".join(names), pick.id, pick.action, ", by " + sim.vehicles.name_of(vehicle).to_lower() if vehicle != "" else ""])
 
 	func _claim() -> void:
 		for s in sim.scavenge.available_sites():
@@ -575,45 +594,103 @@ class Policy:
 			for s in sites:
 				if bool(s.survivor) and (s.available or s.state == "cleared") and s.state != "claimed":
 					var action := "clear" if (int(s.danger) >= 2 and n >= 2) else "loot"
-					if _fits(s, action, left, here, n):
-						return {"id": s.id, "action": action, "n": n, "rescue": true}
+					var ride := _ride_for(s, n)
+					if _fits(s, action, left, here, n, ride) and _ok(free, s, action, n, ride):
+						return {"id": s.id, "action": action, "n": n, "rescue": true, "vehicle": ride}
+		# a vehicle waiting in a place, when the colony has none: go and try to get it running
+		if vehicles_enabled and sim.vehicles.fleet.is_empty() and sim.day >= VEHICLE_FROM_DAY and n > 0:
+			for s in sites:
+				if String(s.get("vehicle_here", "")) != "" and s.available and s.state != "claimed" and int(s.danger) + int(s.nest.get("strength", 0)) < 4:
+					if _fits(s, "loot", left, here, n, "") and _ok(free, s, "loot", n, ""):
+						return {"id": s.id, "action": "loot", "n": n}
+		# fuel, when there is a vehicle and the tank is low
+		if vehicles_enabled and not sim.vehicles.fleet.is_empty() and float(sim.vehicles.fuel) < FUEL_LOW and n > 0:
+			var fuel_at := ""
+			var fuel_best := 0.0
+			for s in sites:
+				if s.available and s.state != "claimed" and s.loot.has("fuel"):
+					var f_ride := _ride_for(s, n)
+					if _fits(s, "loot", left, here, n, f_ride) and _ok(free, s, "loot", n, f_ride) and float(s.loot.fuel[1]) > fuel_best:
+						fuel_best = float(s.loot.fuel[1])
+						fuel_at = String(s.id)
+			if fuel_at != "":
+				return {"id": fuel_at, "action": "loot", "n": n, "vehicle": _ride_for(_site_by(sites, fuel_at), n)}
 		# what is lowest
 		var needs := _needs()
 		for need in needs:
 			var best := ""
 			var best_score := 0.0
+			var best_ride := ""
+			var best_n := n
 			for s in sites:
 				if not s.available or s.state == "claimed" or not s.loot.has(need):
 					continue
-				if not _fits(s, "loot", left, here, maxi(n, 1)):
+				var ride := _ride_for(s, n)
+				var crew_n := _crew_for(ride, free, n)
+				if not _fits(s, "loot", left, here, maxi(crew_n, 1), ride) or not _ok(free, s, "loot", crew_n, ride):
 					continue
 				var span: Array = s.loot[need]
 				var danger := float(s.danger) + float(s.nest.get("strength", 0))
-				if danger >= 3.0 and _shooting(free.slice(0, n)) < 10.0:
+				if danger >= 3.0 and _shooting(free.slice(0, crew_n)) < 10.0:
 					continue
-				var score: float = (float(span[0]) + float(span[1])) * 0.5 / (1.0 + 0.15 * sim.scavenge.action_hours(String(s.id), "loot")) / (1.0 + 0.25 * danger)
+				var cargo := float(sim.vehicles.kind_of(ride).get("cargo", 1.0)) if ride != "" else 1.0
+				var score: float = (float(span[0]) + float(span[1])) * 0.5 * cargo / (1.0 + 0.15 * sim.scavenge.action_hours(String(s.id), "loot", ride)) / (1.0 + 0.25 * danger)
 				if score > best_score:
 					best_score = score
 					best = String(s.id)
-			if best != "" and n > 0:
-				return {"id": best, "action": "loot", "n": n}
+					best_ride = ride
+					best_n = crew_n
+			if best != "" and best_n > 0:
+				return {"id": best, "action": "loot", "n": best_n, "vehicle": best_ride}
 		# nothing known has it, or the fog is still thick: look further
 		if (not needs.is_empty() or sim.day <= SCOUT_UNTIL_DAY) and sim.day - _scouted_day >= SCOUT_GAP_DAYS:
 			var from := _scout_from(sites, left)
 			if from != "":
-				return {"id": from, "action": "scout", "n": 1}
+				return {"id": from, "action": "scout", "n": 1, "vehicle": _ride_for(_site_by(sites, from), 1)}
 		# a nest, when there are hands to spare for it
 		if sim.day >= CLEAR_FROM_DAY and n >= 2 and free.size() >= 3 and _shooting(free.slice(0, 2)) >= CLEAR_SHOOTING:
 			var weakest := ""
 			var weak := 99
 			for s in sites:
 				var st := int(s.nest.get("strength", 0))
-				if st > 0 and s.state == "known" and st < weak and _fits(s, "clear", left, here, 2):
+				if st > 0 and s.state == "known" and st < weak and _fits(s, "clear", left, here, 2, "") and _ok(free, s, "clear", 2, ""):
 					weak = st
 					weakest = String(s.id)
 			if weakest != "":
 				return {"id": weakest, "action": "clear", "n": 2}
 		return {}
+
+	func _site_by(sites: Array, id: String) -> Dictionary:
+		for s in sites:
+			if String(s.id) == id:
+				return s
+		return {}
+
+	## The vehicle this site is worth: one that is parked, fits the party and has the fuel, for a place far enough
+	## (or across the river), else "" (on foot).
+	func _ride_for(s: Dictionary, n: int) -> String:
+		if not vehicles_enabled or sim.vehicles.fleet.is_empty():
+			return ""
+		var far: bool = float(s.get("hours", 0.0)) >= RIDE_FROM_H or bool(s.get("needs_vehicle", false))
+		if not far:
+			return ""
+		for v in sim.vehicles.parked():
+			var seats := int(sim.vehicles.kind_of(String(v.id)).get("seats", 2))
+			if sim.vehicles.why_not_use(String(v.id), mini(n, seats), String(s.id)) == "":
+				return String(v.id)
+		return ""
+
+	## How many go: two on foot (three people free), up to the seats by vehicle (one hand stays at home).
+	func _crew_for(ride: String, free: Array, n: int) -> int:
+		if ride == "":
+			return n
+		var seats := int(sim.vehicles.kind_of(ride).get("seats", 2))
+		# three at most (two stay at home to hold the wall) unless the crew is large
+		return clampi(mini(mini(seats, 2 if free.size() < 7 else 4), free.size() - 1), 1, 6)
+
+	## Whether the rules let this party take this action at this place (a place across the river is refused on foot).
+	func _ok(free: Array, s: Dictionary, action: String, n: int, ride: String) -> bool:
+		return sim.scavenge.why_not_action(free.slice(0, n), String(s.id), action, ride) == ""
 
 	func _shooting(people: Array) -> float:
 		var t := 0.0
@@ -630,8 +707,8 @@ class Policy:
 		return here
 
 	## A trip fits when it is back before dusk, or when enough hands stay to hold the night.
-	func _fits(s: Dictionary, action: String, left: float, here: int, n: int) -> bool:
-		var h: float = sim.scavenge.action_hours(String(s.id), action)
+	func _fits(s: Dictionary, action: String, left: float, here: int, n: int, ride: String = "") -> bool:
+		var h: float = sim.scavenge.action_hours(String(s.id), action, ride)
 		if h <= left:
 			return true
 		return here - n >= OVERNIGHT_HANDS and h <= 22.0
@@ -641,7 +718,10 @@ class Policy:
 		var best := ""
 		var best_n := 0
 		for s in sites:
-			if sim.scavenge.action_hours(String(s.id), "scout") > left:
+			var ride := _ride_for(s, 1)
+			if bool(s.get("needs_vehicle", false)) and ride == "":
+				continue
+			if sim.scavenge.action_hours(String(s.id), "scout", ride) > left:
 				continue
 			var near := 0
 			for q in sim.town.all_places():
@@ -811,7 +891,17 @@ class Policy:
 			var b: Dictionary = sim.build.building(String(id))
 			if float(sim.stock.scrap) < float(b.scrap) + BUILD_KEEP:
 				return
+			# what may stand on the wall as well as in the yard (the floodlights) goes on the wall first: the yard has
+			# five plots, and they are for what stands only there (the bunk house is the last of the order)
+			var spots: Array = []
+			if (b.plots as Array).has("wall") and (b.plots as Array).has("yard"):
+				for pl in sim.build.plots():
+					if String(pl.kind) == "wall":
+						spots.append(pl)
 			for pl in sim.build.plots():
+				if not spots.has(pl):
+					spots.append(pl)
+			for pl in spots:
 				if sim.build.why_not(String(pl.id), String(id)) == "":
 					if sim.build.order(String(pl.id), String(id)):
 						builds_ordered += 1
@@ -849,6 +939,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	var started := Time.get_ticks_msec()
 	var g := Helpers.make(seed_value, difficulty, crew_start, campaign)
 	var sim = g.sim
+	sim.streets.enabled = streets_on
 	# the storyteller: on (the radio brings its cards, the dawn has its assembly) unless asked not to
 	sim.storyteller.enabled = story
 	if setup.is_valid():
@@ -858,6 +949,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	policy.informed = informed
 	policy.builds = informed and build_on
 	policy.lots_enabled = lots_on
+	policy.vehicles_enabled = vehicles_on
 	policy.build_order = build_order_override
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
@@ -935,7 +1027,7 @@ static func _town_row(sim, policy) -> Dictionary:
 			claimed += 1
 		if int(p.get("nest", {}).get("strength", 0)) > 0 and p.state != "cleared" and p.state != "claimed":
 			nests += 1
-	return {"known": known, "cleared": cleared, "claimed": claimed, "nests_left": nests, "scouts": policy.scouts, "clears": policy.clears, "claims": policy.claims, "rescues": policy.rescues}
+	return {"known": known, "cleared": cleared, "claimed": claimed, "nests_left": nests, "scouts": policy.scouts, "clears": policy.clears, "claims": policy.claims, "rescues": policy.rescues, "rides": policy.rides, "vehicles": sim.vehicles.fleet.size(), "fuel": snappedf(sim.vehicles.fuel, 0.1)}
 
 
 ## The colony at this moment, for the day-by-day log.
@@ -1097,6 +1189,10 @@ func _run() -> void:
 			campaign = true
 		elif kv[0] == "nolots":
 			lots_on = false
+		elif kv[0] == "novehicles":
+			vehicles_on = false
+		elif kv[0] == "nostreets":
+			streets_on = false
 		elif kv[0] == "build-order" and kv.size() > 1:
 			build_order_override = String(kv[1]).split(",")
 		elif opts.has(kv[0]) and kv.size() > 1:
@@ -1190,6 +1286,10 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--campaign")
 		if not lots_on:
 			args.append("--nolots")
+		if not vehicles_on:
+			args.append("--novehicles")
+		if not streets_on:
+			args.append("--nostreets")
 		if not build_order_override.is_empty():
 			args.append("--build-order=%s" % ",".join(build_order_override))
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})

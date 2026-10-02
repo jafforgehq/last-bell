@@ -16,11 +16,14 @@ const Lighting := preload("res://scripts/render/lighting.gd")
 const GlowNode := preload("res://scripts/render/glow_node.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
+const DressingNode := preload("res://scripts/render/dressing_node.gd")
+const ParkingNode := preload("res://scripts/render/parking_node.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Snow := preload("res://scripts/render/snow.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
+const StreetAir := preload("res://scripts/audio/street_air.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
@@ -29,6 +32,10 @@ const Orientation := preload("res://scripts/sim/orientation.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
 const Hints := preload("res://scripts/ui/hints.gd")
 const StoryUi := preload("res://scripts/ui/story_ui.gd")
+const RaidScene := preload("res://scripts/raid/raid_scene.gd")
+## The generator of the places of a played trip (the SITES builder's) and, until it exists, a stand-in.
+const SITE_GEN := "res://scripts/raid/site_gen.gd"
+const SITE_STUB := "res://scripts/raid/stub_site.gd"    # TODO-SITEGEN: delete with the fallback in open_raid once SITE_GEN is there
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -67,6 +74,12 @@ var snow
 var ground_snow
 ## The plots, sites and buildings of the yard (round 6, scripts/render/build_node.gd).
 var build_view
+## The dressing of the ring of streets, a settlement game's (round 12, scripts/render/dressing_node.gd).
+var dressing_view
+## The colony's parked vehicles at the main gate, a settlement game's (round 13, scripts/render/parking_node.gd).
+var parking_view
+## The soft groans of the streets by day, a settlement game's (round 12, scripts/audio/street_air.gd).
+var street_air
 var pawn_nodes := {} # entity -> node
 ## Turns frames into whole 1/30 s steps of the rules, and says how far the time
 ## has run into the next one (the drawing blends between the last two steps).
@@ -102,7 +115,14 @@ var title_mode := false
 ## tips wait.)
 var menu_open: bool:
 	get:
-		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open()))
+		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open())) or raid_open()
+## The played trip's scene (round 14, scripts/raid/raid_scene.gd) while one is up, else null: it takes the screen and the
+## keys (so it counts as a menu), the colony's world and HUD are hidden and its rules wait (see `open_raid`).
+var raid = null
+## A seed for the next played trip's site (a screenshot's `--raid=<place>,<seed>`); -1: the run's, the place's and the day's.
+var raid_seed := -1
+## `--raid-stub`: a played trip's site comes from the stand-in (scripts/raid/stub_site.gd), not the generator.
+var raid_stub := false
 ## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
 ## "post": id, "person": id} (each "" when nothing of the kind is marked). The overlay draws the marks.
 var jobs_hover := {}
@@ -286,6 +306,16 @@ func _ready() -> void:
 	world.add_child(cm)
 	lighting.setup(data, cm)
 	lighting.seasons = sim.seasons
+	# the dressing of the streets (a settlement game only): decals under the people, light props sorted among them
+	dressing_view = DressingNode.new()
+	dressing_view.name = "Dressing"
+	world.add_child(dressing_view)
+	dressing_view.setup(sim, entities)
+	# the parked vehicles of the fleet (a settlement game only), by the main gate in the north street
+	parking_view = ParkingNode.new()
+	parking_view.name = "Parking"
+	world.add_child(parking_view)
+	parking_view.setup(sim, entities)
 	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
 	build_view = BuildNode.new()
 	build_view.name = "Buildings"
@@ -335,6 +365,7 @@ func _ready() -> void:
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
 	hud.on_build = toggle_build
 	hud.on_town = toggle_town
+	hud.on_raid = open_raid
 	hud.on_build_hover = func(marks): build_hover = marks
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
@@ -349,6 +380,10 @@ func _ready() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	street_air = StreetAir.new()
+	street_air.name = "StreetAir"
+	world.add_child(street_air)
+	street_air.setup(self)
 
 	# the menus: one layer above the HUD (and the coach), built once, shown when they are asked for
 	var shell_layer := CanvasLayer.new()
@@ -555,7 +590,7 @@ func _did(kind: String, arg = null) -> void:
 ## The mouse cursor over a point of the yard (in tiles), `hit` being what _pick found there: a hand over what a click
 ## would do something with (a person, a walker, a wall section, a plot's sign), else the arrow.
 func _cursor_for(hit, at: Vector2) -> Input.CursorShape:
-	return Input.CURSOR_POINTING_HAND if hit != null or sim.build.sign_at(at) != "" else Input.CURSOR_ARROW
+	return Input.CURSOR_POINTING_HAND if hit != null or sim.build.sign_at(at) != "" or parking_view.vehicle_at(at) != "" else Input.CURSOR_ARROW
 
 
 ## What is under a point of the world (in tiles): a person, a walker or a wall section, or null.
@@ -783,6 +818,41 @@ func toggle_build(plot_id: String = "") -> void:
 	hud.open_build(plot_id, sim)
 	if hud.build_screen != null:
 		_did("build")
+
+
+# ------------------------------------------------------------------- raid --
+# A played trip (round 14): the party's place as a small map the player plays (scripts/raid/raid_scene.gd).
+
+## Whether a played trip is up.
+func raid_open() -> bool:
+	return raid != null and is_instance_valid(raid)
+
+
+## Opens a played trip: `people` (the party, colony people) go to `place` (a place of the town's: its dictionary) in
+## `vehicle_id` (a fleet id, "" on foot) with their loot multiplied by `loot_mult`, and the player plays the place. The
+## colony is hidden and held until the squad is home; `on_done(result)` is then called with the trip's result (loot,
+## hurt, lost, clear, rescue, ammo_used, beats: what `scavenge.send_played` takes). Returns the scene, or null if one is
+## already up. The colony's time stands still while it is played (the party's hours pass afterwards, as for the dice).
+## Nobody calls this yet: the Town Board's "Take control" button will (R14.4), after closing the board, with the
+## chosen people, place, vehicle and the loot multiplier its Go would have used.
+func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: float, on_done: Callable) -> Node:
+	if raid_open() or people.is_empty():
+		return null
+	var seed_value: int = raid_seed if raid_seed >= 0 else int(sim.run_seed) * 1000003 + String(place.get("id", "")).hash() + int(sim.day) * 7919
+	var by_vehicle: bool = vehicle_id != ""
+	# TODO-SITEGEN: the stand-in is for a checkout without the generator (and `--raid-stub`, a screenshot's choice of it)
+	var maker = load(SITE_GEN) if ResourceLoader.exists(SITE_GEN) and not raid_stub else null
+	if maker == null or not maker.can_instantiate():
+		maker = load(SITE_STUB)
+	var site: Dictionary = maker.make(place, seed_value, people.size(), by_vehicle)
+	var kind := "" if not by_vehicle else String(sim.vehicles.vehicle(vehicle_id).get("kind", ""))
+	var scene := RaidScene.new()
+	add_child(scene)
+	var survivor: bool = bool(place.get("survivor", false)) and not bool(sim.town.state.get(String(place.get("id", "")), {}).get("rescued", false))
+	scene.setup(self, hud, data, site, people, float(sim.stock.ammo), kind, loot_mult, survivor)
+	if on_done.is_valid():
+		scene.finished.connect(on_done)
+	return scene
 
 
 # ------------------------------------------------------------------ shell --
@@ -1038,6 +1108,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 					var sign_of: String = sim.build.sign_at(at) if hit == null else ""
 					if sign_of != "" and (coach == null or coach.would_allow("build")):
 						toggle_build(sign_of)
+					elif hit == null and parking_view.vehicle_at(at) != "":
+						# a click on a vehicle parked at the gate opens the Town Board, as its button does
+						toggle_town()
 					else:
 						_try_select(hit)
 				drag = null
@@ -1167,6 +1240,9 @@ func _process(delta: float) -> void:
 	snow.follow({"snow": campaign and bool(look.get("snow", false))}, campaign and sim.seasons.snow_share() > 0.0, lighting.dark, dt)
 	ground_snow.visible = snow.ground > 0.01
 	ground_snow.modulate.a = snow.ground
+	dressing_view.update()
+	parking_view.update()
+	street_air.update(dt)
 	build_view.update(clock)
 	glow.t = clock
 	glow.queue_redraw()
@@ -1320,13 +1396,14 @@ func _handle_events() -> void:
 			"bell":
 				sound.play("bell", 1.0, 0.0)
 			"groan":
-				if randf() < 0.6:
+				# (the stragglers of the streets by day are far and many: a few of their groans are heard, and quietly)
+				if randf() < (0.2 if bool(e.get("stray", false)) else 0.6):
 					var d := Vector2(e.x, e.y).distance_to(cam_center)
 					# a brute groans deep and a little louder, a runner thin and high
 					var kind: String = String(e.get("kind", "walker"))
 					var pitch := 0.72 if kind == "brute" else (1.3 if kind == "runner" else 1.0)
 					var loud := 1.3 if kind == "brute" else 1.0
-					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3) * loud, 0.12, pitch)
+					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3) * loud * (0.5 if bool(e.get("stray", false)) else 1.0), 0.12, pitch)
 			"lure":
 				# the alarm goes off: the bell, higher and thinner than the dusk bell
 				sound.play("bell", 0.6, 0.02, 1.4)
@@ -1430,6 +1507,9 @@ func _parse_args() -> void:
 	var show_town := false
 	var town_place := ""
 	var town_focus := ""
+	var town_ride := ""
+	var raid_spec := ""
+	var raid_do := ""
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
 	if season_asked >= 0:
@@ -1491,6 +1571,16 @@ func _parse_args() -> void:
 				# arguments are in (the board staged with --town-reveal, --town-state and --town-send; the --speed it pauses)
 				show_town = true
 				town_place = v
+			"raid":
+				# --raid=<place id or kind>[,<seed>] opens a played trip to that place with the people of the crew (up to three),
+				# once the other arguments are in (the screenshot then shows it: --frames long enough for the squad to walk)
+				raid_spec = v
+			"raid-stub":
+				raid_stub = true
+			"raid-do":
+				# --raid-do=<steps joined by +> plays the raid a little before the shot: all, one, sel:N, search:N, move:X:Y,
+				# help:N, down:N, wait:SECONDS, pause, ask, retreat, end (see raid_scene.gd `stage`)
+				raid_do = v
 			"town-reveal":
 				# --town-reveal=<place id>,<place id> (or "all") shows places of the board that are hidden at the start
 				for id in (sim.town.state.keys() if v == "all" else v.split(",")):
@@ -1499,12 +1589,29 @@ func _parse_args() -> void:
 				# --town-state=<place id>:cleared,<place id>:claimed[:<person id>+<person id>] stages places (a claimed place
 				# may be held by people, who are off the map): no scrap is paid for them
 				_stage_town(v)
+			"town-ride":
+				# --town-ride=<vehicle kind or id> chooses that parked vehicle in the board's party picker when it opens (--vehicle first)
+				town_ride = v
 			"town-focus":
 				# --town-focus=<place id> puts the keyboard on that pin when the board opens (to see the ring)
 				town_focus = v
 			"town-send":
-				# --town-send=<person id>+<person id>:<place id>:<loot|scout|clear> sends a party at once, as the board does
+				# --town-send=<person id>+<person id>:<place id>:<loot|scout|clear>[:<vehicle kind or id>] sends a party at once, as
+				# the board does (by a vehicle that is in the fleet: --vehicle first)
 				_stage_party(v)
+			"vehicle":
+				# --vehicle=<kind>[,<kind>] puts these vehicles in the colony's fleet, parked at the gate (a settlement game, --crew=3;
+				# the kinds are those of assets/data/vehicles.json: sedan, pickup, van, bus); --fuel=N fills the tank
+				# (a kind may carry its condition, a share of its hp: --vehicle=sedan:30)
+				for entry in v.split(","):
+					var kf := String(entry).strip_edges().split(":")
+					var added: Dictionary = sim.vehicles.add(kf[0])
+					if not added.is_empty():
+						if kf.size() > 1 and kf[1].is_valid_float():
+							added["hp"] = float(sim.vehicles.kind(kf[0]).hp) * clampf(float(kf[1]) / 100.0, 0.0, 1.0)
+						sim.events.clear()
+			"fuel":
+				sim.vehicles.fuel = clampf(float(v), 0.0, sim.vehicles.FUEL_CAP)
 			"build-scrap":
 				# --build-scrap=N sets the scrap in the stores (to show what cannot be ordered, say)
 				sim.stock.scrap = float(v)
@@ -1532,6 +1639,9 @@ func _parse_args() -> void:
 			"wall-site":
 				# --wall-site=<mouth id>[:<share done, 0 to 1>] puts a half-built wall up at a mouth (the lot claimed, no scrap paid)
 				_stage_wall_site(v)
+			"walling":
+				# --walling[=north,west] switches the standing order on for those of the claimed lots (all of them without a list)
+				_stage_walling(v)
 			"lure":
 				# --lure=N sets the alarm on wall section N (scrap is given, the clock settled first)
 				lure_seg = int(v)
@@ -1560,6 +1670,12 @@ func _parse_args() -> void:
 			"build-plots":
 				# --build-plots keeps the plots' outlines lit, as when the Build screen is open (for a screenshot of the yard)
 				build_view.show_plots = true
+			"build-pointer":
+				# --build-pointer=x,y puts the pointer at that point of the yard (tiles): the plot nearest it shows its sign, and an
+				# open street within five tiles its line (a screenshot has no mouse; without this the yard shows none of them)
+				var xy := v.split(",")
+				if xy.size() == 2 and xy[0].is_valid_float() and xy[1].is_valid_float():
+					build_view.pointer = Vector2(float(xy[0]), float(xy[1]))
 			"card":
 				# --card=<id> puts a card of the storyteller's up (the radio card opens)
 				sim.storyteller.force(v)
@@ -1587,8 +1703,17 @@ func _parse_args() -> void:
 		hud.open_scavenge(selection)
 		if hud.town_board_open() and town_place != "":
 			hud.scavenge_dialog.select_place(town_place)
+		if hud.town_board_open() and town_ride != "":
+			for parked in sim.vehicles.parked():
+				if String(parked.id) == town_ride or String(parked.kind) == town_ride:
+					hud.scavenge_dialog.choose_vehicle(String(parked.id))
+					break
 		if hud.town_board_open() and town_focus != "" and hud.scavenge_dialog.map.pins.has(town_focus):
 			hud.scavenge_dialog.map.pins[town_focus].grab_focus()
+	if raid_spec != "":
+		_stage_raid(raid_spec)
+		if raid_do != "" and raid_open():
+			raid.stage(raid_do)
 	if lure_seg >= 0:
 		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
 		for s in sim.segments:
@@ -1737,6 +1862,16 @@ func _stage_wall_site(spec: String) -> void:
 	_stage_wall(f[0], "", false, float(f[1]) if f.size() > 1 else 0.5)
 
 
+## `--walling[=north,west]`: the standing order ("Wall the streets as the scrap allows") on for the lots claimed (put it after `--lots`).
+func _stage_walling(only: String = "") -> void:
+	if not sim.lots.on:
+		return
+	var wanted: PackedStringArray = only.split(",", false) if only != "" else PackedStringArray()
+	for l in sim.lots.lots():
+		if wanted.is_empty() or wanted.has(String(l.id)):
+			sim.lots.set_auto_walling(String(l.id), true)
+
+
 ## `--town-state=`: places of the board cleared or claimed (and held) without a trip.
 func _stage_town(spec: String) -> void:
 	for entry in spec.split(","):
@@ -1768,8 +1903,41 @@ func _stage_party(spec: String) -> void:
 		for p in sim.people:
 			if p.id == id:
 				who.append(p)
-	if not who.is_empty() and sim.scavenge.send(who, f[1], f[2] if f.size() > 2 else "loot"):
+	var ride := ""
+	if f.size() > 3:
+		for v in sim.vehicles.parked():
+			if String(v.id) == f[3] or String(v.kind) == f[3]:
+				ride = String(v.id)
+				break
+	if not who.is_empty() and sim.scavenge.send(who, f[1], f[2] if f.size() > 2 else "loot", ride):
 		sim.events.clear()
+
+
+## `--raid=<place id or kind>[,<seed>[,<vehicle kind>]]`: a played trip opened at once with the first three people (a
+## screenshot's staging; the seed is the site's, else the place's own; a vehicle kind puts one in the fleet and goes in it). The first place of the board with that id or kind.
+func _stage_raid(spec: String) -> void:
+	var f := spec.split(",")
+	var place: Dictionary = {}
+	for pl in sim.town.all_places():
+		if String(pl.id) == f[0] or (place.is_empty() and String(pl.kind) == f[0]):
+			place = pl
+			if String(pl.id) == f[0]:
+				break
+	if place.is_empty():
+		place = {"id": f[0], "name": f[0].capitalize(), "kind": f[0], "danger": 1, "loot": {"food": [8, 14], "water": [10, 20]}}
+	var party: Array = []
+	for p in sim.people:
+		if party.size() < 3 and not p.dead and p.away == null:
+			party.append(p)
+	if f.size() > 1 and f[1].is_valid_int():
+		raid_seed = int(f[1])
+	# a third field puts a vehicle of that kind in the fleet and goes in it (`--raid=houses,5,van`)
+	var vehicle_id := ""
+	if f.size() > 2 and sim.vehicles.kind(f[2]).size() > 0:
+		vehicle_id = "raid_%s" % f[2]
+		sim.vehicles.fleet.append({"id": vehicle_id, "kind": f[2], "hp": 80.0, "state": "parked"})
+	open_raid(party, place, vehicle_id, 1.0, Callable())
+	raid_seed = -1
 
 
 func _tile_to_screen(t: Vector2) -> Vector2:
