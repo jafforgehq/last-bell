@@ -276,6 +276,14 @@ Round 5 made management a real activity: jobs and stations (plan: `docs/superpow
 | Story, informed (8 seeds) | 8 wins of 8 |
 | Brutal, informed (8 seeds) | 0 wins of 8, mean day 16.9 (17.8) |
 
+## 7h. After round 6 (2026-10-02)
+
+Round 6 added buildings you really build (plan: `docs/superpowers/plans/2026-10-02-round-6.md`).
+
+- **Twelve fixed plots** (`assets/data/plots.json`: nine in the yard, three against the wall) and **seven buildings** (`assets/data/buildings.json`): salvage bench (opens a Salvage station, 0.4 scrap an hour a person), greenhouse beds (two garden seats, more food each dawn), workshop (a third bench seat, x1.25 work, one more ammo a scrap), bunk house (four patient beds, housing +4, mood +3), floodlights (night reach x1.12, a blackout costs no aim), watchtower (+3 tiles of reach near it) and radio mast (boons x1.3, threats x0.85). Ordering pays the scrap; the **Builders** (the old Wall crew job) build the oldest site by day at 1 + 0.12 a point of Building per hour; cancel and demolish give scrap back.
+- **The Build screen** (N, the hammer, a click on a plot's sign), the yard drawing (outlines, scaffolds, the props of each building, lamps), and the module `scripts/sim/build.gd` that the other modules read through `bonus(key)` and `factor(key)`.
+- **Harness:** the informed policy builds (salvage bench first). With nothing built the game plays exactly as in round 5 (checked on both bots and on game-state digests). Informed wins over 32 seeds: 17 with building, 12 without; over seeds 1 to 16 alone 7 and 8, so the gain is inside the noise. One building at a time over 16 seeds: salvage bench 7, floodlights 9, workshop 3, greenhouse 1 (the greenhouse looks harmful to the policy and wants a look). The numbers are left as first values.
+
 ## 8. Risks and open questions
 
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.
