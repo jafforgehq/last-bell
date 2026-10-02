@@ -19,6 +19,9 @@ const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const Jobs := preload("res://scripts/sim/jobs.gd")
 const Build := preload("res://scripts/sim/build.gd")
 const Recruits := preload("res://scripts/sim/recruits.gd")
+const Town := preload("res://scripts/sim/town.gd")
+const Lots := preload("res://scripts/sim/lots.gd")
+const Seasons := preload("res://scripts/sim/seasons.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -42,6 +45,8 @@ const SCHOOL_TOP_ROW := 44
 ## The most of the dead sent back to the city in one step at dawn (each one is a
 ## path search).
 const DAWN_LEAVES_PER_STEP := 6
+## In a game with lots a retreating one of the dead is gone this near the spawn point it is walking to.
+const RETREAT_DONE := 1.2
 ## What someone fights with when the stock cannot pay for another shot: the butt
 ## of their gun.
 const BUTT := {"name": "Butt of the gun", "range": 1.9, "cooldown": 1.25, "melee": true, "dmg": 1.1, "acc": 0.7}
@@ -75,6 +80,9 @@ class Segment:
 	var center := Vector2.ZERO
 	var slots: Array = []
 	var obj: Dictionary
+	## The pictures of a wall section made in play (round 9, lots): its four damage states, each a list of
+	## {file, x, y, w, h} in tiles. The map's own sections have theirs in their object.
+	var art: Array = []
 
 
 class Person:
@@ -195,6 +203,9 @@ var spawn_t := 6.0
 var kills := 0
 var stock := {"ammo": 212.0, "scrap": 24.0, "food": 41.0, "water": 230.0, "meds": 7.0}
 var on_segment_change: Callable
+## A wall section was made or taken away in play (round 9): the world draws or drops its pictures.
+var on_segment_added: Callable
+var on_segment_removed: Callable
 var spawns: Array = []
 var guns: Dictionary
 var weapons: Dictionary
@@ -225,12 +236,18 @@ var storyteller
 var jobs
 var build
 var recruits
+var town
+var lots
+var seasons
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
+## The ground's connected stretches for the dead (see `region_at`), worked out when asked after a change.
+var _regions := PackedInt32Array()
+var _regions_dirty := true
 var _school_inner: Array = []
 
 
@@ -299,7 +316,10 @@ func _init(data: Dictionary, w, effects) -> void:
 	jobs = Jobs.new()
 	build = Build.new()
 	recruits = Recruits.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits]:
+	town = Town.new()
+	lots = Lots.new()
+	seasons = Seasons.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons]:
 		m.setup(self)
 	_seed()
 
@@ -525,9 +545,11 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits]:
+	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots]:
 		m.start()
 	recruits.begin()
+	town.begin()
+	lots.begin()
 
 
 # ------------------------------------------------------------------ update --
@@ -541,9 +563,9 @@ func update(dt: float) -> void:
 	clock_min += dt * min_per_sec
 	if minutes >= 24.0 * 60.0:
 		minutes -= 24.0 * 60.0
-	phase = phase_at(minutes)
+	phase = seasons.phase_at(minutes)
 	var h := hour
-	if not bell_rung and h >= 19.0 and h < 20.5:
+	if not bell_rung and h >= seasons.dusk_hour() and h < seasons.dusk_hour() + seasons.DUSK_H:
 		bell_rung = true
 		events.append({"type": "bell"})
 		events.append({"type": "banner", "text": "The bell rings", "sub": "Everyone to the wall"})
@@ -556,9 +578,12 @@ func update(dt: float) -> void:
 			alert("horde", "warn", "The dead are coming", "More walkers every hour until dawn", null, 12.0)
 		elif phase == "dawn":
 			events.append({"type": "banner", "text": "Dawn", "sub": "The dead drift back into the city"})
+		elif phase == "dusk":
+			seasons.on_dusk()
 		elif phase == "day":
 			day += 1
 			bell_rung = false
+			seasons.on_new_day()
 			events.append({"type": "day_start", "day": day})
 			events.append({"type": "banner", "text": "Day %d" % day, "sub": "Repair the wall before dusk"})
 
@@ -575,6 +600,8 @@ func update(dt: float) -> void:
 	jobs.update(dt)
 	build.update(dt)
 	recruits.update(dt)
+	town.update(dt)
+	lots.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -905,6 +932,9 @@ func assign_slot(z: Zombie, only) -> bool:
 	var best_score := INF
 	var yard_down := yard_open()
 	var lured = tactics.lure_seg()
+	# in a game with lots the dead only choose a place they can get to (a wall of the lots may shut the way)
+	var gated: bool = lots.on
+	var home_region := region_at(z.x, z.y) if gated else 0
 	for s in segments:
 		if s.state == 3:
 			continue
@@ -918,6 +948,8 @@ func assign_slot(z: Zombie, only) -> bool:
 				crowd += 1
 		for sl in s.slots:
 			if sl.who != null:
+				continue
+			if gated and home_region >= 0 and region_at(sl.ax, sl.ay) != home_region:
 				continue
 			var score := Vector2(sl.ax - z.x, sl.ay - z.y).length() + crowd * 1.2 + rng.randf() * 4.0
 			if lured != null and s == lured:
@@ -937,10 +969,102 @@ func assign_slot(z: Zombie, only) -> bool:
 	return true
 
 
+## A wall section made in play (a wall at a mouth of a lot, round 9): `def` has id, kind, side, from, to, name,
+## hp, tiles, center, slots ({x, y, ax, ay, face}), obj ({cx, cy, w, h, a}) and art. Its tiles are shut on both
+## walking grids and the world is told to draw it. Sections are only ever added at the end.
+func add_segment(def: Dictionary) -> Segment:
+	var seg := Segment.new()
+	seg.id = int(def.id)
+	seg.kind = String(def.kind)
+	seg.side = String(def.side)
+	seg.from = float(def["from"])
+	seg.to = float(def.to)
+	seg.name = String(def.name)
+	seg.hp = float(def.hp)
+	seg.max_hp = float(def.hp)
+	seg.tiles = def.tiles
+	seg.center = Vector2(def.center)
+	seg.obj = def.obj
+	seg.art = def.get("art", [])
+	for sl in def.slots:
+		var slot := Slot.new()
+		slot.x = float(sl.x)
+		slot.y = float(sl.y)
+		slot.ax = float(sl.ax)
+		slot.ay = float(sl.ay)
+		slot.face = String(sl.face)
+		slot.seg = seg
+		seg.slots.append(slot)
+	segments.append(seg)
+	block_tiles(seg.tiles, true)
+	if on_segment_added.is_valid():
+		on_segment_added.call(seg)
+	return seg
+
+
+## Takes a wall section made in play away (a save is being loaded, a new run begins): its tiles open again.
+func remove_segment(seg: Segment) -> void:
+	for sl in seg.slots:
+		if sl.who != null:
+			var z = sl.who
+			z.slot = null
+			if z.state == "attack":
+				z.state = "approach"
+	segments.erase(seg)
+	block_tiles(seg.tiles, false)
+	if on_segment_removed.is_valid():
+		on_segment_removed.call(seg)
+
+
+## Which stretch of open ground (for the dead) the point is on, as a number, or -1 on a shut tile: two points
+## with the same number can be walked between. Worked out again after any wall goes up or down.
+func region_at(x: float, y: float) -> int:
+	if _regions_dirty:
+		_compute_regions()
+	var tx := floori(x)
+	var ty := floori(y)
+	if tx < 0 or ty < 0 or tx >= W or ty >= H:
+		return -1
+	return _regions[ty * W + tx]
+
+
+func _compute_regions() -> void:
+	_regions_dirty = false
+	_regions.resize(W * H)
+	_regions.fill(-1)
+	var solid: PackedByteArray = world.solid_z
+	var label := 0
+	var stack := PackedInt32Array()
+	for start in W * H:
+		if _regions[start] != -1 or solid[start] != 0:
+			continue
+		_regions[start] = label
+		stack.append(start)
+		while not stack.is_empty():
+			var i: int = stack[stack.size() - 1]
+			stack.resize(stack.size() - 1)
+			var x := i % W
+			@warning_ignore("integer_division")
+			var y := i / W
+			if x > 0 and _regions[i - 1] == -1 and solid[i - 1] == 0:
+				_regions[i - 1] = label
+				stack.append(i - 1)
+			if x < W - 1 and _regions[i + 1] == -1 and solid[i + 1] == 0:
+				_regions[i + 1] = label
+				stack.append(i + 1)
+			if y > 0 and _regions[i - W] == -1 and solid[i - W] == 0:
+				_regions[i - W] = label
+				stack.append(i - W)
+			if y < H - 1 and _regions[i + W] == -1 and solid[i + W] == 0:
+				_regions[i + W] = label
+				stack.append(i + W)
+		label += 1
+
+
 ## Whether a wall section of the yard (not a school door) is down.
 func yard_open() -> bool:
 	for s in segments:
-		if s.kind != DOOR_KIND and s.state == 3:
+		if s.kind != DOOR_KIND and s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
 	return false
 
@@ -1010,6 +1134,7 @@ func refresh_school() -> void:
 	if want == school_open:
 		return
 	school_open = want
+	_regions_dirty = true
 	for i in _school_inner:
 		world.solid_z[int(i)] = 0 if want else 1
 		path_z.set_solid(int(i), not want)
@@ -1020,6 +1145,7 @@ func refresh_school() -> void:
 ## The ground a wall section stands on, open or shut. A school door opens to the
 ## dead only: people walk through it whole.
 func open_segment(s: Segment, open: bool) -> void:
+	_regions_dirty = true
 	if s.kind == DOOR_KIND:
 		for i in s.tiles:
 			world.solid_z[int(i)] = 0 if open else 1
@@ -1029,11 +1155,13 @@ func open_segment(s: Segment, open: bool) -> void:
 	for i in s.tiles:
 		path_z.set_solid(int(i), not open)
 		path_p.set_solid(int(i), not open)
+	lots.after_segment_change(s)
 
 
 ## Shuts or opens ground for good, as a standing building's footprint does: the walking grid and both
 ## path grids (the same ground a wall section has, see `open_segment`).
 func block_tiles(tiles: Array, blocked: bool) -> void:
+	_regions_dirty = true
 	world.set_walkable(tiles, not blocked)
 	for i in tiles:
 		path_z.set_solid(int(i), blocked)
@@ -1068,8 +1196,9 @@ func retreat(z: Zombie) -> void:
 
 
 func _breached() -> bool:
+	# (the compound's own sections: a wall across a street of the lots that has fallen opens the street, not the yard)
 	for s in segments:
-		if s.state == 3:
+		if s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
 	return false
 
@@ -1113,6 +1242,10 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 				z.state = "approach"
 		"retreat":
 			if _follow(z, slow, dt):
+				z.remove = true
+			elif lots.on and not z.path.is_empty() and Vector2(z.x, z.y).distance_to(Vector2(z.path[z.path.size() - 1])) < RETREAT_DONE:
+				# (a pocket behind a wall of the lots is two tiles wide: the dead who crowd it push each other off the
+				# spawn point for good, so near enough is gone)
 				z.remove = true
 		"approach":
 			if _breached() and rng.randf() < dt and not (z.slot != null and z.slot.seg.kind == DOOR_KIND):

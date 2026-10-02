@@ -181,10 +181,40 @@ func _add_pieces(parent: Node, pieces: Array) -> void:
 		s.centered = false
 		s.position = Vector2(p.x, p.y) * TILE
 		s.scale = Vector2(p.w * TILE / t.get_width(), p.h * TILE / t.get_height())
+		# (the walls of the lots, round 9, may be turned over to face the other way: see lots.gd `_art_for`)
+		s.flip_h = bool(p.get("flip_h", false))
+		s.flip_v = bool(p.get("flip_v", false))
 		parent.add_child(s)
 
 
+## A wall section made in play (a wall at a mouth of a lot, round 9): drawn from its own four states' pictures,
+## in the layer the compound's own sections are in.
+func add_segment_art(seg) -> void:
+	if seg.art.is_empty() or segment_holders.has(int(seg.id)):
+		return
+	var holder := Node2D.new()
+	holder.name = "Segment%d" % int(seg.id)
+	layers[4].add_child(holder)
+	segment_holders[int(seg.id)] = holder
+	segment_states[int(seg.id)] = seg.art
+	_add_pieces(holder, seg.art[0])
+
+
+func remove_segment_art(seg) -> void:
+	var id := int(seg.id)
+	if segment_holders.has(id):
+		# (out of the tree at once, so that a wall made again at the same place in the same frame has its name and its place)
+		var holder: Node2D = segment_holders[id]
+		if holder.get_parent() != null:
+			holder.get_parent().remove_child(holder)
+		holder.queue_free()
+		segment_holders.erase(id)
+		segment_states.erase(id)
+
+
 func set_segment_state(id: int, state: int) -> void:
+	if not segment_holders.has(id):
+		return
 	var holder: Node2D = segment_holders[id]
 	for c in holder.get_children():
 		c.queue_free()

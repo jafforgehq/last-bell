@@ -29,6 +29,14 @@
 ## RAID_FACTOR. A site that reopens on the first day it can is therefore worth
 ## 75%; one left another day is whole again.
 ##
+## THE TOWN (round 8). In the settlement game (a small start) the sites are the places of the town board
+## (`sim.town`): `use_town()` swaps them in, `available_sites()` lists the known ones with their distance
+## and what can be done there, a trip takes `2 x hours + SEARCH_H` hours (the party may be out overnight and
+## comes back by day), and `send(people, place, action)` takes an action: "loot" (as before), "scout" (no
+## loot, shows the places near), "clear" (the place is turned out: its nest and its danger go, if the
+## party is strong enough). The way there and back also meets the town's beats (data), decided with the
+## rest at the send. A rescue brings a survivor home. In the classic start none of this exists.
+##
 ## Events: only the rules' own "banner" events.
 extends RefCounted
 
@@ -49,6 +57,14 @@ const GATE_REACH := 1.2
 const DEAD_LIMIT := 3
 const DEAD_RADIUS := 20.0
 const MAX_PARTY := 2
+## In the town two parties may be out at once, and up to three people go together.
+const MAX_PARTIES_TOWN := 2
+## Each stretch of the way meets a beat (the town's data) with this chance.
+const BEAT_CHANCE := 0.6
+## A trip that is out when the dusk falls (a night out, with no wall to stand behind) adds this to each member's
+## wound chance (before their Shooting takes its share off).
+const NIGHT_OUT_WOUND := 0.15
+const MAX_PARTY_TOWN := 3
 ## The days a raided site stays closed: raided on day 5, it opens again on day 8.
 const PICKED_OVER_DAYS := 3
 ## Raids this many days back (or fewer) still cut the loot, each by RAID_FACTOR.
@@ -89,6 +105,8 @@ var trips := 0
 ## Errands the storyteller made up (a crate in the road): site id to a site shaped like those
 ## above. They are not offered in the dialog; `send` takes them at any hour of the day.
 var errands := {}
+## Whether the sites are the town's (see the header).
+var town_mode := false
 
 
 func setup(s) -> void:
@@ -97,6 +115,9 @@ func setup(s) -> void:
 
 
 func start() -> void:
+	if town_mode:
+		town_mode = false
+		_load_sites()
 	parties.clear()
 	raids.clear()
 	trips = 0
@@ -143,11 +164,11 @@ func why_not() -> String:
 	if sim.phase == "dusk" or sim.phase == "night":
 		return "Nobody goes out after dark."
 	if sim.phase == "dawn" or sim.hour < SEND_FROM_H:
-		return "Too early: wait for daylight (06:30)."
+		return "Too early: wait for daylight (%s)." % _clock_text(maxf(SEND_FROM_H, float(sim.seasons.dawn_hour())))
 	if sim.hour >= SEND_TO_H:
-		return "Too late: parties leave between 06:30 and 10:00."
-	if not parties.is_empty():
-		return "A party is already out."
+		return "Too late: parties leave between %s and 10:00." % _clock_text(maxf(SEND_FROM_H, float(sim.seasons.dawn_hour())))
+	if parties.size() >= (MAX_PARTIES_TOWN if town_mode else 1):
+		return "A party is already out." if not town_mode else "Both parties are out."
 	if dead_at_gate() >= DEAD_LIMIT:
 		return "Too many of the dead at the gate."
 	if free_survivors().is_empty():
@@ -159,6 +180,8 @@ func why_not() -> String:
 ## own fields plus {"loot_hint", "available", "note"}. A raided site is not
 ## available ("picked over") until it reopens.
 func available_sites() -> Array:
+	if town_mode:
+		return _town_sites()
 	var out: Array = []
 	for s in sites:
 		var e: Dictionary = s.duplicate(true)
@@ -178,7 +201,9 @@ func available_sites() -> Array:
 
 ## Sends the survivors (Person objects, one or two) to the site (its id). True
 ## if it went. The party's result is decided here.
-func send(people: Array, site_id: String) -> bool:
+func send(people: Array, site_id: String, action: String = "loot") -> bool:
+	if town_mode and not errands.has(site_id):
+		return _send_town(people, site_id, action)
 	if not (can_send() or _errand_ok(site_id)):
 		return false
 	if people.is_empty() or people.size() > MAX_PARTY:
@@ -302,6 +327,8 @@ func save() -> Dictionary:
 			"state": String(party.state),
 			"return_at": float(party.return_at),
 			"result": _copy_result(party.result),
+			"action": String(party.get("action", "loot")),
+			"depart": float(party.get("depart", -1.0)),
 		})
 	var lost := {}
 	for p in sim.people:
@@ -352,6 +379,10 @@ func _restore_party(entry: Dictionary) -> void:
 		"return_at": float(entry.get("return_at", 0.0)),
 		"result": _copy_result(entry.get("result", {})),
 	}
+	if entry.has("action"):
+		party["action"] = String(entry.action)
+	if float(entry.get("depart", -1.0)) >= 0.0:
+		party["depart"] = float(entry.depart)
 	parties.append(party)
 	var through = entry.get("through", [])
 	for id in members:
@@ -379,7 +410,21 @@ func _copy_result(raw) -> Dictionary:
 		if raw_lost is Array:
 			for id in raw_lost:
 				lost.append(String(id))
-	return {"loot": loot, "hurt": hurt, "lost": lost}
+	var out := {"loot": loot, "hurt": hurt, "lost": lost}
+	if raw is Dictionary:
+		for k in ["clear", "rescue"]:
+			if bool(raw.get(k, false)):
+				out[k] = true
+		for k in ["beats", "reveals"]:
+			var list = raw.get(k, [])
+			if list is Array and not list.is_empty():
+				var strs: Array = []
+				for v in list:
+					strs.append(String(v))
+				out[k] = strs
+		if float(raw.get("morale", 0.0)) != 0.0:
+			out["morale"] = float(raw.morale)
+	return out
 
 
 # ------------------------------------------------------------------ the trip --
@@ -420,7 +465,8 @@ func _is_heading_out(p) -> bool:
 
 
 func _go_through(p, party: Dictionary) -> void:
-	if not _any_through(party):
+	# a scout takes nothing, so it picks nothing over
+	if not _any_through(party) and String(party.get("action", "loot")) != "scout":
 		_record_raid(String(party.site))
 	p.away = party
 	p.moving = false
@@ -431,7 +477,16 @@ func _go_through(p, party: Dictionary) -> void:
 	p.activity = "Scavenging at %s" % _where(String(party.site))
 
 
+## "06:30" for an hour of the day.
+static func _clock_text(h: float) -> String:
+	var total := roundi(h * 60.0)
+	@warning_ignore("integer_division")
+	return "%02d:%02d" % [total / 60, total % 60]
+
+
 func _is_due(party: Dictionary) -> bool:
+	if town_mode and not errands.has(String(party.site)):
+		return sim.clock_min >= float(party.return_at) and sim.phase == "day"    # (a party may be out overnight; it comes in by day)
 	return sim.clock_min >= float(party.return_at) or sim.phase != "day"
 
 
@@ -477,6 +532,8 @@ func _come_back(party: Dictionary) -> void:
 		p.away = {"kind": "lost", "site": String(party.site)}
 		if not p.dead:
 			sim.medical.kill(p, "scavenging")
+	if town_mode and not came.is_empty() and not errands.has(String(party.site)):
+		_town_return(party, came)
 	if not came.is_empty() or not lost.is_empty():
 		_tell(party, came, lost, brought)
 
@@ -490,7 +547,13 @@ func _announce_departure(party: Dictionary) -> void:
 	var names: Array = []
 	for id in party.members:
 		names.append(_first(String(id)))
-	sim.alert("scav-out-%d" % int(party.n), "info", "%s left for %s." % [_join(names), _where(String(party.site))], "Back by 16:00.", gate_center(), DEPART_ALERT_TTL)
+	var back := "Back by 16:00."
+	if town_mode:
+		var due: float = fposmod(float(party.return_at) / 60.0 + 7.0, 24.0)
+		back = "Back in about %d hours." % maxi(1, roundi((float(party.return_at) - sim.clock_min) / 60.0))
+		if float(party.return_at) - sim.clock_min > 14.0 * 60.0 or due < 6.5:
+			back = "Back tomorrow, or the day after."
+	sim.alert("scav-out-%d" % int(party.n), "info", "%s left for %s." % [_join(names), _where(String(party.site))], back, gate_center(), DEPART_ALERT_TTL)
 
 
 ## The alert and banner for a settled trip.
@@ -529,6 +592,9 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 			level = "warn"
 		else:
 			sub = "Everyone is in one piece." if came.size() > 1 else "In one piece."
+	var news := _news(party, came)
+	if not news.is_empty():
+		text += " " + news
 	sim.alert("scav-%d" % int(party.n), level, text, sub, gate_center(), RETURN_ALERT_TTL)
 	var title := "Back from %s" % where
 	var line := _capitalise(_loot_text(brought)) + "."
@@ -540,7 +606,192 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 			line = "%s %s home with %s." % [_join(came_names), "is" if came.size() == 1 else "are", _loot_text(brought)]
 	for hurt_line in hurt_lines:
 		line += " " + hurt_line
+	if not news.is_empty():
+		line += " " + news
 	sim.events.append({"type": "banner", "text": title, "sub": line})
+
+
+## What the trip learned, in a sentence or two (the settlement game only): what the way held (the beats), the
+## places it showed, and how a clearing went.
+func _news(party: Dictionary, came: Array) -> String:
+	if not town_mode or errands.has(String(party.site)) or came.is_empty():
+		return ""
+	var result: Dictionary = party.result
+	var parts: Array = []
+	for b in result.get("beats", []):
+		parts.append(String(b))
+		if parts.size() >= 2:
+			break
+	var shown: Array = []
+	for pid in result.get("reveals", []):
+		shown.append(String(sim.town.place(String(pid)).get("name", pid)))
+	if not shown.is_empty():
+		parts.append("%s %s on the map now." % [_join(shown), "is" if shown.size() == 1 else "are"])
+	if String(party.get("action", "loot")) == "clear":
+		var name := String(sim.town.place(String(party.site)).get("name", "the place"))
+		parts.append("%s is cleared." % name if bool(result.get("clear", false)) else "They could not turn the dead out of %s." % name)
+	return " ".join(parts)
+
+
+# ------------------------------------------------------------------- the town --
+
+## The town's places as sites (the same shape): a trip's loot, danger and words.
+func use_town() -> void:
+	town_mode = true
+	sites = []
+	for p in sim.town.places:
+		var loot := {}
+		for k in p.loot:
+			loot[String(k)] = [int(p.loot[k][0]), int(p.loot[k][1])]
+		var extra := {}
+		for k in p.extra:
+			extra[String(k)] = [float(p.extra[k][0]), int(p.extra[k][1])]
+		sites.append({
+			"id": String(p.id), "name": String(p.name), "where": String(p.get("where", _where_of(String(p.name)))),
+			"blurb": String(p.get("blurb", "")), "danger": int(p.danger), "loot": loot, "extra": extra, "image": String(p.get("image", "")),
+		})
+
+
+## How a place is spoken of when its data gives no `where`: "The pharmacy" is "the pharmacy", a name that is a
+## name ("Pell's bakery", "Eastgate clinic") is left as it is.
+static func _where_of(name: String) -> String:
+	if name.begins_with("The "):
+		return "the " + name.trim_prefix("The ").to_lower()
+	return name
+
+
+## The known places, as the board offers them: the site's own fields plus {"loot_hint", "available",
+## "note", "state", "hours" (one way), "trip_hours", "kind", "pos", "nest" ({strength} or {}), "survivor"
+## (someone is hiding there), "outpost" ({yield, cost} or {}), "garrison" (person ids), "can_claim",
+## "actions" (which of "loot", "scout", "clear" make sense now)}.
+func _town_sites() -> Array:
+	var out: Array = []
+	for e in sim.town.known_places():
+		var id := String(e.id)
+		var s := _site(id)
+		if s.is_empty():
+			continue
+		var d: Dictionary = s.duplicate(true)
+		d["loot_hint"] = _hint(s)
+		var wait := _days_until_ready(id)
+		d["available"] = wait <= 0 and e.state != "claimed"
+		if e.state == "claimed":
+			d["note"] = "Your outpost."
+		elif wait > 0:
+			d["note"] = "Picked over. Ready again on day %d." % (_last_raid(id) + PICKED_OVER_DAYS)
+		elif _recent_raids(id) > 0:
+			d["note"] = "Raided on day %d: less to find." % _last_raid(id)
+		else:
+			d["note"] = ""
+		d["state"] = e.state
+		d["hours"] = e.hours
+		d["trip_hours"] = sim.town.trip_hours(id)
+		d["kind"] = String(e.get("kind", ""))
+		d["pos"] = e.pos
+		d["nest"] = e.get("nest", {})
+		d["survivor"] = bool(e.get("survivor", false)) and not bool(e.get("rescued", false))
+		d["outpost"] = e.get("outpost", {})
+		d["garrison"] = e.garrison
+		d["can_claim"] = sim.town.can_claim(id)
+		var actions: Array = []
+		if e.state != "claimed":
+			actions.append("loot")
+		actions.append("scout")
+		if e.state == "known" and (int(e.danger) > 0 or int(e.get("nest", {}).get("strength", 0)) > 0):
+			actions.append("clear")
+		d["actions"] = actions
+		out.append(d)
+	return out
+
+
+## Why this party cannot take this action at this place ("" when it can).
+func why_not_action(people: Array, place_id: String, action: String) -> String:
+	var e: Dictionary = sim.town.place(place_id)
+	if e.is_empty() or not sim.town.is_known(place_id):
+		return "Nobody knows where that is."
+	var st: String = sim.town.state_of(place_id)
+	for other in parties:
+		if String(other.site) == place_id:
+			return "A party is already out there."
+	if action == "loot" and st == "claimed":
+		return "It is your outpost: garrison it or leave it be."
+	if action == "loot" and _days_until_ready(place_id) > 0:
+		return "Picked over."
+	if action == "clear":
+		if st != "known":
+			return "There is nothing left to clear."
+		if int(e.danger) <= 0 and sim.town.nest_strength(place_id) <= 0:
+			return "There is nothing to clear."
+		if sim.town.nest_strength(place_id) > 0 and people.size() < 2:
+			return "A nest takes at least two."
+	if not ["loot", "scout", "clear"].has(action):
+		return "Unknown errand."
+	return ""
+
+
+## The hours a trip of this action takes, there and back (and the search).
+func action_hours(place_id: String, action: String) -> float:
+	var h: float = sim.town.hours_to(place_id)
+	return 2.0 * h if action == "scout" else 2.0 * h + sim.town.SEARCH_H + (1.0 if action == "clear" else 0.0)
+
+
+func _send_town(people: Array, site_id: String, action: String) -> bool:
+	if not can_send() or people.is_empty() or people.size() > MAX_PARTY_TOWN:
+		return false
+	if why_not_action(people, site_id, action) != "" or _site(site_id).is_empty():
+		return false
+	var ids: Array = []
+	for p in people:
+		if p == null or not can_go(p) or ids.has(p.id):
+			return false
+		ids.append(p.id)
+	trips += 1
+	var minutes := action_hours(site_id, action) * 60.0
+	var party := {
+		"kind": "party", "n": trips, "members": ids, "site": site_id, "state": "out", "action": action,
+		"return_at": snappedf(sim.clock_min + minutes, 1.0), "result": {}, "depart": sim.clock_min,
+	}
+	for p in people:
+		p.drafted = false
+		p.order = null
+		p.repair = null
+		p.target = null
+		p.goal_key = ""
+	party.result = _decide(party)
+	# what the way met may have held them up (decided already, so a save keeps it)
+	party.return_at = snappedf(float(party.return_at) + float(party.result.get("delay_h", 0.0)) * 60.0, 1.0)
+	party.result.erase("delay_h")
+	parties.append(party)
+	return true
+
+
+## The chance that this party clears this place, as the rules throw it: 0.35 plus 0.08 for each point of Shooting,
+## less 0.12 for each point of danger and nest (none once it is cleared), kept between 0.1 and 0.95.
+func clear_chance(people: Array, place_id: String) -> float:
+	var shooting := 0.0
+	for p in people:
+		shooting += float(p.skills.Shooting)
+	var cleared: bool = sim.town.state_of(place_id) == "cleared"
+	var danger := 0 if cleared else int(_site(place_id).get("danger", 0))
+	var nest: int = 0 if cleared else sim.town.nest_strength(place_id)
+	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest), 0.1, 0.95)
+
+
+## The extras of a trip's end in the settlement game: the places shown, a nest gone, a survivor home, the
+## road's effect on the mood.
+func _town_return(party: Dictionary, came: Array) -> void:
+	var result: Dictionary = party.result
+	var id := String(party.site)
+	for pid in result.get("reveals", []):
+		sim.town.reveal(String(pid))
+	if bool(result.get("clear", false)):
+		sim.town.mark_cleared(id)
+	var morale := float(result.get("morale", 0.0))
+	if morale != 0.0:
+		for p in came:
+			sim.morale.shock(p, morale, "On the road")
+	if bool(result.get("rescue", false)) and not bool(sim.town.state.get(id, {}).get("rescued", false)):
+		sim.recruits.rescue_home(id)
 
 
 # -------------------------------------------------------------- the dice roll --
@@ -549,6 +800,8 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 ## hurt and who is lost. Three dice are thrown for every member whatever comes
 ## up, so a run's dice stay in step.
 func _decide(party: Dictionary) -> Dictionary:
+	if town_mode and not errands.has(String(party.site)):
+		return _decide_town(party)
 	var site := _site(String(party.site))
 	if site.is_empty():
 		return {"loot": {}, "hurt": {}, "lost": []} # a site that is not in the data (a damaged save)
@@ -590,6 +843,142 @@ func _decide(party: Dictionary) -> Dictionary:
 			if int(found.get(k, 0)) > 0:
 				loot[k] = int(found[k])
 	return {"loot": loot, "hurt": hurt, "lost": lost}
+
+
+## The settlement game's version of the dice: the same dice as the classic trip for the loot, the wounds and
+## the losses (so a trip is as dangerous as ever, scaled by the place's danger and nest), and more: the
+## clearing, a survivor found, the places a scouting trip shows, and the beats of the way (the town's
+## data), each thrown whatever comes up so that a run's dice stay in step.
+func _decide_town(party: Dictionary) -> Dictionary:
+	var id := String(party.site)
+	var site := _site(id)
+	if site.is_empty():
+		return {"loot": {}, "hurt": {}, "lost": []}
+	var action := String(party.get("action", "loot"))
+	var place: Dictionary = sim.town.place(id)
+	var members: Array = []
+	for mid in party.members:
+		var p = _person(String(mid))
+		if p != null:
+			members.append(p)
+	var cleared: bool = sim.town.state_of(id) == "cleared"
+	var scale := loot_scale(id, members)
+	var found := {}
+	for k in STOCKS:
+		if site.loot.has(k):
+			var span: Array = site.loot[k]
+			found[k] = roundi(sim.rng.randi_range(int(span[0]), int(span[1])) * scale)
+	for k in STOCKS:
+		if site.extra.has(k):
+			var pair: Array = site.extra[k]
+			if sim.rng.randf() < float(pair[0]):
+				found[k] = int(found.get(k, 0)) + roundi(float(pair[1]) * scale)
+	var danger := 0 if cleared else int(site.danger)
+	var nest: int = 0 if cleared else sim.town.nest_strength(id)
+	var effective := float(danger + nest)
+	if action == "clear":
+		effective *= 2.0
+	elif action == "scout":
+		effective *= 0.5
+	var roll_clear: float = sim.rng.randf()
+	var clear_ok := false
+	if action == "clear":
+		clear_ok = roll_clear < clear_chance(members, id)
+	var mult: float = DANGER_MULT[clampi(int(sim.difficulty), 0, DANGER_MULT.size() - 1)]
+	var hurt := {}
+	var lost: Array = []
+	var night_out: bool = float(sim.hour) + action_hours(id, action) >= float(sim.seasons.dusk_hour())
+	for p in members:
+		var roll_loss: float = sim.rng.randf()
+		var roll_wound: float = sim.rng.randf()
+		var roll_kind: float = sim.rng.randf()
+		if effective >= float(LOSS_MIN_DANGER) and roll_loss < LOSS_BASE * mult * (effective / 2.0):
+			lost.append(p.id)
+			continue
+		var wound_p: float = (WOUND_BASE * effective * mult + (NIGHT_OUT_WOUND * mult if night_out else 0.0)) * (1.0 - float(p.skills.Shooting) / 15.0)
+		if action == "clear" and not clear_ok:
+			wound_p = minf(0.95, wound_p * 2.5)
+		if roll_wound < wound_p:
+			hurt[p.id] = "bite" if roll_kind < BITE_SHARE else "scratch"
+	var roll_rescue: float = sim.rng.randf()
+	var rescue := bool(place.get("survivor", false)) and not bool(sim.town.state.get(id, {}).get("rescued", false)) and (clear_ok or cleared or (action == "loot" and roll_rescue < 0.5))
+	if action == "scout":
+		rescue = false
+	# the way: a beat or none for each stretch of it
+	var hours: float = action_hours(id, action)
+	var slots := 1 + int(sim.town.hours_to(id) / 2.5)
+	var eligible: Array = []
+	var total := 0.0
+	for b in sim.town.beats():
+		if float(b.get("min_hours", 0.0)) <= hours:
+			eligible.append(b)
+			total += float(b.get("weight", 1.0))
+	var texts: Array = []
+	var reveals: Array = []
+	var loot_pct := 0.0
+	var delay := 0.0
+	var morale := 0.0
+	for i in slots:
+		var roll_slot: float = sim.rng.randf()
+		var roll_pick: float = sim.rng.randf()
+		var roll_who: float = sim.rng.randf()
+		if eligible.is_empty() or roll_slot >= BEAT_CHANCE or members.is_empty():
+			continue
+		var at := roll_pick * total
+		var beat: Dictionary = eligible[eligible.size() - 1]
+		for b in eligible:
+			at -= float(b.get("weight", 1.0))
+			if at < 0.0:
+				beat = b
+				break
+		texts.append(String(beat.text))
+		var fx: Dictionary = beat.get("effects", {})
+		loot_pct += float(fx.get("loot_pct", 0.0))
+		delay += float(fx.get("delay_h", 0.0))
+		morale += float(fx.get("morale", 0.0))
+		var who = members[int(roll_who * float(members.size())) % members.size()]
+		if fx.has("hurt") and not lost.has(who.id) and not hurt.has(who.id):
+			hurt[who.id] = String(fx.hurt)
+		if bool(fx.get("lost", false)) and not lost.has(who.id) and lost.size() < members.size() - 1:
+			lost.append(who.id)
+		if String(fx.get("reveal", "")) == "near":
+			var nearest := ""
+			var best_d := 1.0e9
+			for q in sim.town.places:
+				var qid := String(q.id)
+				if sim.town.state_of(qid) == "unknown" and not reveals.has(qid):
+					var d: float = Vector2(q.pos).distance_to(place.pos)
+					if d < best_d:
+						best_d = d
+						nearest = qid
+			if nearest != "":
+				reveals.append(nearest)
+	if action == "scout":
+		for q in sim.town.places:
+			var qid := String(q.id)
+			if sim.town.state_of(qid) == "unknown" and not reveals.has(qid) and Vector2(q.pos).distance_to(place.pos) <= sim.town.SCOUT_RADIUS:
+				reveals.append(qid)
+	var loot := {}
+	var gave := action == "loot" or (action == "clear" and clear_ok)
+	if gave and lost.size() < members.size():
+		for k in STOCKS:
+			var amount := roundi(float(found.get(k, 0)) * maxf(0.2, 1.0 + loot_pct / 100.0))
+			if amount > 0:
+				loot[k] = amount
+	var result := {"loot": loot, "hurt": hurt, "lost": lost}
+	if clear_ok:
+		result["clear"] = true
+	if rescue and lost.size() < members.size():
+		result["rescue"] = true
+	if not texts.is_empty():
+		result["beats"] = texts
+	if not reveals.is_empty():
+		result["reveals"] = reveals
+	if morale != 0.0:
+		result["morale"] = clampf(morale, -8.0, 8.0)
+	if delay > 0.0:
+		result["delay_h"] = delay
+	return result
 
 
 # ------------------------------------------------------------------- raids --

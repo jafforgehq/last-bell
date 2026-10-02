@@ -12,10 +12,16 @@
 ##
 ## Round 7 asks `housing()` and `radio_range()`.
 ##
+## Round 9 adds the lots' plots (assets/data/lots.json, `lots.gd`): ring plots (`kind` "ring": buildings stand on
+## them as in the yard) and mouths (`kind` "mouth": a wall across a street, ordered like a building from the wall
+## kits, which are catalogue entries with a `wall_kit`; when finished `lots.on_wall_built` makes the wall section).
+## They are seen (`plots()`) only once their lot is claimed.
+##
 ## Events: {"type": "site"|"built"|"cancelled"|"demolished", "plot": id, "building": id}.
 ## Alerts: `built-<plot id>` when a building is finished.
 extends RefCounted
 
+const Lots := preload("res://scripts/sim/lots.gd")
 const BUILDINGS_PATH := "res://assets/data/buildings.json"
 const PLOTS_PATH := "res://assets/data/plots.json"
 const ART_PATH := "res://assets/data/building_art.json"
@@ -54,6 +60,9 @@ var _art := {}
 ## The plots with a site, oldest first: the first is the one being built.
 var _queue: Array = []
 var _hammer := 0.0
+## The plots that are open to use (see `plots`): the yard's own, and those of the lots that are claimed.
+var _visible: Array = []
+var _visible_dirty := true
 
 
 func setup(s) -> void:
@@ -62,7 +71,7 @@ func setup(s) -> void:
 
 
 func _load_data() -> void:
-	var key := plots_path + "|" + buildings_path + "|" + art_path
+	var key := plots_path + "|" + buildings_path + "|" + art_path + "|" + Lots.data_path
 	if not _cache.has(key):
 		var plots: Array = []
 		var rawp = JSON.parse_string(FileAccess.get_file_as_string(plots_path))
@@ -84,6 +93,7 @@ func _load_data() -> void:
 			b["plots"] = r.get("plots", [])
 			b["effects"] = r.get("effects", {})
 			buildings.append(b)
+		_add_lots_data(plots, buildings)
 		var art := {}
 		if FileAccess.file_exists(art_path):
 			var rawa = JSON.parse_string(FileAccess.get_file_as_string(art_path))
@@ -106,6 +116,38 @@ func _load_data() -> void:
 		live["solid"] = []
 		_plots.append(live)
 		_plot_by_id[String(live.id)] = live
+	_visible_dirty = true
+
+
+## The lots' ring plots and mouths join the plots, and the wall kits the catalogue.
+func _add_lots_data(plots: Array, buildings: Array) -> void:
+	var d := Lots.load_data()
+	for r in d.plots:
+		plots.append({
+			"id": String(r.id), "name": String(r.get("name", r.id)), "kind": String(r.get("kind", "ring")), "lot": String(r.get("lot", "")),
+			"pos": Vector2(float(r.pos[0]), float(r.pos[1])), "size": Vector2(float(r.size[0]), float(r.size[1])),
+			"work": Vector2(float(r.work[0]), float(r.work[1])),
+		})
+	for m in d.mouths:
+		var post: Dictionary = m.post
+		var at: Vector2 = m.center
+		var spot := Vector2(float(post.pos[0]), float(post.pos[1])) if post.has("pos") else at
+		var kit_ids: Array = []
+		for k in m.kits:
+			kit_ids.append(String(k))
+		var rect: Array = m.rect
+		plots.append({
+			"id": String(m.id), "name": String(m.name), "kind": "mouth", "lot": String(m.get("lot", "")),
+			"pos": at, "size": Vector2(float(rect[2]) - float(rect[0]) + 1.0, float(rect[3]) - float(rect[1]) + 1.0), "work": spot,
+			"kits": kit_ids, "dir": String(m.dir),
+		})
+	for k in d.kits:
+		var kit: Dictionary = d.kits[k]
+		buildings.append({
+			"id": "wall_%s" % String(k), "name": String(kit.get("name", k)), "blurb": String(kit.get("blurb", "A wall across a street.")),
+			"plots": ["mouth"], "scrap": int(kit.scrap), "work": float(kit.work), "max": 99, "requires": "", "effects": {},
+			"wall_kit": String(k), "hp": float(kit.hp), "dir": String(kit.get("dir", "h")), "length": float(kit.length),
+		})
 
 
 func start() -> void:
@@ -125,7 +167,19 @@ func _reset() -> void:
 # ------------------------------------------------------------------- plots --
 
 func plots() -> Array:
-	return _plots
+	if _visible_dirty:
+		refresh_plots()
+	return _visible
+
+
+## Works out which plots are open (the lots' ones only when their lot is claimed). In the classic start
+## that is the yard's own, always.
+func refresh_plots() -> void:
+	_visible = []
+	for p in _plots:
+		if sim.lots.plot_open(p):
+			_visible.append(p)
+	_visible_dirty = false
 
 
 ## A plot's data and state, or {} when there is no such plot.
@@ -135,7 +189,7 @@ func plot(id: String) -> Dictionary:
 
 ## The plot whose lot contains this point (tile units), or "".
 func plot_at(at: Vector2) -> String:
-	for p in _plots:
+	for p in plots():
 		var half: Vector2 = Vector2(p.size) / 2.0
 		if absf(at.x - p.pos.x) <= half.x and absf(at.y - p.pos.y) <= half.y:
 			return String(p.id)
@@ -145,7 +199,13 @@ func plot_at(at: Vector2) -> String:
 # --------------------------------------------------------------- catalogue --
 
 func catalogue() -> Array:
-	return _catalogue
+	if sim.lots.on:
+		return _catalogue
+	var out: Array = []
+	for b in _catalogue:
+		if not b.has("wall_kit") and not bool(b.get("lots_only", false)):
+			out.append(b)
+	return out
 
 
 ## A building's data, or {} when there is no such building.
@@ -226,7 +286,7 @@ func sign_pos(plot_id: String) -> Vector2:
 func sign_at(at: Vector2) -> String:
 	var best := ""
 	var best_d := SIGN_REACH
-	for pl in _plots:
+	for pl in plots():
 		var d := at.distance_to(sign_pos(String(pl.id)))
 		if d <= best_d:
 			best_d = d
@@ -285,15 +345,27 @@ func why_not(plot_id: String, building_id: String) -> String:
 		return "the %s is already built here" % String(building(String(pl.building)).name).to_lower()
 	if not pl.site.is_empty():
 		return "something is already going up here"
-	if not b.plots.has(pl.kind):
+	if not sim.lots.plot_open(pl):
+		return "claim the lot first"
+	if b.has("wall_kit"):
+		if pl.kind != "mouth" or not pl.kits.has(String(b.wall_kit)):
+			return "it does not fit across this street"
+	elif pl.kind == "mouth":
+		return "only a wall goes across a street"
+	elif not (b.plots.has(pl.kind) or (pl.kind == "ring" and b.plots.has("yard"))):
 		return "it cannot stand on %s" % ("the wall" if pl.kind == "wall" else "the yard")
-	if _count_with_sites(building_id) >= int(b.max):
-		return "there is already %s" % ("one" if int(b.max) == 1 else "the most (%d)" % int(b.max))
+	if _count_with_sites(building_id) >= _max_of(b):
+		return "there is already %s" % ("one" if _max_of(b) == 1 else "the most (%d)" % _max_of(b))
 	if String(b.requires) != "" and not built(String(b.requires)):
 		return "it needs the %s first" % String(building(String(b.requires)).name).to_lower()
 	if float(sim.stock.scrap) + 1.0e-9 < float(b.scrap):
 		return "it needs %d scrap" % int(b.scrap)
 	return ""
+
+
+## How many of a building may stand: its `max`, and each claimed lot allows its `lot_max` more.
+func _max_of(b: Dictionary) -> int:
+	return int(b.max) + int(b.get("lot_max", 0)) * sim.lots.claimed_on.size()
 
 
 ## Pays the scrap and puts a site on the plot. False, and nothing changes, if it cannot be ordered.
@@ -327,6 +399,8 @@ func why_not_demolish(plot_id: String) -> String:
 	var pl := plot(plot_id)
 	if pl.is_empty() or pl.building == "":
 		return "nothing stands there"
+	if pl.kind == "mouth":
+		return "a wall is not pulled down: mend it or let it fall"
 	for q in _plots:
 		if q.building != "" and String(building(String(q.building)).requires) == String(pl.building) and count(String(pl.building)) <= 1:
 			return "the %s needs it" % String(building(String(q.building)).name).to_lower()
@@ -412,13 +486,29 @@ func update(dt: float) -> void:
 		_finish(pl)
 
 
+## A building is lost to the dead (a raid on a lot): gone with nothing back.
+func ruin(plot_id: String) -> bool:
+	var pl := plot(plot_id)
+	if pl.is_empty() or pl.building == "":
+		return false
+	_unblock(pl)
+	pl.building = ""
+	version += 1
+	sim.jobs.trim()
+	return true
+
+
 func _finish(pl: Dictionary) -> void:
 	var id := String(pl.site.building)
 	pl.building = id
 	pl.site = {}
 	_queue.erase(String(pl.id))
-	_block(pl)
 	version += 1
+	if building(id).has("wall_kit"):
+		sim.events.append({"type": "built", "plot": pl.id, "building": id})
+		sim.lots.on_wall_built(String(pl.id), String(building(id).wall_kit))
+		return
+	_block(pl)
 	var label := String(building(id).name)
 	sim.events.append({"type": "built", "plot": pl.id, "building": id})
 	sim.alert("built-%s" % String(pl.id), "info", "The %s is finished" % label.to_lower(), String(pl.name), Vector2(pl.pos), 14.0)

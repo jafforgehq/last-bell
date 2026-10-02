@@ -23,6 +23,8 @@
 ##                    is stood on the decks where its guns cover the walls tonight's dead
 ##                    will come to, and the alarm is set on the best-covered section
 ##   --crew=3         play the small start (three people, the others come over the radio); default 6
+##   --nolots         the informed policy does not claim lots or wall the streets (to see what they change)
+##   --campaign       play the long game of four seasons (--days=102 plays it through)
 ##   --nobuild        the informed policy does not build (to see what the buildings change)
 ##   --build-order=a,b  the informed policy builds only these, in this order (building ids), to see what one building is worth
 ##   --nostory        play with the storyteller off (no card at noon, no assembly at dawn), to see
@@ -61,6 +63,10 @@ static var build_on := true
 static var build_order_override: Array = []
 ## How many people a game starts with (see --crew).
 static var crew_start := 6
+## Play the long game of four seasons (see --campaign; --days=102 plays it through).
+static var campaign := false
+## The informed policy claims lots and walls the streets (see --nolots).
+static var lots_on := true
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -102,6 +108,24 @@ class Policy:
 	const BUILD_FROM_DAY := 2
 	const BUILD_KEEP := 12.0
 	const SALVAGE_BELOW := 40.0
+	## The settlement game's board (see _town_trip): a trip must be back by BACK_BY unless at least OVERNIGHT_HANDS
+	## people stay at home; scouting while the fog is thick (until SCOUT_UNTIL_DAY, every SCOUT_GAP_DAYS); a nest is
+	## cleared by a party whose Shooting adds up to CLEAR_SHOOTING; an outpost is claimed with CLAIM_KEEP scrap to spare.
+	const BACK_BY := 18.5
+	const OVERNIGHT_HANDS := 3
+	const SCOUT_UNTIL_DAY := 10
+	const SCOUT_GAP_DAYS := 2
+	const CLEAR_SHOOTING := 12.0
+	const CLEAR_FROM_DAY := 5
+	const CLAIM_KEEP := 8.0
+	## Lots (the informed policy only): a lot is claimed with LOT_KEEP scrap to spare, and a mouth's wall is
+	## ordered with WALL_KEEP to spare, the one the forecast names first.
+	const LOT_KEEP := 6.0
+	const WALL_KEEP := 10.0
+	## What it builds on the ring once a lot is claimed (the buildings that only stand there), after BUILD_ORDER.
+	const RING_ORDER := ["scrap_yard", "orchard", "cistern"]
+	## Saving for a lot: the bench keeps the price of it (and LOT_KEEP) in scrap while the ammo is above this.
+	const LOT_AMMO_FLOOR := 150.0
 	## One shortage moves at most this much of a person towards a station.
 	const NEED_MAX := 1.5
 	## Against dead at the wall by day this many of the best shooters stand to at their posts.
@@ -125,6 +149,15 @@ class Policy:
 	var trips := 0
 	var treats := 0
 	var sendouts := 0
+	var lots_enabled := true
+	var lots_claimed := 0
+	var walls_ordered := 0
+	var _lots_day := 0
+	var scouts := 0
+	var clears := 0
+	var claims := 0
+	var rescues := 0
+	var _scouted_day := -10
 	var moves := 0
 	var builds_ordered := 0
 	## Builds (and orders them): see BUILD_ORDER (`build_order`, when not empty, is used instead: --build-order).
@@ -159,6 +192,7 @@ class Policy:
 		_jobs()
 		_radio_noon()
 		if builds:
+			_lots()
 			_build()
 		_scavenge()
 		_infection()
@@ -253,6 +287,11 @@ class Policy:
 		for v in out:
 			if sim.world.on_deck(v.x, v.y):
 				ok.append(v)
+		# behind each wall that stands across a street
+		if sim.lots.on:
+			for m in sim.lots.mouths():
+				if sim.lots.segment_at(String(m.id)) != null and m.post.has("pos"):
+					ok.append(Vector2(float(m.post.pos[0]), float(m.post.pos[1])))
 		return ok
 
 	## How much a wall section matters tonight: more the nearer it is to where the
@@ -265,7 +304,7 @@ class Policy:
 
 	func _inform() -> void:
 		var hour: float = sim.hour
-		var dusky: bool = sim.phase == "day" and hour >= PLACE_HOUR or sim.phase == "dusk"
+		var dusky: bool = sim.phase == "day" and hour >= float(sim.seasons.dusk_hour()) - 0.75 or sim.phase == "dusk"
 		if not dusky and sim.phase != "night":
 			# by day the crew goes back to its jobs
 			if not _placed.is_empty():
@@ -355,6 +394,9 @@ class Policy:
 	# ------------------------------------------------------------ scavenging --
 
 	func _scavenge() -> void:
+		if sim.town.on:
+			_town_trip()
+			return
 		if _sent_day == sim.day or sim.phase != "day" or sim.hour >= 10.0:
 			return
 		var site := _site_wanted()
@@ -407,6 +449,224 @@ class Policy:
 		var n := 2 if free.size() >= 3 else (1 if free.size() == 2 else 0)
 		return free.slice(0, n)
 
+	# ------------------------------------------------------------------ the lots --
+
+	## What the first lot not yet claimed costs.
+	func _lot_price() -> float:
+		for l in sim.lots.lots():
+			if not sim.lots.claimed(String(l.id)):
+				return float(l.claim.get("scrap", 0))
+		return 0.0
+
+	## A lot that can be claimed but for the scrap: the other buildings wait (the policy saves for it).
+	func _saving_for_a_lot() -> bool:
+		if not lots_enabled or not sim.lots.on:
+			return false
+		for l in sim.lots.lots():
+			var id := String(l.id)
+			if sim.lots.claimed(id):
+				continue
+			var why: String = sim.lots.why_not_claim(id)
+			if why.begins_with("it needs"):
+				return true
+			break
+		return false
+
+	## Each morning: claim a lot if it can be (one a day), and if nothing is going up put a wall across the
+	## mouth the forecast names (else any open one of a claimed lot) with the best kit it can pay for.
+	func _lots() -> void:
+		if not lots_enabled or not sim.lots.on or sim.phase != "day" or _lots_day == sim.day or sim.hour < 6.9:
+			return
+		_lots_day = sim.day
+		for l in sim.lots.lots():
+			var id := String(l.id)
+			if not sim.lots.claimed(id) and sim.lots.why_not_claim(id) == "" and float(sim.stock.scrap) >= float(l.claim.get("scrap", 0)) + LOT_KEEP:
+				if sim.lots.claim(id):
+					lots_claimed += 1
+					_note("claims %s" % id)
+				break
+		if not sim.build.active_site().is_empty():
+			return
+		var heading: Array = sim.waves.plan_for(sim.day).get("heading", [])
+		var best_mouth := ""
+		var best_rank := 9
+		for m in sim.lots.mouths():
+			var pl: Dictionary = sim.build.plot(String(m.id))
+			if pl.is_empty() or not sim.lots.claimed(String(m.get("lot", ""))) or pl.building != "" or not pl.site.is_empty():
+				continue
+			var rank := 0 if heading.has(int(m.get("spawn", -1))) else 1
+			if rank < best_rank:
+				best_rank = rank
+				best_mouth = String(m.id)
+		if best_mouth == "":
+			return
+		var best_kit := ""
+		var best_value := 0.0
+		for kid in sim.lots.kits_for(best_mouth):
+			var b: Dictionary = sim.build.building(String(kid))
+			if float(sim.stock.scrap) < float(b.scrap) + WALL_KEEP:
+				continue
+			var value: float = float(b.hp) / maxf(1.0, float(b.scrap))
+			if value > best_value:
+				best_value = value
+				best_kit = String(kid)
+		if best_kit != "" and sim.build.order(best_mouth, best_kit):
+			walls_ordered += 1
+			_note("orders a wall across %s" % best_mouth)
+
+	# ----------------------------------------------------------------- the board --
+
+	## The settlement game's morning: claim an outpost if the scrap is there, then send the best free party to the
+	## place that helps most (a rescue first, then what is lowest, then scouting while the fog is thick, then a nest).
+	func _town_trip() -> void:
+		_claim()
+		if _sent_day == sim.day or sim.phase != "day" or sim.hour >= 10.0 or not sim.scavenge.can_send():
+			return
+		var free: Array = _free_by_shooting()
+		if free.is_empty():
+			return
+		var sites: Array = sim.scavenge.available_sites()
+		var pick := _town_pick(sites, free)
+		if pick.is_empty():
+			return
+		var crew: Array = free.slice(0, int(pick.n))
+		if sim.scavenge.send(crew, String(pick.id), String(pick.action)):
+			_sent_day = sim.day
+			trips += 1
+			match String(pick.action):
+				"scout":
+					scouts += 1
+					_scouted_day = sim.day
+				"clear":
+					clears += 1
+			if bool(pick.get("rescue", false)):
+				rescues += 1
+			var names: Array = []
+			for p in crew:
+				names.append(p.first)
+			_note("sent %s to %s (%s)" % [" and ".join(names), pick.id, pick.action])
+
+	func _claim() -> void:
+		for s in sim.scavenge.available_sites():
+			if bool(s.can_claim) and float(sim.stock.scrap) >= float(s.outpost.get("cost", 0.0)) + CLAIM_KEEP:
+				if sim.town.claim(String(s.id)):
+					claims += 1
+					_note("claimed %s" % s.id)
+					return
+
+	func _free_by_shooting() -> Array:
+		var free: Array = []
+		for p in sim.people:
+			if _free(p) and sim.scavenge.can_go(p):
+				free.append(p)
+		free.sort_custom(func(a, b):
+			if a.skills.Shooting != b.skills.Shooting:
+				return a.skills.Shooting > b.skills.Shooting
+			return a.skills.Leading > b.skills.Leading)
+		return free
+
+	## What to do this morning: {"id", "action", "n", "rescue"} or {} for nothing. `free` is who can go, best first.
+	func _town_pick(sites: Array, free: Array) -> Dictionary:
+		var left: float = (float(sim.seasons.dusk_hour()) - 0.5) - float(sim.hour)
+		var n := 2 if free.size() >= 3 else (1 if free.size() == 2 else 0)
+		var here := _hands_home()
+		# a rescue, if there is a bed for them
+		if int(sim.recruits.housing_free()) >= 1 and n > 0:
+			for s in sites:
+				if bool(s.survivor) and (s.available or s.state == "cleared") and s.state != "claimed":
+					var action := "clear" if (int(s.danger) >= 2 and n >= 2) else "loot"
+					if _fits(s, action, left, here, n):
+						return {"id": s.id, "action": action, "n": n, "rescue": true}
+		# what is lowest
+		var needs := _needs()
+		for need in needs:
+			var best := ""
+			var best_score := 0.0
+			for s in sites:
+				if not s.available or s.state == "claimed" or not s.loot.has(need):
+					continue
+				if not _fits(s, "loot", left, here, maxi(n, 1)):
+					continue
+				var span: Array = s.loot[need]
+				var danger := float(s.danger) + float(s.nest.get("strength", 0))
+				if danger >= 3.0 and _shooting(free.slice(0, n)) < 10.0:
+					continue
+				var score: float = (float(span[0]) + float(span[1])) * 0.5 / (1.0 + 0.15 * sim.scavenge.action_hours(String(s.id), "loot")) / (1.0 + 0.25 * danger)
+				if score > best_score:
+					best_score = score
+					best = String(s.id)
+			if best != "" and n > 0:
+				return {"id": best, "action": "loot", "n": n}
+		# nothing known has it, or the fog is still thick: look further
+		if (not needs.is_empty() or sim.day <= SCOUT_UNTIL_DAY) and sim.day - _scouted_day >= SCOUT_GAP_DAYS:
+			var from := _scout_from(sites, left)
+			if from != "":
+				return {"id": from, "action": "scout", "n": 1}
+		# a nest, when there are hands to spare for it
+		if sim.day >= CLEAR_FROM_DAY and n >= 2 and free.size() >= 3 and _shooting(free.slice(0, 2)) >= CLEAR_SHOOTING:
+			var weakest := ""
+			var weak := 99
+			for s in sites:
+				var st := int(s.nest.get("strength", 0))
+				if st > 0 and s.state == "known" and st < weak and _fits(s, "clear", left, here, 2):
+					weak = st
+					weakest = String(s.id)
+			if weakest != "":
+				return {"id": weakest, "action": "clear", "n": 2}
+		return {}
+
+	func _shooting(people: Array) -> float:
+		var t := 0.0
+		for p in people:
+			t += float(p.skills.Shooting)
+		return t
+
+	## People at home: alive, up and not away.
+	func _hands_home() -> int:
+		var here := 0
+		for p in sim.people:
+			if not p.dead and not p.downed and p.away == null:
+				here += 1
+		return here
+
+	## A trip fits when it is back before dusk, or when enough hands stay to hold the night.
+	func _fits(s: Dictionary, action: String, left: float, here: int, n: int) -> bool:
+		var h: float = sim.scavenge.action_hours(String(s.id), action)
+		if h <= left:
+			return true
+		return here - n >= OVERNIGHT_HANDS and h <= 22.0
+
+	## The known place with the most hidden places within the scouting radius that can be reached and left today.
+	func _scout_from(sites: Array, left: float) -> String:
+		var best := ""
+		var best_n := 0
+		for s in sites:
+			if sim.scavenge.action_hours(String(s.id), "scout") > left:
+				continue
+			var near := 0
+			for q in sim.town.all_places():
+				if String(q.state) == "unknown" and Vector2(q.pos).distance_to(Vector2(s.pos)) <= sim.town.SCOUT_RADIUS:
+					near += 1
+			if near > best_n:
+				best_n = near
+				best = String(s.id)
+		return best
+
+	## The stocks that are low, most urgent first (food, water, meds, scrap, ammo).
+	func _needs() -> Array:
+		var needs: Array = []
+		if sim.supplies.days_left("food") < LOW_DAYS:
+			needs.append("food")
+		if sim.supplies.days_left("water") < LOW_DAYS:
+			needs.append("water")
+		if float(sim.stock.meds) < LOW_MEDS:
+			needs.append("meds")
+		if float(sim.stock.scrap) < LOW_SCRAP:
+			needs.append("scrap")
+		if float(sim.stock.ammo) < LOW_AMMO:
+			needs.append("ammo")
+		return needs
+
 	# ------------------------------------------------------------------ jobs --
 
 	## Every morning the crew's jobs are set by what the colony needs: three hands (FLEX_HANDS) are spread over
@@ -420,7 +680,10 @@ class Policy:
 			return
 		_jobs_day = sim.day
 		sim.jobs.set_setting("bench", "ammo_target", BENCH_TARGET)
-		sim.jobs.set_setting("bench", "scrap_reserve", BENCH_RESERVE)
+		var reserve := BENCH_RESERVE
+		if builds and _saving_for_a_lot() and float(sim.stock.ammo) > LOT_AMMO_FLOOR:
+			reserve = _lot_price() + LOT_KEEP
+		sim.jobs.set_setting("bench", "scrap_reserve", reserve)
 		sim.jobs.set_setting("builders", "repair_below", WALL_BELOW)
 		var alive: Array = []
 		for p in sim.people:
@@ -533,8 +796,17 @@ class Policy:
 		_build_day = sim.day
 		if not sim.build.active_site().is_empty():
 			return
-		for id in (build_order if not build_order.is_empty() else BUILD_ORDER):
-			if sim.build.built(String(id)):
+		if _saving_for_a_lot():
+			return
+		var order: Array = build_order if not build_order.is_empty() else BUILD_ORDER
+		if sim.lots.on and not sim.lots.claimed_on.is_empty():
+			order = order + RING_ORDER
+		for id in order:
+			if String(id) in RING_ORDER:
+				# ring buildings may stand more than once: one of each is enough to begin with
+				if sim.build.count(String(id)) >= 1:
+					continue
+			elif sim.build.built(String(id)):
 				continue
 			var b: Dictionary = sim.build.building(String(id))
 			if float(sim.stock.scrap) < float(b.scrap) + BUILD_KEEP:
@@ -575,7 +847,7 @@ class Policy:
 ## first step (the tests use it to play a cheap game).
 static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false, informed: bool = false, story: bool = true) -> Dictionary:
 	var started := Time.get_ticks_msec()
-	var g := Helpers.make(seed_value, difficulty, crew_start)
+	var g := Helpers.make(seed_value, difficulty, crew_start, campaign)
 	var sim = g.sim
 	# the storyteller: on (the radio brings its cards, the dawn has its assembly) unless asked not to
 	sim.storyteller.enabled = story
@@ -585,6 +857,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	policy.hide = hide
 	policy.informed = informed
 	policy.builds = informed and build_on
+	policy.lots_enabled = lots_on
 	policy.build_order = build_order_override
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
@@ -623,6 +896,9 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"trips": policy.trips,
 		"treats": policy.treats,
 		"sendouts": policy.sendouts,
+		"town": _town_row(sim, policy),
+		"season": sim.seasons.index,
+		"lots": {"claimed": policy.lots_claimed, "walls": policy.walls_ordered, "standing": _walls_standing(sim)} if sim.lots.on else {},
 		"moves": policy.moves,
 		"builds": policy.builds_ordered,
 		"cards": policy.cards,
@@ -631,6 +907,35 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	}
 	g.world.free()
 	return result
+
+
+## How many walls stand across the streets of the lots.
+static func _walls_standing(sim) -> int:
+	var n := 0
+	for m in sim.lots.mouths():
+		if sim.lots.segment_at(String(m.id)) != null:
+			n += 1
+	return n
+
+
+## What the board looks like at the end of a settlement game, and what the policy did on it.
+static func _town_row(sim, policy) -> Dictionary:
+	if not sim.town.on:
+		return {}
+	var known := 0
+	var cleared := 0
+	var claimed := 0
+	var nests := 0
+	for p in sim.town.all_places():
+		if p.state != "unknown":
+			known += 1
+		if p.state == "cleared":
+			cleared += 1
+		if p.state == "claimed":
+			claimed += 1
+		if int(p.get("nest", {}).get("strength", 0)) > 0 and p.state != "cleared" and p.state != "claimed":
+			nests += 1
+	return {"known": known, "cleared": cleared, "claimed": claimed, "nests_left": nests, "scouts": policy.scouts, "clears": policy.clears, "claims": policy.claims, "rescues": policy.rescues}
 
 
 ## The colony at this moment, for the day-by-day log.
@@ -788,6 +1093,10 @@ func _run() -> void:
 			build_on = false
 		elif kv[0] == "crew" and kv.size() > 1:
 			crew_start = 3 if int(kv[1]) < 6 else 6
+		elif kv[0] == "campaign":
+			campaign = true
+		elif kv[0] == "nolots":
+			lots_on = false
 		elif kv[0] == "build-order" and kv.size() > 1:
 			build_order_override = String(kv[1]).split(",")
 		elif opts.has(kv[0]) and kv.size() > 1:
@@ -877,6 +1186,10 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--nobuild")
 		if crew_start != 6:
 			args.append("--crew=%d" % crew_start)
+		if campaign:
+			args.append("--campaign")
+		if not lots_on:
+			args.append("--nolots")
 		if not build_order_override.is_empty():
 			args.append("--build-order=%s" % ",".join(build_order_override))
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})

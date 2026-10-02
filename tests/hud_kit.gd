@@ -60,7 +60,7 @@ class FakeScavenge:
 	func available_sites() -> Array:
 		return list
 
-	func send(people: Array, site_id: String) -> bool:
+	func send(people: Array, site_id: String, _action: String = "loot") -> bool:
 		var ids: Array = []
 		for p in people:
 			ids.append(p.id)
@@ -353,8 +353,8 @@ static func sample_sites(with_scrapyard: bool = false) -> Array:
 ## {"g", "sim", "holder", "hud", "pressed": ids of gizmo presses, "speeds",
 ## "selected"}: a new run on day 1 with fake modules and the HUD set up. With `real_people` the game's own
 ## traits, morale, bonds, skills and barks stay (the other modules are still the fakes).
-static func build(width: int = 1280, height: int = 800, seed_value: int = 1, real_people: bool = false) -> Dictionary:
-	var g := Helpers.make(seed_value, 1)
+static func build(width: int = 1280, height: int = 800, seed_value: int = 1, real_people: bool = false, crew: int = 6) -> Dictionary:
+	var g := Helpers.make(seed_value, 1, crew)    # (3: a settlement game, with the lots of the ring)
 	var sim = g.sim
 	sim.supplies = FakeSupplies.new()
 	sim.medical = FakeMedical.new()

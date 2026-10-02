@@ -7,6 +7,11 @@
 ## and weaker; in a blackout the generator is dead: the lamps, the lanterns and the floodlights
 ## go out (the fire barrels burn on) and the sky takes a cooler, darker tint. Both ease in and
 ## out, and under "reduce motion" they simply switch (and the fog does not drift).
+##
+## The seasons (round 10): in a campaign (`seasons` is set) the hour is mapped to the standard day's with the
+## season's own `light_hour`, so that the keyframes above, made for a dusk at 19:00, follow Winter's early dusk
+## and Summer's late one; and the day's colour is multiplied by the season's tint (Winter cold, Spring a little
+## green, Summer warm). Autumn, and any game that is not a campaign, is lit exactly as it always was.
 extends Node2D
 
 const Prefs := preload("res://scripts/prefs.gd")
@@ -79,6 +84,8 @@ void fragment() {
 "
 
 var modulate_node: CanvasModulate
+## The rules' seasons (sim.seasons); null, or not a campaign: no mapping and no tint.
+var seasons = null
 var lights: Array = [] # {def, node, scale}
 var flash_nodes: Array = []
 var flash_tex: Texture2D
@@ -205,6 +212,11 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 	var dt := 0.0 if _last_t < 0.0 else clampf(t - _last_t, 0.0, 0.25)
 	_last_t = t
 	_follow(look, dt)
+	# a campaign's day is the season's: its hour is mapped to the standard day's, and its tint colours the light
+	var tint := Color.WHITE
+	if seasons != null and seasons.campaign:
+		hour = seasons.light_hour(hour)
+		tint = seasons.tint()
 	var sky := sky_at(hour)
 	dark = 1.0 - (sky.r + sky.g + sky.b) / 3.0
 	var flicker := 1.0
@@ -214,13 +226,13 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 	lamp_level = clampf((dark - 0.08) * 4.0, 0.0, 1.0) * power * flicker
 	_set_veil(sky)
 	if dark <= 0.02:
-		modulate_node.color = Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)
+		modulate_node.color = (Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)) * tint
 		for l in lights:
 			l.node.visible = false
 		for f in flash_nodes:
 			f.visible = false
 		return
-	modulate_node.color = _tinted(sky)
+	modulate_node.color = _tinted(sky) * tint
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
 	var energy_k := lerpf(1.0, FOG_LIGHT_ENERGY, fog)
 	var reach_k := lerpf(1.0, FOG_LIGHT_REACH, fog)

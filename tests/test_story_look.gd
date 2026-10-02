@@ -193,7 +193,7 @@ func test_the_storyteller_says_what_to_draw() -> void:
 	var sim = g.sim
 	sim.storyteller.enabled = true
 	var look: Dictionary = sim.storyteller.look()
-	eq(look, {"fog": 0.0, "rain": false, "blackout": false}, "a clear day is plain")
+	eq(look, {"fog": 0.0, "rain": false, "snow": false, "blackout": false}, "a clear day is plain")
 	sim.weather = "fog"
 	sim.minutes = 12.0 * 60.0
 	sim.phase = "day"
@@ -208,5 +208,5 @@ func test_the_storyteller_says_what_to_draw() -> void:
 	sim.storyteller.blackout["state"] = "dark"
 	eq(sim.storyteller.look().blackout, true, "one that has is")
 	sim.storyteller.enabled = false
-	eq(sim.storyteller.look(), {"fog": 0.0, "rain": false, "blackout": false}, "and with the storyteller off nothing is")
+	eq(sim.storyteller.look(), {"fog": 0.0, "rain": false, "snow": false, "blackout": false}, "and with the storyteller off nothing is")
 	g.world.free()

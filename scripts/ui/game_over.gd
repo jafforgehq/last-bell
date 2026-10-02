@@ -21,6 +21,8 @@ var hud
 var sim
 var panel: PanelContainer
 var title_label: Label
+## The line under the verdict (round 10: a campaign says which season a defeat came in).
+var sub_label: Label
 ## "days", "kills" and "lost" -> the Label with that number.
 var stat_values := {}
 
@@ -64,9 +66,10 @@ func _build() -> void:
 	title_label = hud._label(_title(result), Fonts.cond(700), 38, hud.PAPER_INK)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(title_label)
-	var sub: Label = hud._label(SUBTITLES.get(result, ""), Fonts.sans(400), 15, hud.PAPER_INK2)
+	var sub: Label = hud._label(_subtitle(result), Fonts.sans(400), 15, hud.PAPER_INK2)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub_label = sub
 	col.add_child(sub)
 
 	# the numbers, as the ruled lines of the card
@@ -187,8 +190,29 @@ func _fate(p) -> String:
 ## thirty days are over"), which is the scenario's, not a fixed number.
 func _title(result: String) -> String:
 	if result == "victory":
+		if _campaign():
+			return "The seasons are over"
 		return "The %s days are over" % _number_word(int(sim.scenario.total_days()))
 	return String(TITLES.get(result, "The run is over"))
+
+
+## Whether the run was the campaign of four seasons (round 10).
+func _campaign() -> bool:
+	return sim.get("seasons") != null and sim.seasons.campaign
+
+
+## The line under the verdict. The thirty-night game keeps its old words; a campaign's victory says it held through
+## the seasons, and its defeat says which season it came in and on which day of the game ("You fell in Winter, on
+## day 41").
+func _subtitle(result: String) -> String:
+	var line := String(SUBTITLES.get(result, ""))
+	if not _campaign():
+		return line
+	if result == "victory":
+		return "A convoy is on the road at dawn. You held through all four seasons."
+	if result == "defeat":
+		return "You fell in %s, on day %d. %s" % [String(sim.seasons.current().name), int(sim.scenario.day()), line]
+	return line
 
 
 ## 30 -> "thirty", 21 -> "twenty-one"; a number past 99 stays in digits.
@@ -215,6 +239,9 @@ func _new_game() -> void:
 	# a run that began with a small crew (recruits.gd) begins that way again
 	if sim.get("recruits") != null and sim.recruits.small:
 		meta["crew"] = 3
+	# and one that was the campaign of four seasons begins as that again
+	if _campaign():
+		meta["campaign"] = true
 	hud.start_run(meta)
 
 

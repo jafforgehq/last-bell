@@ -114,6 +114,54 @@
     "threat_mult": 0.85,
     "radio_range": 1
    }
+  },
+  {
+   "id": "orchard",
+   "name": "Orchard rows",
+   "blurb": "Fruit bushes and a compost heap on the street: a little food every dawn with nobody to tend it.",
+   "plots": [
+    "ring"
+   ],
+   "lots_only": true,
+   "scrap": 24,
+   "work": 20,
+   "max": 3,
+   "requires": "",
+   "effects": {
+    "orchard": 1.5
+   }
+  },
+  {
+   "id": "cistern",
+   "name": "Rain cistern",
+   "blurb": "Tanks and barrels under the gutters: water every dawn, a good deal more when it rains.",
+   "plots": [
+    "ring"
+   ],
+   "lots_only": true,
+   "scrap": 20,
+   "work": 16,
+   "max": 2,
+   "requires": "",
+   "effects": {
+    "water_base": 3.0
+   }
+  },
+  {
+   "id": "scrap_yard",
+   "name": "Scrap yard",
+   "blurb": "A heap of the street's wrecks, picked over by whoever has a spare hour: a little scrap every dawn.",
+   "plots": [
+    "ring"
+   ],
+   "lots_only": true,
+   "scrap": 28,
+   "work": 20,
+   "max": 2,
+   "requires": "",
+   "effects": {
+    "scrap_base": 3.0
+   }
   }
  ]
 }

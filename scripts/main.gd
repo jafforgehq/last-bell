@@ -18,6 +18,7 @@ const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
+const Snow := preload("res://scripts/render/snow.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
 const Prefs := preload("res://scripts/prefs.gd")
@@ -61,6 +62,9 @@ var air
 var lanterns_node
 var glow
 var overlay
+## The snow (round 10, scripts/render/snow.gd): the flakes on the screen, and the ground's white cover in the world.
+var snow
+var ground_snow
 ## The plots, sites and buildings of the yard (round 6, scripts/render/build_node.gd).
 var build_view
 var pawn_nodes := {} # entity -> node
@@ -98,7 +102,7 @@ var title_mode := false
 ## tips wait.)
 var menu_open: bool:
 	get:
-		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null))
+		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open()))
 ## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
 ## "post": id, "person": id} (each "" when nothing of the kind is marked). The overlay draws the marks.
 var jobs_hover := {}
@@ -177,6 +181,13 @@ func _ready() -> void:
 	ground_bits.z_index = 5
 	ground_bits.painter = fx.draw_ground_bits
 	world.add_child(ground_bits)
+	# the white cover of a snowy season's ground: just over the ground, under everything else (its look is the
+	# snow's, see _process; not drawn at all until there is snow)
+	ground_snow = DrawNode.new()
+	ground_snow.name = "GroundSnow"
+	ground_snow.painter = func(ci): Snow.paint_ground(ci, world)
+	ground_snow.visible = false
+	world.add_child(ground_snow)
 	corpses = Node2D.new()
 	corpses.name = "Corpses"
 	corpses.z_index = 5
@@ -198,6 +209,9 @@ func _ready() -> void:
 
 	sim = Sim.new(data, world, fx)
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
+	# the walls of the lots (round 9) are made and taken away in play (and by a load): the world draws and forgets them
+	sim.on_segment_added = func(s): world.add_segment_art(s)
+	sim.on_segment_removed = func(s): world.remove_segment_art(s)
 	# a run is started (or a save loaded) by reloading the scene with the
 	# choice kept in Engine meta: {"difficulty": int, "seed": int, "load": path};
 	# the first run of a process takes it from the command line instead:
@@ -212,6 +226,9 @@ func _ready() -> void:
 		var crew_asked := crew_from_args(OS.get_cmdline_user_args())
 		if crew_asked > 0:
 			run["crew"] = crew_asked
+		# --campaign (or --season=N) plays the long game of four seasons; without it a run is Autumn's thirty nights
+		if campaign_from_args(OS.get_cmdline_user_args()):
+			run["campaign"] = true
 	# with no run chosen at all the title is shown, over a quiet run of its own
 	title_mode = bool(run.get("title", false)) or wants_title(OS.get_cmdline_user_args(), had_meta)
 	if title_mode:
@@ -234,6 +251,8 @@ func _ready() -> void:
 		else:
 			# a run with no crew in its choice is six (the tests, the screenshots and the title's yard are classic)
 			sim.crew_start = 3 if int(run.get("crew", 6)) <= 3 else 6
+			# (only a run asked for the long game is one: the tutorial, the title's yard and the tests are Autumn's)
+			sim.seasons.campaign = bool(run.get("campaign", false))
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 
 	for tr in data.trees:
@@ -266,6 +285,7 @@ func _ready() -> void:
 	var cm := CanvasModulate.new()
 	world.add_child(cm)
 	lighting.setup(data, cm)
+	lighting.seasons = sim.seasons
 	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
 	build_view = BuildNode.new()
 	build_view.name = "Buildings"
@@ -284,6 +304,12 @@ func _ready() -> void:
 	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	glow.setup(data, fx, lighting, radial)
 	glow_layer.add_child(glow)
+	# the flakes of a snow day: on the screen, over the world and the glow and under the HUD
+	var snow_layer := CanvasLayer.new()
+	snow_layer.layer = 1
+	add_child(snow_layer)
+	snow = Snow.new()
+	snow_layer.add_child(snow)
 
 	var overlay_layer := CanvasLayer.new()
 	overlay_layer.layer = 2
@@ -308,6 +334,7 @@ func _ready() -> void:
 	hud.on_jobs = toggle_jobs
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
 	hud.on_build = toggle_build
+	hud.on_town = toggle_town
 	hud.on_build_hover = func(marks): build_hover = marks
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
@@ -728,6 +755,19 @@ func toggle_jobs() -> void:
 		_did("jobs")
 
 
+## The Town Board (round 8, the settlement game's scavenging page: key G, the person panel's Scavenge button, the bag in
+## the toolbar): the toolbar's button opens it or, with it up, closes it. It is not there in the title, nor while a menu
+## or another page has the screen, and the tutorial's lock may refuse it (the same gate as the Scavenge button's).
+## (With the board up G reaches the board itself, which closes; the rules wait while it is open.)
+func toggle_town() -> void:
+	if hud.town_board_open():
+		hud.scavenge_dialog.close()
+		return
+	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	_gizmo("scavenge")
+
+
 ## The Build screen (key N, the hammer in the toolbar, a click on a plot's sign in the yard): opens it, on `plot_id`
 ## when that is given, or closes it when it is up. It is not there in the title, nor while a menu or another page
 ## (the radio card, the scavenging dialog, the end screen, the Jobs screen) has the screen, and the tutorial's lock
@@ -806,10 +846,13 @@ func _begin(meta: Dictionary) -> void:
 
 ## A new run at difficulty 0 (Story), 1 (Standard) or 2 (Brutal) with this seed. `crew` is 3 (the small start: the
 ## others come over the radio) or 6 (all six from the first day); left out, no choice is made and the run is six.
-func start_run(difficulty: int, seed_value: int, crew: int = 0) -> void:
+## `campaign` is the long game of four seasons (round 10); left out, the run is Autumn's thirty nights.
+func start_run(difficulty: int, seed_value: int, crew: int = 0, campaign: bool = false) -> void:
 	var meta := {"difficulty": clampi(difficulty, 0, 2), "seed": seed_value}
 	if crew > 0:
 		meta["crew"] = 3 if crew <= 3 else 6
+	if campaign:
+		meta["campaign"] = true
 	_begin(meta)
 
 
@@ -828,6 +871,39 @@ static func crew_from_args(args: Array) -> int:
 		if value.is_valid_int():
 			return 3 if value.to_int() <= 3 else 6
 	return 0
+
+
+## The seasons, by the name `--season=` may give them (the order of assets/data/seasons.json).
+const SEASON_NAMES := ["autumn", "winter", "spring", "summer"]
+
+
+## The season a `--season=` argument asks to begin in: 0 to 3 (a number outside them is the nearest, a name is
+## that season), -1 when there is no such argument or it is not a season.
+static func season_from_args(args: Array) -> int:
+	for a in args:
+		var text := String(a)
+		if not text.begins_with("--season="):
+			continue
+		var value := text.trim_prefix("--season=").strip_edges().to_lower()
+		if SEASON_NAMES.has(value):
+			return SEASON_NAMES.find(value)
+		if value.is_valid_int():
+			return clampi(value.to_int(), 0, SEASON_NAMES.size() - 1)
+	return -1
+
+
+## Whether the command line asks for the long game: `--campaign` (or `--campaign=1`, `=yes`, `=true`) or a
+## `--season=` of any season (a game that begins in Winter is a campaign).
+static func campaign_from_args(args: Array) -> bool:
+	for a in args:
+		var text := String(a)
+		if text == "--campaign":
+			return true
+		if text.begins_with("--campaign="):
+			var value := text.trim_prefix("--campaign=").strip_edges().to_lower()
+			if value in ["1", "yes", "true", "on"]:
+				return true
+	return season_from_args(args) >= 0
 
 
 ## Loads the save at `path`. A save that cannot be loaded is refused (false) and the game that
@@ -1084,7 +1160,13 @@ func _process(delta: float) -> void:
 	_apply_camera()
 	_handle_events()
 	_sync_views()
-	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), sim.storyteller.look())
+	var look: Dictionary = sim.storyteller.look()
+	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
+	# snow falls on a snow day of a campaign (and in no other game); the ground keeps a light cover all through a snowy season
+	var campaign: bool = sim.seasons.campaign
+	snow.follow({"snow": campaign and bool(look.get("snow", false))}, campaign and sim.seasons.snow_share() > 0.0, lighting.dark, dt)
+	ground_snow.visible = snow.ground > 0.01
+	ground_snow.modulate.a = snow.ground
 	build_view.update(clock)
 	glow.t = clock
 	glow.queue_redraw()
@@ -1129,6 +1211,7 @@ func _sim_step() -> void:
 ## speed still moves the particles in small steps).
 func _visual_step(h: float) -> void:
 	fx.update(h)
+	snow.advance(h)
 	fire_t += h
 	for f in fire_nodes:
 		var big: bool = f.big
@@ -1222,6 +1305,12 @@ func _vol_at(x: float, y: float) -> float:
 
 
 func _handle_events() -> void:
+	# a season's first morning has its own banner ("Winter begins", with the season's line): the day's banner that
+	# follows it in the same moment would cover it, so it is left out
+	var season_turned := false
+	for e in sim.events:
+		if e.type == "season":
+			season_turned = true
 	for e in sim.events:
 		if coach != null:
 			coach.on_event(e)
@@ -1266,7 +1355,11 @@ func _handle_events() -> void:
 			"thud":
 				sound.play("thud", _vol_at(e.x, e.y))
 			"banner":
-				hud.show_banner(e.text, e.sub)
+				if not (season_turned and String(e.text).begins_with("Day ")):
+					hud.show_banner(e.text, e.sub)
+			"season":
+				# the season turns: a deep, slow bell
+				sound.play("bell", 0.7, 0.0, 0.7)
 			"bark":
 				# what someone said: a speech bubble over their head (the overlay keeps quiet under a menu)
 				overlay.add_bark(e)
@@ -1334,6 +1427,13 @@ func _parse_args() -> void:
 	var lure_seg := -1
 	var show_build := false
 	var build_plot := ""
+	var show_town := false
+	var town_place := ""
+	var town_focus := ""
+	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
+	var season_asked := season_from_args(OS.get_cmdline_user_args())
+	if season_asked >= 0:
+		stage_season(season_asked)
 	for arg in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = arg.trim_prefix("--").split("=", true, 1)
 		var k := kv[0]
@@ -1386,6 +1486,25 @@ func _parse_args() -> void:
 				# (the plots staged with --build-site and --build-built; the --speed it pauses)
 				show_build = true
 				build_plot = v
+			"town":
+				# --town opens the Town Board (--town=<place id> on that place) in a settlement game (--crew=3), once the other
+				# arguments are in (the board staged with --town-reveal, --town-state and --town-send; the --speed it pauses)
+				show_town = true
+				town_place = v
+			"town-reveal":
+				# --town-reveal=<place id>,<place id> (or "all") shows places of the board that are hidden at the start
+				for id in (sim.town.state.keys() if v == "all" else v.split(",")):
+					sim.town.reveal(String(id))
+			"town-state":
+				# --town-state=<place id>:cleared,<place id>:claimed[:<person id>+<person id>] stages places (a claimed place
+				# may be held by people, who are off the map): no scrap is paid for them
+				_stage_town(v)
+			"town-focus":
+				# --town-focus=<place id> puts the keyboard on that pin when the board opens (to see the ring)
+				town_focus = v
+			"town-send":
+				# --town-send=<person id>+<person id>:<place id>:<loot|scout|clear> sends a party at once, as the board does
+				_stage_party(v)
 			"build-scrap":
 				# --build-scrap=N sets the scrap in the stores (to show what cannot be ordered, say)
 				sim.stock.scrap = float(v)
@@ -1399,6 +1518,20 @@ func _parse_args() -> void:
 			"build-built":
 				# --build-built=<plot>:<building>,... stands buildings at once (no scrap is paid, nobody builds them)
 				_stage_build(v, true)
+			"lots":
+				# --lots[=north,west] claims the lots of the ring at once (every one without a list; a settlement game, --crew=3): the
+				# board's cleared places, the day and the scrap are not asked. Put it before --build-built (the ring plots) and
+				# --damage or --breach (the walls)
+				_stage_lots(v)
+			"walls":
+				# --walls[=N] stands a wall at N of the mouths (all of them without N) with the first kit that fits (--wall-kit=<kit>
+				# picks that one where it fits), the lots they are in claimed; no scrap is paid and nobody builds them
+				_stage_walls(int(v) if v.is_valid_int() else 99)
+			"wall-kit":
+				pass # (read by --walls, wherever it stands on the command line)
+			"wall-site":
+				# --wall-site=<mouth id>[:<share done, 0 to 1>] puts a half-built wall up at a mouth (the lot claimed, no scrap paid)
+				_stage_wall_site(v)
 			"lure":
 				# --lure=N sets the alarm on wall section N (scrap is given, the clock settled first)
 				lure_seg = int(v)
@@ -1416,6 +1549,8 @@ func _parse_args() -> void:
 					sim._segment_state(worn)
 			"tutorial":
 				pass # --tutorial[=N] picks the scenario, before the run starts (see _ready and Scenario.run_from_args)
+			"campaign", "season":
+				pass # --campaign asks for the long game before the run starts (see _ready); --season=N is dealt with above
 			"nohud":
 				hud.visible = false
 			"msaa":
@@ -1429,8 +1564,11 @@ func _parse_args() -> void:
 				# --card=<id> puts a card of the storyteller's up (the radio card opens)
 				sim.storyteller.force(v)
 			"weather":
-				# --weather=fog (or rain) for the coming night, as a card would set it
+				# --weather=fog (or rain, or snow in a campaign) for the coming night, as a card would set it
 				sim.weather = v
+				sim.supplies.sources_day = sim.day    # (today's dawn has been rolled: the weather asked for stays for the day)
+				if v == "snow":
+					snow.follow({"snow": sim.seasons.campaign}, true, 0.0, 10.0)    # (it is already falling in the shot)
 			"blackout":
 				# --blackout: the generator is dead (see the storyteller)
 				sim.storyteller.blackout = {"state": "dark", "at": sim.clock_min, "send": false, "fixer": "", "work": 0.0}
@@ -1443,6 +1581,14 @@ func _parse_args() -> void:
 	if show_build:
 		hud.last_speed = speed
 		hud.open_build(build_plot, sim)
+	if show_town:
+		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+		hud.last_speed = speed
+		hud.open_scavenge(selection)
+		if hud.town_board_open() and town_place != "":
+			hud.scavenge_dialog.select_place(town_place)
+		if hud.town_board_open() and town_focus != "" and hud.scavenge_dialog.map.pins.has(town_focus):
+			hud.scavenge_dialog.map.pins[town_focus].grab_focus()
 	if lure_seg >= 0:
 		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
 		for s in sim.segments:
@@ -1463,9 +1609,18 @@ func _parse_args() -> void:
 ## on day 1).
 func _set_hour(hh: float) -> void:
 	sim.minutes = hh * 60.0
-	sim.phase = Sim.phase_at(sim.minutes)
-	sim.bell_rung = hh >= 19.0 or hh < 6.0
+	# (the season's own hours: in Autumn, and in any game that is not a campaign, they are 19:00 and 6.5 as ever)
+	sim.phase = sim.seasons.phase_at(sim.minutes)
+	sim.bell_rung = hh >= sim.seasons.dusk_hour() or hh < sim.seasons.dawn_hour() - 0.5
 	sim.clock_min = (sim.day - 1) * 1440.0 + fposmod(sim.minutes - 420.0, 1440.0)
+
+
+## A screenshot's way of beginning in a season (--season=N): the long game at the first morning of season `i` (0
+## Autumn to 3 Summer), a little after its dawn, so that the day goes on from there (`seasons.jump_to` is the rules'
+## own). `--hour` may then move the clock.
+func stage_season(i: int) -> void:
+	sim.seasons.jump_to(i)
+	_set_hour(maxf(7.0, sim.seasons.dawn_hour() + 0.5))
 
 
 ## A screenshot's way of letting a caller in (--recruit): `id` is the one of the radio's queue who comes in at the gate
@@ -1509,6 +1664,112 @@ func _stage_build(spec: String, finished: bool) -> void:
 			pl.site.progress = clampf(float(f[2]), 0.0, 1.0) * float(pl.site.work)
 	sim.stock.scrap = scrap
 	sim.events.clear()
+
+
+## `--lots`: every lot of the ring claimed (round 9), as a screenshot has it: the day, the cleared places and the scrap the
+## claim asks for are made up for the moment (the places stay cleared) and nothing is paid. Does nothing in a game with no lots.
+func _stage_lots(only: String = "") -> void:
+	if not sim.lots.on:
+		return
+	var wanted: PackedStringArray = only.split(",", false) if only != "" else PackedStringArray()
+	var day: int = sim.day
+	var scrap: float = sim.stock.scrap
+	for id in sim.town.state:
+		sim.town.reveal(id)
+		sim.town.state[id].cleared = true
+	sim.day = maxi(day, 99)
+	for l in sim.lots.lots():
+		if not wanted.is_empty() and not wanted.has(String(l.id)):
+			continue
+		sim.stock.scrap = 10000.0
+		sim.lots.claim(String(l.id))
+	sim.day = day
+	sim.stock.scrap = scrap
+	sim.events.clear()
+	for l in sim.lots.lots():
+		sim.alerts.erase("lot-%s" % String(l.id))
+
+
+## A wall at a mouth, ordered and finished at once (no scrap kept, nobody builds it): `kit` (a kit's id) where it fits the mouth,
+## else the first kit that does. The lot is claimed first. False when it did not go up.
+func _stage_wall(mouth_id: String, kit: String, finished: bool, share: float = 0.5) -> bool:
+	_stage_lots(String(sim.lots.mouth(mouth_id).get("lot", "")))
+	var scrap: float = sim.stock.scrap
+	sim.stock.scrap = 10000.0
+	var kits: Array = sim.lots.kits_for(mouth_id)
+	var building := "wall_%s" % kit
+	if not kits.has(building):
+		building = String(kits[0]) if not kits.is_empty() else ""
+	var ok: bool = building != "" and sim.build.order(mouth_id, building)
+	if ok:
+		var pl: Dictionary = sim.build.plot(mouth_id)
+		if finished:
+			sim.build._finish(pl)
+		else:
+			pl.site.progress = clampf(share, 0.0, 1.0) * float(pl.site.work)
+	sim.stock.scrap = scrap
+	sim.events.clear()
+	sim.alerts.erase("wall-%s" % mouth_id)
+	return ok
+
+
+## `--walls[=N]`: walls at the first N mouths (the data's order), of the kit `--wall-kit=` names where it fits.
+func _stage_walls(count: int) -> void:
+	if not sim.lots.on:
+		return
+	var kit := ""
+	for a in OS.get_cmdline_user_args():
+		if String(a).begins_with("--wall-kit="):
+			kit = String(a).trim_prefix("--wall-kit=")
+	var n := 0
+	for m in sim.lots.mouths():
+		if n >= count:
+			break
+		if _stage_wall(String(m.id), kit, true):
+			n += 1
+
+
+## `--wall-site=<mouth id>[:<share done>]`.
+func _stage_wall_site(spec: String) -> void:
+	if not sim.lots.on:
+		return
+	var f := spec.split(":")
+	_stage_wall(f[0], "", false, float(f[1]) if f.size() > 1 else 0.5)
+
+
+## `--town-state=`: places of the board cleared or claimed (and held) without a trip.
+func _stage_town(spec: String) -> void:
+	for entry in spec.split(","):
+		var f := entry.split(":")
+		if f.size() < 2 or not sim.town.state.has(f[0]):
+			continue
+		sim.town.reveal(f[0])
+		if f[1] == "cleared" or f[1] == "claimed":
+			sim.town.state[f[0]].cleared = true
+		if f[1] == "claimed":
+			sim.town.state[f[0]].claimed = true
+			if f.size() > 2:
+				var who: Array = []
+				for id in f[2].split("+"):
+					for p in sim.people:
+						if p.id == id:
+							who.append(p)
+				if not who.is_empty():
+					sim.town.garrison_send(f[0], who)
+
+
+## `--town-send=`: a party out at once (the settlement game's `send`, from a screenshot's arguments).
+func _stage_party(spec: String) -> void:
+	var f := spec.split(":")
+	if f.size() < 2:
+		return
+	var who: Array = []
+	for id in f[0].split("+"):
+		for p in sim.people:
+			if p.id == id:
+				who.append(p)
+	if not who.is_empty() and sim.scavenge.send(who, f[1], f[2] if f.size() > 2 else "loot"):
+		sim.events.clear()
 
 
 func _tile_to_screen(t: Vector2) -> Vector2:

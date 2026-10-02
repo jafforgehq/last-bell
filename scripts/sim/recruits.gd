@@ -169,6 +169,24 @@ func refuse() -> void:
 	next_call_day = sim.day + REFUSE_DAYS
 
 
+## A survivor found at a place comes home with the party: the next caller joins the crew now, if there is a
+## bed (else they wait where they are, for a later trip). True if they came.
+func rescue_home(place_id: String) -> bool:
+	if not small:
+		return false
+	if sim.town.state.has(place_id) and bool(sim.town.state[place_id].get("rescued", false)):
+		return false
+	var def := current_caller()
+	if def.is_empty() or housing_free() < 1:
+		sim.alert("no-bed-rescue", "warn", "A survivor is waiting at %s" % String(sim.town.place(place_id).get("name", "the place")), "There is no bed for them yet", null, 20.0)
+		return false
+	queue.pop_front()
+	if sim.town.state.has(place_id):
+		sim.town.state[place_id].rescued = true
+	_arrive(def)
+	return true
+
+
 # ------------------------------------------------------------------- arrivals --
 
 func update(_dt: float) -> void:

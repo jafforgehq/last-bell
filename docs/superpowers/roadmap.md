@@ -1,8 +1,8 @@
-# Roadmap after round 6
+# Roadmap after round 6 (rounds 7 to 10 built on 2026-10-02)
 
 > The user's direction (2026-10-02): the game grows from a small crew into a settlement, on a much bigger map, with a world to explore and seasons. They asked for **both** a bigger world to explore and a bigger base to defend, and for **seasons** and the **Town Board** (the "city map" kept for a later round since round 4). The itch demo and the Steam page still wait ("not in a rush"); a human playtest checkpoint is advised after round 7. Each round gets its own plan in `docs/superpowers/plans/` and is built the way rounds 5 and 6 were (core and plan first, builders on disjoint files, an independent review, the harness for balance).
 
-Done: rounds 0 to 5 (supplies, wounds, the night puzzle, the shell and workshop, people and the storyteller, jobs and stations), round 6 (buildings on fixed plots, built by the Builders: seven buildings, the Build screen on N).
+Done: rounds 0 to 5 (supplies, wounds, the night puzzle, the shell and workshop, people and the storyteller, jobs and stations), round 6 (buildings on fixed plots, built by the Builders: seven buildings, the Build screen on N), **round 7** (a small start and recruits over the radio), **round 8** (the Town Board: a map of 24 places with fog, expeditions by distance, nests, outposts, rescues; key G), **round 9** (the lots: the streets round the school claimed, walled at ten mouths, three ring-only buildings; on the Build screen) and **round 10** (seasons and the four-season campaign). What each one turned out to be, and what the harness shows, is in the spec's sections 7i to 7l; each round's plan is in `docs/superpowers/plans/`. What was planned and what was built differ in two places: round 9 grew the base by taking the ring of streets that the map already has (about 2.2 times the ground of the yard and the school) and not by drawing a bigger map; and the radio's place calls came with the Town Board.
 
 ## Round 7: a small start, and recruits over the radio
 

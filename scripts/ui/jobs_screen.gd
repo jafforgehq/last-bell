@@ -943,10 +943,16 @@ func open_post_list(p) -> void:
 	_open_list("post", p, rows[p.id].post, "Night post for %s" % p.first, entries)
 
 
-## Which part of the wall a post is on, for the headings of the list.
+## Which part of the wall a post is on, for the headings of the list. The posts of the lots that are claimed (round 9: the id of
+## a mouth's post is "post_<mouth id>") are grouped under the name of their lot, whatever side of the compound they look at.
 func _post_group(po: Dictionary) -> String:
 	if String(po.id).begins_with("tower"):
 		return "Towers"
+	if String(po.id).begins_with("post_") and sim.get("lots") != null:
+		var m: Dictionary = sim.lots.mouth(String(po.id).trim_prefix("post_"))
+		var lot: Dictionary = sim.lots.lot(String(m.get("lot", "")))
+		if not lot.is_empty():
+			return String(lot.name)
 	match String(po.get("face", "N")):
 		"W":
 			return "West wall"

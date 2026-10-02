@@ -1,10 +1,12 @@
 ## New game: how hard the nights are (Story, Standard, Brutal, each sold with a line and
 ## told truthfully underneath: what it really changes, from the rules' own numbers), how the
 ## crew begins (a small crew of three, the others calling in over the radio, or all six from
-## the first morning) and the seed (a random one is shown; any whole number can be typed).
+## the first morning), the length of the game (Autumn, the thirty nights as they always were, or the
+## campaign of the four seasons, round 10) and the seed (a random one is shown; any whole number can be
+## typed).
 ## Start hands the choice to the game, which reloads the scene with it. Enter starts
-## straight away, so a returning player is one key from the yard; the last difficulty and the
-## last crew chosen are remembered.
+## straight away, so a returning player is one key from the yard; the last difficulty, the
+## last crew and the last length chosen are remembered.
 extends "res://scripts/ui/menu_screen.gd"
 
 const Prefs := preload("res://scripts/prefs.gd")
@@ -19,6 +21,9 @@ const CREW_FACTS := [
 	"A call can come at noon from day 2, when someone is at the radio desk and a bed is free. Nights are smaller while the crew is.",
 	"The nights are the full nights from the first day, and there are no recruits.",
 ]
+## The lengths of the game to choose from (the campaign is round 10): what each is called and the line on its card.
+const LENGTH_NAMES := ["Autumn: thirty nights", "Campaign: the four seasons"]
+const LENGTH_LINES := ["Hold the wall for thirty nights.", "Autumn, Winter, Spring and Summer, each with its own Big Night."]
 
 var difficulty := 1
 ## How many people the run begins with: 3 (a small crew) or 6.
@@ -28,6 +33,10 @@ var cards: Array = []
 ## The two crew buttons, the small crew first, and the words under them.
 var crew_cards: Array = []
 var crew_facts_label: Label
+## Whether the game is the campaign of the four seasons (false: Autumn's thirty nights, the game as it was).
+var campaign := false
+## The two length buttons, Autumn first.
+var length_cards: Array = []
 var facts_label: Label
 var seed_edit: LineEdit
 var seed_error: Label
@@ -82,6 +91,17 @@ func _build_body() -> void:
 	crew_facts_label = note("", ink3(), 13)
 	body.add_child(crew_facts_label)
 
+	# a stored length that is not a plain yes is Autumn
+	var stored = Prefs.get_value("ui", "campaign", false)
+	campaign = typeof(stored) == TYPE_BOOL and stored
+	body.add_child(section("Length"))
+	var length_row: HBoxContainer = hud._hbox(8)
+	for i in LENGTH_NAMES.size():
+		var length_card := _length_card(i)
+		length_row.add_child(length_card)
+		length_cards.append(length_card)
+	body.add_child(length_row)
+
 	body.add_child(section("Seed"))
 	var seed_row: HBoxContainer = hud._hbox(8)
 	seed_edit = LineEdit.new()
@@ -105,6 +125,7 @@ func _build_body() -> void:
 	body.add_child(note("Any whole number. The same seed and the same orders play the same game.", ink3(), 13))
 	_choose(difficulty)
 	_choose_crew(CREWS.find(crew))
+	_choose_length(1 if campaign else 0)
 
 
 func _build_foot() -> void:
@@ -134,11 +155,18 @@ func _crew_card(i: int) -> Button:
 	return b
 
 
+## One length of the game: the same kind of card, a little lower (it has no words under it).
+func _length_card(i: int) -> Button:
+	var b := _pick_card(LENGTH_NAMES[i], LENGTH_LINES[i], 88.0)
+	b.pressed.connect(_choose_length.bind(i))
+	return b
+
+
 ## A card to pick one of several: a name and a line, the whole card a button that stays pressed.
-func _pick_card(title_text: String, line_text: String) -> Button:
+func _pick_card(title_text: String, line_text: String, min_h: float = 104.0) -> Button:
 	var b := button("", false)
 	b.toggle_mode = true
-	b.custom_minimum_size = Vector2(120, 104)
+	b.custom_minimum_size = Vector2(120, min_h)
 	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -215,6 +243,21 @@ func _choose_crew(i: int) -> void:
 	crew_facts_label.text = CREW_FACTS[i]
 
 
+## Picks a length (0 Autumn's thirty nights, 1 the campaign): its card lights up.
+func _choose_length(i: int) -> void:
+	i = clampi(i, 0, LENGTH_NAMES.size() - 1)
+	campaign = i == 1
+	for k in length_cards.size():
+		var b: Button = length_cards[k]
+		var on := k == i
+		b.set_pressed_no_signal(on)
+		shell.restyle(b, on)
+		var t: Label = b.get_meta("title")
+		var s: Label = b.get_meta("sub")
+		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
+		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
+
+
 func _on_random() -> void:
 	seed_edit.text = str(random_seed())
 	_on_seed_changed(seed_edit.text)
@@ -235,6 +278,10 @@ func _start() -> void:
 		return
 	Prefs.set_value("ui", "difficulty", difficulty)
 	Prefs.set_value("ui", "crew", crew)
+	Prefs.set_value("ui", "campaign", campaign)
 	close_sound = ""
-	shell.start_game(difficulty, int(parsed.value), crew)
+	if campaign:
+		shell.start_game(difficulty, int(parsed.value), crew, true)
+	else:
+		shell.start_game(difficulty, int(parsed.value), crew)
 	close()

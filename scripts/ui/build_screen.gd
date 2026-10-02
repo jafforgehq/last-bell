@@ -12,6 +12,14 @@
 ##     says so, and the second, within CONFIRM_S seconds, takes the building down.
 ## The foot says how much scrap is in the stores and how many people the compound has beds for (round 7's cap).
 ##
+## In a settlement game (round 9: `sim.lots.on`) the page has more. The list begins with a slip for the **Lots page** (a card for
+## each lot of the ring: its terms, Claim with the reason it cannot be pressed yet, and, once claimed, how many of its walls stand
+## and whether it is sealed; scripts/ui/build_lots.gd) and goes on with the yard's plots and, for each lot that is claimed, its ring
+## plots (buildings stand on them as in the yard) and its **mouths** (a wall across a street: what kits fit it with their scrap,
+## hours and health, the wall going up, the wall that stands and how well it stands; walls are not demolished). Over the detail is
+## a **map** (scripts/ui/build_map.gd) of the yard, or of the whole block once a lot is claimed (a toggle chooses), with the plots as
+## pins that the pointer and the keyboard can have. Nothing of this is there in the classic start.
+##
 ## Hovering (or putting the keyboard on) a plot's slip marks the lot in the world: the HUD hands `{"plot": id}` to
 ## main.gd (`set_build_hover`, `hud.on_build_hover`), `{}` when the pointer leaves or the page closes, and main.gd
 ## says the page is up with `build_open`: the yard shows every plot's sign more clearly then.
@@ -31,6 +39,8 @@ extends Control
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Kit := preload("res://scripts/ui/menu_kit.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
+const BuildMap := preload("res://scripts/ui/build_map.gd")
+const BuildLots := preload("res://scripts/ui/build_lots.gd")
 
 ## Emitted once, when the screen is gone.
 signal closed
@@ -44,6 +54,8 @@ const GUTTER := 14
 const LIST_W := 238.0
 const LIST_MIN_W := 196.0
 const COLUMN_GAP := 14.0
+## In a settlement game the list is a little wider (the streets' names are long).
+const LIST_W_LOTS := 262.0
 ## A plot's slip: its height and the gap between two.
 const ROW_H := 46.0
 const ROW_GAP := 4
@@ -58,7 +70,17 @@ const CONFIRM_S := 3.0
 ## the meals. (The estimate of how long a site takes is the work left over the crew's rate, in these.)
 const WORK_HOURS_A_DAY := 12.0
 ## The kinds of lot, as the tag on a plot's slip says them.
-const KIND_TAGS := {"yard": "Yard", "wall": "Wall"}
+const KIND_TAGS := {"yard": "Yard", "wall": "Wall", "ring": "Street", "mouth": "Street wall"}
+## The map is this share of the room the columns have, at most (the rest is for what is chosen).
+const MAP_SHARE := 0.45
+## The meter of a wall that stands well: a dark green (worn: the page's amber, failing: its red).
+const WALL_OK := Color("#4f7330")
+## The legend beside the map is this wide.
+const LEGEND_W := 140.0
+## The Lots page is chosen like a plot, by this id (it is in `rows` too).
+const LOTS_PAGE := "@lots"
+## The map card's legend: [colour, words].
+const MAP_LEGEND := [[BuildMap.AMBER, "Open street"], [BuildMap.GOLD, "Wall going up"], [BuildMap.GREEN, "Wall stands"], [BuildMap.RED, "Wall down"], [BuildMap.RED, "Where the dead come in"]]
 
 var hud
 var sim
@@ -110,6 +132,29 @@ var _head: Control
 var _foot: Control
 var _sig := ""
 var _marked := ""
+var _marked_lot := ""
+## The lots (a settlement game): whether the screen has them, the Lots slip, the page and its cards, the map and its two zoom
+## buttons, the lots' captions in the list, and the parts of a mouth's detail.
+var lots_on := false
+var lots_row: Button = null
+var lots_page = null
+var lots_view: Control = null
+var lot_cards := {}
+var map: BuildMap = null
+var map_card: PanelContainer = null
+var map_yard_button: Button
+var map_block_button: Button
+var lot_headers := {}
+var yard_header: Label = null
+var mouth_info: Label
+var empty_caption: Label
+var built_caption: Label
+var wall_box: VBoxContainer
+var wall_meter: Meter
+var wall_percent: Label
+var wall_text: Label
+## The player has chosen what the map shows (it no longer follows the claims).
+var _map_chosen := false
 
 
 ## `h` is the HUD, `s` the game: the screen reads the buildings from `s.build`. `plot_id` is the plot to show first
@@ -118,11 +163,12 @@ func setup(h, s, plot_id: String = "") -> void:
 	hud = h
 	sim = s
 	build = sim.build
+	lots_on = sim.get("lots") != null and sim.lots.on
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# a page over the whole window: the HUD knows it as a modal (the speech bubbles keep quiet under it)
 	set_meta("modal", true)
-	selected = plot_id if not build.plot(plot_id).is_empty() else _default_plot()
+	selected = plot_id if _can_choose(plot_id) else _default_plot()
 	_build()
 	refresh(true)
 	resized.connect(_layout)
@@ -140,6 +186,11 @@ func _default_plot() -> String:
 	var active: Dictionary = build.active_site()
 	if not active.is_empty():
 		return String(active.id)
+	# a lot that can be claimed and none claimed yet: the page of the lots, where it is
+	if lots_on and sim.lots.claimed_on.is_empty():
+		for l in sim.lots.lots():
+			if String(sim.lots.why_not_claim(String(l.id))) == "":
+				return LOTS_PAGE
 	for pl in build.plots():
 		if pl.building == "" and pl.site.is_empty():
 			return String(pl.id)
@@ -170,7 +221,7 @@ func _build() -> void:
 	head.add_theme_constant_override("v_separation", 0)
 	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	head.add_child(hud._label("Build", Fonts.cond(700), 26, hud.PAPER_INK))
-	var sub: Label = hud._caps("Pick a plot and order a building; the Builders raise it by day", hud.PAPER_INK2)
+	var sub: Label = hud._caps("Order buildings and walls; the Builders raise them by day" if lots_on else "Pick a plot and order a building; the Builders raise it by day", hud.PAPER_INK2)
 	sub.size_flags_vertical = Control.SIZE_SHRINK_END
 	head.add_child(sub)
 	_head = head
@@ -184,9 +235,12 @@ func _build() -> void:
 	list_box = _scroll_box(list_scroll)
 	list_box.add_theme_constant_override("separation", ROW_GAP)
 	list_box.add_child(hud._caps("Plots", hud.PAPER_INK2))
-	for pl in build.plots():
-		var slip := _build_row(pl)
-		list_box.add_child(slip)
+	if lots_on:
+		_build_lots_list()
+	else:
+		for pl in build.plots():
+			var slip := _build_row(pl)
+			list_box.add_child(slip)
 	cols.add_child(list_scroll)
 	detail_scroll = _scroll()
 	detail_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -336,9 +390,34 @@ func _tag(text: String) -> PanelContainer:
 
 # --------------------------------------------------------------------- plots --
 
+## The list of a settlement game: the Lots slip, the compound's own plots, then, under a caption with its name, each lot's ring plots and
+## mouths (the slips of a lot that is not claimed are there but not shown: a claim shows them).
+func _build_lots_list() -> void:
+	var lots_slip := _build_row({"id": LOTS_PAGE, "name": "Claim the streets", "kind": "lots"}, "Lots")
+	lots_row = lots_slip
+	list_box.add_child(lots_slip)
+	yard_header = hud._caps("The compound", hud.PAPER_INK2)
+	list_box.add_child(yard_header)
+	for pl in build.plots():
+		if String(pl.get("lot", "")) == "":
+			list_box.add_child(_build_row(pl))
+	for l in sim.lots.lots():
+		var head: Label = hud._caps(String(l.name), hud.PAPER_INK2)
+		head.visible = false
+		lot_headers[String(l.id)] = head
+		list_box.add_child(head)
+		for id in l.get("plots", []) + l.get("mouths", []):
+			var pl: Dictionary = build.plot(String(id))
+			if pl.is_empty():
+				continue
+			var slip := _build_row(pl)
+			slip.visible = false
+			list_box.add_child(slip)
+
+
 ## One plot's slip: a button with the name and the tag on one line and what is on the plot on the next (and, while
 ## a site goes up, a meter of how far along it is).
-func _build_row(pl: Dictionary) -> Button:
+func _build_row(pl: Dictionary, tag_text: String = "") -> Button:
 	var id := String(pl.id)
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_ALL
@@ -360,10 +439,18 @@ func _build_row(pl: Dictionary) -> Button:
 	var top: HBoxContainer = hud._hbox(6)
 	var name_label: Label = hud._label(String(pl.name), Fonts.cond(700), 17, hud.PAPER_INK)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.clip_text = true
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var street: bool = String(pl.kind) == "ring" or String(pl.kind) == "mouth"
+	if street:
+		# (the streets' names are long: a name that does not fit goes on to a second line, and the slip grows to hold it, see `_fit_rows`)
+		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		name_label.custom_minimum_size.x = 60
+	else:
+		name_label.clip_text = true
+		name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(name_label)
-	var tag := _tag(String(KIND_TAGS.get(String(pl.kind), String(pl.kind).capitalize())))
+	var tag := _tag(tag_text if tag_text != "" else String(KIND_TAGS.get(String(pl.kind), String(pl.kind).capitalize())))
+	# (a slip of the streets has no room for a tag beside what is on it: its caption and its words say what it is)
+	tag.visible = not street
 	top.add_child(tag)
 	inner.add_child(top)
 	var bottom: HBoxContainer = hud._hbox(8)
@@ -434,20 +521,50 @@ func _on_row_hover(id: String, on: bool) -> void:
 func show_mark(plot_id: String) -> void:
 	if not _open:
 		return
-	if plot_id == _marked:
+	if plot_id == LOTS_PAGE:
+		plot_id = ""
+	if plot_id == _marked and _marked_lot == "":
 		return
 	_marked = plot_id
+	_marked_lot = ""
+	if map != null:
+		map.lit_lot = ""
+		map.queue_redraw()
 	hud.set_build_hover({"plot": plot_id} if plot_id != "" else {})
 
 
-## What is marked now ({"plot": id}, or {} for nothing).
+## A whole lot is marked in the world and on the map (the pointer or the keyboard is on its card); "" marks nothing.
+func show_lot_mark(lot_id: String) -> void:
+	if not _open:
+		return
+	if lot_id == _marked_lot and _marked == "":
+		return
+	_marked_lot = lot_id
+	_marked = ""
+	if map != null:
+		map.lit_lot = lot_id
+		map.queue_redraw()
+	hud.set_build_hover({"lot": lot_id} if lot_id != "" else {})
+
+
+## What is marked now ({"plot": id}, {"lot": id}, or {} for nothing).
 func marks() -> Dictionary:
+	if _marked_lot != "":
+		return {"lot": _marked_lot}
 	return {"plot": _marked} if _marked != "" else {}
+
+
+## Whether this can be chosen: the Lots page (in a settlement game) or a plot that is open (the lots' plots only once they are claimed).
+func _can_choose(id: String) -> bool:
+	if id == LOTS_PAGE:
+		return lots_on
+	var pl: Dictionary = build.plot(id)
+	return not pl.is_empty() and (not lots_on or sim.lots.plot_open(pl))
 
 
 ## Chooses a plot: its slip is gold, and the detail shows it. False if there is no such plot.
 func select_plot(id: String) -> bool:
-	if build.plot(id).is_empty():
+	if not _can_choose(id):
 		return false
 	var changed := id != selected
 	if changed:
@@ -466,6 +583,101 @@ func select_plot(id: String) -> bool:
 func _reveal_selected() -> void:
 	if _open and is_inside_tree() and rows.has(selected):
 		list_scroll.ensure_control_visible(rows[selected].row)
+
+
+# ------------------------------------------------------------------------- map --
+
+## The map card (a settlement game): the yard or the whole block (a toggle says which), the plots as pins, and what the colours are.
+func _build_map_card() -> Control:
+	map_card = hud._panel(_card_style())
+	map_card.mouse_filter = Control.MOUSE_FILTER_PASS
+	map_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var col: VBoxContainer = hud._vbox(6)
+	var head := HFlowContainer.new()
+	head.add_theme_constant_override("h_separation", 8)
+	head.add_theme_constant_override("v_separation", 4)
+	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var caption: Label = hud._caps("The map", hud.PAPER_INK2)
+	caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(caption)
+	var group := ButtonGroup.new()
+	map_yard_button = _toggle("The yard", group)
+	map_yard_button.pressed.connect(_on_map_zoom.bind(false))
+	head.add_child(map_yard_button)
+	map_block_button = _toggle("The whole block", group)
+	map_block_button.pressed.connect(_on_map_zoom.bind(true))
+	head.add_child(map_block_button)
+	col.add_child(head)
+	# the map, and at its right what its colours are
+	var body: HBoxContainer = hud._hbox(10)
+	map = BuildMap.new()
+	map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map.setup(self, sim)
+	map.picked.connect(_on_map_picked)
+	map.pointed.connect(_on_map_pointed)
+	body.add_child(map)
+	var legend: VBoxContainer = hud._vbox(6)
+	legend.custom_minimum_size.x = LEGEND_W
+	legend.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for item in MAP_LEGEND:
+		var entry: HBoxContainer = hud._hbox(5)
+		var swatch := ColorRect.new()
+		swatch.color = item[0]
+		swatch.custom_minimum_size = Vector2(14, 6)
+		swatch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		entry.add_child(swatch)
+		entry.add_child(hud._label(String(item[1]), Fonts.sans(400), 12, hud.PAPER_INK2))
+		legend.add_child(entry)
+	body.add_child(legend)
+	col.add_child(body)
+	map_card.add_child(col)
+	# the whole block as soon as there is something out in it, the yard before
+	_set_map_whole(not sim.lots.claimed_on.is_empty())
+	return map_card
+
+
+## A button of the map's toggle: on while it is what the map shows.
+func _toggle(text: String, group: ButtonGroup) -> Button:
+	var b := _button(text)
+	b.toggle_mode = true
+	b.button_group = group
+	b.custom_minimum_size = Vector2(0, 30)
+	# (on, it is the gold of a main choice: the one that the map shows)
+	for state in ["pressed", "hover_pressed"]:
+		var on: StyleBox = hud._button_style("hover" if state == "hover_pressed" else "normal", true, false, true)
+		on.content_margin_top = 0
+		on.content_margin_bottom = 0
+		on.content_margin_left = 16
+		on.content_margin_right = 16
+		b.add_theme_stylebox_override(state, on)
+	for color in ["font_pressed_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(color, hud.ACCENT_INK)
+	return b
+
+
+func _set_map_whole(on: bool) -> void:
+	map.set_whole(on)
+	map_block_button.set_pressed_no_signal(on)
+	map_yard_button.set_pressed_no_signal(not on)
+
+
+## One of the two buttons: the player has chosen what the map shows.
+func _on_map_zoom(on: bool) -> void:
+	_map_chosen = true
+	hud.ui_sound("ui_click")
+	_set_map_whole(on)
+
+
+## A pin was pressed: the plot is chosen.
+func _on_map_picked(id: String) -> void:
+	hud.ui_sound("ui_click")
+	select_plot(id)
+
+
+## The pointer or the keyboard came to a pin (or left it): the plot is marked in the world.
+func _on_map_pointed(id: String) -> void:
+	show_mark(id)
 
 
 # ---------------------------------------------------------------------- detail --
@@ -487,18 +699,31 @@ func _build_detail() -> void:
 	col.add_child(head)
 	plot_sub = _para(13, hud.PAPER_INK2)
 	col.add_child(plot_sub)
+	if lots_on:
+		mouth_info = _para(13, hud.PAPER_INK)
+		mouth_info.visible = false
+		col.add_child(mouth_info)
 	col.add_child(_rule())
 	col.add_child(_build_empty_view())
 	col.add_child(_build_site_view())
 	col.add_child(_build_built_view())
+	if lots_on:
+		lots_page = BuildLots.new()
+		lots_page.setup(self)
+		lots_view = lots_page.root
+		lot_cards = lots_page.cards
+		col.add_child(lots_view)
 	detail.add_child(col)
+	if lots_on:
+		detail_box.add_child(_build_map_card())
 	detail_box.add_child(detail)
 
 
 ## What can be built here: a slip for each building of the catalogue (the ones of the plot's kind are shown).
 func _build_empty_view() -> Control:
 	empty_view = hud._vbox(6)
-	empty_view.add_child(hud._caps("What can be built here", hud.PAPER_INK2))
+	empty_caption = hud._caps("What can be built here", hud.PAPER_INK2)
+	empty_view.add_child(empty_caption)
 	for b in build.catalogue():
 		empty_view.add_child(_build_entry(b))
 	return empty_view
@@ -545,6 +770,16 @@ func _build_entry(b: Dictionary) -> Control:
 	work.tooltip_text = "Hours of work for the Builders at the base rate: a good builder does more than one an hour"
 	work.mouse_filter = Control.MOUSE_FILTER_PASS
 	cost.add_child(work)
+	if b.has("wall_kit"):
+		# a wall across a street: how much it takes before it falls
+		var health: HBoxContainer = hud._hbox(4)
+		var health_icon: TextureRect = hud._icon("wall", 14, hud.PAPER_INK2)
+		health_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		health.add_child(health_icon)
+		health.add_child(hud._label("%s health" % _num(float(b.hp)), Fonts.cond(700), 14, hud.PAPER_INK))
+		health.tooltip_text = "How much damage the wall takes before it falls and opens the street"
+		health.mouse_filter = Control.MOUSE_FILTER_PASS
+		cost.add_child(health)
 	left.add_child(cost)
 	var blurb := _para(13, hud.PAPER_INK2)
 	blurb.text = String(b.get("blurb", ""))
@@ -609,9 +844,29 @@ func _build_built_view() -> Control:
 	built_view = hud._vbox(8)
 	built_title = hud._label("", Fonts.cond(700), 20, hud.PAPER_INK)
 	built_view.add_child(built_title)
-	built_view.add_child(hud._caps("What it gives", hud.PAPER_INK2))
+	built_caption = hud._caps("What it gives", hud.PAPER_INK2)
+	built_view.add_child(built_caption)
 	built_blurb = _para(14, hud.PAPER_INK)
 	built_view.add_child(built_blurb)
+	if lots_on:
+		# a wall across a street: how well it stands
+		wall_box = hud._vbox(6)
+		var bar: HBoxContainer = hud._hbox(10)
+		wall_meter = Meter.new()
+		wall_meter.custom_minimum_size = Vector2(60, 14)
+		wall_meter.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		wall_meter.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		wall_meter.track = Color(hud.PAPER_INK, 0.2)
+		wall_meter.fill = hud.OAK
+		bar.add_child(wall_meter)
+		wall_percent = hud._label("100%", Fonts.cond(700), 20, hud.PAPER_INK)
+		wall_percent.custom_minimum_size.x = 56
+		wall_percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		bar.add_child(wall_percent)
+		wall_box.add_child(bar)
+		wall_text = _para(14, hud.PAPER_INK, 600)
+		wall_box.add_child(wall_text)
+		built_view.add_child(wall_box)
 	demolish_button = _button("Demolish")
 	demolish_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	demolish_button.custom_minimum_size = Vector2(0, BUTTON_H)
@@ -649,6 +904,23 @@ class Meter:
 
 # ----------------------------------------------------------------------- layout --
 
+## A slip whose name does not fit on a line has two (or more): it is made as tall as they need, for a column `col_w` wide.
+func _fit_rows(col_w: float) -> void:
+	var avail := col_w - float(GUTTER) - 20.0 - 2.0
+	for id in rows:
+		var r: Dictionary = rows[id]
+		var label: Label = r.name
+		if label.autowrap_mode == TextServer.AUTOWRAP_OFF:
+			continue
+		var font: Font = label.get_theme_font("font")
+		var px: int = label.get_theme_font_size("font_size")
+		var one := font.get_string_size("Ag", HORIZONTAL_ALIGNMENT_LEFT, -1, px).y
+		var lines := maxi(1, roundi(font.get_multiline_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, avail, px, -1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE).y / one))
+		var want := ROW_H + float(lines - 1) * (one + 1.0)
+		if absf(r.row.custom_minimum_size.y - want) > 0.5:
+			r.row.custom_minimum_size.y = want
+
+
 func _layout() -> void:
 	if panel == null or not is_inside_tree():
 		return
@@ -657,10 +929,18 @@ func _layout() -> void:
 	var frame: StyleBox = panel.get_theme_stylebox("panel")
 	var inner := pw - frame.get_margin(SIDE_LEFT) - frame.get_margin(SIDE_RIGHT)
 	# the plots take what they need up to LIST_W; the detail has the rest
-	list_scroll.custom_minimum_size.x = clampf((inner - COLUMN_GAP) * 0.38, LIST_MIN_W, LIST_W)
+	if lots_on:
+		list_scroll.custom_minimum_size.x = clampf((inner - COLUMN_GAP) * 0.4, LIST_MIN_W, LIST_W_LOTS)
+		_fit_rows(list_scroll.custom_minimum_size.x)
+	else:
+		list_scroll.custom_minimum_size.x = clampf((inner - COLUMN_GAP) * 0.38, LIST_MIN_W, LIST_W)
 	# the columns scroll when the window is too short for them
 	var chrome: float = _head.get_combined_minimum_size().y + _foot.get_combined_minimum_size().y + 16.0 + frame.get_minimum_size().y + 12.0
 	var room := maxf(140.0, size.y - 2.0 * MARGIN - chrome)
+	if map != null:
+		# the map takes a share of what the columns have, and leaves the rest for what is chosen
+		map.max_h = clampf(room * MAP_SHARE, BuildMap.MIN_H, BuildMap.MAX_H)
+		map.refresh()
 	var want := maxf(list_box.get_combined_minimum_size().y, detail_box.get_combined_minimum_size().y)
 	var h := minf(want, room)
 	list_scroll.custom_minimum_size.y = h
@@ -674,6 +954,18 @@ func _signature() -> String:
 	var sig := "%s|%d|%d|%d|%s|%s|%s|%s;" % [selected, build.version, roundi(float(sim.stock.scrap) * 10.0), build.housing(), armed, _crew_signature(), String(sim.phase), sim.bell_rung]
 	for pl in build.plots():
 		sig += "%s:%s:%s:%d;" % [pl.id, pl.building, String(pl.site.get("building", "")), roundi(build.progress_of(String(pl.id)) * 1000.0)]
+	if lots_on:
+		sig += _lots_signature()
+	return sig
+
+
+## What the lots add to what the page shows: the claims and what they hang on, the streets that are open, how each wall stands.
+func _lots_signature() -> String:
+	var sig := "L%d|%d|%d|%d;" % [sim.lots.claimed_on.size(), sim.day, int(sim.town.cleared_count()), sim.lots.open_streets()]
+	for m in sim.lots.mouths():
+		var seg = sim.lots.segment_at(String(m.id))
+		if seg != null:
+			sig += "%s:%d:%d;" % [m.id, roundi(float(seg.hp)), int(seg.state)]
 	return sig
 
 
@@ -694,9 +986,47 @@ func refresh(force: bool = false) -> void:
 		return
 	_sig = sig
 	_refresh_foot()
+	if lots_on:
+		_refresh_lots()
 	for pl in build.plots():
 		_refresh_row(pl)
 	_refresh_detail()
+	if lots_on:
+		_refresh_map()
+
+
+## The lots' part of the list: the slips and captions of the lots that are claimed, the Lots slip's words, the page.
+func _refresh_lots() -> void:
+	for l in sim.lots.lots():
+		var id := String(l.id)
+		var open: bool = sim.lots.claimed(id)
+		if lot_headers.has(id):
+			lot_headers[id].visible = open
+		for pid in l.get("plots", []) + l.get("mouths", []):
+			if rows.has(String(pid)):
+				rows[String(pid)].row.visible = open
+	var r: Dictionary = rows[LOTS_PAGE]
+	var total: int = sim.lots.lots().size()
+	var have: int = sim.lots.claimed_on.size()
+	_set_text(r.status, "%d of %d claimed" % [have, total], hud.PAPER_INK if have > 0 else hud.PAPER_INK3)
+	var chosen := selected == LOTS_PAGE
+	if bool(r.row.get_meta("chosen", false)) != chosen:
+		r.row.set_meta("chosen", chosen)
+		_style_row(r.row, chosen)
+	r.row.tooltip_text = "The streets round the school: %d of %d lots claimed" % [have, total]
+	lots_page.refresh()
+
+
+## The map follows the game: what is chosen, the pins, and (until the player chooses) the whole block once a lot is claimed.
+func _refresh_map() -> void:
+	var pl: Dictionary = build.plot(selected)
+	map.selected = selected if selected != LOTS_PAGE else ""
+	if not _map_chosen:
+		_set_map_whole(not sim.lots.claimed_on.is_empty())
+	# a plot out in the streets is not on the map of the yard: the map shows the block
+	if not pl.is_empty() and String(pl.get("lot", "")) != "" and not map.whole:
+		_set_map_whole(true)
+	map.refresh()
 
 
 func _refresh_foot() -> void:
@@ -712,8 +1042,13 @@ func _refresh_row(pl: Dictionary) -> void:
 	var ink: Color = hud.PAPER_INK3
 	var meter: Meter = r.meter
 	meter.visible = false
+	var mouth: bool = String(pl.kind) == "mouth"
 	if pl.building != "":
 		status = String(build.building(String(pl.building)).name)
+		if mouth:
+			var seg = sim.lots.segment_at(id)
+			if seg != null:
+				status += ": down" if int(seg.state) == 3 else ": %d%%" % roundi(float(seg.hp) / maxf(1.0, float(seg.max_hp)) * 100.0)
 		ink = hud.PAPER_INK
 	elif not pl.site.is_empty():
 		var share: float = build.progress_of(id)
@@ -723,13 +1058,13 @@ func _refresh_row(pl: Dictionary) -> void:
 		meter.value = share
 		meter.queue_redraw()
 	else:
-		status = "Empty"
+		status = "Open street" if mouth else "Empty"
 	_set_text(r.status, status, ink)
 	var chosen := id == selected
 	if bool(r.row.get_meta("chosen", false)) != chosen:
 		r.row.set_meta("chosen", chosen)
 		_style_row(r.row, chosen)
-	r.row.tooltip_text = "%s: %s" % [String(pl.name), status.to_lower() if status == "Empty" else status]
+	r.row.tooltip_text = "%s: %s" % [String(pl.name), status.to_lower() if status == "Empty" or status == "Open street" else status]
 
 
 func _set_text(label: Label, text: String, color: Color) -> void:
@@ -741,13 +1076,23 @@ func _set_text(label: Label, text: String, color: Color) -> void:
 
 ## The detail for the plot that is chosen.
 func _refresh_detail() -> void:
+	if selected == LOTS_PAGE:
+		_refresh_lots_detail()
+		return
 	var pl: Dictionary = build.plot(selected)
 	if pl.is_empty():
 		return
 	var kind := String(pl.kind)
+	if lots_on:
+		lots_view.visible = false
+		mouth_info.visible = kind == "mouth"
 	plot_title.text = String(pl.name)
 	plot_tag.text = String(KIND_TAGS.get(kind, kind.capitalize())).to_upper()
-	plot_sub.text = "%s lot, %s by %s tiles" % [String(KIND_TAGS.get(kind, kind.capitalize())), _num(float(pl.size.x)), _num(float(pl.size.y))]
+	if kind == "mouth":
+		plot_sub.text = "A wall across a street, %s tiles wide" % _num(maxf(float(pl.size.x), float(pl.size.y)))
+		mouth_info.text = _mouth_text(pl)
+	else:
+		plot_sub.text = "%s lot, %s by %s tiles" % [String(KIND_TAGS.get(kind, kind.capitalize())), _num(float(pl.size.x)), _num(float(pl.size.y))]
 	var standing := String(pl.building) != ""
 	var going_up: bool = not pl.site.is_empty()
 	empty_view.visible = not standing and not going_up
@@ -761,11 +1106,49 @@ func _refresh_detail() -> void:
 		_refresh_empty(pl)
 
 
+## The Lots page chosen: the heading, and nothing of a plot's three views.
+func _refresh_lots_detail() -> void:
+	plot_title.text = "The streets round the school"
+	plot_tag.text = "LOTS"
+	plot_sub.text = "Claim a lot to build in its streets; shut its streets with walls and the dead stay out of what you build there"
+	mouth_info.visible = false
+	empty_view.visible = false
+	site_view.visible = false
+	built_view.visible = false
+	lots_view.visible = true
+
+
+## What a mouth is, in words: which street, where the dead of it come from, what else shuts it, what it belongs to.
+func _mouth_text(pl: Dictionary) -> String:
+	var m: Dictionary = sim.lots.mouth(String(pl.id))
+	var street := int(m.get("spawn", 0)) + 1
+	var side: String = {"N": "north", "S": "south", "E": "east", "W": "west"}.get(String(m.get("side", "")), "edge of the map")
+	var text := "Street %d of %d: the dead who come in from the %s reach the ring here." % [street, sim.lots.streets(), side]
+	var others: Array = []
+	for o in sim.lots.mouths():
+		if int(o.get("spawn", -1)) == int(m.get("spawn", -2)) and String(o.id) != String(m.id):
+			others.append(String(o.name))
+	if not others.is_empty():
+		text += " The street is shut only when this wall and %s stand." % ", ".join(others)
+	var lot: Dictionary = sim.lots.lot(String(m.get("lot", "")))
+	if not lot.is_empty():
+		text += " Part of %s: %d of %d walls stand." % [String(lot.name).to_lower(), sim.lots.standing_walls(String(lot.id)), sim.lots.mouths_of(String(lot.id)).size()]
+	return text
+
+
 func _refresh_empty(pl: Dictionary) -> void:
+	var mouth: bool = String(pl.kind) == "mouth"
+	if lots_on:
+		empty_caption.text = "Walls that fit across this street" if mouth else "What can be built here"
 	for b in build.catalogue():
 		var id := String(b.id)
 		var e: Dictionary = entries[id]
-		var allowed: bool = b.plots.has(String(pl.kind))
+		var allowed: bool
+		if b.has("wall_kit"):
+			allowed = mouth and pl.kits.has(String(b.wall_kit))
+		else:
+			# (a ring plot takes what is for the yard, and what is only for the streets: `ring`)
+			allowed = b.plots.has(String(pl.kind)) or (String(pl.kind) == "ring" and b.plots.has("yard"))
 		e.card.visible = allowed
 		if not allowed:
 			continue
@@ -815,6 +1198,16 @@ func _refresh_built(pl: Dictionary) -> void:
 	built_blurb.text = String(b.get("blurb", ""))
 	var back := float(b.scrap) * float(build.REFUND_SHARE)
 	var why := String(build.why_not_demolish(String(pl.id)))
+	if lots_on:
+		var wall: bool = String(pl.kind) == "mouth"
+		wall_box.visible = wall
+		built_caption.text = "How it stands" if wall else "What it gives"
+		demolish_button.visible = not wall
+		if wall:
+			_refresh_wall(pl)
+			demolish_why.text = _sentence(why)
+			demolish_why.visible = why != ""
+			return
 	demolish_button.disabled = why != ""
 	demolish_button.focus_mode = Control.FOCUS_NONE if why != "" else Control.FOCUS_ALL
 	demolish_button.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN if why != "" else Control.CURSOR_POINTING_HAND
@@ -826,6 +1219,33 @@ func _refresh_built(pl: Dictionary) -> void:
 		demolish_button.tooltip_text = _sentence(why) if why != "" else "Take the %s down: half of its scrap comes back, its effects end and the plot is free\nTwo clicks: the second within %d seconds" % [String(b.name).to_lower(), int(CONFIRM_S)]
 	demolish_why.text = _sentence(why)
 	demolish_why.visible = why != ""
+
+
+## A wall across a street: its health as a meter and a percentage, and in words what that means for the street.
+func _refresh_wall(pl: Dictionary) -> void:
+	var seg = sim.lots.segment_at(String(pl.id))
+	if seg == null:
+		wall_text.text = "No wall stands here."
+		wall_meter.value = 0.0
+		wall_percent.text = "0%"
+		wall_meter.queue_redraw()
+		return
+	var f := clampf(float(seg.hp) / maxf(1.0, float(seg.max_hp)), 0.0, 1.0)
+	wall_meter.value = f
+	wall_meter.fill = hud.SLIP_MARK.danger if f < 0.34 else (hud.SLIP_MARK.warn if f < 0.67 else WALL_OK)
+	wall_meter.queue_redraw()
+	wall_percent.text = "%d%%" % roundi(f * 100.0)
+	var words := ""
+	match int(seg.state):
+		0:
+			words = "Standing: it holds the street."
+		1:
+			words = "Worn: it has taken a beating and still holds the street."
+		2:
+			words = "Failing: one more bad night may break it."
+		_:
+			words = "Down: the street is open. The Builders mend it by day while there is scrap."
+	wall_text.text = "%d of %d health. %s" % [roundi(float(seg.hp)), roundi(float(seg.max_hp)), words]
 
 
 ## The line about who is building the site: [text, whether nobody is on the job]. For the site the crew works on now,
@@ -910,6 +1330,25 @@ func order(building_id: String) -> bool:
 	hud.ui_sound("ui_confirm")
 	refresh(true)
 	_focus_row(selected)
+	return true
+
+
+## Claims a lot of the ring (the Claim button of its card): the scrap is paid, its plots and mouths open on the list and the map. False,
+## and the page says why, if it cannot be claimed.
+func claim_lot(id: String) -> bool:
+	error_label.visible = false
+	if not lots_on:
+		return false
+	var why := String(sim.lots.why_not_claim(id))
+	if why != "":
+		_say(why)
+		return false
+	if not sim.lots.claim(id):
+		_say("it cannot be claimed")
+		return false
+	hud.ui_sound("ui_confirm")
+	refresh(true)
+	_focus_row(LOTS_PAGE)
 	return true
 
 
@@ -1018,6 +1457,8 @@ func _focus_row(id: String) -> void:
 ## The first control of the detail the keyboard can have: the first Order that is on, the Cancel, the Demolish.
 func _detail_controls() -> Array:
 	var out: Array = []
+	if lots_on and selected == LOTS_PAGE:
+		return lots_page.controls()
 	if empty_view.visible:
 		for b in build.catalogue():
 			var e: Dictionary = entries[String(b.id)]

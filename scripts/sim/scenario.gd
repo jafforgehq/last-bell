@@ -39,10 +39,13 @@ func update(_dt: float) -> void:
 		sim.events.append({"type": "over", "result": "defeat"})
 		sim.events.append({"type": "banner", "text": "Everyone is gone", "sub": "Nobody is left to hold the wall"})
 		return
-	if sim.day > TOTAL_DAYS:
+	if sim.day > total_days():
 		sim.over = "victory"
 		sim.events.append({"type": "over", "result": "victory"})
-		sim.events.append({"type": "banner", "text": "Thirty nights held", "sub": "A convoy is on the road at dawn"})
+		if sim.seasons.campaign:
+			sim.events.append({"type": "banner", "text": "The seasons are over", "sub": "A convoy is on the road at dawn"})
+		else:
+			sim.events.append({"type": "banner", "text": "Thirty nights held", "sub": "A convoy is on the road at dawn"})
 
 
 ## "DAY 7 OF 30" style numbers for the HUD.
@@ -50,8 +53,9 @@ func day() -> int:
 	return sim.day
 
 
+## The last day of the run, or of the season in a campaign (its night is the Big Night).
 func total_days() -> int:
-	return TOTAL_DAYS
+	return sim.seasons.end_day()
 
 
 ## What the command line asks of a run, from the user arguments of the process:

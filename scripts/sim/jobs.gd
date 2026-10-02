@@ -60,6 +60,7 @@ var _now: Array = []
 var _now_by_id := {}
 var _now_version := -1
 var _posts: Array = []
+var _base_posts: Array = []
 var _post_by_id := {}
 
 
@@ -93,6 +94,7 @@ func _load_data() -> void:
 	var c: Dictionary = _cache[key]
 	_stations = c.stations
 	_posts = c.posts
+	_base_posts = c.posts
 	_station_by_id.clear()
 	for st in _stations:
 		_station_by_id[String(st.id)] = st
@@ -417,6 +419,20 @@ func posts() -> Array:
 	return _posts
 
 
+## The posts of the lots that are claimed (round 9) join the wall's own, after them: [{"id", "name", "pos"
+## (Vector2 or [x, y]), "what", "face"}]. Nobody who holds a post loses it.
+func set_extra_posts(extra: Array) -> void:
+	_posts = _base_posts.duplicate()
+	for r in extra:
+		var po: Dictionary = r.duplicate(true)
+		var at = r.pos
+		po["pos"] = at if at is Vector2 else Vector2(float(at[0]), float(at[1]))
+		_posts.append(po)
+	_post_by_id.clear()
+	for po in _posts:
+		_post_by_id[String(po.id)] = po
+
+
 func post(id: String) -> Dictionary:
 	return _post_by_id.get(id, {})
 
@@ -535,7 +551,9 @@ func update(_dt: float) -> void:
 	if h >= RADIO_ALERT_HOUR and h < 12.0 and int(_alert_day.radio) != sim.day and operator("radio") == null:
 		_alert_day.radio = sim.day
 		sim.alert("job-radio", "info", "Nobody is at the radio desk", "There will be no call at noon unless someone sits there", Vector2(station("radio").pos), ALERT_TTL)
-	if h >= WATCH_ALERT_HOUR and h < 17.0 and int(_alert_day.watch) != sim.day and operator("watch") == null:
+	# half an hour before the forecast (16:30 in Autumn, when it comes at 17:00)
+	var forecast_at: float = sim.seasons.dusk_hour() - 2.0    # (tactics.forecast_hour)
+	if h >= forecast_at - 0.5 and h < forecast_at and int(_alert_day.watch) != sim.day and operator("watch") == null:
 		_alert_day.watch = sim.day
 		sim.alert("job-watch", "info", "Nobody is on watch", "There will be no forecast tonight unless someone is at the lookout post", Vector2(station("watch").pos), ALERT_TTL)
 

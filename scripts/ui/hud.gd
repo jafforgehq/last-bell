@@ -33,6 +33,12 @@
 ## toolbar (`build_button`), a click on a plot's sign in the yard: the same paper page, which pauses the rules and gives
 ## the speed back (`open_build`, `close_build`, `toggle_build`). It marks the plot under the pointer in the world
 ## (`build_hover`, main.gd's `build_hover` for the yard); the tutorial's lock ghosts its button like the Jobs one.
+##
+## Round 8 (the town): in a settlement game (`sim.town.on`) `open_scavenge` (key G, a person's Scavenge button, the bag in
+## the toolbar: `town_button`, there only in that game) opens the Town Board (scripts/ui/town_board.gd) in place of the
+## four-site dialog, which the classic start keeps as it was. The board is `scavenge_dialog` (it has the dialog's
+## `closed` and `close`), pauses the rules the same way and is told to `refresh` with the rest of the HUD
+## (`town_board_open`). The help's G reads "Town Board" there (`help_g`).
 extends Control
 
 const GD := preload("res://scripts/game_data.gd")
@@ -40,6 +46,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
 const JobsScreen := preload("res://scripts/ui/jobs_screen.gd")
 const BuildScreen := preload("res://scripts/ui/build_screen.gd")
+const TownBoard := preload("res://scripts/ui/town_board.gd")
 const GameOver := preload("res://scripts/ui/game_over.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
@@ -104,6 +111,8 @@ const ALERT_ICONS := [
 	["skill-", "star"], ["breakdown-", "mood"], ["story", "radio"], ["story-", "radio"], ["dawn", "sun"],
 	# round 5: nobody at the radio desk (the radio) or on watch (the lookout's post)
 	["job-radio", "radio"], ["job-watch", "post"],
+	# round 9: a lot is claimed (the hammer), a wall is put up across a street (the wall), a building out in the streets is ruined
+	["lot-", "build"], ["wall-", "wall"], ["ruined-", "down"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
 ## bell; the Builders job the wall (the hammer is Repair's own, and in the small size, where only the
@@ -121,6 +130,9 @@ const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running
 ## Walls and doors, by side and by what they are made of. A piece the HUD has no
 ## name for (a new kind of wall or door) shows its own words instead of failing.
 const SIDE := {"N": "North wall", "W": "West wall", "E": "East wall", "S": "School"}
+## A wall made at a mouth of a lot (round 9: the sections from this id on) is a street wall, not a side of the compound.
+const LOT_WALL_FROM := 100
+const LOT_WALL := "Street wall"
 const MATERIAL := {"container": "shipping container", "bus": "school bus", "car": "wrecked car", "pallets": "pallets and stakes", "gate": "steel gate", "chainlink": "fence and wire", "blocks": "cinderblock", "door": "boarded door"}
 const STORES := [["ammo", "Ammo"], ["scrap", "Scrap"], ["food", "Food"], ["water", "Water"], ["meds", "Medicine"]]
 ## The stores that also show how many days of them are left.
@@ -200,6 +212,12 @@ const TOOL_W := 26
 const JOBS_TIP := "Jobs: who works where by day and holds which post at night\nKey: J"
 ## The tooltip of the Build button.
 const BUILD_TIP := "Build: pick a plot and order a building for the Builders to raise\nKey: N"
+## The same in a settlement game, where the screen also claims the streets round the school and walls them in.
+const BUILD_LOTS_TIP := "Build: order a building for the Builders to raise, claim the streets round the school and wall them in\nKey: N"
+## What the help's N says when pointed at in a settlement game.
+const HELP_N_LOTS_TIP := "The Build screen: buildings, and the streets round the school to claim and wall in"
+## The tooltip of the Town Board button (a settlement game only: the classic start has no board).
+const TOWN_TIP := "Town Board: the map of the town, the places on the road and the parties out\nKey: G"
 ## What the speed buttons do and their keys, for the tooltips: [words, key].
 const SPEED_TIPS := [["Pause the game", "Space"], ["Play at normal speed", "1"], ["Play twice as fast", "2"], ["Play three times as fast", "3"]]
 ## The controls panel: [caption, entries to a row, [[keys, what it does], ...]]. `keys` is
@@ -266,6 +284,15 @@ class Strip:
 	extends Control
 	var hour := 0.0
 	var gradient: Gradient
+	## The rules' seasons (round 10): in a campaign the day's hours are mapped onto the colours of the standard day, so
+	## the dusk and the dawn of the strip are the season's. Null (or not a campaign): the day's own.
+	var seasons = null
+
+	## The colour of the strip at an hour of the real day.
+	func colour_at(h: float) -> Color:
+		if seasons != null and seasons.campaign:
+			h = seasons.light_hour(h)
+		return gradient.sample(h / 24.0)
 
 	func _init() -> void:
 		gradient = Gradient.new()
@@ -278,7 +305,7 @@ class Strip:
 		for i in n:
 			var x0 := size.x * i / n
 			var x1 := size.x * (i + 1) / n
-			draw_rect(Rect2(x0, y, x1 - x0 + 0.5, 6), gradient.sample((i + 0.5) / n))
+			draw_rect(Rect2(x0, y, x1 - x0 + 0.5, 6), colour_at((i + 0.5) / n * 24.0))
 		var mx := size.x * hour / 24.0
 		draw_rect(Rect2(mx - 2.5, y - 4, 5, 14), Color(0, 0, 0, 0.55))
 		draw_rect(Rect2(mx - 1.5, y - 3, 3, 12), Color("#ece6d8"))
@@ -312,6 +339,9 @@ var on_jobs_hover: Callable
 ## The toolbar's Build button was pressed: main.gd opens or closes the Build screen (it asks the tutorial's lock
 ## first). With nobody listening the HUD opens it itself.
 var on_build: Callable
+## The toolbar's Town Board button was pressed (settlement game): main.gd opens or closes the board (it asks the
+## tutorial's lock and the pages first). With nobody listening the HUD opens it itself.
+var on_town: Callable
 ## The Build screen marks a plot in the world: called with {} when the pointer is not on a plot's slip or the screen
 ## is closed, else {"plot": id}; main.gd keeps it for the yard to draw (`build_hover`).
 var on_build_hover: Callable
@@ -324,7 +354,8 @@ var on_ui_sound: Callable
 var restart: Callable
 ## Where the game's saves are (the newest one is offered when a run is lost).
 var save_paths: Array = [SaveGame.AUTO_PATH, SaveGame.QUICK_PATH]
-## The open scavenging dialog and the game-over overlay, or null.
+## The open scavenging dialog (in a settlement game, round 8, the Town Board: scripts/ui/town_board.gd, which has the
+## same `closed` and `close`) and the game-over overlay, or null.
 var scavenge_dialog = null
 var game_over = null
 var _paused_for_dialog := false
@@ -421,6 +452,14 @@ var help_button: Button
 var jobs_button: Button
 ## The Build button (a hammer) after it (the Build screen: N).
 var build_button: Button
+## The Town Board button (the scavenging bag) between the sound and the help, there only in a settlement game (the Town
+## Board: G).
+var town_button: Button
+## The word beside the G key in the controls help ("Scavenge", or "Town Board" in a settlement game).
+var help_g: Label
+## The word beside the N key in the controls help ("Build": there is no room for more beside it; in a settlement game, round 9,
+## pointing at it says that the screen also claims the streets round the school).
+var help_n: Label
 ## The Menu button at the right end of the toolbar (the pause menu: Esc).
 var menu_button: Button
 var help: PanelContainer
@@ -1771,7 +1810,7 @@ func select(sel) -> void:
 		box.add_child(wi)
 		head.add_child(box)
 		titles.add_child(_label(s.name, Fonts.cond(700), 21, INK))
-		titles.add_child(_label("%s · %s" % [SIDE.get(s.side, "Wall"), MATERIAL.get(s.kind, String(s.kind))], Fonts.sans(400), 13, INK2))
+		titles.add_child(_label("%s · %s" % [LOT_WALL if int(s.id) >= LOT_WALL_FROM else SIDE.get(s.side, "Wall"), MATERIAL.get(s.kind, String(s.kind))], Fonts.sans(400), 13, INK2))
 		var m := _meter()
 		_row(grid, "Integrity", m[0])
 		inspect_refs.hp = m[1]
@@ -2267,6 +2306,11 @@ func _build_speed() -> void:
 	sound_button = _speed_button("soundOn", "Turn the sound off")
 	sound_button.pressed.connect(func(): on_sound.call())
 	row.add_child(sound_button)
+	# the Town Board (round 8): only a settlement game has one, so the button is not there in the classic start
+	town_button = _speed_button("scavenge", TOWN_TIP)
+	town_button.pressed.connect(_press_town)
+	town_button.visible = false
+	row.add_child(town_button)
 	help_button = _speed_button("help", "Show or hide the controls: every key and mouse button")
 	help_button.pressed.connect(func(): help.visible = not help.visible)
 	row.add_child(help_button)
@@ -2345,6 +2389,10 @@ func _build_help() -> void:
 			grid.add_child(cell)
 			var what := _label(String(entry[1]), Fonts.sans(400), 12, INK2)
 			what.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			if String(entry[0]) == "G":
+				help_g = what
+			if String(entry[0]) == "N":
+				help_n = what
 			if entry.size() > 2:
 				# a long entry (its third number is the width it wraps at) takes two lines, not a wider panel
 				what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2502,6 +2550,10 @@ func open_scavenge(sel) -> void:
 	if scavenge_dialog != null or game_over != null or sim_ref == null:
 		return
 	var who = sel.ref if sel != null and sel.kind == "person" else null
+	# the settlement game plans on the Town Board (round 8); the classic start keeps this dialog as it was
+	if sim_ref.get("town") != null and sim_ref.town.on:
+		_open_town_board(who)
+		return
 	var d := Dialog.new()
 	scavenge_dialog = d
 	add_child(d)
@@ -2511,6 +2563,45 @@ func open_scavenge(sel) -> void:
 	_paused_for_dialog = last_speed > 0
 	if _paused_for_dialog and on_speed.is_valid():
 		on_speed.call(0)
+
+
+## The Town Board (key G, a person's Scavenge button, the toolbar's bag) in a settlement game, in place of the dialog:
+## it pauses the game like the dialog and the speed comes back when it is closed. It does not open over another page
+## (the radio card, the Jobs or Build screen) or the end screen.
+func _open_town_board(who) -> void:
+	if modal_open():
+		return
+	var b := TownBoard.new()
+	scavenge_dialog = b
+	add_child(b)
+	b.closed.connect(_on_board_closed)
+	b.setup(self, sim_ref, who)
+	ui_sound("ui_open")
+	_speed_before_dialog = last_speed
+	_paused_for_dialog = last_speed > 0
+	if _paused_for_dialog and on_speed.is_valid():
+		on_speed.call(0)
+
+
+## Whether the open dialog is the Town Board.
+func town_board_open() -> bool:
+	return scavenge_dialog != null and is_instance_valid(scavenge_dialog) and scavenge_dialog is TownBoard
+
+
+func _on_board_closed() -> void:
+	ui_sound("ui_close")
+	_on_dialog_closed()
+
+
+## The toolbar's Town Board button: main.gd decides (the tutorial's lock, another page being up); with nobody
+## listening the HUD opens it itself.
+func _press_town() -> void:
+	if on_town.is_valid():
+		on_town.call()
+	elif town_board_open():
+		scavenge_dialog.close()
+	else:
+		open_scavenge(selection)
 
 
 func _on_dialog_closed() -> void:
@@ -2981,7 +3072,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	# clock
 	var m := int(sim.minutes)
 	var h: float = sim.hour
-	day_label.text = ("DAY %d/%d" if compact else "DAY %d OF %d") % [sim.scenario.day(), sim.scenario.total_days()]
+	day_label.text = _day_text(sim, speed)
 	var pc: Color = PHASE_COLOR.get(sim.phase, ACCENT)
 	phase_chip.add_theme_stylebox_override("panel", _chip_style(pc))
 	phase_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
@@ -2996,14 +3087,17 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	phase_label.text = String(sim.phase).to_upper()
 	phase_label.add_theme_color_override("font_color", pc)
 	time_label.text = "%02d:%02d" % [m / 60, m % 60]
-	var to_dawn := fposmod(6.5 - h, 24.0)
-	var to_dusk := fposmod(19.0 - h, 24.0)
+	# (the season's own dawn and dusk; a game that is not a campaign is Autumn's 6.5 and 19.0)
+	var seasons = sim.get("seasons")
+	var to_dawn := fposmod((seasons.dawn_hour() if seasons != null else 6.5) - h, 24.0)
+	var to_dusk := fposmod((seasons.dusk_hour() if seasons != null else 19.0) - h, 24.0)
 	var next_name := "Dusk" if sim.phase == "day" else "Dawn"
 	var next_h := to_dusk if sim.phase == "day" else to_dawn
 	until_label.text = "%s in %dh %02dm" % [next_name, int(next_h), int(fmod(next_h, 1.0) * 60.0)]
 	strip.hour = h
+	strip.seasons = seasons
 	strip.queue_redraw()
-	var temp := roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
+	var temp := roundi(seasons.temperature(h)) if seasons != null and seasons.campaign else roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
 	temp_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
 	temp_label.text = "%d°C, %s" % [temp, sim.weather]
 	walkers_label.text = "%d walkers" % walkers
@@ -3026,6 +3120,47 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		jobs_screen.refresh()
 	if build_screen != null:
 		build_screen.refresh()
+	if town_board_open():
+		scavenge_dialog.refresh()
+	_sync_town(sim)
+	_sync_lots(sim)
+
+
+## The clock's day: "DAY 7 OF 30" (a game that is not a campaign), or in a campaign the season and the day in it,
+## "WINTER, DAY 5 OF 24" ("WINTER 5/24" in a narrow window, and while the game is paused: the PAUSED pill takes
+## the room of the longer words, so that the clock does not widen).
+func _day_text(sim, speed: int = 1) -> String:
+	var seasons = sim.get("seasons")
+	if seasons != null and seasons.campaign:
+		var season_name := String(seasons.current().name).to_upper()
+		return ("%s %d/%d" if compact or speed == 0 else "%s, DAY %d OF %d") % [season_name, seasons.season_day(sim.scenario.day()), seasons.season_length()]
+	return ("DAY %d/%d" if compact else "DAY %d OF %d") % [sim.scenario.day(), sim.scenario.total_days()]
+
+
+## The Town Board's button is in the toolbar, and the G of the help says so, only in a settlement game.
+func _sync_town(sim) -> void:
+	var on: bool = sim.get("town") != null and sim.town.on
+	if town_button != null and town_button.visible != on:
+		town_button.visible = on
+		_layout_dock.call_deferred()
+	if help_g != null:
+		var word := "Town Board" if on else "Scavenge"
+		if help_g.text != word:
+			help_g.text = word
+
+
+## In a settlement game (round 9) the Build screen has the streets round the school too: the button's tooltip and the help's N say so.
+func _sync_lots(sim) -> void:
+	var on: bool = sim.get("lots") != null and sim.lots.on
+	if build_button != null:
+		var tip := BUILD_LOTS_TIP if on else BUILD_TIP
+		if build_button.tooltip_text != tip:
+			build_button.tooltip_text = tip
+	if help_n != null:
+		var tip := HELP_N_LOTS_TIP if on else ""
+		if help_n.tooltip_text != tip:
+			help_n.tooltip_text = tip
+			help_n.mouse_filter = Control.MOUSE_FILTER_PASS if on else Control.MOUSE_FILTER_IGNORE
 
 
 ## The lookout's forecast under the clock: from the hour he tells it (17:00) until dawn,
@@ -3034,17 +3169,20 @@ func _update_forecast(sim) -> void:
 	var f: Dictionary = sim.tactics.forecast()
 	var text := ""
 	if bool(f.get("given", false)) and sim.phase != "dawn":
-		text = _forecast_text(f)
+		# (in a campaign the last night of a season that has seasons to come is its Big Night, not the last)
+		var seasons = sim.get("seasons")
+		text = _forecast_text(f, seasons == null or not seasons.campaign or seasons.is_last())
 	if forecast_label.text != text:
 		forecast_label.text = text
 	forecast_label.visible = text != ""
 
 
 ## "Tonight: about 55 from the north east, a brute"; "..., runners"; on the last night
-## "The last night: about 120, from everywhere".
-func _forecast_text(f: Dictionary) -> String:
+## "The last night: about 120, from everywhere" ("The Big Night: ..." when `last` is false: a season of a campaign
+## that has others to come).
+func _forecast_text(f: Dictionary, last: bool = true) -> String:
 	if bool(f.get("big", false)):
-		return "The last night: about %d, from everywhere" % int(f.get("total", 0))
+		return "%s: about %d, from everywhere" % ["The last night" if last else "The Big Night", int(f.get("total", 0))]
 	var text := "Tonight: about %d" % int(f.get("total", 0))
 	var heading := String(f.get("heading", ""))
 	if heading != "":
@@ -3108,6 +3246,8 @@ func _doing_person(p) -> String:
 ## "Scavenging at the pharmacy" for someone out with a scavenging party.
 func _away_text(p) -> String:
 	if p.away is Dictionary and sim_ref != null:
+		if String(p.away.get("kind", "")) == "garrison":
+			return "Holding %s" % String(sim_ref.town.place(String(p.away.get("place", ""))).get("name", "an outpost"))
 		var id := String(p.away.get("site", ""))
 		for site in sim_ref.scavenge.sites:
 			if String(site.get("id", "")) == id:
@@ -3561,9 +3701,9 @@ var lock_allowed: Callable
 ## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`, `jobs` (the
 ## toolbar's Jobs button, and while the Jobs screen is open its parts: `jobs.screen`, `jobs.auto`, `jobs.clear`,
 ## `jobs.close`, `jobs.list`, `jobs.row:<person id>`, `jobs.job:<id>`, `jobs.post:<id>`, `jobs.station:<id>` and
-## `jobs.item:<id>`), `build` (the toolbar's Build button, and while the Build screen is open its parts: `build.screen`,
+## `jobs.item:<id>`), `town` (the toolbar's Town Board button: there only in a settlement game), `build` (the toolbar's Build button, and while the Build screen is open its parts: `build.screen`,
 ## `build.close`, `build.row:<plot id>`, `build.detail`, `build.order:<building id>`, `build.cancel`, `build.demolish`
-## and `build.jobs`),
+## and `build.jobs`; in a settlement game `build.lots` (the Lots slip), `build.map`, `build.pin:<plot id>` and `build.claim:<lot id>`),
 ## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`.
 func anchor_rect(name: String) -> Rect2:
@@ -3629,6 +3769,8 @@ func _anchor_control(name: String):
 			return jobs_button
 		"build":
 			return build_button
+		"town":
+			return town_button
 		"sound":
 			return sound_button
 		"legend":
@@ -3716,7 +3858,8 @@ func _anchor_jobs(part: String):
 
 
 ## A part of the Build screen while it is open: `screen`, `close`, `detail` (the card of the chosen plot), `row:<plot id>`
-## (a plot's slip), `order:<building id>` (an Order button), `cancel`, `demolish` and `jobs` (the button for the Jobs screen).
+## (a plot's slip), `order:<building id>` (an Order button), `cancel`, `demolish` and `jobs` (the button for the Jobs screen); and,
+## in a settlement game, `lots` (the Lots slip), `map`, `pin:<plot id>` (a plot's pin on the map) and `claim:<lot id>` (a Claim button).
 func _anchor_build(part: String):
 	var s = build_screen
 	if s == null or not is_instance_valid(s):
@@ -3734,6 +3877,10 @@ func _anchor_build(part: String):
 			return s.get("demolish_button")
 		"jobs":
 			return s.get("jobs_button")
+		"lots":
+			return s.get("lots_row")
+		"map":
+			return s.get("map")
 	var kind := part.get_slice(":", 0)
 	var id := part.get_slice(":", 1)
 	if kind == "row":
@@ -3742,6 +3889,12 @@ func _anchor_build(part: String):
 	if kind == "order":
 		var entries = s.get("entries")
 		return entries[id].order if typeof(entries) == TYPE_DICTIONARY and entries.has(id) else null
+	if kind == "pin":
+		var m = s.get("map")
+		return m.pins.get(id) if m != null and m.pins.has(id) else null
+	if kind == "claim":
+		var cards = s.get("lot_cards")
+		return cards[id].claim if typeof(cards) == TYPE_DICTIONARY and cards.has(id) else null
 	return null
 
 ## Ghosts the order buttons, the speed buttons and the fields button that the tutorial step
@@ -3769,6 +3922,8 @@ func apply_lock() -> void:
 		_ghost(jobs_button, locking and not bool(lock_allowed.call("jobs", null)))
 	if build_button != null:
 		_ghost(build_button, locking and not bool(lock_allowed.call("build", null)))
+	if town_button != null:
+		_ghost(town_button, locking and not bool(lock_allowed.call("gizmo", "scavenge")))
 
 
 func _ghost(b: Button, locked: bool) -> void:

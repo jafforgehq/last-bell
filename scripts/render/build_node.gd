@@ -10,6 +10,10 @@
 ##   with a thin bar above it that fills with the work done.
 ## - A finished building is its `props`. What lies on the ground (`flat`) is drawn under the people; what stands up is
 ##   drawn among them, sorted by its feet, so people walk behind a tower and in front of a bench.
+## - (Round 9, the lots.) A wall plot across a street (a mouth, in a lot that is claimed) with no wall and no site is a dashed
+##   line across the street in amber with the words "open street" on it; one whose wall has fallen is the same in red, "wall
+##   down". A site on one is the heap of materials every few tiles along the street. The Build screen may point at a whole lot
+##   (`main.build_hover`, {"lot": id}): every plot and mouth of it is lit, claimed or not.
 ## - The floodlights' lamps are PointLight2D nodes that burn while the building stands and it is dark; they do not go
 ##   out in a blackout (the building brings its own generator).
 ##
@@ -21,6 +25,7 @@ const GD := preload("res://scripts/game_data.gd")
 const Build := preload("res://scripts/sim/build.gd")
 const Lighting := preload("res://scripts/render/lighting.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
+const Fonts := preload("res://scripts/ui/fonts.gd")
 
 const TILE := GD.TILE
 const OBJECTS := "res://assets/objects/"
@@ -58,6 +63,13 @@ const BAR_THICK_PX := 6.0
 const BAR_LIFT := 0.5
 ## The crew builds by day only: a bar of a site at night is drawn in this colour (the work waits).
 const BAR_WAITING := Color(0.5, 0.65, 0.79)
+## A wall plot's open street: the amber of the HUD's warning and the red of its danger, the width of the line (screen pixels),
+## the size of the words on it, and the tiles between two heaps of materials along a site across a street.
+const OPEN_STREET := Color(0.91, 0.584, 0.227)
+const WALL_DOWN := Color(0.878, 0.345, 0.29)
+const STREET_PX := 3.0
+const STREET_TEXT_PX := 13
+const HEAP_EVERY := 3.5
 ## The floodlights burn from this darkness on (lighting.dark), at full from this much more.
 const LAMP_FROM := 0.08
 const LAMP_RAMP := 4.0
@@ -79,6 +91,7 @@ var show_plots := false
 ## What the last draw put on the screen and how often the sprites were made again, for the tests.
 var drawn_outlines := 0
 var drawn_signs := 0
+var drawn_streets := 0
 var drawn_bars := 0
 var rebuilds := 0
 
@@ -256,14 +269,30 @@ func _rebuild() -> void:
 			var def: Dictionary = _scaffold[stage] if stage >= 0 and stage < _scaffold.size() else {}
 			# a site far along shows the building it will be, faintly, under the heap of materials
 			var ghost := float(def.get("ghost", 0.0))
-			if ghost > 0.0:
-				for pr in own.get("props", []):
-					var faint: Dictionary = pr.duplicate()
-					faint["a"] = ghost
-					_add_prop(faint, origin, east)
 			var props: Array = own.get("site", []) if own.has("site") else def.get("props", [])
-			for pr in props:
-				_add_prop(pr, origin, east)
+			for at in _heaps(pl):
+				if ghost > 0.0:
+					for pr in own.get("props", []):
+						var faint: Dictionary = pr.duplicate()
+						faint["a"] = ghost
+						_add_prop(faint, at, east)
+				for pr in props:
+					_add_prop(pr, at, east)
+
+
+## Where a site's heap of materials stands: the middle of the plot, or, for a wall across a street, every few tiles along it.
+func _heaps(pl: Dictionary) -> Array:
+	var c := Vector2(pl.pos)
+	if String(pl.get("kind", "")) != "mouth":
+		return [c]
+	var horizontal: bool = String(pl.get("dir", "h")) == "h"
+	var length: float = float(pl.size.x) if horizontal else float(pl.size.y)
+	var n := maxi(1, roundi(length / HEAP_EVERY))
+	var out: Array = []
+	for i in n:
+		var off := (float(i) - float(n - 1) / 2.0) * (length / float(n))
+		out.append(c + (Vector2(off, 0.0) if horizontal else Vector2(0.0, off)))
+	return out
 
 
 func _texture(file: String) -> Texture2D:
@@ -409,6 +438,31 @@ func hovered() -> String:
 	return String(h.get("plot", "")) if h is Dictionary else ""
 
 
+## The lot the Build screen points at as a whole ("" for none): its plots and mouths are lit, claimed or not.
+func hovered_lot() -> String:
+	var h = main.get("build_hover") if main != null else null
+	return String(h.get("lot", "")) if h is Dictionary else ""
+
+
+## Whether the Build screen points at this plot, or at the lot it belongs to.
+func marked(pl: Dictionary) -> bool:
+	if String(pl.id) == hovered():
+		return true
+	var lot := hovered_lot()
+	return lot != "" and String(pl.get("lot", "")) == lot
+
+
+## What a wall plot's street is now: "open" (no wall and no site), "down" (the wall has fallen), "" (a wall stands, or one is
+## going up, or it is no wall plot at all).
+func street_state(pl: Dictionary) -> String:
+	if sim == null or String(pl.get("kind", "")) != "mouth":
+		return ""
+	if String(pl.building) == "":
+		return "" if not pl.site.is_empty() else "open"
+	var seg = sim.lots.segment_at(String(pl.id))
+	return "down" if seg != null and int(seg.state) == 3 else ""
+
+
 ## Whether the plots' marks are drawn at all: not on the title, nor in the lesson (Orientation Day teaches the yard
 ## with nothing built).
 func marks_wanted() -> bool:
@@ -421,8 +475,7 @@ func marks_wanted() -> bool:
 
 ## How strong the outline of this plot is now (0 for none).
 func outline_alpha(pl: Dictionary) -> float:
-	var id := String(pl.id)
-	if id == hovered():
+	if marked(pl):
 		return ALPHA_HOVER
 	if screen_open():
 		return ALPHA_OPEN
@@ -433,8 +486,7 @@ func outline_alpha(pl: Dictionary) -> float:
 
 ## How strong the sign of this plot is (0 for none): an empty plot's is faint in the plain yard.
 func sign_alpha(pl: Dictionary) -> float:
-	var id := String(pl.id)
-	if id == hovered():
+	if marked(pl):
 		return 1.0
 	if screen_open():
 		return 0.9
@@ -476,26 +528,81 @@ func _dash_segments(pl: Dictionary) -> PackedVector2Array:
 func _paint_ground(ci) -> void:
 	drawn_outlines = 0
 	drawn_signs = 0
+	drawn_streets = 0
 	if sim == null or sim.get("build") == null or not marks_wanted():
 		return
 	var k := 1.0 / _screen_scale()
 	for pl in sim.build.plots():
-		var id := String(pl.id)
 		var a := outline_alpha(pl)
-		var strong := id == hovered()
+		var strong := marked(pl)
 		if a > 0.01:
 			drawn_outlines += 1
-			var lit := strong or screen_open()
-			var col := Color(GOLD, a) if lit else Color(PAPER, a)
-			var size := Vector2(pl.size) * TILE
-			if lit:
-				var fill := FILL_HOVER if strong else FILL_OPEN
-				ci.draw_rect(Rect2(Vector2(pl.pos) * TILE - size / 2.0, size), Color(GOLD, fill))
-			ci.draw_multiline(_dash_segments(pl), col, (LINE_HOVER_PX if strong else LINE_PX) * k, true)
+			_paint_outline(ci, pl, a, strong, strong or screen_open(), k)
 		var sa := sign_alpha(pl)
 		if sa > 0.01:
 			drawn_signs += 1
 			_paint_sign(ci, pl, sa, strong or (screen_open() and sa > 0.5), k)
+		_paint_street(ci, pl, k)
+	# a lot the screen points at that is not yet claimed: its plots and mouths are lit all the same
+	var lot := hovered_lot()
+	if lot != "" and sim.lots.on and not sim.lots.claimed(lot):
+		var l: Dictionary = sim.lots.lot(lot)
+		for id in l.get("plots", []) + l.get("mouths", []):
+			var pl: Dictionary = sim.build.plot(String(id))
+			if not pl.is_empty():
+				drawn_outlines += 1
+				_paint_outline(ci, pl, ALPHA_HOVER, true, true, k)
+
+
+## The dashed outline of a lot, with its wash when it is lit.
+func _paint_outline(ci, pl: Dictionary, a: float, strong: bool, lit: bool, k: float) -> void:
+	var col := Color(GOLD, a) if lit else Color(PAPER, a)
+	var size := Vector2(pl.size) * TILE
+	if lit:
+		var fill := FILL_HOVER if strong else FILL_OPEN
+		ci.draw_rect(Rect2(Vector2(pl.pos) * TILE - size / 2.0, size), Color(GOLD, fill))
+	ci.draw_multiline(_dash_segments(pl), col, (LINE_HOVER_PX if strong else LINE_PX) * k, true)
+
+
+## A street that is open (no wall across it) or whose wall is down: a dashed line across it in amber (red for a wall that has
+## fallen), with the words on a dark pill at its middle. In the world's pixels, the words in screen pixels.
+func _paint_street(ci, pl: Dictionary, k: float) -> void:
+	var state := street_state(pl)
+	if state == "":
+		return
+	var col := OPEN_STREET if state == "open" else WALL_DOWN
+	var c := Vector2(pl.pos)
+	var half := Vector2(pl.size) / 2.0
+	var horizontal: bool = String(pl.get("dir", "h")) == "h"
+	var a := c - (Vector2(half.x, 0.0) if horizontal else Vector2(0.0, half.y))
+	var b := c + (Vector2(half.x, 0.0) if horizontal else Vector2(0.0, half.y))
+	var len := a.distance_to(b)
+	var n := maxi(1, roundi(len / (DASH + GAP)))
+	var step := len / float(n)
+	var dir := (b - a) / len
+	var pts := PackedVector2Array()
+	for j in n:
+		var from := float(j) * step + GAP / 2.0
+		pts.append((a + dir * from) * TILE)
+		pts.append((a + dir * minf(from + step - GAP, len)) * TILE)
+	var alpha := 0.9 if marked(pl) else 0.75
+	ci.draw_multiline(pts, Color(col, alpha), STREET_PX * k, true)
+	drawn_streets += 1
+	var font: Font = Fonts.cond(700)
+	var text := "open street" if state == "open" else "wall down"
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, STREET_TEXT_PX).x + 12.0
+	var th := float(STREET_TEXT_PX) + 6.0
+	ci.draw_set_transform(c * TILE, 0.0, Vector2(k, k))
+	var box := Rect2(-tw / 2.0, -th / 2.0, tw, th)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(PLATE, 0.86)
+	sb.border_color = Color(col, 0.9)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(int(th / 2.0))
+	sb.anti_aliasing = true
+	ci.draw_style_box(sb, box)
+	ci.draw_string(font, Vector2(-tw / 2.0, th / 2.0 - 5.0), text, HORIZONTAL_ALIGNMENT_CENTER, tw, STREET_TEXT_PX, PAPER)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## The sign: a dark plate with the hammer on it, at the corner of the lot.

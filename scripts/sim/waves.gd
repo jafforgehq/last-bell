@@ -75,12 +75,29 @@ func start() -> void:
 ## The budget of the night that follows `day` (day 1 is the first night), before
 ## the last night's bonus.
 func budget_for(day: int) -> float:
-	return BASE * (1.0 + GROWTH * float(maxi(day, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)])
+	var eff: int = sim.seasons.effective_day(day)
+	return BASE * (1.0 + GROWTH * float(maxi(eff, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)]) * sim.seasons.mult("waves")
 
 
 ## Whether this night is the last one.
 func is_big(day: int) -> bool:
 	return day >= sim.scenario.total_days()
+
+
+## A spawn point, drawn with the nests' pull on it (1 each, and NEST_PULL for every point of strength).
+func _lean(rng: RandomNumberGenerator, n: int) -> int:
+	var weights: Array = []
+	var total := 0.0
+	for i in n:
+		var w: float = 1.0 + sim.town.NEST_PULL * sim.town.pressure(i)
+		weights.append(w)
+		total += w
+	var at := rng.randf() * total
+	for i in n:
+		at -= float(weights[i])
+		if at < 0.0:
+			return i
+	return n - 1
 
 
 ## How big the crew makes tonight (small start; 1 in the classic start): as it is now, but once the bell
@@ -93,7 +110,7 @@ func _scale(day: int) -> float:
 
 ## What the night brings in points: `budget_for`, times the bonus on the last night.
 func night_budget(day: int) -> float:
-	return budget_for(day) * (BIG_FACTOR if is_big(day) else 1.0) * sim.storyteller.budget_mult(day) * _scale(day)
+	return budget_for(day) * (sim.seasons.big_factor() if is_big(day) else 1.0) * sim.storyteller.budget_mult(day) * _scale(day) * sim.town.budget_mult()
 
 
 ## The plan of the night that follows `day`: {"day", "big", "budget", "queue" (the
@@ -101,14 +118,14 @@ func night_budget(day: int) -> float:
 ## the main spawn points), "shown" (the number a forecast gives, off by up to 15%)}.
 func plan_for(day: int) -> Dictionary:
 	var scale := _scale(day)
-	var mult: float = sim.storyteller.budget_mult(day) * scale
+	var mult: float = sim.storyteller.budget_mult(day) * scale * sim.town.budget_mult()
 	if _plan_day == day and not _plan.is_empty() and is_equal_approx(_plan_mult, mult):
 		return _plan
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (sim.run_seed * 2654435761 + day * 40503 + 12345) & 0x7fffffff
 	var big := is_big(day)
 	var budget := night_budget(day)
-	var counts := Kinds.counts(budget, day, big, rng)
+	var counts := Kinds.counts(budget, sim.seasons.effective_day(day), big, rng)
 	var queue: Array = []
 	for i in int(counts.walker):
 		queue.append(Kinds.WALKER)
@@ -124,11 +141,19 @@ func plan_for(day: int) -> Dictionary:
 		queue.insert(int(float(queue.size()) * (0.4 + 0.6 * rng.randf())), Kinds.BRUTE)
 	var heading: Array = []
 	var n: int = sim.spawns.size()
-	heading.append(rng.randi() % n)
-	if rng.randf() < 0.4:
-		var other := rng.randi() % n
-		if other != heading[0]:
-			heading.append(other)
+	if sim.town.on:
+		# the nests (town.gd) pull the main spawn points towards them
+		heading.append(_lean(rng, n))
+		if rng.randf() < 0.4:
+			var other := _lean(rng, n)
+			if other != heading[0]:
+				heading.append(other)
+	else:
+		heading.append(rng.randi() % n)
+		if rng.randf() < 0.4:
+			var other := rng.randi() % n
+			if other != heading[0]:
+				heading.append(other)
 	var shown := roundi(float(queue.size()) * (0.85 + 0.3 * rng.randf()) / 5.0) * 5
 	_plan = {"day": day, "big": big, "budget": budget, "queue": queue, "counts": counts, "heading": heading, "shown": maxi(shown, 5)}
 	_plan_day = day
@@ -169,8 +194,12 @@ func update(dt: float) -> void:
 		spawned = 0
 		sim.spawn_t = 2.0
 		if fresh.big:
-			sim.events.append({"type": "banner", "text": "The last night", "sub": "Hold until dawn: the convoy comes at first light"})
-			sim.alert("bignight", "danger", "The last night", "Everything that is left is coming", null, 30.0)
+			if sim.seasons.is_last():
+				sim.events.append({"type": "banner", "text": "The last night", "sub": "Hold until dawn: the convoy comes at first light"})
+				sim.alert("bignight", "danger", "The last night", "Everything that is left is coming", null, 30.0)
+			else:
+				sim.events.append({"type": "banner", "text": "The Big Night", "sub": "%s ends at dawn. Hold the wall." % String(sim.seasons.current().name)})
+				sim.alert("bignight", "danger", "The Big Night", "Everything the %s kept is coming" % String(sim.seasons.current().name).to_lower(), null, 30.0)
 	if not (dusk or sim.phase == "night") or night_day != sim.day:
 		return
 	var p := plan_for(night_day)
@@ -207,7 +236,7 @@ func update(dt: float) -> void:
 			sim.alert("runners", "warn", "Runners", "Fast ones, from the %s" % direction_name(at), at, 14.0)
 		if kind == Kinds.BRUTE:
 			break
-	var mean := SPREAD_S * AVG_GROUP / maxf(float(queue.size()), 1.0)
+	var mean: float = SPREAD_S * sim.seasons.night_scale() * AVG_GROUP / maxf(float(queue.size()), 1.0)
 	sim.spawn_t = mean * (0.6 + 0.8 * sim.rng.randf())
 
 

@@ -9,8 +9,8 @@ const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 ## The effects a card may use, and the words a card may put in braces.
-const VOCABULARY := ["stock", "morale", "wound", "sick", "weather", "blackout", "night_budget", "spawn_day", "wall_damage", "party", "chance", "tension", "say", "at_hour", "recruit"]
-const TOKENS := ["name", "pair", "section_name", "speaker", "lookout", "flavor", "day"]
+const VOCABULARY := ["stock", "morale", "wound", "sick", "weather", "blackout", "night_budget", "spawn_day", "wall_damage", "party", "chance", "tension", "say", "at_hour", "recruit", "reveal_place"]
+const TOKENS := ["name", "pair", "section_name", "speaker", "lookout", "flavor", "day", "place"]
 
 
 ## Morale that only writes down what it is asked to do.
@@ -90,7 +90,7 @@ func _alive_dead(sim) -> Array:
 func test_the_deck_is_well_formed() -> void:
 	var g := _noon()
 	var deck: Array = g.sim.storyteller.cards
-	check(deck.size() >= 13 and deck.size() <= 16, "about fourteen cards: %d" % deck.size())
+	check(deck.size() >= 13 and deck.size() <= 17, "about fourteen cards: %d" % deck.size())
 	var ids := {}
 	var kinds := {"boon": 0, "threat": 0, "choice": 0}
 	for c in deck:
@@ -165,8 +165,8 @@ func test_every_card_resolves_with_every_one_of_its_choices() -> void:
 	var deck: Array = probe.sim.storyteller.cards.duplicate(true)
 	probe.world.free()
 	for card in deck:
-		if card.id == "survivor_call":
-			continue    # needs a caller: see test_recruits.gd
+		if card.id == "survivor_call" or card.id == "place_call":
+			continue    # needs a caller (see test_recruits.gd) or the town board (see test_town.gd)
 		var count: int = maxi(card.choices.size(), 1)
 		for i in count:
 			var g := _noon(8, 9)
@@ -210,8 +210,8 @@ func test_every_card_can_be_drawn_on_some_day() -> void:
 			if not c.is_empty():
 				seen[c.id] = true
 	for c in deck:
-		if c.id == "survivor_call":
-			continue    # only recruits.gd puts it up
+		if c.id == "survivor_call" or c.id == "place_call":
+			continue    # only recruits.gd puts the first up, and the other needs the town board (the settlement game)
 		check(seen.has(c.id), "%s comes up in the draw" % c.id)
 	g.world.free()
 

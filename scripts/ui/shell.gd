@@ -324,7 +324,7 @@ func open_settings() -> Control:
 
 
 func open_new_game() -> Control:
-	return _open_screen(NewGameMenu.new(), "New game", "Choose the nights, the crew and the seed")
+	return _open_screen(NewGameMenu.new(), "New game", "Choose the nights, the crew, the length and the seed")
 
 
 ## The saves, to load one. `replaces_game` is true from the pause menu, where a load throws
@@ -438,11 +438,15 @@ func save_game() -> bool:
 
 
 ## A new run: the choice goes to the game, which reloads the scene with it. `crew` is how many people it begins
-## with (3 or 6; 0 is no choice, which is six).
-func start_game(difficulty: int, seed_value: int, crew: int = 0) -> void:
+## with (3 or 6; 0 is no choice, which is six). `campaign` is the long game of four seasons (round 10); Autumn's
+## thirty nights are asked for as they always were.
+func start_game(difficulty: int, seed_value: int, crew: int = 0, campaign: bool = false) -> void:
 	play("ui_confirm")
 	if main != null and main.has_method("start_run"):
-		main.start_run(difficulty, seed_value, crew)
+		if campaign:
+			main.start_run(difficulty, seed_value, crew, true)
+		else:
+			main.start_run(difficulty, seed_value, crew)
 
 
 ## Orientation Day, if the game has it yet.

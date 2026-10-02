@@ -142,7 +142,7 @@ func _garden(hours: float) -> void:
 		return
 	var hands: int = sim.jobs.working("garden").size()
 	if hands > 0:
-		sim.stock.food += GARDEN_FOOD_PER_HOUR * float(hands) * hours
+		sim.stock.food += GARDEN_FOOD_PER_HOUR * float(hands) * hours * sim.seasons.mult("garden")
 
 
 ## The day begins: rolls the day's weather (from the run's one random source) and,
@@ -150,15 +150,17 @@ func _garden(hours: float) -> void:
 ## greenhouse) and the rain barrels pay out. Called by update() once a day; public so tests can call it.
 func roll_dawn() -> void:
 	sources_day = sim.day
-	var rain: bool = sim.rng.randf() < RAIN_CHANCE
-	sim.weather = "rain" if rain else "clear"
+	var rain: bool = sim.rng.randf() < sim.seasons.rain_chance()
+	# a season with snow throws one more die, so that every other season's run is as it was
+	sim.weather = sim.seasons.weather_for(rain, sim.rng.randf()) if sim.seasons.snow_share() > 0.0 else ("rain" if rain else "clear")
 	if not sources_on or not _someone_home():
 		return
-	sim.stock.food += GARDEN_BASE + sim.build.bonus("garden_base")
+	sim.stock.food += GARDEN_BASE * sim.seasons.mult("garden") + sim.build.bonus("garden_base") + sim.build.bonus("orchard") * sim.seasons.mult("garden")
 	var water := BARREL_WATER_RAIN if rain else BARREL_WATER
-	sim.stock.water += water
+	sim.stock.water += water + sim.build.bonus("water_base") * (2.0 if rain else 1.0)
+	sim.stock.scrap += sim.build.bonus("scrap_base")
 	if rain:
-		sim.alert("rain", "info", "It rained in the night", "Barrels gave %d water" % roundi(water), _spot("water"), 10.0)
+		sim.alert("rain", "info", "It %s in the night" % ("snowed" if sim.weather == "snow" else "rained"), "Barrels gave %d water" % roundi(water), _spot("water"), 10.0)
 
 
 ## How much of `amount` (health points of repair wanted this step) the scrap pays
@@ -183,9 +185,9 @@ func repair_budget(amount: float) -> float:
 func days_left(kind: String) -> float:
 	var per_day := 0.0
 	if kind == "food":
-		per_day = FOOD_PER_DAY
+		per_day = FOOD_PER_DAY * sim.seasons.mult("food")
 	elif kind == "water":
-		per_day = WATER_PER_DAY
+		per_day = WATER_PER_DAY * sim.seasons.mult("water")
 	var crew := 0
 	for p in sim.people:
 		if not p.dead:
@@ -287,15 +289,17 @@ func _serve_meal() -> void:
 	for p in sim.people:
 		if p.dead or p.away != null:
 			continue
-		var food := _take("food", FOOD_PER_MEAL)
-		if food >= FOOD_PER_MEAL * FED_PART:
+		var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food")
+		var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water")
+		var food := _take("food", food_share)
+		if food >= food_share * FED_PART:
 			p.hunger_h = 0.0
-		if food < FOOD_PER_MEAL - EPS:
+		if food < food_share - EPS:
 			without.food += 1
-		var water := _take("water", WATER_PER_MEAL)
-		if water >= WATER_PER_MEAL * FED_PART:
+		var water := _take("water", water_share)
+		if water >= water_share * FED_PART:
 			p.thirst_h = 0.0
-		if water < WATER_PER_MEAL - EPS:
+		if water < water_share - EPS:
 			without.water += 1
 	var newly: Array = []
 	for kind in ["food", "water"]:

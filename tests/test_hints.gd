@@ -28,7 +28,7 @@ func test_the_tips_file_is_valid_and_every_tip_is_short_and_known() -> void:
 		var start: Dictionary = h.get("start", {})
 		check(table.has(String(start.get("cond", ""))), "%s: its trigger '%s' is a condition" % [id, start.get("cond", "")])
 		for name in h.get("anchor", []):
-			check(String(name) == "clock" or String(name) == "stores" or String(name).begins_with("stores.") or String(name) == "build", "%s: '%s' is a part of the HUD that is always there" % [id, name])
+			check(String(name) == "clock" or String(name) == "stores" or String(name).begins_with("stores.") or String(name) == "build" or String(name) == "town", "%s: '%s' is a part of the HUD that is always there" % [id, name])
 		check(not Prefs.DEFAULTS.flags.has("hint_%s" % id), "%s starts unseen" % id)
 
 

@@ -386,6 +386,19 @@
         }
       ],
       "bot": 0
+    },
+    {
+      "id": "place_call",
+      "kind": "boon",
+      "weight": 0.9,
+      "min_day": 3,
+      "max_day": 29,
+      "title": "Someone is hiding at {place}",
+      "text": "A weak signal on the emergency band, too short to answer: someone is hiding at {place}. They do not say how many, or for how long. It is on the town board now, if anyone is willing to go and look.",
+      "pick": ["place"],
+      "needs": {"town_tip": true},
+      "effects": [{"reveal_place": true}],
+      "result": "The place is on the town board."
     }
   ]
 }

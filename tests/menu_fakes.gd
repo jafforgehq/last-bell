@@ -37,8 +37,9 @@ class FakeMain:
 		sound = FakeSound.new()
 		add_child(sound)
 
-	func start_run(difficulty: int, seed_value: int, crew: int = 0) -> void:
-		calls.append(["start_run", difficulty, seed_value, crew])
+	func start_run(difficulty: int, seed_value: int, crew: int = 0, campaign: bool = false) -> void:
+		# (the campaign is written down only when it was asked for: the calls of the 30-night game read as they always did)
+		calls.append(["start_run", difficulty, seed_value, crew] + ([true] if campaign else []))
 
 	func load_run(path: String) -> bool:
 		calls.append(["load_run", path])

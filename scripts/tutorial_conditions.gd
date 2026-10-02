@@ -73,6 +73,9 @@ static func registry() -> Dictionary:
 			"breached": _breached,
 			"kind_alive": _kind_alive,
 			"can_build": _can_build,
+			"town_on": _town_on,
+			"season": _season,
+			"lot_open": _lot_open,
 			"all": _all,
 			"any": _any,
 			"not": _not,
@@ -403,6 +406,32 @@ static func _can_build(sim, p, _st) -> bool:
 		if String(plot.building) != "" or not plot.site.is_empty():
 			return false
 	return true
+
+
+## The game has a Town Board (round 8): a settlement game (a small start), where the scavenging page is the board. For the
+## tip about it, which comes once the first time the board could be opened.
+static func _town_on(sim, _p, _st) -> bool:
+	var town = sim.get("town")
+	return town != null and town.on
+
+
+## {"id": season id}: the game is a campaign (round 10) and it is that season ("winter", "spring", "summer"). For the tip
+## of each season, which comes once, when the player first sees it.
+static func _season(sim, p, _st) -> bool:
+	var seasons = sim.get("seasons")
+	return seasons != null and seasons.campaign and String(seasons.current().id) == String(p.get("id", ""))
+
+
+## The game has lots (round 9: a settlement game) and one of them could be claimed now: the day, the places cleared on the town
+## board and the scrap are there. For the tip about the streets round the school, which comes once, the first time it could be done.
+static func _lot_open(sim, _p, _st) -> bool:
+	var lots = sim.get("lots")
+	if lots == null or not lots.on:
+		return false
+	for l in lots.lots():
+		if String(lots.why_not_claim(String(l.id))) == "":
+			return true
+	return false
 
 
 # ------------------------------------------------------------- combinators --

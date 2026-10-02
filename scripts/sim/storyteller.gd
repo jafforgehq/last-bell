@@ -297,7 +297,8 @@ func card_named(id: String) -> Dictionary:
 ## The card the radio brings on `day` (or {}), by the rules above. It changes nothing: `remember`
 ## records a card as drawn.
 func draw(day: int) -> Dictionary:
-	if day < FIRST_DAY or day >= sim.scenario.total_days():
+	# the day in the season (the day itself in Autumn): each season has its own quiet first day and Big Night
+	if sim.seasons.season_day(day) < FIRST_DAY or day >= sim.scenario.total_days():
 		return {}
 	var rng := _draw_rng(day)
 	var today := rng.randf()
@@ -357,7 +358,8 @@ func _threat_streak() -> int:
 
 
 func _eligible(c: Dictionary, day: int, streak: int) -> bool:
-	if day < int(c.min_day) or day > int(c.max_day):
+	var season_day: int = sim.seasons.season_day(day)
+	if season_day < int(c.min_day) or season_day > int(c.max_day):
 		return false
 	if c.kind == "threat" and streak >= MAX_THREATS_IN_ROW:
 		return false
@@ -404,6 +406,9 @@ func _needs_ok(needs: Dictionary) -> bool:
 	if needs.has("people") and _well().size() < int(needs.people):
 		return false
 	if needs.get("wall", false) and _rot_candidates().is_empty():
+		return false
+	# a call about a place (the settlement game): there must be someone hiding where the board has not been told
+	if needs.get("town_tip", false) and (not sim.town.on or sim.town.tip_place() == ""):
 		return false
 	return true
 
@@ -665,6 +670,11 @@ func _context(card: Dictionary) -> Dictionary:
 					ctx["caller"] = String(def.name).split(" ")[0]
 					ctx["caller_role"] = String(def.get("role", "survivor")).to_lower()
 					ctx["caller_line"] = line if line != "" else "A voice comes through the static, thin and tired: someone alone, asking whether there is room behind the wall."
+			"place":
+				var tip: String = sim.town.tip_place() if sim.town.on else ""
+				if tip != "":
+					ctx["place_id"] = tip
+					ctx["place"] = String(sim.town.place(tip).get("name", tip))
 			"lookout":
 				# whoever is on the Lookout post (the first of them who is up), else only "the lookout"
 				var look = null
@@ -709,6 +719,8 @@ func _do(effect: Dictionary, ctx: Dictionary, out: Dictionary) -> void:
 				_fx_sick(v, ctx, out)
 			"weather":
 				_fx_weather(String(v), out)
+			"reveal_place":
+				_fx_reveal_place(ctx, out)
 			"blackout":
 				_fx_blackout(v, out)
 			"night_budget":
@@ -802,6 +814,14 @@ func _fx_sick(spec, ctx: Dictionary, out: Dictionary) -> void:
 		out.changes.append("%s is sick (works at %d%%)" % [p.first, roundi(SICK_PERF * 100.0)])
 
 
+func _fx_reveal_place(ctx: Dictionary, out: Dictionary) -> void:
+	var id := String(ctx.get("place_id", ""))
+	if id == "" or not sim.town.on:
+		return
+	sim.town.reveal(id)
+	out.changes.append("%s is on the town board" % String(ctx.get("place", id)))
+
+
 func _fx_weather(weather: String, out: Dictionary) -> void:
 	if not weather in ["fog", "rain", "clear"]:
 		return
@@ -840,7 +860,7 @@ func _fx_spawn(spec, ctx: Dictionary, out: Dictionary) -> void:
 		return
 	var count := int(spec.get("count", 1))
 	if spec.has("plus_day_div"):
-		count += floori(float(sim.day) / float(maxi(int(spec.plus_day_div), 1)))
+		count += floori(float(sim.seasons.effective_day(sim.day)) / float(maxi(int(spec.plus_day_div), 1)))
 	var inside := bool(spec.get("inside", false))
 	var seg = _section_for(String(spec.get("at", "north")), ctx, count)
 	var kind := String(spec.get("kind", "walker"))
@@ -1573,10 +1593,11 @@ func budget_mult(day: int) -> float:
 func look() -> Dictionary:
 	var fog := 0.0
 	if enabled and sim.weather == "fog":
-		fog = 1.0 if sim.phase != "day" else clampf(0.35 + 0.65 * (sim.hour - RADIO_HOUR) / (19.0 - RADIO_HOUR), 0.35, 1.0)
+		fog = 1.0 if sim.phase != "day" else clampf(0.35 + 0.65 * (sim.hour - RADIO_HOUR) / (sim.seasons.dusk_hour() - RADIO_HOUR), 0.35, 1.0)
 	return {
 		"fog": fog,
 		"rain": enabled and sim.weather == "rain",
+		"snow": enabled and sim.weather == "snow",
 		"blackout": enabled and String(blackout.get("state", "")) == "dark",
 	}
 

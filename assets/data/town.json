@@ -1,0 +1,464 @@
+{
+	"board": {"w": 100, "h": 70},
+	"home": [50, 35],
+	"places": [
+		{
+			"id": "houses",
+			"name": "Neighbourhood houses",
+			"kind": "houses",
+			"pos": [43, 29],
+			"blurb": "Doors shut, curtains drawn. Somebody has to go through the cupboards.",
+			"danger": 1,
+			"loot": {"food": [8, 14], "water": [10, 20]},
+			"extra": {"meds": [0.5, 1.5]},
+			"known": true,
+			"image": "res://assets/ui/sites/houses.png"
+		},
+		{
+			"id": "bakery",
+			"name": "Pell's bakery",
+			"kind": "bakery",
+			"pos": [57, 44],
+			"blurb": "The ovens went cold on the first morning. There are flour sacks in the front and sealed tins in the back.",
+			"danger": 1,
+			"loot": {"food": [8, 16]},
+			"extra": {"scrap": [0.3, 3]},
+			"known": true,
+			"outpost": {"yield": {"food": 2}, "cost": 20}
+		},
+		{
+			"id": "pharmacy",
+			"name": "The pharmacy",
+			"kind": "pharmacy",
+			"pos": [62, 36],
+			"blurb": "Boarded up the first week. The stock room might still be full.",
+			"danger": 2,
+			"loot": {"meds": [6, 11]},
+			"extra": {"food": [0.5, 4]},
+			"known": true,
+			"image": "res://assets/ui/sites/pharmacy.png"
+		},
+		{
+			"id": "hardware",
+			"name": "The hardware store",
+			"kind": "hardware",
+			"pos": [39, 42],
+			"blurb": "Shutter dented, ladder left out. Sheet steel, nails, and shells under the counter.",
+			"danger": 2,
+			"loot": {"scrap": [18, 34], "ammo": [70, 130]},
+			"extra": {},
+			"known": true,
+			"image": "res://assets/ui/sites/hardware.png"
+		},
+		{
+			"id": "church",
+			"name": "St. Aidan's church",
+			"kind": "church",
+			"pos": [50, 21],
+			"blurb": "The doors stand open and the pews are stacked with coats. Somebody has been keeping the candles lit.",
+			"danger": 1,
+			"loot": {"food": [3, 7], "water": [4, 9]},
+			"extra": {"meds": [0.4, 1.5]},
+			"known": true,
+			"survivor": true
+		},
+		{
+			"id": "fire_station",
+			"name": "The fire station",
+			"kind": "fire_station",
+			"pos": [33, 26],
+			"blurb": "Two bays, and one engine gone. The hose reels, the tank and the locker room are still there.",
+			"danger": 1,
+			"loot": {"scrap": [8, 16], "water": [6, 12]},
+			"extra": {"meds": [0.4, 2]}
+		},
+		{
+			"id": "clinic",
+			"name": "Eastgate clinic",
+			"kind": "clinic",
+			"pos": [68, 25],
+			"blurb": "Chairs in neat rows and every drawer pulled. The dispensary has a steel door, and someone behind it who has not opened it.",
+			"danger": 2,
+			"loot": {"meds": [5, 9]},
+			"extra": {"water": [0.5, 6], "scrap": [0.4, 3]},
+			"survivor": true,
+			"outpost": {"yield": {"meds": 0.8}, "cost": 50}
+		},
+		{
+			"id": "terraces",
+			"name": "Millbank terraces",
+			"kind": "houses",
+			"pos": [45, 56],
+			"blurb": "Forty narrow houses in a row, every kitchen the same. A cat lives in number nine and has views on visitors.",
+			"danger": 1,
+			"loot": {"food": [8, 14], "water": [10, 18]},
+			"extra": {"meds": [0.4, 1.5]}
+		},
+		{
+			"id": "library",
+			"name": "The public library",
+			"kind": "library",
+			"pos": [41, 14],
+			"blurb": "The reading room is dim and silent, which is how it always was. The staff kitchen is behind the desk.",
+			"danger": 0,
+			"loot": {"food": [2, 6], "water": [3, 8]},
+			"extra": {"meds": [0.3, 1.5]}
+		},
+		{
+			"id": "police",
+			"name": "The police station",
+			"kind": "police",
+			"pos": [69, 50],
+			"blurb": "The front doors are chained from the inside. The armoury is at the back, past the cells.",
+			"danger": 3,
+			"loot": {"ammo": [80, 130], "scrap": [10, 18]},
+			"extra": {"meds": [0.5, 2]},
+			"outpost": {"yield": {"ammo": 5}, "cost": 55}
+		},
+		{
+			"id": "gas_station",
+			"name": "The crossing fuel stop",
+			"kind": "gas_station",
+			"pos": [75, 39],
+			"blurb": "A forecourt by the level crossing. The barrier is still down, waiting for a train, and the kiosk shutter is half up.",
+			"danger": 2,
+			"loot": {"scrap": [10, 20], "food": [3, 7]},
+			"extra": {"water": [0.5, 4]}
+		},
+		{
+			"id": "garage",
+			"name": "Dunne's garage",
+			"kind": "garage",
+			"pos": [27, 46],
+			"blurb": "Two bays, a hoist, and tool cabinets bolted to the floor. The owner kept a shotgun under the till.",
+			"danger": 2,
+			"loot": {"scrap": [16, 28]},
+			"extra": {"ammo": [0.3, 25]},
+			"outpost": {"yield": {"scrap": 3}, "cost": 30}
+		},
+		{
+			"id": "supermarket",
+			"name": "The ring road supermarket",
+			"kind": "supermarket",
+			"pos": [64, 58],
+			"blurb": "Trolleys piled against the doors, and a car park full of the dead who came to shop. The back shelves were never emptied.",
+			"danger": 3,
+			"loot": {"food": [20, 34], "water": [14, 26]},
+			"extra": {"meds": [0.5, 2], "scrap": [0.3, 8]},
+			"nest": {"strength": 2}
+		},
+		{
+			"id": "scrapyard",
+			"name": "The scrapyard",
+			"kind": "scrapyard",
+			"pos": [77, 21],
+			"blurb": "A wrecker's yard: crushed cars, sheet metal, a crane that still has its hook. Nothing here is small.",
+			"danger": 3,
+			"loot": {"scrap": [35, 60]},
+			"extra": {"food": [0.3, 3]},
+			"nest": {"strength": 2},
+			"outpost": {"yield": {"scrap": 4}, "cost": 60},
+			"image": "res://assets/ui/sites/scrapyard.png"
+		},
+		{
+			"id": "radio_shop",
+			"name": "Ferris radio and TV",
+			"kind": "radio_shop",
+			"pos": [20, 27],
+			"blurb": "Rows of dead screens, and one aerial on the roof turned exactly the right way. Someone upstairs may still be listening.",
+			"danger": 1,
+			"loot": {"scrap": [12, 22]},
+			"extra": {"food": [0.4, 3]},
+			"survivor": true
+		},
+		{
+			"id": "truck_stop",
+			"name": "The north road truck stop",
+			"kind": "gas_station",
+			"pos": [58, 5],
+			"blurb": "A café, a shower block and a lorry park, the lorries nose to tail. The drivers' lockers run along the back wall.",
+			"danger": 2,
+			"loot": {"food": [8, 16], "water": [8, 18], "scrap": [10, 18]},
+			"extra": {"ammo": [0.3, 20]},
+			"nest": {"strength": 1}
+		},
+		{
+			"id": "farm_b",
+			"name": "Tern Hill farm",
+			"kind": "farm",
+			"pos": [30, 63],
+			"blurb": "A small hill farm with a root cellar and a hand pump. The gate says 'Stay out, I have a gun', and it is not clear who wrote it.",
+			"danger": 1,
+			"loot": {"food": [16, 30], "water": [8, 16]},
+			"extra": {"meds": [0.3, 1.2]},
+			"survivor": true,
+			"outpost": {"yield": {"food": 4, "water": 2}, "cost": 40}
+		},
+		{
+			"id": "water_works",
+			"name": "The water works",
+			"kind": "water_works",
+			"pos": [28, 6],
+			"blurb": "Settling tanks, pump halls, and a chemical store behind a mesh fence. The pumps still run, and nobody is sure what they are pumping.",
+			"danger": 2,
+			"loot": {"water": [16, 30], "scrap": [8, 16]},
+			"extra": {"meds": [0.3, 1.5]},
+			"nest": {"strength": 1},
+			"outpost": {"yield": {"water": 5}, "cost": 40}
+		},
+		{
+			"id": "school_annex",
+			"name": "The school annex",
+			"kind": "school_annex",
+			"pos": [14, 42],
+			"blurb": "A prefab block across the river: small chairs, a lunch hall, a nurse's cupboard. The yard fence has been chewed at the bottom.",
+			"danger": 2,
+			"loot": {"food": [6, 12], "water": [8, 14], "meds": [1, 3]},
+			"extra": {"scrap": [0.4, 4]},
+			"nest": {"strength": 2}
+		},
+		{
+			"id": "bus_depot",
+			"name": "The bus depot",
+			"kind": "bus_depot",
+			"pos": [90, 36],
+			"blurb": "Forty buses nose to tail, the windows steamed over from the inside. The canteen is at the back, past all of them.",
+			"danger": 3,
+			"loot": {"scrap": [22, 40], "food": [6, 12], "water": [6, 12]},
+			"extra": {"meds": [0.4, 2]},
+			"nest": {"strength": 3}
+		},
+		{
+			"id": "estate",
+			"name": "Larkfield estate",
+			"kind": "houses",
+			"pos": [90, 50],
+			"blurb": "A new estate of identical houses, half of them never lived in. The lived-in half has the cupboards, and its doors have been kicked in.",
+			"danger": 2,
+			"loot": {"food": [14, 24], "water": [12, 22]},
+			"extra": {"meds": [0.5, 2.5]}
+		},
+		{
+			"id": "warehouse",
+			"name": "The distribution warehouse",
+			"kind": "warehouse",
+			"pos": [89, 12],
+			"blurb": "A shed the size of a football pitch, pallets to the roof. Most of it is cardboard, and some of it is not.",
+			"danger": 2,
+			"loot": {"scrap": [28, 50], "food": [8, 18]},
+			"extra": {"water": [0.5, 8]}
+		},
+		{
+			"id": "bunker",
+			"name": "The civil defence bunker",
+			"kind": "bunker",
+			"pos": [10, 12],
+			"blurb": "A concrete door in a hillside, built for a war that was supposed to be different. The ventilation fans are still turning.",
+			"danger": 3,
+			"loot": {"ammo": [90, 140], "food": [14, 24], "water": [10, 18], "meds": [3, 7]},
+			"extra": {"scrap": [0.5, 10]},
+			"survivor": true
+		},
+		{
+			"id": "farm_a",
+			"name": "Hollis farm",
+			"kind": "farm",
+			"pos": [8, 56],
+			"blurb": "A dairy farm at the end of a long lane: grain in the store, a well that works, and a barn door chained from the outside.",
+			"danger": 2,
+			"loot": {"food": [22, 38], "water": [12, 22]},
+			"extra": {"scrap": [0.3, 6]},
+			"nest": {"strength": 1},
+			"outpost": {"yield": {"food": 5, "water": 3}, "cost": 50}
+		}
+	],
+	"roads": [
+		["home", "houses"], ["home", "pharmacy"], ["home", "hardware"],
+		["home", "church"], ["home", "bakery"], ["houses", "fire_station"],
+		["fire_station", "radio_shop"], ["radio_shop", "school_annex"], ["hardware", "garage"],
+		["garage", "school_annex"], ["school_annex", "farm_a"], ["farm_b", "farm_a"],
+		["bakery", "terraces"], ["terraces", "farm_b"], ["bakery", "supermarket"],
+		["supermarket", "police"], ["police", "estate"], ["pharmacy", "gas_station"],
+		["gas_station", "bus_depot"], ["bus_depot", "estate"], ["church", "clinic"],
+		["clinic", "scrapyard"], ["scrapyard", "warehouse"], ["church", "library"],
+		["library", "water_works"], ["water_works", "bunker"], ["church", "truck_stop"],
+		["truck_stop", "scrapyard"], ["bakery", "pharmacy"], ["houses", "church"]
+	],
+	"beats": [
+		{
+			"id": "cache_under_floor",
+			"text": "A loose floorboard in a back bedroom hid a cache of tinned food and a box of shells.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"loot_pct": 25}
+		},
+		{
+			"id": "dog_follows",
+			"text": "A thin brown dog fell in behind the party and growled at every corner before anyone reached it.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"morale": 3}
+		},
+		{
+			"id": "road_atlas",
+			"text": "A road atlas lay on the seat of an abandoned van, with four places circled in biro.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"reveal": "near"}
+		},
+		{
+			"id": "smoke_on_the_horizon",
+			"text": "Smoke stood on the horizon, and from the next rise the party could see which roofs it was coming from.",
+			"weight": 2,
+			"min_hours": 2,
+			"effects": {"reveal": "near"}
+		},
+		{
+			"id": "pharmacy_van",
+			"text": "A locked pharmacy van stood at the kerb with its keys in the ignition and its shelves untouched.",
+			"weight": 1,
+			"min_hours": 0,
+			"effects": {"loot_pct": 35}
+		},
+		{
+			"id": "woman_with_a_trolley",
+			"text": "A woman with a shopping trolley waved the party down a back lane and would take nothing for it.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"morale": 2}
+		},
+		{
+			"id": "warm_rain",
+			"text": "A warm rain came on, and the party filled every bottle it had under a broken gutter.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"loot_pct": 15}
+		},
+		{
+			"id": "tool_chest",
+			"text": "A tool chest in a car boot, still locked, held more than the shelves of the shop it was parked outside.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"loot_pct": 20}
+		},
+		{
+			"id": "church_bell",
+			"text": "A church bell rang once, a long way off, with nobody at the rope.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {}
+		},
+		{
+			"id": "crows_on_the_roof",
+			"text": "A whole roof of crows watched the party go by, and not one of them moved.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {}
+		},
+		{
+			"id": "chalk_arrows",
+			"text": "Someone had chalked arrows on the pavement, then crossed them out, then drawn more.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {}
+		},
+		{
+			"id": "wedding_dress",
+			"text": "A shop window still showed a wedding dress with the price on, new under its coat of dust.",
+			"weight": 1,
+			"min_hours": 0,
+			"effects": {}
+		},
+		{
+			"id": "quiet_street",
+			"text": "The street was so quiet that the party walked it in single file, listening to its own boots.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {}
+		},
+		{
+			"id": "one_long_note",
+			"text": "A radio in a shop window played one long note until the party was out of earshot.",
+			"weight": 1,
+			"min_hours": 2,
+			"effects": {}
+		},
+		{
+			"id": "dead_man_at_the_counter",
+			"text": "A shop still held tinned goods, and a dead man behind the counter who stood up when a tin fell.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"loot_pct": 15, "hurt": "scratch"}
+		},
+		{
+			"id": "roof_climb",
+			"text": "A climb to a roof cost the party an hour, but it showed three streets nobody had known about.",
+			"weight": 1,
+			"min_hours": 2,
+			"effects": {"delay_h": 1, "reveal": "near"}
+		},
+		{
+			"id": "bus_across_the_road",
+			"text": "A bus lay across the road with its doors open, and the way round took an hour.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"delay_h": 1}
+		},
+		{
+			"id": "picked_clean",
+			"text": "Someone had been there first: the shelves were bare and the dust on the floor was all disturbed.",
+			"weight": 3,
+			"min_hours": 0,
+			"effects": {"loot_pct": -30}
+		},
+		{
+			"id": "fire_damage",
+			"text": "A fire had gone through the back of the building, and most of what was left was ash.",
+			"weight": 1,
+			"min_hours": 0,
+			"effects": {"loot_pct": -40}
+		},
+		{
+			"id": "rotten_floor",
+			"text": "A rotten floor gave way under the last of the party, and the fall was longer than it looked.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"hurt": "scratch"}
+		},
+		{
+			"id": "under_the_car",
+			"text": "Something under a parked car caught a boot and would not let go until it had been hit.",
+			"weight": 1,
+			"min_hours": 2,
+			"effects": {"hurt": "bite"}
+		},
+		{
+			"id": "river_fog",
+			"text": "A fog came up off the river, and the party sat out two hours in a bus shelter.",
+			"weight": 2,
+			"min_hours": 2,
+			"effects": {"delay_h": 2}
+		},
+		{
+			"id": "school_bag",
+			"text": "The party found a school bag with a name on it and a packed lunch, and nobody spoke for the rest of the walk.",
+			"weight": 2,
+			"min_hours": 0,
+			"effects": {"morale": -3}
+		},
+		{
+			"id": "level_crossing",
+			"text": "At the level crossing a goods wagon shifted, and what came out of it took one of the party into the dark.",
+			"weight": 1,
+			"min_hours": 4,
+			"effects": {"lost": true, "morale": -4}
+		},
+		{
+			"id": "lit_window",
+			"text": "One of the party saw a lit window across the water and went to look, and the others waited until it was too dark to wait.",
+			"weight": 1,
+			"min_hours": 6,
+			"effects": {"lost": true, "morale": -5}
+		}
+	]
+}

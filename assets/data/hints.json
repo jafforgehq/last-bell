@@ -53,6 +53,41 @@
 			"start": {"cond": "kind_alive", "params": {"kind": "brute"}}
 		},
 		{
+			"id": "town",
+			"title": "The Town Board",
+			"text": "The pins are places on the road: a long trip means a night out. Scout to see more; clear a nest to quieten the nights.",
+			"anchor": ["town"],
+			"start": {"cond": "town_on"}
+		},
+		{
+			"id": "winter",
+			"title": "Winter",
+			"text": "Winter: the beds are frozen, the nights are long and the road takes longer. A greenhouse still gives food.",
+			"anchor": ["clock"],
+			"start": {"cond": "season", "params": {"id": "winter"}}
+		},
+		{
+			"id": "spring",
+			"title": "Spring",
+			"text": "Spring: the thaw. The beds wake up and the rain barrels fill, but the nights are bigger than they were.",
+			"anchor": ["clock"],
+			"start": {"cond": "season", "params": {"id": "spring"}}
+		},
+		{
+			"id": "summer",
+			"title": "Summer",
+			"text": "Summer: long days and short nights, and the water goes fast. The beds give the most and the roads are quick.",
+			"anchor": ["clock"],
+			"start": {"cond": "season", "params": {"id": "summer"}}
+		},
+		{
+			"id": "lots",
+			"title": "The streets",
+			"text": "The streets round the school can be claimed on the Build screen (N): shut them with walls and the dead stay out of what you build there.",
+			"anchor": ["build"],
+			"start": {"cond": "lot_open"}
+		},
+		{
 			"id": "build",
 			"title": "Time to build",
 			"text": "The crew can build now. Press N for the plots: a salvage bench pays for itself.",

@@ -453,10 +453,14 @@ class Reader:
 static func apply(sim, data: Dictionary) -> bool:
 	# a small start's people are not the roster's: the saved ones are made first (and given back if the save is no good)
 	var before: Array = sim.recruits.prepare_load(data) if sim.get("recruits") != null else []
+	# the walls built at the lots' mouths are made before the wall sections are read (they are found by id)
+	var walls: Dictionary = sim.lots.prepare_load(data) if sim.get("lots") != null else {}
 	var plan = _parse(sim, data)
 	if plan == null:
 		if not before.is_empty():
 			sim.people = before
+		if sim.get("lots") != null:
+			sim.lots.restore(walls)
 		return false
 	_commit(sim, plan)
 	return true

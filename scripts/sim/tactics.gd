@@ -72,10 +72,15 @@ func start() -> void:
 	_t = 0.0
 
 
+## The hour the lookout gives the forecast: two hours before dusk (17:00 in Autumn).
+func forecast_hour() -> float:
+	return sim.seasons.dusk_hour() - 2.0
+
+
 func update(dt: float) -> void:
 	if lure_id >= 0 and sim.clock_min >= lure_until:
 		lure_id = -1
-	if sim.phase == "day" and sim.hour >= FORECAST_HOUR and forecast_day != sim.day:
+	if sim.phase == "day" and sim.hour >= forecast_hour() and forecast_day != sim.day:
 		forecast_day = sim.day
 		_tell_the_forecast()
 	_t -= dt
@@ -316,7 +321,7 @@ func _tell_the_forecast() -> void:
 	elif bool(f.runners):
 		text += ", with runners"
 	if bool(f.big):
-		text = "The last night: about %d, from everywhere" % int(f.total)
+		text = "%s: about %d, from everywhere" % ["The last night" if sim.seasons.is_last() else "The Big Night", int(f.total)]
 	sim.events.append({"type": "banner", "text": "%s reports" % String(who.first), "sub": text})
 	sim.alert("forecast", "info", "Tonight's forecast", text, null, 60.0)
 
