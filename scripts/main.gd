@@ -24,6 +24,7 @@ const Snow := preload("res://scripts/render/snow.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
 const StreetAir := preload("res://scripts/audio/street_air.gd")
+const Music := preload("res://scripts/audio/music.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
@@ -60,6 +61,8 @@ var fx
 var lighting
 var hud
 var sound
+## The music (scripts/audio/music.gd): the loops that cross-fade with the hour, the dead and the title screen.
+var music
 var camera: Camera2D
 var entities: Node2D
 var corpses: Node2D
@@ -380,6 +383,10 @@ func _ready() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	music = Music.new()
+	music.name = "Music"
+	add_child(music)
+	music.setup()
 	street_air = StreetAir.new()
 	street_air.name = "StreetAir"
 	world.add_child(street_air)
@@ -1259,6 +1266,7 @@ func _process(delta: float) -> void:
 			if (z.state == "attack" or z.state == "approach") and Vector2(z.x, z.y).distance_to(cam_center) < 30.0:
 				near += 1
 		sound.set_ambience(lighting.dark, minf(1.0, near / 14.0), 0.1)
+		music.follow(not title_mode and hud.game_over == null, raid_open(), lighting.dark, minf(1.0, near / 14.0), 0.1)
 	if shot_path != "":
 		frame_count += 1
 		if frame_count == 50:

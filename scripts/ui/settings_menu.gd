@@ -1,4 +1,4 @@
-## Settings: four volumes (master, effects, ambience, interface), the size of the interface
+## Settings: five volumes (master, effects, ambience, music, interface), the size of the interface
 ## (80% to 150%), hints, reduce motion and fullscreen (not on the web). Every change applies
 ## at once and is kept at once (`Prefs`, scripts/prefs.gd); the game reads them again when it
 ## starts. Used from the title and from the pause menu.
@@ -8,7 +8,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 
 ## The volume rows: [pref key, what the player reads, the audio bus].
-const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["ambience", "Ambience", "Ambience"], ["ui", "Interface", "UI"]]
+const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["ambience", "Ambience", "Ambience"], ["music", "Music", "Music"], ["ui", "Interface", "UI"]]
 const SCALE_MIN := 0.8
 const SCALE_MAX := 1.5
 const SCALE_STEP := 0.1
@@ -84,7 +84,7 @@ func default_focus() -> Control:
 
 
 func _layout() -> void:
-	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 5)
+	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 2)
 	super._layout()
 
 

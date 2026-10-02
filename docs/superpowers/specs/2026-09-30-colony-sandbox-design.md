@@ -336,7 +336,7 @@ The user played rounds 7 to 10 and said the game was too complex (too many build
 - **Balance and feel:** infection, scavenging and the wave curve are where a run can feel unfair or dull. The harness and difficulty levels are the safety valves; early playtests matter.
 - **Art consistency:** new art is limited to tints, scales, plates and a few icons in version 1; decide later between extending the drawing code and commissioning an artist for dedicated zombie art.
 - **Rights:** before any paid release, list every sound, font and image with its licence or origin and replace anything unclear. Check that the name "Last Bell" is free to use on Steam and in trademark databases.
-- **Music:** none exists; decide between a composer and licensed tracks before release.
+- **Music:** a placeholder score exists since 2026-10-02 (`tools/make_music.py` writes four loops from arithmetic: title, day, night, danger; `scripts/audio/music.gd` cross-fades them by the hour, the dead at the wall, a played trip and the title; a Music slider is in Settings). It is meant to be replaced: decide between a composer and licensed tracks before release.
 - **Steam and platform work** (Steamworks, achievements, cloud saves, controller and Steam Deck support, store page assets): research current requirements and fees before round 4.
 
 ---
@@ -372,7 +372,7 @@ The 2D game on `main` is about 4,100 lines of GDScript in Godot 4.7.
 | Drawing | `scripts/render/*`, `scripts/world.gd` | Sprites in draw order, PointLight2D lighting, fire, effects. Art is baked PNGs in `assets/`, made by code from the original web prototype. |
 | HUD | `scripts/ui/hud.gd` (1,031 lines) | Stores panel, portrait cards, clock, alerts, gizmos (draft, post, repair, focus), speed controls, help. |
 | Data | `assets/data/map.json` | Map 84×64 tiles, terrain, solid grids, 376 objects, wall sections, lights, rooms (hall, gym, bunks, infirmary, kitchen), spawn points, six people with skills, posts and jobs. |
-| Sound | `scripts/audio/sound.gd`, `assets/audio` | One-shots and ambience loops. No music. |
+| Sound | `scripts/audio/sound.gd`, `scripts/audio/music.gd`, `assets/audio` | One-shots, ambience loops and a generated placeholder score. |
 
 **Strong:** readable art and lighting, six named people with faces and roles, the bell, day and night rhythm, walls that take damage and are repaired.
 
