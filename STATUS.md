@@ -7,10 +7,10 @@
 
 | Thing | State |
 | --- | --- |
-| Game | Rounds 0 to 14 are built. **Nobody has played rounds 11 to 14 by hand** (tests, screenshots and the bot only). You played up to about round 10. |
-| Git | Everything, including the audio work of 2026-10-02 (section 4), is committed and pushed to `main` on GitHub. |
-| Tests | **1996 passed, 0 failed** on the final tree (1977 before the audio work, plus 19 new). |
-| itch (live) | The 2026-10-02 upload is rounds 5 to 14 **without the audio fix, so the browser build is silent**. A re-upload with the audio work is waiting for your go-ahead (recipe in section 7). |
+| Game | Rounds 0 to 15 are built. **Nobody has played rounds 11 to 15 by hand** (tests, screenshots, a film of a trip and the bot only). You played up to about round 10. |
+| Git | `main` has two local commits that are **not pushed**: `758963b` (the audio fix that works) and `201bd8c` (round 15). GitHub's `main` is at `05e1113` (rounds 7 to 14 and the first, failed, audio fix). |
+| Tests | **2171 passed, 0 failed** on `201bd8c`. |
+| itch (live) | Upload id 19525431 (2026-10-02 21:33): rounds 5 to 14 **with the working audio fix**, the louder sounds and the music. Round 15 is **not** on itch yet. |
 | Biggest open risk | Balance and feel of rounds 11 to 14 for a human; the settlement game is harder than at round 10 (section 6). |
 
 **Folders (home directory):** `/Users/jaf_lab/last-bell` is **the game** (the only Godot project, the only git repo, the one on GitHub and the one you open in Godot). `/Users/jaf_lab/last-bell-prototype-recovered` is only the old web prototype's JavaScript source, rebuilt on 2026-10-01 from an old chat transcript (`README.txt` inside says so); nothing in the game uses it, and it is outside git. Keep it (it is the generator of most of the art and sounds), but never work in it.
@@ -40,11 +40,12 @@ Keys: **G** Town Board, **N** Build screen, **J** Duty roster, **M** workshop, *
 | 12 | **Living streets** (your "dead city" feedback): stragglers hunt by day; street dressing | `scripts/sim/streets.gd`, `scripts/render/dressing_node.gd` |
 | 13 | **Vehicles and fuel**: cars, pickups, vans, buses; a city across the river reachable only by vehicle | `scripts/sim/vehicles.gd`, `assets/data/vehicles.json`, town 160x70 |
 | 14 | **Take control**: play a trip yourself on a generated map of the place | `scripts/raid/` (see the file map) |
-| audio | Music + web-audio fix + sound levels (2026-10-02, **uncommitted**) | section 4 |
+| audio | Music + web-audio fix + sound levels (2026-10-02, committed, on itch) | section 4 |
+| 15 | **The yard in motion**: drag-box select; trips by car are real (walk to the doors, doors open, car out through a sliding vehicle gate and off the map, back, U-turn and reverse into the bay, doors open, people out); a motor pool inside the base; car doors cut from the car pictures and car sounds; each building has its own home and the Build screen is a list of buildings | plan `docs/superpowers/plans/2026-10-02-round-15.md`; `scripts/sim/convoy.gd`, `scripts/render/vehicle_actor.gd`, `gate_node.gd`, `assets/data/motor_pool.json`, `tools/make_motor_pool.py` + `check_motor_pool.py`, `tools/make_car_doors.py`, `scripts/sim/build.gd` homes |
 
 Not built yet (from the roadmap, `docs/superpowers/roadmap.md`, which is only current to round 10): blueprints and research, traders and raiders as events, power and fuel for the base (the fuel in round 13 is for cars), defence variety (traps, lures), the convoy ending where only some leave, a dog.
 
-## 4. The audio session (2026-10-02), uncommitted
+## 4. The audio session (2026-10-02), committed and on itch
 
 You noticed there was no music and no sound effects. Findings and what was done:
 
@@ -55,22 +56,26 @@ You noticed there was no music and no sound effects. Findings and what was done:
 5. Tests: `tests/test_music.gd` (15), `tests/test_sounds_data.gd` (6: every sound the code plays exists, every gun has a shot, the layout file, level guard).
 6. **It is a placeholder score.** It will not sound like a composed soundtrack. Before release: a composer or licensed tracks (spec section 8).
 
-Verification status when this file was written:
-- **Full test suite on the final tree: 1996 passed, 0 failed.**
-- **Web probe on the fixed export: not confirmed when this was pushed.** The first probe (on the unfixed build) proved the silence and the cause; the fix was checked by emulation (patching the engine's add position made every source reach the speakers, destination peak 0.019). A re-check on the real fixed export was still running. Treat the fix as *probable, not proven* until it is re-measured (items: bus route reaches the destination, destination peak > 0 on the title and in play, Master / Music sliders and mute work, bell and shots reach the destination).
-- Nobody has *listened* to the music or the new levels: the levels are numbers in `tools/level_sounds.py` (`LEVELS`), easy to nudge.
-
-To finish the audio work: re-run the web probe on a fresh export, listen, then re-upload to itch (section 7).
+Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a fake sink) passed all five items: the engine builds the buses in order, every one of 379 sources reaches the speakers, the title (music) peaks 0.20 to 0.27 and play 0.14 to 0.65, Master 0 / HUD mute / Music 0 silence what they should, music loops start at 0, the title-to-run crossfade has no dead cut (minimum 0.164), and the bell, shots and groans arrive. **Nobody has *listened*** to the music or the new levels: the levels are numbers in `tools/level_sounds.py` (`LEVELS`), easy to nudge. Not verified: autoplay after a cold page load, the 40 s danger track.
 
 ## 5. What is verified and what is not
 
 - **Verified by machines:** the full test suite (rules, UI layout, saves, data), the balance harness (below), screenshots of the screens, a Web Audio probe of the web build (silent before the fix).
-- **Never played by a human:** rounds 11 to 14 (the cut yard, the streets by day, cars and fuel, Take control), the Campaign's later seasons, outposts and garrisons, the new music and levels.
+- **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the box select, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
 - **Process slips on record:** two `rm` calls on scratch files (the rule is "delete only via `~/.Trash`"); an earlier `pkill -f Godot` killed your open editor (never again).
+
+### Known issues of round 15 (found by review and the film, not fixed)
+
+- **The bus's U-turn is a pirouette:** the 8-tile bus swings on the sedan-sized route, its tail pokes over the walkway at the gate and it lies across the apron for a moment. Rare (the bus is the last vehicle you find).
+- **Three bays, four vehicles:** with all four home, the fourth shares a bay and overlaps.
+- **Cars drive through the walls** you can build across the north street's two ends (the lane is at the street's middle): a walled lot does not stop a trip.
+- **No headlights** (only brake lights), cars come home only by day, a vehicle found on a trip appears in its bay without driving in, and the van's open left door can touch a neighbouring sedan.
+- **`--town-send` staging** needs the hour between 06:30 and 10:00 (`--hour=8`); at other hours the party is refused silently.
 
 ### First things to try by hand
 
-1. Start a small-crew game; look at the yard (is it calmer? are 7 plots enough?).
+1. Start a small-crew game; look at the yard (the motor pool and the gate), drag a box round your people and send them with a right-click, press **N** (the Build screen is a list of buildings now).
+1b. Send a trip **by car** early in the morning (06:30 to 10:00) and watch it from the doors to the unloading, at speed 1 and 3.
 2. Press **G**: scout, loot, clear. Send a trip with **Take control** (the button on the place's card): move the squad, search a container, help a downed friend, retreat.
 3. Send a trip **by car** (the Ride row on the board); watch the fuel line in the HUD; find fuel.
 4. Watch the streets by day: do a few of the dead wander, and does shooting near them bring them?
@@ -83,7 +88,8 @@ Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standa
 
 - **Settlement game** (`--crew=3`, informed bot, 8 games per seed): **2/8 and 3/8 wins on seeds 1 and 9** (median day 26.5 on both) with the cars on; 2/8 and 2/8 with no cars; 3/8 and 3/8 with no streets. Before the streets (round 10) it was about 7/16. The streets made it a bit harder; one cause was found and fixed (day gunfire drew every straggler to the walls).
 - The bot's first use of cars (3 to 4 people by van to far places) lost games on days 16 to 21; sending 2 and only from 3 hours of road fixed it. That was the bot's policy, not the cars.
-- **Classic start** (six people) is unchanged from before round 7 with the default policy (checked against `HEAD` copies).
+- **Round 15 (final tree, same bot, 8 games per seed):** settlement game seeds 1 and 9: **2/8 and 2/8 wins, medians 23.5 and 25** against 2/8 and 3/8, medians 26.5 and 26.5 before round 15: a little lower, within the noise of 8 games (the car trips cost about 71 game minutes each, the building homes moved the salvage bench). Classic start, informed, seed 9: 4/8 against 5/8, median 30 both.
+- **Classic start** (six people): identical to before round 7 up to round 14. **Round 15's map edits (the vehicle gate, the apron, the cleared street lane and the removed wreck) changed it a little**: default policy, 8 games seed 1, median day 17 -> 20.5 (0 wins both). An ablation with the old `map.json` and `dressing.json` restores the old numbers exactly, so it is the map, not the rules. It is easier, not harder; nobody plays the classic start to win, but the tutorial and the Full crew choice use it.
 - **Campaign:** on Standard the bot dies in Autumn; on Story it finishes in 3 of 8. It needs a human's judgement.
 - **Known balance gaps:** outposts are usually overrun in the harness (the policy never posts a garrison); the Campaign is not tuned for people.
 
