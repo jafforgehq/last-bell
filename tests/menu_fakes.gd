@@ -37,8 +37,8 @@ class FakeMain:
 		sound = FakeSound.new()
 		add_child(sound)
 
-	func start_run(difficulty: int, seed_value: int) -> void:
-		calls.append(["start_run", difficulty, seed_value])
+	func start_run(difficulty: int, seed_value: int, crew: int = 0) -> void:
+		calls.append(["start_run", difficulty, seed_value, crew])
 
 	func load_run(path: String) -> bool:
 		calls.append(["load_run", path])

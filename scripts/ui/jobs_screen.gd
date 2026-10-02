@@ -338,7 +338,7 @@ func _build_row(p) -> Control:
 	who.custom_minimum_size.x = CELL_WHO
 	who.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var pic := TextureRect.new()
-	pic.texture = GD.tex(hud.data.portraits[p.id])
+	pic.texture = hud.portrait_of(p)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	pic.custom_minimum_size = Vector2(PORTRAIT_PX, PORTRAIT_PX)
@@ -830,7 +830,7 @@ func _refresh_station(st: Dictionary) -> void:
 		var pip: Panel = c.pips[i]
 		var who = crew[i] if i < crew.size() else null
 		pip.set_meta("who", String(who.id) if who != null else "")
-		pip.get_meta("pic").texture = GD.tex(hud.data.portraits[who.id]) if who != null else null
+		pip.get_meta("pic").texture = hud.portrait_of(who) if who != null else null
 		pip.add_theme_stylebox_override("panel", _seat_style(who != null))
 		pip.tooltip_text = String(who.name) if who != null else "An empty seat"
 	for p in crew:

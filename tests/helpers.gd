@@ -12,12 +12,13 @@ const FxNull := preload("res://scripts/sim/fx_null.gd")
 ## difficulty (0 story, 1 standard, 2 brutal). The storyteller is off (no card at noon, no
 ## assembly at dawn), so that a test of something else is not changed by the radio's news: the
 ## tests of the storyteller, and the harness, switch it on (`sim.storyteller.enabled = true`).
-static func make(seed_value: int = 1, difficulty: int = 1) -> Dictionary:
+static func make(seed_value: int = 1, difficulty: int = 1, crew: int = 6) -> Dictionary:
 	var data := GD.load_all()
 	var world := World.new()
 	Engine.get_main_loop().root.add_child(world)
 	world.build(data)
 	var sim := Sim.new(data, world, FxNull.new())
+	sim.crew_start = crew    # 6: the classic start; 3: a small start (recruits come over the radio)
 	sim.start_run(difficulty, seed_value)
 	sim.storyteller.enabled = false
 	return {"sim": sim, "world": world, "data": data}

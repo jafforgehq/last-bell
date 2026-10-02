@@ -1,0 +1,622 @@
+{
+  "version": 1,
+  "authored": {
+    "ana": {"line": "County hospital, third floor. I am a nurse, I have a bag of supplies and nowhere left to put them. I heard your signal this morning. Is there a bed behind that wall?"},
+    "walt": {"line": "Retired police, twenty-six years on the force. I still have my service pistol and a hip that forecasts rain. I can hold a line, if you have a line to hold."},
+    "hector": {"line": "I kept the keys to every door in this district, and the ones I could not open I took off the hinges. I am quiet, I am good with a wrench, and I am very tired of sleeping in the boiler room."}
+  },
+  "first": ["Mia", "Tomas", "Nia", "Owen", "Lena", "Karim", "June", "Pavel", "Abel", "Priya", "Soren", "Imani", "Jonas", "Marisol", "Dmitri", "Hana", "Eli", "Rosa", "Kofi", "Annika", "Luis", "Greta", "Idris", "Wren", "Tobias", "Yara", "Cal", "Noor", "Stan", "Beth", "Joaquin", "Mei", "Gus", "Tamsin", "Raul", "Femi", "Olga", "Declan", "Sunita", "Matteo"],
+  "last": ["Hale", "Ortiz", "Brandt", "Nakamura", "Costa", "Adeyemi", "Fisher", "Novak", "Lindqvist", "Okonkwo", "Patel", "Moreau", "Kowalski", "Haddad", "Whitfield", "Sandoval", "Petrov", "Abara", "Nguyen", "Tran", "Mbeki", "Larsen", "Vasquez", "Greer", "Ashby", "Duarte", "Yoon", "Cardoso", "Rahimi", "Thornton"],
+  "roles": [
+    {
+      "role": "Nurse",
+      "weight": 1.0,
+      "weapon": "pistol",
+      "skills": {
+        "Shooting": [1, 4],
+        "Melee": [0, 3],
+        "Building": [1, 3],
+        "Medicine": [5, 8],
+        "Leading": [1, 4]
+      },
+      "traits_bias": ["triage", "optimist", "steady", "quick_learner"],
+      "line": "Is anyone there? I'm a nurse. I've been dressing wounds in a stairwell for six days with the last of a first-aid kit, and I'd rather do it where somebody can hold the flashlight.",
+      "line_in": "Nurse. Where do you keep your supplies? I'll start there."
+    },
+    {
+      "role": "Mechanic",
+      "weight": 1.0,
+      "weapon": "rifle",
+      "skills": {
+        "Shooting": [2, 5],
+        "Melee": [2, 5],
+        "Building": [5, 8],
+        "Medicine": [0, 2],
+        "Leading": [0, 3]
+      },
+      "traits_bias": ["tinkerer", "tough", "steady_hands"],
+      "line": "Can you hear me? I fix engines, and I've been fixing the same truck for three days while something knocked on the door. Tell me you've got a garage and I'll be useful.",
+      "line_in": "Got grease on my hands and a rifle on my back. Point me at whatever's broken."
+    },
+    {
+      "role": "Farmer",
+      "weight": 1.0,
+      "weapon": "shotgun",
+      "skills": {
+        "Shooting": [3, 6],
+        "Melee": [2, 5],
+        "Building": [3, 7],
+        "Medicine": [1, 3],
+        "Leading": [1, 3]
+      },
+      "traits_bias": ["tough", "steady", "optimist"],
+      "line": "Hello? I'm a farmer, two days' walk from you if the roads hold. I've got seed in my pockets and a shotgun I'd rather not use, and I'm tired of eating out of cans.",
+      "line_in": "I brought seed. Hope you've got dirt that isn't concrete."
+    },
+    {
+      "role": "Teacher",
+      "weight": 1.0,
+      "weapon": "pike",
+      "skills": {
+        "Shooting": [0, 3],
+        "Melee": [0, 3],
+        "Building": [1, 3],
+        "Medicine": [1, 4],
+        "Leading": [4, 7]
+      },
+      "traits_bias": ["steady", "loyal", "quick_learner", "optimist"],
+      "line": "Please answer. I'm a teacher, and I've spent four days keeping a classroom door shut with a bookcase. I can stand a post, I've got a sharpened broom handle, and I can't do this alone much longer.",
+      "line_in": "Sorry I'm late. I got held up. Where would you like me?"
+    },
+    {
+      "role": "Cook",
+      "weight": 0.9,
+      "weapon": "pike",
+      "skills": {
+        "Shooting": [0, 3],
+        "Melee": [3, 7],
+        "Building": [1, 4],
+        "Medicine": [1, 3],
+        "Leading": [2, 5]
+      },
+      "traits_bias": ["optimist", "loyal", "tough"],
+      "line": "Anyone? I cook for a living, and I have been feeding myself on crackers for a week. If you have a stove and a few cans, I promise I can make them last.",
+      "line_in": "I smell soup. Tell me that's soup."
+    },
+    {
+      "role": "Paramedic",
+      "weight": 0.9,
+      "weapon": "pistol",
+      "skills": {
+        "Shooting": [1, 4],
+        "Melee": [1, 4],
+        "Building": [1, 3],
+        "Medicine": [4, 7],
+        "Leading": [2, 5]
+      },
+      "traits_bias": ["triage", "steady", "tough"],
+      "line": "Radio check, anybody? I'm a paramedic and I'm out of ambulance. I've got a bag with a few good things left in it, and I can keep people breathing if you can keep them safe.",
+      "line_in": "Where do you want the bag? I'll triage as I walk."
+    },
+    {
+      "role": "Hunter",
+      "weight": 0.8,
+      "weapon": "hunting",
+      "skills": {
+        "Shooting": [5, 8],
+        "Melee": [2, 5],
+        "Building": [1, 4],
+        "Medicine": [0, 3],
+        "Leading": [0, 3]
+      },
+      "traits_bias": ["sharp_eyed", "steady_hands", "steady"],
+      "line": "Hello, the school? I hunt for a living, or I did. I've got a rifle, two boxes of shells and a good eye, and I can watch a treeline all night if there's a roof to sit under.",
+      "line_in": "Show me where the best view is. I'll take the first night."
+    },
+    {
+      "role": "Student",
+      "weight": 0.9,
+      "weapon": "pistol",
+      "skills": {
+        "Shooting": [1, 5],
+        "Melee": [1, 4],
+        "Building": [1, 5],
+        "Medicine": [0, 3],
+        "Leading": [0, 2]
+      },
+      "traits_bias": ["quick_learner", "nervous", "optimist"],
+      "line": "Hi, sorry, I'm a student and I don't know who else to call. I've been in a library since the first night, I'm good at being quiet, and I don't want to be alone anymore.",
+      "line_in": "I made it. Is it okay that I'm here?"
+    },
+    {
+      "role": "Electrician",
+      "weight": 0.9,
+      "weapon": "rifle",
+      "skills": {
+        "Shooting": [1, 4],
+        "Melee": [1, 3],
+        "Building": [4, 7],
+        "Medicine": [0, 2],
+        "Leading": [1, 3]
+      },
+      "traits_bias": ["tinkerer", "steady_hands", "quick_learner"],
+      "line": "Can you hear me? I'm an electrician. I can bring a dead panel back to life, and if you've got a generator I'd like to see it, because I can make it do more than hum.",
+      "line_in": "Where's your breaker box? I like to start with the dark."
+    },
+    {
+      "role": "Shopkeeper",
+      "weight": 0.9,
+      "weapon": "shotgun",
+      "skills": {
+        "Shooting": [2, 5],
+        "Melee": [1, 4],
+        "Building": [1, 4],
+        "Medicine": [0, 3],
+        "Leading": [3, 7]
+      },
+      "traits_bias": ["loyal", "steady", "optimist"],
+      "line": "I kept a shop on a good street, and a shotgun under the counter for bad days. This counts as one. Have you got room for someone who knows how to count stock?",
+      "line_in": "I brought what I could carry. Anything you need counted?"
+    },
+    {
+      "role": "Bus driver",
+      "weight": 0.9,
+      "weapon": "pistol",
+      "skills": {
+        "Shooting": [1, 4],
+        "Melee": [2, 5],
+        "Building": [2, 5],
+        "Medicine": [0, 3],
+        "Leading": [2, 6]
+      },
+      "traits_bias": ["steady", "tough", "loyal"],
+      "line": "Hello, anyone? I'm a bus driver, and I've been parked behind a church for a week with a full tank and nowhere to take it. If you've got a gate that opens, I know every back road to it.",
+      "line_in": "End of the line, and I'm the only passenger."
+    },
+    {
+      "role": "Carpenter",
+      "weight": 1.0,
+      "weapon": "pike",
+      "skills": {
+        "Shooting": [1, 4],
+        "Melee": [2, 5],
+        "Building": [5, 8],
+        "Medicine": [0, 2],
+        "Leading": [1, 3]
+      },
+      "traits_bias": ["tinkerer", "tough", "steady_hands"],
+      "line": "Is this thing on? I'm a carpenter, and I've been holed up in a half-built house with a nail bag and a lot of opinions about walls. Let me show you what a proper joist can hold.",
+      "line_in": "Let's see your walls. I brought a hammer."
+    },
+    {
+      "role": "Night guard",
+      "weight": 0.8,
+      "weapon": "service",
+      "skills": {
+        "Shooting": [4, 7],
+        "Melee": [2, 5],
+        "Building": [1, 3],
+        "Medicine": [0, 3],
+        "Leading": [2, 5]
+      },
+      "traits_bias": ["sharp_eyed", "steady", "tough"],
+      "line": "Hello? I was the night guard at a warehouse, and the night got a lot longer than my shift. I have an old rifle and plenty of practice standing still while something moves.",
+      "line_in": "Just point me at a wall and a clock. I'll do the rest."
+    },
+    {
+      "role": "Pharmacist",
+      "weight": 0.8,
+      "weapon": "pistol",
+      "skills": {
+        "Shooting": [0, 3],
+        "Melee": [0, 3],
+        "Building": [0, 3],
+        "Medicine": [4, 7],
+        "Leading": [1, 4]
+      },
+      "traits_bias": ["triage", "steady_hands", "quick_learner"],
+      "line": "Anyone there? I'm a pharmacist, and I walked out with every bottle I could carry before the shop went dark. I'd like to trade my pills for a roof and a wall, if you'll have me.",
+      "line_in": "I labelled everything in this bag. Please don't tip it out."
+    }
+  ],
+  "looks": {
+    "skin": ["#f0cbab", "#e0b393", "#d4a07c", "#c69877", "#b07e58", "#a6734e", "#8d6140", "#7a4e36", "#5b3a28", "#523526"],
+    "hair": [
+      {
+        "style": "short",
+        "colors": ["#1f1a17", "#2a211c", "#3d2a1e", "#5a3d28", "#7a5836"]
+      },
+      {
+        "style": "short",
+        "colors": ["#a8864f", "#c9b27a", "#a19b92", "#d2cdc3", "#8a6a4a"]
+      },
+      {
+        "style": "buzz",
+        "colors": ["#1f1a17", "#3d2a1e", "#5a4a3a", "#8a8479"]
+      },
+      {
+        "style": "curly",
+        "colors": ["#171210", "#2b1c16", "#4a3022", "#8a5a38", "#a19b92"]
+      },
+      {
+        "style": "twists",
+        "colors": ["#171210", "#2b1c16", "#4a3022"]
+      },
+      {
+        "style": "messy",
+        "colors": ["#2a211c", "#5a3d28", "#7a5836", "#b08a54", "#7a3a24"]
+      },
+      {
+        "style": "ponytail",
+        "colors": ["#2b1c16", "#4a3022", "#7a5836", "#a8864f", "#7a3a24"]
+      },
+      {
+        "style": "long",
+        "colors": ["#171210", "#2b1c16", "#5a3d28", "#a8864f", "#c9b27a", "#7a3a24"]
+      },
+      {
+        "style": "bald",
+        "colors": ["#2a211c", "#5a3d28"]
+      },
+      {
+        "style": "balding",
+        "colors": ["#4a3a2e", "#7a766c", "#a19b92"]
+      }
+    ],
+    "tops": [
+      {
+        "style": "tee",
+        "colors": ["#c8c0b0", "#8a8f94", "#6d7a4e", "#4a5a6a", "#7a6a58"]
+      },
+      {
+        "style": "tee",
+        "colors": ["#b5aa92", "#3b3534", "#a85a48", "#5a6a7a"]
+      },
+      {
+        "style": "shirt",
+        "colors": ["#6c7179", "#cfc9b8", "#5a7a8a", "#8a6a58"]
+      },
+      {
+        "style": "shirt",
+        "colors": ["#7a8a6a", "#9a8f78", "#8a8f94", "#4a5a6a"]
+      },
+      {
+        "style": "hoodie",
+        "colors": ["#5a626b", "#4a4f45", "#7a3a30", "#3a4a5e", "#6b5a48", "#4a6a5a"]
+      },
+      {
+        "style": "coverall",
+        "colors": ["#34465a", "#5a5040", "#6a7457", "#7a4a30"]
+      },
+      {
+        "style": "scrubs",
+        "colors": ["#3e8a85", "#4a7ab0", "#6a8a6a"]
+      },
+      {
+        "style": "uniform",
+        "colors": ["#2f3f5c", "#3a4a3a", "#4a3a30"]
+      }
+    ],
+    "outers": [
+      {
+        "style": "jacket",
+        "colors": ["#a7865a", "#4a6784", "#3a2c24", "#5a5a4a", "#6a4a3a", "#3a4a3a"]
+      },
+      {
+        "style": "jacket",
+        "colors": ["#5a6a7a", "#7a6a50", "#2f3a4a", "#6b5a48"]
+      },
+      {
+        "style": "cardigan",
+        "colors": ["#7b2e36", "#5a6a5a", "#7a6a5a", "#3a4a6a", "#8a7a6a"]
+      },
+      {
+        "style": "vest",
+        "colors": ["#5a4a3a", "#4a5a4a", "#6a6a5a", "#3a4a5a"]
+      },
+      {
+        "style": "jacket",
+        "colors": ["#4a4a52", "#6a5a4a", "#52604a", "#3a3a44"]
+      },
+      {
+        "style": "hivis",
+        "colors": ["#c8d23a", "#d89a3a"]
+      }
+    ],
+    "pants": ["#383843", "#34465a", "#3c4a3a", "#4a4a40", "#2e394a", "#3a3f47", "#5a5040", "#4a4034", "#2c2d31", "#6a6050"],
+    "shoes": ["#2b2521", "#2a2420", "#e2ded5", "#d9d3c6", "#4a4038", "#1f2a3a", "#5a4030"],
+    "extras": {
+      "glasses": 0.16,
+      "beard": 0.09,
+      "mustache": 0.07,
+      "bandolier": 0.04,
+      "patch": 0.04
+    }
+  },
+  "portraits": ["res://assets/portraits/gen_00.png", "res://assets/portraits/gen_01.png", "res://assets/portraits/gen_02.png", "res://assets/portraits/gen_03.png", "res://assets/portraits/gen_04.png", "res://assets/portraits/gen_05.png", "res://assets/portraits/gen_06.png", "res://assets/portraits/gen_07.png", "res://assets/portraits/gen_08.png", "res://assets/portraits/gen_09.png", "res://assets/portraits/gen_10.png", "res://assets/portraits/gen_11.png", "res://assets/portraits/gen_12.png", "res://assets/portraits/gen_13.png", "res://assets/portraits/gen_14.png", "res://assets/portraits/gen_15.png"],
+  "portrait_looks": [
+    {
+      "tint": "#2e3e46",
+      "look": {
+        "skin": "#8d6140",
+        "hair": "ponytail",
+        "hairColor": "#2b1c16",
+        "browColor": "#2b1c16",
+        "top": "#4a7ab0",
+        "topStyle": "scrubs",
+        "outer": "#5a6a5a",
+        "outerStyle": "cardigan",
+        "pants": "#4a7ab0",
+        "shoes": "#e2ded5",
+        "seed": 8101
+      }
+    },
+    {
+      "tint": "#44343a",
+      "look": {
+        "skin": "#f0cbab",
+        "hair": "short",
+        "hairColor": "#a8864f",
+        "browColor": "#7a5836",
+        "top": "#6c7179",
+        "topStyle": "shirt",
+        "tie": "#3a3f5c",
+        "outer": "#4a5a6a",
+        "outerStyle": "vest",
+        "pants": "#383843",
+        "shoes": "#2b2521",
+        "glasses": true,
+        "seed": 8102
+      }
+    },
+    {
+      "tint": "#3e3a2c",
+      "look": {
+        "skin": "#523526",
+        "hair": "buzz",
+        "hairColor": "#1f1a17",
+        "browColor": "#1f1a17",
+        "beard": "stubble",
+        "beardColor": "#1f1a17",
+        "top": "#c8c0b0",
+        "topStyle": "tee",
+        "outer": "#3a4a3a",
+        "outerStyle": "jacket",
+        "pants": "#383843",
+        "shoes": "#2a2420",
+        "seed": 8103
+      }
+    },
+    {
+      "tint": "#34304a",
+      "look": {
+        "skin": "#c69877",
+        "hair": "long",
+        "hairColor": "#5a3d28",
+        "browColor": "#4a3022",
+        "top": "#3a4a5e",
+        "topStyle": "hoodie",
+        "outer": "#a7865a",
+        "outerStyle": "jacket",
+        "pants": "#2e394a",
+        "shoes": "#d9d3c6",
+        "seed": 8104
+      }
+    },
+    {
+      "tint": "#2c3a34",
+      "look": {
+        "skin": "#b07e58",
+        "hair": "messy",
+        "hairColor": "#7a3a24",
+        "browColor": "#5a3d28",
+        "top": "#6d7a4e",
+        "topStyle": "tee",
+        "outer": "#c8d23a",
+        "outerStyle": "hivis",
+        "pants": "#4a4034",
+        "shoes": "#2a2420",
+        "hat": "cap",
+        "hatColor": "#6a4a30",
+        "seed": 8105
+      }
+    },
+    {
+      "tint": "#463c30",
+      "look": {
+        "skin": "#d4a07c",
+        "hair": "bald",
+        "hairColor": "#2a211c",
+        "browColor": "#2a211c",
+        "mustache": true,
+        "beardColor": "#4a3a2e",
+        "top": "#3a4a3a",
+        "topStyle": "uniform",
+        "outer": "#5a4a3a",
+        "outerStyle": "vest",
+        "pants": "#2c2d31",
+        "shoes": "#2a2420",
+        "seed": 8106
+      }
+    },
+    {
+      "tint": "#3a4430",
+      "look": {
+        "skin": "#7a4e36",
+        "hair": "twists",
+        "hairColor": "#2b1c16",
+        "browColor": "#2b1c16",
+        "top": "#cfc9b8",
+        "topStyle": "shirt",
+        "tie": "#7b2e36",
+        "outer": "#3a4a6a",
+        "outerStyle": "cardigan",
+        "pants": "#34465a",
+        "shoes": "#2b2521",
+        "glasses": true,
+        "seed": 8107
+      }
+    },
+    {
+      "tint": "#4a3a2c",
+      "look": {
+        "skin": "#a6734e",
+        "hair": "balding",
+        "hairColor": "#7a766c",
+        "browColor": "#5a5a54",
+        "mustache": true,
+        "beardColor": "#7a766c",
+        "top": "#5a5040",
+        "topStyle": "coverall",
+        "outer": "#4a6784",
+        "outerStyle": "jacket",
+        "pants": "#5a5040",
+        "shoes": "#2b2521",
+        "seed": 8108
+      }
+    },
+    {
+      "tint": "#303a40",
+      "look": {
+        "skin": "#5b3a28",
+        "hair": "curly",
+        "hairColor": "#4a3022",
+        "browColor": "#2b1c16",
+        "top": "#a85a48",
+        "topStyle": "tee",
+        "outer": "#2f3a4a",
+        "outerStyle": "jacket",
+        "pants": "#383843",
+        "shoes": "#d9d3c6",
+        "hat": "beanie",
+        "hatColor": "#6a4a4a",
+        "seed": 8109
+      }
+    },
+    {
+      "tint": "#40343e",
+      "look": {
+        "skin": "#f0cbab",
+        "hair": "ponytail",
+        "hairColor": "#7a3a24",
+        "browColor": "#5a3d28",
+        "top": "#6a8a6a",
+        "topStyle": "scrubs",
+        "outer": "#6b5a48",
+        "outerStyle": "jacket",
+        "pants": "#6a8a6a",
+        "shoes": "#e2ded5",
+        "seed": 8110
+      }
+    },
+    {
+      "tint": "#34423c",
+      "look": {
+        "skin": "#8d6140",
+        "hair": "buzz",
+        "hairColor": "#5a4a3a",
+        "browColor": "#3d2a1e",
+        "beard": "full",
+        "beardColor": "#3d2a1e",
+        "top": "#5a626b",
+        "topStyle": "hoodie",
+        "outer": "#4a5a4a",
+        "outerStyle": "vest",
+        "pants": "#3c4a3a",
+        "shoes": "#4a4038",
+        "backpack": "#56613f",
+        "seed": 8111
+      }
+    },
+    {
+      "tint": "#463434",
+      "look": {
+        "skin": "#e0b393",
+        "hair": "long",
+        "hairColor": "#c9b27a",
+        "browColor": "#8a6a4a",
+        "top": "#5a7a8a",
+        "topStyle": "shirt",
+        "outer": "#8a7a6a",
+        "outerStyle": "cardigan",
+        "pants": "#3a3f47",
+        "shoes": "#2b2521",
+        "glasses": true,
+        "seed": 8112
+      }
+    },
+    {
+      "tint": "#2e3446",
+      "look": {
+        "skin": "#c69877",
+        "hair": "short",
+        "hairColor": "#1f1a17",
+        "browColor": "#1f1a17",
+        "top": "#7a4a30",
+        "topStyle": "coverall",
+        "outer": "#5a4a3a",
+        "outerStyle": "vest",
+        "pants": "#7a4a30",
+        "shoes": "#2a2420",
+        "hat": "cap",
+        "hatColor": "#5f5a52",
+        "belt": "tools",
+        "seed": 8113
+      }
+    },
+    {
+      "tint": "#3c3c34",
+      "look": {
+        "skin": "#523526",
+        "hair": "short",
+        "hairColor": "#a19b92",
+        "browColor": "#4a3022",
+        "top": "#9a8f78",
+        "topStyle": "shirt",
+        "outer": "#3a2c24",
+        "outerStyle": "jacket",
+        "pants": "#2c2d31",
+        "shoes": "#2a2420",
+        "glasses": true,
+        "seed": 8114
+      }
+    },
+    {
+      "tint": "#38303c",
+      "look": {
+        "skin": "#d4a07c",
+        "hair": "messy",
+        "hairColor": "#2a211c",
+        "browColor": "#2a211c",
+        "beard": "stubble",
+        "beardColor": "#2a211c",
+        "top": "#6b5a48",
+        "topStyle": "hoodie",
+        "outer": "#5a5a4a",
+        "outerStyle": "jacket",
+        "pants": "#4a4a40",
+        "shoes": "#2b2521",
+        "backpack": "#3a4a5a",
+        "seed": 8115
+      }
+    },
+    {
+      "tint": "#3a3a46",
+      "look": {
+        "skin": "#b07e58",
+        "hair": "twists",
+        "hairColor": "#4a3022",
+        "browColor": "#3d2a1e",
+        "top": "#8a8f94",
+        "topStyle": "tee",
+        "outer": "#d89a3a",
+        "outerStyle": "hivis",
+        "pants": "#383843",
+        "shoes": "#2b2521",
+        "glasses": true,
+        "seed": 8116
+      }
+    }
+  ],
+  "bitten_chance": 0.08
+}

@@ -330,7 +330,7 @@ func test_the_title_of_the_real_game_starts_a_run_through_its_menus() -> void:
 	screen.seed_edit.text_changed.emit("4242")
 	screen.start_button.pressed.emit()
 	check(Engine.has_meta("run"), "the choice is in Engine meta")
-	eq(Engine.get_meta("run"), {"difficulty": 2, "seed": 4242}, "a Brutal run on seed 4242")
+	eq(Engine.get_meta("run"), {"difficulty": 2, "seed": 4242, "crew": 3}, "a Brutal run on seed 4242, the small crew")
 	Engine.remove_meta("run")
 	# Continue: the newest save
 	Fakes.write_save(paths[0], 6, 12.0, 1)

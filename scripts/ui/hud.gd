@@ -351,8 +351,16 @@ var res_grid: GridContainer
 var res_values := {}
 var res_days := {}
 var res_labels: Array = []
-var bar: HBoxContainer
+## The crew's cards across the top: a row, or rows when there are more people than a row has room for (a crew that
+## has grown: recruits come over the radio). `bar_plan` is how they are laid out now, see _layout_bar.
+var bar: HFlowContainer
 var cards: Array = []
+var bar_plan := {"w": 60, "rows": 1, "per_row": 6, "gap": 6, "roam": false}
+## What the row was last laid out for (the number of cards, the window's width and the room), so that it is laid out
+## again only when one of them changes.
+var _bar_sig := ""
+## Kept clear between the cards and the stores, and between the cards and the clock.
+const BAR_MARGIN := 12.0
 ## The size of the status marks on a card and how many fit (set with the card size).
 var mark_px := 0
 var mark_max := 4
@@ -801,97 +809,173 @@ func _card_height(w: int) -> int:
 
 
 func _build_bar() -> void:
-	bar = _hbox(6)
+	bar = HFlowContainer.new()
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.alignment = FlowContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("h_separation", 6)
+	bar.add_theme_constant_override("v_separation", 4)
 	add_child(bar)
 	for p in people:
-		var card := Panel.new()
-		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		card.tooltip_text = "%s, %s" % [p.name, String(p.def.role).to_lower()]
-		card.add_theme_stylebox_override("panel", _card_style(false))
-		# nothing sticks out of the picture's window, and the badge's glow reaches outside the card
-		card.clip_contents = false
-		var pic := TextureRect.new()
-		pic.texture = GD.tex(data.portraits[p.id])
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(pic)
-		# a dark veil and a word over the picture of someone who is gone or away
-		var veil := ColorRect.new()
-		veil.color = Color(0.03, 0.06, 0.05, 0.62)
-		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		veil.visible = false
-		card.add_child(veil)
-		var word := _label("", Fonts.cond(700, 1), 12, INK2)
-		word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		# it sits on a picture: a dark edge keeps it readable over any face
-		word.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.035, 0.9))
-		word.add_theme_constant_override("outline_size", 3)
-		card.add_child(word)
-		var nm := _label(p.first, Fonts.cond(600), 13, INK)
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		card.add_child(nm)
-		var hp_bg := ColorRect.new()
-		hp_bg.color = Color(0, 0.03, 0.02, 0.55)
-		hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(hp_bg)
-		var hp := ColorRect.new()
-		hp.color = OK
-		hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(hp)
-		var badge := Panel.new()
-		var bs := StyleBoxFlat.new()
-		bs.bg_color = ACCENT
-		bs.set_corner_radius_all(9)
-		bs.anti_aliasing = true
-		badge.add_theme_stylebox_override("panel", bs)
-		badge.size = Vector2(17, 17)
-		badge.position = Vector2(3, 3)
-		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var bi := _icon("draft", 11, ACCENT_INK)
-		bi.position = Vector2(3, 3)
-		bi.size = Vector2(11, 11)
-		badge.add_child(bi)
-		badge.visible = false
-		card.add_child(badge)
-		var fight := Panel.new()
-		var fs := StyleBoxFlat.new()
-		fs.bg_color = DANGER
-		fs.set_corner_radius_all(4)
-		fs.anti_aliasing = true
-		fight.add_theme_stylebox_override("panel", fs)
-		fight.size = Vector2(7, 7)
-		fight.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		fight.visible = false
-		card.add_child(fight)
-		# the status marks (hungry, bleeding, feverish...) along the foot of the picture
-		var marks_box := PanelContainer.new()
-		var ms := StyleBoxFlat.new()
-		ms.bg_color = Color(0.03, 0.06, 0.05, 0.74)
-		ms.set_corner_radius_all(7)
-		ms.content_margin_left = 2
-		ms.content_margin_right = 2
-		ms.content_margin_top = 2
-		ms.content_margin_bottom = 2
-		ms.anti_aliasing = true
-		marks_box.add_theme_stylebox_override("panel", ms)
-		marks_box.mouse_filter = Control.MOUSE_FILTER_PASS
-		marks_box.visible = false
-		var marks := _hbox(0)
-		marks_box.add_child(marks)
-		card.add_child(marks_box)
-		card.gui_input.connect(_on_card_input.bind(p))
-		bar.add_child(card)
-		cards.append({"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""})
+		var c := _make_card(p)
+		bar.add_child(c.card)
+		cards.append(c)
 	_size_cards(60)
+
+
+## The picture of a person: the one their def names (a recruit's: it is made for them), else the roster's, else
+## none (a card with only a name, a panel with no face: a missing file is not an error).
+func portrait_of(p) -> Texture2D:
+	var path := String(p.def.get("portrait", ""))
+	if path == "" and data.has("portraits") and data.portraits.has(p.id):
+		path = String(data.portraits[p.id])
+	if path == "":
+		return null
+	if ResourceLoader.exists(path):
+		return GD.tex(path)
+	# a picture made since the project was last opened in the editor has not been imported yet: read the file itself
+	if not _loose_pictures.has(path):
+		var img := Image.load_from_file(ProjectSettings.globalize_path(path)) if FileAccess.file_exists(path) else null
+		_loose_pictures[path] = ImageTexture.create_from_image(img) if img != null and not img.is_empty() else null
+	return _loose_pictures[path]
+
+
+static var _loose_pictures := {}
+
+
+## One crew card, not yet in the row: the hall-pass badge of `p` and the parts _update_card moves.
+func _make_card(p) -> Dictionary:
+	var card := Panel.new()
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.tooltip_text = "%s, %s" % [p.name, String(p.def.role).to_lower()]
+	card.add_theme_stylebox_override("panel", _card_style(false))
+	# nothing sticks out of the picture's window, and the badge's glow reaches outside the card
+	card.clip_contents = false
+	var pic := TextureRect.new()
+	pic.texture = portrait_of(p)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(pic)
+	# a dark veil and a word over the picture of someone who is gone or away
+	var veil := ColorRect.new()
+	veil.color = Color(0.03, 0.06, 0.05, 0.62)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	veil.visible = false
+	card.add_child(veil)
+	var word := _label("", Fonts.cond(700, 1), 12, INK2)
+	word.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	word.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# it sits on a picture: a dark edge keeps it readable over any face
+	word.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.035, 0.9))
+	word.add_theme_constant_override("outline_size", 3)
+	card.add_child(word)
+	var nm := _label(p.first, Fonts.cond(600), 13, INK)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# a long name (a recruit's) is trimmed with a dot dot dot, not spilled over the next card (the tooltip has it whole)
+	nm.clip_text = true
+	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	card.add_child(nm)
+	var hp_bg := ColorRect.new()
+	hp_bg.color = Color(0, 0.03, 0.02, 0.55)
+	hp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(hp_bg)
+	var hp := ColorRect.new()
+	hp.color = OK
+	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(hp)
+	var badge := Panel.new()
+	var bs := StyleBoxFlat.new()
+	bs.bg_color = ACCENT
+	bs.set_corner_radius_all(9)
+	bs.anti_aliasing = true
+	badge.add_theme_stylebox_override("panel", bs)
+	badge.size = Vector2(17, 17)
+	badge.position = Vector2(3, 3)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bi := _icon("draft", 11, ACCENT_INK)
+	bi.position = Vector2(3, 3)
+	bi.size = Vector2(11, 11)
+	badge.add_child(bi)
+	badge.visible = false
+	card.add_child(badge)
+	var fight := Panel.new()
+	var fs := StyleBoxFlat.new()
+	fs.bg_color = DANGER
+	fs.set_corner_radius_all(4)
+	fs.anti_aliasing = true
+	fight.add_theme_stylebox_override("panel", fs)
+	fight.size = Vector2(7, 7)
+	fight.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fight.visible = false
+	card.add_child(fight)
+	# the status marks (hungry, bleeding, feverish...) along the foot of the picture
+	var marks_box := PanelContainer.new()
+	var ms := StyleBoxFlat.new()
+	ms.bg_color = Color(0.03, 0.06, 0.05, 0.74)
+	ms.set_corner_radius_all(7)
+	ms.content_margin_left = 2
+	ms.content_margin_right = 2
+	ms.content_margin_top = 2
+	ms.content_margin_bottom = 2
+	ms.anti_aliasing = true
+	marks_box.add_theme_stylebox_override("panel", ms)
+	marks_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	marks_box.visible = false
+	var marks := _hbox(0)
+	marks_box.add_child(marks)
+	card.add_child(marks_box)
+	card.gui_input.connect(_on_card_input.bind(p))
+	return {"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""}
+
+
+## Someone has joined the crew (a recruit at the gate): their card goes in the row, and the row is laid out again.
+## A person who has a card is left alone.
+func add_person(p) -> void:
+	for c in cards:
+		if c.p == p:
+			return
+	if not people.has(p):
+		people.append(p)
+	var c := _make_card(p)
+	bar.add_child(c.card)
+	cards.append(c)
+	_layout_bar()
+	if sim_ref != null:
+		_update_card(c, sim_ref)
+
+
+## A card lit for a moment (someone has arrived): it comes up bright and settles back.
+func flash_card(p) -> void:
+	for c in cards:
+		if c.p != p:
+			continue
+		var card: Panel = c.card
+		card.modulate = Color(1.75, 1.6, 1.15)
+		if not is_inside_tree():
+			card.modulate = Color.WHITE
+			return
+		var t := create_tween()
+		if _calm():
+			t.tween_interval(1.4)
+			t.tween_callback(func(): card.modulate = Color.WHITE)
+		else:
+			t.tween_interval(0.5)
+			t.tween_property(card, "modulate", Color.WHITE, 1.2)
+		return
+
+
+## Gives a card to everyone in `crew` who has none (the HUD is shown the crew each update, so a person who arrives
+## after it was built is not missed).
+func _sync_cards(crew: Array) -> void:
+	for p in crew:
+		add_person(p)
 
 
 func _size_cards(w: int) -> void:
 	var h := _card_height(w)
 	var was := mark_px
 	mark_px = 12 if w >= 56 else 11
-	mark_max = 4 if w >= 56 else 3
+	mark_max = 4 if w >= 56 else (3 if w >= 48 else 2)
 	# the picture, the name and the health bar sit inside the badge's rim (a pixel on the flat card)
 	var inset := _card_inset()
 	var pw := float(w) - inset.x - inset.z
@@ -916,6 +1000,70 @@ func _size_cards(w: int) -> void:
 		c.marks_box.position = Vector2(inset.x + 2.0, inset.y + pw - 1.0 - mark_px - 4.0)
 		if was != mark_px:
 			_fill_marks(c, c.marks_data)
+
+
+## How `n` cards are laid out: {"w" (a card's width), "rows", "per_row", "gap", "roam"}. `std` is the width cards
+## have when they fit (60, or 48 in a narrow window), `sym` how wide a row may be when it is centred on the window
+## and `free` how wide when it may sit anywhere between the stores and the clock. Six or fewer (the classic crew,
+## and a small start's three) are laid out as they always were. More take one row if one fits, then two, then
+## three; a row is kept centred if it can be, and shrinks the cards (never under 44) before it takes another row.
+static func plan_cards(n: int, std: int, sym: float, free: float) -> Dictionary:
+	if n <= 6:
+		return {"w": std, "rows": 1, "per_row": maxi(n, 1), "gap": 6, "roam": false}
+	var gap := 4
+	var widths: Array = []
+	var k := std
+	while k >= 48:
+		widths.append(k)
+		k -= 4
+	widths.append(44)
+	for rows in range(1, 4):
+		var per_row := ceili(float(n) / float(rows))
+		for roam in [false, true]:
+			var room := free if roam else sym
+			for w in widths:
+				if float(per_row * w + (per_row - 1) * gap) <= room:
+					return {"w": w, "rows": rows, "per_row": per_row, "gap": gap, "roam": roam}
+	# not even then (a very narrow window): the smallest cards, as many rows as it takes
+	var fit := maxi(1, int((free + float(gap)) / float(44 + gap)))
+	return {"w": 44, "rows": ceili(float(n) / float(fit)), "per_row": fit, "gap": gap, "roam": true}
+
+
+## The room the cards have across the top: how wide a row may be when it is centred on the window ("sym") and
+## when it may sit anywhere between the stores and the clock ("free"), and the middle of that stretch ("mid").
+## (In a window under 640 wide the cards are along the bottom and have all of it.)
+func _bar_room() -> Dictionary:
+	var w := size.x
+	if w < 640.0:
+		return {"sym": w - 16.0, "free": w - 16.0, "mid": w * 0.5}
+	# the columns are as wide as they are now (or as they will be: the clock is never narrower than its floor)
+	var from := 12.0 + maxf(left_col.get_combined_minimum_size().x, left_col.size.x) + BAR_MARGIN
+	var to := w - 12.0 - maxf(maxf(right_col.get_combined_minimum_size().x, right_col.size.x), float(CLOCK_W_COMPACT if compact else CLOCK_W)) - BAR_MARGIN
+	return {"sym": 2.0 * minf(w * 0.5 - from, to - w * 0.5), "free": to - from, "mid": (from + to) * 0.5}
+
+
+## Sizes the cards and the row they are in for as many people as there are, in the room there is (a crew that has
+## grown has more cards than a row holds). Under the cards, the banner hangs below the last row.
+func _layout_bar() -> void:
+	if bar == null or left_col == null or right_col == null:
+		return
+	var room := _bar_room()
+	var sig := "%d|%s|%s|%s" % [cards.size(), str(size.x), str(snappedf(float(room.sym), 0.5)), str(snappedf(float(room.free), 0.5))]
+	if sig == _bar_sig:
+		return
+	_bar_sig = sig
+	var plan := plan_cards(cards.size(), 48 if compact else 60, float(room.sym), float(room.free))
+	bar_plan = plan
+	_size_cards(int(plan.w))
+	bar.add_theme_constant_override("h_separation", int(plan.gap))
+	bar.custom_minimum_size.x = float(int(plan.per_row) * int(plan.w) + (int(plan.per_row) - 1) * int(plan.gap))
+	var shift := float(room.mid) - size.x * 0.5 if bool(plan.roam) else 0.0
+	bar.offset_left = shift
+	bar.offset_right = shift
+	if banner != null and size.x >= 640.0:
+		var rows := int(plan.rows)
+		var bar_h := float(rows * _card_height(int(plan.w)) + (rows - 1) * 4)
+		banner.offset_top = maxf(118.0, 10.0 + bar_h + 22.0)
 
 
 func _on_card_input(ev: InputEvent, p) -> void:
@@ -1524,7 +1672,7 @@ func select(sel) -> void:
 	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if sel.kind == "person":
 		var p = sel.ref
-		head.add_child(_pic(GD.tex(data.portraits[p.id])))
+		head.add_child(_pic(portrait_of(p)))
 		# the name carries the person's record (kills, walls mended...) in a tooltip, so it takes the mouse
 		var pname := _label(p.name, Fonts.cond(700), 21, INK)
 		pname.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -2146,6 +2294,7 @@ func set_fields(on: bool) -> void:
 		fields_button.add_theme_stylebox_override("normal", _lit_look(on))
 		fields_button.get_meta("icon").modulate = ACCENT if on else INK2
 	_layout_dock()
+	_layout_bar()
 
 
 func _spacer_fixed(w: int) -> Control:
@@ -2643,7 +2792,6 @@ func _on_resized() -> void:
 	compact = w < 980.0
 	var bottom_bar := w < 640.0
 	if compact != was or cards.size() > 0:
-		_size_cards(48 if compact else 60)
 		for l in res_labels:
 			l.visible = not compact
 		res_grid.columns = 2 if compact else 3
@@ -2668,6 +2816,8 @@ func _on_resized() -> void:
 		bar.offset_bottom = 10
 		alerts_box.visible = true
 	_center_h(bar)
+	_bar_sig = ""
+	_layout_bar()
 	_layout_dock()
 	_layout_toast()
 
@@ -2809,6 +2959,9 @@ func _fill_marks(c: Dictionary, marks: Array) -> void:
 
 func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	sim_ref = sim
+	if cards.size() != sim.people.size():
+		_sync_cards(sim.people)
+	_layout_bar()
 	_refresh_hint()
 	if sim.over != "" and game_over == null:
 		_show_game_over(sim)

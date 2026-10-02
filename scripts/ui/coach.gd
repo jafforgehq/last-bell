@@ -634,14 +634,14 @@ func skip() -> void:
 	state["skipped"] = true
 
 
-## Start a real run (Standard difficulty, a random seed).
+## Start a real run (Standard difficulty, a random seed, the small crew a new game begins with).
 func start_real_run() -> void:
 	if phase != "wrap":
 		return
 	if main.has_method("start_run"):
-		main.start_run(1, randi())
+		main.start_run(1, randi(), 3)
 	else:
-		hud.start_run({"difficulty": 1, "seed": randi()})
+		hud.start_run({"difficulty": 1, "seed": randi(), "crew": 3})
 
 
 ## Play Orientation Day again from the start.

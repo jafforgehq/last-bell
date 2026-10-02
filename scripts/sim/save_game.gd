@@ -451,8 +451,12 @@ class Reader:
 ## Applies saved data to a freshly built `sim`. Returns false (and leaves the
 ## sim alone) if the data is missing, from another version or damaged.
 static func apply(sim, data: Dictionary) -> bool:
+	# a small start's people are not the roster's: the saved ones are made first (and given back if the save is no good)
+	var before: Array = sim.recruits.prepare_load(data) if sim.get("recruits") != null else []
 	var plan = _parse(sim, data)
 	if plan == null:
+		if not before.is_empty():
+			sim.people = before
 		return false
 	_commit(sim, plan)
 	return true

@@ -412,5 +412,85 @@
       "He never asked for anything. We should have asked what he needed.",
       "He tended the garden until the very end."
     ]
+  },
+  "generic": {
+    "bell": [
+      "There's the bell. Find your spot.",
+      "Evening already. Lights down low.",
+      "Dark soon. Let's be ready for it.",
+      "That's the bell. Stay where you can see someone.",
+      "Okay. Another night. We know how this goes.",
+      "Bell's rung. Check your gear."
+    ],
+    "kill_streak": [
+      "That's a run of them. Keep calm.",
+      "Good shooting. Save some for later.",
+      "Five down. There are more coming, I bet.",
+      "Feels strange to be good at this.",
+      "Steady. Breathe. Next one.",
+      "They keep coming. So do we."
+    ],
+    "wounded": [
+      "Ow! Okay, that one got me.",
+      "I'm hit. Not bad. I think.",
+      "That's going to need a bandage.",
+      "Tell me that's not too much blood.",
+      "Just a scratch. A big scratch.",
+      "Hurts. I'll live. Probably."
+    ],
+    "low_ammo": [
+      "We're low on rounds. Be careful with them.",
+      "Not many shots left. Count them.",
+      "Ammo's getting thin out here.",
+      "Somebody tell the bench we need more.",
+      "I'm down to a few rounds.",
+      "If we run dry, we're in trouble."
+    ],
+    "friend_down": [
+      "Somebody's down! Over here!",
+      "Get help! Now!",
+      "Hang on. Stay with me.",
+      "Hold on, we'll get you out of this.",
+      "Hey! Hey, open your eyes!",
+      "Medic! Anyone!"
+    ],
+    "breach": [
+      "The wall's open! They're coming in!",
+      "Breach! Over here, quick!",
+      "That section's gone! Fill it!",
+      "They're through the wall!",
+      "Gap in the wall! Close it up!",
+      "Wall's down! Fall back!"
+    ],
+    "dawn": [
+      "Sun's coming up. We made it.",
+      "Morning. Still here, anyway.",
+      "Another night behind us.",
+      "Light at last. Let's get some food.",
+      "That was a long one. Glad it's over.",
+      "Dawn. Quiet for now."
+    ],
+    "skill_up": [
+      "Getting better at this, I think.",
+      "Funny. I'm learning as I go.",
+      "That felt easier than last time.",
+      "I picked something up there.",
+      "Not as clumsy as I was.",
+      "Every night teaches something."
+    ],
+    "breakdown": [
+      "I can't do this right now.",
+      "Give me a minute. Please.",
+      "I need to sit down. Just for a bit.",
+      "Too much. It's all too much.",
+      "Please. Just leave me a minute."
+    ],
+    "epitaph": [
+      "They stood their post until the very end.",
+      "They came to us a stranger and left a friend.",
+      "They never complained. Not once.",
+      "We were lucky to have had them.",
+      "They did their share, and then some."
+    ]
   }
 }

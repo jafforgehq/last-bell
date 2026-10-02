@@ -982,7 +982,8 @@ func test_days_of_cards_with_random_orders_saves_and_loads_never_break_the_rules
 		rnd.seed = 7000 + seed_value
 		var deck: Array = []
 		for c in sim.storyteller.cards:
-			deck.append(c.id)
+			if c.id != "survivor_call":    # (only recruits.gd puts that one up)
+				deck.append(c.id)
 		var bad := ""
 		var answered := 0
 		var forced := 0

@@ -131,6 +131,11 @@ func start() -> void:
 	_reset()
 
 
+## Someone joined the crew: they start as the crew did.
+func person_added(p) -> void:
+	levels[p.id] = START_VALUE
+
+
 func _reset() -> void:
 	levels = {}
 	until = {}

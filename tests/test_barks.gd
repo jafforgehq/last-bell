@@ -82,9 +82,9 @@ func _break(sim, p) -> void:
 
 func test_everyone_has_the_lines_the_plan_asks_for() -> void:
 	var data := _data()
-	eq(data.keys().size(), 6, "six people")
+	eq(data.keys().size(), 7, "six people and the generic voice")
 	var seen := {}
-	for id in PEOPLE:
+	for id in PEOPLE + ["generic"]:
 		check(data.has(id), "%s has lines" % id)
 		var mine: Dictionary = data.get(id, {})
 		for ctx in FIRST_EIGHT:
@@ -229,6 +229,102 @@ func test_a_context_without_lines_and_a_missing_person_are_quietly_ignored() -> 
 	sim.barks.say(null, "bell")
 	eq(_barks(sim).size(), 0, "nothing")
 	g.world.free()
+
+
+## A quiet day on day 5 in a small start with a newcomer who has no voice of their own (a generated
+## survivor: their id is in no list of barks.json).
+func _with_newcomer() -> Dictionary:
+	var g := Helpers.make(7, 1, 3)
+	var sim = g.sim
+	sim.waves.enabled = false
+	sim.zombies.clear()
+	sim.day = 5
+	sim.minutes = 9.0 * 60.0
+	sim.phase = sim.phase_at(sim.minutes)
+	sim.t = 1000.0
+	var def: Dictionary = sim.recruits.queue[0].duplicate(true)
+	def["id"] = "r1_mia"
+	def["name"] = "Mia Hale"
+	def["station"] = ""
+	sim.add_person(def)
+	sim.recruits.arrived.append(def)    # as an arrival at the gate is kept, for a save
+	sim.events.clear()
+	return g
+
+
+func test_a_person_with_no_voice_of_their_own_speaks_in_the_generic_one() -> void:
+	var g := _with_newcomer()
+	var sim = g.sim
+	var mia = _person(sim, "Mia")
+	check(mia != null and not _data().has(mia.id), "Mia is a stranger to the data")
+	for context in ALL:
+		if context == "epitaph":
+			continue
+		sim.t += 100.0
+		sim.events.clear()
+		sim.barks.say(mia, context)
+		var got := _said(sim, context)
+		eq(got.size(), 1, "Mia says something for %s" % context)
+		if got.size() == 1:
+			eq(got[0].who, "r1_mia", "it is Mia")
+			check(_data().generic[context].has(got[0].text), "from the generic voice: %s" % got[0].text)
+	g.world.free()
+
+
+func test_the_authored_keep_their_own_voices_beside_the_generic_one() -> void:
+	var g := _with_newcomer()
+	var sim = g.sim
+	var ruth = _person(sim, "Ruth")
+	for i in 6:
+		sim.t += 100.0
+		sim.events.clear()
+		sim.barks.say(ruth, "bell")
+		var got := _said(sim, "bell")
+		eq(got.size(), 1, "Ruth speaks")
+		if got.size() == 1:
+			check(_data().ruth.bell.has(got[0].text) and not _data().generic.bell.has(got[0].text), "in her own words, not the generic ones: %s" % got[0].text)
+	g.world.free()
+
+
+func test_a_stranger_who_dies_is_spoken_of_in_neutral_words() -> void:
+	var g := _with_newcomer()
+	var sim = g.sim
+	var mia = _person(sim, "Mia")
+	eq(sim.barks.epitaph(mia), "", "nothing is said about the living")
+	sim.medical.kill(mia, "bled out")
+	var line: String = sim.barks.epitaph(mia)
+	check(_data().generic.epitaph.has(line), "the epitaph is a generic one: '%s'" % line)
+	check(not line.contains("Mia") and not line.contains(" she ") and not line.contains(" he "), "and names no one and no sex")
+	eq(_said(sim, "epitaph").size(), 1, "one of the others says it")
+	g.world.free()
+
+
+func test_without_a_generic_voice_a_stranger_is_as_silent_as_ever() -> void:
+	var g := _with_newcomer()
+	var sim = g.sim
+	sim.barks.lines.erase("generic")
+	var mia = _person(sim, "Mia")
+	sim.barks.say(mia, "bell")
+	sim.barks.on_bell()
+	for e in _barks(sim):
+		check(e.who != "r1_mia", "Mia has nothing to say")
+	eq(sim.barks.epitaph(mia), "", "and the living have no epitaph")
+	g.world.free()
+
+
+func test_a_strangers_used_lines_survive_a_save() -> void:
+	var a := _with_newcomer()
+	var sim = a.sim
+	var mia = _person(sim, "Mia")
+	sim.barks.say(mia, "bell")
+	var used_before: Dictionary = sim.barks.save().used
+	check(used_before.has("r1_mia|bell"), "the round of Mia's bell lines is kept: %s" % str(used_before.keys()))
+	var d: Dictionary = SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(sim)))
+	var b := Helpers.make(99, 1)    # a classic roster: the save puts the small crew in its place
+	check(SaveGame.apply(b.sim, d), "it loads")
+	eq(b.sim.barks.save().used, used_before, "and Mia's round is the same after it")
+	a.world.free()
+	b.world.free()
 
 
 func test_saying_things_does_not_touch_the_rules_dice() -> void:

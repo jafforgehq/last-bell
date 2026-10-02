@@ -54,6 +54,8 @@ var _plan_day := -1
 ## What the plan was made with besides the day: the storyteller's multiplier of tonight's budget
 ## (a warning of a horde), so the plan and the forecast are made again when it changes.
 var _plan_mult := 1.0
+## The crew's share of the night's size the plan of `_plan_day` was made with (it does not change once the bell has rung).
+var _plan_scale := 1.0
 
 
 func setup(s) -> void:
@@ -81,16 +83,25 @@ func is_big(day: int) -> bool:
 	return day >= sim.scenario.total_days()
 
 
+## How big the crew makes tonight (small start; 1 in the classic start): as it is now, but once the bell
+## has rung it is what it was when the plan was made, so that a death in the night does not remake it.
+func _scale(day: int) -> float:
+	if _plan_day == day and not _plan.is_empty() and (sim.bell_rung or sim.phase == "night" or sim.phase == "dawn"):
+		return _plan_scale
+	return sim.recruits.crew_scale()
+
+
 ## What the night brings in points: `budget_for`, times the bonus on the last night.
 func night_budget(day: int) -> float:
-	return budget_for(day) * (BIG_FACTOR if is_big(day) else 1.0) * sim.storyteller.budget_mult(day)
+	return budget_for(day) * (BIG_FACTOR if is_big(day) else 1.0) * sim.storyteller.budget_mult(day) * _scale(day)
 
 
 ## The plan of the night that follows `day`: {"day", "big", "budget", "queue" (the
 ## kinds in the order they come), "counts", "heading" (indices into sim.spawns of
 ## the main spawn points), "shown" (the number a forecast gives, off by up to 15%)}.
 func plan_for(day: int) -> Dictionary:
-	var mult: float = sim.storyteller.budget_mult(day)
+	var scale := _scale(day)
+	var mult: float = sim.storyteller.budget_mult(day) * scale
 	if _plan_day == day and not _plan.is_empty() and is_equal_approx(_plan_mult, mult):
 		return _plan
 	var rng := RandomNumberGenerator.new()
@@ -122,6 +133,7 @@ func plan_for(day: int) -> Dictionary:
 	_plan = {"day": day, "big": big, "budget": budget, "queue": queue, "counts": counts, "heading": heading, "shown": maxi(shown, 5)}
 	_plan_day = day
 	_plan_mult = mult
+	_plan_scale = scale
 	return _plan
 
 

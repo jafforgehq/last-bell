@@ -1,7 +1,8 @@
 ## Barks: the short lines people say when something happens (the bell, a wound, a
 ## friend down), from assets/data/barks.json: {person id: {context: [lines]}}. Rules only:
 ## it adds {"type": "bark", "who": id, "text": String, "context": String} events and the
-## view draws them as speech bubbles.
+## view draws them as speech bubbles. Someone whose id has no voice of its own (a survivor who
+## came over the radio, see recruits.gd) speaks in the voice named GENERIC, if the file has one.
 ##
 ## Contexts: bell (dusk), kill_streak (five kills in a minute), wounded, low_ammo,
 ## friend_down, breach, dawn (the night is over), skill_up, breakdown, and epitaph (a line
@@ -17,6 +18,8 @@
 extends RefCounted
 
 const DATA_PATH := "res://assets/data/barks.json"
+## The voice of anyone whose id is not in the file.
+const GENERIC := "generic"
 
 ## --- rates (seconds of rules time) ---
 const PERSON_GAP := 25.0
@@ -164,7 +167,7 @@ func _wait(p, text: String, context: String) -> void:
 
 ## Whether this person can speak at all just now.
 func _able(p) -> bool:
-	if sim.over != "" or p.dead or p.downed or p.away != null or not lines.has(p.id):
+	if sim.over != "" or p.dead or p.downed or p.away != null or not lines.has(_voice(p.id)):
 		return false
 	return not _in_tutorial()
 
@@ -180,8 +183,13 @@ func _in_tutorial() -> bool:
 	return sim.scenario != null and sim.scenario.has_method("jump") and sim.scenario.has_method("fire")
 
 
+## Whose lines this person says: their own, or the generic voice's when the file has none for them.
+func _voice(id: String) -> String:
+	return id if lines.has(id) else GENERIC
+
+
 func _lines(id: String, context: String) -> Array:
-	return lines.get(id, {}).get(context, [])
+	return lines.get(_voice(id), {}).get(context, [])
 
 
 ## A line of this person's for the context that is not the last one they used (all of them

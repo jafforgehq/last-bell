@@ -119,9 +119,9 @@ func _build() -> void:
 func _build_head() -> Control:
 	var row: HBoxContainer = hud._hbox(10)
 	var who = _speaker()
-	if who != null and hud.data.has("portraits") and hud.data.portraits.has(who.id):
+	if who != null and hud.portrait_of(who) != null:
 		var pic := TextureRect.new()
-		pic.texture = GD.tex(hud.data.portraits[who.id])
+		pic.texture = hud.portrait_of(who)
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		pic.custom_minimum_size = Vector2(PORTRAIT_PX, PORTRAIT_PX)

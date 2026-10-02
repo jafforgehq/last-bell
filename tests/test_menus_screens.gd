@@ -236,7 +236,7 @@ func test_new_game_starts_the_run_with_the_chosen_difficulty_and_seed() -> void:
 	screen.seed_edit.text = "4242"
 	screen.seed_edit.text_changed.emit("4242")
 	HudKit.click_on(screen.start_button)
-	eq(ctx.main.last("start_run"), ["start_run", 2, 4242], "the game is asked for a Brutal run on seed 4242")
+	eq(ctx.main.last("start_run"), ["start_run", 2, 4242, 3], "the game is asked for a Brutal run on seed 4242, with the small crew the menu begins on")
 	check(ctx.sound.ui_played.has("ui_confirm"), "with the sound of yes")
 	_done(ctx)
 
@@ -248,7 +248,7 @@ func test_new_game_can_be_picked_with_the_keyboard() -> void:
 	# Enter on the Start button the keyboard starts on: a Standard run on the seed shown
 	var shown := int(screen.seed_edit.text)
 	Fakes.key(KEY_ENTER)
-	eq(ctx.main.last("start_run"), ["start_run", 1, shown], "Enter starts a Standard run on the seed that was shown")
+	eq(ctx.main.last("start_run"), ["start_run", 1, shown, 3], "Enter starts a Standard run on the seed that was shown")
 	ctx.main.calls.clear()
 	# Enter in the seed box starts too
 	var screen2 = ctx.shell.open_new_game()
@@ -257,7 +257,7 @@ func test_new_game_can_be_picked_with_the_keyboard() -> void:
 	screen2.seed_edit.text = "-17"
 	screen2.seed_edit.text_changed.emit("-17")
 	screen2.seed_edit.text_submitted.emit("-17")
-	eq(ctx.main.last("start_run"), ["start_run", 0, -17], "a Story run on seed -17 from the seed box")
+	eq(ctx.main.last("start_run"), ["start_run", 0, -17, 3], "a Story run on seed -17 from the seed box")
 	_done(ctx)
 
 

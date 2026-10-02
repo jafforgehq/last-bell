@@ -1,17 +1,33 @@
 ## New game: how hard the nights are (Story, Standard, Brutal, each sold with a line and
-## told truthfully underneath: what it really changes, from the rules' own numbers) and the
-## seed (a random one is shown; any whole number can be typed). Start hands the choice to
-## the game, which reloads the scene with it. Enter starts straight away, so a returning
-## player is one key from the yard; the last difficulty chosen is remembered.
+## told truthfully underneath: what it really changes, from the rules' own numbers), how the
+## crew begins (a small crew of three, the others calling in over the radio, or all six from
+## the first morning) and the seed (a random one is shown; any whole number can be typed).
+## Start hands the choice to the game, which reloads the scene with it. Enter starts
+## straight away, so a returning player is one key from the yard; the last difficulty and the
+## last crew chosen are remembered.
 extends "res://scripts/ui/menu_screen.gd"
 
 const Prefs := preload("res://scripts/prefs.gd")
 
 const MAX_SEED_CHARS := 12
+## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
+## what it means for the game, in plain words, under the cards.
+const CREWS := [3, 6]
+const CREW_NAMES := ["Small crew (3)", "Full crew (6)"]
+const CREW_LINES := ["Ruth, Dez and Marcus. More survivors call in over the radio.", "All six from the first morning. Nobody calls in."]
+const CREW_FACTS := [
+	"A call can come at noon from day 2, when someone is at the radio desk and a bed is free. Nights are smaller while the crew is.",
+	"The nights are the full nights from the first day, and there are no recruits.",
+]
 
 var difficulty := 1
+## How many people the run begins with: 3 (a small crew) or 6.
+var crew := 3
 ## The three difficulty buttons, Story first.
 var cards: Array = []
+## The two crew buttons, the small crew first, and the words under them.
+var crew_cards: Array = []
+var crew_facts_label: Label
 var facts_label: Label
 var seed_edit: LineEdit
 var seed_error: Label
@@ -55,6 +71,17 @@ func _build_body() -> void:
 	slip.add_child(facts_label)
 	body.add_child(slip)
 
+	crew = 6 if int(Prefs.get_value("ui", "crew", 3)) == 6 else 3
+	body.add_child(section("Crew"))
+	var crew_row: HBoxContainer = hud._hbox(8)
+	for i in CREWS.size():
+		var crew_card := _crew_card(i)
+		crew_row.add_child(crew_card)
+		crew_cards.append(crew_card)
+	body.add_child(crew_row)
+	crew_facts_label = note("", ink3(), 13)
+	body.add_child(crew_facts_label)
+
 	body.add_child(section("Seed"))
 	var seed_row: HBoxContainer = hud._hbox(8)
 	seed_edit = LineEdit.new()
@@ -77,6 +104,7 @@ func _build_body() -> void:
 	body.add_child(seed_error)
 	body.add_child(note("Any whole number. The same seed and the same orders play the same game.", ink3(), 13))
 	_choose(difficulty)
+	_choose_crew(CREWS.find(crew))
 
 
 func _build_foot() -> void:
@@ -94,6 +122,20 @@ func default_focus() -> Control:
 
 ## One difficulty: its name and its line, the whole card a button that stays pressed.
 func _card(i: int) -> Button:
+	var b := _pick_card(Kit.difficulty_name(i), Kit.difficulty_line(i))
+	b.pressed.connect(_choose.bind(i))
+	return b
+
+
+## One crew: the same kind of card.
+func _crew_card(i: int) -> Button:
+	var b := _pick_card(CREW_NAMES[i], CREW_LINES[i])
+	b.pressed.connect(_choose_crew.bind(i))
+	return b
+
+
+## A card to pick one of several: a name and a line, the whole card a button that stays pressed.
+func _pick_card(title_text: String, line_text: String) -> Button:
 	var b := button("", false)
 	b.toggle_mode = true
 	b.custom_minimum_size = Vector2(120, 104)
@@ -106,9 +148,9 @@ func _card(i: int) -> Button:
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_bottom", 8)
 	var col: VBoxContainer = hud._vbox(3)
-	var t: Label = hud._label(Kit.difficulty_name(i), Fonts.cond(700, 1), 20, hud.INK)
+	var t: Label = hud._label(title_text, Fonts.cond(700, 1), 20, hud.INK)
 	col.add_child(t)
-	var s: Label = hud._label(Kit.difficulty_line(i), Fonts.sans(400), 13, hud.INK2)
+	var s: Label = hud._label(line_text, Fonts.sans(400), 13, hud.INK2)
 	s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	s.custom_minimum_size.x = 60
 	col.add_child(s)
@@ -116,7 +158,6 @@ func _card(i: int) -> Button:
 	b.add_child(margin)
 	b.set_meta("title", t)
 	b.set_meta("sub", s)
-	b.pressed.connect(_choose.bind(i))
 	return b
 
 
@@ -158,6 +199,22 @@ func _choose(i: int) -> void:
 	facts_label.text = Kit.difficulty_facts(difficulty)
 
 
+## Picks a crew (0 the small one, 1 the full one): its card lights up and the words under the cards say what it means.
+func _choose_crew(i: int) -> void:
+	i = clampi(i, 0, CREWS.size() - 1)
+	crew = CREWS[i]
+	for k in crew_cards.size():
+		var b: Button = crew_cards[k]
+		var on := k == i
+		b.set_pressed_no_signal(on)
+		shell.restyle(b, on)
+		var t: Label = b.get_meta("title")
+		var s: Label = b.get_meta("sub")
+		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
+		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
+	crew_facts_label.text = CREW_FACTS[i]
+
+
 func _on_random() -> void:
 	seed_edit.text = str(random_seed())
 	_on_seed_changed(seed_edit.text)
@@ -177,6 +234,7 @@ func _start() -> void:
 		shell.play("ui_error")
 		return
 	Prefs.set_value("ui", "difficulty", difficulty)
+	Prefs.set_value("ui", "crew", crew)
 	close_sound = ""
-	shell.start_game(difficulty, int(parsed.value))
+	shell.start_game(difficulty, int(parsed.value), crew)
 	close()

@@ -18,6 +18,7 @@ const Barks := preload("res://scripts/sim/barks.gd")
 const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const Jobs := preload("res://scripts/sim/jobs.gd")
 const Build := preload("res://scripts/sim/build.gd")
+const Recruits := preload("res://scripts/sim/recruits.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -223,6 +224,10 @@ var barks
 var storyteller
 var jobs
 var build
+var recruits
+## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
+## the others come over the radio, see recruits.gd). Set before `start_run`.
+var crew_start := 6
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -293,7 +298,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	storyteller = Storyteller.new()
 	jobs = Jobs.new()
 	build = Build.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs]:
+	recruits = Recruits.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits]:
 		m.setup(self)
 	_seed()
 
@@ -303,6 +309,22 @@ func _object_index(id: int) -> int:
 		if int(d.objects[i].id) == id:
 			return i
 	return 0
+
+
+## A person made from a roster entry (the recruits' defs are shaped like one), not yet in the crew.
+func make_person(def: Dictionary) -> Person:
+	return _make_person(def)
+
+
+## Someone joins the crew mid-run (a recruit at the gate): made, added, and the modules that keep a
+## state for each person told.
+func add_person(def: Dictionary) -> Person:
+	var p := _make_person(def)
+	people.append(p)
+	for m in [morale, traits, bonds, jobs, skills]:
+		if m.has_method("person_added"):
+			m.person_added(p)
+	return p
 
 
 func _make_person(def: Dictionary) -> Person:
@@ -503,8 +525,9 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits]:
 		m.start()
+	recruits.begin()
 
 
 # ------------------------------------------------------------------ update --
@@ -551,6 +574,7 @@ func update(dt: float) -> void:
 	storyteller.update(dt)
 	jobs.update(dt)
 	build.update(dt)
+	recruits.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()

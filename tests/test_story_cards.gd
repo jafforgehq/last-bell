@@ -9,7 +9,7 @@ const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 ## The effects a card may use, and the words a card may put in braces.
-const VOCABULARY := ["stock", "morale", "wound", "sick", "weather", "blackout", "night_budget", "spawn_day", "wall_damage", "party", "chance", "tension", "say", "at_hour"]
+const VOCABULARY := ["stock", "morale", "wound", "sick", "weather", "blackout", "night_budget", "spawn_day", "wall_damage", "party", "chance", "tension", "say", "at_hour", "recruit"]
 const TOKENS := ["name", "pair", "section_name", "speaker", "lookout", "flavor", "day"]
 
 
@@ -101,7 +101,8 @@ func test_the_deck_is_well_formed() -> void:
 		kinds[c.kind] += 1
 		check(c.title.length() > 0 and c.title.length() <= 36, "%s: a short title (%d)" % [id, c.title.length()])
 		check(c.text.length() >= 8 and c.text.length() <= 420, "%s: a few lines of text (%d characters)" % [id, c.text.length()])
-		check(c.weight > 0.0, "%s: it has a weight" % id)
+		# the survivors' call is only ever put up by recruits.gd (it has no weight and its own words, tested in test_recruits.gd)
+		check(c.weight > 0.0 or id == "survivor_call", "%s: it has a weight" % id)
 		check(c.min_day >= 2 and c.max_day <= 29 and c.min_day <= c.max_day, "%s: days %d to %d" % [id, c.min_day, c.max_day])
 		check(c.hour >= 12.0 and c.hour <= 21.0, "%s: it comes at %.0f" % [id, c.hour])
 		check(c.wait > 0.0 and c.wait <= 3.0, "%s: it waits %.1f hours" % [id, c.wait])
@@ -141,7 +142,7 @@ func _check_words(id: String, text: String) -> void:
 		if close <= open:
 			return
 		var token := rest.substr(open + 1, close - open - 1)
-		check(TOKENS.has(token), "%s: an unknown word {%s}" % [id, token])
+		check(TOKENS.has(token) or (id == "survivor_call" and token.begins_with("caller")), "%s: an unknown word {%s}" % [id, token])
 		rest = rest.substr(close + 1)
 	for banned in ["walking dead", "zombieland", "last of us", "resident evil", "rick grimes", "daryl", "fallout", "shaun of the dead"]:
 		check(not text.to_lower().contains(banned), "%s: no franchise names ('%s')" % [id, banned])
@@ -164,6 +165,8 @@ func test_every_card_resolves_with_every_one_of_its_choices() -> void:
 	var deck: Array = probe.sim.storyteller.cards.duplicate(true)
 	probe.world.free()
 	for card in deck:
+		if card.id == "survivor_call":
+			continue    # needs a caller: see test_recruits.gd
 		var count: int = maxi(card.choices.size(), 1)
 		for i in count:
 			var g := _noon(8, 9)
@@ -207,6 +210,8 @@ func test_every_card_can_be_drawn_on_some_day() -> void:
 			if not c.is_empty():
 				seen[c.id] = true
 	for c in deck:
+		if c.id == "survivor_call":
+			continue    # only recruits.gd puts it up
 		check(seen.has(c.id), "%s comes up in the draw" % c.id)
 	g.world.free()
 

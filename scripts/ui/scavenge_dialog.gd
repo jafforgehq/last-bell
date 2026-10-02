@@ -230,7 +230,7 @@ func _person_card(p, leader: bool) -> PanelContainer:
 	card.custom_minimum_size.x = 200
 	var row: HBoxContainer = hud._hbox(10)
 	var pic := TextureRect.new()
-	pic.texture = GD.tex(hud.data.portraits[p.id])
+	pic.texture = hud.portrait_of(p)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	pic.custom_minimum_size = Vector2(40, 40)

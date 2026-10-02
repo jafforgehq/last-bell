@@ -233,6 +233,7 @@ func test_the_last_card_offers_a_real_run_a_replay_and_staying() -> void:
 	eq(picked.size(), 1, "Start a real run begins a run")
 	eq(int(picked[0].difficulty), 1, "a Standard one")
 	check(picked[0].has("seed"), "with a seed")
+	eq(int(picked[0].get("crew", 6)), 3, "and the small crew a new game begins with")
 	coach.replay_button.pressed.emit()
 	eq(picked.size(), 2, "Replay begins one too")
 	eq(picked[1], {"tutorial": true}, "of Orientation Day")

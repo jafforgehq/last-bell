@@ -22,6 +22,7 @@
 ##   --policy=informed the default policy plus what the game tells a player: at dusk the crew
 ##                    is stood on the decks where its guns cover the walls tonight's dead
 ##                    will come to, and the alarm is set on the best-covered section
+##   --crew=3         play the small start (three people, the others come over the radio); default 6
 ##   --nobuild        the informed policy does not build (to see what the buildings change)
 ##   --build-order=a,b  the informed policy builds only these, in this order (building ids), to see what one building is worth
 ##   --nostory        play with the storyteller off (no card at noon, no assembly at dawn), to see
@@ -58,6 +59,8 @@ static var story_on := true
 ## The informed policy builds (see --nobuild), and what, in what order, if --build-order says (else BUILD_ORDER).
 static var build_on := true
 static var build_order_override: Array = []
+## How many people a game starts with (see --crew).
+static var crew_start := 6
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -128,6 +131,9 @@ class Policy:
 	var builds := false
 	var build_order: Array = []
 	var _build_day := 0
+	## The radio hour of a small start: who was put at the desk for it, and what they were doing.
+	var _radio_day := 0
+	var _radio_prev := {}
 	## Lines of what it did: [{"day", "hour", "text"}].
 	var notes: Array = []
 	var _sent_day := 0
@@ -151,6 +157,7 @@ class Policy:
 		_story()
 		_alarm()
 		_jobs()
+		_radio_noon()
 		if builds:
 			_build()
 		_scavenge()
@@ -492,6 +499,31 @@ class Policy:
 					_note("%s goes to the %s" % [chosen.first, String(sim.jobs.station(pick).name).to_lower()])
 				_last_jobs[chosen.id] = pick
 
+	# ------------------------------------------------------------ the radio hour --
+
+	## In a small start the radio is how the crew grows, and a call comes only if someone is at the desk at
+	## noon: when one is due and nobody sits there, the best leader goes to the desk at 11:20 and goes
+	## back to what they were doing at 12:40.
+	func _radio_noon() -> void:
+		if sim.phase != "day" or not sim.recruits.small:
+			return
+		var h: float = sim.hour
+		if h >= 11.3 and h < 12.0 and _radio_day != sim.day and sim.recruits.call_due() and sim.jobs.crew_of("radio").is_empty():
+			_radio_day = sim.day
+			var best = null
+			for p in sim.people:
+				if _free(p) and (best == null or p.skills.Leading > best.skills.Leading):
+					best = p
+			if best != null:
+				_radio_prev = {"id": best.id, "job": sim.jobs.job_of(best)}
+				sim.jobs.assign(best, "radio")
+				_note("%s goes to the radio for the noon call" % best.first)
+		elif h >= 12.6 and not _radio_prev.is_empty():
+			for p in sim.people:
+				if p.id == _radio_prev.id and sim.jobs.job_of(p) == "radio":
+					sim.jobs.assign(p, String(_radio_prev.job))
+			_radio_prev = {}
+
 	# -------------------------------------------------------------- building --
 
 	## See BUILD_ORDER.
@@ -543,7 +575,7 @@ class Policy:
 ## first step (the tests use it to play a cheap game).
 static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, orders: bool = true, setup: Callable = Callable(), hide: bool = false, informed: bool = false, story: bool = true) -> Dictionary:
 	var started := Time.get_ticks_msec()
-	var g := Helpers.make(seed_value, difficulty)
+	var g := Helpers.make(seed_value, difficulty, crew_start)
 	var sim = g.sim
 	# the storyteller: on (the radio brings its cards, the dawn has its assembly) unless asked not to
 	sim.storyteller.enabled = story
@@ -754,6 +786,8 @@ func _run() -> void:
 			story_on = false
 		elif kv[0] == "nobuild":
 			build_on = false
+		elif kv[0] == "crew" and kv.size() > 1:
+			crew_start = 3 if int(kv[1]) < 6 else 6
 		elif kv[0] == "build-order" and kv.size() > 1:
 			build_order_override = String(kv[1]).split(",")
 		elif opts.has(kv[0]) and kv.size() > 1:
@@ -841,6 +875,8 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--nostory")
 		if not build_on:
 			args.append("--nobuild")
+		if crew_start != 6:
+			args.append("--crew=%d" % crew_start)
 		if not build_order_override.is_empty():
 			args.append("--build-order=%s" % ",".join(build_order_override))
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})

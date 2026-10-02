@@ -23,6 +23,11 @@ func start() -> void:
 	_from_roster()
 
 
+## Someone joined the crew: the roster's bonds that now have both their people count.
+func person_added(_p) -> void:
+	_from_roster()
+
+
 func _from_roster() -> void:
 	list = _clean(sim.d.get("bonds", []))
 

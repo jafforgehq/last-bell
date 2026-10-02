@@ -72,6 +72,12 @@ static func _numbers(raw) -> Dictionary:
 
 
 ## Everyone gets the traits the roster gives them.
+## Someone joined the crew: their traits (from their def) are given.
+func person_added(p) -> void:
+	var ids = p.def.get("traits", [])
+	give(p, ids if ids is Array else [])
+
+
 func _from_roster() -> void:
 	assigned = {}
 	for p in sim.people:

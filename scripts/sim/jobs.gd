@@ -110,6 +110,14 @@ static func _face_of(at: Vector2) -> String:
 	return "N"
 
 
+## Someone joined the crew: the job their def names, if it has a free seat (a recruit's def names none).
+func person_added(p) -> void:
+	var id := String(p.def.get("station", ""))
+	if id != "" and unlocked(id) and seats_left(id) > 0:
+		assignments[String(p.id)] = id
+	post_of(p)    # a night post from the start (it is kept in the save), not at the first dusk
+
+
 func start() -> void:
 	_alert_day = {"radio": 0, "watch": 0}
 	_defaults()

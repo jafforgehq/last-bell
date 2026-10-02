@@ -145,7 +145,7 @@ func _survivor(p) -> Control:
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var col: VBoxContainer = hud._vbox(3)
 	var pic := TextureRect.new()
-	pic.texture = GD.tex(hud.data.portraits[p.id])
+	pic.texture = hud.portrait_of(p)
 	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	pic.custom_minimum_size = Vector2(54, 54)
@@ -211,7 +211,11 @@ func _days_survived() -> int:
 
 
 func _new_game() -> void:
-	hud.start_run({"difficulty": int(sim.difficulty), "seed": randi()})
+	var meta := {"difficulty": int(sim.difficulty), "seed": randi()}
+	# a run that began with a small crew (recruits.gd) begins that way again
+	if sim.get("recruits") != null and sim.recruits.small:
+		meta["crew"] = 3
+	hud.start_run(meta)
 
 
 func _load_save(path: String) -> void:

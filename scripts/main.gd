@@ -16,6 +16,7 @@ const Lighting := preload("res://scripts/render/lighting.gd")
 const GlowNode := preload("res://scripts/render/glow_node.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
+const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
@@ -206,6 +207,11 @@ func _ready() -> void:
 	if had_meta:
 		run = Engine.get_meta("run")
 		Engine.remove_meta("run")
+	else:
+		# --crew=3 plays the small start (the others come over the radio); without it a run is the classic six
+		var crew_asked := crew_from_args(OS.get_cmdline_user_args())
+		if crew_asked > 0:
+			run["crew"] = crew_asked
 	# with no run chosen at all the title is shown, over a quiet run of its own
 	title_mode = bool(run.get("title", false)) or wants_title(OS.get_cmdline_user_args(), had_meta)
 	if title_mode:
@@ -226,6 +232,8 @@ func _ready() -> void:
 		if tutorial:
 			Orientation.begin(sim)
 		else:
+			# a run with no crew in its choice is six (the tests, the screenshots and the title's yard are classic)
+			sim.crew_start = 3 if int(run.get("crew", 6)) <= 3 else 6
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 
 	for tr in data.trees:
@@ -240,7 +248,7 @@ func _ready() -> void:
 		s.position = Vector2(tr.x, tr.y) * TILE
 		entities.add_child(s)
 	for p in sim.people:
-		_add_pawn(p, false, p.id)
+		_add_person_pawn(p)
 
 	for l in data.lights:
 		if l.get("fire", false):
@@ -344,6 +352,20 @@ func _add_pawn(e, is_zombie: bool, key: String) -> void:
 	n.setup(e, is_zombie, data, key)
 	entities.add_child(n)
 	pawn_nodes[e] = n
+
+
+## The node of a person. The six survivors have baked bodies; anyone else (a recruit who came over the radio, see
+## scripts/sim/recruits.gd) is drawn on the baked body most like their look, in the colours of their look
+## (scripts/render/recruit_art.gd).
+func _add_person_pawn(p) -> void:
+	if data.pawn.files.has(p.id):
+		_add_pawn(p, false, p.id)
+		return
+	var base: String = RecruitArt.base_for(data, p.look)
+	_add_pawn(p, false, base)
+	var bodies: Dictionary = RecruitArt.bodies(data, p.look, base)
+	for view in bodies:
+		pawn_nodes[p].tex[view] = bodies[view]
 
 
 func _radial_texture() -> Texture2D:
@@ -782,9 +804,30 @@ func _begin(meta: Dictionary) -> void:
 		tree.reload_current_scene()
 
 
-## A new run at difficulty 0 (Story), 1 (Standard) or 2 (Brutal) with this seed.
-func start_run(difficulty: int, seed_value: int) -> void:
-	_begin({"difficulty": clampi(difficulty, 0, 2), "seed": seed_value})
+## A new run at difficulty 0 (Story), 1 (Standard) or 2 (Brutal) with this seed. `crew` is 3 (the small start: the
+## others come over the radio) or 6 (all six from the first day); left out, no choice is made and the run is six.
+func start_run(difficulty: int, seed_value: int, crew: int = 0) -> void:
+	var meta := {"difficulty": clampi(difficulty, 0, 2), "seed": seed_value}
+	if crew > 0:
+		meta["crew"] = 3 if crew <= 3 else 6
+	_begin(meta)
+
+
+## The crew a `--crew=` argument asks for: 3 (or "small", or anything under three), 6 (or "full", or anything over
+## three), 0 when there is no such argument or it is not a crew.
+static func crew_from_args(args: Array) -> int:
+	for a in args:
+		var text := String(a)
+		if not text.begins_with("--crew="):
+			continue
+		var value := text.trim_prefix("--crew=").strip_edges().to_lower()
+		if value == "small":
+			return 3
+		if value == "full":
+			return 6
+		if value.is_valid_int():
+			return 3 if value.to_int() <= 3 else 6
+	return 0
 
 
 ## Loads the save at `path`. A save that cannot be loaded is refused (false) and the game that
@@ -1145,6 +1188,9 @@ func _sync_views() -> void:
 			if selection != null and selection.ref == e:
 				_select(null)
 	for p in sim.people:
+		# someone who has joined since the yard was built (a recruit at the gate) gets their node here
+		if not pawn_nodes.has(p):
+			_add_person_pawn(p)
 		var n = pawn_nodes[p]
 		n.anim_t = clock
 		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null
@@ -1230,7 +1276,20 @@ func _handle_events() -> void:
 				story_ui.on_dawn_report()
 			"day_start":
 				_autosave()
+			"arrived":
+				_on_arrival(String(e.who))
 	sim.events.clear()
+
+
+## Someone has reached the gate (a recruit, recruits.gd): a soft bell and the chime, and their card, lit for a moment
+## among the others. (Their pawn is made by the next _sync_views; the banner is a "banner" event of its own.)
+func _on_arrival(who: String) -> void:
+	sound.play("bell", 0.4, 0.02, 1.35)
+	sound.ui("ui_confirm", 0.8)
+	for p in sim.people:
+		if p.id == who:
+			hud.add_person(p)
+			hud.flash_card(p)
 
 
 ## The dawn save: one file, written over at each new day. Not in a screenshot
@@ -1285,12 +1344,7 @@ func _parse_args() -> void:
 			"frames":
 				shot_frames = int(v)
 			"hour":
-				sim.minutes = float(v) * 60.0
-				sim.phase = Sim.phase_at(sim.minutes)
-				var hh := float(v)
-				sim.bell_rung = hh >= 19.0 or hh < 6.0
-				# the game clock follows: it counts minutes from 07:00 on day 1
-				sim.clock_min = (sim.day - 1) * 1440.0 + fposmod(sim.minutes - 420.0, 1440.0)
+				_set_hour(float(v))
 			"advance":
 				advance = float(v)
 			"cam":
@@ -1298,6 +1352,10 @@ func _parse_args() -> void:
 				cam_center = Vector2(float(c[0]), float(c[1]))
 				if c.size() > 2:
 					zoom_px = float(c[2])
+			"recruit":
+				# --recruit=<id> lets that caller of the radio (ana, walt, hector, or the id of a generated one; none
+				# named: the next) in at the gate now, with a --crew=3 start. At 07:00, unless --hour is given first.
+				stage_recruit(v)
 			"select":
 				for p in sim.people:
 					if p.id == v:
@@ -1399,6 +1457,37 @@ func _parse_args() -> void:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
 		sim.events.clear()
+
+
+## The hour of day, as `--hour=` sets it: the phase, the bell and the game clock follow (it counts minutes from 07:00
+## on day 1).
+func _set_hour(hh: float) -> void:
+	sim.minutes = hh * 60.0
+	sim.phase = Sim.phase_at(sim.minutes)
+	sim.bell_rung = hh >= 19.0 or hh < 6.0
+	sim.clock_min = (sim.day - 1) * 1440.0 + fposmod(sim.minutes - 420.0, 1440.0)
+
+
+## A screenshot's way of letting a caller in (--recruit): `id` is the one of the radio's queue who comes in at the gate
+## now, "" for the next. False when no one is waiting by that name (a classic start has nobody waiting). The arrival is
+## the rules' own (the banner, the alert, the mood, a bite for the bitten): it happens at once, at the gate hour.
+func stage_recruit(id: String) -> bool:
+	var queue: Array = sim.recruits.queue
+	if id == "" and queue.is_empty():
+		sim.recruits.current_caller()    # the queue ran out: the next caller is made
+	var at := -1
+	for i in queue.size():
+		if id == "" or String(queue[i].id) == id:
+			at = i
+			break
+	if at < 0:
+		return false
+	if not (sim.phase == "day" and sim.hour >= 7.0):
+		_set_hour(7.2)
+	sim.recruits.incoming.append({"def": queue[at], "day": sim.day})
+	queue.remove_at(at)
+	sim.recruits.update(0.0)
+	return true
 
 
 ## A screenshot's way of putting sites up and buildings on the plots (--build-site, --build-built): "plot:building"

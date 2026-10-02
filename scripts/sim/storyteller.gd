@@ -431,7 +431,10 @@ func _radio_hour() -> void:
 	radio_day = sim.day
 	if sim.over != "" or not _card.is_empty() or speaker() == null:
 		return
-	var card := draw(sim.day)
+	# a survivor asking the way in (recruits.gd) comes before the day's draw
+	var card := card_named("survivor_call") if sim.recruits.call_due() else {}
+	if card.is_empty():
+		card = draw(sim.day)
 	if not card.is_empty():
 		_take(card)
 
@@ -550,6 +553,8 @@ func choose(i: int) -> bool:
 ## Why a choice cannot be made now ("" when it can).
 func _why_not(choice: Dictionary) -> String:
 	var needs: Dictionary = choice.get("needs", {})
+	if needs.has("housing") and sim.recruits.housing_free() < int(needs.housing):
+		return "No bed for them"
 	var stock = needs.get("stock", {})
 	if stock is Dictionary:
 		for k in stock:
@@ -652,6 +657,14 @@ func _context(card: Dictionary) -> Dictionary:
 					var seg = options[rng.randi() % options.size()]
 					ctx["section"] = seg.id
 					ctx["section_name"] = _where(seg)
+			"caller":
+				var def: Dictionary = sim.recruits.current_caller()
+				if not def.is_empty():
+					var line := String(def.get("line", ""))
+					ctx["caller_name"] = String(def.name)
+					ctx["caller"] = String(def.name).split(" ")[0]
+					ctx["caller_role"] = String(def.get("role", "survivor")).to_lower()
+					ctx["caller_line"] = line if line != "" else "A voice comes through the static, thin and tired: someone alone, asking whether there is room behind the wall."
 			"lookout":
 				# whoever is on the Lookout post (the first of them who is up), else only "the lookout"
 				var look = null
@@ -710,10 +723,21 @@ func _do(effect: Dictionary, ctx: Dictionary, out: Dictionary) -> void:
 				_fx_chance(v, ctx, out)
 			"tension":
 				tension = clampf(tension + float(v), 0.0, 100.0)
+			"recruit":
+				_fx_recruit(String(v), out)
 			"say":
 				out.say.append(_fmt(String(v), ctx))
 			"at_hour":
 				_fx_later(v, ctx, out)
+
+
+## The answer to a survivor's call (recruits.gd): "accept" (they come tomorrow at seven) or "refuse".
+func _fx_recruit(action: String, out: Dictionary) -> void:
+	if action == "accept":
+		if sim.recruits.accept():
+			out.changes.append("Someone is on the way")
+	else:
+		sim.recruits.refuse()
 
 
 func _fx_stock(spec, out: Dictionary) -> void:

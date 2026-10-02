@@ -360,6 +360,32 @@
         }
       ],
       "bot": 0
+    },
+    {
+      "id": "survivor_call",
+      "kind": "choice",
+      "weight": 0,
+      "min_day": 2,
+      "max_day": 29,
+      "title": "A voice on the radio",
+      "text": "{caller_line}",
+      "pick": ["caller"],
+      "choices": [
+        {
+          "label": "Tell them the way in",
+          "hint": "{caller_name} will reach the gate at seven tomorrow morning and join the crew. Needs a free bed.",
+          "result": "{caller} is on the way.",
+          "needs": {"housing": 1},
+          "effects": [{"recruit": "accept"}]
+        },
+        {
+          "label": "Not yet",
+          "hint": "They will call again in a couple of days.",
+          "result": "The voice faded out, to try again.",
+          "effects": [{"recruit": "refuse"}]
+        }
+      ],
+      "bot": 0
     }
   ]
 }
