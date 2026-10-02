@@ -230,7 +230,7 @@ func test_the_bench_has_two_seats_and_says_when_it_is_full() -> void:
 	check(sim.workshop.order_craft(dez), "the first seat")
 	check(sim.workshop.order_craft(ana), "the second")
 	check(not sim.workshop.order_craft(hector), "and there is no third")
-	eq(sim.workshop.why_not_craft(hector), "the Workbench is full", "the bench says so")
+	eq(sim.workshop.why_not_craft(hector), "no free seat at the Workbench", "the bench says so")
 	eq(sim.workshop.why_not_craft(dez), "", "but not to someone already on it")
 	sim.workshop.stop(ana)
 	eq(sim.jobs.job_of(ana), "", "stop takes her off the bench")

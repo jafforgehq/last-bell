@@ -17,6 +17,9 @@
 ## post (and at night, when nobody works it).
 ##
 ## Events: {"type": "lure", "seg": id}. Alerts: `lure`, `forecast`.
+##
+## From the buildings (build.gd) it reads what changes a gun's reach (`sim.reach_at`: the floodlights by
+## night, a watchtower near the post) when it counts how well the guns cover each wall section.
 extends RefCounted
 
 const Kinds := preload("res://scripts/sim/kinds.gd")
@@ -230,14 +233,15 @@ func post_pos(p) -> Vector2:
 
 
 ## How many of the crew's guns reach at least half of this section's places from
-## where they stand at night.
+## where they stand at night. The reach is the one the guns have there tonight (`sim.reach_at`: a fog, the
+## floodlights, a watchtower near the post), also by day, so that this is the number to plan the night by.
 func coverage_of(seg) -> int:
 	var n := 0
 	for p in sim.people:
 		if p.dead or p.downed or p.away != null:
 			continue
 		var at := post_pos(p)
-		var reach: float = sim.reach_of(p.gun)
+		var reach: float = sim.reach_at(p.gun, at, true)
 		var within := 0
 		for sl in seg.slots:
 			if at.distance_to(Vector2(sl.x, sl.y)) <= reach:

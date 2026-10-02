@@ -277,3 +277,27 @@ func test_combinators() -> void:
 	var nested := _c("all", {"of": [_c("any", {"of": [no, yes]}), _c("not", {"of": no})]})
 	check(_ok(nested, sim), "they nest")
 	g.world.free()
+
+
+## The tip about building (a hint's trigger, not a lesson's): `can_build`, with the day and the scrap as its numbers.
+func test_can_build_wants_the_day_the_scrap_and_nothing_built_or_going_up() -> void:
+	var g := Tut.make()
+	var sim = g.sim
+	var spec := _c("can_build", {"day": 3, "scrap": 30})
+	check(Conditions.has("can_build"), "the registry knows it")
+	sim.day = 2
+	sim.stock.scrap = 100.0
+	check(not _ok(spec, sim), "not before the day")
+	sim.day = 3
+	check(_ok(spec, sim), "on the day, with the scrap")
+	sim.stock.scrap = 29.9
+	check(not _ok(spec, sim), "not short of the scrap")
+	sim.stock.scrap = 100.0
+	check(_ok(_c("can_build"), sim), "with no numbers it asks day 3 and 30 scrap")
+	check(not _ok(_c("can_build", {"scrap": 101}), sim), "and takes the numbers it is given")
+	sim.build.plot("east_lot").site = {"building": "workshop", "progress": 0.0, "work": 24.0, "scrap": 30.0}
+	check(not _ok(spec, sim), "not with a site going up")
+	sim.build.plot("east_lot").site = {}
+	sim.build.plot("east_lot").building = "workshop"
+	check(not _ok(spec, sim), "nor with a building standing")
+	g.world.free()

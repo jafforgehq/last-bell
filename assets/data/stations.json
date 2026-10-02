@@ -34,7 +34,7 @@
     },
     {
       "id": "builders",
-      "name": "Wall crew",
+      "name": "Builders",
       "where": "the walkway by the gate",
       "pos": [
         45.5,
@@ -43,7 +43,7 @@
       "seats": 3,
       "skill": "Building",
       "icon": "repair",
-      "blurb": "Mends the most worn wall section by day while there is scrap.",
+      "blurb": "Mends the most worn wall by day while there is scrap, and builds what you order on the Build screen (N).",
       "what": "Walking the wall",
       "settings": {
         "repair_below": {

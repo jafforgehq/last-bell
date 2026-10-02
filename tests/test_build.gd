@@ -82,9 +82,11 @@ func test_the_plots_and_the_catalogue_are_sound() -> void:
 func test_plot_at_finds_the_lot_a_point_is_in() -> void:
 	var g := _game()
 	var sim = g.sim
-	eq(sim.build.plot_at(Vector2(28.5, 27.0)), "court_north", "the middle of a lot")
-	eq(sim.build.plot_at(Vector2(30.9, 28.9)), "court_north", "near its corner")
-	eq(sim.build.plot_at(Vector2(40.0, 33.0)), "", "open ground between lots")
+	for pl in sim.build.plots():
+		var half: Vector2 = Vector2(pl.size) / 2.0
+		eq(sim.build.plot_at(Vector2(pl.pos)), String(pl.id), "the middle of %s" % pl.id)
+		eq(sim.build.plot_at(Vector2(pl.pos) + half - Vector2(0.1, 0.1)), String(pl.id), "near its corner")
+	eq(sim.build.plot_at(Vector2(1.0, 1.0)), "", "outside every lot")
 	g.world.free()
 
 
@@ -105,6 +107,19 @@ func test_ordering_pays_the_scrap_and_puts_a_site_on_the_plot() -> void:
 		said = said or (e.type == "site" and e.plot == "court_north" and e.building == "workshop")
 	check(said, "and the crew is told")
 	g.world.free()
+
+
+func test_an_order_never_leaves_the_scrap_below_nothing() -> void:
+	var g := _game()
+	var sim = g.sim
+	sim.stock.scrap = 18.0 - 1.0e-12    # a hair short through float noise: close enough to pay
+	check(sim.build.order("junk_corner", "salvage_bench"), "it is ordered")
+	check(float(sim.stock.scrap) >= 0.0, "and the stock is not left below nothing: %s" % str(sim.stock.scrap))
+	var d: Dictionary = SaveGame.from_text(SaveGame.to_text(SaveGame.to_dict(sim)))
+	var other := _game(8.0, 99)
+	check(SaveGame.apply(other.sim, d), "so the game still saves and loads")
+	g.world.free()
+	other.world.free()
 
 
 func test_what_cannot_be_ordered_says_why() -> void:
@@ -274,12 +289,13 @@ func test_a_demolished_building_gives_back_half_and_its_effects_end() -> void:
 func test_a_plots_sign_is_in_its_corner_and_a_click_near_it_finds_the_plot() -> void:
 	var g := _game()
 	var sim = g.sim
+	var pl: Dictionary = sim.build.plot("court_north")
 	var corner: Vector2 = sim.build.sign_pos("court_north")
-	near(corner.x, 28.5 - 2.5 + 0.6, 1e-4, "the sign is inside the top-left corner (x)")
-	near(corner.y, 27.0 - 2.0 + 0.6, 1e-4, "(y)")
+	near(corner.x, pl.pos.x - pl.size.x / 2.0 + 0.6, 1e-4, "the sign is inside the top-left corner (x)")
+	near(corner.y, pl.pos.y - pl.size.y / 2.0 + 0.6, 1e-4, "(y)")
 	eq(sim.build.sign_at(corner), "court_north", "a click on it finds the plot")
 	eq(sim.build.sign_at(corner + Vector2(0.5, 0.3)), "court_north", "and one close to it")
-	eq(sim.build.sign_at(Vector2(28.5, 27.0)), "", "the middle of the lot is not the sign")
+	eq(sim.build.sign_at(Vector2(pl.pos)), "", "the middle of the lot is not the sign")
 	eq(sim.build.sign_pos("nowhere"), Vector2.ZERO, "no plot, no sign")
 	g.world.free()
 
@@ -373,6 +389,41 @@ func test_a_station_that_loses_its_building_lets_its_people_go() -> void:
 	g.world.free()
 
 
+func test_a_station_that_shrinks_lets_go_the_people_who_came_last() -> void:
+	var g := _game()
+	var sim = g.sim
+	_stand(sim, "court_north", "workshop")
+	var ruth = _person(sim, "Ruth")
+	var dez = _person(sim, "Dez")
+	var marcus = _person(sim, "Marcus")
+	check(sim.jobs.assign(ruth, "bench") and sim.jobs.assign(dez, "bench") and sim.jobs.assign(marcus, "bench"), "three at the bench, which has three seats with the workshop")
+	sim.build.demolish("court_north")
+	eq(sim.jobs.job_of(ruth), "bench", "the first two keep their seats (Ruth has the bench's own spot)")
+	eq(sim.jobs.job_of(dez), "bench", "Dez too")
+	eq(sim.jobs.job_of(marcus), "", "and Marcus, the last to sit down, is the one let go")
+	g.world.free()
+
+
+func test_every_seat_of_every_station_is_on_open_ground() -> void:
+	var g := _game()
+	var sim = g.sim
+	for b in sim.build.catalogue():
+		var plot_id := ""
+		for pl in sim.build.plots():
+			if pl.building == "" and String(pl.kind) in b.plots:
+				plot_id = String(pl.id)
+				break
+		if plot_id != "" and sim.build.count(String(b.id)) < int(b.max):
+			_stand(sim, plot_id, String(b.id))
+	for st in sim.jobs.stations():
+		var id := String(st.id)
+		var seats: int = sim.jobs.seats_of(id)
+		for i in seats:
+			var at: Vector2 = Vector2(st.pos) + Vector2(sim.jobs.SEAT_OFFSETS[mini(i, sim.jobs.SEAT_OFFSETS.size() - 1)])
+			check(not sim.world.is_solid(sim.world.solid_p, at.x, at.y), "seat %d of %s at (%.1f, %.1f) is on open ground" % [i, id, at.x, at.y])
+	g.world.free()
+
+
 func test_the_salvage_station_makes_scrap_by_the_hour() -> void:
 	var g := _game()
 	var sim = g.sim
@@ -406,7 +457,12 @@ func test_a_standing_building_shuts_its_footprint_and_demolishing_opens_it() -> 
 	var pl: Dictionary = sim.build.plot("court_north")
 	sim.build._finish(pl)
 	tiles = sim.build.footprint_tiles("court_north")
-	eq(tiles.size(), 6, "three by two tiles")
+	var centre: Vector2 = pl.pos
+	var wanted := 0
+	for ty in range(floori(centre.y - 1.0), floori(centre.y + 1.0 - 0.001) + 1):
+		for tx in range(floori(centre.x - 1.5), floori(centre.x + 1.5 - 0.001) + 1):
+			wanted += 1
+	eq(tiles.size(), wanted, "the tiles under the rectangle: %d" % wanted)
 	for i in tiles:
 		eq(sim.world.solid_p[int(i)], 1, "tile %d is shut for people" % int(i))
 		eq(sim.world.solid_z[int(i)], 1, "and for the dead")

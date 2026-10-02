@@ -5,7 +5,7 @@ const Kit := preload("res://tests/hud_kit.gd")
 const SIZES := [[1280, 800], [980, 700], [700, 700]]
 
 ## Every key and mouse button the game answers to (main.gd's _unhandled_input).
-const KEYS := ["R", "P", "F", "C", "T", "X", "G", "B", "L", "M", "V", "J", "Tab", "Space", "1", "2", "3", "Esc", "F5", "F9", "W", "A", "S", "D", "Arrows"]
+const KEYS := ["R", "P", "F", "C", "T", "X", "G", "B", "L", "M", "V", "J", "N", "Tab", "Space", "1", "2", "3", "Esc", "F5", "F9", "W", "A", "S", "D", "Arrows"]
 const MOUSE := ["Click", "Right-click", "Drag", "Scroll"]
 
 
@@ -27,7 +27,7 @@ func test_the_help_lists_the_mouse() -> void:
 	for k in MOUSE:
 		check(all.has(k), "%s is listed" % k)
 	var joined := " ".join(all).to_lower()
-	for word in ["select", "move", "pan", "zoom", "pause", "save", "load", "speed", "deselect", "next person", "draft", "post", "repair", "follow", "treat", "send out", "scavenge", "wall crew", "workbench", "jobs", "lure", "fields of fire"]:
+	for word in ["select", "move", "pan", "zoom", "pause", "save", "load", "speed", "deselect", "next person", "draft", "post", "repair", "follow", "treat", "send out", "scavenge", "builders", "workbench", "jobs", "build", "lure", "fields of fire"]:
 		check(joined.contains(word), "and says what '%s' is for" % word)
 	Kit.free_all(ctx)
 

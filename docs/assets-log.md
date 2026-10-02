@@ -59,6 +59,18 @@ Reference boards in docs/audit/img/ (concepts for the audit; not used in the gam
 | docs/audit/img/concept_ui_chalkboard.jpg | the noticeboard HUD concept this round's frames are after (a reference, not copied) | 2026-10-01 | 01a0f62b-f6de-74ed-b51c-dbf6a803b550 | 9 |
 | docs/audit/img/concept_city_map.jpg | the town map concept | 2026-10-01 | 01a0f62b-fb75-70c5-9bcb-2828ebadfe53 | 9 |
 
+## Round 6: the radio mast (2026-10-02)
+
+The only new picture of the buildings round (every other building is composed of the props already in
+assets/objects). The reference is cut out, cooled a little, squashed to the game's tilted view and given a soft
+shadow by tools/make_mast_art.py (the same method as the deck pieces); the sprite is assets/objects/392_mast.png.
+
+| File | What | Prompt | Model | Date | Meshy task id | Credits |
+|---|---|---|---|---|---|---|
+| tools/art_src/ref_mast.png (the game's sprite is assets/objects/392_mast.png) | a lattice steel radio mast with a beacon, a cross arm with two whip antennas and a dish, a footing and an equipment box | Straight-on front view, orthographic with no perspective, of a tall slim lattice radio mast: a square galvanized steel truss tower with X cross bracing narrowing a little toward the top, a short cross arm near the top with two whip antennas and a small round dish, a small red beacon lamp, concrete footing and a rusty equipment box with cables at the foot. Hand-painted flat game asset with thick dark outlines and soft cel shading, muted blue-grey steel with rust. Plain solid magenta background, no text, the mast centred and complete, about six times taller than wide. | nano-banana-pro, 9:16 | 2026-10-02 | 01a0fb19-1737-7027-96bb-c4683fb23f82 | 9 |
+
+Spent in round 6 by this task: 1 picture, 9 credits.
+
 The account's history also holds Meshy tasks that are not part of this repository (character and
 prop references for the 3D spike that was dropped, and some experiments with another game's
 style): their pictures are not in the game and are not logged here.

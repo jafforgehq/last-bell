@@ -1,5 +1,5 @@
 extends "res://tests/case.gd"
-## The night tools in the HUD: the Lure (alarm) button, the Wall crew job (key B) and the job tag in
+## The night tools in the HUD: the Lure (alarm) button, the Builders job (key B) and the job tag in
 ## the person panel, the lookout's forecast under the clock, the fields-of-fire button and its
 ## legend, the icons of the new alerts, and the kind of the dead in their panel. (The drawing
 ## in the world is in test_hud_fields.gd, the keys in test_hud_keys.gd, the Workbench job in
@@ -111,14 +111,14 @@ func test_a_person_and_a_walker_get_no_lure_button() -> void:
 	Kit.free_all(ctx)
 
 
-# --------------------------------------------------------------- the wall crew --
+# ---------------------------------------------------------------- the builders --
 
-func test_a_person_gets_a_wall_crew_button_that_lights_while_they_are_on_it() -> void:
+func test_a_person_gets_a_builders_button_that_lights_while_they_are_on_it() -> void:
 	var ctx := Kit.build()
 	var ana = _person(ctx, "ana")
 	var b: Button = Kit.gizmo(ctx, "job_builders")
-	check(b != null, "the Wall crew button is there")
-	check(Kit.texts(b).has("WALL CREW") and Kit.texts(b).has("B"), "named, with its key B (A pans the view)")
+	check(b != null, "the Builders button is there")
+	check(Kit.texts(b).has("BUILDERS") and Kit.texts(b).has("B"), "named, with its key B (A pans the view)")
 	var icons: Array = b.find_children("*", "TextureRect", true, false)
 	check(not icons.is_empty() and icons[0].texture == ctx.hud.icons["wall"], "wearing the wall's icon (the hammer is Repair's)")
 	eq(Hud.GIZMO_ICON.get("job_builders"), "wall", "by the icon table")
@@ -129,39 +129,40 @@ func test_a_person_gets_a_wall_crew_button_that_lights_while_they_are_on_it() ->
 	ctx.sim.jobs.assign(ana, "builders")
 	Kit.update(ctx)
 	b = Kit.gizmo(ctx, "job_builders")
-	eq(b.get_meta("on"), true, "lit once they are on the wall crew")
+	eq(b.get_meta("on"), true, "lit once they are on the Builders job")
 	var on_box: StyleBox = b.get_theme_stylebox("normal")
 	if on_box is StyleBoxFlat:
 		eq(on_box.bg_color, Hud.ACCENT, "lit gold, like a drafted person's Release")
 	else:
 		# a frame: the gold one is another picture (or the same one tinted another way)
 		check(on_box is StyleBoxTexture and (on_box.texture != off_box.texture or on_box.modulate_color != off_box.modulate_color), "lit: made of the main-choice frame, not the dark one")
-	check(Kit.texts(b).has("WALL CREW"), "still named")
+	check(Kit.texts(b).has("BUILDERS"), "still named")
 	ctx.sim.jobs.unassign(ana)
 	Kit.update(ctx)
 	eq(Kit.gizmo(ctx, "job_builders").get_meta("on"), false, "and dark again when they are taken off")
 	Kit.free_all(ctx)
 
 
-func test_the_wall_crew_tooltip_says_what_it_does_what_it_is_set_to_and_its_key() -> void:
+func test_the_builders_tooltip_says_what_it_does_what_it_is_set_to_and_its_key() -> void:
 	var ctx := Kit.build()
 	var ana = _person(ctx, "ana")
 	var lines := _lines(Kit.gizmo(ctx, "job_builders"))
-	eq(lines.size(), 2, "two lines: '%s'" % Kit.gizmo(ctx, "job_builders").tooltip_text)
-	eq(lines[0], "Wall crew: mends the most worn wall under %d%% by day while there is scrap" % int(ctx.sim.jobs.setting("builders", "repair_below")), "what it does, with the threshold the Jobs screen sets")
-	eq(lines[1], "Key: B", "and the key")
+	eq(lines.size(), 3, "three lines: '%s'" % Kit.gizmo(ctx, "job_builders").tooltip_text)
+	eq(lines[0], "Builders: mend the most worn wall under %d%% by day while there is scrap" % int(ctx.sim.jobs.setting("builders", "repair_below")), "what it does, with the threshold the Jobs screen sets")
+	eq(lines[1], "They also build what is ordered on the Build screen (N)", "that they build too")
+	eq(lines[2], "Key: B", "and the key")
 	ctx.sim.jobs.set_setting("builders", "repair_below", 50)
 	Kit.update(ctx)
-	eq(_lines(Kit.gizmo(ctx, "job_builders"))[0], "Wall crew: mends the most worn wall under 50% by day while there is scrap", "the words follow the setting")
+	eq(_lines(Kit.gizmo(ctx, "job_builders"))[0], "Builders: mend the most worn wall under 50% by day while there is scrap", "the words follow the setting")
 	ctx.sim.jobs.assign(ana, "builders")
 	Kit.update(ctx)
 	lines = _lines(Kit.gizmo(ctx, "job_builders"))
-	eq(lines[0], "Wall crew: Ana is on it. Press again to take them off", "someone on it is told how to leave")
+	eq(lines[0], "Builders: Ana is on it. Press again to take them off", "someone on it is told how to leave")
 	eq(lines[lines.size() - 1], "Key: B", "the key is still the last line")
 	Kit.free_all(ctx)
 
 
-func test_the_wall_crew_says_why_not_when_it_is_full_and_someone_on_it_can_always_leave() -> void:
+func test_the_builders_say_why_not_when_it_is_full_and_someone_on_it_can_always_leave() -> void:
 	var ctx := Kit.build()
 	ctx.sim.jobs.assign(Kit.person(ctx, "ruth"), "builders")
 	ctx.sim.jobs.assign(Kit.person(ctx, "dez"), "builders")
@@ -169,12 +170,12 @@ func test_the_wall_crew_says_why_not_when_it_is_full_and_someone_on_it_can_alway
 	_person(ctx, "ana")
 	var b: Button = Kit.gizmo(ctx, "job_builders")
 	var lines := _lines(b)
-	eq(lines.size(), 3, "a third line when there is no seat: '%s'" % b.tooltip_text)
-	eq(lines[1], "Key: B", "the key stays where it was")
-	eq(lines[2], "Not now: the Wall crew is full.", "and the reason is the jobs module's own")
+	eq(lines.size(), 4, "a fourth line when there is no seat: '%s'" % b.tooltip_text)
+	eq(lines[2], "Key: B", "the key stays where it was")
+	eq(lines[3], "Not now: no free seat at the Builders.", "and the reason is the jobs module's own")
 	check(b.modulate.a < 0.9, "ghosted")
 	check(not b.disabled, "but not disabled: the order goes through and the game says why")
-	eq(ctx.hud.why_not("job_builders"), "the Wall crew is full", "the HUD's why is the rules' why")
+	eq(ctx.hud.why_not("job_builders"), "no free seat at the Builders", "the HUD's why is the rules' why")
 	_person(ctx, "walt")
 	b = Kit.gizmo(ctx, "job_builders")
 	check(b.modulate.a > 0.99 and not b.tooltip_text.contains("Not now"), "Walt is on the crew: he can always be taken off")
@@ -184,7 +185,7 @@ func test_the_wall_crew_says_why_not_when_it_is_full_and_someone_on_it_can_alway
 	Kit.free_all(ctx)
 
 
-func test_pressing_the_wall_crew_reaches_main() -> void:
+func test_pressing_the_builders_reaches_main() -> void:
 	var ctx := Kit.build()
 	_person(ctx, "hector")
 	Kit.gizmo(ctx, "job_builders").pressed.emit()

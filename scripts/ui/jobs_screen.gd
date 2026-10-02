@@ -916,7 +916,7 @@ func open_job_list(p) -> void:
 		var current := id == have
 		var note := "current" if current else ("full" if left <= 0 else "%d left" % left)
 		entries.append({"id": id, "icon": String(st.get("icon", "")), "text": String(st.name), "note": note, "disabled": left <= 0 and not current, "current": current,
-			"tip": "%s (%s)\n%s" % [String(st.name), String(st.get("where", "")), hud._wrap(String(st.get("blurb", "")))] if left > 0 or current else "The %s is full: %s" % [String(st.name), _names_of(jobs.crew_of(id))]})
+			"tip": "%s (%s)\n%s" % [String(st.name), String(st.get("where", "")), hud._wrap(String(st.get("blurb", "")))] if left > 0 or current else "No free seat at the %s: %s" % [String(st.name), _names_of(jobs.crew_of(id))]})
 	entries.append({"id": "", "icon": "", "text": "No job", "note": "current" if have == "" else "", "disabled": false, "current": have == "", "tip": "No day job: they stand at ease by day"})
 	_open_list("job", p, rows[p.id].job, "Day job for %s" % p.first, entries)
 

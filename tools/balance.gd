@@ -22,6 +22,8 @@
 ##   --policy=informed the default policy plus what the game tells a player: at dusk the crew
 ##                    is stood on the decks where its guns cover the walls tonight's dead
 ##                    will come to, and the alarm is set on the best-covered section
+##   --nobuild        the informed policy does not build (to see what the buildings change)
+##   --build-order=a,b  the informed policy builds only these, in this order (building ids), to see what one building is worth
 ##   --nostory        play with the storyteller off (no card at noon, no assembly at dawn), to see
 ##                    what the radio changes; by default it is on and the policy answers each card
 ##                    with the choice the card names as its default
@@ -53,6 +55,9 @@ const Scavenge := preload("res://scripts/sim/scavenge.gd")
 static var sites_override := ""
 ## The storyteller is on (see --nostory).
 static var story_on := true
+## The informed policy builds (see --nobuild), and what, in what order, if --build-order says (else BUILD_ORDER).
+static var build_on := true
+static var build_order_override: Array = []
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -85,7 +90,15 @@ class Policy:
 	const FLEX_HANDS := 3
 	## Who is given which of the three moving stations first: the bench wants the best builder (ammo from scrap
 	## scales with Building as nothing else does), the wall crew the next, the beds whoever is left.
-	const PICK_ORDER := ["bench", "builders", "garden"]
+	const PICK_ORDER := ["bench", "builders", "salvage", "garden"]
+	## Building (the informed policy only): from BUILD_FROM_DAY, on a morning with nothing going up, it orders the
+	## next building of BUILD_ORDER that it can pay for with BUILD_KEEP scrap to spare, on the first plot that takes
+	## it (it saves up for the next one rather than skipping ahead). While a site is up the Builders get a hand
+	## more, and the Salvage station, once there is one, gets people while the scrap is short (under SALVAGE_BELOW).
+	const BUILD_ORDER := ["salvage_bench", "greenhouse", "workshop", "floodlights", "watchtower", "radio_mast", "bunk_house"]
+	const BUILD_FROM_DAY := 2
+	const BUILD_KEEP := 12.0
+	const SALVAGE_BELOW := 40.0
 	## One shortage moves at most this much of a person towards a station.
 	const NEED_MAX := 1.5
 	## Against dead at the wall by day this many of the best shooters stand to at their posts.
@@ -110,6 +123,11 @@ class Policy:
 	var treats := 0
 	var sendouts := 0
 	var moves := 0
+	var builds_ordered := 0
+	## Builds (and orders them): see BUILD_ORDER (`build_order`, when not empty, is used instead: --build-order).
+	var builds := false
+	var build_order: Array = []
+	var _build_day := 0
 	## Lines of what it did: [{"day", "hour", "text"}].
 	var notes: Array = []
 	var _sent_day := 0
@@ -133,6 +151,8 @@ class Policy:
 		_story()
 		_alarm()
 		_jobs()
+		if builds:
+			_build()
 		_scavenge()
 		_infection()
 
@@ -276,7 +296,7 @@ class Policy:
 				if used.has(v):
 					continue
 				var gain := 0.0
-				var reach := float(p.gun.range)
+				var reach: float = sim.reach_at(p.gun, v, true)
 				for s in sim.segments:
 					var within := 0
 					for sl in s.slots:
@@ -291,7 +311,7 @@ class Policy:
 			if best == null:
 				continue
 			used[best] = true
-			var reach2 := float(p.gun.range)
+			var reach2: float = sim.reach_at(p.gun, best, true)
 			for s in sim.segments:
 				var within2 := 0
 				for sl in s.slots:
@@ -430,13 +450,16 @@ class Policy:
 		for seg in sim.segments:
 			worst = minf(worst, 100.0 * seg.hp / seg.max_hp)
 		var wall_need := clampf((WALL_BELOW - worst) / 10.0, 0.0, NEED_MAX)
-		var score := {"garden": 1.0 + food_need, "builders": 1.0 + wall_need, "bench": 0.5 + ammo_need}
+		var site_need := 1.0 if not sim.build.active_site().is_empty() else 0.0
+		var score := {"garden": 1.0 + food_need, "builders": 1.0 + wall_need + site_need, "bench": 0.5 + ammo_need}
+		if sim.build.built("salvage_bench"):
+			score["salvage"] = 0.6 + clampf((SALVAGE_BELOW - float(sim.stock.scrap)) / 10.0, 0.0, NEED_MAX)
 		# the stations in the order the colony needs a person at them (each person placed lowers a station's need)
 		var picks: Array = []
 		for i in flex.size():
 			var pick := "builders"
-			for id in ["garden", "bench"]:
-				if float(score[id]) > float(score[pick]):
+			for id in ["garden", "bench", "salvage"]:
+				if score.has(id) and float(score[id]) > float(score[pick]):
 					pick = id
 			picks.append(pick)
 			score[pick] = float(score[pick]) - 1.0
@@ -459,7 +482,7 @@ class Policy:
 			var chosen = pool[0]
 			for p in pool:
 				# the beds suit whoever is least wanted at the bench or the wall; those want the best builders
-				var better: bool = p.skills.Building < chosen.skills.Building if pick == "garden" else p.skills.Building > chosen.skills.Building
+				var better: bool = p.skills.Building < chosen.skills.Building if pick in ["garden", "salvage"] else p.skills.Building > chosen.skills.Building
 				if better:
 					chosen = p
 			pool.erase(chosen)
@@ -468,6 +491,29 @@ class Policy:
 					moves += 1
 					_note("%s goes to the %s" % [chosen.first, String(sim.jobs.station(pick).name).to_lower()])
 				_last_jobs[chosen.id] = pick
+
+	# -------------------------------------------------------------- building --
+
+	## See BUILD_ORDER.
+	func _build() -> void:
+		if sim.phase != "day" or _build_day == sim.day or sim.hour < 6.7 or sim.day < BUILD_FROM_DAY:
+			return
+		_build_day = sim.day
+		if not sim.build.active_site().is_empty():
+			return
+		for id in (build_order if not build_order.is_empty() else BUILD_ORDER):
+			if sim.build.built(String(id)):
+				continue
+			var b: Dictionary = sim.build.building(String(id))
+			if float(sim.stock.scrap) < float(b.scrap) + BUILD_KEEP:
+				return
+			for pl in sim.build.plots():
+				if sim.build.why_not(String(pl.id), String(id)) == "":
+					if sim.build.order(String(pl.id), String(id)):
+						builds_ordered += 1
+						_note("orders the %s on %s" % [String(b.name).to_lower(), String(pl.name).to_lower()])
+					return
+			return
 
 	# ------------------------------------------------------------- infection --
 
@@ -506,6 +552,8 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	var policy := Policy.new(sim)
 	policy.hide = hide
 	policy.informed = informed
+	policy.builds = informed and build_on
+	policy.build_order = build_order_override
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
 	var rows: Array = [_row(sim)]
@@ -544,6 +592,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"treats": policy.treats,
 		"sendouts": policy.sendouts,
 		"moves": policy.moves,
+		"builds": policy.builds_ordered,
 		"cards": policy.cards,
 		"notes": all_notes,
 		"took": snappedf((Time.get_ticks_msec() - started) / 1000.0, 0.1),
@@ -613,10 +662,20 @@ static func _row(sim) -> Dictionary:
 		"tension": snappedf(sim.storyteller.tension, 0.1),
 		"shaken": shaken,
 		"breakdowns": sim.morale.breakdown_count,
+		"built": _standing(sim),
 		"walkers": walkers,
 		"runners": runners,
 		"brutes": brutes,
 	}
+
+
+## How many buildings stand.
+static func _standing(sim) -> int:
+	var n := 0
+	for pl in sim.build.plots():
+		if pl.building != "":
+			n += 1
+	return n
 
 
 ## Across games: how many were survived, the day reached, who was lost, the
@@ -693,6 +752,10 @@ func _run() -> void:
 			quiet = true
 		elif kv[0] == "nostory":
 			story_on = false
+		elif kv[0] == "nobuild":
+			build_on = false
+		elif kv[0] == "build-order" and kv.size() > 1:
+			build_order_override = String(kv[1]).split(",")
 		elif opts.has(kv[0]) and kv.size() > 1:
 			opts[kv[0]] = kv[1]
 			if kv[0] == "hz":
@@ -776,6 +839,10 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--sites=%s" % sites_override)
 		if not story_on:
 			args.append("--nostory")
+		if not build_on:
+			args.append("--nobuild")
+		if not build_order_override.is_empty():
+			args.append("--build-order=%s" % ",".join(build_order_override))
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0
@@ -808,15 +875,15 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 
 
 func _print_header() -> void:
-	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats moves  secs")
+	print("game  seed  outcome    day  alive dead turn left |  food water scrap meds ammo | walls%  down kills | trips treats moves builds  secs")
 
 
 func _print_game(n: int, r: Dictionary, verbose: bool) -> void:
 	var last: Dictionary = r.rows[r.rows.size() - 1]
-	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5d %5.1f" % [
+	print("%4d %5d  %-9s %4d  %5d %4d %4d %4d | %5.1f %5.1f %5.1f %4.1f %4.0f | %5.0f%% %5d %5d | %5d %6d %5d %6d %5.1f" % [
 		n, r.seed, r.outcome, r.day, last.alive, last.dead, last.turned, last.left,
 		last.food, last.water, last.scrap, last.meds, last.ammo,
-		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.get("moves", 0), r.took])
+		100.0 * last.wall_hp / last.wall_max, last.breached, last.kills, r.trips, r.treats, r.get("moves", 0), r.get("builds", 0), r.took])
 	if verbose:
 		for note in r.notes:
 			print("        day %2d %05.2f  %s" % [note.day, note.hour, note.text])

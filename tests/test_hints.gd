@@ -28,7 +28,7 @@ func test_the_tips_file_is_valid_and_every_tip_is_short_and_known() -> void:
 		var start: Dictionary = h.get("start", {})
 		check(table.has(String(start.get("cond", ""))), "%s: its trigger '%s' is a condition" % [id, start.get("cond", "")])
 		for name in h.get("anchor", []):
-			check(String(name) == "clock" or String(name) == "stores" or String(name).begins_with("stores."), "%s: '%s' is a part of the HUD that is always there" % [id, name])
+			check(String(name) == "clock" or String(name) == "stores" or String(name).begins_with("stores.") or String(name) == "build", "%s: '%s' is a part of the HUD that is always there" % [id, name])
 		check(not Prefs.DEFAULTS.flags.has("hint_%s" % id), "%s starts unseen" % id)
 
 
@@ -44,7 +44,7 @@ func _holds(h_id: String, sim) -> bool:
 func test_each_tip_is_set_off_by_what_it_is_about() -> void:
 	var g := Helpers.make(5, 1)
 	var sim = g.sim
-	for id in ["dusk", "stores", "ammo", "wound", "fever", "breach", "runner", "brute"]:
+	for id in ["dusk", "stores", "ammo", "wound", "fever", "breach", "runner", "brute", "build"]:
 		check(not _holds(id, sim), "%s: not at the start of a run" % id)
 	# dusk: the bell
 	Helpers.run_to_hour(sim, 19.2)
@@ -81,6 +81,42 @@ func test_each_tip_is_set_off_by_what_it_is_about() -> void:
 	sim.spawn(32.0, 5.0, "approach", "brute")
 	check(_holds("brute", sim), "brute: and then a brute")
 	g.world.free()
+
+
+## The tip about building: from the third day, with 30 scrap in the stores and nothing built or going up.
+func test_the_build_tip_comes_from_the_third_day_with_the_scrap_and_nothing_built() -> void:
+	var g := Helpers.make(5, 1)
+	var sim = g.sim
+	sim.day = 3
+	sim.stock.scrap = 60.0
+	check(_holds("build", sim), "day 3, 60 scrap, nothing built: it is time")
+	sim.day = 2
+	check(not _holds("build", sim), "not on the second day")
+	sim.day = 9
+	check(_holds("build", sim), "and on any day after")
+	sim.stock.scrap = 29.0
+	check(not _holds("build", sim), "not with 29 scrap")
+	sim.stock.scrap = 30.0
+	check(_holds("build", sim), "with 30 it is")
+	sim.stock.scrap = 60.0
+	check(sim.build.order("court_north", "salvage_bench"), "(a site is ordered)")
+	sim.stock.scrap = 60.0
+	check(not _holds("build", sim), "not once something is going up: the player has found the screen")
+	sim.build.cancel("court_north")
+	sim.stock.scrap = 60.0
+	check(_holds("build", sim), "a cancelled one has built nothing")
+	sim.build.plot("junk_corner").building = "workshop"
+	check(not _holds("build", sim), "not once something stands")
+	for h in Hints.load_hints():
+		if String(h.id) == "build":
+			eq(h.get("anchor", []), ["build"], "it points at the toolbar's hammer")
+			check(String(h.text).contains("N") and String(h.text).contains("salvage bench"), "and says the key and what to build first: %s" % h.text)
+	g.world.free()
+
+
+func test_the_build_tip_comes_last_so_that_it_never_hides_a_warning() -> void:
+	var list := Hints.load_hints()
+	eq(String(list[list.size() - 1].id), "build", "the last of the tips: the first whose moment has come is the one shown")
 
 
 # ------------------------------------------------------------------- the card --
@@ -134,6 +170,28 @@ func test_a_tip_comes_once_with_a_ring_and_goes_when_it_is_read() -> void:
 	main.sim.stock.ammo = 30.0
 	await Tut.frames(main, 40 + 45 * 30)
 	eq(hints.shown_id(), "", "the same tip does not come twice")
+	await Tut.leave(main)
+
+
+func test_the_build_tip_lights_the_hammer_and_comes_once() -> void:
+	var main = _run()
+	await Tut.frames(main, 3)
+	_tips_on(main)
+	var hints = main.hints
+	main.sim.day = 3
+	main.sim.stock.scrap = 45.0
+	await Tut.frames(main, 40)
+	eq(hints.shown_id(), "build", "the build tip is up")
+	check(Prefs.flag("hint_build"), "and is marked as shown the moment it was")
+	check(hints.target_rect.size.x > 0.0 and hints.target_rect == main.hud.anchor_rect("build"), "with the toolbar's hammer lit: %s" % str(hints.target_rect))
+	var card: Rect2 = hints.card.get_global_rect()
+	check(Rect2(Vector2.ZERO, main._vp()).grow(1.0).encloses(card) and not card.intersects(hints.target_rect), "inside the window and off what it lights")
+	check(hints.text_label.text.begins_with("The crew can build now. Press N"), "saying what the key does: '%s'" % hints.text_label.text)
+	hints.ok_button.pressed.emit()
+	await Tut.frames(main, 4)
+	eq(hints.shown_id(), "", "Got it takes it away")
+	await Tut.frames(main, 40 + 45 * 30)
+	eq(hints.shown_id(), "", "the same thing again, and nothing comes: once is all")
 	await Tut.leave(main)
 
 

@@ -1,7 +1,7 @@
 extends "res://tests/case.gd"
 ## The keys and clicks of the night tools in main.gd, on the real game scene (driven by hand
 ## like test_step_clock does): V flips the fields-of-fire view, L sets the alarm on the
-## selected wall section or says why not, B and M give the selected person the wall crew and the
+## selected wall section or says why not, B and M give the selected person the Builders and the
 ## workbench jobs (or take them off, or say why not), J opens the Jobs screen, a brute is easier to
 ## click, and the pitch of a groan follows the kind of the dead.
 
@@ -209,14 +209,14 @@ func test_l_without_a_wall_selected_asks_for_one() -> void:
 
 # ------------------------------------------------------------------- B --
 
-func test_b_puts_the_selected_person_on_the_wall_crew_and_takes_them_off_again() -> void:
+func test_b_puts_the_selected_person_on_the_builders_and_takes_them_off_again() -> void:
 	var main = _game()
 	var sim = main.sim
 	var ana = _person(main, "ana")
 	main._select({"kind": "person", "ref": ana})
 	eq(sim.jobs.job_of(ana), "infirmary", "the nurse is in the infirmary at the start")
 	main._key(KEY_B)
-	eq(sim.jobs.job_of(ana), "builders", "B puts the selected person on the wall crew")
+	eq(sim.jobs.job_of(ana), "builders", "B puts the selected person on the Builders job")
 	main._key(KEY_B)
 	eq(sim.jobs.job_of(ana), "", "and takes them off it")
 	eq(sim.jobs.job_of(_person(main, "walt")), "builders", "nobody else was touched")
@@ -226,7 +226,7 @@ func test_b_puts_the_selected_person_on_the_wall_crew_and_takes_them_off_again()
 	await _leave(main)
 
 
-func test_b_says_why_when_the_wall_crew_is_full() -> void:
+func test_b_says_why_when_the_builders_are_full() -> void:
 	var main = _game()
 	_hud_up(main)
 	var sim = main.sim
@@ -236,7 +236,7 @@ func test_b_says_why_when_the_wall_crew_is_full() -> void:
 	main._select({"kind": "person", "ref": ana})
 	main._key(KEY_B)
 	eq(sim.jobs.job_of(ana), "infirmary", "the three seats are taken: Ana stays where she is")
-	eq(main.hud.toast_label.text, "Not now: the Wall crew is full", "and a toast says why, in the rules' own words")
+	eq(main.hud.toast_label.text, "Not now: no free seat at the Builders", "and a toast says why, in the rules' own words")
 	eq(main.hud.toast_label.get_theme_color("font_color"), Hud.TOAST_COLOR.warn, "as a warning")
 	await _leave(main)
 
@@ -296,11 +296,11 @@ func test_m_says_why_when_the_bench_is_full() -> void:
 	main._key(KEY_M)
 	eq(sim.jobs.job_of(ana), "infirmary", "both seats are taken: Ana stays where she is")
 	var why: String = sim.jobs.why_not(ana, "bench")
-	eq(why, "the Workbench is full", "the rules' reason")
+	eq(why, "no free seat at the Workbench", "the rules' reason")
 	check(main.hud.toast_panel.visible, "a toast says so")
 	eq(main.hud.toast_label.text, "Not now: " + why, "with the rules' own words")
 	eq(main.hud.toast_label.get_theme_color("font_color"), Hud.TOAST_COLOR.warn, "as a warning")
-	check(_job_button(main).tooltip_text.contains("Not now: the Workbench is full."), "and the button said so before: '%s'" % _job_button(main).tooltip_text)
+	check(_job_button(main).tooltip_text.contains("Not now: no free seat at the Workbench."), "and the button said so before: '%s'" % _job_button(main).tooltip_text)
 	await _leave(main)
 
 
@@ -330,7 +330,7 @@ func test_m_with_a_wall_selected_asks_for_one_of_the_crew() -> void:
 	main._key(KEY_M)
 	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "a wall piece has no job")
 	main._key(KEY_B)
-	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "nor does it join the wall crew")
+	eq(main.hud.toast_label.text, "Not now: pick one of the crew first", "nor does it join the Builders")
 	await _leave(main)
 
 
@@ -477,6 +477,20 @@ func test_the_menu_button_opens_the_pause_menu_like_esc_with_nothing_selected() 
 
 
 # ------------------------------------------------------------------- clicking --
+
+func test_a_drag_in_progress_when_a_page_opens_ends_there() -> void:
+	var main = _game()
+	main.drag = {"pos": Vector2(10.0, 10.0), "center": main.cam_center, "moved": true, "button": MOUSE_BUTTON_LEFT}
+	main.toggle_jobs()
+	check(main.menu_open, "the Jobs screen is up")
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = Vector2(120.0, 90.0)
+	main._unhandled_input(release)
+	check(main.drag == null, "the release the page swallowed has ended the drag: the camera is not glued to the mouse")
+	await _leave(main)
+
 
 func test_a_brute_is_easier_to_click_than_a_walker_and_a_runner_no_harder() -> void:
 	var main = _game()

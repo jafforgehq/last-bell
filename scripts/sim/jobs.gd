@@ -32,7 +32,7 @@ static var _cache := {}
 ## Someone is at their seat when within this many tiles of it.
 const AT_STATION := 0.6
 ## Where the seats of a station are, round its spot (the first seat is the spot itself).
-const SEAT_OFFSETS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0), Vector2(0.0, 1.1)]
+const SEAT_OFFSETS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0), Vector2(0.0, -1.1)]
 ## An empty radio desk is said from 11:30 (the noon call is at 12:00) and an empty lookout post from
 ## 16:30 (the forecast is at 17:00).
 const RADIO_ALERT_HOUR := 11.5
@@ -245,7 +245,7 @@ func why_not(p, id: String) -> String:
 	if not unlocked(id):
 		return "the %s is not built yet" % String(_station_by_id[id].name).to_lower()
 	if seats_left(id) <= 0:
-		return "the %s is full" % String(_station_by_id[id].name)
+		return "no free seat at the %s" % String(_station_by_id[id].name)
 	return ""
 
 
@@ -287,7 +287,8 @@ func unassign(p) -> void:
 
 
 ## After a building came down: whoever holds a station that is gone, or a seat the station no longer has,
-## is let go (the ones away first, then the last to arrive).
+## is let go: the ones away on a trip first, then the ones who sit last (the seats are filled in the
+## order of the crew list, so the first keep theirs).
 func trim() -> void:
 	for st in _stations:
 		var id := String(st.id)
@@ -295,9 +296,15 @@ func trim() -> void:
 		var seats := seats_of(id)
 		if crew.size() <= seats:
 			continue
-		crew.sort_custom(func(a, b): return (a.away != null) and (b.away == null))
+		var order: Array = []
+		for i in range(crew.size() - 1, -1, -1):
+			if crew[i].away != null:
+				order.append(crew[i])
+		for i in range(crew.size() - 1, -1, -1):
+			if crew[i].away == null:
+				order.append(crew[i])
 		for i in crew.size() - seats:
-			unassign(crew[i])
+			unassign(order[i])
 
 
 ## Takes everyone off their jobs.

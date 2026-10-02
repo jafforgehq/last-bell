@@ -19,6 +19,9 @@
 ## modifiers, mood "Steady", perf 1.0, no breakdowns.
 ##
 ## Alerts: `breakdown-<id>`. Marks (`status_of`): icon "mood".
+##
+## From the buildings (build.gd) it reads `morale`: each standing bunk house is a steady lift for
+## everyone alive, one more continuous modifier ("A proper bed", see `_modifiers`).
 extends RefCounted
 
 const Supplies := preload("res://scripts/sim/supplies.gd")
@@ -59,6 +62,8 @@ const DEAD_MAX := -20.0
 ## After the bell, with none of the dead within this many tiles, the night is quiet: +QUIET.
 const QUIET_TILES := 15.0
 const QUIET := 2.0
+## What the bunk houses' lift is called (the buildings' `morale` is its size).
+const BED_LABEL := "A proper bed"
 
 ## --- shocks ---
 ## A kill lifts the one who made it, at most KILL_MAX points a night.
@@ -345,6 +350,10 @@ func _modifiers(p) -> Array:
 		out.append({"label": label, "value": maxf(DEAD_MAX, DEAD_EACH * float(attacking)) * scale})
 	if sim.bell_rung and not any_near:
 		out.append({"label": "A quiet night", "value": QUIET})
+	# a bed to sleep in (the bunk houses): a steady lift for everyone
+	var bed: float = sim.build.bonus("morale")
+	if bed != 0.0:
+		out.append({"label": BED_LABEL, "value": bed})
 	return out
 
 

@@ -55,7 +55,7 @@ func test_and_in_the_small_size() -> void:
 
 func test_the_first_line_names_the_order_in_plain_words() -> void:
 	var ctx := _everything()
-	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "job_builders": "Wall crew", "job_bench": "Workbench", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
+	var words := {"draft": "Draft", "post": "To post", "repair": "Repair", "focus": "Follow", "job_builders": "Builders", "job_bench": "Workbench", "treat": "Treat", "sendout": "Send out", "scavenge": "Scavenge"}
 	for id in words:
 		var first: String = _lines(Kit.gizmo(ctx, id))[0]
 		check(first.begins_with(words[id]), "%s starts with its name: '%s'" % [id, first])

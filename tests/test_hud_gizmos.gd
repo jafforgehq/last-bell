@@ -13,7 +13,7 @@ func _open(ctx: Dictionary, id: String):
 func test_a_person_gets_the_four_usual_buttons_and_the_two_jobs_the_keys_give() -> void:
 	var ctx := Kit.build()
 	_open(ctx, "ruth")
-	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "job_builders", "job_bench"], "the usual four in their old order, then the wall crew (B) and the workbench (M)")
+	eq(Kit.gizmo_ids(ctx), ["draft", "post", "repair", "focus", "job_builders", "job_bench"], "the usual four in their old order, then the Builders (B) and the workbench (M)")
 	Kit.free_all(ctx)
 
 

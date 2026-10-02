@@ -683,16 +683,56 @@ func gun_of(p: Person) -> Dictionary:
 	return BUTT
 
 
-## How far a gun reaches right now, in tiles: its own range, less in a fog (a card of the
-## storyteller's); a weapon in the hand never reaches less far.
-func reach_of(gun: Dictionary) -> float:
+## Whether it is night for the guns: from the bell (or the dark) to the end of dawn.
+func is_night() -> bool:
+	return phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
+
+
+## How far a gun reaches right now for this person, in tiles (see `reach_at`): the person's place
+## decides whether a watchtower is near. Without a person (the single-argument form) the place is
+## left out.
+func reach_of(gun: Dictionary, p = null) -> float:
+	return reach_at(gun, null if p == null else Vector2(p.x, p.y))
+
+
+## How far a gun reaches right now, in tiles: its own range, less in a fog (a card of the storyteller's),
+## more from the bell to dawn if floodlights stand (the buildings' `night_reach_mult`; `night` asks for
+## the night's reach by day, as the fields-of-fire view and the planners do), and for someone standing
+## at `at` (a point in tiles; null for no place) more by the flat tiles of a watchtower near them
+## (`reach_bonus_at`). A weapon in the hand never reaches less or further.
+func reach_at(gun: Dictionary, at = null, night := false) -> float:
 	if gun.get("melee", false):
 		return float(gun.range)
-	return float(gun.range) * storyteller.reach_mult()
+	var reach: float = float(gun.range) * storyteller.reach_mult()
+	if night or is_night():
+		reach *= build.factor("night_reach_mult")
+	if at != null:
+		reach += build.reach_bonus_at(Vector2(at))
+	return reach
+
+
+## The range a shot's accuracy falls off against: the gun's own, longer by what the buildings add (the
+## floodlights by night, a watchtower near the shooter), so that the reach they give is shot at the
+## accuracy of the range it adds to and not at a negative one (fog shortens what the guns can see, not how
+## well they shoot). A weapon in the hand is not helped.
+func accuracy_range(gun: Dictionary, p: Person) -> float:
+	var r: float = float(gun.range)
+	if gun.get("melee", false):
+		return r
+	if is_night():
+		r *= build.factor("night_reach_mult")
+	return r + build.reach_bonus_at(Vector2(p.x, p.y))
+
+
+## The chance one shot (one pellet) hits at this distance, before the aim factors: the gun's accuracy,
+## the shooter's skill and how far the target is against `accuracy_range`.
+func hit_chance(gun: Dictionary, p: Person, dist: float) -> float:
+	var skill: float = float(p.skills.Shooting) / 10.0 * perf(p)
+	return float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / accuracy_range(gun, p), 2.0))
 
 
 func _find_target(p: Person):
-	var rng: float = reach_of(gun_of(p))
+	var rng: float = reach_of(gun_of(p), p)
 	var best = null
 	var best_score := INF
 	for z in zombies:
@@ -726,7 +766,7 @@ func _combat(p: Person, dt: float) -> void:
 	if gun == BUTT and (phase == "night" or phase == "dusk" or p.drafted):
 		alert("ammo-out", "danger", "Out of ammo", "The guns are silent. Send a party for more.", null, 20.0)
 	var tz = p.target
-	if tz == null or tz.state == "dying" or tz.state == "dead" or Vector2(tz.x - p.x, tz.y - p.y).length() > reach_of(gun):
+	if tz == null or tz.state == "dying" or tz.state == "dead" or Vector2(tz.x - p.x, tz.y - p.y).length() > reach_of(gun, p):
 		p.target = _find_target(p)
 	if p.target == null:
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 4.0)
@@ -778,12 +818,11 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
 	stock.ammo = maxf(0.0, stock.ammo - shot_cost(p))
 	var pellets := int(gun.get("pellets", 1))
-	var skill: float = float(p.skills.Shooting) / 10.0 * perf(p)
 	var aim_f: float = aim_factor(p) * storyteller.aim_mult(dist)
 	var dealt := 0.0
 	for k in pellets:
 		var pa := ang + (rng.randf() - 0.5) * float(gun.get("spread", 0.05))
-		var p_hit := float(gun.acc) * (0.75 + skill * 0.35) * (1.0 - 0.5 * pow(dist / float(gun.range), 2.0)) * aim_f
+		var p_hit := hit_chance(gun, p, dist) * aim_f
 		var hit := rng.randf() < (p_hit * 0.7 if pellets > 1 else p_hit)
 		var e: Vector2
 		if hit:

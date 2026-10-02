@@ -51,6 +51,13 @@
 			"title": "A brute",
 			"text": "A brute is slow and huge, and it tears walls down. The guns shoot it first. Keep a builder close to mend the wall it attacks (F).",
 			"start": {"cond": "kind_alive", "params": {"kind": "brute"}}
+		},
+		{
+			"id": "build",
+			"title": "Time to build",
+			"text": "The crew can build now. Press N for the plots: a salvage bench pays for itself.",
+			"anchor": ["build"],
+			"start": {"cond": "can_build", "params": {"day": 3, "scrap": 30}}
 		}
 	]
 }

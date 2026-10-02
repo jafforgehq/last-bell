@@ -72,6 +72,7 @@ static func registry() -> Dictionary:
 			"feverish": _feverish,
 			"breached": _breached,
 			"kind_alive": _kind_alive,
+			"can_build": _can_build,
 			"all": _all,
 			"any": _any,
 			"not": _not,
@@ -390,6 +391,18 @@ static func _kind_alive(sim, p, _st) -> bool:
 		if z.kind == kind and z.state != "dead" and z.state != "dying" and z.state != "retreat":
 			return true
 	return false
+
+
+## {"day": n, "scrap": n}: the crew could build (round 6): it is that day (3) or later, the stores hold that much scrap
+## (30) or more, and nothing is built or going up on any plot yet.
+static func _can_build(sim, p, _st) -> bool:
+	var buildings = sim.get("build")
+	if buildings == null or sim.day < int(p.get("day", 3)) or float(sim.stock.scrap) < float(p.get("scrap", 30.0)):
+		return false
+	for plot in buildings.plots():
+		if String(plot.building) != "" or not plot.site.is_empty():
+			return false
+	return true
 
 
 # ------------------------------------------------------------- combinators --

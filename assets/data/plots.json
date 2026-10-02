@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_doc": "Fixed lots in the compound. kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, outside the lot's footprint). The first positions are rough: the view owner checks them against the map (nothing overlapped, every work spot reachable).",
+ "_doc": "Fixed lots in the compound. kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, a step either side too, outside the footprint, reachable from the gate). Every lot is three tiles by three and centred on the middle of a tile, so that what a building shuts (assets/data/building_art.json, 'solid') is whole tiles: the back two rows of the lot, the front row (where the work spot is) is always open. The positions were checked against the map (tests/test_build_view.gd): on open ground inside the yard, clear of every prop, ladder, school door and the gate's lane, a person's width apart, and every work spot reachable.",
  "plots": [
   {
    "id": "court_north",
@@ -8,15 +8,15 @@
    "kind": "yard",
    "pos": [
     28.5,
-    27.0
+    27.5
    ],
    "size": [
-    5.0,
-    4.0
+    3.0,
+    3.0
    ],
    "work": [
     28.5,
-    29.8
+    28.5
    ]
   },
   {
@@ -25,15 +25,15 @@
    "kind": "yard",
    "pos": [
     28.5,
-    33.0
+    32.5
    ],
    "size": [
-    5.0,
-    4.0
+    3.0,
+    3.0
    ],
    "work": [
     28.5,
-    35.8
+    33.5
    ]
   },
   {
@@ -41,16 +41,16 @@
    "name": "The east lot",
    "kind": "yard",
    "pos": [
-    50.5,
-    22.6
+    47.5,
+    35.5
    ],
    "size": [
-    4.0,
+    3.0,
     3.0
    ],
    "work": [
-    50.5,
-    24.9
+    47.5,
+    36.5
    ]
   },
   {
@@ -58,16 +58,16 @@
    "name": "The north-east lot",
    "kind": "yard",
    "pos": [
-    56.4,
-    23.2
+    52.5,
+    22.5
    ],
    "size": [
-    4.0,
-    2.6
+    3.0,
+    3.0
    ],
    "work": [
-    56.4,
-    25.0
+    52.5,
+    23.5
    ]
   },
   {
@@ -76,15 +76,15 @@
    "kind": "yard",
    "pos": [
     35.5,
-    41.0
+    41.5
    ],
    "size": [
-    5.0,
+    3.0,
     3.0
    ],
    "work": [
     35.5,
-    39.0
+    42.5
    ]
   },
   {
@@ -92,16 +92,16 @@
    "name": "The south-east lot",
    "kind": "yard",
    "pos": [
-    50.7,
-    40.6
+    42.5,
+    36.5
    ],
    "size": [
-    4.4,
+    3.0,
     3.0
    ],
    "work": [
-    50.7,
-    38.6
+    42.5,
+    37.5
    ]
   },
   {
@@ -109,16 +109,16 @@
    "name": "The junk corner",
    "kind": "yard",
    "pos": [
-    28.7,
-    41.4
+    26.5,
+    37.5
    ],
    "size": [
     3.0,
-    2.0
+    3.0
    ],
    "work": [
-    28.7,
-    39.8
+    26.5,
+    38.5
    ]
   },
   {
@@ -126,16 +126,16 @@
    "name": "Beside the garden",
    "kind": "yard",
    "pos": [
-    57.0,
-    39.4
+    52.5,
+    36.5
    ],
    "size": [
-    6.0,
-    2.2
+    3.0,
+    3.0
    ],
    "work": [
-    57.0,
-    37.8
+    52.5,
+    37.5
    ]
   },
   {
@@ -143,16 +143,16 @@
    "name": "The south-east corner",
    "kind": "yard",
    "pos": [
-    61.0,
-    41.9
+    56.5,
+    39.5
    ],
    "size": [
-    2.4,
-    2.4
+    3.0,
+    3.0
    ],
    "work": [
-    61.0,
-    40.1
+    56.5,
+    40.5
    ]
   },
   {
@@ -160,16 +160,16 @@
    "name": "The north wall",
    "kind": "wall",
    "pos": [
-    31.5,
-    23.2
+    30.5,
+    22.5
    ],
    "size": [
     3.0,
     3.0
    ],
    "work": [
-    31.5,
-    25.5
+    30.5,
+    23.5
    ]
   },
   {
@@ -177,16 +177,16 @@
    "name": "The west wall",
    "kind": "wall",
    "pos": [
-    24.2,
-    27.8
+    23.5,
+    27.5
    ],
    "size": [
     3.0,
     3.0
    ],
    "work": [
-    26.4,
-    27.8
+    23.5,
+    28.5
    ]
   },
   {
@@ -194,16 +194,16 @@
    "name": "The east wall",
    "kind": "wall",
    "pos": [
-    60.2,
-    33.0
+    60.5,
+    39.5
    ],
    "size": [
-    2.4,
+    3.0,
     3.0
    ],
    "work": [
-    60.2,
-    35.0
+    60.5,
+    40.5
    ]
   }
  ]

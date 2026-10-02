@@ -99,7 +99,7 @@ func test_it_says_why_not_and_is_ghosted_but_still_pressable() -> void:
 	var lines := _lines(b)
 	eq(lines.size(), 5, "a fifth line when there is no seat: '%s'" % b.tooltip_text)
 	eq(lines[3], "Key: M", "the key stays where it was")
-	eq(lines[4], "Not now: the Workbench is full.", "and the reason is the jobs module's own")
+	eq(lines[4], "Not now: no free seat at the Workbench.", "and the reason is the jobs module's own")
 	check(not b.disabled, "but not disabled: the order goes through and the game says why")
 	ctx.sim.jobs.unassign(Kit.person(ctx, "hector"))
 	Kit.update(ctx)
@@ -121,7 +121,7 @@ func test_it_lights_while_they_have_the_job_and_they_can_always_be_taken_off_it(
 	eq(b.get_meta("on"), true, "lit for Dez, who is on the bench")
 	var on_box: StyleBox = b.get_theme_stylebox("normal")
 	if on_box is StyleBoxFlat:
-		eq(on_box.bg_color, Hud.ACCENT, "gold, like Wall crew when it is on")
+		eq(on_box.bg_color, Hud.ACCENT, "gold, like Builders when it is on")
 	# the bench is full and he is on it: pressing it takes him off, so the button says nothing against it
 	ctx.sim.jobs.assign(Kit.person(ctx, "hector"), "bench")
 	Kit.update(ctx)
@@ -190,7 +190,7 @@ func test_the_why_for_a_wall_nobody_the_gone_and_the_full_is_plain() -> void:
 	_person(ctx, "ana")
 	eq(ctx.hud.why_not("job_bench"), "", "a person who can: nothing against it")
 	ctx.sim.jobs.assign(Kit.person(ctx, "hector"), "bench")
-	eq(ctx.hud.why_not("job_bench"), "the Workbench is full", "and when there is no seat, the jobs module says why")
+	eq(ctx.hud.why_not("job_bench"), "no free seat at the Workbench", "and when there is no seat, the jobs module says why")
 	var dez = _person(ctx, "dez")
 	eq(ctx.hud.why_not("job_bench"), "", "someone who is on it can always leave")
 	dez.dead = true
@@ -283,15 +283,15 @@ func test_both_tags_fit_beside_every_name() -> void:
 
 # ------------------------------------------------------------ help and alerts --
 
-func test_the_help_table_lists_m_j_and_b_by_the_names_of_the_jobs() -> void:
+func test_the_help_table_lists_m_j_b_and_n_by_the_names_of_the_jobs_and_the_page() -> void:
 	var ctx := Kit.build()
 	var found := {}
 	for group in Hud.HELP:
 		for entry in group[2]:
-			if ["M", "B", "J"].has(entry[0]):
+			if ["M", "B", "J", "N"].has(entry[0]):
 				found[entry[0]] = entry[1]
-	eq(found, {"M": "Workbench", "B": "Wall crew", "J": "Jobs"}, "what M, B and J do")
-	for t in ["Workbench", "Wall crew", "Jobs"]:
+	eq(found, {"M": "Workbench", "B": "Builders", "J": "Jobs", "N": "Build"}, "what M, B, J and N do")
+	for t in ["Workbench", "Builders", "Jobs", "Build"]:
 		check(Kit.texts(ctx.hud.help).has(t), "'%s' is on the panel" % t)
 	Kit.free_all(ctx)
 

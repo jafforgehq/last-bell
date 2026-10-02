@@ -65,7 +65,7 @@ func test_the_screen_has_a_row_for_each_person_and_a_card_for_each_station() -> 
 	eq(s.rows.keys(), ["ruth", "dez", "ana", "marcus", "walt", "hector"], "a row for each of the six, in the crew's order")
 	eq(s.station_cards.keys(), ["bench", "builders", "garden", "infirmary", "radio", "watch"], "and a card for each of the six stations")
 	var all := Kit.texts(s)
-	for t in ["Duty roster", "Workbench", "Wall crew", "Vegetable beds", "Infirmary", "Radio desk", "Lookout post", "STATIONS"]:
+	for t in ["Duty roster", "Workbench", "Builders", "Vegetable beds", "Infirmary", "Radio desk", "Lookout post", "STATIONS"]:
 		check(all.has(t), "shows '%s'" % t)
 	eq([s.auto_button.text, s.clear_button.text, s.close_button.text], ["Auto-assign", "Clear", "Close"], "and the three buttons")
 	check(ctx.hud.modal_open(), "the HUD calls it a modal")
@@ -131,7 +131,7 @@ func test_every_station_card_has_its_words_its_seats_and_its_crew() -> void:
 	var bench: Dictionary = s.station_cards.bench
 	eq(bench.pips.map(func(p): return p.get_meta("who")), ["dez", ""], "the bench has Dez in one seat and one free")
 	eq(Kit.texts(bench.card).has("Dez"), true, "and says who")
-	eq(s.station_cards.builders.pips.map(func(p): return p.get_meta("who")), ["walt", "", ""], "the wall crew: Walt and two free")
+	eq(s.station_cards.builders.pips.map(func(p): return p.get_meta("who")), ["walt", "", ""], "the Builders: Walt and two free")
 	eq(Kit.texts(s.station_cards.radio.card).has("Ruth"), true, "Ruth is at the radio desk")
 	check(Kit.texts(s.station_cards.garden.card).has("Hector"), "and Hector in the beds")
 	ctx.sim.jobs.unassign(Kit.person(ctx, "dez"))
@@ -230,7 +230,7 @@ func test_choosing_a_job_from_the_list_gives_it_and_the_page_follows() -> void:
 	check(s.list == null, "the list shuts")
 	eq(Kit.texts(s.rows.walt.job), ["Vegetable beds"], "his row follows")
 	eq(s.station_cards.garden.pips.map(func(p): return p.get_meta("who")), ["walt", "hector"], "and the station's seats")
-	eq(s.station_cards.builders.pips.map(func(p): return p.get_meta("who")), ["", "", ""], "the wall crew is empty")
+	eq(s.station_cards.builders.pips.map(func(p): return p.get_meta("who")), ["", "", ""], "the Builders are empty")
 	s.open_job_list(walt)
 	s.list_items[""].pressed.emit()
 	eq(ctx.sim.jobs.job_of(walt), "", "No job takes him off it")
@@ -244,7 +244,7 @@ func test_a_full_station_is_refused_and_the_page_says_why() -> void:
 	var walt = Kit.person(ctx, "walt")
 	check(not s.choose_job(walt, "radio"), "the radio desk is full")
 	eq(ctx.sim.jobs.job_of(walt), "builders", "Walt stays where he was")
-	check(s.error_label.visible and s.error_label.text.contains("Radio desk is full"), "a line says why: '%s'" % s.error_label.text)
+	check(s.error_label.visible and s.error_label.text.contains("No free seat at the Radio desk"), "a line says why: '%s'" % s.error_label.text)
 	check(s.choose_job(walt, "garden"), "a seat in the beds")
 	check(not s.error_label.visible, "and the line goes")
 	Kit.free_all(ctx)
@@ -301,7 +301,7 @@ func test_the_sliders_set_the_stations_settings() -> void:
 	eq(bench.values.scrap_reserve.text, "8 scrap", "with its unit")
 	var crew: HSlider = s.station_cards.builders.sliders.repair_below
 	crew.value = 50.0
-	eq(int(ctx.sim.jobs.setting("builders", "repair_below")), 50, "the wall crew's threshold")
+	eq(int(ctx.sim.jobs.setting("builders", "repair_below")), 50, "the Builders' threshold")
 	eq(s.station_cards.builders.values.repair_below.text, "50%", "in per cent")
 	check(Kit.texts(bench.card).has("Make ammo until the stock reaches") and Kit.texts(s.station_cards.builders.card).has("Mend walls that are under"), "each with its label from the data")
 	check(s.station_cards.garden.sliders.is_empty() and s.station_cards.radio.sliders.is_empty(), "a station with no settings has no sliders")

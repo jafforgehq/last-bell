@@ -16,8 +16,8 @@
 ##   (Medicine 1 or more) to each. A treatment is a "job": the healer walks to
 ##   the patient and works while standing within reach. The medicine is used
 ##   when the job is done, and no job is given out that the stock cannot pay.
-## - A stabilised person is carried to a bed (cots, then the bunks) and heals
-##   10 health an hour, half as fast again while someone is on duty at the
+## - A stabilised person is carried to a bed (cots, then the bunks, then the
+##   bunk house's) and heals 10 health an hour, half as fast again while someone is on duty at the
 ##   Infirmary station; at 40 they get up. The people on the infirmary job are
 ##   preferred as healers.
 ## - An infected person turns into a walker 12 to 24 game hours after the bite
@@ -25,6 +25,10 @@
 ##
 ## Events added to sim.events (main.gd ignores kinds it does not know):
 ##   {"type": "turned", "x": float, "y": float}   a survivor just became a walker
+##
+## From the buildings (build.gd) it reads the bunk house's beds (`bed_spots()`, the `beds` effect): they
+## are added to `beds` after the cots and the bunks as beds of kind "bunk house", and refreshed whenever
+## `build.version` changes (see `_sync_bunks`).
 extends RefCounted
 
 ## Health lost per game hour by each kind of wound.
@@ -70,6 +74,11 @@ const ANCHOR_SLACK := 0.1
 ## to treat the hurt).
 const SKILL_TILES := 3.0
 const INFIRMARY_PREFERENCE := 6.0
+## The kinds of bed, in the order a patient is given one (the bunk house's are the buildings'), and what a
+## patient in each says.
+const BUNK_HOUSE := "bunk house"
+const BED_KINDS := ["cot", "mattress", BUNK_HOUSE]
+const REST_WORDS := {"cot": "Resting in the infirmary", "mattress": "Resting in the bunks", BUNK_HOUSE: "Resting in the bunk house"}
 ## Health a person regains an hour lying stabilised, and where they get up. While someone is on
 ## duty in the infirmary (`jobs.working("infirmary")`) a patient in a bed heals this many times
 ## as fast.
@@ -102,8 +111,11 @@ var jobs: Array = []
 var treat_orders := {}
 ## People walking to the gate to be sent out: id -> sim.clock_min of the order.
 var sendouts := {}
-## The beds, cots first: [{"pos": Vector2, "kind": "cot" or "mattress"}].
+## The beds, cots first: [{"pos": Vector2, "kind": "cot", "mattress" or "bunk house"}].
 var beds: Array = []
+## The version of the buildings (`build.version`) the bunk house beds in `beds` were taken at; -1 when they
+## are to be taken again.
+var _bunks_version := -1
 ## id -> sim.clock_min of the last infection roll.
 var last_roll := {}
 ## id -> the fever stage already announced.
@@ -124,6 +136,7 @@ func start() -> void:
 	stage_seen.clear()
 	no_meds_at = -1.0e9
 	beds = _find_beds()
+	_bunks_version = -1
 
 
 func _find_beds() -> Array:
@@ -142,6 +155,7 @@ func _find_beds() -> Array:
 ## Every step: bleeding, bleed-out timers, healing in bed, infection, turning,
 ## people walking to the gate, treatments, and handing out new ones.
 func update(dt: float) -> void:
+	_sync_bunks()
 	var gh: float = sim.game_hours(dt)
 	for p in sim.people:
 		if p.dead or p.away != null:
@@ -307,6 +321,7 @@ func stabilise(p) -> void:
 func _carry_to_bed(p) -> void:
 	if p.resting_bed != null:
 		return
+	_sync_bunks()
 	p.path = []
 	p.goal_key = ""
 	p.moving = false
@@ -318,11 +333,11 @@ func _carry_to_bed(p) -> void:
 	p.x = pos.x
 	p.y = pos.y
 	p.resting_bed = pos
-	p.activity = "Resting in the infirmary" if bed.kind == "cot" else "Resting in the bunks"
+	p.activity = String(REST_WORDS.get(bed.kind, "Resting"))
 
 
 func _free_bed(from: Vector2):
-	for kind in ["cot", "mattress"]:
+	for kind in BED_KINDS:
 		var best = null
 		var best_d := INF
 		for b in beds:
@@ -340,6 +355,53 @@ func _free_bed(from: Vector2):
 func _bed_taken(pos: Vector2) -> bool:
 	for q in sim.people:
 		if not q.dead and q.resting_bed != null and Vector2(q.resting_bed).distance_to(pos) < 0.05:
+			return true
+	return false
+
+
+## Keeps the bunk house beds in `beds` as the standing buildings have them: when `build.version` has
+## changed they are taken again (after the cots and the bunks). Whoever lay in a bunk house bed that is
+## no longer there is put back: in the next free bed (any kind), or, when none is free, left where they lie
+## to heal as they did, "Resting". Nothing else is touched (so a test or a scenario that sets `beds` by hand
+## keeps what it set).
+func _sync_bunks() -> void:
+	var version: int = sim.build.version
+	if version == _bunks_version:
+		return
+	_bunks_version = version
+	var was: Array = []
+	var kept: Array = []
+	for b in beds:
+		if String(b.kind) == BUNK_HOUSE:
+			was.append(Vector2(b.pos))
+		else:
+			kept.append(b)
+	var fresh: Array = []
+	for at in sim.build.bed_spots():
+		fresh.append({"pos": Vector2(at), "kind": BUNK_HOUSE})
+	beds = kept + fresh
+	if was.is_empty():
+		return
+	for p in sim.people:
+		if p.dead or p.resting_bed == null:
+			continue
+		var lies := Vector2(p.resting_bed)
+		if _has_spot(was, lies) and not _has_bed_at(lies):
+			p.resting_bed = null
+			if p.downed and p.stabilised:
+				_carry_to_bed(p)
+
+
+func _has_spot(spots: Array, at: Vector2) -> bool:
+	for s in spots:
+		if Vector2(s).distance_to(at) < 0.05:
+			return true
+	return false
+
+
+func _has_bed_at(at: Vector2) -> bool:
+	for b in beds:
+		if Vector2(b.pos).distance_to(at) < 0.05:
 			return true
 	return false
 
@@ -888,6 +950,7 @@ func load_state(d: Dictionary) -> void:
 	sendouts.clear()
 	last_roll.clear()
 	stage_seen.clear()
+	_bunks_version = -1    # the buildings may have changed with the load: the bunk house beds are taken again
 	no_meds_at = float(d.get("no_meds_at", -1.0e9))
 	if typeof(d.get("jobs")) == TYPE_ARRAY:
 		for j in d.jobs:

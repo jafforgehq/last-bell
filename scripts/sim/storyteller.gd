@@ -39,6 +39,10 @@
 ## Events: {"type": "story_card"} when a card is up, {"type": "story_resolved", "id", "text"} when
 ## it is settled, {"type": "dawn_report"}. Alerts: `story` (a card waits), `story-<id>` (what came
 ## of it), `dawn`.
+##
+## From the buildings (build.gd) it reads `boon_mult` and `threat_mult` (the radio mast: the draw's
+## weights of boons and threats, see `_weight`) and `blackout_proof` (the floodlights: a blackout costs
+## no aim, see `aim_mult`). The blackout card itself and its generator are as they were.
 extends RefCounted
 
 ## Where the cards are read from (a test may point it at another file).
@@ -362,16 +366,19 @@ func _eligible(c: Dictionary, day: int, streak: int) -> bool:
 	return _needs_ok(c.needs)
 
 
-## The weight of a card in the draw: its own, leaned on by the tension and the difficulty.
+## The weight of a card in the draw: its own, leaned on by the tension and the difficulty, and by the
+## radio mast (the buildings' `boon_mult` and `threat_mult`; a choice is as it was).
 func _weight(c: Dictionary) -> float:
 	var w := float(c.weight)
 	var style: Dictionary = STYLE[clampi(sim.difficulty, 0, 2)]
 	if c.kind == "threat":
 		w *= float(style.threat)
+		w *= sim.build.factor("threat_mult")
 		if tension < LEAN_BELOW:
 			w *= LEAN
 	elif c.kind == "boon":
 		w *= float(style.boon)
+		w *= sim.build.factor("boon_mult")
 		if tension > LEAN_ABOVE:
 			w *= LEAN
 	return w
@@ -1118,7 +1125,10 @@ func _blackout_step(dt: float) -> void:
 		if sim.clock_min >= float(blackout.at):
 			blackout["state"] = "dark"
 			sim.events.append({"type": "banner", "text": "Blackout", "sub": "The generator has died"})
-			sim.alert("story-blackout", "danger", "The generator has died", "The lamps are out. Aim is worse beyond %d tiles" % int(DARK_FROM_TILES), GENERATOR, 30.0)
+			var sub := "The lamps are out. Aim is worse beyond %d tiles" % int(DARK_FROM_TILES)
+			if lights_hold():
+				sub = "The lamps are out, but the floodlights run on their own"
+			sim.alert("story-blackout", "danger", "The generator has died", sub, GENERATOR, 30.0)
 			_log("The generator died and the lights went out.")
 		return
 	# dark: the day brings the light back
@@ -1513,11 +1523,18 @@ func reach_mult() -> float:
 	return 1.0
 
 
-## How well a shot at `dist` tiles goes, as a share: worse far off in the dark of a blackout.
+## How well a shot at `dist` tiles goes, as a share: worse far off in the dark of a blackout, unless
+## the floodlights stand (`lights_hold`).
 func aim_mult(dist: float) -> float:
-	if enabled and String(blackout.get("state", "")) == "dark" and dist > DARK_FROM_TILES:
+	if enabled and String(blackout.get("state", "")) == "dark" and dist > DARK_FROM_TILES and not lights_hold():
 		return DARK_AIM
 	return 1.0
+
+
+## Whether the wall is lit on its own while the generator is dead: the floodlights (the buildings'
+## `blackout_proof`) have a generator of their own. The blackout still happens; it costs no aim.
+func lights_hold() -> bool:
+	return sim.build.bonus("blackout_proof") > 0.0
 
 
 ## What tonight's budget of the dead is multiplied by on `day` (a warning of a horde).

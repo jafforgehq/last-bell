@@ -275,6 +275,91 @@ func test_the_policy_gives_the_bench_to_the_best_builder() -> void:
 	g.world.free()
 
 
+func _morning_of_day(sim, day: int) -> void:
+	sim.day = day
+	sim.minutes = 7.0 * 60.0
+	sim.phase = "day"
+	sim.bell_rung = false
+
+
+func test_the_informed_policy_orders_a_building_when_it_can_pay_for_it_and_nothing_is_going_up() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	_morning_of_day(sim, 3)
+	sim.stock.scrap = 60.0
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	policy.tick()
+	eq(sim.build.active_site().get("site", {}).get("building", ""), "salvage_bench", "the salvage bench is first")
+	near(float(sim.stock.scrap), 60.0 - 18.0, 1e-9, "and its scrap is paid")
+	eq(policy.builds_ordered, 1, "counted")
+	var said := false
+	for n in policy.notes:
+		said = said or String(n.text).contains("orders the salvage bench")
+	check(said, "and the notes say so: %s" % str(policy.notes))
+	g.world.free()
+
+
+func test_the_policy_saves_up_for_the_next_building_and_builds_one_at_a_time() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	_morning_of_day(sim, 3)
+	sim.stock.scrap = 25.0
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	policy.tick()
+	eq(sim.build.active_site(), {}, "with 25 scrap it cannot pay for 18 and keep 12")
+	_morning_of_day(sim, 4)
+	sim.stock.scrap = 60.0
+	policy.tick()
+	check(not sim.build.active_site().is_empty(), "with 60 it orders")
+	_morning_of_day(sim, 5)
+	sim.stock.scrap = 200.0
+	policy.tick()
+	var sites := 0
+	for pl in sim.build.plots():
+		if not pl.site.is_empty():
+			sites += 1
+	eq(sites, 1, "and not a second while the first is going up")
+	g.world.free()
+
+
+func test_the_default_policy_does_not_build() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	_morning_of_day(sim, 3)
+	sim.stock.scrap = 200.0
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	eq(sim.build.active_site(), {}, "it builds nothing")
+	g.world.free()
+
+
+func test_with_a_site_going_up_the_policy_puts_more_hands_on_the_builders() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	sim.stock.scrap = 60.0
+	sim.build.order("junk_corner", "salvage_bench")
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	check(sim.jobs.crew_of("builders").size() >= 2, "two or more are on the Builders job: %d" % sim.jobs.crew_of("builders").size())
+	g.world.free()
+
+
+func test_the_policy_puts_people_on_the_salvage_bench_while_the_scrap_is_short() -> void:
+	var g := Helpers.make(7, 1)
+	var sim = g.sim
+	sim.build.plot("junk_corner").building = "salvage_bench"
+	sim.build.version += 1
+	sim.stock.scrap = 8.0
+	var policy = Balance.Policy.new(sim)
+	policy.tick()
+	check(sim.jobs.crew_of("salvage").size() >= 1, "someone sorts salvage when the scrap is short")
+	g.world.free()
+
+
 func test_the_policy_puts_two_people_on_the_beds_when_the_food_runs_short() -> void:
 	var g := Helpers.make(7, 1)
 	var sim = g.sim

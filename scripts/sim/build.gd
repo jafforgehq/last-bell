@@ -301,7 +301,7 @@ func order(plot_id: String, building_id: String) -> bool:
 	if why_not(plot_id, building_id) != "":
 		return false
 	var b := building(building_id)
-	sim.stock.scrap = float(sim.stock.scrap) - float(b.scrap)
+	sim.stock.scrap = maxf(0.0, float(sim.stock.scrap) - float(b.scrap))
 	plot(plot_id).site = {"building": building_id, "progress": 0.0, "work": float(b.work), "scrap": float(b.scrap)}
 	_queue.append(plot_id)
 	sim.events.append({"type": "site", "plot": plot_id, "building": building_id})

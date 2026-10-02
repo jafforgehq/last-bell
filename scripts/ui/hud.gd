@@ -24,16 +24,22 @@
 ## Round 5 (jobs): a person's day job is a gold tag in the header of their panel ("Job: Workbench"; a click opens the Jobs
 ## screen, the Duty roster, scripts/ui/jobs_screen.gd: key J, the clipboard at the right end of the toolbar, a paper page
 ## that pauses the rules like the scavenging dialog and gives the speed back), and the keys B and M are the buttons
-## `job_builders` (Wall crew) and `job_bench` (Workbench): they give the job and take it away again, lit while the person
+## `job_builders` (Builders) and `job_bench` (Workbench): they give the job and take it away again, lit while the person
 ## has it, ghosted with the jobs module's reason when there is no seat. All of it is read through `_jobs()`, so a game with
 ## no jobs module (an older fake) has no such tag or buttons and no Jobs screen. main.gd keeps what the screen marks in the
 ## world (`jobs_hover`) for the overlay.
+##
+## Round 6 (buildings): the Build screen (scripts/ui/build_screen.gd), key N, the hammer after the clipboard in the
+## toolbar (`build_button`), a click on a plot's sign in the yard: the same paper page, which pauses the rules and gives
+## the speed back (`open_build`, `close_build`, `toggle_build`). It marks the plot under the pointer in the world
+## (`build_hover`, main.gd's `build_hover` for the yard); the tutorial's lock ghosts its button like the Jobs one.
 extends Control
 
 const GD := preload("res://scripts/game_data.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
 const JobsScreen := preload("res://scripts/ui/jobs_screen.gd")
+const BuildScreen := preload("res://scripts/ui/build_screen.gd")
 const GameOver := preload("res://scripts/ui/game_over.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
@@ -100,15 +106,15 @@ const ALERT_ICONS := [
 	["job-radio", "radio"], ["job-watch", "post"],
 ]
 ## The order buttons with no icon of their own wear one that is already there: the alarm a
-## bell; the Wall crew job the wall (the hammer is Repair's own, and in the small size, where only the
+## bell; the Builders job the wall (the hammer is Repair's own, and in the small size, where only the
 ## icons show, two hammers side by side could not be told apart); the Workbench the ammo store's icon.
 const GIZMO_ICON := {"lure": "bell", "job_builders": "wall", "job_bench": "ammo"}
 const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
 ## Icons the HUD adds to the baked ones (assets/data/map.json): white on clear, 64 px, like the rest
 ## (tools/make_menu_icon.py draws the menu's; tools/make_people_icons.py the star, a skill that went
 ## up, and the face, someone who is Shaken or Breaking; tools/make_jobs_icon.py the clipboard of the
-## Jobs screen).
-const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png", "jobs": "res://assets/ui/icons/jobs.png"}
+## Jobs screen; tools/make_build_icon.py the hammer of the Build screen).
+const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png", "jobs": "res://assets/ui/icons/jobs.png", "build": "res://assets/ui/icons/build.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
@@ -187,23 +193,26 @@ const TOAST_COLOR := {"danger": DANGER_TEXT, "warn": WARN, "info": INK}
 const LEGEND_MIN_H := 600.0
 ## The tooltip of the fields-of-fire button.
 const FIELDS_TIP := "Fields of fire: which wall pieces your guns reach at night\nKey: V"
-## The width of a key of the toolbar (the speeds, the fields view, the sound, the help, the Jobs screen, the menu).
-const TOOL_W := 28
+## The width of a key of the toolbar (the speeds, the fields view, the sound, the help, the Jobs screen, the Build
+## screen, the menu).
+const TOOL_W := 26
 ## The tooltip of the Jobs button.
 const JOBS_TIP := "Jobs: who works where by day and holds which post at night\nKey: J"
+## The tooltip of the Build button.
+const BUILD_TIP := "Build: pick a plot and order a building for the Builders to raise\nKey: N"
 ## What the speed buttons do and their keys, for the tooltips: [words, key].
 const SPEED_TIPS := [["Pause the game", "Space"], ["Play at normal speed", "1"], ["Play twice as fast", "2"], ["Play three times as fast", "3"]]
 ## The controls panel: [caption, entries to a row, [[keys, what it does], ...]]. `keys` is
 ## one entry's chips, one chip for each word ("W A S D" is four). Every key and mouse
 ## button main.gd's _unhandled_input answers to is here.
 const HELP := [
-	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Wall crew"], ["L", "Lure the dead"], ["M", "Workbench"]]],
+	["Orders for the selection", 2, [["R", "Draft or release"], ["P", "To post"], ["F", "Repair"], ["C", "Follow"], ["T", "Treat"], ["X", "Send out"], ["G", "Scavenge"], ["B", "Builders"], ["L", "Lure the dead"], ["M", "Workbench"]]],
 	["Mouse", 2, [["Click", "Select"], ["Right-click", "Move there"], ["Drag", "Pan"], ["Scroll", "Zoom"]]],
 	# (Esc, the longest, wraps in as little as 76 px, so in the width of the column ("Fields of fire") as
-	# "Deselect, or" and "the menu": it does not widen the panel; J, the Jobs screen, is "Jobs" so that the other
-	# column, which has "Speed" in it, stays as narrow: the order buttons must still sit beside the selection panel in a
-	# 1280 window)
-	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["F5", "Save"], ["V", "Fields of fire"], ["J", "Jobs"], ["Esc", "Deselect, or the menu", 76], ["F9", "Load"]]],
+	# "Deselect, or" and "the menu": it does not widen the panel; J, the Jobs screen, is "Jobs" and N, the Build
+	# screen, "Build" so that the other column, which has "Speed" in it, stays as narrow: the order buttons must still
+	# sit beside the selection panel in a 1280 window)
+	["Keyboard", 2, [["W A S D", "Pan"], ["Arrows", "Pan"], ["Space", "Pause"], ["1 2 3", "Speed"], ["Tab", "Next person"], ["F5", "Save"], ["V", "Fields of fire"], ["J", "Jobs"], ["Esc", "Deselect, or the menu", 76], ["N", "Build"], ["F9", "Load"]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
@@ -300,6 +309,12 @@ var on_jobs: Callable
 ## closed, else {"station": id, "post": id, "person": id} (each "" when nothing of the kind is marked); main.gd keeps
 ## it for the overlay to draw (`jobs_hover`).
 var on_jobs_hover: Callable
+## The toolbar's Build button was pressed: main.gd opens or closes the Build screen (it asks the tutorial's lock
+## first). With nobody listening the HUD opens it itself.
+var on_build: Callable
+## The Build screen marks a plot in the world: called with {} when the pointer is not on a plot's slip or the screen
+## is closed, else {"plot": id}; main.gd keeps it for the yard to draw (`build_hover`).
+var on_build_hover: Callable
 ## Plays one of the menu sounds (ui_open, ui_close, ui_click, ui_confirm, ui_error) at a level: main.gd sets it; the Jobs
 ## screen uses it (nothing happens while it is not set).
 var on_ui_sound: Callable
@@ -321,6 +336,12 @@ var jobs_screen = null
 var jobs_hover := {}
 var _paused_for_jobs := false
 var _speed_before_jobs := 0
+## The open Build screen (scripts/ui/build_screen.gd), or null: the rules wait while it is up, like the Jobs
+## screen. `build_hover` is the plot it last marked in the world.
+var build_screen = null
+var build_hover := {}
+var _paused_for_build := false
+var _speed_before_build := 0
 
 ## The column at the top left: the stores, and under them the fields-of-fire legend
 ## while that view is on.
@@ -390,6 +411,8 @@ var fields_legend: PanelContainer
 var help_button: Button
 ## The Jobs button (a clipboard) next to the Menu button at the right end of the toolbar (the Jobs screen: J).
 var jobs_button: Button
+## The Build button (a hammer) after it (the Build screen: N).
+var build_button: Button
 ## The Menu button at the right end of the toolbar (the pause menu: Esc).
 var menu_button: Button
 var help: PanelContainer
@@ -1784,7 +1807,7 @@ func _order_words(id: String, label: String) -> String:
 const JOB_OF_GIZMO := {"job_bench": "bench", "job_builders": "builders"}
 
 
-## The tooltip of the Workbench and Wall crew buttons above their key line: what the job is, with what it is set to
+## The tooltip of the Workbench and Builders buttons above their key line: what the job is, with what it is set to
 ## on the Jobs screen and, for the Workbench, what the person would make (the workshop's rates, slower when they
 ## are hungry or hurt). The station's name leads, so the first line names the order; for someone who has the job
 ## it says how to take them off it.
@@ -1802,13 +1825,15 @@ func _job_words(id: String) -> String:
 			lines.append("The target is %d (set on the Jobs screen)" % int(jobs.setting("bench", "ammo_target")))
 		var w = _workshop()
 		if w != null and p != null and w.has_method("scrap_per_hour") and sim_ref != null:
-			var per := float(w.get("AMMO_PER_SCRAP"))
+			var per: float = float(w.ammo_per_scrap()) if w.has_method("ammo_per_scrap") else float(w.get("AMMO_PER_SCRAP"))
 			if per > 0.0:
 				var scrap_h: float = float(w.scrap_per_hour(p)) * float(sim_ref.perf(p))
 				lines.append("1 scrap makes %s ammo. %s makes about %s ammo an hour." % [_num(per), p.first, _num(scrap_h * per)])
 	else:
 		var below := " under %d%%" % int(jobs.setting("builders", "repair_below")) if jobs != null else ""
-		lines.append("Wall crew: mends the most worn wall%s by day while there is scrap" % below)
+		lines.append("%s: mend the most worn wall%s by day while there is scrap" % [name, below])
+		if sim_ref != null and sim_ref.get("build") != null:
+			lines.append("They also build what is ordered on the Build screen (N)")
 	return "\n".join(lines)
 
 
@@ -1958,7 +1983,7 @@ func _build_gizmos() -> void:
 			gizmos.add_child(_gizmo("focus", "Follow", "C", false))
 			# the day jobs the keys B and M give and take away (a game with no jobs has neither), lit while they have it
 			if _jobs() != null:
-				gizmos.add_child(_gizmo("job_builders", "Wall crew", "B", _job_of(p) == "builders"))
+				gizmos.add_child(_gizmo("job_builders", "Builders", "B", _job_of(p) == "builders"))
 				gizmos.add_child(_gizmo("job_bench", "Workbench", "M", _job_of(p) == "bench"))
 			if sim_ref != null and sim_ref.medical.can_treat(p):
 				gizmos.add_child(_gizmo("treat", "Treat", "T", false))
@@ -2036,7 +2061,7 @@ func _can_scavenge(p) -> bool:
 
 func _speed_button(icon_name: String, tip: String) -> Button:
 	var b := Button.new()
-	# (a little narrower than it was: with the Jobs key the toolbar has ten, and a full row of nine order
+	# (narrower than it was: with the Jobs and Build keys the toolbar has eleven, and a full row of nine order
 	# buttons must still sit beside the selection panel in a 1280 window)
 	b.custom_minimum_size = Vector2(TOOL_W, 30)
 	b.focus_mode = Control.FOCUS_NONE
@@ -2097,11 +2122,14 @@ func _build_speed() -> void:
 	help_button = _speed_button("help", "Show or hide the controls: every key and mouse button")
 	help_button.pressed.connect(func(): help.visible = not help.visible)
 	row.add_child(help_button)
-	# the Jobs screen (who works where by day and holds which post at night), and the menu (what Esc opens when
-	# nothing is selected) at the right end
+	# the Jobs screen (who works where by day and holds which post at night), the Build screen (what to build and
+	# where) and the menu (what Esc opens when nothing is selected) at the right end
 	jobs_button = _speed_button("jobs", JOBS_TIP)
 	jobs_button.pressed.connect(_press_jobs)
 	row.add_child(jobs_button)
+	build_button = _speed_button("build", BUILD_TIP)
+	build_button.pressed.connect(_press_build)
+	row.add_child(build_button)
 	menu_button = _speed_button("menu", "Menu\nKey: Esc")
 	menu_button.pressed.connect(func(): if on_open_menu.is_valid(): on_open_menu.call())
 	row.add_child(menu_button)
@@ -2132,7 +2160,7 @@ func _spacer_fixed(w: int) -> Control:
 ## as its widest, like a row of keycaps.
 func _build_help() -> void:
 	help = _panel()
-	var col := _vbox(10)
+	var col := _vbox(8)
 	for group in HELP:
 		var g := _vbox(4)
 		g.add_child(_caps(String(group[0])))
@@ -2144,9 +2172,9 @@ func _build_help() -> void:
 		var grid := GridContainer.new()
 		grid.columns = per_row * 2
 		grid.add_theme_constant_override("h_separation", 8)
-		# the rows are close: the Esc entry takes two lines, and in a 560 px window the panel
-		# must still clear the clock
-		grid.add_theme_constant_override("v_separation", 2)
+		# the rows are close: the Esc entry takes two lines, there are eleven keys to the keyboard group
+		# (the Build screen's N), and in a 560 px window the panel must still clear the clock
+		grid.add_theme_constant_override("v_separation", 1)
 		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var n := 0
 		for entry in group[2]:
@@ -2304,7 +2332,7 @@ func _layout_toast() -> void:
 ## the whole window and stops the mouse (the storyteller's radio card is one) or says so with the meta "modal". A
 ## menu is the shell's (main.gd's `menu_open`). The speech bubbles keep quiet while one is up.
 func modal_open() -> bool:
-	if scavenge_dialog != null or game_over != null or jobs_screen != null:
+	if scavenge_dialog != null or game_over != null or jobs_screen != null or build_screen != null:
 		return true
 	for c in get_children():
 		if not (c is Control) or not c.visible:
@@ -2409,11 +2437,101 @@ func set_jobs_hover(marks: Dictionary) -> void:
 		on_jobs_hover.call(jobs_hover)
 
 
+## Opens the Build screen (key N, the hammer in the toolbar, a click on a plot's sign in the yard), on `plot_id` (the
+## plot being built, else the first with nothing on it, when none is asked for). The game is paused meanwhile, and
+## the speed comes back when it is closed. Nothing happens while another modal is up, in a game with no buildings, or
+## before the HUD has seen the game (`with_sim` stands in for that); with the screen already up, it is the plot that
+## changes.
+func open_build(plot_id: String = "", with_sim = null) -> void:
+	if build_screen != null:
+		if plot_id != "":
+			build_screen.select_plot(plot_id)
+		return
+	if scavenge_dialog != null or game_over != null or modal_open():
+		return
+	var sim = sim_ref if sim_ref != null else with_sim
+	if sim == null or sim.get("build") == null:
+		return
+	var s := BuildScreen.new()
+	build_screen = s
+	add_child(s)
+	s.closed.connect(_on_build_closed)
+	s.setup(self, sim, plot_id)
+	ui_sound("ui_open")
+	_speed_before_build = last_speed
+	_paused_for_build = last_speed > 0
+	if _paused_for_build and on_speed.is_valid():
+		on_speed.call(0)
+
+
+## Closes the Build screen (it gives the speed back).
+func close_build() -> void:
+	if build_screen != null:
+		build_screen.close()
+
+
+## N: the Build screen open or shut.
+func toggle_build() -> void:
+	if build_screen != null:
+		close_build()
+	else:
+		open_build()
+
+
+## The toolbar's Build button: main.gd decides (the tutorial's lock, another page being up); with nobody listening
+## the HUD does it itself.
+func _press_build() -> void:
+	if on_build.is_valid():
+		on_build.call()
+	else:
+		toggle_build()
+
+
+func _on_build_closed() -> void:
+	build_screen = null
+	set_build_hover({})
+	ui_sound("ui_close")
+	if _paused_for_build and on_speed.is_valid():
+		on_speed.call(_speed_before_build)
+	_paused_for_build = false
+
+
+## The Build screen marks a plot in the world (see on_build_hover): {} when none is, or it is closed.
+func set_build_hover(marks: Dictionary) -> void:
+	build_hover = marks.duplicate()
+	if on_build_hover.is_valid():
+		on_build_hover.call(build_hover)
+
+
+## The Build screen's button for the Builders' job: the page gives way to the Jobs screen (the pause is carried over:
+## the rules wait through both) with the Builders' station marked in the yard. Nothing is lost if the Jobs screen
+## does not open (the tutorial's lock, say): the Build screen is shut and the speed is given back.
+func open_jobs_from_build() -> void:
+	if build_screen == null:
+		return
+	var kept_paused := _paused_for_build
+	var kept_speed := _speed_before_build
+	_paused_for_build = false
+	close_build()
+	if kept_paused:
+		# (the game is paused: the Jobs screen finds it so, and its own pause is the one carried over below)
+		last_speed = 0
+	_press_jobs()
+	if jobs_screen != null:
+		_paused_for_jobs = kept_paused
+		_speed_before_jobs = kept_speed
+		jobs_screen.show_marks("builders")
+	elif kept_paused and on_speed.is_valid():
+		on_speed.call(kept_speed)
+
+
 func _show_game_over(sim) -> void:
 	if scavenge_dialog != null:
 		scavenge_dialog.close()
 	if jobs_screen != null:
 		jobs_screen.close()
+	if build_screen != null:
+		build_screen.close()
 	hint_spent = true
 	_refresh_hint()
 	game_over = GameOver.new()
@@ -2753,6 +2871,8 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	_refresh_selection()
 	if jobs_screen != null:
 		jobs_screen.refresh()
+	if build_screen != null:
+		build_screen.refresh()
 
 
 ## The lookout's forecast under the clock: from the hour he tells it (17:00) until dawn,
@@ -3277,7 +3397,7 @@ func _refresh_selection() -> void:
 # ghost buttons, and change nothing the HUD does. Written by TUTORIAL: leave this block at the end.
 
 ## What the tutorial step allows right now, as a Callable(kind, arg) -> bool (kinds "gizmo" with
-## an order's id, "speed" with 0 to 3 and "fields"), or an invalid Callable when nothing is locked.
+## an order's id, "speed" with 0 to 3, "fields", "jobs" and "build"), or an invalid Callable when nothing is locked.
 var lock_allowed: Callable
 
 
@@ -3288,7 +3408,9 @@ var lock_allowed: Callable
 ## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`, `jobs` (the
 ## toolbar's Jobs button, and while the Jobs screen is open its parts: `jobs.screen`, `jobs.auto`, `jobs.clear`,
 ## `jobs.close`, `jobs.list`, `jobs.row:<person id>`, `jobs.job:<id>`, `jobs.post:<id>`, `jobs.station:<id>` and
-## `jobs.item:<id>`),
+## `jobs.item:<id>`), `build` (the toolbar's Build button, and while the Build screen is open its parts: `build.screen`,
+## `build.close`, `build.row:<plot id>`, `build.detail`, `build.order:<building id>`, `build.cancel`, `build.demolish`
+## and `build.jobs`),
 ## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`.
 func anchor_rect(name: String) -> Rect2:
@@ -3325,6 +3447,8 @@ func _anchor_control(name: String):
 		return _anchor_dialog(name.trim_prefix("dialog."))
 	if name.begins_with("jobs."):
 		return _anchor_jobs(name.trim_prefix("jobs."))
+	if name.begins_with("build."):
+		return _anchor_build(name.trim_prefix("build."))
 	match name:
 		"stores":
 			return res_panel
@@ -3350,6 +3474,8 @@ func _anchor_control(name: String):
 			return help_button
 		"jobs":
 			return jobs_button
+		"build":
+			return build_button
 		"sound":
 			return sound_button
 		"legend":
@@ -3436,6 +3562,35 @@ func _anchor_jobs(part: String):
 	return null
 
 
+## A part of the Build screen while it is open: `screen`, `close`, `detail` (the card of the chosen plot), `row:<plot id>`
+## (a plot's slip), `order:<building id>` (an Order button), `cancel`, `demolish` and `jobs` (the button for the Jobs screen).
+func _anchor_build(part: String):
+	var s = build_screen
+	if s == null or not is_instance_valid(s):
+		return null
+	match part:
+		"screen":
+			return s.get("panel")
+		"close":
+			return s.get("close_button")
+		"detail":
+			return s.get("detail")
+		"cancel":
+			return s.get("cancel_button")
+		"demolish":
+			return s.get("demolish_button")
+		"jobs":
+			return s.get("jobs_button")
+	var kind := part.get_slice(":", 0)
+	var id := part.get_slice(":", 1)
+	if kind == "row":
+		var rows = s.get("rows")
+		return rows[id].row if typeof(rows) == TYPE_DICTIONARY and rows.has(id) else null
+	if kind == "order":
+		var entries = s.get("entries")
+		return entries[id].order if typeof(entries) == TYPE_DICTIONARY and entries.has(id) else null
+	return null
+
 ## Ghosts the order buttons, the speed buttons and the fields button that the tutorial step
 ## does not allow: dimmed, no hover look, a cursor that says no. They can still be pressed (the
 ## game refuses the order and says why in a toast). An invalid Callable lifts the lock.
@@ -3459,6 +3614,8 @@ func apply_lock() -> void:
 		_ghost(fields_button, locking and not bool(lock_allowed.call("fields", null)))
 	if jobs_button != null:
 		_ghost(jobs_button, locking and not bool(lock_allowed.call("jobs", null)))
+	if build_button != null:
+		_ghost(build_button, locking and not bool(lock_allowed.call("build", null)))
 
 
 func _ghost(b: Button, locked: bool) -> void:

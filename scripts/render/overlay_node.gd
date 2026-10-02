@@ -186,7 +186,8 @@ func fields_plan(sim) -> Dictionary:
 	for p in sim.people:
 		if p.dead or p.downed or p.away != null:
 			continue
-		reach.append({"id": p.id, "at": sim.tactics.post_pos(p), "r": sim.reach_of(p.gun)})
+		var post: Vector2 = sim.tactics.post_pos(p)
+		reach.append({"id": p.id, "at": post, "r": sim.reach_at(p.gun, post, true)})
 	var spawns: Array = []
 	var f: Dictionary = sim.tactics.forecast()
 	if bool(f.get("given", false)):
@@ -636,7 +637,7 @@ func _draw() -> void:
 			for c in [[a.x, a.y, 1, 1], [b.x, a.y, -1, 1], [a.x, b.y, 1, -1], [b.x, b.y, -1, -1]]:
 				draw_polyline(PackedVector2Array([Vector2(c[0] + c[2] * L, c[1]), Vector2(c[0], c[1]), Vector2(c[0], c[1] + c[3] * L)]), col, 2.0, true)
 			if sel.kind == "person" and not e.downed:
-				_dashed_circle(_screen(ep.x, ep.y), main.sim.reach_of(e.gun) * z, Color(ACCENT, 0.35), 1.2)
+				_dashed_circle(_screen(ep.x, ep.y), main.sim.reach_of(e.gun, e) * z, Color(ACCENT, 0.35), 1.2)
 	elif sel != null and sel.kind == "segment":
 		var box := section_rect(sel.ref)
 		var a := _screen(box.position.x, box.position.y)

@@ -7,6 +7,9 @@
 ##
 ## Alerts raised: `low-food`, `low-water`, `low-ammo`, `no-scrap`, `rain`. The only event
 ## added is the ordinary {"type": "banner", "text", "sub"}, "Short rations".
+##
+## From the buildings (build.gd) it reads `garden_base`: the greenhouse beds add to the food the
+## vegetable beds pay each dawn (`roll_dawn`).
 extends RefCounted
 
 ## The hours of the day's three meals.
@@ -31,7 +34,8 @@ const DAWN_HOUR := 6.5
 ## The vegetable beds (the Vegetable beds station): a small share grows unattended and is paid each
 ## dawn (if anyone is home), and each person working the beds (`jobs.working("garden")`) grows this
 ## much food for every game hour of work. Hector alone (about twelve hours a day) is worth the 3
-## food the beds used to pay each dawn, two gardeners about 5.4.
+## food the beds used to pay each dawn, two gardeners about 5.4. A greenhouse adds to the dawn's share
+## (the buildings' `garden_base`).
 const GARDEN_BASE := 0.6
 const GARDEN_FOOD_PER_HOUR := 0.2
 ## The two rain barrels give this much on a clear day and on a rainy one (the chance of rain is
@@ -142,15 +146,15 @@ func _garden(hours: float) -> void:
 
 
 ## The day begins: rolls the day's weather (from the run's one random source) and,
-## if anyone is on the map to tend them, the vegetable beds' small unattended share and the
-## rain barrels pay out. Called by update() once a day; public so tests can call it.
+## if anyone is on the map to tend them, the vegetable beds' small unattended share (more with a
+## greenhouse) and the rain barrels pay out. Called by update() once a day; public so tests can call it.
 func roll_dawn() -> void:
 	sources_day = sim.day
 	var rain: bool = sim.rng.randf() < RAIN_CHANCE
 	sim.weather = "rain" if rain else "clear"
 	if not sources_on or not _someone_home():
 		return
-	sim.stock.food += GARDEN_BASE
+	sim.stock.food += GARDEN_BASE + sim.build.bonus("garden_base")
 	var water := BARREL_WATER_RAIN if rain else BARREL_WATER
 	sim.stock.water += water
 	if rain:

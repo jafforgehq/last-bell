@@ -170,7 +170,7 @@ static func act(main, id: String, bot: Dictionary) -> void:
 				main._key(KEY_M)
 		"jobs":
 			# J opens the Duty roster; a job is given with the page's own buttons (Hector's Day job, then the
-			# Wall crew line of the list that opens); Close shuts the page again
+			# Builders line of the list that opens); Close shuts the page again
 			var page = main.hud.jobs_screen
 			var given: bool = float(coach.state.events.get("assigned:job", 0.0)) > 0.0
 			if page == null:

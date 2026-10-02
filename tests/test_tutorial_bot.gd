@@ -32,8 +32,8 @@ func test_a_bot_plays_every_step_to_the_end() -> void:
 	check(sim.scenario.finished and not sim.scenario.coached, "the scenario was let go")
 	check(sim.waves.enabled, "and the real nights are on")
 	check(main.speed > 0, "the game runs again")
-	# the duty roster's lesson: the page was opened with J, Hector was given the wall crew on it, and it was shut
-	eq(sim.jobs.job_of(Bot.person(main, "hector")), "builders", "Hector was given the wall crew on the Duty roster")
+	# the duty roster's lesson: the page was opened with J, Hector was given the Builders job on it, and it was shut
+	eq(sim.jobs.job_of(Bot.person(main, "hector")), "builders", "Hector was given the Builders job on the Duty roster")
 	check(main.hud.jobs_screen == null, "and the page is shut")
 	# the lesson went through a dawn and a save, and touched none of the player's own saves
 	check(FileAccess.file_exists(main.tutorial_save_path), "F5 wrote the tutorial's own file")

@@ -70,7 +70,7 @@ func test_a_station_has_so_many_seats_and_refuses_the_rest() -> void:
 	eq(sim.jobs.job_of(hector), "bench", "he is on it")
 	eq(sim.jobs.seats_left("garden"), 2, "and left the garden's seat")
 	check(not sim.jobs.assign(walt, "bench"), "the bench is full")
-	eq(sim.jobs.why_not(walt, "bench"), "the Workbench is full", "and says so")
+	eq(sim.jobs.why_not(walt, "bench"), "no free seat at the Workbench", "and says so")
 	eq(sim.jobs.job_of(walt), "builders", "Walt stays where he was")
 	check(sim.jobs.assign(walt, "garden"), "a seat in the garden")
 	sim.jobs.unassign(walt)

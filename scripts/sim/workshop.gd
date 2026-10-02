@@ -14,16 +14,19 @@
 ## {"type": "craft", x, y, "scrap", "ammo"} with what was made since the last one.
 ## Alerts: `workshop-idle` when the scrap is down to the reserve with ammo still to make (once
 ## for each stretch of low scrap).
+##
+## From the buildings (build.gd) it reads `craft_mult` (the workshop: scrap an hour at the bench) and
+## `ammo_per_scrap` (the workshop: more rounds from each scrap, see `ammo_per_scrap()`).
 extends RefCounted
 
-## Ammo made from one scrap.
+## Ammo made from one scrap (a workshop makes more: `ammo_per_scrap()`).
 const AMMO_PER_SCRAP := 8.0
 ## The scrap the bench keeps in the stock for the walls to begin with. What is used is the
 ## Workbench's `scrap_reserve` setting (`reserve()`), which starts at this.
 const RESERVE_SCRAP := 3.0
 ## A person works through this much scrap an hour, plus half their Building skill
-## (Dez 6.5, Ruth 3.5, Marcus 2.5), times their `craft` traits (Dez, a Tinkerer: 1.2) and
-## how well they are (`sim.perf`).
+## (Dez 6.5, Ruth 3.5, Marcus 2.5), times their `craft` traits (Dez, a Tinkerer: 1.2), the workshop's
+## `craft_mult` if there is one, and how well they are (`sim.perf`).
 const BASE_SCRAP_PER_HOUR := 2.0
 const BUILDING_SHARE := 0.5
 ## How often, in seconds of rules time, the hammer rings and a craft event goes out.
@@ -61,7 +64,13 @@ func bench() -> Vector2:
 
 ## How much scrap this person works through in a game hour when well.
 func scrap_per_hour(p) -> float:
-	return (BASE_SCRAP_PER_HOUR + BUILDING_SHARE * float(p.skills.Building)) * sim.traits.mult(p, "craft")
+	return (BASE_SCRAP_PER_HOUR + BUILDING_SHARE * float(p.skills.Building)) * sim.traits.mult(p, "craft") * sim.build.factor("craft_mult")
+
+
+## The ammo one scrap makes now: AMMO_PER_SCRAP and what the standing buildings add (the workshop's
+## `ammo_per_scrap`).
+func ammo_per_scrap() -> float:
+	return AMMO_PER_SCRAP + sim.build.bonus("ammo_per_scrap")
 
 
 ## The ammo stock the bench makes ammo up to, and the scrap it keeps back for the walls: the
@@ -81,7 +90,7 @@ func _scrap_room() -> float:
 
 
 func _ammo_room() -> float:
-	return (target() - float(sim.stock.ammo)) / AMMO_PER_SCRAP
+	return (target() - float(sim.stock.ammo)) / ammo_per_scrap()
 
 
 ## Whether there is anything to make: the ammo is under the target and the scrap is above the
@@ -157,6 +166,7 @@ func update(dt: float) -> void:
 		_beats.clear()
 		return
 	var hours: float = sim.game_hours(dt)
+	var per := ammo_per_scrap()
 	var at_work := {}
 	for p in crew:
 		var id := String(p.id)
@@ -167,7 +177,7 @@ func update(dt: float) -> void:
 		var want: float = scrap_per_hour(p) * sim.perf(p) * hours
 		var use := minf(want, room)
 		sim.stock.scrap = float(sim.stock.scrap) - use
-		sim.stock.ammo = float(sim.stock.ammo) + use * AMMO_PER_SCRAP
+		sim.stock.ammo = float(sim.stock.ammo) + use * per
 		sim.skills.credit(p, "crafted", use)
 		var st: Dictionary = _beats.get(id, {"hammer": 0.0, "scrap": 0.0, "since": 0.0})
 		st.scrap = float(st.scrap) + use
@@ -177,7 +187,7 @@ func update(dt: float) -> void:
 			st.hammer = HAMMER_EVERY
 			sim.events.append({"type": "hammer", "x": p.x, "y": p.y})
 		if st.since >= CRAFT_EVERY:
-			sim.events.append({"type": "craft", "x": p.x, "y": p.y, "scrap": st.scrap, "ammo": float(st.scrap) * AMMO_PER_SCRAP})
+			sim.events.append({"type": "craft", "x": p.x, "y": p.y, "scrap": st.scrap, "ammo": float(st.scrap) * per})
 			st.scrap = 0.0
 			st.since = 0.0
 		_beats[id] = st

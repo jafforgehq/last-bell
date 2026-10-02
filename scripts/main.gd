@@ -15,6 +15,7 @@ const FireNode := preload("res://scripts/render/fire_node.gd")
 const Lighting := preload("res://scripts/render/lighting.gd")
 const GlowNode := preload("res://scripts/render/glow_node.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
+const BuildNode := preload("res://scripts/render/build_node.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
@@ -59,6 +60,8 @@ var air
 var lanterns_node
 var glow
 var overlay
+## The plots, sites and buildings of the yard (round 6, scripts/render/build_node.gd).
+var build_view
 var pawn_nodes := {} # entity -> node
 ## Turns frames into whole 1/30 s steps of the rules, and says how far the time
 ## has run into the next one (the drawing blends between the last two steps).
@@ -89,14 +92,22 @@ var shell
 ## The title screen is up instead of a run: the clock is held, the HUD is hidden and the
 ## input is the menu's. (A cold start with no run chosen; see wants_title.)
 var title_mode := false
-## A menu screen is open over the game: the camera keys are the menu's, not the camera's. (The Jobs screen,
-## the HUD's own page, counts: it has the keys while it is up, and the cards of the radio and the tips wait.)
+## A menu screen is open over the game: the camera keys are the menu's, not the camera's. (The Jobs screen and the
+## Build screen, the HUD's own pages, count: they have the keys while they are up, and the cards of the radio and the
+## tips wait.)
 var menu_open: bool:
 	get:
-		return title_mode or (shell != null and shell.is_open()) or (hud != null and hud.jobs_screen != null)
+		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null))
 ## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
 ## "post": id, "person": id} (each "" when nothing of the kind is marked). The overlay draws the marks.
 var jobs_hover := {}
+## The Build screen (round 6, scripts/ui/build_screen.gd) is up: the yard draws the plots' signs more clearly.
+var build_open: bool:
+	get:
+		return hud != null and hud.build_screen != null
+## The plot the Build screen has under the pointer or the keyboard ({"plot": id}, {} for none, and while it is closed):
+## the yard draws it brighter. (The screen sets it through the HUD.)
+var build_hover := {}
 ## A test's way of watching a new run, a load or the return to the title without a scene
 ## reload: when set, it is called with the choice ({"difficulty", "seed"}, {"load": path} or
 ## {"title": true}) instead.
@@ -247,6 +258,11 @@ func _ready() -> void:
 	var cm := CanvasModulate.new()
 	world.add_child(cm)
 	lighting.setup(data, cm)
+	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
+	build_view = BuildNode.new()
+	build_view.name = "Buildings"
+	world.add_child(build_view)
+	build_view.setup(self, sim, entities, lighting)
 
 	camera = Camera2D.new()
 	add_child(camera)
@@ -283,6 +299,8 @@ func _ready() -> void:
 	hud.on_open_menu = open_pause
 	hud.on_jobs = toggle_jobs
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
+	hud.on_build = toggle_build
+	hud.on_build_hover = func(marks): build_hover = marks
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
@@ -478,11 +496,17 @@ func _allows(kind: String, arg = null) -> bool:
 	return coach.allows(kind, arg)
 
 
-## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs), told
+## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs, build), told
 ## to the coach so the lesson's conditions can use it.
 func _did(kind: String, arg = null) -> void:
 	if coach != null:
 		coach.on_did(kind, arg)
+
+
+## The mouse cursor over a point of the yard (in tiles), `hit` being what _pick found there: a hand over what a click
+## would do something with (a person, a walker, a wall section, a plot's sign), else the arrow.
+func _cursor_for(hit, at: Vector2) -> Input.CursorShape:
+	return Input.CURSOR_POINTING_HAND if hit != null or sim.build.sign_at(at) != "" else Input.CURSOR_ARROW
 
 
 ## What is under a point of the world (in tiles): a person, a walker or a wall section, or null.
@@ -682,6 +706,23 @@ func toggle_jobs() -> void:
 		_did("jobs")
 
 
+## The Build screen (key N, the hammer in the toolbar, a click on a plot's sign in the yard): opens it, on `plot_id`
+## when that is given, or closes it when it is up. It is not there in the title, nor while a menu or another page
+## (the radio card, the scavenging dialog, the end screen, the Jobs screen) has the screen, and the tutorial's lock
+## may refuse it. (With the screen up N reaches the screen itself, which closes; the rules wait while it is open.)
+func toggle_build(plot_id: String = "") -> void:
+	if hud.build_screen != null:
+		hud.close_build()
+		return
+	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	if not _allows("build"):
+		return
+	hud.open_build(plot_id, sim)
+	if hud.build_screen != null:
+		_did("build")
+
+
 # ------------------------------------------------------------------ shell --
 # The title, the pause menu and the settings (scripts/ui/shell.gd), and how a run is begun.
 
@@ -842,8 +883,10 @@ func _title_camera(dt: float) -> void:
 # ------------------------------------------------------------------ input --
 
 func _unhandled_input(ev: InputEvent) -> void:
-	# the title and the menus have the keys and the mouse: nothing here reaches the yard
+	# the title and the menus have the keys and the mouse: nothing here reaches the yard (and a drag that was
+	# going on when a page opened is over: its release goes to the page, not to us)
 	if menu_open:
+		drag = null
 		return
 	if ev is InputEventMouseButton:
 		var mb: InputEventMouseButton = ev
@@ -869,7 +912,15 @@ func _unhandled_input(ev: InputEvent) -> void:
 				drag = {"pos": mb.position, "center": cam_center, "moved": false, "button": mb.button_index}
 			else:
 				if drag != null and not drag.moved and drag.button == MOUSE_BUTTON_LEFT:
-					_try_select(_pick(_screen_to_tile(mb.position)))
+					var at := _screen_to_tile(mb.position)
+					var hit = _pick(at)
+					# a click that hit nothing else, near a plot's sign, opens the Build screen on that plot (the
+					# tutorial's lock, if it refuses, leaves it an ordinary click on the ground)
+					var sign_of: String = sim.build.sign_at(at) if hit == null else ""
+					if sign_of != "" and (coach == null or coach.would_allow("build")):
+						toggle_build(sign_of)
+					else:
+						_try_select(hit)
 				drag = null
 				Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	elif ev is InputEventMouseMotion:
@@ -886,9 +937,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_clamp_camera()
 				_did("pan", cam_center.distance_to(was_at))
 		else:
-			var h = _pick(_screen_to_tile(mm.position))
+			var at := _screen_to_tile(mm.position)
+			var h = _pick(at)
 			hover = h.ref if h != null and h.kind == "person" else null
-			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if h != null else Input.CURSOR_ARROW)
+			Input.set_default_cursor_shape(_cursor_for(h, at))
 	elif ev is InputEventMagnifyGesture:
 		_zoom_at(ev.factor, ev.position)
 	elif ev is InputEventPanGesture:
@@ -931,6 +983,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_gizmo("job_bench")
 			KEY_J:
 				toggle_jobs()
+			KEY_N:
+				toggle_build()
 			KEY_V:
 				_toggle_fields()
 			KEY_F5:
@@ -988,6 +1042,7 @@ func _process(delta: float) -> void:
 	_handle_events()
 	_sync_views()
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), sim.storyteller.look())
+	build_view.update(clock)
 	glow.t = clock
 	glow.queue_redraw()
 	overlay.queue_redraw()
@@ -1151,6 +1206,15 @@ func _handle_events() -> void:
 				sound.play("reload", 0.8)
 			"hammer":
 				sound.play("hammer", 0.8, 0.1)
+				build_view.hammer(e, fx)
+			"built":
+				# a building is finished: a small high bell and the menus' chime, and a little dust where it stands
+				sound.play("bell", 0.3, 0.02, 1.8)
+				sound.ui("ui_confirm", 0.9)
+				build_view.celebrate(String(e.plot), fx)
+			"demolished":
+				sound.play("crash", 0.45)
+				build_view.celebrate(String(e.plot), fx)
 			"stab":
 				sound.play("stab")
 			"thud":
@@ -1209,6 +1273,8 @@ func _build_coach() -> void:
 func _parse_args() -> void:
 	var advance := 0.0
 	var lure_seg := -1
+	var show_build := false
+	var build_plot := ""
 	for arg in OS.get_cmdline_user_args():
 		var kv: PackedStringArray = arg.trim_prefix("--").split("=", true, 1)
 		var k := kv[0]
@@ -1257,6 +1323,24 @@ func _parse_args() -> void:
 					hud.open_jobs(sim)
 				if hud.jobs_screen != null and what.size() == 2:
 					hud.jobs_screen.show_marks(what[1] if what[0] == "station" else "", what[1] if what[0] == "post" else "", what[1] if what[0] == "person" else "", true)
+			"build":
+				# --build opens the Build screen (--build=<plot id> on that plot), once the other arguments are in
+				# (the plots staged with --build-site and --build-built; the --speed it pauses)
+				show_build = true
+				build_plot = v
+			"build-scrap":
+				# --build-scrap=N sets the scrap in the stores (to show what cannot be ordered, say)
+				sim.stock.scrap = float(v)
+			"build-nobody":
+				# --build-nobody takes everyone off the Builders job (to show what the page says of a site nobody builds)
+				for p in sim.jobs.crew_of("builders"):
+					sim.jobs.unassign(p)
+			"build-site":
+				# --build-site=<plot>:<building>[:<share done, 0 to 1>],... puts sites up (no scrap is paid for them)
+				_stage_build(v, false)
+			"build-built":
+				# --build-built=<plot>:<building>,... stands buildings at once (no scrap is paid, nobody builds them)
+				_stage_build(v, true)
 			"lure":
 				# --lure=N sets the alarm on wall section N (scrap is given, the clock settled first)
 				lure_seg = int(v)
@@ -1280,6 +1364,9 @@ func _parse_args() -> void:
 				get_viewport().msaa_2d = int(v) as Viewport.MSAA
 			"nolights":
 				lighting.visible = false
+			"build-plots":
+				# --build-plots keeps the plots' outlines lit, as when the Build screen is open (for a screenshot of the yard)
+				build_view.show_plots = true
 			"card":
 				# --card=<id> puts a card of the storyteller's up (the radio card opens)
 				sim.storyteller.force(v)
@@ -1295,6 +1382,9 @@ func _parse_args() -> void:
 					"lost": [{"who": "Ana", "epitaph": "She would have wanted the lamp left on.", "how": "died"}], "hurt": ["Marcus"], "skill_ups": [{"who": "Dez", "skill": "Building", "value": 10}],
 					"events": ["Heavy rain: The barrels are full."], "mood": "Mostly steady; Marcus is shaken.", "alive": 5}
 				story_ui.show_dawn()
+	if show_build:
+		hud.last_speed = speed
+		hud.open_build(build_plot, sim)
 	if lure_seg >= 0:
 		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
 		for s in sim.segments:
@@ -1309,6 +1399,27 @@ func _parse_args() -> void:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
 		sim.events.clear()
+
+
+## A screenshot's way of putting sites up and buildings on the plots (--build-site, --build-built): "plot:building"
+## entries, comma-separated, a share done (0 to 1) after a third colon for a site. Nothing is paid and no event is left.
+func _stage_build(spec: String, finished: bool) -> void:
+	var scrap: float = sim.stock.scrap
+	for entry in spec.split(","):
+		var f := entry.split(":")
+		if f.size() < 2:
+			continue
+		sim.stock.scrap = 1000.0
+		if not sim.build.order(f[0], f[1]):
+			continue
+		var pl: Dictionary = sim.build.plot(f[0])
+		if finished:
+			sim.build._finish(pl)
+			sim.alerts.erase("built-%s" % f[0])
+		elif f.size() > 2:
+			pl.site.progress = clampf(float(f[2]), 0.0, 1.0) * float(pl.site.work)
+	sim.stock.scrap = scrap
+	sim.events.clear()
 
 
 func _tile_to_screen(t: Vector2) -> Vector2:
