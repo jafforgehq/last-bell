@@ -17,6 +17,7 @@ const Skills := preload("res://scripts/sim/skills.gd")
 const Barks := preload("res://scripts/sim/barks.gd")
 const Storyteller := preload("res://scripts/sim/storyteller.gd")
 const Jobs := preload("res://scripts/sim/jobs.gd")
+const Build := preload("res://scripts/sim/build.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
@@ -221,6 +222,7 @@ var skills
 var barks
 var storyteller
 var jobs
+var build
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -290,7 +292,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	barks = Barks.new()
 	storyteller = Storyteller.new()
 	jobs = Jobs.new()
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, jobs]:
+	build = Build.new()
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs]:
 		m.setup(self)
 	_seed()
 
@@ -500,7 +503,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, jobs]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs]:
 		m.start()
 
 
@@ -547,6 +550,7 @@ func update(dt: float) -> void:
 	barks.update(dt)
 	storyteller.update(dt)
 	jobs.update(dt)
+	build.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -962,6 +966,15 @@ func open_segment(s: Segment, open: bool) -> void:
 	for i in s.tiles:
 		path_z.set_solid(int(i), not open)
 		path_p.set_solid(int(i), not open)
+
+
+## Shuts or opens ground for good, as a standing building's footprint does: the walking grid and both
+## path grids (the same ground a wall section has, see `open_segment`).
+func block_tiles(tiles: Array, blocked: bool) -> void:
+	world.set_walkable(tiles, not blocked)
+	for i in tiles:
+		path_z.set_solid(int(i), blocked)
+		path_p.set_solid(int(i), blocked)
 
 
 ## At dawn the dead go back to the city, a few a step (each is a path search).

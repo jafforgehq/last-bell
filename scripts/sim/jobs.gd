@@ -13,7 +13,10 @@
 ## the person goes back to their job.
 ##
 ## Data: assets/data/stations.json and assets/data/posts.json; the six starting people's
-## default job and post are `station` and `post_id` in their roster entries.
+## default job and post are `station` and `post_id` in their roster entries. Buildings (build.gd)
+## change the stations: a station with `requires` exists only while that building stands (it is
+## worked at that building's plot), and `seats_<id>` effects add seats; `stations()` and
+## `station(id)` give the stations as they are now.
 ##
 ## Events: {"type": "assigned", "who": id, "station": id}. Alerts: `job-radio`, `job-watch`
 ## when the desk or the post is empty late in the morning or the afternoon.
@@ -38,8 +41,8 @@ const ALERT_TTL := 20.0
 ## The order Auto-assign fills the stations in (one seat each first, then what is left over): the
 ## work first (the bench, the wall crew, the beds), then the desks, the radio last, so a crew that is
 ## short-handed works before it listens.
-const AUTO_ORDER := ["bench", "builders", "garden", "watch", "infirmary", "radio"]
-const AUTO_SECOND_PASS := ["builders", "garden", "bench", "infirmary"]
+const AUTO_ORDER := ["bench", "builders", "garden", "watch", "infirmary", "radio", "salvage"]
+const AUTO_SECOND_PASS := ["builders", "garden", "bench", "infirmary", "salvage"]
 ## Traits that make a person a better fit for a station.
 const AUTO_TRAITS := {"bench": "tinkerer", "builders": "tinkerer", "infirmary": "triage", "watch": "sharp_eyed"}
 
@@ -51,6 +54,11 @@ var settings := {}
 var _alert_day := {"radio": 0, "watch": 0}
 var _stations: Array = []
 var _station_by_id := {}
+## The stations as they are now (the buildings' seats, the ones that need a building not yet built left
+## out of `stations()`), kept by the buildings' version.
+var _now: Array = []
+var _now_by_id := {}
+var _now_version := -1
 var _posts: Array = []
 var _post_by_id := {}
 
@@ -141,13 +149,60 @@ func _free_post(taken: Dictionary) -> String:
 
 # ---------------------------------------------------------------- stations --
 
+## The stations that exist now, as they are now (their seats, and where they are worked).
 func stations() -> Array:
-	return _stations
+	_refresh_now()
+	return _now
 
 
-## A station's data, or {} when there is no such station.
+## A station's data as it is now, or {} when there is no such station. (A station whose building is
+## not built is found here too, with `locked` true and no seats.)
 func station(id: String) -> Dictionary:
-	return _station_by_id.get(id, {})
+	_refresh_now()
+	return _now_by_id.get(id, {})
+
+
+func _refresh_now() -> void:
+	var v: int = sim.build.version if sim != null and sim.get("build") != null else 0
+	if v == _now_version and not _now.is_empty():
+		return
+	_now_version = v
+	_now.clear()
+	_now_by_id.clear()
+	for st in _stations:
+		var e: Dictionary = st.duplicate()
+		var id := String(st.id)
+		var open := unlocked(id)
+		e["locked"] = not open
+		e["seats"] = seats_of(id)
+		var req := String(st.get("requires", ""))
+		if req != "" and open:
+			var at: Vector2 = sim.build.spot_of(req)
+			if at != Vector2.ZERO:
+				e["pos"] = at
+		_now_by_id[id] = e
+		if open:
+			_now.append(e)
+
+
+## Whether this station exists now: it needs no building, or its building stands.
+func unlocked(id: String) -> bool:
+	var st: Dictionary = _station_by_id.get(id, {})
+	if st.is_empty():
+		return false
+	var req := String(st.get("requires", ""))
+	return req == "" or (sim != null and sim.get("build") != null and sim.build.built(req))
+
+
+## The seats a station has now: its own and what the standing buildings add; none while the building
+## it needs is not there.
+func seats_of(id: String) -> int:
+	if not unlocked(id):
+		return 0
+	var extra := 0
+	if sim.get("build") != null:
+		extra = int(sim.build.bonus("seats_%s" % id))
+	return int(_station_by_id[id].seats) + extra
 
 
 func job_of(p) -> String:
@@ -174,7 +229,7 @@ func seats_left(id: String) -> int:
 	for p in crew_of(id):
 		if p.away == null:
 			here += 1
-	return int(_station_by_id[id].seats) - here
+	return seats_of(id) - here
 
 
 ## Why this person cannot be given this job ("" when they can).
@@ -187,6 +242,8 @@ func why_not(p, id: String) -> String:
 		return "they are gone"
 	if job_of(p) == id:
 		return ""
+	if not unlocked(id):
+		return "the %s is not built yet" % String(_station_by_id[id].name).to_lower()
 	if seats_left(id) <= 0:
 		return "the %s is full" % String(_station_by_id[id].name)
 	return ""
@@ -213,7 +270,7 @@ func assign(p, id: String) -> bool:
 ## trip, or `why_not` would have refused), those away give up theirs, so a station never holds more
 ## people than it has seats.
 func _make_room(id: String) -> void:
-	var seats := int(_station_by_id[id].seats)
+	var seats := seats_of(id)
 	for q in crew_of(id):
 		if crew_of(id).size() < seats:
 			break
@@ -227,6 +284,20 @@ func unassign(p) -> void:
 		p.goal_key = ""
 		sim.tactics.call_back(p)
 		sim.events.append({"type": "assigned", "who": p.id, "station": ""})
+
+
+## After a building came down: whoever holds a station that is gone, or a seat the station no longer has,
+## is let go (the ones away first, then the last to arrive).
+func trim() -> void:
+	for st in _stations:
+		var id := String(st.id)
+		var crew := crew_of(id)
+		var seats := seats_of(id)
+		if crew.size() <= seats:
+			continue
+		crew.sort_custom(func(a, b): return (a.away != null) and (b.away == null))
+		for i in crew.size() - seats:
+			unassign(crew[i])
 
 
 ## Takes everyone off their jobs.
@@ -248,6 +319,9 @@ func seat_pos(p) -> Vector2:
 	var st := station(job_of(p))
 	if st.is_empty():
 		return Vector2(p.x, p.y)
+	# the Builders' seat is the active building site, while there is one
+	if String(st.id) == "builders" and not sim.build.active_site().is_empty():
+		return sim.build.work_spot(p)
 	return Vector2(st.pos) + Vector2(SEAT_OFFSETS[mini(seat_index(p), SEAT_OFFSETS.size() - 1)])
 
 
@@ -379,7 +453,10 @@ func goal_for(p) -> Dictionary:
 		return {"x": p.x, "y": p.y, "face": "", "what": "At ease"}
 	var st := station(id)
 	var at := seat_pos(p)
-	return {"x": at.x, "y": at.y, "face": "N" if id == "radio" else "", "what": String(st.get("what", st.name))}
+	var what := String(st.get("what", st.name))
+	if id == "builders" and not sim.build.active_site().is_empty():
+		what = "Building the %s" % String(sim.build.building(String(sim.build.active_site().site.building)).name).to_lower()
+	return {"x": at.x, "y": at.y, "face": "N" if id == "radio" else "", "what": what}
 
 
 # ------------------------------------------------------------- auto-assign --
@@ -409,7 +486,7 @@ func _fill_one(id: String, away := false) -> bool:
 			best_score = s
 			best = p
 	# a seat that is really open (not one held by somebody away: Auto-assign does not take those)
-	if best == null or crew_of(id).size() >= int(_station_by_id[id].seats):
+	if best == null or crew_of(id).size() >= seats_of(id):
 		return false
 	return assign(best, id)
 

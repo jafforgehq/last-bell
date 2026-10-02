@@ -115,6 +115,22 @@
       "blurb": "Watches the road and tells the crew at 17:00 what tonight looks like.",
       "what": "Keeping watch",
       "settings": {}
+    },
+    {
+      "id": "salvage",
+      "name": "Salvage bench",
+      "where": "the salvage bench",
+      "pos": [
+        28.7,
+        39.8
+      ],
+      "seats": 2,
+      "skill": "",
+      "icon": "scrap",
+      "blurb": "Sorts the yard's junk into scrap: 0.4 an hour for each person here.",
+      "what": "Sorting salvage",
+      "requires": "salvage_bench",
+      "settings": {}
     }
   ]
 }

@@ -1,0 +1,210 @@
+{
+ "version": 1,
+ "_doc": "Fixed lots in the compound. kind: yard or wall. pos is the centre and size the width and height of the lot in tiles; work is where the builders stand (walkable, outside the lot's footprint). The first positions are rough: the view owner checks them against the map (nothing overlapped, every work spot reachable).",
+ "plots": [
+  {
+   "id": "court_north",
+   "name": "The court, north end",
+   "kind": "yard",
+   "pos": [
+    28.5,
+    27.0
+   ],
+   "size": [
+    5.0,
+    4.0
+   ],
+   "work": [
+    28.5,
+    29.8
+   ]
+  },
+  {
+   "id": "court_south",
+   "name": "The court, south end",
+   "kind": "yard",
+   "pos": [
+    28.5,
+    33.0
+   ],
+   "size": [
+    5.0,
+    4.0
+   ],
+   "work": [
+    28.5,
+    35.8
+   ]
+  },
+  {
+   "id": "east_lot",
+   "name": "The east lot",
+   "kind": "yard",
+   "pos": [
+    50.5,
+    22.6
+   ],
+   "size": [
+    4.0,
+    3.0
+   ],
+   "work": [
+    50.5,
+    24.9
+   ]
+  },
+  {
+   "id": "north_east_lot",
+   "name": "The north-east lot",
+   "kind": "yard",
+   "pos": [
+    56.4,
+    23.2
+   ],
+   "size": [
+    4.0,
+    2.6
+   ],
+   "work": [
+    56.4,
+    25.0
+   ]
+  },
+  {
+   "id": "south_lot",
+   "name": "The south lot",
+   "kind": "yard",
+   "pos": [
+    35.5,
+    41.0
+   ],
+   "size": [
+    5.0,
+    3.0
+   ],
+   "work": [
+    35.5,
+    39.0
+   ]
+  },
+  {
+   "id": "south_east_lot",
+   "name": "The south-east lot",
+   "kind": "yard",
+   "pos": [
+    50.7,
+    40.6
+   ],
+   "size": [
+    4.4,
+    3.0
+   ],
+   "work": [
+    50.7,
+    38.6
+   ]
+  },
+  {
+   "id": "junk_corner",
+   "name": "The junk corner",
+   "kind": "yard",
+   "pos": [
+    28.7,
+    41.4
+   ],
+   "size": [
+    3.0,
+    2.0
+   ],
+   "work": [
+    28.7,
+    39.8
+   ]
+  },
+  {
+   "id": "garden_south",
+   "name": "Beside the garden",
+   "kind": "yard",
+   "pos": [
+    57.0,
+    39.4
+   ],
+   "size": [
+    6.0,
+    2.2
+   ],
+   "work": [
+    57.0,
+    37.8
+   ]
+  },
+  {
+   "id": "south_east_corner",
+   "name": "The south-east corner",
+   "kind": "yard",
+   "pos": [
+    61.0,
+    41.9
+   ],
+   "size": [
+    2.4,
+    2.4
+   ],
+   "work": [
+    61.0,
+    40.1
+   ]
+  },
+  {
+   "id": "north_wall",
+   "name": "The north wall",
+   "kind": "wall",
+   "pos": [
+    31.5,
+    23.2
+   ],
+   "size": [
+    3.0,
+    3.0
+   ],
+   "work": [
+    31.5,
+    25.5
+   ]
+  },
+  {
+   "id": "west_wall",
+   "name": "The west wall",
+   "kind": "wall",
+   "pos": [
+    24.2,
+    27.8
+   ],
+   "size": [
+    3.0,
+    3.0
+   ],
+   "work": [
+    26.4,
+    27.8
+   ]
+  },
+  {
+   "id": "east_wall",
+   "name": "The east wall",
+   "kind": "wall",
+   "pos": [
+    60.2,
+    33.0
+   ],
+   "size": [
+    2.4,
+    3.0
+   ],
+   "work": [
+    60.2,
+    35.0
+   ]
+  }
+ ]
+}
