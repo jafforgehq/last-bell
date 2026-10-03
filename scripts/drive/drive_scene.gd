@@ -1799,6 +1799,8 @@ func hint_line() -> String:
 		return super()
 	if _wrecked:
 		return "The car is done. Walk to the end of the road."
+	if leg == "there" and leave_requested() and (mode == "drive" or mode == "foot"):
+		return NightKit.leave_hint_there(night_road())
 	if mode == "out":
 		return "Out of the car: E when they are done." if work_left <= 0.0 else "They are working (%d s). The dead come to the noise." % int(ceilf(work_left))
 	if mode == "stopped":
@@ -1806,6 +1808,17 @@ func hint_line() -> String:
 	if mode == "foot":
 		return "Walk to the end of the road."
 	return "W S A D drive; E stop at what is ahead; Tab hands the wheel to the squad."
+
+
+## The night's request to head home (round 19: the road call's "Head home now") is for the place: the squad is asked to go back at the
+## place, once, as the base's scene does it. On the road there it waits (a car cannot be turned round: it is asked at the place's gate,
+## and `hint_line` says so), and on the road home there is nothing left to ask.
+func _watch_leave_request() -> void:
+	if _is_road():
+		if leg == "home":
+			_clear_leave_request()
+		return
+	super()
 
 
 func status_of(p) -> String:
@@ -1891,6 +1904,7 @@ func _on_place_over() -> void:
 		_end_leg()
 		return
 	ended = true
+	_clear_leave_request()    # (round 19: the night's request to head home is spent once the party is done with the place)
 	fire_held = false
 	hover = null
 	reach_container = {}

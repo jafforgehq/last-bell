@@ -550,10 +550,10 @@ func _dusk_clock() -> float:
 ## `forecast.road_margin_min` before the dusk), "left_min" (minutes to that: negative when it is past; on the road home, minutes to
 ## spare on the arrival), "state": "free" (time to spare), "soon" (within `forecast.road_warn_min` of leaving), "now" (leave now: the
 ## margin is being used), "late" (they cannot be home before the dusk: they will be out tonight), "big" (tonight is a Big Night),
-## "text"}. A party on the road home is "free" or "late": nothing can be done from there but the road. `{"on": false}` and the
-## neutral numbers when there is no such trip or no avatar.
+## "text", "in_place" (the party is in the place or on the road there, not yet on the road home)}. A party on the road home is "free" or
+## "late": nothing can be done from there but the road. `{"on": false}` and the neutral numbers when there is no such trip or no avatar.
 func road_status() -> Dictionary:
-	var off := {"on": false, "dusk": 0.0, "road_min": 0.0, "leave_by": 0.0, "left_min": 0.0, "state": "free", "big": false, "text": ""}
+	var off := {"on": false, "in_place": false, "dusk": 0.0, "road_min": 0.0, "leave_by": 0.0, "left_min": 0.0, "state": "free", "big": false, "text": ""}
 	if not radio.avatar_mode():
 		return off
 	var party := _played_party()
@@ -577,7 +577,7 @@ func road_status() -> Dictionary:
 	elif left < -margin:
 		state = "late"
 	var big := _tonight_big()
-	var out := {"on": true, "dusk": dusk, "road_min": road, "leave_by": dusk - margin - road, "left_min": left, "state": state, "big": big, "text": ""}
+	var out := {"on": true, "in_place": in_place, "dusk": dusk, "road_min": road, "leave_by": dusk - margin - road, "left_min": left, "state": state, "big": big, "text": ""}
 	out["text"] = _road_text(out, in_place, arrival)
 	return out
 

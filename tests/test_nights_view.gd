@@ -13,6 +13,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
+const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 
 const SIZES := [[1280, 800], [980, 700], [700, 700], [960, 600], [700, 560]]
 
@@ -754,33 +755,58 @@ func test_a_hot_breach_pulses_and_says_nobody_will_mend_it_under_fire() -> void:
 
 
 func test_the_mend_ring_follows_the_session_of_the_avatars_hands() -> void:
-	var idle := FakeSim.new()
-	eq(OverlayNode.mend_state(idle), {"on": false, "progress": 0.0}, "no hands at work: no ring")
-	var busy := FakeSim.new()
-	busy.interact = FakeInteract.new()
-	busy.interact.working = "wall"
-	busy.interact.work_left = NightData.num("mend.seconds", 10.0) * 0.25
-	var st: Dictionary = OverlayNode.mend_state(busy)
+	# (the session is the nights' module's: the real one, a worn wall and the avatar at its mending place)
+	var g := Helpers.avatar_game(1, 5)
+	var sim = g.sim
+	Helpers.no_work(sim)
+	sim.waves.enabled = false
+	sim.zombies.clear()
+	Helpers.at(sim, 3, 22.0)
+	for p in sim.people:
+		p.reloading = 1.0e6
+	var seg = null
+	for s in sim.segments:
+		if s.id == 0:
+			seg = s
+	seg.hp = seg.max_hp * 0.3
+	sim._segment_state(seg)
+	var me = sim.avatar.player()
+	var spot: Vector2 = sim.repair_spot(seg)
+	me.x = spot.x
+	me.y = spot.y
+	me.path = []
+	sim.stock.scrap = 40.0
+	eq(OverlayNode.mend_state(sim), {"on": false, "progress": 0.0, "seg": -1}, "no hands at work: no ring")
+	check(bool(sim.nights.mend_wall(0).ok), "the hands begin")
+	var st: Dictionary = OverlayNode.mend_state(sim)
 	check(st.on, "mending a wall: the ring")
-	near(st.progress, 0.75, 0.001, "three quarters done")
-	busy.interact.working = "bench"
-	check(not OverlayNode.mend_state(busy).on, "the bench's ring is not this one")
-	busy.interact.working = ""
-	check(not OverlayNode.mend_state(busy).on, "and not working: none")
+	near(st.progress, 0.0, 0.001, "at the start")
+	eq(st.seg, 0, "at that section")
+	var total: float = NightData.num("mend.seconds", 10.0)
+	for i in int(total * 0.25 * 30.0):
+		sim.update(1.0 / 30.0)
+	st = OverlayNode.mend_state(sim)
+	check(st.on, "still at it")
+	near(st.progress, 0.25, 0.05, "a quarter done: %f" % st.progress)
+	near(st.progress, 1.0 - sim.nights.work_left / total, 0.001, "and the ring reads the module's own seconds")
+	# the bench's session (round 18's Interact keeps it) is not this ring
+	sim.nights.stop_mend("stopped")
+	sim.interact.working = "bench"
+	sim.interact.work_left = 3.0
+	check(not OverlayNode.mend_state(sim).on, "the bench's ring is not this one")
+	sim.interact.working = ""
+	check(not OverlayNode.mend_state(sim).on, "and not working: none")
+	# a sim with no such module
+	eq(OverlayNode.mend_state(FakeSim.new()), {"on": false, "progress": 0.0, "seg": -1}, "no nights module: no ring")
+	g.world.queue_free()
 
 
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 
 
-class FakeInteract:
-	extends RefCounted
-	var working := ""
-	var work_left := 0.0
-
-
 class FakeSim:
 	extends RefCounted
-	var interact = null
+	var nights = null
 
 
 func test_the_fields_view_gives_the_spawn_arrows_the_hour_of_the_first_of_the_dead() -> void:
@@ -808,9 +834,12 @@ class FakeNight:
 		return status
 
 
-## The real game with the avatar and a trip played to the place (the stubbed site), in a window of this size; the scene has a stand-in for
-## the night module and the colony's clock is day 3, 13:30 (dusk is at 19:00: 5:30 away).
-func _trip(width: int = 1280, height: int = 800) -> Dictionary:
+## The real game with the avatar and a trip played, in a window of this size; the scene has a stand-in for the night module and the colony's
+## clock is day 3, 13:30 (dusk is at 19:00: 5:30 away). `mode` is where the trip is: "place" (the live drive of round 21, which is what the game
+## opens in avatar mode: a DriveScene put at its place: `scene.leg == "place"`), "road" (the same scene on its way there: `scene.leg ==
+## "there"`) or "classic" (the overlay's road, `--fastroad` and the tests that keep it: a RaidScene played to its place).
+func _trip(width: int = 1280, height: int = 800, mode: String = "place") -> Dictionary:
+	PlaceFlow.live_enabled = mode != "classic"
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true}, width, height)
 	main.raid_stub = true
 	var sim = main.sim
@@ -819,11 +848,26 @@ func _trip(width: int = 1280, height: int = 800) -> Dictionary:
 	check(scene != null, "the trip opens")
 	scene.night_override = FakeNight.new()
 	var guard := 0
-	while scene.phase == "road_there" and guard < 5000:
-		scene.tick(1.0 / 60.0)
-		guard += 1
+	if mode == "classic":
+		while scene.phase == "road_there" and guard < 5000:
+			scene.tick(1.0 / 60.0)
+			guard += 1
+	elif mode == "place":
+		eq(scene.leg, "there", "the drive begins on the road there")
+		scene.stage("exit")    # (the squad is at the end of the road)
+		while scene.leg == "there" and guard < 600:
+			scene.tick(1.0 / 30.0)
+			guard += 1
+		scene.tick(1.0 / 30.0)    # (the card's frame, then the stage is built)
+		eq(scene.leg, "place", "the place is next")
 	Helpers.at(sim, 3, 13.5)
-	return {"main": main, "sim": sim, "scene": scene, "night": scene.night_override}
+	return {"main": main, "sim": sim, "scene": scene, "night": scene.night_override, "mode": mode}
+
+
+## The game given back, the drive on again for the tests that follow.
+func _done(ctx: Dictionary) -> void:
+	PlaceFlow.live_enabled = true
+	await TutorialKit.leave(ctx.main)
 
 
 ## The road's state at `leave_in` game minutes from now with the road home taking 80.
@@ -870,7 +914,7 @@ func test_the_place_says_how_long_to_dusk_the_road_home_and_when_to_leave() -> v
 	ctx.night.status = {"on": false, "state": "free"}
 	_refresh(ctx)
 	check(not h.leave_label.visible, "or says the trip is not out")
-	await TutorialKit.leave(ctx.main)
+	await _done(ctx)
 
 
 func test_without_the_night_module_the_place_is_as_it_was() -> void:
@@ -911,25 +955,27 @@ func test_the_line_fits_the_window_and_leaves_the_rest_of_the_place_alone_at_eve
 		if h.call_card.visible:
 			named["call"] = Kit.rect(h.call_card)
 		eq(Kit.overlaps(named), [], "%s: nothing overlaps the board" % where)
-		await TutorialKit.leave(ctx.main)
+		await _done(ctx)
 
 
-func test_asked_to_head_home_the_squad_goes_back_once_and_the_hint_says_where() -> void:
-	var ctx := _trip()
+## The place's scene is asked to head home and does it once: the squad is asked to go back, the hint says where and how far the road is
+## (the same in the overlay's road and in the live drive's place: `mode`).
+func _check_asked_to_head_home(mode: String) -> Dictionary:
+	var ctx := _trip(1280, 800, mode)
 	var scene = ctx.scene
 	var lead = scene.leader()
 	ctx.night.status = _road(ctx, "now", -5.0)
 	var before: String = scene.hint_line()
-	check(not before.begins_with("Head for the exit"), "no request: the hint is the place's own: %s" % before)
+	check(not before.begins_with("Head for the exit"), "%s: no request: the hint is the place's own: %s" % [mode, before])
 	ctx.night.leave_requested = true
 	scene.tick(1.0 / 60.0)
-	check(scene._leave_asked, "the squad is asked")
+	check(scene._leave_asked, "%s: the squad is asked" % mode)
 	var asked := 0
 	for p in scene.run.squad:
 		if p != lead and not p.dead:
 			asked += 1
-	check(asked > 0, "there is a squad to ask")
-	eq(scene.hint_line(), "Head for the exit: the road home takes 1 h 20", "the hint says where, and how long the road is")
+	check(asked > 0, "%s: there is a squad to ask" % mode)
+	eq(scene.hint_line(), "Head for the exit: the road home takes 1 h 20", "%s: the hint says where, and how long the road is" % mode)
 	# they walk to the exit (the verb is the radio's: willingness and delay as ever)
 	for i in 300:
 		scene.tick(1.0 / 30.0)
@@ -937,20 +983,22 @@ func test_asked_to_head_home_the_squad_goes_back_once_and_the_hint_says_where() 
 	for p in scene.run.squad:
 		if p != lead and not p.dead and String(p.stance) == "back":
 			heading += 1
-	check(heading > 0, "someone of the squad took the stance: back (%d)" % heading)
+	check(heading > 0, "%s: someone of the squad took the stance: back (%d)" % [mode, heading])
 	var count: int = scene.run.log.size()
 	scene.tick(1.0 / 60.0)
 	scene._watch_leave_request()
-	eq(scene.run.log.size(), count, "and they are not asked again")
-	await TutorialKit.leave(ctx.main)
+	eq(scene.run.log.size(), count, "%s: and they are not asked again" % mode)
+	return ctx
 
 
-func test_the_request_is_put_down_when_the_place_is_over() -> void:
-	var ctx := _trip()
-	var scene = ctx.scene
-	ctx.night.leave_requested = true
-	scene.tick(1.0 / 60.0)
-	check(scene.leave_requested(), "asked, and the trip is out")
+func test_asked_to_head_home_the_squad_goes_back_once_and_the_hint_says_where() -> void:
+	for mode in ["classic", "place"]:
+		var ctx = _check_asked_to_head_home(mode)
+		await _done(ctx)
+
+
+## The party walks out of the place: the leader away from the exit for a moment, then everyone in it, and a few frames for the scene to see it.
+func _walk_out(scene) -> void:
 	var spot: Vector2 = scene.site.exit.get_center()
 	var lead = scene.leader()
 	lead.x = spot.x + 7.0
@@ -964,24 +1012,102 @@ func test_the_request_is_put_down_when_the_place_is_over() -> void:
 			p.path = []
 	for i in 15:
 		scene.tick(1.0 / 30.0)
-	check(scene.ended, "the place is over")
-	check(not ctx.night.leave_requested, "the request is put down once the party is finished")
-	check(not scene.leave_requested(), "and is not asked of again")
-	await TutorialKit.leave(ctx.main)
+
+
+## The request is put down once the place is over (a RaidScene: `ended`, the report; a DriveScene: the way home begins).
+func _check_put_down(mode: String) -> Dictionary:
+	var ctx := _trip(1280, 800, mode)
+	var scene = ctx.scene
+	ctx.night.leave_requested = true
+	scene.tick(1.0 / 60.0)
+	check(scene.leave_requested(), "%s: asked, and the trip is out" % mode)
+	_walk_out(scene)
+	if mode == "place":
+		eq(scene.leg, "home", "%s: the place is over and the way home has begun" % mode)
+	else:
+		check(scene.ended, "%s: the place is over" % mode)
+	check(not ctx.night.leave_requested, "%s: the request is put down once the party is finished" % mode)
+	check(not scene.leave_requested(), "%s: and is not asked of again" % mode)
+	return ctx
+
+
+func test_the_request_is_put_down_when_the_place_is_over() -> void:
+	for mode in ["classic", "place"]:
+		var ctx := _check_put_down(mode)
+		await _done(ctx)
 
 
 func test_a_down_friend_is_the_hint_before_the_way_home() -> void:
-	var ctx := _trip()
+	for mode in ["classic", "place"]:
+		var ctx := _trip(1280, 800, mode)
+		var scene = ctx.scene
+		var lead = scene.leader()
+		ctx.night.leave_requested = true
+		ctx.night.status = _road(ctx, "now", -5.0)
+		for p in scene.run.squad:
+			if p != lead:
+				p.downed = true
+				break
+		check(scene.hint_line().contains("is down"), "%s: who is down comes first: %s" % [mode, scene.hint_line()])
+		await _done(ctx)
+
+
+func test_on_the_road_there_the_line_shows_and_a_request_to_head_home_waits_for_the_place() -> void:
+	var ctx := _trip(1280, 800, "road")
 	var scene = ctx.scene
-	var lead = scene.leader()
-	ctx.night.leave_requested = true
+	var h = scene.hud_layer
+	eq(scene.leg, "there", "the squad is still on the road there")
+	ctx.night.status = _road(ctx, "soon", 50.0)
+	_refresh(ctx)
+	check(h.leave_label.visible, "the line is up on the road too: when to turn back is worth knowing")
+	eq(h.leave_label.text, "Dusk in 5:30 · road home 1:20 · leave by 14:20", "its words")
+	var driving: String = scene.hint_line()
+	check(not driving.begins_with("Asked") and not driving.begins_with("Head for"), "no request: the road's own hint: %s" % driving)
 	ctx.night.status = _road(ctx, "now", -5.0)
+	ctx.night.leave_requested = true
+	scene.tick(1.0 / 30.0)
+	check(scene.leave_requested(), "the request stands")
+	check(not scene._leave_asked, "nobody is asked on the road: the squad is in the car, and the car cannot turn round")
 	for p in scene.run.squad:
-		if p != lead:
-			p.downed = true
-			break
-	check(scene.hint_line().contains("is down"), "who is down comes first: %s" % scene.hint_line())
-	await TutorialKit.leave(ctx.main)
+		check(String(p.stance) != "back", "%s keeps to the road" % p.first)
+	eq(scene.hint_line(), "Asked to head home: the place first, then straight back. The road home takes 1 h 20", "the hint says what will happen")
+	# the road is done: at the place the squad is asked, once, and the hint is the place's
+	scene.stage("exit")
+	var guard := 0
+	while scene.leg == "there" and guard < 600:
+		scene.tick(1.0 / 30.0)
+		guard += 1
+	scene.tick(1.0 / 30.0)
+	eq(scene.leg, "place", "the place")
+	scene.tick(1.0 / 30.0)
+	check(scene._leave_asked, "the squad is asked at the place")
+	eq(scene.hint_line(), "Head for the exit: the road home takes 1 h 20", "and the hint is the exit's")
+	await _done(ctx)
+
+
+func test_on_the_road_home_the_line_says_when_they_are_back_and_nothing_is_asked() -> void:
+	var ctx := _trip(1280, 800, "place")
+	var scene = ctx.scene
+	var h = scene.hud_layer
+	ctx.night.leave_requested = true
+	scene.tick(1.0 / 30.0)
+	_walk_out(scene)
+	eq(scene.leg, "home", "the way home has begun")
+	check(not ctx.night.leave_requested, "the request was put down with the place")
+	ctx.night.status = {"on": true, "in_place": false, "dusk": ctx.sim.clock_min + 330.0, "road_min": 80.0, "leave_by": ctx.sim.clock_min - 20.0, "left_min": 25.0,
+		"state": "free", "big": true, "text": "On the road home: back by 14:50"}
+	_refresh(ctx)
+	check(h.leave_label.visible, "the line is up")
+	eq(h.leave_label.text, "On the road home: back by 14:50", "it says when they are back, not an hour to leave by")
+	eq(h.leave_label.get_theme_color("font_color"), Hud.INK2, "calm")
+	ctx.night.leave_requested = true
+	scene.tick(1.0 / 30.0)
+	check(not scene.leave_requested() and not ctx.night.leave_requested, "a stray request on the road home is put down: there is nothing to ask")
+	check(not scene.hint_line().begins_with("Asked") and not scene.hint_line().begins_with("Head for"), "and the hint is the road's own: %s" % scene.hint_line())
+	ctx.night.status = {"on": true, "in_place": false, "state": "late", "big": true, "text": "You will be out tonight"}
+	_refresh(ctx)
+	eq(h.leave_label.text, "You will be out tonight", "too late: as in the place")
+	await _done(ctx)
 
 
 # ------------------------------------------------------------- the board's note --

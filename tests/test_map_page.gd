@@ -19,6 +19,7 @@ const TownMap := preload("res://scripts/ui/town_map.gd")
 const MapPage := preload("res://scripts/ui/map_page.gd")
 const MapData := preload("res://scripts/ui/map_data.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 const TextTests := preload("res://tests/test_hud_text.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 
@@ -779,6 +780,81 @@ func test_who_would_stay_behind_is_told_under_take_control() -> void:
 	_free(ctx)
 
 
+# ----------------------------------------------------------------- tonight (round 19) --
+
+## The clock at `hour` of `day` (the page refreshed): the settlement game's own clock, as `_at` has it for day 3.
+func _on_day(ctx: Dictionary, day: int, hour: float) -> void:
+	var sim = ctx.sim
+	sim.day = day
+	sim.minutes = hour * 60.0
+	sim.clock_min = float(day - 1) * 1440.0 + hour * 60.0 - 420.0
+	sim.phase = sim.phase_at(sim.minutes)
+	sim.supplies.sources_day = day
+	sim.supplies.meal_day = day
+	ctx.page.refresh(true)
+
+
+func test_tonight_is_told_under_take_control_in_the_scavenging_modules_own_words() -> void:
+	var ctx := await _settled()
+	var page = ctx.page
+	var sim = ctx.sim
+	check(page.night_note != null and not page.night_note.visible, "no place chosen: no note")
+	_on_day(ctx, 10, 7.0)
+	page.select_place("houses")
+	var want: Dictionary = sim.scavenge.night_warning("houses", "", float(sim.town.SEARCH_H))
+	check(bool(want.big), "day 10 of a game with an avatar is a Big Night")
+	check(page.night_note.visible, "the note is there")
+	eq(page.night_note.text, String(want.text), "its words are the scavenging module's")
+	check(String(page.night_note.text).begins_with("Big Night tonight: leave the place by"), "it says when to leave: '%s'" % page.night_note.text)
+	eq(page.night_note.get_theme_color("font_color"), ctx.hud.INK2, "calm while the party makes it")
+	var go: Button = page.buttons.go
+	var after = page.night_note.get_parent()
+	check(after != null and after == go.get_parent(), "it sits with Take control")
+	check(page.night_note.get_index() > go.get_index(), "under the button")
+	_free(ctx)
+
+
+func test_the_note_is_the_same_the_town_boards_row_shows_and_it_follows_the_vehicle() -> void:
+	var ctx := await _settled()
+	var page = ctx.page
+	var sim = ctx.sim
+	sim.vehicles.fleet.append({"id": "rig", "kind": "pickup", "hp": 80.0, "state": "parked"})
+	sim.vehicles.fuel = 30.0
+	_on_day(ctx, 10, 7.0)
+	page.select_place("houses")
+	var on_foot := String(page.night_note.text)
+	var line: Dictionary = NightKit.warning_line(sim, "houses", "", float(sim.town.SEARCH_H))
+	eq(on_foot, String(line.text), "the board's line, for a trip on foot")
+	check(page.choose_vehicle("rig"), "the pickup")
+	var by_car := String(page.night_note.text)
+	eq(by_car, String(NightKit.warning_line(sim, "houses", "rig", float(sim.town.SEARCH_H)).text), "and for the trip by the pickup")
+	check(by_car != on_foot, "the road home is not the same length: '%s' and '%s'" % [on_foot, by_car])
+	_free(ctx)
+
+
+func test_the_note_is_amber_when_the_trip_cannot_be_home_in_time_and_gone_when_there_is_nothing_to_say() -> void:
+	var ctx := await _settled()
+	var page = ctx.page
+	var sim = ctx.sim
+	_on_day(ctx, 10, 16.5)
+	page.select_place("houses")
+	var line: Dictionary = NightKit.warning_line(sim, "houses", "", float(sim.town.SEARCH_H))
+	check(not line.is_empty() and line.tone == "warn" and line.big, "late on a Big Night the board says it will not make it: %s" % str(line))
+	check(page.night_note.visible, "so does the page")
+	eq(page.night_note.text, String(line.text), "in the same words")
+	eq(page.night_note.get_theme_color("font_color"), ctx.hud.WARN, "in amber")
+	_on_day(ctx, 3, 7.0)
+	var quiet: Dictionary = NightKit.warning_line(sim, "houses", "", float(sim.town.SEARCH_H))
+	check(quiet.is_empty(), "an ordinary morning has nothing to say")
+	check(not page.night_note.visible, "and the note is hidden")
+	_on_day(ctx, 10, 7.0)
+	check(page.night_note.visible, "and back on a Big Night")
+	sim.player_id = ""
+	page.refresh(true)
+	check(not page.night_note.visible, "with no avatar there is no note")
+	_free(ctx)
+
+
 # ----------------------------------------------------------------------- the errand --
 
 func test_asking_for_an_errand_queues_the_people_and_they_set_off_after_the_delay() -> void:
@@ -1250,6 +1326,12 @@ func _stage(ctx: Dictionary, state: String) -> void:
 			_at(ctx, 21.0)
 			page.select_place("houses")
 			page.toggle_person(_person(ctx, "dez"))
+		"bignight":
+			# (round 19: the note under Take control, on a Big Night with the trip too late to be home in time)
+			_on_day(ctx, 10, 16.5)
+			page.select_place("houses")
+			page.toggle_person(_person(ctx, "dez"))
+			check(page.night_note.visible, "the note is up in this state")
 		"party":
 			sim.scavenge.send([_person(ctx, "dez"), _person(ctx, "ana")], "houses", "loot")
 			sim.clock_min += 50.0
@@ -1298,7 +1380,7 @@ func _misfits(ctx: Dictionary, width: float, _height: float) -> Array:
 func test_the_page_fits_the_panel_at_440_and_316_in_every_state() -> void:
 	for width in WIDTHS:
 		var ctx := await _settled(width, 760)
-		for state in ["none", "depot", "answer", "vehicle", "night", "party"]:
+		for state in ["none", "depot", "answer", "vehicle", "night", "party", "bignight"]:
 			_stage(ctx, state)
 			await Kit.settle()
 			await Kit.settle()

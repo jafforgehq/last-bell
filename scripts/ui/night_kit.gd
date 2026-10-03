@@ -192,6 +192,9 @@ static func road_line(rs: Dictionary, now_min: float) -> Dictionary:
 	var state := String(rs.get("state", "free"))
 	if state == "late":
 		return {"text": "You will be out tonight", "tone": "warn"}
+	if not bool(rs.get("in_place", true)) and String(rs.get("text", "")) != "":
+		# (on the road home, the live drive's last leg: nothing is left to decide, so no hour to leave by; only when they are back)
+		return {"text": String(rs.text), "tone": "calm"}
 	var dusk_in := float(rs.get("dusk", now_min)) - now_min
 	var text := "Dusk in %s · road home %s · " % [minutes_text(dusk_in), minutes_text(float(rs.get("road_min", 0.0)))]
 	if state == "now":
@@ -203,6 +206,12 @@ static func road_line(rs: Dictionary, now_min: float) -> Dictionary:
 ## The hint under the place's name once the head home was asked for ("home" of the night_road call).
 static func leave_hint(rs: Dictionary) -> String:
 	return "Head for the exit: the road home takes %s" % words_text(float(rs.get("road_min", 0.0)))
+
+
+## The hint on the road there (the live drive) once the head home was asked for: the car cannot be turned round, so the place is first and
+## the squad goes straight back from its gate.
+static func leave_hint_there(rs: Dictionary) -> String:
+	return "Asked to head home: the place first, then straight back. The road home takes %s" % words_text(float(rs.get("road_min", 0.0)))
 
 
 ## The Town Board's note on the trip being planned (`scavenge.night_warning`: where it has one): {"text", "tone", "big"}, or {} for none.

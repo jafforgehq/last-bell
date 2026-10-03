@@ -1818,8 +1818,8 @@ func _interact():
 
 ## The key E: uses the thing the prompt is on (so that E does what the pill says). What it began, it ends: E at the person whose card is
 ## open closes the card (the rules' `use` itself leaves a held post and stops a bench session worked). A person opens the card (and the
-## rules have them say their line, which the overlay shows over their head); a post, the bench and a car's gauge answer in a toast, in
-## amber when it is a refusal. Nothing under a page, a menu or a place, nor while the tutorial's lock says no.
+## rules have them say their line, which the overlay shows over their head); a post, the bench, a wall (round 19: the avatar's hands mend it,
+## E again stops them) and a car's gauge answer in a toast, in amber when it is a refusal. Nothing under a page, a menu or a place, nor while the tutorial's lock says no.
 func _interact_key() -> void:
 	var it = _interact()
 	if it == null or avatar_hands_off() or raid_open() or not _allows("interact"):
@@ -2048,7 +2048,36 @@ func _handle_events() -> void:
 					sound.play("hammer", 0.8, 0.1)
 				elif int(e.get("ammo", 0)) > 0:
 					hud.toast("Bench: %d rounds from %d scrap" % [int(e.get("ammo", 0)), int(e.get("scrap", 0))])
+			"wall_work":
+				# the avatar's own hands at a wall (round 19, nights.gd; E starts and stops them): a stroke as they begin (the blows that
+				# follow are the module's `hammer`), and when they end, what they mended and why they stopped
+				if bool(e.get("on", false)):
+					sound.play("hammer", 0.8, 0.1)
+				else:
+					_on_wall_mended(e)
 	sim.events.clear()
+
+
+## The avatar's hands have left a wall (a `wall_work` event with "on" false: the section, what it mended in wall hit points, why). A stop
+## by E has its own line already; the rest are told in a toast, in amber when the work was cut short for want of something.
+func _on_wall_mended(e: Dictionary) -> void:
+	var why := String(e.get("why", ""))
+	if why == "stopped":
+		return
+	var seg = null
+	for s in sim.segments:
+		if int(s.id) == int(e.get("seg", -1)):
+			seg = s
+	var wall: String = String(seg.name).to_lower() if seg != null else "wall"
+	var share := 0
+	if seg != null:
+		share = roundi(100.0 * float(e.get("hp", 0.0)) / maxf(float(seg.max_hp), 1.0))
+	if why == "whole":
+		hud.toast("The %s is whole again" % wall)
+	elif why == "no scrap":
+		hud.toast("No scrap left to mend the %s with" % wall, "warn")
+	elif share > 0:
+		hud.toast("Mended the %s: %d%% more" % [wall, share])
 
 
 ## Someone has reached the gate (a recruit, recruits.gd): a soft bell and the chime, and their card, lit for a moment

@@ -1,12 +1,13 @@
 ## What the avatar uses where it stands (round 18, slice 2 "Home"): E talks to a person, takes a night post, works the bench with its
-## own hands and reads a car's fuel. Rules only: the views ask `candidates()` / `best()` for the prompt and `use()` for the key, and
-## draw what comes back (scripts/ui/talk_card.gd, scripts/render/overlay_node.gd). Everything is behind avatar mode
+## own hands, mends a wall with them (round 19) and reads a car's fuel. Rules only: the views ask `candidates()` / `best()` for the prompt
+## and `use()` for the key, and draw what comes back (scripts/ui/talk_card.gd, scripts/render/overlay_node.gd). Everything is behind avatar mode
 ## (`sim.player_id != ""`): with no avatar nothing here finds anything, takes anything or runs (the harness, the tests and
 ## Orientation Day play as they did).
 ##
-## CANDIDATES. Within reach of the avatar's feet, nearest first, and a person beats a post beats the bench beats a car on a tie (two
-## things within TIE tiles of each other): a person within TALK_REACH, a post within POST_REACH of its spot, the bench within
-## BENCH_REACH, a parked car within CAR_REACH of the middle of its bay. A candidate that cannot be used now is still listed, with its
+## CANDIDATES. Within reach of the avatar's feet, nearest first, and a person beats a post beats the bench beats a car beats a wall on a
+## tie (two things within TIE tiles of each other): a person within TALK_REACH, a post within POST_REACH of its spot, the bench within
+## BENCH_REACH, a parked car within CAR_REACH of the middle of its bay, a worn wall within `mend.reach` of its mending place (the nights'
+## module lists those: `sim.nights.wall_candidates()`). A candidate that cannot be used now is still listed, with its
 ## reason (`ok` false, `why`), so the prompt can say so. Nothing at all while the avatar is down, away (on a trip) or gone.
 ## TALKING. `talk_to` is a conversation, not a command: the person says what is the matter (`needs_of`, in a fixed order: bleeding,
 ## fever, starving or parched, hungry or thirsty, shaken, no job in a settlement game, out of ammunition) or what they are doing, turns
@@ -20,9 +21,13 @@
 ## `Person.work` and `work_t` are set each step so that the drawing's hammer pose shows. Walking, firing, a wound, a fall, the end of the
 ## scrap or of the room for ammunition, the dusk, all end it.
 ##
+## A WALL (round 19, scripts/sim/nights.gd): E at a wall under 95% or down starts the avatar's own hands at it (`mend_wall`), and E again
+## stops them (`stop_mend`); the session, its rules and its events (`wall_work`) are the nights'. A bench session in hand is stopped first,
+## and the bench's `work_bench` stops a wall session in its turn (the hands are at one thing).
+##
 ## Events this module adds to sim.events:
 ##   {"type": "talk", "who": id, "line": the first-person status line}
-##   {"type": "interact", "kind": "person" | "post" | "bench" | "vehicle", "id", "ok"}   (use())
+##   {"type": "interact", "kind": "person" | "post" | "bench" | "vehicle" | "wall", "id", "ok"}   (use())
 ##   {"type": "post_taken", "post": id, "who": the player's id, "held_by_swap": id or ""}
 ##   {"type": "post_left", "post": id, "why"}
 ##   {"type": "bench_work", "on": true} and {"type": "bench_work", "on": false, "ammo": made, "scrap": used, "why"}  (why: "done",
@@ -60,7 +65,7 @@ const AMMO_LOW := 20.0
 ## The walking input this long is a hand on the keys.
 const HANDS_ON := 0.25
 const EPS := 1.0e-6
-const RANK := {"person": 0, "post": 1, "bench": 2, "vehicle": 3}
+const RANK := {"person": 0, "post": 1, "bench": 2, "vehicle": 3, "wall": 4}
 
 var sim
 ## The post the avatar is on ("" none), what it is doing with its hands ("bench" or ""), the rules seconds of the session left, and
@@ -122,9 +127,10 @@ func _cannot(p) -> String:
 
 # -------------------------------------------------------------------- candidates --
 
-## What the avatar could use from where it stands, nearest first (a person beats a post beats the bench beats a car within TIE
-## tiles): [{"kind": "person" | "post" | "bench" | "vehicle", "id", "label" ("Talk to Dez", "Take the gate post", "Work the bench",
-## "Check the pickup's fuel"), "pos": Vector2, "dist", "ok", "why"}]. [] with no avatar, while it is down or away.
+## What the avatar could use from where it stands, nearest first (a person beats a post beats the bench beats a car beats a wall within
+## TIE tiles): [{"kind": "person" | "post" | "bench" | "vehicle" | "wall", "id", "label" ("Talk to Dez", "Take the gate post", "Work the
+## bench", "Check the pickup's fuel", "Mend the Red container (35%)"), "pos": Vector2, "dist", "ok", "why"}]. [] with no avatar, while it is
+## down or away.
 func candidates() -> Array:
 	var p = _lead()
 	if p == null or _cannot(p) != "":
@@ -161,10 +167,13 @@ func candidates() -> Array:
 		var d := me.distance_to(at)
 		if d <= CAR_REACH:
 			out.append({"kind": "vehicle", "id": String(v.id), "label": "Check the %s's fuel" % String(sim.vehicles.name_of(String(v.id))).to_lower(), "pos": at, "dist": d, "ok": true, "why": ""})
+	# the walls the hands could mend (round 19: the nights' module lists them in this very shape, and none without its rules)
+	if sim.nights != null and sim.nights.has_method("wall_candidates"):
+		out.append_array(sim.nights.wall_candidates())
 	return _ordered(out)
 
 
-## The nearest first, but within TIE tiles of the nearest left, the kind that ranks first (a person, a post, the bench, a car).
+## The nearest first, but within TIE tiles of the nearest left, the kind that ranks first (a person, a post, the bench, a car, a wall).
 func _ordered(list: Array) -> Array:
 	var left: Array = list.duplicate()
 	var out: Array = []
@@ -205,7 +214,7 @@ func _fresh(cand: Dictionary) -> Dictionary:
 
 
 ## Does what E does with `cand` (or the best candidate): {"ok", "kind", "id", "line", "why", ...what the kind adds}. A held post is
-## left and a bench session in hand is stopped (`left`, `stopped`). Tells the views (`interact`); nothing in reach gives
+## left, a bench session in hand is stopped and so is the wall being mended (`left`, `stopped`). Tells the views (`interact`); nothing in reach gives
 ## {"ok": false, "why": "Nothing here to use"} and no event.
 func use(cand: Dictionary = {}) -> Dictionary:
 	var c := _fresh(cand)
@@ -232,6 +241,8 @@ func use(cand: Dictionary = {}) -> Dictionary:
 				r = work_bench()
 		"vehicle":
 			r = check_vehicle(id)
+		"wall":
+			r = _use_wall(int(id))
 	r["kind"] = kind
 	r["id"] = id
 	if not r.has("why"):
@@ -240,6 +251,30 @@ func use(cand: Dictionary = {}) -> Dictionary:
 		r["line"] = ""
 	sim.events.append({"type": "interact", "kind": kind, "id": id, "ok": bool(r.get("ok", false))})
 	return r
+
+
+## E at a wall (round 19): the section being mended is stopped (E again, like the bench); any other begins the nights' hand-mending
+## (`mend_wall`: refused with its reason, which the view says), after a bench session in hand is stopped (the hands are at one thing).
+func _use_wall(seg_id: int) -> Dictionary:
+	var nights = sim.nights
+	if nights == null or not nights.has_method("mend_wall"):
+		return {"ok": false, "line": "", "why": "Nothing here to use"}
+	if String(nights.working) == "wall" and int(nights.mend_seg) == seg_id:
+		var name := _wall_name(seg_id)
+		nights.stop_mend("stopped")
+		return {"ok": true, "line": "Stopped mending the %s." % name, "why": "", "stopped": true}
+	var r: Dictionary = nights.mend_wall(seg_id)
+	if bool(r.get("ok", false)) and working == "bench":
+		stop_work("stopped")
+	return r
+
+
+## The name of a compound section as a sentence has it ("red container"), "wall" for none.
+func _wall_name(seg_id: int) -> String:
+	for s in sim.segments:
+		if int(s.id) == seg_id:
+			return String(s.name).to_lower()
+	return "wall"
 
 
 # -------------------------------------------------------------------------- talk --
@@ -433,6 +468,8 @@ func work_bench() -> Dictionary:
 		why = "Stand still to work the bench"
 	if why != "":
 		return {"ok": false, "line": "", "why": why, "seconds": 0.0}
+	if sim.nights != null and String(sim.nights.working) == "wall":
+		sim.nights.stop_mend("stopped")    # (round 19: the hands are at the bench now, not the wall)
 	working = "bench"
 	work_left = BENCH_SECONDS
 	made_scrap = 0.0

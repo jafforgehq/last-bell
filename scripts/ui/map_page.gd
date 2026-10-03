@@ -6,7 +6,9 @@
 ##
 ##   Take control   the avatar and the people ticked go and the player plays the trip (`host.on_raid`, exactly as the Town Board's
 ##                  Take control does: `penalty = scavenge.raid_penalty(place)`); the words of a refusal are `scavenge.why_not_played`'s,
-##                  and who would stay behind (they say no, or the seats are full) is what `PlaceFlow.pick_party` says.
+##                  and who would stay behind (they say no, or the seats are full) is what `PlaceFlow.pick_party` says. And (round 19, avatar
+##                  mode) a line under it, hidden when empty: what tonight means for the trip as planned, `scavenge.night_warning`'s own
+##                  words as the Town Board's "Tonight" row has them (`NightKit.warning_line`): on a Big Night the hour to leave by.
 ##   Ask <names> to go   an ERRAND: the people ticked are asked over the radio (`radio.request_errand`) to go without the player:
 ##                  Loot, Scout or Clear (a three-way switch), with what that costs written under the button ("Without you: about 60% of
 ##                  the loot, ...": `radio.errand_willingness`), who would refuse and why (amber, on their chip, in the list under the
@@ -31,6 +33,7 @@ const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const Map := preload("res://scripts/ui/town_map.gd")
 const MapData := preload("res://scripts/ui/map_data.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 
 ## The map is made this wide at most when the pins need more room than the page has (the sheet then scrolls sideways).
@@ -103,6 +106,8 @@ var buttons := {}
 var segments := {}
 var go_note: Label
 var stay_note: Label
+## What tonight means for the trip as it is planned (round 19, in avatar mode: `scavenge.night_warning`; hidden when it has nothing to say).
+var night_note: Label
 var terms_note: Label
 var summary_label: Label
 var refusal_box: VBoxContainer
@@ -423,6 +428,9 @@ func _build_actions() -> VBoxContainer:
 	stay_note = _para("", 12, host.WARN)
 	stay_note.visible = false
 	col.add_child(stay_note)
+	night_note = _para("", 12, host.INK2, 600)
+	night_note.visible = false
+	col.add_child(night_note)
 	col.add_child(_rule())
 
 	var errand_row: HFlowContainer = HFlowContainer.new()
@@ -1494,6 +1502,13 @@ func _refresh_actions() -> void:
 	go_note.visible = go_why != "" and has
 	if go_note.visible:
 		go_note.text = go_why
+	# tonight, for the trip as it is planned (round 19, the avatar's page: the scavenging module's own words, as the Town Board's "Tonight" row
+	# has them): when the night is a Big one, the hour to leave the place by; amber when the trip cannot be home in time
+	var warning: Dictionary = NightKit.warning_line(s, site_id, vehicle_id, float(s.town.SEARCH_H)) if has else {}
+	night_note.visible = not warning.is_empty()
+	if night_note.visible:
+		night_note.text = String(warning.text)
+		night_note.add_theme_color_override("font_color", host.WARN if String(warning.tone) == "warn" else host.INK2)
 	# who would stay behind: they say no, or the seats are full (the colony's own sorting, `PlaceFlow.pick_party`)
 	var stay_lines: Array = []
 	if avatar != null and not ticks.is_empty():

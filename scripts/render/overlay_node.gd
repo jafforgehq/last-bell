@@ -666,14 +666,16 @@ func _draw_hot_breaches(sim, z: float, vp: Vector2) -> void:
 		hot_tags.append({"id": int(seg.id), "text": text, "at": at})
 
 
-## What the avatar's hands are doing at a wall (round 19; the interaction module of round 18 keeps `working` ("wall" while mending) and
-## `work_left`): {"on": whether they are mending, "progress": 0 to 1}. A sim with no such module, or hands at the bench, is {"on": false}.
+## What the avatar's hands are doing at a wall (round 19): the session is the nights' module's (`sim.nights`: `working` is "wall" while
+## mending, `work_left` the rules seconds left of `mend.seconds`, `mend_seg` the section; round 18's E starts and stops it through
+## `Interact.use`): {"on": whether they are mending, "progress": 0 to 1, "seg": the section's id (-1 for none)}. A sim with no such module,
+## or hands at the bench (`sim.interact.working`), is {"on": false}.
 static func mend_state(sim) -> Dictionary:
-	var it = sim.get("interact")
-	if it == null or String(it.get("working")) != "wall":
-		return {"on": false, "progress": 0.0}
+	var n = sim.get("nights")
+	if n == null or String(n.get("working")) != "wall":
+		return {"on": false, "progress": 0.0, "seg": -1}
 	var total: float = maxf(0.01, NightData.num("mend.seconds", 10.0))
-	return {"on": true, "progress": clampf(1.0 - float(it.get("work_left")) / total, 0.0, 1.0)}
+	return {"on": true, "progress": clampf(1.0 - float(n.get("work_left")) / total, 0.0, 1.0), "seg": int(n.get("mend_seg"))}
 
 
 ## The ring round the avatar while their hands mend a wall (the bench's ring, for the wall): it fills as the work goes.
@@ -1199,6 +1201,9 @@ func prompt_candidate() -> Dictionary:
 	var began: Array = []
 	if String(_prop(it, "working", "")) == "bench":
 		began.append("bench:bench")
+	var mending := mend_state(main.sim)    # (round 19: the wall being mended, E on it stops the hands)
+	if bool(mending.on):
+		began.append("wall:%d" % int(mending.seg))
 	if String(_prop(it, "posted", "")) != "":
 		began.append("post:%s" % String(_prop(it, "posted", "")))
 	var pick := choose_prompt(started_first(it.candidates(), began), prompt_key)
@@ -1280,7 +1285,7 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 	prompt_ok = bool(words.ok)
 	var spot := _spot_of(c)
 	var kind := String(c.kind)
-	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else 0.5)), 14.0, 70.0)
+	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else (0.6 if kind == "wall" else 0.5))), 14.0, 70.0)
 	var ring: Color = ACCENT if prompt_ok else Hud.INK3
 	# (the post that is held has its own green ring: the steady stance)
 	if not (kind == "post" and String(_prop(it, "posted", "")) == String(c.id)):
