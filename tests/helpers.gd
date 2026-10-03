@@ -81,3 +81,63 @@ static func trait_effect(id: String, key: String) -> float:
 			return float(t.effects[key])
 	push_error("assets/data/traits.json has no trait '%s'" % id)
 	return NAN
+
+
+## --------------------------------------------------------------- round 19 (nights) --
+
+## A game with an avatar (round 19): `make` (day 1, 07:00, the storyteller off), then Ruth is the player (`sim.player_id == "ruth"`).
+## `crew` 5 is the harness's small-start crew (`make`'s own default is 6). Free `world` when the test is done.
+static func avatar_game(seed_value: int = 1, crew: int = 5) -> Dictionary:
+	var g := make(seed_value, 1, crew)
+	if not g.sim.avatar.set_player("ruth"):
+		push_error("avatar_game: Ruth cannot be the player")
+	g.sim.storyteller.enabled = false
+	return g
+
+
+## The clock at `hour` (0 to 24) of `day`, as test_radio's `_at`: the day, the minutes, the game minutes since the start (day 1, 07:00 is 0), the
+## phase, the bell (rung from 19:00 to 06:00) and the supplies' day, so that nothing is waiting to happen "again".
+static func at(sim, day: int, hour: float) -> void:
+	sim.day = day
+	sim.minutes = hour * 60.0
+	sim.clock_min = float(day - 1) * 1440.0 + (hour * 60.0 - 420.0)
+	sim.phase = sim.phase_at(sim.minutes)
+	sim.bell_rung = hour >= 19.0 or hour < 6.0
+	sim.supplies.sources_day = day
+
+
+## `n` of the dead clawing at the wall section `seg_id` (at most as many as it has places), each at a place of it, about to strike
+## (as test_radio's `_attack`). Returns them.
+static func attack(sim, seg_id: int, n: int) -> Array:
+	var out: Array = []
+	for s in sim.segments:
+		if s.id != seg_id:
+			continue
+		for i in mini(n, s.slots.size()):
+			var sl = s.slots[i]
+			var z = sim.spawn(sl.x, sl.y, "attack")
+			z.slot = sl
+			sl.who = z
+			z.facing = sl.face
+			z.attack_t = 0.0
+			out.append(z)
+	return out
+
+
+## A plated brute (`z.plated`, round 19) clawing at the wall section `seg_id`, at its first free place (null if there is none or no such
+## section). A plain one when the rules do not read `plated` yet.
+static func plated_brute(sim, seg_id: int):
+	for s in sim.segments:
+		if s.id != seg_id:
+			continue
+		for sl in s.slots:
+			if sl.who != null:
+				continue
+			var z = sim.spawn(sl.x, sl.y, "attack", "brute")
+			z.plated = true
+			z.slot = sl
+			sl.who = z
+			z.facing = sl.face
+			z.attack_t = 0.0
+			return z
+	return null

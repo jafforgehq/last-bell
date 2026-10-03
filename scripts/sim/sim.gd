@@ -23,6 +23,7 @@ const Town := preload("res://scripts/sim/town.gd")
 const Lots := preload("res://scripts/sim/lots.gd")
 const Seasons := preload("res://scripts/sim/seasons.gd")
 const Streets := preload("res://scripts/sim/streets.gd")
+const Nights := preload("res://scripts/sim/nights.gd")
 const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const Radio := preload("res://scripts/sim/radio.gd")
@@ -229,6 +230,8 @@ class Zombie:
 	var kind := "walker"
 	var size := 1.0
 	var claw := 1.0
+	## A brute of a Big Night (round 19): armoured but for its head (nights.gd `damage_to`). Saved with the zombie, optional in a save.
+	var plated := false
 
 
 var world
@@ -293,12 +296,18 @@ var town
 var lots
 var seasons
 var streets
+## Presence, plating and breaches (round 19, nights.gd): every hook of it is neutral without an avatar (`player_id`) and where
+## `nights_on` is false.
+var nights
 var vehicles
 var radio
 var avatar
 ## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
 ## the avatar and the radio's news is behind this).
 var player_id := ""
+## Whether the nights' rules of round 19 (rally, plated brutes, hot breaches: nights.gd) apply in this sim. True in the settlement's own
+## sim; a place's sim (raid_sim.gd) sets it false in its own `_init`. They also need an avatar: `Nights.active()`.
+var nights_on := true
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
@@ -380,12 +389,13 @@ func _init(data: Dictionary, w, effects) -> void:
 	lots = Lots.new()
 	seasons = Seasons.new()
 	streets = Streets.new()
+	nights = Nights.new()
 	vehicles = Vehicles.new()
 	radio = Radio.new()
 	radio.setup(self)
 	avatar = Avatar.new()
 	avatar.setup(self)
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, vehicles]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, nights, vehicles]:
 		m.setup(self)
 	_seed()
 
@@ -611,7 +621,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, vehicles]:
+	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, nights, vehicles]:
 		m.start()
 	radio.start()
 	avatar.start()
@@ -673,6 +683,7 @@ func update(dt: float) -> void:
 	town.update(dt)
 	lots.update(dt)
 	streets.update(dt)
+	nights.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()

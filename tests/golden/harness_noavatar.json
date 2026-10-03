@@ -1,0 +1,3391 @@
+{
+  "args": {
+    "days": "6",
+    "difficulty": "1",
+    "games": "8",
+    "hz": "15",
+    "hz_set": "1",
+    "jobs": "3",
+    "out": "/private/tmp/claude-501/-Users-jaf_lab-last-bell/6b84d821-4f10-4deb-be40-d511bdef2435/scratchpad/r19/phase0/golden_raw.json",
+    "policy": "informed",
+    "seed": "1",
+    "seeds": "1,9,21",
+    "sites": ""
+  },
+  "commit": "f23eee3",
+  "forecasts": {
+    "day 1": {
+      "alert": {
+        "level": "info",
+        "sub": "About 30 tonight, mostly from the north",
+        "text": "Tonight's forecast"
+      },
+      "banners": [
+        {
+          "sub": "About 30 tonight, mostly from the north",
+          "text": "Marcus reports"
+        }
+      ],
+      "forecast": {
+        "big": false,
+        "brutes": 0.0,
+        "given": true,
+        "heading": "north",
+        "high": 35.0,
+        "low": 26.0,
+        "runners": false,
+        "spawns": [
+          [
+            29.0,
+            0.5
+          ]
+        ],
+        "total": 30.0,
+        "who": "Marcus"
+      }
+    },
+    "day 14": {
+      "alert": {
+        "level": "info",
+        "sub": "About 45 tonight, mostly from the north west, and 2 brutes",
+        "text": "Tonight's forecast"
+      },
+      "banners": [
+        {
+          "sub": "About 45 tonight, mostly from the north west, and 2 brutes",
+          "text": "Marcus reports"
+        }
+      ],
+      "forecast": {
+        "big": false,
+        "brutes": 2.0,
+        "given": true,
+        "heading": "north west",
+        "high": 52.0,
+        "low": 38.0,
+        "runners": true,
+        "spawns": [
+          [
+            8.5,
+            0.5
+          ]
+        ],
+        "total": 45.0,
+        "who": "Marcus"
+      }
+    },
+    "day 30": {
+      "alert": {
+        "level": "info",
+        "sub": "The last night: about 180, from everywhere",
+        "text": "Tonight's forecast"
+      },
+      "banners": [
+        {
+          "sub": "The last night: about 180, from everywhere",
+          "text": "Marcus reports"
+        }
+      ],
+      "forecast": {
+        "big": true,
+        "brutes": 8.0,
+        "given": true,
+        "heading": "north east",
+        "high": 207.0,
+        "low": 153.0,
+        "runners": true,
+        "spawns": [
+          [
+            83.5,
+            9.5
+          ]
+        ],
+        "total": 180.0,
+        "who": "Marcus"
+      }
+    },
+    "day 5": {
+      "alert": {
+        "level": "info",
+        "sub": "About 40 tonight, mostly from the north west, with runners",
+        "text": "Tonight's forecast"
+      },
+      "banners": [
+        {
+          "sub": "About 40 tonight, mostly from the north west, with runners",
+          "text": "Marcus reports"
+        }
+      ],
+      "forecast": {
+        "big": false,
+        "brutes": 0.0,
+        "given": true,
+        "heading": "north west",
+        "high": 46.0,
+        "low": 34.0,
+        "runners": true,
+        "spawns": [
+          [
+            0.5,
+            9.5
+          ]
+        ],
+        "total": 40.0,
+        "who": "Marcus"
+      }
+    },
+    "day 9": {
+      "alert": {
+        "level": "info",
+        "sub": "About 40 tonight, mostly from the north west, and a brute",
+        "text": "Tonight's forecast"
+      },
+      "banners": [
+        {
+          "sub": "About 40 tonight, mostly from the north west, and a brute",
+          "text": "Marcus reports"
+        }
+      ],
+      "forecast": {
+        "big": false,
+        "brutes": 1.0,
+        "given": true,
+        "heading": "north west",
+        "high": 46.0,
+        "low": 34.0,
+        "runners": true,
+        "spawns": [
+          [
+            8.5,
+            0.5
+          ]
+        ],
+        "total": 40.0,
+        "who": "Marcus"
+      }
+    },
+    "nobody": {
+      "alert": {
+        "level": "warn",
+        "sub": "Nobody is watching the road",
+        "text": "No forecast"
+      },
+      "banners": [],
+      "forecast": {
+        "given": false
+      }
+    }
+  },
+  "games": [
+    {
+      "day": 6,
+      "outcome": "survived",
+      "rows": [
+        {
+          "alive": 5.0,
+          "ammo": 400.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 1.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 36.0,
+          "hour": 7.0,
+          "kills": 0.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 40.0,
+          "shaken": 0.0,
+          "tension": 25.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3890.0,
+          "wall_max": 3890.0,
+          "water": 54.0
+        },
+        {
+          "alive": 6.0,
+          "ammo": 368.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 2.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 42.400000000000006,
+          "hour": 6.5,
+          "kills": 32.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 37.0,
+          "shaken": 0.0,
+          "tension": 17.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3561.4,
+          "wall_max": 3890.0,
+          "water": 56.0
+        },
+        {
+          "alive": 6.0,
+          "ammo": 328.3,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 3.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 39.8,
+          "hour": 6.5,
+          "kills": 66.0,
+          "left": 0.0,
+          "meds": 7.0,
+          "runners": 0.0,
+          "scrap": 0.0,
+          "shaken": 0.0,
+          "tension": 23.0,
+          "turned": 0.0,
+          "walkers": 2.0,
+          "wall_hp": 3602.7000000000003,
+          "wall_max": 3890.0,
+          "water": 49.5
+        },
+        {
+          "alive": 6.0,
+          "ammo": 295.2,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 4.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 36.9,
+          "hour": 6.5,
+          "kills": 101.0,
+          "left": 0.0,
+          "meds": 7.0,
+          "runners": 0.0,
+          "scrap": 1.6,
+          "shaken": 0.0,
+          "tension": 37.0,
+          "turned": 0.0,
+          "walkers": 5.0,
+          "wall_hp": 3042.0,
+          "wall_max": 3890.0,
+          "water": 44.400000000000006
+        },
+        {
+          "alive": 6.0,
+          "ammo": 339.3,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 5.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 31.6,
+          "hour": 6.5,
+          "kills": 139.0,
+          "left": 0.0,
+          "meds": 8.9,
+          "runners": 0.0,
+          "scrap": 2.7,
+          "shaken": 0.0,
+          "tension": 29.0,
+          "turned": 0.0,
+          "walkers": 5.0,
+          "wall_hp": 3228.6000000000004,
+          "wall_max": 3890.0,
+          "water": 45.7
+        },
+        {
+          "alive": 5.0,
+          "ammo": 442.9,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 6.0,
+          "dead": 1.0,
+          "downed": 0.0,
+          "food": 27.5,
+          "hour": 6.5,
+          "kills": 175.0,
+          "left": 0.0,
+          "meds": 10.9,
+          "runners": 0.0,
+          "scrap": 0.7000000000000001,
+          "shaken": 1.0,
+          "tension": 67.0,
+          "turned": 0.0,
+          "walkers": 9.0,
+          "wall_hp": 2471.0,
+          "wall_max": 3890.0,
+          "water": 40.6
+        },
+        {
+          "alive": 4.0,
+          "ammo": 406.9,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 7.0,
+          "dead": 2.0,
+          "downed": 0.0,
+          "food": 28.0,
+          "hour": 6.5,
+          "kills": 204.0,
+          "left": 0.0,
+          "meds": 10.8,
+          "runners": 0.0,
+          "scrap": 0.0,
+          "shaken": 0.0,
+          "tension": 87.0,
+          "turned": 0.0,
+          "walkers": 8.0,
+          "wall_hp": 2551.7000000000003,
+          "wall_max": 3890.0,
+          "water": 46.400000000000006
+        }
+      ],
+      "seed": 1
+    },
+    {
+      "day": 6,
+      "outcome": "survived",
+      "rows": [
+        {
+          "alive": 5.0,
+          "ammo": 400.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 1.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 36.0,
+          "hour": 7.0,
+          "kills": 0.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 40.0,
+          "shaken": 0.0,
+          "tension": 25.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3890.0,
+          "wall_max": 3890.0,
+          "water": 54.0
+        },
+        {
+          "alive": 5.0,
+          "ammo": 363.4,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 2.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 41.7,
+          "hour": 6.5,
+          "kills": 29.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 37.0,
+          "shaken": 0.0,
+          "tension": 17.0,
+          "turned": 0.0,
+          "walkers": 3.0,
+          "wall_hp": 3876.1,
+          "wall_max": 3890.0,
+          "water": 67.0
+        },
+        {
+          "alive": 5.0,
+          "ammo": 350.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 3.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 40.1,
+          "hour": 6.5,
+          "kills": 60.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 13.4,
+          "shaken": 0.0,
+          "tension": 9.0,
+          "turned": 0.0,
+          "walkers": 2.0,
+          "wall_hp": 3867.3,
+          "wall_max": 3890.0,
+          "water": 62.0
+        },
+        {
+          "alive": 6.0,
+          "ammo": 307.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 4.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 47.6,
+          "hour": 6.5,
+          "kills": 98.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 25.4,
+          "shaken": 0.0,
+          "tension": 1.0,
+          "turned": 0.0,
+          "walkers": 2.0,
+          "wall_hp": 3800.7,
+          "wall_max": 3890.0,
+          "water": 57.5
+        },
+        {
+          "alive": 6.0,
+          "ammo": 262.1,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 5.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 42.5,
+          "hour": 6.5,
+          "kills": 136.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 31.9,
+          "shaken": 0.0,
+          "tension": 9.0,
+          "turned": 0.0,
+          "walkers": 5.0,
+          "wall_hp": 3551.8,
+          "wall_max": 3890.0,
+          "water": 58.900000000000006
+        },
+        {
+          "alive": 6.0,
+          "ammo": 236.9,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 2.0,
+          "day": 6.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 48.5,
+          "hour": 6.5,
+          "kills": 177.0,
+          "left": 0.0,
+          "meds": 8.0,
+          "runners": 0.0,
+          "scrap": 6.5,
+          "shaken": 0.0,
+          "tension": 15.0,
+          "turned": 0.0,
+          "walkers": 5.0,
+          "wall_hp": 3591.2000000000003,
+          "wall_max": 3890.0,
+          "water": 69.4
+        },
+        {
+          "alive": 6.0,
+          "ammo": 372.9,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 2.0,
+          "day": 7.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 43.8,
+          "hour": 6.5,
+          "kills": 220.0,
+          "left": 0.0,
+          "meds": 11.0,
+          "runners": 0.0,
+          "scrap": 30.5,
+          "shaken": 0.0,
+          "tension": 7.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3736.3,
+          "wall_max": 3890.0,
+          "water": 62.900000000000006
+        }
+      ],
+      "seed": 9
+    },
+    {
+      "day": 6,
+      "outcome": "survived",
+      "rows": [
+        {
+          "alive": 5.0,
+          "ammo": 400.0,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 1.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 36.0,
+          "hour": 7.0,
+          "kills": 0.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 40.0,
+          "shaken": 0.0,
+          "tension": 25.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3890.0,
+          "wall_max": 3890.0,
+          "water": 54.0
+        },
+        {
+          "alive": 6.0,
+          "ammo": 369.8,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 0.0,
+          "day": 2.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 38.400000000000006,
+          "hour": 6.5,
+          "kills": 34.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 37.0,
+          "shaken": 0.0,
+          "tension": 17.0,
+          "turned": 0.0,
+          "walkers": 2.0,
+          "wall_hp": 3878.2,
+          "wall_max": 3890.0,
+          "water": 55.0
+        },
+        {
+          "alive": 6.0,
+          "ammo": 352.0,
+          "breached": 1.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 3.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 35.800000000000004,
+          "hour": 6.5,
+          "kills": 64.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 16.0,
+          "shaken": 0.0,
+          "tension": 31.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3765.9,
+          "wall_max": 3890.0,
+          "water": 48.400000000000006
+        },
+        {
+          "alive": 6.0,
+          "ammo": 319.90000000000003,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 4.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 41.7,
+          "hour": 6.5,
+          "kills": 102.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 17.6,
+          "shaken": 0.0,
+          "tension": 23.0,
+          "turned": 0.0,
+          "walkers": 2.0,
+          "wall_hp": 3842.8,
+          "wall_max": 3890.0,
+          "water": 51.400000000000006
+        },
+        {
+          "alive": 6.0,
+          "ammo": 287.3,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 5.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 36.6,
+          "hour": 6.5,
+          "kills": 140.0,
+          "left": 0.0,
+          "meds": 10.0,
+          "runners": 0.0,
+          "scrap": 24.3,
+          "shaken": 0.0,
+          "tension": 15.0,
+          "turned": 0.0,
+          "walkers": 3.0,
+          "wall_hp": 3600.9,
+          "wall_max": 3890.0,
+          "water": 64.9
+        },
+        {
+          "alive": 6.0,
+          "ammo": 230.8,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 6.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 63.2,
+          "hour": 6.5,
+          "kills": 180.0,
+          "left": 0.0,
+          "meds": 9.0,
+          "runners": 0.0,
+          "scrap": 14.0,
+          "shaken": 0.0,
+          "tension": 7.0,
+          "turned": 0.0,
+          "walkers": 3.0,
+          "wall_hp": 3763.9,
+          "wall_max": 3890.0,
+          "water": 76.4
+        },
+        {
+          "alive": 6.0,
+          "ammo": 222.5,
+          "breached": 0.0,
+          "breakdowns": 0.0,
+          "brutes": 0.0,
+          "built": 1.0,
+          "day": 7.0,
+          "dead": 0.0,
+          "downed": 0.0,
+          "food": 58.2,
+          "hour": 6.5,
+          "kills": 222.0,
+          "left": 0.0,
+          "meds": 8.0,
+          "runners": 0.0,
+          "scrap": 17.3,
+          "shaken": 0.0,
+          "tension": 0.0,
+          "turned": 0.0,
+          "walkers": 4.0,
+          "wall_hp": 3536.2000000000003,
+          "wall_max": 3890.0,
+          "water": 69.9
+        }
+      ],
+      "seed": 21
+    }
+  ],
+  "how": "from a clean git-archive copy of f23eee3 (no avatar, no round 19 code): games = tools/balance.gd --policy=informed --crew=5 --hz=15 --days=6 --seeds=1,9,21 (the rows of each game); rng = sim.rng.state at 18:00 of day 4 of the seed 7 harness game (tests/test_nights_regression.gd measure_rng); plans = waves.plan_for / night_budget of every day of three runs (measure_plans); forecasts = tactics.forecast() and what the lookout says at 17:00 (measure_forecasts)",
+  "plans": {
+    "autumn_s1_c5": [
+      {
+        "big": false,
+        "budget": 26.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 26.0
+        },
+        "day": 1.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 26.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 28.6,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 29.0
+        },
+        "day": 2.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 28.6,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 31.200000000000003,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 31.0
+        },
+        "day": 3.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 31.200000000000003,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 33.800000000000004,
+        "counts": {
+          "brute": 0.0,
+          "runner": 1.0,
+          "walker": 32.0
+        },
+        "day": 4.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 33.800000000000004,
+        "queue": "wwwwwrwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 36.4,
+        "counts": {
+          "brute": 0.0,
+          "runner": 1.0,
+          "walker": 34.0
+        },
+        "day": 5.0,
+        "heading": [
+          1.0,
+          5.0
+        ],
+        "night_budget": 36.4,
+        "queue": "wwwwwrwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 39.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 2.0,
+          "walker": 35.0
+        },
+        "day": 6.0,
+        "heading": [
+          7.0,
+          5.0
+        ],
+        "night_budget": 39.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwrwwwwr",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 41.6,
+        "counts": {
+          "brute": 0.0,
+          "runner": 3.0,
+          "walker": 36.0
+        },
+        "day": 7.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 41.6,
+        "queue": "rwwwwwwwwwwwwwwwwwwwwwwrwrwwwwwwwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 44.20000000000001,
+        "counts": {
+          "brute": 1.0,
+          "runner": 4.0,
+          "walker": 27.0
+        },
+        "day": 8.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 44.20000000000001,
+        "queue": "wwwwwwwwwwwwwwrwwwwrwwwwrwwwwbrw",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 46.8,
+        "counts": {
+          "brute": 1.0,
+          "runner": 5.0,
+          "walker": 28.0
+        },
+        "day": 9.0,
+        "heading": [
+          9.0,
+          2.0
+        ],
+        "night_budget": 46.8,
+        "queue": "wwwrrwwwwwwwwwbwwwrwwwwwwrrwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 49.4,
+        "counts": {
+          "brute": 1.0,
+          "runner": 6.0,
+          "walker": 28.0
+        },
+        "day": 10.0,
+        "heading": [
+          8.0,
+          5.0
+        ],
+        "night_budget": 49.4,
+        "queue": "wwwrwwwwwwwwwrrrrwwwwwwwwwwwwwwbrww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 52.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 7.0,
+          "walker": 29.0
+        },
+        "day": 11.0,
+        "heading": [
+          2.0,
+          5.0
+        ],
+        "night_budget": 52.0,
+        "queue": "wrwwwwrwwwrwwwwwrwwwwwwwwwwrwwwwrwbrw",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 54.6,
+        "counts": {
+          "brute": 1.0,
+          "runner": 8.0,
+          "walker": 30.0
+        },
+        "day": 12.0,
+        "heading": [
+          3.0,
+          5.0
+        ],
+        "night_budget": 54.6,
+        "queue": "wrrwwwwrwwwwwrwwwrrwwwbwwwrwrwwwwwwwwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 57.2,
+        "counts": {
+          "brute": 1.0,
+          "runner": 9.0,
+          "walker": 30.0
+        },
+        "day": 13.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 57.2,
+        "queue": "wwwrwwwwwrwwwrrwwwbwwwwwwwwrwrwwrwwrwwrw",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 59.8,
+        "counts": {
+          "brute": 1.0,
+          "runner": 9.0,
+          "walker": 33.0
+        },
+        "day": 14.0,
+        "heading": [
+          5.0,
+          9.0
+        ],
+        "night_budget": 59.8,
+        "queue": "wrrwwwwwwwrwwwwwwwbwwwwrwwwrwwrwwwrwwwwrwrw",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 62.40000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 9.0,
+          "walker": 26.0
+        },
+        "day": 15.0,
+        "heading": [
+          3.0,
+          5.0
+        ],
+        "night_budget": 62.40000000000001,
+        "queue": "wrrwwwwwwwrrwrbwwrwwwbwwwrrwwwwwwwwwr",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 65.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 9.0,
+          "walker": 38.0
+        },
+        "day": 16.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 65.0,
+        "queue": "rrwwrwwwwwwwrwwwwwwwwwwwwwwwwwwwwrwwwwwwrwrwbrwr",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 67.60000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 10.0,
+          "walker": 30.0
+        },
+        "day": 17.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 67.60000000000001,
+        "queue": "wwwrrwwwwrrrwwwrwrwrwwwwwwwwwwwrbwwwwwbrww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 70.2,
+        "counts": {
+          "brute": 1.0,
+          "runner": 10.0,
+          "walker": 41.0
+        },
+        "day": 18.0,
+        "heading": [
+          7.0,
+          9.0
+        ],
+        "night_budget": 70.2,
+        "queue": "wwwwwwwrrwwrwwwrwwwwwwwwwwrwwwwwwwrrwwbwwwrwrwwrwwww",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 72.8,
+        "counts": {
+          "brute": 2.0,
+          "runner": 11.0,
+          "walker": 33.0
+        },
+        "day": 19.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 72.8,
+        "queue": "wwrwwwrwrrwrwwwrwwwwwrwwwbwwwrwwrbwwwrwrwwwwww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 75.40000000000002,
+        "counts": {
+          "brute": 1.0,
+          "runner": 11.0,
+          "walker": 44.0
+        },
+        "day": 20.0,
+        "heading": [
+          3.0,
+          5.0
+        ],
+        "night_budget": 75.40000000000002,
+        "queue": "wrwwwwwwrwwwwwwwwwrwwwwrwwwrwrwrwbwwwwwwwrrwwwrwwwrwwwww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 78.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 36.0
+        },
+        "day": 21.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 78.0,
+        "queue": "wwwwwwwrwwwrwrwwwwrrrwwwwrbrrwwrwwbwwwwwwwrwwwwwrw",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 80.60000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 39.0
+        },
+        "day": 22.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 80.60000000000001,
+        "queue": "wrwwrwwwwwwwrwrwwwwwwwwrwbwwwwwrrrwwwwwwrwrwrrwwwwbww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 83.2,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 41.0
+        },
+        "day": 23.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 83.2,
+        "queue": "wrwrwwwrwwwrwwwwwrwwwwwwwwbrrrwrwrwwrwwwwrwwwwwwbwwwwww",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 85.80000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 42.0
+        },
+        "day": 24.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 85.80000000000001,
+        "queue": "wwwwrwwrrwwwwwwwwwwrrwwwwrwwwwrwrwwrwbwwrrwbwwwwwwwwwrwrw",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 88.40000000000002,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 44.0
+        },
+        "day": 25.0,
+        "heading": [
+          8.0,
+          1.0
+        ],
+        "night_budget": 88.40000000000002,
+        "queue": "wwrwwwwwwwwwrwwrwwwwwwrrbwwwwbwwwwwrrwwwwwwrwrwrwrwrwwwwwrw",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 91.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 47.0
+        },
+        "day": 26.0,
+        "heading": [
+          6.0
+        ],
+        "night_budget": 91.0,
+        "queue": "wwwwrwrwrwwwwwwwwwwrwrwwrwwwwrwwwbwrwwwwrwwwwbwrwrrwwwwwwwwrww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 93.6,
+        "counts": {
+          "brute": 3.0,
+          "runner": 14.0,
+          "walker": 39.0
+        },
+        "day": 27.0,
+        "heading": [
+          3.0,
+          8.0
+        ],
+        "night_budget": 93.6,
+        "queue": "wwwwwwrwwrrwrwwrwwwwrwwrwwwwrbrwrwwwbrwwrwwrwbwwwrwwwwww",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 96.2,
+        "counts": {
+          "brute": 2.0,
+          "runner": 15.0,
+          "walker": 48.0
+        },
+        "day": 28.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 96.2,
+        "queue": "wwwrwwrwwrwwwwrwwwwrwwwwrwwwwwwwrwrrrwwwrwwwwwrwwwwwrwbbwwwrwrwww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 98.8,
+        "counts": {
+          "brute": 3.0,
+          "runner": 14.0,
+          "walker": 44.0
+        },
+        "day": 29.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 98.8,
+        "queue": "wwwwrrwwwwrwrwwwwwwrwwwwwwbwwbwwwwwwwwwrrwwrrbrrrwwwrwwwwwwrw",
+        "shown": 65.0
+      },
+      {
+        "big": true,
+        "budget": 243.36,
+        "counts": {
+          "brute": 7.0,
+          "runner": 36.0,
+          "walker": 108.0
+        },
+        "day": 30.0,
+        "heading": [
+          1.0,
+          2.0
+        ],
+        "night_budget": 243.36,
+        "queue": "rrwwwwrwrwwwwwwwwwwwrrwwrwwwwwwrrwwwwwwwwwwrwwwwwwrwwwwwrwwwwwwwwrrwrrbwwwbwrwwrwwbrrrrrwwwwwwwwrwwrwwwwrwrwwbwbrbrwrwwwwwwwwwwwwwrwwwrwwwwrrwwwbwrrwww",
+        "shown": 160.0
+      }
+    ],
+    "autumn_s7_c6": [
+      {
+        "big": false,
+        "budget": 30.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 30.0
+        },
+        "day": 1.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 30.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 33.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 33.0
+        },
+        "day": 2.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 33.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 36.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 36.0
+        },
+        "day": 3.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 36.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 39.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 1.0,
+          "walker": 37.0
+        },
+        "day": 4.0,
+        "heading": [
+          7.0,
+          0.0
+        ],
+        "night_budget": 39.0,
+        "queue": "wwrwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 42.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 2.0,
+          "walker": 38.0
+        },
+        "day": 5.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 42.0,
+        "queue": "wwwwwwwwwwwwwwwwwwrwwwwwwwwrwwwwwwwwwwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 45.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 3.0,
+          "walker": 39.0
+        },
+        "day": 6.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 45.0,
+        "queue": "rwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwrwwwwwwwwr",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 48.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 4.0,
+          "walker": 40.0
+        },
+        "day": 7.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 48.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwrrwwrrww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 51.00000000000001,
+        "counts": {
+          "brute": 1.0,
+          "runner": 4.0,
+          "walker": 34.0
+        },
+        "day": 8.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 51.00000000000001,
+        "queue": "wwwwwrwwwwwrwwwwwbrwwwwwwwwwwwwwrwwwwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 54.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 6.0,
+          "walker": 33.0
+        },
+        "day": 9.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 54.0,
+        "queue": "wrwwrrwwwwwwwwwwwwwwwrwwwwwwrbwwrwwwwwww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 57.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 7.0,
+          "walker": 34.0
+        },
+        "day": 10.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 57.0,
+        "queue": "wwwwwwwwwwrrwwwrrrwwwwwwwrwwbwwwwwwwwwwwwr",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 60.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 8.0,
+          "walker": 35.0
+        },
+        "day": 11.0,
+        "heading": [
+          0.0
+        ],
+        "night_budget": 60.0,
+        "queue": "wwwwrwrrwwwrwwwwwwwrwwwrwwwwbwwwwwrwrwwwwwww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 63.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 9.0,
+          "walker": 27.0
+        },
+        "day": 12.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 63.0,
+        "queue": "wwwwwwrwwwwrwwwwrwwwwwbwwrwrwwrrwbwwrr",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 66.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 10.0,
+          "walker": 28.0
+        },
+        "day": 13.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 66.0,
+        "queue": "wrrrwwwwwrwwrwwwwrwwwwwrwwrwrbwwrwwbwwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 69.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 10.0,
+          "walker": 31.0
+        },
+        "day": 14.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 69.0,
+        "queue": "wwwrrwwwrwwwwwwwwrbrwbwrwwrwwwwwwwrrwrwwwww",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 72.00000000000001,
+        "counts": {
+          "brute": 1.0,
+          "runner": 10.0,
+          "walker": 43.0
+        },
+        "day": 15.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 72.00000000000001,
+        "queue": "rwwwrwwwwwwwwwrwrwwwwrrwwwrwwwwwwwwwrwwwbrwwwwwwrwwwww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 75.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 33.0
+        },
+        "day": 16.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 75.0,
+        "queue": "wwrwwwwwwwwwrwwrwwrwrwwrbrwwwbrwwwwrwwwrwrwrwww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 78.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 11.0,
+          "walker": 38.0
+        },
+        "day": 17.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 78.0,
+        "queue": "rwwwwrwwwwwwrwwwrwwbwrwwwrwwwwrwbrwwwrwwwwrwwwwwwwr",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 81.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 39.0
+        },
+        "day": 18.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 81.0,
+        "queue": "wrwwrrwwwrwwwwwwwrwwwwwwwwwwrwrwwwrwwbwrrwwrwwbwrwwww",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 84.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 40.0
+        },
+        "day": 19.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 84.0,
+        "queue": "wrwwwwrwwwwwwrwwwwwwwrwrrrwwwwwwrwwrwrwwwrrwbwwwbwwwwrw",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 87.00000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 43.0
+        },
+        "day": 20.0,
+        "heading": [
+          0.0
+        ],
+        "night_budget": 87.00000000000001,
+        "queue": "wwwwwwwrwwwrwrwwwrwwrrwwbwwwwrwwwwwrwrrbwwrwwrwwwwwwwwwwrw",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 90.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 44.0
+        },
+        "day": 21.0,
+        "heading": [
+          1.0,
+          2.0
+        ],
+        "night_budget": 90.0,
+        "queue": "rwwwwwwwwwwrwrwwwwwrwwwrwrwwwbwwwrwwwrwrwrwwwbwwwwrwwwwwrrwr",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 93.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 47.0
+        },
+        "day": 22.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 93.0,
+        "queue": "wrrwwrwrwwwrrwwrwwrwwwwwwrwwrwwwwwrwwwwwwwwwwwwwrrwwwwwbwwbrwww",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 96.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 50.0
+        },
+        "day": 23.0,
+        "heading": [
+          6.0,
+          0.0
+        ],
+        "night_budget": 96.0,
+        "queue": "rwwwwwrrwwwwwrrwwwrrwrwrwwwwwwrwrwwwwrwwbwwwwwwwwwwwwwrwwbwwwrwwww",
+        "shown": 75.0
+      },
+      {
+        "big": false,
+        "budget": 99.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 53.0
+        },
+        "day": 24.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 99.0,
+        "queue": "wwrwrwwwwrwwwrwwwwwwwwwwwrwwwbrwwbwwwrwrwwwwwrrwwrwwwwwrwwwwrrwwwwwww",
+        "shown": 75.0
+      },
+      {
+        "big": false,
+        "budget": 102.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 15.0,
+          "walker": 54.0
+        },
+        "day": 25.0,
+        "heading": [
+          7.0,
+          6.0
+        ],
+        "night_budget": 102.0,
+        "queue": "wwwwrrwwrwwwrwwwwwrwrwwwwwwwwwwwrrrwwwrrwrwwwwrrwwwwbwwwwwwwwwwwwbwwwwr",
+        "shown": 70.0
+      },
+      {
+        "big": false,
+        "budget": 105.0,
+        "counts": {
+          "brute": 3.0,
+          "runner": 16.0,
+          "walker": 46.0
+        },
+        "day": 26.0,
+        "heading": [
+          6.0,
+          4.0
+        ],
+        "night_budget": 105.0,
+        "queue": "wwwwwwrwwwrrrwrwwwwwwrrwwwwwwrwwwwrwwwwrwwbrwwbwwrwwwwwwwrrwbrwwr",
+        "shown": 65.0
+      },
+      {
+        "big": false,
+        "budget": 108.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 16.0,
+          "walker": 58.0
+        },
+        "day": 27.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 108.0,
+        "queue": "rwwwwwwwwwwrrwwwwrwwwwwwwwrwrwrrwwwrwrwwwwrwbrwwwwwwrwwwwwwwwwwwwrwwwwwwwrbr",
+        "shown": 65.0
+      },
+      {
+        "big": false,
+        "budget": 111.0,
+        "counts": {
+          "brute": 3.0,
+          "runner": 16.0,
+          "walker": 52.0
+        },
+        "day": 28.0,
+        "heading": [
+          0.0,
+          2.0
+        ],
+        "night_budget": 111.0,
+        "queue": "wrwwwwrwwwrrwwwwwrwwwwwwwwwrwwwrwrwwbwwwrwwwwwwrrbwwwwbwwrwrrwrwwwwwwrw",
+        "shown": 80.0
+      },
+      {
+        "big": false,
+        "budget": 114.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 17.0,
+          "walker": 62.0
+        },
+        "day": 29.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 114.0,
+        "queue": "wwrwwwrrwwwwwrwwwrwwwrwwwrwwwwwwwwwwwrwwwwrbwwwwwwbwwwwwwwwrrwwwwrrwrrwwrwwwwrwww",
+        "shown": 80.0
+      },
+      {
+        "big": true,
+        "budget": 280.8,
+        "counts": {
+          "brute": 8.0,
+          "runner": 42.0,
+          "walker": 125.0
+        },
+        "day": 30.0,
+        "heading": [
+          6.0,
+          7.0
+        ],
+        "night_budget": 280.8,
+        "queue": "wwwwwwwwwrwwwwrwwwrrwwrwrwrrwwwwwwwwwwrwwwwwwwwwwwwwwwrwwwwwwwwwwwwwwbwwrrwwwwwrwrrwwwwwwrwwwrrrbrrwwrwwbrrrwwwrwwrwrwwwwrwrwrwbwwwwrwwrwwwwwrwrrwwrrwrbwwwbwwrwwwwwwwwwrwbwbrw",
+        "shown": 180.0
+      }
+    ],
+    "campaign_s5_c5": [
+      {
+        "big": false,
+        "budget": 26.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 26.0
+        },
+        "day": 1.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 26.0,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 28.6,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 29.0
+        },
+        "day": 2.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 28.6,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 31.200000000000003,
+        "counts": {
+          "brute": 0.0,
+          "runner": 0.0,
+          "walker": 31.0
+        },
+        "day": 3.0,
+        "heading": [
+          0.0
+        ],
+        "night_budget": 31.200000000000003,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 33.800000000000004,
+        "counts": {
+          "brute": 0.0,
+          "runner": 1.0,
+          "walker": 32.0
+        },
+        "day": 4.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 33.800000000000004,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwwrwwwwwww",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 36.4,
+        "counts": {
+          "brute": 0.0,
+          "runner": 1.0,
+          "walker": 34.0
+        },
+        "day": 5.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 36.4,
+        "queue": "wwwwwwwwwwwwwwwwwwwwwwwwrwwwwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 39.0,
+        "counts": {
+          "brute": 0.0,
+          "runner": 2.0,
+          "walker": 35.0
+        },
+        "day": 6.0,
+        "heading": [
+          5.0,
+          1.0
+        ],
+        "night_budget": 39.0,
+        "queue": "wwwwwwwwrwwwwwwwwwwwwwwwwwwwwwwwwrwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 41.6,
+        "counts": {
+          "brute": 0.0,
+          "runner": 3.0,
+          "walker": 36.0
+        },
+        "day": 7.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 41.6,
+        "queue": "rwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwrwwwwrw",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 44.20000000000001,
+        "counts": {
+          "brute": 1.0,
+          "runner": 4.0,
+          "walker": 27.0
+        },
+        "day": 8.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 44.20000000000001,
+        "queue": "wwwwwwwrwwwrwwwwwwwwrwwwwwwwbwrw",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 46.8,
+        "counts": {
+          "brute": 1.0,
+          "runner": 5.0,
+          "walker": 28.0
+        },
+        "day": 9.0,
+        "heading": [
+          3.0,
+          9.0
+        ],
+        "night_budget": 46.8,
+        "queue": "wwwwwwwrwwwwrwrwwwwwwwbwwrrwwwwwww",
+        "shown": 30.0
+      },
+      {
+        "big": false,
+        "budget": 49.4,
+        "counts": {
+          "brute": 1.0,
+          "runner": 6.0,
+          "walker": 28.0
+        },
+        "day": 10.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 49.4,
+        "queue": "wwwwwwwwwwrwwwwwwwrwwwrwwbrwwwrwrww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 52.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 7.0,
+          "walker": 29.0
+        },
+        "day": 11.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 52.0,
+        "queue": "rwwwwrwwwwrrwwwwwwbwwwwwrwwwwwwwrwwwr",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 54.6,
+        "counts": {
+          "brute": 1.0,
+          "runner": 9.0,
+          "walker": 28.0
+        },
+        "day": 12.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 54.6,
+        "queue": "wwwwwwwwwrwwwwwwwwwrrwwrwbwwwwrrwrwwrr",
+        "shown": 35.0
+      },
+      {
+        "big": false,
+        "budget": 57.2,
+        "counts": {
+          "brute": 1.0,
+          "runner": 8.0,
+          "walker": 32.0
+        },
+        "day": 13.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 57.2,
+        "queue": "wwrwwrrwwwrwwwwwwrbrwwwwwrrwwwwwwwwwwwwww",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 59.8,
+        "counts": {
+          "brute": 2.0,
+          "runner": 9.0,
+          "walker": 24.0
+        },
+        "day": 14.0,
+        "heading": [
+          7.0,
+          2.0
+        ],
+        "night_budget": 59.8,
+        "queue": "wwwrrwrwrwwwwwbwwwrwbwwwrrwwrwwrwww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 62.40000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 9.0,
+          "walker": 26.0
+        },
+        "day": 15.0,
+        "heading": [
+          0.0
+        ],
+        "night_budget": 62.40000000000001,
+        "queue": "wwwwrwrwwwwrwrbwrwrwbwwwwwwwrwwrwwrww",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 65.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 10.0,
+          "walker": 36.0
+        },
+        "day": 16.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 65.0,
+        "queue": "wwwwwwwwwrwwwwwwrwwwrrwwrwwwwrwrwrwwwwrwwwwrwbw",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 67.60000000000001,
+        "counts": {
+          "brute": 1.0,
+          "runner": 11.0,
+          "walker": 37.0
+        },
+        "day": 17.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 67.60000000000001,
+        "queue": "wwwrwwwwwrrwrwwwwwwwwrwwwwwwwwwrrrwwwwwrwbwwwrwrw",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 70.2,
+        "counts": {
+          "brute": 1.0,
+          "runner": 11.0,
+          "walker": 39.0
+        },
+        "day": 18.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 70.2,
+        "queue": "wrwrwwwwwwwwwwrwrwwwwwrwrwwwwwwrwwwrbwwwwwwrwwrwwwr",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 72.8,
+        "counts": {
+          "brute": 2.0,
+          "runner": 11.0,
+          "walker": 33.0
+        },
+        "day": 19.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 72.8,
+        "queue": "wwwwwwrwwwwwwrwrwrwwrwwwwbwwwrwwrrwwwrwwwbwwrr",
+        "shown": 45.0
+      },
+      {
+        "big": false,
+        "budget": 75.40000000000002,
+        "counts": {
+          "brute": 2.0,
+          "runner": 11.0,
+          "walker": 35.0
+        },
+        "day": 20.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 75.40000000000002,
+        "queue": "wwwwwwwwwrwwrrwwwwwwwwrrbwwwbwwrrwwrwwwwrwwrwwwr",
+        "shown": 40.0
+      },
+      {
+        "big": false,
+        "budget": 78.0,
+        "counts": {
+          "brute": 1.0,
+          "runner": 11.0,
+          "walker": 47.0
+        },
+        "day": 21.0,
+        "heading": [
+          6.0
+        ],
+        "night_budget": 78.0,
+        "queue": "wwwwwrwwwwwwwwwwrwwwwwwwwrwwrwwwwbwwwwwwwwwwwrwrrwrrrrwwwww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 80.60000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 12.0,
+          "walker": 39.0
+        },
+        "day": 22.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 80.60000000000001,
+        "queue": "wwwwrwrwwwwwrwrwwrwwwwwwrwwrwwwrwwrwwrwwwwwwrwwbwrwbw",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 83.2,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 39.0
+        },
+        "day": 23.0,
+        "heading": [
+          5.0,
+          1.0
+        ],
+        "night_budget": 83.2,
+        "queue": "rwrwrwrwrrwrwwwwwwwrrbwrwwrwwwwwwrwwwwwwwwwwwwwrwwbwww",
+        "shown": 60.0
+      },
+      {
+        "big": false,
+        "budget": 85.80000000000001,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 42.0
+        },
+        "day": 24.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 85.80000000000001,
+        "queue": "wwwrwwwwwwwwwwwwwwwwwwwwrbwrwrrwwrrwwrwwwwwrwwwrrbrwrwwww",
+        "shown": 50.0
+      },
+      {
+        "big": false,
+        "budget": 88.40000000000002,
+        "counts": {
+          "brute": 2.0,
+          "runner": 13.0,
+          "walker": 44.0
+        },
+        "day": 25.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 88.40000000000002,
+        "queue": "wwrrrwwwwwwwwrwrwwwwwrwwwrwwwwwrwwrwrwwwwwwwwwwwbwwrwbwwwrr",
+        "shown": 70.0
+      },
+      {
+        "big": false,
+        "budget": 91.0,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 45.0
+        },
+        "day": 26.0,
+        "heading": [
+          4.0,
+          1.0
+        ],
+        "night_budget": 91.0,
+        "queue": "wwwwwwwrrrwwwwwwwwrrwwwrwwwwwwwrrwrwwwwwwwwwwwwrwrwwwwrrrbbww",
+        "shown": 65.0
+      },
+      {
+        "big": false,
+        "budget": 93.6,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 48.0
+        },
+        "day": 27.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 93.6,
+        "queue": "wwrwrwwrrwwwwwwwwwwwwrwwrrbrwrrrwrwwwwwwwwwwwwwwwwwwwbwwrwwwrwww",
+        "shown": 55.0
+      },
+      {
+        "big": false,
+        "budget": 96.2,
+        "counts": {
+          "brute": 2.0,
+          "runner": 14.0,
+          "walker": 50.0
+        },
+        "day": 28.0,
+        "heading": [
+          9.0,
+          1.0
+        ],
+        "night_budget": 96.2,
+        "queue": "wwwwwwwwwrwrwwwwwwwrwwrrwwwrwwwwwbwbrwwwwrwrrrrrwrwwwwwwwwwwwwwwww",
+        "shown": 65.0
+      },
+      {
+        "big": false,
+        "budget": 98.8,
+        "counts": {
+          "brute": 3.0,
+          "runner": 15.0,
+          "walker": 42.0
+        },
+        "day": 29.0,
+        "heading": [
+          1.0,
+          6.0
+        ],
+        "night_budget": 98.8,
+        "queue": "wrwwrwwwwwwwrrwwwrwwwrrwrwwwwwrwwwbwwwwrwwrwrbwwrbwwrwwwwwwr",
+        "shown": 60.0
+      },
+      {
+        "big": true,
+        "budget": 243.36,
+        "counts": {
+          "brute": 6.0,
+          "runner": 36.0,
+          "walker": 117.0
+        },
+        "day": 30.0,
+        "heading": [
+          2.0,
+          3.0
+        ],
+        "night_budget": 243.36,
+        "queue": "wwwwwwwwrwwrwwwwwrrrrwwwwwwwwwwrwwwrwwwwwrrrwrrwwwwwrwwwwwrwwrwwrwwwwwrbrwwbwwrwwwwwwwwwwrwrwwwwwwrrwwwrwwwbrrrrwwwwwbwrwwwbrwwwwwwwwwbwrwrwrwwwwwwrwwwwwwwwrww",
+        "shown": 135.0
+      },
+      {
+        "big": true,
+        "budget": 249.6,
+        "counts": {
+          "brute": 7.0,
+          "runner": 38.0,
+          "walker": 111.0
+        },
+        "day": 31.0,
+        "heading": [
+          5.0,
+          4.0
+        ],
+        "night_budget": 249.6,
+        "queue": "wwrrwwwwwrrwwwwwwwwwwwwrrwwwwwwwrwwrrwrrwrwrwwwwwrwwwwwwrwwwwwwwwwwrwbrwwwwwrwwwwrwbwrwwrrrwrwwrwwrwbwwwrrbwwwrwwwwwwwbwwwwwrwwwwrwwwwrwwwwrrwrrwrwbwrwwwwbw",
+        "shown": 160.0
+      },
+      {
+        "big": true,
+        "budget": 255.83999999999995,
+        "counts": {
+          "brute": 7.0,
+          "runner": 38.0,
+          "walker": 117.0
+        },
+        "day": 32.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 255.83999999999995,
+        "queue": "rwwwrwwwwrwwwwwrwwwwrwwrwwwwrrwrwwrwwwwwwwrrwwwrwwwwwwwwwwrwwwwrwwwwrwwwwwbwrwwwrwwwwwwwwwrwwbwwwwrwbwwwwrwwbrbwwwwwwwrwwrrrwwwwwrrrwwwrrwwbwrrwrwwwwwwwrrwwwwbrwr",
+        "shown": 150.0
+      },
+      {
+        "big": true,
+        "budget": 262.08,
+        "counts": {
+          "brute": 7.0,
+          "runner": 39.0,
+          "walker": 121.0
+        },
+        "day": 33.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 262.08,
+        "queue": "wwrwwwwrwwwwwwwwwrwwrwwrwwwwwwwwwrrwwrwrrwwwwwwwwwwwwwwwwwrrwrrwrwrbrwwrwwrwrbwwwwwwwwrrrwwbwwwrbwwwwwrwwwrrrwwwwwwwwrwwwrwrwwwwwwwwwwwwwrwwwwwwwwwwbwrrrwbwrbwwrwwrwwr",
+        "shown": 175.0
+      },
+      {
+        "big": true,
+        "budget": 268.32000000000005,
+        "counts": {
+          "brute": 8.0,
+          "runner": 40.0,
+          "walker": 116.0
+        },
+        "day": 34.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 268.32000000000005,
+        "queue": "rwwrwwwwwwwrwwwwwrwrwwwwwwwwwwwwwwwrrwwwwwwwwwrrwrrrwwwwrwwrrwwwrwwrwwrrwwwwwrrwwwwwrrbwbbrrwwwwwwwwwwwwrbwwwwwwwrwwwwwrwrwbrrrwwrwrwwwwwwwwwwwwrwrbwbrwwwrwrbrwwwww",
+        "shown": 170.0
+      },
+      {
+        "big": true,
+        "budget": 274.56,
+        "counts": {
+          "brute": 8.0,
+          "runner": 41.0,
+          "walker": 121.0
+        },
+        "day": 35.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 274.56,
+        "queue": "wrwrwwwwwwrwrwwwwwrwwwwwwwwwrwrwwrwrrwwwrwwrrrrrwwwwwwwwwwwrwrwwrwwrrbwwwrwwwrwwwwwwwwwbwrrrwwwwwwwwwwwrwwwwwwrwwrrwbwwrwwwbwwbwwwwwwrwwrwwwwwbwwrwrwwwwwwwwrwwwrrwbbwrrrw",
+        "shown": 190.0
+      },
+      {
+        "big": true,
+        "budget": 280.8,
+        "counts": {
+          "brute": 8.0,
+          "runner": 43.0,
+          "walker": 123.0
+        },
+        "day": 36.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 280.8,
+        "queue": "wrwwwwrwwwwrrwwwrwwwwwwwwrwrwwwwwwwwwrwwwwwrwwwwwwrwwrrwwwrwwrwwrwrwwwwbwwwrrrwwwwwwrwwwrbwrwwwwwwwrwwwwwwwrwwwwrrrwwwwwrwwwwrwwrrbwwwwrrwrrbwwwrrrwwwrrwwbwbbrwwwwwwrwbwwrwww",
+        "shown": 180.0
+      },
+      {
+        "big": true,
+        "budget": 287.04,
+        "counts": {
+          "brute": 8.0,
+          "runner": 43.0,
+          "walker": 129.0
+        },
+        "day": 37.0,
+        "heading": [
+          6.0,
+          1.0
+        ],
+        "night_budget": 287.04,
+        "queue": "wwwwwwwwwwwwwwwwrwwwwrwwwwwwrrwwrwwwwwwwrwwrwwwwwrwrwwwwwwwwrwwwwwwwwwbrwwwrwrwrrwwwwrwwwwwwwwwwbwrwbwwrwwwrwrrrwwwwwrwrwrwwwwrrwrwwwwbwrbwbwwwwrwwrwwwwrwwrwrrrwrrwwrwbwrwrwwwrbwrw",
+        "shown": 175.0
+      },
+      {
+        "big": true,
+        "budget": 293.28,
+        "counts": {
+          "brute": 8.0,
+          "runner": 44.0,
+          "walker": 133.0
+        },
+        "day": 38.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 293.28,
+        "queue": "wwrrwwwwwwrwwrwwwwrwrwwwrwwwwwwwwrwwrwwwrwwwwwrwwwrwwwrrwwwrrwrwrwwwwwrrrbwrrrwwwwwwrwwwwwwrbrrwrwwwrbwwwwwrrwwrrwbrwwwwbwbwwwbwwwwwwwrwrwwwwwwwrwwrwwwrwwwwwwwwrwrwwwwwwwwwwwwrwwwbwrwww",
+        "shown": 205.0
+      },
+      {
+        "big": true,
+        "budget": 299.5200000000001,
+        "counts": {
+          "brute": 8.0,
+          "runner": 45.0,
+          "walker": 138.0
+        },
+        "day": 39.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 299.5200000000001,
+        "queue": "wwwwrwwwrwwrwrwwrwrwwwwwwwrwrwwrwrwwrwrwrwwwwwwwwrwrrrrwwwwwwrwwwwwwrrwwrwwwbwrwwwwwwbwrwwwrwwwwwrwwwbwrwwwrwrwrwwwrwrwwwwwwwwrwbbwwbwwrwrwwwwwrwwwwwwwwrwrrwwwrrrwwwwwwwwwwwwrwrwwwbwwwwwwwbwr",
+        "shown": 170.0
+      },
+      {
+        "big": true,
+        "budget": 305.76000000000005,
+        "counts": {
+          "brute": 9.0,
+          "runner": 45.0,
+          "walker": 135.0
+        },
+        "day": 40.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 305.76000000000005,
+        "queue": "wwrrrwwrrwwwwwwwwwwrwrwwwwwwwwwwwrwwrwrwwrwwwwrwwwrwwwrwwwwrwwwwrrwwwrwwwwrwwwbwwwwwbwwwrwrwwwbwbwrwwwwwrwwwwwwwwrrwwwwwrrwwrwrwwbwwrwwwrwwbwwwwrbrwwwwwrbwwrwrwrwrrwwwwwwwrwwwwwwrwbwwrwrrrw",
+        "shown": 200.0
+      },
+      {
+        "big": true,
+        "budget": 312.0,
+        "counts": {
+          "brute": 8.0,
+          "runner": 47.0,
+          "walker": 146.0
+        },
+        "day": 41.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 312.0,
+        "queue": "wwwrwwwwwwwwwwwrwwwwwwwwwrwwwwwwwrwrwwwwwwwwwwrwwwwwrwrrwwwwwwrrwwwwwrwwwwrwwwwwrbrrrrwwrrrwwwwwwbwrwwbwwwwwwwwwwwrwbrwwwrwbwrwwwwwwrrrbrrwwwrrwwwrrwwwwwwrwrwrbwwwrwwrwrwwwwrrwwwwwwwwwwwwwbwwwwrwrwrrww",
+        "shown": 195.0
+      },
+      {
+        "big": true,
+        "budget": 318.24000000000007,
+        "counts": {
+          "brute": 9.0,
+          "runner": 48.0,
+          "walker": 141.0
+        },
+        "day": 42.0,
+        "heading": [
+          6.0
+        ],
+        "night_budget": 318.24000000000007,
+        "queue": "wwrwwwwwwwwwwwwrwwwwwwwrwwwwrwwwrwrwwwwwwrwwrwwwwwwwwwrwwwwwwrwwwwwwwwrrwrwwrwrrwwwwwrwwwwwrwwwrwbrrwrwrrwbrbrwwwwwwwwwwwrwwbwrwwbwrrwwbwrrrwbwrrwrrwwwwwwwwrrwwwrwwwwwwwwrwrbrwwwwwwrrrwwwrrwwwwwwbww",
+        "shown": 200.0
+      },
+      {
+        "big": true,
+        "budget": 324.48,
+        "counts": {
+          "brute": 9.0,
+          "runner": 49.0,
+          "walker": 145.0
+        },
+        "day": 43.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 324.48,
+        "queue": "wwwrwwwwwwwrwwwwwrwwwwwrwrwwwwwrwwwwwwwwwrwwwwwrwrrwwwwwwwwwrrwrwwwrwwwwwrwwwrwwrwwrbwwwwwrwwwwrwwrrrwrrwwwwwwbrrrrwrrwwwwbwwrwwwwwwwrwwwwwwwwwrrrwrwwrbwwwwwwwwwbbwrwwwrrwrwwwrbbwwbwwrrwwwwwwrrrwwwwwwwwr",
+        "shown": 220.0
+      },
+      {
+        "big": true,
+        "budget": 330.71999999999997,
+        "counts": {
+          "brute": 9.0,
+          "runner": 49.0,
+          "walker": 152.0
+        },
+        "day": 44.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 330.71999999999997,
+        "queue": "wrwwwwwwwwwwwwwrrrwwwrrrwwrwwwwwrwwrrwrwwwrwwwwwwrwwrwwwwwrrwrwrwwrrwrwwwwrwrwwwwwwwwwwwwwwwwwwwwbwwwwwwbrrwwwwwwwwrwwwwwwwwrwwbrrwwwwwwwrwwwrwrwrwwrwwwwrwrwwwrrwwwbbwwbwbwwwwwrwrwbrrrwwwwwrwrbwwrwwwwwwwwwwrwwr",
+        "shown": 180.0
+      },
+      {
+        "big": true,
+        "budget": 336.96000000000004,
+        "counts": {
+          "brute": 9.0,
+          "runner": 51.0,
+          "walker": 154.0
+        },
+        "day": 45.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 336.96000000000004,
+        "queue": "wwwwrwwwwwwwwwrwwwrrwwwwwwwwwwwrwwwwrwwrwrwwrwwrwwwwwrwwrwrwwwwrwwwwwwwwwrwwrwwwrrwwwwwrwwwwwrwwwwwwwwwrwwbwwwwwwwrrwrrwrwwwrwrwwwbwwwwwrwrwwwbbrrwwwwwwwwwbrwwwwwrrbwbwwwrwrrwwrbwrrwwrwrwwwwwwwbrwwwwrrwrrwrwwwwrrww",
+        "shown": 195.0
+      },
+      {
+        "big": true,
+        "budget": 343.2,
+        "counts": {
+          "brute": 10.0,
+          "runner": 52.0,
+          "walker": 149.0
+        },
+        "day": 46.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 343.2,
+        "queue": "wwwwwwwrwwrwwwwrwwwwrwwwwwwwwrwrwwwwwwrrwwwwwwwrwwrwwwwrwrwwwwwwwwwwwwrwwwrwwwwrrwwrbwwwwwwwwwwbrwrwwwwbwrwwwwwwwwrwrrwrbwbrwwrrrrwwbrrrwwwwwrrwwwwwwwwwwbrwwwrrwwwrwwwrbwwwwrwwrwwrwrrwwwrwwbwrwwrrwwwrrwbwrwwwwrw",
+        "shown": 230.0
+      },
+      {
+        "big": true,
+        "budget": 349.44000000000005,
+        "counts": {
+          "brute": 10.0,
+          "runner": 52.0,
+          "walker": 155.0
+        },
+        "day": 47.0,
+        "heading": [
+          8.0,
+          1.0
+        ],
+        "night_budget": 349.44000000000005,
+        "queue": "wwwwrwwwwwwrwwwwrrwwwwrwwwwwrwwwwrwrwwwwwwwwrwwwrwwrwwwrwwwwrrrwwwrrwrrwwrwwrwwwrrwwwwwwwrrwwwwwwwwbwwwwwrrwrwwwwwwbbwwwrwrwwwrwwrwrrwwwwrrwrrwwrbrwwrwrwwwwrrbwwrwbwwwwwrwwwwbwwwwwwbwwwrwrwwwbwrwwwwwwrwwwwwwbrwwwwrwww",
+        "shown": 245.0
+      },
+      {
+        "big": true,
+        "budget": 355.68,
+        "counts": {
+          "brute": 10.0,
+          "runner": 54.0,
+          "walker": 158.0
+        },
+        "day": 48.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 355.68,
+        "queue": "wwwwwrwwwwwrwwwwrrwrwrwwwwwwwwwwwwrrwwrwwwrwrwrrwwwwwwrwwwrrrwwrwwwwwwwwwrwrwwwwwwwwrwbwwrrwwwrwwwwwwwrwwwrwrrwwwwwbbwrrrwwwwrwrwwwwwrrwwwwbwrwwwrwrwwrwwrrrwwwwwwwwwrwrwwwbwbwwwrwwwbwwwwrwbwrrrwrrwwwwwwbwrwwwwrwwwwwwwwrbww",
+        "shown": 205.0
+      },
+      {
+        "big": true,
+        "budget": 361.9200000000001,
+        "counts": {
+          "brute": 10.0,
+          "runner": 54.0,
+          "walker": 164.0
+        },
+        "day": 49.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 361.9200000000001,
+        "queue": "wwwwwwwrrwwrwrwwwrwwwrwwwrwrwrwwwwwrwrwwrwwwwwwwwwrwrrwwrrwrwwwwwwwrrrwwwwwwwrwwwwwwwwwwrbwrwwwrwwrwrwwwwwwwwwbwwwrwwwwwwbbrrwrwwwwwwbwwwwrwrwwwwrwwwwrrwwwwwwwwrwwwwwwwwwwrbwwwbwrrwwwwwbwrwrwwwwbwwrwrrwrbrwwrwrwwwrwwwrwwwwwwrrrw",
+        "shown": 200.0
+      },
+      {
+        "big": true,
+        "budget": 368.16,
+        "counts": {
+          "brute": 10.0,
+          "runner": 55.0,
+          "walker": 168.0
+        },
+        "day": 50.0,
+        "heading": [
+          3.0,
+          5.0
+        ],
+        "night_budget": 368.16,
+        "queue": "rwwwwwrrrrwwwwwwwrrwwwrwwwwwwrwwwwwwwwwwwrwrrrwrwrwrwwwwrwwwwwrwwwwwwwwwrrwwwwwwwrrwwwrwwwwwrwwrwwbrrrwwbwwrwwwrwwwwbwwwwrwwwwwwwwwbbrrwwrwwrwwbwwbwrwwwwwrwrwwwwwwwwbwwwwwbrwrwwwwwrrrwrrbrwwwwrrwwwwrwwwrwwrwwwwwrwwwwrwwwwrwwwwwwrwwww",
+        "shown": 230.0
+      },
+      {
+        "big": true,
+        "budget": 374.4,
+        "counts": {
+          "brute": 11.0,
+          "runner": 56.0,
+          "walker": 163.0
+        },
+        "day": 51.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 374.4,
+        "queue": "rwrwwwrwwwwrwrwwrwwwrwwwwwwrwwwwwwrrwwwwwwwwwrwwwwwwrwwwwwrwrwwrrwrrwwwwrrwrwwwwrwwrwwwrwwwwwwbwwrwwwrbwwwrbbwrwrwwwwwwwrwwwrrwwwwwwwwwwwwwbwwwwbwrrwwwrwrwrbrwbwwwwwwrwwwwwwwrwwrwrrrwwbwwwwrwwrrwwwwwrwwrrrwwwwwwwwwwwwwrbbwwwrrrwrw",
+        "shown": 260.0
+      },
+      {
+        "big": true,
+        "budget": 380.64,
+        "counts": {
+          "brute": 10.0,
+          "runner": 57.0,
+          "walker": 177.0
+        },
+        "day": 52.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 380.64,
+        "queue": "wwrwwwwrwwwrwrwwwwwwwwwwwwrwwwwwwrwrwwwrwwrrwwrrwrrwwwwwwwrwwwrwwwwwwwwwrwwwwwwrwrwrwwwwwrrwwwwwwrwwwwwwwwwrrwwwwwwwwwwrrwwwwwwwwwwwrwwbwrwwbwwwwrwrwwrwwwwwwwrwrbrwrwbwrwwrwwwrrwwbwwrwwrrwbwwwwwrrwwwwrwwwrbbrwwwwrrwwwwrwwrrwbrrwwwwwwwrwwwwwrbww",
+        "shown": 245.0
+      },
+      {
+        "big": true,
+        "budget": 386.88,
+        "counts": {
+          "brute": 10.0,
+          "runner": 58.0,
+          "walker": 181.0
+        },
+        "day": 53.0,
+        "heading": [
+          1.0,
+          8.0
+        ],
+        "night_budget": 386.88,
+        "queue": "wrwwwrrwrwrwwwwwwwwwrwrwwwwwwrwwwwrrrwwwwrrwrwwrrwwrwwwwrwrwrwwwwwrwwrrwrwwwwwwwwwwwwwwrwrwwwwwrwrrwwwwwrwwwwwbwwwwwwrwwwwwrrbwrrwwwrrwwwwwrwwwrwwwbwrbrwwwwwrbwwwwwwwwwwwwwrwwwwrwwwwrwwwwrwwwwrwwwbwwrwwwrwwwwwrwbbwwwwrwwwrrwrwwwwrrbwwwrwbwwwwrwwwwww",
+        "shown": 240.0
+      },
+      {
+        "big": true,
+        "budget": 393.12000000000006,
+        "counts": {
+          "brute": 11.0,
+          "runner": 59.0,
+          "walker": 176.0
+        },
+        "day": 54.0,
+        "heading": [
+          2.0,
+          0.0
+        ],
+        "night_budget": 393.12000000000006,
+        "queue": "rrwwwwrwwrrrrwwrwwwwwwwwwwwwwwwwwwwwwwwwwwwrwrwwwwwrwrwrrrwwwrwwwwwwwwrwrrwwwrrrwwwwwwwwwwwrwwrwwwwwbrrwrwwrwrwrrwwwrwwwwwwwwwrwwwrwrwwrwrwrwwwwwrwwwrwwrwwrrwbwwwwwwwwrwwbrwwrrwwwbrwrrwbwwwwwwwwwwwwbwwwwwwrwwwwwbrwbwwrwrwwbwwwrwbwwwrbwwwwrwwwrwrw",
+        "shown": 250.0
+      },
+      {
+        "big": true,
+        "budget": 399.36,
+        "counts": {
+          "brute": 11.0,
+          "runner": 60.0,
+          "walker": 180.0
+        },
+        "day": 55.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 399.36,
+        "queue": "rwrwrwwwwwwwrwwwwwwwrrwrrwwwwrwwwwwrrrwwwwrwwrrwrwwwrwrwwwrwwwrwwwrwrwrwrwwwwwwrwwwwwrwwwwwrwrrwwwwwbwwwrwbwwwwwwwwwwwwwwwwwbrrwrwwwwwrwwrwbwwrwrrrwwwwwwrwrwbwrwwwrbbwwwwbwwwwwbwwrwwwwwwwwbwwwrrwwwwwwwrwwrwwrrwrwwwwrrwwwrwwwwwwwwwwwrwwbwwwrwwwrwwrrwrw",
+        "shown": 215.0
+      },
+      {
+        "big": true,
+        "budget": 405.6,
+        "counts": {
+          "brute": 11.0,
+          "runner": 61.0,
+          "walker": 185.0
+        },
+        "day": 56.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 405.6,
+        "queue": "wwrwrwrwwrwwwwwwwwrwwwrrrrrwwrrwwwwrwwrwwwrwwwwrrwrwwrrwwwrwwwrwwrwwrwwwwrwwrwwwwwwwrwwwwrwwwwwwwwwwrbwwwwwwwwbrwwwwwwwwwrwwwrwrwwwrrwwwrwrwwwrrwwbwwbwbwwwwwwwwrwwwwwrwrwwrwrwwbwwwwwwrwwwwrwwrwrwrwwwbbwrwwwwwrbwwwwrwwwwwwrwrbwwrwwwwbrwwwwwwwwwwwrrwwwwrwrwrw",
+        "shown": 255.0
+      },
+      {
+        "big": true,
+        "budget": 411.84,
+        "counts": {
+          "brute": 12.0,
+          "runner": 61.0,
+          "walker": 182.0
+        },
+        "day": 57.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 411.84,
+        "queue": "wwwwrwwwwwwwwwwwwwrwwwwwwwwwrwrwwwrrwwwrrrwwwwrrwwwrrrwwwrwrwwwwwwwwrwwwrwwwwwwwwwwwwwrrrrwwrwwwwrrwrwwwbrbbwwrwrwwrbrwrrwwwwwwwwrwwwbwwwwwbwwwwwrwwwrwwwrrwwwwrrwwwrwwwwbwwwrwwwrwwrwwwwwwrrbrwwrwwwwwwwwwwwbwwrwwwwwwwwbrwrrwwrrbwwwrrrwwrwwwwwrwwwwwrwrbwwww",
+        "shown": 290.0
+      },
+      {
+        "big": true,
+        "budget": 418.08,
+        "counts": {
+          "brute": 11.0,
+          "runner": 63.0,
+          "walker": 193.0
+        },
+        "day": 58.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 418.08,
+        "queue": "wwrwrwrwwwwwwwwrrwrwwrrwwwwwwwwwwwwrwwwwwwwrwwwrwwwwrwwwwwwwwrwwrwwwwwrwwrrrwwwwwwwwwwwwwwrwrrrwwwwrwrrwwwwrwwrbrwwwbwwrwwrwwrrbwwwwrwwwwwrwwwwwrwwwrrwwwwwwwrrwwwwwwbwwrwwrwwrrwrbwwwwwwrwwwwwrwwwrrwwrrrwrwwwwwwrwwwbwwwwbwwwwwwwwwwwwbwbrwwrrbwwrwwwwwwwwrwrbwrwwrwrwwrw",
+        "shown": 270.0
+      },
+      {
+        "big": true,
+        "budget": 424.3200000000001,
+        "counts": {
+          "brute": 12.0,
+          "runner": 63.0,
+          "walker": 190.0
+        },
+        "day": 59.0,
+        "heading": [
+          5.0,
+          3.0
+        ],
+        "night_budget": 424.3200000000001,
+        "queue": "wrrwrwwwrwwrwrrwwrwwwwwwwrwwrwwrwwwwwwwwwwwwwwrwrwwwwrwwwwwwwwwwwwrwrwwwrwwrwrwrwwwwwwrrwrrwwwwwrwrwwwwwwwrwrbbbrrrwwwrrbwbwwwwwwwrwrrwwrwrrwwwwwwwwwwwwwwwwrwwwwwwwwwrbwwrwwwrwwbwwwwwwwrrwrwwrwwwwwwrwwwrwwwwwwwwwbwwrwwwwwrwwwwrbwwbwwwwwrbrwwwwrrrbwrwwwwrwwwwwrwwrrr",
+        "shown": 290.0
+      },
+      {
+        "big": true,
+        "budget": 430.56,
+        "counts": {
+          "brute": 12.0,
+          "runner": 64.0,
+          "walker": 195.0
+        },
+        "day": 60.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 430.56,
+        "queue": "wwwrwrwrwrwwwrrwwwwwwwwwwwwwwwwwrwwwwwwwwwwwwwwrwwwwwrrwrrwwwwwwrwwwwwwrwwwrwwrwwwwwwwrwwrwwwrrrrwwwwrwwwwwwwwrwwwwbwrwwrwrwwwwwwwrwwwrwwrwrwrrwwrrwwrwwwrwwwwwwwwwrrbrwrwrwwwwrwbwbwrrwwwwwrrwwwwwrwrwwwwwwwwbwwrrbbwwwwwrwrwwwwwwwrwrwwwwrwbwwwwwbwwbrrwwwwwrrbwrrwwbrwwwwwwr",
+        "shown": 240.0
+      },
+      {
+        "big": true,
+        "budget": 436.8,
+        "counts": {
+          "brute": 12.0,
+          "runner": 65.0,
+          "walker": 199.0
+        },
+        "day": 61.0,
+        "heading": [
+          3.0,
+          2.0
+        ],
+        "night_budget": 436.8,
+        "queue": "wrwwwwwwwwrwwwwrwrwwwwrrrrwwrrwrwrwwwrrwwwwwwwrrrwwwwwwwrwrwrwwwrwrwwrrwwwwwwwrrwwwwwwwwrwrwwwwwwwrwwwrwwwwwrrwwwwwrwwwwrrrwwwwwbrwwrrrwwwwwwbwbwwrwwrwwwwwwwbwwrwwrwwrwwwrwwwwwbwwwwwwwwwwrrwrwwwwwwwrwwwwwwwwbrwrwwwwwwbwrwwwwrwwrwwwwwwwwbwrrwbwwrwwwwwwwwwwwrwrwrrwwwbrwbrwbwwrw",
+        "shown": 290.0
+      },
+      {
+        "big": true,
+        "budget": 443.0400000000001,
+        "counts": {
+          "brute": 13.0,
+          "runner": 67.0,
+          "walker": 192.0
+        },
+        "day": 62.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 443.0400000000001,
+        "queue": "rwwwwrwrwwwwwwrrwwwwrwwwwwrwrrwwwwwwwrrwrrwwrwwwwwrwwrwwrrwwwrwwwwrwwwwwwrwwwwwwwwwwwwwwwwwwrrwrwwwwrwwwwwwwrrwrrwwwwwbwwwwbwwbbwwbwwwwrrrwwwwwwwwwrwrrrrrwwbwrwrwwwwrwwwwwwwrrrwwrwwbrrwrbbwwwrwwwwwwwwrwwwrwwrwwwwwwrwrwwwwbwwwwwwwwwrwrrwwrwwbbwwbrwrwwrwwwrwwwrrwwwwwwwwwrrr",
+        "shown": 290.0
+      },
+      {
+        "big": true,
+        "budget": 449.28,
+        "counts": {
+          "brute": 13.0,
+          "runner": 68.0,
+          "walker": 196.0
+        },
+        "day": 63.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 449.28,
+        "queue": "rwrrwrrwrwwrwwwrwwwwwwrwwwwrwrrwwwwwrrrwwwrrwwwwrrwwwwwrwwwwwwwrwrwrwwwrwrwwwwrwwwwwrwwrwwwwwwwwrrwwwwwwwwwwwwrbwwwwwwwrbwwwwwrwwrwwwrbwbwwwwwwrwwrwrrrwwrwwwbwwwwwwwrwwwwwwwrwbwwwwwwrwwrbwwwrrwwwwwwrwbwrwwrwwrwwwrrwrwwbrrrrwwrwwwwwrrwwwbwwwwwwwwrrrwwwrwwwwwrwwbbwwwwwrbrwwwwwww",
+        "shown": 250.0
+      },
+      {
+        "big": true,
+        "budget": 455.52,
+        "counts": {
+          "brute": 12.0,
+          "runner": 68.0,
+          "walker": 212.0
+        },
+        "day": 64.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 455.52,
+        "queue": "rwwwrwwwwwwwwrrwwwwrrwrrwwrwwwwwwwrwwwrwwwwwrwwwrwrwrrwwrwwwwrwwwwwwwwwwwwwwwwrrwwrwwwwwwrrrwrwwrwwwrrwwrwrwwwrwwwwwwwwwrwwwwwwwwrwwrrwwwwrwrwwrwwwwwwwwwrwwwwwwwrwwbwwwwbrwwwwbwwwwwrwwwwrwwbwwwwwbrbwwrwwwwrwwwwwwwwwwrwwwrwwwwrrrrbwwrrwrwrwrrwwrbwbwrwbwwrrrwbwwwrwwwwwwwrbwwwwwwrwwwwwrwrwwwwww",
+        "shown": 305.0
+      },
+      {
+        "big": true,
+        "budget": 461.76,
+        "counts": {
+          "brute": 13.0,
+          "runner": 69.0,
+          "walker": 207.0
+        },
+        "day": 65.0,
+        "heading": [
+          2.0,
+          1.0
+        ],
+        "night_budget": 461.76,
+        "queue": "wwwrwwwwwwwwwwwrwwwwwrwwrrwwwwrwwwwwrrwrrrwwrwrrrrwwrwwwwrwwwwwwwwwwwrwwwwwrrrwrrrwwrwwwrwwrwwwwwwwwwwwwwwrrwrwrwwbwwwrwwwbwbwwwrwwwwwrrbwwrrwrrwrwwwwrrwwwwwwrwwwwwwwwwwwwrwwwwbwwwrwrwwrwwrbwwwbwwwwwrbwwbrwwrrwrwrrwwwbwwwrwwwrwwbwbwrwwwrrwrwwwwwwrwwwwwwwwwwrwwwwwbwwwrwwwrwwwwwwrwrwwwwrwww",
+        "shown": 305.0
+      },
+      {
+        "big": true,
+        "budget": 468.0,
+        "counts": {
+          "brute": 13.0,
+          "runner": 70.0,
+          "walker": 211.0
+        },
+        "day": 66.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 468.0,
+        "queue": "wwwrwwwwrwwrwwwwwwwwwwrwwwwwwwrrwwrrwrwwwrwrwwrwwwwwwwwwwrwwwrwrwwwwwwrwwwrwwwrwwwrwwwwwwwrwwrwrwrwrrrwwwwwwwwwwwwrwrrwwrwwwwwrwwwrwwwwwwwwwwwwrwwrrwwbrwbbrwrwwwwwbwwwwwrwwrrwwwwwwwwrrwwwwwwrrwwwwwwwwwwwrwrbwwwwwwbwwwwwwrwwwwbrrrwwwwwwwbwrwwrwwwwwrwrwwwwwwwrbrrbwwrwrwrwrwwrbwrbrwwrbwwwrwwrwwrr",
+        "shown": 260.0
+      },
+      {
+        "big": true,
+        "budget": 474.24000000000007,
+        "counts": {
+          "brute": 13.0,
+          "runner": 71.0,
+          "walker": 215.0
+        },
+        "day": 67.0,
+        "heading": [
+          0.0,
+          7.0
+        ],
+        "night_budget": 474.24000000000007,
+        "queue": "wrwwwwwrrrrwwwwrwrrwwwwwwwwwrwwwwrwwwwwwwwwwrwwrwwwwwwwwwwwwwwwwrwwwwwrwrwwrwwrwwwwwwwwrwwwwrrwwrwwwrwwrwwwwrwwrwrwwwrwwrrrrrwwrwwwwwwwwwwwwrwrwrwwwwwrwrwbwwrwwrwwrwbwwwwwwwrwrrrwrwrwwrwbrwrwrwbrbbwwrwwwwwbrwwwwwwwwwwwwwrwwwwwwwbwwrwwwrrwrbwwwwrbrwwwwwwwwwwrwrwwwwwwwwwwwrwrbrwwwrrwwwwbwwwrwwwrwbrww",
+        "shown": 280.0
+      },
+      {
+        "big": true,
+        "budget": 480.48,
+        "counts": {
+          "brute": 14.0,
+          "runner": 72.0,
+          "walker": 210.0
+        },
+        "day": 68.0,
+        "heading": [
+          3.0,
+          8.0
+        ],
+        "night_budget": 480.48,
+        "queue": "wwwwwwwwwwwwwwwwrrrwwrwwwwwwwwwwrrwwwwwrwwwwwwwwwwrwrwwrrwwwrrwwrrrwwwrwwwwwwwwwwrwrrrrwwwwrrrwwrwwrwwrwwrwwrwwwwwrrrrwwwwrwwwwwwwrwrwwwwrwwwwrrwrrwwwrbwrwwwwwwwwwrwwrwrwwwwwwwrwbwwwwrbwwwbwwwwrwwwrwwrwrwrwwwwwwrrrwwwwwwrwwwwrrwwwrwwwwbwrwrwrwbwwrwwwrwrrwwwwwwbwbwwbbwwwwwwrwrrwwwwbwwbwwbrwwwwwbw",
+        "shown": 260.0
+      },
+      {
+        "big": true,
+        "budget": 486.72,
+        "counts": {
+          "brute": 14.0,
+          "runner": 73.0,
+          "walker": 215.0
+        },
+        "day": 69.0,
+        "heading": [
+          9.0,
+          5.0
+        ],
+        "night_budget": 486.72,
+        "queue": "wwwwrwwwwwwwwwwwwwwrwrwrwwwrrwwwwrwrwrwwwwrrwwwwwwwrwwrrwrwwwwwwwwwwwrrwrwwwwwrwwwwwrrwwwrrwwwwwrwwwwrwrwwwwwwwwwrrwwbrrbwbbbwwwrrwwwwwwwwwwrrrwrwrrwbwwrwwbwrrwwwwwwwwwwwrwwrwwrwwwwrwwwwwwwwrwwwrwbwrrwwwrwwbrwwwwwwwrwwrwwwwwwwwrwrrwwwrrwwwwwwwrwrwrwwrwwbwwwwwwbwwwwwwbwrwwwwwrrwrwwwrwwwrrwrrwrwwwbwbwrw",
+        "shown": 280.0
+      },
+      {
+        "big": true,
+        "budget": 492.96,
+        "counts": {
+          "brute": 14.0,
+          "runner": 74.0,
+          "walker": 219.0
+        },
+        "day": 70.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 492.96,
+        "queue": "wwwrwwwrwwrrwwwwwwwrwwwwrwwrwwwwwwwrwrwwwwwwwwrwrwrrrwwwrwwwwwwwwwwwrwwwwrwwwrwwwwwwwwwwwrwwwwwrrrrrwwrwwwrwwwrwwwwrrwrrwwrwrwrwrwrwwbwwwwrwrwwwwwwbwrwwwwwrwwbwrwwwwwwbwwwrwwwrwwwwrwrrrwwwwrwwwwrbwrrbwwwwwwwwwwrwrwwrrbwwwrwwrwrrbbwbwbwrwwbrwwwwrwwwrrwwwbrwwwwwwwwwwwrwwwwwwwwrwwwrrwwrwwwwwwwbrwwrrwwwwrwwwww",
+        "shown": 300.0
+      },
+      {
+        "big": true,
+        "budget": 499.2000000000001,
+        "counts": {
+          "brute": 14.0,
+          "runner": 75.0,
+          "walker": 223.0
+        },
+        "day": 71.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 499.2000000000001,
+        "queue": "wrrwrwwrwwrrwwwrwwwrwwwwrwwwwwwwwwwwwwwrwwwwrrwrrwwwwrwwwwwwwwwwwwwwwwwwwrwwrrwwwwwwwwwwrwwwrrwwwwwwwrwwwwwwwwwwrwwwwwwwwrwrrwwwbrrrwwwwrwrrwwwbwwwwwwwrwwrrwwrrrwwwwrrrwwwwwwrwwwwwrwwrwwwwwbbrwwrwrrrbrwwwrwwwwbwwwwrrwwwwwrwwwwwwwwwrrwwwwwwwbwwrwwwrwrwrwwwbwwwwwwwwwbwwrwrwbwwrwrwrwwwbwbrrwwwwbwrrwrrrbwwrwwwwwwrr",
+        "shown": 310.0
+      },
+      {
+        "big": true,
+        "budget": 505.44000000000017,
+        "counts": {
+          "brute": 15.0,
+          "runner": 76.0,
+          "walker": 218.0
+        },
+        "day": 72.0,
+        "heading": [
+          9.0,
+          6.0
+        ],
+        "night_budget": 505.44000000000017,
+        "queue": "wwwwwwwrrrwwwwwwrrwrwwwwrwrwrwwrwwwwwwwwwwwwwwwrwwrwrwwwwwrrwwwwwwrwwwwrwwwrrwwwrrwrwwrwwwwwwwwrwwwwwrrrrwwwwwwwrrwwwwwrrwrwrrwwwrrwbwwbrrwwwbrrwwwwwwwwwwwrwwwwbwbwrwwrwwwrbwwwwwwrwbwwwwwwrwwwwwwwwrwwrrwwbwrwwwrwwbwrwrwwwwwwwwwwrwwrwwwwwwwbwwrwwwwwrwrwwwrrwbwbwwwwrwrrbwwrwwwrwrwwwwrwwrwrrrwwwrrwwwrwwwwbwwwbr",
+        "shown": 340.0
+      },
+      {
+        "big": true,
+        "budget": 511.6799999999999,
+        "counts": {
+          "brute": 14.0,
+          "runner": 77.0,
+          "walker": 232.0
+        },
+        "day": 73.0,
+        "heading": [
+          7.0,
+          1.0
+        ],
+        "night_budget": 511.6799999999999,
+        "queue": "rrwwwwwwwwwwwrwwwwwwwwrrrrwwwwwwwwwwrwwwrrrwwwwwwwwwwwwwrwwrrwwwrwwwwwwwwwwwrwwrwwrwwrwwwwwwwwwwwwwwrwwrwwwwwwwwwwwwrwwwrrwwrwrwwwwbwwwwrrrrrrwwwrbwrrwwwbwrbrwrwrrwwrrrwwwwwrrwwrwwwwwwwbwwbwwwwwrwwbbrrwwwwwwwwwwwwwwrwwwwwrwwwwwrwrrwwwrrwrwwrrwwwwwwwwwwrwwwbwrrwwrrwwwrbwwbwwrwrrwwwwrwrwwrwwwrwwwwwrwwrwbbwwwwrwwwwwbwwwwrwrw",
+        "shown": 280.0
+      },
+      {
+        "big": true,
+        "budget": 517.9200000000001,
+        "counts": {
+          "brute": 14.0,
+          "runner": 78.0,
+          "walker": 236.0
+        },
+        "day": 74.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 517.9200000000001,
+        "queue": "wwwwwwwwwrwwwrwwrwwrwwwwwwwwrwrrwwwwwwwrrwrwrwrrrwrwwwwrwwwwwwrwwwwwwrwrwwwwrwwwwwwwwwwrwwwwwwwwrwwwwwwwrwwwrrwwwwwwwwrwrwwrwrrrwwwwwwwrwrbwwwwwwbwrwrrwwrwrwwbbbwwwrwwwwwbrwwwwwwwwwwwwwrrwrwrwwrwwwwwwrwrrwwwrwwbwrwwwrrwwwwrwbwrwwwwrwwwwwwrwwbwwwwwwwwwrrwwrwwwwwwrwwbwbwwrwwrrwwbwrwwwrwwwrwwwrwwwbwrwwwwwwrwrwrwwrwrwrrrrwwrwwwwbw",
+        "shown": 285.0
+      },
+      {
+        "big": true,
+        "budget": 524.16,
+        "counts": {
+          "brute": 14.0,
+          "runner": 79.0,
+          "walker": 240.0
+        },
+        "day": 75.0,
+        "heading": [
+          4.0
+        ],
+        "night_budget": 524.16,
+        "queue": "rrwwwrwwwwrwwwwwwwwwwrwwwwwwwwwwwwwrwrrwwwwwwwwwrrrwrwwwwwwrrwwrrwwwrrwwrwwwrwwrwwwrwrrrrwwwwwwwwrwwwwwwrrwwwwwrwrwwrwrwrwwrwrwwwwrrwwwrwwwwwwwbrwwwrwrwwwwwwbrrwwwwwwwwrwwwwwwbbwwrwwrwwwbwwwwwwwwrwrrwwwwwwbwwwrwwwwwrwbwrwrwwwwwrrrwrwwwwrwrwrwwwwwrwwwwwwwwrwwrwrwbwwwbwwwrwwwbwrwwwwwwwwwwwwwwrwwwwwrbwrwrwwrrwrwwwwwwrrrbwwwwwbrwwbrwww",
+        "shown": 315.0
+      },
+      {
+        "big": true,
+        "budget": 530.4,
+        "counts": {
+          "brute": 15.0,
+          "runner": 80.0,
+          "walker": 235.0
+        },
+        "day": 76.0,
+        "heading": [
+          8.0,
+          9.0
+        ],
+        "night_budget": 530.4,
+        "queue": "wwrwwwrrrwrwrwwwwwwwrwwwwwwwrrrwwrwwwwwwrwrwwrwrwwrrrwwwwrwwwwwrwwwwrrrwwwwwwwrwwwwwrwwrwwwrwwwwwrwwwwwwwwwrwwwwrrwwwwwwrwwwrrrwwwrrwwwwrwwwrwwbwwbrbrwwbrbwwwwrwwbrwbwwrrrwwrwrrwwwwwwwwrrwwrwwwrwwrwwwwrrrwbwrwwwwwwwwwrwwwwbwwwwwwwbwbbwwwwwrrwwrwbwwwwrwrwwwwwrrwwwwwwwrwwwwwrwwwwwwwrwwwwrwrwwwwwbwwrwwwwwwrwrwrwwwwwbwwwrwwwrwwwwwrr",
+        "shown": 355.0
+      },
+      {
+        "big": true,
+        "budget": 536.6400000000001,
+        "counts": {
+          "brute": 15.0,
+          "runner": 80.0,
+          "walker": 242.0
+        },
+        "day": 77.0,
+        "heading": [
+          5.0,
+          3.0
+        ],
+        "night_budget": 536.6400000000001,
+        "queue": "rwwwwwrwrwwrwwrwrwwrwwrwwwwwrwwrrwrwwwwwwwwwwwwwrwwwwwrwwwwrwwwwwwwwwrwwwwwwwrwrwwwwwwwrwwrwwwrwwwrwwwwwwwwwrrwwwwwwrwrwwrwrwwwwwwwwwrwwwwwwrwrrwwrwrrwrwwrrwrrwwbrwrwwwwwwwrrbrwwwwrwwwwwwwwrwwrwrwwbwrwwrwrrrrrwwbrbwwrwwwwwwbwwrwwrrwwwwwwrrwwwwwwwwwwwwwwrrwrwwwwbwrwwwrbwwwwbwwwwwwwbwbwrwwrwwwwrwrwwwbbwwwrwwwwwrrwwwwwwbbwrwrwwwrwrwwrwwww",
+        "shown": 290.0
+      },
+      {
+        "big": true,
+        "budget": 542.88,
+        "counts": {
+          "brute": 15.0,
+          "runner": 82.0,
+          "walker": 244.0
+        },
+        "day": 78.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 542.88,
+        "queue": "wrwwwwrrwwwwwwwwrwwrwwwwwwrrrwrwwwrwwrwrwrwwrwwrwwwwrwwwwrrwrwwrrrwrrwwrwwwrwwwwwwwwrwwrwwwwwrrwrwwwwwrwwwwwwwwrwwwwwwwrwwwwwwwwrrwwwwwwbwwwrwwrwwwbwwwwwwbwwbwwwwwbwrwwwwrwwwwwwwrrrwwbwwwrrwrwrwwwwrwwwwwrwrwwrrwwwwwwwwwrrwbwwwwrwwwwbwwbwbrwrwwwwrwwwwwwwwwwwwwwwwrwrwrrwrwrwwrwwrwwbrwrwwrwwwwwwwbwwwrbrbwrwwwwrwrwwwwrrwwwwwwrwrrwrwwbwwwwwrwwr",
+        "shown": 320.0
+      },
+      {
+        "big": true,
+        "budget": 549.12,
+        "counts": {
+          "brute": 15.0,
+          "runner": 82.0,
+          "walker": 250.0
+        },
+        "day": 79.0,
+        "heading": [
+          5.0
+        ],
+        "night_budget": 549.12,
+        "queue": "rwwwrwwrwwwwrrwwwrwrwwwwwwwrwwwrwwwwrwwwwwwwwwwwwwwrwwwwwwrwwwwwwrwwwrrrwrrwwwwrrwrwwwrwwwwrwrrrwwwrwrwrwrwwwwwrrwwrwwwwwwrwrwrwwwwrwrrwwrrwrwrrwwwwwwwwwbwrwwwbwwrwwwwbbwwwrwrwwwwbwwwwwbwwwwrwwwwwrwwrwrwwwwwwrwwbwrwwwwwwwwwwwwwwrrwrrwwwwwwwwwwwrwwwrwrbrrwwrwrwwrwwrwwwwrwrwwwwwwwrwrwbwwwrwwrwrwwwwwwrbwwwbwwwwbwwwwwwwwrwwwwwwwwbbwrwrwwwwrwwrwwbrwr",
+        "shown": 360.0
+      },
+      {
+        "big": true,
+        "budget": 555.36,
+        "counts": {
+          "brute": 15.0,
+          "runner": 83.0,
+          "walker": 254.0
+        },
+        "day": 80.0,
+        "heading": [
+          5.0,
+          4.0
+        ],
+        "night_budget": 555.36,
+        "queue": "wwwwwwwwwrwwrwwwwwwwrwwwwwwrwwwrrwwrrwwwrwwwwwrwrrwrwwrrwwwwwwwrwrrwwrwwwwwwwwwrwrwrwwwwwwwrwwrrwwwwrrrwwwwwrrrwrwwrwwwwwwrwwrwwwwrwrwwwwwwwwbwwwwrwwwwwbwrwwwwwbrwwwwwwwwwwwrwwwbwwrwwwwrwwwwwrwrwwwwwwwrrrwbwrrrwwwwwwwwwwrbwwwwwwrwwrrwwrwwwrwrwwwrwwrwrwrwrwwrrbrwwbrwwwrwwwwwbwrwwwrwwwrwrwwwwwwwwwwrbwwbrwwwwwwwwbwwwbwwrwrwwwwwwrwwwwwwwwwrwwbbrrwrwwrrww",
+        "shown": 340.0
+      },
+      {
+        "big": true,
+        "budget": 561.6,
+        "counts": {
+          "brute": 15.0,
+          "runner": 84.0,
+          "walker": 259.0
+        },
+        "day": 81.0,
+        "heading": [
+          3.0,
+          9.0
+        ],
+        "night_budget": 561.6,
+        "queue": "wwwwrwrrwrwwwwwwwwrwwwwwrwrwrwwwwwwwrwwrwwwrwrrwwwwwwrwwwrwwwwwrwwwwwwrwwwrwrwwrrrrwwwwwwwwrwwwwwwwwrwwwwwwrwrwwwwwrrwwwwwwwwrwrrwwwwwwwwwwrwwrwwrwwwwwwwwbwwwrwwwwrwwrbwwrwwwwwwwrrbbrrwwwrwwrwwrwwwwwbwrwrrwbwbwwbrwwrwwwwwwrwrwwrwwwrrrwwrwwrrrwrwwwwrrwwwrwrbbrwrwwwwwwbwrrwwwwwwwbwrwwwwwwwwwwwwwwwrwwwwwwwwwwbwwwrwwwwwwwwrwwwwwwrrwwwwrrbwwrwwwwwwrrwbwwwrrwwwr",
+        "shown": 340.0
+      },
+      {
+        "big": true,
+        "budget": 567.8399999999999,
+        "counts": {
+          "brute": 16.0,
+          "runner": 86.0,
+          "walker": 252.0
+        },
+        "day": 82.0,
+        "heading": [
+          5.0,
+          1.0
+        ],
+        "night_budget": 567.8399999999999,
+        "queue": "rwrwrrwwrwwwrwwrrwrwwrwwrwwwrwwwrwrwwwwwwwwrwwwwwwrrwwwrwwwwwwrwwwwwwwrwrwrwwrwrrwrwwwwwwrrwwwwwrwwwrwwwrwwwwwwwwrwrwrwwwwwwrrwwwwrwwwwwwwrwwwwwwbrbrrwrwrwwwwwbwwwwwbrrwrwwwwwwwbwwwrwwwwwrrwbwwrrrwwrwwwwrwwwwrrwwbwrwbwwwwwwrwwwwrwwwwrwwwwwbwwwrwwbwwwwwrwrwwwwrwwwwwwbwwrrwrwwwwwrwwrrwrrwwwwwwrwrwwwrrwrwbwwwwwwwwwwwrwrrwwwrrwwbbrrwbwwwwwwrwwwwbwwwwwwrwww",
+        "shown": 305.0
+      },
+      {
+        "big": true,
+        "budget": 574.0800000000002,
+        "counts": {
+          "brute": 16.0,
+          "runner": 86.0,
+          "walker": 258.0
+        },
+        "day": 83.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 574.0800000000002,
+        "queue": "wwwwrrwwwwwwwwwwwrwwrwwrwrwwwwwwrwwwwwwwrrwwwrrwwwwwwwrwrrrwrwwwwwrrwrrrwwwrwwwwwwrwwrwwwwwwwwwwwwwwwwwwwwwwwwwrwrwwwwwrrwwwwwwwwwwrrwwwwrwwrrwwwrbwwwwwwwrwwbwwwrwwwwwrrwwbwwwwwrwrwwbwwwwwrwwbwwwwwwwwwwwbwrrwwwwwwbwbwwwwwwrwrwrrwwwwwrbwwrwrwwbwrwwwrrwrwrrwwbwwrwbwwwrwwwrwrwrwwwwwwrwrrrwwwwbrwwrwbwrrwwwrwwwwwrwrwrrwbwwwwbwwwwrwwrwwwwwrwrrwwwrrwwrwwwwrwrwrrwww",
+        "shown": 315.0
+      },
+      {
+        "big": true,
+        "budget": 580.32,
+        "counts": {
+          "brute": 16.0,
+          "runner": 87.0,
+          "walker": 262.0
+        },
+        "day": 84.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 580.32,
+        "queue": "rrwwrrwrwwwwwwrwwwwwwwwwwwrwwrrwrwwwwrwwwwwwrwwwwwwwwwrwwwwrwrwwwwrwwwwwwwwwrwwrrrwwwrrrrwwwwrwwwwrwrwwrwwwwrwwwwwwrwwwwwrwwwwwwrrrwrwwrwwwwwwwwrrbwwwwwwwwwwrrrwwbwwrwrwwbwrwwwwwwwwwwrrwbbwrwrwbwwrrrwwrwwwwwwwrwwwwwbwwrwwwwwrwwwrwwwwrwrwwwbrwwrwbwwwrwwwbwwwwwwwrwwrwwwrrwrwrbwwrwwwrwwbwwwwwrwwwwwwwwwwwrwbrwwrrrwbwwrwrwbwbwwrrwwwrrwrwrwrwwwwrwwwwwwwwwwwwwwwwwwwwrrw",
+        "shown": 350.0
+      },
+      {
+        "big": true,
+        "budget": 586.56,
+        "counts": {
+          "brute": 16.0,
+          "runner": 88.0,
+          "walker": 267.0
+        },
+        "day": 85.0,
+        "heading": [
+          7.0
+        ],
+        "night_budget": 586.56,
+        "queue": "wwrwwwwwrwrwwwwwrrrwwwwrrwwwwwrwrwwwwrrrwwwwwwwwwwwwwrwrwwwwwrwwwrrrwrwwwwwwrwwwrwrrwwwwwrwrrrrwwrrwwwwwrwwwrrrwwwrwwwwwwrwwwwwwwwwwwwwwwwwrwwrwwwrwwwwrbwwwwwwwwwwwwwrbwwwwrwrwrrwwwwbwwwwwwwrbwrwwwwwwwrwwrwwwwwwwwwbrrwwwrwwwwwwwwwbwrwwbrrwrrwbwwrrwwbwrwwwwrwwwwwwwwbwwwrwwrrrwwwwwwwrwwwwrwwwwrrrwwwrwwrwwbrrwwwwwwwwwwrwwrbwwwwwbwrwwrrrwrrwwrrwwwwwwbwwbwwwwwwwwbwwrwwrwwwr",
+        "shown": 400.0
+      },
+      {
+        "big": true,
+        "budget": 592.8000000000001,
+        "counts": {
+          "brute": 17.0,
+          "runner": 89.0,
+          "walker": 262.0
+        },
+        "day": 86.0,
+        "heading": [
+          1.0,
+          2.0
+        ],
+        "night_budget": 592.8000000000001,
+        "queue": "wwwwwwwwwwwrwwrrwrrrwwwwwwwrwrrwwwwrwwwwwwwwwwwwwwrwwwwwwwwwwwrwrwwwwwrrwrrrrwwrwwwwwwrwwrrwwwwwwwrwwwwwrrwwwwwrwwwrwwwwwwwrwrwwrrwwwwrwrwwwwwwrwwrrwwwwwwrwwrwwwrwwrwwwrwrwwwrwwwwwbrwwwwwwwwwwwrbrwwwwbrwrrwwwwrwwrwwwrrwrwrwwwbwwrwrwrrwrwwrwrwrwwwwbwwrbwrrrwwbwwwwwwwwwwwrrwwwwwwwbbwwwwwwwwwwwwbrwrwwrwwwrrbwrwwrbwrrwwwwwrwrbwrwwrwwwwwwwwwwbwwwrwwwrbwwwwbrwwwwwrwwbrrww",
+        "shown": 375.0
+      },
+      {
+        "big": true,
+        "budget": 599.04,
+        "counts": {
+          "brute": 16.0,
+          "runner": 90.0,
+          "walker": 275.0
+        },
+        "day": 87.0,
+        "heading": [
+          9.0,
+          3.0
+        ],
+        "night_budget": 599.04,
+        "queue": "wrwwwwwwwwwwwrrwwwrrwwrrwwwwwwrrwwwwwwwwwrwwwwwrwwwwrwwwwwwwrwrwwwrrwwwwwrwrwwwwwwwwrwwrwwrrwwwrrwwwwwwwwwwwrwrwwwrwwwwwrwrwwwwrwwwwrwwrwwwrwrrrwrwrwwwwwwwwwbbrwrwwwwwwwwrwwrwrrrwwwwwwwwwrbbbwwwwrwwwwwbwwwbwrrwwwrwwwwrwwbwwwrwwwwrwwwwwrwwwwwwwwwrwwwrwrrwwrwwwrwwwwwwwwwwwrrwwwwrwrrrwwrwwbrwwwwrwrwwwwrwrwrrwwwbwbwwwrbrrwwbwrwwbrwwwwwwwrwwwwrwwwwrbwbwrwwwrrwwwwrrwwwwrwwwwwrrwwwwwww",
+        "shown": 365.0
+      },
+      {
+        "big": true,
+        "budget": 605.2800000000001,
+        "counts": {
+          "brute": 17.0,
+          "runner": 91.0,
+          "walker": 270.0
+        },
+        "day": 88.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 605.2800000000001,
+        "queue": "wwwrwwrwwwwwwwwrrrwwwwwwwwwrwrwrwwwwwwrwwrwrwrrrwrwwwrrwwwwwwrwwwwwwrwwwrwwwrwwwwrwwwwrrwwwrrrwwwwwrrrwwwwwwrwwrrwwwwwrwwwwrwwrrrwwwwwwrwwwwwwwrwwwwwwwwwrwrrwbwrwwwwwrwwwrwrwwrwwwwwwwwwwrwwrrwrwrwwwwwwrrwwrrbbwbwwrwrwwwbrwbwbwrwwwwwwwrwwwwwrwwrwwwwwwwwwwwbbwwwwrrwrwwwwrwwbwwwwwrwwwrwwrwwwrwwwwwbwwwwwrrbrwrwrrrrwwwwwwrwrrwbwbwwwbwwrwwwbrrrwwwrwwwwwwwrwwwwwwwwwwwwwwbwrrwwwwwwww",
+        "shown": 380.0
+      },
+      {
+        "big": true,
+        "budget": 611.5200000000001,
+        "counts": {
+          "brute": 17.0,
+          "runner": 92.0,
+          "walker": 275.0
+        },
+        "day": 89.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 611.5200000000001,
+        "queue": "wrwwwwwwwrwwrwwrwwwwwwwwwwwwwwrrrwwwwwrwrwrrwwwwwwwwwrwrwrwwrwwwrwwwwwrwwwwwwrwwrwwwwwrrwwrwwwwwwwwwrwwwrwwwwwrrwwwwrwrwwwwwwwrwrwwrwwwwwwwwrwwwwwwwrwbrwwwwwwwwrwwwwwbwrrwwwwrwwwwwrwrrwwbrwwwwrrwwwwbwwrrrbwrwwwrwwwwwrwwwwwwwwwrwwbrwrwbwrwbwwwbwwbwwrwwrrwwwwrwwrwwwbwwwwwwwbrwwwwwrwwwwwwrwwbbrwrwrwwwrwwwrrwwbwwrwrrrwrwwwwwwrwwwwwwrwwwrwrwrwrrwrbrwwwrwrbrwwwwrrrrwwwwwwwwwwwrwwwwrrwwww",
+        "shown": 350.0
+      },
+      {
+        "big": true,
+        "budget": 617.76,
+        "counts": {
+          "brute": 17.0,
+          "runner": 93.0,
+          "walker": 279.0
+        },
+        "day": 90.0,
+        "heading": [
+          2.0
+        ],
+        "night_budget": 617.76,
+        "queue": "wwwrwwwwwwwwwwwwwwwrrwrwwrwwwrrwwrrwrwrwrrwwwwrwwwwwwrwwwwwrwrrwrrwrwwwrwwwwrwwwwwwrwwwrwrwwwwwrwrwwwrwwwwwwwrrwwwwwwwwrwrrrwwwwwwwwwwwwwrwwwrrrwrwrwwwwwrrwrwwwwrwrwwwwbwrwwrwwwwwrwwbbrwwwrwwwwwwwwrwwwwwwwwrbrbwwbwwwrwwwwwwrwwwwbwwwwwrrwbrrwwrwwwrwbwrrwbwwwbwwwwrwwwwrwwrrwwwwwwwwbbrwwwwrwwwrwrrwwwwrwbwrwwwwwwwwwwwwwwrwwrwwrwbwwwwwrwwwrwwwwwwrwwwwwwwrwwwrwrwrbrrwwwwrwwwwrwwwwwwwwrwwrbrrw",
+        "shown": 400.0
+      },
+      {
+        "big": true,
+        "budget": 624.0,
+        "counts": {
+          "brute": 18.0,
+          "runner": 94.0,
+          "walker": 274.0
+        },
+        "day": 91.0,
+        "heading": [
+          4.0,
+          2.0
+        ],
+        "night_budget": 624.0,
+        "queue": "wwwwwwwrwrrwrwwwwwwwrwwwwwwwwwwwwwrwwwrwrwwwwwwrrrwwwwrrwwwwwwrrrwrwwrwwwwwwwwwwrwwwwrwrwwrwwwrrwwrwrrwrwrwrwwrwwwwwwwwwwwrrrrwwwwwrrwwwrwwwwwwwrwwrwrwwrrbwwwwwwrwrwwwwwwwwwwrwrbrwwbwwwrrrwbwwwwwrwrwwwwrwwwrwwwbrwwwwbwwwwwwrrwwwwwrrbwwrwwrbwwwwrrrwwwwrbwrwwwwwwwwwwwwwwwwwwbrwwwwwwwwwwwrwbrwwrwrrwrwwrwwwwwwbwbwwwrrwwrwwwrrwrrwwwbwwwwwwwwbrwrwwbrrwwwbwwrrwrrrwwrwwwwwwwwwwwwbwwwrwwwwrww",
+        "shown": 365.0
+      },
+      {
+        "big": true,
+        "budget": 630.24,
+        "counts": {
+          "brute": 17.0,
+          "runner": 94.0,
+          "walker": 289.0
+        },
+        "day": 92.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 630.24,
+        "queue": "wrwwrwwwrrwwwwwwwwwwwwwwwwwwwwrrwwwwwwwrwwwwwrwwwwwrwwwwrwwwwrwwwwwwwwwwrrwrwwwwrwrrwwwwwwwwwwrrwrrwwwwrrwwwwrrwwwrwwwwwrwrwwwwrrrwwwwrwwrwwwwrrwwwwrwrwrrwwrwwwwrbwwwwwrwwwwwwwrwwbwwwwwwwwwwwrwwwwwwwwwwbrwrwrwwbwrwrwwrwwwwwwwwwwwwwwwrrwwrwwwrwrwwwwwrwrrwwrrwrwwwwwwrwwwwwwwwrwbrwrwrbwwwrwbwwrwwwrwwwrwrwwwrwwrrwwwrrrwbbbwwwwrbbwwrrwwwwrrwrwwwwwwbwwwrrwbwwbwrrwwrwwbwwwwwwwwwwwrwwbrwrwwwwwwwwrrwwwwrww",
+        "shown": 370.0
+      },
+      {
+        "big": true,
+        "budget": 636.4800000000001,
+        "counts": {
+          "brute": 18.0,
+          "runner": 96.0,
+          "walker": 282.0
+        },
+        "day": 93.0,
+        "heading": [
+          9.0
+        ],
+        "night_budget": 636.4800000000001,
+        "queue": "wrrwwwwwwwwrrwrwwwwwwwwwrwrrrwwwrrwwwwrrwwwwwwwwwrwwwrrwwwwwwrrwwwrwwwwwwwwrwrrwrwwwwwwwwwwwrwrwwrwwwwrwwwrwwwrwwrwwwrrwwrwwwwwwwwrrwwwwwwwwrrwrwwwwwwwrrwwwwwwwwrrwwbwrrwrwwwwrwwwwwwwwwwwwwwrrbwbwrrrwrrbwrbrwrwrwrwbwbbwwrwwrwwwwrwrwwwwwrrrwrwrrwwwwwwbwwwwwrwwwwwwwbwwwrrwrwwwwwwwrwwwrwwrwrwwwwwwwrwwwbrwwwwwwwwwwwwwwwrwwrwwwwwwrwrwwwwwwwwrwwbwbwwwwwbwwrwrwwwrwrwwwrrwwbwwwrrwbrbwrbrwwwwwwwwrwrwww",
+        "shown": 400.0
+      },
+      {
+        "big": true,
+        "budget": 642.72,
+        "counts": {
+          "brute": 18.0,
+          "runner": 97.0,
+          "walker": 287.0
+        },
+        "day": 94.0,
+        "heading": [
+          1.0,
+          6.0
+        ],
+        "night_budget": 642.72,
+        "queue": "wwrrwrwwwwrwwwwwrwwwrrwwwwwwrwwwwwwwwwwrwrwwwwrwwwwwwwwwwrrwwwwwwwwwwrwwrrrrwwwwwwwwwwwwrwwwrwrwwwwrrwrrwwwwwwwwwrwwwwwwwwwwrrwwwwrwwrwrwwrwwwwwwrwrwrwwwrrwwwrwrwrwbrrwbwwwwrwrwwwwwwrrwbwbwwrwrbwwwwrwwwwwwwwrwrwwwwwwwwwrwwwwwwwrwwwwrwrwrwwwwrwrwwwrrwwwwrwwbwrwbbwwwwwwrwwrwrwrrrwwrwwbwwbrrwwbwrwwwwwrrrwwwrrwrwwbwwrbrwwwwbwwrrwrwwwwrwwbrwwwwwwwwwrwrwwrwwwrwwwwwwwwrwwwwwwrwwwrwwwwwbwrwwrwwwwwwwwbrbrrww",
+        "shown": 430.0
+      },
+      {
+        "big": true,
+        "budget": 648.96,
+        "counts": {
+          "brute": 18.0,
+          "runner": 98.0,
+          "walker": 291.0
+        },
+        "day": 95.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 648.96,
+        "queue": "wwwwwwwrwrwwrwrwrwwwwwwwwwwwwwwrwwrwrwwrrwwwwwwwwwrrwwrwwrwwrrwrrwwrwwwwwrwwwrwwwwwwwwwwwwwwwwrwwwwrwwwrwwwwwwrwwwrwwrwwwwwrrwwwwwrwrwwrwwwwrrwwwwwwwwwrrrwwwwrrwwrrwrrwwbrbwwbwbwwbrwwwwrwrwwrwrrwwwbrwwrwwrbrwwrwwwwwwwwwrwwwwrrwrbwwrwwwwwwrrwwwwrwwwwwwwwwbrrrwrrwwwwwrwwrwwwwrwwwwbwwrwwrwwbwwwwrrwrwwwrrwwbwwrwrrwwwwrbwwwbwwwrwrwwwwbrwwwwwwwwrwwwwrbrwwwwrrwwwwwwwwrwrwwwwwwwwwwrwrwwwwwrwwrwwbwwrbwwwwwwwwrwww",
+        "shown": 455.0
+      },
+      {
+        "big": true,
+        "budget": 655.2,
+        "counts": {
+          "brute": 18.0,
+          "runner": 98.0,
+          "walker": 297.0
+        },
+        "day": 96.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 655.2,
+        "queue": "wwrwwrrwwrrrwwrwwrwrwrwwwwwwwwwwwwwrrwwwwwrrwrwwwwwwwrwwwrrwwwrrrwwwwrwwrrwwrwwwwwrwwwwwrrrwwwwwrwwwrwwrwwwrwwwwwwwrwwwrwwwwrwrwwrwrrwrwwrwwwwwrwwrwwwwrwrwwwwwwwwwwrwwwwwwwbwrbwwrwwwwwwbwrwrwwwrwrbwwrrwwwrwwwwwwwwwwwwwbwwwwwwrwwwrwwwrwwrrwwwrwbwwwwrwwwrwrbwwbwwwrwwwwwwwwrwwwwwrrrwwwwwrwrrwwbwwwwwwrwbwwwwrwwwwwwwwrwwbwrwrwwwrwwwwrwwwwwwwwrbrrwwrwwwwwrwrbwrwwwwwwwwbwrbrwwrwwwwbrwwrwwrwwrrbwwwwwwwwrrwwwwrwwwwwbww",
+        "shown": 395.0
+      },
+      {
+        "big": true,
+        "budget": 661.4400000000002,
+        "counts": {
+          "brute": 18.0,
+          "runner": 99.0,
+          "walker": 301.0
+        },
+        "day": 97.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 661.4400000000002,
+        "queue": "rwwrwrwwwwwwwwwwwwrwwwwwwrwrrwwwwwwwrwwwrwwwwwrwwwwwwwwwrwrwwwwwwrrrwwwrwwwrwwwrwwwwrwwwrwrwrwrwwwrwwwwrrwwwwrrwwwrwrwwrwrwwwwrwrwwwwwwrrrwrwwrwwwwrwwwwwwrwwwwrwwwwwrwwwwwrwwrbrrbwrwwwwbwwwwwwbrwwwwwwwrwrwwrwrwrbrrwrwwwbwwrwwbwwwwwwwwrrwrwwwrwrwwwwwwrwwrwbwrwwbwwwwwwwwwwwrwwrbwwwrwbwwwwwrwwrwwwrwwbwwrwwbrwwwwwrwwwwbwwwrwwrwwwwrwwrwrwwwrbwrwwrrwwwwwwrwwwwrwrwrwbwwwwwwwwwwrwwwrwwbwbwwwrwrwwwwwwrrwwwwwwwwwrwwwrwwwrrwr",
+        "shown": 415.0
+      },
+      {
+        "big": true,
+        "budget": 667.6800000000001,
+        "counts": {
+          "brute": 19.0,
+          "runner": 100.0,
+          "walker": 297.0
+        },
+        "day": 98.0,
+        "heading": [
+          3.0
+        ],
+        "night_budget": 667.6800000000001,
+        "queue": "wwwwwrwwrwwwwwwwwrwwwrrwwrwrwrwrrwwwwrwwwwwrwrrwwwwrwwrwwwwwwrrwwrwrwrwwwwwwwwwwwwrrwwwrwwrwwwwrwrwwwrrwwrwwwwwrwwwwwwwrwwwwwrrrwwwwwrwwwwwwwwwwrwrrrwrrrwwwwrwwrwwwwwwrwwwrwwwwwwwrrwbwbrrbrbwwwwwwwrwwbwwrwwwrwwwwwrwwrwrrwrrwwwwwwwwwwwwwwwwwrrbbrwwwbwwbwwrrwwrbwbwwwwrwrwrwwwrwwwrwrwwrwwrwrwwwwwwwwwwwwwrwwwwwwrwwbwwwwwwrwwwrrwwwrrwwrrwwwwwrwrwwwwwwbwwwbrwwrrwrwbwwwbwwwwwrwwrbwbwwwwwwrbwrwwrwwwwwrwwwwwwwwwwwwwwrrwrw",
+        "shown": 435.0
+      },
+      {
+        "big": true,
+        "budget": 673.9200000000001,
+        "counts": {
+          "brute": 19.0,
+          "runner": 101.0,
+          "walker": 301.0
+        },
+        "day": 99.0,
+        "heading": [
+          7.0,
+          3.0
+        ],
+        "night_budget": 673.9200000000001,
+        "queue": "wwrwwwrwrwrwwwrwrwwwwwwwrwwwwwwwwwwwwwwwwrwwwrwwwwwwwwrwwwwwwwwwwwwwwwrwwwwwwrrwwwwrrrwrwwrrwwwwwwwwrwwrrwwrwwwrwwrwwrwwrrwrrwwwwwwwrrwwwwrwwwwwwwwwwwrwrwrwwwwwwwwwwwwrwbwwwwwwwwrwwwrwwrrrrwwwwwwwwrwrrrwrwwrrwwwrwwwwwbrrwwwwrwwwrbrwwwwrwwwbwwwbwwwwrwwwwrrwwwwwrwbrbrwrwwrbwrwwwbrwwwrwwwwwwrrwwwrrwwwwwrwrwwwwwwrrwwrwwwwwrwrbrwwrbwwrwrrwrwwwwbrrrwwwwwbbwwwwwrwwwwwwwwrwwrwwrwwwrwwwbwrwwwrwwwwbwrwwwrbrrwwwwbwwwrbwwwwrwwwww",
+        "shown": 415.0
+      },
+      {
+        "big": true,
+        "budget": 680.16,
+        "counts": {
+          "brute": 19.0,
+          "runner": 102.0,
+          "walker": 305.0
+        },
+        "day": 100.0,
+        "heading": [
+          8.0,
+          9.0
+        ],
+        "night_budget": 680.16,
+        "queue": "wrwwwwwwwwwwwwrwwwrwwrwrrrrwrrwwrwwwwwwwrwwwrwwrwrwwwwwwwwwwwwwwwrwwrwwrwrwwwwwrrwwrwwwwrrwwwwrwwwwwwwwwwrrrwwrwwwwwwrwwwrwwrwrwrwrwwwwrwwrwwwwwwwwwrwwwwrrrwwwrwwrrrwrwwwrwrrrwwwwwwwrwbwwwwwbwrwwrrwwwwwwwwwwbwwrwwrwwwrrwwwwrwwwrbwrrwwwwrwrwrwwwwwrwwrwwwwwwbwwbwrwwwwwwrrwwwrwwwwwwrwrwbwbwwrrwrwwwwwrwwrwwwwwwwwwrwwrwbrbwwwrwwwwwrrwwrwwrwwwrrwbwrwwwwrbwwwbwwrwrrwwwwwwwwrwwwwwwwrwbwwwwbbwwwbwrwwrrwwbwwwrwwwwwwwwrwrwwwwrwbwwwww",
+        "shown": 405.0
+      },
+      {
+        "big": true,
+        "budget": 686.4,
+        "counts": {
+          "brute": 19.0,
+          "runner": 102.0,
+          "walker": 311.0
+        },
+        "day": 101.0,
+        "heading": [
+          8.0
+        ],
+        "night_budget": 686.4,
+        "queue": "wwrwwwwwwwwwrwwwwrrwwwrwwwrrwrwwrwwwwrwwwwwrwrwwwwwwwwwwrwwwwwwwwwwwwrwrrrwwwwwwwwwwwwwwwwwwwwwwwrrwwwwwwrwwwwrwwrrrwwwwrwwrwrwrrrrwwwwwwwwwwwrwwwrrwwwrrwwrwrwwwwwrrwwwwwwwwwwwwrwbwwwwrrrrwwbwwwbwwwwwwwwbbbwwrwbwwwwrwwwwrwwwwrwwrwrwwwwwbwwrrwwrwwbwwwrrwwwrwbwwrwrrrwwrwwwwwwbwwwwwwwwwwwrbwwwwwrrwrwwbwbrrrwbrwwwwwwrwwwwwwwwrwwwbrrwwwwrrwwrwwrwwwwbwwrwwrrwwwwwwwwwrwwrwrrwwwwrwrwwrrwwwwwrwwbwwwwwwwrwwrrwwrbwwwwwrwwwrwrrwwwwwwrwrwrwr",
+        "shown": 375.0
+      },
+      {
+        "big": true,
+        "budget": 692.6400000000002,
+        "counts": {
+          "brute": 20.0,
+          "runner": 104.0,
+          "walker": 305.0
+        },
+        "day": 102.0,
+        "heading": [
+          1.0
+        ],
+        "night_budget": 692.6400000000002,
+        "queue": "rwwwwrrrwrwrwrwwrwwwwwrwrwwrwrwwwwrwrwwrwwrwwwrwwwrwrrwwwwwrwrwrwrwrwwwwrwwwwwwrwwrwwwrwwwwrwwwwrwwwwwrrrwwwwwwwwwwwwwwrrwrwwwwwwwwwwwwwwwwwwwwwwrwwwrwwrwwwwrwrwrwwwwrrbwwbwrrwrwrwbwwwwrwwrrwwwwwwwwwwwwwwwwwwwwwrrwbrwrwrwwwwwwwwwwwrrrbrrwbwwrrwwwwwwbwwwwwrwwwwwwrbbrwwwbwwwwwrwwwwrrwrwwwwwwwwwwwwbrwwwwbrwwwwwwbbwwwwwrwwwwwrwwwwrwrrwwrwwwwwbwwwwrwwwwrwwbrwrbwrrwwrwwwwwbwwrrwwwwrwwwwwrwrrwbrrrwwwwwwrwwrwwrwrrwbwrwrrwwrwwwwwwwwww",
+        "shown": 480.0
+      }
+    ]
+  },
+  "recorded": "2026-10-03",
+  "rng": {
+    "day": 4,
+    "hour": 18.0,
+    "over": "",
+    "rng_seed": "7",
+    "seed": 7,
+    "state": "-879110464126652201"
+  },
+  "version": 1
+}

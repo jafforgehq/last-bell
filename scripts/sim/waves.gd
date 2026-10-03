@@ -84,6 +84,19 @@ func is_big(day: int) -> bool:
 	return day >= sim.scenario.total_days()
 
 
+## PHASE 0 STUB (round 19, S3.1; NIGHTS-SIM replaces the body, keeps the signature): the Big Night of round 19 that follows `day`, or
+## {} when it is not one (always, without an avatar): {"kind": "milestone"|"final", "id": "siege"|"rush"|"last", "index", "name",
+## "factor", "runners", "brutes", "headings", "main_share", "brute_at": [lo, hi], "cap", "blurb", "plated": true}.
+func big_night(_day: int) -> Dictionary:
+	return {}
+
+
+## PHASE 0 STUB (round 19, S3.1; NIGHTS-SIM replaces the body, keeps the signature): what the night that follows `day` will bring, pure
+## and for any day from today on (see the plan): {} for now.
+func outlook(_day: int) -> Dictionary:
+	return {}
+
+
 ## A spawn point, drawn with the nests' pull on it (1 each, and NEST_PULL for every point of strength).
 func _lean(rng: RandomNumberGenerator, n: int) -> int:
 	var weights: Array = []
