@@ -143,8 +143,11 @@ func _rebuild(e: Dictionary) -> void:
 	for o in e.options:
 		var b: Button = RadioKit.small_button(host, String(o.label), BUTTON_H if level < 3 else BUTTON_H_SLIM, 13)
 		b.size_flags_horizontal = Control.SIZE_FILL if slim else Control.SIZE_EXPAND_FILL
-		# an idea's yes carries its price ("Yes: put up a workshop (30 scrap)"): a long word of it wraps rather than widening the card
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		# an idea's yes carries its price ("Yes: put up a workshop (30 scrap)"): a long word of it wraps rather than widening the card. Not in
+		# the slim strip: its buttons sit in a row that wraps as whole buttons, and a button that wraps its own words there shrinks to its
+		# longest word and grows tall (the strip was 364 px high, with three options, and pushed the radio panel over the clock)
+		if not slim:
+			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.pressed.connect(_on_pressed.bind(String(o.id)))
 		_buttons_box.add_child(b)
 		buttons[String(o.id)] = b

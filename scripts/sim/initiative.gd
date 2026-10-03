@@ -1082,14 +1082,18 @@ func _apply_garden(_p, others: Array, _args: Dictionary) -> String:
 
 # ----------------------------------------------------------------------- errand --
 
-## The terms of a trip the player is not on (round 18's `errand_terms`: the loot and so on); {} until it exists, and the trip is the
-## ordinary one.
+## The terms of a trip the player is not on (round 18's `scavenge.errand_terms()`: about 60% of the loot, no rare finds, a worse chance
+## everyone comes home). This module runs only with an avatar, and then every party the dice send is such an errand (`scavenge.is_errand`):
+## `scavenge.send` below applies the terms, and the idea says so.
 func _errand_terms() -> Dictionary:
-	var m = sim.scavenge
-	if m != null and m.has_method("errand_terms"):
-		var t = m.errand_terms()
-		return t if t is Dictionary else {}
-	return {}
+	return sim.scavenge.errand_terms()
+
+
+## Whether this person would go, by the same list of reasons as the radio's verbs, the Map page's chips and the Jobs page (round 18's
+## `radio.reason_not`: bleeding, starving, shaken, tending a patient, staying with a hurt friend, no going with an enemy among `with`,
+## the ids of who else is going): nobody offers a trip they would refuse if the player asked.
+func _will_go(q, with: Array = []) -> bool:
+	return sim.scavenge.can_go(q) and bool(sim.radio.reason_not(q, "go", with).ok)
 
 
 ## What the stores are short of, in the data's order.
@@ -1157,7 +1161,7 @@ func _find_errand(ctx: Dictionary) -> Dictionary:
 		return {}
 	var pool: Array = []
 	for q in ctx.proposers:
-		if sim.scavenge.can_go(q):
+		if _will_go(q):
 			pool.append(q)
 	var p = _holder("scout")
 	if p == null or not pool.has(p):
@@ -1174,17 +1178,17 @@ func _find_errand(ctx: Dictionary) -> Dictionary:
 		return {}
 	var mate = null
 	for f in _friends(p):
-		if f != p and not _is_player(f) and _here(f) and sim.scavenge.can_go(f):
+		if f != p and not _is_player(f) and _here(f) and _will_go(f, [String(p.id)]):
 			mate = f
 			break
 	if mate == null:
 		var rest: Array = []
 		for q in sim.scavenge.free_survivors():
-			if q != p and not _is_player(q) and _here(q):
+			if q != p and not _is_player(q) and _here(q) and _will_go(q, [String(p.id)]):
 				rest.append(q)
 		mate = _best(rest, "Shooting")
 	var party: Array = [p, mate] if mate != null else [p]
-	if sim.scavenge.why_not_action(party, String(found.site.id), "loot") != "":
+	if sim.scavenge.why_not_errand(party, String(found.site.id), "loot") != "":
 		return {}
 	var terms := _errand_terms()
 	var share := float(terms.get("loot", 1.0))
@@ -1211,8 +1215,11 @@ func _ids_first(list: Array) -> Array:
 func _why_errand(p, others: Array, args: Dictionary) -> String:
 	var prm: Dictionary = _kd("errand").params
 	var party: Array = [p] + others
+	var ids: Array = []
 	for q in party:
-		if not _here(q) or _is_player(q) or not sim.scavenge.can_go(q):
+		ids.append(String(q.id))
+	for q in party:
+		if not _here(q) or _is_player(q) or not _will_go(q, ids):
 			return "%s cannot go now" % String(q.first)
 	if not sim.scavenge.can_send():
 		return _plain(String(sim.scavenge.why_not()))
@@ -1227,7 +1234,7 @@ func _why_errand(p, others: Array, args: Dictionary) -> String:
 			needed = true
 	if site.is_empty() or not needed:
 		return "it is not needed now"
-	return _plain(String(sim.scavenge.why_not_action(party, place, "loot")))
+	return _plain(String(sim.scavenge.why_not_errand(party, place, "loot")))
 
 
 func _apply_errand(p, others: Array, args: Dictionary) -> String:

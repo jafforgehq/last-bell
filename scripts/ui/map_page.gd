@@ -738,7 +738,7 @@ func _reason_go(p) -> Dictionary:
 ## The radio's answer for everyone at the base at once (worked out once for each refresh).
 func _everyone_asked() -> Dictionary:
 	if not _memo.has("asked"):
-		_memo["asked"] = _radio().errand_willingness(_candidates(), site_id, errand_action, vehicle_id)
+		_memo["asked"] = _radio().errand_willingness(_candidates(), site_id, errand_action, vehicle_id, ticks)    # (company is judged against the party ticked)
 	return _memo["asked"]
 
 

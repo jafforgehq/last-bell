@@ -487,7 +487,8 @@ func test_errand_for_a_short_stock_at_a_place_that_has_it() -> void:
 	eq(c.who, "marcus", "the best shot brings it")
 	eq(c.others, ["dez"], "with the next best")
 	eq(c.args.place, "houses", "to the nearest place with food and little danger")
-	eq(c.text, "Marcus: Neighbourhood houses should have food. Dez and I could go.", "the words (no errand terms yet: nothing said of less)")
+	eq(c.text, "Marcus: Neighbourhood houses should have food. Dez and I could go. We'd find less without you.", "the words (round 18's errand terms: with the player away a trip finds less)")
+	check(String(c.sub).contains("60%"), "and the line under them says how much: %s" % c.sub)
 	eq(c.cost, {}, "the trip is the price")
 	sim.stock.food = 16.0
 	eq(_who(sim, "errand"), "", "four days of food is enough")
@@ -545,6 +546,8 @@ func test_a_yes_to_errand_sends_the_party() -> void:
 	eq(sim.scavenge.parties[0].members, ["marcus", "dez"], "Marcus and Dez")
 	eq(String(sim.scavenge.parties[0].site), "houses", "to the houses")
 	check(String(e.result).contains("Marcus and Dez"), "the result: %s" % e.result)
+	check(sim.scavenge.is_errand(sim.scavenge.parties[0]), "it is an errand (the player is not along): round 18's penalty applies")
+	check(bool(sim.scavenge.parties[0].result.get("errand", false)), "and its result says so")
 	_free(g)
 
 
@@ -1178,13 +1181,13 @@ func test_a_lesson_is_broken_off_when_somebody_is_asked_to_come_along() -> void:
 	_free(g)
 
 
-## With round 18's errand terms (a trip without the player finds less), the idea says so. They do not exist in this branch yet:
-## a scavenging module that has them stands in.
-func test_errand_says_what_it_finds_less_of_when_the_game_has_terms() -> void:
+## The idea says what the errand finds less of from the scavenging module's terms (round 18's `errand_terms`), not from a number of its
+## own: a module with other terms (a stand-in that finds half) changes the words.
+func test_errand_says_what_it_finds_less_of_from_the_terms_of_the_scavenging_module() -> void:
 	var g := _errand_game()
 	var sim = g.sim
 	var stand_in := GDScript.new()
-	stand_in.source_code = "extends \"res://scripts/sim/scavenge.gd\"\nfunc errand_terms() -> Dictionary:\n\treturn {\"loot\": 0.6}\n"
+	stand_in.source_code = "extends \"res://scripts/sim/scavenge.gd\"\nfunc errand_terms() -> Dictionary:\n\treturn {\"loot\": 0.5}\n"
 	check(stand_in.reload() == OK, "(the stand-in loads)")
 	var scavenge = stand_in.new()
 	scavenge.setup(sim)
@@ -1193,7 +1196,7 @@ func test_errand_says_what_it_finds_less_of_when_the_game_has_terms() -> void:
 	sim.scavenge = scavenge
 	var c := Kit.candidate(sim, "errand")
 	eq(c.text, "Marcus: Neighbourhood houses should have food. Dez and I could go. We'd find less without you.", "the words")
-	check(String(c.sub).contains("60%"), "and the line under them: %s" % c.sub)
+	check(String(c.sub).contains("50%"), "and the line under them: %s" % c.sub)
 	_free(g)
 
 

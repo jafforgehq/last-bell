@@ -15,6 +15,7 @@ const CallView := preload("res://scripts/ui/call_view.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const CommunityKit := preload("res://scripts/ui/community_kit.gd")
+const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
 const TextTests := preload("res://tests/test_hud_text.gd")
 
 const SIZES := [[1280, 800], [980, 700], [700, 700], [960, 600], [700, 560]]
@@ -1141,8 +1142,17 @@ func test_the_call_card_with_an_idea_and_the_voices_line_fits_at_every_size() ->
 			# the column is as wide as the clock: a long yes must not make the card wider than that
 			var width := Kit.rect(h.clock).size.x
 			if news_open:
+				# (round 18: the News is a page of the radio panel, a board of its own with its form's width, not the clock's)
+				var form := RadioPanel.WIDTH_COMPACT if h.compact else RadioPanel.WIDTH
+				var panel := Kit.rect(h.radio_panel)
 				check(h.news_panel.call_views.size() == 2, "%s: the News holds both calls" % where)
-				check(Kit.rect(h.news_panel).size.x <= width + 0.5, "%s: and keeps its width (%s)" % [where, str(Kit.rect(h.news_panel))])
+				check(panel.size.x <= form + 0.5, "%s: the panel keeps its form's width (%s)" % [where, str(panel)])
+				check(Kit.rect(h.news_panel).size.x <= panel.size.x + 0.5, "%s: and the News keeps inside it (%s)" % [where, str(Kit.rect(h.news_panel))])
+				for v in h.news_panel.call_views:    # (the list scrolls, so only across: no button of a call is wider than the page)
+					for b in v.buttons.values():
+						var r := Kit.rect(b)
+						var page := Kit.rect(h.news_panel)
+						check(r.position.x >= page.position.x - 0.5 and r.end.x <= page.end.x + 0.5, "%s: every button of a call is across the News (%s, the page %s)" % [where, str(r), str(page)])
 			else:
 				check(Kit.rect(h.call_card).size.x > 60.0, "%s: the card is up" % where)
 				check(Kit.rect(h.call_card).size.x <= width + 0.5, "%s: and does not widen for the long yes (%s, the clock is %.0f wide)" % [where, str(Kit.rect(h.call_card)), width])

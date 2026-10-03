@@ -684,12 +684,14 @@ const NO_BUILDERS := "Nobody is on the Builders job: give it to someone on the J
 ## the gate, heading out with a party; soft: tending a patient, the lone nurse, the noon radio hour, the forecast, then bleeding, a
 ## fever or an infection, starving, parched, shaken). `kind` "work": the same words for a change TO a station or a post ("can't take a
 ## job now"); taking someone off their job (`job_willingness(p, "")`) is refused only by the hard ones. One list for the verbs, the
-## errands and the roster: never two truths. Pure.
-func reason_not(p, kind: String) -> Dictionary:
-	return _reason_not(p, kind, "-", CANT_GO if kind == "go" else CANT_JOB)
+## errands and the roster: never two truths. Round 20's soft reason of company (`relations.company_reason`: "staying with Dez", "won't
+## go with Walt" among `with_ids`, who else is going; "won't work beside Walt" at a station) follows the health reasons, here, once.
+## Pure.
+func reason_not(p, kind: String, with_ids: Array = []) -> Dictionary:
+	return _reason_not(p, kind, "-", CANT_GO if kind == "go" else CANT_JOB, with_ids)
 
 
-func _reason_not(p, kind: String, station_id: String, cant: String) -> Dictionary:
+func _reason_not(p, kind: String, station_id: String, cant: String, with_ids: Array = []) -> Dictionary:
 	var out := {"ok": true, "why": "", "hard": false, "sentence": "", "line": ""}
 	if p == null:
 		return _no(out, "Nobody answers", "Nobody answers", "", true)
@@ -705,6 +707,8 @@ func _reason_not(p, kind: String, station_id: String, cant: String) -> Dictionar
 	var reason := _busy_soft(p)
 	if reason == "":
 		reason = _health_reason(p)
+	if reason == "":
+		reason = sim.relations.company_reason(p, "go" if kind == "go" else "work", "" if kind == "go" else station_id, with_ids)
 	if reason != "":
 		return _no(out, "%s: %s, can't %s" % [first, reason, cant], "%s is %s" % [first, reason], _capital(reason) + ", can't %s." % cant, false)
 	return out
@@ -742,18 +746,21 @@ func errand_note() -> String:
 ## trip can start with those who agree), "why" (the trip's own refusal first: `scavenge.why_not_errand`, the hour, the dead at the
 ## gate, the seats and the fuel, the place; else "Nobody can go: Ana is tending a patient, Dez is down"; "" when ok), "going" (the
 ## people who agree), "refused" ([{"id", "name", "why", "hard"}], each in the words of `reason_not(p, "go")`), "delay_s" (the slowest of
-## those going), "tone" (the least willing's), "terms" (`scavenge.errand_terms()`), "loot_note"}. Pure.
-func errand_willingness(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "") -> Dictionary:
+## those going), "tone" (the least willing's), "terms" (`scavenge.errand_terms()`), "loot_note"}. `with_ids`: the ids of who is going
+## together, for a refusal of company ("won't go with Walt"): those asked, unless a roster that asks everyone at once names the party
+## it means (the Map page's chips: the people ticked). Pure.
+func errand_willingness(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "", with_ids = null) -> Dictionary:
 	var out := {"ok": false, "why": "", "going": [], "refused": [], "delay_s": 0.0, "tone": "refused", "terms": sim.scavenge.errand_terms(), "loot_note": errand_note()}
 	var going: Array = []
 	var refused: Array = []
 	var sentences: Array = []
 	var seen := {}
+	var asked: Array = _ids_of(people) if with_ids == null else (with_ids as Array)    # (who else is going, for a soft reason of company)
 	for p in people:
 		if p == null or seen.has(String(p.id)):
 			continue
 		seen[String(p.id)] = true
-		var r := _reason_not(p, "go", "-", CANT_GO)
+		var r := _reason_not(p, "go", "-", CANT_GO, asked)
 		var hard := bool(r.hard)
 		var why := String(r.why)
 		var sentence := String(r.sentence)
@@ -855,12 +862,21 @@ func request_errand(people: Array, place_id: String, action: String = "loot", ve
 	return out
 
 
+func _ids_of(people: Array) -> Array:
+	var ids: Array = []
+	for p in people:
+		if p != null:
+			ids.append(String(p.id))
+	return ids
+
+
 ## The first soft refusal of those asked says its line aloud (a bubble over their head, as a verb's does).
 func _say_the_refusal(people: Array) -> void:
+	var asked := _ids_of(people)
 	for p in people:
 		if p == null:
 			continue
-		var r := _reason_not(p, "go", "-", CANT_GO)
+		var r := _reason_not(p, "go", "-", CANT_GO, asked)
 		if not r.ok and String(r.line) != "":
 			_say(p, "errand", false, String(r.line), "refused")
 			return
