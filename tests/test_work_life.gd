@@ -183,7 +183,8 @@ func test_builders_go_to_a_worn_wall_and_mend_it() -> void:
 		if walt.work == "mend":
 			saw_mend = true
 			check(walt.repair == seg, "he is mending the section he was sent to")
-			check(_at(walt, seg.center), "at its middle")
+			check(_at(walt, sim.repair_spot(seg)), "at the place on the yard side of it")
+			check(not sim.world.on_deck(walt.x, walt.y), "and not on the wall")
 			eq(walt.activity, "Mending the wrecked sedan", "and says so")
 			break
 	check(saw_mend, "Walt went to the worn wall and mended it")
@@ -289,8 +290,10 @@ func test_the_dead_at_the_wall_by_day_send_everybody_to_their_posts_and_ten_quie
 	z.stagger = 0.0
 	Helpers.run(sim, 2.0)    # 6 game minutes
 	check(sim.threat_by_day(), "six quiet minutes: still at the posts")
-	Helpers.run(sim, 2.0)    # 12 game minutes
-	check(not sim.threat_by_day(), "ten quiet minutes: the threat is over")
+	Helpers.run(sim, 8.0)    # 30 game minutes: ten real seconds at the normal speed
+	check(sim.threat_by_day(), "half an hour of quiet: still at the posts")
+	Helpers.run(sim, 7.0)    # 51 game minutes
+	check(not sim.threat_by_day(), "three quarters of an hour of quiet: the threat is over")
 	Helpers.run(sim, 45.0)
 	check(_everyone_at(sim, func(p): return Vector2(sim.jobs.goal_for(p).x, sim.jobs.goal_for(p).y)), "everybody has gone back to work")
 	check(not sim.world.on_deck(walt.x, walt.y), "Walt is off the wall")
@@ -370,7 +373,7 @@ func test_the_wall_crew_is_called_off_a_wall_when_the_dead_come_and_the_quiet_mi
 	z.state = "dead"
 	Helpers.run(sim, 1.0)
 	check(walt.repair == null, "and sent back to it only after the quiet minutes (3 minutes in)")
-	Helpers.run(sim, 4.0)
+	Helpers.run(sim, 16.0)
 	check(walt.repair == seg, "after them he goes back to the wall")
 	g.world.free()
 
@@ -566,3 +569,45 @@ func test_a_save_from_before_loads_and_the_threat_is_kept() -> void:
 	a.world.free()
 	b.world.free()
 	c.world.free()
+
+
+# ---------------------------------------------------------- mending from the yard, and the all-clear --
+
+func test_every_wall_piece_is_mended_from_open_ground_on_its_yard_side() -> void:
+	var g := _game()
+	var sim = g.sim
+	var checked := 0
+	for s in sim.segments:
+		if s.id >= 100:
+			continue
+		var spot: Vector2 = sim.repair_spot(s)
+		var i: int = floori(spot.y) * sim.world.W + floori(spot.x)
+		check(int(sim.world.solid_p[i]) == 0, "%s: the spot (%.1f, %.1f) is open ground" % [s.name, spot.x, spot.y])
+		check(not sim.world.on_deck(spot.x, spot.y), "%s: and not on a deck" % s.name)
+		check(spot.distance_to(s.center) <= 9.0, "%s: within reach of the piece (%.1f tiles)" % [s.name, spot.distance_to(s.center)])
+		match s.side:
+			"N":
+				check(spot.y > s.center.y, "%s: south of it, in the yard" % s.name)
+			"S":
+				check(spot.y < s.center.y, "%s: north of it, in the yard" % s.name)
+			"W":
+				check(spot.x > s.center.x, "%s: east of it, in the yard" % s.name)
+			"E":
+				check(spot.x < s.center.x, "%s: west of it, in the yard" % s.name)
+		checked += 1
+	check(checked >= 10, "the compound's pieces were all looked at (%d)" % checked)
+	g.world.free()
+
+
+func test_the_classic_start_still_mends_from_the_wall() -> void:
+	var g := Helpers.make(61, 1, 6)
+	var sim = g.sim
+	for s in sim.segments:
+		if s.id < 100:
+			near(sim.repair_spot(s).distance_to(s.center), 0.0, 0.0001, "%s: the classic start's mender stands where he always stood" % s.name)
+	g.world.free()
+
+
+func test_the_quiet_window_is_long_enough_to_see() -> void:
+	# ten game minutes were three seconds at the normal speed: the crew was back at work before anyone noticed it had been called
+	check(float(load("res://scripts/sim/sim.gd").THREAT_QUIET_MIN) * 60.0 / 3.0 / 60.0 >= 10.0, "at least ten real seconds at the normal speed (3 game minutes a second)")

@@ -731,6 +731,17 @@ func test_a_banner_for_the_dead_who_hear_and_one_for_a_friend_who_falls() -> voi
 	var scene := _open(main, 3, [{"pos": Vector2(14.5, 14.5), "kind": "walker", "state": "still"}])
 	var h = scene.hud_layer
 	_play(scene, 0.2)
+	# the scene is put back to where the test means it to be: asleep, 11 tiles from the shot, nobody hunting yet and no banner
+	# shown. This test failed now and then in a whole run (never alone): the wake-up of a dead man who stands about and the
+	# banner's own clock depend on what the earlier tests drew at random, so the state is not left to chance.
+	for z in scene.run.sim.zombies:
+		z.state = "still"
+		z.x = 14.5
+		z.y = 14.5
+		z.stagger = 1.0e6
+	scene._hunters = 0
+	scene._heard = false
+	scene._banner_t = -99.0
 	scene.run._noise(Vector2(5.5, 8.5))
 	scene.run.events.append({"type": "shot", "weapon": "rifle", "x": 5.5, "y": 8.5})
 	scene.tick(1.0 / 30.0)

@@ -67,8 +67,7 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 
 ### Known issues of round 16
 
-- **Menders stand on the wall:** every wall piece's centre is on a deck, so someone mending a worn wall by day is on it (they are working, but it is the wall). Mending from the yard side would need seats on the ground by each piece.
-- **Ten quiet game minutes is 3.3 real seconds at speed 1,** so after a day threat the crew goes back to work quickly.
+- **Fixed after round 16's first report:** a mender now stands on the yard side of the wall piece (the first open ground in from the scaffold, `Sim.repair_spot`; the classic start and the lots' street walls keep the old spot), and the all-clear after a day threat is 45 game minutes (15 real seconds at the normal speed) instead of 10.
 - **The pose reads weakly from behind** (hauling a crate, the rest mug, the nurse) and the hoe looks crude from the front. A real artist's frames would replace these.
 - For a crew of five only Hector is guaranteed a call without the radio desk (the first three authored callers who did not start).
 - The harness bot grows its crew to nine with tents first (`--beds`, off by default): a bigger crew faces bigger nights.

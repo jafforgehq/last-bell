@@ -64,7 +64,9 @@ const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vect
 ## Someone is at work, for `Person.work`, when they stand within WORK_REACH tiles of the spot.
 const COMPOUND := Rect2(20.0, 18.0, 44.0, 26.0)
 const THREAT_R := 16.0
-const THREAT_QUIET_MIN := 10.0
+## (45 game minutes is fifteen real seconds at the normal speed: long enough to see the crew hold its posts, short enough that
+## the day is not lost.)
+const THREAT_QUIET_MIN := 45.0
 const WORK_REACH := 0.6
 
 
@@ -667,7 +669,8 @@ func _goal_for(p: Person):
 		return duty
 	if p.repair != null:
 		var s: Segment = p.repair
-		return {"x": s.center.x, "y": s.center.y, "face": "N" if s.side == "S" else s.side, "what": "Mending the %s" % s.name.to_lower(), "work": "mend"}
+		var spot := repair_spot(s)
+		return {"x": spot.x, "y": spot.y, "face": "N" if s.side == "S" else s.side, "what": "Mending the %s" % s.name.to_lower(), "work": "mend"}
 	if posts_manned():
 		# (the lookout keeps the tower through a day under attack: the forecast, and the eyes on the road)
 		if phase == "day" and jobs.job_of(p) == "watch":
@@ -681,6 +684,41 @@ func _goal_for(p: Person):
 ## dead are still coming at the compound (`_dead_coming`: the dawn turns them back in its first moments, and the dead
 ## drifting off no longer attack), and a day under attack (`threat_by_day`) puts the crew at its posts as the bell
 ## does. The classic start has the old rule: the posts from the bell to the end of the dawn.
+## Where a person stands to mend a wall piece. In the settlement game by day it is on the yard side of the piece, off any
+## deck: the piece's own middle is on the walkway, and nobody is to stand on the wall unless the dead are at it. The nearest
+## open ground in from the piece (the scaffold's face under the walkway is shut ground, so it is the first open tile past it).
+## The classic start, and a piece made in the streets (a lot's wall, id 100 and over), keep the piece's middle.
+func repair_spot(s: Segment) -> Vector2:
+	if not recruits.small or s.id >= 100:
+		return s.center
+	var inner := Vector2.ZERO
+	match s.side:
+		"N":
+			inner = Vector2(0.0, 1.0)
+		"S":
+			inner = Vector2(0.0, -1.0)
+		"W":
+			inner = Vector2(1.0, 0.0)
+		"E":
+			inner = Vector2(-1.0, 0.0)
+	if inner == Vector2.ZERO:
+		return s.center
+	for k in range(1, 61):
+		var pt := s.center + inner * (0.25 * float(k))
+		var tx := floori(pt.x)
+		var ty := floori(pt.y)
+		if tx < 0 or ty < 0 or tx >= world.W or ty >= world.H:
+			break
+		if int(world.solid_p[ty * world.W + tx]) == 0 and not world.on_deck(pt.x, pt.y):
+			# a step clear of the edge, if that is still open ground
+			var far := pt + inner * 0.4
+			var fi: int = floori(far.y) * world.W + floori(far.x)
+			if fi >= 0 and fi < world.solid_p.size() and int(world.solid_p[fi]) == 0 and not world.on_deck(far.x, far.y):
+				return far
+			return pt
+	return s.center
+
+
 func posts_manned() -> bool:
 	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
 	if not recruits.small:
@@ -765,16 +803,16 @@ func _update_person(p: Person, dt: float) -> void:
 					p.path = [Vector2(goal.x, goal.y)]
 				p.path_i = 0
 			_follow(p, 3.0, dt)
-	if p.repair != null and not p.moving and Vector2(p.repair.center.x - p.x, p.repair.center.y - p.y).length() < 0.3:
+	if p.repair != null and not p.moving and (repair_spot(p.repair) - Vector2(p.x, p.y)).length() < 0.3:
 		var s: Segment = p.repair
 		p.activity = "Mending the %s" % s.name.to_lower()
 		p.hammer_t -= dt
 		if p.hammer_t <= 0.0:
 			p.hammer_t = 0.45
 			events.append({"type": "hammer", "x": p.x, "y": p.y})
-			var hx := s.center.x + (-0.8 if s.side == "W" else (0.8 if s.side == "E" else 0.0))
-			var hy := s.center.y - (0.8 if s.side == "N" else 0.0)
-			fx.hit_material(hx, hy, "metal")
+			# the blow lands a step in front of the mender, towards the wall (he stands on the yard side of it)
+			var toward := (s.center - Vector2(p.x, p.y)).normalized() if Vector2(p.x, p.y).distance_to(s.center) > 0.5 else Vector2.ZERO
+			fx.hit_material(p.x + toward.x * 0.7, p.y + toward.y * 0.7, "metal")
 		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.skills.Building)) * perf(p) * traits.mult(p, "repair"))
 		if done > 0.0:
 			var before_hp := s.hp
