@@ -48,6 +48,9 @@ var lure_until := 0.0
 ## Whom the wall crew (or a chore) has sent to which section (id to id): they are called back
 ## at the bell.
 var auto_jobs := {}
+## While the dead are at the wall by day (the settlement game, `sim.threat_by_day`), until when (sim.clock_min): the
+## crew is at its posts until ten game minutes after the last of them was seen coming. Kept up by the sim each step.
+var threat_until := 0.0
 ## Whether people with nothing to do mend a badly worn wall (the tutorial's lessons switch it off:
 ## nobody mends the wall unasked while the player is learning to ask). Not saved: whoever turns it
 ## off turns it off again.
@@ -66,6 +69,7 @@ func setup(s) -> void:
 func start() -> void:
 	lure_id = -1
 	lure_until = 0.0
+	threat_until = 0.0
 	forecast_day = 0
 	forecast_who = ""
 	auto_jobs.clear()
@@ -163,16 +167,17 @@ func repair_below() -> float:
 
 
 ## Once a second: by day the wall crew goes to the most worn section under its threshold, and
-## whoever is idle to one that is under half; by night they hold their posts, and whoever was
-## sent to a wall is called off it, as they are when the scrap is gone (a hammer with nothing to
-## pay for the blows is no work: they go back to their jobs).
+## whoever is idle to one that is under half; by night (and by day while the dead are at the wall,
+## `sim.threat_by_day`) they hold their posts, and whoever was sent to a wall is called off it, as
+## they are when the scrap is gone (a hammer with nothing to pay for the blows is no work: they go
+## back to their jobs).
 func _mend_walls() -> void:
 	# the sections somebody is mending (a person who is gone is not: they were never relieved)
 	var taken := {}
 	for q in sim.people:
 		if q.repair != null and not q.dead and not q.turned:
 			taken[q.repair.id] = true
-	if sim.phase != "day":
+	if sim.phase != "day" or sim.threat_by_day():
 		for p in sim.people:
 			call_back(p)
 		return
@@ -342,6 +347,7 @@ func save() -> Dictionary:
 	return {
 		"lure_id": lure_id,
 		"lure_until": lure_until,
+		"threat_until": threat_until,
 		"auto_jobs": auto_jobs.duplicate(),
 		"forecast_day": forecast_day,
 		"forecast_who": forecast_who,
@@ -352,6 +358,7 @@ func save() -> Dictionary:
 func load_state(d: Dictionary) -> void:
 	lure_id = int(d.get("lure_id", -1))
 	lure_until = float(d.get("lure_until", 0.0))
+	threat_until = float(d.get("threat_until", 0.0))
 	forecast_day = int(d.get("forecast_day", 0))
 	forecast_who = String(d.get("forecast_who", ""))
 	_t = float(d.get("t", 0.0))

@@ -1,6 +1,6 @@
 extends "res://tests/case.gd"
-## Round 6, the Build screen; round 15 made it a short list of buildings: the page where the buildings of the compound (nine
-## slips: the bunk house and the watchtower have two homes each, numbered) are listed with what each costs, why it cannot be
+## Round 6, the Build screen; round 15 made it a short list of buildings: the page where the buildings of the compound (eleven
+## slips: the bunk house, the tents and the watchtower have two homes each, numbered) are listed with what each costs, why it cannot be
 ## had now, how far along it is or that it stands, and, for the one that is chosen, what it gives, costs and where it goes (its
 ## home's name and why), and the reason it cannot be ordered now (not enough scrap, the most there may be, a building it
 ## needs first, the first of two not ordered yet) with its Build button off; a site shows how far along it is, who builds it
@@ -17,7 +17,7 @@ const TextTests := preload("res://tests/test_hud_text.gd")
 const Build := preload("res://scripts/sim/build.gd")
 
 const SIZES := [[700, 700], [980, 700], [1280, 800], [1920, 1080]]
-const SHORT := [[700, 480], [1280, 500], [980, 420]]    # (nine slips are 450 px tall: a window this short has to scroll them)
+const SHORT := [[700, 480], [1280, 500], [980, 420]]    # (eleven slips are 450 px tall: a window this short has to scroll them)
 
 
 ## The mouse put in a corner where no control is (a pointer left over a button by an earlier test would let its
@@ -91,15 +91,30 @@ func test_the_screen_has_a_slip_for_each_building_and_its_words() -> void:
 	var s = ctx.hud.build_screen
 	check(s != null, "it opens")
 	eq(s.rows.keys(), _plot_ids(ctx), "a slip for each building (each home of a building that has two), in the order of the data")
-	eq(s.rows.size(), 9, "nine: the seven buildings, the bunk house and the watchtower twice")
+	eq(s.rows.size(), 11, "eleven: the eight buildings, the bunk house, the tents and the watchtower twice")
 	var all := Kit.texts(s)
-	for t in ["Build", "BUILDINGS", "Salvage bench", "Greenhouse beds", "Bunk house 1 of 2", "Bunk house 2 of 2", "Watchtower 2 of 2", "Radio mast"]:
+	for t in ["Build", "BUILDINGS", "Salvage bench", "Greenhouse beds", "Bunk house 1 of 2", "Bunk house 2 of 2", "Tents 1 of 2", "Tents 2 of 2", "Watchtower 2 of 2", "Radio mast"]:
 		check(all.has(t), "shows '%s'" % t)
 	for id in s.rows:
 		check(not s.rows[id].tag.get_parent().visible, "%s: no tag for a kind of lot: nobody picks a plot" % id)
 	eq(s.close_button.text, "Close", "and the button at the foot")
 	check(ctx.hud.modal_open(), "the HUD calls it a modal")
 	eq(ctx.hud.build_hover, {"plot": "salvage_bench_home"}, "the chosen building's home is marked in the world from the start")
+	Kit.free_all(ctx)
+
+
+func test_the_tents_are_on_the_list_with_their_words_and_their_price() -> void:
+	var ctx := _open()
+	var s = ctx.hud.build_screen
+	check(s.rows.has("tents_home_1") and s.rows.has("tents_home_2"), "a slip for each of the two tents")
+	eq(Kit.texts(s.rows.tents_home_1.status), ["8 scrap, 6 builder-hours"], "the first tent: what it costs")
+	check(not Kit.texts(s.rows.tents_home_2.status).is_empty() and String(Kit.texts(s.rows.tents_home_2.status)[0]) != "Built", "the second says what it needs: %s" % str(Kit.texts(s.rows.tents_home_2.status)))
+	s.select_plot("tents_home_1")
+	var all := Kit.texts(s)
+	check(all.has("Two beds. Cheap, and cold in winter."), "the blurb is the plain one: %s" % str(all.filter(func(t): return String(t).contains("beds"))))
+	_stand(ctx, "tents_home_1", "tents")
+	Kit.update(ctx)
+	eq(Kit.texts(s.housing_label), ["Beds for 8 people"], "a tent adds two beds to the count")
 	Kit.free_all(ctx)
 
 

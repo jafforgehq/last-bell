@@ -593,6 +593,82 @@ func test_the_page_says_what_the_party_will_be_like_on_the_road() -> void:
 	Kit.free_all(ctx)
 
 
+# ------------------------------------------------- what a trip leaves at home (round 16) --
+## Under the party, in amber, what the trip leaves empty at home (the radio desk, the lookout post, the workbench: in the
+## order of what they cost) and, when few are left, how many stay to hold the yard. It informs and never stops Go.
+
+func test_the_page_says_what_the_trip_leaves_empty_at_home() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	check(board.leave_label.visible, "the line is there")
+	eq(board.leave_label.text, "This leaves the Radio desk empty. 2 stay to hold the yard.", "Ruth alone takes the desk; Dez and Marcus stay")
+	board.toggle_member(_person(ctx, "dez"))
+	eq(board.leave_label.text, "This leaves the Radio desk and the Workbench empty. 1 stays to hold the yard.", "with Dez the bench too, in the order of what they cost")
+	board.toggle_member(_person(ctx, "marcus"))
+	eq(board.leave_label.text, "This leaves the Radio desk, the Lookout post and the Workbench empty. Nobody stays to hold the yard.", "all three: the lookout post as well, and nobody stays")
+	board.toggle_member(_person(ctx, "ruth"))
+	eq(board.leave_label.text, "This leaves the Lookout post and the Workbench empty. 1 stays to hold the yard.", "and the line follows the party")
+	Kit.free_all(ctx)
+
+
+func test_the_line_is_amber_informs_and_never_stops_go() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	board.toggle_member(_person(ctx, "dez"))
+	board.toggle_member(_person(ctx, "marcus"))
+	board.select_place("houses")
+	check(board.leave_label.visible, "the line is up while nobody stays")
+	eq(board.leave_label.get_theme_color("font_color"), TownBoard.WHY_INK, "in the amber ink of the page's reasons")
+	check(not board.go_button.disabled, "and Go is on")
+	eq(board.reason_for("loot"), "", "with no reason against it")
+	check(board.act("loot"), "the party goes all the same")
+	check(ctx.sim.scavenge.parties.size() == 1, "it is out")
+	Kit.free_all(ctx)
+
+
+func test_a_crew_of_five_sending_three_says_two_stay() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	_bring_one(ctx)
+	_bring_one(ctx)    # Ana and Walt: the infirmary and the builders are held
+	board.refresh(true)
+	eq(ctx.sim.people.size(), 5, "a crew of five")
+	board.toggle_member(_person(ctx, "dez"))
+	board.toggle_member(_person(ctx, "marcus"))
+	eq(board.party.size(), 3, "three go")
+	eq(board.leave_label.text, "This leaves the Radio desk, the Lookout post and the Workbench empty. 2 stay to hold the yard.", "two stay home")
+	Kit.free_all(ctx)
+
+
+func test_when_the_trip_leaves_nothing_empty_and_many_stay_the_line_is_not_there() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "ruth")
+	var board = _board(ctx)
+	for i in 4:
+		ctx.sim.add_person(ctx.sim.recruits.make_def(i))    # strangers with no job
+	var stranger = ctx.sim.people[ctx.sim.people.size() - 1]
+	board.refresh(true)
+	board.toggle_member(stranger)
+	board.toggle_member(_person(ctx, "ruth"))
+	eq(board.party, [stranger], "a stranger with no job is going alone")
+	check(not board.leave_label.visible, "nothing is left empty and six stay: nothing to say: '%s'" % board.leave_label.text)
+	Kit.free_all(ctx)
+
+
+func test_the_line_wraps_and_the_page_still_fits_at_every_size() -> void:
+	for size in SIZES + SHORT:
+		var ctx: Dictionary = await _settled(size[0], size[1])
+		var board = _board(ctx)
+		board.toggle_member(_person(ctx, "dez"))
+		board.toggle_member(_person(ctx, "marcus"))
+		await Kit.settle()
+		check(board.leave_label.is_visible_in_tree(), "%d x %d: the line is on the page" % [size[0], size[1]])
+		var win := Rect2(0, 0, size[0], size[1])
+		check(win.encloses(Kit.rect(board.panel).grow(-0.5)), "%d x %d: the page is in the window" % [size[0], size[1]])
+		var r: Rect2 = board.leave_label.get_global_rect()
+		check(r.size.x > 100.0 and r.size.y >= 12.0, "%d x %d: the line has room: %s" % [size[0], size[1], str(r)])
+		Kit.free_all(ctx)
+
+
 func test_when_nobody_is_free_the_page_says_so_and_nothing_can_be_sent() -> void:
 	var ctx := _ctx()
 	for p in ctx.sim.people:

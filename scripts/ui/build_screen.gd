@@ -285,7 +285,7 @@ func _build() -> void:
 	stock.add_child(stock_label)
 	counts.add_child(stock)
 	housing_label = hud._label("", Fonts.cond(700), 16, hud.PAPER_INK)
-	housing_label.tooltip_text = "The people the compound has beds for: the school's own and the bunk houses'"
+	housing_label.tooltip_text = "The people the compound has beds for: the school's own, the bunk houses' and the tents'"
 	housing_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	counts.add_child(housing_label)
 	facts.add_child(counts)

@@ -12,6 +12,15 @@
 ## then (by night) the post, then (by day) the station's seat. Orders end when released and
 ## the person goes back to their job.
 ##
+## WORK LIFE (round 16, the settlement game only: a small start, `sim.recruits.small`; the classic
+## start keeps what it had). By day people are at work, not on the walls: the Builders build at the
+## site, mend a worn wall (tactics) or, with neither to do, sort materials at the builders' yard
+## (`idle_pos`); a person with no job rests at a rest spot (a picnic table, the fire), `rest` in
+## stations.json, one spot each in turn. At the bell they hold their posts, and so they do by day when
+## the dead come to the wall (`sim.threat_by_day`), the lookout aside, who stays at the tower. Every
+## goal carries the `work` word of what the person does there (the station's `work`; "mend" for a
+## wall, "haul" for the yard, "rest"): the rules set `Person.work` from it when they stand at the spot.
+##
 ## Data: assets/data/stations.json and assets/data/posts.json; the six starting people's
 ## default job and post are `station` and `post_id` in their roster entries. Buildings (build.gd)
 ## change the stations: a station with `requires` exists only while that building stands (it is
@@ -59,6 +68,9 @@ var _station_by_id := {}
 var _now: Array = []
 var _now_by_id := {}
 var _now_version := -1
+var _now_settled := false
+## Where the people with no job rest by day: {"what", "work", "spots": [{"pos", "face"}]}.
+var _rest := {"what": "Resting", "work": "rest", "spots": []}
 var _posts: Array = []
 var _base_posts: Array = []
 var _post_by_id := {}
@@ -78,6 +90,8 @@ func _load_data() -> void:
 		for r in list:
 			var st: Dictionary = r.duplicate(true)
 			st["pos"] = Vector2(float(r.pos[0]), float(r.pos[1]))
+			if r.has("idle_pos"):
+				st["idle_pos"] = Vector2(float(r.idle_pos[0]), float(r.idle_pos[1]))
 			st["seats"] = int(r.get("seats", 1))
 			st["skill"] = String(r.get("skill", ""))
 			st["settings"] = r.get("settings", {})
@@ -90,8 +104,16 @@ func _load_data() -> void:
 			po["pos"] = at
 			po["face"] = _face_of(at)
 			posts.append(po)
-		_cache[key] = {"stations": stations, "posts": posts}
+		var rest := {"what": "Resting", "work": "rest", "spots": []}
+		var rr = raw.get("rest", {}) if raw is Dictionary else {}
+		if rr is Dictionary:
+			rest.what = String(rr.get("what", "Resting"))
+			rest.work = String(rr.get("work", "rest"))
+			for sp in rr.get("spots", []):
+				rest.spots.append({"pos": Vector2(float(sp.pos[0]), float(sp.pos[1])), "face": String(sp.get("face", ""))})
+		_cache[key] = {"stations": stations, "posts": posts, "rest": rest}
 	var c: Dictionary = _cache[key]
+	_rest = c.rest
 	_stations = c.stations
 	_posts = c.posts
 	_base_posts = c.posts
@@ -174,9 +196,11 @@ func station(id: String) -> Dictionary:
 
 func _refresh_now() -> void:
 	var v: int = sim.build.version if sim != null and sim.get("build") != null else 0
-	if v == _now_version and not _now.is_empty():
+	var settled := _settled()
+	if v == _now_version and settled == _now_settled and not _now.is_empty():
 		return
 	_now_version = v
+	_now_settled = settled
 	_now.clear()
 	_now_by_id.clear()
 	for st in _stations:
@@ -190,6 +214,10 @@ func _refresh_now() -> void:
 			var at: Vector2 = sim.build.spot_of(req)
 			if at != Vector2.ZERO:
 				e["pos"] = at
+		if settled and st.has("idle_pos"):
+			# the settlement's Builders work in the yard when there is nothing to build or mend: that is their station
+			e["pos"] = st.idle_pos
+			e["where"] = String(st.get("idle_where", st.get("where", "")))
 		_now_by_id[id] = e
 		if open:
 			_now.append(e)
@@ -346,9 +374,15 @@ func _able(p) -> bool:
 	return not (p.dead or p.turned or p.downed) and p.away == null and not sim.morale.breakdown(p)
 
 
-## By day: until the bell (or until the night proper).
+## Whether the settlement rules of work life are in force (a small start).
+func _settled() -> bool:
+	return sim != null and sim.get("recruits") != null and bool(sim.recruits.small)
+
+
+## By day: until the bell (or until the night proper), and not while the dead are at the wall by day (the
+## crew is at its posts then, `sim.posts_manned`).
 func _day() -> bool:
-	return not (sim.phase == "night" or sim.phase == "dawn" or (sim.phase == "dusk" and sim.bell_rung))
+	return not sim.posts_manned()
 
 
 func _free(p) -> bool:
@@ -361,7 +395,8 @@ func _free(p) -> bool:
 ## The modules whose work a station is ask this.
 func working(id: String) -> Array:
 	var out: Array = []
-	if not _day():
+	# (the lookout keeps the tower through a day under attack, and goes on watching)
+	if not _day() and not (id == "watch" and sim.phase == "day"):
 		return out
 	for p in crew_of(id):
 		if _free(p) and not p.moving and Vector2(p.x, p.y).distance_to(seat_pos(p)) <= AT_STATION:
@@ -477,17 +512,60 @@ func post_goal(p) -> Dictionary:
 	return {"x": po.pos.x, "y": po.pos.y, "face": String(po.face), "what": String(po.get("what", po.name))}
 
 
-## The day goal (after any order, treatment or trip): stand at the seat; with no job, stand at ease.
+## The day goal (after any order, treatment or trip): stand at the seat (with `work`, the word of what they do
+## there); with no job, rest at a rest spot in the settlement game and stand at ease in the classic one.
 func goal_for(p) -> Dictionary:
 	var id := job_of(p)
 	if id == "":
-		return {"x": p.x, "y": p.y, "face": "", "what": "At ease"}
+		return rest_goal(p)
 	var st := station(id)
 	var at := seat_pos(p)
 	var what := String(st.get("what", st.name))
-	if id == "builders" and not sim.build.active_site().is_empty():
-		what = "Building the %s" % String(sim.build.building(String(sim.build.active_site().site.building)).name).to_lower()
-	return {"x": at.x, "y": at.y, "face": "N" if id == "radio" else "", "what": what}
+	var work := String(st.get("work", ""))
+	if id == "builders":
+		if not sim.build.active_site().is_empty():
+			what = "Building the %s" % String(sim.build.building(String(sim.build.active_site().site.building)).name).to_lower()
+		elif _settled():
+			# nothing to build and (tactics) nothing to mend: sort materials at the yard
+			what = String(st.get("idle_what", what))
+			work = String(st.get("idle_work", ""))
+		else:
+			work = ""    # the classic start's Builders walk the wall
+	return {"x": at.x, "y": at.y, "face": "N" if id == "radio" else "", "what": what, "work": work}
+
+
+## What someone with no job does by day: rests at their rest spot (the settlement game: the picnic tables and the
+## fire; the first without a job takes the first spot, and so on), or stands where they are (the classic start).
+func rest_goal(p) -> Dictionary:
+	if not _settled() or _rest.spots.is_empty():
+		return {"x": p.x, "y": p.y, "face": "", "what": "At ease"}
+	var spot := rest_spot(p)
+	var at: Vector2 = spot.pos
+	return {"x": at.x, "y": at.y, "face": String(spot.face), "what": String(_rest.what), "work": String(_rest.work)}
+
+
+## The rest spot of someone with no job: the spots in turn, in the order of the crew list among those with no job
+## (one who is away on a trip keeps their turn).
+func rest_spot(p) -> Dictionary:
+	if _rest.spots.is_empty():
+		return {}
+	var rank := 0
+	for q in sim.people:
+		if q == p:
+			break
+		if not (q.dead or q.turned) and job_of(q) == "":
+			rank += 1
+	return _rest.spots[rank % _rest.spots.size()]
+
+
+## The rest spots, as the data has them: [{"pos": Vector2, "face"}].
+func rest_spots() -> Array:
+	return _rest.spots
+
+
+## What the person panel and the roster say a person with no job does by day.
+func no_job_text() -> String:
+	return "rest in the yard" if _settled() else "stand at ease"
 
 
 # ------------------------------------------------------------- auto-assign --
@@ -550,7 +628,9 @@ func update(_dt: float) -> void:
 	var h: float = sim.hour
 	if h >= RADIO_ALERT_HOUR and h < 12.0 and int(_alert_day.radio) != sim.day and operator("radio") == null:
 		_alert_day.radio = sim.day
-		sim.alert("job-radio", "info", "Nobody is at the radio desk", "There will be no call at noon unless someone sits there", Vector2(station("radio").pos), ALERT_TTL)
+		# (round 16: the first survivors' calls come with the desk empty; the day's news and a stranger's call do not)
+		var told := "The next survivor's call will still come, but no news unless someone sits there" if sim.recruits.call_due() and sim.recruits.call_guaranteed() else "There will be no call at noon unless someone sits there"
+		sim.alert("job-radio", "info", "Nobody is at the radio desk", told, Vector2(station("radio").pos), ALERT_TTL)
 	# half an hour before the forecast (16:30 in Autumn, when it comes at 17:00)
 	var forecast_at: float = sim.seasons.dusk_hour() - 2.0    # (tactics.forecast_hour)
 	if h >= forecast_at - 0.5 and h < forecast_at and int(_alert_day.watch) != sim.day and operator("watch") == null:

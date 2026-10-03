@@ -93,7 +93,7 @@ func _reaches_gate(g: Dictionary, to: Vector2) -> bool:
 
 func test_the_homes_are_guarded_by_the_homes_test() -> void:
 	var g := _game()
-	eq(g.sim.build.plots().size(), 9, "nine homes: the guard of where they lie is tests/test_build_homes.gd")
+	eq(g.sim.build.plots().size(), 11, "eleven homes: the guard of where they lie is tests/test_build_homes.gd")
 	g.world.free()
 
 
@@ -168,7 +168,7 @@ func test_every_building_on_each_of_its_homes_leaves_the_crews_places_and_the_la
 			eq(problems, [], "%s on %s: %s" % [String(b.id), String(pl.id), "; ".join(problems)])
 			check(sim.build.demolish(String(pl.id)), "and it comes down again")
 			eq(g.world.solid_p, base, "%s on %s: the ground is as it was after it comes down" % [String(b.id), String(pl.id)])
-	eq(stood, 9, "every home was tried")
+	eq(stood, 11, "every home was tried")
 	g.world.free()
 
 
@@ -291,7 +291,10 @@ func _picture_problems(props: Array, what: String) -> Array:
 				out.append("%s: a prop has no %s" % [what, key])
 		if not pr.has("f") or not pr.has("w") or not pr.has("h"):
 			continue
-		for file in [String(pr.f), String(pr.get("e", pr.f))]:
+		var files: Array = [String(pr.f), String(pr.get("e", pr.f))]
+		for alt in pr.get("by_n", []):
+			files.append(String(alt))
+		for file in files:
 			if not ResourceLoader.exists("res://assets/objects/%s.png" % file):
 				out.append("%s: there is no picture %s" % [what, file])
 		if float(pr.w) <= 0.0 or float(pr.h) <= 0.0:
@@ -486,6 +489,24 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	for c in n._flat.get_children():
 		flat += 1
 	eq(flat, 4, "the four cots lie on the ground")
+	g.world.free()
+
+
+func test_the_two_tents_are_drawn_in_two_colours_one_for_each_home() -> void:
+	var g := _game()
+	var sim = g.sim
+	var h := _node(g)
+	var n = h.node
+	_stand(sim, "tents_home_1", "tents")
+	n.update(0.0)
+	var one: Array = n.files()
+	check("143_tent" in one and not ("144_tent" in one), "the first home has the orange tent: %s" % str(one))
+	_stand(sim, "tents_home_2", "tents")
+	n.update(0.0)
+	var two: Array = n.files()
+	check("143_tent" in two and "144_tent" in two, "the second home has the green one: %s" % str(two))
+	eq(two.count("143_tent"), 1, "one orange tent")
+	eq(two.count("144_tent"), 1, "one green tent")
 	g.world.free()
 
 

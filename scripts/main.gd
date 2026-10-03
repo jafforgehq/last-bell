@@ -453,8 +453,18 @@ func _ready() -> void:
 func _add_pawn(e, is_zombie: bool, key: String) -> void:
 	var n := PawnNode.new()
 	n.setup(e, is_zombie, data, key)
+	if not is_zombie:
+		n.on_work_strike = _on_work_strike
 	entities.add_child(n)
 	pawn_nodes[e] = n
+
+
+## A tool lands in the hands of a person drawn at work (scripts/render/work_anim.gd): a small tap for the few at the bench near
+## the camera. The builders' and the wall crew's hammering has its own sound from the rules' events, and the rest are quiet.
+func _on_work_strike(word: String, x: float, y: float) -> void:
+	if sound == null or word != "bench" or Vector2(x, y).distance_to(cam_center) > 16.0:
+		return
+	sound.play("hammer", 0.2 * _vol_at(x, y), 0.15, 1.35)
 
 
 ## The node of a person. The six survivors have baked bodies; anyone else (a recruit who came over the radio, see
@@ -1833,6 +1843,16 @@ func _parse_args() -> void:
 						if p.id == id:
 							chosen.append(p)
 				select_people(chosen)
+			"work":
+				# --work=<id>:<word>[@seconds] shows that person at that work (a pose, whatever the rules have them at: ana:hammer);
+				# with @seconds the pose holds that moment of its loop (a still of one stroke); without, it moves
+				var wspec := v.split(":")
+				if wspec.size() == 2:
+					var wt := wspec[1].split("@")
+					for p in sim.people:
+						if p.id == wspec[0] and pawn_nodes.has(p):
+							pawn_nodes[p].work_stage = wt[0]
+							pawn_nodes[p].work_stage_t = float(wt[1]) if wt.size() > 1 else -1.0
 			"box":
 				# --box=x0,y0,x1,y1 (tiles) shows a selection box being dragged over that part of the yard, as a screenshot
 				# of it (after --cam, which fixes where the tiles are on the screen)

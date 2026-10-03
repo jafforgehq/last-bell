@@ -7,7 +7,7 @@
 
 | Thing | State |
 | --- | --- |
-| Game | Rounds 0 to 15 are built. **Nobody has played rounds 11 to 15 by hand** (tests, screenshots, a film of a trip and the bot only). You played up to about round 10. |
+| Game | Rounds 0 to 16 are built. **Nobody has played rounds 11 to 16 by hand** (tests, screenshots, a film of a trip and the bot only). You played up to about round 10. |
 | Git | `main` has two local commits that are **not pushed**: `758963b` (the audio fix that works) and `201bd8c` (round 15). GitHub's `main` is at `05e1113` (rounds 7 to 14 and the first, failed, audio fix). |
 | Tests | **2171 passed, 0 failed** on `201bd8c`. |
 | itch (live) | Upload id 19525431 (2026-10-02 21:33): rounds 5 to 14 **with the working audio fix**, the louder sounds and the music. Round 15 is **not** on itch yet. |
@@ -41,6 +41,7 @@ Keys: **G** Town Board, **N** Build screen, **J** Duty roster, **M** workshop, *
 | 13 | **Vehicles and fuel**: cars, pickups, vans, buses; a city across the river reachable only by vehicle | `scripts/sim/vehicles.gd`, `assets/data/vehicles.json`, town 160x70 |
 | 14 | **Take control**: play a trip yourself on a generated map of the place | `scripts/raid/` (see the file map) |
 | audio | Music + web-audio fix + sound levels (2026-10-02, committed, on itch) | section 4 |
+| 16 | **People at work** (2026-10-03): by day nobody stands on a wall but the Lookout (Builders with nothing to build sort materials in a yard, the jobless rest at the picnic tables; a day threat sends everyone to posts and ten quiet minutes send them back); a pose, a tool and small effects for every job (`scripts/render/work_anim.gd`, `tools/make_tools.py`); the first callers need no one at the radio desk; a crew-load strip ("Seats 5 of 11") and a trip warning; tents (2 beds each); a crew of five is the default start | plan `docs/superpowers/plans/2026-10-03-round-16.md`; `scripts/sim/crew_load.gd` |
 | 15 | **The yard in motion**: drag-box select; trips by car are real (walk to the doors, doors open, car out through a sliding vehicle gate and off the map, back, U-turn and reverse into the bay, doors open, people out); a motor pool inside the base; car doors cut from the car pictures and car sounds; each building has its own home and the Build screen is a list of buildings | plan `docs/superpowers/plans/2026-10-02-round-15.md`; `scripts/sim/convoy.gd`, `scripts/render/vehicle_actor.gd`, `gate_node.gd`, `assets/data/motor_pool.json`, `tools/make_motor_pool.py` + `check_motor_pool.py`, `tools/make_car_doors.py`, `scripts/sim/build.gd` homes |
 
 Not built yet (from the roadmap, `docs/superpowers/roadmap.md`, which is only current to round 10): blueprints and research, traders and raiders as events, power and fuel for the base (the fuel in round 13 is for cars), defence variety (traps, lures), the convoy ending where only some leave, a dog.
@@ -63,6 +64,14 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 - **Verified by machines:** the full test suite (rules, UI layout, saves, data), the balance harness (below), screenshots of the screens, a Web Audio probe of the web build (silent before the fix).
 - **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the box select, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
 - **Process slips on record:** two `rm` calls on scratch files (the rule is "delete only via `~/.Trash`"); an earlier `pkill -f Godot` killed your open editor (never again).
+
+### Known issues of round 16
+
+- **Menders stand on the wall:** every wall piece's centre is on a deck, so someone mending a worn wall by day is on it (they are working, but it is the wall). Mending from the yard side would need seats on the ground by each piece.
+- **Ten quiet game minutes is 3.3 real seconds at speed 1,** so after a day threat the crew goes back to work quickly.
+- **The pose reads weakly from behind** (hauling a crate, the rest mug, the nurse) and the hoe looks crude from the front. A real artist's frames would replace these.
+- For a crew of five only Hector is guaranteed a call without the radio desk (the first three authored callers who did not start).
+- The harness bot grows its crew to nine with tents first (`--beds`, off by default): a bigger crew faces bigger nights.
 
 ### Known issues of round 15 (found by review and the film, not fixed)
 
@@ -90,6 +99,7 @@ Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standa
 - The bot's first use of cars (3 to 4 people by van to far places) lost games on days 16 to 21; sending 2 and only from 3 hours of road fixed it. That was the bot's policy, not the cars.
 - **Round 15 (final tree, same bot, 8 games per seed):** settlement game seeds 1 and 9: **2/8 and 2/8 wins, medians 23.5 and 25** against 2/8 and 3/8, medians 26.5 and 26.5 before round 15: a little lower, within the noise of 8 games (the car trips cost about 71 game minutes each, the building homes moved the salvage bench). Classic start, informed, seed 9: 4/8 against 5/8, median 30 both.
 - **Crew size (2026-10-02, after you said three felt low):** the New game screen offers Small crew (3), **Crew of five (the default for a new player)** and Full crew (6, the old yard). Harness, informed, seeds 1 and 9 together (16 games each): crew 3: 4 wins, medians 23.5 and 25; crew 4: 3 wins, 23 and 27.5; crew 5: 4 wins, 23.5 and 25.5. The nights scale with the crew, so the size changes how much there is to do, not how hard it is. (A prefs file that remembered crew 3 keeps showing 3 until you click another card.)
+- **Round 16 (informed bot, crew 5, seeds 1, 9, 21 and 40, 8 games each = 32):** mean day reached 23.4 against 23.7 before; crew sizes identical (never above 6; the bot builds no tents). **Wins: 0 of 32 against 6 of 32.** The games that reach night 30 are few (5 in each arm, 3 of them survived it before and none now). A null perturbation (one extra random draw) takes the same bot from 4 wins to 2, so this may be noise, but it is not proven: if wins matter, run more seeds before trusting round 16's balance, or look at the Big Night (the dawn and day-threat rules are the suspects; switching all three round-16 rules off reproduces the old numbers exactly).
 - **Classic start** (six people): identical to before round 7 up to round 14. **Round 15's map edits (the vehicle gate, the apron, the cleared street lane and the removed wreck) changed it a little**: default policy, 8 games seed 1, median day 17 -> 20.5 (0 wins both). An ablation with the old `map.json` and `dressing.json` restores the old numbers exactly, so it is the map, not the rules. It is easier, not harder; nobody plays the classic start to win, but the tutorial and the Full crew choice use it.
 - **Campaign:** on Standard the bot dies in Autumn; on Story it finishes in 3 of 8. It needs a human's judgement.
 - **Known balance gaps:** outposts are usually overrun in the harness (the policy never posts a garrison); the Campaign is not tuned for people.
@@ -142,6 +152,8 @@ Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full d
 - Before any paid release: a rights audit of every asset (sounds, fonts, images, AI-made pictures, with the AI-content disclosure Steam asks for) and a trademark check of the name.
 
 ## 9. What to do next (suggested order)
+
+0. **Twenty more ideas** for the base, management and building are in `docs/superpowers/ideas-2026-10-03-base-and-management.md` (the author's picks marked: an inner wall, a kitchen, sanitation, a timetable, things going wrong inside, tiers of the settlement). The eight earlier ones (the gate as the heart of the night, fuel for the base, traps, upgrades, road events, territory, a garage, a heat map) are in the 2026-10-02 reply and `docs/superpowers/roadmap.md`'s reserve list.
 
 1. **Finish the audio work** (section 4): confirm the web probe and the suite, commit, re-export, re-upload to itch, then listen.
 2. **Playtest rounds 11 to 14 by hand** (checklist in section 5) and write down what is wrong or boring. This matters more than anything the bot says.

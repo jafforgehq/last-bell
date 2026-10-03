@@ -271,6 +271,7 @@ func _radial_texture() -> Texture2D:
 
 func _add_pawn(e, is_zombie: bool, key: String) -> void:
 	var n := PawnNode.new()
+	n.work_poses = false    # (a trip played by hand: the base's work words are not its rules')
 	n.setup(e, is_zombie, data, key)
 	entities.add_child(n)
 	pawn_nodes[e] = n

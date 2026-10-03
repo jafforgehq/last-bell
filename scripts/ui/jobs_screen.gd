@@ -810,7 +810,7 @@ func _job_tip(p, st: Dictionary) -> String:
 	if not can_assign(p):
 		return "%s cannot be given a job" % p.first
 	if st.is_empty():
-		return "Day job for %s: none. They stand at ease by day.\nClick to give them one." % p.first
+		return "Day job for %s: none. They %s by day.\nClick to give them one." % [p.first, jobs.no_job_text()]
 	return "Day job for %s: %s (%s)\n%s\nClick to change it." % [p.first, String(st.name), String(st.get("where", "")), hud._wrap(String(st.get("blurb", "")))]
 
 
@@ -917,7 +917,7 @@ func open_job_list(p) -> void:
 		var note := "current" if current else ("full" if left <= 0 else "%d left" % left)
 		entries.append({"id": id, "icon": String(st.get("icon", "")), "text": String(st.name), "note": note, "disabled": left <= 0 and not current, "current": current,
 			"tip": "%s (%s)\n%s" % [String(st.name), String(st.get("where", "")), hud._wrap(String(st.get("blurb", "")))] if left > 0 or current else "No free seat at the %s: %s" % [String(st.name), _names_of(jobs.crew_of(id))]})
-	entries.append({"id": "", "icon": "", "text": "No job", "note": "current" if have == "" else "", "disabled": false, "current": have == "", "tip": "No day job: they stand at ease by day"})
+	entries.append({"id": "", "icon": "", "text": "No job", "note": "current" if have == "" else "", "disabled": false, "current": have == "", "tip": "No day job: they %s by day" % jobs.no_job_text()})
 	_open_list("job", p, rows[p.id].job, "Day job for %s" % p.first, entries)
 
 

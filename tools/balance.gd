@@ -28,6 +28,8 @@
 ##   --nolots         the informed policy does not claim lots or wall the streets (to see what they change)
 ##   --campaign       play the long game of four seasons (--days=102 plays it through)
 ##   --nobuild        the informed policy does not build (to see what the buildings change)
+##   --beds           the informed policy puts tents (and the bunk house) first when the school's beds are full (off by default: the numbers
+##                    of before round 16, which built the bunk house last and never got to the tents)
 ##   --build-order=a,b  the informed policy builds only these, in this order (building ids), to see what one building is worth
 ##   --nostory        play with the storyteller off (no card at noon, no assembly at dawn), to see
 ##                    what the radio changes; by default it is on and the policy answers each card
@@ -63,6 +65,8 @@ static var story_on := true
 ## The informed policy builds (see --nobuild), and what, in what order, if --build-order says (else BUILD_ORDER).
 static var build_on := true
 static var build_order_override: Array = []
+## The informed policy builds beds first when the crew is at the cap (see --beds; off by default so the numbers match earlier rounds: a bot with a crew of nine against nights scaled for nine fares worse).
+static var beds_on := false
 ## How many people a game starts with (see --crew).
 static var crew_start := 6
 ## Play the long game of four seasons (see --campaign; --days=102 plays it through).
@@ -111,6 +115,9 @@ class Policy:
 	## 15; the first free one) (it saves up for the next one rather than skipping ahead). While a site is up the Builders get a hand
 	## more, and the Salvage station, once there is one, gets people while the scrap is short (under SALVAGE_BELOW).
 	const BUILD_ORDER := ["salvage_bench", "greenhouse", "workshop", "floodlights", "watchtower", "radio_mast", "bunk_house"]
+	## Beds first (the settlement game): when the school is full and a caller is waiting, the next of these that has a home
+	## free goes up before anything else (a tent is cheap: eight scrap), as soon as it can be paid with BUILD_KEEP to spare.
+	const BED_ORDER := ["tents", "bunk_house"]
 	const BUILD_FROM_DAY := 2
 	const BUILD_KEEP := 12.0
 	const SALVAGE_BELOW := 40.0
@@ -177,6 +184,8 @@ class Policy:
 	## Builds (and orders them): see BUILD_ORDER (`build_order`, when not empty, is used instead: --build-order).
 	var builds := false
 	var build_order: Array = []
+	## Beds first when the school is full and a caller is waiting (BED_ORDER; --beds switches it on).
+	var beds_first := true
 	var _build_day := 0
 	## The radio hour of a small start: who was put at the desk for it, and what they were doing.
 	var _radio_day := 0
@@ -881,6 +890,19 @@ class Policy:
 		var order: Array = build_order if not build_order.is_empty() else BUILD_ORDER
 		if sim.lots.on and not sim.lots.claimed_on.is_empty():
 			order = order + RING_ORDER
+		# the crew is at the cap and someone is waiting to call: beds before anything else
+		if beds_first and sim.recruits.small and sim.recruits.housing_free() < 1 and (not sim.recruits.queue.is_empty() or sim.recruits.generated < sim.recruits.MAX_GENERATED):
+			for id in BED_ORDER:
+				var home: String = sim.build.home_for(String(id))
+				if home == "":
+					continue
+				var b: Dictionary = sim.build.building(String(id))
+				if float(sim.stock.scrap) < float(b.scrap) + BUILD_KEEP:
+					return
+				if sim.build.why_not(home, String(id)) == "" and sim.build.order(home, String(id)):
+					builds_ordered += 1
+					_note("orders the %s at %s (the beds are full)" % [String(b.name).to_lower(), String(sim.build.plot(home).name).to_lower()])
+				return
 		for id in order:
 			if String(id) in RING_ORDER:
 				# ring buildings may stand more than once: one of each is enough to begin with
@@ -941,6 +963,7 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	policy.lots_enabled = lots_on
 	policy.vehicles_enabled = vehicles_on
 	policy.build_order = build_order_override
+	policy.beds_first = beds_on
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
 	var rows: Array = [_row(sim)]
@@ -1227,6 +1250,8 @@ func _run() -> void:
 			story_on = false
 		elif kv[0] == "nobuild":
 			build_on = false
+		elif kv[0] == "beds":
+			beds_on = true
 		elif kv[0] == "crew" and kv.size() > 1:
 			crew_start = clampi(int(kv[1]), 3, 6)
 		elif kv[0] == "campaign":
@@ -1324,6 +1349,8 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--nostory")
 		if not build_on:
 			args.append("--nobuild")
+		if beds_on:
+			args.append("--beds")
 		if crew_start != 6:
 			args.append("--crew=%d" % crew_start)
 		if campaign:

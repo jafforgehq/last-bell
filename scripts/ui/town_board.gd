@@ -40,6 +40,7 @@ const Kit := preload("res://scripts/ui/menu_kit.gd")
 const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
 const Map := preload("res://scripts/ui/town_map.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
+const CrewLoad := preload("res://scripts/sim/crew_load.gd")
 
 ## Emitted once, when the page is gone (a party sent, or closed).
 signal closed
@@ -108,6 +109,8 @@ var legend: Control
 var card: PanelContainer
 var party_box: VBoxContainer
 var chip_flow: HFlowContainer
+## Round 16: under the party, what the trip leaves empty at home and how many hold the yard (informs, never stops Go).
+var leave_label: Label
 var out_box: HFlowContainer
 var out_caption: Label
 ## The foot, which never scrolls (Go is always in reach): at the left the parties that are out and the keys; at the right,
@@ -526,6 +529,9 @@ func _build_party() -> VBoxContainer:
 	party_box.add_child(_note_label)
 	_effect_label = _para(13, hud.PAPER_INK)
 	party_box.add_child(_effect_label)
+	leave_label = _para(13, WHY_INK)
+	leave_label.visible = false
+	party_box.add_child(leave_label)
 	return party_box
 
 
@@ -1386,6 +1392,10 @@ func _refresh_party() -> void:
 			break
 	_effect_label.text = effect
 	_effect_label.visible = effect != ""
+	# what the trip leaves empty at home (the radio desk, the lookout post...) and how many stay to hold the yard
+	var leaves := CrewLoad.trip_line(sim, party) if not free_people.is_empty() else ""
+	leave_label.text = leaves
+	leave_label.visible = leaves != ""
 	hint_label.text = "Arrows and Tab go between the pins, Enter picks one. G or Esc closes."
 
 

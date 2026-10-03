@@ -105,8 +105,8 @@ func test_the_classic_start_has_no_lots() -> void:
 	var g := _game(false)
 	var sim = g.sim
 	check(not sim.lots.on, "no lots in the classic start")
-	eq(sim.build.plots().size(), 9, "the compound's nine homes only")
-	eq(sim.build.catalogue().size(), 7, "the seven buildings, no wall kits")
+	eq(sim.build.plots().size(), 11, "the compound's eleven homes only")
+	eq(sim.build.catalogue().size(), 8, "the eight buildings, no wall kits")
 	check(sim.lots.why_not_claim("north") != "", "nothing to claim")
 	check(sim.build.why_not("alley_w", "wall_pallets_h") != "", "no wall can be ordered")
 	eq(sim.jobs.posts().size(), sim.jobs._base_posts.size(), "no extra posts")
@@ -118,11 +118,11 @@ func test_the_settlement_game_has_lots_that_are_not_open_yet() -> void:
 	var sim = g.sim
 	check(sim.lots.on, "lots in the settlement game")
 	eq(sim.lots.lots().size(), 2, "two lots")
-	eq(sim.build.plots().size(), 9, "no lot's plots are seen before it is claimed")
+	eq(sim.build.plots().size(), 11, "no lot's plots are seen before it is claimed")
 	check(sim.build.plot("ring_a").size() > 0 and sim.build.plot("alley_w").size() > 0, "but they are known to the module")
 	check(sim.build.why_not("ring_a", "greenhouse") != "", "a ring plot cannot be built on before the claim")
 	check(sim.build.why_not("alley_w", "wall_pallets_h").contains("claim"), "nor a wall: %s" % sim.build.why_not("alley_w", "wall_pallets_h"))
-	eq(sim.build.catalogue().size(), 7 + 1 + 2, "the ring's one building (the scrap yard) and the kits are in the catalogue of a lots game")
+	eq(sim.build.catalogue().size(), 8 + 1 + 2, "the ring's one building (the scrap yard) and the kits are in the catalogue of a lots game")
 	g.world.free()
 
 
@@ -155,7 +155,7 @@ func test_a_claim_pays_and_opens_the_lots_plots_and_the_gate_to_people() -> void
 	check(sim.lots.claim("north"), "the claim goes through")
 	eq(float(sim.stock.scrap), 160.0, "it cost 40 scrap")
 	check(sim.lots.claimed("north"), "claimed")
-	eq(sim.build.plots().size(), 9 + 1 + 2, "the lot's ring plot and two mouths are seen")
+	eq(sim.build.plots().size(), 11 + 1 + 2, "the lot's ring plot and two mouths are seen")
 	eq(int(sim.world.solid_p[gate_tile]), 0, "the gate is open to people")
 	eq(int(sim.world.solid_z[gate_tile]), 1, "and shut to the dead")
 	var way_after: Array = sim.path_p.find(sim.world.solid_p, 39.0, 24.0, 39.0, 13.0)
@@ -370,7 +370,7 @@ func test_saves_keep_the_claim_and_the_walls() -> void:
 	eq(int(sim_b.world.solid_p[2 * sim_b.W + 28]), 1, "its tiles are shut")
 	eq(int(sim_b.world.solid_p[17 * sim_b.W + 38]), 0, "the gate is open to people")
 	check(not sim_b.jobs.post("post_alley_w").is_empty(), "the post is there")
-	eq(sim_b.build.plots().size(), 9 + 1 + 2, "the lot's plots are seen")
+	eq(sim_b.build.plots().size(), 11 + 1 + 2, "the lot's plots are seen")
 	check(String(sim_b.build.plot("alley_w").building) != "", "the plot knows its wall")
 	g.world.free()
 	b.world.free()
@@ -495,17 +495,17 @@ func test_each_wall_of_the_real_ring_draws_the_dead_to_it() -> void:
 	g.world.free()
 
 
-## Round 15 on the real data: nine homes in the compound, two on the ring once its lots are claimed (the scrap yard's), eight buildings.
-func test_the_real_ring_has_two_homes_and_the_compound_nine() -> void:
+## Round 15 on the real data: eleven homes in the compound (nine, and the two tents of round 16), two on the ring once its lots are claimed (the scrap yard's), nine buildings.
+func test_the_real_ring_has_two_homes_and_the_compound_eleven() -> void:
 	var g := _real_ring()
 	var sim = g.sim
-	eq(sim.build.plots().size(), 9, "nine homes before a claim")
+	eq(sim.build.plots().size(), 11, "eleven homes before a claim")
 	var mouths: int = sim.lots.mouths().size()
 	var kits := 0
 	for b in sim.build.catalogue():
 		if b.has("wall_kit"):
 			kits += 1
-	eq(sim.build.catalogue().size() - kits, 8, "eight buildings in a lots game (seven of the yard and the scrap yard)")
+	eq(sim.build.catalogue().size() - kits, 9, "nine buildings in a lots game (eight of the yard and the scrap yard)")
 	check(kits >= 10, "and the wall kits besides: %d" % kits)
 	eq(sim.lots.lots().size(), 3, "three lots")
 	var by_lot := {}
@@ -513,7 +513,7 @@ func test_the_real_ring_has_two_homes_and_the_compound_nine() -> void:
 		by_lot[String(l.id)] = (l.plots as Array).size()
 		check(sim.lots.claim(String(l.id)), "the %s lot is claimed" % l.id)
 	eq(by_lot, {"north": 1, "west": 1, "east": 0}, "one, one and no ring home: the scrap yard's two")
-	eq(sim.build.plots().size(), 9 + 2 + mouths, "nine, two on the ring and a plot for every street")
+	eq(sim.build.plots().size(), 11 + 2 + mouths, "eleven, two on the ring and a plot for every street")
 	var ring := 0
 	for pl in sim.build.plots():
 		if pl.kind == "ring":
@@ -732,10 +732,10 @@ func test_a_new_run_forgets_the_lots_posts_and_plots() -> void:
 	var sim = g.sim
 	_clear_places(sim, 1)
 	sim.lots.claim("north")
-	check(sim.build.plots().size() > 9, "plots are open")
+	check(sim.build.plots().size() > 11, "plots are open")
 	var base: int = sim.jobs._base_posts.size()
 	sim.start_run(1, 9)
-	eq(sim.build.plots().size(), 9, "a new run has only the compound's homes")
+	eq(sim.build.plots().size(), 11, "a new run has only the compound's homes")
 	eq(sim.jobs.posts().size(), base, "and only the wall's posts")
 	g.world.free()
 

@@ -51,6 +51,7 @@ const GameOver := preload("res://scripts/ui/game_over.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
+const CrewLoad := preload("res://scripts/sim/crew_load.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
@@ -405,6 +406,12 @@ var res_labels: Array = []
 ## The fuel row of the stores panel (round 13): [icon, name, number] and the number's label, which are shown only in a settlement
 ## game once there is a vehicle or any fuel (the panel is as it always was without them).
 var fuel_cells: Array = []
+## Round 16, the crew-load strip under the stores: "Seats 5 of 11" (scripts/sim/crew_load.gd), a tooltip that lists the empty
+## seats, a click that opens the Duty roster. Amber while the radio desk or the lookout post is empty.
+var crew_load_panel: PanelContainer
+var crew_load_label: Label
+var crew_load_icon: TextureRect
+var _crew_load_sig := ""
 ## The crew's cards across the top: a row, or rows when there are more people than a row has room for (a crew that
 ## has grown: recruits come over the radio). `bar_plan` is how they are laid out now, see _layout_bar.
 var bar: HFlowContainer
@@ -803,9 +810,71 @@ func _build_stores() -> void:
 	res_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	left_col = _vbox(8)
 	left_col.add_child(res_panel)
+	left_col.add_child(_build_crew_load())
 	left_col.add_child(_build_legend())
 	add_child(left_col)
 	_corner(left_col, false, false, 12, 12)
+
+
+## The crew-load strip (round 16): a small stamp under the stores, an icon and "Seats 5 of 11"; a click opens the Duty roster.
+func _build_crew_load() -> PanelContainer:
+	crew_load_panel = PanelContainer.new()
+	crew_load_panel.add_theme_stylebox_override("panel", _crew_load_style(false))
+	crew_load_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	crew_load_panel.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	crew_load_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	crew_load_panel.visible = false    # (the first update shows it in a settlement game: the classic start never has it)
+	crew_load_panel.gui_input.connect(_on_crew_load_input)
+	var row := _hbox(6)
+	crew_load_icon = _icon("jobs", 14, INK3)
+	crew_load_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(crew_load_icon)
+	crew_load_label = _label("Seats 0 of 0", Fonts.sans(400), 13, INK)
+	row.add_child(crew_load_label)
+	crew_load_panel.add_child(row)
+	return crew_load_panel
+
+
+## A small slate stamp (dark enough to read on any ground), its edge amber while the radio desk or the lookout post is empty.
+func _crew_load_style(warn: bool) -> StyleBoxFlat:
+	var s := _flat(PANEL, 6, Color(WARN, 0.8) if warn else LINE2, false)
+	s.content_margin_left = 9
+	s.content_margin_right = 10
+	s.content_margin_top = 4
+	s.content_margin_bottom = 4
+	return s
+
+
+func _on_crew_load_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		_press_jobs()
+
+
+## The strip follows the game: the seats staffed, amber while the radio desk or the lookout post is empty, a tooltip that lists
+## what is empty. In a narrow window the 'of' goes. It is there in the settlement game only (a small start): the classic start's
+## column of stores is as tight as the dock beside it was laid out for, and has no recruits whose seats are to be filled.
+func _update_crew_load(sim) -> void:
+	if crew_load_panel == null:
+		return
+	var recruits = sim.get("recruits")
+	var on: bool = sim.get("jobs") != null and sim.get("build") != null and recruits != null and bool(recruits.small)
+	if crew_load_panel.visible != on:
+		crew_load_panel.visible = on
+		_layout_dock.call_deferred()
+	if not on:
+		return
+	var r := CrewLoad.report(sim)
+	var text: String = ("Seats %s" % String(r.short)) if compact else String(r.text)
+	var sig := "%s|%s|%s" % [text, String(r.level), String(r.tip)]
+	if sig == _crew_load_sig:
+		return
+	_crew_load_sig = sig
+	var warn: bool = String(r.level) == "warn"
+	crew_load_label.text = text
+	crew_load_label.add_theme_color_override("font_color", WARN if warn else INK)
+	crew_load_panel.add_theme_stylebox_override("panel", _crew_load_style(warn))
+	crew_load_icon.modulate = WARN if warn else INK3
+	crew_load_panel.tooltip_text = String(r.tip)
 
 
 ## The legend of the fields-of-fire view: a swatch for each tint and what it means.
@@ -3285,6 +3354,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		var low: bool = (s[0] == "ammo" and v < 60) or (s[0] == "meds" and v < 3)
 		lbl.add_theme_color_override("font_color", WARN if low else INK)
 	_update_fuel(sim)
+	_update_crew_load(sim)
 	for kind in res_days:
 		var days: float = sim.supplies.days_left(kind)
 		var dl: Label = res_days[kind]
@@ -3857,7 +3927,7 @@ func _refresh_job_tag(p) -> void:
 		label.text = text
 	var tip := ""
 	if st.is_empty():
-		tip = "Day job: none. They stand at ease by day."
+		tip = "Day job: none. They %s by day." % jobs.no_job_text()
 	else:
 		tip = "Day job: %s (%s)\n%s" % [String(st.name), String(st.get("where", "")), _wrap(String(st.get("blurb", "")))]
 	tip += "\nClick to open the Jobs screen. Key: J"

@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_doc": "Every building has its own HOME, the place where it belongs (round 15; assets/data/plots.json: a plot names the building it is the home of), so the player picks a building and never a plot; a building that may stand twice has two homes, numbered, built in order (`max` is how many homes it has). A building with lots_only has its homes out in the streets, in lots that are claimed (lots.json: the scrap yard, the one building of the ring). scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count), never more than it has homes: the watchtower and the bunk house have two each. requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people within reach_radius tiles of the building itself: the nearest point of its footprint, round 15), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
+ "_doc": "Every building has its own HOME, the place where it belongs (round 15; assets/data/plots.json: a plot names the building it is the home of), so the player picks a building and never a plot; a building that may stand twice has two homes, numbered, built in order (`max` is how many homes it has). A building with lots_only has its homes out in the streets, in lots that are claimed (lots.json: the scrap yard, the one building of the ring). scrap is paid when it is ordered, work is builder-hours at the base rate. max: how many may stand (sites count), never more than it has homes: the watchtower, the bunk house and the tents have two each. requires: a building that must already stand. effects: a flat map of numbers read through sim.build.bonus(key) (the sum over the standing buildings) and sim.build.factor(key) (the product): seats_<station id> (more seats at a station), unlocks_station is carried by stations.json (requires), garden_base (food at each dawn), craft_mult (the workbench's scrap an hour), ammo_per_scrap, beds (beds for patients), housing (people the compound sleeps, round 7: the bunk house four, a tent two), morale (a steady mood bonus), night_reach_mult (the guns' reach by night), blackout_proof (1: a blackout costs no aim), reach_bonus and reach_radius (tiles of reach for people within reach_radius tiles of the building itself: the nearest point of its footprint, round 15), boon_mult and threat_mult (the radio's cards), radio_range (round 7).",
  "buildings": [
   {
    "id": "salvage_bench",
@@ -51,6 +51,18 @@
     "beds": 4,
     "housing": 4,
     "morale": 3
+   }
+  },
+  {
+   "id": "tents",
+   "name": "Tents",
+   "blurb": "Two beds. Cheap, and cold in winter.",
+   "scrap": 8,
+   "work": 6,
+   "max": 2,
+   "requires": "",
+   "effects": {
+    "housing": 2
    }
   },
   {

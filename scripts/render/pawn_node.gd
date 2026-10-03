@@ -9,6 +9,7 @@ extends Node2D
 const GD := preload("res://scripts/game_data.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const S := preload("res://scripts/render/shapes.gd")
+const WorkAnim := preload("res://scripts/render/work_anim.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -16,6 +17,8 @@ const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vect
 ## A jump of more than this many tiles between two steps (back from a trip, a
 ## walker risen where a survivor fell) is a jump, not a walk: no sliding.
 const SNAP_TILES := 3.0
+## `_strike_seen` before any blow has been counted.
+const NO_STRIKE := -1000000000
 
 var entity # Sim.Person or Sim.Zombie
 var zombie := false
@@ -43,6 +46,29 @@ var _meshes := {} # view -> the warped sprite of this kind, or null for the plai
 ## Where the drawing goes: this node, or a stand-in that records the calls (tests).
 var _pen = self
 
+## Round 16, people at work (scripts/render/work_anim.gd): the pose is kept in one object and the work clock is shown between the
+## rules' steps. `_wk` is how far into the pose the person is (0 the ordinary figure, 1 the pose), moved over WorkAnim.EASE seconds
+## of the screen's clock (`anim_t`) toward where `Person.work` says it should be, so a person who stops working is back to normal
+## within 0.2 s. `on_work_strike(word, x, y)`, when set, is called as a tool lands (the sound, which main.gd may play).
+var _wpose := WorkAnim.Pose.new()
+var _wk := 0.0
+var _w_word := ""
+var _w_last := ""
+var _work_phase := 0.0
+var _wt_prev := 0.0
+var _wt_cur := 0.0
+var _w_steps := -1
+var _w_alpha := 1.0
+var _anim_prev := -1.0
+var _strike_seen := NO_STRIKE
+var on_work_strike: Callable = Callable()
+## A job staged for a screenshot (`--work=<id>:<word>[@seconds]`): the word to show whatever the rules say, and a work time to hold
+## (negative: let it run on the clock).
+var work_stage := ""
+var work_stage_t := -1.0
+## Whether `Person.work` is drawn at all: false in a trip played by hand (scripts/raid), where the base's rules do not run.
+var work_poses := true
+
 
 func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	entity = e
@@ -59,6 +85,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		if tinted != null:
 			material = tinted
 	if not zombie:
+		_work_phase = WorkAnim.phase_of(String(e.id))
 		var wb: Array = data.weaponArt.box
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
 		weapon_tex = GD.tex(data.weaponArt.files[e.weapon])
@@ -86,6 +113,8 @@ func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 		_cur = now
 	_steps_seen = steps
 	_frame_seen = frame
+	if not zombie:
+		_work_sync(steps, alpha)
 	position = _prev.lerp(_cur, alpha) * TILE
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
 	if modulate != tint:
@@ -206,24 +235,108 @@ func _view() -> String:
 
 func _draw_person() -> void:
 	var p = entity
+	if _work_update(p):
+		_draw_working()
+		return
 	var view := _view()
 	var mirror: bool = p.facing == "W"
 	var bob: float = absf(sin(p.walk_phase)) * 0.045 if p.moving else sin(anim_t * 2.2 + p.x * 3.0) * 0.008
 	_reset()
 	_apply()
-	Art.shadow(self)
+	Art.shadow(_pen)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	Art.legs(self, pal, view, p.walk_phase, p.moving, false)
+	Art.legs(_pen, pal, view, p.walk_phase, p.moving, false)
 	_tr(0, -bob)
 	var aim: float = PI - p.aim if mirror else p.aim
 	if view == "N":
 		_weapon(view, aim)
 	_apply()
-	draw_texture_rect(tex[view], pawn_rect, false)
+	_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if view != "N":
 		_weapon(view, aim)
+
+
+## What the person is doing, for the pose: the word staged for a screenshot, else the rules' own (`Person.work`).
+func _work_word() -> String:
+	if work_stage != "":
+		return work_stage
+	return String(entity.work) if work_poses else ""
+
+
+## The work time to draw, in seconds: the rules' clock shown between their last two steps (a staged job's own).
+func work_time() -> float:
+	if work_stage != "":
+		return work_stage_t if work_stage_t >= 0.0 else anim_t
+	return lerpf(_wt_prev, _wt_cur, _w_alpha)
+
+
+## Follows the rules' work clock the way the position follows their steps: from where it stood a step ago to where it stands now.
+func _work_sync(steps: int, alpha: float) -> void:
+	var wt: float = entity.work_t
+	var word := _work_word()
+	if steps < 0:
+		_wt_prev = wt
+		_wt_cur = wt
+		_w_alpha = 1.0
+	elif steps != _w_steps:
+		_wt_prev = _wt_cur if (word == _w_last and wt >= _wt_cur) else wt
+		_wt_cur = wt
+		_w_alpha = alpha
+	else:
+		if word != _w_last or wt < _wt_cur:
+			_wt_prev = wt
+			_wt_cur = wt
+		_w_alpha = alpha
+	_w_steps = steps
+	_w_last = word
+
+
+## Whether the person is to be drawn at their work, and how far into the pose they are (`_wk`, eased with the screen's clock). Someone
+## walking, or in the sights of a weapon, or with a gun going off, is not at work, whatever word the rules have left on them.
+func _work_update(p) -> bool:
+	var word := _work_word()
+	var busy: bool = word != "" and WorkAnim.CYCLE.has(word) and not p.moving and p.target == null and p.reloading <= 0.0 and p.recoil <= 0.0
+	var dt := 0.0
+	if _anim_prev >= 0.0:
+		dt = clampf(anim_t - _anim_prev, 0.0, 0.1)
+	_anim_prev = anim_t
+	if busy:
+		if word != _w_word:
+			_strike_seen = NO_STRIKE
+			if _wk > 0.0:
+				_wk = 0.0    # (one job to another with no pause: the pose starts again)
+		_w_word = word
+	_wk = WorkAnim.weight(_wk, busy, dt)
+	return _wk > 0.0 and _w_word != ""
+
+
+func _draw_working() -> void:
+	var p = entity
+	var o := WorkAnim.solve(_wpose, _w_word, work_time(), _work_phase, WorkAnim.reduced())
+	if on_work_strike.is_valid() and _wk >= 1.0 and o.fx != "" and not WorkAnim.reduced():
+		if _strike_seen != NO_STRIKE and o.strike == _strike_seen + 1:
+			on_work_strike.call(_w_word, p.x, p.y)
+		_strike_seen = o.strike
+	WorkAnim.draw_person(self, o, WorkAnim.eased(_wk), p.facing, p.aim)
+
+
+## The weapon drawn at the strength `fade` (1 in hand, less as it is put away for work); `aim` is the rules' angle.
+func _weapon_faded(view: String, aim: float, fade: float, mirror: bool) -> void:
+	if fade <= 0.02:
+		return
+	var a: float = PI - aim if mirror else aim
+	var saved := _m
+	var pv: Vector2 = PIVOT[view]
+	_tr(pv.x, pv.y)
+	_rot(a)
+	if cos(a) < 0.0:
+		_sc(1, -1)
+	_apply()
+	_pen.draw_texture_rect(weapon_tex, weapon_rect, false, Color(1.0, 1.0, 1.0, fade))
+	_m = saved
+	_apply()
 
 
 func _weapon(view: String, aim: float) -> void:
@@ -240,8 +353,8 @@ func _weapon(view: String, aim: float) -> void:
 	var push: float = sin(p.thrust * PI) * 0.6 if p.weapon == "pike" else -p.recoil * 0.08
 	_tr(push, 0)
 	_apply()
-	draw_texture_rect(weapon_tex, weapon_rect, false)
-	Art.hands(self, gun_front, pal.skin)
+	_pen.draw_texture_rect(weapon_tex, weapon_rect, false)
+	Art.hands(_pen, gun_front, pal.skin)
 	_m = saved
 
 
@@ -304,29 +417,31 @@ func _draw_dead() -> void:
 
 func _draw_downed() -> void:
 	var p = entity
+	_wk = 0.0
 	_reset()
 	_tr(0, 0.3)
 	_rot(PI / 2.0)
 	_tr(0, -0.3)
 	_apply()
-	Art.legs(self, pal, "S", 0.0, false, false)
-	draw_texture_rect(tex["S"], pawn_rect, false)
+	Art.legs(_pen, pal, "S", 0.0, false, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
 
 
 ## In bed: the head and shoulders on the pillow and the bed's own blanket over
 ## the rest (the body is drawn upright, so it lies along the bed, not across it).
 func _draw_resting() -> void:
 	var blanket := _blanket_color()
+	_wk = 0.0
 	_reset()
 	_tr(0, -0.16) # the head lands on the pillow
 	_apply()
-	draw_texture_rect(tex["S"], pawn_rect, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
 	_reset()
 	_apply()
 	var hump := S.rrect(-0.34, -0.3, 0.68, 1.22, 0.2, 4)
-	draw_colored_polygon(hump, blanket.lightened(0.05))
-	draw_polyline(S.closed(hump), Color(S.INK.r, S.INK.g, S.INK.b, 0.5), S.LW, true)
-	draw_line(Vector2(-0.29, -0.27), Vector2(0.29, -0.27), blanket.lightened(0.28), 0.06, true)
+	_pen.draw_colored_polygon(hump, blanket.lightened(0.05))
+	_pen.draw_polyline(S.closed(hump), Color(S.INK.r, S.INK.g, S.INK.b, 0.5), S.LW, true)
+	_pen.draw_line(Vector2(-0.29, -0.27), Vector2(0.29, -0.27), blanket.lightened(0.28), 0.06, true)
 
 
 ## The colour of the blanket of the bed they lie in, read from the bed's art.

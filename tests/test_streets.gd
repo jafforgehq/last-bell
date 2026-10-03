@@ -110,7 +110,7 @@ func test_a_straggler_hunts_a_survivor_outside_the_walls_and_the_survivor_shoots
 	ruth.path = []
 	ruth.drafted = false
 	ruth.order = null
-	sim.jobs.unassign(ruth)    # (so that she stays where she is put)
+	ruth.order = Vector3(ruth.x, ruth.y, 0.0)    # (so that she stays where she is put: with no job she would walk to a rest spot, round 16)
 	var z = sim.spawn(46.0, 12.0, "wander")
 	sim.streets._look_t = 0.0
 	sim.streets.update(0.1)
@@ -175,7 +175,7 @@ func test_a_shot_by_day_draws_only_the_stragglers_close_by_and_not_to_the_walls(
 	var ruth = sim.people[0]
 	ruth.x = 40.0
 	ruth.y = 12.0
-	sim.jobs.unassign(ruth)
+	ruth.order = Vector3(ruth.x, ruth.y, 0.0)    # (stays where she is put: with no job she would walk to a rest spot, round 16)
 	var hunter = sim.spawn(46.0, 12.0, "wander")
 	sim.streets._look_t = 0.0
 	sim.streets.update(0.1)

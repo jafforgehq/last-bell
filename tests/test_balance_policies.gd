@@ -95,3 +95,101 @@ func test_the_default_policy_does_not_stand_anyone_on_a_deck_or_ring_the_alarm()
 	for p in sim.people:
 		check(not (p.drafted and p.order != null and sim.world.on_deck(p.order.x, p.order.y)), "%s was not sent up" % p.first)
 	g.world.free()
+
+
+# ----------------------------------------------------------- beds first (round 16) --
+
+## A settlement game of five whose school is full (Hector has come), a morning of day 3 with `scrap` in the stores.
+func _full_school(scrap: float) -> Dictionary:
+	var g := Helpers.make(75, 1, 5)
+	var sim = g.sim
+	sim.waves.enabled = false
+	sim.zombies.clear()
+	sim.day = 3
+	_at(sim, 8.0)
+	sim.stock.scrap = scrap
+	sim.add_person(sim.recruits.queue.pop_front())
+	return g
+
+
+func test_the_informed_policy_builds_tents_first_when_the_school_is_full_and_someone_is_waiting() -> void:
+	var g := _full_school(40.0)
+	var sim = g.sim
+	eq(int(sim.recruits.housing_free()), 0, "the six beds are taken")
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	_play_seconds(sim, policy, 3)
+	eq(String(sim.build.plot("tents_home_1").site.get("building", "")), "tents", "the first tent is ordered, before the salvage bench that comes first in the order")
+	eq(sim.build.plot("salvage_bench_home").site, {}, "and nothing else")
+	eq(policy.builds_ordered, 1, "one order")
+	g.world.free()
+
+
+func test_the_tent_waits_for_the_scrap_to_spare_and_the_policy_saves_for_it() -> void:
+	var g := _full_school(15.0)
+	var sim = g.sim
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	_play_seconds(sim, policy, 3)
+	eq(policy.builds_ordered, 0, "eight scrap and twelve to spare is twenty: not yet")
+	eq(sim.build.plot("salvage_bench_home").site, {}, "and the others wait for it")
+	g.world.free()
+
+
+func test_a_second_tent_follows_the_first_and_the_bunk_house_after_them() -> void:
+	var g := _full_school(100.0)
+	var sim = g.sim
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	sim.build.plot("tents_home_1").building = "tents"
+	sim.build.version += 1
+	sim.add_person(sim.recruits.make_def(0))
+	sim.add_person(sim.recruits.make_def(1))    # the two new beds are taken
+	eq(int(sim.recruits.housing_free()), 0, "full again")
+	_play_seconds(sim, policy, 3)
+	eq(String(sim.build.plot("tents_home_2").site.get("building", "")), "tents", "the second tent")
+	g.world.free()
+
+
+func test_with_a_bed_to_spare_or_in_the_classic_start_the_order_is_the_old_one() -> void:
+	var g := Helpers.make(75, 1, 5)
+	var sim = g.sim
+	sim.waves.enabled = false
+	sim.day = 3
+	_at(sim, 8.0)
+	sim.stock.scrap = 100.0
+	eq(int(sim.recruits.housing_free()), 1, "one bed to spare")
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	_play_seconds(sim, policy, 3)
+	eq(sim.build.plot("tents_home_1").site, {}, "no tent")
+	eq(String(sim.build.plot("salvage_bench_home").site.get("building", "")), "salvage_bench", "the salvage bench, as before")
+	g.world.free()
+	var c := Helpers.make(75, 1)
+	c.sim.waves.enabled = false
+	c.sim.day = 3
+	_at(c.sim, 8.0)
+	c.sim.stock.scrap = 100.0
+	var p2 = Balance.Policy.new(c.sim)
+	p2.informed = true
+	p2.builds = true
+	_play_seconds(c.sim, p2, 3)
+	eq(c.sim.build.plot("tents_home_1").site, {}, "the classic start has no callers, so no tent")
+	c.world.free()
+
+
+func test_without_beds_first_the_informed_policy_builds_as_it_did_before_the_tents() -> void:
+	var g := _full_school(40.0)
+	var sim = g.sim
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	policy.builds = true
+	policy.beds_first = false
+	_play_seconds(sim, policy, 3)
+	eq(sim.build.plot("tents_home_1").site, {}, "no tent (--nobeds)")
+	eq(String(sim.build.plot("salvage_bench_home").site.get("building", "")), "salvage_bench", "the salvage bench, first of the order")
+	g.world.free()

@@ -55,6 +55,18 @@ const BUTT := {"name": "Butt of the gun", "range": 1.9, "cooldown": 1.25, "melee
 
 const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vector2(0.26, -0.22)}
 
+## Work life (round 16, the settlement game only). The compound is this rectangle of the map (the walls' outer
+## edges: the north wall's walkway, the two side walkways and the school's front). The dead are a threat by day
+## when one that is coming to the wall (approach, attack) or already in (breach) is within THREAT_R tiles of it,
+## or the alarm rings; the crew goes to its posts then, and back to work once it has been quiet for
+## THREAT_QUIET_MIN game minutes. At dawn the crew holds its posts only while some of the dead are still coming at
+## the compound (the dawn sends them all back to the city in the first moments, so the dawn hour is work time).
+## Someone is at work, for `Person.work`, when they stand within WORK_REACH tiles of the spot.
+const COMPOUND := Rect2(20.0, 18.0, 44.0, 26.0)
+const THREAT_R := 16.0
+const THREAT_QUIET_MIN := 10.0
+const WORK_REACH := 0.6
+
 
 class Slot:
 	extends RefCounted
@@ -114,6 +126,11 @@ class Person:
 	var order = null
 	var repair = null
 	var activity := ""
+	## What they are doing at their spot right now ("" when walking or at nothing: see jobs.gd, `work` of a goal) and
+	## for how many seconds (round 16, read by the drawing; the rules set it each step, so a save from before has none
+	## and it is worked out again at once; the save's reflection keeps it like any other variable of the person).
+	var work := ""
+	var work_t := 0.0
 	var recoil := 0.0
 	var thrust := 0.0
 	var downed := false
@@ -595,6 +612,7 @@ func update(dt: float) -> void:
 			streets.on_dawn()
 			events.append({"type": "day_start", "day": day})
 			events.append({"type": "banner", "text": "Day %d" % day, "sub": "Repair the wall before dusk"})
+	_update_threat()
 
 	scenario.update(dt)
 	supplies.update(dt)
@@ -649,11 +667,74 @@ func _goal_for(p: Person):
 		return duty
 	if p.repair != null:
 		var s: Segment = p.repair
-		return {"x": s.center.x, "y": s.center.y, "face": "N" if s.side == "S" else s.side, "what": "Repairing the %s" % s.name.to_lower()}
-	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
-	if night:
+		return {"x": s.center.x, "y": s.center.y, "face": "N" if s.side == "S" else s.side, "what": "Mending the %s" % s.name.to_lower(), "work": "mend"}
+	if posts_manned():
+		# (the lookout keeps the tower through a day under attack: the forecast, and the eyes on the road)
+		if phase == "day" and jobs.job_of(p) == "watch":
+			return jobs.goal_for(p)
 		return jobs.post_goal(p)
 	return jobs.goal_for(p)
+
+
+## Whether the crew holds its night posts right now: from the bell (or the dark) through the night and the dawn. In
+## the settlement game (a small start) people are at work by day, so the dawn counts as night only while some of the
+## dead are still coming at the compound (`_dead_coming`: the dawn turns them back in its first moments, and the dead
+## drifting off no longer attack), and a day under attack (`threat_by_day`) puts the crew at its posts as the bell
+## does. The classic start has the old rule: the posts from the bell to the end of the dawn.
+func posts_manned() -> bool:
+	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
+	if not recruits.small:
+		return night
+	if phase == "dawn":
+		return _dead_coming()
+	return night or threat_by_day()
+
+
+## Whether the dead are at the wall by day (the settlement game; false at any other time): one that is coming to the
+## compound's wall (approach), clawing at it (attack) or inside it (breach) within THREAT_R tiles of it, or the
+## alarm ringing. Stragglers of the streets that only wander, or hunt someone who shot at them outside, are not a
+## threat to the compound: the crew goes on working. Once it has stopped, THREAT_QUIET_MIN game minutes of quiet
+## pass before the crew goes back to work. Kept up once a step (`_update_threat`); `tactics.threat_until` is saved.
+func threat_by_day() -> bool:
+	return recruits.small and phase == "day" and clock_min < tactics.threat_until
+
+
+func _update_threat() -> void:
+	if not recruits.small:
+		return    # (the classic start never has a day threat: nothing of this touches it)
+	if phase != "day":
+		tactics.threat_until = 0.0
+		return
+	var was := threat_by_day()
+	if _under_attack():
+		tactics.threat_until = clock_min + THREAT_QUIET_MIN
+	if threat_by_day() and not was:
+		# the wall crew's mending stops at once: the crew is called to its posts
+		for p in people:
+			tactics.call_back(p)
+		alert("day-threat", "warn", "The dead are at the wall", "Everyone to their posts", null, 10.0)
+
+
+## Whether, right now, some of the dead are coming to the compound's wall or the alarm rings.
+func _under_attack() -> bool:
+	return tactics.lure_id >= 0 or _dead_coming()
+
+
+## Whether any of the dead is coming at the compound: on its way to a wall section (approach), clawing at it (attack)
+## or inside it (breach), within THREAT_R tiles of it. The dead of the streets that wander, or hunt someone who shot at
+## them, and the dead going back to the city are not.
+func _dead_coming() -> bool:
+	for z in zombies:
+		if (z.state == "approach" or z.state == "attack" or z.state == "breach") and _compound_dist(z.x, z.y) <= THREAT_R:
+			return true
+	return false
+
+
+## How far a point is from the compound's rectangle (0 inside it).
+static func _compound_dist(x: float, y: float) -> float:
+	var dx := maxf(maxf(COMPOUND.position.x - x, x - COMPOUND.end.x), 0.0)
+	var dy := maxf(maxf(COMPOUND.position.y - y, y - COMPOUND.end.y), 0.0)
+	return sqrt(dx * dx + dy * dy)
 
 
 func _post_face(p: Person) -> String:
@@ -664,6 +745,7 @@ func _update_person(p: Person, dt: float) -> void:
 	p.recoil = maxf(0.0, p.recoil - dt * 8.0)
 	p.thrust = maxf(0.0, p.thrust - dt * 4.0)
 	if p.downed or p.dead or p.away != null:
+		_set_work(p, null, dt)
 		return
 	var goal = _goal_for(p)
 	if goal != null:
@@ -685,7 +767,7 @@ func _update_person(p: Person, dt: float) -> void:
 			_follow(p, 3.0, dt)
 	if p.repair != null and not p.moving and Vector2(p.repair.center.x - p.x, p.repair.center.y - p.y).length() < 0.3:
 		var s: Segment = p.repair
-		p.activity = "Repairing the %s" % s.name.to_lower()
+		p.activity = "Mending the %s" % s.name.to_lower()
 		p.hammer_t -= dt
 		if p.hammer_t <= 0.0:
 			p.hammer_t = 0.45
@@ -702,7 +784,23 @@ func _update_person(p: Person, dt: float) -> void:
 				morale.on_repaired(p)
 		if s.hp >= s.max_hp:
 			p.repair = null
+	_set_work(p, goal, dt)
 	_combat(p, dt)
+
+
+## `Person.work`: the work word of the goal (jobs.gd) while the person stands at its spot and is not walking, else "";
+## `work_t` counts the seconds it has gone on, from 0 when the word changes. The drawing reads them; no rule does.
+func _set_work(p: Person, goal, dt: float) -> void:
+	var word := ""
+	if goal != null and not p.moving:
+		word = String(goal.get("work", ""))
+		if word != "" and Vector2(goal.x - p.x, goal.y - p.y).length() > WORK_REACH:
+			word = ""
+	if word != p.work:
+		p.work = word
+		p.work_t = 0.0
+	elif word != "":
+		p.work_t += dt
 
 
 ## Walk along a.path; returns true once the path is used up.
@@ -832,7 +930,7 @@ func _combat(p: Person, dt: float) -> void:
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return
 	p.cooldown -= dt
-	if p.moving or (phase == "day" and not p.drafted and not _hunted(p)) or morale.breakdown(p):
+	if p.moving or (phase == "day" and not p.drafted and not threat_by_day() and not _hunted(p)) or morale.breakdown(p):
 		p.target = null
 		p.aim += ang_diff(p.aim, _rest_angle(p)) * minf(1.0, dt * 6.0)
 		return

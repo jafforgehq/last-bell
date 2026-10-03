@@ -27,7 +27,7 @@ const LOT_GAP := 0.9
 ## The people at a site stand at the work spot and a step either side (build.gd's STAND_OFFSETS).
 const STANDS := [Vector2(0.0, 0.0), Vector2(1.1, 0.0), Vector2(-1.1, 0.0)]
 ## How many homes each building has (its max, said here in words).
-const HOMES := {"salvage_bench": 1, "greenhouse": 1, "workshop": 1, "bunk_house": 2, "floodlights": 1, "watchtower": 2, "radio_mast": 1, "scrap_yard": 2}
+const HOMES := {"salvage_bench": 1, "greenhouse": 1, "workshop": 1, "bunk_house": 2, "tents": 2, "floodlights": 1, "watchtower": 2, "radio_mast": 1, "scrap_yard": 2}
 
 
 # --------------------------------------------------------------------- helpers --
@@ -281,31 +281,31 @@ func test_every_building_has_the_homes_its_max_says() -> void:
 		seen_names[name] = true
 		var why := String(pl.get("why", ""))
 		check(why.length() >= 20 and why.length() <= 130 and why.ends_with("."), "%s has a sentence that says why it is there: '%s'" % [id, why])
-	eq(with_home, 11, "eleven homes: nine in the yard and on the wall, two in the streets")
+	eq(with_home, 13, "thirteen homes: eleven in the yard and on the wall, two in the streets")
 	g.world.free()
 
 
-func test_the_yard_has_nine_homes_and_a_building_never_has_more_than_its_homes() -> void:
+func test_the_yard_has_eleven_homes_and_a_building_never_has_more_than_its_homes() -> void:
 	var g := _game()
 	var sim = g.sim
-	eq(sim.build.plots().size(), 9, "nine homes in the compound (the ring's are seen when its lots are claimed)")
+	eq(sim.build.plots().size(), 11, "eleven homes in the compound (the ring's are seen when its lots are claimed)")
 	var yard_total := 0
 	for b in sim.build.catalogue():
 		yard_total += int(b.max)
 		check(int(b.max) <= sim.build.homes_of(String(b.id)).size(), "%s may stand %d times and has %d homes" % [String(b.id), int(b.max), sim.build.homes_of(String(b.id)).size()])
-	eq(yard_total, 9, "the classic start's catalogue is exactly what the nine homes hold")
+	eq(yard_total, 11, "the classic start's catalogue is exactly what the eleven homes hold")
 	g.world.free()
 
 
 func test_a_ring_home_is_seen_only_when_its_lot_is_claimed() -> void:
 	var g := _game(71, 3)
 	var sim = g.sim
-	eq(sim.build.plots().size(), 9, "no lot claimed: the compound's nine")
+	eq(sim.build.plots().size(), 11, "no lot claimed: the compound's eleven")
 	eq(sim.build.home_for("scrap_yard"), "", "the scrap yard has no home to build on yet")
 	check(sim.build.why_not_build("scrap_yard") != "", "and says so: %s" % sim.build.why_not_build("scrap_yard"))
 	g.world.free()
 	var t := _town(["north"])
-	eq(t.sim.build.plots().size(), 9 + 1 + t.sim.lots.mouths_of("north").size(), "the north lot's home and its streets")
+	eq(t.sim.build.plots().size(), 11 + 1 + t.sim.lots.mouths_of("north").size(), "the north lot's home and its streets")
 	eq(t.sim.build.home_for("scrap_yard"), "scrap_yard_home_1", "the scrap yard's first home is out in the north")
 	t.world.free()
 
@@ -339,7 +339,8 @@ func test_the_guard_finds_the_court_the_garden_the_playground_the_apron_the_door
 		"the other school door's approach": [Vector2(52.5, 41.5), "school door"],
 		"a ladder's landing": [Vector2(24.5, 22.5), "ladder"],
 		"a fire barrel": [Vector2(44.5, 22.5), "barrel"],
-		"a tent": [Vector2(33.5, 24.5), "tent"],
+		"a picnic table": [Vector2(41.5, 40.5), "picnic"],
+		"a tent of the camp": [Vector2(33.5, 37.5), "closer than"],
 		"the school's own wall": [Vector2(38.5, 44.5), "not inside the yard"],
 	}
 	for name in cases:
@@ -586,5 +587,119 @@ func test_a_save_of_the_new_homes_loads_as_it_was() -> void:
 	eq(String(g2.sim.build.plot("watchtower_home_1").building), "watchtower", "the tower stands")
 	eq(float(g2.sim.build.plot("workshop_home").site.progress), 5.0, "the workshop's progress is kept")
 	check(not g2.sim.alerts.has("refund"), "nothing is refunded")
+	g.world.free()
+	g2.world.free()
+
+
+# --------------------------------------------------------------- tents (round 16) --
+## Two beds each, two of them: cheap beds so that the crew can grow past the school's six. They give the people a bed and
+## nothing else: no patients' beds and no mood, which are the bunk house's.
+
+func test_the_tents_are_cheap_two_beds_each_and_give_nothing_else() -> void:
+	var g := _game(71, 3)
+	var sim = g.sim
+	var t: Dictionary = sim.build.building("tents")
+	check(not t.is_empty(), "there is a building 'tents'")
+	eq(String(t.name), "Tents", "called Tents")
+	eq(int(t.max), 2, "two of them may stand")
+	eq(int(t.scrap), 8, "eight scrap")
+	near(float(t.work), 6.0, 1.0e-9, "six builder-hours")
+	eq(String(t.requires), "", "and nothing must stand first")
+	eq(String(t.blurb), "Two beds. Cheap, and cold in winter.", "in plain words")
+	eq(t.effects.keys(), ["housing"], "the tents give beds for people and nothing else: no patients' beds, no mood")
+	eq(int(t.effects.housing), 2, "two beds each")
+	check(int(t.scrap) < int(sim.build.building("bunk_house").scrap) and float(t.work) < float(sim.build.building("bunk_house").work), "cheaper than a bunk house")
+	check(not bool(t.get("lots_only", false)) and not t.has("wall_kit"), "an ordinary building of the yard")
+	eq(sim.build.homes_of("tents").size(), 2, "with two homes")
+	g.world.free()
+
+
+func test_the_housing_counts_the_tents() -> void:
+	var g := _game(71, 3)
+	var sim = g.sim
+	eq(sim.build.housing(), 6, "the school's six")
+	_stand(sim, "tents_home_1", "tents")
+	eq(sim.build.housing(), 8, "a tent gives two")
+	_stand(sim, "tents_home_2", "tents")
+	eq(sim.build.housing(), 10, "and the second two more")
+	_stand(sim, "bunk_house_home_1", "bunk_house")
+	eq(sim.build.housing(), 14, "with a bunk house, fourteen")
+	check(sim.build.bed_spots().size() == 4, "but only the bunk house has beds for patients (%d)" % sim.build.bed_spots().size())
+	sim.build.demolish("tents_home_1")
+	eq(sim.build.housing(), 12, "and a tent taken down takes its two beds away")
+	g.world.free()
+
+
+func test_tents_are_ordered_one_after_the_other_on_their_own_homes() -> void:
+	var g := _game(71, 3)
+	var sim = g.sim
+	eq(sim.build.home_for("tents"), "tents_home_1", "the first goes to the first home")
+	check(sim.build.why_not("tents_home_2", "tents").contains("first"), "the second waits for the first: %s" % sim.build.why_not("tents_home_2", "tents"))
+	sim.stock.scrap = 20.0
+	check(sim.build.order(sim.build.home_for("tents"), "tents"), "ordered")
+	near(float(sim.stock.scrap), 12.0, 1.0e-9, "for eight scrap")
+	eq(sim.build.home_for("tents"), "tents_home_2", "the next to the second")
+	check(sim.build.order(sim.build.home_for("tents"), "tents"), "and the second")
+	eq(sim.build.home_for("tents"), "", "a third has no home")
+	check(sim.build.why_not_build("tents").contains("most"), "the most there may be: %s" % sim.build.why_not_build("tents"))
+	eq(String(sim.build.title_of("tents_home_2")), "Tents 2 of 2", "numbered on the list")
+	g.world.free()
+
+
+func test_the_tent_homes_are_by_the_fire_barrel_off_the_motor_pool() -> void:
+	var g := _game()
+	var sim = g.sim
+	var barrels: Array = []
+	for o in g.data.objects:
+		if String(o.kind) == "barrel":
+			barrels.append(Vector2(float(o.cx), float(o.cy)))
+	var apron := _apron()
+	for id in ["tents_home_1", "tents_home_2"]:
+		var pl: Dictionary = sim.build.plot(id)
+		eq(String(pl.kind), "yard", "%s lies in the yard" % id)
+		eq(String(pl.home), "tents", "%s is for the tents" % id)
+		var near_fire := false
+		for b in barrels:
+			near_fire = near_fire or Vector2(pl.pos).distance_to(b) <= 4.5
+		check(near_fire, "%s is by a fire barrel (the camp's fire)" % id)
+		check(_lot(pl).position.y >= apron.end.y, "%s is south of the motor pool's apron (%s)" % [id, str(apron)])
+	check(String(sim.build.plot("tents_home_1").name) != String(sim.build.plot("tents_home_2").name), "each home has a name of its own")
+	g.world.free()
+
+
+func test_a_standing_tent_shuts_its_back_two_rows_and_leaves_the_front_one_open() -> void:
+	var g := _game()
+	var sim = g.sim
+	for id in ["tents_home_1", "tents_home_2"]:
+		var pl: Dictionary = sim.build.plot(id)
+		_stand(sim, id, "tents")
+		var shut := 0
+		var w: int = g.world.W
+		for ty in range(floori(_lot(pl).position.y), ceili(_lot(pl).end.y)):
+			for tx in range(floori(_lot(pl).position.x), ceili(_lot(pl).end.x)):
+				if g.world.solid_p[ty * w + tx] != 0:
+					shut += 1
+		eq(shut, 6, "%s: a tent is three tiles wide and two deep" % id)
+		check(_reaches_gate(g, Vector2(pl.work)), "the builders can still reach the front of %s" % id)
+	g.world.free()
+
+
+func test_a_save_without_tents_loads_and_a_save_with_them_keeps_them() -> void:
+	var g := _game(71, 3)
+	var sim = g.sim
+	sim.build.load_state({"plots": {"workshop_home": {"building": "workshop", "site": {}}}, "queue": []})
+	eq(sim.build.count("tents"), 0, "a save from before has no tents")
+	eq(sim.build.housing(), 6, "and the school's six beds")
+	check(not sim.alerts.has("refund"), "nothing is refunded")
+	check(sim.build.order("tents_home_1", "tents"), "a tent is ordered")
+	sim.build._finish(sim.build.plot("tents_home_1"))
+	check(sim.build.order("tents_home_2", "tents"), "and a second")
+	sim.build.plot("tents_home_2").site.progress = 2.0
+	var saved: Dictionary = sim.build.save()
+	var g2 := _game(71, 3)
+	g2.sim.build.load_state(saved)
+	eq(String(g2.sim.build.plot("tents_home_1").building), "tents", "the first tent stands")
+	eq(g2.sim.build.housing(), 8, "its two beds count")
+	near(float(g2.sim.build.plot("tents_home_2").site.progress), 2.0, 1.0e-9, "the second is half begun")
 	g.world.free()
 	g2.world.free()

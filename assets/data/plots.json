@@ -58,6 +58,28 @@
    "work": [38.5, 43.5]
   },
   {
+   "id": "tents_home_1",
+   "home": "tents",
+   "n": 1,
+   "name": "By the fire barrel",
+   "why": "South of the basketball court, beside the fire barrel the crew warms its hands at.",
+   "kind": "yard",
+   "pos": [33.5, 37.5],
+   "size": [3.0, 3.0],
+   "work": [33.5, 38.5]
+  },
+  {
+   "id": "tents_home_2",
+   "home": "tents",
+   "n": 2,
+   "name": "East of the fire barrel",
+   "why": "On the other side of the fire barrel from the first tent, so the two share one fire.",
+   "kind": "yard",
+   "pos": [39.5, 36.5],
+   "size": [3.0, 3.0],
+   "work": [39.5, 37.5]
+  },
+  {
    "id": "floodlights_home",
    "home": "floodlights",
    "n": 1,

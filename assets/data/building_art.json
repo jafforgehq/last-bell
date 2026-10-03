@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_doc": "How the yard draws the buildings (scripts/render/build_node.gd) and what they shut and hold (scripts/sim/build.gd reads 'solid' and 'beds'). Everything is in tiles from the middle of the plot (a lot is three tiles by three, centred on the middle of a tile, so the back two rows are y -1.5 to 0.5 and the front row, where the crew stands, is y 0.5 to 1.5). A prop is {f: the picture in assets/objects without .png, x: the middle of the picture, y: its bottom edge, w and h: its size, flat: true for what lies on the ground (drawn under the people), flip: mirrored, e: another picture for the plots in the east half of the yard (x over 42), sort: the line the picture's feet stand on (what the people are sorted against: they walk behind it up to there; it is the bottom edge unless the picture has a shadow under it or stands on something), a: opacity}. The props are drawn in the order they are written. 'solid' is [x0, y0, x1, y1] and shuts those tiles for walking while the building stands (whole tiles only: keep the front row open and never close a lane; tests/test_build_view.gd checks it); 'beds' are where the hurt lie (the bunk house); 'lights' are the lamps that burn at night while it stands: {x, y, r: how far, energy, color}. 'scaffold' is the look of a site before it has a look of its own: the first stage whose 'upto' is above the share done ('ghost': the building's own props show faintly under it, at that opacity).",
+ "_doc": "How the yard draws the buildings (scripts/render/build_node.gd) and what they shut and hold (scripts/sim/build.gd reads 'solid' and 'beds'). Everything is in tiles from the middle of the plot (a lot is three tiles by three, centred on the middle of a tile, so the back two rows are y -1.5 to 0.5 and the front row, where the crew stands, is y 0.5 to 1.5). A prop is {f: the picture in assets/objects without .png, x: the middle of the picture, y: its bottom edge, w and h: its size, flat: true for what lies on the ground (drawn under the people), flip: mirrored, e: another picture for the plots in the east half of the yard (x over 42), by_n: a picture for each of the building's homes in turn (the first home takes the first, the second the second), sort: the line the picture's feet stand on (what the people are sorted against: they walk behind it up to there; it is the bottom edge unless the picture has a shadow under it or stands on something), a: opacity}. The props are drawn in the order they are written. 'solid' is [x0, y0, x1, y1] and shuts those tiles for walking while the building stands (whole tiles only: keep the front row open and never close a lane; tests/test_build_view.gd checks it); 'beds' are where the hurt lie (the bunk house); 'lights' are the lamps that burn at night while it stands: {x, y, r: how far, energy, color}. 'scaffold' is the look of a site before it has a look of its own: the first stage whose 'upto' is above the share done ('ghost': the building's own props show faintly under it, at that opacity).",
  "scaffold": [
   {"upto": 0.34, "props": [
    {"f": "164_pallets_s3", "x": 0.0, "y": -0.05, "w": 2.8, "h": 1.65, "flat": true},
@@ -62,6 +62,13 @@
     {"f": "073_mattress", "x": -0.39, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true},
     {"f": "083_cot", "x": 0.39, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true},
     {"f": "075_mattress", "x": 1.17, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true}
+   ]
+  },
+  "tents": {
+   "solid": [-1.5, -1.5, 1.5, 0.5],
+   "props": [
+    {"f": "143_tent", "by_n": ["143_tent", "144_tent"], "x": -0.1, "y": 0.45, "w": 2.4, "h": 2.64},
+    {"f": "120_crate", "x": 1.15, "y": 0.4, "w": 0.7, "h": 0.74}
    ]
   },
   "floodlights": {

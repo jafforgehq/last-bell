@@ -1,12 +1,13 @@
 ## Recruits. A new game starts with three people (Ruth, Dez and Marcus); the others join over the
-## radio. At the radio hour (12:00), when someone is at the radio desk and the compound has a free bed,
-## a call can come: a survivor asks the way in. The card `survivor_call` puts it to the player: tell
+## radio. At the radio hour (12:00), when the compound has a free bed and someone is at the radio desk, a call can come: a
+## survivor asks the way in (round 16: the first callers, the authored survivors, are heard even with the desk empty, see
+## `call_guaranteed`; a stranger needs someone there). The card `survivor_call` puts it to the player: tell
 ## them the way in (they reach the gate at 07:00 the next morning and join the crew) or not yet. The
 ## callers are, first, the three authored survivors who did not start (Ana, Walt, Hector, in story
 ## order) and then generated ones (name, role, look, skills, two traits, a weapon, a portrait: made
 ## from assets/data/recruits.json with this module's own generator, so a run is repeatable).
 ##
-## The compound's housing (build.gd: the school's six beds and the bunk houses) is the cap: no call
+## The compound's housing (build.gd: the school's six beds, the bunk houses and the tents) is the cap: no call
 ## comes when everyone here, and everyone on the way, already has a bed. A newcomer is sometimes bitten
 ## (`bitten` in their def), and then the infection rules take over.
 ##
@@ -140,6 +141,19 @@ func call_due() -> bool:
 	if queue.is_empty() and generated >= MAX_GENERATED:
 		return false
 	return housing_free() >= 1
+
+
+## Whether the next caller is heard even with nobody at the Radio desk (round 16: the radio trap). The authored survivors
+## who did not start (Ana, Walt, Hector, whichever are still waiting) call in whatever the desk; a stranger, and the radio's
+## ordinary news, need someone sitting there. Said of the front of the queue only: the authored ones are always in front.
+func call_guaranteed() -> bool:
+	if not small or queue.is_empty():
+		return false
+	return STORY.has(String(queue[0].get("id", "")))
+
+
+## The words that open the card when the call came in with nobody at the desk ("" when someone took it).
+const EMPTY_DESK_INTRO := "The desk was empty, but the set had been left on, and a voice came through the static. "
 
 
 ## The caller on the table: the first of the queue (made now if the queue is empty), or {}.

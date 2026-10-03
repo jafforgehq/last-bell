@@ -1,0 +1,145 @@
+{
+ "density": 192.0,
+ "tools": {
+  "hammer": {
+   "file": "res://assets/objects/tool_hammer.png",
+   "w": 128,
+   "h": 60,
+   "grip": [
+    28,
+    30
+   ],
+   "axis": true
+  },
+  "mallet": {
+   "file": "res://assets/objects/tool_mallet.png",
+   "w": 112,
+   "h": 64,
+   "grip": [
+    24,
+    32
+   ],
+   "axis": true
+  },
+  "hoe": {
+   "file": "res://assets/objects/tool_hoe.png",
+   "w": 224,
+   "h": 100,
+   "grip": [
+    62,
+    38
+   ],
+   "axis": true
+  },
+  "can": {
+   "file": "res://assets/objects/tool_can.png",
+   "w": 104,
+   "h": 80,
+   "grip": [
+    32,
+    10
+   ],
+   "axis": true
+  },
+  "clipboard": {
+   "file": "res://assets/objects/tool_clipboard.png",
+   "w": 56,
+   "h": 74,
+   "grip": [
+    28,
+    56
+   ],
+   "axis": false
+  },
+  "bottle": {
+   "file": "res://assets/objects/tool_bottle.png",
+   "w": 32,
+   "h": 62,
+   "grip": [
+    16,
+    40
+   ],
+   "axis": false
+  },
+  "mug": {
+   "file": "res://assets/objects/tool_mug.png",
+   "w": 40,
+   "h": 36,
+   "grip": [
+    16,
+    20
+   ],
+   "axis": false
+  },
+  "mic": {
+   "file": "res://assets/objects/tool_mic.png",
+   "w": 52,
+   "h": 30,
+   "grip": [
+    14,
+    15
+   ],
+   "axis": true
+  },
+  "plank": {
+   "file": "res://assets/objects/tool_plank.png",
+   "w": 180,
+   "h": 32,
+   "grip": [
+    44,
+    16
+   ],
+   "axis": true
+  },
+  "saw": {
+   "file": "res://assets/objects/tool_saw.png",
+   "w": 160,
+   "h": 60,
+   "grip": [
+    24,
+    30
+   ],
+   "axis": true
+  },
+  "crate": {
+   "file": "res://assets/objects/tool_crate.png",
+   "w": 84,
+   "h": 84,
+   "grip": [
+    42,
+    42
+   ],
+   "axis": false
+  },
+  "binoculars": {
+   "file": "res://assets/objects/tool_binoculars.png",
+   "w": 76,
+   "h": 40,
+   "grip": [
+    10,
+    17
+   ],
+   "axis": true
+  },
+  "binoculars_front": {
+   "file": "res://assets/objects/tool_binoculars_front.png",
+   "w": 68,
+   "h": 44,
+   "grip": [
+    34,
+    22
+   ],
+   "axis": false
+  },
+  "headset": {
+   "file": "res://assets/objects/tool_headset.png",
+   "w": 156,
+   "h": 120,
+   "grip": [
+    78,
+    74
+   ],
+   "axis": false
+  }
+ }
+}

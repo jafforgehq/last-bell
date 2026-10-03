@@ -434,11 +434,15 @@ func _radio_hour() -> void:
 	if radio_day == sim.day or sim.phase != "day" or sim.hour < RADIO_HOUR:
 		return
 	radio_day = sim.day
-	if sim.over != "" or not _card.is_empty() or speaker() == null:
+	if sim.over != "" or not _card.is_empty():
 		return
-	# a survivor asking the way in (recruits.gd) comes before the day's draw
-	var card := card_named("survivor_call") if sim.recruits.call_due() else {}
+	# a survivor asking the way in (recruits.gd) comes before the day's draw; the first callers come even with nobody at the
+	# desk (round 16), a stranger and the day's news need someone there
+	var desk = speaker()
+	var card := card_named("survivor_call") if sim.recruits.call_due() and (desk != null or sim.recruits.call_guaranteed()) else {}
 	if card.is_empty():
+		if desk == null:
+			return
 		card = draw(sim.day)
 	if not card.is_empty():
 		_take(card)
@@ -493,7 +497,7 @@ func _deliver(card: Dictionary, ctx: Dictionary) -> void:
 		_card["changes"] = out.changes
 		_settled(card, text, out, ctx)
 	else:
-		sim.alert("story", "info", "%s has news on the radio" % ctx.speaker, "%s: answer by %s" % [_fmt(String(card.title), ctx), _clock_text(float(_card.due))], null, float(card.wait) * 20.0 + 6.0)
+		sim.alert("story", "info", ("%s has news on the radio" % ctx.speaker) if sp != null else "There is a call on the radio", "%s: answer by %s" % [_fmt(String(card.title), ctx), _clock_text(float(_card.due))], null, float(card.wait) * 20.0 + 6.0)
 	sim.events.append({"type": "story_card"})
 
 
@@ -670,6 +674,8 @@ func _context(card: Dictionary) -> Dictionary:
 					ctx["caller"] = String(def.name).split(" ")[0]
 					ctx["caller_role"] = String(def.get("role", "survivor")).to_lower()
 					ctx["caller_line"] = line if line != "" else "A voice comes through the static, thin and tired: someone alone, asking whether there is room behind the wall."
+					# nobody at the desk (the first callers are heard anyway): the card says so
+					ctx["caller_intro"] = _desk_intro()
 			"place":
 				var tip: String = sim.town.tip_place() if sim.town.on else ""
 				if tip != "":
@@ -684,6 +690,11 @@ func _context(card: Dictionary) -> Dictionary:
 						break
 				ctx["lookout"] = look.first if look != null else "The lookout"
 	return ctx
+
+
+## The opening words of a call's card: nothing when someone is at the Radio desk, else that the set was left on.
+func _desk_intro() -> String:
+	return "" if speaker() != null else String(sim.recruits.EMPTY_DESK_INTRO)
 
 
 func _where(seg) -> String:

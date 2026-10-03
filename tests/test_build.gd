@@ -53,7 +53,7 @@ func test_the_plots_and_the_catalogue_are_sound() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ids := {}
-	eq(sim.build.plots().size(), 9, "nine homes (round 15)")
+	eq(sim.build.plots().size(), 11, "eleven homes (round 15, and the two tents of round 16)")
 	var by_kind := {"yard": 0, "wall": 0}
 	for pl in sim.build.plots():
 		check(not ids.has(pl.id), "plot ids are unique: %s" % pl.id)
@@ -64,8 +64,8 @@ func test_the_plots_and_the_catalogue_are_sound() -> void:
 		check(String(pl.home) != "" and String(pl.why) != "", "%s is the home of a building and says why" % pl.id)
 		eq(pl.building, "", "%s starts empty" % pl.id)
 		check(pl.site.is_empty(), "and with no site")
-	eq(by_kind, {"yard": 6, "wall": 3}, "six homes on the yard and three on the north wall")
-	eq(sim.build.catalogue().size(), 7, "seven buildings")
+	eq(by_kind, {"yard": 8, "wall": 3}, "eight homes on the yard and three on the north wall")
+	eq(sim.build.catalogue().size(), 8, "eight buildings")
 	var seen := {}
 	for b in sim.build.catalogue():
 		check(not seen.has(b.id), "building ids are unique: %s" % b.id)
@@ -96,7 +96,7 @@ func test_plot_at_finds_the_lot_a_point_is_in() -> void:
 func test_the_yard_has_a_home_for_everything_in_the_catalogue_and_no_more() -> void:
 	var g := _game()
 	var sim = g.sim
-	# round 15: every building has its own home, so what the catalogue holds is what the nine homes hold
+	# round 15: every building has its own home, so what the catalogue holds is what the eleven homes hold
 	var wanted := 0
 	for b in sim.build.catalogue():
 		eq(sim.build.homes_of(String(b.id)).size(), int(b.max), "%s has %d homes" % [b.id, int(b.max)])
@@ -575,7 +575,7 @@ func test_a_save_from_before_the_cut_loads_and_leaves_out_what_is_no_more() -> v
 		check(b.sim.build.plot(id).is_empty(), "%s is not a plot of this game" % id)
 	check(b.sim.build.plot("east_lot").is_empty(), "the east lot is no plot of this game")
 	check(b.sim.build.plot("north_east_lot").is_empty(), "nor is the north-east lot")
-	eq(b.sim.build.plots().size(), 9, "the plots are the nine homes")
+	eq(b.sim.build.plots().size(), 11, "the plots are the eleven homes")
 	var standing := 0
 	for pl in b.sim.build.plots():
 		if pl.building != "":

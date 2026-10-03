@@ -368,7 +368,7 @@
       "min_day": 2,
       "max_day": 29,
       "title": "A voice on the radio",
-      "text": "{caller_line}",
+      "text": "{caller_intro}{caller_line}",
       "pick": ["caller"],
       "choices": [
         {

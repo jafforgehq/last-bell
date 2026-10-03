@@ -13,6 +13,7 @@
       "icon": "ammo",
       "blurb": "Makes ammo from scrap while the stock is under the target; mends walls when there is nothing to make.",
       "what": "At the workbench",
+      "work": "bench",
       "settings": {
         "ammo_target": {
           "label": "Make ammo until the stock reaches",
@@ -43,8 +44,16 @@
       "seats": 3,
       "skill": "Building",
       "icon": "repair",
-      "blurb": "Mends the most worn wall by day while there is scrap, and builds what you order on the Build screen (N).",
+      "blurb": "Mends the most worn wall by day while there is scrap, builds what you order on the Build screen (N), and sorts materials in the yard when there is nothing to do.",
       "what": "Walking the wall",
+      "work": "hammer",
+      "idle_pos": [
+        29.4,
+        41.4
+      ],
+      "idle_where": "the builders' yard",
+      "idle_what": "Sorting materials",
+      "idle_work": "haul",
       "settings": {
         "repair_below": {
           "label": "Mend walls that are under",
@@ -69,6 +78,7 @@
       "icon": "food",
       "blurb": "Each hour of work grows food.",
       "what": "Tending the garden",
+      "work": "garden",
       "settings": {}
     },
     {
@@ -84,6 +94,7 @@
       "icon": "meds",
       "blurb": "Treats the hurt and the sick first; patients in the beds heal faster while someone is on duty.",
       "what": "Sorting medicine",
+      "work": "nurse",
       "settings": {}
     },
     {
@@ -97,8 +108,9 @@
       "seats": 1,
       "skill": "Leading",
       "icon": "radio",
-      "blurb": "Takes the noon call. With nobody at the desk the radio stays silent.",
+      "blurb": "Takes the noon call. With nobody here only the first survivors call.",
       "what": "Working the radio",
+      "work": "radio",
       "settings": {}
     },
     {
@@ -114,6 +126,7 @@
       "icon": "post",
       "blurb": "Watches the road and tells the crew, two hours before dusk, what tonight looks like.",
       "what": "Keeping watch",
+      "work": "watch",
       "settings": {}
     },
     {
@@ -129,8 +142,23 @@
       "icon": "scrap",
       "blurb": "Sorts the yard's junk into scrap: 0.4 an hour for each person here.",
       "what": "Sorting salvage",
+      "work": "sort",
       "requires": "salvage_bench",
       "settings": {}
     }
-  ]
+  ],
+  "rest": {
+    "what": "Resting",
+    "work": "rest",
+    "spots": [
+      {"pos": [38.9, 40.55], "face": "N"},
+      {"pos": [40.3, 40.55], "face": "N"},
+      {"pos": [46.3, 39.5], "face": "S"},
+      {"pos": [47.7, 39.5], "face": "S"},
+      {"pos": [46.3, 41.8], "face": "N"},
+      {"pos": [47.7, 41.8], "face": "N"},
+      {"pos": [37.8, 39.3], "face": "E"},
+      {"pos": [41.5, 39.3], "face": "W"}
+    ]
+  }
 }

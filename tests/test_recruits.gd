@@ -97,12 +97,21 @@ func test_no_call_comes_on_day_one_or_without_someone_at_the_desk() -> void:
 	_at_noon(sim)
 	check(sim.storyteller.pending().is_empty(), "day one is quiet")
 	g.world.free()
+	# (round 16: the first callers, the authored three, come anyway: see the radio trap below; a stranger needs the desk)
 	var h := _small(2)
 	var s2 = h.sim
+	for i in 3:
+		_pop_caller(s2)
 	s2.jobs.unassign(_person(s2, "ruth"))
 	_at_noon(s2)
-	check(s2.storyteller.pending().is_empty(), "and with nobody at the desk the radio stays silent")
+	check(s2.storyteller.pending().is_empty(), "and with nobody at the desk the radio stays silent for a stranger")
 	h.world.free()
+
+
+## Takes the front of the queue away (it is what a caller who has come is), the way the tests of the later callers need.
+func _pop_caller(sim) -> void:
+	if not sim.recruits.queue.is_empty():
+		sim.recruits.queue.pop_front()
 
 
 func test_telling_them_the_way_in_brings_them_to_the_gate_at_seven_next_morning() -> void:
@@ -505,4 +514,151 @@ func test_a_crew_of_five_fills_the_beds_after_one_caller() -> void:
 	var g := Helpers.make(41, 1, 5)
 	var sim = g.sim
 	eq(int(sim.recruits.housing_free()) if sim.recruits.has_method("housing_free") else int(sim.build.housing()) - sim.recruits.crew_size(), 1, "the school's six beds: one is free for the next caller")
+	g.world.free()
+
+
+# ------------------------------------------------------------- the radio trap (round 16) --
+## The first callers (the authored survivors who did not start: Ana, Walt and Hector, whichever are still waiting) are
+## heard even when nobody sits at the Radio desk, so a crew whose desk is empty by luck is not stuck without calls. A
+## stranger (the callers after them) and the radio's ordinary news still need someone at the desk.
+
+## Takes Ruth off the desk and brings the radio hour of the day round.
+func _desk_empty_noon(sim) -> void:
+	sim.jobs.unassign(_person(sim, "ruth"))
+	_at_noon(sim)
+
+
+func test_the_first_caller_comes_on_day_two_with_nobody_at_the_desk() -> void:
+	var g := _small()
+	var sim = g.sim
+	eq(sim.jobs.crew_of("radio").size(), 1, "Ruth holds the desk to begin with")
+	_desk_empty_noon(sim)
+	check(sim.jobs.operator("radio") == null, "nobody is at the desk")
+	var up: Dictionary = sim.storyteller.pending()
+	eq(String(up.get("id", "")), "survivor_call", "the radio brings a call all the same")
+	check(String(up.text).to_lower().contains("desk"), "the card says the desk was empty: '%s'" % up.text)
+	check(String(up.text).contains("Is there a bed behind that wall"), "and still carries what Ana said: '%s'" % up.text)
+	check(not String(up.text).contains("{") and not String(up.title).contains("{"), "no word is left unfilled")
+	check(up.choices[0].enabled and String(up.choices[0].hint).contains("Ana"), "the way in can be told to Ana")
+	check(sim.storyteller.choose(0), "and it is told")
+	eq(sim.recruits.incoming.size(), 1, "Ana is on the way")
+	g.world.free()
+
+
+func test_with_someone_at_the_desk_the_card_is_what_it_was() -> void:
+	var g := _small()
+	var sim = g.sim
+	_at_noon(sim)
+	var up: Dictionary = sim.storyteller.pending()
+	eq(String(up.id), "survivor_call", "a call")
+	eq(String(up.speaker), "Ruth", "Ruth took it")
+	check(not String(up.text).to_lower().contains("empty"), "nothing is said of an empty desk: '%s'" % up.text)
+	g.world.free()
+
+
+func test_the_first_three_callers_come_with_an_empty_desk_and_the_fourth_does_not() -> void:
+	var heard: Array = []
+	for n in 4:
+		var g := _small()
+		var sim = g.sim
+		for i in n:
+			sim.recruits.queue.pop_front()    # the ones before have come
+		_desk_empty_noon(sim)
+		var up: Dictionary = sim.storyteller.pending()
+		heard.append(String(sim.recruits.current_caller().get("id", "")) if String(up.get("id", "")) == "survivor_call" else "")
+		g.world.free()
+	eq(heard.slice(0, 3), ["ana", "walt", "hector"], "Ana, Walt and Hector are heard with nobody at the desk")
+	eq(heard[3], "", "the fourth caller, a stranger, is not")
+
+
+func test_a_stranger_is_heard_once_someone_sits_at_the_desk() -> void:
+	var g := _small()
+	var sim = g.sim
+	for i in 3:
+		sim.recruits.queue.pop_front()
+	eq(String(sim.recruits.current_caller().get("id", "")).begins_with("r1_"), true, "the caller on the table is a stranger")
+	check(not sim.recruits.call_guaranteed(), "a stranger's call is not guaranteed")
+	_at_noon(sim)
+	eq(String(sim.storyteller.pending().get("id", "")), "survivor_call", "with Ruth at the desk the stranger's call comes")
+	check(not String(sim.storyteller.pending().text).to_lower().contains("empty"), "and says nothing of an empty desk")
+	g.world.free()
+
+
+func test_the_daily_news_still_needs_the_desk() -> void:
+	var g := _small()
+	var sim = g.sim
+	for i in 3:
+		sim.recruits.queue.pop_front()
+	_desk_empty_noon(sim)
+	check(sim.storyteller.pending().is_empty(), "no news and no stranger's call with nobody at the desk")
+	g.world.free()
+	# an authored caller does not bring the day's draw with them: only the call
+	var h := _small()
+	var s2 = h.sim
+	s2.recruits.next_call_day = 99    # no call due today
+	_desk_empty_noon(s2)
+	check(s2.storyteller.pending().is_empty(), "a day with no call due is silent with the desk empty")
+	h.world.free()
+
+
+func test_call_guaranteed_is_about_the_authored_survivors_still_waiting() -> void:
+	var g := Helpers.make(41, 1, 5)
+	var sim = g.sim
+	check(sim.recruits.call_guaranteed(), "a crew of five: Hector is still to call")
+	sim.recruits.queue.pop_front()
+	check(not sim.recruits.call_guaranteed(), "and when he has come, the strangers need the desk")
+	g.world.free()
+	var c := Helpers.make(41, 1, 6)
+	check(not c.sim.recruits.call_guaranteed(), "the classic start has no callers at all")
+	c.world.free()
+	var d := Helpers.make(41, 1, 3)
+	check(d.sim.recruits.call_guaranteed(), "a crew of three: Ana, Walt and Hector are all still waiting")
+	d.sim.recruits.queue.clear()
+	check(not d.sim.recruits.call_guaranteed(), "an empty queue has nobody guaranteed")
+	d.world.free()
+
+
+func test_the_empty_desk_alert_says_a_call_will_still_come_for_the_first_callers() -> void:
+	var g := _small()
+	var sim = g.sim
+	sim.jobs.unassign(_person(sim, "ruth"))
+	sim.minutes = 11.4 * 60.0
+	sim.clock_min = float(sim.day - 1) * 1440.0 + (11.4 * 60.0 - 420.0)
+	Helpers.run(sim, 5.0)    # past 11:30
+	check(sim.alerts.has("job-radio"), "the empty desk is still said (the day's news needs it)")
+	var al: Dictionary = sim.alerts.get("job-radio", {})
+	var sub := String(al.get("sub", al.get("detail", "")))
+	check(sub.to_lower().contains("call") and (sub.to_lower().contains("still") or sub.to_lower().contains("anyway")), "it says the next survivor's call comes anyway: '%s' / %s" % [sub, str(al)])
+	g.world.free()
+	# with a stranger on the table the words are the old ones
+	var h := _small()
+	var s2 = h.sim
+	for i in 3:
+		s2.recruits.queue.pop_front()
+	s2.jobs.unassign(_person(s2, "ruth"))
+	s2.minutes = 11.4 * 60.0
+	s2.clock_min = float(s2.day - 1) * 1440.0 + (11.4 * 60.0 - 420.0)
+	Helpers.run(s2, 5.0)
+	var al2: Dictionary = s2.alerts.get("job-radio", {})
+	check(not al2.is_empty() and String(al2.get("sub", al2.get("detail", ""))).contains("no call at noon"), "a stranger's call still needs someone: %s" % str(al2))
+	h.world.free()
+
+
+# ---------------------------------------------------------------- tents (round 16) --
+
+func test_tents_make_room_for_callers_past_the_schools_six() -> void:
+	var g := Helpers.make(41, 1, 5)
+	var sim = g.sim
+	sim.recruits.queue.pop_front()
+	sim.add_person(sim.recruits.make_def(0))    # Hector has come: six people, six beds
+	sim.day = 9
+	eq(sim.recruits.housing_free(), 0, "the school is full")
+	check(not sim.recruits.call_due(), "no call comes")
+	sim.build.plot("tents_home_1").building = "tents"
+	sim.build.version += 1
+	eq(sim.recruits.housing_free(), 2, "a tent gives two beds")
+	check(sim.recruits.call_due(), "and the calls come again")
+	sim.build.plot("tents_home_2").building = "tents"
+	sim.build.version += 1
+	eq(sim.recruits.housing_free(), 4, "two tents, four beds: a crew of ten")
 	g.world.free()

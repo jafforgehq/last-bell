@@ -24,8 +24,8 @@ const CREW_LINES := [
 	"All six from the first morning, in the old schoolyard. Nobody calls in.",
 ]
 const CREW_FACTS := [
-	"A call can come at noon from day 2, when someone is at the radio desk and a bed is free. Nights are smaller while the crew is.",
-	"The school has six beds, so one caller fits before you build a bunk house. Nights are a little smaller than the full night while the crew is.",
+	"A call can come at noon from day 2 when a bed is free (the first three callers even with the desk empty, later ones when someone is at the radio desk). Nights are smaller while the crew is.",
+	"The school has six beds, so one caller fits before you build tents or a bunk house. Nights are a little smaller than the full night while the crew is.",
 	"The nights are the full nights from the first day, and there are no recruits (and no town to travel to).",
 ]
 ## The lengths of the game to choose from (the campaign is round 10): what each is called and the line on its card.

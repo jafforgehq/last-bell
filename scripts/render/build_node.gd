@@ -273,11 +273,12 @@ func _rebuild() -> void:
 	for pl in sim.build.plots():
 		var origin := Vector2(pl.pos)
 		var east := origin.x > 42.0
+		var n := int(pl.get("n", 1))
 		var b := String(pl.building)
 		if b != "":
 			var art := art_of(b)
 			for pr in art.get("props", []):
-				_add_prop(pr, origin, east)
+				_add_prop(pr, origin, east, n)
 			for def in art.get("lights", []):
 				_add_light(def, origin)
 		elif not pl.site.is_empty():
@@ -292,9 +293,9 @@ func _rebuild() -> void:
 					for pr in own.get("props", []):
 						var faint: Dictionary = pr.duplicate()
 						faint["a"] = ghost
-						_add_prop(faint, at, east)
+						_add_prop(faint, at, east, n)
 				for pr in props:
-					_add_prop(pr, at, east)
+					_add_prop(pr, at, east, n)
 
 
 ## Where a site's heap of materials stands: the middle of the plot, or, for a wall across a street, every few tiles along it.
@@ -320,8 +321,12 @@ func _texture(file: String) -> Texture2D:
 
 
 ## One picture of a building or a site: `pr` is an entry of the art's props (see the file's _doc).
-func _add_prop(pr: Dictionary, origin: Vector2, east: bool) -> void:
+func _add_prop(pr: Dictionary, origin: Vector2, east: bool, n := 1) -> void:
 	var file := String(pr.get("e", pr.f)) if east else String(pr.f)
+	# `by_n`: the picture for each of the building's homes in turn (the orange tent and the green one)
+	var by_n = pr.get("by_n", [])
+	if by_n is Array and not by_n.is_empty():
+		file = String(by_n[clampi(n - 1, 0, by_n.size() - 1)])
 	var tex := _texture(file)
 	if tex == null:
 		return

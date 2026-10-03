@@ -767,7 +767,7 @@ func goal_for(p):
 		word = "Treating"
 	elif patient.downed and not patient.stabilised:
 		word = "Stabilising"
-	return {"x": stand.x, "y": stand.y, "face": _face(patient.x - stand.x, patient.y - stand.y), "what": "%s %s" % [word, patient.first]}
+	return {"x": stand.x, "y": stand.y, "face": _face(patient.x - stand.x, patient.y - stand.y), "what": "%s %s" % [word, patient.first], "work": "nurse"}
 
 
 func _face(dx: float, dy: float) -> String:
