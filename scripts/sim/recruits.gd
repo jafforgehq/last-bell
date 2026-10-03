@@ -182,6 +182,19 @@ func current_caller() -> Dictionary:
 	return queue[0]
 
 
+## The caller `n` places down the queue (0 is `current_caller`): made now while the queue is short, {} when there is none. The live road's
+## survivor on the way home is the caller after the ones already taken in on the way there (they join only when the party is home).
+func caller_at(n: int) -> Dictionary:
+	if not small or n < 0:
+		return {}
+	while queue.size() <= n:
+		if generated >= MAX_GENERATED:
+			return {}
+		queue.append(make_def(generated))
+		generated += 1
+	return queue[n]
+
+
 ## "Tell them the way in": the caller will reach the gate at 07:00 tomorrow. False if there is no caller or no bed.
 func accept() -> bool:
 	var def := current_caller()

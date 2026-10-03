@@ -140,14 +140,22 @@ func damage_to(z, dmg: float, weak: bool) -> float:
 ## Whether the pellet's ray (from `from` along `dir`, any length) passes within weak_r x size of the head's centre,
 ## (z.x, z.y - head x size): the body's centre is BODY (0.3) up, as `Avatar.trace` has it. Only a plated brute has a weak point.
 func weak_hit(z, from: Vector2, dir: Vector2) -> bool:
+	return weak_along(z, from, dir) >= 0.0
+
+
+## How far along the ray (from `from`, along `dir`) the head's disc is met: the distance to the point nearest the head's middle, or -1.0 when the ray
+## does not pass within weak_r x size of it (or the rules do not apply). `weak_hit` is this; `Avatar.trace` takes a plated brute's head as part of
+## the brute with it, since the head's disc sticks out of the body's: one geometry for the pellet, the rules and the ring that shows it.
+func weak_along(z, from: Vector2, dir: Vector2) -> float:
 	if z == null or not z.plated or not active() or dir.length_squared() < 1.0e-12:
-		return false
+		return -1.0
 	var size := float(z.size)
 	var head := Vector2(z.x, z.y - NightData.num("plated.head") * size) - from
 	var ray := dir.normalized()
-	if head.dot(ray) < 0.0:
-		return false
-	return absf(head.cross(ray)) <= NightData.num("plated.weak_r") * size
+	var along := head.dot(ray)
+	if along < 0.0 or absf(head.cross(ray)) > NightData.num("plated.weak_r") * size:
+		return -1.0
+	return along
 
 
 ## A defender's shot at a plated brute: one die (rng.randf() < npc_weak); no die for anything else.

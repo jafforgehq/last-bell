@@ -99,6 +99,7 @@ var tank_label: Label
 var hp_head: Label
 var hp_bar
 var hp_note: Label
+var hp_gate: Label
 var mini_speed: Label
 var mini_speed_bar
 var mini_fuel: Label
@@ -171,8 +172,9 @@ func _car():
 	return _g("car")
 
 
+## A car is something to drive and to read: not one that is a wreck (the squad is out of it, the rest of the road is on foot: no gauges).
 func _has_car() -> bool:
-	return _car() != null
+	return _car() != null and not bool(_g("_wrecked", false))
 
 
 func _live() -> bool:
@@ -405,6 +407,10 @@ func _build_dash() -> void:
 	info.add_child(hp_bar)
 	hp_note = hud._label("", Fonts.sans(600), 12, Hud.DANGER_TEXT)
 	info.add_child(hp_note)
+	hp_gate = hud._label("", Fonts.sans(600), 12, Hud.WARN)
+	hp_gate.tooltip_text = "The place's danger wears the vehicle when it comes home: it is taken off the bar at the gate."
+	hp_gate.mouse_filter = Control.MOUSE_FILTER_PASS
+	info.add_child(hp_gate)
 	roomy_box.add_child(info)
 	roomy_box.visible = false
 	dash.add_child(roomy_box)
@@ -503,7 +509,7 @@ func hp_now() -> Dictionary:
 
 ## The words of the gauges, for the board and for the tests.
 func gauge_words() -> Dictionary:
-	var out := {"speed": "", "kmh": "", "fuel": "", "tank": "", "hp": "", "hp_note": "", "progress": "%d%%" % roundi(_progress() * 100.0), "delta": delta_text()}
+	var out := {"speed": "", "kmh": "", "fuel": "", "tank": "", "hp": "", "hp_note": "", "gate": "", "gate_lost": false, "progress": "%d%%" % roundi(_progress() * 100.0), "delta": delta_text()}
 	if not _has_car():
 		return out
 	out.speed = speed_word(_speed(), _cruise())
@@ -516,7 +522,29 @@ func gauge_words() -> Dictionary:
 	out.hp = "%s %d%%" % [String(h.name), roundi(float(h.share) * 100.0)]
 	if float(h.share) < SMOKING_BELOW:
 		out.hp_note = "The engine is smoking"
+	var wear := gate_wear()
+	if wear > 0.0:
+		var points := float(_car().get("hp"))
+		out.gate_lost = points - wear <= 0.0
+		out.gate = ("Lost at the gate: -%s more (the place's danger)" if out.gate_lost else "-%s more at the gate (the place's danger)") % num(wear)
 	return out
+
+
+## The place's danger wears the vehicle when it is home (the colony's `vehicles.come_home`: 5 for each point of danger): on the way home
+## the bar says what the gate will take (a car at 8 hp from a danger-2 place does not make it).
+func gate_wear() -> float:
+	if _leg() != "home" or not _has_car():
+		return 0.0
+	var flow = _g("flow")
+	var cs = scene.colony() if scene != null else null
+	if flow == null or cs == null or cs.get("vehicles") == null or cs.get("scavenge") == null or flow.get("place_id") == null:
+		return 0.0
+	var danger := 0
+	for site in cs.scavenge.sites:
+		if String(site.id) == String(flow.place_id):
+			danger = int(site.get("danger", 0))
+			break
+	return float(cs.vehicles.WEAR_PER_DANGER) * float(danger)
 
 
 func _update_gauges() -> void:
@@ -545,6 +573,9 @@ func _update_gauges() -> void:
 	hp_bar.color = hp_color
 	hp_note.text = String(words.hp_note)
 	hp_note.visible = String(words.hp_note) != ""
+	hp_gate.text = String(words.gate)
+	hp_gate.visible = String(words.gate) != ""
+	hp_gate.add_theme_color_override("font_color", Hud.DANGER_TEXT if bool(words.gate_lost) else Hud.WARN)
 	# the narrow form
 	mini_speed.text = "%s %s" % [words.speed, words.kmh]
 	mini_speed_bar.value = speed_share
@@ -552,8 +583,9 @@ func _update_gauges() -> void:
 	mini_fuel.text = String(words.fuel).trim_prefix("Fuel ")
 	mini_fuel_bar.value = fuel_share
 	mini_fuel_bar.color = fuel_color
-	mini_hp.text = ("Smoking! %d%%" % roundi(share * 100.0)) if String(words.hp_note) != "" else String(words.hp)
-	mini_hp.add_theme_color_override("font_color", Hud.DANGER_TEXT if String(words.hp_note) != "" else Hud.INK)
+	var gate_note: bool = bool(words.gate_lost)
+	mini_hp.text = ("Lost at gate! %d%%" % roundi(share * 100.0)) if gate_note else (("Smoking! %d%%" % roundi(share * 100.0)) if String(words.hp_note) != "" else String(words.hp))
+	mini_hp.add_theme_color_override("font_color", Hud.DANGER_TEXT if (String(words.hp_note) != "" or gate_note) else Hud.INK)
 	mini_hp_bar.value = share
 	mini_hp_bar.color = hp_color
 	for b in [fuel_bar, hp_bar, mini_speed_bar, mini_fuel_bar, mini_hp_bar]:
@@ -561,7 +593,7 @@ func _update_gauges() -> void:
 	dial.queue_redraw()
 	mini_fuel.tooltip_text = "%s\n%s" % [words.fuel, words.tank]
 	mini_fuel.mouse_filter = Control.MOUSE_FILTER_PASS
-	mini_hp.tooltip_text = String(words.hp) if String(words.hp_note) == "" else "%s: %s" % [words.hp, words.hp_note]
+	mini_hp.tooltip_text = (String(words.hp) if String(words.hp_note) == "" else "%s: %s" % [words.hp, words.hp_note]) + ("\n" + String(words.gate) if String(words.gate) != "" else "")
 	mini_hp.mouse_filter = Control.MOUSE_FILTER_PASS
 	mini_speed.tooltip_text = "Speed. Past cruising you arrive early and the car takes the knocks."
 	mini_speed.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -1031,6 +1063,11 @@ func _refresh_place(run) -> void:
 func road_line() -> String:
 	var home := _leg() == "home"
 	var dest := "home" if home else place_phrase_of(place_name())
+	# what matters now is the scene's to say (a card's real default, a friend who is down, the head home asked for, a wreck)
+	if scene != null and scene.has_method("road_note"):
+		var note := String(scene.road_note())
+		if note != "":
+			return note
 	match _mode():
 		"stopped":
 			return "Choose, or drive on. The base goes on without you."

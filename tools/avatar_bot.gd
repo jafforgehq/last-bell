@@ -39,7 +39,10 @@ class Sections:
 ##          station, then the ones coming to it. It fires only along a clear line (`avatar.trace`), after REACT_S on a new target, standing
 ##          still, with the mouse AIM_JITTER radians off; it swings at what is in arm's reach; it reloads in a lull; it mends the wall it
 ##          holds with E when it is down or under MEND_BELOW and no dead is near.
-##   HURT. Below HURT_HP (or bleeding below SAFE_HP) it goes to the nearest bed and stays until SAFE_HP and no bleeding.
+##   HURT. Bleeding below SAFE_HP it goes to the nearest bed (the medic comes to a bleeding person and bandages them) and goes back to its
+##          wall when the bleeding has stopped, or after HURT_REST_S at the longest, and does not go again for HURT_PAUSE_S. Nothing heals a
+##          person who stands, so it never waits for its health: a low health that does not bleed is fought on with (round 19 fix: it used to
+##          sit in the bed for ever below HURT_HP, and every lab row of the bot after its first wound was an idle row).
 ##   CALLS. `going` -> coming (reinforce when away), `brute` -> coming if plated else watch, `breach` -> close (and it goes to mend),
 ##          `attack` -> hold, `night` -> hold; a call is read for ANSWER_S first; the rest are left to their own clocks.
 class AvatarBot:
@@ -49,8 +52,12 @@ class AvatarBot:
 	const ARRIVE_R := 0.5
 	const STAND_R := 1.0
 	const SWITCH_GAIN := 1.5
+	## Below this health the avatar counts as played hurt (the row's `hurt_s`); a bleeding wound under SAFE_HP sends it to a bed.
 	const HURT_HP := 45.0
 	const SAFE_HP := 75.0
+	## How long (rules seconds) it rests at a bed at the longest, and how long it does not go again after that (a bandage takes ten game minutes).
+	const HURT_REST_S := 25.0
+	const HURT_PAUSE_S := 45.0
 	const MAG_LOW := 3
 	const LULL_R := 8.0
 	const MEND_BELOW := 0.5
@@ -110,6 +117,8 @@ class AvatarBot:
 	var _target_class := 99
 	var _target_since := -10.0
 	var _hurt := false
+	var _hurt_since := 0.0
+	var _hurt_block_until := -10.0
 	var _seen: Dictionary = {}
 	var _called: Dictionary = {}
 	var _mend_t := -10.0
@@ -246,10 +255,14 @@ class AvatarBot:
 
 	func _update_hurt(me) -> void:
 		if not _hurt:
-			if float(me.hp) < HURT_HP or (float(me.bleeding) > 0.0 and float(me.hp) < SAFE_HP):
+			if _t >= _hurt_block_until and float(me.bleeding) > 0.0 and float(me.hp) < SAFE_HP:
 				_hurt = true
-		elif float(me.hp) >= SAFE_HP and float(me.bleeding) <= 0.0:
-			_hurt = false
+				_hurt_since = _t
+		elif float(me.bleeding) <= 0.0:
+			_hurt = false    # (bandaged, or it stopped by itself: nothing more a bed can do)
+		elif _t - _hurt_since >= HURT_REST_S:
+			_hurt = false    # (nobody came: a bounded rest, then back to the wall)
+			_hurt_block_until = _t + HURT_PAUSE_S
 
 	func _bed_for(pos: Vector2) -> Vector2:
 		var best := pos
@@ -587,6 +600,8 @@ class NightStats:
 	const READY_HOUR := 18.5
 	## The mark on an event this has counted.
 	const MARK := "_ns"
+	## A night is played hurt when the avatar bled or was under AvatarBot.HURT_HP for this long (rules seconds) of it (the table's `hurt%`).
+	const HURT_NIGHT_S := 30.0
 
 	var sim
 	var mode := "none"
@@ -699,7 +714,7 @@ class NightStats:
 			"ready": bool(ready.get("holds", false)), "ready_known": bool(ready.get("known", false)),
 			"people": alive, "stock_ammo0": snappedf(float(sim.stock.ammo), 0.1), "stock_ammo": 0.0,
 			"first_at": float(outlook.get("first_at", -1.0)), "targets": _targets.duplicate(), "first_claw_at": -1.0,
-			"avatar": {"present": 0.0, "threat_steps": 0, "present_steps": 0, "shots": 0, "kills": 0, "hp_min": 100.0, "downed": 0, "died": 0, "ammo": 0.0},
+			"avatar": {"present": 0.0, "threat_steps": 0, "present_steps": 0, "shots": 0, "kills": 0, "hp_min": 100.0, "downed": 0, "died": 0, "ammo": 0.0, "hurt_s": 0.0},
 			"calls": {"raised": 0, "answered_by_player": 0, "by_default": 0, "mean_s": 0.0},
 			"brute_s": [],
 		}
@@ -809,6 +824,8 @@ class NightStats:
 				av["kills"] = int(av.kills) + (kills - _av_kills)
 			_av_kills = kills
 			av["hp_min"] = minf(float(av.hp_min), float(_av.hp))
+			if not _av.dead and not _av.downed and (float(_av.hp) < AvatarBot.HURT_HP or float(_av.bleeding) > 0.0):
+				av["hurt_s"] = float(av.get("hurt_s", 0.0)) + dt    # (played hurt: a lab row of a bot that bleeds says so)
 			if bool(_av.downed) and not _av_was_down:
 				av["downed"] = int(av.downed) + 1
 			_av_was_down = bool(_av.downed)
@@ -858,6 +875,7 @@ class NightStats:
 		av["present"] = snappedf(float(av.present_steps) / float(steps), 0.001) if steps > 0 else 0.0
 		av.erase("_dead")
 		av["hp_min"] = snappedf(float(av.hp_min), 0.1)
+		av["hurt_s"] = snappedf(float(av.get("hurt_s", 0.0)), 0.1)
 		av["ammo"] = snappedf(float(av.ammo), 0.1)
 		var calls: Dictionary = out.calls
 		var n := int(calls.answered_by_player)
@@ -893,7 +911,7 @@ static func aggregate(rows: Array) -> Dictionary:
 	var n := rows.size()
 	var out := {"n": n, "held": 0.0, "held_ready": -1.0, "n_ready": 0, "held_not": -1.0, "n_not": 0, "fell": 0.0, "died": 0.0, "downed": 0.0,
 		"bites": 0.0, "hp_lost": 0.0, "presence": 0.0, "shots": 0.0, "ammo": 0.0, "raised": 0.0, "answered": 0.0, "by_default": 0.0,
-		"av_downed": 0.0, "av_died": 0.0, "lost_games": 0.0, "size": 0.0, "min_wall": 0.0, "stock_ammo": 0.0}
+		"av_downed": 0.0, "av_died": 0.0, "av_hurt": 0.0, "lost_games": 0.0, "size": 0.0, "min_wall": 0.0, "stock_ammo": 0.0}
 	if n == 0:
 		return out
 	var held := 0
@@ -903,6 +921,7 @@ static func aggregate(rows: Array) -> Dictionary:
 	var not_held := 0
 	var steps := 0
 	var near := 0
+	var hurt_nights := 0
 	for r in rows:
 		var h := bool(r.get("held", false))
 		held += 1 if h else 0
@@ -929,6 +948,8 @@ static func aggregate(rows: Array) -> Dictionary:
 		out["ammo"] = float(out.ammo) + float(av.get("ammo", 0.0))
 		out["av_downed"] = float(out.av_downed) + float(av.get("downed", 0))
 		out["av_died"] = float(out.av_died) + float(av.get("died", 0))
+		if float(av.get("hurt_s", 0.0)) >= NightStats.HURT_NIGHT_S:
+			hurt_nights += 1
 		var calls: Dictionary = r.get("calls", {})
 		out["raised"] = float(out.raised) + float(calls.get("raised", 0))
 		out["answered"] = float(out.answered) + float(calls.get("answered_by_player", 0))
@@ -937,6 +958,7 @@ static func aggregate(rows: Array) -> Dictionary:
 		out[k] = float(out[k]) / float(n)
 	out["held"] = float(held) / float(n)
 	out["lost_games"] = float(out.lost_games) / float(n)
+	out["av_hurt"] = float(hurt_nights) / float(n)
 	out["presence"] = float(near) / float(steps) if steps > 0 else 0.0
 	out["n_ready"] = ready_n
 	out["n_not"] = not_n
@@ -949,7 +971,7 @@ static func aggregate(rows: Array) -> Dictionary:
 
 ## The header of the table of cells (`cell_line`).
 static func table_header() -> String:
-	return "cell        mode    nights | held%  ready/not | fell  died downed  bites hp lost | present | shots  ammo | calls ans def | av down died | lost%"
+	return "cell        mode    nights | held%  ready/not | fell  died downed  bites hp lost | present | shots  ammo | calls ans def | av down died hurt% | lost%"
 
 
 static func _pct(v: float) -> String:
@@ -959,10 +981,10 @@ static func _pct(v: float) -> String:
 ## One line of the table: a cell is a group of nights of one mode.
 static func cell_line(label: String, mode: String, rows: Array) -> String:
 	var a := aggregate(rows)
-	return "%-11s %-7s %6d | %s  %s/%s | %4.2f %5.2f %5.2f %6.2f %7.0f | %6.2f | %5.1f %5.1f | %5.1f %3.1f %3.1f | %4.2f %4.2f | %4.0f%%" % [
+	return "%-11s %-7s %6d | %s  %s/%s | %4.2f %5.2f %5.2f %6.2f %7.0f | %6.2f | %5.1f %5.1f | %5.1f %3.1f %3.1f | %4.2f %4.2f %5.0f%% | %4.0f%%" % [
 		label, mode, int(a.n), _pct(float(a.held)), _pct(float(a.held_ready)), _pct(float(a.held_not)), float(a.fell), float(a.died), float(a.downed),
 		float(a.bites), float(a.hp_lost), float(a.presence), float(a.shots), float(a.ammo), float(a.raised), float(a.answered), float(a.by_default),
-		float(a.av_downed), float(a.av_died), 100.0 * float(a.lost_games)]
+		float(a.av_downed), float(a.av_died), 100.0 * float(a.av_hurt), 100.0 * float(a.lost_games)]
 
 
 ## The table of a list of rows (any modes): a line for each group of days and each mode, groups in the order 1-9, 11+, big.

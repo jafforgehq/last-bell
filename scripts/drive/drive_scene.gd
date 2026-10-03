@@ -55,6 +55,8 @@ const MISSED_BEHIND := 8.0
 ## How near the car the squad must be to board (tiles), how long a card waits for an answer (seconds, the def's `ttl_s` overrides),
 ## how long a car may stand with nothing the matter before the squad pushes it clear.
 const BOARD_R := 6.0
+## A friend who is down at a stop is left only by a second press of E within this many seconds of the first (it says so).
+const LEAVE_ASK_S := 5.0
 const CARD_TTL := 8.0
 ## The autopilot answers a card this soon (it is the squad's own driver: the safe option, at once enough to be seen).
 const AUTO_ANSWER_S := 2.5
@@ -142,9 +144,12 @@ var _hp_seen := 0.0
 var _dust_t := 0.0
 var _scrape_t := 0.0
 var _out_spots := {}
+var _leave_down_asked := -99.0
 var _hitch_layer: CanvasLayer
 var _hitch_label: Label
 var _pending: Callable
+var _pending_skip := 0
+var _built := true
 var _probe_c := Callable()
 var _orig_goal := Callable()
 var _backdrop: Sprite2D
@@ -202,6 +207,56 @@ func begin_trip(the_flow) -> void:
 	_started = true
 
 
+## Whether `main.open_raid` opens a trip behind the card (`open_trip`): in a real window, yes (the build of the first leg is 250 to 850 ms
+## headless and more on the web: a game that freezes at the click is no answer to it); headless the build is at once (the tests and the
+## staging of a screenshot, `--drive=`, take the scene as it is returned).
+static var card_first := true
+
+
+func wants_card() -> bool:
+	return card_first and DisplayServer.get_name() != "headless"
+
+
+## `open_raid`'s way in when `wants_card()`: the colony's view is put away and the card ("Driving to the pharmacy...") is up at once, and
+## the road is built a frame later (`setup_trip`, then `begin_trip`), so that the click is answered by a card and not by a frozen game.
+## Nothing of the scene is there until it is built (`built()`): the keys are not taken, the steps wait.
+func open_trip(game, game_hud, base_data: Dictionary, the_flow, the_place: Dictionary, the_maker: Callable, going: Array, ammo: float, vehicle_kind_id: String, loot_mult: float, survivor: bool) -> void:
+	main = game
+	hud = game_hud
+	_built = false
+	var where := String(the_place.get("name", "the place"))
+	if where.begins_with("The "):
+		where = "the " + where.trim_prefix("The ")
+	_make_hitch_layer()
+	_hide_colony()
+	_hitch(("Driving to %s..." if vehicle_kind_id != "" else "Walking to %s...") % where, func():
+		setup_trip(game, game_hud, base_data, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor)
+		begin_trip(the_flow)
+		_built = true)
+	_pending_skip = 1    # (this frame's own step comes before the card is drawn: the build is the next frame's)
+
+
+func built() -> bool:
+	return _built
+
+
+## The colony's view is put away once (`open_trip` does it before the build, and `setup` asks again).
+func _hide_colony() -> void:
+	if not _saved.is_empty():
+		return
+	super()
+
+
+func _input(ev: InputEvent) -> void:
+	if _built:
+		super(ev)
+
+
+func _unhandled_input(ev: InputEvent) -> void:
+	if _built:
+		super(ev)
+
+
 ## The seed the trip's road and plan are made from (a screenshot's `--drive=place,<seed>` is the site's, else the run's own).
 func _seed_of(game, the_place: Dictionary, cs) -> int:
 	var rs = game.get("raid_seed")
@@ -228,6 +283,13 @@ func _mount_parts() -> void:
 	overlay = DriveOverlay.new()
 	overlay.scene = self
 	overlay_layer.add_child(overlay)
+	_make_hitch_layer()
+
+
+## The card that hides a build (a stage's, or the trip's own: `open_trip` makes it first). Made once.
+func _make_hitch_layer() -> void:
+	if _hitch_layer != null:
+		return
 	_hitch_layer = CanvasLayer.new()
 	_hitch_layer.layer = 6
 	_hitch_layer.visible = false
@@ -478,7 +540,8 @@ func _add_figures() -> void:
 		for j in list.size():
 			var def: Dictionary = {}
 			if String(e.id) == "survivor" and j == 0:
-				def = cs.recruits.current_caller()
+				# (the caller after the ones already taken in on this trip: the way home does not offer the same person twice)
+				def = cs.recruits.caller_at(int(flow.road_survivors) if flow != null and flow.get("road_survivors") != null else 0)
 			if def.is_empty():
 				def = cs.recruits.make_def(40 + k)
 			k += 1
@@ -503,17 +566,19 @@ func _sleep_the_dead() -> void:
 	run.sim.zombies.clear()
 
 
-## The night road (road.ambient: headlights, more of the dead, a few runners among them).
-func _apply_ambient() -> void:
+## The night road (road.ambient: headlights, more of the dead, a few runners among them). `from_t` is how far along the road the extra dead
+## may be put (a leg that meets dusk on its way puts them ahead of the car, none behind it).
+func _apply_ambient(from_t: float = 0.18) -> void:
 	for a in road.get("ambient", []):
 		var mult := float(a.get("dead_mult", 1.0))
 		if mult <= 1.0 or _dormant.is_empty():
 			continue
-		var extra := roundi(float(_dormant.size()) * (mult - 1.0))
+		var span := maxf(0.0, 0.95 - from_t) / (0.95 - 0.18)
+		var extra := roundi(float(_dormant.size()) * (mult - 1.0) * clampf(span, 0.0, 1.0))
 		var rng := RandomNumberGenerator.new()
 		rng.seed = _trip_seed + 77
 		for i in extra:
-			var at := _road_point(rng.randf_range(0.18, 0.95), rng.randf_range(-6.0, 6.0))
+			var at := _road_point(rng.randf_range(from_t, 0.95), rng.randf_range(-6.0, 6.0))
 			if at == Vector2.ZERO:
 				continue
 			var kind := "runner" if rng.randf() < float(a.get("runner_share", 0.0)) else "walker"
@@ -913,6 +978,9 @@ func search_key() -> bool:
 	if in_car():
 		return bool(press_stop().get("ok", false))
 	if car != null and not _wrecked and (mode == "out" or mode == "foot"):
+		# a friend who is down is got up first, whatever the work (the place's own rule: stand beside them, HELP_S seconds)
+		if find_help_target() != null or run.helping_of(leader()) != null:
+			return super()
 		if work_left > 0.0:
 			hud_layer.toast("They are still at it", "info")
 			return false
@@ -943,6 +1011,13 @@ func press_stop() -> Dictionary:
 			hud_layer.toast("They are still at it", "info")
 			return {"ok": false, "what": "working"}
 		if _squad_near_car():
+			var down := _downed_squad()
+			if not down.is_empty():
+				# nobody drives off without them: the first E says so, a second one (within LEAVE_ASK_S) leaves them
+				if _leg_clock - _leave_down_asked > LEAVE_ASK_S:
+					_leave_down_asked = _leg_clock
+					hud_layer.toast("%s is down: stand beside them and press E. E again leaves them." % _names_of(down), "warn")
+					return {"ok": false, "what": "downed"}
 			_board()
 			return {"ok": true, "what": "boarded"}
 		hud_layer.toast("Get everyone back to the car first", "warn")
@@ -970,6 +1045,22 @@ func press_stop() -> Dictionary:
 
 func _can_board_now() -> bool:
 	return car != null and not _wrecked and (mode == "out" or mode == "foot") and work_left <= 0.0 and _squad_near_car()
+
+
+## The people of the squad who are down (alive: they are lost if the car drives on without them).
+func _downed_squad() -> Array:
+	var out: Array = []
+	for p in run.squad:
+		if p.downed and not p.dead:
+			out.append(p)
+	return out
+
+
+func _names_of(people: Array) -> String:
+	var names: Array = []
+	for p in people:
+		names.append(String(p.first))
+	return " and ".join(names)
 
 
 func _squad_near_car() -> bool:
@@ -1207,6 +1298,7 @@ func _work_step(dt: float) -> void:
 		return
 	if mode != "out":
 		return
+	_help_the_downed()
 	if work_left > 0.0:
 		work_left = maxf(0.0, work_left - dt)
 		if work_left <= 0.0:
@@ -1214,8 +1306,39 @@ func _work_step(dt: float) -> void:
 				_open_dyn(String(id), true, Vector2(0.0, 0.0))
 			_clearing = []
 		return
-	if _squad_near_car() and not _wrecked:
+	# (nobody drives off without a friend who is down: they are got up first, by the squad or by E)
+	if _squad_near_car() and not _wrecked and _downed_squad().is_empty():
 		_board()
+
+
+## Out at a stop, a friend who goes down is got up by the nearest of the squad who is free (not the player's own pawn, not at the
+## guns): the place's `order_help` (they walk to them, HELP_S seconds beside them). Looked at a few times a second; the one you lead
+## helps by hand (E beside them).
+func _help_the_downed() -> void:
+	if _leg_steps % 10 != 0:
+		return
+	for friend in _downed_squad():
+		var taken := false
+		for q in run.squad:
+			var h = run.helping_of(q)
+			if h != null and h == friend:
+				taken = true
+				break
+		if taken:
+			continue
+		var best = null
+		var best_d := INF
+		for q in run.squad:
+			if q == friend or q.player or q.dead or q.downed or run.helping_of(q) != null:
+				continue
+			if run.squad_ai.active() and run.squad_ai.engaged(q):
+				continue
+			var d := Vector2(q.x, q.y).distance_to(Vector2(friend.x, friend.y))
+			if d < best_d:
+				best_d = d
+				best = q
+		if best != null:
+			run.order_help(best, friend)
 
 
 ## The place of everyone aboard in the car's frame, then in the world: the leader at the wheel.
@@ -1267,10 +1390,10 @@ func _squad_goal(p):
 	if _is_road():
 		if _is_aboard(p):
 			return {"x": p.x, "y": p.y, "face": "", "what": "In the car"}
-		if mode == "out" and _out_spots.has(String(p.id)) and not p.player and not p.downed and not p.dead:
+		if mode == "out" and (_out_spots.has(String(p.id)) or work_left <= 0.0) and not p.player and not p.downed and not p.dead:
 			if run.squad_ai.active() and run.squad_ai.engaged(p):
 				return {"x": p.x, "y": p.y, "face": "", "what": "Shooting"}
-			var at: Vector2 = _out_spots[String(p.id)] if work_left > 0.0 else Vector2(car.pos)
+			var at: Vector2 = _out_spots.get(String(p.id), Vector2(car.pos)) if work_left > 0.0 else Vector2(car.pos)
 			return {"x": at.x, "y": at.y, "face": "", "what": "Working" if work_left > 0.0 else "Back to the car"}
 	if _orig_goal.is_valid():
 		return _orig_goal.call(p)
@@ -1299,6 +1422,7 @@ func _drive_step() -> void:
 	sim_steps += 1
 	_progress = maxf(_progress, _progress_now())
 	_stream_dead()
+	_night_watch()
 	_events_step(dt)
 	_card_step(dt)
 	_work_step(dt)
@@ -1405,7 +1529,8 @@ func _pilot(dt: float) -> Dictionary:
 		if z.state == "dying" or z.state == "dead":
 			continue
 		if absf(z.y - here.y) < 24.0 and absf(z.x - here.x) < 12.0:
-			near.append(Vector2(z.x, z.y))
+			# (a brute is told as one: it is the one the autopilot slows for, the others it ploughs)
+			near.append({"pos": Vector2(z.x, z.y), "kind": "brute"} if z.kind == "brute" else Vector2(z.x, z.y))
 	var halt := mode == "stopped" or _coasting != "" or open_uid != "" or _stopping_for != ""
 	var aware := {"probe": _probe_c, "dead": near, "halt": halt}
 	var e := _next_stop()
@@ -1626,8 +1751,8 @@ func _trigger_dead(e: Dictionary) -> void:
 
 ## The puncture: the throttle is cut and the car coasts; when it stands the card opens.
 func _trigger_forced(e: Dictionary) -> void:
-	if car == null:
-		e["state"] = "missed"
+	if car == null or _wrecked:
+		e["state"] = "missed"    # (no car to puncture: none, or a wreck the squad has walked away from)
 		return
 	_coasting = String(e.uid)
 	_banner(String(e.get("def", {}).get("title", "A puncture")), String(e.get("def", {}).get("text", "")))
@@ -1635,9 +1760,11 @@ func _trigger_forced(e: Dictionary) -> void:
 		met.append(String(e.uid))
 
 
-## A car that has stood with nothing the matter is pushed back to its road.
+## A car that is being driven (W held, or the autopilot) and does not move for STUCK_S seconds is pushed back to its road. A car nobody
+## is driving (the player reading a radio call or the News) stands where it is.
 func _stuck_check(dt: float) -> void:
-	if car == null or mode != "drive" or absf(float(car.speed)) > 0.4 or _stopping_for != "" or _coasting != "":
+	if car == null or mode != "drive" or absf(float(car.speed)) > 0.4 or _stopping_for != "" or _coasting != "" or paused \
+			or not (autopilot or _throttle > 0.0):
 		_stuck_t = 0.0
 		return
 	_stuck_t += dt
@@ -1732,6 +1859,27 @@ func _pose_car(first: bool) -> void:
 	car_node.apply(p.pos, p.heading, _steer_now, _braking, share, lights)
 
 
+## A leg that did not start as a night road and meets dusk anyway (it took longer than the road's own minutes: a stop, slow driving, the
+## grass) becomes one when the colony's hour says night: the headlights, more of the dead ahead and a few runners among them, once. (The
+## events' `ambient_for` decides a leg's night at its start from the abstract minutes; this is the same word, said again by the clock.)
+func _night_watch() -> void:
+	if not _is_road() or _leg_steps % 30 != 0:
+		return
+	for a in road.get("ambient", []):
+		if String(a.get("id", "")) == "night_road":
+			return
+	var cs = colony()
+	var events = module("road_events")
+	if cs == null or events == null or not events.has_method("ambient_for"):
+		return
+	var amb: Array = events.ambient_for({"road_min": 1.0, "hour": float(cs.hour), "dusk": float(cs.seasons.dusk_hour()), "dawn": float(cs.seasons.dawn_hour())})
+	if amb.is_empty():
+		return
+	road["ambient"] = amb
+	_apply_ambient(clampf(_progress + 0.05, 0.18, 0.95))
+	clock_banner("Night falls on the road", "The dead are out. Headlights on")
+
+
 func _has_headlights() -> bool:
 	for a in road.get("ambient", []):
 		if bool(a.get("headlights", false)):
@@ -1740,6 +1888,8 @@ func _has_headlights() -> bool:
 
 
 func _sync_views(first: bool) -> void:
+	if phase == "report":
+		return    # (the trip ended inside this step: the report's roster has the lost ones' old people, whose pawns the stage no longer has)
 	super(first)
 	if not _is_road():
 		return
@@ -1797,17 +1947,40 @@ func _check_way_out() -> void:
 func hint_line() -> String:
 	if not _is_road():
 		return super()
+	var note := road_note()
+	if note != "":
+		return note
+	if mode == "foot":
+		return "Walk to the end of the road."
+	return "W S A D drive; E stop at what is ahead; Tab hands the wheel to the squad."
+
+
+## What the line under the road's name says when the plain "drive to the place" is not what matters now: a wreck, the head home asked for
+## (on the road there), the squad out at a stop (or a friend who is down), a card with its real default. "" when it is the plain drive:
+## the HUD (`DriveHud.road_line`) shows this in place of its own line (review of round 21: the hint was never seen on a road, and it said
+## the first option was the default, which is the second on most cards).
+func road_note() -> String:
+	if not _is_road():
+		return ""
 	if _wrecked:
 		return "The car is done. Walk to the end of the road."
 	if leg == "there" and leave_requested() and (mode == "drive" or mode == "foot"):
 		return NightKit.leave_hint_there(night_road())
 	if mode == "out":
+		var down := _downed_squad()
+		if not down.is_empty():
+			return "%s is down: stand beside them and press E." % _names_of(down)
 		return "Out of the car: E when they are done." if work_left <= 0.0 else "They are working (%d s). The dead come to the noise." % int(ceilf(work_left))
 	if mode == "stopped":
-		return "1 2 3 choose; the first option is taken in %d s." % int(ceilf(card_left))
-	if mode == "foot":
-		return "Walk to the end of the road."
-	return "W S A D drive; E stop at what is ahead; Tab hands the wheel to the squad."
+		var def_label := ""
+		for o in card_options():
+			if bool(o.get("auto", false)) and bool(o.get("ok", true)):
+				def_label = String(o.label)
+				break
+		if def_label != "":
+			return "1 2 3 choose. If you do not, \"%s\" in %d s." % [def_label, int(ceilf(card_left))]
+		return "1 2 3 choose, or drive on: the card closes in %d s (E opens it again)." % int(ceilf(card_left))
+	return ""
 
 
 ## The night's request to head home (round 19: the road call's "Head home now") is for the place: the squad is asked to go back at the
@@ -1858,6 +2031,7 @@ func leg_result() -> Dictionary:
 	for id in _wounds:
 		hurt[id] = "bite" if String(_wounds[id]) == "bite" or String(hurt.get(id, "")) == "bite" else "scratch"
 	var out := {"leg": leg, "hp": played.get("hp", {}), "lost": played.get("lost", []), "hurt": hurt,
+		"trust": run.sim.radio.trust_moved.duplicate(),    # (what the road's own radio moved: a push to go on, an order insisted on)
 		"ammo_used": float(played.get("ammo_used", 0.0)), "vehicle_hp_lost": wear, "wrecked": _wrecked,
 		"failed": run.living().is_empty() or (played.get("lost", []) as Array).size() >= run.squad.size(), "progress": _progress}
 	if played.has("leader"):
@@ -1967,6 +2141,9 @@ func _to_report() -> void:
 
 func tick(delta: float) -> void:
 	if _pending.is_valid() and not done:
+		if _pending_skip > 0:
+			_pending_skip -= 1    # (the card is drawn first)
+			return
 		_begin_pending()
 	super(delta)
 

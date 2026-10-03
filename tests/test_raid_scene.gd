@@ -96,6 +96,7 @@ func _play(scene: Node, seconds: float) -> void:
 
 
 func _leave(main: Node) -> void:
+	PlaceFlow.live_enabled = true    # (this file turns the live road off for its trips: the next file starts from it on)
 	await TutorialKit.leave(main)
 
 

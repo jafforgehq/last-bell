@@ -140,6 +140,10 @@ static func resize(width: int, height: int) -> void:
 ## The game given back: freed, the window and the preferences as they were, the test's save gone
 ## (unless `keep_save`: a test that loads it next).
 static func leave(main: Node, keep_save: bool = false) -> void:
+	# (round 21: the flags of the road that the files of the overlay's trips turn off are static: every test ends with the live road on)
+	PlaceFlow.live_enabled = true
+	PlaceFlow.fast_road = false
+	PlaceFlow.no_events = false
 	main.queue_free()
 	await Engine.get_main_loop().process_frame
 	var win: Window = Engine.get_main_loop().root

@@ -1468,8 +1468,9 @@ func road_minutes(place_id: String, vehicle_id: String = "") -> float:
 ## home), "leave_by" (the hour of the day the party must leave the place by to be home `forecast.road_margin_min` before the dusk), "home_by"
 ## (the hour it would be home: the road there, `site_hours` in the place and the road back; it may pass 24), "makes_it" (it would leave the
 ## place in time), "text"}. The rule it explains is `_is_due`: in the settlement game a party is due only while it is day, so a trip
-## that reaches the gate after the dusk is out until morning, and on a Big Night the base holds the night alone. The text is "" when there
-## is nothing to say (no avatar, not by day, an ordinary night and a trip that is home in time).
+## sent without the avatar that reaches the gate after the dusk is out until morning; a trip he leads is driven live and comes in by night as
+## well (`arrive_home`), so for it the dusk means a road home in the dark and a base that holds the first of a Big Night until he is back.
+## The text is "" when there is nothing to say (no avatar, not by day, an ordinary night and a trip that is home in time).
 func night_warning(place_id: String, vehicle_id: String = "", site_hours: float = 1.0) -> Dictionary:
 	var road := road_minutes(place_id, vehicle_id)
 	var dusk: float = sim.seasons.dusk_hour()
@@ -1484,12 +1485,14 @@ func night_warning(place_id: String, vehicle_id: String = "", site_hours: float 
 	if not avatar or String(sim.phase) != "day":
 		return out
 	var takes := NightCalls.duration_text(road)
+	# (what a late trip means depends on who drives it: a trip the avatar leads is a live drive and comes in by night too, home in the dark and the base
+	# holds the first of the night until he is back; one sent without him is out until morning, `_is_due`, and he is at the base for the night)
 	if big and makes_it:
-		out["text"] = "Big Night tonight: leave the place by %s (the road home takes %s), or stay out and the base holds alone" % [NightCalls.clock_text(leave_by), takes]
+		out["text"] = "Big Night tonight: leave the place by %s (the road home takes %s), or drive home in the dark and the base holds the first of the night alone" % [NightCalls.clock_text(leave_by), takes]
 	elif big:
-		out["text"] = "Big Night tonight, and this trip cannot be home in time (the road home takes %s): go another day, or stay out and the base holds alone" % takes
+		out["text"] = "Big Night tonight, and this trip cannot be home before the dusk (the road home takes %s): go another day, or drive home in the dark and the base holds the first of the night alone" % takes
 	elif not makes_it:
-		out["text"] = "This trip is not home before the dusk (%s): the party would be out until morning" % NightCalls.clock_text(dusk)
+		out["text"] = "This trip is not home before the dusk (%s): led by you, you drive home in the dark; sent without you, the party is out until morning" % NightCalls.clock_text(dusk)
 	return out
 
 
@@ -1508,13 +1511,17 @@ func why_not_played(people: Array, place_id: String, action: String = "loot", ve
 
 ## The player's trip begins: the party is made at once, "in_place", and returned ({} when it is refused: `why_not_played`).
 ## Its people (the avatar may be one) are away from this moment, the vehicle is out and its fuel burnt as `send` does it,
-## the place is raided. No result yet and nothing due: `finish_played` ends it. See the header.
-func begin_played(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "") -> Dictionary:
+## the place is raided. No result yet and nothing due: `finish_played` ends it. See the header. `live` (round 21, set by the flow: the avatar drives
+## it): the road home is driven, and the party comes in by night as well, so the dusk does not leave it out until morning (`party.live`: what
+## the radio's road line and the Map say of the dusk, round 19; not saved: a load falls back to the abstract return, which is day only).
+func begin_played(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "", live: bool = false) -> Dictionary:
 	if why_not_played(people, place_id, action, vehicle_id) != "":
 		return {}
 	var party := _open_party(people, place_id, action, vehicle_id)
 	party["state"] = IN_PLACE
 	party["played"] = true
+	if live:
+		party["live"] = true
 	party["result"] = {"loot": {}, "hurt": {}, "lost": []}
 	parties.append(party)
 	for p in people:

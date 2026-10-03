@@ -89,7 +89,7 @@ func test_a_big_night_says_by_when_the_party_must_leave_the_place() -> void:
 	var text := String(w.text)
 	check(text.begins_with("Big Night tonight: leave the place by %s" % NightCalls.clock_text(float(w.leave_by))), "the text says when: %s" % text)
 	check(text.contains("the road home takes %s" % NightCalls.duration_text(road)), "and how long the road is: %s" % text)
-	check(text.contains("stay out and the base holds alone"), "and that staying out is allowed: %s" % text)
+	check(text.contains("or drive home in the dark and the base holds the first of the night alone"), "and what being late means for a trip he drives (round 21: it comes in by night): %s" % text)
 	g.world.free()
 
 
@@ -98,7 +98,7 @@ func test_a_trip_that_cannot_be_home_in_time_says_so() -> void:
 	var sim = g.sim
 	var w: Dictionary = sim.scavenge.night_warning("houses", "", 12.0)
 	check(not bool(w.makes_it), "twelve hours at the houses is not home before the dusk")
-	check(String(w.text).contains("cannot be home in time") and String(w.text).contains("stay out"), "it says so: %s" % String(w.text))
+	check(String(w.text).contains("cannot be home before the dusk") and String(w.text).contains("drive home in the dark"), "it says so: %s" % String(w.text))
 	g.world.free()
 	var h := _game(false, 8.0)
 	var s2 = h.sim
@@ -454,9 +454,10 @@ func test_the_real_waves_make_the_milestone_night_a_big_one_for_the_warning() ->
 	sim.waves.enabled = false
 	sim.zombies.clear()
 	Helpers.at(sim, DAY, 8.0)
+	check(not sim.waves.big_night(DAY).is_empty(), "day %d is a real Big Night (a test of the real waves does not pass by finding none; round 19 review F8)" % DAY)
 	if sim.waves.big_night(DAY).is_empty():
 		g.world.free()
-		return    # (the real Big Nights are not in yet: the fake's tests above stand for them)
+		return
 	var w: Dictionary = sim.scavenge.night_warning("houses", "", 1.0)
 	check(bool(w.big), "tonight is a Big Night by the real waves")
 	check(String(w.text).begins_with("Big Night tonight"), "and the Map says so: %s" % String(w.text))

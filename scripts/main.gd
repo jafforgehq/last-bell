@@ -180,6 +180,9 @@ var raid = null
 var trip_report = null
 ## A seed for the next played trip's site (a screenshot's `--raid=<place>,<seed>`); -1: the run's, the place's and the day's.
 var raid_seed := -1
+## Whether a live trip opens behind the card in a real window (`DriveScene.open_trip`); a screenshot's staging (`--drive=`) takes the scene
+## built, and turns it off while it opens it.
+var trip_card := true
 ## `--raid-stub`: a played trip's site comes from the stand-in (scripts/raid/stub_site.gd), not the generator.
 var raid_stub := false
 ## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
@@ -1048,8 +1051,12 @@ func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: 
 		add_child(drive)
 		var make_place_site := func(squad_size: int, by_car: bool) -> Dictionary:
 			return maker.make(place, seed_value, squad_size, by_car)
-		drive.setup_trip(self, hud, data, flow, place, make_place_site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
-		drive.begin_trip(flow)
+		if trip_card and drive.wants_card():
+			# (a real window: the card is up at once and the road is built a frame later; the scene is not there until `built()`)
+			drive.open_trip(self, hud, data, flow, place, make_place_site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
+		else:
+			drive.setup_trip(self, hud, data, flow, place, make_place_site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
+			drive.begin_trip(flow)
 		if on_done.is_valid():
 			drive.finished.connect(on_done)
 		return drive
@@ -2056,7 +2063,25 @@ func _handle_events() -> void:
 					sound.play("hammer", 0.8, 0.1)
 				else:
 					_on_wall_mended(e)
+			"call_raised":
+				_on_call_raised(e)
 	sim.events.clear()
+
+
+## A call that cannot wait has been raised (radio.gd `URGENT_KINDS`; round 19). A call's time is game minutes, about two real seconds at 3x for
+## a wall that is going, and nothing else slows the game: so at 2x or 3x the game drops to 1x, once for each call (the keys speed it up again),
+## and a small toast says why. A calm call, a call that is answered already, a paused game and a game with no avatar change nothing.
+func _on_call_raised(e: Dictionary) -> void:
+	if not bool(e.get("urgent", false)) or speed <= 1 or String(sim.player_id) == "":
+		return
+	var waiting := false
+	for c in sim.radio.open_calls():
+		if int(c.id) == int(e.get("id", -1)):
+			waiting = true
+	if not waiting:
+		return
+	speed = 1
+	hud.toast("Slowing down: a call is waiting", "warn")
 
 
 ## The avatar's hands have left a wall (a `wall_work` event with "on" false: the section, what it mended in wall hit points, why). A stop
@@ -2962,7 +2987,9 @@ func _stage_raid(spec: String, drive: bool = false) -> void:
 		sim.phase = sim.phase_at(sim.minutes)
 	var fast_before := PlaceFlow.fast_road
 	PlaceFlow.fast_road = not drive
+	trip_card = false    # (the staging steps that follow take the scene as it is returned)
 	open_raid(party, place, vehicle_id, 1.0, Callable())
+	trip_card = true
 	PlaceFlow.fast_road = fast_before
 	raid_seed = -1
 

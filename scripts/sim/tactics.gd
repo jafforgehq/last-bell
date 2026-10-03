@@ -49,6 +49,10 @@ var sim
 ## The section the alarm is set on (-1: none) and when it stops (sim.clock_min).
 var lure_id := -1
 var lure_until := 0.0
+## Whether the alarm was set for the night's brutes (round 19: the `night` call's alarm, `order_lure(seg, true)`): it rings until the dawn or until
+## the last brute of the night's plan has come in and is dead, not for LURE_HOURS (the brutes come after midnight; the old three hours ran out
+## before they did).
+var lure_brutes := false
 ## Whom the wall crew (or a chore) has sent to which section (id to id): they are called back
 ## at the bell.
 var auto_jobs := {}
@@ -73,6 +77,7 @@ func setup(s) -> void:
 func start() -> void:
 	lure_id = -1
 	lure_until = 0.0
+	lure_brutes = false
 	threat_until = 0.0
 	forecast_day = 0
 	forecast_who = ""
@@ -87,13 +92,15 @@ func forecast_hour() -> float:
 
 func update(dt: float) -> void:
 	if lure_id >= 0 and sim.clock_min >= lure_until:
-		lure_id = -1
+		_end_lure()
 	if sim.phase == "day" and sim.hour >= forecast_hour() and forecast_day != sim.day:
 		forecast_day = sim.day
 		_tell_the_forecast()
 	_t -= dt
 	if _t <= 0.0:
 		_t = 1.0
+		if lure_id >= 0 and lure_brutes and _brutes_are_done():
+			_end_lure()
 		_mend_walls()
 
 
@@ -107,6 +114,25 @@ func lure_seg():
 		if s.id == lure_id:
 			return s
 	return null
+
+
+func _end_lure() -> void:
+	lure_id = -1
+	lure_brutes = false
+
+
+## Whether tonight's plan has a brute in it that has not come in yet, or one is alive: the other way about, whether an alarm for the brutes has
+## nothing left to draw (`lure_brutes`).
+func _brutes_are_done() -> bool:
+	for z in sim.zombies:
+		if z.kind == Kinds.BRUTE and z.state != "dead" and z.state != "dying":
+			return false
+	var queue: Array = sim.waves.plan_for(sim.day).get("queue", [])
+	var from: int = int(sim.waves.spawned) if int(sim.waves.night_day) == int(sim.day) else 0
+	for i in range(from, queue.size()):
+		if queue[i] == Kinds.BRUTE:
+			return false
+	return true
 
 
 ## How long the alarm still rings, in game minutes.
@@ -134,6 +160,7 @@ func order_lure(seg) -> bool:
 	sim.stock.scrap = maxf(0.0, float(sim.stock.scrap) - LURE_COST)
 	lure_id = seg.id
 	lure_until = sim.clock_min + LURE_HOURS * 60.0
+	lure_brutes = false
 	# (round 19, avatar mode: every brute obeys the alarm, so that the player chooses the wall a plated brute breaks on: no die for it)
 	var brutes_obey: bool = sim.waves.avatar_mode()
 	for z in sim.zombies:
@@ -150,6 +177,27 @@ func order_lure(seg) -> bool:
 	sim.events.append({"type": "lure", "seg": seg.id})
 	sim.alert("lure", "info", "Alarm at the %s" % seg.name.to_lower(), "The dead are drawn to it for %d hours" % int(LURE_HOURS), seg.center, 10.0)
 	return true
+
+
+## The alarm of the `night` call (round 19, avatar mode: set at the forecast, for the brutes that come after midnight): the same alarm, the same
+## scrap, but it rings until the dawn, or until the night's brutes are dead if the plan has any, and not for LURE_HOURS.
+func order_lure_for_brutes(seg) -> bool:
+	if not order_lure(seg):
+		return false
+	if not sim.waves.avatar_mode():
+		return true
+	lure_until = sim.clock_min + fposmod(float(sim.seasons.dawn_hour()) - float(sim.hour), 24.0) * 60.0
+	lure_brutes = _plan_has_brutes()
+	sim.alert("lure", "info", "Alarm at the %s" % seg.name.to_lower(), "The dead are drawn to it %s" % ("until the brutes are down" if lure_brutes else "until dawn"), seg.center, 10.0)
+	return true
+
+
+## Whether the plan of the night that is coming (or is on) has a brute in it.
+func _plan_has_brutes() -> bool:
+	for k in sim.waves.plan_for(sim.day).get("queue", []):
+		if k == Kinds.BRUTE:
+			return true
+	return false
 
 
 # --------------------------------------------------------- the wall crew --
@@ -415,7 +463,7 @@ func gizmo(id: String, sel) -> bool:
 # -------------------------------------------------------------------- save --
 
 func save() -> Dictionary:
-	return {
+	var out := {
 		"lure_id": lure_id,
 		"lure_until": lure_until,
 		"threat_until": threat_until,
@@ -424,11 +472,15 @@ func save() -> Dictionary:
 		"forecast_who": forecast_who,
 		"t": _t,
 	}
+	if lure_brutes:
+		out["lure_brutes"] = true    # (only when it is so: a game with no avatar saves what it always did)
+	return out
 
 
 func load_state(d: Dictionary) -> void:
 	lure_id = int(d.get("lure_id", -1))
 	lure_until = float(d.get("lure_until", 0.0))
+	lure_brutes = bool(d.get("lure_brutes", false)) and lure_id >= 0
 	threat_until = float(d.get("threat_until", 0.0))
 	forecast_day = int(d.get("forecast_day", 0))
 	forecast_who = String(d.get("forecast_who", ""))

@@ -9,7 +9,8 @@
 ## key is optional:
 ##   "probe"    Callable(Vector2) -> {"solid", "ground", "dyn"}: the same probe the car is stepped with (without it the car's own
 ##              last probe is used: `car.last_probe`)
-##   "dead"     Array of the dead near the road: Vector2s, Dictionaries with "pos" (or "x" and "y"), or objects with x and y
+##   "dead"     Array of the dead near the road: Vector2s, Dictionaries with "pos" (or "x" and "y") and optionally "kind" ("brute"
+##              is the one that matters: the others are ploughed), or objects with x and y (and "kind")
 ##   "halt"     bool (alias "stop"): an open stop's card, a squad out working: stand still, and go on when it is false
 ##   "slow"     bool: something the scene saw: keep to CAUTION_SPEED
 ##   "stop_at"  float: the distance (tiles, from the car's middle) of something to stop short of
@@ -17,8 +18,13 @@
 ## HOW. Pure pursuit: the car aims at the point of `path` `max(6, 0.8 x speed, 0.9 x its length)` ahead of the nearest one, so a
 ## gap that the path goes through is taken, and a car that is off the path finds it again; where a solid stands close to the path
 ## the path is first nudged to the middle of the free space (a long body in a 4-wide gap must be in the middle of it). The speed
-## is 0.8 of cruise, brought down to CAUTION_SPEED when one of the dead is in the 3-wide corridor of the path ahead within 14
-## tiles, and eased down to it as the nose comes to a solid at the corridor's edge (a gap's wall). A solid IN the way (within the
+## is 0.8 of cruise (4.6 t/s and more, above the 4.0 that runs the dead over). The dead do NOT slow it: a car that creeps through them at
+## 2.5 t/s kills none, shoves the ones in front of its nose along the road, and the leg takes three times as long (round 21 review:
+## "the autopilot never recovers its speed"); the walkers, the runners and the brutes are ploughed as the player would plough them
+## (RUN_OVER_HP each, BRUTE_HP a brute, which is the price of a leg that ends). Only a car too hurt to pay for the dead of its corridor
+## (more than its hp less HP_RESERVE) creeps through them at CAUTION_SPEED (above the 2 t/s under which they claw): it must arrive as a
+## car. Walls and wrecks are another matter: the speed is eased down to CAUTION_SPEED
+## as the nose comes to a solid at the corridor's edge (a gap's wall). A solid IN the way (within the
 ## car's own width of the path) is a place to stop short of: the speed falls by what the brakes do comfortably so that the car
 ## stands STOP_MARGIN tiles from it and does not ram it (so does `stop_at`). An open card stops the car. A car that has been
 ## knocked, or has not moved for STUCK_S seconds while it wants to, backs away for BACK_S and goes on gently.
@@ -27,6 +33,8 @@ extends RefCounted
 
 const TARGET_SHARE := 0.8
 const CAUTION_SPEED := 2.5
+## The car keeps this much hp after ploughing the dead of the corridor (a hurt car creeps through them instead).
+const HP_RESERVE := 4.0
 const LOOK_MIN := 6.0
 const LOOK_MIN_FOOT := 3.0
 const LOOK_GAIN := 0.8
@@ -89,7 +97,8 @@ static func drive(car, road: Dictionary, dt: float, aware: Dictionary) -> Dictio
 		if stop_at < INF:
 			var room: float = maxf(0.0, stop_at - car.length * 0.5 - STOP_MARGIN)
 			vt = minf(vt, sqrt(2.0 * COMFORT_BRAKE * room))
-		if bool(caution.dead) or bool(aware.get("slow", false)):
+		var hurt: bool = float(caution.cost) > 0.0 and float(caution.cost) > float(car.hp) - HP_RESERVE
+		if hurt or bool(aware.get("slow", false)):
 			vt = minf(vt, CAUTION_SPEED)
 		if float(caution.edge) < INF:
 			# something at the edge of the corridor (a gap's wall): the nearer the nose is to it the slower
@@ -167,7 +176,7 @@ static func _path(car, road: Dictionary, st: Dictionary, aware: Dictionary) -> D
 	st["road"] = road
 	st["path"] = {"pts": pts, "cum": cum, "total": cum[cum.size() - 1], "centred": centred}
 	st["hint"] = -1
-	st["caution"] = {"stop": INF, "edge": INF, "dead": false}
+	st["caution"] = {"stop": INF, "edge": INF, "cost": 0.0}
 	return st.path
 
 
@@ -281,11 +290,11 @@ static func _point_at(path: Dictionary, s: float) -> Vector2:
 # --------------------------------------------------------------------------------------------- what is ahead --
 
 ## {"stop": the distance of what is in the way (INF for nothing), "edge": the distance of the first thing at the edge of the
-## corridor, "dead": one of the dead is in it ahead}.
+## corridor, "cost": the hp that ploughing the dead in it ahead would cost (RUN_OVER_HP each, BRUTE_HP a brute)}.
 static func _look(car, path: Dictionary, s: float, aware: Dictionary) -> Dictionary:
 	var stop := INF
 	var edge := INF
-	var dead_near := false
+	var cost := 0.0
 	var probe: Callable = aware.get("probe", car.last_probe)
 	var half: float = car.width * 0.5
 	var block_offs := [0.0, -half + 0.3, half - 0.3]
@@ -320,16 +329,23 @@ static func _look(car, path: Dictionary, s: float, aware: Dictionary) -> Diction
 						edge = float(k)
 						break
 	var dead = aware.get("dead", [])
-	if dead is Array and not dead.is_empty():
+	if dead is Array and not dead.is_empty() and not car.foot:    # (on foot nothing is run over: the walk is as slow as the caution)
 		var fwd: Vector2 = car.forward()
 		var right := Vector2(-fwd.y, fwd.x)
 		for z in dead:
 			var rel: Vector2 = _pos_of(z) - car.pos
 			var f: float = rel.dot(fwd)
 			if f > 0.0 and f <= CORRIDOR_LEN + car.length * 0.5 and absf(rel.dot(right)) <= half + EDGE_MARGIN + 0.3:
-				dead_near = true
-				break
-	return {"stop": stop, "edge": edge, "dead": dead_near}
+				cost += car.BRUTE_HP if _is_brute(z) else car.RUN_OVER_HP
+	return {"stop": stop, "edge": edge, "cost": cost}
+
+
+static func _is_brute(z) -> bool:
+	if z is Dictionary:
+		return String(z.get("kind", "")) == "brute"
+	if z is Object:
+		return String(z.get("kind")) == "brute"
+	return false
 
 
 static func _solid(q: Dictionary) -> bool:

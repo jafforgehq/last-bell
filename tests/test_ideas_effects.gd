@@ -110,6 +110,38 @@ func test_a_yes_to_fix_wall_mends_the_wall_to_full_and_pays_for_it() -> void:
 	_free(g)
 
 
+func test_the_mender_of_a_wall_idea_is_released_when_the_scrap_runs_out() -> void:
+	var g := Kit.game(4)
+	var sim = g.sim
+	Helpers.idle_stores(sim)
+	Kit.wear(sim, 5, 0.8)
+	var seg = sim.segments[5]
+	_answer(sim, "fix_wall", "yes")
+	var dez = Kit.who(sim, "dez")
+	check(dez.repair == seg, "Dez has the order to repair it")
+	Helpers.run(sim, 3.0)
+	check(dez.repair == seg and seg.hp < seg.max_hp, "he is at it (the wall is not whole yet)")
+	sim.stock.scrap = 0.0
+	Helpers.run(sim, 3.0)
+	check(dez.repair == null, "the scrap is gone: he is let go, he does not stand at the wall")
+	check(seg.hp < seg.max_hp, "(the wall is not whole)")
+	_free(g)
+
+
+func test_the_mender_of_a_wall_idea_goes_back_to_his_post_at_dusk() -> void:
+	var g := Kit.game(4)
+	var sim = g.sim
+	Helpers.idle_stores(sim)
+	Kit.wear(sim, 5, 0.8)
+	_answer(sim, "fix_wall", "yes")
+	var dez = Kit.who(sim, "dez")
+	check(dez.repair != null, "he is on the wall")
+	Kit.at(sim, 3, 19.6)
+	Helpers.run(sim, 3.0)
+	check(dez.repair == null, "at night the crew is at its posts: the order is over")
+	_free(g)
+
+
 func test_a_no_to_fix_wall_leaves_the_wall_alone() -> void:
 	var g := Kit.game(4)
 	var sim = g.sim
@@ -540,14 +572,63 @@ func test_a_yes_to_errand_sends_the_party() -> void:
 	var sim = g.sim
 	var id: int = Kit.raise(sim, "errand")
 	var e: Dictionary = sim.radio._entry(id)
-	near(float(e.due) - float(sim.clock_min), 60.0, 0.01, "the call waits until the parties stop leaving (10:00), not six hours")
+	near(float(e.due) - float(sim.clock_min), 60.0 - sim.game_hours(sim.radio.DELAY_SLOW) * 60.0, 0.01, "the call waits until the parties stop leaving (10:00) less the radio's longest delay (a yes at the last minute still sets off), not six hours")
 	check(sim.radio.answer(id, "yes"), "the answer is taken")
+	eq(sim.scavenge.parties.size(), 0, "nobody is out yet: the errand is in the radio's queue like any errand the player asks for")
+	eq(sim.radio.errand_wait.size(), 1, "one errand waits")
+	eq(sim.radio.errand_wait[0].ids, ["marcus", "dez"], "for Marcus and Dez")
+	sim.radio.tick(sim.radio.DELAY_SLOW + 0.1)
+	check(sim.radio.errand_wait.is_empty(), "after its delay it leaves the queue")
 	eq(sim.scavenge.parties.size(), 1, "a party is out")
 	eq(sim.scavenge.parties[0].members, ["marcus", "dez"], "Marcus and Dez")
 	eq(String(sim.scavenge.parties[0].site), "houses", "to the houses")
 	check(String(e.result).contains("Marcus and Dez"), "the result: %s" % e.result)
 	check(sim.scavenge.is_errand(sim.scavenge.parties[0]), "it is an errand (the player is not along): round 18's penalty applies")
 	check(bool(sim.scavenge.parties[0].result.get("errand", false)), "and its result says so")
+	_free(g)
+
+
+func test_a_yes_to_errand_at_the_last_minute_of_its_life_still_sets_off() -> void:
+	var g := _errand_game()
+	var sim = g.sim
+	var id: int = Kit.raise(sim, "errand")
+	var e: Dictionary = sim.radio._entry(id)
+	Kit.at(sim, 3, (float(e.due) - 0.01 - float(sim.day - 1) * 1440.0 + 420.0) / 60.0)    # (the very last moment the call is open)
+	check(sim.radio.answer(id, "yes"), "the answer is taken")
+	check(String(sim.radio._entry(id).result).contains("set off"), "the yes is carried out: %s" % sim.radio._entry(id).result)
+	Helpers.run(sim, sim.radio.DELAY_SLOW + 0.5)    # (the game's clock runs while the people answer)
+	eq(sim.scavenge.parties.size(), 1, "the party is made after the radio's delay, before the parties stop leaving")
+	for n in sim.radio.news:
+		check(not String(n.text).begins_with("The errand could not start"), "no 'could not start': %s" % String(n.text))
+	_free(g)
+
+
+func test_a_yes_to_errand_is_counted_against_the_parties_the_radio_has_queued() -> void:
+	var g := Kit.game(5)
+	var sim = g.sim
+	sim.stock.food = 10.0
+	Kit.at(sim, 3, 9.0)
+	var id: int = Kit.raise(sim, "errand")
+	var c: Dictionary = sim.radio._entry(id)
+	var party: Array = [String(c.data.who)] + c.data.others
+	var rest: Array = []
+	for who in ["dez", "marcus", "ana", "walt"]:
+		if not party.has(who):
+			rest.append(who)
+	eq(rest.size(), 2, "(two others are left to ask)")
+	for who in rest:
+		check(sim.radio.request_errand([Kit.who(sim, who)], "houses").ok, "the player asks %s to go (the errand waits for its delay)" % who)
+	eq(sim.radio.errand_wait.size(), 2, "two errands wait: as many as the parties the game allows")
+	sim.radio.answer(id, "yes")
+	var result := String(sim.radio._entry(id).result)
+	check(result.begins_with("Not now: "), "a third does not fit: %s" % result)
+	eq(sim.radio.errand_wait.size(), 2, "nothing was added to the queue")
+	eq(sim.initiative.record_of(Kit.who(sim, String(c.data.who))).later, 1, "the yes counts as a later")
+	eq(sim.initiative.record_of(Kit.who(sim, String(c.data.who))).yes, 0, "and not as a yes")
+	sim.radio.tick(sim.radio.DELAY_SLOW + 0.1)
+	check(not sim.scavenge.parties.is_empty(), "the errands the player asked for are on their way")
+	for pt in sim.scavenge.parties:
+		check(not pt.members.has(String(c.data.who)), "and the idea's party is not among them")
 	_free(g)
 
 

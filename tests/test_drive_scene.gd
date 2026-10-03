@@ -81,6 +81,43 @@ func _release(scene: Node, code: Key) -> void:
 
 # ----------------------------------------------------------------- building --
 
+## Review of round 21, minor 6: the first leg's build (250 to 850 ms headless, more on the web) ran inside the click, with no card: the
+## game froze. `open_trip` (main.open_raid's way in, in a real window) puts the colony's view away and the card up at once and builds a
+## frame later.
+func test_a_trip_opened_behind_the_card_shows_it_first_and_builds_a_frame_later() -> void:
+	var main := _game()
+	var sim = main.sim
+	sim.vehicles.fuel = 60.0
+	sim.waves.enabled = false
+	sim.town.reveal("pharmacy")
+	var vid := String(sim.vehicles.add("pickup").id)
+	var party: Array = [sim.people[0], sim.people[1]]
+	var flow = PlaceFlow.new(sim)
+	check(flow.begin(party, "pharmacy", vid), "the trip begins: %s" % flow.error)
+	flow.live = true
+	var place: Dictionary = sim.town.place("pharmacy")
+	var scene := DriveScene.new()
+	main.add_child(scene)
+	scene.set_process(false)
+	check(not scene.wants_card(), "(headless the build is at once: main.open_raid does not ask for the card)")
+	var maker := func(size: int, by_vehicle: bool) -> Dictionary: return SiteGen.make(place, 5, size, by_vehicle)
+	scene.open_trip(main, main.hud, main.data, flow, place, maker, party, float(sim.stock.ammo), "pickup", 1.0, false)
+	check(not scene.built(), "nothing is built at the click")
+	check(scene._hitch_layer.visible, "the card is up")
+	eq(scene._hitch_label.text, "Driving to the pharmacy...", "and says where")
+	check(main.raid == scene and not main.hud.visible, "the colony's view is put away at once")
+	_press(scene, KEY_E)    # (a key in the gap is not taken: there is no run to press it on)
+	scene.tick(STEP)
+	check(not scene.built(), "the frame the card was drawn in builds nothing")
+	scene.tick(STEP)
+	check(scene.built(), "the next frame builds the road")
+	check(scene.car != null and scene.leg == "there" and scene.mode == "drive", "and the leg there is on")
+	check(not scene._hitch_layer.visible, "the card is gone")
+	eq(String(flow.stage), "drive_there", "the flow counts it")
+	check(main.raid == scene and not main.hud.visible, "the colony is still put away, once")
+	await _leave(main)
+
+
 func test_the_scene_builds_from_a_generated_road_and_the_phase_stays_place() -> void:
 	var main := _game()
 	var t := _trip(main)
@@ -458,6 +495,194 @@ func test_choose_applies_its_effects_once_and_the_squad_goes_out_for_the_work() 
 	await _leave(main)
 
 
+# ---------------------------------------------------- a friend who is down at a stop (FIX 21) --
+
+## The squad is out at a "Search it" stop of a van (n people of the crew): the work is on, nothing else of the stop's dead about.
+func _out_at_a_stop(main: Node, n: int) -> Dictionary:
+	var t := _event_trip(main, "wreck_supplies", 0.3, 0.25, "van", n)
+	var scene = t.scene
+	scene.tick(STEP)
+	scene.press_stop()
+	var r: Dictionary = scene.choose("e1", "search")
+	check(bool(r.ok), "Search it")
+	eq(scene.mode, "out", "the squad is out")
+	scene.run.sim.zombies.clear()    # (the stop's own walker is not what these tests are about)
+	_play(scene, 1.0)
+	return t
+
+
+## Dez goes down where he stands, and the one you lead is put beside him with her hands off the keys.
+func _down_and_beside(scene: Node, who: String = "dez", helper: String = "ruth") -> void:
+	var down = scene.run.person(who)
+	down.downed = true
+	down.hp = 0.0
+	var other = scene.run.person(helper)
+	other.x = down.x - 0.8
+	other.y = down.y
+	other.path = []
+	_play(scene, 0.2)
+
+
+func _helped_up(scene: Node, who: String = "dez") -> bool:
+	return not scene.run.person(who).downed
+
+
+## Review of round 21, important 2: E was swallowed ("They are still at it") while the squad worked, the squad boarded the moment the
+## work was done without the one who was down, and in the car E is "stop": a friend who went down at a stop was dead at the end of the
+## leg. The place's rule holds on the road: stand beside them and press E (HELP_S seconds), and nobody drives off without them.
+func test_e_gets_a_friend_who_went_down_at_a_stop_up_while_they_work() -> void:
+	var main := _game()
+	var t := _out_at_a_stop(main, 2)
+	var scene = t.scene
+	_down_and_beside(scene)
+	check(scene.work_left > 0.0, "(the work is still on)")
+	check(scene.find_help_target() != null, "the one you lead is beside him")
+	check(scene.search_key(), "E begins to help him up although the squad is working")
+	check(scene.run.helping_of(scene.leader()) != null, "she is helping")
+	_play(scene, 5.0)
+	check(_helped_up(scene), "four seconds later he is on his feet")
+	_play(scene, 8.0)
+	eq(scene.mode, "drive", "the work is done and they board")
+	eq(scene.aboard().size(), 2, "both aboard")
+	check(scene.leg_result().lost.is_empty(), "nobody is lost: %s" % str(scene.leg_result().lost))
+	await _leave(main)
+
+
+func test_the_squad_does_not_board_and_drive_off_without_the_one_who_is_down() -> void:
+	var main := _game()
+	var t := _out_at_a_stop(main, 2)
+	var scene = t.scene
+	scene.run.person("dez").downed = true
+	scene.run.person("dez").hp = 0.0
+	scene.run.person("dez").x += 3.0    # (not beside her)
+	_play(scene, 12.0)
+	check(scene.work_left <= 0.0, "the work is done")
+	eq(scene.mode, "out", "they do not board without him")
+	check(scene.hint_line().contains("Dez"), "the hint says who is down: %s" % scene.hint_line())
+	var r: Dictionary = scene.press_stop()
+	check(not bool(r.ok) and String(r.what) == "downed", "E at the car is a refusal, not boarding: %s" % str(r))
+	check(scene.hud_layer.toast_label.text.contains("Dez") and scene.hud_layer.toast_label.text.contains("down"), "that says why: %s" % scene.hud_layer.toast_label.text)
+	eq(scene.mode, "out", "still out")
+	# she walks to him and gets him up, then they board
+	var lead = scene.leader()
+	var dez = scene.run.person("dez")
+	lead.x = dez.x - 0.8
+	lead.y = dez.y
+	_play(scene, 0.2)
+	check(scene.search_key(), "E beside him helps him")
+	_play(scene, 5.0)
+	check(_helped_up(scene), "he is up")
+	_play(scene, 8.0)
+	eq(scene.mode, "drive", "now they board")
+	eq(scene.aboard().size(), 2, "both")
+	check(scene.leg_result().lost.is_empty(), "nobody lost")
+	await _leave(main)
+
+
+func test_a_friend_who_is_down_is_got_up_by_the_squad_itself() -> void:
+	var main := _game()
+	var t := _out_at_a_stop(main, 3)
+	var scene = t.scene
+	var dez = scene.run.person("dez")
+	dez.downed = true
+	dez.hp = 0.0
+	# nobody presses anything: the one who is free (not the player) goes to him
+	_play(scene, 14.0)
+	check(_helped_up(scene), "Marcus got him up on his own")
+	_play(scene, 6.0)
+	eq(scene.mode, "drive", "they boarded")
+	eq(scene.aboard().size(), 3, "all three aboard")
+	check(scene.leg_result().lost.is_empty(), "nobody lost")
+	await _leave(main)
+
+
+func test_the_avatar_who_goes_down_at_a_stop_is_got_up_and_the_lead_comes_back() -> void:
+	var main := _game()
+	var t := _out_at_a_stop(main, 3)
+	var scene = t.scene
+	var ruth = scene.run.person("ruth")
+	ruth.downed = true
+	ruth.hp = 0.0
+	_play(scene, 0.5)
+	check(scene.leader() != ruth, "the lead passes on while she is down")
+	_play(scene, 14.0)
+	check(_helped_up(scene, "ruth"), "she is got back on her feet")
+	_play(scene, 6.0)
+	eq(scene.mode, "drive", "they board")
+	eq(scene.aboard().size(), 3, "all three")
+	check(scene.leg_result().lost.is_empty(), "and she is not lost: %s" % str(scene.leg_result().lost))
+	await _leave(main)
+
+
+func test_leaving_a_friend_who_is_down_is_a_second_press() -> void:
+	var main := _game()
+	var t := _out_at_a_stop(main, 2)
+	var scene = t.scene
+	scene.run.person("dez").downed = true
+	scene.run.person("dez").hp = 0.0
+	scene.run.person("dez").x += 3.0
+	_play(scene, 12.0)
+	var first: Dictionary = scene.press_stop()
+	check(not bool(first.ok) and String(first.what) == "downed", "the first E refuses")
+	check(scene.hud_layer.toast_label.text.contains("again"), "and says how to leave him: %s" % scene.hud_layer.toast_label.text)
+	var second: Dictionary = scene.press_stop()
+	check(bool(second.ok) and String(second.what) == "boarded", "the second E drives on without him")
+	eq(scene.mode, "drive", "in the car")
+	eq(scene.aboard().size(), 1, "one aboard")
+	check(scene.leg_result().lost.has("dez"), "he is lost: %s" % str(scene.leg_result().lost))
+	await _leave(main)
+
+
+## Review of round 21, minor 8: a forced event (the puncture) fired on a car that was already a wreck: the banner "A puncture" and a car
+## coasting while the squad walks.
+func test_a_puncture_does_not_fire_on_a_wreck() -> void:
+	var main := _game()
+	var t := _event_trip(main, "breakdown", 0.3, 0.2)
+	var scene = t.scene
+	scene._wreck_car()
+	check(scene._wrecked, "(the car is a wreck)")
+	scene._trigger_forced(scene.plan[0])
+	eq(String(scene.plan[0].state), "missed", "the puncture is missed")
+	eq(scene._coasting, "", "nothing coasts")
+	await _leave(main)
+
+
+func test_the_leg_result_carries_the_trust_the_roads_radio_moved() -> void:
+	var main := _game()
+	var t := _trip(main, "pharmacy", "", 2, false)
+	var scene = t.scene
+	var dez = scene.run.person("dez")
+	scene.run.sim.radio.add_trust(dez, -3.0, "pushed")
+	var r: Dictionary = scene.leg_result()
+	check(r.has("trust") and absf(float(r.trust.get("dez", 0.0)) + 3.0) < 1e-6, "the push is in the leg's result: %s" % str(r.get("trust")))
+	await _leave(main)
+
+
+## Review of round 21, minor 11: the night road was decided at the leg's start from the abstract minutes; a day leg that took longer (a
+## stop, slow driving) and met dusk anyway had the headlights only, no extra dead and no runners. It becomes a night road when the colony's
+## hour says so.
+func test_a_day_leg_that_meets_dusk_on_the_way_becomes_a_night_road() -> void:
+	var main := _game()
+	var sim = main.sim
+	sim.minutes = 8.0 * 60.0
+	sim.phase = sim.phase_at(sim.minutes)
+	var t := _trip(main, "pharmacy", "pickup", 2, false)
+	var scene = t.scene
+	check(scene.road.ambient.is_empty(), "a day leg at eight in the morning: no night road")
+	var dead0: int = scene._dormant.size() + scene.run.sim.zombies.size()
+	sim.minutes = sim.seasons.dusk_hour() * 60.0 + 5.0
+	sim.phase = sim.phase_at(sim.minutes)
+	_play(scene, 2.0)
+	check(not scene.road.ambient.is_empty() and String(scene.road.ambient[0].id) == "night_road", "dusk fell on the road: it is a night road now: %s" % str(scene.road.ambient))
+	check(scene._has_headlights(), "with its headlights")
+	var dead1: int = scene._dormant.size() + scene.run.sim.zombies.size()
+	check(dead1 > dead0, "and more of the dead ahead (%d -> %d)" % [dead0, dead1])
+	var amb: int = scene.road.ambient.size()
+	_play(scene, 3.0)
+	eq(scene.road.ambient.size(), amb, "once")
+	await _leave(main)
+
+
 func test_a_refused_option_says_why_and_the_card_stays() -> void:
 	var main := _game()
 	var t := _event_trip(main, "survivor", 0.3, 0.25)
@@ -497,6 +722,37 @@ func test_a_card_nobody_answers_takes_its_auto_option_after_its_time() -> void:
 		after += float(t.sim.stock[k])
 	check(after < before, "the toll was paid (%.0f -> %.0f)" % [before, after])
 	await _leave(main)
+
+
+## Review of round 21, minor 7: the hint line said "the first option is taken in N s" (the default is the second on most cards, and a
+## roadblock has none) and was never seen on a road at all (the road's own line covered it). The line under the road's name is the
+## scene's note when it has one, and it names the real default.
+func test_the_line_under_the_roads_name_says_the_cards_real_default() -> void:
+	var main := _game()
+	var t := _event_trip(main, "wreck_supplies", 0.3, 0.25)
+	var scene = t.scene
+	scene.tick(STEP)
+	scene.press_stop()
+	scene.hud_layer.refresh()
+	var note: String = scene.road_note()
+	check(note.contains("\"Drive on\"") and note.contains("in 8 s"), "a stop's default is Drive on, in its 8 seconds: %s" % note)
+	check(not note.contains("first option"), "not the first option")
+	eq(scene.hud_layer.line_label.text, note, "and it is on the board")
+	eq(scene.hint_line(), note, "and the scene's hint is the same")
+	scene.choose("e1", "search")
+	scene.hud_layer.refresh()
+	check(scene.hud_layer.line_label.text.contains("They are working"), "out at the stop the board says so: %s" % scene.hud_layer.line_label.text)
+	await _leave(main)
+	var main2 := _game()
+	var t2 := _event_trip(main2, "roadblock", 0.3, 0.28)
+	var scene2 = t2.scene
+	scene2.tick(STEP)
+	var r: Dictionary = scene2.press_stop()
+	check(bool(r.ok) and String(r.what) == "card", "the roadblock's card opens: %s" % str(r))
+	scene2.hud_layer.refresh()
+	check(scene2.road_note().contains("closes in") and not scene2.road_note().contains("If you do not"), "a roadblock has no default: %s" % scene2.road_note())
+	eq(scene2.hud_layer.line_label.text, scene2.road_note(), "on the board")
+	await _leave(main2)
 
 
 func test_a_card_answered_by_its_key_takes_that_option() -> void:
@@ -635,14 +891,20 @@ func test_the_streets_dead_sleep_in_a_list_and_wake_as_the_car_comes() -> void:
 	await _leave(main)
 
 
+## Review of round 21, minor 9: the nudge moved a car whose player was only reading a radio call (20 seconds of standing is not being
+## stuck); it is for a car that is being driven (W held, or the autopilot) and does not move.
 func test_a_car_that_stands_with_nothing_the_matter_is_pushed_back_onto_the_road() -> void:
 	var main := _game()
 	var t := _trip(main, "pharmacy", "pickup", 2, false)
 	var scene = t.scene
 	_hands_off(scene)
 	var at := Vector2(scene.car.pos)
+	_play(scene, 30.0)
+	check(Vector2(scene.car.pos).distance_to(at) < 0.5, "a car nobody is driving stays where it stands (a radio call, the News)")
+	_press(scene, KEY_W)    # (the player wants to go and the car does not: against a wall)
 	_play(scene, 21.0)
-	check(Vector2(scene.car.pos).distance_to(at) > 2.0, "the squad pushes it on after twenty seconds")
+	_release(scene, KEY_W)
+	check(Vector2(scene.car.pos).distance_to(at) > 2.0, "the squad pushes it on after twenty seconds of W")
 	await _leave(main)
 
 
@@ -679,6 +941,26 @@ func test_the_autopilot_drives_the_leg_to_its_end_and_the_place_is_next() -> voi
 	await _leave(main)
 
 
+## FIX 21: the autopilot with the dead on the road. One dead one in its corridor used to hold it at 2.5 t/s (under the 4.0 that runs
+## anyone over), so more of them gathered and it crawled for the whole leg (about three times the cruise time). It ploughs the walkers
+## now (the plan promises at most 1.35 x the cruise time) and the dead of the strip are really there.
+func test_the_autopilot_keeps_its_pace_with_the_dead_on_the_road() -> void:
+	var runs := [["estate", "pickup", 3], ["estate", "sedan", 5], ["warehouse", "pickup", 11]]
+	for r in runs:
+		var main := _game()
+		main.raid_seed = int(r[2])
+		var t := _trip(main, String(r[0]), String(r[1]), 2, false)
+		var scene = t.scene
+		var cruise_s: float = float(scene.road.len) / float(scene.car.cruise)
+		var n := _until(scene, func(): return scene.leg != "there" or scene.get("_pending").is_valid(), 9000)
+		var secs := float(n) * STEP
+		var label := "%s by %s, seed %d" % [r[0], r[1], r[2]]
+		check(scene.road_progress() > 0.97, "%s: it arrives (%.2f)" % [label, scene.road_progress()])
+		check(secs <= cruise_s * 1.35, "%s: %.0f s for a cruise time of %.0f s (at most 1.35x)" % [label, secs, cruise_s])
+		check(scene.car.hp > 0.0 and not scene._wrecked, "%s: and the car is not a wreck (hp %.0f)" % [label, scene.car.hp])
+		await _leave(main)
+
+
 func test_a_whole_trip_a_drive_a_place_a_drive_and_the_report() -> void:
 	var main := _game()
 	var t := _trip(main, "pharmacy", "pickup", 2, false)
@@ -708,6 +990,31 @@ func test_a_whole_trip_a_drive_a_place_a_drive_and_the_report() -> void:
 	eq(seen.size(), 1, "finished is sent once")
 	check(seen[0].has("loot") and seen[0].has("lost"), "with the trip's result")
 	check(main.raid == null, "the colony is back")
+	await _leave(main)
+
+
+## Found by the integration test of FIX 21: the way home ends inside the scene's own step, and the report's roster (everyone who set out, the
+## lost ones with their old pawns that the stage no longer has) is put in `run.squad` before the base's `_sync_views` of that same step: an
+## error in the log on every trip that lost somebody. The views are left alone once the trip has ended.
+func test_a_trip_that_lost_somebody_ends_in_the_report_without_an_error() -> void:
+	var main := _game()
+	var t := _trip(main, "pharmacy", "pickup", 2, false)
+	var scene = t.scene
+	scene.run.person("dez").downed = true    # (left on the road: lost at the end of the leg)
+	scene.run.person("dez").hp = 0.0
+	_until(scene, func(): return scene.leg != "there" or scene.get("_pending").is_valid(), 6000)
+	scene.tick(STEP)
+	eq(scene.leg, "place", "the place")
+	check(t.flow.road_lost.has("dez"), "Dez is lost: %s" % str(t.flow.road_lost))
+	scene.stage("exit")
+	_until(scene, func(): return scene.leg == "home" or scene.phase == "report", 400)
+	scene.tick(STEP)
+	eq(scene.leg, "home", "the way home")
+	_until(scene, func(): return scene.phase == "report" or scene.get("_pending").is_valid(), 6000)
+	scene.tick(STEP)
+	scene.tick(STEP)
+	eq(scene.phase, "report", "the report is up")
+	eq(scene.run.squad.size(), 2, "with the whole party on its cards")
 	await _leave(main)
 
 

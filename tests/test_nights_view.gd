@@ -445,7 +445,9 @@ func test_the_news_lists_the_new_kinds_with_their_names() -> void:
 		check(all.contains(word), "the news says %s: %s" % [word, all])
 	var p = ctx.hud.news_panel
 	eq(p.call_views.size(), 3, "the three calls wait for an answer at the top")
-	eq(p.call_views[0].buttons.keys(), ["watch", "coming", "reinforce", "lure"], "the brute's four options")
+	# (round 19 fix: most urgent first, as the card has it: a breach, then the brute on its way, then the night's own call)
+	eq(p.call_views[0].buttons.keys(), ["hold", "close", "fall_back", "coming"], "the breach's four options, the most urgent first")
+	eq(p.call_views[1].buttons.keys(), ["watch", "coming", "reinforce", "lure"], "the brute's four options")
 	eq(p.call_views[2].buttons.keys(), ["hold", "arms", "lure"], "the night's three")
 	check(p.call_views[2].buttons["arms"].text == "Call to arms now", "with their words")
 	Kit.free_all(ctx)
@@ -680,6 +682,10 @@ func test_a_plated_brute_wears_its_plates_and_a_ring_at_the_weak_point_which_lig
 	var plain = Helpers.plated_brute(sim, wall.id)
 	if plain != null:
 		plain.plated = false
+	# (round 19 fix: the ring is full when the pellets' own trace would land on the head, so the line from the avatar must be open: the brute
+	# stands in the quiet yard five tiles from where he stands, not at a wall with a building in the way)
+	brute.x = SPOT.x
+	brute.y = SPOT.y - 5.0
 	_look(main, Vector2(brute.x, brute.y))
 	var me = sim.avatar.player()
 	_stand(main, me, Vector2(brute.x, brute.y) + Vector2(0.0, 5.0))

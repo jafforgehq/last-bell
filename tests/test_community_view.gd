@@ -1154,6 +1154,14 @@ func test_the_call_card_with_an_idea_and_the_voices_line_fits_at_every_size() ->
 						var page := Kit.rect(h.news_panel)
 						check(r.position.x >= page.position.x - 0.5 and r.end.x <= page.end.x + 0.5, "%s: every button of a call is across the News (%s, the page %s)" % [where, str(r), str(page)])
 			else:
+				# (round 19 fix: the card shows the most urgent open call, the wall's, and not the oldest, the idea. The idea's card is what this
+				# test is about: the wall's call is answered first, as the player would, and the idea comes up)
+				check(Kit.rect(h.call_card).size.x <= width + 0.5, "%s: the wall's card does not widen either" % where)
+				for c in ctx.sim.radio.open_calls():
+					if String(c.kind) != "idea":
+						ctx.sim.radio.answer(int(c.id), String(c.default))
+				Kit.update(ctx)
+				await Kit.settle()
 				check(Kit.rect(h.call_card).size.x > 60.0, "%s: the card is up" % where)
 				check(Kit.rect(h.call_card).size.x <= width + 0.5, "%s: and does not widen for the long yes (%s, the clock is %.0f wide)" % [where, str(Kit.rect(h.call_card)), width])
 				var btn: Button = h.call_card.view.buttons["yes"]

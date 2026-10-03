@@ -108,6 +108,41 @@ static func opinion_for(sim, e: Dictionary) -> Dictionary:
 	return got if got is Dictionary else {}
 
 
+## How urgent a kind of call is, lower first (round 19, the card shows the most urgent open call and not the oldest): 0 a wall that is down
+## or going, 1 a brute on its way and the old call of a wall under attack, 2 anything else (a fever, the night's call, an idea).
+const URGENCY := {"breach": 0, "going": 0, "brute": 1, "attack": 1}
+
+
+static func urgency_of(kind: String) -> int:
+	return int(URGENCY.get(kind, 2))
+
+
+## The call of a list of open calls (the radio's `open_calls()`, oldest first) that waits for an answer most urgently: the lowest urgency
+## of its kind, then the least time left (`due`), then the oldest. {} for none.
+static func most_urgent(calls: Array) -> Dictionary:
+	var best := {}
+	for e in calls:
+		if best.is_empty():
+			best = e
+			continue
+		var ua := urgency_of(String(e.get("kind", "")))
+		var ub := urgency_of(String(best.get("kind", "")))
+		if ua < ub or (ua == ub and float(e.get("due", 0.0)) < float(best.get("due", 0.0)) - 1.0e-9):
+			best = e
+	return best
+
+
+## The open calls in the order of `most_urgent`, the most urgent first (the News lists them so, and the card is the first of them).
+static func by_urgency(calls: Array) -> Array:
+	var rest: Array = calls.duplicate()
+	var out: Array = []
+	while not rest.is_empty():
+		var best := most_urgent(rest)
+		out.append(best)
+		rest.erase(best)
+	return out
+
+
 ## The game's rate of time (game minutes a second): never 0, so that a division by it is safe.
 static func rate(radio) -> float:
 	var s = radio.get("sim")

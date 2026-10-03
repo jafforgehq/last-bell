@@ -203,7 +203,7 @@ func refresh() -> void:
 	var radio = _radio()
 	if radio == null:
 		return
-	var open: Array = radio.open_calls()
+	var open: Array = RadioKit.by_urgency(radio.open_calls())    # (the card's own call first, then the others: round 19)
 	var open_ids: Array = []
 	for e in open:
 		open_ids.append(int(e.id))
