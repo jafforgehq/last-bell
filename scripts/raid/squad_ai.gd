@@ -42,6 +42,9 @@ const COVER_CONE := 1.05
 const COVER_APART := 0.3
 ## How fast the aim the cover goes by follows the mouse (a share of the way a second).
 const AIM_EASE := 2.5
+## An aim whose dot product with the old one is under this (turned about 162 degrees or more) is taken as it is: the easing
+## cannot turn a vector exactly opposite to the one it follows.
+const AIM_FLIP := -0.95
 ## The trail the player leaves: a point every TRAIL_STEP tiles, TRAIL_KEEP of them, the heading is the way from the point
 ## HEADING_BACK tiles back along it.
 const TRAIL_STEP := 0.4
@@ -124,6 +127,10 @@ func _track(lead, dt: float) -> void:
 			_trail.pop_front()
 		_heading = _heading_from_trail(at)
 	var raw := _aim_dir(lead)
+	if _aim.dot(raw) < AIM_FLIP:
+		# (an aim turned right round: easing between two opposite vectors goes nowhere, so the new one is taken at once)
+		_aim = raw
+		return
 	var eased := _aim + (raw - _aim) * minf(1.0, dt * AIM_EASE)
 	_aim = eased.normalized() if eased.length() > 0.2 else raw
 

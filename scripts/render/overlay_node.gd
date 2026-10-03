@@ -101,6 +101,9 @@ var drew_crosshair := false
 var drew_aim_line := false
 var drew_reload_ring := false
 var drew_you := false
+## The crosshair is the greyed one (the trigger would only hit the face of a walkway: `Avatar.fire_blocked`) and its hint is drawn.
+var crosshair_blocked := false
+var drew_blocked_hint := false
 var crosshair_at := Vector2.ZERO
 var aim_end := Vector2.ZERO
 var aim_on_target := false
@@ -481,6 +484,19 @@ func _modal_open() -> bool:
 	return hud != null and hud.has_method("modal_open") and bool(hud.modal_open())
 
 
+## The rectangles of the HUD's boards that cover the world (the HUD says; a stand-in without the question has none).
+func _covered_by_hud() -> Array:
+	var hud = main.get("hud") if main != null else null
+	return hud.covered_rects() if hud != null and hud.has_method("covered_rects") else []
+
+
+func _under_hud(rect: Rect2, covered: Array) -> bool:
+	for r in covered:
+		if (r as Rect2).intersects(rect):
+			return true
+	return false
+
+
 ## How solid a bubble is `age` seconds after it was said: it fades in and out, not with reduced motion.
 static func bubble_alpha(age: float, calm: bool) -> float:
 	if calm:
@@ -540,6 +556,7 @@ func bubble_plan(vp: Vector2) -> Array:
 	var tail := _bubble_tail()
 	var font := Fonts.sans(500)
 	var fs := maxi(BUBBLE_PX, Fonts.MIN_PX)
+	var covered := _covered_by_hud()
 	for b in bubbles:
 		var p = b.p
 		if p.dead or p.away != null:
@@ -564,6 +581,9 @@ func bubble_plan(vp: Vector2) -> Array:
 		var x := clampf(left, BUBBLE_MARGIN, maxf(BUBBLE_MARGIN, vp.x - BUBBLE_MARGIN - size.x))
 		var y := maxf(BUBBLE_MARGIN, tip.y - float(tail[1]) - size.y)
 		var rect := Rect2(x, y, size.x, size.y)
+		# (a bubble that would be under a board of the HUD is not drawn: the line is in the dock, in a toast and on the card as well)
+		if _under_hud(rect, covered):
+			continue
 		plan.append({
 			"who": p.id, "text": b.text, "lines": maxi(1, roundi(words.y / font.get_height(fs))), "size": fs, "rect": rect,
 			"tip": Vector2(rect.end.x - float(tail[0]) if flip else rect.position.x + float(tail[0]), rect.end.y + float(tail[1])),
@@ -633,6 +653,9 @@ const CROSS_EDGE := Color(0.04, 0.07, 0.06, 0.9)
 const CROSS_INK := Color(0.96, 0.94, 0.86, 0.95)
 const CROSS_HIT := Color("#ff7d6e")
 const CROSS_MIN := 10.0
+## The crosshair while the shot would only hit the face of a walkway: grey, and what to do about it near it.
+const CROSS_BLOCKED := Color(0.62, 0.65, 0.62, 0.8)
+const BLOCKED_HINT := "Climb a ladder"
 const CROSS_MAX := 46.0
 ## The aim line: how bright it is at the muzzle and at the end of the gun's reach, and the pieces it is drawn in.
 const AIM_NEAR := 0.75
@@ -705,8 +728,8 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 			_pill(Rect2(head.x - w / 2.0, head.y - 22.0, w, 16.0), ACCENT)
 			draw_string(font, Vector2(head.x - w / 2.0, head.y - 22.0 + fs * 0.9), "YOU", HORIZONTAL_ALIGNMENT_CENTER, w, fs, Color("#1a1508"))
 			drew_you = true
-	# the crosshair
-	if hands_off or bool(main.get("over_hud")):
+	# the crosshair (none for one who is down: there is nothing in their hands)
+	if hands_off or me.downed or bool(main.get("over_hud")):
 		return
 	var at: Vector2 = main.mouse_screen
 	if not Rect2(Vector2.ZERO, vp).has_point(at):
@@ -716,7 +739,9 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 		var muzzle_px := _screen(me.x, me.y - 0.3)
 		var cone: float = sim.avatar.spread_of(me, live)
 		radius = clampf(muzzle_px.distance_to(at) * cone * 0.5, CROSS_MIN, CROSS_MAX)
-	var ink: Color = CROSS_HIT if aim_on_target else CROSS_INK
+	# a trigger pull that would only hit the face of a walkway does nothing (a dry click): the crosshair says so
+	crosshair_blocked = not melee and sim.avatar.has_method("fire_blocked") and bool(sim.avatar.fire_blocked(me))
+	var ink: Color = CROSS_BLOCKED if crosshair_blocked else (CROSS_HIT if aim_on_target else CROSS_INK)
 	for pass_ in 2:
 		var col: Color = CROSS_EDGE if pass_ == 0 else ink
 		var w := 4.0 if pass_ == 0 else 2.0
@@ -727,6 +752,13 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 	draw_circle(at, 1.2, ink)
 	crosshair_at = at
 	drew_crosshair = true
+	if crosshair_blocked:
+		var hint_font := Fonts.sans(600)
+		var hw := hint_font.get_string_size(BLOCKED_HINT, HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 12.0
+		var hbox := Rect2(clampf(at.x - hw / 2.0, 4.0, maxf(4.0, vp.x - hw - 4.0)), minf(at.y + radius + 14.0, vp.y - 24.0), hw, 18.0)
+		_pill(hbox, Color(0.04, 0.07, 0.06, 0.82))
+		draw_string(hint_font, Vector2(hbox.position.x, hbox.position.y + FIELD_PX + 1.0), BLOCKED_HINT, HORIZONTAL_ALIGNMENT_CENTER, hw, FIELD_PX, Color(0.9, 0.9, 0.84, 0.95))
+		drew_blocked_hint = true
 
 
 func _draw() -> void:
@@ -747,6 +779,8 @@ func _draw() -> void:
 	drawn_job_edges = 0
 	drawn_selected = 0
 	drew_crosshair = false
+	crosshair_blocked = false
+	drew_blocked_hint = false
 	drew_aim_line = false
 	drew_reload_ring = false
 	drew_you = false

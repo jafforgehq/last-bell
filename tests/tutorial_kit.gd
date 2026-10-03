@@ -23,6 +23,19 @@ static func make() -> Dictionary:
 	return {"sim": sim, "world": world, "data": data, "scenario": scenario}
 
 
+## {"sim", "world", "data", "scenario"}: the avatar's Orientation Day, begun (as `make`, with the town on and Ruth the player), the
+## way main.gd makes it. Free `world` when the test is done.
+static func make_avatar() -> Dictionary:
+	var data := GD.load_all()
+	var world := World.new()
+	Engine.get_main_loop().root.add_child(world)
+	world.build(data)
+	var sim := Sim.new(data, world, FxNull.new())
+	var scenario = Orientation.begin(sim, true)
+	sim.avatar.set_player("ruth")
+	return {"sim": sim, "world": world, "data": data, "scenario": scenario}
+
+
 static func person(sim, id: String):
 	for p in sim.people:
 		if p.id == id:
@@ -84,12 +97,19 @@ static var _window := {}
 static var _tutorial_save := ""
 
 
-## The real game scene as Orientation Day (from step `step`), in a window of `width` x `height`,
+## The real game scene as the classic Orientation Day (the old yard: no avatar, assets/data/tutorial_classic.json; what `--noavatar`
+## and the tests of the old controls play), from step `step`, in a window of `width` x `height`,
 ## with the preferences and the tutorial's save file pointed at files of the test's own. Its own
 ## per-frame work is switched off: the tests drive `_process` by hand (see `frames`). Give it back
 ## with `leave`.
 static func game(step: int = 0, width: int = 1280, height: int = 800) -> Node:
 	return start({"tutorial": true, "step": step}, width, height)
+
+
+## The real game scene as the avatar's Orientation Day (what a player gets from the title: Ruth is the player, the town is on, the
+## coach teaches from assets/data/tutorial.json), from step `step`, as `game` has it otherwise.
+static func avatar_game(step: int = 0, width: int = 1280, height: int = 800) -> Node:
+	return start({"tutorial": true, "step": step, "avatar": true}, width, height)
 
 
 ## The real game scene for the run the choice `meta` asks for ({"tutorial": true, ...}, {"load":

@@ -1,9 +1,9 @@
 ## The little paper card of a first launch: "First time here? Orientation Day teaches the
-## basics in about ten minutes." The shell shows it once (the flag `tutorial_offered`);
+## basics in about ten minutes": the game as it is played (the avatar, the radio, the News, the map, the alarm). The shell shows it once (the flag `tutorial_offered`);
 ## the answer is Start Orientation Day or Not now (Esc is Not now).
 extends "res://scripts/ui/menu_screen.gd"
 
-const BODY := "Orientation Day teaches the basics in about ten minutes. You can play it again from the main menu."
+const BODY := "Orientation Day teaches the basics in about ten minutes: walking and shooting as Ruth, asking the crew over the radio, the News, the map and the alarm. You can play it again from the main menu."
 
 var start_button: Button
 var later_button: Button

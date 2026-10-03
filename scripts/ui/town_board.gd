@@ -72,6 +72,8 @@ const LIKELY_AT := 0.65
 const RISK_AT := 0.4
 ## The ink of the lines that say why a button is off: a deeper amber than the slips' (4.5:1 on the darkest of the page).
 const WHY_INK := Color("#74400a")
+## What Go says in a game with an avatar: it sends the others, without the player.
+const AVATAR_GO_TIP := "Send them without you: worse loot, no rescues"
 ## The words for a place's danger (0 to 3).
 const DANGER_WORDS := ["Quiet", "A few of the dead about", "The dead are thick here", "Overrun"]
 ## The hours of the day a party can set off (the rules' own), and the hour the day ends (dusk).
@@ -91,7 +93,8 @@ var hud
 var sim
 var town
 var scav
-## The people going (Person objects), the leader first.
+## The people going (Person objects), the leader first. With an avatar (round 17) these are the OTHERS: the player always goes and
+## leads a trip they play, so they are not in the list but the first of the party row (`me_chip`), and the limit counts them.
 var party: Array = []
 ## The place that is chosen ("" until one is).
 var site_id := ""
@@ -123,6 +126,7 @@ var foot_right: VBoxContainer
 var out_section: VBoxContainer
 var actions_block: VBoxContainer
 var _arranged_wide := true
+var _avatar_buttons := false
 var go_button: Button
 var play_button: Button
 var scout_button: Button
@@ -154,6 +158,8 @@ var ride_chips := {}
 var _ride_sig := ""
 ## person id -> {"chip": Button, "person": Person, "lead": Control (the star of the one who leads)}
 var chips := {}
+## The player's own chip, first in the row of an avatar game ("You lead": it is not a choice), or null.
+var me_chip: Button = null
 ## action -> its button. The lines under the buttons say why those that are off are off, those with the same
 ## reason together (`why_lines` are the labels, `_why_of` the line that covers each action).
 var buttons := {}
@@ -189,7 +195,7 @@ func setup(h, s, sel) -> void:
 		party = [sel]
 	elif not free_people.is_empty():
 		party = [free_people[0]]
-		if sel != null:
+		if sel != null and sel != avatar():
 			_note = "%s can't go out now." % sel.first
 	_build()
 	refresh(true)
@@ -671,18 +677,26 @@ func _reveal_card() -> void:
 		scroll.scroll_vertical = maxi(0, int(top) - 6)
 
 
-## How many can go: three on foot, the seats of the vehicle that is chosen.
+## The survivor the player plays (round 17), or null in the game without one: they always go on a trip they play, and lead it.
+func avatar():
+	if sim == null or String(sim.player_id) == "":
+		return null
+	return sim.avatar.player()
+
+
+## How many OTHERS can go: three on foot, the seats of the vehicle that is chosen; with an avatar they take one of the places.
 func party_limit() -> int:
+	var seats := int(scav.MAX_PARTY_TOWN)
 	if vehicle_id != "":
-		return int(sim.vehicles.kind_of(vehicle_id).get("seats", scav.MAX_PARTY_TOWN))
-	return int(scav.MAX_PARTY_TOWN)
+		seats = int(sim.vehicles.kind_of(vehicle_id).get("seats", scav.MAX_PARTY_TOWN))
+	return seats - (1 if avatar() != null else 0)
 
 
 ## Puts `p` in the party, or takes them out (the first of the party leads). Three is the most on foot (a vehicle's
 ## seats in a vehicle: the rules' own words say so), and the party is never empty while someone could go. True if the
 ## party changed.
 func toggle_member(p) -> bool:
-	if not chips.has(p.id):
+	if not chips.has(p.id) or p == avatar():
 		return false
 	if party.has(p):
 		if party.size() <= 1:
@@ -690,8 +704,11 @@ func toggle_member(p) -> bool:
 		party.erase(p)
 	else:
 		if party.size() >= party_limit():
+			var going := party.size() + 1 + (1 if avatar() != null else 0)
 			if vehicle_id != "":
-				_say(String(sim.vehicles.why_not_use(vehicle_id, party.size() + 1, "")), "warn")
+				_say(String(sim.vehicles.why_not_use(vehicle_id, going, "")), "warn")
+			elif avatar() != null:
+				_say("Two is the most: you go too.", "warn")
 			else:
 				_say("Three is the most.", "warn")
 			return false
@@ -1251,9 +1268,12 @@ func _refresh_card() -> void:
 	_fact_set("held", holders if holders != "" else "Nobody. It is unguarded.", state == "claimed")
 	# the chance of clearing it
 	var can_clear: bool = (s.get("actions", []) as Array).has("clear")
-	if can_clear and not party.is_empty():
-		var chance := clear_chance(party, site_id)
-		_fact_set("clear", "%s with %s." % [chance_words(chance).capitalize(), _names(party)])
+	var crowd: Array = party.duplicate()
+	if avatar() != null:
+		crowd.push_front(avatar())    # (the player goes, and shoots, too)
+	if can_clear and not crowd.is_empty():
+		var chance := clear_chance(crowd, site_id)
+		_fact_set("clear", "%s with %s." % [chance_words(chance).capitalize(), _names(crowd)])
 	else:
 		_fact_set("clear", "", false)
 
@@ -1368,7 +1388,8 @@ func _site_texture(path: String) -> Texture2D:
 
 func _refresh_party() -> void:
 	var free_people: Array = scav.free_survivors()
-	var free_sig := ""
+	var me = avatar()
+	var free_sig := "me:%s;" % (String(me.id) if me != null else "")
 	for p in free_people:
 		free_sig += "%s;" % p.id
 	# the people on offer are made again only when they change
@@ -1377,16 +1398,21 @@ func _refresh_party() -> void:
 		for id in chips:
 			chips[id].chip.queue_free()
 		chips.clear()
+		me_chip = null
 		for c in chip_flow.get_children():
 			chip_flow.remove_child(c)
 			c.queue_free()
+		if me != null:
+			# the player first: they lead, and go whoever else does
+			me_chip = _person_chip(me, true)
+			chip_flow.add_child(me_chip)
 		for p in free_people:
 			var chip := _person_chip(p)
 			chip_flow.add_child(chip)
 	for id in chips:
 		var e: Dictionary = chips[id]
 		var in_party: bool = party.has(e.person)
-		var leads: bool = not party.is_empty() and party[0] == e.person
+		var leads: bool = me == null and not party.is_empty() and party[0] == e.person
 		_style_chip(e.chip, in_party, leads)
 		e.lead.visible = leads
 		var who: String = e.person.first
@@ -1397,12 +1423,18 @@ func _refresh_party() -> void:
 		_tip_label.text = "Nobody is free to go."
 	else:
 		var most := "Three is the most." if vehicle_id == "" else "The %s seats %d." % [_ride_name(vehicle_id), party_limit()]
-		_tip_label.text = "%sClick someone to bring them along. %s" % ["%s leads. " % party[0].first if not party.is_empty() else "", most]
+		var leads_line := "%s leads. " % party[0].first if not party.is_empty() else ""
+		if me != null:
+			# (the player leads: two others on foot, the seats less one in a vehicle)
+			most = "Two is the most." if vehicle_id == "" else "The %s seats %d: you and %d more." % [_ride_name(vehicle_id), party_limit() + 1, party_limit()]
+			leads_line = "You lead. "
+		_tip_label.text = "%sClick someone to bring them along. %s" % [leads_line, most]
 	var effect := ""
-	if party.size() == 1:
+	# (these are the dice's rules, for a trip that goes without the player: with an avatar Go's tooltip says it sends them without you)
+	if party.size() == 1 and me == null:
 		effect = "A lone scavenger brings back less."
 	for p in party:
-		if int(p.skills.get("Leading", 0)) >= int(scav.LEADER_SKILL):
+		if me == null and int(p.skills.get("Leading", 0)) >= int(scav.LEADER_SKILL):
 			effect += ("" if effect == "" else " ") + "%s leads well: the party finds a little more." % p.first
 			break
 	_effect_label.text = effect
@@ -1415,7 +1447,7 @@ func _refresh_party() -> void:
 
 
 ## A person's chip: a portrait, a name and the skills that matter for a trip.
-func _person_chip(p) -> Button:
+func _person_chip(p, is_me: bool = false) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_ALL
 	b.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -1445,17 +1477,28 @@ func _person_chip(p) -> Button:
 	# the one who leads has a star before their name
 	var lead: TextureRect = hud._icon("star", 13, Dialog.GOLD_INK)
 	lead.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	lead.visible = false
+	lead.visible = is_me
 	top.add_child(lead)
 	top.add_child(hud._label(String(p.first), Fonts.cond(700), 16, hud.PAPER_INK))
 	text.add_child(top)
 	text.add_child(hud._label("Shooting %d" % int(p.skills.get("Shooting", 0)), Fonts.sans(400), 12, hud.PAPER_INK2))
-	text.add_child(hud._label("Leading %d" % int(p.skills.get("Leading", 0)), Fonts.sans(400), 12, hud.PAPER_INK2))
+	if is_me:
+		text.add_child(hud._label("You lead", Fonts.sans(600), 12, hud.PAPER_INK))
+	else:
+		text.add_child(hud._label("Leading %d" % int(p.skills.get("Leading", 0)), Fonts.sans(400), 12, hud.PAPER_INK2))
 	row.add_child(text)
 	pad.add_child(row)
 	b.add_child(pad)
-	b.pressed.connect(toggle_member.bind(p))
 	b.set_meta("person", p.id)
+	if is_me:
+		# the player is not a choice: they go, and lead (the click does nothing; the tooltip says why)
+		b.disabled = true
+		b.focus_mode = Control.FOCUS_NONE
+		b.mouse_default_cursor_shape = Control.CURSOR_ARROW
+		b.tooltip_text = "You lead, and you always go. Take control to play the trip; Go sends the others without you."
+		_style_chip(b, true, true)
+		return b
+	b.pressed.connect(toggle_member.bind(p))
 	chips[p.id] = {"chip": b, "person": p, "lead": lead}
 	_style_chip(b, false, false)
 	return b
@@ -1540,7 +1583,7 @@ func ride_entries(parked: Array) -> Array:
 			warn = float(sim.vehicles.fuel) + 1.0e-9 < need
 		else:
 			l3 = "burns %s an hour" % _num(float(k.burn))
-		if party.size() > int(k.seats):
+		if party.size() + (1 if avatar() != null else 0) > int(k.seats):
 			warn = true
 		var worn := int(roundf(100.0 * float(v.hp) / maxf(float(k.hp), 1.0)))
 		out.append({"id": String(v.id), "name": String(k.name), "l2": l2, "l3": l3, "warn": warn, "glyph": "bus" if String(v.kind).contains("bus") else "car",
@@ -1591,7 +1634,32 @@ func _ride_chip(e: Dictionary) -> Button:
 	return b
 
 
+## The avatar's board (round 17): Take control, the trip they play, is the first and the main button; Go (the dice's trip, without them)
+## is the plainer one. The game without an avatar has Go first and gold, as ever.
+func _apply_avatar_buttons() -> void:
+	var on: bool = avatar() != null and hud.on_raid.is_valid()
+	if on == _avatar_buttons:
+		return
+	_avatar_buttons = on
+	_set_primary(play_button, on)
+	_set_primary(go_button, not on)
+	var flow: Node = go_button.get_parent()
+	flow.move_child(play_button if on else go_button, 0)
+
+
+## Gives a button of the page the main choice's look (gold) or the plain one (the HUD's own styles for each).
+func _set_primary(b: Button, on: bool) -> void:
+	var look: Button = hud._button(b.text, on, true)
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		b.add_theme_stylebox_override(state, look.get_theme_stylebox(state))
+	for key in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+		b.add_theme_color_override(key, look.get_theme_color(key))
+	b.add_theme_stylebox_override("focus", Kit.focus_box(hud.INK if on else hud.ACCENT))
+	look.free()
+
+
 func _refresh_buttons() -> void:
+	_apply_avatar_buttons()
 	var s: Dictionary = sites.get(site_id, {})
 	var state := String(s.get("state", ""))
 	var has_outpost: bool = s.get("outpost", {}) is Dictionary and not (s.get("outpost", {}) as Dictionary).is_empty()
@@ -1611,7 +1679,7 @@ func _refresh_buttons() -> void:
 		b.disabled = why != ""
 		b.focus_mode = Control.FOCUS_NONE if why != "" else Control.FOCUS_ALL
 		b.mouse_default_cursor_shape = Control.CURSOR_FORBIDDEN if why != "" else Control.CURSOR_POINTING_HAND
-		b.tooltip_text = why if why != "" else _action_tip(action, s)
+		b.tooltip_text = why if why != "" else (AVATAR_GO_TIP if action == "loot" and _avatar_buttons else _action_tip(action, s))
 	_say_why(why_of)
 
 

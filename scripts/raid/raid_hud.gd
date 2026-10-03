@@ -7,16 +7,19 @@
 ##              the bags (right: what is in them by stock, "n of m") - in a narrow window the cards drop to a row of their own
 ##   right      the radio: the contacts (the squad above; the people at the base: chips), News and Alarm and "All back", and
 ##              for the selected contact the verbs of radio_verbs.gd. The News log (news_panel.gd) takes the verbs' place in a
-##              narrow window, and stands beside the radio in a wide one
+##              narrow window, and stands beside the radio in a wide one. Under the radio, the call card (call_card.gd: the
+##              oldest call of the base that waits for an answer: it never pauses anything; it tells less of the call when the
+##              column is short, and steps aside while the News, which has the open calls itself, is up)
 ##   bottom     the log of what happened (the last four lines, fading), the legend of the controls (fades), the ammunition
-##              (the magazine and the stock, a reload bar), the call card (call_card.gd: the oldest call of the base that waits
-##              for an answer: it never pauses anything) and the base's clock (its day and hour, dusk and night) and how it
-##              stands (walls holding, under attack, alarm)
+##              (the magazine and the stock, a reload bar) and the base's clock (its day and hour, dusk and night) and how it
+##              stands (walls holding, under attack, alarm). The camera keeps the squad out from under these and from under the
+##              radio's column (`foot_reserve`, `right_limit`)
 ##   over all   a banner ("They heard that", "Dez leads now"), a toast for an order that cannot be given, the road's overlay
 ##              ("Driving to the pharmacy...": the progress, the clock of the base and the news as it comes) and the report
 ##              (a paper page: what came home, who is hurt or lost, the place, the ammo used, the news, and one button)
 ##
-## Everything is laid out in `_layout`, from the panels' own sizes, so that nothing overlaps at any width from 700 up.
+## Everything is laid out in `_layout`, from the panels' own sizes, so that nothing overlaps at any width from 700 up. (A window with
+## no room under the radio for even the slimmest call card puts it at the foot, as before: `call_in_column`.)
 ## Nothing is set under Fonts.MIN_PX (the label factory raises it).
 extends CanvasLayer
 
@@ -57,6 +60,8 @@ const WEAPON_W := 230.0
 const CALL_W := 300.0
 const CALL_W_MIN := 230.0
 const BASE_W := 250.0
+## How far from the one you lead the rest of the squad stand, in pixels, when the window keeps them out from under the radio's column.
+const SQUAD_SPREAD := 85.0
 const ROAD_W := 460.0
 ## Amber for the report's paper (the chalk amber is for the dark panels): 5.7 to 1 on the paper.
 const PAPER_AMBER := Color("#8a4a00")
@@ -116,6 +121,10 @@ var radio_verbs
 var news_panel
 var news_open := false
 var call_card
+## The call card is in the radio's column (else, in a window with no room there, at the foot).
+var call_in_column := false
+## Where the radio's column begins (pixels from the left), as the last layout put it.
+var _radio_x := 0.0
 
 ## The foot: the log and the legend (left), the ammunition (middle), the base (right).
 var log_panel: PanelContainer
@@ -937,10 +946,10 @@ static func _mood_word(cs) -> String:
 
 ## Where everything goes, from the panels' own sizes. The squad's cards sit between the place and the bags when all of them
 ## fit there at their narrowest, and otherwise in a row (or rows) of their own under both. The radio is a column at the right
-## under them (the News log beside it in a wide window, in the verbs' place in a narrow one) and the base's clock is at the
-## foot of that column. A WIDE window (WIDE_W) keeps the log and the legend at the bottom left, the ammunition in the middle
-## of the foot with the call card above it, the banner at the top of the middle and the toast over the call card; a narrow
-## one has one column at the left (the ammunition at the foot, the call card above it, then the log and the legend, whichever
+## under them (the News log beside it in a wide window, in the verbs' place in a narrow one), the call card under the radio and
+## the base's clock at the foot of that column. A WIDE window (WIDE_W) keeps the log and the legend at the bottom left, the
+## ammunition in the middle of the foot, the banner at the top of the middle and the toast over the ammunition; a narrow
+## one has one column at the left (the ammunition at the foot, then the log and the legend, whichever
 ## of those two fit under the banner and the toast, which hang from the cards' row while they are up). Nothing overlaps.
 func _layout() -> void:
 	if root == null or place_panel == null:
@@ -980,6 +989,7 @@ func _layout() -> void:
 	var rs := radio_panel.get_combined_minimum_size()
 	var radio_x := w - PAD - maxf(rs.x, RADIO_W)
 	_place(radio_panel, Vector2(radio_x, right_top))
+	_radio_x = radio_x
 	var room_below := maxf(0.0, base_at.y - 8.0 - right_top)
 	var news_left := radio_x    # (what the middle of the window has to keep clear of at the top)
 	if news_panel.visible:
@@ -1000,7 +1010,23 @@ func _layout() -> void:
 	var bs := banner.get_combined_minimum_size()
 	var ts := toast_panel.get_combined_minimum_size()
 	var wes := weapon_panel.get_combined_minimum_size()
+	# the call card: parked in the right column under the radio, where the player looks for the radio and where it hides nobody of the
+	# squad. The News panel (when it is up) has the open calls itself, so the card is not up while it is. In a column with little room
+	# it tells less (`CallCard.fit`); when even that does not fit (a tiny window with a tall radio) it goes to the foot, as before.
 	var cc: Vector2 = call_card.get_combined_minimum_size()
+	call_in_column = false
+	if call_card.visible:
+		var card_w := maxf(RADIO_W, rs.x)
+		call_card.custom_minimum_size.x = card_w
+		var card_top := right_top + rs.y + 6.0
+		var card_room := base_at.y - 6.0 - card_top
+		if call_card.fit(card_room):
+			cc = call_card.get_combined_minimum_size()
+			_place(call_card, Vector2(w - PAD - card_w, card_top))
+			call_in_column = true
+		else:
+			call_card.view.set_level(0)
+			cc = call_card.get_combined_minimum_size()
 	if wide:
 		# the left column: the log at the foot, the legend over it (both as wide as the log)
 		var left_w := LOG_W
@@ -1023,9 +1049,9 @@ func _layout() -> void:
 		var mid_c := (mid_l + mid_r) / 2.0
 		_place(weapon_panel, Vector2(mid_c - wes.x / 2.0, h - PAD - wes.y))
 		var up := h - PAD - wes.y - 6.0
-		call_card.custom_minimum_size.x = minf(CALL_W, mid_r - mid_l)
-		cc = call_card.get_combined_minimum_size()
-		if call_card.visible:
+		if call_card.visible and not call_in_column:
+			call_card.custom_minimum_size.x = minf(CALL_W, mid_r - mid_l)
+			cc = call_card.get_combined_minimum_size()
 			_place(call_card, Vector2(mid_c - cc.x / 2.0, up - cc.y))
 			up -= cc.y + 6.0
 		_place(toast_panel, Vector2(mid_c - ts.x / 2.0, up - ts.y))
@@ -1040,9 +1066,9 @@ func _layout() -> void:
 		var foot := h - PAD
 		_place(weapon_panel, Vector2(PAD, foot - wes.y))
 		foot -= wes.y + 6.0
-		call_card.custom_minimum_size.x = clampf(left_w2, CALL_W_MIN, CALL_W)
-		cc = call_card.get_combined_minimum_size()
-		if call_card.visible:
+		if call_card.visible and not call_in_column:
+			call_card.custom_minimum_size.x = clampf(left_w2, CALL_W_MIN, CALL_W)
+			cc = call_card.get_combined_minimum_size()
 			_place(call_card, Vector2(PAD, foot - cc.y))
 			foot -= cc.y + 6.0
 		# the banner and the toast hang from the cards' row while they are up: the log and the legend need the room under them
@@ -1055,7 +1081,8 @@ func _layout() -> void:
 			ceiling += ts.y + 6.0
 		log_panel.visible = false
 		legend_panel.visible = false
-		var log_w := minf(LOG_W, left_w2)
+		# (the lines' width is the panel's less its margins: the board must end where the room does, not past it)
+		var log_w := minf(LOG_W, left_w2 - log_panel.get_theme_stylebox("panel").get_minimum_size().x)
 		for l in log_labels:
 			l.custom_minimum_size.x = log_w
 		log_panel.custom_minimum_size.x = 0.0
@@ -1073,6 +1100,24 @@ func _layout() -> void:
 				_place(legend_panel, Vector2(PAD, foot - legs2.y))
 	_layout_w = w
 	_sig = _signature()
+
+
+## How far across the window (pixels from the left) the squad may be seen: left of the radio's column, with room for the people about the
+## one you lead. In a window wide enough that the column is far from the middle this is past the middle and costs nothing.
+func right_limit() -> float:
+	if root == null or _radio_x <= 0.0:
+		return INF
+	return _radio_x - GAP - SQUAD_SPREAD
+
+
+## How much of the window's foot the boards there take (the ammunition and the base's clock, and the space round them): the camera
+## lets the foot of the map come up above them, so that the squad is never under them when it is at the map's edge.
+func foot_reserve() -> float:
+	var r := 0.0
+	for c in [weapon_panel, base_panel]:
+		if c != null:
+			r = maxf(r, c.get_combined_minimum_size().y)
+	return r + PAD + 6.0
 
 
 ## The banner is as wide as its words, but never wider than the room: its lines wrap.
@@ -1140,6 +1185,8 @@ func refresh() -> void:
 	var run = scene.run
 	var in_place: bool = scene.phase == "place"
 	var live: bool = in_place and not scene.ended
+	# (the News panel has the open calls itself: the card steps aside while it is up)
+	call_card.set_suppressed(live and news_open)
 	if in_place or scene.phase == "report":
 		_refresh_place(run)
 		_refresh_loot(run)

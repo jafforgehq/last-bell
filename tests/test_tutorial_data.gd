@@ -1,6 +1,8 @@
 extends "res://tests/case.gd"
-## assets/data/tutorial.json is data, not code: it has to be valid, every step has what the coach
-## reads, every condition and beat and anchor it names exists, and the cards are short.
+## The lessons' files are data, not code: each has to be valid, every step has what the coach reads, every
+## condition and beat and anchor it names exists, and the cards are short. There are two: the avatar's
+## (assets/data/tutorial.json, tests/test_tutorial_avatar_data.gd looks at what is its own) and the old yard's
+## (assets/data/tutorial_classic.json, what `--noavatar` plays): the checks of the first kind run on both.
 
 const Coach := preload("res://scripts/ui/coach.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
@@ -8,22 +10,33 @@ const Orientation := preload("res://scripts/sim/orientation.gd")
 
 ## The order buttons' ids, and the orders and intents a step's allow list may name.
 const GIZMOS := ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge", "lure"]
-const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed", "jobs"]
+const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed", "jobs", "build", "alarm"]
 ## What the HUD's anchor_rect understands (the part before a ":" or a "."), and the world anchors.
-const HUD_ANCHORS := ["stores", "stores.ammo", "stores.scrap", "stores.food", "stores.water", "stores.meds", "bar", "clock", "clock.time", "clock.forecast", "alerts", "inspect", "inspect.weapon", "speed", "fields", "help", "sound", "jobs", "legend", "toast", "banner", "dialog.send", "dialog.cancel", "dialog.party"]
+const HUD_ANCHORS := ["stores", "stores.ammo", "stores.scrap", "stores.food", "stores.water", "stores.meds", "bar", "clock", "clock.time", "clock.forecast", "alerts", "inspect", "inspect.weapon", "speed", "fields", "help", "sound", "jobs", "legend", "toast", "banner", "dialog.send", "dialog.cancel", "dialog.party", "dialog.close", "ammo", "town", "build", "news", "news.panel", "alarm", "radio", "call"]
+## The verbs of the radio (the anchors `radio.<verb>` and `radio.insist`).
+const RADIO_PARTS := ["come", "hold", "cover", "search", "back", "post", "insist"]
+## The beats of each lesson's scenario.
+const CLASSIC_BEATS := ["dusk", "more", "scratch", "fever"]
+const AVATAR_BEATS := ["dusk", "more", "scratch", "fever", "stray", "spent", "assault", "home"]
 const OPTIONAL_KEYS := ["goal", "goals", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed"]
-const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select"]
+const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select", "at", "mag"]
 ## The parts of the Duty roster's page (while it is open) that an anchor may name, and the stations a card is for.
 const JOBS_PARTS := ["screen", "auto", "clear", "close", "list"]
 const STATIONS := ["bench", "builders", "garden", "infirmary", "radio", "watch"]
 
 
+## The old yard's lesson (what `_steps()` has always been).
 func _steps() -> Array:
-	return Coach.load_steps()
+	return Coach.load_steps(Coach.CLASSIC_PATH)
+
+
+## Both lessons: [[path, steps, the beats the scenario has]].
+func _lessons() -> Array:
+	return [[Coach.CLASSIC_PATH, Coach.load_steps(Coach.CLASSIC_PATH), CLASSIC_BEATS], [Coach.STEPS_PATH, Coach.load_steps(Coach.STEPS_PATH), AVATAR_BEATS]]
 
 
 func test_the_file_is_valid_and_has_the_steps() -> void:
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(Coach.STEPS_PATH))
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(Coach.CLASSIC_PATH))
 	check(typeof(parsed) == TYPE_DICTIONARY, "it is a JSON object")
 	check(typeof(parsed.get("steps")) == TYPE_ARRAY, "with a list of steps")
 	var steps := _steps()
@@ -34,11 +47,16 @@ func test_the_file_is_valid_and_has_the_steps() -> void:
 
 
 func test_every_step_has_what_the_coach_reads() -> void:
+	for lesson in _lessons():
+		_every_step_has_what_the_coach_reads(lesson[1], String(lesson[0]))
+
+
+func _every_step_has_what_the_coach_reads(steps: Array, label: String) -> void:
 	var ids := {}
-	for s in _steps():
+	for s in steps:
 		var id := String(s.get("id", ""))
-		check(id != "" and id == id.to_lower() and not id.contains(" "), "a step has a plain lower-case id: '%s'" % id)
-		check(not ids.has(id), "ids are unique: %s" % id)
+		check(id != "" and id == id.to_lower() and not id.contains(" "), "%s: a step has a plain lower-case id: '%s'" % [label, id])
+		check(not ids.has(id), "%s: ids are unique: %s" % [label, id])
 		ids[id] = true
 		for key in s:
 			check(["id", "title", "text", "done"].has(key) or OPTIONAL_KEYS.has(key), "%s: '%s' is a key the coach knows" % [id, key])
@@ -58,7 +76,12 @@ func test_every_step_has_what_the_coach_reads() -> void:
 
 
 func test_the_cards_are_short() -> void:
-	for s in _steps():
+	for lesson in _lessons():
+		_the_cards_are_short(lesson[1])
+
+
+func _the_cards_are_short(steps: Array) -> void:
+	for s in steps:
 		for key in ["text", "wait_text", "skipped_text", "dialog_text"]:
 			if s.has(key):
 				var n := Coach.words(String(s[key]))
@@ -92,8 +115,13 @@ func _conds_in(spec, out: Array) -> void:
 
 
 func test_every_condition_the_data_names_exists() -> void:
+	for lesson in _lessons():
+		_every_condition_the_data_names_exists(lesson[1])
+
+
+func _every_condition_the_data_names_exists(steps: Array) -> void:
 	var table := Conditions.registry()
-	for s in _steps():
+	for s in steps:
 		var names: Array = []
 		for key in ["done", "start", "pause_until"]:
 			_conds_in(s.get(key, {}), names)
@@ -125,8 +153,13 @@ func test_every_beat_a_step_fires_exists_and_each_beat_is_fired_by_a_step() -> v
 
 
 func test_anchor_names_are_the_ones_the_hud_and_the_world_know() -> void:
+	for lesson in _lessons():
+		_anchor_names_are_the_ones_the_hud_and_the_world_know(lesson[1])
+
+
+func _anchor_names_are_the_ones_the_hud_and_the_world_know(steps: Array) -> void:
 	var people := ["ruth", "dez", "ana", "marcus", "walt", "hector"]
-	for name in Coach.anchor_names(_steps()):
+	for name in Coach.anchor_names(steps):
 		var n := String(name)
 		if n.begins_with("person:") or n.begins_with("card:"):
 			check(people.has(n.split(":")[1]), "%s names someone in the crew" % n)
@@ -150,20 +183,23 @@ func test_anchor_names_are_the_ones_the_hud_and_the_world_know() -> void:
 				check(STATIONS.has(which), "%s names a station" % n)
 			else:
 				check(kind == "item" and which != "", "%s is a part of the Duty roster's page" % n)
-		elif n == "bench" or n.begins_with("spot:"):
+		elif n.begins_with("radio."):
+			check(RADIO_PARTS.has(n.trim_prefix("radio.")), "%s names a verb of the radio (or Insist)" % n)
+		elif n == "bench" or n == "zombie:near" or n.begins_with("spot:"):
 			pass
 		else:
 			check(HUD_ANCHORS.has(n), "%s is a part of the HUD" % n)
 
 
 func test_the_jump_blocks_only_ask_for_what_the_scenario_can_do() -> void:
-	for s in _steps():
-		var jump = s.get("jump", {})
-		check(typeof(jump) == TYPE_DICTIONARY, "%s: jump is a block" % s.id)
-		for key in jump:
-			check(JUMP_KEYS.has(key), "%s: '%s' is something jump can do" % [s.id, key])
-		for id in jump.get("fired", []):
-			check(["dusk", "more", "scratch", "fever"].has(String(id)), "%s: '%s' is a beat" % [s.id, id])
+	for lesson in _lessons():
+		for s in lesson[1]:
+			var jump = s.get("jump", {})
+			check(typeof(jump) == TYPE_DICTIONARY, "%s: jump is a block" % s.id)
+			for key in jump:
+				check(JUMP_KEYS.has(key), "%s: '%s' is something jump can do" % [s.id, key])
+			for id in jump.get("fired", []):
+				check((lesson[2] as Array).has(String(id)), "%s: '%s' is a beat" % [s.id, id])
 
 
 ## Round 5's Duty roster (key J) is taught after the worktable, which gives a person the Workbench job, and

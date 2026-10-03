@@ -28,6 +28,11 @@
 ## - It is the scenario that remembers where it is (`step`, `coach_state`), so a save made in the
 ##   middle resumes the same step.
 ##
+## Orientation Day is taught in the game the player will play: with the avatar (round 17: walking, aiming and shooting, the
+## ladder, the radio, the News and its calls, the map, the alarm) from assets/data/tutorial.json, or, in the old yard
+## (`--noavatar`, a test), from assets/data/tutorial_classic.json (see `steps_path`). The card keeps out of the way of the
+## person the player plays, and of the gun's readout, as well as of the thing it points at (`best_rect`).
+##
 ## It does nothing in a normal run: main.gd builds it only for Orientation Day, and every call
 ## into it is behind `if coach != null`.
 extends CanvasLayer
@@ -38,6 +43,8 @@ const Prefs := preload("res://scripts/prefs.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 
 const STEPS_PATH := "res://assets/data/tutorial.json"
+## The old yard's lesson (the one with no avatar: orders by right-click and by the keys).
+const CLASSIC_PATH := "res://assets/data/tutorial_classic.json"
 ## The card's width, the space kept round the window's edge and round the target.
 const CARD_W := 360.0
 const EDGE := 12.0
@@ -45,6 +52,8 @@ const GAP := 16.0
 ## Real seconds of nothing before the ring pulses (and Show me appears), and before the arrow comes.
 const IDLE_PULSE_S := 20.0
 const IDLE_ARROW_S := 45.0
+## The crew of the real run the last card offers: what the New game screen opens on.
+const REAL_CREW := 5
 ## A card stays at least this long when its lesson is already done as it begins, so it does not
 ## blink past.
 const MIN_SHOW_S := 1.0
@@ -52,6 +61,13 @@ const MIN_SHOW_S := 1.0
 const DONE_FLASH_S := 0.7
 ## How long the camera is eased towards what a step asks it to look at.
 const FOCUS_S := 1.6
+## What a pixel of the card over the person the player plays (or the gun's readout) costs in `best_rect`, against 1 for a pixel over
+## a panel of the HUD and 50 over the thing a card points at.
+const KEEP_WEIGHT := 400.0
+## What it is worth to a card in avatar mode to stay where it is rather than move to another place.
+const STAY_BONUS := 6000.0
+## How far round the person the player plays, in tiles, the card keeps clear (the figure, the YOU tag and the gun's muzzle).
+const AVATAR_CLEAR := 1.2
 ## How dark the screen goes round a lit part of the HUD.
 const DIM := 0.4
 ## The most words a card may have (the data test holds the lessons to it).
@@ -293,6 +309,11 @@ var refused := 0
 
 
 # ------------------------------------------------------------------- data --
+
+## The file the lessons are read from: the avatar's, or the old yard's.
+static func steps_path(avatar: bool) -> String:
+	return STEPS_PATH if avatar else CLASSIC_PATH
+
 
 ## The steps of the file (an empty list, and an error, when it cannot be read).
 static func load_steps(path: String = STEPS_PATH) -> Array:
@@ -576,7 +597,11 @@ func _activate() -> void:
 	var pos := {}
 	for p in sim.people:
 		pos[p.id] = [p.x, p.y]
-	state["base"] = {"ammo": float(sim.stock.ammo), "kills": float(sim.kills), "pos": pos}
+	state["base"] = {"ammo": float(sim.stock.ammo), "kills": float(sim.kills), "pos": pos, "news": float(sim.radio.latest_id())}
+	var me = sim.avatar.player()
+	if me != null:
+		# (numbers as a save gives them back: floats)
+		state["base"]["mine"] = {"shots": float(me.stats.shots), "kills": float(me.stats.kills)}
 	for id in step.get("fire", []):
 		scenario.fire(String(id))
 	# a lesson that is already done as it begins stays up a moment (MIN_SHOW_S) so it can be read;
@@ -634,14 +659,14 @@ func skip() -> void:
 	state["skipped"] = true
 
 
-## Start a real run (Standard difficulty, a random seed, the small crew a new game begins with).
+## Start a real run (Standard difficulty, a random seed, the crew of five a new game begins with, played by an avatar).
 func start_real_run() -> void:
 	if phase != "wrap":
 		return
 	if main.has_method("start_run"):
-		main.start_run(1, randi(), 3)
+		main.start_run(1, randi(), REAL_CREW)
 	else:
-		hud.start_run({"difficulty": 1, "seed": randi(), "crew": 3})
+		hud.start_run({"difficulty": 1, "seed": randi(), "crew": REAL_CREW})
 
 
 ## Play Orientation Day again from the start.
@@ -701,6 +726,7 @@ func _refresh_state() -> void:
 	state["dialog"] = {"open": open, "site": String(d.site_id) if open else ""}
 	var page = hud.get("jobs_screen")
 	state["jobs"] = {"open": page != null and is_instance_valid(page)}
+	state["news"] = {"open": hud.has_method("news_open") and hud.news_open()}
 
 
 ## The player did something (main.gd's _did): `kind` is "select" (with the selection), "move",
@@ -731,6 +757,9 @@ func on_event(e: Dictionary) -> void:
 		return
 	var type := String(e.get("type", ""))
 	_count(state["events"], type)
+	# an answer of the radio to a request: who was asked, what, and whether they agreed
+	if type == "radio_line":
+		_count(state["events"], "radio_line:%s:%s:%s" % [String(e.get("who", "")), String(e.get("verb", "")), "ok" if bool(e.get("ok", false)) else "no"])
 	# a job given (an "assigned" event that names a station) counts on its own: taking one away is not giving one
 	if type == "assigned" and String(e.get("station", "")) != "":
 		_count(state["events"], "assigned:job")
@@ -809,6 +838,9 @@ func _world_point(name: String):
 	if name.begins_with("spot:"):
 		var xy := name.trim_prefix("spot:").split(",")
 		return Vector2(float(xy[0]), float(xy[1])) if xy.size() == 2 else null
+	if name == "zombie:near":
+		var z = _nearest_dead()
+		return Vector2(z.x, z.y - 0.45) if z != null else null
 	return null
 
 
@@ -826,8 +858,25 @@ func _wall(id: int):
 	return null
 
 
+## The one of the dead that is coming for the compound (or at its wall) nearest the person the player plays (the nearest to the
+## camera without an avatar), or null: the thing a lesson on shooting points at.
+func _nearest_dead():
+	var me = sim.avatar.player()
+	var from: Vector2 = Vector2(me.x, me.y) if me != null else main.cam_center
+	var best = null
+	var best_d := INF
+	for z in sim.zombies:
+		if z.state != "approach" and z.state != "attack" and z.state != "hunt" and z.state != "breach":
+			continue
+		var d := Vector2(z.x, z.y).distance_to(from)
+		if d < best_d:
+			best_d = d
+			best = z
+	return best
+
+
 func _is_world(name: String) -> bool:
-	return name.begins_with("person:") or name.begins_with("wall:") or name.begins_with("spot:") or name == "bench"
+	return name.begins_with("person:") or name.begins_with("wall:") or name.begins_with("spot:") or name == "bench" or name == "zombie:near"
 
 
 ## The screen rectangle of a world anchor, and whether it is drawn as a circle ({"rect",
@@ -851,6 +900,9 @@ func _world_rect(name: String) -> Dictionary:
 	var at = _world_point(name)
 	if at == null:
 		return {"rect": Rect2(), "circle": true}
+	if name == "zombie:near":
+		var near = _nearest_dead()
+		at = main.view_pos(near) + Vector2(0.0, -0.45)
 	var c2: Vector2 = main._tile_to_screen(at)
 	var r2: float = 1.0 * main.zoom_px
 	return {"rect": Rect2(c2 - Vector2(r2, r2), Vector2(r2, r2) * 2.0), "circle": true}
@@ -1197,28 +1249,45 @@ func _place_card(delta: float, vp: Vector2) -> void:
 ## The rectangle for a card of size `sz` in a window of size `vp`, in the present step's way
 ## (see `best_rect`).
 func _best_rect(sz: Vector2, vp: Vector2, t: Rect2, compact_top: bool) -> Rect2:
-	return best_rect(hud, sz, vp, t, String(step.get("place", "top")), compact_top, phase == "wrap")
+	return best_rect(hud, sz, vp, t, String(step.get("place", "top")), compact_top, phase == "wrap", _kept_clear(), _card_rect)
+
+
+## What the card keeps off in avatar mode, in screen pixels: the person the player plays (the middle of the screen: the camera
+## is on them: the figure, which no card may cover, and the room round it for the gun that a card keeps off if it can) and the gun's
+## readout. Nothing without an avatar.
+func _kept_clear() -> Array:
+	var out: Array = []
+	var me = sim.avatar.player() if sim != null else null
+	if me == null or me.away != null:
+		return out
+	var at: Vector2 = main.view_pos(me)
+	var a: Vector2 = main._tile_to_screen(at + Vector2(-0.5, -1.9))
+	var b: Vector2 = main._tile_to_screen(at + Vector2(0.5, 0.5))
+	out.append(Rect2(a, b - a).abs())    # (the figure and its YOU tag: counted twice, with the room round it)
+	var c: Vector2 = main._tile_to_screen(at + Vector2(0.0, -0.45))
+	var r: float = AVATAR_CLEAR * main.zoom_px
+	out.append(Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0))
+	var gun = hud.get("ammo_panel")
+	if gun != null and is_instance_valid(gun) and gun.is_visible_in_tree():
+		out.append(gun.get_global_rect())
+	return out
 
 
 ## The rectangle for a card of size `sz` in a window of size `vp`: round the target `t` (a rectangle
 ## on the screen, empty for none) if there is one, else where `place` says ("top" under the crew,
 ## "center", "bottom"); the one that covers none of the target and least of the HUD's own panels.
-## `compact_top` is the small card at the very top (over a page of the HUD). Used by the hints too.
-static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, compact_top: bool, centered: bool = false) -> Rect2:
+## `compact_top` is the small card at the very top (over a page of the HUD). `keep_clear` (avatar mode) is
+## more of the screen to keep off, as the target is: the person the player plays and the gun's readout; with
+## it a card with no target moves from its place to the nearest where it hides none of them, and `prev` (where the card was) is
+## kept unless another place is clearly better (a card that walks about with the person it keeps clear of is no help). Used by the
+## hints too.
+static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, compact_top: bool, centered: bool = false, keep_clear: Array = [], prev: Rect2 = Rect2()) -> Rect2:
 	var bounds := Rect2(Vector2(EDGE, EDGE), vp - Vector2(EDGE, EDGE) * 2.0)
 	var bar: Rect2 = hud.anchor_rect("bar")
 	var top_y := bar.end.y + GAP if bar.size.y > 0.0 else 100.0
 	var top_center := Rect2(Vector2((vp.x - sz.x) * 0.5, top_y), sz)
 	if compact_top:
 		return _fit(Rect2(Vector2((vp.x - sz.x) * 0.5, EDGE), sz), bounds)
-	if t.size.x <= 0.0 or centered:
-		match place:
-			"center":
-				return _fit(Rect2((vp - sz) * 0.5, sz), bounds)
-			"bottom":
-				return _fit(Rect2(Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 110.0), sz), bounds)
-		return _fit(top_center, bounds)
-	var avoid := t.grow(10.0)
 	var obstacles: Array = []
 	for n in ["inspect", "clock", "stores", "bar", "speed", "alerts", "legend", "news.panel", "call", "radio"]:
 		var r: Rect2 = hud.anchor_rect(n)
@@ -1228,6 +1297,33 @@ static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, co
 		var d: Rect2 = hud.dock.get_global_rect()
 		if d.size.x > 0.0 and not d.intersects(t):
 			obstacles.append(d)
+	if t.size.x <= 0.0 or centered:
+		var chosen := top_center
+		match place:
+			"center":
+				chosen = Rect2((vp - sz) * 0.5, sz)
+			"bottom":
+				chosen = Rect2(Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 110.0), sz)
+		if keep_clear.is_empty():
+			return _fit(chosen, bounds)
+		# its own place first; if that hides the person or the gun's readout, the nearest of the others that does not
+		var spots: Array = [chosen, top_center, Rect2(Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 110.0), sz), Rect2(Vector2(EDGE, top_y), sz), Rect2(Vector2(vp.x - sz.x - EDGE, top_y), sz), Rect2(Vector2(EDGE, (vp.y - sz.y) * 0.5), sz), Rect2(Vector2(vp.x - sz.x - EDGE, (vp.y - sz.y) * 0.5), sz), Rect2(Vector2(EDGE, vp.y - sz.y - EDGE), sz), Rect2(Vector2(vp.x - sz.x - EDGE, vp.y - sz.y - EDGE), sz)]
+		for k in keep_clear:
+			spots.append_array(_beside(k, sz))
+		if prev.size == sz:
+			spots.append(prev)
+		var pick := _fit(chosen, bounds)
+		var pick_cost := INF
+		for i in spots.size():
+			var r := _fit(spots[i], bounds)
+			var cost := _hidden(r, keep_clear) * KEEP_WEIGHT + _hidden(r, obstacles) + float(i) * 400.0
+			if prev.size == sz and r.position.distance_to(prev.position) < 1.0:
+				cost -= STAY_BONUS + float(i) * 400.0
+			if cost < pick_cost:
+				pick_cost = cost
+				pick = r
+		return pick
+	var avoid := t.grow(10.0)
 	var cands: Array = []
 	for dx in [0.0, -0.5, -1.0]:
 		cands.append(Rect2(Vector2(t.position.x + t.size.x * 0.5 + dx * sz.x, t.end.y + GAP), sz))
@@ -1240,6 +1336,10 @@ static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, co
 	cands.append(Rect2(Vector2(EDGE, (vp.y - sz.y) * 0.5), sz))
 	cands.append(Rect2(Vector2(vp.x - sz.x - EDGE, (vp.y - sz.y) * 0.5), sz))
 	cands.append(Rect2((vp - sz) * 0.5, sz))
+	for k in keep_clear:
+		cands.append_array(_beside(k, sz))
+	if prev.size == sz and not keep_clear.is_empty():
+		cands.append(prev)
 	var best := top_center
 	var best_cost := INF
 	var centre := t.get_center()
@@ -1248,14 +1348,40 @@ static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, co
 		var cost := 0.0
 		var hit := r.intersection(avoid)
 		cost += hit.size.x * hit.size.y * 50.0
+		cost += _hidden(r, keep_clear) * KEEP_WEIGHT
 		for o in obstacles:
 			var ov: Rect2 = r.intersection(o)
 			cost += ov.size.x * ov.size.y
 		cost += r.get_center().distance_to(centre) * 20.0 + float(i) * 400.0
+		if prev.size == sz and not keep_clear.is_empty() and r.position.distance_to(prev.position) < 1.0:
+			cost -= STAY_BONUS + float(i) * 400.0
 		if cost < best_cost:
 			best_cost = cost
 			best = r
 	return best
+
+
+## Places for a card of size `sz` just beside `r`: to its left and right (level with it, a little above and below) and above and
+## below it (level, and pushed to either side).
+static func _beside(r: Rect2, sz: Vector2) -> Array:
+	var c := r.get_center()
+	var out: Array = []
+	for dy in [0.5, 0.0, 1.0]:
+		out.append(Rect2(Vector2(r.position.x - GAP - sz.x, c.y - sz.y * dy), sz))
+		out.append(Rect2(Vector2(r.end.x + GAP, c.y - sz.y * dy), sz))
+	for dx in [0.5, 0.0, 1.0]:
+		out.append(Rect2(Vector2(c.x - sz.x * dx, r.position.y - GAP - sz.y), sz))
+		out.append(Rect2(Vector2(c.x - sz.x * dx, r.end.y + GAP), sz))
+	return out
+
+
+## The area of `r` that lies over any of the rectangles.
+static func _hidden(r: Rect2, over: Array) -> float:
+	var area := 0.0
+	for o in over:
+		var ov: Rect2 = r.intersection(o)
+		area += ov.size.x * ov.size.y
+	return area
 
 
 ## `r` moved to lie inside `bounds` (as much as it can).

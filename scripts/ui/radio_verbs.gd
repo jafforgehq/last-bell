@@ -206,6 +206,8 @@ func refresh() -> void:
 	for verb in buttons:
 		var b: Button = buttons[verb]
 		var st := verb_state(verb)
+		# (Search that is for a place: in the yard there is nothing to search, so it is not offered; it stays off, with its reason)
+		b.visible = verb != "search" or bool(options.get("place", false))
 		b.disabled = not st.enabled
 		var tip := String(WORDS.get(verb, String(verb))).replace("%s", first)
 		if not st.enabled:

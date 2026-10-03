@@ -1,267 +1,177 @@
 {
-	"version": 1,
+	"version": 2,
 	"steps": [
 		{
-			"id": "look",
-			"title": "Welcome to the yard",
-			"text": "Six people hold this schoolyard against the dead. I'll show you how. First, look around: pan with W A S D (or middle-drag, or Alt and drag) and scroll to zoom.",
-			"goal": "pan and zoom the view",
-			"allow": [],
-			"done": {"cond": "look_around", "params": {"pan": 6, "zoom": 0.15}},
-			"pause": true,
-			"place": "top",
-			"jump": {"hour": 7.0}
-		},
-		{
-			"id": "send",
-			"run_speed": 1,
-			"title": "Give an order",
-			"text": "Click Ruth's picture at the top to select her. Then right-click the ground nearby: she walks there and waits for you.",
-			"goal": "select Ruth, then right-click the ground",
-			"anchor": [
-				{"name": "person:ruth", "when": "selected", "params": {"who": "ruth"}},
-				"card:ruth"
-			],
-			"allow": ["select:person:ruth", "move"],
-			"move_inside": [20.5, 19.5, 63.0, 43.5],
-			"move_radius": 14,
-			"move_min": 3,
-			"goals": [{"when": "selected", "params": {"who": "ruth"}, "text": "right-click the ground nearby"}],
-			"done": {"cond": "arrived", "params": {"who": "ruth", "min_dist": 3}},
-			"pause_until": {"cond": "ordered", "params": {"who": "ruth", "min_dist": 3}},
-			"focus": "person:ruth",
-			"jump": {"hour": 7.0}
-		},
-		{
-			"id": "release",
-			"title": "Hand her back",
-			"text": "Whoever you order about stays where you put them. Press R, or the Release button, and Ruth goes back to her usual work.",
-			"goal": "press R to release Ruth",
-			"anchor": [
-				{"name": "gizmo:draft", "when": "selected", "params": {"who": "ruth"}},
-				"card:ruth"
-			],
-			"allow": ["select:person:ruth", "gizmo:draft"],
-			"done": {"cond": "released", "params": {"who": "ruth"}},
-			"pause": true,
-			"jump": {"hour": 7.1, "drafted": ["ruth"], "select": "ruth"}
-		},
-		{
-			"id": "stores",
-			"title": "Your stores",
-			"text": "Top left is everything you own. Food and water are counted in days. Repairs spend scrap, shots spend ammo, bandages spend medicine. Nothing refills itself unless someone goes out and fetches it.",
-			"anchor": ["stores"],
+			"id": "you",
+			"title": "This is you",
+			"text": "You play Ruth: the gold YOU tag over her head and on her picture at the top says so. The camera follows her. Everyone else has a mind of their own.",
+			"anchor": ["person:ruth"],
 			"allow": [],
 			"done": {"cond": "next"},
 			"pause": true,
-			"jump": {"hour": 7.3}
+			"jump": {"hour": 7.0}
 		},
 		{
-			"id": "scavenge",
-			"title": "A trip to town",
-			"text": "Food and water will run out, so someone has to fetch more. Click Ana, press G, choose the houses and press Send. She is back around four in the afternoon.",
-			"goal": "select Ana, press G, choose a place, then Send",
-			"goals": [
-				{"when": "site_chosen", "text": "press Send"},
-				{"when": "dialog_open", "text": "choose the houses"},
-				{"when": "selected", "params": {"who": "ana"}, "text": "press G"}
-			],
-			"anchor": [
-				{"name": "dialog.send", "when": "site_chosen"},
-				{"name": "dialog.site:houses", "when": "dialog_open"},
-				{"name": "gizmo:scavenge", "when": "selected", "params": {"who": "ana"}},
-				"card:ana"
-			],
-			"allow": ["select:person:ana", "gizmo:scavenge"],
-			"done": {"cond": "party_out"},
-			"pause": true,
-			"dialog_text": "In the box, click the houses, then press Send.",
-			"dim": false,
-			"place": "top",
-			"jump": {"hour": 7.4}
-		},
-		{
-			"id": "post",
+			"id": "walk",
 			"run_speed": 1,
-			"title": "Posts on the wall",
-			"text": "At night the crew shoots from the walkways. Select Hector and press P: he climbs a ladder to his post and holds it.",
-			"goal": "select Hector, then press P",
-			"goals": [{"when": "selected", "params": {"who": "hector"}, "text": "press P"}],
-			"anchor": [
-				{"name": "gizmo:post", "when": "selected", "params": {"who": "hector"}},
-				"card:hector"
-			],
-			"allow": ["select:person:hector", "gizmo:post"],
-			"done": {"cond": "posted", "params": {"who": "hector"}},
-			"pause_until": {"cond": "post_ordered", "params": {"who": "hector"}},
-			"follow": "hector",
-			"jump": {"hour": 7.5}
-		},
-		{
-			"id": "repair",
-			"run_speed": 1,
-			"title": "Mend the wall",
-			"text": "The school bus on the north wall is at 45%. Click it, then press F. A builder repairs it, and every ten points of wall cost one scrap.",
-			"goal": "click the bus, then press F",
-			"goals": [{"when": "selected", "params": {"wall": 3}, "text": "press F"}],
-			"anchor": [
-				{"name": "gizmo:repair", "when": "selected", "params": {"wall": 3}},
-				"wall:3"
-			],
-			"allow": ["select:segment:3", "gizmo:repair"],
-			"done": {"cond": "wall_mended", "params": {"wall": 3, "frac": 0.99}},
-			"pause_until": {"cond": "repair_ordered", "params": {"wall": 3}},
-			"focus": "wall:3",
-			"jump": {"hour": 7.7, "post": ["hector"]}
-		},
-		{
-			"id": "report",
-			"title": "The lookout speaks",
-			"text": "Marcus watches the road. Each day at 17:00 he says how many are coming tonight, and from where. It shows in the clock. Plan your guns around it.",
-			"anchor": ["clock"],
+			"title": "Walk",
+			"text": "W A S D walk Ruth, and the camera goes with her. Take a few steps around the yard. The walls keep the dead out, and keep you in.",
+			"goal": "walk six steps with W A S D",
 			"allow": [],
-			"done": {"cond": "next"},
-			"pause": true,
-			"start": {"cond": "forecast_given"},
-			"wait_title": "The day goes on",
-			"wait_text": "Ana is due back at 16:00 and Marcus reports at 17:00. Press 3 to speed time up, 1 for normal speed, Space to pause.",
-			"wait_anchor": ["speed.3"],
-			"clear_selection": true,
-			"jump": {"hour": 16.9, "bus": 1.0, "post": ["hector"], "stock": {"scrap": 22}}
+			"done": {"cond": "walked", "params": {"min": 6}},
+			"jump": {"hour": 7.0}
 		},
 		{
 			"id": "shoot",
 			"run_speed": 1,
-			"title": "Shots cost ammo",
-			"text": "Walkers at the gate! Click Marcus: the ring is how far he shoots, the pips are the rounds in his rifle. Every shot comes out of the Ammo store.",
-			"goal": "select Marcus and watch the Ammo number",
-			"goals": [{"when": "selected", "params": {"who": "marcus"}, "text": "watch the Ammo number go down"}],
+			"title": "Aim and shoot",
+			"text": "A walker is coming to the north wall. Shots stop at its face, so climb the marked ladder to the walkway. Then aim with the mouse and hold the left button.",
+			"goal": "climb the ladder to the walkway",
+			"goals": [{"when": "on_deck", "text": "aim at the walker, hold the left button"}],
 			"anchor": [
-				{"name": "stores.ammo", "when": "selected", "params": {"who": "marcus"}},
-				"card:marcus"
+				{"name": "zombie:near", "when": "on_deck"},
+				"spot:48.5,20.4"
 			],
-			"allow": ["select:person:marcus"],
-			"done": {"cond": "all", "params": {"of": [
-				{"cond": "selected", "params": {"who": "marcus"}},
-				{"cond": "any", "params": {"of": [
-					{"cond": "ammo_spent", "params": {"min": 1}},
-					{"cond": "kills", "params": {"min": 3}}
-				]}}
-			]}},
-			"pause_until": {"cond": "selected", "params": {"who": "marcus"}},
-			"start": {"cond": "bell_rung"},
-			"wait_title": "Dusk is coming",
-			"wait_text": "At 19:00 the bell rings. Everyone goes to their post and the dead come, a few more each night. Press 3 to speed time up.",
-			"wait_anchor": ["clock"],
-			"fire": ["dusk"],
-			"focus": "wall:2",
-			"clear_selection": true,
-			"jump": {"hour": 19.05, "bus": 1.0, "post": ["hector"], "stock": {"scrap": 22}}
+			"allow": [],
+			"done": {"cond": "player_kills", "params": {"min": 1}},
+			"fire": ["stray"],
+			"jump": {"hour": 7.05}
 		},
 		{
-			"id": "fields",
-			"title": "Where the guns reach",
-			"text": "Press V. Every wall piece shows how many guns cover it from the night posts: red none, amber one, green two or more. Keep your guns where the dead will come.",
-			"goal": "press V",
-			"anchor": ["fields"],
-			"allow": ["fields"],
-			"done": {"cond": "fields_on"},
+			"id": "reload",
+			"run_speed": 1,
+			"title": "Reload and swing",
+			"text": "The gun holds a few rounds: R reloads it, and the readout under the clock shows the magazine over the stores. When something gets close, F swings the butt.",
+			"goal": "press R to reload",
+			"goals": [{"when": "reloaded", "text": "press F to swing"}],
+			"anchor": ["ammo"],
+			"allow": [],
+			"dim": false,
+			"done": {"cond": "all", "params": {"of": [
+				{"cond": "reloaded"},
+				{"cond": "did", "params": {"what": "melee"}}
+			]}},
+			"fire": ["spent"],
+			"jump": {"hour": 7.2, "at": [48.5, 18.6]}
+		},
+		{
+			"id": "crew",
+			"title": "Who is who",
+			"text": "Everyone else has a job, a mood and a say. Click Dez's picture at the top: his panel shows his work, his skills, and how far he trusts you.",
+			"goal": "click Dez's picture at the top",
+			"anchor": ["card:dez"],
+			"allow": ["select:person:dez"],
+			"done": {"cond": "selected", "params": {"who": "dez"}},
 			"pause": true,
-			"jump": {"hour": 19.1, "bus": 1.0, "post": ["hector"], "fired": ["dusk"]}
+			"jump": {"hour": 7.3}
+		},
+		{
+			"id": "come",
+			"title": "Ask, do not order",
+			"text": "Nobody takes orders: you ask, over the radio. With Dez picked, press Come with me. He answers, then follows you. Go back sends him back to work.",
+			"goal": "press Come with me",
+			"goals": [{"when": "asked", "params": {"who": "dez", "verb": "come", "ok": true}, "text": "watch Dez come to you"}],
+			"anchor": ["radio.come", "card:dez"],
+			"allow": ["select:person:dez"],
+			"dim": false,
+			"done": {"cond": "has_stance", "params": {"who": "dez", "stance": "follow"}},
+			"pause_until": {"cond": "asked", "params": {"who": "dez", "verb": "come"}},
+			"jump": {"hour": 7.4, "select": "dez"}
+		},
+		{
+			"id": "refusal",
+			"title": "A refusal",
+			"text": "Ana is bandaging Walt, so she can't come. Ask her anyway: the reason shows. Insist pushes her to come regardless, at a cost to her trust.",
+			"goal": "click Ana, then press Come with me",
+			"goals": [
+				{"when": "insisted", "params": {"who": "ana"}, "text": "watch Ana come to you"},
+				{"when": "asked", "params": {"who": "ana", "ok": false}, "text": "press Insist"}
+			],
+			"anchor": [
+				{"name": "radio.insist", "when": "asked", "params": {"who": "ana", "ok": false}},
+				{"name": "radio.come", "when": "selected", "params": {"who": "ana"}},
+				"card:ana"
+			],
+			"allow": ["select:person:ana"],
+			"dim": false,
+			"done": {"cond": "has_stance", "params": {"who": "ana"}},
+			"pause_until": {"cond": "insisted", "params": {"who": "ana"}},
+			"fire": ["scratch"],
+			"jump": {"hour": 7.5}
+		},
+		{
+			"id": "news",
+			"title": "News and calls",
+			"text": "T opens News, the radio's log. Some news waits for your answer: a wall is under attack, and the radio asks what to do. Answer it, or the default answer is taken.",
+			"goal": "press T to open the News",
+			"goals": [{"when": "news_seen", "text": "answer the call: pick one of the buttons"}],
+			"anchor": [
+				{"name": "news.panel", "when": "news_open"},
+				{"name": "call", "when": "news_seen"},
+				"news"
+			],
+			"allow": [],
+			"dim": false,
+			"done": {"cond": "all", "params": {"of": [
+				{"cond": "news_seen"},
+				{"cond": "call_answered", "params": {"kind": "attack"}}
+			]}},
+			"pause": true,
+			"clear_selection": true,
+			"fire": ["home", "assault"],
+			"jump": {"hour": 7.7}
+		},
+		{
+			"id": "map",
+			"title": "The map",
+			"text": "G opens the Town Board: the map of the town. Pick a place to see what it holds and how far it is. Take control plays a trip yourself, in the real game: not today.",
+			"goal": "press G, pick a place, then close it",
+			"goals": [{"when": "dialog_open", "text": "pick a place, then close the board with G"}],
+			"anchor": [
+				{"name": "dialog.close", "when": "site_chosen"},
+				{"name": "town", "when": "not", "params": {"of": {"cond": "dialog_open"}}}
+			],
+			"allow": ["gizmo:scavenge"],
+			"done": {"cond": "board_read"},
+			"pause": true,
+			"dialog_text": "Pick a place on the map, then press G or Close.",
+			"dim": false,
+			"jump": {"hour": 7.8}
 		},
 		{
 			"id": "alarm",
-			"title": "Ring the alarm",
-			"text": "Four more are coming from the north east. Click the main gate, where the guns reach, and press L. The alarm draws the dead to it. It costs 3 scrap.",
-			"goal": "click the main gate, then press L",
-			"goals": [{"when": "selected", "params": {"wall": 2}, "text": "press L"}],
-			"anchor": [
-				{"name": "gizmo:lure", "when": "selected", "params": {"wall": 2}},
-				"wall:2"
-			],
-			"allow": ["select:segment:2", "gizmo:lure", "fields"],
-			"done": {"cond": "lure_set"},
-			"pause": true,
-			"fire": ["more"],
-			"focus": "wall:2",
-			"jump": {"hour": 19.3, "bus": 1.0, "post": ["hector"], "fired": ["dusk"]}
+			"title": "The alarm",
+			"text": "When the dead are at the wall, ring the alarm: L, or the Alarm button. Everyone drops what they are doing and goes to their post. Press it again to stand down.",
+			"goal": "press L to ring the alarm",
+			"goals": [{"when": "alarm_on", "text": "press L again to stand down"}],
+			"anchor": ["alarm"],
+			"allow": ["alarm"],
+			"dim": false,
+			"done": {"cond": "alarm_cycled"},
+			"pause_until": {"cond": "alarm_on"},
+			"jump": {"hour": 8.0, "fired": ["assault", "home"]}
 		},
 		{
-			"id": "scratch",
+			"id": "dusk",
 			"run_speed": 1,
-			"title": "A scratch",
-			"text": "Walt was scratched. A wound bleeds until someone bandages it. Ana does it on her own, and it costs one medicine. Look for the red mark on his picture.",
-			"goal": "watch Ana bandage him",
-			"anchor": ["card:walt"],
-			"allow": ["select:*", "fields"],
-			"done": {"cond": "healed", "params": {"who": "walt"}},
-			"fire": ["scratch"],
-			"focus": "person:walt",
-			"clear_selection": true,
-			"jump": {"hour": 20.3, "bus": 1.0, "post": ["hector"], "fired": ["dusk", "more"]}
-		},
-		{
-			"id": "fever",
-			"run_speed": 1,
-			"title": "A fever",
-			"text": "Hector has a fever. Left alone, it turns him into one of the dead. Click him and press T: Ana treats it for two medicine. X sends someone out for good: not today.",
-			"goal": "select Hector, then press T",
-			"goals": [
-				{"when": "treat_ordered", "params": {"who": "hector"}, "text": "watch Ana treat him"},
-				{"when": "selected", "params": {"who": "hector"}, "text": "press T"}
-			],
-			"anchor": [
-				{"name": "gizmo:treat", "when": "selected", "params": {"who": "hector"}},
-				"card:hector"
-			],
-			"allow": ["select:person:hector", "gizmo:treat", "fields"],
-			"done": {"cond": "cured", "params": {"who": "hector"}},
-			"pause_until": {"cond": "treat_ordered", "params": {"who": "hector"}},
-			"fire": ["fever"],
-			"focus": "person:hector",
-			"clear_selection": true,
-			"jump": {"hour": 20.6, "bus": 1.0, "post": ["hector"], "fired": ["dusk", "more", "scratch"]}
-		},
-		{
-			"id": "save",
-			"title": "Save your game",
-			"text": "Press F5 to save wherever you are, and F9 to load it again. A real run also saves itself at every dawn.",
-			"goal": "press F5",
-			"anchor": [],
-			"allow": ["fields"],
-			"done": {"cond": "saved"},
-			"pause": true,
-			"place": "top",
-			"clear_selection": true,
-			"jump": {"hour": 21.0, "bus": 1.0, "post": ["hector"], "fired": ["dusk", "more", "scratch", "fever"]}
-		},
-		{
-			"id": "workshop",
-			"run_speed": 1,
-			"title": "The worktable",
-			"text": "Ammo runs out first in a long game. Click Dez and press M: he turns scrap into ammo at the worktable, eight rounds for each scrap, until the bell.",
-			"goal": "select Dez, then press M",
-			"goals": [{"when": "selected", "params": {"who": "dez"}, "text": "press M"}],
-			"anchor": [
-				{"name": "gizmo:job_bench", "when": "selected", "params": {"who": "dez"}},
-				"card:dez"
-			],
-			"allow": ["select:person:dez", "gizmo:job_bench", "fields"],
-			"done": {"cond": "ammo_gained", "params": {"min": 8}},
-			"pause_until": {"cond": "crafting"},
-			"start": {"cond": "day_started", "params": {"day": 2}},
-			"wait_title": "The night goes on",
-			"wait_text": "Hold the wall until first light at 06:30. The dead drift away then. Press 3 to hurry the night along.",
+			"title": "Dusk",
+			"text": "The bell rings at 19:00 and the dead come, a few more each night. Everyone goes to their post. Shots cost ammo: watch the Ammo store. Walls cost scrap to mend.",
+			"goal": "watch the Ammo number go down",
+			"anchor": ["stores.ammo"],
+			"allow": [],
+			"dim": false,
+			"done": {"cond": "ammo_spent", "params": {"min": 1}},
+			"start": {"cond": "bell_rung"},
+			"wait_title": "The day goes on",
+			"wait_text": "Marcus says how many are coming at 17:00: it shows in the clock. The bell rings at 19:00. Press 3 to hurry the day along.",
 			"wait_anchor": ["clock"],
-			"needs": "workshop",
-			"focus": "bench",
-			"clear_selection": true,
-			"jump": {"hour": 6.6, "day": 2, "bus": 1.0, "fired": ["dusk", "more", "scratch", "fever"]}
+			"fire": ["dusk", "more"],
+			"jump": {"hour": 19.05}
 		},
 		{
 			"id": "jobs",
 			"title": "The duty roster",
-			"text": "Between your orders, everyone does a job: at a station by day, at a post on the wall by night. Press J, or click the clipboard, to open the Duty roster.",
+			"text": "Between your requests, everyone does a job: at a station by day, at a post on the wall by night. Press J, or click the clipboard, to open the Duty roster.",
 			"goal": "press J to open the Duty roster",
 			"goals": [
 				{"when": "jobs_given", "text": "close the page with J or the Close button", "line": "Now close the page: press J or Close."},
@@ -279,14 +189,18 @@
 				{"cond": "not", "params": {"of": {"cond": "jobs_open"}}}
 			]}},
 			"pause": true,
+			"start": {"cond": "day_started", "params": {"day": 2}},
+			"wait_title": "The night goes on",
+			"wait_text": "Hold the wall until first light at 06:30. The dead drift away then. Press 3 to hurry the night along.",
+			"wait_anchor": ["clock"],
 			"clear_selection": true,
-			"jump": {"hour": 7.0, "day": 2, "bus": 1.0}
+			"jump": {"hour": 7.0, "day": 2}
 		},
 		{
 			"id": "wrap",
 			"type": "wrap",
 			"title": "Well done",
-			"text": "You can give orders, hold a post, mend a wall, keep the stores, send a trip, tend the hurt and set the duty roster. The ? button lists every key. Ready for thirty nights?",
+			"text": "You can walk, shoot, ask the crew over the radio, answer the News, read the map, ring the alarm and set the roster. The ? button lists every key. Ready for thirty nights?",
 			"anchor": ["help"],
 			"skipped_title": "Skipped",
 			"skipped_text": "No problem. The ? button lists every key, and you can play Orientation Day again from the main menu whenever you like.",
@@ -294,7 +208,7 @@
 			"done": {"cond": "never"},
 			"pause": true,
 			"place": "center",
-			"jump": {"hour": 7.0, "day": 2, "bus": 1.0, "fired": ["dusk", "more", "scratch", "fever"]}
+			"jump": {"hour": 7.0, "day": 2}
 		}
 	]
 }

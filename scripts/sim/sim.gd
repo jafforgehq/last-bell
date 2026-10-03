@@ -870,6 +870,8 @@ func _update_person(p: Person, dt: float) -> void:
 	p.recoil = maxf(0.0, p.recoil - dt * 8.0)
 	p.thrust = maxf(0.0, p.thrust - dt * 4.0)
 	if p.downed or p.dead or p.away != null:
+		if p.player and (p.downed or p.dead):
+			avatar.clear_hands(p)    # (a person on the ground holds no trigger, no stick, no key: avatar.gd)
 		_set_work(p, null, dt)
 		return
 	if p.player:

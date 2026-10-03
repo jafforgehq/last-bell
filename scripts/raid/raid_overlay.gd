@@ -249,8 +249,9 @@ func _draw() -> void:
 		var at3: Vector2 = scene.to_screen(Vector2(c2.at))
 		_tag(at3 + Vector2(0.0, -0.7 * z - 8.0), "%s: %d s to search" % [String(c2.kind).capitalize(), int(ceilf(float(c2.search_s)))], font, INK)
 
-	# the crosshair: four arms and a ring that is the cone of the next shot, at the pointer (the system's arrow is hidden over the world)
-	if scene.crosshair_shown():
+	# the crosshair: four arms and a ring that is the cone of the next shot, at the pointer (the system's arrow is hidden over the world);
+	# none for a leader who is down: there is nothing in her hands
+	if scene.crosshair_shown() and not (lead != null and lead.downed):
 		var m2: Vector2 = scene._mouse
 		var bloom: float = float(lead.bloom) if lead != null else 0.0
 		var ring := RING_MIN + minf(bloom, 2.0) * 10.0 + (3.0 if lead != null and lead.moving else 0.0)

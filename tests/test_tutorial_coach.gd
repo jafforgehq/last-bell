@@ -187,7 +187,7 @@ func test_the_game_waits_while_a_card_is_up_and_goes_on_at_the_speed_it_had() ->
 
 
 func test_the_first_cards_ask_for_a_pause_and_the_run_steps_do_not_pause_after_the_order() -> void:
-	for s in Coach.load_steps():
+	for s in Coach.load_steps(Coach.CLASSIC_PATH):
 		var pauses: bool = bool(s.get("pause", false)) or s.has("pause_until")
 		if ["look", "release", "stores", "scavenge", "report", "fields", "alarm", "save", "jobs", "wrap"].has(String(s.id)):
 			check(pauses, "%s waits for the player" % s.id)
@@ -248,10 +248,10 @@ func test_the_last_card_offers_a_real_run_a_replay_and_staying() -> void:
 	eq(picked.size(), 1, "Start a real run begins a run")
 	eq(int(picked[0].difficulty), 1, "a Standard one")
 	check(picked[0].has("seed"), "with a seed")
-	eq(int(picked[0].get("crew", 6)), 3, "and the small crew a new game begins with")
+	eq(int(picked[0].get("crew", 6)), 5, "and the crew of five a new game begins with")
 	coach.replay_button.pressed.emit()
 	eq(picked.size(), 2, "Replay begins one too")
-	eq(picked[1], {"tutorial": true}, "of Orientation Day")
+	eq(picked[1], {"tutorial": true, "avatar": true}, "of Orientation Day (the avatar's: `--noavatar` still plays the old yard's)")
 	check(main.coach == coach, "the coach is still there until one is chosen to stay")
 	coach.stay_button.pressed.emit()
 	check(main.coach == null, "Keep playing here lets the coach go")
@@ -267,7 +267,7 @@ func test_the_last_card_offers_a_real_run_a_replay_and_staying() -> void:
 # ------------------------------------------------------------------- skipping --
 
 func test_skip_works_at_every_step_and_sets_the_flag() -> void:
-	var count := Coach.load_steps().size()
+	var count := Coach.load_steps(Coach.CLASSIC_PATH).size()
 	for i in count:
 		var main = Tut.game(i)
 		await Tut.frames(main, 12)
@@ -321,7 +321,7 @@ func _check_picture(main, label: String, w: int, h: int) -> void:
 
 
 func test_every_step_points_at_something_and_its_card_stays_clear_of_it() -> void:
-	var steps := Coach.load_steps()
+	var steps := Coach.load_steps(Coach.CLASSIC_PATH)
 	for width in [1280, 980, 1920, 900]:
 		var height := {980: 700, 1280: 800, 1920: 1080, 900: 640}[width] as int
 		var main = Tut.game(0, width, height)
@@ -448,7 +448,7 @@ func test_a_spot_too_near_to_walk_to_is_refused() -> void:
 # ------------------------------------------------------ the arrow and the calm --
 
 func test_the_arrow_comes_from_a_side_with_room_and_never_from_under_the_card() -> void:
-	var steps := Coach.load_steps()
+	var steps := Coach.load_steps(Coach.CLASSIC_PATH)
 	for width in [1280, 980]:
 		var height := {980: 700, 1280: 800}[width] as int
 		var main = Tut.game(0, width, height)
@@ -659,7 +659,7 @@ func test_a_lesson_the_player_does_is_done_at_once_and_one_that_was_done_already
 # ------------------------------------------------------------ the duty roster --
 
 func _index_of(id: String) -> int:
-	var steps := Coach.load_steps()
+	var steps := Coach.load_steps(Coach.CLASSIC_PATH)
 	for i in steps.size():
 		if String(steps[i].id) == id:
 			return i

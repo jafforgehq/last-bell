@@ -1931,3 +1931,98 @@ func test_if_the_raid_cannot_open_the_page_says_so_and_nobody_goes() -> void:
 	check(not board.act("play"), "the raid did not open")
 	eq(ctx.sim.scavenge.parties.size(), 0, "nobody went")
 	Kit.free_all(ctx)
+
+
+# ------------------------------------------------ the player on the board (round 17, the QA's I6) --
+## With an avatar the player is the one who leads a played trip and always goes: Ruth is the first in the party row, two others fit on
+## foot (the seats less one in a vehicle), Take control is the main button and Go, the dice's trip, the plainer one, and the chance
+## counts Ruth. The game without an avatar is as it was (above).
+
+## The board of a game whose player is Ruth (the avatar is named before the page opens), with a fourth person at the gate.
+func _avatar_open(width: int = 1280, height: int = 800) -> Dictionary:
+	var ctx := _ctx(width, height)
+	ctx.sim.avatar.set_player("ruth")
+	_bring_one(ctx)
+	Kit.update(ctx)
+	ctx.hud.on_raid = func(_p, _pl, _v, _m, _d): return Node.new()
+	ctx.hud.open_scavenge(null)
+	return ctx
+
+
+func test_with_an_avatar_ruth_is_first_in_the_party_row_and_leads() -> void:
+	var ctx := _avatar_open()
+	await Kit.settle()
+	var board = _board(ctx)
+	check(board.me_chip != null and board.chip_flow.get_child(0) == board.me_chip, "Ruth's chip is the first of the row")
+	if board.me_chip != null:
+		eq(String(board.me_chip.get_meta("person")), "ruth", "and it is hers")
+		var words: Array = Kit.texts(board.me_chip)
+		check(words.has("You lead"), "it says so: %s" % str(words))
+		check(words.has("Ruth"), "with her name: %s" % str(words))
+	check(not _person(ctx, "ruth") in board.party, "she is not one of the others (she always goes)")
+	check(not board.chips.has("ruth"), "no chip of the others for her: a click cannot leave her at home")
+	check(not board.toggle_member(_person(ctx, "ruth")), "and she cannot be toggled")
+	check(not board._tip_label.text.contains("Dez leads"), "no 'Dez leads' on a trip the player leads: '%s'" % board._tip_label.text)
+	check(board._tip_label.text.begins_with("You lead."), "the line over the row says who leads: '%s'" % board._tip_label.text)
+	for id in board.chips:
+		check(not board.chips[id].lead.visible, "%s has no star" % id)
+	Kit.free_all(ctx)
+
+
+func test_with_an_avatar_two_others_fit_on_foot_and_the_vehicles_seats_less_one() -> void:
+	var ctx := _avatar_open()
+	var board = _board(ctx)
+	eq(board.party_limit(), 2, "two others on foot (three with her)")
+	var dez = _person(ctx, "dez")
+	var marcus = _person(ctx, "marcus")
+	var extra = ctx.sim.people[ctx.sim.people.size() - 1]
+	for p in [dez, marcus]:
+		if not p in board.party:
+			board.toggle_member(p)
+	eq(board.party.size(), 2, "two picked")
+	check(not board.toggle_member(extra) and board.party.size() == 2, "a third cannot come: the page says so")
+	check(board.error_label.visible and board.error_label.text.begins_with("Two is the most"), "in words: '%s'" % board.error_label.text)
+	# a vehicle's seats count her too
+	ctx.sim.vehicles.fleet.append({"id": "rig", "kind": "pickup", "hp": 80.0, "state": "parked"})
+	board.refresh(true)
+	var seats := int(ctx.sim.vehicles.kind_of("rig").get("seats", 0))
+	check(board.choose_vehicle("rig"), "the pickup is chosen")
+	eq(board.party_limit(), seats - 1, "the pickup's %d seats: her and the rest" % seats)
+	Kit.free_all(ctx)
+
+
+func test_with_an_avatar_take_control_is_the_main_button_and_go_says_what_it_leaves_out() -> void:
+	var ctx := _avatar_open()
+	await Kit.settle()
+	var board = _board(ctx)
+	board.select_place("houses")
+	var flow: Node = board.play_button.get_parent()
+	check(flow.get_child(0) == board.play_button, "Take control comes first")
+	check(board.play_button.get_theme_color("font_color") == ctx.hud.ACCENT_INK, "and wears the gold (the main choice)")
+	check(board.go_button.get_theme_color("font_color") != ctx.hud.ACCENT_INK, "Go is the plainer one")
+	eq(board.go_button.tooltip_text, "Send them without you: worse loot, no rescues", "and says what sending them without her means")
+	check(not board.go_button.disabled, "(it is on)")
+	Kit.free_all(ctx)
+
+
+func test_with_an_avatar_the_chance_counts_her_shooting() -> void:
+	var ctx := _avatar_open()
+	await Kit.settle()
+	var board = _board(ctx)
+	board.select_place("depot")
+	var with_her: float = board.clear_chance([_person(ctx, "ruth")] + board.party, "depot")
+	var text := String(board.facts.clear.label.text)
+	check(text.contains("Ruth"), "the Clearing line names her: '%s'" % text)
+	check(text.begins_with(TownBoard.chance_words(with_her).capitalize()), "and is the chance with her in it: '%s' for %.2f" % [text, with_her])
+	Kit.free_all(ctx)
+
+
+func test_without_an_avatar_the_party_row_is_as_it_was() -> void:
+	var ctx := _open(1280, 800, 7.0, 1, "dez")
+	var board = _board(ctx)
+	check(board.me_chip == null, "no chip of the player's")
+	eq(board.party_limit(), 3, "three on foot")
+	check(board._tip_label.text.begins_with("Dez leads."), "Dez leads: '%s'" % board._tip_label.text)
+	check(board.go_button.get_theme_color("font_color") == ctx.hud.ACCENT_INK, "Go is the main button")
+	check(not board.go_button.tooltip_text.contains("without you"), "and says nothing of the player")
+	Kit.free_all(ctx)

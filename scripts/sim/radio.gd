@@ -815,7 +815,8 @@ func _on_event(e: Dictionary) -> void:
 	match String(e.get("type", "")):
 		"story_card":
 			var pend: Dictionary = sim.storyteller.pending()
-			if not pend.is_empty() and not bool(pend.get("resolved", false)):
+			# (a card that comes while the player is out is told in its own line, "waiting for your return": storyteller.gd)
+			if not pend.is_empty() and not bool(pend.get("resolved", false)) and not sim.storyteller.card_frozen():
 				var who := String(pend.speaker)
 				log_news("story", String(pend.title), "A call on the radio" if who == "The radio" else "%s on the radio" % who)
 		"story_resolved":

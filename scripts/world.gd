@@ -21,6 +21,9 @@ var solid_p := PackedByteArray()
 var layers := {}
 ## The tiles of the raised decks (walkways and towers): index to true.
 var deck_tiles := {}
+## The tiles of the faces of the walkways (their rail and the face that hangs down to the ground, shut to people and the dead
+## except at a ladder): index to true. A shot from the ground stops on them (avatar.gd `fire_blocked`).
+var deck_face_tiles := {}
 var segment_holders := {} # segment id -> Node2D holding its current sprite pieces
 var segment_states := {} # segment id -> Array of piece lists, one per damage state
 var segment_painters := {} # segment id -> Callable(state): a node that draws that segment's picture itself (the gate)
@@ -135,11 +138,13 @@ func _apply_deck_barriers() -> void:
 		for ty in range(floori(float(o.cy) - ey), floori(float(o.cy) + ey) + 1):
 			for tx in range(floori(float(o.cx) - ex), floori(float(o.cx) + ex) + 1):
 				barrier.erase(ty * W + tx)
+	deck_face_tiles = {}
 	for i in barrier:
 		if usable.has(i):
 			continue
 		solid_p[i] = 1
 		solid_z[i] = 1
+		deck_face_tiles[i] = true
 	# the towers are raised too
 	for o in d.objects:
 		if o.kind != "tower":

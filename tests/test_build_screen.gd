@@ -1931,7 +1931,7 @@ func test_the_page_follows_a_site_the_rules_finish_under_it_and_a_demolished_bui
 
 
 func test_on_the_last_card_of_orientation_day_the_screen_may_be_opened() -> void:
-	var main = Tut.game(Coach.load_steps().size() - 1)
+	var main = Tut.game(Coach.load_steps(Coach.CLASSIC_PATH).size() - 1)
 	await Tut.frames(main, 12)
 	var coach = main.coach
 	eq(coach.step_id(), "wrap", "the last card is up")

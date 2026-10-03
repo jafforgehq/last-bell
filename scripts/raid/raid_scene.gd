@@ -63,7 +63,7 @@ const CAMERA_EASE := 8.0
 const CAM_LEAD_K := 0.3
 const CAM_LEAD := 2.0
 ## The place's light keeps this much of day in the darkest night (the colony's own lighting is darker: a place has to be playable).
-const NIGHT_FLOOR := 0.38
+const NIGHT_FLOOR := 0.24
 ## How the squad's stances read on a card.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Heading back"}
 
@@ -110,6 +110,11 @@ var _mouse := Vector2(-1.0, -1.0)
 var over_hud := false
 ## The point of the world (tiles) the avatar aims at now.
 var aim_tile := Vector2.ZERO
+## A test says so to have the scene read the real pointer and the real button as a windowed run does (a headless one cannot).
+var live_for_tests := false
+## A staged aim (`aim:x:y`) and trigger (`fire:s`) of a screenshot run: they stand until the player moves the pointer.
+var _staged_aim := false
+var _staged_fire := false
 ## The container in reach of E now ({} when none), and the friend who is down within reach of it (null when none), for the prompts.
 var reach_container: Dictionary = {}
 var reach_friend = null
@@ -473,8 +478,11 @@ func _clamp_camera() -> void:
 	var m := 1.0
 	var ww: float = world.W
 	var wh: float = world.H
-	cam_center.x = ww / 2.0 if hw * 2.0 >= ww + 2.0 * m else clampf(cam_center.x, hw - m, ww - hw + m)
-	cam_center.y = wh / 2.0 if hh * 2.0 >= wh + 2.0 * m else clampf(cam_center.y, hh - m, wh - hh + m)
+	# (the map's foot may come up above the HUD's boards at the foot of the window, so that the squad is never under them)
+	var pad: float = hud_layer.foot_reserve() / zoom_px if hud_layer != null and phase == "place" else 0.0
+	var pad_x: float = maxf(0.0, vp.x / 2.0 - hud_layer.right_limit()) / zoom_px if hud_layer != null and phase == "place" else 0.0
+	cam_center.x = ww / 2.0 if hw * 2.0 >= ww + 2.0 * m else clampf(cam_center.x, hw - m, ww - hw + m + pad_x)
+	cam_center.y = wh / 2.0 if hh * 2.0 >= wh + 2.0 * m else clampf(cam_center.y, hh - m, wh - hh + m + pad)
 
 
 func _apply_camera() -> void:
@@ -838,6 +846,7 @@ func _input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventMouseMotion:
 		_mouse = ev.position
+		_staged_aim = false
 		over_hud = true
 		return
 	if ev is InputEventMouseButton:
@@ -932,6 +941,7 @@ func mouse_button(mb: InputEventMouseButton) -> void:
 
 func mouse_motion(mm: InputEventMouseMotion) -> void:
 	_mouse = mm.position
+	_staged_aim = false
 	over_hud = false
 
 
@@ -948,8 +958,12 @@ func _hands() -> void:
 		move = Vector2.ZERO
 	var fire := fire_held
 	if _live():
-		_mouse = get_viewport().get_mouse_position()
-		fire = fire and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		# (a staged aim or trigger, a screenshot run's, is the hands' until the player's own pointer moves: the real pointer does not
+		# override it, nor does the real button, which nobody is pressing)
+		if not _staged_aim:
+			_mouse = get_viewport().get_mouse_position()
+		if not _staged_fire:
+			fire = fire and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 	if _mouse.x < 0.0:
 		aim_tile = Vector2(lead.x, lead.y) + Vector2(1.0, 0.0)
 	else:
@@ -970,7 +984,7 @@ func _key_down(code: Key) -> bool:
 
 ## Whether there is a real window and pointer to ask (not a headless test).
 func _live() -> bool:
-	return is_inside_tree() and DisplayServer.get_name() != "headless"
+	return is_inside_tree() and (live_for_tests or DisplayServer.get_name() != "headless")
 
 
 ## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow; over the HUD or off the
@@ -995,6 +1009,7 @@ func _notification(what: int) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if what == NOTIFICATION_WM_MOUSE_EXIT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		_mouse = Vector2(-1.0, -1.0)
+		_staged_aim = false
 		if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 			held.clear()
 			fire_held = false
@@ -1072,7 +1087,14 @@ func _tick_place(dt: float) -> void:
 			lean = (_mouse - _vp() / 2.0) / zoom_px * CAM_LEAD_K
 			if lean.length() > CAM_LEAD:
 				lean = lean.normalized() * CAM_LEAD
-		cam_center += (view_pos(lead) + lean - cam_center) * (1.0 - exp(-CAMERA_EASE * dt))
+		var at: Vector2 = view_pos(lead)
+		var goal: Vector2 = at + lean
+		# (the squad is kept out from under the radio's column: in a narrow window it takes half the screen)
+		var limit: float = hud_layer.right_limit()
+		var seen_x: float = _vp().x / 2.0 + (at.x - goal.x) * zoom_px
+		if seen_x > limit:
+			goal.x += (seen_x - limit) / zoom_px
+		cam_center += (goal - cam_center) * (1.0 - exp(-CAMERA_EASE * dt))
 	_clamp_camera()
 	_apply_camera()
 	reach_container = find_reach_container() if not ended else {}
@@ -1270,6 +1292,8 @@ func _handle_events() -> void:
 				sound.play("reload", 0.8)
 			"stab":
 				sound.play("stab")
+			"blocked_shot":
+				sound.ui("ui_click", 0.45)    # (the trigger against the face of a walkway: a dry click)
 			"thud":
 				sound.play("thud", _vol_at(e.x, e.y))
 			"searched":
@@ -1395,11 +1419,14 @@ func stage(script: String) -> void:
 					_apply_camera()
 			"aim":
 				_mouse = to_screen(Vector2(float(f[1]), float(f[2])))
+				_staged_aim = true
 			"fire":
 				fire_held = true
+				_staged_fire = true
 				for i in int(float(f[1]) * 30.0):
 					tick(1.0 / 30.0)
 				fire_held = false
+				_staged_fire = false
 			"hold":
 				held.clear()
 				fire_held = false

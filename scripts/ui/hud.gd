@@ -231,7 +231,7 @@ const FUEL_LOW := 10.0
 ## The tooltip of the Town Board button (a settlement game only: the classic start has no board).
 const TOWN_TIP := "Town Board: the map of the town, the places on the road and the parties out\nKey: G"
 ## Round 17, the radio's toolbar buttons (avatar mode only): the News log and the call to arms.
-const NEWS_TIP := "News: what the radio heard, and the calls that wait for your answer\nKey: T"
+const NEWS_TIP := "Radio and News: what the radio heard, and the calls that wait for your answer. Click a crew card to ask them something.\nKey: T"
 const ALARM_TIP := "Call to arms: everyone to their posts now, by day too, until you stand down or the dawn comes"
 const ALARM_OFF_TIP := "Stand down: end the call to arms and send everyone back to work"
 ## How the trust a person has in the player reads, by the radio's word (radio.tone_of): the bar and the word.
@@ -258,11 +258,20 @@ const HELP := [
 ## the words the HUD gives them in a settlement game still reach them.)
 const HELP_AVATAR := [
 	["You", 2, [["W A S D", "Move"], ["Arrows", "Move"], ["Mouse", "Aim"], ["Click", "Fire"], ["R", "Reload"], ["F", "Melee"]]],
+	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "News"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Deselect, or the menu", 76], ["F9", "Load"]]],
 ]
+## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
+const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
+const STANCE_SHORT := {"follow": "Follow", "hold": "Hold", "cover": "Cover", "search": "Search", "back": "Back"}
+const STANCE_TIPS := {"follow": "Following you", "hold": "Holding where you left them", "cover": "Covering your back", "search": "Searching where you pointed", "back": "On the way back to work"}
 ## The one-line hint at the foot of the window, [words, [key, words]...]: the old yard's and avatar mode's.
 const HINT := ["Click someone in the yard", [["Right-click", "to send them"], ["Scroll", "to zoom"], ["Space", "to pause"]]]
-const HINT_AVATAR := ["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]]
+## (Avatar mode's is two lines, so that it fits a 700 px window: the survivor's hands, then the radio, the map and the news.)
+const HINT_AVATAR := [
+	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
+	["Click a crew card to radio them", [["G", "the map"], ["T", "News"]]],
+]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
 const FIELDS_LEGEND := [[DANGER, "Red: no gun reaches it"], [WARN, "Amber: one gun"], [OK, "Green: two or more"]]
@@ -373,6 +382,9 @@ var on_build: Callable
 ## The toolbar's Town Board button was pressed (settlement game): main.gd opens or closes the board (it asks the
 ## tutorial's lock and the pages first). With nobody listening the HUD opens it itself.
 var on_town: Callable
+## The toolbar's Alarm button was pressed (avatar mode): called first, with no arguments, and the alarm is only rung or stood down if
+## it returns true (main.gd asks the tutorial's lock, which refuses it in the lessons that do not teach it). With nobody listening it is.
+var on_alarm: Callable
 ## Opens a played trip (main.gd's `open_raid(people, place, vehicle_id, loot_mult, on_done)`): the Town Board's "Take control".
 var on_raid: Callable
 ## The Build screen marks a plot in the world: called with {} when the pointer is not on a plot's slip or the screen
@@ -508,8 +520,9 @@ var help: PanelContainer
 var hint: PanelContainer
 ## Avatar mode (round 17; main.gd's `set_avatar`, and the HUD notices it from the sim): the controls help and the hint describe the
 ## survivor's keys, the readout of the gun is up and the avatar's crew card says YOU. `ammo_panel` is that readout in the right
-## column under the clock: the weapon's name (`ammo_name`), "12 / 340" magazine over stock (`ammo_label`, amber while the magazine
-## is low, red when the stock is dry) and a bar (`ammo_bar`, the reload while the gun is being reloaded, else how full the magazine is).
+## column under the clock: the weapon's name (`ammo_name`), "12 / 340" the rounds that can be fired over the stores (`ammo_label`: the
+## magazine's, but never more than the stores hold, as shots come from them; amber while the magazine is low or the stores cannot fill
+## it, red when they are dry) and a bar (`ammo_bar`, the reload while the gun is being reloaded, else how full the magazine is).
 var avatar_ui := false
 var ammo_panel: PanelContainer
 var ammo_label: Label
@@ -517,10 +530,13 @@ var ammo_name: Label
 var ammo_bar: Bar
 var _help_col: Control = null
 var _hint_row: Control = null
-## The one-line hint's job is done (the first selection, the end of the run, or a window too
-## narrow for it): it does not come back. Whether it shows now also depends on the player's
-## settings (hints on: Prefs ui/hints), see _refresh_hint.
+## The one-line hint's job is done (the old yard's: the first selection, the end of the run, or a window too
+## narrow for it; avatar mode's, which is two short lines that fit any window: the player has asked somebody for something over
+## the radio, or the run has ended): it does not come back. Whether it shows now also depends on the player's
+## settings (hints on: Prefs ui/hints) and, in avatar mode, on the dock, the help and the News being shut, see _refresh_hint.
 var hint_spent := false
+## The hint was spent only because the window was too narrow for the old yard's (avatar mode, which may be told a moment later, has one that fits).
+var _hint_spent_by_width := false
 ## The one-line message near the bottom centre (see toast()).
 var toast_panel: PanelContainer
 var toast_label: Label
@@ -1080,6 +1096,23 @@ func _make_card(p) -> Dictionary:
 	badge.add_child(bi)
 	badge.visible = false
 	card.add_child(badge)
+	# the stance the radio has put them in, in words (avatar mode): a small gold tag in the corner of the picture
+	var stance_box := PanelContainer.new()
+	var sts := StyleBoxFlat.new()
+	sts.bg_color = ACCENT
+	sts.set_corner_radius_all(4)
+	sts.anti_aliasing = true
+	sts.content_margin_left = 3
+	sts.content_margin_right = 3
+	sts.content_margin_top = 0
+	sts.content_margin_bottom = 0
+	stance_box.add_theme_stylebox_override("panel", sts)
+	stance_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var stance := _label("", Fonts.cond(700, 0), 12, ACCENT_INK)
+	stance.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stance_box.add_child(stance)
+	stance_box.visible = false
+	card.add_child(stance_box)
 	# "YOU" on the card of the person the player plays (round 17): a small gold tag in the corner of the picture
 	var you := PanelContainer.new()
 	var ys := StyleBoxFlat.new()
@@ -1125,7 +1158,7 @@ func _make_card(p) -> Dictionary:
 	marks_box.add_child(marks)
 	card.add_child(marks_box)
 	card.gui_input.connect(_on_card_input.bind(p))
-	return {"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "you": you, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""}
+	return {"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "stance_box": stance_box, "stance": stance, "you": you, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""}
 
 
 ## Someone has joined the crew (a recruit at the gate): their card goes in the row, and the row is laid out again.
@@ -1197,6 +1230,7 @@ func _size_cards(w: int) -> void:
 		c.hp.position = c.hp_bg.position
 		c.fight.position = Vector2(inset.x + pw - 11.0, inset.y + 4.0)
 		c.badge.position = Vector2(inset.x + 2.0, inset.y + 2.0)
+		c.stance_box.position = Vector2(inset.x + 2.0, inset.y + 2.0)
 		c.you.position = Vector2(inset.x + 2.0, inset.y + 2.0)
 		c.marks_box.position = Vector2(inset.x + 2.0, inset.y + pw - 1.0 - mark_px - 4.0)
 		if was != mark_px:
@@ -1446,12 +1480,14 @@ func _build_ammo() -> void:
 	ammo_bar.color = ACCENT
 	v.add_child(ammo_bar)
 	ammo_panel.add_child(v)
-	ammo_panel.tooltip_text = "Magazine / stock. R reloads."
+	ammo_panel.tooltip_text = AMMO_TIP
 	ammo_panel.visible = avatar_ui
 	right_col.add_child(ammo_panel)
 	right_col.move_child(ammo_panel, 1)
 
 
+## The readout's tooltip: what the two numbers are, and where rounds come from.
+const AMMO_TIP := "Rounds you can fire / rounds in the stores.\nShots are taken from the stores: rounds come from the stores, so with fewer in them than the magazine holds that is all you can fire.\nR reloads."
 ## How low a magazine is before the readout warns: this share of its size (and never less than one round).
 const AMMO_LOW := 0.25
 
@@ -1471,12 +1507,17 @@ func _update_ammo(sim) -> void:
 	var stock: float = float(sim.stock.ammo)
 	var dry: bool = not melee and stock < float(sim.shot_cost(me))
 	var low: bool = not melee and me.mag <= maxi(1, ceili(float(cap) * AMMO_LOW))
+	# the rounds that can be fired: shots are taken from the stores (a reload takes nothing), so a magazine of six over one round in
+	# the stores is one round to fire, and with the stores dry there is nothing in the magazine to speak of
+	var rounds := floori(stock)
+	var ready: int = mini(me.mag, rounds)
+	var short: bool = not melee and rounds < cap
 	ammo_name.text = String(gun.get("name", me.weapon))
-	ammo_label.text = "-" if melee else "%d / %d" % [me.mag, roundi(stock)]
+	ammo_label.text = "-" if melee else "%d / %d" % [ready, rounds]
 	var col := INK
 	if dry:
 		col = DANGER_TEXT
-	elif low:
+	elif low or short:
 		col = WARN
 	ammo_label.add_theme_color_override("font_color", col)
 	if me.reloading > 0.0:
@@ -1487,9 +1528,6 @@ func _update_ammo(sim) -> void:
 		ammo_bar.value = 1.0 if melee or cap <= 0 else clampf(float(me.mag) / float(cap), 0.0, 1.0)
 		ammo_bar.color = col if col != INK else Color(0.82, 0.78, 0.64, 0.8)
 	ammo_bar.queue_redraw()
-	# the first rounds fired are the hint's job done
-	if me.stats.shots >= 3:
-		hint_spent = true
 
 
 ## Whether the player asked for less motion (Prefs ui/reduce_motion): the banner and the toast
@@ -1931,11 +1969,13 @@ func select(sel) -> void:
 		inspect.visible = false
 		if radio_verbs != null:
 			radio_verbs.set_contact(null)
+		_refresh_hint()
 		_layout_dock()
 		_layout_toast()
 		return
 	inspect.visible = true
-	hint_spent = true
+	# (the old yard's hint is done with the first selection; avatar mode's is done when the player has asked someone for something)
+	hint_spent = hint_spent or not avatar_ui
 	_refresh_hint()
 	_layout_toast()
 	var tight: bool = sel.kind == "person"
@@ -2636,6 +2676,9 @@ func set_avatar(on: bool) -> void:
 	if on == avatar_ui:
 		return
 	avatar_ui = on
+	if on and _hint_spent_by_width:
+		hint_spent = false
+		_hint_spent_by_width = false
 	if help != null:
 		_fill_help()
 	if hint != null:
@@ -2745,15 +2788,19 @@ func _fill_hint() -> void:
 	if _hint_row != null and is_instance_valid(_hint_row):
 		hint.remove_child(_hint_row)
 		_hint_row.queue_free()
-	var words: Array = HINT_AVATAR if avatar_ui else HINT
-	var row := _hbox(5)
-	if String(words[0]) != "":
-		row.add_child(_label(String(words[0]), Fonts.sans(400), 13, INK2))
-	for part in words[1]:
-		row.add_child(_kbd(part[0]))
-		row.add_child(_label(part[1], Fonts.sans(400), 13, INK2))
-	hint.add_child(row)
-	_hint_row = row
+	var lines: Array = HINT_AVATAR if avatar_ui else [HINT]
+	var rows := _vbox(4)
+	for words in lines:
+		var row := _hbox(5)
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		if String(words[0]) != "":
+			row.add_child(_label(String(words[0]), Fonts.sans(400), 13, INK2))
+		for part in words[1]:
+			row.add_child(_kbd(part[0]))
+			row.add_child(_label(part[1], Fonts.sans(400), 13, INK2))
+		rows.add_child(row)
+	hint.add_child(rows)
+	_hint_row = rows
 
 
 ## Shows or hides the one-line hint: it shows until its job is done, unless the player has turned
@@ -2763,6 +2810,12 @@ func _refresh_hint() -> void:
 	if hint == null:
 		return
 	var show := not hint_spent and Prefs.on("ui", "hints")
+	# (in avatar mode a selected contact has the dock, which would cover it: it waits, and comes back when the dock goes)
+	if avatar_ui and inspect != null and inspect.visible:
+		show = false
+	# (and the controls help and the News panel are in its way too: it is only the first screen's)
+	if avatar_ui and ((help != null and help.visible) or news_open()):
+		show = false
 	if hint.visible != show:
 		hint.visible = show
 		_layout_toast()
@@ -3213,8 +3266,10 @@ func _on_resized() -> void:
 		clock.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
 		alerts_box.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
 		time_label.add_theme_font_size_override("font_size", 24 if compact else 30)
-		# a window too narrow for the hint loses it for good (as it always did)
-		hint_spent = hint_spent or compact
+		# a window too narrow for the hint loses it for good (as it always did; avatar mode's is two short lines and fits)
+		if compact and not avatar_ui and not hint_spent:
+			hint_spent = true
+			_hint_spent_by_width = true
 		_refresh_hint()
 	if bottom_bar:
 		bar.anchor_top = 1.0
@@ -3282,6 +3337,8 @@ func _card_tip(p, word: String, epitaph: String) -> String:
 	var tip := "%s, %s" % [p.name, String(p.def.role).to_lower()]
 	if p.player and word == "":
 		tip += "\nThis is you"
+	if avatar_ui and word == "" and not p.player and STANCE_TIPS.has(String(p.stance)):
+		tip += "\n" + String(STANCE_TIPS[String(p.stance)])
 	if word == "In memory" or word == "Turned":
 		tip += "\nIn memory" if word == "In memory" else "\nTurned into one of the dead"
 		if epitaph != "":
@@ -3324,7 +3381,16 @@ func _update_card(c: Dictionary, sim) -> void:
 	c.hp.size = Vector2(c.hp_bg.size.x * f, 3)
 	c.hp.color = _hp_color(f)
 	var present: bool = not p.dead and p.away == null
-	c.badge.visible = p.drafted and present
+	# the stance in words (avatar mode: the radio's; a narrow card has the short ones), else the old gold glyph of a drafted person
+	var word_of := ""
+	if avatar_ui and present and not p.player:
+		var table: Dictionary = STANCE_WORDS if c.card.custom_minimum_size.x >= 56.0 else STANCE_SHORT
+		word_of = String(table.get(String(p.stance), ""))
+	if c.stance.text != word_of:
+		c.stance.text = word_of
+		c.stance_box.reset_size()
+	c.stance_box.visible = word_of != ""
+	c.badge.visible = p.drafted and present and word_of == ""
 	c.you.visible = p.player and present
 	c.fight.visible = p.target != null and not p.downed and present
 	if c.fight.visible:
@@ -4115,6 +4181,9 @@ func _light(b: Button, on: bool) -> void:
 
 ## A request went to the radio (the dock's verbs): what they said, or why they cannot, in a toast as well as in the dock.
 func _on_radio_requested(contact, _verb: String, result: Dictionary) -> void:
+	# (somebody has been asked for something: the first screen's hint has taught what it was for)
+	hint_spent = true
+	_refresh_hint()
 	if bool(result.get("ok", false)):
 		var line := String(result.get("line", ""))
 		if line != "":
@@ -4221,6 +4290,36 @@ func _radio_dock_width() -> float:
 	return float(INSPECT_W) + 8.0 + radio_box.get_combined_minimum_size().x
 
 
+## The rectangles of the boards that cover the world now: what a speech bubble keeps out from under (overlay_node.gd).
+func covered_rects() -> Array:
+	var out: Array = []
+	var parts: Array = [res_panel, crew_load_panel, clock, ammo_panel, alerts_box, call_card, inspect, radio_box, gizmos, speed_panel, help, news_panel, fields_legend]
+	for c in cards:
+		parts.append(c.card)
+	for c in parts:
+		if c != null and is_instance_valid(c) and c is Control and c.is_visible_in_tree():
+			var r: Rect2 = c.get_global_rect()
+			if r.size.x > 0.0 and r.size.y > 0.0:
+				out.append(r)
+	return out
+
+
+## The rectangle the dock takes at the foot of the window (the selection's panel and, beside or above it, the radio's verbs or the
+## order buttons): empty when nothing is selected. The yard's camera keeps the avatar out from under it.
+func dock_rect() -> Rect2:
+	if dock == null or not dock.is_visible_in_tree():
+		return Rect2()
+	var out := Rect2()
+	var any := false
+	for c in dock.get_children():
+		if c is Control and c.is_visible_in_tree():
+			var r: Rect2 = c.get_global_rect()
+			if r.size.x > 0.0 and r.size.y > 0.0:
+				out = r if not any else out.merge(r)
+				any = true
+	return out
+
+
 # ---- the News panel, the alarm, the call card
 
 func news_open() -> bool:
@@ -4247,6 +4346,7 @@ func set_news(on: bool) -> void:
 		if sim_ref != null:
 			_sync_alerts(sim_ref)
 	_light(news_button, on)
+	_refresh_hint()
 	_layout_news()
 
 
@@ -4254,12 +4354,15 @@ func _press_help() -> void:
 	help.visible = not help.visible
 	if help.visible and news_open():
 		set_news(false)
+	_refresh_hint()
 
 
 ## The call to arms from the toolbar: rings it, or stands everyone down (the radio does the rest and says it in a banner).
 func _press_alarm() -> void:
 	var radio = _radio()
 	if radio == null or not avatar_ui:
+		return
+	if on_alarm.is_valid() and not bool(on_alarm.call()):
 		return
 	var on: bool = not radio.alarm_on
 	radio.alarm(on)
@@ -4363,7 +4466,7 @@ var lock_allowed: Callable
 ## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`; in avatar mode (round 17) `news` (the toolbar's News button), `news.panel`,
 ## `alarm` (the toolbar's call to arms), `radio` (the verbs in the dock), `radio.<verb>` (one verb's button: come, hold, cover, search,
-## back, post) and `call` (the call card).
+## back, post), `radio.insist` (the Insist button, there after a refusal), `ammo` (the readout of the gun) and `call` (the call card).
 func anchor_rect(name: String) -> Rect2:
 	if name.begins_with("stores."):
 		return _anchor_store(name.trim_prefix("stores."))
@@ -4392,6 +4495,8 @@ func _anchor_control(name: String):
 				return b
 		return null
 	if name.begins_with("radio."):
+		if name == "radio.insist":
+			return radio_verbs.insist_button if radio_verbs != null else null
 		return radio_verbs.buttons.get(name.trim_prefix("radio.")) if radio_verbs != null else null
 	if name.begins_with("speed."):
 		var i := name.trim_prefix("speed.").to_int()
@@ -4437,6 +4542,8 @@ func _anchor_control(name: String):
 			return news_panel
 		"alarm":
 			return alarm_button
+		"ammo":
+			return ammo_panel
 		"radio":
 			return radio_box
 		"call":
@@ -4486,6 +4593,8 @@ func _anchor_dialog(part: String):
 		return d.get("send_button")
 	if part == "cancel":
 		return d.get("cancel_button")
+	if part == "close":
+		return d.get("close_button")    # (the Town Board's)
 	if part == "party":
 		return d.get("party_box")
 	if part.begins_with("site:"):
@@ -4597,6 +4706,8 @@ func apply_lock() -> void:
 		_ghost(build_button, locking and not bool(lock_allowed.call("build", null)))
 	if town_button != null:
 		_ghost(town_button, locking and not bool(lock_allowed.call("gizmo", "scavenge")))
+	if alarm_button != null and alarm_button.visible:
+		_ghost(alarm_button, locking and not bool(lock_allowed.call("alarm", null)))
 
 
 func _ghost(b: Button, locked: bool) -> void:

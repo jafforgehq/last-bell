@@ -238,7 +238,7 @@ func test_the_duty_roster_page_is_open_and_a_job_is_given() -> void:
 ## The lesson's own `done`, read from the data: the page was opened, a job was given and the page is shut again.
 func test_the_duty_roster_lesson_is_done_when_a_job_was_given_and_the_page_is_closed() -> void:
 	var step := {}
-	for s in Coach.load_steps():
+	for s in Coach.load_steps(Coach.CLASSIC_PATH):
 		if String(s.id) == "jobs":
 			step = s
 	check(not step.is_empty(), "there is a lesson on the duty roster")

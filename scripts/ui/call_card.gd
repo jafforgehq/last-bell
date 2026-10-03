@@ -68,6 +68,16 @@ func set_suppressed(on: bool) -> void:
 	visible = shown_id != 0 and not on
 
 
+## Tells as much of the call as `room` pixels of height allow (the host's column has little): the whole of it, else without the line
+## under the title, without the kind, with slimmer buttons. True if it fits (the card's own height is `get_combined_minimum_size`).
+func fit(room: float) -> bool:
+	for l in range(0, view.MAX_LEVEL + 1):
+		view.set_level(l)
+		if get_combined_minimum_size().y <= room + 0.5:
+			return true
+	return false
+
+
 ## Whether the card is showing what came of a call rather than the call.
 func is_showing_result() -> bool:
 	return visible and _showing_result

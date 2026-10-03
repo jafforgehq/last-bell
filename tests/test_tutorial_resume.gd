@@ -127,7 +127,7 @@ func test_a_lesson_late_in_the_night_resumes_too() -> void:
 ## at the page, with the page shut, resumes the lesson, which still remembers the look and can be finished.
 func test_a_save_in_the_duty_roster_lesson_resumes_it_with_what_was_done() -> void:
 	var at := -1
-	var steps := Coach.load_steps()
+	var steps := Coach.load_steps(Coach.CLASSIC_PATH)
 	for i in steps.size():
 		if String(steps[i].id) == "jobs":
 			at = i

@@ -27,6 +27,16 @@
 ##   when she is let go), and `jump` puts the world the way a step expects, for starting
 ##   the tutorial at that step.
 ##
+## THE AVATAR'S ORIENTATION DAY (round 17, `avatar`): the lesson the real game is taught in. Ruth is the player (main.gd
+## names her after the run begins), the town is on (the board that G opens, as in a real run, with six people and the old
+## school's buildings), the dead of the streets are off, and the bus is whole (nobody mends it: nothing here is the old
+## yard's order). It adds two beats to the script, `stray` (one walker comes to the bus wall at the north: it is a lesson
+## in aiming and in the ladder, so it is put again if somebody else shoots it before the player has fired at one) and
+## `spent` (the magazine of the player's gun is left low, so that R has something to do), `assault` (two of the dead are at a
+## wall section and the radio calls: the call card's lesson) and `home` (everyone back to their work, any call answered by its
+## default); and the scratch comes with Ana at Walt's side at once (the radio refuses her in the hearing of the player, who
+## has the game held). The classic Orientation Day (`avatar` false: `--noavatar`, a test) is as it was.
+##
 ## When the lesson is over (`finish`, called by the coach on the last card or on Skip)
 ## the script stops and the real nights begin: the run goes on as a sandbox that still
 ## cannot be lost.
@@ -76,6 +86,17 @@ const MORE_WALL := 5
 ## Who gets the wound and the fever.
 const SCRATCHED := "walt"
 const FEVERISH := "hector"
+## The avatar's lesson (see the top of the file): the beats it adds (they are never brought by the clock: only a
+## lesson brings them), the lone walker's place (the north lane, in front of the bus section and its ladder) and how
+## many times it is put again; and what the player's magazine is left at (a third of it, at least one round).
+const AVATAR_BEATS := ["stray", "spent", "assault", "home"]
+const STRAY_AT := [47.5, 9.0]
+const STRAY_WALL := 3
+const STRAY_TRIES := 3
+const SPENT_SHARE := 0.34
+## The wall that is under attack when the news comes (the blue container at the north east) and how many of the dead are at it.
+const ASSAULT_WALL := 5
+const ASSAULT_N := 2
 ## What the lookout says tonight brings: the two groups, from the spawn point nearest where
 ## the first group comes in.
 const FORECAST_TOTAL := 7
@@ -139,13 +160,21 @@ var coached := false
 var finished := false
 ## The first step of the rules has been taken (what is put right once, then left alone).
 var prepared := false
+## This is the avatar's Orientation Day (see the top of the file): `install` says so before the run begins.
+var avatar := false
+## The lone walker of the avatar's lesson: it is looked for again while this is on (the lesson has not been passed by
+## the player: no kill of theirs since it came, `stray_kills`), up to STRAY_TRIES times (`stray_tries`).
+var stray_open := false
+var stray_kills := 0
+var stray_tries := 0
 
 
 ## Swaps this scenario, the scripted waves and the forgiving medicine into a freshly
 ## built `sim` (before the run starts). Returns the scenario.
-static func install(game):
+static func install(game, avatar_run: bool = false):
 	var script: GDScript = load("res://scripts/sim/orientation.gd")
 	var module = script.new()
+	module.avatar = avatar_run
 	game.scenario = module
 	module.setup(game)
 	# the lesson is scripted: nobody's mood moves and no radio card is drawn
@@ -160,10 +189,13 @@ static func install(game):
 	return module
 
 
-## Installs it and starts the run on the fixed seed, on Story difficulty.
-static func begin(game):
-	var module = install(game)
+## Installs it and starts the run on the fixed seed, on Story difficulty. `avatar_run`: the avatar's Orientation Day, which
+## also puts the town on (G opens the board, as in a real run). The caller makes the player (`game.avatar.set_player`).
+static func begin(game, avatar_run: bool = false):
+	var module = install(game, avatar_run)
 	game.start_run(0, SEED)
+	if avatar_run:
+		module.stage_town()
 	return module
 
 
@@ -190,6 +222,9 @@ func start() -> void:
 	coached = false
 	finished = false
 	prepared = false
+	stray_open = false
+	stray_kills = 0
+	stray_tries = 0
 	sim.difficulty = 0
 	sim.permadeath = false
 	sim.stock.ammo = START_AMMO
@@ -198,7 +233,7 @@ func start() -> void:
 	if waves.get("scripted") != null:
 		waves.scripted = true
 	var bus = _segment(BUS_ID)
-	if bus != null:
+	if bus != null and not avatar:
 		bus.hp = bus.max_hp * BUS_START
 		sim._segment_state(bus)
 	# Ruth starts out in the yard, in view: the first lesson sends her across it, and when she is
@@ -217,6 +252,8 @@ func update(_dt: float) -> void:
 	# nobody mends a wall unasked while the lesson is on (not even as a chore): the lesson is to ask
 	sim.tactics.chores = finished
 	_prepare()
+	if avatar and not finished:
+		_keep_stray()
 	if finished or coached:
 		return
 	for beat in BEATS:
@@ -272,6 +309,8 @@ func beat_ids() -> Array:
 	var ids: Array = []
 	for beat in BEATS:
 		ids.append(String(beat.id))
+	if avatar:
+		ids.append_array(AVATAR_BEATS)
 	return ids
 
 
@@ -293,14 +332,25 @@ func fire(id: String) -> bool:
 			_send_dead(MORE_AT, MORE_WALL, "horde-b", "More are coming", "Four, from the north east")
 		"scratch":
 			_scratch(SCRATCHED)
+			if avatar:
+				sim.medical._assign()    # (Ana is on her way to him at once: the lesson has the game held, so no step would send her)
 		"fever":
 			_infect(FEVERISH)
+		"stray":
+			_stray()
+		"spent":
+			_spent()
+		"assault":
+			_assault()
+		"home":
+			_home()
 	return true
 
 
 ## The script is over: no more beats, and the real nights begin.
 func finish() -> void:
 	finished = true
+	stray_open = false
 	coached = false
 	sim.waves.enabled = true
 	if sim.waves.get("scripted") != null:
@@ -336,13 +386,92 @@ func _infect(id: String) -> void:
 	p.turn_at = p.infected_at + TURN_AFTER_H * 60.0
 
 
+# ------------------------------------------------- the avatar's lesson --
+
+## The avatar's lesson is played in a town: the board that G opens, as in a real run (the six people, no recruits, no lots,
+## and nothing of the streets: no dead about them by day).
+func stage_town() -> void:
+	sim.town.begin(true)
+	sim.streets.enabled = false
+
+
+## One walker comes to the bus wall from the north lane. The lesson is the player's own shot, so it is put again (a few times)
+## while nobody has been shot by the player and nothing of the dead is left coming.
+func _stray() -> void:
+	stray_open = true
+	stray_tries = 0
+	var me = sim.avatar.player()
+	stray_kills = int(me.stats.kills) if me != null else 0
+	_put_stray()
+
+
+func _put_stray() -> void:
+	_send_dead([STRAY_AT], STRAY_WALL, "stray", "A walker at the north wall", "Shoot it from the walkway")
+
+
+## While the lesson is open: the player's first kill closes it; else a walker that was taken by something else is put again.
+func _keep_stray() -> void:
+	if not stray_open:
+		return
+	var me = sim.avatar.player()
+	if me == null or int(me.stats.kills) > stray_kills:
+		stray_open = false
+		return
+	if stray_tries >= STRAY_TRIES:
+		return
+	for z in sim.zombies:
+		if z.state == "approach" or z.state == "attack" or z.state == "hunt" or z.state == "breach":
+			return
+	stray_tries += 1
+	_put_stray()
+
+
+## Two of the dead are at a wall section, clawing: the radio's call (the real one, with its words and its three answers) is
+## there at once, before any step of the rules (the lesson has the game held until it is answered).
+func _assault() -> void:
+	var seg = _segment(ASSAULT_WALL)
+	if seg == null:
+		return
+	for i in mini(ASSAULT_N, seg.slots.size()):
+		var sl = seg.slots[i]
+		var z = sim.spawn(sl.x, sl.y, "attack")
+		z.slot = sl
+		sl.who = z
+		z.facing = sl.face
+		z.attack_t = 0.0
+	sim.radio._watch_the_walls()    # (it notes how strong the wall is, then the first blow lands and it calls)
+	seg.hp = maxf(0.0, seg.hp - 2.0)
+	sim._segment_state(seg)
+	sim.radio._watch_the_walls()
+
+
+## The player's magazine is left low (a third full, one round at least) and no reload is on: R has something to do.
+func _spent() -> void:
+	stray_open = false
+	var me = sim.avatar.player()
+	if me == null or me.gun.get("melee", false):
+		return
+	me.reloading = 0.0
+	me.mag = clampi(int(floor(float(me.gun.get("mag", 0)) * SPENT_SHARE)), 1, maxi(1, int(me.gun.get("mag", 1)) - 1))
+
+
+## Everyone is back to what they were doing: no stance is held, and a call that waits for an answer is answered by its default.
+func _home() -> void:
+	sim.radio.pending.clear()
+	for p in sim.people:
+		sim.radio.clear_stance(p)
+	for e in sim.radio.open_calls():
+		sim.radio._settle(e, String(e.default), true)
+
+
 # --------------------------------------------------- setting the scene up --
 
 ## Puts the world the way a lesson expects it, for starting the tutorial at a step
 ## (a screenshot, a test): `spec` may hold "hour" (0 to 24) and "day", "bus" (the
 ## bus's health, 0 to 1), "stock" ({store: amount}), "drafted" (ids sent to stand
 ## where they are), "post" (ids sent to their posts and standing there) and "fired"
-## (beats to bring). Nothing in a normal run calls it.
+## (beats to bring); and in the avatar's lesson "at" ([x, y]: where the player stands) and "mag" (the rounds left in their
+## gun). Nothing in a normal run calls it.
 func jump(spec: Dictionary) -> void:
 	if spec.has("hour"):
 		set_time(float(spec.hour), int(spec.get("day", sim.day)))
@@ -367,6 +496,16 @@ func jump(spec: Dictionary) -> void:
 			p.y = float(p.def.post.y)
 	for id in spec.get("fired", []):
 		fire(String(id))
+	var me = sim.avatar.player() if avatar else null
+	if me != null:
+		var at = spec.get("at")
+		if typeof(at) == TYPE_ARRAY and at.size() == 2:
+			me.x = float(at[0])
+			me.y = float(at[1])
+			me.path = []
+			me.moving = false
+		if spec.has("mag") and not me.gun.get("melee", false):
+			me.mag = clampi(int(spec.mag), 0, int(me.gun.get("mag", 0)))
 	_prepare()
 
 
@@ -392,6 +531,8 @@ func save() -> Dictionary:
 		"prepared": prepared,
 		"coached": coached,
 		"finished": finished,
+		"avatar": avatar,
+		"stray": [stray_open, stray_kills, stray_tries],
 		"coach": coach_state.duplicate(true),
 	}
 
@@ -408,6 +549,17 @@ func load_state(d: Dictionary) -> void:
 	prepared = bool(d.get("prepared", true))
 	coached = bool(d.get("coached", false))
 	finished = bool(d.get("finished", false))
+	avatar = bool(d.get("avatar", false))
+	if avatar:
+		sim.streets.enabled = false    # (the harness's switch is not saved)
+	stray_open = false
+	stray_kills = 0
+	stray_tries = 0
+	var stray = d.get("stray", [])
+	if typeof(stray) == TYPE_ARRAY and stray.size() == 3:
+		stray_open = bool(stray[0])
+		stray_kills = int(stray[1])
+		stray_tries = int(stray[2])
 	var kept = d.get("coach", {})
 	coach_state = kept.duplicate(true) if typeof(kept) == TYPE_DICTIONARY else {}
 	sim.waves.enabled = finished

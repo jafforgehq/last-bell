@@ -6,7 +6,7 @@ extends "res://tests/case.gd"
 const Kit := preload("res://tests/hud_kit.gd")
 const Tut := preload("res://tests/tutorial_kit.gd")
 
-const STEPS := "res://assets/data/tutorial.json"
+const STEPS := "res://assets/data/tutorial_classic.json"
 ## Anchors that are in the world, not the HUD: the coach resolves those itself.
 const WORLD := ["person:", "wall:", "spot:", "bench"]
 

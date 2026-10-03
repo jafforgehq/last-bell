@@ -11,6 +11,9 @@ const Prefs := preload("res://scripts/prefs.gd")
 const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
 
 const TAGLINE := "Hold the schoolyard for thirty nights."
+## What the Orientation Day line says under its name: it teaches the game as it is played (the survivor you walk and shoot with,
+## and the crew you ask over the radio), not the old yard's orders.
+const ORIENTATION_BLURB := "Walk, shoot, radio the crew: ten minutes"
 ## The column's width, and the windows below which the small logo and the tighter menu are used.
 const COLUMN_W := 340.0
 const COLUMN_MIN_W := 280.0
@@ -89,7 +92,7 @@ func _build_column() -> void:
 	var orientation_done := Prefs.flag("tutorial_done")
 	_add(list, "continue", shell.menu_item("Continue", "No saved game yet"), shell.continue_game)
 	_add(list, "new", shell.menu_item("New game"), shell.open_new_game)
-	_add(list, "orientation", shell.menu_item("Orientation Day", "The basics in about ten minutes", not orientation_done), shell.start_orientation)
+	_add(list, "orientation", shell.menu_item("Orientation Day", ORIENTATION_BLURB, not orientation_done), shell.start_orientation)
 	_add(list, "load", shell.menu_item("Load"), shell.open_load.bind(false))
 	_add(list, "settings", shell.menu_item("Settings"), shell.open_settings)
 	_add(list, "credits", shell.menu_item("Credits"), shell.open_credits)

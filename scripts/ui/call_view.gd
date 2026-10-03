@@ -13,6 +13,11 @@ extends VBoxContainer
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 
+## The height of an option's button, and of a slim one (the most `level` there is).
+const BUTTON_H := 28.0
+const BUTTON_H_SLIM := 24.0
+const MAX_LEVEL := 3
+
 ## Emitted when a button was pressed and the radio took the answer.
 signal answered(call_id: int, option_id: String)
 
@@ -27,6 +32,9 @@ var count_label: Label
 var result_label: Label
 ## Option id to its button, in the order of the call's options.
 var buttons := {}
+## How much of the call is told: 0 all of it; 1 without the line under the title; 2 and without the kind (the colour bar of the card says it);
+## 3 and with slimmer buttons. A card that has little room asks for more (`set_level`, `CallCard.fit`).
+var level := 0
 var _radio_getter: Callable
 var _buttons_box: VBoxContainer
 var _built := false
@@ -82,6 +90,21 @@ func show_entry(e: Dictionary) -> void:
 	refresh()
 
 
+## Tells less of the call (see `level`), for a card that has little room.
+func set_level(l: int) -> void:
+	level = clampi(l, 0, MAX_LEVEL)
+	_apply_level()
+
+
+func _apply_level() -> void:
+	if kind_label == null:
+		return
+	kind_label.visible = level < 2
+	sub_label.visible = level < 1 and sub_label.text != ""
+	for b in buttons.values():
+		b.custom_minimum_size.y = BUTTON_H if level < 3 else BUTTON_H_SLIM
+
+
 func _rebuild(e: Dictionary) -> void:
 	for c in _buttons_box.get_children():
 		_buttons_box.remove_child(c)
@@ -93,11 +116,12 @@ func _rebuild(e: Dictionary) -> void:
 	sub_label.text = String(e.sub)
 	sub_label.visible = String(e.sub) != ""
 	for o in e.options:
-		var b: Button = RadioKit.small_button(host, String(o.label), 28.0, 13)
+		var b: Button = RadioKit.small_button(host, String(o.label), BUTTON_H if level < 3 else BUTTON_H_SLIM, 13)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_on_pressed.bind(String(o.id)))
 		_buttons_box.add_child(b)
 		buttons[String(o.id)] = b
+	_apply_level()
 
 
 func _speed() -> float:

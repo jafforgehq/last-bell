@@ -5,7 +5,7 @@
 			"id": "dusk",
 			"title": "Dusk",
 			"text": "The bell has rung. The crew goes to their posts and the dead come, more every night. Press V to see which walls your guns cover, and keep a builder ready to repair (F).",
-			"text_avatar": "The bell has rung and the dead come, more every night. Press V to see which walls the guns cover. Aim with the mouse, hold the button to fire, R reloads.",
+			"text_avatar": "The bell has rung: the dead come. Aim with the mouse, fire with the button, R reloads. Climb a ladder to shoot over the wall. Click a crew card to radio them.",
 			"anchor": ["clock"],
 			"start": {"cond": "bell_rung"}
 		},
@@ -36,7 +36,7 @@
 			"id": "fever",
 			"title": "A fever",
 			"text": "Someone has a fever. Left alone it turns them into one of the dead. Select them and press T to treat it (two medicine), or X to send them out for good.",
-			"text_avatar": "Someone has a fever. Left alone it turns them into one of the dead: it needs treating (two medicine). Click their card to see how they are.",
+			"text_avatar": "Someone has a fever. Left alone it turns them into one of the dead. Answer the sick call on the radio card: treat (two medicine), keep apart or send out.",
 			"start": {"cond": "feverish"}
 		},
 		{

@@ -17,6 +17,12 @@
 ## open) and, left alone, takes its `bot` choice two game hours later. A card with no choice is
 ## settled at once and waits only to be read (one choice, "Understood").
 ##
+## THE PLAYER OUT (round 17, the avatar game): while the player is in a place (`scavenge.party_in_place()`, with an avatar) a card
+## with a choice cannot be answered, so the player is never decided for: its clock stands still (`card_frozen`: every step pushes the
+## card's `due` on by the minutes the step took) and the place's News is told once, in a line of kind "story" with no options
+## ("The radio has news for you: <title>", "waiting for your return": `_tell_the_place`; the radio's ordinary line for the card
+## is left out then). On the return the card opens as ever and its clock runs again. The old game (no avatar) is unchanged.
+##
 ## THE DECK is data: {"id", "kind", "weight", "min_day", "max_day", "hour" (when it comes, 12 by
 ## default), "wait" (game hours before the default is taken), "title", "text", "pick" (what to
 ## choose when it is drawn: "person", "pair", "section", "lookout"), "needs" (what must be so for
@@ -419,6 +425,7 @@ func _needs_ok(needs: Dictionary) -> bool:
 func update(dt: float) -> void:
 	if not enabled:
 		return
+	_hold_the_clock(dt)    # (first: a card that was up before this step keeps the time it had left)
 	_watch()
 	_new_day()
 	_radio_hour()
@@ -428,6 +435,31 @@ func update(dt: float) -> void:
 	_blackout_step(dt)
 	_sick_step()
 	_errand_step()
+	_tell_the_place()
+
+
+## Whether the card that is up has its clock stopped: the player is out (an avatar game, a played trip in its place or on the road home),
+## and the card has a choice they cannot answer from there. For the tests and the News (the radio leaves its ordinary line out).
+func card_frozen() -> bool:
+	if _card.is_empty() or String(sim.player_id) == "" or not sim.scavenge.player_out():
+		return false
+	var card := card_named(String(_card.id))
+	return not card.is_empty() and not card.choices.is_empty()
+
+
+## A frozen card's answer is due as much later as this step lasted.
+func _hold_the_clock(dt: float) -> void:
+	if card_frozen():
+		_card["due"] = float(_card.due) + dt * float(sim.min_per_sec)
+
+
+## The place's News says once that a card waits for the player's return.
+func _tell_the_place() -> void:
+	if bool(_card.get("told", false)) or not card_frozen():
+		return
+	_card["told"] = true
+	var ctx: Dictionary = _card.ctx
+	sim.radio.log_news("story", "The radio has news for you: %s" % _fmt(String(card_named(String(_card.id)).title), ctx), "waiting for your return")
 
 
 func _radio_hour() -> void:
@@ -486,7 +518,7 @@ func _deliver(card: Dictionary, ctx: Dictionary) -> void:
 	var sp = speaker()
 	ctx["speaker"] = sp.first if sp != null else "The radio"
 	ctx["speaker_id"] = sp.id if sp != null else ""
-	_card = {"id": String(card.id), "ctx": ctx, "due": sim.clock_min + float(card.wait) * 60.0, "resolved": false, "result": "", "changes": []}
+	_card = {"id": String(card.id), "ctx": ctx, "due": sim.clock_min + float(card.wait) * 60.0, "resolved": false, "result": "", "changes": [], "told": false}
 	if card.kind == "threat":
 		_trouble(T_THREAT)
 	if card.choices.is_empty():
@@ -1682,6 +1714,7 @@ func load_state(d: Dictionary) -> void:
 			"resolved": bool(c.get("resolved", false)),
 			"result": String(c.get("result", "")),
 			"changes": _strings(c.get("changes", [])),
+			"told": bool(c.get("told", false)),
 		}
 	day_log = []
 	var lg = d.get("log", [])

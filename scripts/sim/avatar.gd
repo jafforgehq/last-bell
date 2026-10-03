@@ -20,6 +20,11 @@
 ## over it from the walkway: the whole game); a prop or a building's wall, the walkway's own face and the edge of the map
 ## stop it. The cost in ammunition, the noise, the events and the effects are the NPC's (`Sim._fire`): a round from the
 ## stock (`shot_cost`), and with the stock too low for one the butt of the gun is swung instead; a pike thrusts.
+## FROM THE GROUND, INTO A WALKWAY. A shot whose first obstacle is the face of a walkway (its rail and the planks that hang down
+## to the ground: `World.deck_face_tiles`) within FACE_NEAR tiles of the shoulder is not fired: no round, no recoil, no noise, a dry
+## click instead (`fire_blocked`, which the crosshair reads to grey out; a `blocked_shot` event at most once in CLICK_EVERY
+## seconds). A shot that passes (up a ladder's column, from the deck over the wall) and one that has one of the dead to hit
+## before the face is fired as ever.
 ## RELOADING. `reload()` (R) when the magazine is not full and there is ammunition; the gun's own time; the last round
 ## starts one by itself, and an empty magazine starts one when the trigger is let go.
 ## MELEE. `melee()` (F): an arc of MELEE_REACH tiles and MELEE_ARC degrees toward the aim hits every one of the dead in
@@ -31,6 +36,9 @@
 ##
 ## Events this module adds to sim.events (besides the `shot`, `reload` and `stab` events of the NPCs' own fighting):
 ##   {"type": "succession", "from": id, "to": id}
+##   {"type": "blocked_shot", "id": the player's id}: the trigger was pulled against the face of a walkway (a dry click)
+## A DOWNED, DEAD OR TURNED player has no hands: `set_input` takes nothing from the views and `clear_hands` (the sim calls it every
+## step for them) empties what is held, so no firing flag outlives the fall.
 ## Saved: only the id of the player (the Person's own variables, the flag and the input among them, are saved with them).
 extends RefCounted
 
@@ -55,6 +63,11 @@ const MOVE_SPREAD := 0.6
 const BLOOM_PER_SHOT := 0.3
 const BLOOM_DECAY := 1.5
 
+## A trigger pull is not a shot when the first thing it would strike is the face of a walkway nearer than this (tiles, from the shoulder),
+## and the dry click is told at most once in CLICK_EVERY seconds.
+const FACE_NEAR := 1.5
+const CLICK_EVERY := 0.5
+
 const MELEE_REACH := 1.5
 const MELEE_ARC := 100.0
 const MELEE_COOLDOWN := 0.5
@@ -74,6 +87,8 @@ var _low := {}
 ## every frame and a spread of pellets once each, and the walls only change when something is built or taken down.
 var _low_cache := {}
 var _low_key := ""
+## When the dry click was last told (`Sim.t`).
+var _click_at := -10.0
 
 
 func setup(s) -> void:
@@ -83,6 +98,7 @@ func setup(s) -> void:
 ## A new run: nobody is the player (the caller names them with `set_player` after `start_run`).
 func start() -> void:
 	sim.player_id = ""
+	_click_at = -10.0
 	for p in sim.people:
 		p.player = false
 		_clear_input(p)
@@ -179,6 +195,16 @@ func _clear_input(p) -> void:
 	p.input_melee = false
 
 
+## What the player's hands hold is let go (the aim, where the pointer is, is kept): the sim does it every step for a player who is
+## downed, dead or turned (`Sim._update_person`), so that the trigger is not still held when they get up, and nothing reads a firing
+## flag from a person on the ground.
+func clear_hands(p) -> void:
+	p.input_move = Vector2.ZERO
+	p.input_fire = false
+	p.input_reload = false
+	p.input_melee = false
+
+
 # ---------------------------------------------------------------- the hands --
 
 ## The player's hands for the coming steps: the direction to walk (any length), the point of the world, in tiles, that the
@@ -187,8 +213,11 @@ func set_input(move: Vector2, aim: Vector2, fire: bool) -> void:
 	var p = player()
 	if p == null:
 		return
-	p.input_move = move
 	p.input_aim = aim
+	if p.downed or p.dead or p.turned:
+		clear_hands(p)    # (a person on the ground has no hands: the view goes on asking, nothing is taken)
+		return
+	p.input_move = move
 	p.input_fire = fire
 
 
@@ -377,7 +406,38 @@ func _trigger(p) -> void:
 		return
 	if p.mag <= 0:
 		return    # (it clicks: reload, or let go of the trigger)
+	if fire_blocked(p):
+		_click(p)
+		return
 	_shoot(p, gun)
+
+
+## Whether a trigger pull now would only hit the face of a walkway at the person's feet: the aim line, from the shoulder as a shot
+## goes, meets nothing of the dead and stops on a face tile within FACE_NEAR tiles. False for a blow (the butt, a pike), for
+## somebody downed, dead, turned or away. The views grey the crosshair out with it.
+func fire_blocked(p) -> bool:
+	if p == null or p.dead or p.downed or p.turned or p.away != null:
+		return false
+	if sim.gun_of(p).get("melee", false):
+		return false
+	var faces = sim.world.get("deck_face_tiles")
+	if not faces is Dictionary or (faces as Dictionary).is_empty():
+		return false
+	var from := shoulder(p)
+	var dir := Vector2.from_angle(p.aim)
+	_low = _low_tiles()
+	var stop := _first_obstacle(from, dir, FACE_NEAR)
+	if stop.is_empty() or not (faces as Dictionary).has(int(stop.tile)):
+		return false
+	return trace(from, p.aim, FACE_NEAR).z == null
+
+
+## The dry click: told to the views at most once in CLICK_EVERY seconds however long the trigger is held.
+func _click(p) -> void:
+	if float(sim.t) - _click_at < CLICK_EVERY:
+		return
+	_click_at = float(sim.t)
+	sim.events.append({"type": "blocked_shot", "id": String(p.id)})
 
 
 func _shoot(p, gun: Dictionary) -> void:
@@ -446,6 +506,18 @@ func _wall_distance(from: Vector2, dir: Vector2, reach: float) -> float:
 			return t
 		t += TRACE_STEP
 	return reach
+
+
+## What a line from `from` toward `dir` meets first within `reach` tiles: {"t": how far along, "tile": its index}, or {} when
+## it is clear (the same line and the same walls as `_wall_distance`; the caller has set `_low`).
+func _first_obstacle(from: Vector2, dir: Vector2, reach: float) -> Dictionary:
+	var t := 0.0
+	while t < reach:
+		var pt := from + dir * t
+		if _stops(pt):
+			return {"t": t, "tile": clampi(floori(pt.y), 0, sim.H - 1) * sim.W + clampi(floori(pt.x), 0, sim.W - 1)}
+		t += TRACE_STEP
+	return {}
 
 
 func _stops(pt: Vector2) -> bool:

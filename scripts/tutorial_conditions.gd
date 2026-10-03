@@ -12,15 +12,18 @@
 ##                of each factor, added up)
 ##   "did"        what the player did since it began, counted: "select:person:ruth",
 ##                "gizmo:draft", "move", "speed:3", "save", "fields"...
-##   "events"     the rules' events since it began, counted by type: "shot", "bell"... (an "assigned"
+##   "events"     the rules' events since it began, counted by type: "shot", "bell"... (a "radio_line" is counted as
+##                "radio_line:<who>:<verb>:ok" or ":no", the answer to a request of the radio; an "assigned"
 ##                event that names a station, a job given, also counts as "assigned:job": one that
 ##                takes a job away does not)
 ##   "next"       the card's Got it was pressed
-##   "base"       the world as the step began: {"ammo": n, "kills": n, "pos": {person id: [x, y]}}
+##   "base"       the world as the step began: {"ammo": n, "kills": n, "pos": {person id: [x, y]}, "mine": {"shots": n,
+##                "kills": n} (what the player's own person had done: avatar mode), "news": the id of the newest line of the radio's log}
 ##   "selection"  {"kind": "person", "id": "ruth"}, {"kind": "segment", "id": 3} or {}
 ##   "speed"      the game's speed (0 to 3), "fields": the fields-of-fire view is on
 ##   "dialog"     {"open": bool, "site": the place chosen in the scavenging dialog or ""}
 ##   "jobs"       {"open": bool}: the Duty roster's page (key J) is open
+##   "news"       {"open": bool}: the News panel (key T, avatar mode) is open
 ## A condition may note something in `state` (a wound seen, say), but never reads the
 ## screen: anything it needs the coach has put in `state`, so the tests can drive it.
 extends RefCounted
@@ -77,6 +80,21 @@ static func registry() -> Dictionary:
 			"season": _season,
 			"lot_open": _lot_open,
 			"has_vehicle": _has_vehicle,
+			"walked": _walked,
+			"on_deck": _on_deck,
+			"shots": _shots,
+			"player_kills": _player_kills,
+			"reloaded": _reloaded,
+			"asked": _asked,
+			"has_stance": _has_stance,
+			"insisted": _insisted,
+			"news_open": _news_open,
+			"news_seen": _news_seen,
+			"call_open": _call_open,
+			"call_answered": _call_answered,
+			"board_read": _board_read,
+			"alarm_on": _alarm_on,
+			"alarm_cycled": _alarm_cycled,
 			"all": _all,
 			"any": _any,
 			"not": _not,
@@ -441,6 +459,143 @@ static func _has_vehicle(sim, _p, _st) -> bool:
 	var vehicles = sim.get("vehicles")
 	var town = sim.get("town")
 	return vehicles != null and town != null and town.on and not vehicles.fleet.is_empty()
+
+
+
+# --------------------------------------------------- the avatar's lesson (round 17) --
+
+## The person the player plays, or null (no avatar: nothing below holds).
+static func _me(sim):
+	var avatar = sim.get("avatar")
+	return avatar.player() if avatar != null else null
+
+
+## {"min": tiles}: the player has walked this far from where they stood when the step began.
+static func _walked(sim, p, st) -> bool:
+	var me = _me(sim)
+	if me == null:
+		return false
+	var start = st.get("base", {}).get("pos", {}).get(me.id)
+	if typeof(start) != TYPE_ARRAY or start.size() != 2:
+		return false
+	return Vector2(float(start[0]), float(start[1])).distance_to(Vector2(me.x, me.y)) >= float(p.get("min", 6.0))
+
+
+## The player stands on a raised walkway (they climbed a ladder).
+static func _on_deck(sim, _p, _st) -> bool:
+	var me = _me(sim)
+	return me != null and sim.world.on_deck(me.x, me.y)
+
+
+## {"min": n}: the player has fired this many rounds since the step began.
+static func _shots(sim, p, st) -> bool:
+	var me = _me(sim)
+	var base := int(st.get("base", {}).get("mine", {}).get("shots", 0))
+	return me != null and int(me.stats.shots) - base >= int(p.get("min", 1))
+
+
+## {"min": n}: the player's own shots or blows have put this many of the dead down since the step began.
+static func _player_kills(sim, p, st) -> bool:
+	var me = _me(sim)
+	var base := int(st.get("base", {}).get("mine", {}).get("kills", 0))
+	return me != null and int(me.stats.kills) - base >= int(p.get("min", 1))
+
+
+## The player pressed R and the gun is full again (and no reload is still going on).
+static func _reloaded(sim, _p, st) -> bool:
+	var me = _me(sim)
+	if me == null or _counted(st.get("did", {}), "reload") <= 0.0:
+		return false
+	return float(me.reloading) <= 0.0 and int(me.mag) >= int(me.gun.get("mag", 0))
+
+
+## {"who": id, "verb": verb, "ok": bool}: the player asked that one (that verb, with that answer; each is optional) over the
+## radio since the step began. `ok`: whether they agreed (false: they refused, and said why).
+static func _asked(_sim, p, st) -> bool:
+	var events = st.get("events", {})
+	if typeof(events) != TYPE_DICTIONARY:
+		return false
+	for key in events:
+		var parts := String(key).split(":")
+		if parts.size() != 4 or parts[0] != "radio_line" or float(events[key]) <= 0.0:
+			continue
+		if p.has("who") and parts[1] != String(p.who):
+			continue
+		if p.has("verb") and parts[2] != String(p.verb):
+			continue
+		if p.has("ok") and (parts[3] == "ok") != bool(p.ok):
+			continue
+		return true
+	return false
+
+
+## {"who": id, "stance": "follow"}: they do what the player asked now (the request took effect: it takes a moment): they hold the
+## stance named, or any stance when none is.
+static func _has_stance(sim, p, _st) -> bool:
+	var who = _person(sim, String(p.get("who", "")))
+	if who == null:
+		return false
+	return String(who.stance) == String(p.stance) if p.has("stance") else String(who.stance) != ""
+
+
+## {"who": id}: the player pushed them (insisted over a refusal): they trust the player less than everybody did to begin with.
+static func _insisted(sim, p, _st) -> bool:
+	var who = _person(sim, String(p.get("who", "")))
+	return who != null and float(sim.radio.trust_of(who)) < float(sim.radio.TRUST_START) - 0.01
+
+
+## The News panel is open now (the coach notes that in `state.news`).
+static func _news_open(_sim, _p, st) -> bool:
+	return bool(st.get("news", {}).get("open", false))
+
+
+## The News panel was open at some time since the step began.
+static func _news_seen(_sim, _p, st) -> bool:
+	if bool(st.get("news", {}).get("open", false)):
+		st["news_seen"] = true
+	return bool(st.get("news_seen", false))
+
+
+## {"kind": "attack"}: a call of the radio (of that kind, if one is named) waits for an answer.
+static func _call_open(sim, p, _st) -> bool:
+	for e in sim.radio.open_calls():
+		if not p.has("kind") or String(e.kind) == String(p.kind):
+			return true
+	return false
+
+
+## {"kind": "attack"}: the player answered a call that came since the step began (not one the radio's clock answered).
+static func _call_answered(sim, p, st) -> bool:
+	var after := int(st.get("base", {}).get("news", 0))
+	for e in sim.radio.news:
+		if int(e.id) > after and String(e.answered) != "" and not bool(e.get("by_default", false)) and (not p.has("kind") or String(e.kind) == String(p.kind)):
+			return true
+	return false
+
+
+## The page that G opens (the board, or in a game without one the scavenging dialog) was open, a place was chosen on it, and
+## it is shut again (the coach notes the page in `state.dialog`).
+static func _board_read(_sim, _p, st) -> bool:
+	var d = st.get("dialog", {})
+	if bool(d.get("open", false)):
+		st["board_open"] = true
+		if String(d.get("site", "")) != "":
+			st["board_site"] = true
+		return false
+	return bool(st.get("board_open", false)) and bool(st.get("board_site", false))
+
+
+## {"on": true}: the call to arms is on (false: it is off).
+static func _alarm_on(sim, p, _st) -> bool:
+	return bool(sim.radio.alarm_on) == bool(p.get("on", true))
+
+
+## The alarm was on at some time since the step began and is off now.
+static func _alarm_cycled(sim, _p, st) -> bool:
+	if bool(sim.radio.alarm_on):
+		st["alarm_seen"] = true
+		return false
+	return bool(st.get("alarm_seen", false))
 
 
 # ------------------------------------------------------------- combinators --

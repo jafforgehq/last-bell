@@ -1308,6 +1308,15 @@ func party_in_place() -> Dictionary:
 	return {}
 
 
+## Whether a trip the player led is out: in its place, or on the road home (finished, not yet at the gate). The player cannot answer
+## anything from there: the storyteller's cards wait for them (`Storyteller.card_frozen`).
+func player_out() -> bool:
+	for party in parties:
+		if String(party.state) == IN_PLACE or bool(party.get("played", false)):
+			return true
+	return false
+
+
 ## The game minutes of the road from the base to a place (and back: the same): half the round trip by this vehicle, the
 ## way there on foot. The abstract travel until the live drive; a place's scene runs it with `Sim.fast_forward`.
 func road_minutes(place_id: String, vehicle_id: String = "") -> float:

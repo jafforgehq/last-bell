@@ -64,6 +64,10 @@ const CAM_EASE := 8.0
 const CAM_LEAD_K := 0.3
 const CAM_LEAD := 2.0
 const CAM_HOLD := 1.5
+## How long a glide of the camera takes: the least, the most, and how much more for each tile it goes.
+const CAM_GLIDE_MIN := 0.25
+const CAM_GLIDE_MAX := 0.6
+const CAM_GLIDE_PER_TILE := 1.0 / 60.0
 
 var data: Dictionary
 var world
@@ -134,6 +138,15 @@ var over_hud := false
 var firing := false
 ## Seconds the camera is to stay off the avatar after a jump (`_focus`).
 var cam_hold := 0.0
+## The glide of the avatar camera to a point (a jump of `_focus`, a succession): where it set out, where it goes (`cam_glide_avatar`:
+## to the avatar, wherever they are by then), how long it takes (0: no glide) and how long it has gone. Eased, a few tenths of a second.
+var cam_glide_from := Vector2.ZERO
+var cam_glide_to := Vector2.ZERO
+var cam_glide_avatar := false
+var cam_glide_s := 0.0
+var cam_glide_t := 0.0
+## How far (tiles) the map's foot may come up above the dock: the avatar camera is held down by as much as the dock needs (`_dock_offset_px`).
+var cam_pad := 0.0
 var walkers := 0
 ## The fields-of-fire view (key V) is on: the overlay tints every wall section by how
 ## many guns reach it. A view only; the rules never read it.
@@ -310,7 +323,11 @@ func _ready() -> void:
 		load_failed = not loaded
 	if not loaded:
 		if tutorial:
-			Orientation.begin(sim)
+			# Orientation Day is the avatar's lesson in the real game (the old yard's with `--noavatar`, and in a test that does not ask)
+			var avatar_lesson := wants_avatar(OS.get_cmdline_user_args(), run, title_mode, true, get_tree().current_scene == self)
+			Orientation.begin(sim, avatar_lesson)
+			if avatar_lesson:
+				sim.avatar.set_player(first_starter_id(sim.people))
 		else:
 			# a run with no crew in its choice is six (the tests, the screenshots and the title's yard are classic)
 			sim.crew_start = clampi(int(run.get("crew", 6)), 3, 6)
@@ -420,6 +437,7 @@ func _ready() -> void:
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
 	hud.on_build = toggle_build
 	hud.on_town = toggle_town
+	hud.on_alarm = func(): return _allows("alarm")
 	hud.on_raid = open_raid
 	hud.on_build_hover = func(marks): build_hover = marks
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
@@ -594,7 +612,7 @@ func _clamp_camera() -> void:
 	var W: float = world.W
 	var H: float = world.H
 	cam_center.x = W / 2.0 if hw * 2.0 >= W + 2.0 * m else clampf(cam_center.x, hw - m, W - hw + m)
-	cam_center.y = H / 2.0 if hh * 2.0 >= H + 2.0 * m else clampf(cam_center.y, hh - m, H - hh + m)
+	cam_center.y = H / 2.0 if hh * 2.0 >= H + 2.0 * m else clampf(cam_center.y, hh - m, H - hh + m + cam_pad)
 
 
 func _apply_camera() -> void:
@@ -617,10 +635,23 @@ func _zoom_at(factor: float, screen: Vector2) -> void:
 
 
 func _focus(at: Vector2) -> void:
-	cam_center = at
-	# (with an avatar the camera is back on them after a moment)
+	# (with an avatar the camera glides there, stays a moment and is back on them after it)
 	cam_hold = CAM_HOLD if avatar_mode else 0.0
+	if avatar_mode and not title_mode:
+		_glide_to(at, false)
+		return
+	cam_center = at
 	_clamp_camera()
+
+
+## The avatar camera sets out for `at` (or for the avatar, whoever and wherever they are by the time it gets there): eased, over a few
+## tenths of a second, a little longer for a longer way.
+func _glide_to(at: Vector2, to_avatar: bool) -> void:
+	cam_glide_from = cam_center
+	cam_glide_to = at
+	cam_glide_avatar = to_avatar
+	cam_glide_t = 0.0
+	cam_glide_s = clampf(CAM_GLIDE_MIN + cam_center.distance_to(at) * CAM_GLIDE_PER_TILE, CAM_GLIDE_MIN, CAM_GLIDE_MAX)
 
 
 func view_rect() -> Rect2:
@@ -664,7 +695,7 @@ func _allows(kind: String, arg = null) -> bool:
 	return coach.allows(kind, arg)
 
 
-## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs, build), told
+## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs, build, and in avatar mode reload and melee), told
 ## to the coach so the lesson's conditions can use it.
 func _did(kind: String, arg = null) -> void:
 	if coach != null:
@@ -1215,6 +1246,10 @@ func _notification(what: int) -> void:
 	# (a window that lost the focus under a held button never sees the release)
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		firing = false
+	elif what == NOTIFICATION_WM_MOUSE_EXIT:
+		# the pointer has left the window: nowhere (no crosshair, no lean; the aim stays where it was), as the place does
+		mouse_screen = Vector2(-1.0, -1.0)
+		over_hud = false
 	elif what == NOTIFICATION_EXIT_TREE:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
@@ -1320,15 +1355,15 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_R:
 				# the avatar's reload; the old yard's draft order
 				if avatar:
-					if not hud.modal_open():
-						sim.avatar.reload()
+					if not hud.modal_open() and sim.avatar.reload():
+						_did("reload")
 				else:
 					_gizmo("draft")
 			KEY_F:
 				# the avatar's melee swing; the old yard's repair order
 				if avatar:
-					if not hud.modal_open():
-						sim.avatar.melee()
+					if not hud.modal_open() and sim.avatar.melee():
+						_did("melee")
 				else:
 					_gizmo("repair")
 			KEY_P:
@@ -1351,7 +1386,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_L:
 				# the alarm: on a wall section that is picked, as ever; with an avatar it is the call to arms
 				if avatar and (selection == null or selection.kind != "segment"):
-					sim.radio.alarm(not sim.radio.alarm_on)
+					if _allows("alarm"):
+						sim.radio.alarm(not sim.radio.alarm_on)
 				else:
 					_gizmo("lure")
 			KEY_B:
@@ -1372,9 +1408,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_quick_load()
 			KEY_TAB:
 				# Tab goes round the people who are here and alive: not the lost, not those away
+				# (and in avatar mode not the one you are: they cannot be asked, and selecting them shows nothing)
 				var here: Array = []
 				for q in sim.people:
-					if not q.dead and q.away == null:
+					if not q.dead and q.away == null and not (avatar_mode and q.player):
 						here.append(q)
 				if not here.is_empty():
 					var i: int = here.find(selection.ref) if selection != null and selection.kind == "person" else -1
@@ -1424,6 +1461,7 @@ func _process(delta: float) -> void:
 			_avatar_camera(dt)
 		_update_pointer()
 	else:
+		cam_pad = 0.0
 		# (Ctrl or Cmd with a letter is a command, not the camera's key)
 		var cmd := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
 		var kx := int((Input.is_key_pressed(KEY_D) and not cmd) or Input.is_key_pressed(KEY_RIGHT)) - int((Input.is_key_pressed(KEY_A) and not cmd) or Input.is_key_pressed(KEY_LEFT))
@@ -1493,14 +1531,17 @@ func _shot_frame() -> void:
 # ----------------------------------------------------------------- avatar --
 # The player's hands, the camera and the pointer in avatar mode (round 17; the rules are scripts/sim/avatar.gd's).
 
-## Whether a run of these user arguments is played by an avatar: not the title's yard, not Orientation Day, not `--noavatar`;
-## else the run's own word (`"avatar"`: a test asks for it) or, with none, whether this is the real game's scene (`real`: a test's
+## Whether a run of these user arguments is played by an avatar: not the title's yard, not `--noavatar`; Orientation Day is the
+## avatar's lesson in the real game (its choice says so: the title's button and the wrap-up's Replay) and, like any run, the
+## run's own word (`"avatar"`: a test asks for it) or, with none, whether this is the real game's scene (`real`: a test's
 ## and a screenshot's helper scenes are not the current scene of the tree) and not a loaded save (those are the caller's). A full
 ## crew (`crew` 6, the old schoolyard: no recruits, no town to go to) plays as before, with no avatar, unless the run says so
 ## itself: an avatar that can never leave the base is not a game; `crew` 0 is not named (the caller does not say).
 static func wants_avatar(args: Array, run: Dictionary, title: bool, tutorial_run: bool, real: bool, crew: int = 0) -> bool:
-	if title or tutorial_run or "--noavatar" in args:
+	if title or "--noavatar" in args:
 		return false
+	if tutorial_run:
+		return bool(run.get("avatar", real))
 	if not run.has("avatar") and crew >= 6:
 		return false
 	return bool(run.get("avatar", real))
@@ -1554,7 +1595,8 @@ func _feed_avatar() -> void:
 		firing = false
 		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
 		return
-	sim.avatar.set_input(_walk_keys(), aim_tile(), firing)
+	# (a pointer that is not in the window aims nowhere new: the aim stays where it was)
+	sim.avatar.set_input(_walk_keys(), aim_tile() if _pointer_in_window() else me.input_aim, firing)
 
 
 ## The camera of avatar mode: it follows the avatar, eased, and leans toward the pointer (up to CAM_LEAD tiles); for CAM_HOLD
@@ -1563,17 +1605,69 @@ func _avatar_camera(dt: float) -> void:
 	var me = sim.avatar.player()
 	if me == null:
 		return
+	# (the dock must not hide the avatar: with a contact selected the camera is held down by as much as it needs, and the map's foot
+	# may come up that far)
+	var off_px := _dock_offset_px()
+	cam_pad = off_px / zoom_px
+	var goal_at: Vector2 = view_pos(me)
+	var lead := Vector2.ZERO
+	if _pointer_in_window():
+		lead = (mouse_screen - _vp() / 2.0) / zoom_px * CAM_LEAD_K
+		if lead.length() > CAM_LEAD:
+			lead = lead.normalized() * CAM_LEAD
+	var goal := goal_at + lead + Vector2(0.0, cam_pad)
 	if cam_hold > 0.0:
 		cam_hold = maxf(0.0, cam_hold - dt)
-		if follow != null:
+		if cam_glide_s > 0.0:
+			_glide_step(dt, goal)
+		elif follow != null:
 			cam_center += (Vector2(follow.x, follow.y) - cam_center) * minf(1.0, dt * 5.0)
 		if cam_hold <= 0.0:
 			follow = null
 		return
-	var lead := (mouse_screen - _vp() / 2.0) / zoom_px * CAM_LEAD_K
-	if lead.length() > CAM_LEAD:
-		lead = lead.normalized() * CAM_LEAD
-	cam_center += (view_pos(me) + lead - cam_center) * (1.0 - exp(-CAM_EASE * dt))
+	if cam_glide_s > 0.0:
+		_glide_step(dt, goal)
+		return
+	cam_center += (goal - cam_center) * (1.0 - exp(-CAM_EASE * dt))
+
+
+## One frame of a glide: the camera is `cam_glide_t` of the way along an ease from where it set out to where it goes (the avatar's own
+## place, `avatar_goal`, when it goes to them; the person it follows, if it follows one).
+func _glide_step(dt: float, avatar_goal: Vector2) -> void:
+	cam_glide_t += dt
+	var k := clampf(cam_glide_t / cam_glide_s, 0.0, 1.0)
+	var e := k * k * (3.0 - 2.0 * k)
+	var goal := cam_glide_to
+	if cam_glide_avatar:
+		goal = avatar_goal
+	elif follow != null:
+		goal = Vector2(follow.x, follow.y)
+	cam_center = cam_glide_from.lerp(goal, e)
+	if k >= 1.0:
+		cam_glide_s = 0.0
+
+
+## The pointer is in the window (it is nowhere after it has left: `NOTIFICATION_WM_MOUSE_EXIT`).
+func _pointer_in_window() -> bool:
+	return mouse_screen.x >= 0.0 and mouse_screen.y >= 0.0
+
+
+## How far down (pixels) the camera is held so that the dock (the selected contact's panel and verbs, at the foot of the window) does not
+## hide the avatar, who is in the middle: as far as takes their feet and name clear of its top edge, never more than half of what it
+## takes of the window's height; nothing when the dock is not under them (a window wide enough has the room beside it).
+func _dock_offset_px() -> float:
+	if hud == null or not hud.has_method("dock_rect"):
+		return 0.0
+	var dock: Rect2 = hud.dock_rect()
+	if dock.size == Vector2.ZERO:
+		return 0.0
+	var vp := _vp()
+	var c := vp / 2.0
+	var half_w := 0.6 * zoom_px + 18.0
+	if c.x + half_w < dock.position.x or c.x - half_w > dock.end.x:
+		return 0.0
+	var need := c.y + 0.42 * zoom_px + 22.0 - dock.position.y + 10.0
+	return clampf(need, 0.0, (vp.y - dock.position.y) * 0.5)
 
 
 ## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow; over the HUD, a menu or
@@ -1609,8 +1703,7 @@ func _on_succession(e: Dictionary) -> void:
 	if to == null:
 		return
 	if not title_mode:
-		cam_center = Vector2(to.x, to.y)
-		_clamp_camera()
+		_glide_to(Vector2(to.x, to.y), true)
 	hud.show_banner("%s leads now" % to.first, "%s is gone" % from.first if from != null else "")
 
 
@@ -1769,6 +1862,9 @@ func _handle_events() -> void:
 				sound.play("stab")
 			"thud":
 				sound.play("thud", _vol_at(e.x, e.y))
+			"blocked_shot":
+				# the trigger was pulled against the face of a walkway: a dry click (the menus' own click, quietly)
+				sound.ui("ui_click", 0.45)
 			"banner":
 				if not (season_turned and String(e.text).begins_with("Day ")):
 					hud.show_banner(e.text, e.sub)
@@ -1819,7 +1915,7 @@ func _autosave() -> void:
 ## that cannot be lost) with a coach teaching it. The title's Orientation Day button and the
 ## wrap-up's Replay call this.
 func start_tutorial() -> void:
-	_begin({"tutorial": true})
+	_begin({"tutorial": true, "avatar": true})
 
 
 ## The tips of a normal run, over the HUD (none in the tutorial, on the title or in a screenshot).
@@ -1836,7 +1932,7 @@ func _start_hints() -> void:
 func _build_coach() -> void:
 	coach = Coach.new()
 	add_child(coach)
-	coach.setup(self, hud, sim, Coach.load_steps())
+	coach.setup(self, hud, sim, Coach.load_steps(Coach.steps_path(avatar_mode)))
 	coach.begin(tutorial_step)
 
 

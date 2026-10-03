@@ -24,7 +24,7 @@
 
 ### Controls in avatar mode (yard and places)
 
-WASD move; the mouse aims; left button held fires; R reloads; F swings the melee; Space pauses as now; Esc the menu; wheel zooms; the camera follows the avatar. **Removed:** box select and groups, left-drag/middle-drag/WASD panning, right-click orders, the order keys (R draft, P post, F repair, C follow, T, X, B, M as hotkeys), the HUD's selection strip. **Kept:** J (Duty roster), N (Build), G (the map: the Town Board, becoming a page of the radio panel), L (alarm becomes "call to arms" in slice 2; for now the alarm as it is), V (fields of fire), and clicking a crew card to look at a person. Without avatar mode (Orientation Day, tests) the old yard controls stay, minus box select.
+WASD move; the mouse aims; left button held fires; R reloads; F swings the melee; Space pauses as now; Esc the menu; wheel zooms; the camera follows the avatar. **Removed:** box select and groups, left-drag/middle-drag/WASD panning, right-click orders, the order keys (R draft, P post, F repair, C follow, T, X, B, M as hotkeys), the HUD's selection strip. **Kept:** J (Duty roster), N (Build), G (the map: the Town Board, becoming a page of the radio panel), L (alarm becomes "call to arms" in slice 2; for now the alarm as it is), V (fields of fire), and clicking a crew card to look at a person. Without avatar mode (`--noavatar`, tests) the old yard controls stay, minus box select. Orientation Day is taught in avatar mode (fixer T, round 17: `assets/data/tutorial.json`; the old yard's lesson is `tutorial_classic.json`, played with `--noavatar`).
 
 ### The simulation (S1.1 AVATAR, S1.2 RADIO, S1.3 CONTINUITY)
 
