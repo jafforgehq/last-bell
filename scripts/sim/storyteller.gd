@@ -1026,7 +1026,7 @@ func _fx_party(spec, ctx: Dictionary, out: Dictionary) -> void:
 		out.say.append(String(spec.get("none", "Nobody could be spared, and by evening the crate was gone.")))
 		return
 	sim.scavenge.errands[String(site.id)] = site
-	if not sim.scavenge.send(crew, String(site.id)):
+	if not sim.scavenge.send(crew, String(site.id), "loot", "", false):    # (a card's party, not an errand the player asked for)
 		sim.scavenge.errands.erase(String(site.id))
 		out.say.append(String(spec.get("blocked", "The road was not clear, so nobody went.")))
 		return

@@ -593,12 +593,12 @@ func test_the_errand_takes_people_off_their_stance_and_pending_verbs() -> void:
 
 
 func test_a_second_errand_for_the_same_person_replaces_the_first() -> void:
-	var g := _game()
+	var g := _town()    # (two parties may be out: the classic start's one would refuse the second errand at the asking)
 	var sim = g.sim
-	sim.radio.request_errand([_p(sim, "dez"), _p(sim, "walt")], "houses")
-	sim.radio.request_errand([_p(sim, "dez")], "pharmacy")
+	check(sim.radio.request_errand([_p(sim, "dez"), _p(sim, "marcus")], "houses").ok, "the first is asked")
+	check(sim.radio.request_errand([_p(sim, "dez")], "pharmacy").ok, "and the second")
 	eq(sim.radio.errand_wait.size(), 2, "two entries")
-	eq(sim.radio.errand_wait[0].ids, ["walt"], "Dez is taken out of the first")
+	eq(sim.radio.errand_wait[0].ids, ["marcus"], "Dez is taken out of the first")
 	eq(sim.radio.errand_wait[1].ids, ["dez"], "and is in the second")
 	_free(g)
 
@@ -619,7 +619,9 @@ func test_the_errand_wait_survives_a_save_and_a_bad_entry_is_dropped() -> void:
 	var sim = a.sim
 	var r: Dictionary = sim.radio.request_errand([_p(sim, "dez"), _p(sim, "walt")], "houses", "loot")
 	check(r.ok, "an errand waits")
-	check(sim.radio.request_errand([_p(sim, "hector")], "pharmacy", "loot").ok, "a second errand waits too")
+	# (the classic start's one party refuses a second errand at the asking: the entry is put in by hand, as a game with two parties would have it)
+	check(not sim.radio.request_errand([_p(sim, "hector")], "pharmacy", "loot").ok, "a second errand is refused at the asking in the classic start")
+	sim.radio.errand_wait.append({"ids": ["hector"], "place": "pharmacy", "action": "loot", "vehicle": "", "left": 2.0})
 	var d := SaveGame.to_dict(sim)
 	var saved: Dictionary = d.modules.radio
 	check(saved.has("errand_wait"), "the radio saves it")

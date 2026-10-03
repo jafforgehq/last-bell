@@ -829,15 +829,16 @@ func _why_not_played(s: Dictionary) -> String:
 
 
 ## The chance that this party clears this place, as the rules throw it (scavenge.gd's `_decide_town`: 0.35 plus
-## 0.08 for each point of Shooting, less 0.12 for each point of danger and nest, kept between 0.1 and 0.95).
-func clear_chance(people: Array, id: String) -> float:
+## 0.08 for each point of Shooting, less 0.12 for each point of danger and nest, kept between 0.1 and 0.95). `errand`: the party goes
+## without the player (the dice's trip in avatar mode: Clear), which is `scavenge.ERRAND_CLEAR` worse.
+func clear_chance(people: Array, id: String, errand: bool = false) -> float:
 	var shooting := 0.0
 	for p in people:
 		shooting += float(p.skills.get("Shooting", 0))
 	var cleared: bool = town.state_of(id) == "cleared"
 	var danger := 0 if cleared else int(town.place(id).get("danger", 0))
 	var nest := 0 if cleared else int(town.nest_strength(id))
-	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest), 0.1, 0.95)
+	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (float(scav.ERRAND_CLEAR) if errand else 0.0), 0.1, 0.95)
 
 
 ## "likely", "a risk" or "unlikely".
@@ -1738,7 +1739,8 @@ func _action_tip(action: String, s: Dictionary) -> String:
 		"play":
 			return "Play the trip yourself: your squad goes in and you give the orders. Search what you can, shoot what you must, and get out."
 		"clear":
-			var chance := clear_chance(party, site_id)
+			# (in avatar mode Clear sends the party without the player: an errand, whose chance is worse)
+			var chance := clear_chance(party, site_id, avatar() != null)
 			return "Turn the dead out of %s (and end its nest, if it has one): %s, %s. A failed attempt hurts." % [where, chance_words(chance), Map.hours_text(scav.action_hours(site_id, "clear", vehicle_id))]
 		"claim":
 			return "Make %s your outpost: %d scrap now, then %s a day." % [where, int(s.get("outpost", {}).get("cost", 0)), _yield_text(s.get("outpost", {}).get("yield", {}))]

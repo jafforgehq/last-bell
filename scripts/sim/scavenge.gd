@@ -331,9 +331,9 @@ func available_sites() -> Array:
 
 ## Sends the survivors (Person objects, one or two) to the site (its id). True
 ## if it went. The party's result is decided here.
-func send(people: Array, site_id: String, action: String = "loot", vehicle_id: String = "") -> bool:
+func send(people: Array, site_id: String, action: String = "loot", vehicle_id: String = "", asked: bool = true) -> bool:
 	if town_mode and not errands.has(site_id):
-		return _send_town(people, site_id, action, vehicle_id)
+		return _send_town(people, site_id, action, vehicle_id, {}, asked)
 	if not (can_send() or _errand_ok(site_id)):
 		return false
 	if people.is_empty() or people.size() > MAX_PARTY:
@@ -356,6 +356,8 @@ func send(people: Array, site_id: String, action: String = "loot", vehicle_id: S
 		"return_at": snappedf(sim.clock_min + (RETURN_H * 60.0 - sim.minutes), 1.0),
 		"result": {},
 	}
+	if not asked:
+		party["card"] = true
 	for p in people:
 		p.drafted = false
 		p.order = null
@@ -463,7 +465,7 @@ func loot_scale(site_id: String, people: Array) -> float:
 
 ## Whether a party the dice decide is an errand (see the header): there is an avatar and the player is not along.
 func is_errand(party) -> bool:
-	return String(sim.player_id) != "" and not bool(party.get("played", false))
+	return String(sim.player_id) != "" and not bool(party.get("played", false)) and not bool(party.get("card", false))
 
 
 ## What an errand does worse, for the Map page's note and the radio's `errand_willingness`: the numbers of the constants.
@@ -1413,10 +1415,12 @@ func _open_party(people: Array, site_id: String, action: String, vehicle_id: Str
 	return party
 
 
-func _send_town(people: Array, site_id: String, action: String, vehicle_id: String = "", played: Dictionary = {}) -> bool:
+func _send_town(people: Array, site_id: String, action: String, vehicle_id: String = "", played: Dictionary = {}, asked: bool = true) -> bool:
 	if _why_not_town(people, site_id, action, vehicle_id, not played.is_empty()) != "":
 		return false
 	var party := _open_party(people, site_id, action, vehicle_id)
+	if not asked:
+		party["card"] = true
 	if played.is_empty():
 		party.result = _decide(party)
 	else:

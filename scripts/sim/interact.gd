@@ -290,8 +290,12 @@ func talk_to(p) -> Dictionary:
 	var gain := 0.0
 	if int(talked.get(id, 0)) != int(sim.day):
 		talked[id] = int(sim.day)
-		gain = TALK_TRUST
-		sim.radio.add_trust(p, TALK_TRUST, "Had a word with you")
+		# (what trust can still rise by: at 100 the word earns nothing, and says so)
+		gain = minf(TALK_TRUST, 100.0 - float(p.trust))
+		if gain > 0.0:
+			sim.radio.add_trust(p, gain, "Had a word with you")
+		else:
+			gain = 0.0
 	if lead != null and not p.moving:
 		var to := Vector2(lead.x - p.x, lead.y - p.y)
 		if to.length() > 0.05:

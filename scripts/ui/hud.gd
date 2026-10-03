@@ -545,6 +545,9 @@ var hint: PanelContainer
 ## magazine's, but never more than the stores hold, as shots come from them; amber while the magazine is low or the stores cannot fill
 ## it, red when they are dry) and a bar (`ammo_bar`, the reload while the gun is being reloaded, else how full the magazine is).
 var avatar_ui := false
+## Orientation Day (main.gd sets it before `set_avatar`): the lessons teach the modal pages, locked by the coach, so the radio panel has
+## the News page only and the toolbar's tips are the plain ones (`panel_ui`).
+var tutorial_ui := false
 var ammo_panel: PanelContainer
 var ammo_label: Label
 var ammo_name: Label
@@ -2218,10 +2221,11 @@ func _job_tag() -> PanelContainer:
 
 func _on_job_tag_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		_press_jobs()
-		# (in avatar mode the radio panel's Jobs page is what opens: it finds the person's row)
-		if radio_page() == "jobs" and selection != null and selection.kind == "person":
-			radio_panel.page_node("jobs").focus_on(String(selection.ref.id))
+		if panel_ui() and selection != null and selection.kind == "person":
+			# (in avatar mode the radio panel's Jobs page is what opens, on their row; the click never shuts it)
+			open_radio("jobs", {"focus": String(selection.ref.id)})
+		else:
+			_press_jobs()
 		accept_event()
 
 
@@ -2721,6 +2725,11 @@ func _spacer_fixed(w: int) -> Control:
 	return c
 
 
+## Whether the colony's interface is the radio panel (avatar mode, outside Orientation Day), else the modal pages.
+func panel_ui() -> bool:
+	return avatar_ui and not tutorial_ui
+
+
 ## Avatar mode on or off (main.gd says so at the start of a run; the HUD also notices it from the sim at each update): the
 ## controls help and the hint are rewritten, the readout of the gun is shown or hidden and the cards say who is YOU.
 func set_avatar(on: bool) -> void:
@@ -2948,6 +2957,7 @@ func _layout_toast() -> void:
 	if radio_open():
 		var room_to := size.x - 12.0 - _radio_panel_width() - 8.0
 		shift = minf(0.0, room_to - half - size.x * 0.5)
+		shift = maxf(shift, minf(0.0, 12.0 + half - size.x * 0.5))    # (and not off the left edge of a narrow window)
 	if inspect != null and inspect.visible:
 		shift = maxf(shift, 12.0 + _radio_dock_width() + 8.0 + half - size.x * 0.5)
 		shift = minf(shift, maxf(0.0, size.x * 0.5 - 12.0 - half))
@@ -3631,7 +3641,7 @@ func _sync_town(sim) -> void:
 		town_button.visible = on
 		_layout_dock.call_deferred()
 	if help_g != null:
-		var word := ("Map" if avatar_ui else "Town Board") if on else "Scavenge"
+		var word := ("Map" if panel_ui() else "Town Board") if on else "Scavenge"
 		if help_g.text != word:
 			help_g.text = word
 		var g_tip := HELP_G_TOWN_TIP if on else ""
@@ -3644,7 +3654,7 @@ func _sync_town(sim) -> void:
 func _sync_lots(sim) -> void:
 	var on: bool = sim.get("lots") != null and sim.lots.on
 	if build_button != null:
-		var tip := (BUILD_LOTS_TIP_AVATAR if avatar_ui else BUILD_LOTS_TIP) if on else (BUILD_TIP_AVATAR if avatar_ui else BUILD_TIP)
+		var tip := (BUILD_LOTS_TIP_AVATAR if panel_ui() else BUILD_LOTS_TIP) if on else (BUILD_TIP_AVATAR if panel_ui() else BUILD_TIP)
 		if build_button.tooltip_text != tip:
 			build_button.tooltip_text = tip
 	if help_n != null:
@@ -4265,8 +4275,8 @@ func _apply_radio_mode(on: bool) -> void:
 		return
 	news_button.visible = on
 	alarm_button.visible = on
-	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on else JOBS_TIP
-	town_button.tooltip_text = TOWN_TIP_AVATAR if on else TOWN_TIP
+	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on and not tutorial_ui else JOBS_TIP
+	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
 	if not on:
 		radio_panel.close()
 		_news_cap = -1
