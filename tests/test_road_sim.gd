@@ -7,7 +7,7 @@ const Helpers := preload("res://tests/helpers.gd")
 const Town := preload("res://scripts/sim/town.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
-const FIXTURE := "user://test_r21_events_town.json"
+const FIXTURE := "user://test_r21_sim_town.json"
 const STEP := 1.0 / 30.0
 
 ## Home is at (50, 35). The houses are an hour away on foot; the garage holds a pickup; the city is across the river.

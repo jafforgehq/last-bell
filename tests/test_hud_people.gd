@@ -336,10 +336,11 @@ func test_the_skills_never_read_the_roster_when_the_person_has_their_own() -> vo
 	var ctx := Kit.build()
 	var dez = _open(ctx, "dez")
 	dez.skills["Building"] = 10
+	var roster_had = dez.def.skills["Building"]    # (the roster is the map's own data, shared by every game: put it back as it was)
 	dez.def.skills["Building"] = 3
 	Kit.update(ctx)
 	eq(_refs(ctx).skills.Building.value.text, "10", "the person's own copy")
-	dez.def.skills["Building"] = 9
+	dez.def.skills["Building"] = roster_had
 	Kit.free_all(ctx)
 
 

@@ -9,6 +9,7 @@ const Sim := preload("res://scripts/sim/sim.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 
 
 ## {"sim", "world", "data", "scenario"}: Orientation Day, begun (day 1, 07:00, Story, its
@@ -84,9 +85,10 @@ static func use_test_prefs() -> void:
 	Prefs.reset()
 
 
-## Puts the preferences back where they belong.
+## Puts the preferences back where the test run keeps them: the test run's own file (run.gd points `Prefs` at it for the whole run),
+## never the player's (`Prefs.DEFAULT_PATH`: a later test that saved a setting would write it).
 static func restore_prefs() -> void:
-	Prefs.path = Prefs.DEFAULT_PATH
+	Prefs.path = "user://prefs_test.cfg"
 	Prefs.forget()
 
 
@@ -147,6 +149,10 @@ static func leave(main: Node, keep_save: bool = false) -> void:
 	win.size = _window.size
 	win.position = _window.position
 	restore_prefs()
+	# the live drive's switches (a test turns one off to keep the overlay's road): as the game has them
+	PlaceFlow.live_enabled = true
+	PlaceFlow.fast_road = false
+	PlaceFlow.no_events = false
 	if _tutorial_save != "" and not keep_save and FileAccess.file_exists(_tutorial_save):
 		OS.move_to_trash(ProjectSettings.globalize_path(_tutorial_save))
 	if not keep_save:

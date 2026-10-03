@@ -1038,8 +1038,12 @@ func test_build_willingness_says_what_it_needs() -> void:
 	eq(String(poor.why), "it needs 30 scrap", "in the build module's words")
 	eq(String(poor.why), String(sim.build.why_not_build("workshop")), "which are its")
 	sim.stock.scrap = 100.0
-	sim.build.building("watchtower")["requires"] = "workshop"
+	# the catalogue is shared by every game of the process (build.gd's cache): the made-up rule is put back at once
+	var tower: Dictionary = sim.build.building("watchtower")
+	var had_requires = tower["requires"]
+	tower["requires"] = "workshop"
 	var needs: Dictionary = sim.radio.build_willingness("watchtower")
+	tower["requires"] = had_requires
 	eq(String(needs.why), "it needs the workshop first", "a prerequisite")
 	var nothing: Dictionary = sim.radio.build_willingness("nowhere")
 	check(not nothing.ok and String(nothing.why) == "there is no such building", "an unknown building: %s" % str(nothing))
