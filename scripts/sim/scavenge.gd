@@ -86,6 +86,15 @@
 ## The played result (`RaidRun.result()`, in the dice's shape: loot, hurt, lost, clear, rescue, beats, ammo_used) has two keys
 ## more for this: `hp` {person id: health (0 to 100) they have when they leave the place} and `skills` {person id: {skill:
 ## points gained there}}. Both are applied at the finish to those who come home (a missing key changes nothing).
+##
+## THE LIVE ROAD (round 21, "the live drive"). A trip the player leads in avatar mode drives its road home in a scene instead of
+## the abstract travel: `hold_on_road(party, true)` keeps the party from being due while the scene plays that road (the flag
+## `road_live` is not saved: a load falls back to the abstract return); `amend_result(party, d)` merges what the road found
+## ({hurt, lost, loot, hp, morale, road_survivors, road, beats}) into the settled result, sanitised as the place's result is;
+## `arrive_home(party)` ends the road: the party is due at once, night or not (`night_ok`, saved), and comes in at the gate as any
+## trip does. `result.road_survivors` (a whole number) are the survivors the squad took in on the road: they join the crew as a
+## rescue does (`recruits.rescue_home("road")`), the ones with no bed stay callers and an alert says so. A vehicle wrecked on the
+## road (`vehicles.wreck`) turns its party into a party on foot.
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
@@ -150,6 +159,11 @@ const STATES := ["out", "driving_out", "away", "driving_in", "unloading", "in_pl
 const IN_PLACE := "in_place"
 ## The most health a person may come home with from a played trip.
 const PLAYED_HP_MAX := 100.0
+## The live road (round 21): the most survivors a trip may take in on its road, the most its mood may move (as the dice's beats),
+## and the most lines of the road a result keeps.
+const MAX_ROAD_SURVIVORS := 6
+const MAX_ROAD_MORALE := 8.0
+const MAX_ROAD_LINES := 6
 const AWAY_COLOR := Color("#7fa6c9")
 ## How long the departure and return alerts stay up (seconds of rules time).
 const DEPART_ALERT_TTL := 10.0
@@ -433,6 +447,8 @@ func save() -> Dictionary:
 		}
 		if bool(party.get("played", false)):
 			entry["played"] = true
+		if bool(party.get("night_ok", false)):
+			entry["night_ok"] = true
 		if _by_car(party):
 			entry["seats"] = (party.get("seats", {}) as Dictionary).duplicate()
 			entry["doors"] = _copy_doors(party.get("doors", []))
@@ -500,6 +516,8 @@ func _restore_party(entry: Dictionary) -> void:
 		party["vehicle"] = String(entry.vehicle)
 	if bool(entry.get("played", false)):
 		party["played"] = true
+	if bool(entry.get("night_ok", false)):
+		party["night_ok"] = true
 	if not STATES.has(String(party.state)) or (not _by_car(party) and not ["out", "away", IN_PLACE].has(String(party.state))):
 		party["state"] = "away"    # (a state this version does not know, or a car's state for a party on foot)
 	if String(party.state) == IN_PLACE:
@@ -550,6 +568,14 @@ func _copy_result(raw) -> Dictionary:
 			out["morale"] = float(raw.morale)
 		if String(raw.get("vehicle", "")) != "":
 			out["vehicle"] = String(raw.vehicle)
+		if _is_number(raw.get("road_survivors", 0)) and int(raw.get("road_survivors", 0)) > 0:
+			out["road_survivors"] = int(raw.road_survivors)
+		var road_lines = raw.get("road", [])
+		if road_lines is Array and not road_lines.is_empty():
+			var texts: Array = []
+			for v in road_lines:
+				texts.append(String(v))
+			out["road"] = texts
 	return out
 
 
@@ -929,6 +955,10 @@ static func _clock_text(h: float) -> String:
 
 
 func _is_due(party: Dictionary) -> bool:
+	if bool(party.get("road_live", false)):
+		return false    # (the player is driving the road home: the scene says when they are at the gate, `arrive_home`)
+	if bool(party.get("night_ok", false)):
+		return sim.clock_min >= float(party.return_at)    # (the player brought them to the gate: by day or by night)
 	if town_mode and not errands.has(String(party.site)):
 		return sim.clock_min >= float(party.return_at) and sim.phase == "day"    # (a party may be out overnight; it comes in by day)
 	return sim.clock_min >= float(party.return_at) or sim.phase != "day"
@@ -1094,6 +1124,12 @@ func _news(party: Dictionary, came: Array) -> String:
 		shown.append(String(sim.town.place(String(pid)).get("name", pid)))
 	if not shown.is_empty():
 		parts.append("%s %s on the map now." % [_join(shown), "is" if shown.size() == 1 else "are"])
+	# what the live road held (round 21)
+	var on_the_road := _whole(result.get("road_survivors", 0), 0, MAX_ROAD_SURVIVORS)
+	if on_the_road > 0:
+		parts.append(("A survivor joined them on the road." if on_the_road == 1 else "%d survivors joined them on the road." % on_the_road))
+	for line in _lines_of(result.get("road", [])).slice(0, 2):
+		parts.append(String(line))
 	if String(party.get("action", "loot")) == "clear":
 		var name := String(sim.town.place(String(party.site)).get("name", "the place"))
 		parts.append("%s is cleared." % name if bool(result.get("clear", false)) else "They could not turn the dead out of %s." % name)
@@ -1365,6 +1401,99 @@ func finish_played(party_or_id, result: Dictionary = {}) -> void:
 		_drop_party(party)
 
 
+## The player drives the road home in a scene (round 21): while this is on the party is never due, so the abstract return does not
+## bring it in early or late; the scene ends it with `arrive_home`. Not saved (a load falls back to the abstract return).
+func hold_on_road(party_or_id, on: bool) -> void:
+	var party := _party_by(party_or_id)
+	if party.is_empty():
+		return
+	if on:
+		party["road_live"] = true
+	else:
+		party.erase("road_live")
+
+
+## What the road home found, put into the settled result of a played party that is on its way home (`d`: the dice's shape, {hurt,
+## lost, loot}, and `hp`, `morale`, `road_survivors`, `road`, `beats`: every key optional). Sanitised as `_played_result` does it:
+## only members can be hurt or lost (a bite is worse than a scratch and stays), only real stocks come home, a stock of the
+## road and the place together never passes PLAYED_LOOT_MAX. The people lost are dead when the party gets in (`_come_back`). A
+## party that is not played, is still in its place (no result yet) or is not found is left alone.
+func amend_result(party_or_id, d: Dictionary) -> void:
+	var party := _party_by(party_or_id)
+	if party.is_empty() or not bool(party.get("played", false)) or String(party.state) == IN_PLACE or d.is_empty():
+		return
+	var people: Array = []
+	var members_ids: Array = []
+	for id in party.members:
+		var p = _person(String(id))
+		if p != null:
+			people.append(p)
+			members_ids.append(String(p.id))
+	var result: Dictionary = party.result
+	var found_loot = d.get("loot", {})
+	if found_loot is Dictionary:
+		var loot: Dictionary = result.get("loot", {})
+		for k in STOCKS:
+			if found_loot.has(k) and _is_number(found_loot[k]) and int(found_loot[k]) > 0:
+				loot[k] = mini(int(loot.get(k, 0)) + mini(int(found_loot[k]), PLAYED_LOOT_MAX), PLAYED_LOOT_MAX)
+		result["loot"] = loot
+	var found_hurt = d.get("hurt", {})
+	if found_hurt is Dictionary:
+		var hurt: Dictionary = result.get("hurt", {})
+		for pid in found_hurt:
+			if members_ids.has(String(pid)) and String(hurt.get(String(pid), "")) != "bite":
+				hurt[String(pid)] = "bite" if String(found_hurt[pid]) != "scratch" else "scratch"
+		result["hurt"] = hurt
+	var found_lost = d.get("lost", [])
+	if found_lost is Array:
+		var lost: Array = result.get("lost", [])
+		for pid in found_lost:
+			if members_ids.has(String(pid)) and not lost.has(String(pid)):
+				lost.append(String(pid))
+		result["lost"] = lost
+	_apply_played_state(people, d, result)
+	if _is_number(d.get("morale", 0.0)) and float(d.get("morale", 0.0)) != 0.0:
+		result["morale"] = clampf(float(result.get("morale", 0.0)) + float(d.morale), -MAX_ROAD_MORALE, MAX_ROAD_MORALE)
+	var more := _whole(d.get("road_survivors", 0), 0, MAX_ROAD_SURVIVORS)
+	if more > 0:
+		result["road_survivors"] = mini(_whole(result.get("road_survivors", 0), 0, MAX_ROAD_SURVIVORS) + more, MAX_ROAD_SURVIVORS)
+	for key in ["road", "beats"]:
+		var add := _lines_of(d.get(key, []))
+		if not add.is_empty():
+			var all: Array = (result.get(key, []) as Array).duplicate()
+			all.append_array(add)
+			result[key] = all.slice(maxi(0, all.size() - MAX_ROAD_LINES))
+
+
+## The party is at the gate (the scene's road home is over): it is due at once, by day or by night (the player brought them,
+## `night_ok`: the gate is still only a picture), and comes in as any trip does (a car drives in and parks, a party on foot walks
+## in). The road is no longer held.
+func arrive_home(party_or_id) -> void:
+	var party := _party_by(party_or_id)
+	if party.is_empty():
+		return
+	party.erase("road_live")
+	if String(party.state) == IN_PLACE:
+		return    # (still in the place: there is no road to have come home by)
+	party["return_at"] = floorf(float(sim.clock_min))
+	party["night_ok"] = true
+
+
+static func _whole(v, lo: int, hi: int) -> int:
+	return clampi(int(v), lo, hi) if _is_number(v) else lo
+
+
+## Up to MAX_ROAD_LINES lines of text (a list of anything: each is a string, none empty).
+static func _lines_of(raw) -> Array:
+	var out: Array = []
+	if raw is Array:
+		for v in raw:
+			var s := String(v).strip_edges()
+			if s != "" and out.size() < MAX_ROAD_LINES:
+				out.append(s)
+	return out
+
+
 ## Settles the end of a party's time in a place: puts the sanitised result in, applies what the place did to the members,
 ## and sets the party on the road home. False if the party is done with (nobody of it is coming home: it is told and
 ## the vehicle dealt with at once), so that the caller takes it out of `parties`.
@@ -1471,6 +1600,15 @@ func _played_result(played: Dictionary, party: Dictionary, people: Array) -> Dic
 		beats.append(String(b))
 	if not beats.is_empty():
 		result["beats"] = beats
+	# what the road there held (the live drive, round 21; a place's own result has none of these)
+	var road_survivors := _whole(played.get("road_survivors", 0), 0, MAX_ROAD_SURVIVORS)
+	if road_survivors > 0:
+		result["road_survivors"] = road_survivors
+	if _is_number(played.get("morale", 0.0)) and float(played.get("morale", 0.0)) != 0.0:
+		result["morale"] = clampf(float(played.morale), -MAX_ROAD_MORALE, MAX_ROAD_MORALE)
+	var road_lines := _lines_of(played.get("road", []))
+	if not road_lines.is_empty():
+		result["road"] = road_lines
 	var place: Dictionary = sim.town.place(id)
 	if not played.is_empty() and String(place.get("vehicle", "")) != "" and not bool(sim.town.state.get(id, {}).get("vehicle_taken", false)) and lost.size() < people.size() and (String(party.get("action", "loot")) == "loot" or bool(played.get("clear", false))):
 		var building_total := 0.0
@@ -1508,6 +1646,12 @@ func _town_return(party: Dictionary, came: Array) -> void:
 			sim.morale.shock(p, morale, "On the road")
 	if bool(result.get("rescue", false)) and not bool(sim.town.state.get(id, {}).get("rescued", false)):
 		sim.recruits.rescue_home(id)
+	# the survivors the squad took in on the road (round 21): each joins the crew while there is a bed, else stays a caller
+	for _i in _whole(result.get("road_survivors", 0), 0, MAX_ROAD_SURVIVORS):
+		if sim.recruits.housing_free() >= 1 and not sim.recruits.current_caller().is_empty():
+			sim.recruits.rescue_home("road")
+		elif sim.recruits.small:
+			sim.alert("no-bed-road", "warn", "A survivor met on the road could not come in", "There is no bed for them yet", null, RETURN_ALERT_TTL)
 	var found_kind := String(result.get("vehicle", ""))
 	if found_kind != "" and sim.town.state.has(id) and not bool(sim.town.state[id].get("vehicle_taken", false)):
 		sim.town.state[id]["vehicle_taken"] = true

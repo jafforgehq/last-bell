@@ -245,6 +245,12 @@ func fuel_for(place_id: String, vehicle_id: String) -> float:
 	return float(k.burn) * 2.0 * sim.town.hours_to(place_id) / float(k.speed)
 
 
+## The fuel one leg of the road burns (round 21, the live drive): half of the trip's, `burn` x the road's hours. A drive there and
+## back with nothing in the way burns exactly `fuel_for`; the live drive shows this tank draining by distance.
+func fuel_per_leg(place_id: String, vehicle_id: String) -> float:
+	return fuel_for(place_id, vehicle_id) / 2.0
+
+
 ## The hours the road takes (there and back, without the search) by this vehicle.
 func drive_hours(place_id: String, vehicle_id: String) -> float:
 	var k := kind_of(vehicle_id)
@@ -300,6 +306,40 @@ func _lose(v: Dictionary) -> void:
 	fleet.erase(v)
 	sim.events.append({"type": "vehicle", "id": String(v.id), "what": "lost"})
 	sim.alert("vehicle-%s" % String(v.id), "danger", "The %s is lost" % String(kind(String(v.kind)).get("name", "vehicle")).to_lower(), "It will not be coming back", null, 20.0)
+
+
+# ------------------------------------------------------------------- the live road (round 21) --
+
+## The road wears the vehicle (the live drive's crashes and events): `hp_lost` is taken off, and its hp never goes below 1. False when
+## it was at 1 already (nothing is left to wear: the caller `wreck`s it); a knock that takes it down to 1 is true, it limps on. Nothing
+## lost, nothing changes; a vehicle that is not in the fleet is nothing to wreck (true).
+func road_wear(vehicle_id: String, hp_lost: float) -> bool:
+	var v := vehicle(vehicle_id)
+	if v.is_empty() or hp_lost <= 0.0 or not is_finite(hp_lost):
+		return true
+	var was := float(v.hp)
+	v["hp"] = maxf(1.0, was - hp_lost)
+	return was > 1.0
+
+
+## The vehicle is lost on the road (a wreck the party leaves behind): off the fleet, with an alert that says where ("The pickup is
+## lost: left on the road to the pharmacy"). The party it carried goes on without a car: it is a party on foot from now on (its
+## way home is the whole way, and nothing drives in at the gate). A vehicle that is not there is left alone.
+func wreck(vehicle_id: String, why: String) -> void:
+	var v := vehicle(vehicle_id)
+	if v.is_empty():
+		return
+	var name := String(kind(String(v.kind)).get("name", "vehicle")).to_lower()
+	fleet.erase(v)
+	sim.events.append({"type": "vehicle", "id": String(v.id), "what": "lost"})
+	sim.alert("vehicle-%s" % String(v.id), "danger", ("The %s is lost: %s" % [name, why]) if why != "" else ("The %s is lost" % name), "It will not be coming back", null, 20.0)
+	for party in sim.scavenge.parties:
+		if String(party.get("vehicle", "")) == String(v.id):
+			party["vehicle"] = ""
+			for key in ["seats", "doors", "drive_t", "drive_len", "aboard", "unload", "unload_wait"]:
+				party.erase(key)
+			if ["driving_out", "driving_in", "unloading"].has(String(party.state)):
+				party["state"] = "away"
 
 
 # ------------------------------------------------------------------ a parked car is in the way --

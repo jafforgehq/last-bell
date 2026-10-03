@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "_doc": "The road of the live drive (round 21), read by scripts/drive/road_gen.gd: the strip of ground between the base and a place, 30 tiles wide, in the vocabulary of site_layouts.json (its props, its terrain, its Canvas). geometry: the carriageway (8 wide, two lanes) and its verge (2 each side) follow the centre line x(y) = base + scale x (3.2 sin(2 pi y / 140 + phi) + 1.6 sin(2 pi y / 57 + psi)), the scale taking it down where it would run steeper than max_slope; margin: rows of road beyond each end of the leg; border and cap: the solid edge columns and end rows; lane_*: the painted lines, in short straight pieces. budget: objects and trees together for each row of the strip (the web build's sprites), and the room kept back for what the events put down; dyn_max: the wrecks the scene may draw and move. styles: by the kind of place the road leads to (urban is the rest): the ground of the carriageway, the verge and the country about it; patches of other ground; buildings (roofed blocks: walls and roof are ground, no sprites), fields; scatter, in the zones `verge` (the 2 tiles by the road) and `beyond` (the country to the strip's edge), counts for each 100 rows of road; trees; fences; decals on the carriageway. wrecks: the cars standing about, (base + per_danger x danger) for each 100 rows: `verge` ones lie along the road on the verge, the others across the country beyond. block: the roadblock's wall across the strip and its single gap, in whole tiles (a car is 2.2 wide and needs 4: two lanes of clear 1.7 each side of the middle; a person 2); the wrecks of the line are the scene's (dyn). dead: the stragglers of the strip, for each 100 rows.",
+  "geometry": {
+    "width": 30,
+    "margin": 12,
+    "carriage": 8,
+    "verge": 2,
+    "border": 2,
+    "cap": 3,
+    "base": 15.0,
+    "base_jitter": 1.0,
+    "waves": [[3.2, 140.0], [1.6, 57.0]],
+    "max_slope": 0.25,
+    "exit_rows": 6,
+    "lane_seg": 4,
+    "lane_skip_every": 4,
+    "lane_w": 7.0,
+    "border_trees": 0.06
+  },
+  "budget": {"per_row": 0.34, "dyn_max": 8},
+  "styles": {
+    "urban": {
+      "kinds": [],
+      "carriage": "ASPHALT",
+      "verge": "SIDEWALK",
+      "ground": "GRASS",
+      "patches": [{"t": "DIRT", "n": [0, 2], "r": [1.4, 3.0]}],
+      "buildings": {
+        "items": [
+          {"k": 3, "w": [6, 9], "h": [7, 11], "wall": ["WALL_BRICK", "WALL_PLASTER"], "roof": "ROOF"},
+          {"k": 1, "w": [7, 9], "h": [6, 8], "wall": ["WALL_PLASTER"], "roof": "ROOF_LIGHT"},
+          {"k": 1, "w": [6, 6], "h": [12, 12], "stamp": "terrace_house", "max": 3}
+        ],
+        "front": [1, 3],
+        "min_w": 4,
+        "between": [2, 14],
+        "skip": 0.15
+      },
+      "scatter": [
+        {"zone": "verge", "per100": 5.0, "kinds": {"lamppost": 6, "hydrant": 1.5, "trashbags": 2, "trashcan": 1}},
+        {"zone": "beyond", "per100": 9.0, "kinds": {"shrub": 6, "trashbags": 1, "trashcan": 1, "wheelbarrow": 0.5}}
+      ],
+      "trees": 5.0,
+      "fences": 0.0,
+      "decals": {"per100": 4.0, "kinds": {"crack": 3, "stain": 3, "papers": 2, "blood": 2}}
+    },
+    "rural": {
+      "kinds": ["farm", "water_works", "checkpoint", "bunker", "bridge"],
+      "carriage": "ASPHALT",
+      "verge": "DIRT",
+      "ground": "GRASS",
+      "patches": [{"t": "DIRT", "n": [0, 2], "r": [1.5, 3.5]}],
+      "buildings": {
+        "items": [
+          {"k": 1, "w": [8, 11], "h": [8, 12], "wall": ["WALL_METAL"], "roof": "ROOF_LIGHT"},
+          {"k": 1, "w": [6, 8], "h": [6, 8], "wall": ["WALL_BRICK"], "roof": "ROOF"}
+        ],
+        "front": [2, 4],
+        "min_w": 5,
+        "between": [20, 60],
+        "skip": 0.3
+      },
+      "fields": {"t": "SOIL", "w": [5, 9], "h": [14, 34], "front": [1, 3], "between": [3, 20], "skip": 0.15},
+      "scatter": [
+        {"zone": "verge", "per100": 1.5, "kinds": {"hydrant": 1, "barrel": 1}},
+        {"zone": "beyond", "per100": 4.0, "kinds": {"shrub": 6, "barrel": 1, "wheelbarrow": 1, "compost": 0.5}}
+      ],
+      "trees": 9.0,
+      "fences": 1.6,
+      "decals": {"per100": 2.5, "kinds": {"crack": 4, "stain": 2, "papers": 1}}
+    },
+    "industrial": {
+      "kinds": ["scrapyard", "warehouse", "bus_depot", "depot", "power_station", "fuel_depot", "rail_yard", "cold_store", "factory", "harbour", "port", "airfield"],
+      "carriage": "ASPHALT",
+      "verge": "DIRT",
+      "ground": "DIRT",
+      "patches": [{"t": "SOIL", "n": [0, 2], "r": [1.5, 3.5]}, {"t": "GRASS", "n": [0, 1], "r": [1.5, 3.0]}],
+      "buildings": {
+        "items": [
+          {"k": 1, "w": [8, 12], "h": [7, 12], "wall": ["WALL_METAL", "WALL_PLASTER"], "roof": "ROOF_LIGHT"}
+        ],
+        "front": [1, 3],
+        "min_w": 5,
+        "between": [6, 26],
+        "skip": 0.25
+      },
+      "scatter": [
+        {"zone": "verge", "per100": 2.5, "kinds": {"blocks_v": 2, "lamppost": 3, "barrel": 1, "tires": 1}},
+        {"zone": "beyond", "per100": 7.0, "kinds": {"barrel": 5, "crate": 4, "tires": 2, "scrap": 2, "ibc": 1.5, "generator": 0.5, "cont_blue": 1.2, "cont_orange_v": 0.8, "cont_green_v": 0.6}}
+      ],
+      "trees": 2.5,
+      "fences": 0.0,
+      "decals": {"per100": 4.0, "kinds": {"stain": 4, "crack": 3, "papers": 1}}
+    }
+  },
+  "wrecks": {
+    "base": 3.0,
+    "per_danger": 3.0,
+    "verge_share": 0.6,
+    "verge": {"car_v": 4, "pickup_v": 1.5},
+    "beyond": {"car_h": 3, "van_h": 1, "car_police": 0.6, "bus_h": 0.3},
+    "corpses_per_danger": 1.0
+  },
+  "block": {
+    "gap_car": 4,
+    "gap_foot": 2,
+    "offset": 1.0,
+    "clear_rows": 12,
+    "plateau": 5,
+    "ramp": 18,
+    "tilt": 0.14,
+    "ram_hp": 8.0,
+    "ram_hp_bus": 15.0,
+    "line": {"car_h": 3, "van_h": 1, "car_police": 0.6, "car_v": 2, "pickup_v": 1},
+    "outer": {"car_h": 2, "car_v": 2, "sandbags": 2, "blocks_v": 2, "tires": 1, "barrel": 1, "shrub": 1}
+  },
+  "dead": {
+    "base": 2.0,
+    "per_danger": 2.0,
+    "runner_from": 2,
+    "runner_share": 0.25,
+    "brute_from": 3,
+    "wander_share": 0.22,
+    "keep_from_start": 20.0
+  }
+}

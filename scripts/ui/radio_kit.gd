@@ -18,11 +18,13 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 ## What a kind of news is called (the small capitals over a line of the log).
 const KIND_NAME := {
 	"attack": "Attack", "succession": "Lost", "sick": "Fever", "alarm": "Alarm", "recruit": "Arrival", "story": "Radio", "stranger": "At the gate",
+	"road": "Road",
 }
 
 
 ## The colour of a kind of news (a word, readable on the panel): the dead at the wall and a death are red, a fever and the
-## alarm amber, a new face green, a card of the storyteller blue, a stranger gold; anything else the dim chalk.
+## alarm amber, a new face green, a card of the storyteller and a word from the road blue, a stranger gold; anything else the
+## dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
 		"attack", "succession":
@@ -31,7 +33,7 @@ static func kind_color(host, kind: String) -> Color:
 			return host.WARN
 		"recruit":
 			return host.OK
-		"story":
+		"story", "road":
 			return host.INFO
 		"stranger":
 			return host.ACCENT

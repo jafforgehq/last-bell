@@ -634,7 +634,7 @@ func _refresh_radio() -> void:
 	contact_box.visible = not _news_replaces()
 	base_button.modulate = Color(1.0, 0.92, 0.6) if base_open else Color.WHITE
 	var c: Dictionary = scene.contact
-	if c.is_empty() or c.p == null or c.p.dead:
+	if c.is_empty() or c.p == null or c.p.dead or (String(c.get("kind", "")) == "squad" and _hide_for_drive()):
 		contact_label.text = ""
 		contact_label.visible = false
 		contact_hint.visible = scene.phase == "place" and not scene.ended
@@ -685,7 +685,7 @@ func _build_legend() -> void:
 	flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	flow.add_theme_constant_override("h_separation", 12)
 	flow.add_theme_constant_override("v_separation", 4)
-	for entry in LEGEND:
+	for entry in _legend_text():
 		var item: HBoxContainer = hud._hbox(3)
 		for key in entry[0]:
 			item.add_child(hud._kbd(String(key)))
@@ -696,6 +696,17 @@ func _build_legend() -> void:
 	legend_panel.add_child(flow)
 	legend_panel.visible = false
 	_put(legend_panel)
+
+
+## The keys the legend shows, as LEGEND has them ([[keys], "what"]): a hook, so that the live drive (drive_hud.gd) can show its own.
+func _legend_text() -> Array:
+	return LEGEND
+
+
+## Whether the squad's radio verbs are off the panel (they ride with you: the drive's HUD says so while you are aboard). The people at
+## the base stay. A hook: the place never hides them.
+func _hide_for_drive() -> bool:
+	return false
 
 
 ## The ammunition of the one you lead: the weapon, the magazine and what is in the stores, and a bar that is the magazine, or

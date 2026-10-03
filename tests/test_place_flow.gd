@@ -502,6 +502,7 @@ const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 
 func _main(crew: int = 3, avatar: bool = true) -> Node:
+	PlaceFlow.live_enabled = false    # (round 21: these trips keep the overlay's road; the live drive is tests/test_road_flow.gd's)
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar})
 	main.raid_stub = true
 	main.sim.waves.enabled = false

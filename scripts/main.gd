@@ -39,6 +39,8 @@ const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 ## The generator of the places of a played trip (the SITES builder's) and, until it exists, a stand-in.
 const SITE_GEN := "res://scripts/raid/site_gen.gd"
 const SITE_STUB := "res://scripts/raid/stub_site.gd"    # TODO-SITEGEN: delete with the fallback in open_raid once SITE_GEN is there
+## The live drive's scene (round 21): a RaidScene whose road is driven (see `open_raid`).
+const DRIVE_SCENE := "res://scripts/drive/drive_scene.gd"
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -961,6 +963,15 @@ func trip_report_up() -> bool:
 	return trip_report != null and is_instance_valid(trip_report)
 
 
+## The live drive's scene (round 21, scripts/drive/drive_scene.gd) as a script, or null when this checkout has not got it (the trip
+## then keeps the overlay's road).
+func _drive_scene_script():
+	if not ResourceLoader.exists(DRIVE_SCENE):
+		return null
+	var script = load(DRIVE_SCENE)
+	return script if script != null and script.can_instantiate() else null
+
+
 ## Opens a played trip (round 17: the player is one survivor, the trip is a flow, scripts/raid/place_flow.gd): the `people` the
 ## player chose are ASKED over the radio to come (who cannot is left out and the road's overlay and the report say why, or a toast
 ## on the colony's HUD when the trip cannot begin at all; the avatar always goes and leads), the party begins at once (the colony
@@ -990,11 +1001,26 @@ func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: 
 	var maker = load(SITE_GEN) if ResourceLoader.exists(SITE_GEN) and not raid_stub else null
 	if maker == null or not maker.can_instantiate():
 		maker = load(SITE_STUB)
-	var site: Dictionary = maker.make(place, seed_value, going.size(), by_vehicle)
 	var kind := "" if not by_vehicle else String(sim.vehicles.vehicle(vehicle_id).get("kind", ""))
+	var survivor: bool = bool(place.get("survivor", false)) and not bool(sim.town.state.get(String(place.get("id", "")), {}).get("rescued", false))
+	# (round 21) a trip the player leads is a live drive: the road is a scene of its own (scripts/drive/drive_scene.gd, a RaidScene), the
+	# place is made when they get to it (`make_place_site`: the squad is as the road left it); the classic game, the tests that keep
+	# the overlay and `--fastroad` take the overlay's road below
+	var drive_script = _drive_scene_script() if PlaceFlow.live_for(sim) else null
+	flow.live = drive_script != null
+	if flow.live:
+		var drive = drive_script.new()
+		add_child(drive)
+		var make_place_site := func(squad_size: int, by_car: bool) -> Dictionary:
+			return maker.make(place, seed_value, squad_size, by_car)
+		drive.setup_trip(self, hud, data, flow, place, make_place_site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
+		drive.begin_trip(flow)
+		if on_done.is_valid():
+			drive.finished.connect(on_done)
+		return drive
+	var site: Dictionary = maker.make(place, seed_value, going.size(), by_vehicle)
 	var scene := RaidScene.new()
 	add_child(scene)
-	var survivor: bool = bool(place.get("survivor", false)) and not bool(sim.town.state.get(String(place.get("id", "")), {}).get("rescued", false))
 	scene.setup(self, hud, data, site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
 	scene.begin_trip(flow)
 	if on_done.is_valid():
@@ -1949,6 +1975,8 @@ func _parse_args() -> void:
 	var town_ride := ""
 	var raid_spec := ""
 	var raid_do := ""
+	var drive_spec := ""
+	var drive_do := ""
 	var cam_asked := false
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
@@ -2062,6 +2090,21 @@ func _parse_args() -> void:
 				# --raid-do=<steps joined by +> plays the trip a little before the shot: road[:share], go, wait:SECONDS, walk:X:Y,
 				# aim:X:Y, fire:SECONDS, sel:N, base:N, ask:VERB, news, alarm, down, hour:H, exit, home, ... (see raid_scene.gd `stage`)
 				raid_do = v
+			"drive":
+				# --drive=<place id or kind>[,<seed>[,<vehicle kind>]] opens a LIVE trip (round 21: the road is driven, scripts/drive/) as
+				# --raid opens the overlay's, once the other arguments are in; the shot then shows the car on the road
+				drive_spec = v
+			"drive-do":
+				# --drive-do=<steps joined by +> plays the drive a little before the shot: at:<share>, speed:<share of cruise>,
+				# event:<id>@<share>, hour:<h>, wait:<s>, aim:<x>:<y>, fire:<s>, autopilot, crash, stop, leg:home, end, news, alarm,
+				# down (see drive_scene.gd `stage`)
+				drive_do = v
+			"fastroad":
+				# --fastroad keeps the overlay's road for every trip of the run (the live drive is off)
+				PlaceFlow.fast_road = true
+			"noevents":
+				# --noevents leaves the road's events out (an empty road to drive)
+				PlaceFlow.no_events = true
 			"town-reveal":
 				# --town-reveal=<place id>,<place id> (or "all") shows places of the board that are hidden at the start
 				for id in (sim.town.state.keys() if v == "all" else v.split(",")):
@@ -2203,6 +2246,10 @@ func _parse_args() -> void:
 		_stage_raid(raid_spec)
 		if raid_do != "" and raid_open():
 			raid.stage(raid_do)
+	if drive_spec != "":
+		_stage_raid(drive_spec, true)
+		if drive_do != "" and raid_open():
+			raid.stage(drive_do)
 	if lure_seg >= 0:
 		sim.stock.scrap = maxf(float(sim.stock.scrap), 10.0)
 		for s in sim.segments:
@@ -2431,7 +2478,9 @@ func _stage_trip_phase(spec: String) -> void:
 
 ## `--raid=<place id or kind>[,<seed>[,<vehicle kind>]]`: a played trip opened at once with the first three people (a
 ## screenshot's staging; the seed is the site's, else the place's own; a vehicle kind puts one in the fleet and goes in it). The first place of the board with that id or kind.
-func _stage_raid(spec: String) -> void:
+## `--drive=` is the same with the road driven (round 21: `drive`); `--raid=` keeps the overlay's road, whose staging steps (road, go, home)
+## are its own.
+func _stage_raid(spec: String, drive: bool = false) -> void:
 	var f := spec.split(",")
 	var place: Dictionary = {}
 	for pl in sim.town.all_places():
@@ -2458,7 +2507,10 @@ func _stage_raid(spec: String) -> void:
 	if not (sim.hour >= 6.5 and sim.hour < 10.0 and String(sim.phase) == "day"):
 		sim.minutes = 8.0 * 60.0
 		sim.phase = sim.phase_at(sim.minutes)
+	var fast_before := PlaceFlow.fast_road
+	PlaceFlow.fast_road = not drive
 	open_raid(party, place, vehicle_id, 1.0, Callable())
+	PlaceFlow.fast_road = fast_before
 	raid_seed = -1
 
 
