@@ -25,6 +25,10 @@ const Seasons := preload("res://scripts/sim/seasons.gd")
 const Streets := preload("res://scripts/sim/streets.gd")
 const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
+const Radio := preload("res://scripts/sim/radio.gd")
+const Avatar := preload("res://scripts/sim/avatar.gd")
+const StepClock := preload("res://scripts/sim/step_clock.gd")
+const FxNull := preload("res://scripts/sim/fx_null.gd")
 
 ## What a new run starts with (tuned later with the balance harness). Food and
 ## water are six days of full rations for the crew of six (6 x 1 x 6 food, 6 x
@@ -68,6 +72,15 @@ const THREAT_R := 16.0
 ## the day is not lost.)
 const THREAT_QUIET_MIN := 45.0
 const WORK_REACH := 0.6
+
+## The colony goes on while the player is in a place (round 17): the place is stepped at 30 steps a second and the colony
+## takes one step (of the same 1/30 s) for this many of them, which is one game minute per real second at the normal
+## `min_per_sec` of 3 (an hour in a place is a minute of the day's twenty). `background_steps_for` is the helper the scene
+## uses; `fast_forward` runs the colony quickly for the road there and back.
+const PLACE_STEP_RATIO := 3
+## The events that are only a sound or a picture and nothing else reads (main.gd plays them): `fast_forward` drops them
+## after each step, so a long run of colony steps does not leave thousands of them to be played at once.
+const FAST_FORWARD_NOISE := ["shot", "groan", "claw", "hammer", "stab", "thud", "reload"]
 
 
 class Slot:
@@ -162,6 +175,23 @@ class Person:
 	## What they have done: kills, kills_night (since the last dusk), mended (HP), treated,
 	## crafted (scrap) and shots.
 	var stats: Dictionary = {}
+	## The avatar and the radio (round 17, avatar.gd and radio.gd): the one the player controls; how far they trust the
+	## player (0 to 100); what they have been asked to do ("", "follow", "hold", "cover", "search") and where to hold.
+	var player := false
+	var trust := 55.0
+	var stance := ""
+	var stance_at := Vector2.ZERO
+	## What the player's hands ask of the avatar, set by the views every frame (avatar.gd, `set_input`): the walking
+	## direction (a vector; its length does not matter), the point of the world (tiles) the mouse is over, the trigger,
+	## and the two one-shot keys (reload, melee: taken at the next step). `melee_t` is the swing's cooldown and `bloom`
+	## the spread that sustained fire builds up and a pause lets go.
+	var input_move := Vector2.ZERO
+	var input_aim := Vector2.ZERO
+	var input_fire := false
+	var input_reload := false
+	var input_melee := false
+	var melee_t := 0.0
+	var bloom := 0.0
 
 
 class Zombie:
@@ -264,6 +294,11 @@ var lots
 var seasons
 var streets
 var vehicles
+var radio
+var avatar
+## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
+## the avatar and the radio's news is behind this).
+var player_id := ""
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
@@ -346,6 +381,10 @@ func _init(data: Dictionary, w, effects) -> void:
 	seasons = Seasons.new()
 	streets = Streets.new()
 	vehicles = Vehicles.new()
+	radio = Radio.new()
+	radio.setup(self)
+	avatar = Avatar.new()
+	avatar.setup(self)
 	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, vehicles]:
 		m.setup(self)
 	_seed()
@@ -472,7 +511,7 @@ func alert(id: String, level: String, text: String, sub: String, at, ttl: float 
 # ------------------------------------------------------------------ orders --
 
 func toggle_draft(p: Person) -> void:
-	if morale.breakdown(p):
+	if morale.breakdown(p) or p.player:
 		return
 	p.drafted = not p.drafted
 	p.repair = null
@@ -480,8 +519,8 @@ func toggle_draft(p: Person) -> void:
 
 
 func order_move(p: Person, x: float, y: float) -> bool:
-	if p.downed or p.dead or p.away != null or morale.breakdown(p):
-		return false
+	if p.downed or p.dead or p.away != null or morale.breakdown(p) or p.player:
+		return false    # (nobody orders the player about: they walk by their own hands, avatar.gd)
 	if world.is_solid(world.solid_p, x, y):
 		return false
 	p.drafted = true
@@ -492,7 +531,7 @@ func order_move(p: Person, x: float, y: float) -> bool:
 
 
 func order_post(p: Person) -> void:
-	if morale.breakdown(p):
+	if morale.breakdown(p) or p.player:
 		return
 	p.drafted = true
 	p.repair = null
@@ -502,7 +541,7 @@ func order_post(p: Person) -> void:
 
 
 func order_repair(p: Person, seg: Segment) -> void:
-	if morale.breakdown(p):
+	if morale.breakdown(p) or p.player:
 		return
 	p.drafted = false
 	p.order = null
@@ -574,6 +613,8 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 		spawn(pos[0], pos[1], "wander")
 	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, vehicles]:
 		m.start()
+	radio.start()
+	avatar.start()
 	recruits.begin()
 	town.begin()
 	lots.begin()
@@ -650,6 +691,44 @@ func update(dt: float) -> void:
 		var a: Dictionary = alerts[id]
 		if t - a.t > a.ttl:
 			alerts.erase(id)
+	# the radio's news and calls, from what happened this step (last: it reads the step's events)
+	radio.update(dt)
+
+
+## Runs the colony `game_minutes` game minutes ahead as quickly as it can: the usual steps of 1/30 s (the last one a short
+## one, so the minutes come out exact), no drawing (the effects are a sink meanwhile) and no sounds (the events that are
+## only a sound or a picture are dropped after each step, `FAST_FORWARD_NOISE`; the banners, the bell and the rest stay
+## for `main.gd`, and the radio's news collects inside `update` as ever). At most `max_steps_per_call` steps are taken
+## in one call (200 game minutes at the normal speed with the default; a colony step costs about 0.2 ms, so a scene that
+## keeps its frames passes about 60 and calls again next frame with what is left). Returns the game minutes still to go, 0 when it is done or when the run is over (`over`: nothing more can
+## happen). A place's scene uses it for the road there and back (the abstract travel until the live drive).
+func fast_forward(game_minutes: float, max_steps_per_call: int = 2000) -> float:
+	var rate := float(min_per_sec)
+	var goal := clock_min + game_minutes
+	var left := game_minutes
+	if left <= 1.0e-6 or over != "" or rate <= 0.0:
+		return 0.0
+	var real_fx = fx
+	fx = FxNull.new()
+	var steps := 0
+	while left > 1.0e-6 and steps < max_steps_per_call and over == "":
+		update(minf(StepClock.STEP, left / rate))
+		steps += 1
+		left = goal - clock_min
+		for i in range(events.size() - 1, -1, -1):
+			if FAST_FORWARD_NOISE.has(String(events[i].get("type", ""))):
+				events.remove_at(i)
+	fx = real_fx
+	if over != "" or left <= 1.0e-6:
+		return 0.0
+	return left
+
+
+## How many colony steps a place's scene takes for `raid_steps` steps of the place (see `PLACE_STEP_RATIO`; the scene keeps
+## the place steps it has taken in all and asks for the total, so the remainder is never lost).
+static func background_steps_for(raid_steps: int) -> int:
+	@warning_ignore("integer_division")
+	return maxi(raid_steps, 0) / PLACE_STEP_RATIO
 
 
 # ------------------------------------------------------------------ people --
@@ -667,6 +746,10 @@ func _goal_for(p: Person):
 		duty = workshop.goal_for(p)
 	if duty != null:
 		return duty
+	# what the player has asked of them over the radio: follow, hold, cover, search (radio.gd; null with no stance)
+	var asked = radio.stance_goal(p)
+	if asked != null:
+		return asked
 	if p.repair != null:
 		var s: Segment = p.repair
 		var spot := repair_spot(s)
@@ -720,6 +803,8 @@ func repair_spot(s: Segment) -> Vector2:
 
 
 func posts_manned() -> bool:
+	if radio.alarm_on:
+		return true    # the call to arms (radio.gd): everyone at their posts until it is stood down
 	var night := phase == "night" or phase == "dawn" or (phase == "dusk" and bell_rung)
 	if not recruits.small:
 		return night
@@ -734,6 +819,8 @@ func posts_manned() -> bool:
 ## threat to the compound: the crew goes on working. Once it has stopped, THREAT_QUIET_MIN game minutes of quiet
 ## pass before the crew goes back to work. Kept up once a step (`_update_threat`); `tactics.threat_until` is saved.
 func threat_by_day() -> bool:
+	if radio.alarm_on and phase == "day":
+		return true    # (the call to arms, in any start)
 	return recruits.small and phase == "day" and clock_min < tactics.threat_until
 
 
@@ -785,6 +872,11 @@ func _update_person(p: Person, dt: float) -> void:
 	if p.downed or p.dead or p.away != null:
 		_set_work(p, null, dt)
 		return
+	if p.player:
+		# the player's own hands (avatar.gd): no goals, no orders, no auto-fire
+		_set_work(p, null, dt)
+		avatar.update(p, dt)
+		return
 	var goal = _goal_for(p)
 	if goal != null:
 		p.activity = goal.what
@@ -802,7 +894,7 @@ func _update_person(p: Person, dt: float) -> void:
 				if p.path.is_empty():
 					p.path = [Vector2(goal.x, goal.y)]
 				p.path_i = 0
-			_follow(p, 3.0, dt)
+			_follow(p, radio.speed_of(p), dt)    # (3.0: whoever follows the player a long way behind hurries)
 	if p.repair != null and not p.moving and (repair_spot(p.repair) - Vector2(p.x, p.y)).length() < 0.3:
 		var s: Segment = p.repair
 		p.activity = "Mending the %s" % s.name.to_lower()
@@ -1050,8 +1142,12 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 		p.reloading = float(gun.reload) * traits.mult(p, "reload")
 		p.target = null
 		events.append({"type": "reload", "x": p.x, "y": p.y})
-	# gunfire draws the dead (by day in the settlement game only those close by, and for the shooter: a shot at a
-	# straggler of the streets does not send the whole city against the walls)
+	_shot_noise(p)
+
+
+## Gunfire draws the dead (by day in the settlement game only those close by, and for the shooter: a shot at a
+## straggler of the streets does not send the whole city against the walls). `_fire` and the avatar's shots call it.
+func _shot_noise(p: Person) -> void:
 	var shot_by_day: bool = town.on and phase == "day"
 	for w in zombies:
 		if w.state != "wander":
@@ -1373,6 +1469,13 @@ func _breached() -> bool:
 	return false
 
 
+## Whether one of the dead of the streets may go on hunting a survivor now: in the yard only by day (it gives up at
+## nightfall: the night belongs to the walls). A place's sim says yes at every hour (raid_sim.gd): a place can be played
+## at night.
+func _hunt_allowed() -> bool:
+	return phase == "day"
+
+
 func _update_zombie(z: Zombie, dt: float) -> void:
 	z.t += dt
 	z.moving = false
@@ -1467,7 +1570,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 			for p in people:
 				if String(p.id) == z.hunt_id:
 					prey2 = p
-			if prey2 == null or prey2.dead or prey2.downed or prey2.away != null or phase != "day":
+			if prey2 == null or prey2.dead or prey2.downed or prey2.away != null or not _hunt_allowed():
 				z.state = "wander"
 				z.hunt_id = ""
 				return

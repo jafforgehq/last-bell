@@ -439,6 +439,8 @@ func kill(p, cause: String) -> void:
 		sim.events.append({"type": "banner", "text": "%s died" % p.first, "sub": _cause_text(cause)})
 	sim.morale.on_lost(p, "died")
 	sim.barks.on_lost(p)
+	if p.player:
+		sim.avatar.on_player_lost(p)    # the next in line takes over (avatar.gd)
 
 
 func _cause_text(cause: String) -> String:
@@ -500,6 +502,8 @@ func _turn(p) -> void:
 	sim.events.append({"type": "turned", "x": p.x, "y": p.y})
 	sim.morale.on_lost(p, "turned")
 	sim.barks.on_lost(p)
+	if p.player:
+		sim.avatar.on_player_lost(p)
 
 
 ## The chance that `healer` clears an infection: 30% plus 10% a point of
@@ -555,8 +559,8 @@ func _job_of_patient(p):
 ## Free to go and treat someone: able, off orders, not already busy, and with
 ## at least a little Medicine.
 func _is_free(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h):
-		return false
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "":
+		return false    # (whoever the player has asked to follow, hold or cover is not a free healer: radio.gd)
 	if int(h.skills.Medicine) < 1 or sendouts.has(h.id):
 		return false
 	if _job_of_healer(h) != null or _job_of_patient(h) != null:
@@ -578,8 +582,8 @@ func _job_ok(j) -> bool:
 
 ## Like _is_free, for a healer who already holds a job.
 func _is_free_for_job(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h):
-		return false
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "":
+		return false    # (whoever the player has asked to follow, hold or cover is not a free healer: radio.gd)
 	return not sendouts.has(h.id) and sim.scavenge.goal_for(h) == null
 
 
@@ -922,6 +926,8 @@ func _exile(p) -> void:
 	p.activity = "Left through the gate"
 	sim.alert("exile-%s" % p.id, "warn", "%s left through the gate" % p.first, "", null, 10.0)
 	sim.morale.on_lost(p, "left")
+	if p.player:
+		sim.avatar.on_player_lost(p)
 
 
 # ---------------------------------------------------------------------- save --

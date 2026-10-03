@@ -371,7 +371,7 @@ func seat_pos(p) -> Vector2:
 
 
 func _able(p) -> bool:
-	return not (p.dead or p.turned or p.downed) and p.away == null and not sim.morale.breakdown(p)
+	return not (p.dead or p.turned or p.downed or p.player) and p.away == null and not sim.morale.breakdown(p)
 
 
 ## Whether the settlement rules of work life are in force (a small start).
@@ -588,8 +588,8 @@ func _fill_one(id: String, away := false) -> bool:
 	var best = null
 	var best_score := -1.0e9
 	for p in sim.people:
-		if p.dead or p.turned or job_of(p) != "" or (p.away != null) != away:
-			continue
+		if p.dead or p.turned or p.player or job_of(p) != "" or (p.away != null) != away:
+			continue    # (the player is never given a seat: avatar.gd)
 		var s := _fit(p, id)
 		if s > best_score:
 			best_score = s

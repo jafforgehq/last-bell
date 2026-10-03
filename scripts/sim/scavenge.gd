@@ -17,7 +17,8 @@
 ##
 ## Shapes other code may rely on (plain data only, so it can be saved as JSON):
 ##   party = {"kind": "party", "n": trip number, "members": [person ids],
-##            "site": site id, "state": "out" | "away", "return_at": clock_min,
+##            "site": site id, "state": "out" | "away" (a trip by car has more, and a played one is "in_place": see below),
+##            "return_at": clock_min,
 ##            "result": {"loot": {stock: int}, "hurt": {id: "scratch" | "bite"},
 ##                       "lost": [ids]}}
 ##   p.away is that very dictionary while a member is off the map, and
@@ -68,6 +69,23 @@
 ##   {"type": "parked", "vehicle": id}                                  the car has driven in and stopped in its bay
 ##   {"type": "alight", "vehicle": id, "person": id, "door": door id}   a person has got out (stands at their door)
 ## Besides these, only the rules' own "banner" events.
+##
+## A TRIP IN A PLACE (round 17, "one survivor and a radio"). The player plays the place while the base goes on:
+##   begin_played(people, place, action, vehicle) -> the party, or {} (refused as `send` refuses, see `why_not_played`).
+##        The party is "in_place" at once: its members are away (gone from the base), the vehicle is out and its fuel is
+##        burnt, the place is raided. Nothing is due while it is in the place (`return_at` is only the old estimate, for
+##        the Town Board's map): the base's rules run on, jobs, nights, the day's threat, the radio.
+##   finish_played(party or its number, result) -> the scene says what came of it. The result is sanitised as a played
+##        result always is (`_played_result`), the members' health and skills are put back (see below), and the party is on
+##        the road home: "away" with `return_at = clock_min + road_minutes` (half the round trip by vehicle, the way there
+##        on foot: the abstract travel until the live drive), then home as any trip (`driving_in`, `_come_back`, the report).
+##        A party nobody of whom is left is settled at once (nobody is on the road): the banner, the vehicle lost. A second
+##        finish, or one for a party that is not in a place, does nothing.
+##   A save in the place loads as a party that is still "in_place" and is finished at the next step with an empty result (the
+##        scene is not saved): they turn back with nothing and come home after the road.
+## The played result (`RaidRun.result()`, in the dice's shape: loot, hurt, lost, clear, rescue, beats, ammo_used) has two keys
+## more for this: `hp` {person id: health (0 to 100) they have when they leave the place} and `skills` {person id: {skill:
+## points gained there}}. Both are applied at the finish to those who come home (a missing key changes nothing).
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
@@ -127,8 +145,11 @@ const BOARD_REACH := 0.7
 const BOARD_MIN := 4.0
 const UNLOAD_GAP_MIN := 2.5
 const CAR_SPEED_TPM := 3.8
-## The states a party can be in.
-const STATES := ["out", "driving_out", "away", "driving_in", "unloading"]
+## The states a party can be in. "in_place": the player is playing the place (round 17, see the header).
+const STATES := ["out", "driving_out", "away", "driving_in", "unloading", "in_place"]
+const IN_PLACE := "in_place"
+## The most health a person may come home with from a played trip.
+const PLAYED_HP_MAX := 100.0
 const AWAY_COLOR := Color("#7fa6c9")
 ## How long the departure and return alerts stay up (seconds of rules time).
 const DEPART_ALERT_TTL := 10.0
@@ -186,6 +207,9 @@ func update(dt: float) -> void:
 				_drive_in(party, mins)
 			"unloading":
 				open = _unload(party, mins)
+			"in_place":
+				if bool(party.get("orphan", false)):
+					open = _finish_party(party, {})    # (loaded from a save: the scene is gone, they turn back with nothing)
 		var waiting: bool = String(party.state) == "out" or String(party.state) == "away"
 		if open and waiting and _is_due(party):
 			if by_car and String(party.state) == "away":
@@ -218,6 +242,11 @@ func can_send() -> bool:
 
 
 func why_not() -> String:
+	return _why_not(false)
+
+
+## `why_not`, for a trip the player leads when `played` (the avatar may go: someone is free if the player is).
+func _why_not(played: bool) -> String:
 	if sim.over != "":
 		return "The run is over."
 	if sim.phase == "dusk" or sim.phase == "night":
@@ -230,7 +259,7 @@ func why_not() -> String:
 		return "A party is already out." if not town_mode else "Both parties are out."
 	if dead_at_gate() >= DEAD_LIMIT:
 		return "Too many of the dead at the gate."
-	if free_survivors().is_empty():
+	if free_survivors(played).is_empty():
 		return "Nobody is free to go."
 	return ""
 
@@ -304,6 +333,8 @@ func status_of(p) -> Array:
 	if String(party.state) == "unloading" and not _is_through(p, party):
 		return []    # out of the car: home again, though the trip is not told yet
 	var tip := "Away scavenging" if _is_through(p, party) else "Heading out to scavenge"
+	if String(party.state) == IN_PLACE:
+		tip = "Out at %s" % _where(String(party.site))    # (the player's trip: they are playing it)
 	return [{"icon": "away", "color": AWAY_COLOR, "tip": tip}]
 
 
@@ -318,9 +349,9 @@ func gizmo(_id: String, _sel) -> bool:
 ## Whether `p` can be put in a party now: alive, on the map, on their feet, not
 ## drafted with an order, not already out, not busy treating someone or leaving
 ## through the gate, not delirious with fever.
-func can_go(p) -> bool:
-	if p == null or p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
-		return false
+func can_go(p, played: bool = false) -> bool:
+	if p == null or p.dead or p.downed or p.away != null or sim.morale.breakdown(p) or (p.player and not played):
+		return false    # (the player leaves by their own hands: a played trip (`played`), never the dice's party)
 	if p.drafted or p.order != null:
 		return false
 	if _party_of(p) != null or sim.medical.goal_for(p) != null:
@@ -329,10 +360,10 @@ func can_go(p) -> bool:
 
 
 ## The survivors who can be sent now, in crew order.
-func free_survivors() -> Array:
+func free_survivors(played: bool = false) -> Array:
 	var out: Array = []
 	for p in sim.people:
-		if can_go(p):
+		if can_go(p, played):
 			out.append(p)
 	return out
 
@@ -466,8 +497,11 @@ func _restore_party(entry: Dictionary) -> void:
 		party["vehicle"] = String(entry.vehicle)
 	if bool(entry.get("played", false)):
 		party["played"] = true
-	if not STATES.has(String(party.state)) or (not _by_car(party) and String(party.state) != "out" and String(party.state) != "away"):
+	if not STATES.has(String(party.state)) or (not _by_car(party) and not ["out", "away", IN_PLACE].has(String(party.state))):
 		party["state"] = "away"    # (a state this version does not know, or a car's state for a party on foot)
+	if String(party.state) == IN_PLACE:
+		party["played"] = true
+		party["orphan"] = true    # (the place's scene was not saved: the next step finishes the trip with nothing, see `update`)
 	if _by_car(party):
 		_restore_car(party, entry)
 	parties.append(party)
@@ -550,7 +584,7 @@ func _walk_out(party: Dictionary) -> bool:
 
 ## Whether a member who has not yet reached the gate is still going there.
 func _is_heading_out(p) -> bool:
-	return not p.dead and not p.downed and not p.drafted and p.order == null and p.repair == null
+	return not p.dead and not p.downed and not p.drafted and p.order == null and p.repair == null and not p.player
 
 
 func _go_through(p, party: Dictionary) -> void:
@@ -564,6 +598,14 @@ func _go_through(p, party: Dictionary) -> void:
 	p.target = null
 	p.goal_key = ""
 	p.activity = "Scavenging at %s" % _where(String(party.site))
+	_clear_stance(p)
+
+
+## A person who leaves or comes home has no radio stance any more (follow, hold... are for the yard or the place they are
+## in); the property is the radio's (round 17), so a person without it is left alone.
+static func _clear_stance(p) -> void:
+	if p.get("stance") != null:
+		p.set("stance", "")
 
 
 # ------------------------------------------------------------------ the trip by car --
@@ -808,6 +850,7 @@ func _alight(p, party: Dictionary, door: String) -> void:
 	p.order = null
 	p.repair = null
 	p.facing = "W" if at.x < Convoy.bay(_spot_of(party)).x else "E"
+	_clear_stance(p)
 	sim.events.append({"type": "alight", "vehicle": String(party.vehicle), "person": String(p.id), "door": door})
 
 
@@ -922,6 +965,7 @@ func _come_back(party: Dictionary, unloaded: bool = false) -> void:
 			p.drafted = false
 			p.order = null
 			p.repair = null
+			_clear_stance(p)
 	var brought := {}
 	if not came.is_empty():
 		for k in STOCKS:
@@ -1175,16 +1219,40 @@ func send_played(people: Array, site_id: String, action: String, vehicle_id: Str
 	return _send_town(people, site_id, action, vehicle_id, played)
 
 
-func _send_town(people: Array, site_id: String, action: String, vehicle_id: String = "", played: Dictionary = {}) -> bool:
+## Why a party of `people` cannot set off for this place with this action in this vehicle now ("" when it can): what `send`
+## refuses in the settlement game, the hour, the dead at the gate, a party that is already out, nobody free (`why_not`),
+## the seats, then the place and the errand (`why_not_action`), then each person (`can_go`). `played`: the player leads it
+## (the avatar may go).
+func _why_not_town(people: Array, site_id: String, action: String, vehicle_id: String, played: bool = false) -> String:
+	var why := _why_not(played)
+	if why != "":
+		return why
 	var most: int = int(sim.vehicles.kind_of(vehicle_id).get("seats", MAX_PARTY_TOWN)) if vehicle_id != "" else MAX_PARTY_TOWN
-	if not can_send() or people.is_empty() or people.size() > maxi(most, 0):
-		return false
-	if why_not_action(people, site_id, action, vehicle_id) != "" or _site(site_id).is_empty():
-		return false
+	if people.is_empty():
+		return "Nobody is going."
+	if people.size() > maxi(most, 0):
+		return "There is room for %d." % maxi(most, 0)
+	var why_action := why_not_action(people, site_id, action, vehicle_id)
+	if why_action != "":
+		return why_action
+	if _site(site_id).is_empty():
+		return "Nobody knows where that is."
 	var ids: Array = []
 	for p in people:
-		if p == null or not can_go(p) or ids.has(p.id):
-			return false
+		if p == null or not can_go(p, played):
+			return "%s cannot go now." % (String(p.first) if p != null else "Someone")
+		if ids.has(p.id):
+			return "%s is on the list twice." % String(p.first)
+		ids.append(p.id)
+	return ""
+
+
+## Makes the party of a trip in the settlement game: its number, its members (and their seats, if it goes by vehicle: the
+## vehicle is taken and its fuel burnt), the old estimate of its return, and the orders of its members cleared. It is not
+## yet in `parties`: the caller gives it its result and its state. The party is not checked here (`_why_not_town`).
+func _open_party(people: Array, site_id: String, action: String, vehicle_id: String) -> Dictionary:
+	var ids: Array = []
+	for p in people:
 		ids.append(p.id)
 	trips += 1
 	var minutes := action_hours(site_id, action, vehicle_id) * 60.0
@@ -1205,6 +1273,13 @@ func _send_town(people: Array, site_id: String, action: String, vehicle_id: Stri
 		p.repair = null
 		p.target = null
 		p.goal_key = ""
+	return party
+
+
+func _send_town(people: Array, site_id: String, action: String, vehicle_id: String = "", played: Dictionary = {}) -> bool:
+	if _why_not_town(people, site_id, action, vehicle_id, not played.is_empty()) != "":
+		return false
+	var party := _open_party(people, site_id, action, vehicle_id)
 	if played.is_empty():
 		party.result = _decide(party)
 	else:
@@ -1218,6 +1293,141 @@ func _send_town(people: Array, site_id: String, action: String, vehicle_id: Stri
 	if vehicle_id != "" and not played.is_empty():
 		_skip_departure(party)    # (the raid screen was the way out)
 	return true
+
+
+# ------------------------------------------------------------- a trip in a place --
+
+## The party the player is playing now (state "in_place"), or {}.
+func party_in_place() -> Dictionary:
+	for party in parties:
+		if String(party.state) == IN_PLACE:
+			return party
+	return {}
+
+
+## The game minutes of the road from the base to a place (and back: the same): half the round trip by this vehicle, the
+## way there on foot. The abstract travel until the live drive; a place's scene runs it with `Sim.fast_forward`.
+func road_minutes(place_id: String, vehicle_id: String = "") -> float:
+	if vehicle_id != "":
+		return float(sim.vehicles.drive_hours(place_id, vehicle_id)) / 2.0 * 60.0
+	return float(sim.town.hours_to(place_id)) * 60.0
+
+
+## Why the player cannot begin a played trip to this place now ("" when they can): what `send` refuses (`_why_not_town`:
+## the hour, the dead at the gate, nobody free, the seats and the fuel, the place, each person), a scouting trip (it is not
+## played), and a second place while one is being played.
+func why_not_played(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "") -> String:
+	if not town_mode:
+		return "There is nowhere to go."
+	if action == "scout":
+		return "A scouting trip is not played."
+	if not party_in_place().is_empty():
+		return "A trip is already being played."
+	return _why_not_town(people, place_id, action, vehicle_id, true)
+
+
+## The player's trip begins: the party is made at once, "in_place", and returned ({} when it is refused: `why_not_played`).
+## Its people (the avatar may be one) are away from this moment, the vehicle is out and its fuel burnt as `send` does it,
+## the place is raided. No result yet and nothing due: `finish_played` ends it. See the header.
+func begin_played(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "") -> Dictionary:
+	if why_not_played(people, place_id, action, vehicle_id) != "":
+		return {}
+	var party := _open_party(people, place_id, action, vehicle_id)
+	party["state"] = IN_PLACE
+	party["played"] = true
+	party["result"] = {"loot": {}, "hurt": {}, "lost": []}
+	parties.append(party)
+	for p in people:
+		_go_through(p, party)
+	return party
+
+
+## The player's trip is over: `result` is what the place's scene made of it (see the header: the dice's shape and `hp`,
+## `skills`). `party_or_id` is the party `begin_played` returned, or its number. A party that is not in a place (already
+## finished, home, a dice's trip, no such number) is left alone.
+func finish_played(party_or_id, result: Dictionary = {}) -> void:
+	var party := _party_by(party_or_id)
+	if party.is_empty() or String(party.state) != IN_PLACE:
+		return
+	if not _finish_party(party, result):
+		_drop_party(party)
+
+
+## Settles the end of a party's time in a place: puts the sanitised result in, applies what the place did to the members,
+## and sets the party on the road home. False if the party is done with (nobody of it is coming home: it is told and
+## the vehicle dealt with at once), so that the caller takes it out of `parties`.
+func _finish_party(party: Dictionary, played: Dictionary) -> bool:
+	var people: Array = []
+	for id in party.members:
+		var p = _person(String(id))
+		if p != null:
+			people.append(p)
+	var result := _played_result(played, party, people)
+	party["result"] = result
+	party.erase("orphan")
+	_apply_played_state(people, played, result)
+	sim.stock.ammo = maxf(0.0, float(sim.stock.ammo) - clampf(float(played.get("ammo_used", 0.0)), 0.0, float(sim.stock.ammo)))
+	var coming := false
+	for p in people:
+		if not p.dead and not (result.lost as Array).has(String(p.id)):
+			coming = true
+	if not coming:
+		_come_back(party)
+		return false
+	party["state"] = "away"
+	party["return_at"] = snappedf(sim.clock_min + road_minutes(String(party.site), String(party.get("vehicle", ""))), 1.0)
+	return true
+
+
+## What the place did to those who come home: their health as they left it and the skills they gained there (the result's
+## `hp` and `skills`; a missing key or a name that is not a member's changes nothing; a gain is at most what a run can give,
+## `Skills.MAX_GAIN`, within the skill's cap, and Leading does not grow).
+func _apply_played_state(people: Array, played: Dictionary, result: Dictionary) -> void:
+	var hp = played.get("hp", {})
+	var gains = played.get("skills", {})
+	for p in people:
+		if p.dead or (result.lost as Array).has(String(p.id)):
+			continue
+		if hp is Dictionary and hp.has(String(p.id)) and _is_number(hp[String(p.id)]):
+			p.hp = clampf(float(hp[String(p.id)]), 1.0, PLAYED_HP_MAX)
+		var row = gains.get(String(p.id), {}) if gains is Dictionary else {}
+		if not row is Dictionary:
+			continue
+		for k in row:
+			var skill := String(k)
+			if not sim.skills.SKILLS.has(skill) or sim.skills.NO_GROWTH.has(skill) or not _is_number(row[k]):
+				continue
+			var now := int(p.skills.get(skill, 0))
+			var to := maxi(now, mini(int(sim.skills.cap_of(p, skill)), now + clampi(int(row[k]), 0, int(sim.skills.MAX_GAIN))))
+			if to > now:
+				p.skills[skill] = to
+				sim.skills._announce(p, skill, to)
+
+
+static func _is_number(v) -> bool:
+	return (typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT) and is_finite(float(v))
+
+
+## The party with this number (or the one given, found again by its number), or {}.
+func _party_by(party_or_id) -> Dictionary:
+	var n := -1
+	if party_or_id is Dictionary:
+		n = int(party_or_id.get("n", -1))
+	elif typeof(party_or_id) == TYPE_INT or typeof(party_or_id) == TYPE_FLOAT:
+		n = int(party_or_id)
+	elif typeof(party_or_id) == TYPE_STRING and String(party_or_id).is_valid_int():
+		n = int(String(party_or_id))
+	for party in parties:
+		if int(party.n) == n:
+			return party
+	return {}
+
+
+func _drop_party(party: Dictionary) -> void:
+	for i in parties.size():
+		if is_same(parties[i], party):
+			parties.remove_at(i)
+			return
 
 
 ## A played trip's result in the shape the return reads (see `_decide_town`): its loot, wounds and losses, a cleared
@@ -1250,7 +1460,7 @@ func _played_result(played: Dictionary, party: Dictionary, people: Array) -> Dic
 	if not beats.is_empty():
 		result["beats"] = beats
 	var place: Dictionary = sim.town.place(id)
-	if String(place.get("vehicle", "")) != "" and not bool(sim.town.state.get(id, {}).get("vehicle_taken", false)) and lost.size() < people.size() and (String(party.get("action", "loot")) == "loot" or bool(played.get("clear", false))):
+	if not played.is_empty() and String(place.get("vehicle", "")) != "" and not bool(sim.town.state.get(id, {}).get("vehicle_taken", false)) and lost.size() < people.size() and (String(party.get("action", "loot")) == "loot" or bool(played.get("clear", false))):
 		var building_total := 0.0
 		for p in people:
 			building_total += float(p.skills.Building)

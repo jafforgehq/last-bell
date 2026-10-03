@@ -1221,12 +1221,12 @@ func _blackout_step(dt: float) -> void:
 ## Who mends the generator: Dez, else the best builder who is up.
 func _fixer():
 	var dez = _person("dez")
-	if dez != null and _up(dez):
+	if dez != null and _up(dez) and not dez.player:
 		return dez
 	var best = null
 	for p in sim.people:
-		if _up(p) and (best == null or _skill(p, "Building") > _skill(best, "Building")):
-			best = p
+		if _up(p) and not p.player and (best == null or _skill(p, "Building") > _skill(best, "Building")):
+			best = p    # (the player is never sent on a chore by the AI: avatar.gd)
 	return best
 
 

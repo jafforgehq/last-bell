@@ -214,7 +214,7 @@ func forget_trip(p) -> void:
 ## Sends `p`, if they are free, to the most worn section under `below` of its health that
 ## nobody is mending.
 func _send_to_the_wall(p, below: float, taken: Dictionary) -> void:
-	if p.dead or p.downed or p.away != null or sim.morale.breakdown(p):
+	if p.dead or p.downed or p.away != null or sim.morale.breakdown(p) or p.player:
 		return
 	if p.repair != null or p.drafted or p.order != null:
 		return
