@@ -142,6 +142,8 @@ func mult(p, key: String) -> float:
 			m *= float(t.effects[key])
 		if t.has("crowded") and t.crowded.effects.has(key) and _crowded(p, t.crowded):
 			m *= float(t.crowded.effects[key])
+	if sim.specialists.active():    # (round 20: a title's bonus on its own work; exactly nothing changes without an avatar)
+		m *= sim.specialists.mult(p, key)
 	return m
 
 
@@ -154,6 +156,8 @@ func add(p, key: String) -> float:
 		var t: Dictionary = defs[id]
 		if t.effects.has(key):
 			sum += float(t.effects[key])
+	if sim.specialists.active():
+		sum += sim.specialists.add(p, key)
 	return sum
 
 

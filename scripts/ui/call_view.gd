@@ -27,6 +27,8 @@ var entry_id := 0
 var kind_label: Label
 var title_label: Label
 var sub_label: Label
+## The voice's opinion under the line (round 20, "Ana, the medic: treat them."): the initiative module's, told only at level 0.
+var opinion_label: Label
 var bar
 var count_label: Label
 var result_label: Label
@@ -61,6 +63,12 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	sub_label.custom_minimum_size.x = 100
 	sub_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(sub_label)
+	opinion_label = host._label("", Fonts.sans(600), 12, host.ACCENT)
+	opinion_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	opinion_label.custom_minimum_size.x = 100
+	opinion_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	opinion_label.visible = false
+	add_child(opinion_label)
 	bar = host.Bar.new()
 	bar.custom_minimum_size = Vector2(0, 6)
 	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -101,6 +109,7 @@ func _apply_level() -> void:
 		return
 	kind_label.visible = level < 2
 	sub_label.visible = level < 1 and sub_label.text != ""
+	opinion_label.visible = level < 1 and opinion_label.text != ""
 	for b in buttons.values():
 		b.custom_minimum_size.y = BUTTON_H if level < 3 else BUTTON_H_SLIM
 
@@ -115,9 +124,13 @@ func _rebuild(e: Dictionary) -> void:
 	title_label.text = String(e.text)
 	sub_label.text = String(e.sub)
 	sub_label.visible = String(e.sub) != ""
+	opinion_label.text = ""
+	opinion_label.visible = false
 	for o in e.options:
 		var b: Button = RadioKit.small_button(host, String(o.label), BUTTON_H if level < 3 else BUTTON_H_SLIM, 13)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# an idea's yes carries its price ("Yes: put up a workshop (30 scrap)"): a long word of it wraps rather than widening the card
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.pressed.connect(_on_pressed.bind(String(o.id)))
 		_buttons_box.add_child(b)
 		buttons[String(o.id)] = b
@@ -148,6 +161,7 @@ func refresh() -> void:
 	if e.is_empty():
 		return
 	var open: bool = not e.options.is_empty() and String(e.answered) == ""
+	_show_opinion(radio, e, open)
 	_buttons_box.visible = open
 	bar.visible = open
 	count_label.visible = open
@@ -178,6 +192,15 @@ func refresh() -> void:
 		said += " (by default)"
 	if result_label.text != said:
 		result_label.text = said
+
+
+## The voice's opinion of the call while it waits (it is live: a wall that worsens changes it); none once it is settled. It is a line
+## and nothing more: no option is lit and the call's own default is not touched.
+func _show_opinion(radio, e: Dictionary, open: bool) -> void:
+	var words := RadioKit.opinion_text(radio, e) if open else ""
+	if opinion_label.text != words:
+		opinion_label.text = words
+	opinion_label.visible = level < 1 and words != ""
 
 
 func _on_pressed(option_id: String) -> void:

@@ -18,22 +18,25 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 ## What a kind of news is called (the small capitals over a line of the log).
 const KIND_NAME := {
 	"attack": "Attack", "succession": "Lost", "sick": "Fever", "alarm": "Alarm", "recruit": "Arrival", "story": "Radio", "stranger": "At the gate",
+	# round 20, the community: an idea someone brings, a friendship or a couple, a falling out, a title earned
+	"idea": "Idea", "bond": "People", "rift": "Falling out", "title": "Known for",
 }
 
 
-## The colour of a kind of news (a word, readable on the panel): the dead at the wall and a death are red, a fever and the
-## alarm amber, a new face green, a card of the storyteller blue, a stranger gold; anything else the dim chalk.
+## The colour of a kind of news (a word, readable on the panel): the dead at the wall and a death are red, a fever, the
+## alarm and a falling out amber, a new face and a friendship green, a card of the storyteller and an idea blue, a stranger and
+## a title earned gold; anything else the dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
 		"attack", "succession":
 			return host.DANGER_TEXT
-		"sick", "alarm":
+		"sick", "alarm", "rift":
 			return host.WARN
-		"recruit":
+		"recruit", "bond":
 			return host.OK
-		"story":
+		"story", "idea":
 			return host.INFO
-		"stranger":
+		"stranger", "title":
 			return host.ACCENT
 	return host.INK2
 
@@ -64,6 +67,39 @@ static func option_label(e: Dictionary, option_id: String) -> String:
 		if String(o.id) == option_id:
 			return String(o.label)
 	return ""
+
+
+## What the voice of the community thinks of an open call (round 20): the initiative module's `voice_opinion(e)`, as it gives it
+## ({"who", "first", "title", "option", "line"}), or {} when there is no such module, it is switched off (no avatar, Orientation
+## Day), it has no opinion, or `radio` is null. The radio's own `sim` is where the module is; a stand-in radio with no `sim` has none.
+static func opinion_of(radio, e: Dictionary) -> Dictionary:
+	if radio == null:
+		return {}
+	return opinion_for(radio.get("sim"), e)
+
+
+## The words of an opinion ("Ana, the medic: treat them."), or "" when it has none (an answer whose line is not text is none).
+static func line_of(opinion: Dictionary) -> String:
+	var line = opinion.get("line", "")
+	return String(line).strip_edges() if line is String else ""
+
+
+## The words of the voice's opinion of an open call ("" when there is none).
+static func opinion_text(radio, e: Dictionary) -> String:
+	return line_of(opinion_of(radio, e))
+
+
+## The same, asked of the sim itself.
+static func opinion_for(sim, e: Dictionary) -> Dictionary:
+	if sim == null or e.is_empty():
+		return {}
+	var m = sim.get("initiative")
+	if m == null or not m.has_method("voice_opinion"):
+		return {}
+	if m.has_method("active") and not bool(m.active()):
+		return {}
+	var got = m.voice_opinion(e)
+	return got if got is Dictionary else {}
 
 
 ## The game's rate of time (game minutes a second): never 0, so that a division by it is safe.

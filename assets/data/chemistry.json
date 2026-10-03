@@ -1,0 +1,16 @@
+{
+	"warm": {
+		"optimist": 1.25,
+		"loyal": 1.2,
+		"steady": 1.1,
+		"nervous": 0.85
+	},
+	"friction": [
+		{"a": "nervous", "b": "tough", "per_look": -0.25},
+		{"a": "sharp_eyed", "b": "sharp_eyed", "per_look": -0.2}
+	],
+	"warmth": [
+		{"a": "loyal", "b": "loyal", "per_look": 0.2},
+		{"a": "nervous", "b": "steady", "per_look": 0.2}
+	]
+}

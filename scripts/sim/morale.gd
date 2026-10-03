@@ -329,6 +329,9 @@ func _modifiers(p) -> Array:
 	var friend = _near_friend(p)
 	if friend != null:
 		out.append({"label": "Near %s" % friend.first, "value": NEAR_BOND})
+	var rival = sim.relations.rival_near(p)    # (round 20: a rival close by wears on them; null without an avatar)
+	if rival != null:
+		out.append({"label": "On edge near %s" % rival.first, "value": sim.relations.RIVAL_NEAR})
 	var lead = _leader()
 	if lead != null and lead != p and Vector2(lead.x - p.x, lead.y - p.y).length() <= LEADER_TILES:
 		out.append({"label": "%s is leading" % lead.first, "value": minf(LEADER_MAX, float(lead.skills.get("Leading", 0)) * LEADER_PER_POINT)})
@@ -463,6 +466,7 @@ func on_breach() -> void:
 
 ## `p` has just gone down: their friends are shaken.
 func on_downed(p) -> void:
+	sim.relations.on_downed(p)    # (round 20)
 	if not enabled:
 		return
 	for b in sim.bonds.of(p):
@@ -473,6 +477,7 @@ func on_downed(p) -> void:
 ## Their friends feel it most (a friend's death or turning, times the `grief` trait), the rest
 ## of the crew less.
 func on_lost(p, how: String) -> void:
+	sim.relations.on_lost(p, how)    # (round 20: the pairs of the lost one, and who mourns a partner)
 	if not enabled:
 		return
 	for q in sim.people:
@@ -482,7 +487,7 @@ func on_lost(p, how: String) -> void:
 		if how == "left":
 			shock(q, EXILE_FRIEND if friend else EXILE_OTHER, "%s left" % p.first)
 		elif friend:
-			shock(q, FRIEND_LOST * sim.traits.mult(q, "grief"), "%s %s" % [p.first, how])
+			shock(q, FRIEND_LOST * sim.traits.mult(q, "grief") * sim.relations.grief_mult(q, p), "%s %s" % [p.first, how])
 		else:
 			shock(q, OTHER_LOST, "%s %s" % [p.first, how])
 

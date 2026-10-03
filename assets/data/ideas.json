@@ -1,0 +1,312 @@
+{
+  "version": 1,
+  "_about": "What the community proposes over the radio (scripts/sim/initiative.gd, round 20). Per kind: `base` (its score before who proposes it and how well they fit), `skill` (the skill that makes a proposer fit, or \"\"), `title` (the specialist title that makes a proposer first choice, or \"\"), `communal` (the voice gets a bonus on it), `params` (the thresholds of its trigger) and the words: `line` (what they say; {first} is the proposer), `yes` (the button), `sub` (the line under it), `done` (what came of a yes). The placeholders each kind fills are in the module. A kind that is missing here is never proposed.",
+  "kinds": {
+    "fix_wall": {
+      "base": 6.0,
+      "skill": "Building",
+      "title": "engineer",
+      "communal": false,
+      "params": {
+        "under": 0.9,
+        "before_dusk_h": 3.0,
+        "per_scrap": 10.0
+      },
+      "line": "I could fix the {wall} properly. About {scrap} scrap.",
+      "yes": "Yes: fix the {short} ({scrap} scrap)",
+      "sub": "It is at {pct}% now. The scrap is paid as {first} works, up to {scrap}.",
+      "done": "{first} goes to mend the {short} (about {scrap} scrap)"
+    },
+    "build": {
+      "base": 5.5,
+      "skill": "Building",
+      "title": "engineer",
+      "communal": true,
+      "params": {
+        "food_days": 4.0,
+        "ammo": 90.0,
+        "scrap": 40.0,
+        "mood": 55.0
+      },
+      "needs": [
+        {
+          "id": "housing",
+          "buildings": [
+            "tents",
+            "bunk_house"
+          ],
+          "why": "a caller is waiting and there is no bed for them"
+        },
+        {
+          "id": "food",
+          "buildings": [
+            "greenhouse"
+          ],
+          "why": "the food runs short"
+        },
+        {
+          "id": "ammo",
+          "buildings": [
+            "workshop"
+          ],
+          "why": "the ammo runs short"
+        },
+        {
+          "id": "scrap",
+          "buildings": [
+            "salvage_bench"
+          ],
+          "why": "the scrap runs short"
+        },
+        {
+          "id": "mood",
+          "buildings": [
+            "bunk_house"
+          ],
+          "why": "people are worn thin"
+        }
+      ],
+      "named": {
+        "tents": "Some tents",
+        "bunk_house": "A bunk house",
+        "greenhouse": "A greenhouse",
+        "workshop": "A workshop",
+        "salvage_bench": "A salvage bench"
+      },
+      "line": "{the} would help: {why}. {scrap} scrap.",
+      "yes": "Yes: build it ({scrap} scrap)",
+      "sub": "The Builders put it up. It costs {scrap} scrap now and some hours of work.",
+      "done": "The {name} goes up ({scrap} scrap)"
+    },
+    "bench_target": {
+      "base": 4.0,
+      "skill": "Building",
+      "title": "engineer",
+      "communal": false,
+      "params": {
+        "within": 10.0,
+        "ammo_under": 400.0,
+        "target_under": 600.0,
+        "step": 100.0,
+        "scrap_over_reserve": 20.0
+      },
+      "line": "The bench stops at {t}. Let me run it to {to}.",
+      "yes": "Yes: run the bench to {to}",
+      "sub": "It costs nothing now. The bench makes ammo from scrap up to the line.",
+      "done": "The bench will run to {to}"
+    },
+    "wall_line": {
+      "base": 3.5,
+      "skill": "Building",
+      "title": "",
+      "communal": false,
+      "params": {
+        "below": 85.0,
+        "step": 10.0,
+        "from_pct": 0.7,
+        "to_pct": 0.85,
+        "min_scrap": 25.0
+      },
+      "line": "The crew leaves walls at {x}%. Mend them at {to}.",
+      "yes": "Yes: mend walls under {to}%",
+      "sub": "It costs nothing now. The crew spends scrap on a wall as soon as it is under the line ({short} is at {pct}%).",
+      "done": "The crew mends walls under {to}% now"
+    },
+    "desk": {
+      "base": 6.5,
+      "skill": "",
+      "title": "",
+      "communal": false,
+      "params": {
+        "radio_from": 8.0,
+        "radio_to": 11.0,
+        "watch_from": 14.0,
+        "watch_to": 16.0
+      },
+      "stations": {
+        "infirmary": {
+          "skill": "Medicine",
+          "title": "medic",
+          "line": "Nobody is at the infirmary and someone is in a bed. I can sit with them.",
+          "short": "the infirmary"
+        },
+        "radio": {
+          "skill": "Leading",
+          "title": "",
+          "line": "Nobody is at the radio. I can sit with it.",
+          "short": "the radio desk"
+        },
+        "watch": {
+          "skill": "Shooting",
+          "title": "marksman",
+          "line": "Nobody is on watch. I can take the lookout post.",
+          "short": "the lookout post"
+        }
+      },
+      "yes": "Yes: {first} takes {short}",
+      "sub": "{first} leaves {old} for it.",
+      "done": "{first} takes {short}",
+      "sub_free": "{first} has no job now."
+    },
+    "garden": {
+      "base": 5.0,
+      "skill": "",
+      "title": "",
+      "communal": false,
+      "params": {
+        "food_days": 5.0
+      },
+      "line": "The garden could feed two more if {helper} gave a hand.",
+      "yes": "Yes: {helper} works the garden",
+      "sub": "The food would last {days} days. {helper} has no job now.",
+      "done": "{helper} goes to the garden"
+    },
+    "errand": {
+      "base": 4.5,
+      "skill": "Shooting",
+      "title": "scout",
+      "communal": false,
+      "params": {
+        "max_danger": 1,
+        "food_days": 4.0,
+        "water_days": 4.0,
+        "meds": 3.0,
+        "scrap": 10.0,
+        "ammo": 80.0,
+        "window_left_h": 0.5,
+        "trip_note": "Back by the afternoon."
+      },
+      "needs": [
+        "food",
+        "water",
+        "meds",
+        "scrap",
+        "ammo"
+      ],
+      "line": "{Where} should have {loot}. {us} could go.{less}",
+      "yes": "Yes: send {party}",
+      "sub": "A trip to {where}. {terms}",
+      "done": "{party} set off for {where}"
+    },
+    "swap_posts": {
+      "base": 3.0,
+      "skill": "Shooting",
+      "title": "marksman",
+      "communal": false,
+      "params": {
+        "better_by": 2.0,
+        "holder_morale": -2.0,
+        "holder_affinity": -4.0,
+        "refused_affinity": -1.5
+      },
+      "line": "I shoot better than {other}. Give me the tower.",
+      "yes": "Yes: {first} takes the tower post",
+      "sub": "{other} moves to {old}. Shooting {mine} against {theirs}.",
+      "done": "{first} takes the tower post and {other} moves to {old}"
+    },
+    "post_beside": {
+      "base": 3.0,
+      "skill": "",
+      "title": "",
+      "communal": false,
+      "params": {
+        "apart": 9.0,
+        "beside": 6.0,
+        "gain": 3.0
+      },
+      "line": "Put me beside {friend} on the wall.",
+      "yes": "Yes: {first} stands beside {friend}",
+      "sub": "{other} takes {old}, the post {first} has now.",
+      "done": "{first} takes a post beside {friend} and {other} moves to {old}"
+    },
+    "supper": {
+      "base": 4.0,
+      "skill": "",
+      "title": "",
+      "communal": true,
+      "params": {
+        "mood_under": 62.0,
+        "food": 12.0,
+        "from": 14.0,
+        "to": 18.0,
+        "cost_food": 2.0,
+        "mood": 4.0,
+        "bond": 2.0
+      },
+      "line": "Let's all eat together tonight. It would help.",
+      "yes": "Yes: a shared supper (2 food)",
+      "sub": "Everyone at the base eats together. The mood is {mood} now.",
+      "done": "Everyone eats together tonight (2 food)"
+    },
+    "quarrel": {
+      "base": 4.5,
+      "skill": "",
+      "title": "",
+      "communal": true,
+      "params": {
+        "tiles": 6.0,
+        "far": 9.0,
+        "gain": 2.0
+      },
+      "line": "{a} and {b} are at each other's throats. Put them apart?",
+      "yes": "Yes: put them apart",
+      "sub": "{b} {move}. {reason}",
+      "done": "{b} {move}"
+    },
+    "lesson": {
+      "base": 2.5,
+      "skill": "",
+      "title": "",
+      "communal": false,
+      "params": {
+        "teacher_min": 7,
+        "student_max": 4,
+        "minutes": 60.0,
+        "dusk_h": 2.0,
+        "gain": 3.0,
+        "teacher_morale": 2.0
+      },
+      "skills": {
+        "Medicine": {
+          "kind": "treated",
+          "phrase": "dress a wound"
+        },
+        "Building": {
+          "kind": "mended",
+          "phrase": "mend a wall"
+        },
+        "Shooting": {
+          "kind": "kills",
+          "phrase": "shoot straight"
+        }
+      },
+      "line": "I could show {student} how to {phrase}. An hour of both of us.",
+      "yes": "Yes: an hour's lesson",
+      "sub": "{first} and {student} stop work for an hour. {skill} {have} to {next}.",
+      "done": "{first} and {student} sit down for an hour",
+      "titles": {
+        "medic": "Medicine",
+        "engineer": "Building",
+        "marksman": "Shooting"
+      }
+    },
+    "farewell": {
+      "base": 7.0,
+      "skill": "",
+      "title": "",
+      "communal": true,
+      "params": {
+        "from": 15.0,
+        "to": 18.5,
+        "within_days": 1,
+        "circle": 6.0,
+        "all": 2.0,
+        "unsaid": -2.0
+      },
+      "line": "Let's say a few words for {dead} at dusk.",
+      "yes": "Yes: say a few words",
+      "sub": "A quiet minute. Those who were close to {dead} feel it most.",
+      "done": "A few words are said for {dead}"
+    }
+  }
+}
