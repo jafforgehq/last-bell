@@ -645,8 +645,11 @@ func _before(a, b) -> bool:
 		return a.away == null
 	if a.downed != b.downed:
 		return not a.downed
-	if not is_equal_approx(a.trust, b.trust):
-		return a.trust > b.trust
+	# (round 20: the community's standing adds to the trust: the one people stand by; +0.0 without relations)
+	var ta: float = a.trust + sim.relations.succession_bonus(a)
+	var tb: float = b.trust + sim.relations.succession_bonus(b)
+	if not is_equal_approx(ta, tb):
+		return ta > tb
 	var la := int(a.skills.get("Leading", 0))
 	var lb := int(b.skills.get("Leading", 0))
 	if la != lb:

@@ -25,7 +25,8 @@
 ## near it; fall back to the school: the people of that section's posts), a call when someone has a fever (treat them; keep
 ## them apart: off work, resting at a bed of the bunks, `medical.keep_apart`; and, for an infection with no medicine to treat it,
 ## send them out through the gate), a log entry for every card of the storyteller (the card itself stays the storyteller's), for every arrival
-## and for a succession. With no avatar (the old game, the harness, the tests) none of that happens.
+## and for a succession; the community's ideas (round 20, kind "idea", yes / later / no) are raised and answered by initiative.gd
+## through `raise_call` and `_carry_out`. With no avatar (the old game, the harness, the tests) none of that happens.
 ##
 ## THE ALARM is the call to arms: `alarm(true)` puts everyone at their posts now (by day too, in any start) until
 ## `alarm(false)` or the dawn, and ends whatever stances there were.
@@ -225,6 +226,7 @@ func add_trust(p, delta: float, why: String) -> void:
 	while list.size() > MAX_REASONS:
 		list.pop_front()
 	reasons[String(p.id)] = list
+	sim.relations.on_trust_moved(p, delta)    # (round 20: a push or a gain reaches the person's friends)
 
 
 ## The last few reasons someone's trust has moved, newest first: [{"why", "delta", "day"}].
@@ -288,7 +290,7 @@ func willingness(contact, verb: String) -> Dictionary:
 	var out := {"ok": true, "why": "", "line": "", "delay_s": 0.0, "tone": "", "hard": false}
 	if contact == null or not VERBS.has(verb):
 		return _refused(out, "Nobody answers", "", true)
-	var trust := trust_of(contact)
+	var trust: float = trust_of(contact) + sim.relations.company_pull(contact, verb)    # (round 20: a friend in the squad warms, a rival cools; +0.0 without an avatar)
 	out["delay_s"] = delay_for(trust)
 	out["tone"] = tone_for(trust)
 	var first := String(contact.first)
@@ -304,6 +306,8 @@ func willingness(contact, verb: String) -> Dictionary:
 	var reason := _busy_soft(contact)
 	if reason == "" and verb != "hold":
 		reason = _health_reason(contact)
+	if reason == "" and verb != "hold":
+		reason = sim.relations.company_reason(contact, verb)    # (round 20: a soft reason of company: staying with a hurt friend, an enemy in the squad)
 	if reason != "":
 		var spoken := reason.substr(0, 1).to_upper() + reason.substr(1) + ", can't %s." % String(CANT.get(verb, "do that"))
 		return _refused(out, "%s: %s, can't %s" % [first, reason, String(CANT.get(verb, "do that"))], spoken, false)
@@ -1354,6 +1358,9 @@ func _carry_out(e: Dictionary, option_id: String) -> String:
 				if sim.medical.gizmo("sendout", {"kind": "person", "ref": p}):
 					return "%s is sent out through the gate" % String(p.first)
 				return "Cannot send %s out now" % String(p.first)
+		"idea":
+			# an idea the community brought (initiative.gd, round 20): the module does what a yes asks and keeps the accounts
+			return sim.initiative.carry_out(e, option_id)
 	return ""
 
 

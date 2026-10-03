@@ -26,6 +26,9 @@ const Streets := preload("res://scripts/sim/streets.gd")
 const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const Radio := preload("res://scripts/sim/radio.gd")
+const Relations := preload("res://scripts/sim/relations.gd")
+const Specialists := preload("res://scripts/sim/specialists.gd")
+const Initiative := preload("res://scripts/sim/initiative.gd")
 const Avatar := preload("res://scripts/sim/avatar.gd")
 const Interact := preload("res://scripts/sim/interact.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
@@ -296,6 +299,9 @@ var seasons
 var streets
 var vehicles
 var radio
+var relations    # (round 20: who is close to whom)
+var specialists    # (round 20: the one to call for a trade)
+var initiative    # (round 20: what the community proposes over the radio)
 var avatar
 ## What the avatar uses where it stands (round 18, interact.gd): talk, a post, the bench, a car's fuel. Behind avatar mode.
 var interact
@@ -386,6 +392,12 @@ func _init(data: Dictionary, w, effects) -> void:
 	vehicles = Vehicles.new()
 	radio = Radio.new()
 	radio.setup(self)
+	relations = Relations.new()
+	relations.setup(self)
+	specialists = Specialists.new()
+	specialists.setup(self)
+	initiative = Initiative.new()
+	initiative.setup(self)
 	avatar = Avatar.new()
 	avatar.setup(self)
 	interact = Interact.new()
@@ -412,7 +424,7 @@ func make_person(def: Dictionary) -> Person:
 func add_person(def: Dictionary) -> Person:
 	var p := _make_person(def)
 	people.append(p)
-	for m in [morale, traits, bonds, jobs, skills]:
+	for m in [morale, traits, bonds, jobs, skills, relations, specialists]:
 		if m.has_method("person_added"):
 			m.person_added(p)
 	return p
@@ -619,6 +631,9 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, vehicles]:
 		m.start()
 	radio.start()
+	relations.start()
+	specialists.start()
+	initiative.start()
 	avatar.start()
 	interact.start()
 	recruits.begin()
@@ -699,7 +714,11 @@ func update(dt: float) -> void:
 			alerts.erase(id)
 	# what the avatar is using (a post, the bench), after the people have moved (round 18, interact.gd)
 	interact.update(dt)
-	# the radio's news and calls, from what happened this step (last: it reads the step's events)
+	# the community: who is close to whom, who is the one to call, what they propose (round 20), then the radio's news and calls
+	# from what happened this step (last: it reads the step's events)
+	relations.update(dt)
+	specialists.update(dt)
+	initiative.update(dt)
 	radio.update(dt)
 
 

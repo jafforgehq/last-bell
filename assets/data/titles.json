@@ -1,0 +1,69 @@
+{
+  "fit_bonus": 1.5,
+  "effect_words": {
+    "bandage": "bandages {n}% faster",
+    "cure": "cures {n}% more often",
+    "craft": "makes ammo {n}% faster",
+    "repair": "mends and builds {n}% faster",
+    "aim": "shoots {n}% truer",
+    "party_loot": "finds {n}% more on trips"
+  },
+  "titles": [
+    {
+      "id": "medic",
+      "name": "the medic",
+      "short": "Medic",
+      "skill": "Medicine",
+      "min_skill": 6,
+      "need": 6.0,
+      "practice": "treated",
+      "practice_text": "%d treated",
+      "seats": ["infirmary"],
+      "effects": {"mult": {"bandage": 1.25}, "add": {"cure": 0.08}},
+      "blurb": "The one people carry the hurt to: quicker with a bandage, better at a cure.",
+      "bark": "Leave the hurt to me."
+    },
+    {
+      "id": "engineer",
+      "name": "the engineer",
+      "short": "Engineer",
+      "skill": "Building",
+      "min_skill": 6,
+      "need": 30.0,
+      "practice": "mended_crafted",
+      "practice_text": "%d mended or made",
+      "seats": ["bench"],
+      "effects": {"mult": {"craft": 1.15, "repair": 1.2}},
+      "blurb": "The one who keeps the place standing: faster at the bench and with a hammer.",
+      "bark": "I'll keep the place standing."
+    },
+    {
+      "id": "marksman",
+      "name": "the marksman",
+      "short": "Marksman",
+      "skill": "Shooting",
+      "min_skill": 6,
+      "need": 20.0,
+      "practice": "kills",
+      "practice_text": "%d kills",
+      "seats": ["watch"],
+      "effects": {"mult": {"aim": 1.04}},
+      "blurb": "The best shot the camp has, and the one for the tower.",
+      "bark": "Put me where I can see them."
+    },
+    {
+      "id": "scout",
+      "name": "the scout",
+      "short": "Scout",
+      "skill": "",
+      "min_skill": 0,
+      "need": 3.0,
+      "practice": "trips",
+      "practice_text": "%d trips",
+      "seats": [],
+      "effects": {"party_loot": 1.12},
+      "blurb": "Has been out more than anyone: a party with them finds more.",
+      "bark": "I know the way out there."
+    }
+  ]
+}

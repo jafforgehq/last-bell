@@ -754,6 +754,7 @@ func _update_jobs(dt: float) -> void:
 func _finish(j) -> void:
 	var healer = j.healer
 	var p = j.patient
+	sim.relations.on_treated(healer, p, j.kind)    # (round 20: looked after, they are closer; nothing without an avatar)
 	if j.kind == "bandage":
 		_use_meds(BANDAGE_MEDS)
 		p.bleeding = 0.0

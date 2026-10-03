@@ -1,7 +1,10 @@
 ## Bonds: who is close to whom (friend, family, mentor), from map.json (`bonds`: a list of
 ## {"a": id, "b": id, "kind"}; for a mentor, `a` is the mentor of `b`). A person with a
 ## bonded person within AIM_TILES tiles aims AIM_BONUS better (the Loyal trait adds to it),
-## being near one steadies them (morale.gd), and losing one hurts (morale.gd).
+## being near one steadies them (morale.gd), and losing one hurts (morale.gd). In an avatar game of the
+## settlement start the friends and the partner people make in play (relations.gd, round 20) are bonds too:
+## `of` lists them after the roster's and `bonded` counts them, so all of the above follows with no more edits;
+## without an avatar they are not there and this is the roster alone.
 extends RefCounted
 
 const KINDS := ["friend", "family", "mentor"]
@@ -73,6 +76,8 @@ func of(p) -> Array:
 			other = _person(e.a)
 		if other != null:
 			out.append({"who": other, "kind": e.kind, "role": role})
+	# (round 20: the friends and the partner made in play, in an avatar game; nothing without one)
+	out.append_array(sim.relations.circle(p))
 	return out
 
 
@@ -83,7 +88,7 @@ func bonded(p, q) -> bool:
 	for e in list:
 		if (e.a == p.id and e.b == q.id) or (e.a == q.id and e.b == p.id):
 			return true
-	return false
+	return sim.relations.is_close(p, q)    # (round 20: friends made in play; false without an avatar)
 
 
 ## Whether a bonded person (alive, up and on the map) is within `tiles` of this one.

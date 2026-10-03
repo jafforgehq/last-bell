@@ -692,6 +692,10 @@ func _fit(p, id: String) -> float:
 				score += 0.5
 	if id == "watch" and String(p.def.get("role", "")) == "Lookout":
 		score += 3.0
+	if sim.specialists.active():    # (round 20: the title holder has first call on their seat: the medic in the infirmary)
+		score += sim.specialists.fit_bonus(p, id)
+	if sim.relations.active():    # (round 20: a friend at that station is a reason to sit there, a rival a reason not to)
+		score += sim.relations.fit_adjust(p, id)
 	return score
 
 

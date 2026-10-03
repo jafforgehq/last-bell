@@ -58,6 +58,7 @@ const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
+const CommunityKit := preload("res://scripts/ui/community_kit.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -3356,6 +3357,10 @@ func _card_tip(p, word: String, epitaph: String) -> String:
 		tip += "\nThis is you"
 	if avatar_ui and word == "" and not p.player and STANCE_TIPS.has(String(p.stance)):
 		tip += "\n" + String(STANCE_TIPS[String(p.stance)])
+	# round 20: the title they are known by and who they are close to or at odds with (the card itself shows nothing more)
+	if not p.dead and not p.turned:
+		for line in CommunityKit.person_lines(sim_ref, p):
+			tip += "\n" + String(line)
 	if word == "In memory" or word == "Turned":
 		tip += "\nIn memory" if word == "In memory" else "\nTurned into one of the dead"
 		if epitaph != "":
@@ -3963,9 +3968,11 @@ func _refresh_traits(p) -> void:
 		var got = t.of(p)
 		if got is Array:
 			list = got
-	refs.traits_head.visible = not list.is_empty()
-	refs.traits_box.visible = not list.is_empty()
-	var sig := ""
+	# round 20: a title earned (the medic...) is a gold chip first, with the numbers in its tooltip ("" when they have none)
+	var title_sig := CommunityKit.title_sig(sim_ref, p)
+	refs.traits_head.visible = not list.is_empty() or title_sig != ""
+	refs.traits_box.visible = not list.is_empty() or title_sig != ""
+	var sig := title_sig
 	for tr in list:
 		sig += "%s|%s|%s;" % [tr.get("id", ""), tr.get("name", ""), tr.get("blurb", "")]
 	if sig == refs.traits_sig:
@@ -3974,6 +3981,10 @@ func _refresh_traits(p) -> void:
 	for c in refs.traits_box.get_children():
 		refs.traits_box.remove_child(c)
 		c.queue_free()
+	if title_sig != "":
+		var chip = CommunityKit.title_chip(self, sim_ref, p)
+		if chip != null:
+			refs.traits_box.add_child(chip)
 	for tr in list:
 		var blurb := String(tr.get("blurb", ""))
 		refs.traits_box.add_child(_chip(String(tr.get("name", "")), _wrap(blurb if blurb != "" else String(tr.get("name", "")))))
@@ -3983,6 +3994,8 @@ func _refresh_traits(p) -> void:
 ## is close, what it is doing for their aim.
 func _refresh_bonds(p) -> void:
 	var refs := inspect_refs
+	# round 20: who they are at odds with is a row of its own under this one (made when somebody has a rival)
+	CommunityKit.sync_rivals(self, refs, sim_ref, p)
 	var b = _mod("bonds")
 	var list: Array = []
 	if b != null and b.has_method("of"):
@@ -4005,6 +4018,10 @@ func _refresh_bonds(p) -> void:
 	var tip := "Close to:\n" + "\n".join(full) + "\n" + _bond_words(p)
 	if b.has_method("aim_bonus") and not p.dead and float(b.aim_bonus(p)) > 0.0:
 		tip += "\nA friend is close now: aims %d%% better." % roundi(float(b.aim_bonus(p)) * 100.0)
+	# round 20: how each friendship stands, and since when
+	var stands := CommunityKit.bond_tip(sim_ref, p)
+	if stands != "":
+		tip += "\n" + stands
 	_set_text(refs.bonds, ", ".join(short), INK)
 	for c in [refs.bonds, refs.bonds_head]:
 		if c.tooltip_text != tip:
@@ -4277,6 +4294,9 @@ func _trust_tip(p, radio, trust: float, tone: String) -> String:
 		lines.append("Lately:")
 		for r in why:
 			lines.append(_wrap("%s  %s (day %d)" % [_signed(float(r.delta)), String(r.why), int(r.day)], 64))
+	# round 20: how their ideas have gone, and who people turn to
+	for line in CommunityKit.trust_lines(sim_ref, p):
+		lines.append(_wrap(String(line), 64))
 	return "\n".join(lines)
 
 
@@ -4517,6 +4537,10 @@ func _layout_news() -> void:
 			break
 		_news_cap = shown - 1
 		_sync_alerts(sim_ref)
+	# round 20: an idea tells more than the old calls did (the voice's line, a yes that wraps): when even with no alerts the card is
+	# taller than the room it has, it tells less of itself (the lines under its title first), and all of it again when there is room
+	if call_card.visible:
+		call_card.fit(avail + call_card.get_combined_minimum_size().y)
 	if radio_open():
 		radio_panel.set_compact(compact)
 		radio_panel.fit(avail, size.x - 24.0)

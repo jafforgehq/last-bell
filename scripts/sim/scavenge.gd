@@ -454,6 +454,8 @@ func loot_scale(site_id: String, people: Array) -> float:
 		if int(p.skills.Leading) >= LEADER_SKILL:
 			scale *= LEADER_BONUS
 			break
+	if sim.specialists.active():    # (round 20: a party with the scout finds more)
+		scale *= sim.specialists.party_mult(people)
 	return scale
 
 
@@ -1059,6 +1061,8 @@ func _come_back(party: Dictionary, unloaded: bool = false) -> void:
 			lost.append(p)
 		else:
 			came.append(p)
+	sim.specialists.on_trip(came, lost, party)    # (round 20: a trip home is the scout's practice; a no-op without an avatar)
+	sim.relations.on_trip(came, lost, party)    # (round 20: those who came home together are closer; a no-op without an avatar)
 	if not unloaded:
 		for i in came.size():
 			var p = came[i]
