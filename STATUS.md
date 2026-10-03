@@ -8,9 +8,9 @@
 | Thing | State |
 | --- | --- |
 | Game | Rounds 0 to 16 are built. **Nobody has played rounds 11 to 16 by hand** (tests, screenshots, a film of a trip and the bot only). You played up to about round 10. |
-| Git | `main` has two local commits that are **not pushed**: `758963b` (the audio fix that works) and `201bd8c` (round 15). GitHub's `main` is at `05e1113` (rounds 7 to 14 and the first, failed, audio fix). |
-| Tests | **2171 passed, 0 failed** on `201bd8c`. |
-| itch (live) | Upload id 19525431 (2026-10-02 21:33): rounds 5 to 14 **with the working audio fix**, the louder sounds and the music. Round 15 is **not** on itch yet. |
+| Git | Everything is committed and **pushed**: GitHub's `main` is at the commit after `d97bb70` (rounds 15 and 16, the crew of five, the working audio fix). |
+| Tests | **2267 passed, 1 failed** on `d97bb70`: the one failure was a raid-banner test that failed now and then in whole runs (never alone); it has since been made to pin its own state and passes alone, but the whole suite has not been re-run since. |
+| itch (live) | Upload id 19534948 (2026-10-03 10:22): rounds 5 to 16 with the working audio fix, the louder sounds, the music, the crew of five and round 16's work life and animations. Checked: the embed loads to the title screen, the page is still Restricted, one file. |
 | Biggest open risk | Balance and feel of rounds 11 to 14 for a human; the settlement game is harder than at round 10 (section 6). |
 
 **Folders (home directory):** `/Users/jaf_lab/last-bell` is **the game** (the only Godot project, the only git repo, the one on GitHub and the one you open in Godot). `/Users/jaf_lab/last-bell-prototype-recovered` is only the old web prototype's JavaScript source, rebuilt on 2026-10-01 from an old chat transcript (`README.txt` inside says so); nothing in the game uses it, and it is outside git. Keep it (it is the generator of most of the art and sounds), but never work in it.
