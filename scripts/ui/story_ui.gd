@@ -72,6 +72,12 @@ func on_alert(id: String) -> bool:
 	return false
 
 
+## Whatever was kept waiting while something had the screen (a played trip and its report) is opened now if nothing is in the
+## way: the game calls it the moment it hands the screen back, so the card's pause is taken at the right speed.
+func retry() -> void:
+	_try_open()
+
+
 ## Shows the last assembly again.
 func show_dawn() -> void:
 	if sim.storyteller.report().is_empty():

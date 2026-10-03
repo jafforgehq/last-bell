@@ -24,8 +24,8 @@
 ## starts one by itself, and an empty magazine starts one when the trigger is let go.
 ## MELEE. `melee()` (F): an arc of MELEE_REACH tiles and MELEE_ARC degrees toward the aim hits every one of the dead in
 ## it once, with the pike's damage or the butt's, whatever the gun and with no ammunition; MELEE_COOLDOWN seconds between.
-## SUCCESSION. When the player dies, turns or leaves (`on_player_lost`, called by medical.gd), the next in line (alive, up
-## before down; the most trusted, then the best Leading, then the id) is the player; everyone's trust falls, a mourning
+## SUCCESSION. When the player dies, turns or leaves (`on_player_lost`, called by medical.gd), the next in line (alive, at the base
+## before away on a trip, up before down; the most trusted, then the best Leading, then the id) is the player; everyone's trust falls, a mourning
 ## shock goes through the morale, and a "succession" event is raised. The lost one's carried gear is lost with them:
 ## nothing in the sim carries any yet (a played trip's bags are the trip's, not a person's).
 ##
@@ -70,6 +70,10 @@ const MOURNING := -8.0
 var sim
 ## The tiles of the wall sections that a shot goes over, kept while a shot or a blow is worked out.
 var _low := {}
+## The same table for the buildings it was made for (`sim.build.version` and the number of wall sections): the aim line asks for it
+## every frame and a spread of pellets once each, and the walls only change when something is built or taken down.
+var _low_cache := {}
+var _low_key := ""
 
 
 func setup(s) -> void:
@@ -147,8 +151,10 @@ func _find(who):
 	return null
 
 
-## The AI lets go of a person who becomes the player.
+## The AI lets go of a person who becomes the player. The seat they leave (the radio desk, the infirmary...) is not left empty: the
+## people at the base fill it again (`jobs.refill`), so that the storyteller has a speaker and the infirmary a medic.
 func _take_over(p) -> void:
+	var seat: String = sim.jobs.job_of(p)
 	sim.jobs.unassign(p)
 	sim.tactics.call_back(p)
 	p.drafted = false
@@ -161,6 +167,8 @@ func _take_over(p) -> void:
 	p.stance = ""
 	p.stance_at = Vector2.ZERO
 	_clear_input(p)
+	if seat != "":
+		sim.jobs.refill(seat)
 
 
 func _clear_input(p) -> void:
@@ -452,12 +460,17 @@ func _stops(pt: Vector2) -> bool:
 ## The tiles of the wall sections that a shot goes over: the yard's walls are barricades, shot over from the walkway
 ## (a school door is a building's wall and is not).
 func _low_tiles() -> Dictionary:
+	var key := "%d:%d" % [int(sim.build.version), sim.segments.size()]
+	if key == _low_key:
+		return _low_cache
 	var out := {}
 	for s in sim.segments:
 		if s.kind == sim.DOOR_KIND:
 			continue
 		for i in s.tiles:
 			out[int(i)] = true
+	_low_cache = out
+	_low_key = key
 	return out
 
 
@@ -542,8 +555,9 @@ func on_player_lost(p, successor = null) -> void:
 	sim.alert("succession", "warn", "You are %s now" % next.first, "%s is gone" % p.first, Vector2(next.x, next.y) if next.away == null else null, 20.0)
 
 
-## Who leads next: anyone alive (away on a trip too), those who can stand before those who are down, then the most trusted,
-## the best Leading, and the id.
+## Who leads next: anyone alive, those at the base before those away on a trip (the player has a body to walk, a gun to shoot and
+## people to ask only at home; somebody away leads only when nobody is), those who can stand before those who are down, then the most
+## trusted, the best Leading, and the id.
 func _next_in_line(lost):
 	var best = null
 	for q in sim.people:
@@ -555,6 +569,8 @@ func _next_in_line(lost):
 
 
 func _before(a, b) -> bool:
+	if (a.away == null) != (b.away == null):
+		return a.away == null
 	if a.downed != b.downed:
 		return not a.downed
 	if not is_equal_approx(a.trust, b.trust):

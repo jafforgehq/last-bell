@@ -18,7 +18,12 @@ func _init() -> void:
 
 func _build_body() -> void:
 	_add("resume", shell.menu_item("Resume", "", true, "Esc"), close)
-	_add("save", shell.menu_item("Save", "Quick save", false, "F5"), shell.save_game)
+	# (not in a place: the game keeps no state there, and the line says so)
+	var no_save: String = shell.save_blocked()
+	_add("save", shell.menu_item("Save", no_save if no_save != "" else "Quick save", false, "F5"), shell.save_game)
+	if no_save != "":
+		shell.set_item_enabled(items["save"], false)
+		items["save"].tooltip_text = no_save
 	_add("load", shell.menu_item("Load", "Pick a save"), shell.open_load.bind(true))
 	_add("settings", shell.menu_item("Settings"), shell.open_settings)
 	_add("help", shell.menu_item("How to play", "Every key and mouse button"), _help)

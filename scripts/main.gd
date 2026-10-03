@@ -150,10 +150,14 @@ var title_mode := false
 ## tips wait.)
 var menu_open: bool:
 	get:
-		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open())) or raid_open()
+		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open())) or raid_open() or trip_report_up()
 ## The played trip's scene (round 14, scripts/raid/raid_scene.gd) while one is up, else null: it takes the screen and the
 ## keys (so it counts as a menu), the colony's world and HUD are hidden and the scene steps its rules (see `open_raid`).
 var raid = null
+## The same scene while its REPORT is up (round 17): the colony's view is back under the report (`raid` is null) with its rules
+## held, and the report is a page over it, so it counts as a menu too: the storyteller's cards wait for it to be dismissed, the
+## avatar's hands are off and the pointer is the arrow. The scene sets it when the report comes up and clears it in `go_home`.
+var trip_report = null
 ## A seed for the next played trip's site (a screenshot's `--raid=<place>,<seed>`); -1: the run's, the place's and the day's.
 var raid_seed := -1
 ## `--raid-stub`: a played trip's site comes from the stand-in (scripts/raid/stub_site.gd), not the generator.
@@ -315,7 +319,7 @@ func _ready() -> void:
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 			# a new run of the real game is played by one survivor (a save keeps the player it had; the title's yard,
 			# Orientation Day and a test's game have none unless the test asks, and `--noavatar` is the old game)
-			if wants_avatar(OS.get_cmdline_user_args(), run, title_mode, tutorial, get_tree().current_scene == self):
+			if wants_avatar(OS.get_cmdline_user_args(), run, title_mode, tutorial, get_tree().current_scene == self, sim.crew_start):
 				sim.avatar.set_player(first_starter_id(sim.people))
 	if loaded and "--noavatar" in OS.get_cmdline_user_args():
 		sim.avatar.set_player(null)    # (the old yard was asked for: a saved game's player is given up)
@@ -807,9 +811,20 @@ func _quick_save() -> void:
 	quick_save()
 
 
+## What the quick save says when a trip is up (the pause menu's Save line says it too).
+const SAVE_REFUSED := "Not while you are out"
+
+
 ## Writes the quick save and says how it went in a banner; true if it was written. (The
-## pause menu's Save is this.)
+## pause menu's Save is this.) Not while a trip is up (round 17): the game keeps no state in a place.
 func quick_save() -> bool:
+	if raid_open() or trip_report_up():
+		# a trip in a place is not a state the game keeps (a save made now would load as a party with nowhere to be, and what was
+		# searched so far would be gone): say so on the screen that shows, the place's own HUD (the colony's is hidden)
+		var out_hud = raid.get("hud_layer") if raid_open() else null
+		if out_hud != null:
+			out_hud.toast(SAVE_REFUSED, "warn")
+		return false
 	if sim.over != "":
 		hud.show_banner("The run is over", "Start a new game or load a save")
 	elif SaveGame.write(sim, _save_path()):
@@ -910,10 +925,15 @@ func raid_open() -> bool:
 	return raid != null and is_instance_valid(raid)
 
 
+## Whether the report of a played trip is up over the colony's view (see `trip_report`).
+func trip_report_up() -> bool:
+	return trip_report != null and is_instance_valid(trip_report)
+
+
 ## Opens a played trip (round 17: the player is one survivor, the trip is a flow, scripts/raid/place_flow.gd): the `people` the
-## player chose are ASKED over the radio to come (who cannot is left out and the toast says why; the avatar always goes and
-## leads), the party begins at once (the colony people vanish from the base), the road to `place` (a place of the town's: its
-## dictionary) is driven under an overlay while the colony runs ahead, the place is played in `vehicle_id` (a fleet id, "" on
+## player chose are ASKED over the radio to come (who cannot is left out and the road's overlay and the report say why, or a toast
+## on the colony's HUD when the trip cannot begin at all; the avatar always goes and leads), the party begins at once (the colony
+## people vanish from the base), the road to `place` (a place of the town's: its dictionary) is driven under an overlay while the colony runs ahead, the place is played in `vehicle_id` (a fleet id, "" on
 ## foot) with the loot multiplied by `loot_mult` while the colony goes on behind it (one step in three), and the road home and
 ## the report close it. The colony's view is hidden, and held by this node (`_process` leaves it alone: the scene steps it)
 ## until the report is dismissed; `on_done(result)` is then called with the trip's result (loot, hurt, lost, clear, rescue,
@@ -923,12 +943,15 @@ func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: 
 	if raid_open() or (people.is_empty() and not avatar_mode):
 		return null
 	var picked: Dictionary = PlaceFlow.pick_party(sim, people, vehicle_id)
-	for line in PlaceFlow.refusal_lines(picked):
-		hud.toast(String(line), "warn")
 	var going: Array = picked.going
 	var flow = PlaceFlow.new(sim)
+	# who stays behind and why: the road's overlay and the report show it (the colony's own HUD is hidden once the scene is up, so
+	# a toast now would be on a HUD nobody sees); a trip that cannot begin says it on the HUD that shows
+	flow.refusals = PlaceFlow.refusal_lines(picked)
 	if going.is_empty() or not flow.begin(going, String(place.get("id", "")), vehicle_id):
-		hud.toast(flow.error if flow.error != "" else "Nobody can go.", "warn")
+		var lines: Array = [flow.error if flow.error != "" else "Nobody can go."]
+		lines.append_array(flow.refusals)
+		hud.toast("\n".join(lines), "warn")
 		return null
 	var seed_value: int = raid_seed if raid_seed >= 0 else int(sim.run_seed) * 1000003 + String(place.get("id", "")).hash() + int(sim.day) * 7919
 	var by_vehicle: bool = vehicle_id != ""
@@ -1472,9 +1495,13 @@ func _shot_frame() -> void:
 
 ## Whether a run of these user arguments is played by an avatar: not the title's yard, not Orientation Day, not `--noavatar`;
 ## else the run's own word (`"avatar"`: a test asks for it) or, with none, whether this is the real game's scene (`real`: a test's
-## and a screenshot's helper scenes are not the current scene of the tree) and not a loaded save (those are the caller's).
-static func wants_avatar(args: Array, run: Dictionary, title: bool, tutorial_run: bool, real: bool) -> bool:
+## and a screenshot's helper scenes are not the current scene of the tree) and not a loaded save (those are the caller's). A full
+## crew (`crew` 6, the old schoolyard: no recruits, no town to go to) plays as before, with no avatar, unless the run says so
+## itself: an avatar that can never leave the base is not a game; `crew` 0 is not named (the caller does not say).
+static func wants_avatar(args: Array, run: Dictionary, title: bool, tutorial_run: bool, real: bool, crew: int = 0) -> bool:
 	if title or tutorial_run or "--noavatar" in args:
+		return false
+	if not run.has("avatar") and crew >= 6:
 		return false
 	return bool(run.get("avatar", real))
 
@@ -1554,11 +1581,17 @@ func _avatar_camera(dt: float) -> void:
 func _update_pointer() -> void:
 	if raid_open():
 		return    # (the scene of a played trip has the pointer)
-	var want := Input.MOUSE_MODE_VISIBLE
-	if not avatar_hands_off() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(mouse_screen):
-		want = Input.MOUSE_MODE_HIDDEN
+	var want := pointer_mode()
 	if Input.mouse_mode != want:
 		Input.mouse_mode = want
+
+
+## The mode the system pointer is in over the yard: hidden over the bare world (the crosshair is drawn there), the arrow over the
+## HUD, off the window, under a menu or a page, and while a trip's report is up.
+func pointer_mode() -> Input.MouseMode:
+	if not avatar_hands_off() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(mouse_screen):
+		return Input.MOUSE_MODE_HIDDEN
+	return Input.MOUSE_MODE_VISIBLE
 
 
 ## The player has been lost and the next in line leads (the rules' `succession` event): the camera goes to them and a banner
@@ -1869,6 +1902,12 @@ func _parse_args() -> void:
 				var tile := v.split(",")
 				if tile.size() == 2 and tile[0].is_valid_float() and tile[1].is_valid_float():
 					shot_aim = Vector2(float(tile[0]), float(tile[1]))
+			"bleed":
+				# --bleed=<id> has that person bleeding (a screenshot's staging: the radio refuses them a trip, and `--raid=` shows
+				# who was left out on the road's overlay and in the report)
+				for p in sim.people:
+					if p.id == v:
+						p.bleeding = 2.0
 			"avatar-at":
 				# --avatar-at=x,y stands the avatar there (a screenshot's staging; the camera begins on them)
 				var spot := v.split(",")

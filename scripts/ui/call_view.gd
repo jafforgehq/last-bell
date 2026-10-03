@@ -4,8 +4,8 @@
 ## came of it. The News panel stacks one for each open call; the call card is one of them on its own board.
 ##
 ## `setup(host, radio_getter, options)`: `host` is the HUD (it lends its looks, see radio_kit.gd); `radio_getter` a Callable that
-## returns the radio (or null); `options` (all optional): "speed_getter" (a Callable returning the game's speed, 1 to 3, so that the
-## seconds are the player's: at 3x a call has a third of the seconds). `show_entry(entry)` points the view at an entry of the radio's
+## returns the radio (or null); `options` (all optional): "speed_getter" (a Callable returning the pace of the player's clock against the game's normal one: 1 to 3 in the yard, a
+## third in a place, so that the seconds are the player's: at 3x a call has a third of the seconds). `show_entry(entry)` points the view at an entry of the radio's
 ## log; `refresh()` brings it up to date (the countdown, the result). Answering calls `radio.answer(id, option_id)`; it never pauses
 ## anything.
 extends VBoxContainer
@@ -100,11 +100,12 @@ func _rebuild(e: Dictionary) -> void:
 		buttons[String(o.id)] = b
 
 
-func _speed() -> int:
+func _speed() -> float:
 	var g = options.get("speed_getter")
 	if g is Callable and g.is_valid():
-		return maxi(1, int(g.call()))
-	return 1
+		var v := float(g.call())
+		return v if v > 0.0 else 1.0
+	return 1.0
 
 
 ## The seconds the call has left (0 once it is settled or the entry is gone).

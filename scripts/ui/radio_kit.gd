@@ -74,18 +74,24 @@ static func rate(radio) -> float:
 	return maxf(float(s.min_per_sec), 0.001)
 
 
-## How many seconds of the radio's own time a call has left (0 when it is over): (due - clock_min) / min_per_sec. `speed` (1, 2
-## or 3) turns it into the seconds of the player's clock; at 0 (paused) it counts as 1, so the figure does not jump.
-static func left_seconds(radio, e: Dictionary, speed: int = 1) -> float:
+## How many seconds of the radio's own time a call has left (0 when it is over): (due - clock_min) / min_per_sec. `speed` is
+## how many times the game's normal pace the player's clock runs at: 1, 2 or 3 in the yard, a THIRD in a place (the base runs at
+## one game minute a second there, `PlaceFlow.PLACE_PACE`); it turns the radio's time into the seconds of the player's clock. At
+## 0 or less (paused) it counts as 1, so the figure does not jump.
+static func left_seconds(radio, e: Dictionary, speed: float = 1.0) -> float:
 	var s = radio.get("sim")
 	if s == null:
 		return 0.0
-	return maxf(0.0, (float(e.due) - float(s.clock_min)) / rate(radio) / float(maxi(speed, 1)))
+	return maxf(0.0, (float(e.due) - float(s.clock_min)) / rate(radio) / _pace(speed))
 
 
 ## The whole wait of a call, in the same seconds (from the minute it was raised to the minute its default is taken).
-static func total_seconds(radio, e: Dictionary, speed: int = 1) -> float:
-	return maxf(0.001, (float(e.due) - float(e.t)) / rate(radio) / float(maxi(speed, 1)))
+static func total_seconds(radio, e: Dictionary, speed: float = 1.0) -> float:
+	return maxf(0.001, (float(e.due) - float(e.t)) / rate(radio) / _pace(speed))
+
+
+static func _pace(speed: float) -> float:
+	return speed if speed > 0.0 else 1.0
 
 
 ## A small button for a card: the HUD's own look (frame or flat), a word in the condensed bold, 12 px or more, never focused.

@@ -22,6 +22,8 @@
 ##   preferred as healers.
 ## - An infected person turns into a walker 12 to 24 game hours after the bite
 ##   unless cured or sent out through the gate.
+## - A sick person can be kept apart (`keep_apart`, an answer of the radio's fever call): off their job and post, resting at a bed
+##   of the bunks until it is over; a passing fever runs out twice as fast that way. Nothing is cured by it.
 ##
 ## Events added to sim.events (main.gd ignores kinds it does not know):
 ##   {"type": "turned", "x": float, "y": float}   a survivor just became a walker
@@ -92,6 +94,10 @@ const HURT_PERF := 0.85
 ## not got there in EXILE_TIMEOUT_H game hours they leave anyway.
 const EXILE_REACH := 1.0
 const EXILE_TIMEOUT_H := 1.5
+## A passing fever runs out this many times as fast for somebody resting apart (the rest is what cures it).
+const APART_FEVER_MULT := 2.0
+## The beds a person kept apart is given, in the order: the bunks first, the cots (the infirmary's, for those who are down) last.
+const APART_BED_KINDS := ["mattress", BUNK_HOUSE, "cot"]
 ## The no-medicine alert comes at most this often (game hours).
 const NO_MEDS_EVERY_H := 2.0
 ## Thresholds that fall on exact multiples of a step are met with this much to
@@ -111,6 +117,10 @@ var jobs: Array = []
 var treat_orders := {}
 ## People walking to the gate to be sent out: id -> sim.clock_min of the order.
 var sendouts := {}
+## Sick people kept apart (the radio's call, `keep_apart`): id -> sim.clock_min when they were. They are off their job and their post,
+## resting at a bed of the bunks away from the others until the fever or the infection is gone, and a passing fever (the
+## storyteller's) runs out APART_FEVER_MULT times as fast while they rest.
+var apart := {}
 ## The beds, cots first: [{"pos": Vector2, "kind": "cot", "mattress" or "bunk house"}].
 var beds: Array = []
 ## The version of the buildings (`build.version`) the bunk house beds in `beds` were taken at; -1 when they
@@ -132,6 +142,7 @@ func start() -> void:
 	jobs.clear()
 	treat_orders.clear()
 	sendouts.clear()
+	apart.clear()
 	last_roll.clear()
 	stage_seen.clear()
 	no_meds_at = -1.0e9
@@ -201,6 +212,12 @@ func _tick(p, gh: float) -> void:
 				_bled_out(p)
 	if treat_orders.has(p.id) and not _needs_bandage(p) and p.infected_at < 0.0:
 		treat_orders.erase(p.id)
+	if apart.has(p.id):
+		var sick: bool = sim.storyteller.is_sick(p)
+		if p.infected_at < 0.0 and not sick:
+			apart.erase(p.id)    # (cured, or over the fever: back to the job)
+		elif sick and not p.moving:
+			sim.storyteller.rest_fever(p, gh * 60.0 * (APART_FEVER_MULT - 1.0))
 
 
 # -------------------------------------------------------------------- wounds --
@@ -559,7 +576,7 @@ func _job_of_patient(p):
 ## Free to go and treat someone: able, off orders, not already busy, and with
 ## at least a little Medicine.
 func _is_free(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "":
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "" or apart.has(h.id):
 		return false    # (whoever the player has asked to follow, hold or cover is not a free healer: radio.gd)
 	if int(h.skills.Medicine) < 1 or sendouts.has(h.id):
 		return false
@@ -582,7 +599,7 @@ func _job_ok(j) -> bool:
 
 ## Like _is_free, for a healer who already holds a job.
 func _is_free_for_job(h) -> bool:
-	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "":
+	if h.dead or h.downed or h.away != null or h.order != null or sim.morale.breakdown(h) or h.player or h.stance != "" or apart.has(h.id):
 		return false    # (whoever the player has asked to follow, hold or cover is not a free healer: radio.gd)
 	return not sendouts.has(h.id) and sim.scavenge.goal_for(h) == null
 
@@ -598,6 +615,7 @@ func _forget(p) -> void:
 	_drop_jobs_of(p)
 	treat_orders.erase(p.id)
 	sendouts.erase(p.id)
+	apart.erase(p.id)
 	stage_seen.erase(p.id)
 
 
@@ -761,6 +779,9 @@ func goal_for(p):
 	if sendouts.has(p.id):
 		var gate := _gate()
 		return {"x": gate.x, "y": gate.y, "face": "N", "what": "Leaving through the gate"}
+	if apart.has(p.id):
+		var rest := apart_spot(p)
+		return {"x": rest.x, "y": rest.y, "face": "", "what": "Resting apart", "work": "rest"}
 	var j = _job_of_healer(p)
 	if j == null:
 		return null
@@ -831,6 +852,49 @@ func can_send_out(p) -> bool:
 	return not (p.downed and not p.stabilised)
 
 
+## Whether somebody is kept apart (resting off their work, away from the others).
+func is_apart(p) -> bool:
+	return p != null and apart.has(p.id)
+
+
+## Keeps a sick person apart: off their job and their post, they go to rest at a bed of the bunks until the fever or the infection is
+## gone (a passing fever runs out faster for the rest). Nothing is cured, and nobody is treated: that is what treating is for. A
+## treatment ordered later (`gizmo("treat")`), or being sent out, ends it. False for somebody who is gone, away, or on the way out.
+func keep_apart(p) -> bool:
+	if p == null or p.dead or p.turned or p.away != null or sendouts.has(p.id):
+		return false
+	apart[p.id] = sim.clock_min
+	treat_orders.erase(p.id)
+	_drop_jobs_of(p)
+	sim.radio.clear_stance(p)
+	p.drafted = false
+	p.order = null
+	p.repair = null
+	p.target = null
+	p.path = []
+	p.goal_key = ""
+	return true
+
+
+## Where somebody kept apart rests: a free bed of the bunks (the mattresses, then the bunk house; a cot only when there is nothing
+## else), the first for the first of them (in the order of the crew) and so on; where they stand when there are no beds.
+func apart_spot(p) -> Vector2:
+	var rank := 0
+	for q in sim.people:
+		if q == p:
+			break
+		if apart.has(q.id):
+			rank += 1
+	var free: Array = []
+	for kind in APART_BED_KINDS:
+		for b in beds:
+			if b.kind == kind and not _bed_taken(b.pos):
+				free.append(Vector2(b.pos))
+	if free.is_empty():
+		return Vector2(p.x, p.y)
+	return free[rank % free.size()]
+
+
 ## Marks for the card and panel: wound, fever, down, resting.
 func status_of(p) -> Array:
 	var out: Array = []
@@ -863,6 +927,7 @@ func gizmo(id: String, sel) -> bool:
 		if sim.storyteller.is_sick(p) and not _needs_bandage(p) and p.infected_at < 0.0:
 			return sim.storyteller.treat(p)
 		sendouts.erase(p.id) # they changed their mind
+		apart.erase(p.id)
 		treat_orders[p.id] = true
 		no_meds_at = -1.0e9 # the player asked: tell them if it cannot be done
 		_assign()
@@ -878,6 +943,7 @@ func gizmo(id: String, sel) -> bool:
 func _start_sendout(p) -> void:
 	sendouts[p.id] = sim.clock_min
 	treat_orders.erase(p.id)
+	apart.erase(p.id)
 	p.drafted = false
 	p.order = null
 	p.repair = null
@@ -944,6 +1010,7 @@ func save() -> Dictionary:
 		"jobs": saved_jobs,
 		"orders": treat_orders.keys(),
 		"sendouts": sendouts.duplicate(),
+		"apart": apart.keys(),
 		"rolls": last_roll.duplicate(),
 		"stages": stage_seen.duplicate(),
 		"no_meds_at": no_meds_at,
@@ -954,6 +1021,7 @@ func load_state(d: Dictionary) -> void:
 	jobs.clear()
 	treat_orders.clear()
 	sendouts.clear()
+	apart.clear()
 	last_roll.clear()
 	stage_seen.clear()
 	_bunks_version = -1    # the buildings may have changed with the load: the bunk house beds are taken again
@@ -982,6 +1050,10 @@ func load_state(d: Dictionary) -> void:
 		for id in d.sendouts:
 			if _person(String(id)) != null:
 				sendouts[String(id)] = float(d.sendouts[id])
+	if typeof(d.get("apart")) == TYPE_ARRAY:
+		for id in d.apart:
+			if _person(String(id)) != null:
+				apart[String(id)] = sim.clock_min
 	if typeof(d.get("rolls")) == TYPE_DICTIONARY:
 		for id in d.rolls:
 			if _person(String(id)) != null:

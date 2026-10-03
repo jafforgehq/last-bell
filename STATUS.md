@@ -65,6 +65,10 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 - **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
 - **Process slips on record:** two `rm` calls on scratch files (the rule is "delete only via `~/.Trash`"); an earlier `pkill -f Godot` killed your open editor (never again).
 
+### Known issues of round 17
+
+- **A stranger cannot be answered from a place and takes its default.** The storyteller's modal card (the radio card) waits while a trip is out and for the report to be dismissed, then opens and holds the game until it is answered; but a stranger at the gate is not a radio call with options (contract S1.2), so while the player is in a place it cannot be answered there and, if it is left, takes its default after two game hours. (The radio calls with options, the attack, the fever, are answered from the place.)
+
 ### Known issues of round 16
 
 - **Fixed after round 16's first report:** a mender now stands on the yard side of the wall piece (the first open ground in from the scaffold, `Sim.repair_spot`; the classic start and the lots' street walls keep the old spot), and the all-clear after a day threat is 45 game minutes (15 real seconds at the normal speed) instead of 10.

@@ -20,7 +20,7 @@
 ## camera follows the one you lead, Esc is the game's menu. There is no selecting, no box, no right-click order, no panning: the
 ## squad is asked over the radio (the HUD's panel: `contact`, `ask`; the verbs of `radio_verbs.gd` through `squad_radio` and
 ## `base_radio`, which stand in for the radio they ask). When the one you lead falls the next of the squad leads (the camera
-## glides, the base is told).
+## glides, a banner says who; the base is told when the trip ends, and only if she is lost: see `_watch_leader`).
 extends Node
 
 signal finished(result: Dictionary)
@@ -258,6 +258,8 @@ func _restore_colony(hold: bool = false) -> void:
 	if hold and main.get("speed") != null:
 		_speed_after = int(_saved.get("speed", 0))
 		main.set("speed", 0)
+	# the report is up over the colony's view: it counts as a page (the storyteller's cards wait, the pointer is the arrow)
+	main.set("trip_report", self if hold else null)
 	var cam = main.get("camera")
 	if cam != null and is_instance_valid(cam) and cam.is_inside_tree():
 		cam.make_current()
@@ -271,6 +273,8 @@ func _exit_tree() -> void:
 	# freed without being sent home (the game was left, a test): the colony is put back all the same, no `finished`
 	if not done:
 		_restore_colony()
+	if is_instance_valid(main) and main.get("trip_report") == self:
+		main.set("trip_report", null)
 
 
 ## The colony's person with this id, or null.
@@ -606,7 +610,7 @@ func squad_request(p, verb: String, args: Dictionary = {}) -> Dictionary:
 			if not a.has("at"):
 				at_c = search_target()
 				if at_c.is_empty():
-					return {"ok": false, "line": "", "why": "Aim at a shelf or a crate first", "delay_s": 0.0, "tone": "refused", "insisted": false}
+					return {"ok": false, "line": "", "why": "Aim at a shelf or a crate first", "delay_s": 0.0, "tone": "refused", "insisted": false, "hard": true}
 				a["at"] = Vector2(at_c.pos)
 	var r: Dictionary = run.request(p, verb, a)
 	if bool(r.get("ok", false)):
@@ -1203,9 +1207,10 @@ func _banner(title: String, sub: String) -> void:
 
 # ------------------------------------------------------------- succession --
 
-## When the one you lead falls the run hands the lead to the next of the squad (its own rules: raid_run.gd); the scene notices
-## and the base is told: the colony's player is the same person now (the mourning, the trust and the news are its own), the
-## camera glides there (it follows whoever leads), a banner says who leads.
+## When the one you lead falls the run hands the lead to the next of the squad (its own rules: raid_run.gd); the scene notices, the
+## camera glides there (it follows whoever leads), a banner says who leads. The BASE is not told now: the one who fell is only down
+## (she may be got up and come home), and the loss, with its setback, is told when the trip ends and she is among the lost
+## (`PlaceFlow.finish`, which also makes the last leader the base's player when she lived).
 func _watch_leader() -> void:
 	var lead = leader()
 	var id := String(lead.id) if lead != null else ""
@@ -1217,7 +1222,6 @@ func _watch_leader() -> void:
 		return
 	var old = run.person(from)
 	if lead != null:
-		_colony_succession(from, id)
 		if contact.get("p") == lead:
 			contact = {}
 		clock_banner("%s leads now" % lead.first, "%s is down" % (old.first if old != null else "Your leader"))
@@ -1228,18 +1232,6 @@ func _watch_leader() -> void:
 func clock_banner(title: String, sub: String) -> void:
 	_banner_t = clock
 	hud_layer.show_banner(title, sub)
-
-
-## The colony's avatar passes to the person who leads the place now: its own succession (trust, mourning, the news), with the
-## successor the place chose.
-func _colony_succession(from_id: String, to_id: String) -> void:
-	var cs = colony()
-	if cs == null or String(cs.player_id) == "":
-		return
-	var old_c = colony_person(from_id)
-	var new_c = colony_person(to_id)
-	if old_c != null and old_c.player and new_c != null:
-		cs.avatar.on_player_lost(old_c, new_c)
 
 
 # ----------------------------------------------------------------- events --
@@ -1315,6 +1307,7 @@ func _on_place_over() -> void:
 	hover = null
 	reach_container = {}
 	reach_friend = null
+	_update_pointer()    # (the road home's overlay is a page: the arrow, not the crosshair's hidden pointer)
 	if run.sim.avatar != null and leader() != null:
 		run.sim.avatar.set_input(Vector2.ZERO, aim_tile, false)
 	final_result = run.result()
@@ -1359,6 +1352,12 @@ func go_home() -> void:
 	if flow != null:
 		if main.get("speed") != null:
 			main.set("speed", _speed_after)
+		# the report is gone: the cards that came in while the player was out (and were kept waiting) open now, with the speed as it
+		# was before the trip, so that the rules wait for the answer
+		main.set("trip_report", null)
+		var stories = main.get("story_ui")
+		if stories != null and is_instance_valid(stories):
+			stories.retry()
 	else:
 		_restore_colony()
 	finished.emit(result)

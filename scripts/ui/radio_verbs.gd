@@ -28,6 +28,8 @@ signal requested(contact, verb: String, result: Dictionary)
 
 ## The short names of the verbs, for the narrowest form (one row of six).
 const SHORT := {"come": "Come", "hold": "Hold", "cover": "Cover", "search": "Search", "back": "Back", "post": "Walls"}
+## The stance each verb puts a person in, once it has taken effect ("back" and "post" end a stance: none to watch).
+const STANCE_OF := {"come": "follow", "hold": "hold", "cover": "cover", "search": "search"}
 ## What each verb does, for the tooltip ("%s" is the contact's first name).
 const WORDS := {
 	"come": "Come with me: %s follows you",
@@ -218,7 +220,9 @@ func refresh() -> void:
 			all_off = false
 		if b.tooltip_text != tip:
 			b.tooltip_text = tip
-	# an answer they gave is kept while they are the contact; with none, a reason that stops every verb shows by itself
+	# an answer they gave is kept while they are the contact and it still holds; with none, a reason that stops every verb shows by itself
+	if not last.is_empty() and _stale(radio):
+		last = {}
 	var text := ""
 	var color: Color = host.INK
 	var show_insist := false
@@ -238,6 +242,26 @@ func refresh() -> void:
 		reply.tooltip_text = text if short else ""
 	reply.add_theme_color_override("font_color", color)
 	insist_button.visible = show_insist
+
+
+## Whether the last answer no longer says anything true about the contact: they cannot be asked at all now (down, away, leaving, in a
+## breakdown: a refusal nobody can argue with, unless it is the same one the answer gave) or, having done what they were asked, they
+## no longer do (their stance ended: they went back to their work, were sent elsewhere). While the request waits for its delay the
+## stance is not yet there: the answer stays until it has been seen.
+func _stale(radio) -> bool:
+	if _is_you(contact):
+		return true
+	var verb := String(last.verb)
+	var w: Dictionary = radio.willingness(contact, verb)
+	if bool(w.get("hard", false)) and (bool(last.ok) or String(w.get("why", "")) != String(last.get("why", ""))):
+		return true
+	if bool(last.ok) and STANCE_OF.has(verb):
+		var now = contact.get("stance")
+		if String(now if now != null else "") == String(STANCE_OF[verb]):
+			last["held"] = true
+		elif bool(last.get("held", false)):
+			return true
+	return false
 
 
 ## Asks the contact to do what `verb` says (what a click on its button does). Returns `radio.request`'s answer with "verb" added ({}
@@ -274,9 +298,15 @@ func _ask(verb: String, push: bool) -> Dictionary:
 		args["insist"] = true
 	var result: Dictionary = radio.request(contact, verb, args).duplicate()
 	result["verb"] = verb
-	var w: Dictionary = radio.willingness(contact, verb)
+	# whether insisting could change the refusal is the ANSWER's word (a place refuses some things before the radio is asked at all:
+	# "Already searched", "can't get there"); an answer that does not say is judged by the radio's willingness as it always was
+	var hard: bool
+	if result.has("hard"):
+		hard = bool(result.hard)
+	else:
+		hard = bool(radio.willingness(contact, verb).get("hard", false))
 	last = {"who": String(contact.id), "verb": verb, "ok": bool(result.ok), "line": String(result.get("line", "")), "why": String(result.get("why", "")),
-		"hard": bool(w.get("hard", false)), "tone": String(result.get("tone", ""))}
+		"hard": hard, "tone": String(result.get("tone", ""))}
 	refresh()
 	requested.emit(contact, verb, result)
 	return result

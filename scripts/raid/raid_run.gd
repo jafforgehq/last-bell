@@ -21,7 +21,7 @@
 ## come, hold, cover, search that, go back) is a stance they keep and shoot from. The old orders (`order_move`, `order_search`,
 ## `order_help`, `retreat`) still work for everyone but the player, and a squad with no player is the old squad. When the avatar
 ## falls the next of the squad leads (`on_avatar_down`, which `update` calls by itself): the base's `finish_played` is told in
-## `result()` who was lost, and who leads. `result()` carries what the base needs: `hp`, `skills` and `trust_delta` besides the
+## `result()` who was lost, and who leads. `result()` carries what the base needs: `hp`, `skills` and `trust` besides the
 ## trip's own keys. The place has the base's clock (`mirror`, `hour`).
 extends RefCounted
 
@@ -460,8 +460,10 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 	return sim.radio.request(p, verb, a)
 
 
+## A refusal of the place itself (nothing to search there, no way there, the trip turning back): nobody can be pushed past it, so it is
+## "hard" and the view offers no Insist for it.
 func _refusal(why: String) -> Dictionary:
-	return {"ok": false, "line": "", "why": why, "delay_s": 0.0, "tone": "refused", "insisted": false}
+	return {"ok": false, "line": "", "why": why, "delay_s": 0.0, "tone": "refused", "insisted": false, "hard": true}
 
 
 # --------------------------------------------------------------------- orders --
@@ -723,6 +725,10 @@ func _collect_events() -> void:
 			_noise(Vector2(float(e.x), float(e.y)))
 		elif t == "bite":
 			var who = person(String(e.get("who", "")))
+			if who != null:
+				# (a person hurt while following the player's request costs the player trust, once for the request: the yard does
+				# this by reading the same event in `radio.update`, which a place does not run)
+				sim.radio.on_hurt_following(who)
 			if who != null and not _bitten.has(String(who.id)):
 				_bitten[String(who.id)] = true
 				log.append("%s was bitten." % who.first)
@@ -756,11 +762,13 @@ func finished() -> bool:
 
 ## The trip's result in the dice's format: {"loot", "hurt", "lost", "clear", "rescue", "beats", "ammo_used"}, and what the base
 ## needs of a played one: `hp` {person id: health they leave with} and `skills` {person id: {skill: points gained here, at most
-## three, never Leading}} for every member who comes home (`finish_played` puts them in), `trust_delta` {person id: n} (what
-## the trip is worth in the base's trust in the player: TRIP_TRUST for someone who came home standing, was never down and was
-## with the player to the end, not left holding or waiting; 0 otherwise or with no player; the base's own
-## `radio.on_trip_led` gives the same bonus: use one of the two) and `leader` (the id of the person the player controlled when it
-## ended, with a player). A person down at the end, or dead, is lost.
+## three, never Leading}} for every member who comes home (`finish_played` puts them in), `trust` {person id: n} (what the trip
+## changed in the base's trust in the player, the ONE number the base pays: what the place's radio moved for them, a push to go
+## when they could not (-6), being hurt following the request (-3), and TRIP_TRUST for someone who came home standing, was never
+## down and was with the player to the end, not left holding or waiting; the succession's own loss is not in it, the base's
+## succession pays that), `trust_delta` {person id: n} (the TRIP_TRUST part of it alone, kept for whoever reads it: `PlaceFlow.finish`
+## pays `trust` and not both) and `leader` (the id of the person the player controlled when it ended, with a player). A person
+## down at the end, or dead, is lost.
 func result() -> Dictionary:
 	var hurt := {}
 	var lost: Array = []
@@ -786,11 +794,13 @@ func result() -> Dictionary:
 	var hp := {}
 	var skills := {}
 	var trust := {}
+	var moved := {}
 	var lead = avatar()
 	for p in squad:
 		var id := String(p.id)
 		if p.dead or p.downed:
 			trust[id] = 0.0
+			moved[id] = 0.0
 			continue
 		hp[id] = clampf(float(p.hp), 0.0, 100.0)
 		var gain := {}
@@ -804,8 +814,11 @@ func result() -> Dictionary:
 		if not gain.is_empty():
 			skills[id] = gain
 		trust[id] = TRIP_TRUST if lead != null and p != lead and not _ever_down.has(id) and String(p.stance) != "hold" and String(p.stance) != "back" else 0.0
+		# (what the trip cost: being pushed to go when they could not, being hurt following: the radio's own count of what it moved)
+		moved[id] = float(sim.radio.trust_moved.get(id, 0.0)) + float(trust[id])
 	out["hp"] = hp
 	out["skills"] = skills
+	out["trust"] = moved
 	out["trust_delta"] = trust
 	if lead != null:
 		out["leader"] = String(lead.id)

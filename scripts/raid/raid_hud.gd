@@ -58,6 +58,8 @@ const CALL_W := 300.0
 const CALL_W_MIN := 230.0
 const BASE_W := 250.0
 const ROAD_W := 460.0
+## Amber for the report's paper (the chalk amber is for the dark panels): 5.7 to 1 on the paper.
+const PAPER_AMBER := Color("#8a4a00")
 const MAX_CHIPS := 14
 const STOCK_ORDER := ["food", "water", "scrap", "ammo", "meds", "fuel"]
 const STOCK_NAMES := {"food": "Food", "water": "Water", "scrap": "Scrap", "ammo": "Ammo", "meds": "Medicine", "fuel": "Fuel"}
@@ -153,6 +155,9 @@ var road_mood_label: Label
 var road_news_box: VBoxContainer
 var road_news: Array = []
 var road_hint_label: Label
+## Who stayed behind and why: one amber line each, under the progress bar (the flow's `refusals`).
+var road_refusal_box: VBoxContainer
+var road_refusals: Array = []
 
 ## What the refresh wants shown of the two things that may be left out for want of room (the layout decides if they fit).
 var _log_wanted := false
@@ -504,7 +509,7 @@ func _build_radio() -> void:
 	_put(radio_panel)
 	news_panel = NewsPanel.new()
 	_put(news_panel)
-	news_panel.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return 1})
+	news_panel.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return PlaceFlow.PLACE_PACE})
 	news_panel.visible = false
 
 
@@ -746,7 +751,7 @@ func _draw_sky() -> void:
 func _build_call_card() -> void:
 	call_card = CallCard.new()
 	_put(call_card)
-	call_card.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return 1})
+	call_card.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return PlaceFlow.PLACE_PACE})
 	call_card.custom_minimum_size.x = CALL_W
 
 
@@ -830,6 +835,9 @@ func _build_road() -> void:
 	road_bar.groove = hud.frame("bar_track")
 	road_bar.color = Hud.ACCENT
 	col.add_child(road_bar)
+	road_refusal_box = hud._vbox(2)
+	road_refusal_box.custom_minimum_size.x = ROAD_W
+	col.add_child(road_refusal_box)
 	var clock_row: HBoxContainer = hud._hbox(10)
 	clock_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	road_clock_label = hud._label("", Fonts.cond(700), 26, Hud.INK)
@@ -856,6 +864,7 @@ func show_road(title: String, flow) -> void:
 	for p in flow.going:
 		names.append(String(p.first))
 	road_sub_label.text = ", ".join(names) if not names.is_empty() else ""
+	_show_refusals(flow.refusals)
 	road_panel.visible = true
 	for c in [place_panel, loot_panel, cards_grid, radio_panel, news_panel, log_panel, legend_panel, weapon_panel, base_panel, call_card, banner, toast_panel]:
 		c.visible = false
@@ -865,6 +874,21 @@ func show_road(title: String, flow) -> void:
 func hide_road() -> void:
 	road_panel.visible = false
 	refresh()
+
+
+## The people who were asked and stayed (or did not fit), one line each under the bar, in amber: a refusal is never left unseen.
+func _show_refusals(lines: Array) -> void:
+	road_refusals = []
+	for c in road_refusal_box.get_children():
+		road_refusal_box.remove_child(c)
+		c.queue_free()
+	for line in lines:
+		road_refusals.append(String(line))
+		var l: Label = hud._label(String(line), Fonts.sans(600), 14, Hud.WARN)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = ROAD_W
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		road_refusal_box.add_child(l)
 
 
 ## One frame of the road: the bar, the base's clock and the news that has come in since the trip began (the last few lines).
@@ -1333,6 +1357,8 @@ func end_words(result: Dictionary) -> Array:
 	if lost.size() >= scene.run.squad.size():
 		return ["Nobody came back", "The squad was lost at %s." % place_phrase()]
 	var sub := "Everyone came home."
+	if scene.flow != null and not scene.flow.refusals.is_empty():
+		sub = "Everyone who went came home."
 	if not lost.is_empty():
 		sub = "%s did not come back." % _names_of(lost)
 	elif not result.get("hurt", {}).is_empty():
@@ -1392,6 +1418,10 @@ func show_end(result: Dictionary, news: Array = []) -> void:
 	if scene.has_survivor or bool(result.get("rescue", false)):
 		lines.add_child(_end_row("rescue", "Someone alive", _text_value("Found, and coming home with you" if bool(result.get("rescue", false)) else "Not found")))
 	lines.add_child(_end_row("ammo", "Ammo used", _text_value(_ammo_text(float(result.get("ammo_used", 0.0))))))
+	if scene.flow != null and not scene.flow.refusals.is_empty():
+		var stayed: Label = _text_value("\n".join(PackedStringArray(scene.flow.refusals)))
+		stayed.add_theme_color_override("font_color", PAPER_AMBER)
+		lines.add_child(_end_row("stayed", "Stayed behind", stayed))
 	if not news.is_empty():
 		var items: Array = []
 		for line in news:

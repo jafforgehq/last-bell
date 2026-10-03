@@ -1035,20 +1035,26 @@ func _site_def(raw) -> Dictionary:
 	}
 
 
-## The people who could go: the free survivors with the best Shooting, the one at the radio excepted.
+## The people who could go: the free survivors with the best Shooting, the one at the radio excepted. (Whoever the player has asked
+## something of over the radio, a stance or the walls, is not taken for a card's errand: a player's trip may take them, a card may not.)
 func _errand_crew(size: int) -> Array:
 	if not sim.scavenge.has_method("free_survivors"):
 		return []
 	var sp = speaker()
 	var free: Array = []
 	for p in sim.scavenge.free_survivors():
-		if p != sp:
+		if p != sp and _unasked(p):
 			free.append(p)
 	free.sort_custom(func(a, b):
 		if _skill(a, "Shooting") != _skill(b, "Shooting"):
 			return _skill(a, "Shooting") > _skill(b, "Shooting")
 		return sim.people.find(a) < sim.people.find(b))
 	return free.slice(0, size)
+
+
+## Whether nobody has asked this person for anything: no stance, no order, not drafted.
+func _unasked(p) -> bool:
+	return String(p.stance) == "" and p.order == null and not p.drafted
 
 
 ## The card's pair if they are still free, else the best who are.
@@ -1058,7 +1064,7 @@ func _errand_party(size: int, ctx: Dictionary) -> Array:
 	if ids is Array:
 		for id in ids:
 			var p = _person(String(id))
-			if p != null and sim.scavenge.can_go(p) and crew.size() < size:
+			if p != null and sim.scavenge.can_go(p) and _unasked(p) and crew.size() < size:
 				crew.append(p)
 	if crew.size() < size:
 		for p in _errand_crew(size + crew.size()):
@@ -1267,6 +1273,14 @@ func _sick_step() -> void:
 ## How well a person works for what the storyteller has done to them: a fever takes a quarter.
 func perf(p) -> float:
 	return SICK_PERF if is_sick(p) else 1.0
+
+
+## The fever of somebody who rests (medical.gd: kept apart) runs out `minutes` of the game's clock sooner than it would have.
+func rest_fever(p, minutes: float) -> void:
+	var id := String(p.id)
+	if not is_sick(p) or minutes <= 0.0:
+		return
+	sick[id] = maxf(float(sick[id]) - minutes, float(sim.clock_min))
 
 
 ## Ana (or anyone who knows medicine) treats a fever for one medicine and it is over.

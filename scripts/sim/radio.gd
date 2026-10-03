@@ -23,7 +23,8 @@
 ## mode (`sim.player_id != ""`) the radio makes its entries by itself from the step's events and state, at the end of
 ## `Sim.update`: a call when a wall section is under attack by the dead (hold; send reinforcements: everyone free to a post
 ## near it; fall back to the school: the people of that section's posts), a call when someone has a fever (treat them; keep
-## them apart), a log entry for every card of the storyteller (the card itself stays the storyteller's), for every arrival
+## them apart: off work, resting at a bed of the bunks, `medical.keep_apart`; and, for an infection with no medicine to treat it,
+## send them out through the gate), a log entry for every card of the storyteller (the card itself stays the storyteller's), for every arrival
 ## and for a succession. With no avatar (the old game, the harness, the tests) none of that happens.
 ##
 ## THE ALARM is the call to arms: `alarm(true)` puts everyone at their posts now (by day too, in any start) until
@@ -102,11 +103,18 @@ var sim
 ## "default", "due" (sim.clock_min), "answered" ("" while it waits), "by_default", "result", "at" (a Vector2 or null),
 ## "data" (a plain dictionary the kind keeps what it needs in)}].
 var news: Array = []
+## The id of the newest line the player has read (the News panels of the yard and of a place both read and set it: what is read in
+## one is read in the other). Not saved: a game that is loaded starts with everything unread, as a panel always did.
+var news_seen := 0
 ## Requests that have been agreed to and are waiting for their delay: [{"who", "verb", "at", "left" (seconds), "insist"}].
 var pending: Array = []
 var alarm_on := false
 ## Why each person trusts the player as they do, newest last: person id to [{"why", "delta", "day"}].
 var reasons := {}
+## What `add_trust` has really moved for each person (person id to the sum of the changes, after the 0 to 100 limits) since the
+## radio began: not saved. A place's own radio is a new one for each trip, and the trip's report (`RaidRun.result`) reads what the
+## trip cost the squad's trust here; the succession's loss is not in it (the base's own succession pays that).
+var trust_moved := {}
 var _next_id := 1
 ## The radio's own time (seconds, from the steps it is given).
 var _age := 0.0
@@ -144,6 +152,7 @@ func _reset() -> void:
 	pending.clear()
 	alarm_on = false
 	reasons.clear()
+	trust_moved.clear()
 	_next_id = 1
 	_age = 0.0
 	_applied.clear()
@@ -196,7 +205,9 @@ func trust_of(p) -> float:
 func add_trust(p, delta: float, why: String) -> void:
 	if p == null or delta == 0.0 or not is_finite(delta):
 		return
-	p.trust = clampf(float(p.trust) + delta, 0.0, 100.0)
+	var was := float(p.trust)
+	p.trust = clampf(was + delta, 0.0, 100.0)
+	trust_moved[String(p.id)] = float(trust_moved.get(String(p.id), 0.0)) + (float(p.trust) - was)
 	var list: Array = reasons.get(String(p.id), [])
 	list.append({"why": why, "delta": delta, "day": int(sim.day)})
 	while list.size() > MAX_REASONS:
@@ -380,15 +391,15 @@ func _health_reason(p) -> String:
 # ------------------------------------------------------------------- requests --
 
 ## Asks `contact` to do what `verb` says: {"ok", "line" (what they say), "why" (the refusal, "" when ok), "delay_s", "tone",
-## "insisted"}. `args`: "at" (a Vector2: the spot of "hold", the container of "search"), "insist" (true: override a refusal
+## "insisted", "hard" (a refusal that insisting cannot change: the view does not offer Insist for it)}. `args`: "at" (a Vector2: the spot of "hold", the container of "search"), "insist" (true: override a refusal
 ## that is not a hard one, at a cost of trust and a blow to the mood). If they agree, what was asked comes true after
 ## `delay_s` seconds of the radio's time (`tick`); a later request to the same person replaces one still waiting.
 func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 	if contact == null:
-		return {"ok": false, "line": "", "why": "Nobody answers", "delay_s": 0.0, "tone": "refused", "insisted": false}
+		return {"ok": false, "line": "", "why": "Nobody answers", "delay_s": 0.0, "tone": "refused", "insisted": false, "hard": true}
 	var lead = leader()
 	if lead == null:
-		return {"ok": false, "line": "", "why": "Nobody is on the radio", "delay_s": 0.0, "tone": "refused", "insisted": false}
+		return {"ok": false, "line": "", "why": "Nobody is on the radio", "delay_s": 0.0, "tone": "refused", "insisted": false, "hard": true}
 	var w := willingness(contact, verb)
 	if w.ok and lead.away != null and (verb == "come" or verb == "cover" or (verb == "hold" and not args.has("at"))):
 		w = _refused(w, "%s: you are not at the base, can't %s" % [String(contact.first), String(CANT[verb])], "", true)
@@ -401,7 +412,7 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 			w = {"ok": true, "why": "", "line": String(LINES[verb]["doubtful"]), "delay_s": delay_for(trust_of(contact)), "tone": "doubtful", "hard": false}
 		else:
 			_say(contact, verb, false, String(w.line), "refused")
-			return {"ok": false, "line": String(w.line), "why": String(w.why), "delay_s": 0.0, "tone": "refused", "insisted": false}
+			return {"ok": false, "line": String(w.line), "why": String(w.why), "delay_s": 0.0, "tone": "refused", "insisted": false, "hard": bool(w.hard)}
 	var at := Vector2.ZERO
 	if verb == "hold":
 		at = _point(args.get("at"), Vector2(lead.x, lead.y))
@@ -414,7 +425,7 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 		i -= 1
 	pending.append({"who": String(contact.id), "verb": verb, "at": at, "left": float(w.delay_s), "insist": insisted})
 	_say(contact, verb, true, String(w.line), String(w.tone))
-	return {"ok": true, "line": String(w.line), "why": "", "delay_s": float(w.delay_s), "tone": String(w.tone), "insisted": insisted}
+	return {"ok": true, "line": String(w.line), "why": "", "delay_s": float(w.delay_s), "tone": String(w.tone), "insisted": insisted, "hard": false}
 
 
 func _say(p, verb: String, ok: bool, line: String, tone: String) -> void:
@@ -434,7 +445,8 @@ func _aim_point(lead) -> Vector2:
 
 
 ## The radio's own clock, and what it has been waiting on: the requests whose delay is up take effect; a stance that no
-## longer makes sense (the person is down, gone, away, in a breakdown, or is the leader) ends. `update` calls it each step;
+## longer makes sense (the person is down, gone, away, in a breakdown, or is the leader; a follower or a cover whose leader is away
+## or gone) ends. `update` calls it each step;
 ## a place's scene, which does not run `Sim.update`, calls it with the place's step.
 func tick(dt: float) -> void:
 	_age += dt
@@ -450,8 +462,15 @@ func tick(dt: float) -> void:
 		var p = _person(String(e.who))
 		if p != null and _hard_reason(p) == "" and _busy_hard(p) == "":
 			_take_effect(p, String(e.verb), e.at)
+	# (a follower or a cover has nobody to follow while the leader is out on a trip or gone: they go back to their jobs; a hold or
+	# a search is a spot, and stays)
+	var lead = leader()
+	var leader_out: bool = lead == null or lead.away != null or lead.dead or lead.turned
 	for p in sim.people:
-		if String(p.stance) != "" and (p.downed or p.dead or p.turned or p.away != null or _is_leader(p) or sim.morale.breakdown(p)):
+		var stance := String(p.stance)
+		if stance == "":
+			continue
+		if p.downed or p.dead or p.turned or p.away != null or _is_leader(p) or sim.morale.breakdown(p) or (leader_out and (stance == "follow" or stance == "cover")):
 			clear_stance(p)
 
 
@@ -739,8 +758,14 @@ func _carry_out(e: Dictionary, option_id: String) -> String:
 					return "Treating %s" % String(p.first)
 				return "Cannot treat %s now" % String(p.first)
 			if option_id == "apart":
+				if not sim.medical.keep_apart(p):
+					return "Cannot keep %s apart now" % String(p.first)
 				sim.morale.shock(p, APART_MORALE, "Kept apart from the others")
-				return "%s is kept apart" % String(p.first)
+				return "%s rests apart, off work until it passes" % String(p.first)
+			if option_id == "sendout":
+				if sim.medical.gizmo("sendout", {"kind": "person", "ref": p}):
+					return "%s is sent out through the gate" % String(p.first)
+				return "Cannot send %s out now" % String(p.first)
 	return ""
 
 
@@ -852,10 +877,16 @@ func _watch_for_fever() -> void:
 		if _sick_called.has(id) or sim.medical.treat_orders.has(p.id):
 			continue
 		_sick_called[id] = true
-		raise_call("sick", "%s has a fever" % String(p.first), "Treat them, or keep them apart", [
+		var options: Array = [
 			{"id": "treat", "label": "Treat them"},
 			{"id": "apart", "label": "Keep them apart"},
-		], "treat", SICK_TTL_MIN, {"who": id}, Vector2(p.x, p.y))
+		]
+		var sub := "Treat them, or keep them apart"
+		# (with no medicine to treat an infection with, the gate is an answer too: never the default)
+		if sim.medical.can_send_out(p) and float(sim.stock.meds) < float(sim.medical.CURE_MEDS):
+			options.append({"id": "sendout", "label": "Send them out"})
+			sub = "No medicine to treat them with: keep them apart, or send them out"
+		raise_call("sick", "%s has a fever" % String(p.first), sub, options, "treat", SICK_TTL_MIN, {"who": id}, Vector2(p.x, p.y))
 
 
 # --------------------------------------------------------------- the call's options --

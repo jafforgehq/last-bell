@@ -423,9 +423,21 @@ func load_slot(path: String) -> bool:
 	return true
 
 
+## Why the pause menu's Save is off now ("" when it is on): the game keeps no state while a trip is played in a place.
+func save_blocked() -> String:
+	if main != null and main.has_method("raid_open") and (main.raid_open() or (main.has_method("trip_report_up") and main.trip_report_up())):
+		return "Not while you are out"
+	return ""
+
+
 ## The pause menu's Save: the quick save, and a toast to say how it went.
 func save_game() -> bool:
 	if main == null or not main.has_method("quick_save"):
+		return false
+	var blocked := save_blocked()
+	if blocked != "":
+		play("ui_error")
+		toast(blocked, "warn")
 		return false
 	var ok: bool = main.quick_save()
 	if ok:

@@ -35,6 +35,8 @@ var drawn_names := 0
 var drawn_hunters := 0
 var drawn_crosshair := false
 var drawn_aim_line := false
+## Where the aim line ended, in tiles (the first wall or body the shot would meet, or the end of the gun's reach).
+var aim_end := Vector2.ZERO
 var drawn_reload_ring := false
 var drawn_prompt := ""
 
@@ -225,14 +227,18 @@ func _draw() -> void:
 				if SHOWN_STATUS.has(word):
 					_tag(pos + Vector2(0.0, row + 8.0), word, font, Hud.INK2 if word != "Down" else DANGER, Color(PILL, 0.6))
 
-	# the aim line from the muzzle toward the pointer, as far as the gun reaches
+	# the aim line from the muzzle along the aim, as far as the shot goes: to the first wall or the first of the dead it would hit, or
+	# the end of the gun's reach (the yard's line is the same trace: `Avatar.trace`), not on to the pointer through the walls
 	if lead != null and not lead.downed and scene.crosshair_shown():
 		var lp: Vector2 = scene.view_pos(lead)
-		var muzzle: Vector2 = scene.to_screen(Vector2(lp.x, lp.y - 0.5))
-		var target: Vector2 = scene._mouse
-		var reach_px: float = float(run.sim.reach_of(lead.gun, lead)) * z
-		var dist := muzzle.distance_to(target)
-		var end := muzzle.lerp(target, minf(1.0, reach_px / maxf(dist, 1.0)))
+		var off := lp - Vector2(lead.x, lead.y)    # (the figure is drawn up to a step behind the rules')
+		var shoulder: Vector2 = run.sim.avatar.shoulder(lead)
+		var muzzle_at: Vector2 = run.sim.muzzle(lead, lead.aim)
+		var shot: Dictionary = run.sim.avatar.trace(shoulder, lead.aim, float(run.sim.reach_of(lead.gun, lead)))
+		var end_at: Vector2 = shot.end
+		aim_end = end_at
+		var muzzle: Vector2 = scene.to_screen(muzzle_at + off)
+		var end: Vector2 = scene.to_screen(end_at + off)
 		_dashed_line(muzzle, end, Color(ACCENT, 0.4), 1.5)
 		drawn_aim_line = true
 

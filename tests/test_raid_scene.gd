@@ -921,7 +921,7 @@ func test_the_place_is_lit_by_the_colonys_hour() -> void:
 
 # -------------------------------------------------------------- succession --
 
-func test_when_the_leader_falls_the_next_leads_the_base_is_told_and_the_camera_goes_there() -> void:
+func test_when_the_leader_falls_the_next_leads_the_camera_goes_there_and_the_base_is_told_when_the_trip_ends() -> void:
 	var main := _game()
 	var scene := _open(main, 3, [], "", false, true)
 	var h = scene.hud_layer
@@ -944,24 +944,32 @@ func test_when_the_leader_falls_the_next_leads_the_base_is_told_and_the_camera_g
 	check(scene.leader() == dez, "Dez, the most trusted, leads now")
 	eq(h.banner_title.text, "DEZ LEADS NOW", "the banner says so")
 	check(h.banner_sub.text.contains("Ruth"), "and who fell: %s" % h.banner_sub.text)
-	eq(cs.player_id, "dez", "the base's player is the same person")
-	check(cs.people[1].player and not cs.people[0].player, "the flag moved there too")
-	check(cs.people[2].trust < trust0, "the base trusts the player less: %.1f from %.1f" % [cs.people[2].trust, trust0])
+	# (she is only down: she may be got up and come home, so the base is told when the trip is over and she is lost, not before)
+	eq(cs.player_id, "ruth", "the base's player is still Ruth")
+	near(cs.people[2].trust, trust0, 0.01, "nobody trusts the player less yet")
 	_play(scene, 2.5)
 	check(scene.cam_center.x > 17.0, "the camera glided to him (as far as the map lets it): %s" % str(scene.cam_center))
 	check(h.cards[1].you.visible and not h.cards[0].you.visible, "'YOU' moved to his card")
-	var heard := false
-	for e in cs.radio.news:
-		heard = heard or String(e.kind) == "succession"
-	_play(scene, 0.2)
-	for e in cs.radio.news:
-		heard = heard or String(e.kind) == "succession"
-	check(heard, "the base's radio has the news")
 	var dx: float = dez.x
 	_press(scene, KEY_S)
 	_play(scene, 0.5)
 	check(dez.y > 9.5, "and the keys walk him now: %.2f" % dez.y)
 	check(absf(dez.x - dx) < 0.5, "")
+	_release(scene, KEY_S)
+	var heard := false
+	for e in cs.radio.news:
+		heard = heard or String(e.kind) == "succession"
+	check(not heard, "the base's radio has no news of a loss yet")
+	# the trip ends with her among the lost: now the base is told, once, with the place's heir
+	_walk_out(scene)
+	check(scene.final_result.lost.has("ruth"), "Ruth is lost in the result")
+	eq(cs.player_id, "dez", "the base's player is the one who led at the end")
+	check(cs.people[1].player and not cs.people[0].player, "the flag moved there too")
+	check(cs.people[2].trust < trust0, "the base trusts the player less: %.1f from %.1f" % [cs.people[2].trust, trust0])
+	cs.update(STEP)
+	for e in cs.radio.news:
+		heard = heard or String(e.kind) == "succession"
+	check(heard, "the base's radio has the news")
 	await _leave(main)
 
 
@@ -1233,6 +1241,41 @@ func test_the_overlay_draws_the_crosshair_the_aim_line_the_prompt_and_the_reload
 	await _leave(main)
 
 
+func test_the_aim_line_in_a_place_stops_where_the_shot_stops() -> void:
+	var main := _game()
+	var scene := _open(main)
+	var lead = scene.leader()
+	var reach: float = float(scene.run.sim.reach_of(lead.gun, lead))
+	check(reach > 4.0, "(the gun reaches past the wall: %.1f tiles)" % reach)
+	# the pointer is on the far side of the house's west wall (x 14, no door at this height): the line stops at the wall
+	_put(lead, 11.5, 5.5)
+	_motion(scene, scene.to_screen(Vector2(20.5, 5.5)))
+	scene.over_hud = false
+	_play(scene, 0.2)
+	await TutorialKit.settle()
+	scene.overlay.queue_redraw()
+	await TutorialKit.settle()
+	check(scene.overlay.drawn_aim_line, "the aim line is drawn")
+	check(scene.overlay.aim_end.x > 12.5 and scene.overlay.aim_end.x < 14.2, "and ends at the wall, not at the pointer or the reach: %s" % str(scene.overlay.aim_end))
+	# the same line at the door's height goes through it, as far as the gun reaches or the pointer is
+	_put(lead, 11.5, 8.5)
+	_motion(scene, scene.to_screen(Vector2(20.5, 8.5)))
+	scene.over_hud = false
+	_play(scene, 0.2)
+	await TutorialKit.settle()
+	scene.overlay.queue_redraw()
+	await TutorialKit.settle()
+	check(scene.overlay.aim_end.x > 15.0, "through the door it goes on: %s" % str(scene.overlay.aim_end))
+	# and it stops at the first of the dead it would hit
+	scene.run.sim.zombies.clear()
+	var z = scene.run.sim.spawn(13.0, 8.5, "still")
+	_play(scene, 0.1)
+	scene.overlay.queue_redraw()
+	await TutorialKit.settle()
+	check(scene.overlay.aim_end.x > 12.5 and scene.overlay.aim_end.x < 13.6, "a body in the way: the line ends on it: %s" % str(scene.overlay.aim_end))
+	await _leave(main)
+
+
 func test_the_sounds_of_the_run_are_played_and_the_events_taken() -> void:
 	var main := _game()
 	var scene := _open(main)
@@ -1416,7 +1459,11 @@ func test_open_raid_leaves_out_who_the_radio_says_cannot_come_and_says_why() -> 
 	check(scene != null, "the trip opens")
 	eq(_ids(scene.run.squad), ["ruth", "marcus"], "without Dez")
 	check(dez.away == null, "who is still at the base")
-	check(main.hud.toast_label.text.begins_with("Dez"), "the toast says why: '%s'" % main.hud.toast_label.text)
+	# (the colony's HUD is hidden once the trip is up, so a toast there is never seen: the reason is on the road's overlay, and in
+	# the report; tests/test_round17_views.gd has the whole of it)
+	eq(scene.flow.refusals.size(), 1, "the flow keeps why")
+	check(String(scene.flow.refusals[0]).begins_with("Dez"), "it names him: '%s'" % str(scene.flow.refusals))
+	check(scene.hud_layer.road_panel.visible and scene.hud_layer.road_refusals == scene.flow.refusals, "and the road's overlay shows it: %s" % str(scene.hud_layer.road_refusals))
 	scene.free()
 	await _leave(main)
 

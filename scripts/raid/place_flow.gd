@@ -16,9 +16,11 @@
 ##                is never lost, and the place's own Sim is given the colony's clock after each colony step (`mirror`).
 ##   finish       the place is over: `scavenge.finish_played(party, result)` (the people are on the road home from this
 ##                moment: the colony's rules bring them in after `road_minutes`), the radio is told of the trip (the trust
-##                the place counted, `result.trust_delta`; `radio.on_trip_led` for the ones who came back when it counted
-##                none) and the road HOME is run the same way as the road there. The people are home, or in sight of the
-##                gate, when it is done.
+##                the place counted, `result.trust` (what it cost them and what it earned them: one number each, paid once);
+##                `radio.on_trip_led` for the ones who came back when it counted none), the base is told who led at the end
+##                (the loss of a leader who is lost, with its setback, or just the new player when she lived: see
+##                `_agree_on_the_leader`) and the road HOME is run the same way as the road there. The people are home, or in
+##                sight of the gate, when it is done.
 ## The road home is run AFTER `finish_played` (not before it): the party's way home is already in the colony's own rules
 ## (`return_at`), and the fast-forward only carries the clock to it, so the trip does not take its road twice.
 extends RefCounted
@@ -33,6 +35,9 @@ const MAX_STEPS_PER_FRAME := 60
 const MIN_ROAD_S := 2.5
 ## Three on foot (the seats of a vehicle otherwise): the avatar counts.
 const MAX_ON_FOOT := 3
+## How fast the base's clock runs while the place is played, against the yard's normal speed: a third (a game minute a real second
+## where the yard has three). The radio's countdowns are read at this pace there (`RadioKit.left_seconds`).
+const PLACE_PACE := 1.0 / Sim.PLACE_STEP_RATIO
 ## The road home runs this many game minutes past the party's own time, so that they have reached the gate when it ends.
 const ARRIVAL_MARGIN_MIN := 1.5
 ## How many news lines the overlay and the report keep.
@@ -47,6 +52,9 @@ var action := "loot"
 var vehicle_id := ""
 ## Why `begin` was refused ("" when it was not).
 var error := ""
+## Who of the people the player chose did not come, one line each with the reason ("Dez: bleeding, can't come": `refusal_lines` of
+## `pick_party`; main.gd's `open_raid` sets it): the road's overlay and the report show them, so that nobody is left out unseen.
+var refusals: Array = []
 ## "idle", "road_there", "place", "road_home", "home".
 var stage := "idle"
 ## The road in game minutes: all of it and what is left.
@@ -220,9 +228,12 @@ func place_step(run_sim, dt: float = StepClock.STEP) -> int:
 func finish(played: Dictionary) -> void:
 	result = played
 	sim.scavenge.finish_played(party, played)
-	# the trust the trip earned: the place's own count (who followed to the end, never down), else the radio's flat bonus for
-	# everyone who came back (the two are the same sum: only one is paid)
-	if played.has("trust_delta"):
+	# the trust the trip changed: the place's own count (`trust`: what it cost, a push to go or a bite while following, and the bonus
+	# for who followed to the end, never down; `trust_delta` is that bonus alone), else the radio's flat bonus for everyone who
+	# came back (they are the same sum: ONE number is paid for each person)
+	if played.has("trust"):
+		_apply_trust(played.trust)
+	elif played.has("trust_delta"):
 		_apply_trust(played.trust_delta)
 	else:
 		var came: Array = []
@@ -238,19 +249,32 @@ func finish(played: Dictionary) -> void:
 	stage = "road_home"
 
 
-## The base's player is the person who led in the place when it ended (the scene passes the succession on as it happens; this is
-## the safety for a trip whose last leader was not told to the base): not when that person is lost, whose loss the base's own
-## succession takes care of when they are told dead.
+## The base is told who leads when the place ends (the scene does NOT tell it when the one you lead only falls: she may be got up
+## and come home, and then nobody has been lost). The player the base has now is the one who went in; `played.leader` is who led at
+## the end, `played.lost` who is not coming home:
+##   - the old leader is lost (and the colony has not buried her yet: the road home does): the base's own succession now, with the
+##     place's chosen heir (the last leader, if they are not lost) in place of its order, and so its setback (everyone's trust, the
+##     mourning, the news). If nobody is left standing the colony has already buried everyone (`finish_played`) and has done it;
+##   - the old leader lives: the last leader is the base's player, with no setback and no news of a loss (a line in the alerts says so).
 func _agree_on_the_leader(played: Dictionary) -> void:
-	if String(sim.player_id) == "" or not played.has("leader"):
+	if String(sim.player_id) == "":
 		return
-	var id := String(played.leader)
-	if id == String(sim.player_id) or (played.get("lost", []) as Array).has(id):
+	var old = sim.avatar.player()
+	if old == null or not going.has(old):
 		return
-	for p in sim.people:
-		if String(p.id) == id and not p.dead and not p.turned:
-			sim.avatar.set_player(p)
-			return
+	var lost: Array = played.get("lost", [])
+	var heir = null
+	var heir_id := String(played.get("leader", ""))
+	if heir_id != "" and not lost.has(heir_id):
+		for p in sim.people:
+			if String(p.id) == heir_id and not p.dead and not p.turned:
+				heir = p
+	if lost.has(String(old.id)):
+		if not old.dead:
+			sim.avatar.on_player_lost(old, heir)
+	elif heir != null and heir != old:
+		sim.avatar.set_player(heir)
+		sim.alert("leader", "info", "You are %s now" % heir.first, "%s went down in the place" % old.first, null, 20.0)
 
 
 ## The trust the place moved: a number for each person ({id: delta}), or one for them all.
@@ -259,12 +283,17 @@ func _apply_trust(delta) -> void:
 		for id in delta:
 			for p in sim.people:
 				if String(p.id) == String(id) and not p.dead:
-					sim.radio.add_trust(p, float(delta[id]), "On the trip")
+					sim.radio.add_trust(p, float(delta[id]), _trust_reason(float(delta[id])))
 	elif typeof(delta) == TYPE_FLOAT or typeof(delta) == TYPE_INT:
 		if float(delta) != 0.0:
 			for p in going:
 				if not p.dead:
-					sim.radio.add_trust(p, float(delta), "On the trip")
+					sim.radio.add_trust(p, float(delta), _trust_reason(float(delta)))
+
+
+## What the tooltip says the trip did to their trust.
+static func _trust_reason(delta: float) -> String:
+	return "Came back safe from a trip you led" if delta >= 0.0 else "Pushed or hurt on a trip you led"
 
 
 ## The road home is done and the colony view comes back.

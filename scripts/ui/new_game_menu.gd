@@ -21,7 +21,7 @@ const CREW_NAMES := ["Small crew (3)", "Crew of five", "Full crew (6)"]
 const CREW_LINES := [
 	"Ruth, Dez and Marcus. More survivors call in over the radio.",
 	"Ruth, Dez, Marcus, Ana and Walt. Hector and others call in over the radio.",
-	"All six from the first morning, in the old schoolyard. Nobody calls in.",
+	"All six from day one, no recruits. No avatar: the full crew plays as before.",
 ]
 const CREW_FACTS := [
 	"A call can come at noon from day 2 when a bed is free (the first three callers even with the desk empty, later ones when someone is at the radio desk). Nights are smaller while the crew is.",

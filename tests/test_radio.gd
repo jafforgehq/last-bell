@@ -578,7 +578,7 @@ func test_hold_keeps_the_spot_where_the_leader_was_when_asked() -> void:
 	var hector = _p(sim, "hector")
 	hector.trust = 90.0
 	sim.radio.request(hector, "hold", {"at": Vector2(30.5, 39.5)})
-	Helpers.run(sim, 10.0)
+	Helpers.run(sim, 20.0)    # (Hector sits at the radio desk, which Ruth left to be the player: a long walk)
 	near(hector.stance_at.x, 30.5, 0.0001, "a spot given in the request is the spot")
 	check(Vector2(hector.x, hector.y).distance_to(Vector2(30.5, 39.5)) < 0.2, "and he is there")
 	g.world.free()

@@ -348,12 +348,15 @@ func gizmo(_id: String, _sel) -> bool:
 
 ## Whether `p` can be put in a party now: alive, on the map, on their feet, not
 ## drafted with an order, not already out, not busy treating someone or leaving
-## through the gate, not delirious with fever.
+## through the gate, not delirious with fever. In an avatar game the only orders there are are the radio's (a stance that
+## drafted them, "to the walls", a call's errand: the old controls are gone), and being taken on a trip is what "come with me"
+## asks: the party's opening ends them, so they are no reason to refuse. The old game keeps refusing a person it has drafted
+## or sent somewhere by hand.
 func can_go(p, played: bool = false) -> bool:
 	if p == null or p.dead or p.downed or p.away != null or sim.morale.breakdown(p) or (p.player and not played):
 		return false    # (the player leaves by their own hands: a played trip (`played`), never the dice's party)
-	if p.drafted or p.order != null:
-		return false
+	if String(sim.player_id) == "" and (p.order != null or (p.drafted and String(p.stance) == "")):
+		return false    # (a stance, the radio's, drafted them: that is not an order of the old controls)
 	if _party_of(p) != null or sim.medical.goal_for(p) != null:
 		return false
 	return sim.medical.infection_stage(p) != "delirious"

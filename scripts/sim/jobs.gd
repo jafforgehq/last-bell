@@ -4,7 +4,7 @@
 ## This module keeps who is where (assignments, seats, posts, the stations' settings), says
 ## who is working a station right now (`working`, which the effect modules ask), supplies the
 ## goals the rules follow (`goal_for` by day, `post_goal` by night) and fills the seats by skill
-## (`auto_assign`). What a station does is the business of the module it belongs to: the
+## (`auto_assign`; `refill` fills one seat the avatar left). What a station does is the business of the module it belongs to: the
 ## workshop makes the ammo, tactics mends the walls and keeps watch, supplies grows the food,
 ## medical heals, the storyteller takes the noon call.
 ##
@@ -54,6 +54,9 @@ const AUTO_ORDER := ["bench", "builders", "garden", "watch", "infirmary", "radio
 const AUTO_SECOND_PASS := ["builders", "garden", "bench", "infirmary", "salvage"]
 ## Traits that make a person a better fit for a station.
 const AUTO_TRAITS := {"bench": "tinkerer", "builders": "tinkerer", "infirmary": "triage", "watch": "sharp_eyed"}
+## The stations that give up a worker, first to last, when a seat that was left (the avatar's) is filled from a crew at work
+## (`refill`): what can wait goes first, the bench (the ammunition) last. The desks are not here.
+const GIVE_UP_ORDER := ["salvage", "garden", "builders", "watch", "bench"]
 
 var sim
 ## Person id -> station id ("" none), person id -> post id, and station id -> {setting: value}.
@@ -585,19 +588,68 @@ func auto_assign() -> void:
 
 
 func _fill_one(id: String, away := false) -> bool:
+	var best = _best_free(id, away)
+	# a seat that is really open (not one held by somebody away: Auto-assign does not take those)
+	if best == null or crew_of(id).size() >= seats_of(id):
+		return false
+	return assign(best, id)
+
+
+## The person with no job (here or away, as asked) who suits this station best, or null. `up_only` leaves out those who are down or
+## in a breakdown.
+func _best_free(id: String, away := false, up_only := false):
 	var best = null
 	var best_score := -1.0e9
 	for p in sim.people:
 		if p.dead or p.turned or p.player or job_of(p) != "" or (p.away != null) != away:
 			continue    # (the player is never given a seat: avatar.gd)
+		if up_only and not _able(p):
+			continue
 		var s := _fit(p, id)
 		if s > best_score:
 			best_score = s
 			best = p
-	# a seat that is really open (not one held by somebody away: Auto-assign does not take those)
-	if best == null or crew_of(id).size() >= seats_of(id):
+	return best
+
+
+## A seat has been left empty by somebody who became the player (avatar.gd: the player is never given a seat, so the radio desk, the
+## infirmary or the lookout post they held would stay empty, and the storyteller would have no speaker): somebody at the base
+## fills it. Whoever has no job takes it (the best fit, as Auto-assign picks them); with none, a seat is taken from the crew of a
+## station whose work can wait (`GIVE_UP_ORDER`: a station that has two at the base before one that would be left empty, then the
+## order of the list), the best fit of them. The radio desk and the infirmary are not robbed to fill each other. True when
+## somebody sits in the seat now; false (nothing is changed) when there is no seat to fill or nobody to fill it.
+func refill(id: String) -> bool:
+	if not _station_by_id.has(id) or seats_left(id) <= 0:
 		return false
-	return assign(best, id)
+	var free = _best_free(id, false, true)
+	if free != null:
+		return assign(free, id)
+	var best = null
+	var best_rank := 1.0e9
+	var best_fit := -1.0e9
+	for p in sim.people:
+		if not _able(p):
+			continue
+		var from := job_of(p)
+		var order := GIVE_UP_ORDER.find(from)
+		if from == id or order < 0:
+			continue
+		var rank := float(order) + (0.0 if _at_base(from) >= 2 else 100.0)
+		var fit := _fit(p, id)
+		if rank < best_rank or (is_equal_approx(rank, best_rank) and fit > best_fit):
+			best_rank = rank
+			best_fit = fit
+			best = p
+	return best != null and assign(best, id)
+
+
+## How many of a station's crew are here (not away on a trip).
+func _at_base(id: String) -> int:
+	var n := 0
+	for p in crew_of(id):
+		if p.away == null:
+			n += 1
+	return n
 
 
 ## How well this person suits this station (higher is better).

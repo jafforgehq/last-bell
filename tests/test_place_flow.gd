@@ -432,6 +432,45 @@ func test_the_base_is_told_who_led_at_the_end_when_it_was_not_told_before() -> v
 	_end(g2)
 
 
+func test_the_old_leader_who_is_lost_costs_the_setback_at_the_finish_and_the_place_chooses_the_heir() -> void:
+	var g := _game(8.0)
+	var sim = g.sim
+	var ruth = _person(sim, "ruth")
+	var dez = _person(sim, "dez")
+	var marcus = _person(sim, "marcus")
+	dez.trust = 40.0
+	marcus.trust = 90.0    # (the base's own order would pick Marcus: the place's pick is Dez)
+	var flow = PlaceFlow.new(sim)
+	flow.begin([ruth, dez], "houses", "")
+	var m0: float = marcus.trust
+	flow.finish({"loot": {}, "hurt": {}, "lost": ["ruth"], "ammo_used": 0.0, "beats": [], "leader": "dez", "trust_delta": {"dez": 0.0}})
+	eq(sim.player_id, "dez", "the place's pick, whatever the base's own order would be")
+	near(marcus.trust, m0 - 10.0, 0.01, "everyone's trust fell ten")
+	sim.update(STEP)    # (the radio reads the events of a step)
+	check(not sim.radio.news.filter(func(e): return String(e.kind) == "succession").is_empty(), "and the base heard of the loss")
+	_end(g)
+
+
+func test_a_leader_who_lived_hands_over_to_the_last_leader_without_the_setback() -> void:
+	var g := _game(8.0)
+	var sim = g.sim
+	var ruth = _person(sim, "ruth")
+	var dez = _person(sim, "dez")
+	var marcus = _person(sim, "marcus")
+	var flow = PlaceFlow.new(sim)
+	flow.begin([ruth, dez], "houses", "")
+	var m0: float = marcus.trust
+	var d0: float = dez.trust
+	flow.finish({"loot": {}, "hurt": {}, "lost": [], "ammo_used": 0.0, "beats": [], "leader": "dez", "trust_delta": {}})
+	eq(sim.player_id, "dez", "Dez is the base's player: he led at the end")
+	check(dez.player and not ruth.player, "Ruth is not")
+	near(marcus.trust, m0, 0.01, "no setback for the others")
+	near(dez.trust, d0, 0.01, "or for him")
+	check(sim.radio.news.filter(func(e): return String(e.kind) == "succession").is_empty(), "no news of a loss: nobody was lost")
+	check(not ruth.dead, "and Ruth lives")
+	_end(g)
+
+
 # -------------------------------------------------------------------- base --
 
 func test_the_base_state_reads_the_walls_the_alarm_and_the_night() -> void:
@@ -683,7 +722,7 @@ func test_the_colony_is_given_back_exactly_after_a_whole_trip() -> void:
 	await _leave(main)
 
 
-func test_the_fall_of_the_leader_in_the_trip_hands_the_base_over_once_and_the_loss_is_told_after_the_road() -> void:
+func test_the_fall_of_the_leader_in_the_trip_hands_the_place_over_at_once_and_the_base_is_told_when_the_trip_ends() -> void:
 	var main := _main()
 	var sim = main.sim
 	var ruth = sim.people[0]
@@ -698,10 +737,14 @@ func test_the_fall_of_the_leader_in_the_trip_hands_the_base_over_once_and_the_lo
 	ruth_run.hp = 0.0
 	_tick(scene, 0.3)
 	eq(String(scene.leader().id), "dez", "Dez leads in the place")
-	eq(sim.player_id, "dez", "and at the base")
-	near(marcus.trust, t0 - 10.0, 1.0, "the base trusts the player ten less: %.1f from %.1f" % [marcus.trust, t0])
+	# she is only DOWN: the base is not told (she may be got up), nobody mourns yet
+	eq(sim.player_id, "ruth", "the base's player is still Ruth: she is only down")
+	near(marcus.trust, t0, 0.01, "nobody has lost any trust in the player: %.1f from %.1f" % [marcus.trust, t0])
+	check(sim.radio.news.filter(func(e): return String(e.kind) == "succession").is_empty(), "and there is no word of a loss")
 	_leave_place(scene)
 	check(scene.final_result.lost.has("ruth"), "Ruth is lost in the result")
+	eq(sim.player_id, "dez", "the trip is over and she is lost: the base is told, and hands over to the one the place chose")
+	near(marcus.trust, t0 - 10.0, 1.0, "the base trusts the player ten less: %.1f from %.1f" % [marcus.trust, t0])
 	_drive_road(main, scene, "road_home")
 	var steps := 0
 	while not sim.scavenge.parties.is_empty() and steps < 6000:
@@ -711,6 +754,45 @@ func test_the_fall_of_the_leader_in_the_trip_hands_the_base_over_once_and_the_lo
 	eq(sim.player_id, "dez", "and the base's player is still Dez: no second succession")
 	check(not dez.dead and dez.away == null, "Dez is home")
 	check(marcus.trust > t0 - 14.0, "(trust fell once)")
+	eq(sim.radio.news.filter(func(e): return String(e.kind) == "succession").size(), 1, "one line of news about it")
+	scene.go_home()
+	await _leave(main)
+
+
+func test_a_leader_who_was_got_up_and_came_home_is_no_loss_to_the_base() -> void:
+	var main := _main()
+	var sim = main.sim
+	var ruth = sim.people[0]
+	var dez = sim.people[1]
+	var marcus = sim.people[2]
+	var scene = main.open_raid([dez], sim.town.place("houses"), "", 1.0, Callable())
+	_drive_road(main, scene, "road_there")
+	var t0: float = marcus.trust
+	var ruth_run = scene.leader()
+	ruth_run.downed = true
+	ruth_run.hp = 0.0
+	_tick(scene, 0.3)
+	eq(String(scene.leader().id), "dez", "Dez leads in the place")
+	eq(sim.player_id, "ruth", "the base has not been told")
+	# Dez gets her up (what the place's helping ends in)
+	ruth_run.downed = false
+	ruth_run.hp = 30.0
+	_tick(scene, 0.2)
+	_leave_place(scene)
+	check(not scene.final_result.lost.has("ruth"), "Ruth is not lost")
+	eq(String(scene.final_result.leader), "dez", "Dez led at the end")
+	eq(sim.player_id, "dez", "the base's player is the one who led at the end")
+	check(dez.player and not ruth.player, "(and Ruth is no longer the player)")
+	near(marcus.trust, t0, 0.5, "with no setback: nobody trusts the player less: %.1f from %.1f" % [marcus.trust, t0])
+	check(sim.radio.news.filter(func(e): return String(e.kind) == "succession").is_empty(), "and no news of a loss")
+	_drive_road(main, scene, "road_home")
+	var steps := 0
+	while not sim.scavenge.parties.is_empty() and steps < 6000:
+		sim.update(STEP)
+		steps += 1
+	check(not ruth.dead and ruth.away == null, "Ruth came home")
+	eq(sim.player_id, "dez", "and Dez is still the player")
+	check(marcus.trust >= t0 - 0.5, "no mourning came with her return: %.1f from %.1f" % [marcus.trust, t0])
 	scene.go_home()
 	await _leave(main)
 

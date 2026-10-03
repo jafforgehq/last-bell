@@ -779,7 +779,8 @@ func test_the_one_who_is_down_is_the_last_to_be_chosen() -> void:
 	g.world.free()
 
 
-func test_someone_away_can_be_next_in_line() -> void:
+func test_someone_away_is_next_in_line_only_when_nobody_is_at_the_base() -> void:
+	# (round 17 review: a player who is away has no body to walk or shoot with and cannot ask anybody to come)
 	var g := _game()
 	var sim = g.sim
 	for q in sim.people:
@@ -787,9 +788,20 @@ func test_someone_away_can_be_next_in_line() -> void:
 	var dez = _person(sim, "dez")
 	dez.trust = 95.0
 	dez.away = {"kind": "party"}
+	_person(sim, "ana").trust = 60.0
 	sim.medical.kill(g.p, "bled out")
-	eq(sim.player_id, "dez", "a party member out on a trip is still in line")
+	eq(sim.player_id, "ana", "somebody at the base leads, though the one on a trip is more trusted")
 	g.world.free()
+	var g2 := _game()
+	var sim2 = g2.sim
+	for q in sim2.people:
+		q.trust = 40.0
+		if q != g2.p:
+			q.away = {"kind": "party"}
+	_person(sim2, "dez").trust = 95.0
+	sim2.medical.kill(g2.p, "bled out")
+	eq(sim2.player_id, "dez", "with nobody at home a party member out on a trip is in line")
+	g2.world.free()
 
 
 func test_a_turned_player_hands_over_too() -> void:

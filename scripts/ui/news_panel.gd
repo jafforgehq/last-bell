@@ -6,7 +6,9 @@
 ## `setup(host, radio_getter, options)` as call_view.gd (the HUD lends its looks; the radio comes from the Callable; the options are
 ## handed on to the views). `refresh()` brings it up to date (the HUD does it with each update while it is open). The panel is as wide
 ## as its `custom_minimum_size.x` (the HUD gives it the clock's width) and as tall as `fit(max_h)` lets it be; what does not fit scrolls.
-## Lines are UNREAD while their id is above `seen_id`; `mark_read()` sets it to the newest (the HUD does when the panel is shut).
+## Lines are UNREAD while their id is above `seen_id`; `mark_read()` sets it to the newest (the HUD does when the panel is shut). The
+## radio keeps the number (`news_seen`), so the yard's panel and a place's share it: what is read in one is read in the other. A
+## radio without that field (a test's stand-in) leaves it to the panel.
 extends PanelContainer
 
 const CallView := preload("res://scripts/ui/call_view.gd")
@@ -23,8 +25,20 @@ const MIN_LIST_H := 40.0
 
 var host
 var options := {}
-## The newest line the player has seen: everything above it is unread.
-var seen_id := 0
+## The newest line the player has seen: everything above it is unread. It is the radio's own number when it has one.
+var seen_id: int:
+	get:
+		var radio = _radio()
+		if radio != null and radio.get("news_seen") != null:
+			return int(radio.news_seen)
+		return _own_seen
+	set(value):
+		var radio = _radio()
+		if radio != null and radio.get("news_seen") != null:
+			radio.news_seen = value
+		else:
+			_own_seen = value
+var _own_seen := 0
 ## One view for each open call, oldest first (call_view.gd).
 var call_views: Array = []
 ## The lines of the log, newest first: {"id", "kind", "unread", "color", "box"}.
