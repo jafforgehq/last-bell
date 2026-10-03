@@ -193,3 +193,32 @@ func test_without_beds_first_the_informed_policy_builds_as_it_did_before_the_ten
 	eq(sim.build.plot("tents_home_1").site, {}, "no tent (--nobeds)")
 	eq(String(sim.build.plot("salvage_bench_home").site.get("building", "")), "salvage_bench", "the salvage bench, first of the order")
 	g.world.free()
+
+
+# ------------------------------------------------- round 19: the avatar is not a worker --
+
+func test_the_policy_treats_the_player_as_nobody_to_give_work() -> void:
+	var g := Helpers.avatar_game(76, 5)
+	var sim = g.sim
+	sim.waves.enabled = false
+	var policy = Balance.Policy.new(sim)
+	policy.informed = true
+	var me = sim.avatar.player()
+	var other = null
+	for p in sim.people:
+		if p != me:
+			other = p
+	check(not policy._free(me), "the player is never free to be given a job, an errand or a post")
+	check(policy._free(other), "anyone else on their feet is")
+	eq(policy._hands_home(), sim.people.size() - 1, "the hands at home are everyone but the player")
+	g.world.free()
+
+
+func test_the_avatar_flag_is_off_by_default_and_a_game_without_it_has_no_player() -> void:
+	eq(Balance.avatar_mode, "none", "no avatar unless --avatar says so")
+	eq(Balance.nightstats_on, false, "and no night rows")
+	var g := Helpers.make(77, 1, 5)
+	eq(g.sim.player_id, "", "the harness's own game has nobody for a player")
+	var policy = Balance.policy_for(g.sim, false, true)
+	check(policy.informed and policy.builds, "the informed policy made by `policy_for` builds as it always did")
+	g.world.free()

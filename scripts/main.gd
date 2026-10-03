@@ -36,6 +36,8 @@ const Hints := preload("res://scripts/ui/hints.gd")
 const StoryUi := preload("res://scripts/ui/story_ui.gd")
 const RaidScene := preload("res://scripts/raid/raid_scene.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
 ## The generator of the places of a played trip (the SITES builder's) and, until it exists, a stand-in.
 const SITE_GEN := "res://scripts/raid/site_gen.gd"
 const SITE_STUB := "res://scripts/raid/stub_site.gd"    # TODO-SITEGEN: delete with the fallback in open_raid once SITE_GEN is there
@@ -211,6 +213,8 @@ var shot_path := ""
 var shot_frames := 25
 ## `--aim=x,y`: the tile the screenshot has the mouse over (a screenshot has no pointer), and `--hold-fire`: the trigger is held.
 var shot_aim := Vector2.INF
+## Where a screenshot's staging of the nights (`--night`, `--plated`, `--breach`) wants the camera (INF: nowhere in particular).
+var _stage_focus := Vector2.INF
 ## `--swing[=0..1]`: the avatar is held in the middle of a melee swing (how far it has run out), for a screenshot of it.
 var shot_swing := 0.0
 var frame_count := 0
@@ -1950,6 +1954,7 @@ func _parse_args() -> void:
 	var raid_spec := ""
 	var raid_do := ""
 	var cam_asked := false
+	var want_notice := false
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
 	if season_asked >= 0:
@@ -2026,6 +2031,17 @@ func _parse_args() -> void:
 				for s in sim.segments:
 					if s.id == int(v):
 						_select({"kind": "segment", "ref": s})
+			"night":
+				# --night=<ordinary|siege|rush|last> (round 19, avatar mode) stages that night at 18:30 with the lookout's forecast given
+				# and the avatar at the brunt (put it before --plated, --advance and the other staging of the night)
+				stage_night(v)
+			"forecast":
+				# --forecast=ahead stages noon of the day before the first Big Night with the Radio desk manned (the notice is the radio's)
+				if v == "ahead" and stage_forecast_ahead():
+					want_notice = true
+			"plated":
+				# --plated puts a plated brute at the wall of the brunt, the aim on its head (--aim=x,y puts it elsewhere)
+				stage_plated()
 			"fields":
 				# the fields-of-fire view starts on
 				fields = true
@@ -2134,8 +2150,11 @@ func _parse_args() -> void:
 			"speed":
 				speed = int(v)
 			"breach":
+				# --breach[=N] brings wall section N (the first) down; in avatar mode it is a hot breach: the dead are in it
 				var seg = sim.segments[int(v)]
 				sim._damage_segment(seg, seg.hp + 1.0)
+				if avatar_mode:
+					stage_hot_breach(seg)
 			"damage":
 				# --damage=N:F leaves wall section N at the fraction F of its health
 				var nf := v.split(":")
@@ -2183,6 +2202,9 @@ func _parse_args() -> void:
 	if cam_asked and avatar_mode:
 		# (the camera starts where `--cam` put it; in a screenshot it stays, else it goes back to the avatar after a moment)
 		cam_hold = 1.0e9 if shot_path != "" else CAM_HOLD
+	elif _stage_focus != Vector2.INF and avatar_mode:
+		cam_center = _stage_focus
+		cam_hold = 1.0e9 if shot_path != "" else CAM_HOLD
 	if show_build:
 		hud.last_speed = speed
 		hud.open_build(build_plot, sim)
@@ -2221,6 +2243,8 @@ func _parse_args() -> void:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
 		sim.events.clear()
+	if want_notice:
+		ensure_notice()
 
 
 ## The hour of day, as `--hour=` sets it: the phase, the bell and the game clock follow (it counts minutes from 07:00
@@ -2239,6 +2263,149 @@ func _set_hour(hh: float) -> void:
 func stage_season(i: int) -> void:
 	sim.seasons.jump_to(i)
 	_set_hour(maxf(7.0, sim.seasons.dawn_hour() + 0.5))
+
+
+# ------------------------------------------------- staging the nights (round 19) --
+
+## The days that begin a night of each kind in Autumn's thirty (the first milestone, the second, the last night) and an ordinary one.
+const NIGHT_DAYS := {"ordinary": 4, "siege": 10, "rush": 20, "last": 30}
+
+
+## The wall section the dead of tonight come to (the forecast's first, else the waves' first target), or the first compound section.
+func _brunt_section():
+	var ids: Array = []
+	var f: Dictionary = sim.tactics.forecast()
+	for id in f.get("sections", []):
+		ids.append(int(id))
+	if ids.is_empty() and sim.waves.has_method("target_sections"):
+		for s in sim.waves.target_sections(sim.waves.plan_for(sim.day)):
+			ids.append(int(s.id) if s is Object else int(s))
+	for id in ids:
+		for s in sim.segments:
+			if int(s.id) == id:
+				return s
+	for s in sim.segments:
+		if s.kind != sim.DOOR_KIND and int(s.id) < 100:
+			return s
+	return null
+
+
+## Where the avatar stands to cover a section (the nights' module's answer, else the spot a mender takes).
+func _stand_spot(seg) -> Vector2:
+	var me = sim.avatar.player()
+	if sim.nights != null and sim.nights.has_method("stand_for") and me != null:
+		return sim.nights.stand_for(seg, me.gun)
+	return sim.repair_spot(seg)
+
+
+func _stand_avatar(at: Vector2) -> void:
+	var me = sim.avatar.player()
+	if me == null:
+		return
+	me.x = at.x
+	me.y = at.y
+	me.path = []
+	me.moving = false
+	_stage_focus = at
+
+
+## A screenshot's way of reaching a night (--night=<ordinary|siege|rush|last>): that kind of night's day at 18:30, the lookout's forecast
+## given, the avatar standing where the dead will come. False when the kind is none of those or there is no avatar.
+func stage_night(kind: String) -> bool:
+	if not NIGHT_DAYS.has(kind) or String(sim.player_id) == "":
+		return false
+	sim.storyteller.enabled = false    # (a staged night is looked at: no card of the storyteller's over it)
+	sim.day = int(NIGHT_DAYS[kind])
+	_set_hour(18.5)
+	sim.supplies.sources_day = sim.day
+	for p in sim.people:
+		if not p.player and not p.dead and p.away == null:
+			sim.tactics.forecast_day = sim.day
+			sim.tactics.forecast_who = String(p.id)
+			break
+	var seg = _brunt_section()
+	if seg != null:
+		_stand_avatar(_stand_spot(seg))
+	return true
+
+
+## A screenshot's way of reaching the notice of a Big Night (--forecast=ahead): noon of the day before the first milestone (day 9), the
+## Radio desk manned (the first of the crew who is not the player), the radio's own watch asked to look. False without an avatar.
+func stage_forecast_ahead() -> bool:
+	if String(sim.player_id) == "":
+		return false
+	sim.storyteller.enabled = false
+	sim.day = 9
+	_set_hour(12.05)
+	sim.supplies.sources_day = sim.day
+	for q in sim.jobs.crew_of("radio"):
+		if q.player:
+			sim.jobs.unassign(q)    # (the player plays: they hold no desk)
+	if sim.jobs.crew_of("radio").is_empty():
+		for p in sim.people:
+			if not p.player and not p.dead and p.away == null and sim.jobs.assign(p, "radio"):
+				break
+	for p in sim.jobs.crew_of("radio"):
+		var at: Vector2 = sim.jobs.seat_pos(p)
+		p.x = at.x
+		p.y = at.y
+		p.moving = false
+		p.path = []
+		p.goal_key = ""
+	var night = sim.radio.get("night")
+	if night != null and night.has_method("watch"):
+		night.watch()
+	return true
+
+
+## The notice of tomorrow's Big Night in the radio's log, if the radio made none (the staging of a screenshot of a game whose desk has not
+## looked yet): from the waves' outlook of the day after, or a plain line. True when there is one now.
+func ensure_notice() -> bool:
+	if not NightKit.notice(sim).is_empty():
+		return true
+	var o: Dictionary = sim.waves.outlook(sim.day + 1) if sim.waves.has_method("outlook") else {}
+	var name := String(o.get("name", ""))
+	var text := "Big Night tomorrow: %s" % (name if name != "" else "The Siege")
+	var sub := "About %d to %d. Be home by %s." % [int(o.get("low", 70)), int(o.get("high", 95)), NightKit.hour_text(float(sim.seasons.dusk_hour()) - 0.5)]
+	sim.radio.log_news("forecast", text, sub)
+	sim.alert("bignight-next", "warn", text, sub, null, 60.0)
+	return true
+
+
+## A screenshot's way of showing a plated brute (--plated): one at the first free place of the brunt's wall, the avatar at the post that
+## covers it, the pointer on its head (unless --aim says otherwise). False when there is no such wall or place.
+func stage_plated() -> bool:
+	var seg = _brunt_section()
+	if seg == null or String(sim.player_id) == "":
+		return false
+	for sl in seg.slots:
+		if sl.who != null:
+			continue
+		var z = sim.spawn(sl.x, sl.y, "attack", "brute")
+		z.plated = true
+		z.slot = sl
+		sl.who = z
+		z.facing = sl.face
+		z.attack_t = 0.0
+		var me = sim.avatar.player()
+		var stand := _stand_spot(seg)
+		_stand_avatar(stand)
+		_stage_focus = (stand + Vector2(z.x, z.y)) / 2.0
+		if shot_aim == Vector2.INF:
+			shot_aim = Vector2(z.x, z.y - NightData.num("plated.head", 0.62) * float(z.size))
+		if me != null:
+			me.aim = (Vector2(z.x, z.y - NightData.num("plated.head", 0.62) * float(z.size)) - sim.avatar.shoulder(me)).angle()
+		return true
+	return false
+
+
+## A screenshot's way of showing a hot breach (--breach): three of the dead inside the fallen section, the avatar at the post that covers it.
+func stage_hot_breach(seg) -> void:
+	for i in 3:
+		var z = sim.spawn(seg.center.x + (float(i) - 1.0) * 0.9, seg.center.y + 0.6 * float(i % 2), "breach")
+		z.facing = "S"
+	_stand_avatar(_stand_spot(seg))
+	_stage_focus = (seg.center + _stand_spot(seg)) / 2.0
 
 
 ## A screenshot's way of letting a caller in (--recruit): `id` is the one of the radio's queue who comes in at the gate

@@ -7,7 +7,11 @@
 ## (round 5) the marks of the Jobs screen while it is open (`main.jobs_hover`): a faint ring and the seats
 ## at every station, a firm ring and name at what the page points at, a ring at a night post, a box round a person.
 ## And (round 17, avatar mode only) the survivor the player plays: the crosshair at the pointer, the aim line from the
-## gun, the ring of a reload and the YOU tag over their head (`_draw_avatar`).
+## gun, the ring of a reload and the YOU tag over their head (`_draw_avatar`). And (round 19, avatar mode) the marks of the nights: from the
+## forecast to dawn the walls the dead will come to wear a hatched bracket and "brunt, about 21:00" (`_draw_targets`), the avatar a faint ring
+## as wide as the rally radius, brighter while someone is rallied, and the rallied a small chevron (`_draw_rally`), a plated brute a steel
+## tell and a ring at its weak point that lights when the aim is near (`_draw_plated`), a breach that is hot a pulsing ring that says nobody
+## will mend it under fire (`_draw_hot_breaches`), and the ring of the avatar's hands mending a wall (`_draw_mend`).
 ## All of it is a view: nothing here changes the rules.
 extends Node2D
 
@@ -17,6 +21,9 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Frames := preload("res://scripts/ui/frames.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Art := preload("res://scripts/render/pawn_art.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -78,8 +85,53 @@ const JOB_LIT := 0.95
 ## How far in from the window's edge the arrows are kept, and the size of the seat marks.
 const JOB_EDGE := 48.0
 const JOB_SEAT := 4.5
+## The marks of the nights (round 19). The brunt's colour is the spawn arrow's red (its text the arrow's); the rally ring is the HUD's
+## green; a plated brute's steel is cold grey with a dark edge so that it reads on grass, concrete and in the dark; the weak point is
+## amber, hot red-orange.
+const BRUNT := SPAWN
+const BRUNT_TEXT := SPAWN_TEXT
+const BRUNT_FILL := 0.13
+const BRUNT_FILL_CALM := 0.07
+const RALLY := Color("#8fb85a")
+const STEEL := Color("#aeb9c3")
+const STEEL_DARK := Color("#4a5660")
+const STEEL_EDGE := Color(0.04, 0.06, 0.07, 0.92)
+const WEAK := Color("#ffb347")
+const WEAK_HOT := Color("#ff7d6e")
+const HOT := Color("#ff7d6e")
+## How often the forecast is asked for the marks (seconds of the screen's clock), how near the aim has to pass a weak point for the ring to
+## light (in weak-point radii), and the smallest the ring is drawn (pixels).
+const NIGHT_REFRESH := 0.25
+const WEAK_NEAR := 3.0
+const WEAK_MIN_PX := 7.0
+## How long the hatching's lines are apart, the brackets' arm and the dead's weak point height as the rules have it.
+const HATCH_GAP := 12.0
 
 var main
+## The nights' marks of the last draw (round 19; see the header): the brunt's brackets (how many were in the window, whether any, the tags
+## [{"id", "text", "at"}] and whether the night is one that needs the player), the rally ring (its radius in pixels, whether someone is
+## rallied, how many chevrons), the plated brutes drawn (and their weak-point rings [{"id", "at", "r", "near", "on"}]), the hot breaches
+## (and their tags) and the ring of the hands at a wall (`mend_progress`, 0 to 1).
+var drew_target_marks := false
+var drawn_target_marks := 0
+var target_tags: Array = []
+var target_lit := false
+var drew_rally_ring := false
+var rally_ring_px := 0.0
+var rally_lit := false
+var drawn_rallied := 0
+var drew_weak_marks := false
+var drawn_weak_marks := 0
+var drawn_plated := 0
+var weak_marks: Array = []
+var drew_hot_breach := false
+var drawn_hot_breach := 0
+var hot_tags: Array = []
+var drew_mend_ring := false
+var mend_progress := 0.0
+## What the forecast said at the last look (it is asked a few times a second, not every frame) and when.
+var _night_f := {}
+var _night_t := -1.0e9
 ## What the last draw put on the screen (for the tests: a section, a gun's reach or an arrow
 ## that is out of the window is not drawn, and does not count).
 var drawn_sections := 0
@@ -192,10 +244,31 @@ static func time_text(minutes: float) -> String:
 	return "%dm" % m
 
 
+## Forgets what the forecast said at the last look, so that the next draw asks again (a test that changed the night asks for it).
+func forget_night() -> void:
+	_night_t = -1.0e9
+
+
+## The lookout's forecast as the marks use it (avatar mode only; {"given": false} otherwise), kept for NIGHT_REFRESH seconds.
+func _night_forecast(sim) -> Dictionary:
+	var now: float = main.clock
+	if now >= _night_t and now - _night_t < NIGHT_REFRESH:
+		return _night_f
+	_night_t = now
+	_night_f = sim.tactics.forecast() if String(sim.player_id) != "" else {"given": false}
+	return _night_f
+
+
+## Avatar mode (the nights' marks are only for it).
+func _avatar_on(sim) -> bool:
+	return main.get("avatar_mode") == true and String(sim.player_id) != ""
+
+
 ## What the fields-of-fire view shows, in tiles: {"sections": [{"id", "rect", "n" (guns
 ## that reach it), "color", "damaged"}], "reach": [{"id", "at", "r"}] (each gun at
 ## its post), "spawns": [{"at", "dir"}] (where the dead come in tonight, if the lookout
-## has said)}. The rules' own numbers (sim.tactics), read and not changed.
+## has said), "brunt": the words under each arrow ("first about 21:00", avatar mode, when the lookout gave an hour)}. The rules' own numbers
+## (sim.tactics), read and not changed.
 func fields_plan(sim) -> Dictionary:
 	var cover: Dictionary = sim.tactics.coverage_map()
 	var sections: Array = []
@@ -213,7 +286,8 @@ func fields_plan(sim) -> Dictionary:
 	if bool(f.get("given", false)):
 		for at in f.get("spawns", []):
 			spawns.append({"at": at, "dir": inward(at, float(sim.W), float(sim.H))})
-	return {"sections": sections, "reach": reach, "spawns": spawns}
+	var brunt := NightKit.arrow_tag(f) if String(sim.player_id) != "" else ""
+	return {"sections": sections, "reach": reach, "spawns": spawns, "brunt": brunt}
 
 
 func _icon(name: String) -> Texture2D:
@@ -270,11 +344,11 @@ func _draw_fields(sim, z: float, vp: Vector2) -> void:
 		var mid := box.get_center() + Vector2(0.0, -11.0 if item.damaged else 0.0)
 		_tag(mid, str(item.n), font, INK, Color(col.darkened(0.6), 0.92), Color(col, 0.95))
 	for sp in plan.spawns:
-		_draw_spawn(sp, z, font, vp)
+		_draw_spawn(sp, z, font, vp, String(plan.get("brunt", "")))
 
 
 ## A pulsing red arrow at a spawn point on the map's edge, pointing inward, with "from here".
-func _draw_spawn(sp: Dictionary, z: float, font: Font, vp: Vector2) -> void:
+func _draw_spawn(sp: Dictionary, z: float, font: Font, vp: Vector2, when: String = "") -> void:
 	var at := _screen(sp.at.x, sp.at.y)
 	if at.x < -80.0 or at.y < -80.0 or at.x > vp.x + 80.0 or at.y > vp.y + 80.0:
 		return
@@ -297,6 +371,8 @@ func _draw_spawn(sp: Dictionary, z: float, font: Font, vp: Vector2) -> void:
 	var tw := font.get_string_size("from here", HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 10.0
 	var out := tip + d * (8.0 + (tw / 2.0 if absf(d.x) > 0.5 else 8.0))
 	_tag(out, "from here", font, SPAWN_TEXT)
+	if when != "":
+		_tag(out + Vector2(0.0, 20.0), when, font, SPAWN_TEXT)
 
 
 ## The alarm's marker on the section it rings at: a pulsing outline round the section, a bell
@@ -332,6 +408,277 @@ func _draw_alarm(sim, z: float, vp: Vector2) -> void:
 		draw_texture_rect(bell, Rect2(-8.0, -8.0, 16.0, 16.0), false, ALARM)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_tag(c + Vector2(0.0, 28.0), time_text(sim.tactics.lure_left_min()), Fonts.cond(700), ALARM)
+
+
+# --------------------------------------------------------------- the nights' marks --
+
+## Diagonal lines (a hatching) filling `box`, `gap` pixels apart, clipped to it.
+func _hatch(box: Rect2, color: Color, gap: float, width: float = 1.5) -> void:
+	var k := box.position.x - box.end.y + gap * 0.5
+	var k_end := box.end.x - box.position.y
+	while k < k_end:
+		# the line y = x - k, between the box's left and right edges and its top and bottom
+		var lo := maxf(box.position.x, box.position.y + k)
+		var hi := minf(box.end.x, box.end.y + k)
+		if hi - lo > 1.0:
+			draw_line(Vector2(lo, lo - k), Vector2(hi, hi - k), color, width, true)
+		k += gap
+
+
+## The four corners of `box` as brackets: a dark stroke under a bright one, so that they read on any ground.
+func _brackets(box: Rect2, color: Color, arm: float, width: float) -> void:
+	for pass_ in 2:
+		var col: Color = Color(0.05, 0.03, 0.03, 0.8) if pass_ == 0 else color
+		var w := width + 2.0 if pass_ == 0 else width
+		for c in [[box.position, 1.0, 1.0], [Vector2(box.end.x, box.position.y), -1.0, 1.0], [Vector2(box.position.x, box.end.y), 1.0, -1.0], [box.end, -1.0, -1.0]]:
+			var at: Vector2 = c[0]
+			draw_polyline(PackedVector2Array([at + Vector2(c[1] * arm, 0.0), at, at + Vector2(0.0, c[2] * arm)]), col, w, true)
+
+
+## The walls the dead will come to, from the forecast to dawn (avatar mode): the sections the forecast names wear a hatched bracket in the
+## spawn arrow's red, the first of them the words "brunt, about 21:00" (the others "brunt"). Quieter for an ordinary night, which needs
+## nobody; a Big Night's is lit.
+func _draw_targets(sim, z: float, vp: Vector2) -> void:
+	if not _avatar_on(sim) or String(sim.phase) == "dawn":
+		return
+	var f := _night_forecast(sim)
+	if not NightKit.has_outlook(f):
+		return
+	var ids: Array = f.get("sections", [])
+	if ids.is_empty():
+		return
+	var lit := NightKit.needs_you(f)
+	target_lit = lit
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 3.0)
+	var font := Fonts.cond(700)
+	var view := Rect2(-30.0, -30.0, vp.x + 60.0, vp.y + 60.0)
+	var first := true
+	for id in ids:
+		var seg = null
+		for s in sim.segments:
+			if int(s.id) == int(id):
+				seg = s
+				break
+		if seg == null:
+			continue
+		var rect := section_rect(seg)
+		var a := _screen(rect.position.x, rect.position.y)
+		var b := _screen(rect.end.x, rect.end.y)
+		var box := Rect2(a, b - a).grow(3.0)
+		if not box.intersects(view):
+			continue
+		drew_target_marks = true
+		drawn_target_marks += 1
+		var strength := 1.0 if lit else 0.55
+		draw_rect(box, Color(BRUNT, (BRUNT_FILL if lit else BRUNT_FILL_CALM) * (0.8 + 0.4 * pulse)))
+		_hatch(box, Color(BRUNT, 0.34 * strength), HATCH_GAP)
+		_brackets(box, Color(BRUNT, (0.7 + 0.3 * pulse) * strength + 0.1), clampf(minf(box.size.x, box.size.y) * 0.35, 9.0, 22.0), 3.0 if lit else 2.0)
+		var text := NightKit.brunt_tag(f) if first else "brunt"
+		first = false
+		# (the tag is on the inner side of the wall, where the dead do not stand: they would hide it)
+		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 10.0
+		var c := box.get_center()
+		var at := c
+		match String(seg.side):
+			"N":
+				at = Vector2(c.x, box.end.y + 14.0)
+			"S":
+				at = Vector2(c.x, box.position.y - 14.0)
+			"W":
+				at = Vector2(box.end.x + tw / 2.0 + 6.0, c.y)
+			"E":
+				at = Vector2(box.position.x - tw / 2.0 - 6.0, c.y)
+			_:
+				at = Vector2(c.x, box.position.y - 14.0)
+		at = Vector2(clampf(at.x, tw / 2.0 + 6.0, maxf(tw / 2.0 + 6.0, vp.x - tw / 2.0 - 6.0)), clampf(at.y, 14.0, maxf(14.0, vp.y - 14.0)))
+		_tag(at, text, font, INK, Color(BRUNT.darkened(0.6), 0.92), Color(BRUNT, 0.95 if lit else 0.6))
+		target_tags.append({"id": int(seg.id), "text": text, "at": at})
+
+
+## The avatar's rally ring (avatar mode, where the nights' rules apply): a faint ring as wide as the radius within which the others shoot
+## better for him; brighter while someone stands in it, and each of them wears a small chevron over the head.
+func _draw_rally(sim, z: float, vp: Vector2) -> void:
+	if not _avatar_on(sim):
+		return
+	var nights = sim.get("nights")
+	if nights == null or not bool(nights.active()):
+		return
+	var me = sim.avatar.player()
+	if me == null or me.dead or me.turned or me.downed or me.away != null:
+		return
+	var pp: Vector2 = main.view_pos(me)
+	var c := _screen(pp.x, pp.y)
+	var r: float = NightData.num("rally.radius", 9.0) * z
+	var count := 0
+	for p in sim.people:
+		if p == me or p.dead or p.turned or p.away != null or not bool(nights.rallied(p)):
+			continue
+		count += 1
+		var q: Vector2 = main.view_pos(p)
+		var head := _screen(q.x, q.y - BUBBLE_HEAD - 0.25)
+		if head.x < -20.0 or head.x > vp.x + 20.0 or head.y < -20.0 or head.y > vp.y + 20.0:
+			continue
+		drawn_rallied += 1
+		var pts := PackedVector2Array([head + Vector2(-6.0, 3.0), head + Vector2(0.0, -3.0), head + Vector2(6.0, 3.0)])
+		draw_polyline(pts, Color(0.04, 0.07, 0.06, 0.85), 4.5, true)
+		draw_polyline(pts, RALLY, 2.5, true)
+	drew_rally_ring = true
+	rally_ring_px = r
+	rally_lit = count > 0
+	var a := 0.42 if rally_lit else 0.17
+	draw_arc(c, r, 0.0, TAU, clampi(int(r / 5.0), 48, 160), Color(RALLY, a), 2.0 if rally_lit else 1.5, true)
+	if rally_lit:
+		draw_circle(c, r, Color(RALLY, 0.04))
+
+
+## A plated brute's steel: shoulder plates and a chest plate over the body, drawn on the figure as the pawn is (its box, from the feet).
+func _draw_plates(e, zp: Vector2, z: float) -> void:
+	var box: Rect2 = Art.hit_box(Art.kind_of(e), Art.size_of(e))
+	var hw := box.size.x * 0.5
+	var top := box.position.y
+	var h := box.size.y
+	var y0 := top + h * 0.38
+	var y1 := top + h * 0.68
+	var xw := hw * 0.6
+	var chest := PackedVector2Array([
+		_screen(zp.x - xw, zp.y + y0), _screen(zp.x + xw, zp.y + y0), _screen(zp.x + xw * 0.82, zp.y + y1), _screen(zp.x - xw * 0.82, zp.y + y1),
+	])
+	for side in [-1.0, 1.0]:
+		var at := _screen(zp.x + side * xw, zp.y + y0 + h * 0.03)
+		var pr := maxf(4.0, hw * 0.27 * z)
+		draw_circle(at, pr + 1.5, STEEL_EDGE)
+		draw_circle(at, pr, STEEL_DARK)
+		draw_arc(at, pr * 0.62, PI * 1.1, PI * 1.9, 8, STEEL, 2.0, true)
+	draw_colored_polygon(chest, Color(STEEL, 0.78))
+	draw_polyline(S.closed(chest), STEEL_EDGE, 2.0, true)
+	# the lit top edge, a plate seam and the rivets
+	draw_line(chest[0].lerp(chest[3], 0.08), chest[1].lerp(chest[2], 0.08), Color(1, 1, 1, 0.55), 1.5, true)
+	var mid_l := chest[0].lerp(chest[3], 0.52)
+	var mid_r := chest[1].lerp(chest[2], 0.52)
+	draw_line(mid_l, mid_r, Color(STEEL_DARK, 0.9), 1.5, true)
+	for k in [0.18, 0.5, 0.82]:
+		draw_circle(chest[0].lerp(chest[1], k).lerp(chest[3].lerp(chest[2], k), 0.78), 1.6, STEEL_DARK)
+
+
+## The distance from a point to the line the avatar's shot travels along (-1 when the point is behind them).
+func _aim_miss(sim, me, point: Vector2) -> float:
+	var from: Vector2 = sim.avatar.shoulder(me)
+	var dir := Vector2.from_angle(float(me.aim))
+	var rel := point - from
+	if rel.dot(dir) < 0.0:
+		return -1.0
+	return absf(rel.cross(dir))
+
+
+## The plated brutes of a Big Night: steel on the body, and a ring at the weak point (the head's disc of the rules, `plated.weak_r` x size
+## across, never under WEAK_MIN_PX on screen). The ring is quiet while the avatar aims elsewhere, lit when the aim passes within WEAK_NEAR
+## radii of it (with the words "weak point"), and full when the shot would land on it. A dead one wears nothing.
+func _draw_plated(sim, z: float, vp: Vector2) -> void:
+	var me = sim.avatar.player() if _avatar_on(sim) else null
+	var aiming: bool = me != null and not me.dead and not me.turned and not me.downed and me.away == null
+	var hands_off: bool = main.has_method("avatar_hands_off") and main.avatar_hands_off()
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 7.0)
+	var head_k: float = NightData.num("plated.head", 0.62)
+	var weak_r: float = NightData.num("plated.weak_r", 0.2)
+	var font := Fonts.cond(700)
+	var view := Rect2(-120.0, -120.0, vp.x + 240.0, vp.y + 240.0)
+	for e in sim.zombies:
+		if not bool(e.plated) or e.state == "dead" or e.state == "dying":
+			continue
+		var zp: Vector2 = main.view_pos(e)
+		if not view.has_point(_screen(zp.x, zp.y)):
+			continue
+		drawn_plated += 1
+		_draw_plates(e, zp, z)
+		var size := Art.size_of(e)
+		var head := _screen(zp.x, zp.y - head_k * size)
+		var r_tiles := weak_r * size
+		var rpx := maxf(r_tiles * z, WEAK_MIN_PX)
+		var near := false
+		var on := false
+		if aiming and not hands_off:
+			var miss := _aim_miss(sim, me, Vector2(e.x, e.y - head_k * size))
+			if miss >= 0.0:
+				on = miss <= r_tiles
+				near = miss <= r_tiles * WEAK_NEAR
+		drew_weak_marks = true
+		drawn_weak_marks += 1
+		weak_marks.append({"id": drawn_weak_marks, "at": head, "r": rpx, "near": near, "on": on})
+		var col := WEAK_HOT if on else WEAK
+		var wide := 3.0 if near else 2.0
+		if on:
+			draw_circle(head, rpx, Color(col, 0.28 + 0.2 * pulse))
+		elif near:
+			draw_circle(head, rpx, Color(col, 0.12))
+		draw_arc(head, rpx, 0.0, TAU, 28, Color(0.04, 0.03, 0.02, 0.85), wide + 2.0, true)
+		draw_arc(head, rpx, 0.0, TAU, 28, Color(col, 1.0 if near else 0.75), wide, true)
+		for dir in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+			draw_line(head + dir * (rpx + 1.0), head + dir * (rpx + (7.0 if near else 4.0)), Color(col, 1.0 if near else 0.75), 2.0, true)
+		if near:
+			_tag(head + Vector2(0.0, -rpx - 16.0), "weak point", font, INK, Color(WEAK.darkened(0.65), 0.92), Color(col, 0.9))
+
+
+## A breach that is hot (the nights module says: fallen, with the dead at it): a pulsing ring and "no mending under fire" under it, so that
+## the player knows nobody will go to it until the dead are put down or he comes.
+func _draw_hot_breaches(sim, z: float, vp: Vector2) -> void:
+	if not _avatar_on(sim):
+		return
+	var nights = sim.get("nights")
+	if nights == null or not bool(nights.active()):
+		return
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 5.0)
+	var font := Fonts.cond(700)
+	var view := Rect2(-60.0, -60.0, vp.x + 120.0, vp.y + 120.0)
+	for seg in sim.segments:
+		if seg.state != 3 or not bool(nights.breach_hot(seg)):
+			continue
+		var c := _screen(seg.center.x, seg.center.y)
+		if not view.has_point(c):
+			continue
+		drew_hot_breach = true
+		drawn_hot_breach += 1
+		var r := clampf(z * 1.6, 26.0, 80.0)
+		draw_circle(c, r, Color(HOT, 0.10 + 0.08 * pulse))
+		draw_arc(c, r, 0.0, TAU, 40, Color(0.05, 0.02, 0.02, 0.8), 5.0, true)
+		draw_arc(c, r, 0.0, TAU, 40, Color(HOT, 0.65 + 0.35 * pulse), 3.0, true)
+		draw_arc(c, r + 4.0 + pulse * 6.0, 0.0, TAU, 40, Color(HOT, 0.5 * (1.0 - pulse)), 2.0, true)
+		var text := "no mending under fire"
+		var at := Vector2(clampf(c.x, 90.0, maxf(90.0, vp.x - 90.0)), c.y + r + 16.0)
+		_tag(at, text, font, INK, Color(HOT.darkened(0.65), 0.92), Color(HOT, 0.9))
+		hot_tags.append({"id": int(seg.id), "text": text, "at": at})
+
+
+## What the avatar's hands are doing at a wall (round 19; the interaction module of round 18 keeps `working` ("wall" while mending) and
+## `work_left`): {"on": whether they are mending, "progress": 0 to 1}. A sim with no such module, or hands at the bench, is {"on": false}.
+static func mend_state(sim) -> Dictionary:
+	var it = sim.get("interact")
+	if it == null or String(it.get("working")) != "wall":
+		return {"on": false, "progress": 0.0}
+	var total: float = maxf(0.01, NightData.num("mend.seconds", 10.0))
+	return {"on": true, "progress": clampf(1.0 - float(it.get("work_left")) / total, 0.0, 1.0)}
+
+
+## The ring round the avatar while their hands mend a wall (the bench's ring, for the wall): it fills as the work goes.
+func _draw_mend(sim, z: float) -> void:
+	if not _avatar_on(sim):
+		return
+	var me = sim.avatar.player()
+	if me == null or me.dead or me.turned or me.away != null:
+		return
+	var st := mend_state(sim)
+	if not bool(st.on):
+		return
+	mend_progress = float(st.progress)
+	drew_mend_ring = true
+	var pp: Vector2 = main.view_pos(me)
+	var c := _screen(pp.x, pp.y - 0.45)
+	var r := maxf(22.0, 0.74 * z)
+	draw_arc(c, r, 0.0, TAU, 40, RING_TRACK, 4.0, true)
+	draw_arc(c, r, -PI / 2.0, -PI / 2.0 + mend_progress * TAU, 40, RALLY, 3.0, true)
+	_tag(c + Vector2(0.0, r + 14.0), "mending", Fonts.cond(700), INK, Color(0.04, 0.07, 0.06, 0.85), Color(RALLY, 0.8))
 
 
 # ----------------------------------------------------- the Jobs screen's marks --
@@ -785,10 +1132,26 @@ func _draw() -> void:
 	drew_reload_ring = false
 	drew_you = false
 	aim_on_target = false
+	drew_target_marks = false
+	drawn_target_marks = 0
+	target_tags = []
+	target_lit = false
+	drew_rally_ring = false
+	rally_lit = false
+	drawn_rallied = 0
+	drew_weak_marks = false
+	drawn_weak_marks = 0
+	drawn_plated = 0
+	weak_marks = []
+	drew_hot_breach = false
+	drawn_hot_breach = 0
+	hot_tags = []
+	drew_mend_ring = false
 	if main.fields:
 		_draw_fields(sim, z, vp)
 	_draw_alarm(sim, z, vp)
 	_draw_jobs(sim, z, vp)
+	_draw_targets(sim, z, vp)
 
 	# wall damage bars across the damaged piece
 	for s in sim.segments:
@@ -861,8 +1224,14 @@ func _draw() -> void:
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
 
+	# the nights' marks: the ring of the rally, the plated brutes and their weak points, the breaches that are hot
+	_draw_rally(sim, z, vp)
+	_draw_hot_breaches(sim, z, vp)
+	_draw_plated(sim, z, vp)
+
 	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
 	_draw_avatar(sim, z, vp)
+	_draw_mend(sim, z)
 
 	# what people say, over everything else
 	_draw_bubbles(vp)

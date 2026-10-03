@@ -35,6 +35,14 @@
 ##                    what the radio changes; by default it is on and the policy answers each card
 ##                    with the choice the card names as its default
 ##   --verbose        print what the policy did and who was lost, game by game
+##   --avatar=none    (default) nobody is the player: the harness of before round 17, game for game
+##   --avatar=idle    Ruth is the player and keeps her hands off, in the school gym (`Policy.KEEP_SPOTS[5]`): the community alone
+##                    holds the nights, with the avatar counted in the night's size but not defending (round 19, the lab's `idle`)
+##   --avatar=bot     the bot plays Ruth (tools/avatar_bot.gd: walks to the wall the night will break on, climbs the ladder, aims, shoots,
+##                    answers the radio's calls, mends the wall by hand). Either avatar mode adds each night's row (`nights`) to a game and
+##                    a table of them to the summary (what the walls lost, who fell, how often the avatar stood where the pressure was)
+##   --nightstats     the same rows and table without an avatar (the night lab's `none`)
+##   --data=path      read the nights' numbers (rally, plating, Big Nights...) from another nights.json (to try a number before it is in the game)
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
 ## The default policy is what a sensible player does without thinking:
@@ -57,6 +65,8 @@ extends SceneTree
 
 const Helpers := preload("res://tests/helpers.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
+const BotLib := preload("res://tools/avatar_bot.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
 
 ## Another sites file for the whole run (--sites=path): to try a site before it is in the game.
 static var sites_override := ""
@@ -77,6 +87,10 @@ static var lots_on := true
 static var vehicles_on := true
 ## The dead in the streets by day (see --nostreets).
 static var streets_on := true
+## Who plays the player's person (see --avatar): "none", "idle" or "bot". With either of the last two a game has Ruth as the player.
+static var avatar_mode := "none"
+## The rows of each night are kept even with no avatar (see --nightstats).
+static var nightstats_on := false
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -284,7 +298,7 @@ class Policy:
 		for p in sim.people:
 			var spot: Vector2 = KEEP_SPOTS[i % KEEP_SPOTS.size()]
 			i += 1
-			if p.dead or p.downed or p.away != null:
+			if p.dead or p.downed or p.away != null or p.player:
 				continue
 			if night:
 				if not p.drafted or p.order == null:
@@ -354,7 +368,7 @@ class Policy:
 			count[s.id] = 0
 		var crew: Array = []
 		for p in sim.people:
-			if not (p.dead or p.downed or p.away != null):
+			if not (p.dead or p.downed or p.away != null or p.player):
 				crew.append(p)
 		crew.sort_custom(func(a, b): return a.skills.Shooting > b.skills.Shooting)
 		var used := {}
@@ -410,7 +424,8 @@ class Policy:
 
 	## Free to be given a job: on the map, on their feet, on no order, and not busy treating someone.
 	func _free(p) -> bool:
-		if p.dead or p.downed or p.away != null or p.drafted or p.order != null or sim.morale.breakdown(p):
+		# (round 19: the avatar is not a worker: the policy gives the player no seat, no errand, no post)
+		if p.player or p.dead or p.downed or p.away != null or p.drafted or p.order != null or sim.morale.breakdown(p):
 			return false
 		return sim.medical.goal_for(p) == null
 
@@ -711,7 +726,7 @@ class Policy:
 	func _hands_home() -> int:
 		var here := 0
 		for p in sim.people:
-			if not p.dead and not p.downed and p.away == null:
+			if not p.dead and not p.downed and p.away == null and not p.player:
 				here += 1
 		return here
 
@@ -776,7 +791,7 @@ class Policy:
 		sim.jobs.set_setting("builders", "repair_below", WALL_BELOW)
 		var alive: Array = []
 		for p in sim.people:
-			if not (p.dead or p.turned):
+			if not (p.dead or p.turned or p.player):
 				alive.append(p)
 		# the desks that are kept for a crew this size: whoever is on them stays; a vacancy goes to the best fit
 		var kept: Array = DESKS.slice(0, clampi(alive.size() - FLEX_HANDS, 0, DESKS.size()))
@@ -954,16 +969,15 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	sim.streets.enabled = streets_on
 	# the storyteller: on (the radio brings its cards, the dawn has its assembly) unless asked not to
 	sim.storyteller.enabled = story
+	# the avatar (round 19, --avatar): Ruth is the player; an idle one stands in the school gym, the bot plays her
+	var bot = null
+	if avatar_mode != "none":
+		sim.avatar.set_player("ruth")
+		bot = BotLib.AvatarBot.new(sim, avatar_mode)
+	var stats = BotLib.NightStats.new(sim, avatar_mode) if (avatar_mode != "none" or nightstats_on) else null
 	if setup.is_valid():
 		setup.call(sim)
-	var policy := Policy.new(sim)
-	policy.hide = hide
-	policy.informed = informed
-	policy.builds = informed and build_on
-	policy.lots_enabled = lots_on
-	policy.vehicles_enabled = vehicles_on
-	policy.build_order = build_order_override
-	policy.beds_first = beds_on
+	var policy := policy_for(sim, hide, informed)
 	var dt := 1.0 / hz
 	var every := maxi(1, roundi(hz))
 	var rows: Array = [_row(sim)]
@@ -974,7 +988,11 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	var ride_watch := {}
 	var ride_log: Array = []
 	while sim.over == "" and sim.day <= days:
+		if bot != null:
+			bot.step(dt)
 		sim.update(dt)
+		if stats != null:
+			stats.observe(dt)
 		step += 1
 		if not ride_watch.is_empty() or not sim.scavenge.parties.is_empty():
 			_watch_rides(sim, ride_watch, ride_log)
@@ -992,6 +1010,8 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 				notes.append({"day": sim.day, "hour": snappedf(sim.hour, 0.01), "text": "%s %s" % [p.first, how]})
 	if sim.over != "":
 		rows.append(_row(sim))
+	if stats != null:
+		stats.finish()
 	var survived: bool = (sim.over == "" and sim.day > days) or sim.over == "victory"
 	var all_notes: Array = policy.notes + notes
 	all_notes.sort_custom(func(a, b): return a.day < b.day or (a.day == b.day and a.hour < b.hour))
@@ -1015,8 +1035,25 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 		"notes": all_notes,
 		"took": snappedf((Time.get_ticks_msec() - started) / 1000.0, 0.1),
 	}
+	if stats != null:
+		result["nights"] = stats.rows
+		result["avatar"] = avatar_mode
 	g.world.free()
 	return result
+
+
+## The policy of a game with the switches of this run (the flags above) set on it: the informed one builds, claims, rides and so on
+## unless a flag says not. `play` and the night lab (tools/night_lab.gd) make theirs here.
+static func policy_for(sim, hide: bool, informed: bool) -> Policy:
+	var policy := Policy.new(sim)
+	policy.hide = hide
+	policy.informed = informed
+	policy.builds = informed and build_on
+	policy.lots_enabled = lots_on
+	policy.vehicles_enabled = vehicles_on
+	policy.build_order = build_order_override
+	policy.beds_first = beds_on
+	return policy
 
 
 ## Follows the parties that go by vehicle for what the animation of the trip costs (round 15: the walk to the car, the
@@ -1216,7 +1253,11 @@ static func summarise(games: Array) -> Dictionary:
 	if int(rides.trips) > 0:
 		for k in ["out_min", "in_min", "extra_min"]:
 			rides[k] = snappedf(float(rides[k]) / float(rides.trips), 0.1)
-	return {
+	var games_nights: Array = []
+	for game in games:
+		if game.has("nights"):
+			games_nights.append(game.nights)
+	var result := {
 		"games": games.size(),
 		"survived": survived,
 		"median_day": reached[reached.size() / 2] if not reached.is_empty() else 0,
@@ -1225,6 +1266,10 @@ static func summarise(games: Array) -> Dictionary:
 		"curve": curve,
 		"rides": rides,
 	}
+	# (only when the games have night rows: the summary of a game with no avatar is the old one, key for key)
+	if not games_nights.is_empty():
+		result["games_nights"] = games_nights
+	return result
 
 
 # ---------------------------------------------------------------------- run --
@@ -1262,6 +1307,18 @@ func _run() -> void:
 			vehicles_on = false
 		elif kv[0] == "nostreets":
 			streets_on = false
+		elif kv[0] == "nightstats":
+			nightstats_on = true
+		elif kv[0] == "avatar" and kv.size() > 1:
+			if not ["none", "idle", "bot"].has(String(kv[1])):
+				printerr("--avatar takes none, idle or bot (not '%s')" % kv[1])
+				quit(2)
+				return
+			avatar_mode = String(kv[1])
+		elif kv[0] == "data" and kv.size() > 1:
+			# another nights.json for the whole run (the tuning: a number tried before it is in the game)
+			NightData.data_path = String(kv[1])
+			NightData.forget()
 		elif kv[0] == "build-order" and kv.size() > 1:
 			build_order_override = String(kv[1]).split(",")
 		elif opts.has(kv[0]) and kv.size() > 1:
@@ -1290,7 +1347,7 @@ func _run() -> void:
 		var names := ["Story", "Standard", "Brutal"]
 		print("Thirty Bells balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
 			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else ("informed policy" if informed else "default policy")) if orders else "no orders",
-			((", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else "") + ("" if story_on else ", storyteller off")])
+			((", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else "") + ("" if story_on else ", storyteller off") + ("" if avatar_mode == "none" else ", avatar: %s" % avatar_mode)])
 		print("")
 		if jobs == 1 or seeds.size() == 1:
 			_print_header()
@@ -1363,6 +1420,12 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--nostreets")
 		if not build_order_override.is_empty():
 			args.append("--build-order=%s" % ",".join(build_order_override))
+		if avatar_mode != "none":
+			args.append("--avatar=%s" % avatar_mode)
+		if nightstats_on:
+			args.append("--nightstats")
+		if NightData.data_path != NightData.DATA_PATH:
+			args.append("--data=%s" % NightData.data_path)
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})
 	while true:
 		var running := 0
@@ -1419,6 +1482,19 @@ func _print_summary(summary: Dictionary) -> void:
 	if int(rides.get("trips", 0)) > 0:
 		print("Trips by vehicle: %d; extra game minutes for each (the walk to the car, the doors, the drives): %.0f from the send to the car leaving the map, %.0f from the due hour to everyone home; %.0f later home than the plain hours (at most %.0f); %d of them were pushed past dusk, so home the next morning" % [
 			int(rides.trips), float(rides.out_min), float(rides.in_min), float(rides.extra_min), float(rides.max_extra_min), int(rides.pushed_past_dusk)])
+	var nights: Array = []
+	for game_nights in summary.get("games_nights", []):
+		nights.append_array(game_nights)
+	if not nights.is_empty():
+		print("")
+		print("The nights (held: no wall of the compound fell and nobody died; present: the share of the pressed moments the avatar stood within the rally's reach):")
+		for line in BotLib.table_lines(nights):
+			print(line)
+		var wiped := 0
+		for game_nights in summary.get("games_nights", []):
+			if not game_nights.is_empty() and bool(game_nights[game_nights.size() - 1].get("over", false)):
+				wiped += 1
+		print("Games lost in a night: %d of %d" % [wiped, int(summary.games)])
 	print("")
 	print("Day by day, the average over the games still standing at the start of the day:")
 	print(" day games alive |  food water scrap meds ammo | walls%  walkers kills")

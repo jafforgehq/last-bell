@@ -89,6 +89,8 @@
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
+const NightCalls := preload("res://scripts/sim/night_calls.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
 
 const SITES_PATH := "res://assets/data/sites.json"
 ## Where the sites are read from (the harness and the tests may point it at another file).
@@ -1323,6 +1325,36 @@ func road_minutes(place_id: String, vehicle_id: String = "") -> float:
 	if vehicle_id != "":
 		return float(sim.vehicles.drive_hours(place_id, vehicle_id)) / 2.0 * 60.0
 	return float(sim.town.hours_to(place_id)) * 60.0
+
+
+## What a trip that began now would mean for tonight (round 19, "stay home on purpose, or drive back in time"; pure: the Map page asks it
+## under Take control): {"big" (tonight is a Big Night: `Waves.big_night`, avatar mode only), "dusk" (the hour the dusk begins), "road_min" (the road
+## home), "leave_by" (the hour of the day the party must leave the place by to be home `forecast.road_margin_min` before the dusk), "home_by"
+## (the hour it would be home: the road there, `site_hours` in the place and the road back; it may pass 24), "makes_it" (it would leave the
+## place in time), "text"}. The rule it explains is `_is_due`: in the settlement game a party is due only while it is day, so a trip
+## that reaches the gate after the dusk is out until morning, and on a Big Night the base holds the night alone. The text is "" when there
+## is nothing to say (no avatar, not by day, an ordinary night and a trip that is home in time).
+func night_warning(place_id: String, vehicle_id: String = "", site_hours: float = 1.0) -> Dictionary:
+	var road := road_minutes(place_id, vehicle_id)
+	var dusk: float = sim.seasons.dusk_hour()
+	var margin := NightData.num("forecast.road_margin_min", 30.0)
+	var avatar: bool = String(sim.player_id) != ""
+	var big: bool = avatar and not sim.waves.big_night(int(sim.day)).is_empty()
+	var now: float = sim.hour
+	var leave_by := dusk - (road + margin) / 60.0
+	var leaves_at := now + road / 60.0 + site_hours
+	var makes_it := leaves_at <= leave_by + 1.0e-9
+	var out := {"big": big, "dusk": dusk, "road_min": road, "leave_by": leave_by, "home_by": now + 2.0 * road / 60.0 + site_hours, "makes_it": makes_it, "text": ""}
+	if not avatar or String(sim.phase) != "day":
+		return out
+	var takes := NightCalls.duration_text(road)
+	if big and makes_it:
+		out["text"] = "Big Night tonight: leave the place by %s (the road home takes %s), or stay out and the base holds alone" % [NightCalls.clock_text(leave_by), takes]
+	elif big:
+		out["text"] = "Big Night tonight, and this trip cannot be home in time (the road home takes %s): go another day, or stay out and the base holds alone" % takes
+	elif not makes_it:
+		out["text"] = "This trip is not home before the dusk (%s): the party would be out until morning" % NightCalls.clock_text(dusk)
+	return out
 
 
 ## Why the player cannot begin a played trip to this place now ("" when they can): what `send` refuses (`_why_not_town`:

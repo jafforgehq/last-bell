@@ -18,20 +18,24 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 ## What a kind of news is called (the small capitals over a line of the log).
 const KIND_NAME := {
 	"attack": "Attack", "succession": "Lost", "sick": "Fever", "alarm": "Alarm", "recruit": "Arrival", "story": "Radio", "stranger": "At the gate",
+	# round 19, the nights: a wall that is going, a plated brute coming, a breach, the night itself (the forecast's call), the notice of a
+	# Big Night a day ahead, the road home of a trip that is out at dusk
+	"going": "Wall", "brute": "Brute", "breach": "Breach", "night": "Night", "forecast": "Forecast", "night_road": "Road",
 }
 
 
-## The colour of a kind of news (a word, readable on the panel): the dead at the wall and a death are red, a fever and the
-## alarm amber, a new face green, a card of the storyteller blue, a stranger gold; anything else the dim chalk.
+## The colour of a kind of news (a word, readable on the panel): the dead at the wall (a wall going, a brute, a breach) and a death are
+## red, a fever and the alarm amber, a new face green, a card of the storyteller and the night's notices (the forecast, the night, the
+## road) blue, a stranger gold; anything else the dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
-		"attack", "succession":
+		"attack", "succession", "going", "brute", "breach":
 			return host.DANGER_TEXT
 		"sick", "alarm":
 			return host.WARN
 		"recruit":
 			return host.OK
-		"story":
+		"story", "night", "forecast", "night_road":
 			return host.INFO
 		"stranger":
 			return host.ACCENT

@@ -460,7 +460,8 @@ func _shoot(p, gun: Dictionary) -> void:
 		var pa: float = p.aim + (sim.rng.randf() - 0.5) * spread
 		var res := trace(from, pa, reach)
 		if res.z != null:
-			dealt[res.z] = float(dealt.get(res.z, 0.0)) + dmg
+			# (a plated brute of a Big Night takes the armoured share, or a head hit's many times: nights.gd)
+			dealt[res.z] = float(dealt.get(res.z, 0.0)) + sim.nights.damage_to(res.z, dmg, bool(res.weak))
 		else:
 			sim.fx.smoke(res.end.x, res.end.y, 0.12, false)
 			# (a shot stopped by a wall, not one that ran out of reach, throws sparks where it struck)
@@ -476,8 +477,8 @@ func _shoot(p, gun: Dictionary) -> void:
 
 
 ## Follows a shot from `from` along `ang` for `reach` tiles: {"z": the first of the dead hit (or null), "end": where it
-## stopped}. The dead hit are the nearest whose body is within HIT_R (times their size) of the line before any wall. (The
-## views can use it for an aim line.)
+## stopped, "weak": whether the ray passed through the head of the plated brute it hit}. The dead hit are the nearest whose body
+## is within HIT_R (times their size) of the line before any wall. (The views can use it for an aim line.)
 func trace(from: Vector2, ang: float, reach: float) -> Dictionary:
 	_low = _low_tiles()
 	var dir := Vector2.from_angle(ang)
@@ -495,7 +496,7 @@ func trace(from: Vector2, ang: float, reach: float) -> Dictionary:
 			continue
 		best = z
 		best_t = along
-	return {"z": best, "end": from + dir * best_t}
+	return {"z": best, "end": from + dir * best_t, "weak": best != null and sim.nights.weak_hit(best, from, dir)}
 
 
 ## How far along a line from `from` toward `dir` a shot goes before a wall, up to `reach`.
@@ -597,7 +598,7 @@ func _strike(p, reach: float, half_arc: float, dmg: float) -> int:
 			continue
 		if _wall_between(from, c):
 			continue
-		sim._hurt_zombie(z, dmg, v.angle(), p, true)
+		sim._hurt_zombie(z, sim.nights.damage_to(z, dmg, false), v.angle(), p, true)
 		hits += 1
 	return hits
 

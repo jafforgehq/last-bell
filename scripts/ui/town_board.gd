@@ -42,6 +42,7 @@ const Map := preload("res://scripts/ui/town_map.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const CrewLoad := preload("res://scripts/sim/crew_load.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 
 ## Emitted once, when the page is gone (a party sent, or closed).
 signal closed
@@ -461,6 +462,8 @@ func _build_card() -> PanelContainer:
 	danger_value.add_child(danger_words)
 	_fact(grid, "danger", "Danger", danger_value, danger_words)
 	_fact(grid, "trip", "Trip", _para(13, hud.PAPER_INK))
+	# (round 19, avatar mode: what tonight means for this trip, when the night is a Big one: the hour to leave the place by)
+	_fact(grid, "night", "Tonight", _para(13, WHY_INK, 600))
 	_fact(grid, "vehicle", "Vehicle", _para(13, hud.PAPER_INK))
 	# what it is likely to give: the hint and what each stock is worth
 	var loot_box: VBoxContainer = hud._vbox(3)
@@ -1219,6 +1222,10 @@ func _refresh_card() -> void:
 
 	# the trip
 	_fact_set("trip", _trip_text(s))
+	# tonight, for the trip as it is now planned (the avatar's board: `scavenge.night_warning`'s own words)
+	var warning := NightKit.warning_line(sim, site_id, vehicle_id, float(town.SEARCH_H))
+	_fact_set("night", String(warning.get("text", "")), not warning.is_empty())
+	facts.night.label.add_theme_color_override("font_color", WHY_INK if String(warning.get("tone", "calm")) == "warn" else hud.PAPER_INK)
 	# a vehicle that stands in the place: looting (or clearing) it may get it running
 	var here_kind := String(s.get("vehicle_here", ""))
 	if here_kind != "" and not sim.vehicles.kind(here_kind).is_empty():

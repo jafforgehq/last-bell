@@ -38,6 +38,7 @@ const RaidRun := preload("res://scripts/raid/raid_run.gd")
 const RaidHud := preload("res://scripts/raid/raid_hud.gd")
 const RaidOverlay := preload("res://scripts/raid/raid_overlay.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -583,6 +584,59 @@ func radio_of(kind: String):
 	return squad_radio if kind == "squad" else base_radio
 
 
+## Round 19, the nights. A stand-in for the colony's night module (the radio's `night`: `road_status()` and `leave_requested`) that a test or a
+## screenshot's staging sets; when it is there it is asked instead.
+var night_override = null
+## The head-home request of the night_road call was passed on to the squad (once a trip).
+var _leave_asked := false
+
+
+## The colony's night module (the radio's `night`: the road home's state and the request to head home), or null.
+func night_calls():
+	if night_override != null:
+		return night_override
+	var radio = colony_radio()
+	return radio.get("night") if radio != null else null
+
+
+## The state of the road home, from the night module: {"on", "dusk", "road_min", "leave_by", "left_min", "state", "big", "text"}; {} when
+## there is none (no module, a game with no avatar).
+func night_road() -> Dictionary:
+	var n = night_calls()
+	if n == null or not n.has_method("road_status"):
+		return {}
+	var rs = n.road_status()
+	return rs if rs is Dictionary else {}
+
+
+## Whether the player answered "head home now" to the road's call (`night.leave_requested`) and the trip is still out.
+func leave_requested() -> bool:
+	var n = night_calls()
+	return n != null and bool(n.get("leave_requested")) and not ended
+
+
+## The squad is asked to go back, once, when the head-home request comes in (the verb "back" of the radio: they walk to the exit).
+func _watch_leave_request() -> void:
+	if not leave_requested():
+		return
+	if _leave_asked:
+		return
+	_leave_asked = true
+	var lead = leader()
+	for p in run.squad:
+		if p == lead or p.dead or p.downed:
+			continue
+		squad_request(p, "back")
+	hud_layer.refresh()
+
+
+## The request is spent once the party is finished: the flag is put down.
+func _clear_leave_request() -> void:
+	var n = night_calls()
+	if n != null and n.get("leave_requested") != null:
+		n.set("leave_requested", false)
+
+
 ## The colony's radio (the news, the calls, the alarm), or null.
 func colony_radio():
 	var cs = colony()
@@ -824,6 +878,8 @@ func hint_line() -> String:
 		return "Waiting for %s to reach the exit." % " and ".join(waiting)
 	if down != "":
 		return "%s is down. Stand beside them and press E to get them up, or they are lost." % down
+	if leave_requested():
+		return NightKit.leave_hint(night_road())
 	var left := 0
 	for c in run.containers:
 		if not bool(c.looted) and String(c.kind) != "survivor":
@@ -1070,6 +1126,7 @@ func _tick_place(dt: float) -> void:
 		fx.update(dt)
 	_handle_events()
 	_watch_leader()
+	_watch_leave_request()
 	_check_way_out()
 	_sound_t -= dt
 	if _sound_t <= 0.0:
@@ -1327,6 +1384,7 @@ func _arrive() -> void:
 ## flow the colony is told (the party is on the road home) and the road home is driven; without one the end card is up.
 func _on_place_over() -> void:
 	ended = true
+	_clear_leave_request()
 	fire_held = false
 	hover = null
 	reach_container = {}
@@ -1390,12 +1448,31 @@ func go_home() -> void:
 
 # ---------------------------------------------------------------- staging --
 
+## A stand-in for the colony's night module for `--raid-do=night:<state>`: the road home's state against the colony's clock (the road takes
+## 80 minutes, tonight is a Big Night) and the head-home request.
+class StagedNight:
+	extends RefCounted
+	var scene
+	var state := "free"
+	var leave_requested := false
+
+	func _init(the_scene, the_state: String, leave: bool) -> void:
+		scene = the_scene
+		state = the_state
+		leave_requested = leave
+
+	func road_status() -> Dictionary:
+		var now: float = float(scene.colony().clock_min)
+		var left: float = float({"free": 190.0, "soon": 50.0, "now": -10.0, "late": -60.0}.get(state, 190.0))
+		return {"on": true, "dusk": now + 330.0, "road_min": 80.0, "leave_by": now + left, "left_min": left, "state": state, "big": true, "text": ""}
+
+
 ## A screenshot's way of playing (main.gd's `--raid-do=`): steps joined by "+", each "name" or "name:arg:arg": road[:share] (the
 ## road there runs to that share, or to its end), go (the road there to its end), wait:<seconds> (the place runs that long: the
 ## colony behind it), walk:<x>:<y> (the one you lead is put there), aim:<x>:<y> (the pointer is put at that tile), fire:<seconds>
 ## (the trigger is held that long), hold (held keys let go), sel:<n> (the nth of the squad is selected on the radio), base:<n>
 ## (the nth of the base), ask:<verb> (the selected contact is asked), news (opens the News panel), alarm, down (the one you
-## lead falls), cam:<x>:<y>[:<zoom>], pause, hour:<h> (the colony's clock is set), exit (the whole squad is put in the exit and
+## lead falls), cam:<x>:<y>[:<zoom>], pause, hour:<h> (the colony's clock is set), night:<free|soon|now|late>[:leave] (the "leave by" line), exit (the whole squad is put in the exit and
 ## the place ends), roadhome[:share] (the road home runs to that share), home (the road home to its end: the report is up).
 func stage(script: String) -> void:
 	for step in script.split("+", false):
@@ -1482,6 +1559,10 @@ func stage(script: String) -> void:
 						p.y = spot.y + randf_range(-0.8, 0.8)
 				tick(1.0 / 30.0)
 				tick(1.0 / 30.0)
+			"night":
+				# night:<free|soon|now|late>[:leave] shows the "leave by" line in that state (a stand-in for the night module; with
+				# :leave the head-home request is in as well)
+				night_override = StagedNight.new(self, String(f[1]) if f.size() > 1 else "free", f.size() > 2 and f[2] == "leave")
 			"roadhome":
 				_stage_road(float(f[1]) if f.size() > 1 else 1.0, "road_home")
 			"home":

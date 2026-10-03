@@ -57,6 +57,7 @@ const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -74,6 +75,9 @@ const ACCENT := Color("#f0c24a")
 const ACCENT_INK := Color("#1a1508")
 const DANGER := Color("#e0584a")
 const DANGER_TEXT := Color("#f27f72")
+## The words of the Big Night's badge (round 19): a lighter red than DANGER_TEXT, which on the badge's own tinted chip reads at only 4.1 to 1 over
+## the brightest ground (the HUD's rule is 4.5).
+const DANGER_BADGE := Color("#ff9b8e")
 const WARN := Color("#e8953a")
 const OK := Color("#8fb85a")
 const INFO := Color("#7fa6c9")
@@ -133,6 +137,8 @@ const STORE_ICONS := ["ammo", "scrap", "food", "water", "meds"]
 const EXTRA_ICONS := {"menu": "res://assets/ui/icons/menu.png", "star": "res://assets/ui/icons/star.png", "mood": "res://assets/ui/icons/mood.png", "radio": "res://assets/ui/icons/radio.png", "jobs": "res://assets/ui/icons/jobs.png", "build": "res://assets/ui/icons/build.png", "fuel": "res://assets/ui/icons/fuel.png", "car": "res://assets/ui/icons/car.png"}
 ## The panel of one of the dead by its kind: [title, second line]; and what it does on its way in.
 const ZOMBIE_NAMES := {"walker": ["Walker", "One of the dead"], "runner": ["Runner", "Fast and frail"], "brute": ["Brute", "Slow, huge, tears walls down"]}
+## A brute of a Big Night (round 19): armoured, soft only at the head.
+const PLATED_NAMES := ["Plated brute", "Armoured: only the head is soft"]
 const ZOMBIE_VERBS := {"walker": "Shambling toward the wall", "runner": "Running toward the wall", "brute": "Lumbering toward the wall"}
 ## Walls and doors, by side and by what they are made of. A piece the HUD has no
 ## name for (a new kind of wall or door) shows its own words instead of failing.
@@ -468,6 +474,14 @@ var temp_label: Label
 var walkers_label: Label
 ## The lookout's forecast of tonight, in the clock from 17:00 until dawn (hidden before).
 var forecast_label: Label
+## Round 19, in avatar mode: the community's own reading of tonight under the forecast ("Should hold: posts 5 of 5, walls 90%"; green or
+## amber), and the badge of a Big Night in a row of its own under the day counter ("Big Night tomorrow" from the radio desk's notice,
+## "Big Night" tonight), its bell and its words. Anchor `clock.night` is the badge.
+var ready_label: Label
+var night_badge: PanelContainer
+var night_badge_icon: TextureRect
+var night_badge_label: Label
+var _badge_state := ""
 var alerts_box: VBoxContainer
 ## The order the feed shows its alerts in ("id:level|..."): the panels are moved only when it changes.
 var alert_sig := ""
@@ -1395,6 +1409,20 @@ func _build_clock() -> void:
 	phase_chip.add_child(chip)
 	r1.add_child(phase_chip)
 	v.add_child(r1)
+	# round 19: the badge of a Big Night, in a row of its own (the day counter's row has no room for it), there only in avatar mode
+	night_badge = PanelContainer.new()
+	night_badge.mouse_filter = Control.MOUSE_FILTER_PASS
+	night_badge.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	night_badge.add_theme_stylebox_override("panel", _chip_style(DANGER))
+	var badge_row := _hbox(5)
+	night_badge_icon = _icon("bell", 13, DANGER_TEXT)
+	night_badge_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	badge_row.add_child(night_badge_icon)
+	night_badge_label = _label("Big Night tomorrow", Fonts.cond(700, 1), 12, DANGER_BADGE)
+	badge_row.add_child(night_badge_label)
+	night_badge.add_child(badge_row)
+	night_badge.visible = false
+	v.add_child(night_badge)
 	var r2 := _hbox(8)
 	time_label = _label("18:46", Fonts.cond(600), 30, INK)
 	r2.add_child(time_label)
@@ -1426,6 +1454,13 @@ func _build_clock() -> void:
 	forecast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	forecast_label.visible = false
 	v.add_child(forecast_label)
+	# (round 19) and under it, in avatar mode, the community's own reading of the night
+	ready_label = _label("", Fonts.sans(400), 12, OK)
+	ready_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ready_label.tooltip_text = NightKit.READY_TIP
+	ready_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	ready_label.visible = false
+	v.add_child(ready_label)
 	clock.add_child(v)
 	# a small brass bell on the clock's top edge once the dusk bell has rung (see update_hud); it is
 	# set by hand in a layer of its own, so it takes no room in the clock
@@ -2069,6 +2104,8 @@ func select(sel) -> void:
 		var z = sel.ref
 		head.add_child(_pic(GD.tex(data.portraits["z%d" % z.look_index])))
 		var names: Array = ZOMBIE_NAMES.get(String(z.kind), ZOMBIE_NAMES.walker)
+		if bool(z.plated):
+			names = PLATED_NAMES
 		titles.add_child(_label(String(names[0]), Fonts.cond(700), 21, INK))
 		titles.add_child(_label(String(names[1]), Fonts.sans(400), 13, INK2))
 		var m := _meter()
@@ -3599,13 +3636,45 @@ func _sync_lots(sim) -> void:
 func _update_forecast(sim) -> void:
 	var f: Dictionary = sim.tactics.forecast()
 	var text := ""
+	var ready := {}
 	if bool(f.get("given", false)) and sim.phase != "dawn":
 		# (in a campaign the last night of a season that has seasons to come is its Big Night, not the last)
-		var seasons = sim.get("seasons")
-		text = _forecast_text(f, seasons == null or not seasons.campaign or seasons.is_last())
+		var last: bool = NightKit.last_night(sim)
+		if String(sim.player_id) != "" and NightKit.has_outlook(f):
+			# round 19, avatar mode: the outlook of the night (its kind, size, side, brutes and hours) and the community's reading of it
+			text = NightKit.forecast_line(f, last)
+			ready = NightKit.ready_line(f)
+		else:
+			text = _forecast_text(f, last)
 	if forecast_label.text != text:
 		forecast_label.text = text
 	forecast_label.visible = text != ""
+	var ready_text := String(ready.get("text", ""))
+	if ready_label.text != ready_text:
+		ready_label.text = ready_text
+	ready_label.visible = ready_text != ""
+	if ready_text != "":
+		ready_label.add_theme_color_override("font_color", OK if bool(ready.get("holds", false)) else WARN)
+	_update_night_badge(sim, f)
+
+
+## The badge of a Big Night by the day counter (avatar mode): "Big Night tomorrow" from the radio desk's notice, "Big Night" tonight once
+## told; its tooltip is the notice or the forecast. Not there for an ordinary night, without the notice or without an avatar.
+func _update_night_badge(sim, f: Dictionary) -> void:
+	var b: Dictionary = NightKit.badge(sim, f)
+	_badge_state = String(b.get("state", ""))
+	night_badge.visible = _badge_state != ""
+	if _badge_state == "":
+		return
+	var word := String(b.get("text", ""))
+	if night_badge_label.text != word:
+		night_badge_label.text = word
+	night_badge.tooltip_text = String(b.get("tip", ""))
+
+
+## "tomorrow", "tonight" or "": what the badge by the day counter says now.
+func badge_state() -> String:
+	return _badge_state
 
 
 ## "Tonight: about 55 from the north east, a brute"; "..., runners"; on the last night
@@ -4456,7 +4525,7 @@ var lock_allowed: Callable
 ## The global rectangle of a named part of the HUD, or an empty Rect2 when it is not there (not
 ## built, hidden, or the selection has no such button). Looked up by name each time: the cards,
 ## the order buttons and the dialog are rebuilt. Names: `stores`, `stores.<ammo|scrap|food|water|
-## meds|fuel>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `alerts`, `inspect`,
+## meds|fuel>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `clock.night` (the badge of a Big Night, avatar mode), `alerts`, `inspect`,
 ## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`, `jobs` (the
 ## toolbar's Jobs button, and while the Jobs screen is open its parts: `jobs.screen`, `jobs.auto`, `jobs.clear`,
 ## `jobs.close`, `jobs.list`, `jobs.row:<person id>`, `jobs.job:<id>`, `jobs.post:<id>`, `jobs.station:<id>` and
@@ -4518,6 +4587,8 @@ func _anchor_control(name: String):
 			return time_label
 		"clock.forecast":
 			return forecast_label
+		"clock.night":
+			return night_badge
 		"inspect":
 			return inspect
 		"inspect.weapon":
