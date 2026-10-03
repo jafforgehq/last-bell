@@ -1877,7 +1877,7 @@ func test_take_control_is_there_only_when_a_trip_can_be_played_and_asks_what_go_
 	Kit.free_all(ctx)
 
 
-func test_taking_control_closes_the_page_opens_the_raid_and_sends_what_comes_of_it() -> void:
+func test_taking_control_closes_the_page_and_opens_the_trip_which_finishes_the_party_itself() -> void:
 	var ctx := _open(1280, 800, 7.0, 1, "ruth")
 	var board = _board(ctx)
 	board.toggle_member(_person(ctx, "dez"))
@@ -1897,11 +1897,29 @@ func test_taking_control_closes_the_page_opens_the_raid_and_sends_what_comes_of_
 	eq(String(got.place.id), "houses", "at the houses")
 	eq(got.vehicle, "", "on foot")
 	near(float(got.mult), 1.0, 1e-9, "with nothing picked over")
-	eq(ctx.sim.scavenge.parties.size(), 0, "nobody is away yet: the player plays first")
+	eq(ctx.sim.scavenge.parties.size(), 0, "nobody is away yet: the (stand-in) trip made no party")
 	got.done.call({"loot": {"food": 12}, "hurt": {}, "lost": [], "ammo_used": 5.0, "beats": []})
-	eq(ctx.sim.scavenge.parties.size(), 1, "then the party is on the road")
-	check(bool(ctx.sim.scavenge.parties[0].get("played", false)), "with the played result")
+	eq(ctx.sim.scavenge.parties.size(), 0, "and the callback sends nobody: the scene finishes the party itself (round 17, place_flow.gd)")
 	holder.free()
+	Kit.free_all(ctx)
+
+
+func test_with_an_avatar_the_player_always_goes_and_is_counted_in_the_party_the_rules_see() -> void:
+	var ctx := _open(1280, 800, 7.0, 1)
+	var board = _board(ctx)
+	ctx.sim.avatar.set_player("ruth")
+	board.select_place("houses")
+	ctx.hud.on_raid = func(_people, _place, _vehicle, _mult, _done): return Node.new()
+	board.refresh(true)
+	check(not _person(ctx, "ruth") in board.party, "the player is not in the picker (they always go)")
+	eq(board.reason_for("play"), "", "Take control is on with whoever is picked")
+	check(not board.play_button.disabled, "the button too")
+	for id in ["dez", "marcus"]:
+		if not _person(ctx, id) in board.party:
+			board.toggle_member(_person(ctx, id))
+	eq(board.reason_for("play"), "", "two picked and the player: three on foot, as many as there may be")
+	_at(ctx, 21.0)
+	eq(board.reason_for("play"), "Nobody goes out after dark.", "the rules of a played trip still refuse after dark")
 	Kit.free_all(ctx)
 
 

@@ -320,3 +320,73 @@ func test_a_place_with_no_danger_can_be_cleared_too() -> void:
 	ctx.run.site["danger"] = 0
 	check(ctx.run.result().get("clear", false), "no dead left: cleared, whatever the danger")
 	_free(ctx)
+
+
+# ------------------------------------------------- round 17: what the base is told --
+
+func test_the_squad_brings_its_trust_and_keeps_the_colony_id() -> void:
+	var g := Helpers.make(3, 1, 6)
+	var people: Array = g.sim.people.slice(0, 2)
+	people[1].trust = 31.0
+	var members: Array = RaidRun.squad_of(people)
+	eq(members[1].trust, 31.0, "squad_of carries the trust")
+	var site := _site()
+	var world := World.new()
+	Engine.get_main_loop().root.add_child(world)
+	world.build(site.data)
+	var run = RaidRun.new(site, world, FxNull.new(), members, 300.0)
+	eq(String(run.squad[1].id), String(people[1].id), "the colony's id")
+	near(run.squad[1].trust, 31.0, 0.001, "and the trust")
+	near(run.squad[0].trust, 55.0, 0.001, "(the others' as they were)")
+	check(run.squad[1].stance == "" and run.avatar() == null, "no stance, no player")
+	world.free()
+	g.world.free()
+
+
+func test_a_run_made_the_old_way_without_trust_gives_the_usual_trust() -> void:
+	var ctx := _run([], 1)
+	near(ctx.run.squad[0].trust, 55.0, 0.001, "the start (members with no trust key)")
+	_free(ctx)
+
+
+func test_the_result_names_health_and_skills_of_those_who_come_home() -> void:
+	var ctx := _run([], 2)
+	var run = ctx.run
+	var a = run.squad[0]
+	var b = run.squad[1]
+	a.hp = 41.0
+	run.sim.skills.credit(a, "kills", 100.0)
+	b.downed = true
+	var r: Dictionary = run.result()
+	near(float(r.hp.get(String(a.id), -1.0)), 41.0, 0.001, "the health they leave with")
+	check(not r.hp.has(String(b.id)), "a lost one has none to bring")
+	eq(int(r.skills.get(String(a.id), {}).get("Shooting", 0)), 1, "the skill they gained")
+	check(not r.has("leader"), "no player: no leader")
+	for k in r.trust_delta:
+		near(float(r.trust_delta[k]), 0.0, 0.001, "no player: no trust moves")
+	_free(ctx)
+
+
+func test_a_place_has_an_hour_of_its_own_and_takes_the_colonys() -> void:
+	var ctx := _run([], 1)
+	var run = ctx.run
+	check(run.hour() >= 0.0 and run.hour() < 24.0, "an hour")
+	var colony = ctx.g.sim
+	colony.minutes = 4.0 * 60.0 + 30.0
+	colony.phase = colony.phase_at(colony.minutes)
+	run.mirror(colony)
+	near(run.hour(), 4.5, 0.001, "the colony's")
+	_free(ctx)
+
+
+func test_the_dead_do_not_depend_on_the_hour_to_hunt() -> void:
+	var ctx := _run([{"pos": Vector2(7.5, 8.5), "kind": "walker", "state": "still"}], 1)
+	var run = ctx.run
+	var colony = ctx.g.sim
+	colony.minutes = 2.0 * 60.0
+	colony.phase = colony.phase_at(colony.minutes)
+	run.mirror(colony)
+	var z = run.sim.zombies[0]
+	_step(run, 5.0)
+	check(z.state == "hunt" or z.state == "dying" or z.state == "dead", "at two in the morning it hunts the one it saw: %s" % z.state)
+	_free(ctx)

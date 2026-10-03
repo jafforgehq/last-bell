@@ -41,6 +41,7 @@ const Dialog := preload("res://scripts/ui/scavenge_dialog.gd")
 const Map := preload("res://scripts/ui/town_map.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const CrewLoad := preload("res://scripts/sim/crew_load.gd")
+const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 
 ## Emitted once, when the page is gone (a party sent, or closed).
 signal closed
@@ -757,6 +758,8 @@ func reason_for(action: String) -> String:
 		"play":
 			if not hud.on_raid.is_valid():
 				return "Not in this game."
+			if String(sim.player_id) != "":
+				return _why_not_played(s)
 			return reason_for(_played_action(s))
 		"claim":
 			if String(s.state) == "claimed":
@@ -785,6 +788,24 @@ func reason_for(action: String) -> String:
 				return "Nobody is stationed there."
 			return town.why_not_recall(site_id)
 	return "That cannot be done."
+
+
+## Why the player cannot take control of a trip to the chosen place now (round 17, "" when they can): the people picked go with
+## them (the survivor you play always goes and leads, so a trip with nobody picked is a lone one), judged as the rules of a
+## played trip judge it (`scavenge.why_not_played`); the last of the picks stay behind when the seats or the three on foot
+## are full (`place_flow.gd`).
+func _why_not_played(s: Dictionary) -> String:
+	var who: Array = party.duplicate()
+	var me = sim.avatar.player()
+	if me != null and not who.has(me):
+		who.push_front(me)
+	var most: int = PlaceFlow.seats(sim, vehicle_id)
+	if who.size() > most:
+		who = who.slice(0, maxi(most, 1))
+	var why: String = scav.why_not_played(who, site_id, _played_action(s), vehicle_id)
+	if why == "Picked over." and String(s.get("note", "")) != "":
+		return String(s.note)
+	return why
 
 
 ## The chance that this party clears this place, as the rules throw it (scavenge.gd's `_decide_town`: 0.35 plus
@@ -884,12 +905,14 @@ func _played_action(s: Dictionary) -> String:
 	return "loot" if (s.get("actions", []) as Array).has("loot") else "clear"
 
 
-## Takes control of the party: the page closes, the colony waits and the player plays the place (main.gd's
-## `open_raid`); what comes of it is sent as the trip's result (`scavenge.send_played`).
-func _play(s: Dictionary, where: String) -> bool:
+## Takes control of the party (round 17): the page closes and main.gd's `open_raid` asks the people over the radio, begins the
+## trip (the colony's party is made there: `scavenge.begin_played`) and drives the road, the place, the road home and the report
+## (scripts/raid/place_flow.gd, raid_scene.gd). The scene finishes the party itself when the place is over, so the callback
+## has nothing to send: it is called with the trip's result when the report is dismissed. `open_raid` says why it could not
+## begin when it could not (a toast).
+func _play(s: Dictionary, _where: String) -> bool:
 	var going: Array = party.duplicate()
 	var ride := vehicle_id
-	var action := _played_action(s)
 	var place: Dictionary = town.place(site_id).duplicate(true)
 	place["id"] = site_id
 	# a place that has been cleared has few of the dead left (the dice zero its danger and nest too)
@@ -898,20 +921,12 @@ func _play(s: Dictionary, where: String) -> bool:
 	var id := site_id
 	var penalty: float = scav.raid_penalty(id)
 	var hud_ref = hud
-	var scav_ref = scav
-	var sim_ref = sim
 	hud.ui_sound("ui_confirm")
 	close()
-	var done := func(result: Dictionary) -> void:
-		if scav_ref.send_played(going, id, action, ride, result):
-			hud_ref.toast("%s set off %s." % [_names(going), _errand(action, where)])
-		else:
-			hud_ref.toast("They could not go out just now.")
+	var done := func(_result: Dictionary) -> void:
+		pass
 	var scene = hud_ref.on_raid.call(going, place, ride, penalty, done)
-	if scene == null:
-		hud_ref.toast("They could not go out just now.")
-		return false
-	return true
+	return scene != null
 
 
 ## "to look the place over", "to search the pharmacy": the errand in words.

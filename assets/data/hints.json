@@ -5,6 +5,7 @@
 			"id": "dusk",
 			"title": "Dusk",
 			"text": "The bell has rung. The crew goes to their posts and the dead come, more every night. Press V to see which walls your guns cover, and keep a builder ready to repair (F).",
+			"text_avatar": "The bell has rung and the dead come, more every night. Press V to see which walls the guns cover. Aim with the mouse, hold the button to fire, R reloads.",
 			"anchor": ["clock"],
 			"start": {"cond": "bell_rung"}
 		},
@@ -12,6 +13,7 @@
 			"id": "stores",
 			"title": "Running low",
 			"text": "Food or water is running low. Select someone, press G and send them scavenging: the houses have food and water. The stores panel shows the days left.",
+			"text_avatar": "Food or water is running low. Press G and send a party scavenging: the houses have food and water. The stores panel shows the days left.",
 			"anchor": ["stores"],
 			"start": {"cond": "low_stores", "params": {"days": 2}}
 		},
@@ -19,6 +21,7 @@
 			"id": "ammo",
 			"title": "Ammo",
 			"text": "Ammo is running low. Select someone and press M to make more at the worktable from scrap, or send a trip to the hardware store (G).",
+			"text_avatar": "Ammo is running low. Give someone the Workbench job on the Duty roster (J) to make more from scrap, or send a trip to the hardware store (G).",
 			"anchor": ["stores.ammo"],
 			"start": {"cond": "low_ammo", "params": {"below": 60}}
 		},
@@ -26,18 +29,21 @@
 			"id": "wound",
 			"title": "A wound",
 			"text": "Someone is bleeding. Ana bandages wounds on her own, and each bandage costs one medicine. A bite can also bring a fever: select them and press T.",
+			"text_avatar": "Someone is bleeding. Ana bandages wounds on her own, and each bandage costs one medicine. A bite can also bring a fever: click their card to see how they are.",
 			"start": {"cond": "wounded"}
 		},
 		{
 			"id": "fever",
 			"title": "A fever",
 			"text": "Someone has a fever. Left alone it turns them into one of the dead. Select them and press T to treat it (two medicine), or X to send them out for good.",
+			"text_avatar": "Someone has a fever. Left alone it turns them into one of the dead: it needs treating (two medicine). Click their card to see how they are.",
 			"start": {"cond": "feverish"}
 		},
 		{
 			"id": "breach",
 			"title": "A wall has fallen",
 			"text": "A wall piece is down and the dead can walk in. Select it and press F to rebuild it, and keep the crew at their posts.",
+			"text_avatar": "A wall piece is down and the dead can walk in. The Builders mend it; keep the crew at their posts and shoot what gets in.",
 			"start": {"cond": "breached"}
 		},
 		{
@@ -50,6 +56,7 @@
 			"id": "brute",
 			"title": "A brute",
 			"text": "A brute is slow and huge, and it tears walls down. The guns shoot it first. Keep a builder close to mend the wall it attacks (F).",
+			"text_avatar": "A brute is slow and huge, and it tears walls down. The guns shoot it first. Keep a builder close to mend the wall it attacks, and put your own rounds into it.",
 			"start": {"cond": "kind_alive", "params": {"kind": "brute"}}
 		},
 		{

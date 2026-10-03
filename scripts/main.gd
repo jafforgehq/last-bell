@@ -35,6 +35,7 @@ const Coach := preload("res://scripts/ui/coach.gd")
 const Hints := preload("res://scripts/ui/hints.gd")
 const StoryUi := preload("res://scripts/ui/story_ui.gd")
 const RaidScene := preload("res://scripts/raid/raid_scene.gd")
+const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 ## The generator of the places of a played trip (the SITES builder's) and, until it exists, a stand-in.
 const SITE_GEN := "res://scripts/raid/site_gen.gd"
 const SITE_STUB := "res://scripts/raid/stub_site.gd"    # TODO-SITEGEN: delete with the fallback in open_raid once SITE_GEN is there
@@ -54,11 +55,15 @@ const TITLE_DEAD := [Vector2(35.5, 14.2), Vector2(41.0, 13.0), Vector2(46.5, 15.
 const UI_SCALE_MIN := 0.8
 const UI_SCALE_MAX := 1.5
 const MIN_LOGICAL := Vector2(700.0, 560.0)
-## Selecting a group (round 15): a left press that moves more than this many pixels is a box, not a click; the people of a
-## group sent to one spot stand round it this far from it (a bigger group, a wider ring); a group's orders and how many a
-## spread ring takes are in `order_group_move`.
-const BOX_PX := 6.0
-const GROUP_SPREAD := 0.55
+## A left or middle press that moves more than this many pixels before it is let go is a drag (a pan, or nothing), not a click.
+const DRAG_PX := 6.0
+## The avatar's camera (round 17): it follows the avatar, eased (this many "e-folds" a second), leans toward the mouse by this
+## share of how far the pointer is from the middle of the window and never by more than CAM_LEAD tiles, and after a jump
+## (`_focus`: Tab, a card's double click, an alert) it stays where it was put for CAM_HOLD seconds before it comes back.
+const CAM_EASE := 8.0
+const CAM_LEAD_K := 0.3
+const CAM_LEAD := 2.0
+const CAM_HOLD := 1.5
 
 var data: Dictionary
 var world
@@ -104,20 +109,31 @@ var zoom_px := 32.0
 var speed := 1
 var sound_on := true
 var selection = null
-## Everyone selected (round 15), the primary included, in the order they were picked: a box, shift, Ctrl+A. `selection` is
-## the primary, the one the panel and the single-person orders (follow, treat, send out, scavenge, jobs) are about, and while
-## the selection is one person this is just them; with a wall piece or a walker selected, or nothing, it is empty.
-var selected_people: Array = []
 var hover = null
 var follow = null
 var order_mark = null
 var clock := 0.0
 var fire_t := 0.0
 var hud_t := 0.0
-## A left or middle press that may become a box or a pan: {"pos", "center", "moved", "button", "box" (the Rect2 being
-## drawn, screen pixels), "shift" (the group is added to), "pan" (the camera follows the pointer: the middle button, or Alt
-## and the left)}.
+## A left or middle press that may become a pan (the old yard's controls, without an avatar): {"pos", "center", "moved",
+## "button", "pan" (the camera follows the pointer: the middle button, or Alt and the left)}. A left press that moves is a drag:
+## nothing is picked when it is let go.
 var drag = null
+## Avatar mode (round 17): the yard is played by one survivor, `sim.player_id` (a new run of the real game: the first starter,
+## Ruth; a saved game's own; never the title, Orientation Day or a test unless it asks). In it W A S D walk them, the mouse aims,
+## the left button held fires, R reloads and F swings; the camera follows them; the old yard controls (panning, right-click
+## orders, picking in the world, the order keys) are gone. Without it the yard is as it was, but for the box select that is gone.
+var avatar_mode: bool:
+	get:
+		return sim != null and sim.player_id != ""
+## Where the pointer last was, in screen pixels (the aim is the tile under it, and the crosshair is drawn there), whether the
+## last pointer move was swallowed by a HUD control (then there is no crosshair), and whether the trigger is held (a left press
+## that reached the world; any release lets it go).
+var mouse_screen := Vector2.ZERO
+var over_hud := false
+var firing := false
+## Seconds the camera is to stay off the avatar after a jump (`_focus`).
+var cam_hold := 0.0
 var walkers := 0
 ## The fields-of-fire view (key V) is on: the overlay tints every wall section by how
 ## many guns reach it. A view only; the rules never read it.
@@ -136,7 +152,7 @@ var menu_open: bool:
 	get:
 		return title_mode or (shell != null and shell.is_open()) or (hud != null and (hud.jobs_screen != null or hud.build_screen != null or hud.town_board_open())) or raid_open()
 ## The played trip's scene (round 14, scripts/raid/raid_scene.gd) while one is up, else null: it takes the screen and the
-## keys (so it counts as a menu), the colony's world and HUD are hidden and its rules wait (see `open_raid`).
+## keys (so it counts as a menu), the colony's world and HUD are hidden and the scene steps its rules (see `open_raid`).
 var raid = null
 ## A seed for the next played trip's site (a screenshot's `--raid=<place>,<seed>`); -1: the run's, the place's and the day's.
 var raid_seed := -1
@@ -176,9 +192,10 @@ var story_ui = null
 # screenshot mode (used for automated checks): --shot=path.png
 var shot_path := ""
 var shot_frames := 25
-## `--box=`: a selection box, in tiles, that the screenshot shows being dragged (put on the screen two frames before the shot,
-## when the window has its size).
-var shot_box := Rect2()
+## `--aim=x,y`: the tile the screenshot has the mouse over (a screenshot has no pointer), and `--hold-fire`: the trigger is held.
+var shot_aim := Vector2.INF
+## `--swing[=0..1]`: the avatar is held in the middle of a melee swing (how far it has run out), for a screenshot of it.
+var shot_swing := 0.0
 var frame_count := 0
 var bench_start := 0
 var bench_cpu := 0.0
@@ -296,6 +313,12 @@ func _ready() -> void:
 			# (only a run asked for the long game is one: the tutorial, the title's yard and the tests are Autumn's)
 			sim.seasons.campaign = bool(run.get("campaign", false))
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
+			# a new run of the real game is played by one survivor (a save keeps the player it had; the title's yard,
+			# Orientation Day and a test's game have none unless the test asks, and `--noavatar` is the old game)
+			if wants_avatar(OS.get_cmdline_user_args(), run, title_mode, tutorial, get_tree().current_scene == self):
+				sim.avatar.set_player(first_starter_id(sim.people))
+	if loaded and "--noavatar" in OS.get_cmdline_user_args():
+		sim.avatar.set_player(null)    # (the old yard was asked for: a saved game's player is given up)
 
 	for tr in data.trees:
 		var s := Sprite2D.new()
@@ -381,9 +404,6 @@ func _ready() -> void:
 	add_child(hud_layer)
 	hud = Hud.new()
 	hud.on_select = func(sel): _try_select(sel)
-	hud.on_group_pick = func(p): _set_primary(p)
-	hud.on_group_drop = func(p): _toggle_person(p)
-	hud.on_group_toggle = func(p): _toggle_person(p)
 	hud.on_focus = func(p): _focus(Vector2(p.x, p.y))
 	hud.on_speed = func(s): _set_speed(s)
 	hud.on_gizmo = _gizmo
@@ -401,6 +421,7 @@ func _ready() -> void:
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
+	hud.set_avatar(avatar_mode)
 	story_ui = StoryUi.new()
 	add_child(story_ui)
 	story_ui.blocked = func(): return menu_open
@@ -440,6 +461,11 @@ func _ready() -> void:
 
 	var vp := _vp()
 	zoom_px = clampf(vp.x / 26.0, 28.0, 52.0)
+	mouse_screen = get_viewport().get_mouse_position() if Rect2(Vector2.ZERO, vp).has_point(get_viewport().get_mouse_position()) else vp / 2.0
+	if avatar_mode:
+		# the camera begins on the avatar (`--cam=` below may put it elsewhere)
+		var me = sim.avatar.player()
+		cam_center = Vector2(me.x, me.y)
 	_parse_args()
 	_clamp_camera()
 	_apply_camera()
@@ -588,6 +614,8 @@ func _zoom_at(factor: float, screen: Vector2) -> void:
 
 func _focus(at: Vector2) -> void:
 	cam_center = at
+	# (with an avatar the camera is back on them after a moment)
+	cam_hold = CAM_HOLD if avatar_mode else 0.0
 	_clamp_camera()
 
 
@@ -598,34 +626,11 @@ func view_rect() -> Rect2:
 
 # -------------------------------------------------------------- selection --
 
-## Selects exactly `sel` (a person, a walker, a wall section, or null for nothing): a person is a group of one.
+## Selects exactly `sel` (a person, a walker, a wall section, or null for nothing).
 func _select(sel) -> void:
 	selection = sel
-	selected_people = [sel.ref] if sel != null and sel.kind == "person" else []
 	follow = null
-	hud.select(sel, selected_people)
-
-
-## Selects `people` as a group (round 15): the primary, the one the panel and the single-person orders are about, is
-## `primary` if it is one of them, else the first. Doubles are dropped. Nobody at all lets go. (The tutorial's lock is
-## `_pick_people`'s to ask.)
-func select_people(people: Array, primary = null) -> void:
-	var group: Array = []
-	for p in people:
-		if not group.has(p):
-			group.append(p)
-	if group.is_empty():
-		_select(null)
-		return
-	selection = {"kind": "person", "ref": primary if primary != null and group.has(primary) else group[0]}
-	selected_people = group
-	follow = null
-	hud.select(selection, selected_people)
-
-
-## Whether `p` is in the yard and alive: the people a box, Ctrl+A or a shift-click may pick (a person who is down is).
-func _is_here(p) -> bool:
-	return not p.dead and not p.turned and p.away == null
+	hud.select(sel)
 
 
 ## What the player does about the selection (a click, a crew card, Tab): the tutorial's soft lock may
@@ -635,107 +640,6 @@ func _try_select(sel) -> void:
 		return
 	_select(sel)
 	_did("select", sel)
-
-
-## The player picks `people` at once (a box, Ctrl+A): they become the group, or with `add` join the one there is (the
-## primary stays). The tutorial's lock lets through only whom the step teaches (the first it refuses is the one it says
-## so for, once). A pick of nobody lets go, as a click on empty ground does, unless it is an addition.
-func _pick_people(people: Array, add: bool = false) -> void:
-	var allowed: Array = []
-	var refused = null
-	for p in people:
-		if coach == null or coach.would_allow("select", Coach.sel_key({"kind": "person", "ref": p})):
-			allowed.append(p)
-		elif refused == null:
-			refused = p
-	if allowed.is_empty():
-		if refused != null:
-			_allows("select", Coach.sel_key({"kind": "person", "ref": refused}))
-		elif not add:
-			_try_select(null)
-		return
-	var group: Array = selected_people.duplicate() if add else []
-	for p in allowed:
-		if not group.has(p):
-			group.append(p)
-	var lead = selection.ref if add and selection != null and selection.kind == "person" else null
-	select_people(group, lead)
-	_did("select", selection)
-
-
-## A shift-click on `p`: they join the group, or, if they are in it, leave it (the next in the group is then the primary
-## if it was they). Someone who is not here is not added; a click that starts a group is a plain selection.
-func _toggle_person(p) -> void:
-	if selected_people.has(p):
-		var rest: Array = selected_people.filter(func(q): return q != p)
-		var lead = selection.ref if selection != null and selection.ref != p else null
-		select_people(rest, lead)
-		return
-	if not _is_here(p):
-		return
-	if selection == null or selection.kind != "person":
-		_try_select({"kind": "person", "ref": p})
-	elif _allows("select", Coach.sel_key({"kind": "person", "ref": p})):
-		select_people(selected_people + [p], selection.ref)
-		_did("select", selection)
-
-
-## A badge of the HUD's strip was clicked: `p`, of the group, is the primary now (the group as it was).
-func _set_primary(p) -> void:
-	if not selected_people.has(p) or not _allows("select", Coach.sel_key({"kind": "person", "ref": p})):
-		return
-	select_people(selected_people, p)
-	_did("select", selection)
-
-
-## Whom a box holds: everyone in the yard and alive whose body is inside `box` (screen pixels), in the order of the crew.
-func box_people(box: Rect2) -> Array:
-	var out: Array = []
-	for p in sim.people:
-		if _is_here(p) and box.has_point(_tile_to_screen(view_pos(p) + Vector2(0.0, -0.45))):
-			out.append(p)
-	return out
-
-
-## Ctrl+A or Cmd+A: everyone who is here and alive (A alone pans).
-func select_everyone() -> void:
-	var all: Array = []
-	for p in sim.people:
-		if _is_here(p):
-			all.append(p)
-	_pick_people(all)
-
-
-## Keeps the group in step with the game, every frame: a person who has died, turned, gone away or left the crew is
-## taken out (and, if they were the primary, the next in the group is), a selection set from outside (the title, a test)
-## is told to the group, and the HUD is told of any change. One person alone is left selected whatever becomes of them (their
-## panel says what did), as it always was. Not while a played trip holds the colony (it gives the group back as it was).
-func _prune_selection() -> void:
-	if raid_open() or hud == null:
-		return
-	if selection == null or selection.kind != "person":
-		if not selected_people.is_empty():
-			selected_people = []
-			hud.set_group(selected_people)
-		return
-	if not selected_people.has(selection.ref):
-		# someone put in by hand: they are a group of one
-		selected_people = [selection.ref]
-		hud.set_group(selected_people)
-		return
-	if selected_people.size() < 2:
-		return
-	var here: Array = []
-	for p in selected_people:
-		if sim.people.has(p) and _is_here(p):
-			here.append(p)
-	if here.size() == selected_people.size():
-		return
-	if here.is_empty():
-		selected_people = [selection.ref]
-		hud.set_group(selected_people)
-		return
-	select_people(here, selection.ref if here.has(selection.ref) else here[0])
 
 
 ## A speed asked for with the keys or the buttons (and by the dialogs, which pause the game while
@@ -811,11 +715,6 @@ func _gizmo(g: String) -> void:
 	if sel == null:
 		hud.toast("Click a wall section first" if g == "lure" else "Click someone first")
 		return
-	# R, P and F with a group selected are for all of them; the rest (C, T, X, G, B, M) are for the primary
-	if sel.kind == "person" and selected_people.size() > 1 and (g == "draft" or g == "post" or g == "repair"):
-		_gizmo_group(g)
-		hud.select(selection)
-		return
 	# the jobs (M and B) are for the crew who are here: the page of jobs says the same of the gone and the away
 	if (g == "job_bench" or g == "job_builders") and sel.kind == "person" and (sel.ref.dead or sel.ref.turned or sel.ref.away != null):
 		var gone_why: String = hud.why_not(g)
@@ -866,82 +765,6 @@ func _gizmo(g: String) -> void:
 			_focus(Vector2(sel.ref.x, sel.ref.y))
 			follow = sel.ref
 	hud.select(selection)
-
-
-## R, P or F for the whole group (the sim has no order for many: each person is ordered in turn). R drafts everyone if
-## anyone is not drafted, else releases everyone; P sends each to their own night post; F sends them to mend the worn
-## wall pieces, the worst first, one piece to a person and round again when there are more people than pieces (those who are
-## down stay). What cannot be done is said once, in the words the order's button has for it.
-func _gizmo_group(g: String) -> void:
-	match g:
-		"draft":
-			var want := false
-			for p in selected_people:
-				if not p.drafted:
-					want = true
-			var refused: Array = []
-			for p in selected_people:
-				if p.drafted != want:
-					sim.toggle_draft(p)
-				if p.drafted != want:
-					refused.append(p)
-			if not refused.is_empty():
-				hud.toast("Not now: %s is having a breakdown" % refused[0].first, "warn")
-		"post":
-			for p in selected_people:
-				sim.order_post(p)
-		"repair":
-			var no_go: String = hud.why_not("repair")
-			var worn: Array = []
-			for s in sim.segments:
-				if s.hp < s.max_hp:
-					worn.append(s)
-			worn.sort_custom(func(a, b): return a.hp / a.max_hp < b.hp / b.max_hp or (a.hp / a.max_hp == b.hp / b.max_hp and a.id < b.id))
-			var able: Array = selected_people.filter(func(p): return not p.downed and not p.dead and p.away == null)
-			if no_go != "" or worn.is_empty() or able.is_empty():
-				hud.toast("Not now: %s" % (no_go if no_go != "" else ("nothing is damaged" if worn.is_empty() else "nobody is free to repair")), "warn")
-				return
-			for i in able.size():
-				sim.order_repair(able[i], worn[i % worn.size()])
-
-
-## A right-click on the ground at `w` (tiles) with a group selected: everyone who can go is sent there through
-## `sim.order_move`, spread on a ring round the click (the exact spot is tried when the ring's own is solid) so they do
-## not stand on each other: a ring `GROUP_SPREAD` wide for five, wider the more they are. Who cannot go is said once (the
-## first reason, and how many other reasons there were). Returns how many were sent.
-func order_group_move(w: Vector2) -> int:
-	# (a click on a wall or anything else nobody can stand on sends no one, as for one person)
-	if world.is_solid(world.solid_p, w.x, w.y):
-		hud.toast("Nobody can stand there", "warn")
-		return 0
-	var able: Array = []
-	var reasons: Array = []
-	for p in selected_people:
-		if p.dead or p.turned or p.downed or p.away != null or sim.morale.breakdown(p):
-			var why := _why_not_there(p, w)
-			if not reasons.has(why):
-				reasons.append(why)
-		else:
-			able.append(p)
-	var sent := 0
-	var ring := GROUP_SPREAD * maxf(1.0, float(able.size()) / 5.0)
-	for i in able.size():
-		var at := w
-		if able.size() > 1:
-			var a := TAU * float(i) / float(able.size()) + 0.4
-			at = w + Vector2(cos(a), sin(a)) * ring
-		if sim.order_move(able[i], at.x, at.y) or sim.order_move(able[i], w.x, w.y):
-			sent += 1
-		else:
-			var why := _why_not_there(able[i], w)
-			if not reasons.has(why):
-				reasons.append(why)
-	if sent > 0:
-		order_mark = {"x": w.x, "y": w.y, "t": clock}
-		_did("move")
-	if not reasons.is_empty():
-		hud.toast(String(reasons[0]) if reasons.size() == 1 else "%s (and %d more)" % [reasons[0], reasons.size() - 1], "warn")
-	return sent
 
 
 ## Why an order to walk to `w` was refused, in a few words.
@@ -1087,15 +910,25 @@ func raid_open() -> bool:
 	return raid != null and is_instance_valid(raid)
 
 
-## Opens a played trip: `people` (the party, colony people) go to `place` (a place of the town's: its dictionary) in
-## `vehicle_id` (a fleet id, "" on foot) with their loot multiplied by `loot_mult`, and the player plays the place. The
-## colony is hidden and held until the squad is home; `on_done(result)` is then called with the trip's result (loot,
-## hurt, lost, clear, rescue, ammo_used, beats: what `scavenge.send_played` takes). Returns the scene, or null if one is
-## already up. The colony's time stands still while it is played (the party's hours pass afterwards, as for the dice).
-## Nobody calls this yet: the Town Board's "Take control" button will (R14.4), after closing the board, with the
-## chosen people, place, vehicle and the loot multiplier its Go would have used.
+## Opens a played trip (round 17: the player is one survivor, the trip is a flow, scripts/raid/place_flow.gd): the `people` the
+## player chose are ASKED over the radio to come (who cannot is left out and the toast says why; the avatar always goes and
+## leads), the party begins at once (the colony people vanish from the base), the road to `place` (a place of the town's: its
+## dictionary) is driven under an overlay while the colony runs ahead, the place is played in `vehicle_id` (a fleet id, "" on
+## foot) with the loot multiplied by `loot_mult` while the colony goes on behind it (one step in three), and the road home and
+## the report close it. The colony's view is hidden, and held by this node (`_process` leaves it alone: the scene steps it)
+## until the report is dismissed; `on_done(result)` is then called with the trip's result (loot, hurt, lost, clear, rescue,
+## ammo_used, beats, hp, skills). The colony has taken the result by then (`scavenge.finish_played`). Returns the scene, or
+## null if one is already up or the trip cannot begin (the toast says why).
 func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: float, on_done: Callable) -> Node:
-	if raid_open() or people.is_empty():
+	if raid_open() or (people.is_empty() and not avatar_mode):
+		return null
+	var picked: Dictionary = PlaceFlow.pick_party(sim, people, vehicle_id)
+	for line in PlaceFlow.refusal_lines(picked):
+		hud.toast(String(line), "warn")
+	var going: Array = picked.going
+	var flow = PlaceFlow.new(sim)
+	if going.is_empty() or not flow.begin(going, String(place.get("id", "")), vehicle_id):
+		hud.toast(flow.error if flow.error != "" else "Nobody can go.", "warn")
 		return null
 	var seed_value: int = raid_seed if raid_seed >= 0 else int(sim.run_seed) * 1000003 + String(place.get("id", "")).hash() + int(sim.day) * 7919
 	var by_vehicle: bool = vehicle_id != ""
@@ -1103,12 +936,13 @@ func open_raid(people: Array, place: Dictionary, vehicle_id: String, loot_mult: 
 	var maker = load(SITE_GEN) if ResourceLoader.exists(SITE_GEN) and not raid_stub else null
 	if maker == null or not maker.can_instantiate():
 		maker = load(SITE_STUB)
-	var site: Dictionary = maker.make(place, seed_value, people.size(), by_vehicle)
+	var site: Dictionary = maker.make(place, seed_value, going.size(), by_vehicle)
 	var kind := "" if not by_vehicle else String(sim.vehicles.vehicle(vehicle_id).get("kind", ""))
 	var scene := RaidScene.new()
 	add_child(scene)
 	var survivor: bool = bool(place.get("survivor", false)) and not bool(sim.town.state.get(String(place.get("id", "")), {}).get("rescued", false))
-	scene.setup(self, hud, data, site, people, float(sim.stock.ammo), kind, loot_mult, survivor)
+	scene.setup(self, hud, data, site, going, float(sim.stock.ammo), kind, loot_mult, survivor)
+	scene.begin_trip(flow)
 	if on_done.is_valid():
 		scene.finished.connect(on_done)
 	return scene
@@ -1337,26 +1171,57 @@ func _title_camera(dt: float) -> void:
 
 # ------------------------------------------------------------------ input --
 
+## The pointer's place and whether a HUD control has it (`over_hud`): `_input` sees every pointer event first and says the
+## HUD has it; `_unhandled_input` only sees the ones the HUD let through, and says it has not.
+func _track_pointer(ev: InputEvent, early: bool) -> void:
+	if ev is InputEventMouseMotion or ev is InputEventMouseButton:
+		mouse_screen = ev.position
+		if ev is InputEventMouseMotion:
+			over_hud = early
+
+
+## Every event, before the HUD: the trigger is let go whenever the button is, wherever the pointer was (a release over a
+## HUD control goes to the control and never reaches `_unhandled_input`).
+func _input(ev: InputEvent) -> void:
+	_track_pointer(ev, true)
+	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
+		firing = false
+
+
+func _notification(what: int) -> void:
+	# (a window that lost the focus under a held button never sees the release)
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		firing = false
+	elif what == NOTIFICATION_EXIT_TREE:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+
 func _unhandled_input(ev: InputEvent) -> void:
+	_track_pointer(ev, false)
 	# the title and the menus have the keys and the mouse: nothing here reaches the yard (and a drag that was
 	# going on when a page opened is over: its release goes to the page, not to us)
 	if menu_open:
 		drag = null
+		firing = false
 		return
+	var avatar := avatar_mode
 	if ev is InputEventMouseButton:
 		var mb: InputEventMouseButton = ev
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
-			_zoom_at(exp(0.2 * maxf(mb.factor, 0.2)), mb.position)
+			_zoom_at(exp(0.2 * maxf(mb.factor, 0.2)), _vp() / 2.0 if avatar else mb.position)
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
-			_zoom_at(exp(-0.2 * maxf(mb.factor, 0.2)), mb.position)
+			_zoom_at(exp(-0.2 * maxf(mb.factor, 0.2)), _vp() / 2.0 if avatar else mb.position)
+		elif avatar:
+			# the avatar's hands: the left button is the trigger (a press that reached the world, not a HUD control); there are
+			# no orders, no picking in the world and no panning
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				firing = mb.pressed
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			if selection != null and selection.kind == "person":
 				var w := _screen_to_tile(mb.position)
 				if not _allows("move", w):
 					return
-				if selected_people.size() > 1:
-					order_group_move(w)
-				elif sim.order_move(selection.ref, w.x, w.y):
+				if sim.order_move(selection.ref, w.x, w.y):
 					order_mark = {"x": w.x, "y": w.y, "t": clock}
 					_did("move")
 				else:
@@ -1366,14 +1231,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 				hud.toast("Click someone first, then right-click where they should go")
 		elif mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_MIDDLE:
 			if mb.pressed:
-				# the left button draws a box; the middle button, or Alt (Option) and the left, pans the camera
-				drag = {"pos": mb.position, "center": cam_center, "moved": false, "button": mb.button_index, "box": Rect2(), "shift": mb.shift_pressed, "pan": mb.button_index == MOUSE_BUTTON_MIDDLE or mb.alt_pressed}
+				# the middle button, or Alt (Option) and the left, pans the camera; a left press is a click if it stays put
+				drag = {"pos": mb.position, "center": cam_center, "moved": false, "button": mb.button_index, "pan": mb.button_index == MOUSE_BUTTON_MIDDLE or mb.alt_pressed}
 			else:
 				if drag != null and mb.button_index != drag.button:
 					return # (another button let go: the drag goes on)
-				if drag != null and drag.button == MOUSE_BUTTON_LEFT and drag.moved and not drag.get("pan", false):
-					_pick_people(box_people(drag.box), bool(drag.get("shift", false)) or mb.shift_pressed)
-				elif drag != null and not drag.moved and drag.button == MOUSE_BUTTON_LEFT:
+				if drag != null and not drag.moved and drag.button == MOUSE_BUTTON_LEFT:
 					var at := _screen_to_tile(mb.position)
 					var hit = _pick(at)
 					# a click that hit nothing else, near a plot's sign, opens the Build screen on that plot (the
@@ -1384,42 +1247,37 @@ func _unhandled_input(ev: InputEvent) -> void:
 					elif hit == null and parking_view.vehicle_at(at) != "":
 						# a click on a vehicle parked at the gate opens the Town Board, as its button does
 						toggle_town()
-					elif mb.shift_pressed and hit != null and hit.kind == "person":
-						# shift and a click on a person: they join the group (or leave it)
-						_toggle_person(hit.ref)
-					elif mb.shift_pressed and hit == null:
-						pass # (shift keeps the group: a click on empty ground does not let go of it)
 					else:
 						_try_select(hit)
 				drag = null
 				Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	elif ev is InputEventMouseMotion:
 		var mm: InputEventMouseMotion = ev
-		if drag != null:
+		if avatar:
+			hover = null
+		elif drag != null:
 			var dv: Vector2 = mm.position - drag.pos
 			var panning: bool = drag.get("pan", false)
-			if not drag.moved and dv.length() > BOX_PX:
+			if not drag.moved and dv.length() > DRAG_PX:
 				drag.moved = true
 				hover = null
-				Input.set_default_cursor_shape(Input.CURSOR_DRAG if panning else Input.CURSOR_CROSS)
-			if drag.moved:
 				if panning:
-					follow = null
-					var was_at := cam_center
-					cam_center = drag.center - dv / zoom_px
-					_clamp_camera()
-					_did("pan", cam_center.distance_to(was_at))
-				else:
-					drag.box = Rect2(drag.pos, Vector2.ZERO).expand(mm.position)
+					Input.set_default_cursor_shape(Input.CURSOR_DRAG)
+			if drag.moved and panning:
+				follow = null
+				var was_at := cam_center
+				cam_center = drag.center - dv / zoom_px
+				_clamp_camera()
+				_did("pan", cam_center.distance_to(was_at))
 		else:
 			var at := _screen_to_tile(mm.position)
 			var h = _pick(at)
 			hover = h.ref if h != null and h.kind == "person" else null
 			Input.set_default_cursor_shape(_cursor_for(h, at))
 	elif ev is InputEventMagnifyGesture:
-		_zoom_at(ev.factor, ev.position)
+		_zoom_at(ev.factor, _vp() / 2.0 if avatar else ev.position)
 	elif ev is InputEventPanGesture:
-		_zoom_at(exp(-ev.delta.y * 0.06), ev.position)
+		_zoom_at(exp(-ev.delta.y * 0.06), _vp() / 2.0 if avatar else ev.position)
 	elif ev is InputEventKey and ev.pressed and not ev.echo:
 		match ev.keycode:
 			KEY_SPACE:
@@ -1431,39 +1289,54 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_3:
 				_set_speed(3)
 			KEY_ESCAPE:
-				# Esc ends a box that is being drawn; else it lets go of the selection (the whole group); with nothing
-				# selected it opens the pause menu
-				if drag != null and drag.moved and not drag.get("pan", false):
-					drag = null
-					Input.set_default_cursor_shape(Input.CURSOR_ARROW)
-				elif selection != null or not selected_people.is_empty():
+				# Esc lets go of the selection; with nothing selected it opens the pause menu
+				if selection != null:
 					_select(null)
 				else:
 					open_pause()
-			KEY_A:
-				# Ctrl+A (Cmd+A on a Mac): everyone in the yard. (A alone pans, with W S D.)
-				if ev.ctrl_pressed or ev.meta_pressed:
-					select_everyone()
 			KEY_R:
-				_gizmo("draft")
-			KEY_P:
-				_gizmo("post")
+				# the avatar's reload; the old yard's draft order
+				if avatar:
+					if not hud.modal_open():
+						sim.avatar.reload()
+				else:
+					_gizmo("draft")
 			KEY_F:
-				_gizmo("repair")
+				# the avatar's melee swing; the old yard's repair order
+				if avatar:
+					if not hud.modal_open():
+						sim.avatar.melee()
+				else:
+					_gizmo("repair")
+			KEY_P:
+				if not avatar:
+					_gizmo("post")
 			KEY_C:
-				_gizmo("focus")
+				if not avatar:
+					_gizmo("focus")
 			KEY_T:
-				_gizmo("treat")
+				# the old yard's treat order; with an avatar the radio's News (T for the radio)
+				if not avatar:
+					_gizmo("treat")
+				else:
+					hud.toggle_news()
 			KEY_X:
-				_gizmo("sendout")
+				if not avatar:
+					_gizmo("sendout")
 			KEY_G:
 				_gizmo("scavenge")
 			KEY_L:
-				_gizmo("lure")
+				# the alarm: on a wall section that is picked, as ever; with an avatar it is the call to arms
+				if avatar and (selection == null or selection.kind != "segment"):
+					sim.radio.alarm(not sim.radio.alarm_on)
+				else:
+					_gizmo("lure")
 			KEY_B:
-				_gizmo("job_builders")
+				if not avatar:
+					_gizmo("job_builders")
 			KEY_M:
-				_gizmo("job_bench")
+				if not avatar:
+					_gizmo("job_bench")
 			KEY_J:
 				toggle_jobs()
 			KEY_N:
@@ -1493,11 +1366,22 @@ func _unhandled_input(ev: InputEvent) -> void:
 func _process(delta: float) -> void:
 	var dt := clampf(delta, 0.0, StepClock.MAX_FRAME)
 	clock += dt
+	if raid_open():
+		# a played trip is up (scripts/raid/raid_scene.gd): the scene steps the colony itself, at the pace of the place, and
+		# shows what there is to see; the yard's world is hidden, so none of it is stepped, synced or drawn, its sounds do not
+		# play and nothing is saved from here (a trip in a place is not a state the game keeps)
+		_shot_frame()
+		return
 	# the tutorial's coach looks at the lesson first: it may hold the game still for this frame
 	if coach != null:
 		coach.tick(dt)
 	if hints != null:
 		hints.tick(dt)
+	# a screenshot has no pointer: `--aim=x,y` puts one over that tile
+	if shot_aim != Vector2.INF:
+		mouse_screen = _tile_to_screen(shot_aim)
+	# the avatar's hands for the steps of this frame (the keys, the pointer's tile, the trigger)
+	_feed_avatar()
 	# The rules only ever take whole steps of 1/30 s, however long the frame was,
 	# so a seed plays the same game at any frame rate. Everything that is only
 	# drawn (effects, flames, light, camera) runs on the frame's own time.
@@ -1511,21 +1395,26 @@ func _process(delta: float) -> void:
 
 	if title_mode:
 		_title_camera(dt)
-	# (Ctrl or Cmd with a letter is a command, Ctrl+A selecting everyone, not the camera's key)
-	var cmd := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
-	var kx := int((Input.is_key_pressed(KEY_D) and not cmd) or Input.is_key_pressed(KEY_RIGHT)) - int((Input.is_key_pressed(KEY_A) and not cmd) or Input.is_key_pressed(KEY_LEFT))
-	var ky := int((Input.is_key_pressed(KEY_S) and not cmd) or Input.is_key_pressed(KEY_DOWN)) - int((Input.is_key_pressed(KEY_W) and not cmd) or Input.is_key_pressed(KEY_UP))
-	# (the arrow keys are the menu's while one is open)
-	if (kx != 0 or ky != 0) and not menu_open:
-		follow = null
-		cam_center += Vector2(kx, ky) * dt * 700.0 / zoom_px
-		_did("pan", Vector2(kx, ky).length() * dt * 700.0 / zoom_px)
-	if follow != null:
-		cam_center += (Vector2(follow.x, follow.y) - cam_center) * minf(1.0, dt * 5.0)
+	if avatar_mode:
+		# the camera is the avatar's: it follows them (and the keys walk them, they do not pan)
+		if not title_mode and not raid_open():
+			_avatar_camera(dt)
+		_update_pointer()
+	else:
+		# (Ctrl or Cmd with a letter is a command, not the camera's key)
+		var cmd := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
+		var kx := int((Input.is_key_pressed(KEY_D) and not cmd) or Input.is_key_pressed(KEY_RIGHT)) - int((Input.is_key_pressed(KEY_A) and not cmd) or Input.is_key_pressed(KEY_LEFT))
+		var ky := int((Input.is_key_pressed(KEY_S) and not cmd) or Input.is_key_pressed(KEY_DOWN)) - int((Input.is_key_pressed(KEY_W) and not cmd) or Input.is_key_pressed(KEY_UP))
+		# (the arrow keys are the menu's while one is open)
+		if (kx != 0 or ky != 0) and not menu_open:
+			follow = null
+			cam_center += Vector2(kx, ky) * dt * 700.0 / zoom_px
+			_did("pan", Vector2(kx, ky).length() * dt * 700.0 / zoom_px)
+		if follow != null:
+			cam_center += (Vector2(follow.x, follow.y) - cam_center) * minf(1.0, dt * 5.0)
 	_clamp_camera()
 	_apply_camera()
 	_handle_events()
-	_prune_selection()
 	_sync_views()
 	var look: Dictionary = sim.storyteller.look()
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
@@ -1554,12 +1443,15 @@ func _process(delta: float) -> void:
 				near += 1
 		sound.set_ambience(lighting.dark, minf(1.0, near / 14.0), 0.1)
 		music.follow(not title_mode and hud.game_over == null, raid_open(), lighting.dark, minf(1.0, near / 14.0), 0.1)
+	_shot_frame()
+
+
+## One frame of a screenshot run (it counts frames, measures a few and takes the shot): the yard's frame and a played trip's both end here.
+func _shot_frame() -> void:
 	if shot_path != "":
 		frame_count += 1
-		if frame_count == shot_frames - 2 and shot_box.size != Vector2.ZERO:
-			var from_px := _tile_to_screen(shot_box.position)
-			var to_px := _tile_to_screen(shot_box.end)
-			drag = {"pos": from_px, "center": cam_center, "moved": true, "button": MOUSE_BUTTON_LEFT, "box": Rect2(from_px, Vector2.ZERO).expand(to_px), "shift": false, "pan": false}
+		if shot_swing > 0.0 and avatar_mode:
+			sim.avatar.player().thrust = shot_swing
 		if frame_count == 50:
 			RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 		if frame_count == 60:
@@ -1573,6 +1465,120 @@ func _process(delta: float) -> void:
 			_selftest()
 		if frame_count == shot_frames:
 			_take_shot()
+
+
+# ----------------------------------------------------------------- avatar --
+# The player's hands, the camera and the pointer in avatar mode (round 17; the rules are scripts/sim/avatar.gd's).
+
+## Whether a run of these user arguments is played by an avatar: not the title's yard, not Orientation Day, not `--noavatar`;
+## else the run's own word (`"avatar"`: a test asks for it) or, with none, whether this is the real game's scene (`real`: a test's
+## and a screenshot's helper scenes are not the current scene of the tree) and not a loaded save (those are the caller's).
+static func wants_avatar(args: Array, run: Dictionary, title: bool, tutorial_run: bool, real: bool) -> bool:
+	if title or tutorial_run or "--noavatar" in args:
+		return false
+	return bool(run.get("avatar", real))
+
+
+## The id of the first starter of a crew (anything with an `id`): Ruth if she is there, else the first. "" for no crew.
+static func first_starter_id(crew: Array) -> String:
+	for p in crew:
+		if String(p["id"]) == "ruth":
+			return "ruth"
+	return String(crew[0]["id"]) if not crew.is_empty() else ""
+
+
+## Whether the avatar's hands are off: the title, a menu or a page over the yard, a played trip, the end of the run.
+func avatar_hands_off() -> bool:
+	return menu_open or sim.over != "" or (hud != null and hud.modal_open())
+
+
+## The tile of the world under the pointer: where the avatar's gun is aimed.
+func aim_tile() -> Vector2:
+	return _screen_to_tile(mouse_screen)
+
+
+## The keys that walk the avatar, as a direction (W A S D and the arrows; a command's Ctrl or Cmd is not a step).
+func _walk_keys() -> Vector2:
+	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
+		return Vector2.ZERO
+	var x := int(_key_down(KEY_D) or _key_down(KEY_RIGHT)) - int(_key_down(KEY_A) or _key_down(KEY_LEFT))
+	var y := int(_key_down(KEY_S) or _key_down(KEY_DOWN)) - int(_key_down(KEY_W) or _key_down(KEY_UP))
+	return Vector2(x, y)
+
+
+## A key is down by what it says or by where it is (W A S D are the keys at the W A S D places on any layout).
+func _key_down(code: Key) -> bool:
+	return Input.is_physical_key_pressed(code) or Input.is_key_pressed(code)
+
+
+## Every frame in avatar mode: what the player's hands ask of the avatar (the sim keeps the last values): the keys' direction,
+## the tile under the pointer and the trigger; nothing under a menu or a page (and the trigger is let go).
+func _feed_avatar() -> void:
+	if not avatar_mode:
+		return
+	if raid_open():
+		# (a played trip's scene has the hands: nothing is asked of the yard's avatar meanwhile)
+		firing = false
+		return
+	var me = sim.avatar.player()
+	if me == null:
+		return
+	if avatar_hands_off():
+		firing = false
+		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
+		return
+	sim.avatar.set_input(_walk_keys(), aim_tile(), firing)
+
+
+## The camera of avatar mode: it follows the avatar, eased, and leans toward the pointer (up to CAM_LEAD tiles); for CAM_HOLD
+## seconds after a jump (`_focus`) it stays where it was put (or follows the one a `follow` names), then comes back.
+func _avatar_camera(dt: float) -> void:
+	var me = sim.avatar.player()
+	if me == null:
+		return
+	if cam_hold > 0.0:
+		cam_hold = maxf(0.0, cam_hold - dt)
+		if follow != null:
+			cam_center += (Vector2(follow.x, follow.y) - cam_center) * minf(1.0, dt * 5.0)
+		if cam_hold <= 0.0:
+			follow = null
+		return
+	var lead := (mouse_screen - _vp() / 2.0) / zoom_px * CAM_LEAD_K
+	if lead.length() > CAM_LEAD:
+		lead = lead.normalized() * CAM_LEAD
+	cam_center += (view_pos(me) + lead - cam_center) * (1.0 - exp(-CAM_EASE * dt))
+
+
+## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow; over the HUD, a menu or
+## a page it is the arrow as ever.
+func _update_pointer() -> void:
+	if raid_open():
+		return    # (the scene of a played trip has the pointer)
+	var want := Input.MOUSE_MODE_VISIBLE
+	if not avatar_hands_off() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(mouse_screen):
+		want = Input.MOUSE_MODE_HIDDEN
+	if Input.mouse_mode != want:
+		Input.mouse_mode = want
+
+
+## The player has been lost and the next in line leads (the rules' `succession` event): the camera goes to them and a banner
+## says so.
+func _on_succession(e: Dictionary) -> void:
+	var to = null
+	var from = null
+	for p in sim.people:
+		if String(p.id) == String(e.get("to", "")):
+			to = p
+		elif String(p.id) == String(e.get("from", "")):
+			from = p
+	cam_hold = 0.0
+	follow = null
+	if to == null:
+		return
+	if not title_mode:
+		cam_center = Vector2(to.x, to.y)
+		_clamp_camera()
+	hud.show_banner("%s leads now" % to.first, "%s is gone" % from.first if from != null else "")
 
 
 ## One step of the rules.
@@ -1739,6 +1745,9 @@ func _handle_events() -> void:
 			"bark":
 				# what someone said: a speech bubble over their head (the overlay keeps quiet under a menu)
 				overlay.add_bark(e)
+			"radio_line":
+				# what someone answered over the radio (radio.gd: asked, they agree or say why not): a bubble over their head too
+				overlay.add_bark({"who": e.who, "text": e.line, "context": "radio"})
 			"story_card":
 				story_ui.on_story_card()
 			"dawn_report":
@@ -1747,6 +1756,8 @@ func _handle_events() -> void:
 				_autosave()
 			"arrived":
 				_on_arrival(String(e.who))
+			"succession":
+				_on_succession(e)
 	sim.events.clear()
 
 
@@ -1764,7 +1775,7 @@ func _on_arrival(who: String) -> void:
 ## The dawn save: one file, written over at each new day. Not in a screenshot
 ## run, and not once the run is lost (that would replace the last good one).
 func _autosave() -> void:
-	if shot_path == "" and sim.over == "" and not title_mode and not tutorial:
+	if shot_path == "" and sim.over == "" and not title_mode and not tutorial and not raid_open():
 		SaveGame.write(sim, SaveGame.AUTO_PATH)
 
 
@@ -1809,6 +1820,7 @@ func _parse_args() -> void:
 	var town_ride := ""
 	var raid_spec := ""
 	var raid_do := ""
+	var cam_asked := false
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
 	if season_asked >= 0:
@@ -1831,18 +1843,16 @@ func _parse_args() -> void:
 				cam_center = Vector2(float(c[0]), float(c[1]))
 				if c.size() > 2:
 					zoom_px = float(c[2])
+				cam_asked = true
 			"recruit":
 				# --recruit=<id> lets that caller of the radio (ana, walt, hector, or the id of a generated one; none
 				# named: the next) in at the gate now, with a --crew=3 start. At 07:00, unless --hour is given first.
 				stage_recruit(v)
 			"select":
-				# --select=<id> selects that person; --select=<id>+<id>+<id> a group (the first is the primary)
-				var chosen: Array = []
-				for id in v.split("+"):
-					for p in sim.people:
-						if p.id == id:
-							chosen.append(p)
-				select_people(chosen)
+				# --select=<id> selects that person
+				for p in sim.people:
+					if p.id == v:
+						_select({"kind": "person", "ref": p})
 			"work":
 				# --work=<id>:<word>[@seconds] shows that person at that work (a pose, whatever the rules have them at: ana:hammer);
 				# with @seconds the pose holds that moment of its loop (a still of one stroke); without, it moves
@@ -1853,12 +1863,29 @@ func _parse_args() -> void:
 						if p.id == wspec[0] and pawn_nodes.has(p):
 							pawn_nodes[p].work_stage = wt[0]
 							pawn_nodes[p].work_stage_t = float(wt[1]) if wt.size() > 1 else -1.0
-			"box":
-				# --box=x0,y0,x1,y1 (tiles) shows a selection box being dragged over that part of the yard, as a screenshot
-				# of it (after --cam, which fixes where the tiles are on the screen)
-				var corner := v.split(",")
-				if corner.size() == 4:
-					shot_box = Rect2(Vector2(float(corner[0]), float(corner[1])), Vector2.ZERO).expand(Vector2(float(corner[2]), float(corner[3])))
+			"aim":
+				# --aim=x,y (tiles) puts the pointer over that tile, as a screenshot has none: the avatar aims there and the
+				# crosshair is drawn there (the avatar's own tile when the camera is moving, so give --cam too if it must stay)
+				var tile := v.split(",")
+				if tile.size() == 2 and tile[0].is_valid_float() and tile[1].is_valid_float():
+					shot_aim = Vector2(float(tile[0]), float(tile[1]))
+			"avatar-at":
+				# --avatar-at=x,y stands the avatar there (a screenshot's staging; the camera begins on them)
+				var spot := v.split(",")
+				var me = sim.avatar.player()
+				if me != null and spot.size() == 2 and spot[0].is_valid_float() and spot[1].is_valid_float():
+					me.x = float(spot[0])
+					me.y = float(spot[1])
+					me.path = []
+					me.moving = false
+					cam_center = Vector2(me.x, me.y)
+			"swing":
+				shot_swing = float(v) if v.is_valid_float() else 0.55
+			"hold-fire":
+				# --hold-fire holds the avatar's trigger down (the left button, in a screenshot of a fight)
+				firing = true
+			"noavatar":
+				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
 			"wall":
 				# --wall=N selects wall section N (by its id)
 				for s in sim.segments:
@@ -1897,8 +1924,8 @@ func _parse_args() -> void:
 			"raid-stub":
 				raid_stub = true
 			"raid-do":
-				# --raid-do=<steps joined by +> plays the raid a little before the shot: all, one, sel:N, search:N, move:X:Y,
-				# help:N, down:N, wait:SECONDS, pause, ask, retreat, end (see raid_scene.gd `stage`)
+				# --raid-do=<steps joined by +> plays the trip a little before the shot: road[:share], go, wait:SECONDS, walk:X:Y,
+				# aim:X:Y, fire:SECONDS, sel:N, base:N, ask:VERB, news, alarm, down, hour:H, exit, home, ... (see raid_scene.gd `stage`)
 				raid_do = v
 			"town-reveal":
 				# --town-reveal=<place id>,<place id> (or "all") shows places of the board that are hidden at the start
@@ -2018,6 +2045,9 @@ func _parse_args() -> void:
 					"lost": [{"who": "Ana", "epitaph": "She would have wanted the lamp left on.", "how": "died"}], "hurt": ["Marcus"], "skill_ups": [{"who": "Dez", "skill": "Building", "value": 10}],
 					"events": ["Heavy rain: The barrels are full."], "mood": "Mostly steady; Marcus is shaken.", "alive": 5}
 				story_ui.show_dawn()
+	if cam_asked and avatar_mode:
+		# (the camera starts where `--cam` put it; in a screenshot it stays, else it goes back to the avatar after a moment)
+		cam_hold = 1.0e9 if shot_path != "" else CAM_HOLD
 	if show_build:
 		hud.last_speed = speed
 		hud.open_build(build_plot, sim)
@@ -2044,6 +2074,10 @@ func _parse_args() -> void:
 			if s.id == lure_seg:
 				sim.tactics.order_lure(s)
 	if advance > 0.0:
+		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
+		if shot_aim != Vector2.INF:
+			mouse_screen = _tile_to_screen(shot_aim)
+		_feed_avatar()
 		var steps := int(advance * 30.0)
 		for i in steps:
 			_sim_step()
@@ -2283,6 +2317,12 @@ func _stage_raid(spec: String) -> void:
 	if f.size() > 2 and sim.vehicles.kind(f[2]).size() > 0:
 		vehicle_id = "raid_%s" % f[2]
 		sim.vehicles.fleet.append({"id": vehicle_id, "kind": f[2], "hp": 80.0, "state": "parked"})
+		sim.vehicles.fuel = maxf(float(sim.vehicles.fuel), 30.0)    # (a trip by vehicle burns fuel as it begins)
+	# a trip leaves in the morning: a screenshot taken at another hour starts from eight (the `hour:` step of `--raid-do` moves
+	# the clock again once the trip is on its way)
+	if not (sim.hour >= 6.5 and sim.hour < 10.0 and String(sim.phase) == "day"):
+		sim.minutes = 8.0 * 60.0
+		sim.phase = sim.phase_at(sim.minutes)
 	open_raid(party, place, vehicle_id, 1.0, Callable())
 	raid_seed = -1
 
@@ -2309,6 +2349,9 @@ func _key(code: Key) -> void:
 
 ## Drives the real input handlers once, so broken code paths show up in logs.
 func _selftest() -> void:
+	if avatar_mode:
+		print("selftest: this drives the old yard's controls: run it with --noavatar")
+		return
 	var ruth = sim.people[0]
 	_focus(Vector2(ruth.x, ruth.y))
 	_apply_camera()
@@ -2340,7 +2383,8 @@ func _selftest() -> void:
 	press.position = move.position
 	_unhandled_input(press)
 	print("selftest: middle-drag pans camera by ", (cam_center - c0).snapped(Vector2(0.01, 0.01)))
-	# a left-drag draws a box round the middle of the window and selects whoever is in it; Ctrl+A everyone
+	# a left-drag selects nobody (the box is gone): the camera stays and so does the selection
+	var picked = selection
 	var box_from := _vp() / 2.0 - Vector2(60, 60)
 	var box_to := _vp() / 2.0 + Vector2(60, 60)
 	var left := InputEventMouseButton.new()
@@ -2354,13 +2398,7 @@ func _selftest() -> void:
 	left.pressed = false
 	left.position = box_to
 	_unhandled_input(left)
-	print("selftest: left-drag box selected %d, camera stayed %s" % [selected_people.size(), (cam_center - c0).snapped(Vector2(0.01, 0.01))])
-	var all := InputEventKey.new()
-	all.keycode = KEY_A
-	all.ctrl_pressed = true
-	all.pressed = true
-	_unhandled_input(all)
-	print("selftest: Ctrl+A selected ", selected_people.size())
+	print("selftest: left-drag changed the selection: %s, camera stayed %s" % [selection != picked, (cam_center - c0).snapped(Vector2(0.01, 0.01))])
 	for z in sim.zombies:
 		if z.state == "attack":
 			_focus(Vector2(z.x, z.y))

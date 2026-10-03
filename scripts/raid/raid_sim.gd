@@ -3,7 +3,9 @@
 ## jobs, no radio): `RaidRun` steps only the people and the dead. It overrides the seeding of a new run, which the
 ## real map's wall sections would otherwise provide, and (round 17) what the hour changes: `mirror(colony)` gives it the
 ## colony's clock while the player is in the place (the base goes on meanwhile), the dead hunt at every hour and there
-## are no wall posts to man, so a place can be played at night.
+## are no wall posts to man, so a place can be played at night. With a player in the place the squad's stances (follow, hold,
+## cover, search, back) are asked of `squad_goal`, the run's SquadAI (scripts/raid/squad_ai.gd), before the colony's own
+## goals (`_goal_for`).
 extends "res://scripts/sim/sim.gd"
 
 
@@ -37,6 +39,20 @@ func _hunt_allowed() -> bool:
 ## send them to the yard's posts).
 func posts_manned() -> bool:
 	return false
+
+
+## What the squad's AI says a person should do now (`SquadAI.goal_for`, set by the run, round 17): {"x", "y", "face", "what"} or
+## null (no stance, no player, or an order stands: then the colony's own rules decide, as before). A person with an order is
+## left to the order.
+var squad_goal: Callable
+
+
+func _goal_for(p: Person):
+	if squad_goal.is_valid() and p.order == null and not p.player and not p.downed and not p.dead:
+		var asked = squad_goal.call(p)
+		if asked != null:
+			return asked
+	return super(p)
 
 
 ## The squad shoots what it can see: a clear line to the target (the dead behind a wall are not shot).

@@ -1,15 +1,20 @@
-## The raid's HUD (round 14, R14.3): its own CanvasLayer over the raid scene (raid_scene.gd), in the noticeboard style of
-## the rest of the game. It borrows the game HUD's helpers (`_style`, `_panel`, `_label`, `_button`, `_kbd`, `_icon`,
-## the paper page...) so that it looks like it and changes with the theme.
+## The raid's HUD (round 14, R14.3; the radio, round 17, S1.6b): its own CanvasLayer over the raid scene (raid_scene.gd), in
+## the noticeboard style of the rest of the game. It borrows the game HUD's helpers (`_style`, `_panel`, `_label`, `_button`,
+## `_kbd`, `_icon`, the paper page...) so that it looks like it and changes with the theme.
 ##
-##   top        the place's name and a line about what to do (left), the squad's cards (middle: portrait, name, health,
-##              weapon and magazine, what they are doing), the bags (right: what is in them by stock, "n of m")
-##              - in a narrow window the cards drop to a row of their own under the other two
-##   bottom     the log of what happened (the last four lines, fading), the legend of the controls (fades; H brings it
-##              back) and the Retreat button with its key
-##   over all   a banner ("They heard that", "Marcus is down"), a toast for an order that cannot be given, the "Retreat?"
-##              question, and, when the run is over, the end card (a paper page: what came home, who is hurt or lost,
-##              the place, the ammo used, and one button: Go home)
+##   top        the place's name and a line about what to do (left), the squad's cards (middle: portrait, name, health, weapon
+##              and magazine, what they are doing: a stance word; "YOU" on the one you lead; a click asks them over the radio),
+##              the bags (right: what is in them by stock, "n of m") - in a narrow window the cards drop to a row of their own
+##   right      the radio: the contacts (the squad above; the people at the base: chips), News and Alarm and "All back", and
+##              for the selected contact the verbs of radio_verbs.gd. The News log (news_panel.gd) takes the verbs' place in a
+##              narrow window, and stands beside the radio in a wide one
+##   bottom     the log of what happened (the last four lines, fading), the legend of the controls (fades), the ammunition
+##              (the magazine and the stock, a reload bar), the call card (call_card.gd: the oldest call of the base that waits
+##              for an answer: it never pauses anything) and the base's clock (its day and hour, dusk and night) and how it
+##              stands (walls holding, under attack, alarm)
+##   over all   a banner ("They heard that", "Dez leads now"), a toast for an order that cannot be given, the road's overlay
+##              ("Driving to the pharmacy...": the progress, the clock of the base and the news as it comes) and the report
+##              (a paper page: what came home, who is hurt or lost, the place, the ammo used, the news, and one button)
 ##
 ## Everything is laid out in `_layout`, from the panels' own sizes, so that nothing overlaps at any width from 700 up.
 ## Nothing is set under Fonts.MIN_PX (the label factory raises it).
@@ -17,6 +22,11 @@ extends CanvasLayer
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
+const NewsPanel := preload("res://scripts/ui/news_panel.gd")
+const CallCard := preload("res://scripts/ui/call_card.gd")
+const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 
 const PAD := 12.0
 const GAP := 10.0
@@ -26,9 +36,10 @@ const CARD_H := 66.0
 const PORTRAIT := 46.0
 const LOG_LINES := 4
 const LOG_W := 380.0
+const LOG_W_NARROW := 250.0
 const LOG_HOLD := 12.0
 const LOG_FADE := 3.0
-## How long the legend shows when the raid begins (and after H), and how long it takes to fade.
+## How long the legend shows when the raid begins, and how long it takes to fade.
 const LEGEND_HOLD := 14.0
 const LEGEND_FADE := 2.0
 const BANNER_HOLD := 3.0
@@ -37,13 +48,30 @@ const TOAST_HOLD := 2.4
 const TOAST_FADE := 0.4
 const PLACE_W := 290.0
 const END_W := 540.0
+## The radio's column: the panel is this wide, the News log as wide beside it (a wide window) or in its place (a narrow one).
+const RADIO_W := 280.0
+const WIDE_W := 1000.0
+## A window shorter than this has the radio in its compact form (the verbs in one row, the people at the base behind a button).
+const COMPACT_H := 680.0
+const WEAPON_W := 230.0
+const CALL_W := 300.0
+const CALL_W_MIN := 230.0
+const BASE_W := 250.0
+const ROAD_W := 460.0
+const MAX_CHIPS := 14
 const STOCK_ORDER := ["food", "water", "scrap", "ammo", "meds", "fuel"]
 const STOCK_NAMES := {"food": "Food", "water": "Water", "scrap": "Scrap", "ammo": "Ammo", "meds": "Medicine", "fuel": "Fuel"}
 const LEGEND := [
-	[["Click", "Drag"], "select"], [["Right-click"], "move, search, help"], [["Space"], "pause"], [["R"], "retreat"],
-	[["Tab"], "next"], [["F"], "follow"], [["Scroll"], "zoom"],
+	[["W", "A", "S", "D"], "walk"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "search"],
+	[["Space"], "pause"], [["T"], "news"], [["Scroll"], "zoom"],
 ]
-const STATUS_COLOR := {"Down": Hud.DANGER_TEXT, "Lost": Hud.DANGER_TEXT, "Searching": Hud.ACCENT, "Helping": Hud.INFO, "Going to search": Hud.INK2, "Going to help": Hud.INK2, "Reloading": Hud.WARN, "Fighting": Hud.WARN}
+const STATUS_COLOR := {
+	"Down": Hud.DANGER_TEXT, "Lost": Hud.DANGER_TEXT, "Searching": Hud.ACCENT, "Helping": Hud.INFO, "Going to search": Hud.INK2,
+	"Going to help": Hud.INK2, "Reloading": Hud.WARN, "Fighting": Hud.WARN, "You": Hud.ACCENT, "Following": Hud.INK2, "Holding": Hud.INFO,
+	"Covering": Hud.INFO, "Heading back": Hud.OK,
+}
+## How the base reads, by the key `PlaceFlow.base_state` gives.
+const BASE_COLOR := {"ok": Hud.OK, "night": Hud.INFO, "attack": Hud.DANGER_TEXT, "alarm": Hud.WARN, "fallen": Hud.DANGER_TEXT}
 
 var hud
 var scene
@@ -63,15 +91,43 @@ var chips := {}          # stock -> {"box": HBoxContainer, "num": Label}
 var empty_label: Label
 
 var cards_grid: GridContainer
-var cards: Array = []    # {"p", "panel", "pic", "name", "hp", "weapon", "status"}
+var cards: Array = []    # {"p", "panel", "pic", "name", "you", "hp", "weapon", "status"}
 var card_w := CARD_MIN_W
 
+## The radio: its panel, the buttons of its header, the people at the base (chips), the contact asked and the verbs.
+var radio_panel: PanelContainer
+var news_button: Button
+var news_dot: Control
+var alarm_button: Button
+var back_button: Button
+var base_flow: HFlowContainer
+var base_caption: Label
+var base_button: Button
+var base_open := false
+var radio_caps: Label
+var chips_box_radio: VBoxContainer
+var contact_box: VBoxContainer
+var base_chips: Dictionary = {}    # person id -> Button
+var contact_label: Label
+var contact_hint: Label
+var radio_verbs
+var news_panel
+var news_open := false
+var call_card
+
+## The foot: the log and the legend (left), the ammunition (middle), the base (right).
 var log_panel: PanelContainer
 var log_labels: Array = []
 var legend_panel: PanelContainer
-var retreat_panel: PanelContainer
-var retreat_button: Button
-var retreat_key: Control
+var weapon_panel: PanelContainer
+var weapon_label: Label
+var stock_label: Label
+var mag_bar
+var base_panel: PanelContainer
+var sky_dot: Control
+var clock_label: Label
+var mood_label: Label
+var base_label: Label
 
 var banner: PanelContainer
 var banner_title: Label
@@ -80,21 +136,33 @@ var banner_tween: Tween
 var toast_panel: PanelContainer
 var toast_label: Label
 var toast_tween: Tween
-var ask_panel: PanelContainer
-var ask_yes: Button
-var ask_warn: Label
-var ask_no: Button
 var end_card: Control
 var end_button: Button
 var end_panel: PanelContainer
 var end_title: Label
 var end_sub: Label
-var end_rows := {}       # "loot", "hurt", "lost", "place", "rescue", "ammo" -> the value's Control
+var end_rows := {}       # "loot", "hurt", "lost", "place", "rescue", "ammo", "news" -> the value's Control
 
+## The road's overlay.
+var road_panel: Control
+var road_title_label: Label
+var road_sub_label: Label
+var road_bar
+var road_clock_label: Label
+var road_mood_label: Label
+var road_news_box: VBoxContainer
+var road_news: Array = []
+var road_hint_label: Label
+
+## What the refresh wants shown of the two things that may be left out for want of room (the layout decides if they fit).
+var _log_wanted := false
+var _legend_wanted := false
+var _compact := false
 var _log_seen := 0
 var _log: Array = []     # [{"text", "t"}]
 var _sig := ""
 var _layout_w := -1.0
+var _news_unread_seen := 0
 
 
 func setup(game_hud, the_scene) -> void:
@@ -110,12 +178,15 @@ func setup(game_hud, the_scene) -> void:
 	_build_place()
 	_build_loot()
 	_build_cards()
+	_build_radio()
 	_build_log()
 	_build_legend()
-	_build_retreat()
+	_build_weapon()
+	_build_base()
+	_build_call_card()
 	_build_banner()
 	_build_toast()
-	_build_ask()
+	_build_road()
 	root.resized.connect(_layout)
 	_layout()
 
@@ -259,12 +330,12 @@ func _card_box(selected: bool) -> StyleBox:
 	return s
 
 
-func _make_card(p, index: int) -> Dictionary:
+func _make_card(p, _index: int) -> Dictionary:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	panel.custom_minimum_size = Vector2(card_w, CARD_H)
 	panel.add_theme_stylebox_override("panel", _card_box(false))
-	panel.tooltip_text = "%s, %s. Click to select (key %d)" % [p.name, String(p.def.role).to_lower(), index + 1]
+	panel.tooltip_text = "%s, %s. Click to ask them something over the radio" % [p.name, String(p.def.role).to_lower()]
 	var row: HBoxContainer = hud._hbox(7)
 	# the portrait in a small window with a thin edge
 	var win := PanelContainer.new()
@@ -294,7 +365,9 @@ func _make_card(p, index: int) -> Dictionary:
 	nm.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(nm)
-	head.add_child(hud._kbd(str(index + 1)))
+	var you: PanelContainer = _you_chip()
+	you.visible = false
+	head.add_child(you)
 	col.add_child(head)
 	var track := Control.new()
 	track.custom_minimum_size = Vector2(60, 6)
@@ -322,23 +395,258 @@ func _make_card(p, index: int) -> Dictionary:
 	row.add_child(col)
 	panel.add_child(row)
 	panel.gui_input.connect(_on_card_input.bind(p))
-	return {"p": p, "panel": panel, "pic": pic, "name": nm, "hp": fill, "weapon": weapon, "status": status, "selected": false}
+	return {"p": p, "panel": panel, "pic": pic, "name": nm, "you": you, "hp": fill, "weapon": weapon, "status": status, "selected": false}
 
 
+## A small gold stamp that says YOU (on the card of the one you lead).
+func _you_chip() -> PanelContainer:
+	var f := StyleBoxFlat.new()
+	f.bg_color = Hud.ACCENT
+	f.set_corner_radius_all(4)
+	f.content_margin_left = 5
+	f.content_margin_right = 5
+	f.content_margin_top = 0
+	f.content_margin_bottom = 1
+	var chip := PanelContainer.new()
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	chip.add_theme_stylebox_override("panel", f)
+	var l: Label = hud._label("YOU", Fonts.cond(700, 1), 12, Hud.ACCENT_INK)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chip.add_child(l)
+	return chip
+
+
+## A click on a card asks that person (the radio's verbs for them); the one you lead has nothing to be asked.
 func _on_card_input(ev: InputEvent, p) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		if scene.ended or scene.asking:
+		if scene.phase != "place" or scene.ended or p == scene.leader() or p.dead:
 			return
-		if ev.shift_pressed:
-			var more: Array = scene.selection.duplicate()
-			if more.has(p):
-				more.erase(p)
-			else:
-				more.append(p)
-			scene.select(more)
-		else:
-			scene.select_one(p)
+		pick_contact("squad", p)
 
+
+## Selects a contact (the News log makes room for the verbs).
+func pick_contact(kind: String, p) -> void:
+	if news_open and not _news_beside():
+		open_news(false)
+	scene.select_contact(kind, p)
+
+
+# ----------------------------------------------------------------- radio --
+
+func _build_radio() -> void:
+	radio_panel = hud._panel()
+	var col: VBoxContainer = hud._vbox(6)
+	var head: HBoxContainer = hud._hbox(5)
+	radio_caps = hud._caps("Radio")
+	head.add_child(radio_caps)
+	head.add_child(hud._spacer())
+	news_button = RadioKit.small_button(hud, "News", 26.0, 13)
+	news_button.tooltip_text = "News: what the radio heard, and the calls that wait for your answer\nKey: T"
+	news_button.pressed.connect(func(): open_news(not news_open))
+	news_dot = Control.new()
+	news_dot.custom_minimum_size = Vector2(9, 9)
+	news_dot.size = Vector2(9, 9)
+	news_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	news_dot.draw.connect(func(): news_dot.draw_circle(Vector2(4.5, 4.5), 4.0, Hud.ACCENT))
+	news_dot.visible = false
+	news_button.add_child(news_dot)
+	head.add_child(news_button)
+	alarm_button = RadioKit.small_button(hud, "Alarm", 26.0, 13)
+	alarm_button.pressed.connect(func(): scene.toggle_alarm())
+	head.add_child(alarm_button)
+	back_button = RadioKit.small_button(hud, "All back", 26.0, 13)
+	back_button.tooltip_text = "Ask everyone with you to go back to the exit"
+	back_button.pressed.connect(call_all_back)
+	head.add_child(back_button)
+	base_button = RadioKit.small_button(hud, "Base", 26.0, 13)
+	base_button.tooltip_text = "The people at the base: ask them to go back to what they were doing, or to the walls"
+	base_button.pressed.connect(func(): open_base(not base_open))
+	base_button.visible = false
+	head.add_child(base_button)
+	col.add_child(head)
+	chips_box_radio = hud._vbox(4)
+	base_caption = hud._caps("At the base")
+	chips_box_radio.add_child(base_caption)
+	base_flow = HFlowContainer.new()
+	base_flow.add_theme_constant_override("h_separation", 4)
+	base_flow.add_theme_constant_override("v_separation", 4)
+	base_flow.custom_minimum_size.x = RADIO_W - 24.0
+	base_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chips_box_radio.add_child(base_flow)
+	col.add_child(chips_box_radio)
+	contact_box = hud._vbox(4)
+	contact_label = hud._label("", Fonts.cond(700), 16, Hud.INK)
+	contact_label.clip_text = true
+	contact_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	contact_box.add_child(contact_label)
+	contact_hint = hud._label("Click a card or a name to ask them something", Fonts.sans(400), 12, Hud.INK3)
+	contact_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	contact_hint.custom_minimum_size.x = RADIO_W - 24.0
+	contact_box.add_child(contact_hint)
+	radio_verbs = RadioVerbs.new()
+	contact_box.add_child(radio_verbs)
+	col.add_child(contact_box)
+	radio_verbs.setup(hud, func(): return scene.radio_of(String(scene.contact.get("kind", "squad"))), {
+		"place": true,
+		"search_at": func():
+			var c: Dictionary = scene.search_target()
+			return Vector2(c.pos) if not c.is_empty() else null,
+		"hold_at": func():
+			var lead = scene.leader()
+			return Vector2(lead.x, lead.y) if lead != null else null,
+		"is_you": func(p): return p == scene.leader(),
+	})
+	radio_verbs.set_form(3, false)
+	radio_verbs.requested.connect(_on_requested)
+	radio_panel.add_child(col)
+	radio_panel.custom_minimum_size.x = RADIO_W
+	_put(radio_panel)
+	news_panel = NewsPanel.new()
+	_put(news_panel)
+	news_panel.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return 1})
+	news_panel.visible = false
+
+
+func _on_requested(_who, verb: String, result: Dictionary) -> void:
+	if bool(result.get("ok", false)):
+		return
+	# (a refusal's reason is in the panel's answer line; the squad's "search that" that found nothing to search says so here)
+	if verb == "search" and String(result.get("why", "")) != "" and scene.contact.get("kind", "") == "squad":
+		toast(String(result.why), "warn")
+	refresh()
+
+
+## Everyone with you is asked to go back to the exit.
+func call_all_back() -> void:
+	var asked := 0
+	var yes := 0
+	for p in scene.squad_contacts():
+		if p.downed:
+			continue
+		asked += 1
+		if bool(scene.squad_request(p, "back").get("ok", false)):
+			yes += 1
+	if asked == 0:
+		toast("Nobody is with you", "warn")
+	elif yes == asked:
+		toast("Everyone is heading back to the exit")
+	else:
+		toast("%d of %d are heading back to the exit" % [yes, asked], "warn")
+	refresh()
+
+
+## Opens or shuts the News log (T).
+func open_news(on: bool) -> void:
+	news_open = on
+	news_panel.visible = on
+	if on:
+		news_panel.refresh()
+	else:
+		news_panel.mark_read()
+	refresh()
+	_layout()
+
+
+func toggle_news() -> void:
+	open_news(not news_open)
+
+
+## In the compact radio the people at the base are behind the "Base" button.
+func open_base(on: bool) -> void:
+	base_open = on
+	refresh()
+	_layout()
+
+
+## The radio's form for this window: compact (a short window) keeps the verbs in one row of short names and the people at the
+## base behind a button; the full form lists them and has the verbs in two rows.
+func _apply_modes(h: float) -> void:
+	var compact: bool = h < COMPACT_H
+	if compact == _compact and radio_verbs.columns == (6 if compact else 3):
+		return
+	_compact = compact
+	radio_verbs.set_form(6 if compact else 3, compact)
+	radio_caps.visible = not compact
+	base_button.visible = compact
+
+
+## Whether the News log takes the verbs' place (a narrow window) rather than standing beside the radio.
+func _news_replaces() -> bool:
+	return news_open and not _news_beside()
+
+
+## What a contact said (the staging and the tests use it: the verbs panel keeps the last answer for the person asked).
+func say(who, verb: String, result: Dictionary) -> void:
+	if radio_verbs.contact == who:
+		radio_verbs.last = {"who": String(who.id), "verb": verb, "ok": bool(result.get("ok", false)), "line": String(result.get("line", "")), "why": String(result.get("why", "")), "hard": false, "tone": String(result.get("tone", ""))}
+		radio_verbs.refresh()
+
+
+## Whether the News log stands beside the radio (a wide window) rather than in the verbs' place.
+func _news_beside() -> bool:
+	return root != null and root.size.x >= WIDE_W
+
+
+func _refresh_radio() -> void:
+	var alarm_on: bool = bool(scene.colony_radio().alarm_on) if scene.colony_radio() != null else false
+	alarm_button.text = "Stand down" if alarm_on else "Alarm"
+	alarm_button.tooltip_text = "Stand down: end the call to arms and send everyone back to work" if alarm_on else "Call to arms: everyone at the base to their posts now, by day too, until you stand down or the dawn comes"
+	alarm_button.disabled = scene.colony_radio() == null or scene.phase != "place"
+	back_button.disabled = scene.phase != "place" or scene.ended
+	news_button.disabled = scene.colony_radio() == null
+	# the people at the base are chips: one for each who is not away (made when they are first seen, the rest hidden)
+	var people: Array = scene.base_contacts()
+	var seen := {}
+	for p in people:
+		seen[String(p.id)] = true
+		if not base_chips.has(String(p.id)):
+			var b: Button = RadioKit.small_button(hud, String(p.first), 26.0, 13)
+			b.pressed.connect(func(): pick_contact("base", p))
+			base_flow.add_child(b)
+			base_chips[String(p.id)] = b
+	var shown := 0
+	for id in base_chips:
+		var b2: Button = base_chips[id]
+		var show: bool = seen.has(id) and shown < MAX_CHIPS
+		b2.visible = show
+		if show:
+			shown += 1
+			var p2 = _colony_of(id)
+			var chosen: bool = p2 != null and scene.is_selected(p2) and scene.contact.get("kind", "") == "base"
+			b2.modulate = Color(1.0, 0.92, 0.6) if chosen else Color.WHITE
+	var chips_on: bool = shown > 0 and (not _compact or base_open) and not _news_replaces()
+	chips_box_radio.visible = chips_on
+	contact_box.visible = not _news_replaces()
+	base_button.modulate = Color(1.0, 0.92, 0.6) if base_open else Color.WHITE
+	var c: Dictionary = scene.contact
+	if c.is_empty() or c.p == null or c.p.dead:
+		contact_label.text = ""
+		contact_label.visible = false
+		contact_hint.visible = scene.phase == "place" and not scene.ended
+		radio_verbs.set_contact(null)
+	else:
+		var p3 = c.p
+		contact_label.visible = true
+		contact_hint.visible = false
+		var where := "with you" if String(c.kind) == "squad" else "at the base"
+		contact_label.text = "%s, %s" % [String(p3.first), where]
+		radio_verbs.set_contact(p3)
+		radio_verbs.refresh()
+	# the News log's dot: something the player has not seen since it was last shut
+	var unread: int = news_panel.unread() if not news_open else 0
+	news_dot.visible = unread > 0
+	news_dot.position = Vector2(news_button.size.x - 11.0, 2.0)
+	if news_open:
+		news_panel.refresh()
+		news_panel.mark_read()
+
+
+func _colony_of(id: String):
+	return scene.colony_person(id)
+
+
+# ------------------------------------------------------------------ the foot --
 
 func _build_log() -> void:
 	log_panel = hud._panel(hud._style(Color(Hud.PANEL, 0.82), 6, Hud.LINE, false))
@@ -376,18 +684,70 @@ func _build_legend() -> void:
 	_put(legend_panel)
 
 
-func _build_retreat() -> void:
-	retreat_panel = hud._panel()
-	var row: HBoxContainer = hud._hbox(8)
-	retreat_button = hud._button("Retreat")
-	retreat_button.custom_minimum_size = Vector2(112, 38)
-	retreat_button.tooltip_text = "Everyone walks back to the road and the trip ends. What is in the bags comes home."
-	retreat_button.pressed.connect(func(): scene.retreat())
-	row.add_child(retreat_button)
-	retreat_key = hud._kbd("R")
-	row.add_child(retreat_key)
-	retreat_panel.add_child(row)
-	_put(retreat_panel)
+## The ammunition of the one you lead: the weapon, the magazine and what is in the stores, and a bar that is the magazine, or
+## the reload while it goes.
+func _build_weapon() -> void:
+	weapon_panel = hud._panel()
+	weapon_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col: VBoxContainer = hud._vbox(3)
+	weapon_label = hud._label("", Fonts.cond(700), 20, Hud.INK)
+	col.add_child(weapon_label)
+	mag_bar = hud.Bar.new()
+	mag_bar.custom_minimum_size = Vector2(WEAPON_W - 28.0, 6)
+	mag_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mag_bar.groove = hud.frame("bar_track")
+	col.add_child(mag_bar)
+	stock_label = hud._label("", Fonts.sans(400), 13, Hud.INK2)
+	col.add_child(stock_label)
+	weapon_panel.add_child(col)
+	_put(weapon_panel)
+
+
+## The base's clock and how it stands, bottom right: the day and the hour of the colony (the place is lit by it), its mood
+## (day, dusk, night, dawn) and "Base: walls holding".
+func _build_base() -> void:
+	base_panel = hud._panel()
+	base_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var col: VBoxContainer = hud._vbox(3)
+	var head: HBoxContainer = hud._hbox(8)
+	sky_dot = Control.new()
+	sky_dot.custom_minimum_size = Vector2(16, 16)
+	sky_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sky_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sky_dot.draw.connect(_draw_sky)
+	head.add_child(sky_dot)
+	clock_label = hud._label("", Fonts.cond(700), 20, Hud.INK)
+	head.add_child(clock_label)
+	head.add_child(hud._spacer())
+	mood_label = hud._caps("", Hud.INK2)
+	head.add_child(mood_label)
+	col.add_child(head)
+	base_label = hud._label("", Fonts.sans(600), 13, Hud.INK)
+	base_label.custom_minimum_size.x = BASE_W - 28.0
+	base_label.clip_text = true
+	base_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	col.add_child(base_label)
+	base_panel.add_child(col)
+	base_panel.custom_minimum_size.x = BASE_W
+	_put(base_panel)
+
+
+## The sun or the moon of the base's hour.
+func _draw_sky() -> void:
+	var dark: float = float(scene.light_now().dark)
+	var c := Vector2(8, 8)
+	if dark > 0.3:
+		sky_dot.draw_circle(c, 6.5, Color("#cfd8e8"))
+		sky_dot.draw_circle(c + Vector2(3, -2), 5.5, Color("#16221f"))
+	else:
+		sky_dot.draw_circle(c, 6.0, Color("#f0c24a"))
+
+
+func _build_call_card() -> void:
+	call_card = CallCard.new()
+	_put(call_card)
+	call_card.setup(hud, func(): return scene.colony_radio(), {"speed_getter": func(): return 1})
+	call_card.custom_minimum_size.x = CALL_W
 
 
 func _build_banner() -> void:
@@ -411,6 +771,7 @@ func _build_banner() -> void:
 	words.add_child(banner_sub)
 	banner.add_child(words)
 	banner.modulate.a = 0.0
+	banner.visible = false
 	_put(banner)
 
 
@@ -430,43 +791,133 @@ func _build_toast() -> void:
 	_put(toast_panel)
 
 
-func _build_ask() -> void:
-	ask_panel = hud._panel()
-	var col: VBoxContainer = hud._vbox(8)
-	var title: Label = hud._label("Retreat?", Fonts.cond(700), 28, Hud.INK)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(title)
-	var what: Label = hud._label("Everyone walks back to the road and the trip ends. What is in the bags comes home.", Fonts.sans(400), 14, Hud.INK2)
-	what.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	what.custom_minimum_size.x = 330.0
-	what.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	col.add_child(what)
-	ask_warn = hud._label("", Fonts.sans(600), 14, Hud.WARN)
-	ask_warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	ask_warn.custom_minimum_size.x = 330.0
-	ask_warn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ask_warn.visible = false
-	col.add_child(ask_warn)
-	var buttons: HBoxContainer = hud._hbox(10)
-	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	ask_yes = hud._button("Retreat", true)
-	ask_yes.pressed.connect(func(): scene.retreat())
-	buttons.add_child(ask_yes)
-	buttons.add_child(hud._kbd("Enter"))
-	ask_no = hud._button("Keep going")
-	ask_no.pressed.connect(func(): scene.cancel_ask())
-	buttons.add_child(ask_no)
-	buttons.add_child(hud._kbd("Any key"))
-	col.add_child(buttons)
-	ask_panel.add_child(col)
-	ask_panel.visible = false
-	_put(ask_panel)
+# ------------------------------------------------------------------- the road --
+
+## The overlay of the road: a full window, the title, how far the road is, the clock of the base and the news as it comes. It
+## takes no input (nothing skips it) and stays until the road is done.
+func _build_road() -> void:
+	road_panel = Control.new()
+	road_panel.name = "Road"
+	road_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(road_panel)
+	road_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var back := ColorRect.new()
+	back.color = Color("#0b1411")
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	road_panel.add_child(back)
+	back.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var center := CenterContainer.new()
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	road_panel.add_child(center)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var col: VBoxContainer = hud._vbox(10)
+	col.custom_minimum_size.x = ROAD_W
+	center.add_child(col)
+	var caps: Label = hud._caps("On the road", Hud.INK3)
+	caps.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(caps)
+	road_title_label = hud._label("", Fonts.cond(700, 2), 40, Hud.INK)
+	road_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	road_title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(road_title_label)
+	road_sub_label = hud._label("", Fonts.sans(400), 14, Hud.INK2)
+	road_sub_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	road_sub_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(road_sub_label)
+	road_bar = hud.Bar.new()
+	road_bar.custom_minimum_size = Vector2(ROAD_W, 8)
+	road_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	road_bar.groove = hud.frame("bar_track")
+	road_bar.color = Hud.ACCENT
+	col.add_child(road_bar)
+	var clock_row: HBoxContainer = hud._hbox(10)
+	clock_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	road_clock_label = hud._label("", Fonts.cond(700), 26, Hud.INK)
+	clock_row.add_child(road_clock_label)
+	road_mood_label = hud._caps("", Hud.INK2)
+	clock_row.add_child(road_mood_label)
+	col.add_child(clock_row)
+	road_news_box = hud._vbox(3)
+	road_news_box.custom_minimum_size = Vector2(ROAD_W, 96)
+	col.add_child(road_news_box)
+	road_hint_label = hud._label("The base goes on without you.", Fonts.sans(400), 13, Hud.INK3)
+	road_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(road_hint_label)
+	road_panel.visible = false
+
+
+## The road's overlay comes up with `title` ("Driving to The pharmacy...") for the flow `flow` (place_flow.gd).
+func show_road(title: String, flow) -> void:
+	road_news = []
+	for c in road_news_box.get_children():
+		c.queue_free()
+	road_title_label.text = title
+	var names: Array = []
+	for p in flow.going:
+		names.append(String(p.first))
+	road_sub_label.text = ", ".join(names) if not names.is_empty() else ""
+	road_panel.visible = true
+	for c in [place_panel, loot_panel, cards_grid, radio_panel, news_panel, log_panel, legend_panel, weapon_panel, base_panel, call_card, banner, toast_panel]:
+		c.visible = false
+	update_road(flow)
+
+
+func hide_road() -> void:
+	road_panel.visible = false
+	refresh()
+
+
+## One frame of the road: the bar, the base's clock and the news that has come in since the trip began (the last few lines).
+func update_road(flow) -> void:
+	road_bar.value = flow.road_progress()
+	road_bar.queue_redraw()
+	var cs = scene.colony()
+	if cs != null:
+		road_clock_label.text = PlaceFlow.clock_text(cs)
+		road_mood_label.text = _mood_word(cs).to_upper()
+	for line in flow.news_lines(PlaceFlow.MAX_NEWS_LINES):
+		_add_road_line(String(line))
+
+
+## A line of news on the road (one that is already there is not added again).
+func road_note(text: String) -> void:
+	_add_road_line(text)
+
+
+func _add_road_line(text: String) -> void:
+	if road_news.has(text):
+		return
+	road_news.append(text)
+	var l: Label = hud._label(text, Fonts.sans(600), 14, Hud.INK)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size.x = ROAD_W
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	road_news_box.add_child(l)
+	while road_news_box.get_child_count() > PlaceFlow.MAX_NEWS_LINES:
+		road_news_box.get_child(0).queue_free()
+		road_news_box.remove_child(road_news_box.get_child(0))
+
+
+static func _mood_word(cs) -> String:
+	match String(cs.phase):
+		"dusk":
+			return "Dusk"
+		"night":
+			return "Night"
+		"dawn":
+			return "Dawn"
+	return "Day"
 
 
 # ----------------------------------------------------------------- layout --
 
-## Where everything goes, from the panels' own sizes. The squad's cards sit between the place and the bags when all
-## of them fit there at their narrowest, and otherwise in a row (or rows) of their own under both.
+## Where everything goes, from the panels' own sizes. The squad's cards sit between the place and the bags when all of them
+## fit there at their narrowest, and otherwise in a row (or rows) of their own under both. The radio is a column at the right
+## under them (the News log beside it in a wide window, in the verbs' place in a narrow one) and the base's clock is at the
+## foot of that column. A WIDE window (WIDE_W) keeps the log and the legend at the bottom left, the ammunition in the middle
+## of the foot with the call card above it, the banner at the top of the middle and the toast over the call card; a narrow
+## one has one column at the left (the ammunition at the foot, the call card above it, then the log and the legend, whichever
+## of those two fit under the banner and the toast, which hang from the cards' row while they are up). Nothing overlaps.
 func _layout() -> void:
 	if root == null or place_panel == null:
 		return
@@ -474,6 +925,8 @@ func _layout() -> void:
 	var h: float = root.size.y
 	if w <= 0.0 or h <= 0.0:
 		return
+	var wide := w >= WIDE_W
+	_apply_modes(h)
 	var ps := place_panel.get_combined_minimum_size()
 	var ls := loot_panel.get_combined_minimum_size()
 	_place(place_panel, Vector2(PAD, PAD))
@@ -482,6 +935,7 @@ func _layout() -> void:
 	var between := w - 2.0 * PAD - ps.x - ls.x - 2.0 * GAP
 	var plan := plan_cards(n, between)
 	var top_end := PAD + maxf(ps.y, ls.y)
+	var right_top := PAD + ls.y + 8.0
 	if plan.fits:
 		_size_cards(plan)
 		var cs := cards_grid.get_combined_minimum_size()
@@ -494,26 +948,127 @@ func _layout() -> void:
 		var cs2 := cards_grid.get_combined_minimum_size()
 		_place(cards_grid, Vector2(maxf(PAD, w / 2.0 - cs2.x / 2.0), top_end + 6.0))
 		top_end = top_end + 6.0 + cs2.y
+		right_top = top_end + 8.0
+	# the right column: the radio under the bags (or the cards), the base's clock at the foot
+	var bas := base_panel.get_combined_minimum_size()
+	var base_at := Vector2(w - PAD - bas.x, h - PAD - bas.y)
+	_place(base_panel, base_at)
+	var rs := radio_panel.get_combined_minimum_size()
+	var radio_x := w - PAD - maxf(rs.x, RADIO_W)
+	_place(radio_panel, Vector2(radio_x, right_top))
+	var room_below := maxf(0.0, base_at.y - 8.0 - right_top)
+	var news_left := radio_x    # (what the middle of the window has to keep clear of at the top)
+	if news_panel.visible:
+		news_panel.custom_minimum_size.x = RADIO_W
+		if wide:
+			news_panel.fit(minf(room_below, 420.0))
+			var nss: Vector2 = news_panel.get_combined_minimum_size()
+			_place(news_panel, Vector2(radio_x - GAP - nss.x, right_top))
+			news_left = radio_x - GAP - nss.x
+		else:
+			# it stands in the verbs' place: under the radio's header, down to the base's clock
+			var head_h := radio_panel.get_combined_minimum_size().y
+			var below := right_top + head_h + 6.0
+			news_panel.fit(maxf(120.0, base_at.y - 8.0 - below))
+			_place(news_panel, Vector2(radio_x, below))
+	_fit_banner((news_left - GAP - PAD) if wide else maxf(160.0, radio_x - GAP - PAD))
+	_fit_toast((news_left - GAP - PAD) if wide else maxf(160.0, radio_x - GAP - PAD))
 	var bs := banner.get_combined_minimum_size()
-	_place(banner, Vector2(w / 2.0 - bs.x / 2.0, top_end + 8.0))
-	# the foot: the Retreat button at the right, the log at the left with the legend over it
-	var rs := retreat_panel.get_combined_minimum_size()
-	_place(retreat_panel, Vector2(w - PAD - rs.x, h - PAD - rs.y))
-	var stack_top := h - PAD
-	if log_panel.visible:
-		var logs := log_panel.get_combined_minimum_size()
-		_place(log_panel, Vector2(PAD, h - PAD - logs.y))
-		stack_top = h - PAD - logs.y - 6.0
-	legend_panel.custom_minimum_size.x = minf(660.0, w - 2.0 * PAD - rs.x - GAP)
-	var ls2 := legend_panel.get_combined_minimum_size()
-	_place(legend_panel, Vector2(PAD, stack_top - ls2.y))
-	stack_top = minf(stack_top - (ls2.y + 6.0 if legend_panel.visible else 0.0), h - PAD - rs.y - 6.0)
 	var ts := toast_panel.get_combined_minimum_size()
-	_place(toast_panel, Vector2(w / 2.0 - ts.x / 2.0, stack_top - ts.y - 4.0))
-	var asks := ask_panel.get_combined_minimum_size()
-	_place(ask_panel, Vector2(w / 2.0 - asks.x / 2.0, h / 2.0 - asks.y / 2.0))
+	var wes := weapon_panel.get_combined_minimum_size()
+	var cc: Vector2 = call_card.get_combined_minimum_size()
+	if wide:
+		# the left column: the log at the foot, the legend over it (both as wide as the log)
+		var left_w := LOG_W
+		for l in log_labels:
+			l.custom_minimum_size.x = left_w
+		legend_panel.custom_minimum_size.x = left_w
+		var foot := h - PAD
+		log_panel.visible = _log_wanted
+		if log_panel.visible:
+			var logs := log_panel.get_combined_minimum_size()
+			_place(log_panel, Vector2(PAD, foot - logs.y))
+			foot -= logs.y + 6.0
+		legend_panel.visible = _legend_wanted
+		if legend_panel.visible:
+			var legs := legend_panel.get_combined_minimum_size()
+			_place(legend_panel, Vector2(PAD, foot - legs.y))
+		# the middle of the foot: the ammunition, the call card over it, the toast over that
+		var mid_l := PAD + left_w + GAP
+		var mid_r := base_at.x - GAP
+		var mid_c := (mid_l + mid_r) / 2.0
+		_place(weapon_panel, Vector2(mid_c - wes.x / 2.0, h - PAD - wes.y))
+		var up := h - PAD - wes.y - 6.0
+		call_card.custom_minimum_size.x = minf(CALL_W, mid_r - mid_l)
+		cc = call_card.get_combined_minimum_size()
+		if call_card.visible:
+			_place(call_card, Vector2(mid_c - cc.x / 2.0, up - cc.y))
+			up -= cc.y + 6.0
+		_place(toast_panel, Vector2(mid_c - ts.x / 2.0, up - ts.y))
+		# the banner: the top of the middle, clear of the radio and of the News log
+		var top_l := PAD
+		var top_c := (top_l + news_left - GAP) / 2.0
+		_place(banner, Vector2(top_c - bs.x / 2.0, top_end + 8.0))
+	else:
+		# one column at the left, as wide as the room between it and the radio's
+		var left_end := radio_x - GAP
+		var left_w2 := maxf(120.0, left_end - PAD)
+		var foot := h - PAD
+		_place(weapon_panel, Vector2(PAD, foot - wes.y))
+		foot -= wes.y + 6.0
+		call_card.custom_minimum_size.x = clampf(left_w2, CALL_W_MIN, CALL_W)
+		cc = call_card.get_combined_minimum_size()
+		if call_card.visible:
+			_place(call_card, Vector2(PAD, foot - cc.y))
+			foot -= cc.y + 6.0
+		# the banner and the toast hang from the cards' row while they are up: the log and the legend need the room under them
+		var ceiling := top_end + 8.0
+		if banner.visible:
+			_place(banner, Vector2(PAD, ceiling))
+			ceiling += bs.y + 6.0
+		if toast_panel.visible:
+			_place(toast_panel, Vector2(PAD, ceiling))
+			ceiling += ts.y + 6.0
+		log_panel.visible = false
+		legend_panel.visible = false
+		var log_w := minf(LOG_W, left_w2)
+		for l in log_labels:
+			l.custom_minimum_size.x = log_w
+		log_panel.custom_minimum_size.x = 0.0
+		if _log_wanted:
+			var logs2 := log_panel.get_combined_minimum_size()
+			if foot - logs2.y >= ceiling:
+				log_panel.visible = true
+				_place(log_panel, Vector2(PAD, foot - logs2.y))
+				foot -= logs2.y + 6.0
+		if _legend_wanted:
+			legend_panel.custom_minimum_size.x = left_w2
+			var legs2 := legend_panel.get_combined_minimum_size()
+			if foot - legs2.y >= ceiling:
+				legend_panel.visible = true
+				_place(legend_panel, Vector2(PAD, foot - legs2.y))
 	_layout_w = w
 	_sig = _signature()
+
+
+## The banner is as wide as its words, but never wider than the room: its lines wrap.
+func _fit_banner(max_w: float) -> void:
+	var room := maxf(80.0, max_w - 52.0)
+	for l in [banner_title, banner_sub]:
+		var f: Font = l.get_theme_font("font")
+		var size: int = l.get_theme_font_size("font_size")
+		var natural := f.get_string_size(l.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + 4.0
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = minf(natural, room)
+
+
+## The toast likewise.
+func _fit_toast(max_w: float) -> void:
+	var f: Font = toast_label.get_theme_font("font")
+	var size: int = toast_label.get_theme_font_size("font_size")
+	var natural := f.get_string_size(toast_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x + 4.0
+	toast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	toast_label.custom_minimum_size.x = minf(natural, maxf(80.0, max_w - 26.0))
 
 
 func _place(c: Control, at: Vector2) -> void:
@@ -546,43 +1101,48 @@ func _size_cards(plan: Dictionary) -> void:
 func _signature() -> String:
 	var parts: Array = [root.size, place_panel.get_combined_minimum_size(), loot_panel.get_combined_minimum_size(), cards.size(), card_w,
 		log_panel.visible, log_panel.get_combined_minimum_size(), legend_panel.visible, legend_panel.get_combined_minimum_size(),
-		retreat_panel.get_combined_minimum_size(), banner.get_combined_minimum_size(), toast_panel.get_combined_minimum_size(), ask_panel.get_combined_minimum_size()]
+		weapon_panel.get_combined_minimum_size(), base_panel.get_combined_minimum_size(), banner.get_combined_minimum_size(),
+		toast_panel.get_combined_minimum_size(), radio_panel.get_combined_minimum_size(), news_panel.visible, news_panel.get_combined_minimum_size(),
+		call_card.visible, call_card.get_combined_minimum_size(), banner.visible, toast_panel.visible, _log_wanted, _legend_wanted]
 	return str(parts)
 
 
 # ---------------------------------------------------------------- refresh --
 
-## Brings every part up to date with the run (called a few times a second, and when the selection or a state changes).
+## Brings every part up to date with the run (called a few times a second, and when a state changes).
 func refresh() -> void:
 	if scene == null or scene.run == null:
 		return
 	var run = scene.run
-	_refresh_place(run)
-	_refresh_loot(run)
-	_refresh_cards(run)
-	_refresh_log(run)
-	var live: bool = not scene.ended
-	legend_panel.visible = live and scene.legend_t > 0.0
+	var in_place: bool = scene.phase == "place"
+	var live: bool = in_place and not scene.ended
+	if in_place or scene.phase == "report":
+		_refresh_place(run)
+		_refresh_loot(run)
+		_refresh_cards(run)
+		_refresh_log(run)
+		_refresh_weapon(run)
+		_refresh_base()
+		_refresh_radio()
+		call_card.refresh()
+	for c in [place_panel, loot_panel, cards_grid, radio_panel, weapon_panel, base_panel]:
+		c.visible = live
+	news_panel.visible = live and news_open
+	if not live or scene.phase != "place":
+		call_card.visible = false
+	_legend_wanted = live and scene.legend_t > 0.0
 	legend_panel.modulate.a = clampf(scene.legend_t / LEGEND_FADE, 0.0, 1.0)
-	retreat_panel.visible = live
-	var going: bool = run.phase != "play"
-	retreat_button.disabled = going
-	retreat_button.text = "Retreating" if going else "Retreat"
-	retreat_key.visible = not going
-	ask_panel.visible = live and scene.asking
-	var left: Array = []
-	for p in run.squad:
-		if p.downed and not p.dead:
-			left.append(p.first)
-	ask_warn.visible = not left.is_empty()
-	ask_warn.text = "%s %s down and will be left behind." % [", ".join(left), "is" if left.size() == 1 else "are"]
+	if not live:
+		_log_wanted = false
+		log_panel.visible = false
+		legend_panel.visible = false
 	if end_card != null:
-		end_card.visible = scene.ended
+		end_card.visible = scene.phase == "report"
 	if _signature() != _sig or root.size.x != _layout_w:
 		_layout()
 
 
-func _refresh_place(run) -> void:
+func _refresh_place(_run) -> void:
 	paused_chip.visible = scene.paused and not scene.ended
 	line_label.text = scene.hint_line() if not scene.ended else "The trip is over."
 
@@ -611,10 +1171,11 @@ func _refresh_loot(run) -> void:
 	empty_label.visible = not any
 
 
-func _refresh_cards(run) -> void:
+func _refresh_cards(_run) -> void:
+	var lead = scene.leader()
 	for c in cards:
 		var p = c.p
-		var selected: bool = scene.is_selected(p)
+		var selected: bool = scene.is_selected(p) and scene.contact.get("kind", "") == "squad"
 		if selected != bool(c.selected):
 			c.selected = selected
 			c.panel.add_theme_stylebox_override("panel", _card_box(selected))
@@ -628,6 +1189,7 @@ func _refresh_cards(run) -> void:
 		var status: String = scene.status_of(p)
 		c.status.text = status
 		c.status.add_theme_color_override("font_color", STATUS_COLOR.get(status, Hud.INK2))
+		c.you.visible = p == lead and not p.dead
 		c.panel.modulate = Color(1, 1, 1, 0.55) if p.dead else Color.WHITE
 
 
@@ -649,7 +1211,50 @@ func _refresh_log(run) -> void:
 			any = any or a > 0.0
 		else:
 			l.visible = false
-	log_panel.visible = any
+	_log_wanted = any
+
+
+## The magazine and the stock of the one you lead, and how far the reload has got.
+func _refresh_weapon(run) -> void:
+	var lead = scene.leader()
+	if lead == null:
+		weapon_label.text = ""
+		stock_label.text = ""
+		mag_bar.value = 0.0
+		return
+	var gun: Dictionary = lead.gun
+	var name := String(gun.get("name", lead.weapon))
+	if gun.get("melee", false):
+		weapon_label.text = name
+		stock_label.text = "No ammunition needed"
+		mag_bar.value = 1.0
+		mag_bar.color = Hud.INK2
+	else:
+		weapon_label.text = "%s  %d / %d" % [name, int(lead.mag), int(gun.mag)]
+		var stock := int(run.sim.stock.ammo)
+		if lead.reloading > 0.0:
+			var total := maxf(float(gun.get("reload", 1.0)), 0.1)
+			mag_bar.value = clampf(1.0 - float(lead.reloading) / total, 0.0, 1.0)
+			mag_bar.color = Hud.WARN
+			stock_label.text = "Reloading..."
+		else:
+			mag_bar.value = clampf(float(lead.mag) / maxf(float(gun.mag), 1.0), 0.0, 1.0)
+			mag_bar.color = Hud.DANGER if lead.mag <= 0 else Hud.OK
+			stock_label.text = "%d rounds in the stores" % stock if stock > 0 else "No ammunition in the stores"
+	mag_bar.queue_redraw()
+
+
+## The base's clock, its mood and how it stands.
+func _refresh_base() -> void:
+	var cs = scene.colony()
+	if cs == null:
+		return
+	clock_label.text = PlaceFlow.clock_text(cs)
+	mood_label.text = _mood_word(cs).to_upper()
+	var state: Dictionary = PlaceFlow.base_state(cs)
+	base_label.text = "Base: %s" % String(state.text)
+	base_label.add_theme_color_override("font_color", BASE_COLOR.get(String(state.key), Hud.INK))
+	sky_dot.queue_redraw()
 
 
 # ------------------------------------------------------------- banner etc --
@@ -658,6 +1263,7 @@ func show_banner(title: String, sub: String) -> void:
 	banner_title.text = title.to_upper()
 	banner_sub.text = sub
 	banner_sub.visible = sub != ""
+	banner.visible = true
 	_layout()
 	if banner_tween != null:
 		banner_tween.kill()
@@ -668,12 +1274,19 @@ func show_banner(title: String, sub: String) -> void:
 	if hud._calm():
 		banner.modulate.a = 1.0
 		banner_tween.tween_interval(BANNER_HOLD + BANNER_FADE)
-		banner_tween.tween_callback(func(): banner.modulate.a = 0.0)
+		banner_tween.tween_callback(_banner_gone)
 		return
 	banner.modulate.a = 0.0
 	banner_tween.tween_property(banner, "modulate:a", 1.0, BANNER_FADE)
 	banner_tween.tween_interval(BANNER_HOLD)
 	banner_tween.tween_property(banner, "modulate:a", 0.0, BANNER_FADE)
+	banner_tween.tween_callback(_banner_gone)
+
+
+func _banner_gone() -> void:
+	banner.modulate.a = 0.0
+	banner.visible = false
+	_layout()
 
 
 func toast(text: String, level: String = "info") -> void:
@@ -691,7 +1304,9 @@ func toast(text: String, level: String = "info") -> void:
 		return
 	toast_tween.tween_interval(TOAST_HOLD - TOAST_FADE)
 	toast_tween.tween_property(toast_panel, "modulate:a", 0.0, TOAST_FADE)
-	toast_tween.tween_callback(func(): toast_panel.visible = false)
+	toast_tween.tween_callback(func():
+		toast_panel.visible = false
+		_layout())
 
 
 # --------------------------------------------------------------- end card --
@@ -725,7 +1340,9 @@ func end_words(result: Dictionary) -> Array:
 	return ["Back from %s" % place_phrase(), sub]
 
 
-func show_end(result: Dictionary) -> void:
+## The report: what came home, who is hurt or lost, the place, the rescue, the ammunition used and (after a trip with a road)
+## the news that came in while you were out. `news` is a list of lines.
+func show_end(result: Dictionary, news: Array = []) -> void:
 	if end_card != null:
 		end_card.queue_free()
 	end_card = Control.new()
@@ -753,7 +1370,7 @@ func show_end(result: Dictionary) -> void:
 	center.add_child(end_panel)
 	var col: VBoxContainer = hud._vbox(10)
 	end_panel.add_child(col)
-	var head: Label = hud._caps("Raid report", Hud.PAPER_INK3)
+	var head: Label = hud._caps("Trip report", Hud.PAPER_INK3)
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(head)
 	var words := end_words(result)
@@ -775,16 +1392,24 @@ func show_end(result: Dictionary) -> void:
 	if scene.has_survivor or bool(result.get("rescue", false)):
 		lines.add_child(_end_row("rescue", "Someone alive", _text_value("Found, and coming home with you" if bool(result.get("rescue", false)) else "Not found")))
 	lines.add_child(_end_row("ammo", "Ammo used", _text_value(_ammo_text(float(result.get("ammo_used", 0.0))))))
+	if not news.is_empty():
+		var items: Array = []
+		for line in news:
+			items.append(String(line))
+		var l: Label = _text_value("\n".join(items))
+		l.add_theme_font_override("font", Fonts.sans(600))
+		l.add_theme_font_size_override("font_size", 14)
+		lines.add_child(_end_row("news", "News meanwhile", l))
 	col.add_child(lines)
 	var buttons: HBoxContainer = hud._hbox(8)
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	end_button = hud._button("Go home", true, true)
+	end_button = hud._button("Go home" if scene.flow == null else "Back to the base", true, true)
 	end_button.pressed.connect(func(): scene.go_home())
 	buttons.add_child(end_button)
 	var key: PanelContainer = hud._kbd("Enter")
 	buttons.add_child(key)
 	col.add_child(buttons)
-	for c in [banner, toast_panel, legend_panel, retreat_panel, ask_panel]:
+	for c in [banner, toast_panel, legend_panel, radio_panel, news_panel, call_card, weapon_panel, base_panel, log_panel]:
 		c.visible = false
 
 

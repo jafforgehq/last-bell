@@ -256,6 +256,36 @@ func _draw_person() -> void:
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if view != "N":
 		_weapon(view, aim)
+	if p.thrust > 0.0:
+		_swing(view, aim)
+
+
+## A blow in the air (round 17: the avatar's F, and the pike's thrust and the butt of a gun for everyone): a pale crescent that
+## sweeps across the way the weapon points while `thrust` runs out (1 at the start of the blow, 0 at the end), the whole arc for
+## a swing and a narrow one for the pike's thrust, fading as it goes. The weapon in the hand does what it did.
+func _swing(view: String, aim: float) -> void:
+	var p = entity
+	var done: float = clampf(1.0 - p.thrust, 0.0, 1.0)
+	var half := deg_to_rad(18.0 if p.weapon == "pike" else 50.0)
+	var lead := lerpf(-half, half, done)
+	var tail := maxf(-half, lead - 1.2)
+	var saved := _m
+	var pv: Vector2 = PIVOT[view]
+	_tr(pv.x, pv.y)
+	_apply()
+	var steps := 8
+	var pts := PackedVector2Array()
+	for i in range(steps + 1):
+		pts.append(Vector2.from_angle(aim + lerpf(tail, lead, float(i) / steps)) * 1.15)
+	for i in range(steps, -1, -1):
+		pts.append(Vector2.from_angle(aim + lerpf(tail, lead, float(i) / steps)) * 0.6)
+	_pen.draw_colored_polygon(pts, Color(1.0, 0.97, 0.88, 0.2 + 0.4 * p.thrust))
+	var edge := PackedVector2Array()
+	for i in range(steps + 1):
+		edge.append(Vector2.from_angle(aim + lerpf(tail, lead, float(i) / steps)) * 1.15)
+	_pen.draw_polyline(edge, Color(1.0, 0.98, 0.9, 0.35 + 0.5 * p.thrust), 0.03, true)
+	_m = saved
+	_apply()
 
 
 ## What the person is doing, for the pose: the word staged for a screenshot, else the rules' own (`Person.work`).

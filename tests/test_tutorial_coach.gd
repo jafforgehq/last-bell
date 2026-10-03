@@ -81,7 +81,7 @@ func test_the_soft_lock_refuses_what_the_step_does_not_teach_and_allows_what_it_
 	check(float(coach.state.pan) > 0.0 and float(coach.state.zoom) > 0.0, "and the coach saw the camera move")
 	main._key(KEY_ESCAPE)
 	check(main.selection == null, "Esc lets go of the selection")
-	# a left-drag draws a box (round 15) and is no pan: the lesson does not count it
+	# a left-drag is no pan (and there is no box to draw): the lesson does not count it
 	var pan_was: float = float(coach.state.pan)
 	var vp: Vector2 = main._vp()
 	for step in [[true, Vector2(vp.x * 0.7, vp.y * 0.5)], [null, Vector2(vp.x * 0.2, vp.y * 0.3)], [false, Vector2(vp.x * 0.2, vp.y * 0.3)]]:

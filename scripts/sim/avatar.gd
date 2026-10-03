@@ -395,6 +395,9 @@ func _shoot(p, gun: Dictionary) -> void:
 			dealt[res.z] = float(dealt.get(res.z, 0.0)) + dmg
 		else:
 			sim.fx.smoke(res.end.x, res.end.y, 0.12, false)
+			# (a shot stopped by a wall, not one that ran out of reach, throws sparks where it struck)
+			if res.end.distance_to(from) < reach - 0.15:
+				sim.fx.hit_material(res.end.x, res.end.y, "metal")
 		sim.fx.tracer(m.x, m.y, res.end.x, res.end.y)
 	for z in dealt:
 		sim._hurt_zombie(z, float(dealt[z]), p.aim, p)
@@ -517,11 +520,13 @@ func _strike(p, reach: float, half_arc: float, dmg: float) -> int:
 # --------------------------------------------------------------- succession --
 
 ## The player is gone (died, turned, or left through the gate): the next in line takes over. With nobody left there is
-## nothing to do (the scenario's defeat).
-func on_player_lost(p) -> void:
+## nothing to do (the scenario's defeat). `successor` names who takes over when the one who fell was not the colony's to
+## replace (a place's squad chose its own leader while the base was told: raid_scene.gd); a missing or unfit one is the next
+## in line as ever.
+func on_player_lost(p, successor = null) -> void:
 	if p == null or not p.player:
 		return
-	var next = _next_in_line(p)
+	var next = successor if successor != null and successor != p and sim.people.has(successor) and not successor.dead and not successor.turned else _next_in_line(p)
 	if next == null:
 		return
 	p.player = false

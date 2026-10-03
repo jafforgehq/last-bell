@@ -47,7 +47,7 @@ static func spot_near(main, p, reach: float) -> Vector2:
 
 
 ## What a person does to look around: scroll the wheel three times and drag the ground with the middle button held (a
-## left-drag draws a box now; Alt and the left button, or W A S D, pan too).
+## left-drag is no pan; Alt and the left button, or W A S D, pan too).
 static func pan_and_zoom(main) -> void:
 	var vp: Vector2 = main._vp()
 	for i in 3:

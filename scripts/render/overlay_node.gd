@@ -6,6 +6,8 @@
 ## the wall section it rings at. And (round 4) what people say: speech bubbles over their heads. And
 ## (round 5) the marks of the Jobs screen while it is open (`main.jobs_hover`): a faint ring and the seats
 ## at every station, a firm ring and name at what the page points at, a ring at a night post, a box round a person.
+## And (round 17, avatar mode only) the survivor the player plays: the crosshair at the pointer, the aim line from the
+## gun, the ring of a reload and the YOU tag over their head (`_draw_avatar`).
 ## All of it is a view: nothing here changes the rules.
 extends Node2D
 
@@ -19,6 +21,8 @@ const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
 const NAME_PX := 12
+## The size of the YOU tag over the avatar's head.
+const YOU_PX := 12
 ## The tint of a wall section by how many guns reach it: none, one, two or more (the
 ## HUD's red, amber and green). A pale fill that leaves the wall's art showing, and an edge.
 const COVER := [Color("#e0584a"), Color("#e8953a"), Color("#8fb85a")]
@@ -88,11 +92,19 @@ var drawn_job_stations := 0
 var drawn_job_lit := 0
 var drew_job_post := false
 var drawn_job_edges := 0
-## The selection of the last draw (round 15): how many people wear the brackets and the ring, whether a box was being
-## dragged, and how many people it holds at the moment (they show a ring of their own).
+## How many people wore the brackets and the ring of the selection at the last draw.
 var drawn_selected := 0
-var drew_box := false
-var drawn_box_hits := 0
+## The avatar's marks (round 17, avatar mode only) at the last draw: the crosshair at the pointer (and where, in screen pixels),
+## the aim line from the muzzle (and the tile where it stops, and whether it stops on one of the dead), the ring of a reload
+## (and how far round it is, 0 to 1) and the YOU tag over the head.
+var drew_crosshair := false
+var drew_aim_line := false
+var drew_reload_ring := false
+var drew_you := false
+var crosshair_at := Vector2.ZERO
+var aim_end := Vector2.ZERO
+var aim_on_target := false
+var reload_progress := 0.0
 ## What people are saying: [{"p": Person, "text", "born": main.clock}], the oldest first; and how many bubbles
 ## the last draw put on the screen.
 var bubbles: Array = []
@@ -596,14 +608,6 @@ func _draw_bubbles(vp: Vector2) -> void:
 		drawn_bubbles += 1
 
 
-## Everyone selected with `sel` (a person): main.gd's `selected_people` when it has one that holds them, else just them.
-func _selected_people(sel) -> Array:
-	if sel == null or sel.kind != "person":
-		return []
-	var g = main.get("selected_people")
-	return g if g is Array and g.has(sel.ref) else [sel.ref]
-
-
 ## A selected person's marks: the ellipse of a ring at their feet (the primary's heavier), the four corner brackets, and for
 ## one person alone the dashed circle of how far their gun reaches.
 func _mark_person(e, primary: bool, alone: bool, z: float) -> void:
@@ -621,25 +625,108 @@ func _mark_person(e, primary: bool, alone: bool, z: float) -> void:
 		_dashed_circle(_screen(ep.x, ep.y), main.sim.reach_of(e.gun, e) * z, Color(ACCENT, 0.35), 1.2)
 
 
-## The box a left-drag is drawing (main.gd's `drag`: not for a pan): a pale fill and an outline in the HUD's gold, and a ring
-## at the feet of each person it holds now.
-func _draw_box() -> void:
-	var d = main.get("drag")
-	if d == null or not bool(d.get("moved", false)) or int(d.get("button", 0)) != MOUSE_BUTTON_LEFT or bool(d.get("pan", false)):
+# ------------------------------------------------------- the avatar's marks --
+
+## The crosshair's colours: a dark edge under a bright line (it must read on grass, on concrete and in the dark), red while the
+## shot would land on one of the dead. Its ring is as wide as the gun's cone is at the pointer, never under CROSS_MIN pixels.
+const CROSS_EDGE := Color(0.04, 0.07, 0.06, 0.9)
+const CROSS_INK := Color(0.96, 0.94, 0.86, 0.95)
+const CROSS_HIT := Color("#ff7d6e")
+const CROSS_MIN := 10.0
+const CROSS_MAX := 46.0
+## The aim line: how bright it is at the muzzle and at the end of the gun's reach, and the pieces it is drawn in.
+const AIM_NEAR := 0.75
+const AIM_FAR := 0.08
+const AIM_PIECES := 14
+## The reload ring round the avatar's body: its colour while it fills.
+const RING_TRACK := Color(0.04, 0.07, 0.06, 0.5)
+
+
+## What the avatar's hands and gun look like: the aim line from the muzzle to the first thing the shot would hit (it fades
+## with the distance and is hidden while the gun is being reloaded or has no barrel), the ring of a reload round the body, the
+## YOU tag over the head and the crosshair where the pointer is (not over a menu, a page or a HUD control). Not in the old yard.
+func _draw_avatar(sim, z: float, vp: Vector2) -> void:
+	if main.get("avatar_mode") != true:
 		return
-	var box: Rect2 = d.get("box", Rect2())
-	drew_box = true
-	draw_rect(box, Color(ACCENT, 0.12))
-	draw_rect(box, Color(ACCENT, 0.85), false, 1.5)
-	if not main.has_method("box_people"):
+	var me = sim.avatar.player()
+	if me == null or me.dead or me.turned or me.away != null:
 		return
-	var z: float = main.zoom_px
-	for e in main.box_people(box):
-		drawn_box_hits += 1
-		var ep: Vector2 = main.view_pos(e)
-		draw_set_transform(_screen(ep.x, ep.y), 0.0, Vector2(1.0, 0.45))
-		draw_arc(Vector2.ZERO, 0.42 * z, 0, TAU, 28, Color(ACCENT, 0.7), 1.5, true)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var pp: Vector2 = main.view_pos(me)
+	var hands_off: bool = main.has_method("avatar_hands_off") and main.avatar_hands_off()
+	var gun: Dictionary = me.gun
+	# (what is in the hand: a gun that the stores cannot feed is the butt of it, which has no line to draw)
+	var live: Dictionary = sim.gun_of(me)
+	var melee: bool = bool(live.get("melee", false))
+	# the line from the gun
+	if not hands_off and not me.downed and not melee and me.reloading <= 0.0:
+		var shoulder: Vector2 = sim.avatar.shoulder(me)
+		var muzzle: Vector2 = sim.muzzle(me, me.aim)
+		var reach: float = sim.reach_of(live, me)
+		var res: Dictionary = sim.avatar.trace(shoulder, me.aim, reach)
+		var off := pp - Vector2(me.x, me.y)    # (the figure is drawn up to a step behind the rules')
+		var end: Vector2 = res.end
+		var a := _screen(muzzle.x + off.x, muzzle.y + off.y)
+		var b := _screen(end.x + off.x, end.y + off.y)
+		aim_end = end
+		aim_on_target = res.z != null
+		if a.distance_to(b) > 4.0:
+			drew_aim_line = true
+			var span := maxf(1.0, shoulder.distance_to(muzzle) + reach)
+			var pieces := clampi(int(a.distance_to(b) / 28.0), 2, AIM_PIECES)
+			var base := muzzle.distance_to(shoulder)
+			for i in pieces:
+				var t0 := float(i) / pieces
+				var t1 := float(i + 1) / pieces
+				var reach_share := clampf((base + muzzle.distance_to(end) * t0) / span, 0.0, 1.0)
+				var col := Color(CROSS_HIT if aim_on_target else CROSS_INK, lerpf(AIM_NEAR, AIM_FAR, reach_share))
+				draw_line(a.lerp(b, t0), a.lerp(b, t1), col, 1.5, true)
+			if aim_on_target:
+				draw_arc(b, 4.0, 0, TAU, 12, Color(CROSS_HIT, 0.85), 1.5, true)
+	# the reload ring
+	if me.reloading > 0.0 and not bool(gun.get("melee", false)):
+		var total: float = maxf(0.01, float(gun.get("reload", 1.0)) * float(sim.traits.mult(me, "reload")))
+		reload_progress = clampf(1.0 - me.reloading / total, 0.0, 1.0)
+		drew_reload_ring = true
+		var c := _screen(pp.x, pp.y - 0.45)
+		var r := maxf(18.0, 0.66 * z)
+		draw_arc(c, r, 0, TAU, 40, RING_TRACK, 4.0, true)
+		draw_arc(c, r, -PI / 2.0, -PI / 2.0 + reload_progress * TAU, 40, ACCENT, 3.0, true)
+	# the YOU tag over the head (not while they are speaking: the bubble has that place)
+	var speaking := false
+	for bubble in bubbles:
+		if bubble.p == me:
+			speaking = true
+	if not speaking:
+		var head := _screen(pp.x, pp.y - BUBBLE_HEAD)
+		if head.x > -40.0 and head.x < vp.x + 40.0 and head.y > -20.0 and head.y < vp.y + 40.0:
+			var font := Fonts.cond(700, 1)
+			var fs := maxi(YOU_PX, Fonts.MIN_PX)
+			var w := font.get_string_size("YOU", HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 12.0
+			_pill(Rect2(head.x - w / 2.0, head.y - 22.0, w, 16.0), ACCENT)
+			draw_string(font, Vector2(head.x - w / 2.0, head.y - 22.0 + fs * 0.9), "YOU", HORIZONTAL_ALIGNMENT_CENTER, w, fs, Color("#1a1508"))
+			drew_you = true
+	# the crosshair
+	if hands_off or bool(main.get("over_hud")):
+		return
+	var at: Vector2 = main.mouse_screen
+	if not Rect2(Vector2.ZERO, vp).has_point(at):
+		return
+	var radius := CROSS_MIN
+	if not melee:
+		var muzzle_px := _screen(me.x, me.y - 0.3)
+		var cone: float = sim.avatar.spread_of(me, live)
+		radius = clampf(muzzle_px.distance_to(at) * cone * 0.5, CROSS_MIN, CROSS_MAX)
+	var ink: Color = CROSS_HIT if aim_on_target else CROSS_INK
+	for pass_ in 2:
+		var col: Color = CROSS_EDGE if pass_ == 0 else ink
+		var w := 4.0 if pass_ == 0 else 2.0
+		draw_arc(at, radius, 0, TAU, 32, col, w, true)
+		for dir in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+			draw_line(at + dir * (radius - 3.0), at + dir * (radius + 6.0), col, w, true)
+	draw_circle(at, 1.8, CROSS_EDGE)
+	draw_circle(at, 1.2, ink)
+	crosshair_at = at
+	drew_crosshair = true
 
 
 func _draw() -> void:
@@ -659,8 +746,11 @@ func _draw() -> void:
 	drew_job_post = false
 	drawn_job_edges = 0
 	drawn_selected = 0
-	drew_box = false
-	drawn_box_hits = 0
+	drew_crosshair = false
+	drew_aim_line = false
+	drew_reload_ring = false
+	drew_you = false
+	aim_on_target = false
 	if main.fields:
 		_draw_fields(sim, z, vp)
 	_draw_alarm(sim, z, vp)
@@ -679,13 +769,10 @@ func _draw() -> void:
 		var col := Color("#e0584a") if f < 0.34 else (Color("#e8953a") if f < 0.67 else Color("#9cc46a"))
 		_pill(Rect2(p.x - w / 2, p.y - 1.5, maxf(3.0, w * f), 3), col)
 
-	# selection: a person (or the group of them) wears the corner brackets and a ring at their feet, the primary's ring
-	# the heavier; the reach circle is for one person alone
-	var group := _selected_people(sel)
+	# selection: a person wears the corner brackets, a ring at their feet and the circle of how far their gun reaches
 	if sel != null and sel.kind == "person":
-		for e in group:
-			if e.away == null:
-				_mark_person(e, e == sel.ref, group.size() == 1, z)
+		if sel.ref.away == null:
+			_mark_person(sel.ref, true, true, z)
 	elif sel != null and sel.kind == "zombie":
 		var e = sel.ref
 		if e.state != "dead":
@@ -702,7 +789,7 @@ func _draw() -> void:
 		for edge in [[a, Vector2(b.x, a.y)], [Vector2(b.x, a.y), b], [b, Vector2(a.x, b.y)], [Vector2(a.x, b.y), a]]:
 			_dashed_line(edge[0], edge[1], ACCENT, 2.0)
 	var hover = main.hover
-	if hover != null and (sel == null or hover != sel.ref) and not group.has(hover):
+	if hover != null and (sel == null or hover != sel.ref):
 		var hp: Vector2 = main.view_pos(hover)
 		var a := _screen(hp.x - 0.45, hp.y - 0.88)
 		draw_rect(Rect2(a, Vector2(0.9, 1.28) * z), Color(1, 1, 1, 0.35), false, 1.0)
@@ -726,9 +813,8 @@ func _draw() -> void:
 				continue
 			var label: String = p.first
 			var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0
-			var primary: bool = sel != null and sel.ref == p
-			var selected: bool = primary or group.has(p)
-			var bg := Color(ACCENT, 0.92 if primary else 0.62) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
+			var selected: bool = sel != null and sel.ref == p
+			var bg := Color(ACCENT, 0.92) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
 			_pill(Rect2(pos.x - tw / 2, pos.y - 8, tw, 16), bg)
 			var fg := Color("#1a1508") if selected else (ACCENT if p.drafted else INK)
 			draw_string(font, Vector2(pos.x - tw / 2, pos.y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, fg)
@@ -741,8 +827,8 @@ func _draw() -> void:
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
 
-	# the box being dragged (a left-drag that is not a pan): the raid's own colours, and a ring on those it holds now
-	_draw_box()
+	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
+	_draw_avatar(sim, z, vp)
 
 	# what people say, over everything else
 	_draw_bubbles(vp)

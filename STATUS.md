@@ -42,7 +42,7 @@ Keys: **G** Town Board, **N** Build screen, **J** Duty roster, **M** workshop, *
 | 14 | **Take control**: play a trip yourself on a generated map of the place | `scripts/raid/` (see the file map) |
 | audio | Music + web-audio fix + sound levels (2026-10-02, committed, on itch) | section 4 |
 | 16 | **People at work** (2026-10-03): by day nobody stands on a wall but the Lookout (Builders with nothing to build sort materials in a yard, the jobless rest at the picnic tables; a day threat sends everyone to posts and ten quiet minutes send them back); a pose, a tool and small effects for every job (`scripts/render/work_anim.gd`, `tools/make_tools.py`); the first callers need no one at the radio desk; a crew-load strip ("Seats 5 of 11") and a trip warning; tents (2 beds each); a crew of five is the default start | plan `docs/superpowers/plans/2026-10-03-round-16.md`; `scripts/sim/crew_load.gd` |
-| 15 | **The yard in motion**: drag-box select; trips by car are real (walk to the doors, doors open, car out through a sliding vehicle gate and off the map, back, U-turn and reverse into the bay, doors open, people out); a motor pool inside the base; car doors cut from the car pictures and car sounds; each building has its own home and the Build screen is a list of buildings | plan `docs/superpowers/plans/2026-10-02-round-15.md`; `scripts/sim/convoy.gd`, `scripts/render/vehicle_actor.gd`, `gate_node.gd`, `assets/data/motor_pool.json`, `tools/make_motor_pool.py` + `check_motor_pool.py`, `tools/make_car_doors.py`, `scripts/sim/build.gd` homes |
+| 15 | **The yard in motion**: drag-box select (removed again in round 17: one survivor, no box); trips by car are real (walk to the doors, doors open, car out through a sliding vehicle gate and off the map, back, U-turn and reverse into the bay, doors open, people out); a motor pool inside the base; car doors cut from the car pictures and car sounds; each building has its own home and the Build screen is a list of buildings | plan `docs/superpowers/plans/2026-10-02-round-15.md`; `scripts/sim/convoy.gd`, `scripts/render/vehicle_actor.gd`, `gate_node.gd`, `assets/data/motor_pool.json`, `tools/make_motor_pool.py` + `check_motor_pool.py`, `tools/make_car_doors.py`, `scripts/sim/build.gd` homes |
 
 Not built yet (from the roadmap, `docs/superpowers/roadmap.md`, which is only current to round 10): blueprints and research, traders and raiders as events, power and fuel for the base (the fuel in round 13 is for cars), defence variety (traps, lures), the convoy ending where only some leave, a dog.
 
@@ -62,7 +62,7 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 ## 5. What is verified and what is not
 
 - **Verified by machines:** the full test suite (rules, UI layout, saves, data), the balance harness (below), screenshots of the screens, a Web Audio probe of the web build (silent before the fix).
-- **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the box select, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
+- **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
 - **Process slips on record:** two `rm` calls on scratch files (the rule is "delete only via `~/.Trash`"); an earlier `pkill -f Godot` killed your open editor (never again).
 
 ### Known issues of round 16
@@ -82,7 +82,7 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 
 ### First things to try by hand
 
-1. Start a small-crew game; look at the yard (the motor pool and the gate), drag a box round your people and send them with a right-click, press **N** (the Build screen is a list of buildings now).
+1. Start a small-crew game; look at the yard (the motor pool and the gate), walk the survivor with **W A S D** and shoot with the mouse (round 17: `--noavatar` plays the old yard with right-click orders), press **N** (the Build screen is a list of buildings now).
 1b. Send a trip **by car** early in the morning (06:30 to 10:00) and watch it from the doors to the unloading, at speed 1 and 3.
 2. Press **G**: scout, loot, clear. Send a trip with **Take control** (the button on the place's card): move the squad, search a container, help a downed friend, retreat.
 3. Send a trip **by car** (the Ride row on the board); watch the fuel line in the HUD; find fuel.

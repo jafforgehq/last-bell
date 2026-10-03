@@ -1220,7 +1220,7 @@ static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, co
 		return _fit(top_center, bounds)
 	var avoid := t.grow(10.0)
 	var obstacles: Array = []
-	for n in ["inspect", "clock", "stores", "bar", "speed", "alerts", "legend"]:
+	for n in ["inspect", "clock", "stores", "bar", "speed", "alerts", "legend", "news.panel", "call", "radio"]:
 		var r: Rect2 = hud.anchor_rect(n)
 		if r.size.x > 0.0 and not r.intersects(t):
 			obstacles.append(r)

@@ -161,7 +161,11 @@ func _show(h: Dictionary) -> void:
 	active = h
 	left_s = STAY_S
 	title_label.text = String(h.get("title", ""))
-	text_label.text = String(h.get("text", ""))
+	# (with an avatar there is no selecting and no order keys: a tip that names them has words of its own, "text_avatar")
+	var words := String(h.get("text", ""))
+	if sim != null and String(sim.get("player_id")) != "":
+		words = String(h.get("text_avatar", words))
+	text_label.text = words
 	var inner := CARD_W - card.get_theme_stylebox("panel").get_minimum_size().x
 	for l in [title_label, text_label]:
 		l.custom_minimum_size.x = inner
