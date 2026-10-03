@@ -1,0 +1,311 @@
+{
+  "version": 1,
+  "_doc": "The events of the live road (round 21, scripts/drive/road_events.gd). An event: title and text (the card and the banner); kind (dead: the dead come at you; stop: someone or something at the verge, a card; block: wrecks across the road; forced: the car stops by itself); weight (relative chance; dead kinds grow with the place's danger, `hp_weight` kinds with the car's wear); legs (there, home); vehicle (any, needs: a vehicle only, foot: on foot only); min_danger; band (any, day, night: by the hour of its slot on the road); needs (bed, seat, fuel_room, vehicle: the base's and the car's state); card (always, vehicle: only with a vehicle, never: nothing is asked, the choice happens by itself); auto (the choice the card takes when it is not answered, and the choice a card-less event happens as), auto_else (what the card takes if auto is refused), timeout (auto: the card takes the auto choice after ttl_s seconds; close: it just closes). A choice: id, label, needs (seat, bed, vehicle, fuel_room, stock:<name>:<n>, toll:<n>), effects, lines (what the squad says: two of them are used), log (the radio's line: text and sub), and optionally maybe {chance, effects, lines}, one_of [{needs, effects, lines, log}] (one is taken by the dice), gamble {base, skill, per, cap, win {effects, lines, log}, lose {effects, lines, log}}. Effects (all optional): stock {food|water|scrap|meds|ammo: n | [lo, hi], two_of: {from, base, per_danger}, toll: {n, mult, from}} (positive: into the party's bags, it comes home; negative: paid from the base's stock now), fuel, vehicle_hp, hp_all, hurt (scratch | bite), trust, morale, survivor, reveal (near), stop_s (n | {base, skill, per, min}), dead {walker|runner|brute: [lo, hi], grow: {kind: per danger point}, from: {kind: first danger it comes at}, where, state}, block_cleared. In lines and logs: {n} the dead, {loot}, {fuel}, {who}, {paid}, {secs}.",
+  "events": {
+    "ambush": {
+      "title": "Ambush!",
+      "text": "The dead come out of the verges on both sides, just ahead.",
+      "kind": "dead",
+      "weight": 3.0,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 1,
+      "band": "any",
+      "needs": [],
+      "card": "never",
+      "auto": "through",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "through",
+          "label": "Drive through or fight",
+          "needs": [],
+          "effects": {"dead": {"walker": [8, 14], "runner": [1, 3], "grow": {"walker": 3.0, "runner": 1.0}, "from": {"runner": 2}, "where": "verges", "state": "hunt"}},
+          "lines": ["Both sides! Here they come!", "Foot down, or stop and shoot: your call.", "Heads in. Heads IN."],
+          "log": {"text": "An ambush on the road: {n} of the dead came out of the verges.", "sub": "The squad is watching the road."}
+        }
+      ]
+    },
+    "roadblock": {
+      "title": "Roadblock",
+      "text": "Wrecks across the road with one gap. Thread it, ram a wreck, or stop and clear it.",
+      "kind": "block",
+      "weight": 2.0,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 0,
+      "band": "any",
+      "needs": [],
+      "card": "vehicle",
+      "auto": "clear",
+      "timeout": "close",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "clear",
+          "label": "Clear it",
+          "needs": [],
+          "effects": {"stop_s": 14, "dead": {"walker": [3, 6], "where": "around", "state": "hunt"}, "block_cleared": 1},
+          "lines": ["Get the chains. Keep your eyes open.", "We drag them aside. Somebody watch the verges."],
+          "log": {"text": "The squad dragged the wrecks off the road.", "sub": "{n} of the dead came while they worked."}
+        }
+      ]
+    },
+    "survivor": {
+      "title": "Someone is waving",
+      "text": "A person stands at the verge with both arms up.",
+      "kind": "stop",
+      "weight": 1.5,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 0,
+      "band": "any",
+      "needs": ["bed", "seat"],
+      "card": "always",
+      "auto": "pass",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "take",
+          "label": "Take them in",
+          "needs": ["seat", "bed"],
+          "effects": {"survivor": 1, "trust": 2, "morale": 2, "stop_s": 4},
+          "lines": ["Get in. Quick. There is a bed for you at the base.", "{who} climbs in without a word."],
+          "log": {"text": "{who} was taken in on the road.", "sub": "There is a bed for them at the base."}
+        },
+        {
+          "id": "pass",
+          "label": "Drive on",
+          "needs": [],
+          "effects": {"trust": -1},
+          "lines": ["We can't stop for everyone.", "They get smaller in the mirror."],
+          "log": {"text": "The squad drove past a survivor on the road.", "sub": "Nobody liked it."}
+        }
+      ]
+    },
+    "wreck_supplies": {
+      "title": "A wreck by the road",
+      "text": "A car on its side with the boot sprung open and full.",
+      "kind": "stop",
+      "weight": 3.0,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 0,
+      "band": "any",
+      "needs": [],
+      "card": "always",
+      "auto": "pass",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "search",
+          "label": "Search it",
+          "needs": [],
+          "effects": {"stop_s": 10, "stock": {"two_of": {"from": ["food", "water", "scrap", "meds", "ammo"], "base": 7, "per_danger": 3}}},
+          "maybe": {"chance": 0.3, "effects": {"dead": {"walker": [1, 1], "where": "around", "state": "hunt"}, "hurt": "scratch"}, "lines": ["Something was in the back seat!"]},
+          "lines": ["Boot's full. Quick, before anything smells us.", "Two on the boot, two on the road."],
+          "log": {"text": "The squad searched a wreck and found {loot}.", "sub": "It is in the bags."}
+        },
+        {
+          "id": "pass",
+          "label": "Drive on",
+          "needs": [],
+          "effects": {},
+          "lines": ["Not worth it.", "Another wreck. The road is full of them."],
+          "log": {"text": "The squad drove past a wreck.", "sub": "Nothing was taken."}
+        }
+      ]
+    },
+    "breakdown": {
+      "title": "Puncture",
+      "text": "A bang, and the car pulls to one side and coasts to a stop.",
+      "kind": "forced",
+      "weight": 1.2,
+      "hp_weight": true,
+      "legs": ["there", "home"],
+      "vehicle": "needs",
+      "min_danger": 0,
+      "band": "any",
+      "needs": [],
+      "card": "always",
+      "auto": "fix",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "fix",
+          "label": "Fix it",
+          "needs": [],
+          "effects": {"stop_s": {"base": 14, "skill": "building", "per": 1.5, "min": 6}, "vehicle_hp": -2},
+          "lines": ["Spare's in the back. Everybody out.", "Hold the jack. Hold your breath."],
+          "log": {"text": "A tyre went on the road: the squad changed it in {secs} seconds.", "sub": "The car took a knock."}
+        }
+      ]
+    },
+    "herd": {
+      "title": "A herd on the road",
+      "text": "Dozens of the dead stand in the road ahead, shoulder to shoulder, and do not look up.",
+      "kind": "dead",
+      "weight": 1.5,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 0,
+      "band": "day",
+      "needs": [],
+      "card": "never",
+      "auto": "plough",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "plough",
+          "label": "Plough through, go round or shoot",
+          "needs": [],
+          "effects": {"dead": {"walker": [24, 36], "where": "ahead", "state": "still"}},
+          "lines": ["Look at them all. Don't wake them.", "That is a whole street standing there.", "Slow and wide, or fast and straight. Decide."],
+          "log": {"text": "A herd of {n} of the dead stands on the road.", "sub": "They have not noticed anyone yet."}
+        }
+      ]
+    },
+    "fuel_stash": {
+      "title": "Drums on the verge",
+      "text": "Fuel drums stacked against the cab of a tanker at the verge.",
+      "kind": "stop",
+      "weight": 1.5,
+      "legs": ["there", "home"],
+      "vehicle": "needs",
+      "min_danger": 0,
+      "band": "any",
+      "needs": ["fuel_room"],
+      "card": "always",
+      "auto": "pass",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "siphon",
+          "label": "Siphon it",
+          "needs": ["fuel_room"],
+          "effects": {"fuel": [4, 9], "stop_s": 9},
+          "lines": ["Hose. Bucket. Don't spill it.", "That tanker never made it home either."],
+          "log": {"text": "The squad siphoned {fuel} fuel from a tanker.", "sub": "It goes into the base's tank."}
+        },
+        {
+          "id": "pass",
+          "label": "Drive on",
+          "needs": [],
+          "effects": {},
+          "lines": ["No time for it.", "Leave it for the next one."],
+          "log": {"text": "The squad drove past a tanker's fuel drums.", "sub": "Nothing was taken."}
+        }
+      ]
+    },
+    "checkpoint": {
+      "title": "Checkpoint",
+      "text": "A barrier of cars and sandbags. Armed survivors watch you come, and one holds up a hand.",
+      "kind": "stop",
+      "weight": 1.5,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 1,
+      "band": "day",
+      "needs": [],
+      "card": "always",
+      "auto": "toll",
+      "auto_else": ["talk"],
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "toll",
+          "label": "Pay the toll",
+          "needs": ["toll:10"],
+          "effects": {"stock": {"toll": {"n": 10, "from": ["food", "scrap", "ammo"]}}},
+          "lines": ["Ten of whatever. Pay them.", "They count it twice and wave you through."],
+          "log": {"text": "The squad paid {paid} to pass a checkpoint.", "sub": "Survivors hold the road here."}
+        },
+        {
+          "id": "trade",
+          "label": "Trade",
+          "needs": ["stock:scrap:20"],
+          "effects": {"stock": {"scrap": -20}},
+          "one_of": [
+            {"needs": ["fuel_room"], "effects": {"fuel": 8}, "lines": ["Twenty scrap, and they pour us eight fuel.", "Fair is fair. Fill her up."], "log": {"text": "The squad traded 20 scrap for 8 fuel at a checkpoint.", "sub": "It goes into the base's tank."}},
+            {"effects": {"stock": {"meds": 3}}, "lines": ["Twenty scrap for three of their meds.", "They don't ask where we got it."], "log": {"text": "The squad traded 20 scrap for 3 meds at a checkpoint.", "sub": "The meds are in the bags."}}
+          ],
+          "lines": ["Twenty scrap on the table.", "Show them what we have."],
+          "log": {"text": "The squad traded with a checkpoint.", "sub": "Survivors hold the road here."}
+        },
+        {
+          "id": "talk",
+          "label": "Talk",
+          "needs": [],
+          "effects": {},
+          "gamble": {
+            "base": 0.35, "skill": "leading", "per": 0.06, "cap": 0.9,
+            "win": {"effects": {"reveal": "near"}, "lines": ["They listened. They even told us what is on the road ahead.", "Free pass. Don't look surprised."], "log": {"text": "The squad talked its way past a checkpoint.", "sub": "They were told of a place nearby."}},
+            "lose": {"effects": {"hp_all": -3, "stock": {"toll": {"n": 10, "mult": 2, "from": ["food", "scrap", "ammo"]}}}, "lines": ["That did it. They want twice the toll.", "Somebody got a rifle butt in the ribs."], "log": {"text": "A checkpoint would not listen and took double the toll.", "sub": "The squad is bruised."}}
+          },
+          "lines": ["Hands where they can see them. Let me talk."],
+          "log": {"text": "The squad talked to a checkpoint.", "sub": "Survivors hold the road here."}
+        },
+        {
+          "id": "run",
+          "label": "Run it",
+          "needs": ["vehicle"],
+          "effects": {"vehicle_hp": -10, "hurt": "scratch", "trust": -2},
+          "lines": ["Floor it! Floor it!", "Get down! Get DOWN!"],
+          "log": {"text": "The squad ran a checkpoint.", "sub": "They shot at the car as it went."}
+        }
+      ]
+    },
+    "smoke": {
+      "title": "Smoke and a chalk sign",
+      "text": "A column of smoke over the roofs, and a chalked arrow on the road: people this way.",
+      "kind": "stop",
+      "weight": 2.5,
+      "legs": ["there", "home"],
+      "vehicle": "any",
+      "min_danger": 0,
+      "band": "any",
+      "needs": [],
+      "card": "always",
+      "auto": "pass",
+      "timeout": "auto",
+      "ttl_s": 8,
+      "choices": [
+        {
+          "id": "check",
+          "label": "Check it",
+          "needs": [],
+          "effects": {"stop_s": 5, "reveal": "near"},
+          "maybe": {"chance": 0.3, "effects": {"dead": {"walker": [1, 1], "where": "around", "state": "hunt"}}, "lines": ["Something is coming out of the smoke!"]},
+          "lines": ["The chalk is fresh. Somebody was here today.", "Five minutes. Not one more."],
+          "log": {"text": "The squad followed a chalked sign off the road.", "sub": "Someone has been this way."}
+        },
+        {
+          "id": "pass",
+          "label": "Drive on",
+          "needs": [],
+          "effects": {},
+          "lines": ["Smoke means people. People mean trouble.", "Not today."],
+          "log": {"text": "The squad drove past a column of smoke.", "sub": "Nobody stopped."}
+        }
+      ]
+    }
+  },
+  "ambient": {
+    "night_road": {
+      "title": "Night on the road",
+      "text": "The light goes. The headlights make a small room in the dark, and the dead are about.",
+      "dead_mult": 1.5,
+      "runner_share": 0.15,
+      "headlights": true,
+      "lines": ["Lights on. Eyes open.", "Nobody should be out on this road after dark."],
+      "log": {"text": "The road home is dark now.", "sub": "The dead are about in greater numbers at night."}
+    }
+  }
+}

@@ -60,6 +60,7 @@ func _site(dead: Array = []) -> Dictionary:
 ## The real game (a small start: Ruth, Dez and Marcus) in a window of this size, with its own frames off. Ruth is the avatar
 ## (the real game's new run has her), unless `avatar` is false: then it is the old game.
 func _game(width: int = 1280, height: int = 800, crew: int = 3, avatar: bool = true) -> Node:
+	PlaceFlow.live_enabled = false    # (round 21: these trips keep the overlay's road; the live drive is tests/test_road_flow.gd's)
 	return TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar}, width, height)
 
 

@@ -19,12 +19,14 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const KIND_NAME := {
 	"attack": "Attack", "succession": "Lost", "sick": "Fever", "alarm": "Alarm", "recruit": "Arrival", "story": "Radio", "stranger": "At the gate",
 	"errand": "Errand", "build": "Built",
+	"road": "Road",
 }
 
 
 ## The colour of a kind of news (a word, readable on the panel): the dead at the wall and a death are red, a fever and the
-## alarm amber, a new face green, a card of the storyteller blue, a stranger gold; an errand (round 18: someone sent out without you) is
-## blue like the radio's own cards and a building that went up green like a new face; anything else the dim chalk.
+## alarm amber, a new face green, a card of the storyteller and a word from the road blue, a stranger gold; an errand
+## (round 18: someone sent out without you) is blue like the radio's own cards and a building that went up green like a
+## new face; anything else the dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
 		"attack", "succession":
@@ -33,7 +35,7 @@ static func kind_color(host, kind: String) -> Color:
 			return host.WARN
 		"recruit", "build":
 			return host.OK
-		"story", "errand":
+		"story", "errand", "road":
 			return host.INFO
 		"stranger":
 			return host.ACCENT

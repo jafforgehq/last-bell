@@ -188,6 +188,17 @@ static func make(place: Dictionary, seed: int, squad_size: int, by_vehicle: bool
 	}
 
 
+## The map of a canvas drawn by something other than `make` (the road of the live drive, round 21, scripts/drive/road_gen.gd):
+## `_data` over the base data and the terrain a site's layouts add (the walls and doors). `rooms` is {name: [x0, y0, x1, y1]}.
+static func map_data(cv, entry: Vector2, rooms: Dictionary = {}) -> Dictionary:
+	var lay := layouts()
+	var base := GD.load_all()
+	var terrain_types: Dictionary = base.terrainTypes.duplicate(true)
+	for k in lay.terrain:
+		terrain_types[k] = {"id": int(lay.terrain[k].id), "file": String(lay.terrain[k].file)}
+	return _data(base, cv, terrain_types, rooms, entry, cv.W, cv.H)
+
+
 ## The map dictionary the world and the rules are built from: the base data (the pawns, the guns, the sounds...) with
 ## the map fields replaced by the site's.
 static func _data(base: Dictionary, cv, terrain_types: Dictionary, rooms: Dictionary, entry: Vector2, W: int, H: int) -> Dictionary:

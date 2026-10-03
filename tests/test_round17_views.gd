@@ -21,6 +21,7 @@ const SENTINEL := "user://test_round17_views_save.json"
 
 ## The real game (a small start, Ruth the avatar) with its own frames off and the old stubbed site.
 func _main(crew: int = 3) -> Node:
+	PlaceFlow.live_enabled = false    # (round 21: these trips keep the overlay's road; the live drive is tests/test_road_flow.gd's)
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": true})
 	main.raid_stub = true
 	main.sim.waves.enabled = false
@@ -100,6 +101,7 @@ func test_who_was_left_out_and_why_is_on_the_road_overlay_and_in_the_report() ->
 
 
 func test_the_lists_of_the_left_out_fit_the_window_on_the_road_and_in_the_report_even_in_the_smallest() -> void:
+	PlaceFlow.live_enabled = false    # (round 21: the overlay's road)
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true}, 700, 560)
 	main.raid_stub = true
 	var sim = main.sim
