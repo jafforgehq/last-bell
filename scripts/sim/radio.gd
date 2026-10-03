@@ -667,6 +667,8 @@ const CANT_JOB := "take a job now"
 const CANT_POST := "take a post now"
 ## The errands that can be asked (`scavenge.send`'s actions).
 const ERRAND_ACTIONS := ["loot", "scout", "clear"]
+## No errand waits longer than this (a damaged save's `left` is held to it: the slowest answer is DELAY_SLOW).
+const MAX_ERRAND_WAIT_S := 60.0
 ## The player is nobody's to give a seat or a post to.
 const NO_SEAT_FOR_YOU := "You: no seat, you are the player"
 const NO_POST_FOR_YOU := "You: no post, you are the player"
@@ -767,6 +769,8 @@ func errand_willingness(people: Array, place_id: String, action: String = "loot"
 	out["going"] = going
 	out["refused"] = refused
 	var trip_why: String = String(sim.scavenge.why_not_errand(going, place_id, action, vehicle_id)) if not going.is_empty() else String(sim.scavenge.why_not_when())
+	if trip_why == "" and not going.is_empty():
+		trip_why = _waits_why(going.map(func(q): return String(q.id)))
 	if trip_why != "":
 		out["why"] = trip_why
 		return out
@@ -819,6 +823,8 @@ func request_errand(people: Array, place_id: String, action: String = "loot", ve
 		_say_the_refusal(people)
 		return out
 	var trip_why: String = String(sim.scavenge.why_not_errand(go, place_id, action, vehicle_id, true))
+	if trip_why == "":
+		trip_why = _waits_why(ids_of(go))
 	if trip_why != "":
 		out["why"] = trip_why
 		return out
@@ -849,6 +855,29 @@ func request_errand(people: Array, place_id: String, action: String = "loot", ve
 	out["tone"] = tone_for(least) if pushed.is_empty() else "doubtful"
 	out["insisted"] = not pushed.is_empty()
 	return out
+
+
+## The ids of these people.
+static func ids_of(people: Array) -> Array:
+	var out: Array = []
+	for p in people:
+		out.append(String(p.id))
+	return out
+
+
+## Why one more errand cannot be queued: the parties that are out and the errands that wait for their delay (those of other people than
+## `ids`: asking again for the same ones replaces their errand) fill what the game allows ("" when there is room).
+func _waits_why(ids: Array) -> String:
+	var town: bool = bool(sim.scavenge.town_mode)
+	var waiting := 0
+	for e in errand_wait:
+		for id in e.ids:
+			if not ids.has(String(id)):
+				waiting += 1
+				break
+	if sim.scavenge.parties.size() + waiting >= (sim.scavenge.MAX_PARTIES_TOWN if town else 1):
+		return "Both parties are out." if town else "A party is already out."
+	return ""
 
 
 ## The first soft refusal of those asked says its line aloud (a bubble over their head, as a verb's does).
@@ -902,10 +931,13 @@ func _start_errand(e: Dictionary) -> void:
 	if sim.get("scavenge") == null:
 		return
 	var people: Array = []
+	var stayers: Array = []
 	for id in e.ids:
 		var p = _person(String(id))
 		if p != null and _hard_reason(p) == "" and _busy_hard(p) == "":
-			people.append(p)    # (someone who is down, gone or already out stays behind)
+			people.append(p)
+		elif p != null and not (p.dead or p.turned):
+			stayers.append(p)    # (someone who is down, away or already out stays behind)
 	if people.is_empty():
 		_errand_failed(e, "nobody is left who can go")
 		return
@@ -918,12 +950,24 @@ func _start_errand(e: Dictionary) -> void:
 		_leave_patient(p)
 	if not sim.scavenge.send(people, String(e.place), String(e.action), String(e.vehicle)):
 		_errand_failed(e, "the party could not be made")
+		return
+	# (the others who were asked and could not go now say so, in the words of their refusal)
+	if not stayers.is_empty():
+		var names: Array = []
+		var reasons_why: Array = []
+		for q in stayers:
+			names.append(String(q.first))
+			var hard := _hard_reason(q)
+			reasons_why.append(hard if hard != "" else "%s is %s" % [String(q.first), _busy_hard(q)])
+		log_news("errand", "%s %s at the base." % [_and(names), "stays" if names.size() == 1 else "stay"], ". ".join(reasons_why) + ".")
 
 
 func _errand_failed(e: Dictionary, why: String) -> void:
 	var names: Array = []
 	for id in e.ids:
-		names.append(_first_of(String(id)))
+		var q = _person(String(id))
+		if q != null and not (q.dead or q.turned) and q.away == null:
+			names.append(String(q.first))    # (those who are here: not the dead, not those gone on a trip of their own)
 	var first_word := why.get_slice(" ", 0)
 	var spoken := why
 	var is_name := false
@@ -931,7 +975,7 @@ func _errand_failed(e: Dictionary, why: String) -> void:
 		is_name = is_name or String(q.first) == first_word
 	if not is_name:
 		spoken = why.substr(0, 1).to_lower() + why.substr(1)
-	log_news("errand", "The errand could not start: %s" % spoken, "%s stay at the base." % _and(names))
+	log_news("errand", "The errand could not start: %s" % spoken, "" if names.is_empty() else "%s %s at the base." % [_and(names), "stays" if names.size() == 1 else "stay"])
 
 
 # ---- jobs and posts --
@@ -1222,7 +1266,7 @@ func _load_errands(raw) -> void:
 		if ids.is_empty():
 			continue
 		var vehicle = r.get("vehicle", "")
-		errand_wait.append({"ids": ids, "place": String(r.place), "action": String(r.action), "vehicle": String(vehicle) if typeof(vehicle) == TYPE_STRING else "", "left": float(r.left)})
+		errand_wait.append({"ids": ids, "place": String(r.place), "action": String(r.action), "vehicle": String(vehicle) if typeof(vehicle) == TYPE_STRING else "", "left": clampf(float(r.left), 0.0, MAX_ERRAND_WAIT_S)})
 
 
 # ----------------------------------------------------------------------- news --

@@ -191,9 +191,12 @@ func tab_marks(page: String) -> Dictionary:
 	return {"dot": bool(m.get_meta("dot")), "bang": bool(m.get_meta("bang"))}
 
 
-## Whether the page can be had: the Map is for a settlement game (`sim.town.on`).
+## Whether the page can be had: the Map is for a settlement game (`sim.town.on`); in Orientation Day (`host.tutorial_ui`: its lessons teach
+## the modal pages, and the coach's lock is the modal pages' key) the News is the only page, so that no tab goes round the lock.
 func page_available(page: String) -> bool:
 	if not PAGES.has(page):
+		return false
+	if page != "news" and host != null and bool(host.get("tutorial_ui")):
 		return false
 	if page == "map":
 		var sim = _sim()
@@ -206,9 +209,10 @@ func page_available(page: String) -> bool:
 func _sync_tabs() -> void:
 	if tabs.is_empty():
 		return
-	var map_here := page_available("map")
-	if tabs["map"].visible != map_here:
-		tabs["map"].visible = map_here
+	for page in PAGES:
+		var here := page_available(String(page))
+		if tabs[page].visible != here:
+			tabs[page].visible = here
 	var news = page_node("news")
 	var shown_news := is_open() and _page == "news"
 	var radio = _radio()

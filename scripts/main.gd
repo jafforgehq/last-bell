@@ -448,6 +448,7 @@ func _ready() -> void:
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
+	hud.tutorial_ui = tutorial
 	hud.set_avatar(avatar_mode)
 	story_ui = StoryUi.new()
 	add_child(story_ui)

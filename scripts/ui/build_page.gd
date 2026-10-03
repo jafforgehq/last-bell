@@ -97,6 +97,7 @@ var lots_on := false
 var _squeeze := 0.0
 var _squeeze_for := 0.0
 var _squeeze_frame := 0
+var _short_seen := 0.0
 var _marked := ""
 var _sig := ""
 var _struct := ""
@@ -573,8 +574,16 @@ func _fit_list(calibrate: bool = false) -> void:
 	if calibrate and holder is ScrollContainer and holder.is_visible_in_tree() and holder.size.y > 0.0 and Engine.get_process_frames() - _squeeze_frame > 4:
 		var missing: float = get_combined_minimum_size().y - float(holder.size.y)
 		if missing > 1.0 and list_scroll.custom_minimum_size.y > MIN_LIST_H + 0.5:
-			_squeeze += missing
-			_squeeze_frame = Engine.get_process_frames()
+			# (a shortage counts only when it is seen twice, an update apart: the first sight just after the panel has opened, or the page
+			# has grown, is of a holder the panel has not yet sized to the page, and would squeeze the list for good for nothing)
+			if absf(missing - _short_seen) <= 1.0:
+				_squeeze += missing
+				_squeeze_frame = Engine.get_process_frames()
+				_short_seen = 0.0
+			else:
+				_short_seen = missing
+		else:
+			_short_seen = 0.0
 	var cap := maxf(MIN_LIST_H, window_h - PANEL_RESERVE - chrome - _squeeze)
 	var h := clampf(list_box.get_combined_minimum_size().y, MIN_LIST_H, cap)
 	if absf(list_scroll.custom_minimum_size.y - h) > 0.5:
@@ -796,6 +805,11 @@ func focus_on(id: String) -> void:
 
 
 func _reveal() -> void:
+	if not is_inside_tree():
+		return
+	# (a frame later: the slip has just opened its detail and the list has not laid itself out round it yet, so that its rectangle is
+	# still the old one and the list would scroll past it)
+	await get_tree().process_frame
 	if is_inside_tree() and rows.has(selected):
 		list_scroll.ensure_control_visible(rows[selected].item)
 

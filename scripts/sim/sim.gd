@@ -701,6 +701,9 @@ func update(dt: float) -> void:
 	interact.update(dt)
 	# the radio's news and calls, from what happened this step (last: it reads the step's events)
 	radio.update(dt)
+	# Orientation Day's floor under the walls holds when the step is over too (the dead strike after the scenario's turn)
+	if scenario.has_method("after_step"):
+		scenario.after_step()
 
 
 ## Runs the colony `game_minutes` game minutes ahead as quickly as it can: the usual steps of 1/30 s (the last one a short

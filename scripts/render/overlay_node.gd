@@ -838,6 +838,10 @@ func _prompt_allowed() -> bool:
 		return false
 	if main.has_method("raid_open") and main.raid_open():
 		return false
+	# (Orientation Day's coach refuses what a step does not teach: E is refused there, so no pill is drawn for it)
+	var coach = main.get("coach")
+	if coach != null and coach.has_method("would_allow") and not coach.would_allow("interact"):
+		return false
 	return not _modal_open()
 
 

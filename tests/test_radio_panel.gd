@@ -420,7 +420,7 @@ func test_the_old_yard_and_the_tutorial_keep_the_modal_pages_on_the_plain_keys()
 	_press(main, KEY_T)
 	check(not main.hud.radio_open(), "T is the treat order, not the radio")
 	await TutorialKit.leave(main)
-	# Orientation Day, avatar: its lessons teach the modal pages
+	# Orientation Day, avatar, with its coach gone (the plain keys are the modal pages there; the coach's own lock is the next test's)
 	var lesson = TutorialKit.avatar_game(0)
 	lesson.coach.queue_free()
 	lesson.coach = null
@@ -432,6 +432,54 @@ func test_the_old_yard_and_the_tutorial_keep_the_modal_pages_on_the_plain_keys()
 	_press(lesson, KEY_T)
 	eq(lesson.hud.radio_page(), "news", "T is the News, which is the lesson")
 	await TutorialKit.leave(lesson)
+
+
+## Orientation Day (avatar) with its REAL coach: its lessons teach the modal pages and the coach's lock refuses what a step does not teach,
+## so the panel has the News page and no other (its Jobs, Build and Map tabs are not there and cannot be opened), the prompt of E follows
+## the coach, and the toolbar's tips do not promise a panel.
+func test_orientation_day_keeps_the_panels_other_pages_locked_with_the_coach() -> void:
+	var lesson = TutorialKit.avatar_game(0)    # (the first step: nothing is allowed yet)
+	var h = lesson.hud
+	h.update_hud(lesson.sim, 1, true, 0)
+	check(lesson.coach != null and lesson.avatar_mode and lesson.tutorial, "(Orientation Day, with its coach)")
+	_press(lesson, KEY_T)
+	eq(h.radio_page(), "news", "T opens the News, which is a lesson")
+	for page in ["jobs", "build", "map"]:
+		check(not h.radio_panel.page_available(page), "the %s page is not to be had" % page)
+		check(not h.radio_panel.tab_button(page).visible, "and its tab is not there")
+		h.open_radio(page)
+		eq(h.radio_page(), "news", "open_radio('%s' ) leaves the panel on the News" % page)
+		h.radio_panel.open(page, {"focus": "dez"})
+		eq(h.radio_page(), "news", "so does the panel's own open")
+	check(h.radio_panel.tab_button("news").visible, "(the News tab is)")
+	h.close_radio()
+	h.open_radio("jobs")
+	check(not h.radio_open(), "nor does a locked page open a shut panel")
+	# the keys: the coach refuses what the step does not teach (and the modal pages stay the plain keys' business)
+	_press(lesson, KEY_J)
+	check(not h.radio_open() and h.jobs_screen == null, "J is refused, and is not the panel's Jobs page")
+	_press(lesson, KEY_N)
+	check(not h.radio_open() and h.build_screen == null, "N too")
+	_press(lesson, KEY_G)
+	check(not h.radio_open() and not h.town_board_open(), "G too")
+	# E: the prompt follows the coach (the pill is never drawn for what E would be refused)
+	var dez = _person(lesson, "dez")
+	var me = lesson.sim.avatar.player()
+	dez.x = me.x + 1.0
+	dez.y = me.y
+	for i in 4:
+		lesson._process(DT)
+	check(not lesson.coach.would_allow("interact"), "(the coach refuses E here)")
+	check(lesson.overlay.prompt_candidate().is_empty(), "so there is no prompt of E")
+	# the toolbar's tips are the plain ones: the keys are the modal pages
+	check(not String(h.jobs_button.tooltip_text).contains("radio panel"), "the Jobs key does not promise a panel: '%s'" % h.jobs_button.tooltip_text)
+	await TutorialKit.leave(lesson)
+	# step 11 teaches the Duty roster: J opens it, the modal page, and the panel has no Jobs page even so
+	var roster = TutorialKit.avatar_game(11)
+	roster.hud.update_hud(roster.sim, 1, true, 0)
+	check(roster.coach != null, "(the roster's lesson)")
+	check(not roster.hud.radio_panel.page_available("jobs"), "the panel's Jobs page is not there in the roster's lesson either")
+	await TutorialKit.leave(roster)
 
 
 func test_esc_closes_the_talk_card_then_the_panel_then_the_selection_then_it_is_the_menu() -> void:

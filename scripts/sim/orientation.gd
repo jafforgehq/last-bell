@@ -280,14 +280,26 @@ func _prepare() -> void:
 	sim.tactics.auto_jobs.clear()
 
 
-## It cannot be lost: nobody dies or turns or leaves, no wall falls, no trip goes wrong.
-func _safety() -> void:
-	sim.permadeath = false
+## No wall section is under its floor: raised at the start of a step (`_safety`) and again at the end of it (`after_step`), for the dead
+## strike the walls after the scenario has had its turn, and a wall that was at the floor would otherwise show a hit's worth under it
+## until the next step.
+func _wall_floor() -> void:
 	for s in sim.segments:
 		var floor_hp: float = s.max_hp * (0.41 if s.state == 3 else WALL_FLOOR)
 		if s.hp < floor_hp:
 			s.hp = floor_hp
 			sim._segment_state(s)
+
+
+## The end of every step (Sim.update calls it when the scenario has it).
+func after_step() -> void:
+	_wall_floor()
+
+
+## It cannot be lost: nobody dies or turns or leaves, no wall falls, no trip goes wrong.
+func _safety() -> void:
+	sim.permadeath = false
+	_wall_floor()
 	var latest: float = sim.clock_min + TURN_MARGIN_MIN
 	for p in sim.people:
 		if p.infected_at >= 0.0 and p.turn_at >= 0.0 and p.turn_at < latest:

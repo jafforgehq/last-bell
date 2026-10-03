@@ -19,7 +19,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 
-## The card is closing: the HUD hides it. (The reason is for the tests: "esc", "e", "far", "away", "down", "gone", "modal", "lost".)
+## The card is closing: the HUD hides it. (The reason is for the tests: "esc", "e", "far", "away", "down", "gone", "modal", "lost", "you".)
 signal closed(why: String)
 
 const CARD_W := 330.0
@@ -70,6 +70,9 @@ const NONE_YET := "?"
 var _needs_sig := NONE_YET
 var _opening_sig := NONE_YET
 var _opening_activity := ""
+## They were down when the card was opened: then the card is for what they need and stays (their verbs are off, with the reason); it closes
+## for a fall while it is open (until they have got up once).
+var _down_at_open := false
 var _built := false
 
 
@@ -237,6 +240,7 @@ func open(p, res: Dictionary = {}) -> void:
 	_needs_sig = NONE_YET
 	_opening_sig = NONE_YET
 	_opening_activity = String(p.activity)
+	_down_at_open = bool(p.downed)
 	refresh()
 	_place()
 
@@ -268,8 +272,13 @@ func ending() -> String:
 		return "gone"
 	if p.away != null:
 		return "away"
+	if p.player:
+		return "you"    # (the one it was for leads now: a succession)
 	if p.downed:
-		return "down"
+		if not _down_at_open:
+			return "down"
+	else:
+		_down_at_open = false
 	var s = _sim()
 	if s == null or not bool(host.get("avatar_ui")):
 		return "lost"
