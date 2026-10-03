@@ -6,6 +6,10 @@
 ## `setup(host, radio_getter, options)` as call_view.gd (the HUD lends its looks; the radio comes from the Callable; the options are
 ## handed on to the views). `refresh()` brings it up to date (the HUD does it with each update while it is open). The panel is as wide
 ## as its `custom_minimum_size.x` (the HUD gives it the clock's width) and as tall as `fit(max_h)` lets it be; what does not fit scrolls.
+##
+## Round 18: it is also the News PAGE of the radio panel (radio_panel.gd), which has the page contract (`setup(host, sim_getter, options)`,
+## `refresh()`, `focus_on(id)`, `full_page()`): the Callable may return the radio or a sim that has one, and with the option "embedded"
+## the panel wears no board of its own (the radio panel's is behind it) and has no title (the tab says it).
 ## Lines are UNREAD while their id is above `seen_id`; `mark_read()` sets it to the newest (the HUD does when the panel is shut). The
 ## radio keeps the number (`news_seen`), so the yard's panel and a place's share it: what is read in one is read in the other. A
 ## radio without that field (a test's stand-in) leaves it to the panel.
@@ -47,6 +51,8 @@ var scroll: ScrollContainer
 var body: VBoxContainer
 var title_label: Label
 var count_label: Label
+var embedded := false
+var head: HBoxContainer
 var _radio_getter: Callable
 var _calls_box: VBoxContainer
 var _log_box: VBoxContainer
@@ -58,17 +64,22 @@ var _built := false
 
 func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	host = host_hud
-	_radio_getter = radio_getter
+	_radio_getter = func(): return _as_radio(radio_getter.call() if radio_getter.is_valid() else null)
 	options = opts
 	if _built:
 		return
 	_built = true
-	add_theme_stylebox_override("panel", host._style(host.PANEL, 6, host.LINE, true, "panel"))
+	embedded = bool(opts.get("embedded", false))
+	if embedded:
+		add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	else:
+		add_theme_stylebox_override("panel", host._style(host.PANEL, 6, host.LINE, true, "panel"))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var col: VBoxContainer = host._vbox(6)
 	add_child(col)
-	var head: HBoxContainer = host._hbox(6)
+	head = host._hbox(6)
 	title_label = host._caps("News")
+	title_label.visible = not embedded
 	head.add_child(title_label)
 	head.add_child(host._spacer())
 	count_label = host._label("", Fonts.cond(700, 0), 12, host.ACCENT)
@@ -96,6 +107,25 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 
 func _radio():
 	return _radio_getter.call() if _radio_getter.is_valid() else null
+
+
+## The radio of what the Callable gave: the radio itself (anything that has a log of news: a place's, a test's stand-in) or a sim that has one.
+static func _as_radio(r):
+	if r == null:
+		return null
+	if r.get("news") != null:
+		return r
+	var inner = r.get("radio")
+	return inner if inner != null else r
+
+
+## The page contract (radio_panel.gd): the news has nothing to focus on and no fuller page.
+func focus_on(_id: String) -> void:
+	scroll.scroll_vertical = 0
+
+
+func full_page() -> void:
+	pass
 
 
 ## The narrow form (a small window): the hours are left off the lines and the panel is as wide as the clock is then.
@@ -190,6 +220,8 @@ func refresh() -> void:
 	var words := "%d new" % n if n > 0 else ""
 	if count_label.text != words:
 		count_label.text = words
+	if embedded and head.visible != (words != ""):
+		head.visible = words != ""
 
 
 func _sync_calls(open: Array, open_ids: Array) -> void:

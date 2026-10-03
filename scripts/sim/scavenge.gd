@@ -86,6 +86,15 @@
 ## The played result (`RaidRun.result()`, in the dice's shape: loot, hurt, lost, clear, rescue, beats, ammo_used) has two keys
 ## more for this: `hp` {person id: health (0 to 100) they have when they leave the place} and `skills` {person id: {skill:
 ## points gained there}}. Both are applied at the finish to those who come home (a missing key changes nothing).
+##
+## AN ERRAND (round 18, "home"). In avatar mode (`sim.player_id != ""`) a trip the dice decide (`send`: from the radio panel's Map
+## page, the radio's `request_errand`, or the old dialog) is an errand: the player is not along, so it works but does worse than
+## the player's own trip: the loot is `ERRAND_LOOT` of what it would be, the rare finds (`extra`) are rolled and not added, nobody
+## is rescued, no vehicle is got running, the chance of clearing a place is `ERRAND_CLEAR` lower, each member's wound chance is
+## `ERRAND_WOUND` times and the chance of not coming back at least `ERRAND_LOSS_PER_DANGER` for each point of danger (and nest)
+## from danger 1 up. Every die is still thrown (a run's dice stay in step); only what is done with it changes. The result carries
+## `errand: true`, the trip tells it ("Without you along they found less.") and the radio's news does (kind "errand"). The
+## player's own trips (`begin_played`) and a game with no avatar are untouched: their numbers are the old ones.
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
@@ -136,6 +145,14 @@ const LOSS_BASE := 0.01
 const LOSS_MIN_DANGER := 2
 ## The danger multiplier for story, standard and brutal.
 const DANGER_MULT := [0.5, 1.0, 1.6]
+## A delegated errand (see the header): what it does worse than the trip the player leads. One place for the numbers; the Map page's
+## note reads `errand_terms()`.
+const ERRAND_LOOT := 0.6
+const ERRAND_WOUND := 1.5
+const ERRAND_LOSS_PER_DANGER := 0.03
+const ERRAND_CLEAR := -0.2
+## What the return of an errand that brought something says (the banner and the radio's news).
+const ERRAND_LESS := "Without you along they found less."
 ## The stocks a trip can bring back, in the order they are rolled and told.
 const STOCKS := ["food", "water", "scrap", "ammo", "meds", "fuel"]
 ## A trip by car (see the header): a person within BOARD_REACH tiles of their door starts to get in; a door takes BOARD_MIN game
@@ -246,7 +263,18 @@ func why_not() -> String:
 
 
 ## `why_not`, for a trip the player leads when `played` (the avatar may go: someone is free if the player is).
-func _why_not(played: bool) -> String:
+func _why_not(played: bool, healer_ok: bool = false) -> String:
+	var why := why_not_when()
+	if why != "":
+		return why
+	if free_survivors(played, healer_ok).is_empty():
+		return "Nobody is free to go."
+	return ""
+
+
+## What is against any trip at this moment, whoever goes: the run is over, the hour, a party already out (as many as the game allows),
+## too many of the dead at the gate ("" when nothing is).
+func why_not_when() -> String:
 	if sim.over != "":
 		return "The run is over."
 	if sim.phase == "dusk" or sim.phase == "night":
@@ -259,8 +287,6 @@ func _why_not(played: bool) -> String:
 		return "A party is already out." if not town_mode else "Both parties are out."
 	if dead_at_gate() >= DEAD_LIMIT:
 		return "Too many of the dead at the gate."
-	if free_survivors(played).is_empty():
-		return "Nobody is free to go."
 	return ""
 
 
@@ -352,21 +378,29 @@ func gizmo(_id: String, _sel) -> bool:
 ## drafted them, "to the walls", a call's errand: the old controls are gone), and being taken on a trip is what "come with me"
 ## asks: the party's opening ends them, so they are no reason to refuse. The old game keeps refusing a person it has drafted
 ## or sent somewhere by hand.
-func can_go(p, played: bool = false) -> bool:
+func can_go(p, played: bool = false, healer_ok: bool = false) -> bool:
 	if p == null or p.dead or p.downed or p.away != null or sim.morale.breakdown(p) or (p.player and not played):
 		return false    # (the player leaves by their own hands: a played trip (`played`), never the dice's party)
 	if String(sim.player_id) == "" and (p.order != null or (p.drafted and String(p.stance) == "")):
 		return false    # (a stance, the radio's, drafted them: that is not an order of the old controls)
-	if _party_of(p) != null or sim.medical.goal_for(p) != null:
+	if _party_of(p) != null or _held_by_medicine(p, healer_ok):
 		return false
 	return sim.medical.infection_stage(p) != "delirious"
 
 
+## Whether the medical module has them: leaving through the gate, kept apart, or on a patient's case. `healer_ok`: a healer on a case
+## does not count (the radio's errand takes them off it when they are pushed to go: `Radio.request_errand`).
+func _held_by_medicine(p, healer_ok: bool) -> bool:
+	if not healer_ok:
+		return sim.medical.goal_for(p) != null
+	return sim.medical.sendouts.has(p.id) or sim.medical.apart.has(p.id)
+
+
 ## The survivors who can be sent now, in crew order.
-func free_survivors(played: bool = false) -> Array:
+func free_survivors(played: bool = false, healer_ok: bool = false) -> Array:
 	var out: Array = []
 	for p in sim.people:
-		if can_go(p, played):
+		if can_go(p, played, healer_ok):
 			out.append(p)
 	return out
 
@@ -407,6 +441,48 @@ func loot_scale(site_id: String, people: Array) -> float:
 			scale *= LEADER_BONUS
 			break
 	return scale
+
+
+## Whether a party the dice decide is an errand (see the header): there is an avatar and the player is not along.
+func is_errand(party) -> bool:
+	return String(sim.player_id) != "" and not bool(party.get("played", false))
+
+
+## What an errand does worse, for the Map page's note and the radio's `errand_willingness`: the numbers of the constants.
+func errand_terms() -> Dictionary:
+	return {"loot": ERRAND_LOOT, "wound": ERRAND_WOUND, "loss_per_danger": ERRAND_LOSS_PER_DANGER, "clear": ERRAND_CLEAR, "extras": false, "rescue": false, "vehicle": false}
+
+
+## Why these people cannot be sent on an errand to this place now ("" when they can): what `send` refuses, in the words the
+## radio and the Map page show. The settlement game's reasons (`_why_not_town`: the hour, the dead at the gate, a party out, the
+## seats and the fuel, the place and the action, each person) or the classic start's. `healer_ok`: a healer on a case may go (the
+## radio takes them off it).
+func why_not_errand(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "", healer_ok: bool = false) -> String:
+	if town_mode and not errands.has(place_id):
+		return _why_not_town(people, place_id, action, vehicle_id, false, healer_ok)
+	var when := why_not_when()
+	if when != "" and not _errand_ok(place_id):
+		return when
+	if people.is_empty():
+		return "Nobody is going."
+	if action != "loot":
+		return "There is nothing to do there but look for what is left."    # (the classic start has no scouting and no clearing)
+	if vehicle_id != "":
+		return "There is no vehicle to take."
+	if people.size() > MAX_PARTY:
+		return "There is room for %d." % MAX_PARTY
+	if _site(place_id).is_empty():
+		return "Nobody knows where that is."
+	if _days_until_ready(place_id) > 0:
+		return "Picked over."
+	var ids: Array = []
+	for p in people:
+		if p == null or not can_go(p, false, healer_ok):
+			return "%s cannot go now." % (String(p.first) if p != null else "Someone")
+		if ids.has(p.id):
+			return "%s is on the list twice." % String(p.first)
+		ids.append(p.id)
+	return ""
 
 
 # ------------------------------------------------------------------- saving --
@@ -536,7 +612,7 @@ func _copy_result(raw) -> Dictionary:
 				lost.append(String(id))
 	var out := {"loot": loot, "hurt": hurt, "lost": lost}
 	if raw is Dictionary:
-		for k in ["clear", "rescue"]:
+		for k in ["clear", "rescue", "errand"]:
 			if bool(raw.get(k, false)):
 				out[k] = true
 		for k in ["beats", "reveals"]:
@@ -1021,6 +1097,14 @@ func _announce_departure(party: Dictionary) -> void:
 		if float(party.return_at) - sim.clock_min > 14.0 * 60.0 or due < 6.5:
 			back = "Back tomorrow, or the day after."
 	sim.alert("scav-out-%d" % int(party.n), "info", "%s left for %s." % [_join(names), _where(String(party.site))], back, gate_center(), DEPART_ALERT_TTL)
+	if bool(party.result.get("errand", false)) and sim.get("radio") != null:
+		var expect := ""
+		match String(party.get("action", "loot")):
+			"loot":
+				expect = "They will find less without you."
+			"clear":
+				expect = "They will have a harder time without you."
+		sim.radio.log_news("errand", "%s set off for %s." % [_join(names), _where(String(party.site))], expect)
 
 
 ## The alert and banner for a settled trip.
@@ -1039,6 +1123,8 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 				hurt_lines.append("%s was bitten." % p.first)
 			"scratch":
 				hurt_lines.append("%s is bleeding." % p.first)
+	var errand := bool(party.result.get("errand", false))
+	var lighter := errand and not brought.is_empty()    # (an errand that brought something home brought less: it says so)
 	var text := ""
 	var sub := ""
 	var level := "info"
@@ -1048,6 +1134,8 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 		level = "danger"
 	else:
 		text = "%s %s back from %s with %s." % [_join(came_names), "is" if came.size() == 1 else "are", where, _loot_text(brought)]
+		if lighter:
+			text += " " + ERRAND_LESS
 		for line in hurt_lines:
 			text += " " + line
 		if not lost.is_empty():
@@ -1071,11 +1159,15 @@ func _tell(party: Dictionary, came: Array, lost: Array, brought: Dictionary) -> 
 			line = "Lost at %s." % where
 		else:
 			line = "%s %s home with %s." % [_join(came_names), "is" if came.size() == 1 else "are", _loot_text(brought)]
+	if lighter:
+		line += " " + ERRAND_LESS
 	for hurt_line in hurt_lines:
 		line += " " + hurt_line
 	if not news.is_empty():
 		line += " " + news
 	sim.events.append({"type": "banner", "text": title, "sub": line})
+	if errand and sim.get("radio") != null:
+		sim.radio.log_news("errand", title, line)    # (the same words as the banner: the radio's log keeps them)
 
 
 ## What the trip learned, in a sentence or two (the settlement game only): what the way held (the beats), the
@@ -1226,8 +1318,8 @@ func send_played(people: Array, site_id: String, action: String, vehicle_id: Str
 ## refuses in the settlement game, the hour, the dead at the gate, a party that is already out, nobody free (`why_not`),
 ## the seats, then the place and the errand (`why_not_action`), then each person (`can_go`). `played`: the player leads it
 ## (the avatar may go).
-func _why_not_town(people: Array, site_id: String, action: String, vehicle_id: String, played: bool = false) -> String:
-	var why := _why_not(played)
+func _why_not_town(people: Array, site_id: String, action: String, vehicle_id: String, played: bool = false, healer_ok: bool = false) -> String:
+	var why := _why_not(played, healer_ok)
 	if why != "":
 		return why
 	var most: int = int(sim.vehicles.kind_of(vehicle_id).get("seats", MAX_PARTY_TOWN)) if vehicle_id != "" else MAX_PARTY_TOWN
@@ -1242,7 +1334,7 @@ func _why_not_town(people: Array, site_id: String, action: String, vehicle_id: S
 		return "Nobody knows where that is."
 	var ids: Array = []
 	for p in people:
-		if p == null or not can_go(p, played):
+		if p == null or not can_go(p, played, healer_ok):
 			return "%s cannot go now." % (String(p.first) if p != null else "Someone")
 		if ids.has(p.id):
 			return "%s is on the list twice." % String(p.first)
@@ -1482,15 +1574,16 @@ func _played_result(played: Dictionary, party: Dictionary, people: Array) -> Dic
 
 
 ## The chance that this party clears this place, as the rules throw it: 0.35 plus 0.08 for each point of Shooting,
-## less 0.12 for each point of danger and nest (none once it is cleared), kept between 0.1 and 0.95.
-func clear_chance(people: Array, place_id: String) -> float:
+## less 0.12 for each point of danger and nest (none once it is cleared), kept between 0.1 and 0.95. `errand`: the party is an
+## errand (the player is not along): `ERRAND_CLEAR` is added before the limits.
+func clear_chance(people: Array, place_id: String, errand: bool = false) -> float:
 	var shooting := 0.0
 	for p in people:
 		shooting += float(p.skills.Shooting)
 	var cleared: bool = sim.town.state_of(place_id) == "cleared"
 	var danger := 0 if cleared else int(_site(place_id).get("danger", 0))
 	var nest: int = 0 if cleared else sim.town.nest_strength(place_id)
-	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest), 0.1, 0.95)
+	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (ERRAND_CLEAR if errand else 0.0), 0.1, 0.95)
 
 
 ## The extras of a trip's end in the settlement game: the places shown, a nest gone, a survivor home, the
@@ -1532,7 +1625,10 @@ func _decide(party: Dictionary) -> Dictionary:
 		var p = _person(String(id))
 		if p != null:
 			members.append(p)
+	var errand := is_errand(party)
 	var scale := loot_scale(String(party.site), members)
+	if errand:
+		scale *= ERRAND_LOOT
 	var found := {}
 	for k in STOCKS:
 		if site.loot.has(k):
@@ -1543,7 +1639,7 @@ func _decide(party: Dictionary) -> Dictionary:
 		if site.extra.has(k):
 			var pair: Array = site.extra[k]
 			var luck: float = sim.rng.randf()
-			if luck < float(pair[0]):
+			if luck < float(pair[0]) and not errand:    # (an errand finds nothing rare: the die is thrown, the find is not added)
 				found[k] = int(found.get(k, 0)) + roundi(float(pair[1]) * scale)
 	var mult: float = DANGER_MULT[clampi(int(sim.difficulty), 0, DANGER_MULT.size() - 1)]
 	var danger := int(site.danger)
@@ -1553,18 +1649,27 @@ func _decide(party: Dictionary) -> Dictionary:
 		var roll_loss: float = sim.rng.randf()
 		var roll_wound: float = sim.rng.randf()
 		var roll_kind: float = sim.rng.randf()
-		if danger >= LOSS_MIN_DANGER and roll_loss < LOSS_BASE * mult:
+		var lose: bool = danger >= LOSS_MIN_DANGER and roll_loss < LOSS_BASE * mult
+		if errand and danger >= 1:
+			lose = lose or roll_loss < ERRAND_LOSS_PER_DANGER * mult * float(danger)
+		if lose:
 			lost.append(p.id)
 			continue
 		var shooting := float(p.skills.Shooting)
-		if roll_wound < WOUND_BASE * danger * mult * (1.0 - shooting / 15.0):
+		var wound_p: float = WOUND_BASE * danger * mult * (1.0 - shooting / 15.0)
+		if errand:
+			wound_p *= ERRAND_WOUND
+		if roll_wound < wound_p:
 			hurt[p.id] = "bite" if roll_kind < BITE_SHARE else "scratch"
 	var loot := {}
 	if lost.size() < members.size():
 		for k in STOCKS:
 			if int(found.get(k, 0)) > 0:
 				loot[k] = int(found[k])
-	return {"loot": loot, "hurt": hurt, "lost": lost}
+	var result := {"loot": loot, "hurt": hurt, "lost": lost}
+	if errand:
+		result["errand"] = true
+	return result
 
 
 ## The settlement game's version of the dice: the same dice as the classic trip for the loot, the wounds and
@@ -1585,9 +1690,12 @@ func _decide_town(party: Dictionary) -> Dictionary:
 			members.append(p)
 	var cleared: bool = sim.town.state_of(id) == "cleared"
 	var vehicle_id := String(party.get("vehicle", ""))
+	var errand := is_errand(party)
 	var scale := loot_scale(id, members)
 	if vehicle_id != "":
 		scale *= float(sim.vehicles.kind_of(vehicle_id).get("cargo", 1.0))
+	if errand:
+		scale *= ERRAND_LOOT
 	var found := {}
 	for k in STOCKS:
 		if site.loot.has(k):
@@ -1596,7 +1704,7 @@ func _decide_town(party: Dictionary) -> Dictionary:
 	for k in STOCKS:
 		if site.extra.has(k):
 			var pair: Array = site.extra[k]
-			if sim.rng.randf() < float(pair[0]):
+			if sim.rng.randf() < float(pair[0]) and not errand:    # (an errand finds nothing rare: the die is thrown, the find is not added)
 				found[k] = int(found.get(k, 0)) + roundi(float(pair[1]) * scale)
 	var danger := 0 if cleared else int(site.danger)
 	var nest: int = 0 if cleared else sim.town.nest_strength(id)
@@ -1608,7 +1716,7 @@ func _decide_town(party: Dictionary) -> Dictionary:
 	var roll_clear: float = sim.rng.randf()
 	var clear_ok := false
 	if action == "clear":
-		clear_ok = roll_clear < clear_chance(members, id)
+		clear_ok = roll_clear < clear_chance(members, id, errand)
 	var mult: float = DANGER_MULT[clampi(int(sim.difficulty), 0, DANGER_MULT.size() - 1)]
 	var hurt := {}
 	var lost: Array = []
@@ -1617,17 +1725,22 @@ func _decide_town(party: Dictionary) -> Dictionary:
 		var roll_loss: float = sim.rng.randf()
 		var roll_wound: float = sim.rng.randf()
 		var roll_kind: float = sim.rng.randf()
-		if effective >= float(LOSS_MIN_DANGER) and roll_loss < LOSS_BASE * mult * (effective / 2.0):
+		var lose: bool = effective >= float(LOSS_MIN_DANGER) and roll_loss < LOSS_BASE * mult * (effective / 2.0)
+		if errand and effective >= 1.0:
+			lose = lose or roll_loss < ERRAND_LOSS_PER_DANGER * mult * effective
+		if lose:
 			lost.append(p.id)
 			continue
 		var wound_p: float = (WOUND_BASE * effective * mult + (NIGHT_OUT_WOUND * mult if night_out else 0.0)) * (1.0 - float(p.skills.Shooting) / 15.0)
+		if errand:
+			wound_p *= ERRAND_WOUND
 		if action == "clear" and not clear_ok:
 			wound_p = minf(0.95, wound_p * 2.5)
 		if roll_wound < wound_p:
 			hurt[p.id] = "bite" if roll_kind < BITE_SHARE else "scratch"
 	var roll_rescue: float = sim.rng.randf()
 	var rescue := bool(place.get("survivor", false)) and not bool(sim.town.state.get(id, {}).get("rescued", false)) and (clear_ok or cleared or (action == "loot" and roll_rescue < 0.5))
-	if action == "scout":
+	if action == "scout" or errand:    # (nobody is rescued by an errand: the player is not there to talk them out)
 		rescue = false
 	# the way: a beat or none for each stretch of it
 	var hours: float = action_hours(id, action, vehicle_id)
@@ -1698,7 +1811,7 @@ func _decide_town(party: Dictionary) -> Dictionary:
 		var building_total := 0.0
 		for p in members:
 			building_total += float(p.skills.Building)
-		if sim.rng.randf() < sim.vehicles.start_chance(building_total):
+		if sim.rng.randf() < sim.vehicles.start_chance(building_total) and not errand:    # (the die is thrown; an errand does not get it running)
 			result["vehicle"] = String(place.vehicle)
 	if rescue and lost.size() < members.size():
 		result["rescue"] = true
@@ -1710,6 +1823,8 @@ func _decide_town(party: Dictionary) -> Dictionary:
 		result["morale"] = clampf(morale, -8.0, 8.0)
 	if delay > 0.0:
 		result["delay_h"] = delay
+	if errand:
+		result["errand"] = true
 	return result
 
 

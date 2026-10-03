@@ -30,6 +30,14 @@
 ## THE ALARM is the call to arms: `alarm(true)` puts everyone at their posts now (by day too, in any start) until
 ## `alarm(false)` or the dawn, and ends whatever stances there were.
 ##
+## ASKING FOR WORK (round 18). The same request, for the colony's work: an errand (`request_errand`: people sent to a place without the
+## player, a dice trip in `scavenge.gd` that does worse than the player's own), a day job (`request_job`), a night post
+## (`request_post`), "fill the empty seats" (`request_fill`) and an order for a building (`request_build`). Each has a pure
+## `*_willingness` that gives the reason when there is one, in the words the Jobs, Build and Map pages show (a page never writes a
+## reason of its own); `reason_not` is the one list of the reasons a person may have, shared with the verbs (`willingness`). A roster
+## change is a plan, accepted or refused at once with the person's line; an errand leaves after the radio's delay (`errand_wait`).
+## Insisting (`args.insist`) overrides a soft refusal at the same cost as for a verb. Nothing is random.
+##
 ## Events this module adds to sim.events: {"type": "radio_line", "who", "verb", "ok", "line", "tone"} when someone is asked,
 ## {"type": "stance", "who", "stance"} when a request takes effect, {"type": "alarm", "on"}, {"type": "radio_answered",
 ## "id", "option", "by_default"} when a call is settled.
@@ -108,6 +116,9 @@ var news: Array = []
 var news_seen := 0
 ## Requests that have been agreed to and are waiting for their delay: [{"who", "verb", "at", "left" (seconds), "insist"}].
 var pending: Array = []
+## Errands that have been agreed to and are waiting for their delay: [{"ids": [person ids], "place", "action" ("loot", "scout",
+## "clear"), "vehicle" (an id or ""), "left" (seconds of the radio's time)}]. When it is up `scavenge.send` makes the party. Saved.
+var errand_wait: Array = []
 var alarm_on := false
 ## Why each person trusts the player as they do, newest last: person id to [{"why", "delta", "day"}].
 var reasons := {}
@@ -150,6 +161,7 @@ func start() -> void:
 func _reset() -> void:
 	news.clear()
 	pending.clear()
+	errand_wait.clear()
 	alarm_on = false
 	reasons.clear()
 	trust_moved.clear()
@@ -462,6 +474,8 @@ func tick(dt: float) -> void:
 		var p = _person(String(e.who))
 		if p != null and _hard_reason(p) == "" and _busy_hard(p) == "":
 			_take_effect(p, String(e.verb), e.at)
+	if not errand_wait.is_empty():
+		_tick_errands(dt)
 	# (a follower or a cover has nobody to follow while the leader is out on a trip or gone: they go back to their jobs; a hold or
 	# a search is a spot, and stays)
 	var lead = leader()
@@ -511,14 +525,18 @@ func set_stance(p, stance: String, at: Vector2 = Vector2.ZERO) -> void:
 	p.repair = null
 	p.goal_key = ""
 	sim.tactics.forget_trip(p)
-	# a nurse pushed off her patient leaves them (the patient goes back in the queue)
+	_leave_patient(p)
+	_sent.erase(String(p.id))
+	_applied[String(p.id)] = {"at": _age, "hurt": false}
+
+
+## A nurse pushed off her patient leaves them (the patient goes back in the queue).
+func _leave_patient(p) -> void:
 	var i: int = sim.medical.jobs.size() - 1
 	while i >= 0:
 		if sim.medical.jobs[i].healer == p:
 			sim.medical.jobs.remove_at(i)
 		i -= 1
-	_sent.erase(String(p.id))
-	_applied[String(p.id)] = {"at": _age, "hurt": false}
 
 
 ## Ends whatever the person was asked to follow, hold, cover or search, and what it drafted them for.
@@ -635,6 +653,576 @@ func _open_spot(origin: Vector2, want: Vector2) -> Vector2:
 		if sim.path_p.sight(world.solid_p, origin, pt, 0.2):
 			return pt
 	return origin
+
+
+# ------------------------------------------------------------------ asking for work --
+
+## What they say, by tone: an errand, a day job or a night post, an order for a building.
+const ERRAND_LINES := {"willing": "I'll go.", "grudging": "Fine. I'll go.", "doubtful": "...if you say so."}
+const WORK_LINES := {"willing": "Right away.", "grudging": "Fine. I'll do it.", "doubtful": "...if you say so."}
+const BUILD_LINES := {"willing": "On it.", "grudging": "Fine. I'll start.", "doubtful": "...if you say so."}
+## What a refusal says they cannot do, by what is asked.
+const CANT_GO := "go"
+const CANT_JOB := "take a job now"
+const CANT_POST := "take a post now"
+## The errands that can be asked (`scavenge.send`'s actions).
+const ERRAND_ACTIONS := ["loot", "scout", "clear"]
+## The player is nobody's to give a seat or a post to.
+const NO_SEAT_FOR_YOU := "You: no seat, you are the player"
+const NO_POST_FOR_YOU := "You: no post, you are the player"
+## What a Builders crew of nobody says (advice only: the site waits).
+const NO_BUILDERS := "Nobody is on the Builders job: give it to someone on the Jobs page, or the site waits"
+
+
+## Why this person cannot be asked something now: {"ok", "why" (the words, "Ana: tending a patient, can't go"; "" when ok), "hard"
+## (nobody can argue with it), "sentence" ("Ana is tending a patient": for a line that names several), "line" (what they would say)}.
+## `kind` "go": the reasons of `willingness(p, "come")` exactly (hard: is the player, gone, turned, down, away, in a breakdown, leaving by
+## the gate, heading out with a party; soft: tending a patient, the lone nurse, the noon radio hour, the forecast, then bleeding, a
+## fever or an infection, starving, parched, shaken). `kind` "work": the same words for a change TO a station or a post ("can't take a
+## job now"); taking someone off their job (`job_willingness(p, "")`) is refused only by the hard ones. One list for the verbs, the
+## errands and the roster: never two truths. Pure.
+func reason_not(p, kind: String) -> Dictionary:
+	return _reason_not(p, kind, "-", CANT_GO if kind == "go" else CANT_JOB)
+
+
+func _reason_not(p, kind: String, station_id: String, cant: String) -> Dictionary:
+	var out := {"ok": true, "why": "", "hard": false, "sentence": "", "line": ""}
+	if p == null:
+		return _no(out, "Nobody answers", "Nobody answers", "", true)
+	var hard := _hard_reason(p)
+	if hard != "":
+		return _no(out, hard, hard, "", true)
+	var first := String(p.first)
+	var busy := _busy_hard(p)
+	if busy != "":
+		return _no(out, "%s: %s, can't %s" % [first, busy, cant], "%s is %s" % [first, busy], _capital(busy) + ".", true)
+	if kind != "go" and station_id == "":
+		return out
+	var reason := _busy_soft(p)
+	if reason == "":
+		reason = _health_reason(p)
+	if reason != "":
+		return _no(out, "%s: %s, can't %s" % [first, reason, cant], "%s is %s" % [first, reason], _capital(reason) + ", can't %s." % cant, false)
+	return out
+
+
+func _no(out: Dictionary, why: String, sentence: String, line: String, hard: bool) -> Dictionary:
+	out["ok"] = false
+	out["why"] = why
+	out["sentence"] = sentence
+	out["line"] = line
+	out["hard"] = hard
+	return out
+
+
+static func _capital(text: String) -> String:
+	return text.substr(0, 1).to_upper() + text.substr(1)
+
+
+## "Dez", "Dez and Marcus", "Dez, Ana and Marcus".
+static func _and(words: Array) -> String:
+	if words.size() <= 1:
+		return "".join(words)
+	return "%s and %s" % [", ".join(words.slice(0, words.size() - 1)), words[words.size() - 1]]
+
+
+# ---- errands --
+
+## "Without you: about 60% of the loot, ..." (the numbers are the scavenge module's).
+func errand_note() -> String:
+	var terms: Dictionary = sim.scavenge.errand_terms()
+	return "Without you: about %d%% of the loot, no rare finds, no rescue, a worse chance everyone comes home" % roundi(float(terms.loot) * 100.0)
+
+
+## Whether these people would go on an errand to this place (an action "loot", "scout" or "clear", in a vehicle or on foot): {"ok" (the
+## trip can start with those who agree), "why" (the trip's own refusal first: `scavenge.why_not_errand`, the hour, the dead at the
+## gate, the seats and the fuel, the place; else "Nobody can go: Ana is tending a patient, Dez is down"; "" when ok), "going" (the
+## people who agree), "refused" ([{"id", "name", "why", "hard"}], each in the words of `reason_not(p, "go")`), "delay_s" (the slowest of
+## those going), "tone" (the least willing's), "terms" (`scavenge.errand_terms()`), "loot_note"}. Pure.
+func errand_willingness(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "") -> Dictionary:
+	var out := {"ok": false, "why": "", "going": [], "refused": [], "delay_s": 0.0, "tone": "refused", "terms": sim.scavenge.errand_terms(), "loot_note": errand_note()}
+	var going: Array = []
+	var refused: Array = []
+	var sentences: Array = []
+	var seen := {}
+	for p in people:
+		if p == null or seen.has(String(p.id)):
+			continue
+		seen[String(p.id)] = true
+		var r := _reason_not(p, "go", "-", CANT_GO)
+		var hard := bool(r.hard)
+		var why := String(r.why)
+		var sentence := String(r.sentence)
+		if r.ok:
+			if sim.scavenge.can_go(p):
+				going.append(p)
+				continue
+			hard = true    # (the trip's rules will not take them, whatever they say)
+			why = "%s cannot go now." % String(p.first)
+			sentence = "%s cannot go now" % String(p.first)
+		elif not hard and not sim.scavenge.can_go(p, false, true):
+			hard = true    # (a fever too far gone, kept apart, in a party: not a thing to push)
+		refused.append({"id": String(p.id), "name": String(p.first), "why": why, "hard": hard})
+		sentences.append(sentence)
+	out["going"] = going
+	out["refused"] = refused
+	var trip_why: String = String(sim.scavenge.why_not_errand(going, place_id, action, vehicle_id)) if not going.is_empty() else String(sim.scavenge.why_not_when())
+	if trip_why != "":
+		out["why"] = trip_why
+		return out
+	if going.is_empty():
+		out["why"] = "Nobody is going." if sentences.is_empty() else "Nobody can go: " + ", ".join(sentences)
+		return out
+	var slowest := 0.0
+	var least := 1000.0
+	for p in going:
+		slowest = maxf(slowest, delay_for(trust_of(p)))
+		least = minf(least, trust_of(p))
+	out["ok"] = true
+	out["delay_s"] = slowest
+	out["tone"] = tone_for(least)
+	return out
+
+
+## Asks these people to go on an errand: {"ok", "line" (the first of those going says it, by tone), "why", "going", "refused", "delay_s",
+## "tone", "insisted"}. `args.insist` sends those who refused softly too, each at INSIST_COST of trust and a blow to the mood (nothing is
+## paid when the trip itself is refused). Those who agree are queued in `errand_wait`; after `delay_s` of the radio's time `scavenge.send`
+## makes the party (a trip that cannot start then, the hour having passed, is logged: "The errand could not start: ..."). An errand brings
+## less than the player's own trip: `scavenge.errand_terms()`.
+func request_errand(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "", args: Dictionary = {}) -> Dictionary:
+	var out := {"ok": false, "line": "", "why": "", "going": [], "refused": [], "delay_s": 0.0, "tone": "refused", "insisted": false}
+	if leader() == null:
+		out["why"] = "Nobody is on the radio"
+		return out
+	var w := errand_willingness(people, place_id, action, vehicle_id)
+	out["refused"] = w.refused
+	var agree := {}
+	for p in w.going:
+		agree[String(p.id)] = true
+	var soft := {}
+	if bool(args.get("insist", false)):
+		for r in w.refused:
+			if not bool(r.hard):
+				soft[String(r.id)] = true
+	var go: Array = []
+	var pushed: Array = []
+	for p in people:
+		if p == null or go.has(p):
+			continue
+		if agree.has(String(p.id)):
+			go.append(p)
+		elif soft.has(String(p.id)):
+			go.append(p)
+			pushed.append(p)
+	if go.is_empty():
+		out["why"] = String(w.why)
+		_say_the_refusal(people)
+		return out
+	var trip_why: String = String(sim.scavenge.why_not_errand(go, place_id, action, vehicle_id, true))
+	if trip_why != "":
+		out["why"] = trip_why
+		return out
+	for p in pushed:
+		add_trust(p, -INSIST_COST, "You pushed them to go when they could not")
+		sim.morale.shock(p, INSIST_MORALE, "Pushed to go when they could not")
+	var delay := 0.0
+	var least := 1000.0
+	var ids: Array = []
+	for p in go:
+		delay = maxf(delay, delay_for(trust_of(p)))
+		least = minf(least, trust_of(p))
+		ids.append(String(p.id))
+	_replace_waits(ids)
+	errand_wait.append({"ids": ids, "place": place_id, "action": action, "vehicle": vehicle_id, "left": delay})
+	var tone := "doubtful" if pushed.has(go[0]) else tone_of(go[0])
+	var line := String(ERRAND_LINES[tone])
+	_say(go[0], "errand", true, line, tone)
+	var still: Array = []
+	for r in w.refused:
+		if not soft.has(String(r.id)):
+			still.append(r)
+	out["ok"] = true
+	out["line"] = line
+	out["going"] = go
+	out["refused"] = still
+	out["delay_s"] = delay
+	out["tone"] = tone_for(least) if pushed.is_empty() else "doubtful"
+	out["insisted"] = not pushed.is_empty()
+	return out
+
+
+## The first soft refusal of those asked says its line aloud (a bubble over their head, as a verb's does).
+func _say_the_refusal(people: Array) -> void:
+	for p in people:
+		if p == null:
+			continue
+		var r := _reason_not(p, "go", "-", CANT_GO)
+		if not r.ok and String(r.line) != "":
+			_say(p, "errand", false, String(r.line), "refused")
+			return
+
+
+## A new errand for these people replaces what they were waiting to do (an errand, a verb).
+func _replace_waits(ids: Array) -> void:
+	var i := errand_wait.size() - 1
+	while i >= 0:
+		var rest: Array = []
+		for id in errand_wait[i].ids:
+			if not ids.has(id):
+				rest.append(id)
+		if rest.is_empty():
+			errand_wait.remove_at(i)
+		else:
+			errand_wait[i]["ids"] = rest
+		i -= 1
+	i = pending.size() - 1
+	while i >= 0:
+		if ids.has(String(pending[i].who)):
+			pending.remove_at(i)
+		i -= 1
+
+
+## The errands whose time is up set off.
+func _tick_errands(dt: float) -> void:
+	var due: Array = []
+	var i := errand_wait.size() - 1
+	while i >= 0:
+		errand_wait[i]["left"] = float(errand_wait[i].left) - dt
+		if float(errand_wait[i].left) <= 0.0:
+			due.push_front(errand_wait[i])
+			errand_wait.remove_at(i)
+		i -= 1
+	for e in due:
+		_start_errand(e)
+
+
+## The party is made now, of those who can still go (someone lost or down meanwhile stays): they are off their stance and their patient,
+## and `scavenge.send` takes them. When it cannot (the hour has passed, the dead at the gate...) the radio says so.
+func _start_errand(e: Dictionary) -> void:
+	if sim.get("scavenge") == null:
+		return
+	var people: Array = []
+	for id in e.ids:
+		var p = _person(String(id))
+		if p != null and _hard_reason(p) == "" and _busy_hard(p) == "":
+			people.append(p)    # (someone who is down, gone or already out stays behind)
+	if people.is_empty():
+		_errand_failed(e, "nobody is left who can go")
+		return
+	var why: String = String(sim.scavenge.why_not_errand(people, String(e.place), String(e.action), String(e.vehicle), true))
+	if why != "":
+		_errand_failed(e, why)
+		return
+	for p in people:
+		clear_stance(p)
+		_leave_patient(p)
+	if not sim.scavenge.send(people, String(e.place), String(e.action), String(e.vehicle)):
+		_errand_failed(e, "the party could not be made")
+
+
+func _errand_failed(e: Dictionary, why: String) -> void:
+	var names: Array = []
+	for id in e.ids:
+		names.append(_first_of(String(id)))
+	var first_word := why.get_slice(" ", 0)
+	var spoken := why
+	var is_name := false
+	for q in sim.people:
+		is_name = is_name or String(q.first) == first_word
+	if not is_name:
+		spoken = why.substr(0, 1).to_lower() + why.substr(1)
+	log_news("errand", "The errand could not start: %s" % spoken, "%s stay at the base." % _and(names))
+
+
+# ---- jobs and posts --
+
+## Whether this person would take this day job (`station_id` "" is taking them off the one they have): {"ok", "why", "hard", "line"
+## (what they say, by the tone of their trust: "Right away." / "Fine. I'll do it." / "...if you say so."; their refusal when they
+## refuse), "tone", "delay_s" (0: a roster change is a plan, answered at once)}. Refused: the player ("You: no seat, you are the player"),
+## then the reasons a person has (`reason_not(p, "work", station_id)`: the hard ones, so that no soft reason is offered on top of a seat
+## that is not there), then the station (`jobs.why_not`: a full one names its crew, "no free seat at the Workbench: Dez and Marcus hold
+## it", hard; one not built yet), then the soft reasons. Pure.
+func job_willingness(p, station_id: String) -> Dictionary:
+	var out := {"ok": true, "why": "", "hard": false, "line": "", "tone": "", "delay_s": 0.0}
+	if p == null:
+		return _work_no(out, "Nobody answers", "", true)
+	if _is_leader(p):
+		return _work_no(out, NO_SEAT_FOR_YOU, "", true)
+	var r := _reason_not(p, "work", station_id, CANT_JOB)
+	if not r.ok and bool(r.hard):
+		return _work_no(out, String(r.why), String(r.line), true)
+	var station_why := _station_why(p, station_id)
+	if station_why != "":
+		return _work_no(out, station_why, "", true)
+	if not r.ok:
+		return _work_no(out, String(r.why), String(r.line), false)
+	out["tone"] = tone_of(p)
+	out["line"] = String(WORK_LINES[out.tone])
+	return out
+
+
+func _work_no(out: Dictionary, why: String, line: String, hard: bool) -> Dictionary:
+	out["ok"] = false
+	out["why"] = why
+	out["line"] = line
+	out["hard"] = hard
+	out["tone"] = "refused"
+	out["delay_s"] = 0.0
+	return out
+
+
+## Why this station cannot have this person, in words: the jobs module's, with the crew named when the seats are all taken.
+func _station_why(p, station_id: String) -> String:
+	if station_id == "":
+		return ""
+	var why: String = sim.jobs.why_not(p, station_id)
+	if why == "":
+		return ""
+	if sim.jobs.unlocked(station_id) and sim.jobs.seats_left(station_id) <= 0:
+		var holders: Array = []
+		for q in sim.jobs.crew_of(station_id):
+			if q.away == null:
+				holders.append(String(q.first))
+		if not holders.is_empty():
+			return "%s: %s %s it" % [why, _and(holders), "holds" if holders.size() == 1 else "hold"]
+	return why
+
+
+## Asks this person to take this day job: the answer at once ({"ok", "line", "why", "hard", "tone", "insisted"}); on ok `jobs.assign` is
+## done and they say it. `args.insist` overrides a soft refusal at INSIST_COST (never one the station or a hard reason gives).
+func request_job(p, station_id: String, args: Dictionary = {}) -> Dictionary:
+	var out := {"ok": false, "line": "", "why": "", "hard": true, "tone": "refused", "insisted": false}
+	if p == null or leader() == null:
+		out["why"] = "Nobody is on the radio" if leader() == null else "Nobody answers"
+		return out
+	var w := job_willingness(p, station_id)
+	return _answer_work(p, w, args, "job", func(): return sim.jobs.assign(p, station_id))
+
+
+## Asks this person to hold this night post.
+func post_willingness(p, post_id: String) -> Dictionary:
+	var out := {"ok": true, "why": "", "hard": false, "line": "", "tone": "", "delay_s": 0.0}
+	if p == null:
+		return _work_no(out, "Nobody answers", "", true)
+	if _is_leader(p):
+		return _work_no(out, NO_POST_FOR_YOU, "", true)
+	var r := _reason_not(p, "work", post_id, CANT_POST)
+	if not r.ok and bool(r.hard):
+		return _work_no(out, String(r.why), String(r.line), true)
+	if sim.jobs.post(post_id).is_empty():
+		return _work_no(out, "There is no such post", "", true)
+	var holder = _post_holder(p, post_id)
+	if holder != null:
+		return _work_no(out, "You hold that post" if _is_leader(holder) else "%s holds that post" % String(holder.first), "", true)
+	if not r.ok:
+		return _work_no(out, String(r.why), String(r.line), false)
+	out["tone"] = tone_of(p)
+	out["line"] = String(WORK_LINES[out.tone])
+	return out
+
+
+## Who else holds this post (alive), or null: `jobs.set_post` refuses it for that reason.
+func _post_holder(p, post_id: String):
+	for q in sim.people:
+		if q != p and not (q.dead or q.turned) and String(sim.jobs.post_ids.get(String(q.id), "")) == post_id:
+			return q
+	return null
+
+
+func request_post(p, post_id: String, args: Dictionary = {}) -> Dictionary:
+	var out := {"ok": false, "line": "", "why": "", "hard": true, "tone": "refused", "insisted": false}
+	if p == null or leader() == null:
+		out["why"] = "Nobody is on the radio" if leader() == null else "Nobody answers"
+		return out
+	var w := post_willingness(p, post_id)
+	return _answer_work(p, w, args, "post_set", func(): return sim.jobs.set_post(p, post_id))
+
+
+## The answer to a request for a day job or a night post: refused with their words (a soft refusal pushed at INSIST_COST when asked to),
+## or done (`apply`) with their line. They say the line aloud (a radio_line, `verb` "job" or "post_set").
+func _answer_work(p, w: Dictionary, args: Dictionary, verb: String, apply: Callable) -> Dictionary:
+	var insisted := false
+	if not bool(w.ok):
+		if not (bool(args.get("insist", false)) and not bool(w.hard)):
+			_say(p, verb, false, String(w.line), "refused")
+			return {"ok": false, "line": String(w.line), "why": String(w.why), "hard": bool(w.hard), "tone": "refused", "insisted": false}
+		insisted = true
+		w = {"ok": true, "why": "", "hard": false, "line": String(WORK_LINES["doubtful"]), "tone": "doubtful"}
+	if not bool(apply.call()):
+		return {"ok": false, "line": "", "why": "That cannot be done now", "hard": true, "tone": "refused", "insisted": false}
+	if insisted:
+		add_trust(p, -INSIST_COST, "You pushed them to take work when they could not")
+		sim.morale.shock(p, INSIST_MORALE, "Pushed to take work when they could not")
+	_say(p, verb, true, String(w.line), String(w.tone))
+	return {"ok": true, "line": String(w.line), "why": "", "hard": false, "tone": String(w.tone), "insisted": insisted}
+
+
+# ---- fill the empty seats --
+
+## What "Fill empty seats" would do: {"seats" ([{"station", "left"}]: the stations with an open seat), "free" (ids of the people with no job
+## who would take one), "stuck" ([{"id", "name", "why"}]: those with no job who would not, and why)}. The player is not in it. Pure.
+func fill_willingness() -> Dictionary:
+	var seats: Array = []
+	for st in sim.jobs.stations():
+		var open: int = sim.jobs.seats_of(String(st.id)) - sim.jobs.crew_of(String(st.id)).size()
+		if open > 0:
+			seats.append({"station": String(st.id), "left": open})
+	var free: Array = []
+	var stuck: Array = []
+	for p in sim.people:
+		if p.dead or p.turned or _is_leader(p) or String(sim.jobs.job_of(p)) != "":
+			continue
+		var r := _reason_not(p, "work", "any", CANT_JOB)
+		if r.ok:
+			free.append(String(p.id))
+		else:
+			stuck.append({"id": String(p.id), "name": String(p.first), "why": String(r.why)})
+	return {"seats": seats, "free": free, "stuck": stuck}
+
+
+## Gives the open seats to the people with no job (`jobs.fill_empty`: the best fit for each, nobody taken off a job, not those who would
+## not today): {"ok" (a seat was filled), "assigned" ([{"who", "station"}]), "stuck" ([{"id", "name", "why"}]: who could not and why), "line"}.
+func request_fill() -> Dictionary:
+	var out := {"ok": false, "assigned": [], "stuck": [], "line": ""}
+	if leader() == null:
+		out["line"] = "Nobody is on the radio"
+		return out
+	var w := fill_willingness()
+	var skip: Array = []
+	for s in w.stuck:
+		skip.append(String(s.id))
+	var before := {}
+	for p in sim.people:
+		before[String(p.id)] = String(sim.jobs.job_of(p))
+	var n: int = sim.jobs.fill_empty(skip)
+	var assigned: Array = []
+	var told: Array = []
+	for p in sim.people:
+		var now := String(sim.jobs.job_of(p))
+		if String(before[String(p.id)]) == "" and now != "":
+			assigned.append({"who": String(p.id), "station": now})
+			told.append("%s at the %s" % [String(p.first), String(sim.jobs.station(now).get("name", now))])
+	var stuck: Array = w.stuck.duplicate(true)
+	for id in w.free:
+		var q = _person(String(id))
+		if q != null and String(sim.jobs.job_of(q)) == "":
+			stuck.append({"id": String(id), "name": String(q.first), "why": "%s: no seat is open" % String(q.first)})
+	out["ok"] = n > 0
+	out["assigned"] = assigned
+	out["stuck"] = stuck
+	if n > 0:
+		out["line"] = "Filled %d seat%s: %s." % [n, "" if n == 1 else "s", _and(told)]
+	elif w.seats.is_empty():
+		out["line"] = "Every seat is taken."
+	elif w.free.is_empty():
+		out["line"] = "Nobody without a job can take a seat now."
+	else:
+		out["line"] = "No seat is open to the people who are free."
+	return out
+
+
+# ---- buildings --
+
+## Whether this building can be ordered now: {"ok", "why" (`build.why_not_build`: "it needs 30 scrap", "it needs the workshop first", "claim
+## the north street first"...; "" when ok), "plot" (its home), "cost" (scrap), "note" (the crew, advice and never a refusal: "Nobody is on
+## the Builders job: give it to someone on the Jobs page, or the site waits", "Dez is the only builder and is down"; "" when the
+## crew is fine)}. Pure.
+func build_willingness(building_id: String) -> Dictionary:
+	var b: Dictionary = sim.build.building(building_id)
+	var why: String = sim.build.why_not_build(building_id)
+	return {"ok": why == "", "why": why, "plot": String(sim.build.home_for(building_id)), "cost": int(b.get("scrap", 0)), "note": _build_note()}
+
+
+## The Builders crew, as advice: nobody; the only builder down or away; none of them able.
+func _build_note() -> String:
+	var crew: Array = []
+	for q in sim.jobs.crew_of("builders"):
+		if not _is_leader(q):
+			crew.append(q)
+	if crew.is_empty():
+		return NO_BUILDERS
+	for q in crew:
+		if _hard_reason(q) == "":
+			return ""
+	if crew.size() == 1:
+		var q = crew[0]
+		return "%s is the only builder and is %s" % [String(q.first), _hard_reason(q).trim_prefix("%s is " % String(q.first))]
+	var parts: Array = []
+	for q in crew:
+		parts.append(_hard_reason(q))
+	return "None of the builders can work now: " + ", ".join(parts)
+
+
+## The builder who would lead the work: the one on his feet at the Builders job with the most Building (null when none).
+func _lead_builder():
+	var best = null
+	for q in sim.jobs.crew_of("builders"):
+		if _is_leader(q) or _hard_reason(q) != "":
+			continue
+		if best == null or int(q.skills.Building) > int(best.skills.Building):
+			best = q
+	return best
+
+
+## Orders the building on its home (`build.order`): {"ok", "line" (the lead builder's words, by tone of trust), "why", "plot", "who" (the
+## lead builder's id, or "")}; the radio logs it (news kind "build").
+func request_build(building_id: String, _args: Dictionary = {}) -> Dictionary:
+	var out := {"ok": false, "line": "", "why": "", "plot": "", "who": ""}
+	if leader() == null:
+		out["why"] = "Nobody is on the radio"
+		return out
+	var w := build_willingness(building_id)
+	out["plot"] = String(w.plot)
+	if not bool(w.ok):
+		out["why"] = String(w.why)
+		return out
+	if not sim.build.order(String(w.plot), building_id):
+		out["why"] = String(sim.build.why_not(String(w.plot), building_id))
+		return out
+	var lead = _lead_builder()
+	var name := String(sim.build.building(building_id).get("name", building_id))
+	var sub := "%d scrap spent" % int(w.cost)
+	if lead != null:
+		var tone := tone_of(lead)
+		out["line"] = String(BUILD_LINES[tone])
+		out["who"] = String(lead.id)
+		_say(lead, "build", true, String(out.line), tone)
+		sub += ". %s builds it." % String(lead.first)
+	else:
+		out["line"] = "Ordered. Nobody is on the Builders job: the site waits."
+		sub += ". The site waits for a builder."
+	log_news("build", "%s ordered" % name, sub)
+	out["ok"] = true
+	return out
+
+
+# ---- saving the errands --
+
+func _errands_saved() -> Array:
+	var out: Array = []
+	for e in errand_wait:
+		out.append({"ids": e.ids.duplicate(), "place": String(e.place), "action": String(e.action), "vehicle": String(e.vehicle), "left": float(e.left)})
+	return out
+
+
+## Reads them again; whatever is not sound is left out, and an id that names nobody is dropped from its entry.
+func _load_errands(raw) -> void:
+	errand_wait.clear()
+	if not (raw is Array):
+		return
+	for r in raw:
+		if not (r is Dictionary) or typeof(r.get("place")) != TYPE_STRING or String(r.place) == "":
+			continue
+		if not ERRAND_ACTIONS.has(String(r.get("action", ""))) or not _number(r.get("left")) or not (r.get("ids") is Array):
+			continue
+		var ids: Array = []
+		for id in r.ids:
+			if typeof(id) == TYPE_STRING and _person(String(id)) != null and not ids.has(String(id)):
+				ids.append(String(id))
+		if ids.is_empty():
+			continue
+		var vehicle = r.get("vehicle", "")
+		errand_wait.append({"ids": ids, "place": String(r.place), "action": String(r.action), "vehicle": String(vehicle) if typeof(vehicle) == TYPE_STRING else "", "left": float(r.left)})
 
 
 # ----------------------------------------------------------------------- news --
@@ -1002,6 +1590,7 @@ func save() -> Dictionary:
 	return {
 		"news": list,
 		"pending": wait,
+		"errand_wait": _errands_saved(),
 		"alarm_on": alarm_on,
 		"reasons": reasons.duplicate(true),
 		"next_id": _next_id,
@@ -1039,6 +1628,7 @@ func load_state(d: Dictionary) -> void:
 		for r in wait:
 			if r is Dictionary and typeof(r.get("who")) == TYPE_STRING and VERBS.has(String(r.get("verb", ""))) and _number(r.get("left")):
 				pending.append({"who": String(r.who), "verb": String(r.verb), "at": _vec(r.get("at")), "left": float(r.left), "insist": bool(r.get("insist", false))})
+	_load_errands(d.get("errand_wait", []))
 	var why = d.get("reasons", {})
 	if why is Dictionary:
 		for id in why:

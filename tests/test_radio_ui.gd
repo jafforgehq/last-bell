@@ -14,6 +14,7 @@ const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
 const TextTests := preload("res://tests/test_hud_text.gd")
 
 const SIZES := [[1280, 800], [980, 700], [700, 700], [960, 600], [700, 560]]
@@ -914,16 +915,19 @@ func test_every_control_of_the_radio_takes_no_focus() -> void:
 	Kit.free_all(ctx)
 
 
-func test_the_small_window_collapses_the_news_to_a_narrow_list_that_scrolls() -> void:
+func test_the_small_window_has_the_narrow_panel_with_the_news_in_it_that_scrolls() -> void:
+	# (round 18: the News is a page of the radio panel, which is 316 px wide in a narrow window and 440 in a wide one)
 	var ctx: Dictionary = await _busy(700, 560, true)
 	var h = ctx.hud
-	var r := Kit.rect(h.news_panel)
-	check(r.size.x <= 170.0, "narrow: %s" % str(r))
-	check(r.size.y >= 80.0, "and tall enough to read: %s" % str(r))
+	var r := Kit.rect(h.radio_panel)
+	check(r.size.x <= RadioPanel.WIDTH_COMPACT + 0.5 and r.size.x >= 300.0, "narrow: %s" % str(r))
+	check(r.size.y >= 200.0, "and tall enough to read: %s" % str(r))
+	var page := Kit.rect(h.news_panel)
+	check(page.size.y >= 80.0 and r.encloses(page), "the News page has its room in it: %s" % str(page))
 	check(h.news_panel.is_compact(), "it knows it is the narrow one")
 	Kit.resize(ctx, 1280, 800)
 	await Kit.settle()
 	Kit.update(ctx)
 	await Kit.settle()
-	check(Kit.rect(h.news_panel).size.x >= 230.0 and not h.news_panel.is_compact(), "and wide again in a wide window: %s" % str(Kit.rect(h.news_panel)))
+	check(Kit.rect(h.radio_panel).size.x >= RadioPanel.WIDTH - 0.5 and not h.news_panel.is_compact(), "and wide again in a wide window: %s" % str(Kit.rect(h.radio_panel)))
 	Kit.free_all(ctx)

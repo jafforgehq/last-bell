@@ -57,6 +57,7 @@ const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -231,7 +232,12 @@ const FUEL_LOW := 10.0
 ## The tooltip of the Town Board button (a settlement game only: the classic start has no board).
 const TOWN_TIP := "Town Board: the map of the town, the places on the road and the parties out\nKey: G"
 ## Round 17, the radio's toolbar buttons (avatar mode only): the News log and the call to arms.
-const NEWS_TIP := "Radio and News: what the radio heard, and the calls that wait for your answer. Click a crew card to ask them something.\nKey: T"
+const NEWS_TIP := "Radio panel: News, what the radio heard and the calls that wait for your answer, with Jobs, Build and the Map one tab away. Click a crew card to ask them something.\nKey: T"
+## Round 18, avatar mode: the toolbar's Jobs, Build and Town Board buttons open the radio panel on a page; the full (modal) page is Shift and the key.
+const JOBS_TIP_AVATAR := "Jobs: who works where by day and holds which post at night. You ask, and they answer, on the radio panel\nKey: J (Shift+J: the full page)"
+const BUILD_TIP_AVATAR := "Build: pick a building, and the Builders raise it where it belongs\nKey: N (Shift+N: the full page, with the streets)"
+const BUILD_LOTS_TIP_AVATAR := "Build: order a building for the Builders to raise; the full page claims the streets round the school and walls them in\nKey: N (Shift+N: the full page)"
+const TOWN_TIP_AVATAR := "Map: the places on the road and the parties out. Take control of a trip, or ask someone to go\nKey: G (Shift+G: the Town Board, the full page)"
 const ALARM_TIP := "Call to arms: everyone to their posts now, by day too, until you stand down or the dawn comes"
 const ALARM_OFF_TIP := "Stand down: end the call to arms and send everyone back to work"
 ## How the trust a person has in the player reads, by the radio's word (radio.tone_of): the bar and the word.
@@ -257,9 +263,9 @@ const HELP := [
 ## keys, no selecting in the yard, no panning: the camera follows. G, the Town Board, and N, Build, keep their places so that
 ## the words the HUD gives them in a settlement game still reach them.)
 const HELP_AVATAR := [
-	["You", 2, [["W A S D", "Move"], ["Arrows", "Move"], ["Mouse", "Aim"], ["Click", "Fire"], ["R", "Reload"], ["F", "Melee"]]],
+	["You", 2, [["W A S D", "Move"], ["Arrows", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R", "Reload"], ["F", "Melee"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "News"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Deselect, or the menu", 76], ["F9", "Load"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
 ]
 ## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
@@ -270,7 +276,7 @@ const HINT := ["Click someone in the yard", [["Right-click", "to send them"], ["
 ## (Avatar mode's is two lines, so that it fits a 700 px window: the survivor's hands, then the radio, the map and the news.)
 const HINT_AVATAR := [
 	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
-	["Click a crew card to radio them", [["G", "the map"], ["T", "News"]]],
+	["Click a crew card to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
@@ -553,6 +559,9 @@ var last_speed := -1
 var radio_box: PanelContainer
 var radio_verbs
 var call_card
+## Round 18: the radio panel (scripts/ui/radio_panel.gd), the colony's interface in avatar mode, with the pages Jobs, Build, Map and News;
+## `news_panel` is its News page (the log of round 17, still the object the News wrappers and the tests speak to).
+var radio_panel
 var news_panel
 var news_button: Button
 var news_dot: Control
@@ -585,6 +594,7 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	_build_hint()
 	_build_toast()
 	_build_radio_ui()
+	_build_talk_card()
 	resized.connect(_on_resized)
 	_on_resized()
 
@@ -1835,7 +1845,7 @@ func _layout_dock() -> void:
 	var n := gizmo_count
 	var panel_w := maxf(float(INSPECT_W), inspect.get_combined_minimum_size().x)
 	var beside := float(n * GIZMO_W + maxi(0, n - 1) * GIZMO_GAP)
-	var reserve := maxf(speed_panel.get_combined_minimum_size().x, help.get_combined_minimum_size().x) + 8.0
+	var reserve := _right_reserve()
 	var fits := n == 0 or panel_w + 8.0 + beside <= size.x - 24.0 - reserve
 	dock.vertical = not fits
 	var mini := false
@@ -2171,6 +2181,9 @@ func _job_tag() -> PanelContainer:
 func _on_job_tag_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 		_press_jobs()
+		# (in avatar mode the radio panel's Jobs page is what opens: it finds the person's row)
+		if radio_page() == "jobs" and selection != null and selection.kind == "person":
+			radio_panel.page_node("jobs").focus_on(String(selection.ref.id))
 		accept_event()
 
 
@@ -2814,7 +2827,7 @@ func _refresh_hint() -> void:
 	if avatar_ui and inspect != null and inspect.visible:
 		show = false
 	# (and the controls help and the News panel are in its way too: it is only the first screen's)
-	if avatar_ui and ((help != null and help.visible) or news_open()):
+	if avatar_ui and ((help != null and help.visible) or radio_open()):
 		show = false
 	if hint.visible != show:
 		hint.visible = show
@@ -2892,9 +2905,13 @@ func _layout_toast() -> void:
 		lift += hint.get_combined_minimum_size().y + 8.0
 	toast_panel.offset_bottom = -lift
 	var shift := 0.0
+	var half := toast_panel.get_combined_minimum_size().x * 0.5
+	# (with the radio panel up the toast keeps to the left of it when it can: it would cover the page's answer line, which says the same)
+	if radio_open():
+		var room_to := size.x - 12.0 - _radio_panel_width() - 8.0
+		shift = minf(0.0, room_to - half - size.x * 0.5)
 	if inspect != null and inspect.visible:
-		var half := toast_panel.get_combined_minimum_size().x * 0.5
-		shift = maxf(0.0, 12.0 + _radio_dock_width() + 8.0 + half - size.x * 0.5)
+		shift = maxf(shift, 12.0 + _radio_dock_width() + 8.0 + half - size.x * 0.5)
 		shift = minf(shift, maxf(0.0, size.x * 0.5 - 12.0 - half))
 	toast_panel.offset_left = shift
 	toast_panel.offset_right = shift
@@ -3517,6 +3534,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	_sync_alerts(sim)
 	_refresh_selection()
 	_sync_radio(sim)
+	_sync_talk()
 	if jobs_screen != null:
 		jobs_screen.refresh()
 	if build_screen != null:
@@ -3571,7 +3589,7 @@ func _sync_town(sim) -> void:
 		town_button.visible = on
 		_layout_dock.call_deferred()
 	if help_g != null:
-		var word := "Town Board" if on else "Scavenge"
+		var word := ("Map" if avatar_ui else "Town Board") if on else "Scavenge"
 		if help_g.text != word:
 			help_g.text = word
 		var g_tip := HELP_G_TOWN_TIP if on else ""
@@ -3584,7 +3602,7 @@ func _sync_town(sim) -> void:
 func _sync_lots(sim) -> void:
 	var on: bool = sim.get("lots") != null and sim.lots.on
 	if build_button != null:
-		var tip := BUILD_LOTS_TIP if on else BUILD_TIP
+		var tip := (BUILD_LOTS_TIP_AVATAR if avatar_ui else BUILD_LOTS_TIP) if on else (BUILD_TIP_AVATAR if avatar_ui else BUILD_TIP)
 		if build_button.tooltip_text != tip:
 			build_button.tooltip_text = tip
 	if help_n != null:
@@ -4145,12 +4163,14 @@ func _build_radio_ui() -> void:
 	call_card = CallCard.new()
 	right_col.add_child(call_card)
 	call_card.setup(self, getter, {"speed_getter": speed_getter})
-	# the log: in the free band above the toolbar, where the controls help also opens (one or the other)
-	news_panel = NewsPanel.new()
-	add_child(news_panel)
-	news_panel.setup(self, getter, {"speed_getter": speed_getter})
-	news_panel.visible = false
-	_corner(news_panel, true, true, 12, _help_lift())
+	# the radio panel (round 18): Jobs, Build, Map and News, in the free band above the toolbar, where the controls help also opens (one or
+	# the other); the News page is the log of round 17 (`news_panel`)
+	radio_panel = RadioPanel.new()
+	add_child(radio_panel)
+	radio_panel.setup(self, func(): return sim_ref)
+	radio_panel.changed.connect(_on_radio_panel_changed)
+	news_panel = radio_panel.page_node("news")
+	_corner(radio_panel, true, true, 12, _help_lift())
 
 
 ## Avatar mode comes or goes (`set_avatar` says so): the toolbar's News and Alarm, the dock's verbs and the call card appear or are put away.
@@ -4159,8 +4179,10 @@ func _apply_radio_mode(on: bool) -> void:
 		return
 	news_button.visible = on
 	alarm_button.visible = on
+	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on else JOBS_TIP
+	town_button.tooltip_text = TOWN_TIP_AVATAR if on else TOWN_TIP
 	if not on:
-		news_panel.visible = false
+		radio_panel.close()
 		_news_cap = -1
 		news_dot.visible = false
 		call_card.clear()
@@ -4175,7 +4197,10 @@ func _apply_radio_mode(on: bool) -> void:
 
 ## A toolbar key lit or dark.
 func _light(b: Button, on: bool) -> void:
-	b.add_theme_stylebox_override("normal", _lit_look(on))
+	var look := _lit_look(on)
+	# (a lit key keeps the key's size: the frame's own margins would make it wider than an unlit one, and the toolbar with it)
+	look.set_content_margin_all(0)
+	b.add_theme_stylebox_override("normal", look)
 	b.get_meta("icon").modulate = ACCENT if on else INK2
 
 
@@ -4263,7 +4288,7 @@ func _layout_dock_radio() -> void:
 	gizmo_count = 0
 	gizmo_mini = false
 	var panel_w := maxf(float(INSPECT_W), inspect.get_combined_minimum_size().x)
-	var reserve := maxf(speed_panel.get_combined_minimum_size().x, help.get_combined_minimum_size().x) + 8.0
+	var reserve := _right_reserve()
 	radio_verbs.set_form(2, false)
 	var fits := panel_w + 8.0 + radio_box.get_combined_minimum_size().x <= size.x - 24.0 - reserve
 	dock.vertical = not fits
@@ -4281,6 +4306,20 @@ func _layout_dock_radio() -> void:
 	dock.queue_sort()
 
 
+## How much of the window's width the boards at the right of the foot keep from the dock: the toolbar and the controls help, and the radio
+## panel while it is up (it is the widest), with a gap.
+func _right_reserve() -> float:
+	var w := maxf(speed_panel.get_combined_minimum_size().x, help.get_combined_minimum_size().x)
+	if radio_open():
+		w = maxf(w, _radio_panel_width())
+	return w + 8.0
+
+
+## How wide the radio panel is (its form in this window), whether or not it is up.
+func _radio_panel_width() -> float:
+	return minf(RadioPanel.WIDTH_COMPACT if compact else RadioPanel.WIDTH, maxf(180.0, size.x - 24.0))
+
+
 ## The width the dock takes from the left edge when the radio box is beside the panel (the toast keeps clear of it).
 func _radio_dock_width() -> float:
 	if radio_box == null or not radio_box.visible:
@@ -4293,9 +4332,10 @@ func _radio_dock_width() -> float:
 ## The rectangles of the boards that cover the world now: what a speech bubble keeps out from under (overlay_node.gd).
 func covered_rects() -> Array:
 	var out: Array = []
-	var parts: Array = [res_panel, crew_load_panel, clock, ammo_panel, alerts_box, call_card, inspect, radio_box, gizmos, speed_panel, help, news_panel, fields_legend]
+	var parts: Array = [res_panel, crew_load_panel, clock, ammo_panel, alerts_box, call_card, inspect, radio_box, gizmos, speed_panel, help, radio_panel, fields_legend]
 	for c in cards:
 		parts.append(c.card)
+	parts.append(talk_card)
 	for c in parts:
 		if c != null and is_instance_valid(c) and c is Control and c.is_visible_in_tree():
 			var r: Rect2 = c.get_global_rect()
@@ -4320,40 +4360,101 @@ func dock_rect() -> Rect2:
 	return out
 
 
-# ---- the News panel, the alarm, the call card
+# ---- the radio panel (round 18), the News wrappers, the alarm, the call card
+
+## Opens the radio panel on `page` ("jobs", "build", "map" or "news"; "" for the page it was left on, News the first time), or moves it there;
+## `opts.focus` goes to the page's `focus_on` (a person id, a station id, a building id, a place id). Avatar mode only: without an avatar, and
+## while a modal page has the screen, nothing happens. The panel never pauses the game; opening it takes the place of the controls help.
+func open_radio(page: String = "", opts: Dictionary = {}) -> void:
+	if radio_panel == null or not avatar_ui or game_over != null or modal_open():
+		return
+	radio_panel.open(page, opts)
+
+
+func close_radio() -> void:
+	if radio_panel != null:
+		radio_panel.close()
+
+
+## The key of a page: opens the panel on it, shuts it when it is already on that page, moves to another page ("" is the key of the panel
+## itself: its last page, or shut).
+func toggle_radio(page: String = "") -> void:
+	if radio_panel == null:
+		return
+	if radio_panel.is_open() and (page == "" or page == radio_panel.page()):
+		radio_panel.close()
+	else:
+		open_radio(page)
+
+
+func radio_open() -> bool:
+	return radio_panel != null and radio_panel.is_open()
+
+
+## The page of the radio panel that is up ("" while it is shut).
+func radio_page() -> String:
+	return radio_panel.page() if radio_panel != null else ""
+
+
+## The part of the window the world can be seen in: the whole of it, or while the radio panel is up what is left of it at the panel's left (so
+## not under the panel, nor the clock column above it; the crew's cards are across the top of what is left). main.gd keeps the avatar in the
+## middle of it.
+func free_view() -> Rect2:
+	var whole := Rect2(Vector2.ZERO, size)
+	if not radio_open():
+		return whole
+	var r: Rect2 = radio_panel.get_global_rect() if radio_panel.is_visible_in_tree() else Rect2()
+	if r.size.x <= 0.0:
+		return whole
+	var right := clampf(r.position.x - 8.0, 0.0, whole.size.x)
+	return Rect2(0.0, 0.0, right, whole.size.y)
+
+
+## The radio panel was opened, shut or moved to another page: the toolbar's keys, the help, the hint and the room of the alerts follow.
+func _on_radio_panel_changed() -> void:
+	var on := radio_open()
+	var page := radio_page()
+	if on and help != null:
+		help.visible = false
+	_light(news_button, on and page == "news")
+	_light(jobs_button, on and page == "jobs")
+	_light(build_button, on and page == "build")
+	_light(town_button, on and page == "map")
+	_news_cap = -1
+	if not on and sim_ref != null:
+		_sync_alerts(sim_ref)
+	if on and news_dot != null and page == "news":
+		news_dot.visible = false
+	_refresh_hint()
+	_layout_dock()
+	_layout_toast()
+	_layout_news()
+
+
+# (round 17's News, as wrappers over the News page of the panel)
 
 func news_open() -> bool:
-	return news_panel != null and news_panel.visible
+	return radio_page() == "news"
 
 
 func toggle_news() -> void:
-	set_news(not news_open())
+	toggle_radio("news")
 
 
-## Opens or shuts the News panel (avatar mode only). Shutting it reads everything; opening it takes the place of the controls help.
+## Opens or shuts the News page (avatar mode only). Shutting it reads everything.
 func set_news(on: bool) -> void:
-	if news_panel == null or (on and not avatar_ui) or on == news_panel.visible:
+	if on == news_open():
 		return
-	news_panel.visible = on
-	_news_cap = -1
 	if on:
-		if help != null:
-			help.visible = false
-		news_dot.visible = false
-		news_panel.refresh()
+		open_radio("news")
 	else:
-		news_panel.mark_read()
-		if sim_ref != null:
-			_sync_alerts(sim_ref)
-	_light(news_button, on)
-	_refresh_hint()
-	_layout_news()
+		close_radio()
 
 
 func _press_help() -> void:
 	help.visible = not help.visible
-	if help.visible and news_open():
-		set_news(false)
+	if help.visible and radio_open():
+		close_radio()
 	_refresh_hint()
 
 
@@ -4393,22 +4494,22 @@ func _alerts_shown() -> int:
 	return n
 
 
-## The right column in avatar mode: the clock, the gun's readout, the alerts and the call card hang one under the other, and the News
-## panel (when it is open) takes what is left down to the toolbar; while it is open the call card steps aside, the panel showing the open
-## calls itself. When there is not enough room for the card, or for NEWS_MIN_H of news when it is open, the alerts give up theirs, the
-## least urgent first (the call is a decision; an alert only says something). What does not fit in the News panel scrolls.
+## The right column in avatar mode: the clock, the gun's readout, the alerts and the call card hang one under the other, and the radio
+## panel (when it is open) takes what is left down to the toolbar; while it is open the call card steps aside, the panel keeping the oldest
+## open call in view itself (the News page lists them with their buttons, the other pages have a slim strip under the tabs). When there is
+## not enough room for the card, or for the panel's least height (MIN_H) when it is open, the alerts give up theirs, the least urgent first
+## (the call is a decision; an alert only says something). What does not fit in the panel scrolls.
 func _layout_news() -> void:
-	if news_panel == null:
+	if radio_panel == null:
 		return
 	var w := CLOCK_W_COMPACT if compact else CLOCK_W
 	call_card.custom_minimum_size.x = w
 	if not avatar_ui:
 		return
 	var lift := _help_lift()
-	var need := NEWS_MIN_H if news_open() else 0.0
+	var need := RadioPanel.MIN_H if radio_open() else 0.0
 	var avail := 0.0
-	# with the News panel up the card steps aside: the panel has the open calls at its top, with their buttons, and the room is its
-	call_card.set_suppressed(news_open())
+	call_card.set_suppressed(radio_open())
 	for i in 10:
 		avail = size.y - lift - (12.0 + right_col.get_combined_minimum_size().y + 8.0)
 		var shown := _alerts_shown()
@@ -4416,11 +4517,10 @@ func _layout_news() -> void:
 			break
 		_news_cap = shown - 1
 		_sync_alerts(sim_ref)
-	if news_open():
-		news_panel.custom_minimum_size.x = w
-		news_panel.set_compact(compact)
-		news_panel.fit(avail)
-		_corner(news_panel, true, true, 12.0, lift)
+	if radio_open():
+		radio_panel.set_compact(compact)
+		radio_panel.fit(avail, size.x - 24.0)
+		_corner(radio_panel, true, true, 12.0, lift)
 
 
 ## Each update, in avatar mode: the call card and the News panel follow the radio, the dot says whether anything is unread, the alarm key
@@ -4435,8 +4535,7 @@ func _sync_radio(sim) -> void:
 	if (call_card.shown_id != 0) != _call_seen:
 		_call_seen = call_card.shown_id != 0
 		_news_cap = -1
-	if news_panel.visible:
-		news_panel.refresh()
+	radio_panel.refresh()
 	news_dot.visible = not news_open() and news_panel.unread() > 0
 	_sync_alarm(radio)
 	if radio_box.visible:
@@ -4466,7 +4565,8 @@ var lock_allowed: Callable
 ## `legend`, `toast`, `banner` and, while the scavenging dialog is open, `dialog.send`,
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`; in avatar mode (round 17) `news` (the toolbar's News button), `news.panel`,
 ## `alarm` (the toolbar's call to arms), `radio` (the verbs in the dock), `radio.<verb>` (one verb's button: come, hold, cover, search,
-## back, post), `radio.insist` (the Insist button, there after a refusal), `ammo` (the readout of the gun) and `call` (the call card).
+## back, post), `radio.insist` (the Insist button, there after a refusal), `ammo` (the readout of the gun), `call` (the call card) and `talk` (the card E at a person opens);
+## round 18: `panel` (the radio panel), `panel.tab:<page>` (a tab: jobs, build, map, news) and `panel.page` (the page that is up).
 func anchor_rect(name: String) -> Rect2:
 	if name.begins_with("stores."):
 		return _anchor_store(name.trim_prefix("stores."))
@@ -4494,6 +4594,10 @@ func _anchor_control(name: String):
 			if b is Button and b.has_meta("id") and String(b.get_meta("id")) == gid and not b.is_queued_for_deletion():
 				return b
 		return null
+	if name.begins_with("panel.tab:"):
+		return radio_panel.tab_button(name.trim_prefix("panel.tab:")) if radio_panel != null else null
+	if name == "panel.page":
+		return radio_panel.pages.get(radio_panel.page()) if radio_panel != null and radio_panel.is_open() else null
 	if name.begins_with("radio."):
 		if name == "radio.insist":
 			return radio_verbs.insist_button if radio_verbs != null else null
@@ -4540,6 +4644,8 @@ func _anchor_control(name: String):
 			return news_button
 		"news.panel":
 			return news_panel
+		"panel":
+			return radio_panel
 		"alarm":
 			return alarm_button
 		"ammo":
@@ -4548,6 +4654,8 @@ func _anchor_control(name: String):
 			return radio_box
 		"call":
 			return call_card
+		"talk":
+			return talk_card
 		"sound":
 			return sound_button
 		"legend":
@@ -4728,3 +4836,50 @@ func _ghost(b: Button, locked: bool) -> void:
 		b.add_theme_stylebox_override("pressed", b.get_meta("coach_pressed"))
 		b.mouse_default_cursor_shape = Control.CURSOR_ARROW
 		b.modulate.a = 1.0
+
+
+# ---- the talk card (round 18, slice 2: E at a person) ----
+# The card beside the person that E opens (scripts/ui/talk_card.gd): what they say of themselves, what they need (a button to the radio
+# panel's page that deals with it), how far they trust you and the radio's verbs for them. A view only. main.gd's E key calls `show_talk`;
+# Esc, E again, the distance and the person's fall call `hide_talk` (or the card closes itself, see `TalkCard.ending`). Anchor name:
+# `talk`. The card is a board over the yard, never a modal: the game does not stop and WASD still walks.
+
+const TalkCard := preload("res://scripts/ui/talk_card.gd")
+
+## The card (made by `setup`) and where a tile of the world is on this HUD: a Callable(tile: Vector2) -> pixels that main.gd sets (the
+## canvas transform stands in when there is none).
+var talk_card
+var talk_anchor: Callable
+
+
+func _build_talk_card() -> void:
+	talk_card = TalkCard.new()
+	add_child(talk_card)
+	talk_card.setup(self)
+
+
+## Opens the talk card for `p` (avatar mode only). `result` is what the rules' `interact.talk_to(p)` said (its line, its needs, the
+## trust earned): without it the card says what it can of its own.
+func show_talk(p, result: Dictionary = {}) -> void:
+	if talk_card == null or p == null or not avatar_ui:
+		return
+	talk_card.open(p, result)
+
+
+func hide_talk() -> void:
+	if talk_card != null:
+		talk_card.close("hide")
+
+
+func talk_open() -> bool:
+	return talk_card != null and talk_card.is_open()
+
+
+## The person the card is for, or null.
+func talk_person():
+	return talk_card.person if talk_open() else null
+
+
+func _sync_talk() -> void:
+	if talk_card != null and talk_card.is_open():
+		talk_card.refresh()

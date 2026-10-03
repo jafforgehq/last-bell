@@ -297,6 +297,7 @@ func test_with_nobody_at_home_the_succession_falls_back_to_somebody_away_safely(
 	var marcus = _p(sim, "marcus")
 	dez.skills["Leading"] = 3
 	check(sim.scavenge.send([dez, marcus], "houses"), "both go on a dice errand")
+	sim.scavenge.parties[0].result.lost.clear()    # (round 18: an errand can lose people at a danger 1 place: this test is about the way home)
 	var guard := 0
 	while (dez.away == null or marcus.away == null) and guard < 6000:
 		sim.update(DT)

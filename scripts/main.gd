@@ -147,6 +147,9 @@ var cam_glide_s := 0.0
 var cam_glide_t := 0.0
 ## How far (tiles) the map's foot may come up above the dock: the avatar camera is held down by as much as the dock needs (`_dock_offset_px`).
 var cam_pad := 0.0
+## How far (tiles) the map's right edge may come in past the camera's reach: the avatar camera keeps the avatar in the middle of the part of
+## the window the HUD leaves free (`hud.free_view()`: not under the radio panel), which near the east wall is further than the map allows.
+var cam_pad_x := 0.0
 var walkers := 0
 ## The fields-of-fire view (key V) is on: the overlay tints every wall section by how
 ## many guns reach it. A view only; the rules never read it.
@@ -178,10 +181,11 @@ var raid_stub := false
 ## What the Jobs screen marks in the world (it sets it through the HUD): {} while it is closed, else {"station": id,
 ## "post": id, "person": id} (each "" when nothing of the kind is marked). The overlay draws the marks.
 var jobs_hover := {}
-## The Build screen (round 6, scripts/ui/build_screen.gd) is up: the yard draws the plots' signs more clearly.
+## The Build screen (round 6, scripts/ui/build_screen.gd) is up, or in avatar mode (round 18) the radio panel is on its Build page: the
+## yard draws the plots' signs more clearly.
 var build_open: bool:
 	get:
-		return hud != null and hud.build_screen != null
+		return hud != null and (hud.build_screen != null or hud.radio_page() == "build")
 ## The plot the Build screen has under the pointer or the keyboard ({"plot": id}, {} for none, and while it is closed):
 ## the yard draws it brighter. (The screen sets it through the HUD.)
 var build_hover := {}
@@ -433,13 +437,14 @@ func _ready() -> void:
 	hud.on_fields = _toggle_fields
 	hud.on_menu = show_title
 	hud.on_open_menu = open_pause
-	hud.on_jobs = toggle_jobs
+	hud.on_jobs = func(): page_key("jobs", false)
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
-	hud.on_build = toggle_build
-	hud.on_town = toggle_town
+	hud.on_build = func(): page_key("build", false)
+	hud.on_town = func(): page_key("map", false)
 	hud.on_alarm = func(): return _allows("alarm")
 	hud.on_raid = open_raid
 	hud.on_build_hover = func(marks): build_hover = marks
+	hud.talk_anchor = func(tile: Vector2) -> Vector2: return _tile_to_screen(tile)
 	hud.on_ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	hud_layer.add_child(hud)
 	hud.setup(data, sim.people)
@@ -611,7 +616,7 @@ func _clamp_camera() -> void:
 	var m := 1.0
 	var W: float = world.W
 	var H: float = world.H
-	cam_center.x = W / 2.0 if hw * 2.0 >= W + 2.0 * m else clampf(cam_center.x, hw - m, W - hw + m)
+	cam_center.x = W / 2.0 if hw * 2.0 >= W + 2.0 * m else clampf(cam_center.x, hw - m, W - hw + m + cam_pad_x)
 	cam_center.y = H / 2.0 if hh * 2.0 >= H + 2.0 * m else clampf(cam_center.y, hh - m, H - hh + m + cam_pad)
 
 
@@ -899,6 +904,31 @@ func _toggle_fields() -> void:
 	fields = not fields
 	hud.set_fields(fields)
 	_did("fields", fields)
+
+
+## Avatar mode's colony interface (round 18): J, N and G, and the toolbar's Jobs, Build and Town Board buttons, open the radio panel
+## (scripts/ui/radio_panel.gd) on a page, Jobs, Build or Map; the same key shuts it, another page's key moves to that page. The modal pages
+## (Duty roster, Build screen, Town Board) are the FULL pages behind Shift+J, Shift+N, Shift+G. The old yard (no avatar) and Orientation
+## Day (whose lessons teach the modal pages) have the modal pages on the plain keys; a classic start has no Map page, so G is the old dialog.
+func panel_mode() -> bool:
+	return avatar_mode and not tutorial
+
+
+## The key of a page ("jobs", "build" or "map"); `full` is the Shift form, the modal page.
+func page_key(page: String, full: bool = false) -> void:
+	var panel := panel_mode() and not full and (page != "map" or bool(sim.town.on))
+	if not panel:
+		match page:
+			"jobs":
+				toggle_jobs()
+			"build":
+				toggle_build()
+			"map":
+				toggle_town()
+		return
+	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	hud.toggle_radio(page)
 
 
 ## The Jobs screen (key J, the clipboard in the toolbar, the job tag in a person's panel): opens it, or closes it
@@ -1347,8 +1377,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_3:
 				_set_speed(3)
 			KEY_ESCAPE:
-				# Esc lets go of the selection; with nothing selected it opens the pause menu
-				if selection != null:
+				# Esc closes, in this order: the talk card, the radio panel, the selection, else it opens the pause menu
+				if hud.talk_open():
+					hud.hide_talk()
+				elif hud.radio_open():
+					hud.close_radio()
+				elif selection != null:
 					_select(null)
 				else:
 					open_pause()
@@ -1366,6 +1400,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 						_did("melee")
 				else:
 					_gizmo("repair")
+			KEY_E:
+				# E uses what the prompt points at: talk to a person, take a post, work the bench, read a car's gauge (round 18)
+				if avatar:
+					_interact_key()
 			KEY_P:
 				if not avatar:
 					_gizmo("post")
@@ -1373,16 +1411,17 @@ func _unhandled_input(ev: InputEvent) -> void:
 				if not avatar:
 					_gizmo("focus")
 			KEY_T:
-				# the old yard's treat order; with an avatar the radio's News (T for the radio)
+				# the old yard's treat order; with an avatar the radio panel (T for the radio), on the page it was left on (News the
+				# first time; Orientation Day's lesson is News)
 				if not avatar:
 					_gizmo("treat")
 				else:
-					hud.toggle_news()
+					hud.toggle_radio("news" if tutorial else "")
 			KEY_X:
 				if not avatar:
 					_gizmo("sendout")
 			KEY_G:
-				_gizmo("scavenge")
+				page_key("map", ev.shift_pressed)
 			KEY_L:
 				# the alarm: on a wall section that is picked, as ever; with an avatar it is the call to arms
 				if avatar and (selection == null or selection.kind != "segment"):
@@ -1397,9 +1436,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 				if not avatar:
 					_gizmo("job_bench")
 			KEY_J:
-				toggle_jobs()
+				page_key("jobs", ev.shift_pressed)
 			KEY_N:
-				toggle_build()
+				page_key("build", ev.shift_pressed)
 			KEY_V:
 				_toggle_fields()
 			KEY_F5:
@@ -1462,6 +1501,7 @@ func _process(delta: float) -> void:
 		_update_pointer()
 	else:
 		cam_pad = 0.0
+		cam_pad_x = 0.0
 		# (Ctrl or Cmd with a letter is a command, not the camera's key)
 		var cmd := Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META)
 		var kx := int((Input.is_key_pressed(KEY_D) and not cmd) or Input.is_key_pressed(KEY_RIGHT)) - int((Input.is_key_pressed(KEY_A) and not cmd) or Input.is_key_pressed(KEY_LEFT))
@@ -1609,13 +1649,16 @@ func _avatar_camera(dt: float) -> void:
 	# may come up that far)
 	var off_px := _dock_offset_px()
 	cam_pad = off_px / zoom_px
+	# (and the radio panel must not either: the avatar is in the middle of what the panel leaves of the window)
+	var shift := _free_view_shift()
+	cam_pad_x = _free_view_pad()
 	var goal_at: Vector2 = view_pos(me)
 	var lead := Vector2.ZERO
 	if _pointer_in_window():
 		lead = (mouse_screen - _vp() / 2.0) / zoom_px * CAM_LEAD_K
 		if lead.length() > CAM_LEAD:
 			lead = lead.normalized() * CAM_LEAD
-	var goal := goal_at + lead + Vector2(0.0, cam_pad)
+	var goal := goal_at + lead + Vector2(0.0, cam_pad) + shift
 	if cam_hold > 0.0:
 		cam_hold = maxf(0.0, cam_hold - dt)
 		if cam_glide_s > 0.0:
@@ -1652,6 +1695,32 @@ func _pointer_in_window() -> bool:
 	return mouse_screen.x >= 0.0 and mouse_screen.y >= 0.0
 
 
+## The part of the window the HUD leaves free for the world (`hud.free_view()`, round 18: the window less the radio panel while it is up),
+## else the whole window.
+func _free_view_rect() -> Rect2:
+	var whole := Rect2(Vector2.ZERO, _vp())
+	if hud == null or not hud.has_method("radio_open") or not hud.radio_open():
+		return whole
+	var fv: Rect2 = hud.free_view()
+	return fv if fv.size.x > 0.0 and fv.size.y > 0.0 else whole
+
+
+## Where the avatar is on the screen: the middle of the free view.
+func _free_view_center() -> Vector2:
+	return _free_view_rect().get_center()
+
+
+## How far (tiles) the radio panel takes from the right of the window: the map's east edge may come that far in past the camera's reach, so
+## that the avatar at the wall is not under the panel either.
+func _free_view_pad() -> float:
+	return maxf(0.0, (_vp().x - _free_view_rect().end.x) / zoom_px)
+
+
+## How far (tiles) the camera is held over so that the avatar is in the free view's middle: nothing while no panel is up.
+func _free_view_shift() -> Vector2:
+	return (_vp() / 2.0 - _free_view_center()) / zoom_px
+
+
 ## How far down (pixels) the camera is held so that the dock (the selected contact's panel and verbs, at the foot of the window) does not
 ## hide the avatar, who is in the middle: as far as takes their feet and name clear of its top edge, never more than half of what it
 ## takes of the window's height; nothing when the dock is not under them (a window wide enough has the room beside it).
@@ -1662,7 +1731,7 @@ func _dock_offset_px() -> float:
 	if dock.size == Vector2.ZERO:
 		return 0.0
 	var vp := _vp()
-	var c := vp / 2.0
+	var c := _free_view_center()
 	var half_w := 0.6 * zoom_px + 18.0
 	if c.x + half_w < dock.position.x or c.x - half_w > dock.end.x:
 		return 0.0
@@ -1705,6 +1774,52 @@ func _on_succession(e: Dictionary) -> void:
 	if not title_mode:
 		_glide_to(Vector2(to.x, to.y), true)
 	hud.show_banner("%s leads now" % to.first, "%s is gone" % from.first if from != null else "")
+
+
+# ---------------------------------------------------------------- interact --
+# E in avatar mode (round 18, S2.2 and V2.5): the rules (scripts/sim/interact.gd) say what is in reach and what using it does, the
+# prompt (overlay_node.gd) says it beside the thing, the talk card (scripts/ui/talk_card.gd, the HUD's `show_talk`) is how a person's
+# word looks. This is only the key and the events.
+
+## The interact module of the game, or null (a stand-in a test left in the sim's meta counts: see TalkCard.interact_of).
+func _interact():
+	return Hud.TalkCard.interact_of(sim)
+
+
+## The key E: uses the thing the prompt is on (so that E does what the pill says). What it began, it ends: E at the person whose card is
+## open closes the card (the rules' `use` itself leaves a held post and stops a bench session worked). A person opens the card (and the
+## rules have them say their line, which the overlay shows over their head); a post, the bench and a car's gauge answer in a toast, in
+## amber when it is a refusal. Nothing under a page, a menu or a place, nor while the tutorial's lock says no.
+func _interact_key() -> void:
+	var it = _interact()
+	if it == null or avatar_hands_off() or raid_open() or not _allows("interact"):
+		return
+	var pick: Dictionary = overlay.prompt_candidate() if overlay != null else {}
+	var kind := String(pick.get("kind", ""))
+	var id := String(pick.get("id", ""))
+	if kind == "person" and hud.talk_open() and String(hud.talk_person().id) == id:
+		hud.hide_talk()
+		return
+	var res: Dictionary = it.use(pick)
+	var got := String(res.get("kind", kind))
+	if not bool(res.get("ok", false)):
+		var why := String(res.get("why", ""))
+		hud.toast(why if why != "" else "Nothing here to use", "warn" if got != "" else "info")
+		return
+	if got == "person":
+		var who = null
+		for p in sim.people:
+			if String(p.id) == String(res.get("id", id)):
+				who = p
+		if who != null:
+			hud.show_talk(who, res)
+		return
+	hud.hide_talk()
+	var line := String(res.get("line", ""))
+	if line != "":
+		hud.toast(line)
+	elif bool(res.get("left", false)):
+		hud.toast("Left the post")
 
 
 ## One step of the rules.
@@ -1887,6 +2002,22 @@ func _handle_events() -> void:
 				_on_arrival(String(e.who))
 			"succession":
 				_on_succession(e)
+			"talk":
+				# someone has had a word with the avatar (interact.gd): what they said, in a bubble over their head
+				overlay.add_bark({"who": e.get("who", ""), "text": e.get("line", ""), "context": "talk"})
+			"interact":
+				# E used something (or was refused): the menus' soft click, or their error
+				sound.ui("ui_click" if bool(e.get("ok", true)) else "ui_error", 0.5)
+			"post_taken":
+				sound.ui("ui_confirm", 0.6)
+			"post_left":
+				sound.ui("ui_click", 0.4)
+			"bench_work":
+				# the avatar's own session at the workbench begins (the strokes are the workshop's `hammer`) or ends with what it made
+				if bool(e.get("on", false)):
+					sound.play("hammer", 0.8, 0.1)
+				elif int(e.get("ammo", 0)) > 0:
+					hud.toast("Bench: %d rounds from %d scrap" % [int(e.get("ammo", 0)), int(e.get("scrap", 0))])
 	sim.events.clear()
 
 
@@ -1947,8 +2078,14 @@ func _parse_args() -> void:
 	var town_place := ""
 	var town_focus := ""
 	var town_ride := ""
+	var radio_page := ""
 	var raid_spec := ""
 	var raid_do := ""
+	var talk_id := ""
+	var talk_ask := ""
+	var beside_spec := ""
+	var post_id := ""
+	var bench_asked := false
 	var cam_asked := false
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
@@ -2019,6 +2156,21 @@ func _parse_args() -> void:
 			"hold-fire":
 				# --hold-fire holds the avatar's trigger down (the left button, in a screenshot of a fight)
 				firing = true
+			"talk":
+				# --talk=<person id> stands the avatar beside them and opens the talk card (--bleed=<id> first for a need)
+				talk_id = v
+			"talk-ask":
+				# --talk-ask=<verb> presses that verb in the talk card (come, hold, cover, back, post), to show the answer or the refusal
+				talk_ask = v
+			"beside":
+				# --beside=<person id>, post:<post id> or bench stands the avatar a step from it and no more: the prompt shows (--speed=0 keeps people still)
+				beside_spec = v
+			"post":
+				# --post=<post id> has the avatar take that post (E at it); --hour=22 for a night
+				post_id = v
+			"bench":
+				# --bench has the avatar work the bench (E at it); --advance=3 to see the ring and the hammer
+				bench_asked = true
 			"noavatar":
 				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
 			"wall":
@@ -2070,6 +2222,10 @@ func _parse_args() -> void:
 				# --town-state=<place id>:cleared,<place id>:claimed[:<person id>+<person id>] stages places (a claimed place
 				# may be held by people, who are off the map): no scrap is paid for them
 				_stage_town(v)
+			"radio":
+				# --radio=<jobs|build|map|news>[,call][,news] opens the radio panel on that page (avatar mode), once the other arguments are
+				# in; with `call` a call waits for an answer (a wall under attack), with `news` there are a few lines in the log
+				radio_page = v
 			"town-ride":
 				# --town-ride=<vehicle kind or id> chooses that parked vehicle in the board's party picker when it opens (--vehicle first)
 				town_ride = v
@@ -2186,6 +2342,18 @@ func _parse_args() -> void:
 	if show_build:
 		hud.last_speed = speed
 		hud.open_build(build_plot, sim)
+	if radio_page != "":
+		var radio_parts := radio_page.split(",")
+		if radio_parts.has("news"):
+			sim.radio.log_news("story", "A voice on the radio", "A call on the radio")
+			sim.radio.log_news("recruit", "Hector has joined the crew", "Medic")
+			sim.radio.log_news("alarm", "Call to arms", "Everyone to their posts")
+		if radio_parts.has("call"):
+			sim.radio.raise_call("attack", "North wall under attack", "3 of the dead at it, 80% intact", [{"id": "hold", "label": "Hold"},
+				{"id": "reinforce", "label": "Send reinforcements"}, {"id": "fall_back", "label": "Fall back to the school"}], "hold", 90.0, {"seg": 1}, Vector2(40, 10))
+		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+		hud.last_speed = speed
+		hud.open_radio(String(radio_parts[0]))
 	if show_town:
 		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
 		hud.last_speed = speed
@@ -2208,6 +2376,14 @@ func _parse_args() -> void:
 		for s in sim.segments:
 			if s.id == lure_seg:
 				sim.tactics.order_lure(s)
+	if beside_spec != "":
+		_stage_beside_spec(beside_spec)
+	if talk_id != "":
+		_stage_talk(talk_id, talk_ask)
+	if post_id != "":
+		_stage_post(post_id)
+	if bench_asked:
+		_stage_bench()
 	if advance > 0.0:
 		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
 		if shot_aim != Vector2.INF:
@@ -2221,6 +2397,86 @@ func _parse_args() -> void:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
 		sim.events.clear()
+
+
+## Stands the avatar a step from a spot (a screenshot's staging): on the first open ground of the sides, `step` tiles away, the
+## camera on them. False when the avatar is not there or there is no room.
+func _stage_beside(spot: Vector2, step: float = 1.1) -> bool:
+	var me = sim.avatar.player()
+	if me == null:
+		return false
+	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, 1), Vector2(0, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var at: Vector2 = spot + d.normalized() * step
+		if not sim.avatar._blocked(at.x, at.y):
+			me.x = at.x
+			me.y = at.y
+			me.path = []
+			me.moving = false
+			cam_center = Vector2(me.x, me.y)
+			return true
+	return false
+
+
+## --beside=<person id>, post:<post id> or bench: the avatar a step from that (nothing is used). False when there is no such thing.
+func _stage_beside_spec(spec: String) -> bool:
+	if spec == "bench":
+		var at: Vector2 = sim.workshop.bench()
+		return at != Vector2.ZERO and _stage_beside(at, 0.9)
+	if spec.begins_with("post:"):
+		var post: Dictionary = sim.jobs.post(spec.trim_prefix("post:"))
+		return not post.is_empty() and _stage_beside(post.pos, 0.3)
+	for p in sim.people:
+		if String(p.id) == spec:
+			return _stage_beside(Vector2(p.x, p.y))
+	return false
+
+
+## A screenshot's way of talking to someone (--talk=<id>): the avatar stands beside them, the rules' `talk_to` has the word, the card
+## opens; `ask` (--talk-ask=<verb>) is a verb pressed in the card. False when there is no avatar, no such person or no interact module.
+func _stage_talk(id: String, ask: String) -> bool:
+	var it = _interact()
+	var who = null
+	for p in sim.people:
+		if String(p.id) == id:
+			who = p
+	if it == null or who == null or not it.has_method("talk_to") or not _stage_beside(Vector2(who.x, who.y)):
+		return false
+	var res: Dictionary = it.talk_to(who)
+	hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+	hud.show_talk(who, res)
+	if ask != "" and hud.talk_open() and hud.talk_card.verbs.buttons.has(ask):
+		hud.talk_card.verbs.press(ask)
+	return true
+
+
+## A screenshot's way of taking a post (--post=<post id>): the avatar goes to it and takes it, as E would.
+func _stage_post(id: String) -> bool:
+	var it = _interact()
+	var post: Dictionary = sim.jobs.post(id)
+	if it == null or post.is_empty() or not it.has_method("take_post") or not _stage_beside(post.pos, 0.3):
+		return false
+	var res: Dictionary = it.take_post(id)
+	hud.update_hud(sim, speed, sound_on, 0)
+	if not bool(res.get("ok", false)):
+		hud.toast(String(res.get("why", "")), "warn")
+	return bool(res.get("ok", false))
+
+
+## A screenshot's way of working the bench (--bench): the avatar goes to it and begins, as E would (the ring shows while it runs; the
+## ammo in the stores is brought down to 100 first, for the bench has nothing to make from a full store).
+func _stage_bench() -> bool:
+	var it = _interact()
+	var bench = null
+	for st in sim.jobs.stations():
+		if String(st.id) == "bench":
+			bench = st
+	if it == null or bench == null or not it.has_method("work_bench") or not _stage_beside(bench.pos, 0.6):
+		return false
+	sim.stock.ammo = minf(float(sim.stock.ammo), 100.0)    # (a full store has nothing for the bench to make)
+	var res: Dictionary = it.work_bench()
+	if not bool(res.get("ok", false)):
+		hud.toast(String(res.get("why", "")), "warn")
+	return bool(res.get("ok", false))
 
 
 ## The hour of day, as `--hour=` sets it: the phase, the bell and the game clock follow (it counts minutes from 07:00

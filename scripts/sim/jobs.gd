@@ -595,13 +595,36 @@ func _fill_one(id: String, away := false) -> bool:
 	return assign(best, id)
 
 
+## Fills the open seats from the people with no job who are here and on their feet, by skill (the stations in the order of
+## `auto_assign`: one seat each first, then what is left over), and takes nobody off a job (no `clear`): the Jobs page's "Fill empty
+## seats" (round 18; the radio's `request_fill`). `skip`: person ids that are not to be used (those who would not today). Returns how
+## many seats were filled.
+func fill_empty(skip: Array = []) -> int:
+	var n := 0
+	for id in AUTO_ORDER:
+		if crew_of(String(id)).is_empty() and _fill_open(String(id), skip):
+			n += 1
+	for id in AUTO_SECOND_PASS:
+		while _fill_open(String(id), skip):
+			n += 1
+	return n
+
+
+## One open seat of a station, given to the best of those with no job who are up (`_best_free`, not in `skip`).
+func _fill_open(id: String, skip: Array) -> bool:
+	if crew_of(id).size() >= seats_of(id):
+		return false
+	var best = _best_free(id, false, true, skip)
+	return best != null and assign(best, id)
+
+
 ## The person with no job (here or away, as asked) who suits this station best, or null. `up_only` leaves out those who are down or
-## in a breakdown.
-func _best_free(id: String, away := false, up_only := false):
+## in a breakdown; `skip` those whose ids are listed.
+func _best_free(id: String, away := false, up_only := false, skip: Array = []):
 	var best = null
 	var best_score := -1.0e9
 	for p in sim.people:
-		if p.dead or p.turned or p.player or job_of(p) != "" or (p.away != null) != away:
+		if p.dead or p.turned or p.player or job_of(p) != "" or (p.away != null) != away or skip.has(String(p.id)):
 			continue    # (the player is never given a seat: avatar.gd)
 		if up_only and not _able(p):
 			continue

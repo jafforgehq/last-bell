@@ -133,6 +133,7 @@ func _press(main: Node, code: Key, mods: Dictionary = {}) -> void:
 	ev.physical_keycode = code
 	ev.pressed = true
 	ev.ctrl_pressed = bool(mods.get("ctrl", false))
+	ev.shift_pressed = bool(mods.get("shift", false))
 	main._unhandled_input(ev)
 
 
@@ -501,12 +502,19 @@ func test_the_order_hotkeys_are_off_in_avatar_mode_but_the_pages_stay() -> void:
 	var fields: bool = main.fields
 	_press(main, KEY_V)
 	check(main.fields != fields, "V still flips the fields of fire")
+	# (round 18: in avatar mode J and N open the radio panel on its Jobs and Build pages; Shift is the modal page)
 	_press(main, KEY_J)
-	check(main.hud.jobs_screen != null, "J still opens the Duty roster")
+	eq(main.hud.radio_page(), "jobs", "J opens the radio panel on Jobs")
+	check(main.hud.jobs_screen == null, "and not the modal page")
+	_press(main, KEY_J, {"shift": true})
+	check(main.hud.jobs_screen != null, "Shift+J opens the Duty roster")
 	main.toggle_jobs()
 	_press(main, KEY_N)
-	check(main.hud.build_screen != null, "N still opens Build")
+	eq(main.hud.radio_page(), "build", "N moves the panel to Build")
+	_press(main, KEY_N, {"shift": true})
+	check(main.hud.build_screen != null, "Shift+N opens Build")
 	main.toggle_build()
+	main.hud.close_radio()
 	await TutorialKit.leave(main)
 
 

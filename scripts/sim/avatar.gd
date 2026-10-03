@@ -388,13 +388,13 @@ func _aim(p) -> void:
 
 # ----------------------------------------------------------------- shooting --
 
-## The cone, in radians all across, of the next shot of this gun.
+## The cone, in radians all across, of the next shot of this gun (narrower while braced on a night post: interact.gd `brace_factor`).
 func spread_of(p, gun: Dictionary) -> float:
 	var skill := clampf(1.6 - 0.08 * float(p.skills.get("Shooting", 0)), 0.8, 1.6)
 	var steady := clampf(sim.aim_factor(p) * sim.perf(p), 0.5, 1.5)
 	var kick := maxf(p.recoil, p.bloom)
 	var walking := 1.0 + (MOVE_SPREAD if p.moving else 0.0)
-	return float(gun.get("spread", DEFAULT_SPREAD)) * skill / steady * (1.0 + RECOIL_SPREAD * kick) * walking
+	return float(gun.get("spread", DEFAULT_SPREAD)) * skill / steady * (1.0 + RECOIL_SPREAD * kick) * walking * sim.interact.brace_factor(p)
 
 
 func _trigger(p) -> void:

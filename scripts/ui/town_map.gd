@@ -114,6 +114,9 @@ var hovered := ""
 var focused := ""
 ## place id -> its pin (a Button)
 var pins := {}
+## Round 18 (optional): the focus mode the pins are given. The Town Board keeps them focusable (the keyboard walks the pins); the
+## radio panel's Map page sets FOCUS_NONE (`set_pin_focus`) so that WASD and E never go into a button.
+var pin_focus: int = Control.FOCUS_ALL
 var home_marker: Control
 var _over: Control
 var _scale := 1.0
@@ -163,6 +166,14 @@ func set_data(d: Dictionary) -> void:
 	_over.queue_redraw()
 
 
+## Sets how the pins take focus (Control.FOCUS_NONE for a map that must not take the keyboard), for the pins there are and for
+## those made later. Round 18, optional: a map that never calls it is as it was.
+func set_pin_focus(mode: int) -> void:
+	pin_focus = mode
+	for pin in pins.values():
+		pin.focus_mode = mode as Control.FocusMode
+
+
 ## The pins of the places that are known now.
 func _sync_pins() -> void:
 	var keep := {}
@@ -181,6 +192,7 @@ func _sync_pins() -> void:
 			pin.focus_entered.connect(func(): _focus_on(id, true))
 			pin.focus_exited.connect(func(): _focus_on(id, false))
 			pin.set_meta("caption", _make_caption(String(p.name)))
+			pin.focus_mode = pin_focus as Control.FocusMode
 			pins[id] = pin
 			add_child(pin)
 		pin.place = p

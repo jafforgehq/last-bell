@@ -15,6 +15,11 @@
 ## Alerts: `workshop-idle` when the scrap is down to the reserve with ammo still to make (once
 ## for each stretch of low scrap).
 ##
+## HAND WORK (round 18, interact.gd): the avatar has no seat, but while it works the bench with its own hands
+## (`sim.interact.working == "bench"`, E at the worktable, a session of BENCH_SECONDS) it is one of the crew `update` works,
+## at BENCH_MULT of the scrap an hour its Building skill gives; the same use of the stores, the same hammer and craft events and the
+## same credit toward Building. `why_not_hand_craft` is `why_not_craft` without the seat. With no avatar nothing of this runs.
+##
 ## From the buildings (build.gd) it reads `craft_mult` (the workshop: scrap an hour at the bench) and
 ## `ammo_per_scrap` (the workshop: more rounds from each scrap, see `ammo_per_scrap()`).
 extends RefCounted
@@ -102,7 +107,16 @@ func can_make() -> bool:
 ## Whether this person is making ammo right now: on the bench job, at their seat, free and by
 ## day, with something to make.
 func crafting(p) -> bool:
-	return can_make() and sim.jobs.working("bench").has(p)
+	return can_make() and (sim.jobs.working("bench").has(p) or p == _hand_worker())
+
+
+## The avatar, while it works the bench with its own hands (interact.gd), else null.
+func _hand_worker():
+	var it = sim.interact
+	if it == null or it.working != "bench":
+		return null
+	var p = sim.avatar.player()
+	return p if p != null and not (p.dead or p.turned or p.downed or p.away != null) else null
 
 
 func _night() -> bool:
@@ -118,6 +132,20 @@ func why_not_craft(p) -> String:
 	var why: String = sim.jobs.why_not(p, "bench")
 	if why != "":
 		return why
+	return _why_not_work(p)
+
+
+## `why_not_craft` for the avatar's own hands: the same reasons without the seat (the avatar holds no job). "" = it can.
+func why_not_hand_craft(p) -> String:
+	if not sim.d.has("workshop"):
+		return "there is no worktable"
+	if p.dead or p.turned:
+		return "they are gone"
+	return _why_not_work(p)
+
+
+## The person, the hour and the stores: why work at the bench would not be making ammo ("" when it would).
+func _why_not_work(p) -> String:
 	if p.downed:
 		return "they are down"
 	if p.away != null:
@@ -129,7 +157,7 @@ func why_not_craft(p) -> String:
 	if float(sim.stock.scrap) < reserve() + 1.0:
 		return "there is no scrap to spare"
 	if float(sim.stock.ammo) >= target():
-		return "the ammo is at its target"
+		return "the ammo is at its target (%d)" % int(target())
 	return ""
 
 
@@ -162,6 +190,9 @@ func update(dt: float) -> void:
 	if _scrap_room() > EPS:
 		_told_idle = false
 	var crew: Array = sim.jobs.working("bench")
+	var hands = _hand_worker()
+	if hands != null:
+		crew = crew + [hands]
 	if crew.is_empty():
 		_beats.clear()
 		return
@@ -175,10 +206,15 @@ func update(dt: float) -> void:
 		if room <= EPS:
 			continue
 		var want: float = scrap_per_hour(p) * sim.perf(p) * hours
+		if p == hands:
+			# (the session's last step is a short one, so that twelve seconds make exactly twelve seconds of work)
+			want = scrap_per_hour(p) * sim.perf(p) * sim.game_hours(minf(dt, sim.interact.work_left)) * sim.interact.BENCH_MULT
 		var use := minf(want, room)
 		sim.stock.scrap = float(sim.stock.scrap) - use
 		sim.stock.ammo = float(sim.stock.ammo) + use * per
 		sim.skills.credit(p, "crafted", use)
+		if p == hands:
+			sim.interact.bench_made(use, use * per)
 		var st: Dictionary = _beats.get(id, {"hammer": 0.0, "scrap": 0.0, "since": 0.0})
 		st.scrap = float(st.scrap) + use
 		st.hammer = float(st.hammer) - dt

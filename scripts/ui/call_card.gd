@@ -5,6 +5,7 @@
 ##
 ## `setup(host, radio_getter, options)` as call_view.gd (the HUD lends its looks; the radio comes from the Callable; the options are
 ## handed on to the view). `refresh()` is called whenever the HUD is updated; the card is only visible while it has something to show.
+## Round 18: with the option "slim" it is the strip the radio panel keeps under its tabs (call_view.gd's slim form, on a flat slip).
 extends PanelContainer
 
 const CallView := preload("res://scripts/ui/call_view.gd")
@@ -37,11 +38,20 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	if view != null:
 		view.setup(host, radio_getter, opts)
 		return
-	var st: StyleBox = host._style(host.PANEL, 6, host.LINE2, true, "panel")
-	if st is StyleBoxFlat:
-		st.content_margin_left = 16
+	var st: StyleBox
+	if bool(opts.get("slim", false)):
+		# a slip inside the radio panel's board: flat, a little lighter than it, with the kind's bar down its left edge
+		st = host._style(host.PANEL_HI, 5, host.LINE2, false)
+		st.content_margin_left = 14
+		st.content_margin_right = 8
+		st.content_margin_top = 6
+		st.content_margin_bottom = 7
 	else:
-		st.content_margin_left = maxf(st.content_margin_left, 16.0)
+		st = host._style(host.PANEL, 6, host.LINE2, true, "panel")
+		if st is StyleBoxFlat:
+			st.content_margin_left = 16
+		else:
+			st.content_margin_left = maxf(st.content_margin_left, 16.0)
 	add_theme_stylebox_override("panel", st)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	view = CallView.new()

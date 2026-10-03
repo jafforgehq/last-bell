@@ -27,6 +27,7 @@ const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const Radio := preload("res://scripts/sim/radio.gd")
 const Avatar := preload("res://scripts/sim/avatar.gd")
+const Interact := preload("res://scripts/sim/interact.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 
@@ -296,6 +297,8 @@ var streets
 var vehicles
 var radio
 var avatar
+## What the avatar uses where it stands (round 18, interact.gd): talk, a post, the bench, a car's fuel. Behind avatar mode.
+var interact
 ## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
 ## the avatar and the radio's news is behind this).
 var player_id := ""
@@ -385,6 +388,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	radio.setup(self)
 	avatar = Avatar.new()
 	avatar.setup(self)
+	interact = Interact.new()
+	interact.setup(self)
 	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, vehicles]:
 		m.setup(self)
 	_seed()
@@ -615,6 +620,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 		m.start()
 	radio.start()
 	avatar.start()
+	interact.start()
 	recruits.begin()
 	town.begin()
 	lots.begin()
@@ -691,6 +697,8 @@ func update(dt: float) -> void:
 		var a: Dictionary = alerts[id]
 		if t - a.t > a.ttl:
 			alerts.erase(id)
+	# what the avatar is using (a post, the bench), after the people have moved (round 18, interact.gd)
+	interact.update(dt)
 	# the radio's news and calls, from what happened this step (last: it reads the step's events)
 	radio.update(dt)
 

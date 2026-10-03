@@ -5,7 +5,9 @@
 ##
 ## `setup(host, radio_getter, options)`: `host` is the HUD (it lends its looks, see radio_kit.gd); `radio_getter` a Callable that
 ## returns the radio (or null); `options` (all optional): "speed_getter" (a Callable returning the pace of the player's clock against the game's normal one: 1 to 3 in the yard, a
-## third in a place, so that the seconds are the player's: at 3x a call has a third of the seconds). `show_entry(entry)` points the view at an entry of the radio's
+## third in a place, so that the seconds are the player's: at 3x a call has a third of the seconds); "slim" (round 18: the strip the radio
+## panel keeps under its tabs while another page is up: the title, the countdown and the options side by side in a row that wraps, without the
+## kind or the line under the title). `show_entry(entry)` points the view at an entry of the radio's
 ## log; `refresh()` brings it up to date (the countdown, the result). Answering calls `radio.answer(id, option_id)`; it never pauses
 ## anything.
 extends VBoxContainer
@@ -35,8 +37,10 @@ var buttons := {}
 ## How much of the call is told: 0 all of it; 1 without the line under the title; 2 and without the kind (the colour bar of the card says it);
 ## 3 and with slimmer buttons. A card that has little room asks for more (`set_level`, `CallCard.fit`).
 var level := 0
+## The slim form (see `setup`): the options are in a row that wraps, not one under the other.
+var slim := false
 var _radio_getter: Callable
-var _buttons_box: VBoxContainer
+var _buttons_box: Container
 var _built := false
 
 
@@ -47,6 +51,9 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	if _built:
 		return
 	_built = true
+	slim = bool(opts.get("slim", false))
+	if slim:
+		level = 2
 	add_theme_constant_override("separation", 3)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	kind_label = host._caps("", host.INK2)
@@ -78,7 +85,14 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	result_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	result_label.visible = false
 	add_child(result_label)
-	_buttons_box = host._vbox(4)
+	if slim:
+		var flow := HFlowContainer.new()
+		flow.add_theme_constant_override("h_separation", 4)
+		flow.add_theme_constant_override("v_separation", 4)
+		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_buttons_box = flow
+	else:
+		_buttons_box = host._vbox(4)
 	add_child(_buttons_box)
 
 
@@ -117,7 +131,7 @@ func _rebuild(e: Dictionary) -> void:
 	sub_label.visible = String(e.sub) != ""
 	for o in e.options:
 		var b: Button = RadioKit.small_button(host, String(o.label), BUTTON_H if level < 3 else BUTTON_H_SLIM, 13)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_horizontal = Control.SIZE_FILL if slim else Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_on_pressed.bind(String(o.id)))
 		_buttons_box.add_child(b)
 		buttons[String(o.id)] = b

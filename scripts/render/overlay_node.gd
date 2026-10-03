@@ -7,7 +7,8 @@
 ## (round 5) the marks of the Jobs screen while it is open (`main.jobs_hover`): a faint ring and the seats
 ## at every station, a firm ring and name at what the page points at, a ring at a night post, a box round a person.
 ## And (round 17, avatar mode only) the survivor the player plays: the crosshair at the pointer, the aim line from the
-## gun, the ring of a reload and the YOU tag over their head (`_draw_avatar`).
+## gun, the ring of a reload and the YOU tag over their head (`_draw_avatar`). And (round 18) what E would do: the prompt
+## beside the nearest thing in reach, the steady-stance mark on a post and the bench's ring (`_draw_interact`).
 ## All of it is a view: nothing here changes the rules.
 extends Node2D
 
@@ -17,6 +18,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Frames := preload("res://scripts/ui/frames.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const TalkCard := preload("res://scripts/ui/talk_card.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -112,6 +114,18 @@ var reload_progress := 0.0
 ## the last draw put on the screen.
 var bubbles: Array = []
 var drawn_bubbles := 0
+## What E would do (round 18), at the last draw: the prompt's words ("E  Talk to Dez"; with a refusal "E  Take the gate post: Dez is at
+## the post"; "" when there is no prompt to show), whether its pill was drawn (it is not under a modal, a menu or a place, nor when
+## every side of the thing is under a board of the HUD), whether the thing may be used (a dimmer prompt when not), the pill's
+## rectangle, the thing the prompt is on ("kind:id") and the marks of a post held and of a bench session (and how far round it is).
+var drew_prompt := false
+var prompt_text := ""
+var prompt_ok := true
+var prompt_rect := Rect2()
+var prompt_key := ""
+var drew_brace := false
+var drew_bench_ring := false
+var bench_progress := 0.0
 var _bubble_sb: StyleBox = null
 var _bubble_framed := false
 
@@ -761,6 +775,221 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 		drew_blocked_hint = true
 
 
+# --------------------------------------------------------- what E would do --
+
+## How much nearer another thing has to be before the prompt leaves the one it is on (tiles): it does not flicker between two.
+const PROMPT_HOLD := 0.3
+## The pill's slate, the size of its key and its limit in width, and how far it keeps from the thing it is for.
+const PROMPT_BACK := Color(0.043, 0.078, 0.067, 0.93)
+const PROMPT_KEY := 20.0
+const PROMPT_MAX_W := 340.0
+const PROMPT_GAP := 10.0
+## What E does to a person who has the card open (the words of the prompt then).
+const PROMPT_END_TALK := "End the talk with %s"
+
+
+## The thing the prompt rests on: the nearest candidate, or the one it was on (`held`, a "kind:id") while that is still in reach and
+## not more than PROMPT_HOLD tiles farther than the nearest.
+static func choose_prompt(cands: Array, held: String) -> Dictionary:
+	if cands.is_empty():
+		return {}
+	var nearest: Dictionary = cands[0]
+	if held != "" and held != key_of(nearest):
+		for c in cands:
+			if key_of(c) == held:
+				if float(c.get("dist", 0.0)) <= float(nearest.get("dist", 0.0)) + PROMPT_HOLD:
+					return c
+				break
+	return nearest
+
+
+## Moves what the avatar has begun (a bench being worked, a post held: their "kind:id" in `began`) to the front of `cands` when it is within
+## PROMPT_HOLD tiles of the nearest one: E is to end it, and a person standing as near would otherwise be what E does (the rules rank a
+## person first within a third of a tile).
+static func started_first(cands: Array, began: Array) -> Array:
+	if cands.size() < 2 or began.is_empty() or began.has(key_of(cands[0])):
+		return cands
+	var limit := float(cands[0].get("dist", 0.0)) + PROMPT_HOLD
+	for i in range(1, cands.size()):
+		if began.has(key_of(cands[i])) and float(cands[i].get("dist", 0.0)) <= limit:
+			var out: Array = cands.duplicate()
+			var c = out.pop_at(i)
+			out.push_front(c)
+			return out
+	return cands
+
+
+## "kind:id" of a candidate ("" for none).
+static func key_of(c: Dictionary) -> String:
+	return "" if c.is_empty() else "%s:%s" % [String(c.get("kind", "")), String(c.get("id", ""))]
+
+
+## `name` of the interact module, or `fallback` (a stand-in may have no such thing).
+func _prop(it, prop_name: String, fallback):
+	var v = it.get(prop_name) if it != null else null
+	return fallback if v == null else v
+
+
+## Whether a prompt may be shown at all: an avatar in the yard, with no menu, page or place over it and the run not over.
+func _prompt_allowed() -> bool:
+	if main == null or main.sim == null or main.get("avatar_mode") != true:
+		return false
+	if main.has_method("avatar_hands_off") and main.avatar_hands_off():
+		return false
+	if main.has_method("raid_open") and main.raid_open():
+		return false
+	return not _modal_open()
+
+
+## The thing E would use now (the nearest candidate of the rules' `interact.candidates()`, held by PROMPT_HOLD), or {} when there is
+## none or the prompt is not to be shown. main.gd's E key uses what this says, so that E does what the pill says.
+func prompt_candidate() -> Dictionary:
+	var it = TalkCard.interact_of(main.sim if main != null else null)
+	if it == null or not _prompt_allowed():
+		prompt_key = ""
+		return {}
+	var began: Array = []
+	if String(_prop(it, "working", "")) == "bench":
+		began.append("bench:bench")
+	if String(_prop(it, "posted", "")) != "":
+		began.append("post:%s" % String(_prop(it, "posted", "")))
+	var pick := choose_prompt(started_first(it.candidates(), began), prompt_key)
+	prompt_key = key_of(pick)
+	return pick
+
+
+## The words of a candidate's prompt: {"label", "why", "ok", "text" ("E  Talk to Dez", "E  Take the gate post: Dez is at the post")}.
+## What E does to a person whose card is open is not what the rules' label says (it would talk again: E closes the card), so the words say
+## that; the rules' own labels already offer to leave a post held and to stop a bench worked.
+func prompt_for(c: Dictionary, it) -> Dictionary:
+	var label := String(c.get("label", ""))
+	var kind := String(c.get("kind", ""))
+	var id := String(c.get("id", ""))
+	var ok := bool(c.get("ok", true))
+	var why := String(c.get("why", ""))
+	var hud = main.get("hud") if main != null else null
+	if kind == "person" and hud != null and hud.has_method("talk_person"):
+		var open_for = hud.talk_person()
+		if open_for != null and String(open_for.id) == id:
+			label = PROMPT_END_TALK % String(open_for.first)
+			ok = true
+	if ok:
+		why = ""
+	return {"label": label, "why": why, "ok": ok, "text": "E  %s" % label if why == "" else "E  %s: %s" % [label, why]}
+
+
+## Where the thing a candidate is on is on the screen (pixels): a person at their feet as drawn, anything else where the rules say.
+func _spot_of(c: Dictionary) -> Vector2:
+	if String(c.get("kind", "")) == "person":
+		var who = _person(String(c.get("id", "")))
+		if who != null:
+			var pp: Vector2 = main.view_pos(who)
+			return _screen(pp.x, pp.y)
+	var at: Vector2 = c.get("pos", Vector2.ZERO)
+	return _screen(at.x, at.y)
+
+
+## The marks of what the avatar is doing with their hands on the yard (not the gun's: `_draw_avatar` has those): the steady stance on a
+## post, the bench's ring while they work it, and the prompt of what E would do beside the nearest thing in reach.
+func _draw_interact(sim, z: float, vp: Vector2) -> void:
+	var it = TalkCard.interact_of(sim)
+	if it == null or main.get("avatar_mode") != true:
+		return
+	var me = sim.avatar.player()
+	if me == null or me.dead or me.turned or me.away != null:
+		return
+	var pp: Vector2 = main.view_pos(me)
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 4.0)
+	# the steady stance: a green ring at the feet and the word beside them
+	if String(_prop(it, "posted", "")) != "":
+		var feet := _screen(pp.x, pp.y)
+		draw_set_transform(feet, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, maxf(14.0, 0.55 * z), 0.0, TAU, 40, Color(PILL, 0.7), 4.5, true)
+		draw_arc(Vector2.ZERO, maxf(14.0, 0.55 * z), 0.0, TAU, 40, Hud.OK, 2.5, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var font := Fonts.cond(700)
+		# (on the left of the feet: the prompt's pill is on the right of them)
+		_tag(feet + Vector2(-maxf(14.0, 0.55 * z) - 34.0, -0.1 * z), "Steady", font, Hud.OK, PROMPT_BACK, Color(Hud.OK, 0.7))
+		drew_brace = true
+	# the bench: a ring round the body that fills while they work
+	if String(_prop(it, "working", "")) == "bench":
+		var total := float(TalkCard.rule(it, "BENCH_SECONDS", 12.0))
+		var left := float(_prop(it, "work_left", 0.0))
+		bench_progress = clampf(1.0 - left / maxf(total, 0.01), 0.0, 1.0)
+		var body := _screen(pp.x, pp.y - 0.45)
+		var r := maxf(18.0, 0.55 * z)    # (round the body, under the YOU tag over the head; the reload ring has no room to be there too)
+		draw_arc(body, r, 0.0, TAU, 48, RING_TRACK, 5.0, true)
+		draw_arc(body, r, -PI / 2.0, -PI / 2.0 + bench_progress * TAU, 48, ACCENT, 3.5, true)
+		_tag(body + Vector2(-r - 40.0, -4.0), "Bench %ds" % ceili(left), Fonts.cond(700), ACCENT, PROMPT_BACK, Color(ACCENT, 0.6))
+		drew_bench_ring = true
+	# the prompt
+	var c := prompt_candidate()
+	if c.is_empty():
+		return
+	var words := prompt_for(c, it)
+	prompt_text = String(words.text)
+	prompt_ok = bool(words.ok)
+	var spot := _spot_of(c)
+	var kind := String(c.kind)
+	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else 0.5)), 14.0, 70.0)
+	var ring: Color = ACCENT if prompt_ok else Hud.INK3
+	# (the post that is held has its own green ring: the steady stance)
+	if not (kind == "post" and String(_prop(it, "posted", "")) == String(c.id)):
+		draw_set_transform(spot, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(PILL, 0.65), 4.5, true)
+		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(ring, (0.6 + 0.4 * pulse) if prompt_ok else 0.6), 2.5, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_prompt_pill(words, spot, rx, vp)
+
+
+## The pill of the prompt: a gold key with E, the label, and for a refusal the reason in amber under it; beside the ring on the right,
+## else on the left, else above, else below, whichever is in the window and not under a board of the HUD. Not drawn when none is.
+func _draw_prompt_pill(words: Dictionary, spot: Vector2, rx: float, vp: Vector2) -> void:
+	var font := Fonts.sans(600)
+	var fs := maxi(FIELD_PX, Fonts.MIN_PX)
+	var label := String(words.label)
+	var why := String(words.why)
+	var inner := PROMPT_MAX_W - PROMPT_KEY - 24.0
+	var label_w := minf(font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, inner)
+	var why_w := minf(font.get_string_size(why, HORIZONTAL_ALIGNMENT_LEFT, inner, fs).x, inner) if why != "" else 0.0
+	var lines := 2 if why != "" else 1
+	var h := 24.0 if lines == 1 else 42.0
+	var w := 8.0 + PROMPT_KEY + 8.0 + maxf(label_w, why_w) + 10.0
+	var sides := [
+		Vector2(spot.x + rx + PROMPT_GAP, spot.y - 0.4 * h - 6.0),
+		Vector2(spot.x - rx - PROMPT_GAP - w, spot.y - 0.4 * h - 6.0),
+		Vector2(spot.x - w / 2.0, spot.y - rx * 0.5 - PROMPT_GAP - h - 24.0),
+		Vector2(spot.x - w / 2.0, spot.y + rx * 0.5 + PROMPT_GAP + 14.0),
+	]
+	var view := Rect2(4.0, 4.0, vp.x - 8.0, vp.y - 8.0)
+	var covered := _covered_by_hud()
+	var rect := Rect2()
+	var found := false
+	for at in sides:
+		var r := Rect2(at, Vector2(w, h))
+		if view.encloses(r) and not _under_hud(r, covered):
+			rect = r
+			found = true
+			break
+	if not found:
+		return
+	var ok: bool = prompt_ok
+	var round_r := minf(12.0, rect.size.y * 0.5)
+	draw_colored_polygon(S.rrect(rect.position.x, rect.position.y, rect.size.x, rect.size.y, round_r, 5), PROMPT_BACK)
+	draw_polyline(S.closed(S.rrect(rect.position.x, rect.position.y, rect.size.x, rect.size.y, round_r, 5)), Color(ACCENT if ok else Hud.INK3, 0.8), 1.5, true)
+	var key := Rect2(rect.position.x + 6.0, rect.position.y + 3.0, PROMPT_KEY, 18.0)
+	draw_colored_polygon(S.rrect(key.position.x, key.position.y, key.size.x, key.size.y, 4.0, 4), ACCENT if ok else Hud.INK3)
+	var kfont := Fonts.cond(700, 1)
+	draw_string(kfont, Vector2(key.position.x, key.position.y + 14.0), "E", HORIZONTAL_ALIGNMENT_CENTER, key.size.x, fs, Color("#1a1508"))
+	var tx := key.end.x + 8.0
+	draw_string(font, Vector2(tx, rect.position.y + 3.0 + fs), label, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.INK if ok else Hud.INK2)
+	if why != "":
+		draw_string(font, Vector2(tx, rect.position.y + 21.0 + fs), why, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.WARN)
+	prompt_rect = rect
+	drew_prompt = true
+
+
 func _draw() -> void:
 	if main == null or main.sim == null:
 		return
@@ -784,6 +1013,11 @@ func _draw() -> void:
 	drew_aim_line = false
 	drew_reload_ring = false
 	drew_you = false
+	drew_prompt = false
+	prompt_text = ""
+	prompt_rect = Rect2()
+	drew_brace = false
+	drew_bench_ring = false
 	aim_on_target = false
 	if main.fields:
 		_draw_fields(sim, z, vp)
@@ -863,6 +1097,8 @@ func _draw() -> void:
 
 	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
 	_draw_avatar(sim, z, vp)
+	# what E would do: the prompt, the steady stance, the bench's ring
+	_draw_interact(sim, z, vp)
 
 	# what people say, over everything else
 	_draw_bubbles(vp)
