@@ -23,6 +23,8 @@
 extends RefCounted
 
 const Kinds := preload("res://scripts/sim/kinds.gd")
+const Lots := preload("res://scripts/sim/lots.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
 
 ## The alarm costs this much scrap, rings for this many game hours and makes its
 ## wall section's slots score this many tiles better when the dead choose where to
@@ -40,6 +42,8 @@ const AUTO_MIN_SCRAP := 5.0
 const CHORE_WALL_BELOW := 0.5
 ## The hour the lookout tells the crew what tonight looks like.
 const FORECAST_HOUR := 17.0
+## How near their post (tiles) someone has to be to be manning it (`readiness`).
+const POST_R := 1.5
 
 var sim
 ## The section the alarm is set on (-1: none) and when it stops (sim.clock_min).
@@ -130,10 +134,12 @@ func order_lure(seg) -> bool:
 	sim.stock.scrap = maxf(0.0, float(sim.stock.scrap) - LURE_COST)
 	lure_id = seg.id
 	lure_until = sim.clock_min + LURE_HOURS * 60.0
+	# (round 19, avatar mode: every brute obeys the alarm, so that the player chooses the wall a plated brute breaks on: no die for it)
+	var brutes_obey: bool = sim.waves.avatar_mode()
 	for z in sim.zombies:
 		if z.state != "approach" or z.slot == null or z.slot.seg == seg:
 			continue
-		if sim.rng.randf() >= LURE_SWITCH:
+		if not (brutes_obey and z.kind == Kinds.BRUTE) and sim.rng.randf() >= LURE_SWITCH:
 			continue
 		var old = z.slot
 		old.who = null
@@ -246,9 +252,18 @@ func post_pos(p) -> Vector2:
 ## where they stand at night. The reach is the one the guns have there tonight (`sim.reach_at`: a fog, the
 ## floodlights, a watchtower near the post), also by day, so that this is the number to plan the night by.
 func coverage_of(seg) -> int:
+	return _coverage(seg, false)
+
+
+## The same without the avatar's own gun (round 19): where he stands is his to choose, so the community's guns are the others'.
+func coverage_without_player(seg) -> int:
+	return _coverage(seg, true)
+
+
+func _coverage(seg, skip_player: bool) -> int:
 	var n := 0
 	for p in sim.people:
-		if p.dead or p.downed or p.away != null:
+		if p.dead or p.downed or p.away != null or (skip_player and p.player):
 			continue
 		var at := post_pos(p)
 		var reach: float = sim.reach_at(p.gun, at, true)
@@ -280,6 +295,9 @@ func lookout():
 ## {"given", "total", "low", "high", "heading", "spawns" (Vectors), "runners",
 ## "brutes", "big", "who"}; {"given": false} before 17:00 and when nobody was on watch at 17:00.
 ## It is the night's whoever has left the post since, and `who` is the one who reported it.
+## In avatar mode (round 19) it has more, from `waves.outlook(today)`: "kind" ("ordinary", "milestone", "final"), "name", "side",
+## "sections" (ids of the walls the night will break on), "section_text", "plated" (plated brutes), "first_at" and "brute_at" (hours),
+## "needs_you" (a Big Night) and "ready" (`readiness` of those sections: will the community hold tonight).
 func forecast() -> Dictionary:
 	if forecast_day != sim.day or forecast_who == "":
 		return {"given": false}
@@ -291,7 +309,7 @@ func forecast() -> Dictionary:
 	for i in plan.heading:
 		spawns.append(sim.spawns[int(i)])
 	var shown: int = int(plan.shown)
-	return {
+	var out := {
 		"given": true,
 		"total": shown,
 		"low": roundi(float(shown) * 0.85),
@@ -302,6 +320,56 @@ func forecast() -> Dictionary:
 		"brutes": int(plan.counts.brute),
 		"big": bool(plan.big),
 		"who": String(who.first),
+	}
+	if sim.waves.avatar_mode():
+		var o: Dictionary = sim.waves.outlook(sim.day)
+		if not o.is_empty():
+			for key in ["kind", "name", "side", "sections", "section_text", "plated", "first_at", "brute_at", "needs_you"]:
+				out[key] = o[key]
+			out["ready"] = readiness(o.sections)
+	return out
+
+
+# -------------------------------------------------------------- readiness --
+
+## Whether the community would hold tonight on its own, as a number for the HUD ("Posts 5 of 5, walls 82%") and the lab: for `sections`
+## (ids or Segments of the compound; all its walls when empty): {"walls" (the lowest share of hit points of those sections), "guns" (the
+## fewest guns that reach them: the avatar's own is left out), "manned" (those at their night posts: alive, up, at the base, not the
+## player; before the bell, those who will be: nobody has gone to the wall yet), "posts" (those who should be), "holds" (the
+## walls are at least `forecast.decent_walls`, the guns at least `forecast.decent_guns` and every post is manned)}.
+func readiness(sections := []) -> Dictionary:
+	var segs: Array = []
+	if sections.is_empty():
+		for s in sim.segments:
+			if s.kind != sim.DOOR_KIND and int(s.id) < Lots.FIRST_SEGMENT_ID:
+				segs.append(s)
+	else:
+		for ref in sections:
+			for s in sim.segments:
+				if (typeof(ref) == TYPE_INT and int(s.id) == int(ref)) or (typeof(ref) == TYPE_OBJECT and s == ref):
+					segs.append(s)
+					break
+	var walls := 1.0
+	var guns := 0
+	for i in segs.size():
+		var share: float = clampf(float(segs[i].hp) / maxf(float(segs[i].max_hp), 1.0), 0.0, 1.0)
+		var cover := coverage_without_player(segs[i])
+		walls = share if i == 0 else minf(walls, share)
+		guns = cover if i == 0 else mini(guns, cover)
+	var manned := 0
+	var posts := 0
+	var at_posts: bool = sim.posts_manned()
+	for p in sim.people:
+		if p.dead or p.turned or p.player or p.away != null:
+			continue
+		posts += 1
+		if p.downed or sim.morale.breakdown(p):
+			continue
+		if not at_posts or Vector2(p.x, p.y).distance_to(post_pos(p)) <= POST_R:
+			manned += 1
+	return {
+		"walls": walls, "guns": guns, "manned": manned, "posts": posts,
+		"holds": walls >= NightData.num("forecast.decent_walls", 0.7) and guns >= int(NightData.num("forecast.decent_guns", 2.0)) and manned == posts,
 	}
 
 
@@ -327,6 +395,9 @@ func _tell_the_forecast() -> void:
 		text += ", with runners"
 	if bool(f.big):
 		text = "%s: about %d, from everywhere" % ["The last night" if sim.seasons.is_last() else "The Big Night", int(f.total)]
+	if f.has("kind") and bool(f.needs_you):
+		# (avatar mode, a Big Night: what it is, from where, when, and the plated brutes)
+		text = sim.waves.outlook_text(sim.waves.outlook(sim.day))
 	sim.events.append({"type": "banner", "text": "%s reports" % String(who.first), "sub": text})
 	sim.alert("forecast", "info", "Tonight's forecast", text, null, 60.0)
 

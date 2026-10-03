@@ -9,6 +9,12 @@
 extends "res://scripts/sim/sim.gd"
 
 
+## A place has no rally, no plated brutes and no hot breaches (round 19: `Sim.nights_on`).
+func _init(data: Dictionary, w, effects) -> void:
+	super(data, w, effects)
+	nights_on = false
+
+
 ## The yard's own dead and the walls' slots do not exist in a site.
 func _seed() -> void:
 	pass

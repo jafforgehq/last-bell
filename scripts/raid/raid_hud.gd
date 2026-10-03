@@ -29,6 +29,7 @@ const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const CallCard := preload("res://scripts/ui/call_card.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const NightKit := preload("res://scripts/ui/night_kit.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 
 const PAD := 12.0
@@ -79,6 +80,8 @@ const STATUS_COLOR := {
 }
 ## How the base reads, by the key `PlaceFlow.base_state` gives.
 const BASE_COLOR := {"ok": Hud.OK, "night": Hud.INFO, "attack": Hud.DANGER_TEXT, "alarm": Hud.WARN, "fallen": Hud.DANGER_TEXT}
+## How the "leave by" line reads, by its tone (`NightKit.road_line`).
+const LEAVE_COLOR := {"calm": Hud.INK2, "warn": Hud.WARN, "danger": Hud.DANGER_TEXT}
 
 var hud
 var scene
@@ -139,6 +142,9 @@ var sky_dot: Control
 var clock_label: Label
 var mood_label: Label
 var base_label: Label
+## Round 19: the line under the base's state while the trip is out: "Dusk in 2:10 · road home 1:20 · leave by 15:40" (the colony's night
+## module says; amber when it is time to think of it, red when it is time to go, "You will be out tonight" when it is too late).
+var leave_label: Label
 
 var banner: PanelContainer
 var banner_title: Label
@@ -752,6 +758,11 @@ func _build_base() -> void:
 	base_label.clip_text = true
 	base_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	col.add_child(base_label)
+	leave_label = hud._label("", Fonts.sans(600), 13, Hud.INK2)
+	leave_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	leave_label.custom_minimum_size.x = BASE_W - 28.0
+	leave_label.visible = false
+	col.add_child(leave_label)
 	base_panel.add_child(col)
 	base_panel.custom_minimum_size.x = BASE_W
 	_put(base_panel)
@@ -1336,7 +1347,20 @@ func _refresh_base() -> void:
 	var state: Dictionary = PlaceFlow.base_state(cs)
 	base_label.text = "Base: %s" % String(state.text)
 	base_label.add_theme_color_override("font_color", BASE_COLOR.get(String(state.key), Hud.INK))
+	_refresh_leave(cs)
 	sky_dot.queue_redraw()
+
+
+## The "leave by" line (round 19): what the colony's night module says of the road home (`scene.night_road()`), in the tone of its state.
+## Nothing without one (a game with no avatar, a trip with no play).
+func _refresh_leave(cs) -> void:
+	var line := NightKit.road_line(scene.night_road(), float(cs.clock_min))
+	var text := String(line.get("text", ""))
+	if leave_label.text != text:
+		leave_label.text = text
+	leave_label.visible = text != ""
+	if text != "":
+		leave_label.add_theme_color_override("font_color", LEAVE_COLOR.get(String(line.tone), Hud.INK2))
 
 
 # ------------------------------------------------------------- banner etc --

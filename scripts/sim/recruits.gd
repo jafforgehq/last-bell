@@ -17,6 +17,7 @@
 ## Events: {"type": "arrived", "who": id}, {"type": "call_taken", "who": id}. Alerts: none of its own.
 extends RefCounted
 
+const NightData := preload("res://scripts/sim/night_data.gd")
 const DATA_PATH := "res://assets/data/recruits.json"
 ## Where the data is read from (tests may point it at another file).
 static var data_path := DATA_PATH
@@ -119,11 +120,24 @@ func housing_free() -> int:
 	return int(sim.build.housing()) - crew_size() - incoming.size()
 
 
-## Night size by crew (small start only).
+## Night size by crew (small start only). In avatar mode (round 19) the avatar counts as `ordinary.avatar_weight` of a defender
+## (nights.json: the community's guns hold an ordinary night, the player is a boon, not a gun it needs); `crew_size()` itself, the
+## housing's count, is not touched.
 func crew_scale() -> float:
 	if not small:
 		return 1.0
-	return clampf(SCALE_BASE + SCALE_PER_SIX * float(crew_size()) / 6.0, SCALE_MIN, SCALE_MAX)
+	var n := float(crew_size())
+	if sim.nights_on and sim.player_id != "" and _avatar_counted():
+		n = n - 1.0 + NightData.num("ordinary.avatar_weight", 0.5)
+	return clampf(SCALE_BASE + SCALE_PER_SIX * n / 6.0, SCALE_MIN, SCALE_MAX)
+
+
+## Whether the player is among the people `crew_size()` counts (alive, not turned): one who died is not taken off it again.
+func _avatar_counted() -> bool:
+	for p in sim.people:
+		if String(p.id) == sim.player_id:
+			return not p.dead and not p.turned
+	return false
 
 
 func gap_days() -> int:

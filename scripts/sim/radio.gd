@@ -28,6 +28,13 @@
 ## and for a succession; the community's ideas (round 20, kind "idea", yes / later / no) are raised and answered by initiative.gd
 ## through `raise_call` and `_carry_out`. With no avatar (the old game, the harness, the tests) none of that happens.
 ##
+## THE CALLS OF THE NIGHT (round 19, scripts/sim/night_calls.gd: `radio.night`, watched at the end of `update` in avatar mode only, saved
+## under "night"): a wall that is going (`going`), a brute on its way (`brute`), a section that has fallen (`breach`), the Big Night the
+## lookout has read (`night`), the day-ahead notice at noon (`forecast`, news only) and the road home of a trip in a place (`night_road`).
+## Their options that send people are `_reinforce_near` (two, the old `attack` call still sends everyone) and `_fall_back`; the newer
+## call settles the older ones of the same wall (`settle_wall_calls`); what the rest do is in night_calls.gd (`carry_out`, which
+## `_carry_out` hands every kind it does not know to).
+##
 ## THE ALARM is the call to arms: `alarm(true)` puts everyone at their posts now (by day too, in any start) until
 ## `alarm(false)` or the dawn, and ends whatever stances there were.
 ##
@@ -43,6 +50,8 @@
 ## {"type": "stance", "who", "stance"} when a request takes effect, {"type": "alarm", "on"}, {"type": "radio_answered",
 ## "id", "option", "by_default"} when a call is settled.
 extends RefCounted
+
+const NightCalls := preload("res://scripts/sim/night_calls.gd")
 
 const VERBS := ["come", "hold", "cover", "search", "back", "post"]
 const VERB_NAMES := {"come": "Come with me", "hold": "Hold here", "cover": "Cover me", "search": "Search that", "back": "Go back", "post": "To the walls"}
@@ -144,10 +153,15 @@ var _sent := {}
 ## What the wall sections were worth last step (id to hp) and the last phase the radio saw.
 var _seg_hp := {}
 var _phase_seen := ""
+## The calls and notices of the night (round 19, night_calls.gd): a wall that is going, a brute, a breach, the night's forecast, the
+## day-ahead notice, the road home. Made in `setup`, watched in `update` (avatar mode only), saved under "night".
+var night
 
 
 func setup(s) -> void:
 	sim = s
+	night = NightCalls.new()
+	night.setup(self)
 
 
 func start() -> void:
@@ -175,6 +189,7 @@ func _reset() -> void:
 	_sent.clear()
 	_seg_hp.clear()
 	_phase_seen = ""
+	night.reset()
 
 
 # ------------------------------------------------------------------ the people --
@@ -1330,11 +1345,23 @@ func answer(id: int, option_id: String) -> bool:
 	return true
 
 
-func _settle(e: Dictionary, option_id: String, by_default: bool) -> void:
+func _settle(e: Dictionary, option_id: String, by_default: bool, quiet: bool = false) -> void:
 	e["answered"] = option_id
 	e["by_default"] = by_default
 	e["result"] = _carry_out(e, option_id)
-	sim.events.append({"type": "radio_answered", "id": int(e.id), "option": option_id, "by_default": by_default})
+	if not quiet:
+		sim.events.append({"type": "radio_answered", "id": int(e.id), "option": option_id, "by_default": by_default})
+
+
+## A wall's older calls are over when a newer one says more of it (round 19: the wall is going, the wall is down): the open calls
+## of these kinds about this section take their default, quietly (no answer is announced); and when `kinds` has "attack" the old call
+## is not made for this section again tonight.
+func settle_wall_calls(seg, kinds: Array) -> void:
+	for e in news:
+		if _open(e) and kinds.has(String(e.kind)) and int(e.data.get("seg", -1)) == int(seg.id):
+			_settle(e, String(e.default), true, true)
+	if kinds.has("attack"):
+		_attack_called["%s:%d" % ["n" if sim.is_night() else "d", int(seg.id)]] = true
 
 
 ## Calls whose time is up take their default.
@@ -1377,6 +1404,8 @@ func _carry_out(e: Dictionary, option_id: String) -> String:
 		"idea":
 			# an idea the community brought (initiative.gd, round 20): the module does what a yes asks and keeps the accounts
 			return sim.initiative.carry_out(e, option_id)
+		_:
+			return night.carry_out(e, option_id)    # (the calls of the night, round 19: night_calls.gd)
 	return ""
 
 
@@ -1402,6 +1431,7 @@ func update(dt: float) -> void:
 	_read_events()
 	_watch_the_walls()
 	_watch_for_fever()
+	night.watch()
 
 
 ## The alarm stands down by itself when the day comes.
@@ -1532,6 +1562,49 @@ func _reinforce(seg) -> int:
 	return sent
 
 
+## "Send two" (round 19, the calls of the night): the `n` free defenders nearest the section who do not already hold it (their post is
+## not on it; if there are fewer of those, the nearest of its own make up the number) go to the section's nearest posts that nobody
+## holds (the avatar's own post is nobody's), or behind the wall when there are none. The old call above sends everyone. Returns
+## how many went.
+func _reinforce_near(seg, n: int) -> int:
+	var own: Array = []
+	var others: Array = []
+	for p in sim.people:
+		if not _free_to_go(p):
+			continue
+		if _post_at(seg, sim.jobs.post_pos(p)):
+			own.append(p)
+		else:
+			others.append(p)
+	var nearer := func(a, b): return Vector2(a.x, a.y).distance_to(seg.center) < Vector2(b.x, b.y).distance_to(seg.center)
+	own.sort_custom(nearer)
+	others.sort_custom(nearer)
+	var crew: Array = others + own
+	if crew.size() > n:
+		crew.resize(maxi(n, 0))
+	var held: Array = []
+	for q in sim.people:
+		if not (q.dead or q.turned or _is_leader(q)):
+			held.append(Vector2(sim.jobs.post_pos(q)))
+	var spots: Array = []
+	for po in sim.jobs.posts():
+		var at := Vector2(po.pos)
+		var taken := false
+		for h in held:
+			taken = taken or h.distance_to(at) < 0.5
+		if not taken:
+			spots.append(at)
+	spots.sort_custom(func(a, b): return a.distance_to(seg.center) < b.distance_to(seg.center))
+	var yard: Vector2 = sim.repair_spot(seg)
+	var sent := 0
+	for i in crew.size():
+		var at: Vector2 = spots[i] if i < spots.size() else yard + Vector2(float(i - spots.size()) * 0.8, 0.0)
+		if sim.order_move(crew[i], at.x, at.y) or sim.order_move(crew[i], yard.x, yard.y):
+			_sent[String(crew[i].id)] = int(seg.id)
+			sent += 1
+	return sent
+
+
 ## "Fall back to the school": the people whose posts are at this section are sent inside, to the school door nearest them.
 func _fall_back(seg) -> int:
 	var doors: Array = []
@@ -1624,6 +1697,7 @@ func save() -> Dictionary:
 		"sick_called": _sick_called.keys(),
 		"sent": _sent.duplicate(),
 		"phase": _phase_seen,
+		"night": night.save(),
 	}
 
 
@@ -1685,6 +1759,9 @@ func load_state(d: Dictionary) -> void:
 		for id in sent:
 			if _number(sent[id]) and _person(String(id)) != null:
 				_sent[String(id)] = int(sent[id])
+	var nd = d.get("night", {})
+	if nd is Dictionary:
+		night.load_state(nd)    # (a save from before round 19 has none: no promise, no call remembered)
 
 
 func _entry_in(r) -> Dictionary:

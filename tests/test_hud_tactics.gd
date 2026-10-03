@@ -325,7 +325,9 @@ func test_the_forecast_line_is_twelve_pixel_text_in_the_clocks_style() -> void:
 	eq(l.get_theme_color("font_color"), Hud.INK2, "in the colour of the weather line")
 	check(l.get_parent().get_parent() == ctx.hud.clock, "inside the clock, under its other rows")
 	var rows: Array = l.get_parent().get_children()
-	eq(rows[rows.size() - 1], l, "as the last row")
+	# (round 19: the community's own reading of the night, avatar mode only, is the row under it)
+	eq(rows[rows.size() - 1], ctx.hud.ready_label, "the readiness line is the last row")
+	eq(rows[rows.size() - 2], l, "and the forecast the one over it")
 	Kit.free_all(ctx)
 
 

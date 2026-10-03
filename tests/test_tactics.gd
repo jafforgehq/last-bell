@@ -319,3 +319,43 @@ func test_a_defender_on_a_raised_deck_is_scratched_far_less_than_one_on_the_grou
 		g.world.free()
 	check(counts.ground >= 40, "on the ground about one claw in nine scratches: %d of 600" % counts.ground)
 	check(counts.deck * 3 <= counts.ground, "on the deck far fewer: %d against %d" % [counts.deck, counts.ground])
+
+
+# ------------------------------------------------------------- round 19 --
+
+func test_the_guns_without_the_players_are_the_guns_and_readiness_names_its_numbers() -> void:
+	var g := Helpers.make(20, 1)
+	var sim = g.sim
+	for s in sim.segments:
+		eq(sim.tactics.coverage_without_player(s), sim.tactics.coverage_of(s), "nobody is the player, so the counts are the same on %s" % s.name)
+	var r: Dictionary = sim.tactics.readiness()
+	for key in ["walls", "guns", "manned", "posts", "holds"]:
+		check(r.has(key), "readiness has `%s`" % key)
+	check(float(r.walls) > 0.0 and float(r.walls) <= 1.0, "the walls are a share")
+	eq(r.posts, sim.people.size(), "everyone in the classic yard has a post")
+	g.world.free()
+
+
+func test_the_alarm_draws_the_brutes_on_their_way_by_the_old_die_without_an_avatar() -> void:
+	var g := Helpers.make(14, 1)
+	var sim = g.sim
+	sim.waves.enabled = false
+	sim.zombies.clear()
+	var north = _seg(sim, NORTH_BUS)
+	for sl in north.slots:
+		sl.who = sim.spawn(sl.x, sl.y, "attack")
+	var coming: Array = []
+	for i in 6:
+		var z = sim.spawn(76.0, 28.0 + float(i), "approach", "brute" if i < 3 else "walker")
+		z.speed = 0.7
+		sim._assign_slot(z)
+		coming.append(z)
+	var ref := RandomNumberGenerator.new()
+	ref.seed = sim.rng.seed
+	ref.state = sim.rng.state
+	sim.stock.scrap = 20.0
+	check(sim.tactics.order_lure(north), "the alarm is set")
+	for z in coming:
+		ref.randf()
+	eq(sim.rng.state, ref.state, "a die for each of the six on their way, the brutes too")
+	g.world.free()

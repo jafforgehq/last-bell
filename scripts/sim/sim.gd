@@ -23,6 +23,7 @@ const Town := preload("res://scripts/sim/town.gd")
 const Lots := preload("res://scripts/sim/lots.gd")
 const Seasons := preload("res://scripts/sim/seasons.gd")
 const Streets := preload("res://scripts/sim/streets.gd")
+const Nights := preload("res://scripts/sim/nights.gd")
 const Vehicles := preload("res://scripts/sim/vehicles.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const Radio := preload("res://scripts/sim/radio.gd")
@@ -233,6 +234,8 @@ class Zombie:
 	var kind := "walker"
 	var size := 1.0
 	var claw := 1.0
+	## A brute of a Big Night (round 19): armoured but for its head (nights.gd `damage_to`). Saved with the zombie, optional in a save.
+	var plated := false
 
 
 var world
@@ -297,6 +300,9 @@ var town
 var lots
 var seasons
 var streets
+## Presence, plating and breaches (round 19, nights.gd): every hook of it is neutral without an avatar (`player_id`) and where
+## `nights_on` is false.
+var nights
 var vehicles
 var radio
 var relations    # (round 20: who is close to whom)
@@ -308,6 +314,9 @@ var interact
 ## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
 ## the avatar and the radio's news is behind this).
 var player_id := ""
+## Whether the nights' rules of round 19 (rally, plated brutes, hot breaches: nights.gd) apply in this sim. True in the settlement's own
+## sim; a place's sim (raid_sim.gd) sets it false in its own `_init`. They also need an avatar: `Nights.active()`.
+var nights_on := true
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
@@ -389,6 +398,7 @@ func _init(data: Dictionary, w, effects) -> void:
 	lots = Lots.new()
 	seasons = Seasons.new()
 	streets = Streets.new()
+	nights = Nights.new()
 	vehicles = Vehicles.new()
 	radio = Radio.new()
 	radio.setup(self)
@@ -402,7 +412,7 @@ func _init(data: Dictionary, w, effects) -> void:
 	avatar.setup(self)
 	interact = Interact.new()
 	interact.setup(self)
-	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, vehicles]:
+	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, nights, vehicles]:
 		m.setup(self)
 	_seed()
 
@@ -577,7 +587,7 @@ func perf(p: Person) -> float:
 ## trait (Sharp-eyed, Nervous among a crowd of the dead), a friend close by (see bonds.gd) and
 ## being Shaken (see morale.gd).
 func aim_factor(p: Person) -> float:
-	return traits.mult(p, "aim") * (1.0 + bonds.aim_bonus(p)) * morale.aim_mult(p)
+	return traits.mult(p, "aim") * (1.0 + bonds.aim_bonus(p)) * morale.aim_mult(p) * nights.aim_mult(p)
 
 
 ## Small status marks for a person's card and panel, from every module:
@@ -628,7 +638,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 			sl.who = null
 	for pos in [[7.5, 47], [76.5, 45], [3.6, 8.6], [80, 8.2]]:
 		spawn(pos[0], pos[1], "wander")
-	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, vehicles]:
+	for m in [seasons, supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, streets, nights, vehicles]:
 		m.start()
 	radio.start()
 	relations.start()
@@ -694,6 +704,7 @@ func update(dt: float) -> void:
 	town.update(dt)
 	lots.update(dt)
 	streets.update(dt)
+	nights.update(dt)
 
 	if phase == "dawn":
 		_dawn_sweep()
@@ -714,6 +725,8 @@ func update(dt: float) -> void:
 			alerts.erase(id)
 	# what the avatar is using (a post, the bench), after the people have moved (round 18, interact.gd)
 	interact.update(dt)
+	# the avatar's own hands at a wall, after the people and the dead have moved (round 19, nights.gd)
+	nights.after_people(dt)
 	# the community: who is close to whom, who is the one to call, what they propose (round 20), then the radio's news and calls
 	# from what happened this step (last: it reads the step's events)
 	relations.update(dt)
@@ -934,7 +947,8 @@ func _update_person(p: Person, dt: float) -> void:
 			# the blow lands a step in front of the mender, towards the wall (he stands on the yard side of it)
 			var toward := (s.center - Vector2(p.x, p.y)).normalized() if Vector2(p.x, p.y).distance_to(s.center) > 0.5 else Vector2.ZERO
 			fx.hit_material(p.x + toward.x * 0.7, p.y + toward.y * 0.7, "metal")
-		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.skills.Building)) * perf(p) * traits.mult(p, "repair"))
+		# (nights.repair_mult: 0.0 for a mender at a breach the dead are at, unless the avatar rallies them: round 19)
+		var done: float = supplies.repair_budget(dt * (REPAIR_BASE + float(p.skills.Building)) * perf(p) * traits.mult(p, "repair") * nights.repair_mult(p, s))
 		if done > 0.0:
 			var before_hp := s.hp
 			_repair_segment(s, done)
@@ -1134,15 +1148,15 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	var dist := Vector2(z.x - p.x, z.y - p.y).length()
 	if gun.get("melee", false):
 		p.thrust = 1.0
-		p.cooldown = float(gun.cooldown) * (0.9 + rng.randf() * 0.2)
+		p.cooldown = float(gun.cooldown) * (0.9 + rng.randf() * 0.2) * nights.fire_mult(p)
 		events.append({"type": "stab", "x": p.x, "y": p.y})
 		if rng.randf() < float(gun.acc):
-			_hurt_zombie(z, float(gun.dmg), ang, p, true)
+			_hurt_zombie(z, nights.damage_to(z, float(gun.dmg), nights.npc_weak(z)), ang, p, true)
 		return
 	p.mag -= 1
 	p.stats.shots += 1
 	p.recoil = 1.0
-	p.cooldown = float(gun.cooldown) * (0.85 + rng.randf() * 0.3)
+	p.cooldown = float(gun.cooldown) * (0.85 + rng.randf() * 0.3) * nights.fire_mult(p)
 	var m := muzzle(p, ang)
 	fx.muzzle(m.x, m.y, ang, p.weapon == "shotgun" or p.weapon == "hunting")
 	fx.casing(p.x, p.y - 0.15, ang, p.weapon == "shotgun")
@@ -1166,7 +1180,8 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 			fx.smoke(e.x, e.y, 0.12, false)
 		fx.tracer(m.x, m.y, e.x, e.y)
 	if dealt > 0.0:
-		_hurt_zombie(z, dealt, ang, p)
+		# (a plated brute of a Big Night: the armoured share, or one shot in a dozen on its head; one die for it, none for anything else)
+		_hurt_zombie(z, nights.damage_to(z, dealt, nights.npc_weak(z)), ang, p)
 	if p.mag <= 0:
 		p.reloading = float(gun.reload) * traits.mult(p, "reload")
 		p.target = null

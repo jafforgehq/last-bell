@@ -46,8 +46,10 @@ static func shares(day: int, big: bool) -> Dictionary:
 
 ## How many of each kind a night with this budget brings. A kind that has begun
 ## brings at least one. `rng` rounds the part of a creature that is left over.
-static func counts(budget: float, day: int, big: bool, rng: RandomNumberGenerator) -> Dictionary:
-	var sh := shares(day, big)
+## Round 19: `shares` (when it is not empty) replaces `shares(day, big)` (the Big Nights of the avatar game have their own: nights.json),
+## and `floors` ({kind: least number}) lifts a count that came out lower; neither spends a draw, so the same draws come in the same order.
+static func counts(budget: float, day: int, big: bool, rng: RandomNumberGenerator, given := {}, floors := {}) -> Dictionary:
+	var sh: Dictionary = given if not given.is_empty() else shares(day, big)
 	var out := {"walker": 0, "runner": 0, "brute": 0}
 	var spent := 0.0
 	for kind in ["brute", "runner"]:
@@ -57,7 +59,7 @@ static func counts(budget: float, day: int, big: bool, rng: RandomNumberGenerato
 		var n := int(floor(want))
 		if rng.randf() < want - float(n):
 			n += 1
-		out[kind] = maxi(n, 1)
+		out[kind] = maxi(n, maxi(1, int(floors.get(kind, 0))))
 		spent += float(out[kind]) * float(KINDS[kind].cost)
 	out["walker"] = maxi(0, roundi(budget - spent))
 	return out
