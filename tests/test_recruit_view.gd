@@ -460,7 +460,9 @@ func test_the_crew_comes_from_the_command_line() -> void:
 	eq(Main.crew_from_args(["--crew=small"]), 3, "small is three")
 	eq(Main.crew_from_args(["--crew=full"]), 6, "full is six")
 	eq(Main.crew_from_args(["--crew=2"]), 3, "fewer than three is three")
-	eq(Main.crew_from_args(["--crew=9"]), 6, "more than three is six")
+	eq(Main.crew_from_args(["--crew=4"]), 4, "four is four")
+	eq(Main.crew_from_args(["--crew=5"]), 5, "five is five")
+	eq(Main.crew_from_args(["--crew=9"]), 6, "more than six is six")
 	eq(Main.crew_from_args(["--crew=lots"]), 0, "words that are not a crew are no choice")
 
 
@@ -476,7 +478,11 @@ func test_a_new_run_asked_for_with_a_crew_leaves_it_in_the_meta() -> void:
 	main.start_run(1, 5, 6)
 	eq(got.back(), {"difficulty": 1, "seed": 5, "crew": 6}, "a full one")
 	main.start_run(1, 5, 4)
-	eq(got.back().crew, 6, "anything over three is the full crew")
+	eq(got.back().crew, 4, "four is four")
+	main.start_run(1, 5, 5)
+	eq(got.back().crew, 5, "five is five")
+	main.start_run(1, 5, 9)
+	eq(got.back().crew, 6, "more than six is the full crew")
 	await MenuFakes.leave(g)
 
 
@@ -489,18 +495,20 @@ func _menu(width: int = 1280, height: int = 800) -> Dictionary:
 	return ctx
 
 
-func test_the_new_game_menu_offers_a_small_crew_and_a_full_one() -> void:
+func test_the_new_game_menu_offers_three_crews_and_begins_on_five() -> void:
 	var ctx: Dictionary = await _menu()
 	var screen = ctx.screen
-	eq(screen.crew, 3, "the small crew is the one chosen to begin with")
-	eq(screen.crew_cards.size(), 2, "two crews to choose from")
-	check(screen.crew_cards[0].button_pressed and not screen.crew_cards[1].button_pressed, "the small crew's card is the one pressed")
+	eq(screen.crew, 5, "a crew of five is the one chosen to begin with (three felt too few to do everything)")
+	eq(screen.crew_cards.size(), 3, "three crews to choose from")
+	check(screen.crew_cards[1].button_pressed and not screen.crew_cards[0].button_pressed and not screen.crew_cards[2].button_pressed, "the crew of five's card is the one pressed")
 	var small := Kit.texts(screen.crew_cards[0])
-	var full := Kit.texts(screen.crew_cards[1])
+	var five := Kit.texts(screen.crew_cards[1])
+	var full := Kit.texts(screen.crew_cards[2])
 	check(small.has("Small crew (3)"), "named: %s" % str(small))
-	check(full.has("Full crew (6)"), "and the other: %s" % str(full))
-	check(small.size() == 2 and full.size() == 2 and String(small[1]) != "" and String(full[1]) != "", "each with a line of its own")
-	check(String(small[1]).to_lower().contains("radio"), "the small crew says the others call in: '%s'" % small[1])
+	check(five.has("Crew of five"), "and the middle one: %s" % str(five))
+	check(full.has("Full crew (6)"), "and the last: %s" % str(full))
+	check(small.size() == 2 and five.size() == 2 and full.size() == 2 and String(small[1]) != "" and String(five[1]) != "" and String(full[1]) != "", "each with a line of its own")
+	check(String(small[1]).to_lower().contains("radio") and String(five[1]).to_lower().contains("radio"), "the small crews say the others call in: '%s' '%s'" % [small[1], five[1]])
 	MenuFakes.free_all(ctx)
 
 
@@ -510,13 +518,13 @@ func test_the_crew_chosen_is_what_the_game_is_asked_for() -> void:
 	screen.seed_edit.text = "4242"
 	screen.seed_edit.text_changed.emit("4242")
 	Kit.click_on(screen.start_button)
-	eq(ctx.main.last("start_run"), ["start_run", 1, 4242, 3], "Start with what it showed: a small crew")
+	eq(ctx.main.last("start_run"), ["start_run", 1, 4242, 5], "Start with what it showed: a crew of five")
 	ctx.main.calls.clear()
 	var again = ctx.shell.open_new_game()
 	await Kit.settle()
-	Kit.click_on(again.crew_cards[1])
+	Kit.click_on(again.crew_cards[2])
 	eq(again.crew, 6, "a click on the full crew")
-	check(again.crew_cards[1].button_pressed and not again.crew_cards[0].button_pressed, "lights its card and no other")
+	check(again.crew_cards[2].button_pressed and not again.crew_cards[0].button_pressed and not again.crew_cards[1].button_pressed, "lights its card and no other")
 	again.seed_edit.text = "17"
 	again.seed_edit.text_changed.emit("17")
 	Kit.click_on(again.start_button)
@@ -527,7 +535,7 @@ func test_the_crew_chosen_is_what_the_game_is_asked_for() -> void:
 func test_the_crew_can_be_chosen_with_the_keyboard() -> void:
 	var ctx: Dictionary = await _menu()
 	var screen = ctx.screen
-	screen.crew_cards[1].grab_focus()
+	screen.crew_cards[2].grab_focus()
 	MenuFakes.key(KEY_ENTER)
 	eq(screen.crew, 6, "Enter on the full crew's card picks it")
 	screen.crew_cards[0].grab_focus()
@@ -535,26 +543,26 @@ func test_the_crew_can_be_chosen_with_the_keyboard() -> void:
 	eq(screen.crew, 3, "Space on the small one picks that")
 	var focus_order: Array = []
 	var f: Control = screen.crew_cards[0]
-	for i in 3:
+	for i in 4:
 		focus_order.append(f)
 		f = f.find_next_valid_focus()
-	check(focus_order.has(screen.crew_cards[1]), "Tab reaches both cards")
+	check(focus_order.has(screen.crew_cards[1]) and focus_order.has(screen.crew_cards[2]), "Tab reaches every card")
 	MenuFakes.free_all(ctx)
 
 
 func test_the_last_crew_chosen_is_remembered_like_the_difficulty() -> void:
 	var ctx: Dictionary = await _menu()
-	ctx.screen.crew_cards[1].pressed.emit()
+	ctx.screen.crew_cards[2].pressed.emit()
 	ctx.screen.start_button.pressed.emit()
-	eq(int(Prefs.get_value("ui", "crew", 3)), 6, "it was kept")
+	eq(int(Prefs.get_value("ui", "crew", 5)), 6, "it was kept")
 	var again = ctx.shell.open_new_game()
 	await Kit.settle()
 	eq(again.crew, 6, "and is the one chosen next time")
-	check(again.crew_cards[1].button_pressed, "with its card pressed")
+	check(again.crew_cards[2].button_pressed, "with its card pressed")
 	Prefs.set_value("ui", "crew", 17)
 	var odd = ctx.shell.open_new_game()
 	await Kit.settle()
-	eq(odd.crew, 3, "a stored crew that is not three or six is three")
+	eq(odd.crew, 5, "a stored crew that is not one of the choices is the usual five")
 	MenuFakes.free_all(ctx)
 
 

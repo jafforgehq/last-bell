@@ -292,7 +292,7 @@ func _ready() -> void:
 			Orientation.begin(sim)
 		else:
 			# a run with no crew in its choice is six (the tests, the screenshots and the title's yard are classic)
-			sim.crew_start = 3 if int(run.get("crew", 6)) <= 3 else 6
+			sim.crew_start = clampi(int(run.get("crew", 6)), 3, 6)
 			# (only a run asked for the long game is one: the tutorial, the title's yard and the tests are Autumn's)
 			sim.seasons.campaign = bool(run.get("campaign", false))
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
@@ -1176,7 +1176,7 @@ func _begin(meta: Dictionary) -> void:
 func start_run(difficulty: int, seed_value: int, crew: int = 0, campaign: bool = false) -> void:
 	var meta := {"difficulty": clampi(difficulty, 0, 2), "seed": seed_value}
 	if crew > 0:
-		meta["crew"] = 3 if crew <= 3 else 6
+		meta["crew"] = clampi(crew, 3, 6)
 	if campaign:
 		meta["campaign"] = true
 	_begin(meta)
@@ -1195,7 +1195,7 @@ static func crew_from_args(args: Array) -> int:
 		if value == "full":
 			return 6
 		if value.is_valid_int():
-			return 3 if value.to_int() <= 3 else 6
+			return clampi(value.to_int(), 3, 6)
 	return 0
 
 

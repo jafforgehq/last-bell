@@ -23,7 +23,8 @@ static var _cache := {}
 
 ## The people a small start begins with, the first day a call may come, and the days between calls: after
 ## an arrival (less the radio range of a mast, at least one) and after a refusal.
-const STARTERS := ["ruth", "dez", "marcus"]
+## The survivors in story order: a run begins with the first `crew_start` of them (three, four or five), the rest call in.
+const STORY := ["ruth", "dez", "marcus", "ana", "walt", "hector"]
 const FIRST_CALL_DAY := 2
 const GAP_DAYS := 3
 const REFUSE_DAYS := 2
@@ -81,9 +82,10 @@ func begin() -> void:
 	if int(sim.crew_start) >= sim.people.size():
 		return
 	small = true
+	var starters: Array = STORY.slice(0, clampi(int(sim.crew_start), 3, STORY.size()))
 	var keep: Array = []
 	for p in sim.people:
-		if STARTERS.has(String(p.id)):
+		if starters.has(String(p.id)):
 			keep.append(p)
 		else:
 			var def: Dictionary = p.def.duplicate(true)

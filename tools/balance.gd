@@ -1228,7 +1228,7 @@ func _run() -> void:
 		elif kv[0] == "nobuild":
 			build_on = false
 		elif kv[0] == "crew" and kv.size() > 1:
-			crew_start = 3 if int(kv[1]) < 6 else 6
+			crew_start = clampi(int(kv[1]), 3, 6)
 		elif kv[0] == "campaign":
 			campaign = true
 		elif kv[0] == "nolots":

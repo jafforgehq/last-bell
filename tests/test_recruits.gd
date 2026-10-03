@@ -467,3 +467,42 @@ func test_a_classic_save_still_loads_and_plays_on() -> void:
 	check(not b.sim.recruits.small, "and no recruits")
 	a.world.free()
 	b.world.free()
+
+
+# ------------------------------------------------------ a start of four or five (the crew's size is a choice) --
+
+func test_a_start_of_five_has_the_first_five_and_the_rest_wait_in_story_order() -> void:
+	var g := Helpers.make(41, 1, 5)
+	var sim = g.sim
+	var ids := _ids(sim)
+	ids.sort()
+	eq(ids, ["ana", "dez", "marcus", "ruth", "walt"], "the first five of the story begin")
+	check(sim.recruits.small, "it is a settlement start (the board, the lots, the calls)")
+	check(not sim.recruits.queue.is_empty(), "someone is still to call in")
+	eq(String(sim.recruits.queue[0].get("id", "")), "hector", "the next caller is Hector, then strangers")
+	near(sim.recruits.crew_scale(), 0.2 + 0.8 * 5.0 / 6.0, 0.001, "the nights follow the crew: a little under the full night")
+	check(sim.town.on, "the Town Board is on")
+	g.world.free()
+
+
+func test_a_start_of_four_has_four_and_a_start_of_six_is_the_classic_yard() -> void:
+	var g := Helpers.make(41, 1, 4)
+	var four := _ids(g.sim)
+	four.sort()
+	eq(four, ["ana", "dez", "marcus", "ruth"], "four: the three and Ana")
+	eq(String(g.sim.recruits.queue[0].get("id", "")), "walt", "then Walt calls")
+	g.world.free()
+	var c := Helpers.make(41, 1, 6)
+	eq(_ids(c.sim).size(), 6, "six: all of them")
+	check(not c.sim.recruits.small, "and it is the classic start: no recruits, no board")
+	c.world.free()
+	var t := Helpers.make(41, 1, 3)
+	eq(_ids(t.sim), ["ruth", "dez", "marcus"], "three is as it was")
+	t.world.free()
+
+
+func test_a_crew_of_five_fills_the_beds_after_one_caller() -> void:
+	var g := Helpers.make(41, 1, 5)
+	var sim = g.sim
+	eq(int(sim.recruits.housing_free()) if sim.recruits.has_method("housing_free") else int(sim.build.housing()) - sim.recruits.crew_size(), 1, "the school's six beds: one is free for the next caller")
+	g.world.free()

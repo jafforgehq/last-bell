@@ -54,7 +54,7 @@ func test_the_length_chosen_is_what_the_game_is_asked_for() -> void:
 	screen.seed_edit.text = "4242"
 	screen.seed_edit.text_changed.emit("4242")
 	Kit.click_on(screen.start_button)
-	eq(ctx.main.last("start_run"), ["start_run", 1, 4242, 3], "Start with what it showed: Autumn, asked for as it always was")
+	eq(ctx.main.last("start_run"), ["start_run", 1, 4242, 5], "Start with what it showed: Autumn, asked for as it always was")
 	ctx.main.calls.clear()
 	var again = ctx.shell.open_new_game()
 	await Kit.settle()
@@ -64,7 +64,7 @@ func test_the_length_chosen_is_what_the_game_is_asked_for() -> void:
 	again.seed_edit.text = "17"
 	again.seed_edit.text_changed.emit("17")
 	Kit.click_on(again.start_button)
-	eq(ctx.main.last("start_run"), ["start_run", 1, 17, 3, true], "and asks for the campaign")
+	eq(ctx.main.last("start_run"), ["start_run", 1, 17, 5, true], "and asks for the campaign")
 	MenuFakes.free_all(ctx)
 
 

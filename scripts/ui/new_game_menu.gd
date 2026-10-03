@@ -14,20 +14,27 @@ const Prefs := preload("res://scripts/prefs.gd")
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
 ## what it means for the game, in plain words, under the cards.
-const CREWS := [3, 6]
-const CREW_NAMES := ["Small crew (3)", "Full crew (6)"]
-const CREW_LINES := ["Ruth, Dez and Marcus. More survivors call in over the radio.", "All six from the first morning. Nobody calls in."]
+const CREWS := [3, 5, 6]
+## The crew a new player begins with: five (three felt too few to do the work and send a trip).
+const DEFAULT_CREW := 5
+const CREW_NAMES := ["Small crew (3)", "Crew of five", "Full crew (6)"]
+const CREW_LINES := [
+	"Ruth, Dez and Marcus. More survivors call in over the radio.",
+	"Ruth, Dez, Marcus, Ana and Walt. Hector and others call in over the radio.",
+	"All six from the first morning, in the old schoolyard. Nobody calls in.",
+]
 const CREW_FACTS := [
 	"A call can come at noon from day 2, when someone is at the radio desk and a bed is free. Nights are smaller while the crew is.",
-	"The nights are the full nights from the first day, and there are no recruits.",
+	"The school has six beds, so one caller fits before you build a bunk house. Nights are a little smaller than the full night while the crew is.",
+	"The nights are the full nights from the first day, and there are no recruits (and no town to travel to).",
 ]
 ## The lengths of the game to choose from (the campaign is round 10): what each is called and the line on its card.
 const LENGTH_NAMES := ["Autumn: thirty nights", "Campaign: the four seasons"]
 const LENGTH_LINES := ["Hold the wall for thirty nights.", "Autumn, Winter, Spring and Summer, each with its own Big Night."]
 
 var difficulty := 1
-## How many people the run begins with: 3 (a small crew) or 6.
-var crew := 3
+## How many people the run begins with: 3 (a small crew), 5 or 6.
+var crew := DEFAULT_CREW
 ## The three difficulty buttons, Story first.
 var cards: Array = []
 ## The two crew buttons, the small crew first, and the words under them.
@@ -80,7 +87,9 @@ func _build_body() -> void:
 	slip.add_child(facts_label)
 	body.add_child(slip)
 
-	crew = 6 if int(Prefs.get_value("ui", "crew", 3)) == 6 else 3
+	crew = int(Prefs.get_value("ui", "crew", DEFAULT_CREW))
+	if not CREWS.has(crew):
+		crew = DEFAULT_CREW
 	body.add_child(section("Crew"))
 	var crew_row: HBoxContainer = hud._hbox(8)
 	for i in CREWS.size():
