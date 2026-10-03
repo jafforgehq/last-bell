@@ -588,7 +588,9 @@ func _aim_miss(sim, me, point: Vector2) -> float:
 
 ## The plated brutes of a Big Night: steel on the body, and a ring at the weak point (the head's disc of the rules, `plated.weak_r` x size
 ## across, never under WEAK_MIN_PX on screen). The ring is quiet while the avatar aims elsewhere, lit when the aim passes within WEAK_NEAR
-## radii of it (with the words "weak point"), and full when the shot would land on it. A dead one wears nothing.
+## radii of it (with the words "weak point"), and full when the shot would land on it: when `Avatar.trace` of the aim, the very function the
+## pellets use, hits THIS brute on the head (round 19 fix: the ring promised hits the trace refused; and a melee weapon, which has no weak
+## point, never fills it). A dead one wears nothing.
 func _draw_plated(sim, z: float, vp: Vector2) -> void:
 	var me = sim.avatar.player() if _avatar_on(sim) else null
 	var aiming: bool = me != null and not me.dead and not me.turned and not me.downed and me.away == null
@@ -599,6 +601,12 @@ func _draw_plated(sim, z: float, vp: Vector2) -> void:
 	var weak_r: float = NightData.num("plated.weak_r", 0.2)
 	var font := Fonts.cond(700)
 	var view := Rect2(-120.0, -120.0, vp.x + 240.0, vp.y + 240.0)
+	# what the shot would do now (once for all the brutes: the pellets' own trace along the aim, with the gun in the hand and its reach)
+	var shot := {}
+	if aiming and not hands_off:
+		var gun: Dictionary = sim.gun_of(me)
+		if not bool(gun.get("melee", false)):
+			shot = sim.avatar.trace(sim.avatar.shoulder(me), float(me.aim), float(sim.reach_of(gun, me)))
 	for e in sim.zombies:
 		if not bool(e.plated) or e.state == "dead" or e.state == "dying":
 			continue
@@ -616,8 +624,9 @@ func _draw_plated(sim, z: float, vp: Vector2) -> void:
 		if aiming and not hands_off:
 			var miss := _aim_miss(sim, me, Vector2(e.x, e.y - head_k * size))
 			if miss >= 0.0:
-				on = miss <= r_tiles
 				near = miss <= r_tiles * WEAK_NEAR
+			on = not shot.is_empty() and shot.z == e and bool(shot.weak)
+			near = near or on
 		drew_weak_marks = true
 		drawn_weak_marks += 1
 		weak_marks.append({"id": drawn_weak_marks, "at": head, "r": rpx, "near": near, "on": on})

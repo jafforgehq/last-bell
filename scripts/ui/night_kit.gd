@@ -5,7 +5,8 @@
 ##   forecast_line(f, last)      "The Siege: about 70 to 95 from the east side, 2 plated brutes after 23:00, first about 21:00"
 ##   ready_line(f)               {"text": "Should hold: posts 5 of 5, walls 90%", "holds": true} (the community's own prediction)
 ##   badge(sim, f)               {"state": "tomorrow" | "tonight" | "", "text", "tip"}: the bell by the day counter
-##   road_line(rs, now_min)      {"text": "Dusk in 2:10 · road home 1:20 · leave by 15:40", "tone": "calm" | "warn" | "danger"}
+##   road_line(rs, now_min)      {"text": "Dusk in 2:10 · road home 1:20 · leave by 15:40", "tone": "calm" | "warn" | "danger"} ("You will be out tonight"
+##                               for a trip nobody drives that cannot be home; "Home about 19:10, after the dusk" for one the avatar drives)
 ##   warning_line(sim, ...)      the Town Board's note for the trip (scavenge.night_warning's own text)
 ##
 ## The keys of a forecast are those of tactics.forecast() (docs/superpowers/plans/2026-10-03-round-19.md, S3.1): the old ones and, in avatar
@@ -191,6 +192,12 @@ static func road_line(rs: Dictionary, now_min: float) -> Dictionary:
 		return {}
 	var state := String(rs.get("state", "free"))
 	if state == "late":
+		if bool(rs.get("live", false)):
+			# (the avatar drives this trip: it comes in by night too, so it is not out until morning but home after the dusk)
+			var back := hour_text(hour_of_clock(float(rs.get("arrival", now_min))))
+			if not bool(rs.get("in_place", true)):
+				return {"text": "On the road home in the dark: back about %s" % back, "tone": "warn"}
+			return {"text": "Home about %s, after the dusk" % back, "tone": "warn"}
 		return {"text": "You will be out tonight", "tone": "warn"}
 	if not bool(rs.get("in_place", true)) and String(rs.get("text", "")) != "":
 		# (on the road home, the live drive's last leg: nothing is left to decide, so no hour to leave by; only when they are back)

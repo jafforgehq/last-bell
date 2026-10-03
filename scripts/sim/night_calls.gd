@@ -7,12 +7,14 @@
 ## CALLS (`radio.raise_call`; once for a section a night each; a call raised while the avatar is away has no option that needs him at
 ## the base, so it reads as a plain warning):
 ##   going   a compound section under `calls.going_below` of its health with two of the dead at it, or a plated brute at it
-##           (hold | send two | I'm on my way | fall back). It settles the section's open `attack` call by its default, quietly.
+##           (hold | send two | I'm on my way | fall back). It settles the section's open `attack` and `brute` calls by their defaults, quietly.
 ##   brute   a brute on its way to a section, within `calls.brute_warn_r` tiles of it
 ##           (keep the guns on it | I'll take it | send two | draw it to the best defended other section, 3 scrap)
-##   breach  a compound section has fallen in the night (hold the line | close it, needs you there | pull back | I'm on my way)
+##   breach  a compound section has fallen in the night (hold the line | close it, needs you there | pull back | I'm on my way); it settles
+##           the section's open `attack`, `going` and `brute` calls
 ##   night   the lookout has given the forecast and the night is Big (hold: understood | call to arms now | the alarm on the best
-##           defended section, 3 scrap), until the bell
+##           defended section, 3 scrap: it rings until the night's brutes are dead or the dawn, and not for three hours: the brutes
+##           come after midnight), until the bell
 ##   night_road  a played trip is out and the dusk with a Big Night is coming (news at "soon", a call at "now", see `road_status`)
 ## NEWS ONLY: `forecast` (the day-ahead notice of a Big Night at noon, only when someone is at the Radio desk), `night_road`, and
 ## "The <wall> is shut again" (kind `breach`, no options) when a breach has been closed.
@@ -25,7 +27,10 @@
 ##
 ## THE ROAD HOME (S3.4): `road_status()` for a played trip that is in its place or on the road home: the dusk, the road, the hour to
 ## leave by (`forecast.road_margin_min` before the dusk) and "free", "soon", "now" or "late". `Scavenge.night_warning` asks the same
-## numbers for a trip that has not begun.
+## numbers for a trip that has not begun. Late means two things (round 19 fix): a trip the avatar DRIVES (`party.live`, set by the flow;
+## round 21) comes in by night as well, so he is home after the dusk and the base holds the first of the night until he is back; a trip
+## nobody drives is out until morning. A party still on the road THERE is counted a whole round trip from home, and cannot be asked to
+## head home yet.
 extends RefCounted
 
 const Kinds := preload("res://scripts/sim/kinds.gd")
@@ -49,6 +54,9 @@ var notice_day := 0
 var focus := {}
 ## Whether the player has asked to head home from the place (the place's scene reads it and clears it). Not saved.
 var leave_requested := false
+## What "I'm on my way" has already paid, for a person and a day: "trust:<id>" and "morale:<id>" to `sim.day` (the promise is paid once for a
+## person a day, however often it is made: it could be farmed).
+var paid := {}
 
 var sim
 var radio
@@ -67,6 +75,7 @@ func reset() -> void:
 	notice_day = 0
 	focus = {}
 	leave_requested = false
+	paid = {}
 
 
 # ------------------------------------------------------------------- the words --
@@ -228,17 +237,18 @@ func _watch_walls() -> void:
 					plated_at = true
 			elif z.state == "approach" and z.kind == Kinds.BRUTE and z.slot == sl and coming == null and Vector2(z.x, z.y).distance_to(s.center) <= warn_r:
 				coming = z
-		if coming != null:
-			_raise_brute(s, coming)
 		var share: float = s.hp / s.max_hp
+		# (the wall that is going is told before a brute that comes to it: the brute's call then stands behind it, and is not settled by it)
 		if (share < below and attackers >= 2) or plated_at:
 			_raise_going(s, attackers, share, plated_at)
+		if coming != null:
+			_raise_brute(s, coming)
 
 
 func _raise_going(s, attackers: int, share: float, plated: bool) -> void:
 	if not _once("going:%d" % int(s.id)):
 		return
-	radio.settle_wall_calls(s, ["attack"])
+	radio.settle_wall_calls(s, ["attack", "brute"])    # (a brute that was coming to it is in this call now: one open call for one wall)
 	var pct := roundi(share * 100.0)
 	var text := "%s is going" % _the_cap(s)
 	if share >= NightData.num("calls.going_below", 0.4):
@@ -279,7 +289,7 @@ func _raise_breach(s) -> void:
 	if not _once("breach:%d" % int(s.id)):
 		return
 	breaches[int(s.id)] = int(sim.day)
-	radio.settle_wall_calls(s, ["attack", "going"])
+	radio.settle_wall_calls(s, ["attack", "going", "brute"])
 	var options: Array = [{"id": "hold", "label": "Hold the line"}]
 	var here := avatar_here()
 	if here:
@@ -319,15 +329,28 @@ func _judge(kept: bool) -> void:
 		if p == null or p.dead or p.turned or p.away != null:
 			continue
 		if kept:
-			radio.add_trust(p, NightData.num("calls.kept_trust", 2.0), "You came when you said")
+			if _pay("trust", p):
+				radio.add_trust(p, NightData.num("calls.kept_trust", 2.0), "You came when you said")
 		else:
 			radio.add_trust(p, NightData.num("calls.broken_trust", -2.0), "You said you were coming")
 
 
-## The avatar says he is coming to the wall: the defenders near it are lifted now and watch for him until the time is up.
+## Whether this has not been paid to this person today: true (and noted) the first time, false after.
+func _pay(what: String, p) -> bool:
+	var key := "%s:%s" % [what, String(p.id)]
+	if int(paid.get(key, -1)) == int(sim.day):
+		return false
+	paid[key] = int(sim.day)
+	return true
+
+
+## The avatar says he is coming to the wall: the defenders near it are lifted now and watch for him until the time is up. From the wall
+## itself it is no promise (they see him), and each person is lifted and trusts him more for a kept promise once a day.
 func _coming(seg) -> String:
 	if not avatar_here():
 		return "You are not at the base: there is nobody to promise"
+	if _avatar_within(seg):
+		return "You are at %s already: they can see you" % _the(seg)
 	if not focus.is_empty() and int(focus.get("seg", -1)) != int(seg.id):
 		var old = radio._segment(int(focus.get("seg", -1)))    # (a promise for another wall is judged now: he came, or he did not)
 		_judge(old != null and _avatar_within(old))
@@ -335,7 +358,8 @@ func _coming(seg) -> String:
 	var radius := NightData.num("rally.radius", 9.0)
 	for p in _defenders():
 		if Vector2(p.x, p.y).distance_to(seg.center) <= radius:
-			sim.morale.shock(p, NightData.num("calls.coming_morale", 4.0), "Help is on the way")
+			if _pay("morale", p):
+				sim.morale.shock(p, NightData.num("calls.coming_morale", 4.0), "Help is on the way")
 			who.append(String(p.id))
 	focus = {"seg": int(seg.id), "until": float(sim.clock_min) + NightData.num("calls.coming_window_min", 15.0), "who": who}
 	if who.is_empty():
@@ -374,7 +398,7 @@ func carry_out(e: Dictionary, option_id: String) -> String:
 					radio.alarm(true)
 					return "Everyone to their posts"
 				"lure":
-					return _lure(data, null)
+					return _lure(data, null, true)
 			return "Understood"
 		"night_road":
 			if option_id == "home":
@@ -408,13 +432,16 @@ func _close(seg) -> String:
 
 
 ## "Draw it to...": the alarm on the section the call named (or, when that cannot be, the best now).
-func _lure(data: Dictionary, avoid_seg) -> String:
+func _lure(data: Dictionary, avoid_seg, for_brutes := false) -> String:
 	var seg = radio._segment(int(data.get("lure", -1))) if data.has("lure") else null
 	if seg == null or sim.tactics.why_not_lure(seg) != "":
 		seg = best_lure_section(avoid_seg)
 	if seg == null:
 		return "There is no wall to draw them to"
-	if sim.tactics.order_lure(seg):
+	var rung: bool = sim.tactics.order_lure_for_brutes(seg) if for_brutes else sim.tactics.order_lure(seg)
+	if rung:
+		if for_brutes and sim.tactics.lure_brutes:
+			return "The alarm rings at %s until the brutes are down" % _the(seg)
 		return "The alarm rings at %s" % _the(seg)
 	return "The alarm cannot be set: %s" % sim.tactics.why_not_lure(seg)
 
@@ -514,7 +541,7 @@ func _watch_tonight() -> void:
 	var data := {"day": int(sim.day)}
 	var best = best_lure_section()
 	if best != null:
-		options.append({"id": "lure", "label": "Alarm on the %s (%d scrap)" % [String(best.name).to_lower(), int(sim.tactics.LURE_COST)]})
+		options.append({"id": "lure", "label": "Alarm on the %s until the brutes are down (%d scrap)" % [String(best.name).to_lower(), int(sim.tactics.LURE_COST)]})
 		data["lure"] = int(best.id)
 	var to_the_bell := maxf(1.0, (float(sim.seasons.dusk_hour()) - float(sim.hour)) * 60.0)
 	radio.raise_call("night", "Big Night tonight: %s" % _night_name(o), sub, options, "hold", to_the_bell, data)
@@ -549,11 +576,16 @@ func _dusk_clock() -> float:
 ## dusk begins), "road_min" (the road home), "leave_by" (the game minute by which the party must leave the place to be home
 ## `forecast.road_margin_min` before the dusk), "left_min" (minutes to that: negative when it is past; on the road home, minutes to
 ## spare on the arrival), "state": "free" (time to spare), "soon" (within `forecast.road_warn_min` of leaving), "now" (leave now: the
-## margin is being used), "late" (they cannot be home before the dusk: they will be out tonight), "big" (tonight is a Big Night),
-## "text", "in_place" (the party is in the place or on the road there, not yet on the road home)}. A party on the road home is "free" or
-## "late": nothing can be done from there but the road. `{"on": false}` and the neutral numbers when there is no such trip or no avatar.
+## margin is being used), "late" (they cannot be home before the dusk), "big" (tonight is a Big Night), "text", "in_place" (the party is
+## in the place or on the road there, not yet on the road home), "stage" ("there": still driving out, "place": in it, "home": on the road
+## home), "live" (the avatar drives it: `party.live`), "arrival" (the game minute the party can be at the gate at the soonest)}. The
+## arrival counts the road THERE too while the party is still on it (`depart` + two roads, no time in the place at all), and a party that is
+## driving out is never "now": nothing can be asked of it before it is at the place. A party on the road home is "free" or "late": nothing
+## can be done from there but the road. What "late" means differs: a live trip (the avatar drives, `Scavenge.arrive_home`) comes in by night
+## as well, home after the dusk; a trip nobody drives is out until morning (`Scavenge._is_due`, day only). `{"on": false}` and the neutral
+## numbers when there is no such trip or no avatar.
 func road_status() -> Dictionary:
-	var off := {"on": false, "in_place": false, "dusk": 0.0, "road_min": 0.0, "leave_by": 0.0, "left_min": 0.0, "state": "free", "big": false, "text": ""}
+	var off := {"on": false, "in_place": false, "stage": "", "live": false, "arrival": 0.0, "dusk": 0.0, "road_min": 0.0, "leave_by": 0.0, "left_min": 0.0, "state": "free", "big": false, "text": ""}
 	if not radio.avatar_mode():
 		return off
 	var party := _played_party()
@@ -564,30 +596,40 @@ func road_status() -> Dictionary:
 	var warn := NightData.num("forecast.road_warn_min", 60.0)
 	var dusk := _dusk_clock()
 	var in_place: bool = String(party.state) == String(sim.scavenge.IN_PLACE)
-	var arrival: float = float(sim.clock_min) + road if in_place else float(party.return_at)
+	var stage := "home"
+	var arrival: float = float(party.return_at)
+	if in_place:
+		var there: bool = float(sim.clock_min) < float(party.get("depart", -1.0e9)) + road - 1.0e-6
+		stage = "there" if there else "place"
+		arrival = float(party.get("depart", sim.clock_min)) + 2.0 * road if there else float(sim.clock_min) + road
 	var left := dusk - margin - arrival
 	var state := "free"
-	if in_place:
-		if String(sim.phase) != "day" or left < -margin:
+	if stage == "home":
+		if left < -margin:
 			state = "late"
-		elif left <= 0.0:
-			state = "now"
-		elif left <= warn:
-			state = "soon"
-	elif left < -margin:
+	elif String(sim.phase) != "day" or left < -margin:
 		state = "late"
-	var big := _tonight_big()
-	var out := {"on": true, "in_place": in_place, "dusk": dusk, "road_min": road, "leave_by": dusk - margin - road, "left_min": left, "state": state, "big": big, "text": ""}
-	out["text"] = _road_text(out, in_place, arrival)
+	elif stage == "place" and left <= 0.0:
+		state = "now"
+	elif left <= warn:
+		state = "soon"
+	var live := bool(party.get("live", false))
+	var out := {"on": true, "in_place": in_place, "stage": stage, "live": live, "arrival": arrival, "dusk": dusk, "road_min": road, "leave_by": dusk - margin - road, "left_min": left, "state": state, "big": _tonight_big(), "text": ""}
+	out["text"] = _road_text(out)
 	return out
 
 
-func _road_text(st: Dictionary, in_place: bool, arrival: float) -> String:
+func _road_text(st: Dictionary) -> String:
 	var with_it := ", and a Big Night with it" if bool(st.big) else ""
+	var back := clock_text(hour_of(float(st.arrival)))
 	if String(st.state) == "late":
+		if bool(st.live):
+			if String(st.stage) == "home":
+				return "On the road home in the dark: back about %s" % back
+			return "Home about %s, after the dusk%s" % [back, ": the base holds the Big Night until you are back" if bool(st.big) else ""]
 		return "You will be out tonight%s" % ((": the base holds the Big Night alone") if bool(st.big) else "")
-	if not in_place:
-		return "On the road home: back by %s" % clock_text(hour_of(arrival))
+	if not bool(st.in_place):
+		return "On the road home: back by %s" % back
 	return "Dusk in %s%s: leave by %s" % [duration_text(float(st.dusk) - float(sim.clock_min)), with_it, clock_text(hour_of(float(st.leave_by)))]
 
 
@@ -607,12 +649,18 @@ func _watch_road() -> void:
 				radio.log_news("night_road", String(st.text), "The road home takes %s" % duration_text(road))
 		"now":
 			if _once("road-now:%d" % trip):
-				radio.raise_call("night_road", "Time to head home: a Big Night is coming",
-					"The road home takes %s and the dusk is in %s. Leave now, or the base holds the night alone." % [duration_text(road), duration_text(float(st.dusk) - float(sim.clock_min))],
-					[{"id": "home", "label": "Head home now"}, {"id": "stay", "label": "Stay out, the base holds alone"}],
+				var live := bool(st.live)
+				var sub := "The road home takes %s and the dusk is in %s. " % [duration_text(road), duration_text(float(st.dusk) - float(sim.clock_min))]
+				# (a trip the avatar drives comes in by night too: staying is a road home in the dark, and the base holds the first of the night until he is back)
+				sub += "Leave now, or the road home is in the dark and the base holds the first of the night until you are back." if live else "Leave now, or the base holds the night alone."
+				radio.raise_call("night_road", "Time to head home: a Big Night is coming", sub,
+					[{"id": "home", "label": "Head home now"}, {"id": "stay", "label": "Stay here, drive home in the dark" if live else "Stay out, the base holds alone"}],
 					"stay", NightData.num("forecast.road_margin_min", 30.0), {"day": int(sim.day)})
 	if String(st.state) == "late" and String(sim.phase) != "day" and _once("stayed:%d" % trip):
-		radio.log_news("night_road", "You stayed out", "The base holds the night alone.")
+		if bool(st.live):
+			radio.log_news("night_road", "You are still out at the bell", "The base holds the night until you are back.")
+		else:
+			radio.log_news("night_road", "You stayed out", "The base holds the night alone.")
 
 
 # ----------------------------------------------------------------------------- save --
@@ -628,7 +676,17 @@ func save() -> Dictionary:
 		"breaches": breaches.duplicate(),
 		"notice_day": notice_day,
 		"focus": focus.duplicate(true),
+		"paid": _paid_kept(),
 	}
+
+
+## What has been paid today and yesterday (older entries are no use).
+func _paid_kept() -> Dictionary:
+	var keep := {}
+	for k in paid:
+		if int(paid[k]) >= int(sim.day) - 1:
+			keep[String(k)] = int(paid[k])
+	return keep
 
 
 ## Restores what `save` wrote; what is not sound is left out (a save from before round 19 has none of it).
@@ -655,6 +713,11 @@ func load_state(d: Dictionary) -> void:
 				if typeof(id) == TYPE_STRING:
 					who.append(String(id))
 		focus = {"seg": int(f.seg), "until": float(f.until), "who": who}
+	var pd = d.get("paid", {})
+	if pd is Dictionary:
+		for k in pd:
+			if typeof(k) == TYPE_STRING and _number(pd[k]):
+				paid[String(k)] = int(pd[k])
 
 
 static func _number(v) -> bool:

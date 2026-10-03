@@ -240,38 +240,107 @@ func test_a_yes_is_checked_again_when_it_is_given() -> void:
 	_free(g)
 
 
-# ------------------------------------------------------ three refusals in four days --
+# ------------------------------------------------------ three refusals in a row --
 
-func test_three_noes_in_four_days_and_the_proposer_goes_quiet() -> void:
-	var g := Kit.game(4)
+## Dez is the only one who may bring an idea (the others trust the leader too little), and the leader says no to all of them. The ideas
+## come through the real schedule (`update`: the slow look, the gap between two proposals, a person's gap, a kind's gap, the shelves).
+func _only_dez(sim) -> void:
+	for id in ["marcus", "ana"]:
+		Kit.who(sim, id).trust = sim.initiative.QUIET_TRUST - 1.0
+
+
+## One slow look at this hour of this day; the idea it raised (if any) is answered with `option`. The kind that came, "" when none.
+func _look_and_answer(sim, day: int, hour: float, option: String) -> String:
+	Kit.at(sim, day, hour)
+	sim.initiative.update(sim.initiative.TICK_S)
+	var open: Array = Kit.open_ideas(sim)
+	if open.is_empty():
+		return ""
+	var kind := String(open[0].data.idea)
+	check(sim.radio.answer(int(open[0].id), option), "the answer to the %s idea is taken" % kind)
+	return kind
+
+
+func test_three_noes_in_a_row_through_the_real_schedule_and_the_proposer_goes_quiet() -> void:
+	var g := _wall_game()
 	var sim = g.sim
+	_only_dez(sim)
 	var dez = Kit.who(sim, "dez")
 	var trust: float = dez.trust
-	var mood: float = sim.morale.value(dez)
-	for day in [3, 4]:
-		Kit.at(sim, day, 9.0)
-		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
-	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "two noes are not enough")
-	Kit.at(sim, 5, 9.0)
+	sim.stock.ammo = 100.0    # (the bench has no need yet: the wall is the first idea)
+	eq(_look_and_answer(sim, 3, 9.0, "no"), "fix_wall", "day 3: the wall")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "one no")
+	sim.stock.ammo = 300.0    # (the bench stops at its line)
+	eq(_look_and_answer(sim, 4, 9.0, "no"), "", "day 4: he was asked yesterday")
+	eq(_look_and_answer(sim, 5, 9.0, "no"), "bench_target", "day 5 (his gap is two days): the bench, the wall being put away")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "two noes")
+	sim.stock.ammo = 600.0
+	for q in sim.jobs.crew_of("radio"):
+		sim.jobs.unassign(q)
+	sim.jobs.unassign(dez)    # (nobody at the radio, and Dez with no job to do it)
 	var news: int = sim.radio.news.size()
-	sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	eq(_look_and_answer(sim, 7, 9.0, "no"), "desk", "day 7: the radio desk")
 	var rec: Dictionary = sim.initiative.record_of(dez)
-	eq(int(rec.quiet_until), 5 + sim.initiative.QUIET_DAYS, "silent for three days")
+	eq(int(rec.no), 3, "three noes")
+	eq(int(rec.quiet_until), 7 + sim.initiative.QUIET_DAYS, "(days 3, 5 and 7) he is silent for three days: three in a row, in the span of the rule")
 	near(dez.trust, trust + 3.0 * sim.initiative.NO_TRUST + sim.initiative.QUIET_TRUST_COST, 1e-9, "the third costs more trust")
-	near(sim.morale.value(dez), mood + 3.0 * sim.initiative.NO_MORALE + sim.initiative.QUIET_MORALE, 1e-9, "and more mood")
 	var line := ""
 	for i in range(news, sim.radio.news.size()):
 		if String(sim.radio.news[i].text).contains("stopped bringing ideas"):
 			line = String(sim.radio.news[i].text)
 	eq(line, "Dez has stopped bringing ideas", "the News says it")
-	g.spec.holders["engineer"] = "dez"
-	Kit.wear(sim, 5, 0.8)
-	Kit.at(sim, 6, 9.0)
-	check(_who(sim, "fix_wall") != "dez", "he brings nothing on day 6")
-	Kit.at(sim, 7, 9.0)
-	check(_who(sim, "fix_wall") != "dez", "nor on day 7")
+	for day in [8, 9]:
+		Kit.at(sim, day, 9.0)
+		check(not sim.initiative._context().proposers.has(dez), "day %d: he brings nothing" % day)
+	Kit.at(sim, 10, 9.0)
+	check(sim.initiative._context().proposers.has(dez), "day 10: he may again")
+	_free(g)
+
+
+func test_a_no_does_not_come_back_from_the_same_person_for_a_while() -> void:
+	var g := _wall_game()
+	var sim = g.sim
+	_only_dez(sim)
+	eq(_look_and_answer(sim, 3, 9.0, "no"), "fix_wall", "day 3: the wall, turned down")
+	var back := 0
+	for day in range(4, 3 + sim.initiative.REFUSED_KIND_DAYS + 2):
+		Kit.at(sim, day, 9.0)
+		Kit.wear(sim, 5, 0.8)
+		if _who(sim, "fix_wall") == "dez":
+			back = day
+			break
+	eq(back, 3 + sim.initiative.REFUSED_KIND_DAYS, "he does not bring the same idea again for %d days (the kind's own gap is only three)" % sim.initiative.REFUSED_KIND_DAYS)
+	# somebody else may, after the kind's own gap
+	var h := _wall_game()
+	var hs = h.sim
+	_only_dez(hs)
+	_look_and_answer(hs, 3, 9.0, "no")
+	Kit.at(hs, 6, 9.0)
+	Kit.wear(hs, 5, 0.8)
+	Kit.who(hs, "marcus").trust = 55.0
+	h.spec.holders["engineer"] = "marcus"
+	eq(_who(hs, "fix_wall"), "marcus", "(another person may bring it once the kind's own gap is over)")
+	_free(h)
+	_free(g)
+
+
+func test_a_yes_ends_a_run_of_noes() -> void:
+	var g := _wall_game()
+	var sim = g.sim
+	var dez = Kit.who(sim, "dez")
+	for day in [3, 4]:
+		Kit.at(sim, day, 9.0)
+		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	Kit.at(sim, 5, 9.0)
+	sim.radio.answer(Kit.raise(sim, "fix_wall"), "yes")
+	eq(sim.initiative.record_of(dez).yes, 1, "(a yes in the middle)")
+	for day in [6, 7]:
+		Kit.at(sim, day, 9.0)
+		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "no, no, yes, no, no: not a run of three")
 	Kit.at(sim, 8, 9.0)
-	eq(_who(sim, "fix_wall"), "dez", "he is back on day 8")
+	sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 8 + sim.initiative.QUIET_DAYS, "the third after the yes is")
 	_free(g)
 
 
@@ -279,10 +348,15 @@ func test_noes_that_are_far_apart_do_not_add_up() -> void:
 	var g := Kit.game(4)
 	var sim = g.sim
 	var dez = Kit.who(sim, "dez")
-	for day in [3, 5, 7]:
+	var span: int = sim.initiative.NO_WINDOW_DAYS
+	for day in [3, 3 + span / 2 + 1, 3 + span + 1]:
 		Kit.at(sim, day, 9.0)
 		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
-	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "three noes in five days are not three in four")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "three noes spread over %d days are not a run in %d" % [span + 1, span])
+	# (the window slides: the next one is three in a row over the last days)
+	Kit.at(sim, 3 + span + 2, 9.0)
+	sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 3 + span + 2 + sim.initiative.QUIET_DAYS, "but the last three, close enough, are")
 	_free(g)
 
 
@@ -447,6 +521,68 @@ func test_no_ideas_while_the_alarm_rings_or_the_dead_are_at_the_wall() -> void:
 	sim.tactics.threat_until = sim.clock_min + 100.0
 	check(sim.threat_by_day(), "(the dead are at the wall)")
 	check(not sim.initiative.allowed_now(), "not while they are")
+	_free(g)
+
+
+func test_an_idea_ends_by_dusk_and_takes_a_later_then() -> void:
+	var g := _wall_game()
+	var sim = g.sim
+	var dusk: float = sim.seasons.dusk_hour()
+	Kit.at(sim, 3, 9.0)
+	var e: Dictionary = sim.radio._entry(Kit.raise(sim, "fix_wall"))
+	near(float(e.due) - float(sim.clock_min), sim.initiative.TTL_MIN, 0.001, "in the morning: six hours")
+	sim.radio.answer(int(e.id), "later")
+	Kit.at(sim, 6, 17.3)
+	g.rel.voice_id = "dez"
+	for p in sim.people:
+		sim.morale.set_value(p, 40.0)    # (a camp that could do with a supper)
+	var id := Kit.raise(sim, "supper")
+	check(id > 0, "(the evening's idea is the supper)")
+	e = sim.radio._entry(id)
+	near(float(e.due) - float(sim.clock_min), (dusk - 17.3) * 60.0, 0.01, "at 17:18: only until dusk, not six hours (it would stand open through the night)")
+	Kit.at(sim, 6, dusk - 0.01)
+	sim.radio.update(0.0)
+	eq(String(sim.radio._entry(id).answered), "", "(still open a moment before dusk)")
+	Kit.at(sim, 6, dusk)
+	sim.radio.update(0.0)
+	e = sim.radio._entry(id)
+	eq(String(e.answered), "later", "at dusk it takes later")
+	check(bool(e.by_default), "by default")
+	eq(Kit.open_ideas(sim).size(), 0, "and there is no idea open at night")
+	_free(g)
+
+
+func test_the_last_proposal_is_an_hour_before_dusk_in_a_season_of_early_dusks() -> void:
+	var g := _wall_game()
+	var sim = g.sim
+	sim.seasons._dusk = 16.5    # (winter)
+	Kit.at(sim, 3, 15.4)
+	check(sim.initiative.allowed_now(), "at 15:24, over an hour to dusk")
+	Kit.at(sim, 3, 15.6)
+	check(not sim.initiative.allowed_now(), "at 15:36 less than an hour is left: none")
+	sim.seasons._dusk = 19.0
+	Kit.at(sim, 3, 17.5)
+	check(sim.initiative.allowed_now(), "(in autumn 17:30 is the last, as it was)")
+	_free(g)
+
+
+func test_no_idea_is_raised_while_an_urgent_call_is_open() -> void:
+	var g := _wall_game()
+	var sim = g.sim
+	check(sim.initiative.allowed_now(), "(a quiet morning)")
+	var attack := _attack_call(sim, 3)
+	check(not sim.initiative.allowed_now(), "an attack call is open: no idea")
+	eq(sim.initiative.look(), 0, "a look raises nothing")
+	sim.radio.answer(attack, "hold")
+	check(sim.initiative.allowed_now(), "answered: it may")
+	var sick := _sick_call(sim, "marcus")
+	check(not sim.initiative.allowed_now(), "a fever call is open: no idea")
+	sim.radio.answer(sick, "treat")
+	var night: int = sim.radio.raise_call("night", "Big Night tonight", "", [{"id": "hold", "label": "Understood"}], "hold", 60.0, {}, null)
+	check(not sim.initiative.allowed_now(), "a call of the night too")
+	sim.radio.answer(night, "hold")
+	_fake_idea(sim, "supper", "ana")
+	check(sim.initiative.allowed_now(), "(an idea that waits is no urgent call: a second may come)")
 	_free(g)
 
 

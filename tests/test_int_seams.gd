@@ -145,6 +145,9 @@ func test_an_ideas_errand_goes_as_round_18s_errand_with_its_penalty_and_news() -
 	check(String(c.text).ends_with("We'd find less without you."), "it says what the terms are: %s" % c.text)
 	var id: int = IdeaKit.raise(sim, "errand")
 	check(id != 0 and sim.radio.answer(id, "yes"), "a yes is taken")
+	eq(sim.radio.errand_wait.size(), 1, "the errand is in the radio's queue, as any errand the player asks for (round 20 fix)")
+	eq(sim.scavenge.parties.size(), 0, "nobody has left before the people's delay")
+	sim.radio.tick(sim.radio.DELAY_SLOW + 0.1)
 	eq(sim.scavenge.parties.size(), 1, "a party is out")
 	var party: Dictionary = sim.scavenge.parties[0]
 	check(sim.scavenge.is_errand(party), "an errand of round 18 (the player is not along)")

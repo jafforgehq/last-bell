@@ -983,9 +983,11 @@ func test_the_real_waves_give_a_notice_for_a_real_big_night() -> void:
 	var g := _game(9, 11.9)
 	var sim = g.sim
 	var tomorrow: Dictionary = sim.waves.outlook(10)
-	if tomorrow.is_empty() or String(tomorrow.get("kind", "ordinary")) == "ordinary":
+	var big := not (tomorrow.is_empty() or String(tomorrow.get("kind", "ordinary")) == "ordinary")
+	check(big, "day 10 is a real Big Night (a test of the real waves does not pass by finding none; round 19 review F8): %s" % str(tomorrow.get("kind")))
+	if not big:
 		g.world.free()
-		return    # (the real Big Nights are not in yet: the fake's tests above stand for them)
+		return
 	Helpers.seat(sim, _p(sim, "walt"), "radio")
 	Helpers.at(sim, 9, 12.0)
 	Helpers.run(sim, 0.2)
@@ -1001,9 +1003,11 @@ func test_the_real_waves_give_the_night_call_on_the_big_nights_own_day() -> void
 	var g := _game(10, 16.99)
 	var sim = g.sim
 	var tonight: Dictionary = sim.waves.outlook(10)
-	if tonight.is_empty() or String(tonight.get("kind", "ordinary")) == "ordinary":
+	var big := not (tonight.is_empty() or String(tonight.get("kind", "ordinary")) == "ordinary")
+	check(big, "day 10 is a real Big Night (a test of the real waves does not pass by finding none; round 19 review F8): %s" % str(tonight.get("kind")))
+	if not big:
 		g.world.free()
-		return    # (the real Big Nights are not in yet: the fake's tests above stand for them)
+		return
 	Helpers.seat(sim, _p(sim, "marcus"), "watch")
 	Helpers.run(sim, 0.5)
 	eq(String(sim.tactics.forecast_who), "marcus", "the lookout gave the forecast")

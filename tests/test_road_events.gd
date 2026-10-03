@@ -662,6 +662,12 @@ func test_a_fuel_stash_gives_four_to_nine() -> void:
 	eq(seen.size(), 6, "all of 4 to 9 come up")
 	var full := RoadEvents.resolve(_entry("fuel_stash", 1), "siphon", _ctx({"fuel_room": 0.0}))
 	check(not bool(full.ok) and String(full.why).to_lower().contains("full"), "a full tank cannot siphon: '%s'" % full.why)
+	# review of round 21, minor 12: the stash is planned at 4 fuel of room (`FUEL_ROOM_MIN`) and was offered at 1: "Siphon" says +4 to +9
+	for room in [1.0, 3.9]:
+		var few := RoadEvents.resolve(_entry("fuel_stash", 1), "siphon", _ctx({"fuel_room": room}))
+		check(not bool(few.ok) and String(few.why) != "", "room for %s is not enough to siphon: '%s'" % [str(room), few.get("why", "")])
+	for room in [4.0, 30.0]:
+		check(bool(RoadEvents.resolve(_entry("fuel_stash", 1), "siphon", _ctx({"fuel_room": room})).ok), "room for %s is" % str(room))
 
 
 func test_the_checkpoint_toll_trade_talk_and_run() -> void:
@@ -942,6 +948,29 @@ func test_apply_leaves_the_scenes_part_alone_and_draws_no_dice() -> void:
 	for k in sim.stock:
 		check(float(sim.stock[k]) >= 0.0, "%s is not below 0" % k)
 	check(float(sim.vehicles.fuel) >= 0.0, "nor the fuel")
+	_end(g)
+
+
+# ---------------------------------------------------------------- the caller on the way home (FIX 21) --
+
+## Review of round 21, minor 10: a survivor taken in on the way there stays the front of the queue until the party is home, so the
+## way home offered the same person again (and two `rescue_home("road")` took two different callers). The one met after `taken` are the
+## caller after them: `recruits.caller_at(taken)`.
+func test_the_survivor_met_on_the_way_home_is_the_next_caller_not_the_one_already_taken() -> void:
+	var g := _game()
+	var sim = g.sim
+	var f = _flow(sim, ["dez", "marcus"], "van", "garage")
+	var first := String(sim.recruits.current_caller().get("name", ""))
+	check(first != "", "(a caller is waiting)")
+	eq(String(sim.recruits.caller_at(0).get("name", "")), first, "caller_at(0) is the one on the table")
+	var second := String(sim.recruits.caller_at(1).get("name", ""))
+	check(second != "" and second != first, "caller_at(1) is another: %s / %s" % [first, second])
+	eq(String(sim.recruits.current_caller().get("name", "")), first, "and the table is as it was")
+	var there := RoadEvents.make_ctx(f, "there")
+	eq(String(there.caller), first.split(" ")[0], "on the way there it is the one on the table")
+	f.road_survivors = 1
+	var home := RoadEvents.make_ctx(f, "home")
+	eq(String(home.caller), second.split(" ")[0], "on the way home, with one taken in, it is the next one")
 	_end(g)
 
 

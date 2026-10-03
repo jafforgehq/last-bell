@@ -39,6 +39,8 @@ var buttons := {}
 ## How much of the call is told: 0 all of it; 1 without the line under the title; 2 and without the kind (the colour bar of the card says it);
 ## 3 and with slimmer buttons. A card that has little room asks for more (`set_level`, `CallCard.fit`).
 var level := 0
+## How many other calls wait behind this one (the card says so under the countdown: they are in the News).
+var more := 0
 ## The slim form (see `setup`): the options are in a row that wraps, not one under the other.
 var slim := false
 var _radio_getter: Callable
@@ -110,6 +112,11 @@ func show_entry(e: Dictionary) -> void:
 		entry_id = int(e.id)
 		_rebuild(e)
 	refresh()
+
+
+## The number of other open calls that wait behind this one ("+2 more in the News" under the countdown; 0 says nothing).
+func set_more(n: int) -> void:
+	more = maxi(0, n)
 
 
 ## Tells less of the call (see `level`), for a card that has little room.
@@ -198,6 +205,8 @@ func refresh() -> void:
 		var words := "%d s" % ceili(left)
 		if fallback != "":
 			words += ": %s by default" % fallback
+		if more > 0:
+			words += " · +%d more in the News" % more
 		if count_label.text != words:
 			count_label.text = words
 		return

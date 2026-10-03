@@ -1010,8 +1010,14 @@ func test_a_save_loads_back_to_the_same_state() -> void:
 	var voice_id: String = ra.voice().id
 	var d: Dictionary = _via_json(ra.save())
 	var b := _game()
+	b.sim.day = 4    # (the day it is loaded on: a pair without a kind must keep the day it has, not take this one)
 	var rb = b.sim.relations
 	rb.load_state(d)
+	var kindless := 0
+	for key in ra.pairs:
+		if String(ra.pairs[key].kind) == "" and int(ra.pairs[key].since) != int(b.sim.day):
+			kindless += 1
+	check(kindless > 0, "(some pair has no kind and a day of its own)")
 	for key in ra.pairs:
 		var pa: Dictionary = ra.pairs[key]
 		var pb: Dictionary = rb.pairs.get(key, {})

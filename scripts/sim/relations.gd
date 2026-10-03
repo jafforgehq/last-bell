@@ -15,7 +15,7 @@
 ## WHAT IT FEEDS (the hooks of other modules call the functions below; none of them does anything when the module is not `active()`):
 ## `bonds.of` and `bonds.bonded` (the roster plus the friends made in play: morale's near friend, the aim bonus, grief), morale (a rival
 ## near is on edge, a partner's loss is felt harder), the radio (a friend in the squad warms a request, a rival cools it; a friend who
-## lies hurt keeps someone home; an enemy in the squad refuses; the echo of a push to a friend's friends), the jobs' fit, the player's
+## lies hurt and alone keeps someone home, except under the alarm; an enemy in the squad refuses; the echo of a push to a friend's friends), the jobs' fit, the player's
 ## succession (the one the community stands by), and the voice: the one people turn to, whose opinion the radio's calls may show.
 ##
 ## WHEN IT RUNS. Only in an avatar game of the settlement start (`active()`); never on Orientation Day or in the classic six start. The
@@ -549,9 +549,11 @@ func company_pull(contact, verb: String) -> float:
 
 ## A soft reason, in the radio's words ("staying with Dez", "won't go with Walt", "won't work beside Walt"), or "" when there is none.
 ## `what`: come, cover, search, go (a person is asked to go somewhere with others: `with_ids` are who else is going) or work (at
-## `station_id`). The squad is who follows or covers the leader now, or has agreed to. Insisting overrides it at the usual cost.
+## `station_id`). The squad is who follows or covers the leader now, or has agreed to. Insisting overrides it at the usual cost (once for
+## a request that asks several: `radio.request_errand`). Under the call to arms (`radio.alarm_on`) there is NO reason of company: a
+## friend does not stay behind, and an old quarrel waits.
 func company_reason(contact, what: String, station_id: String = "", with_ids: Array = []) -> String:
-	if contact == null or not active():
+	if contact == null or not active() or sim.radio.alarm_on:
 		return ""
 	var cid := _id(contact)
 	if what == "work":
@@ -597,16 +599,14 @@ func _squad_ids(extra: Array) -> Dictionary:
 	return ids
 
 
-## Whether `q` (a friend of `contact`, at the base) is down, bleeding, in a bed or has a fever, and nobody else is with them (nobody up
-## within TOGETHER_TILES, nobody sent to treat them).
+## Whether `q` (a friend of `contact`, at the base) lies down or bleeds with nobody looking after them: not in a bed (the infirmary's
+## care, or their own rest, is care enough), nobody treating them, and nobody else up within TOGETHER_TILES. Somebody who is looked
+## after does not keep their friends from the work; the one who is alone does.
 func _needs_company(q, contact) -> bool:
-	var hurt: bool = q.downed or float(q.bleeding) > 0.0 or q.resting_bed != null
-	if not hurt:
-		hurt = sim.storyteller.is_sick(q) or String(sim.medical.infection_stage(q)) != ""
-	if not hurt:
+	if not (q.downed or float(q.bleeding) > 0.0) or q.resting_bed != null:
 		return false
 	for j in sim.medical.jobs:
-		if j.patient == q and j.healer != contact:
+		if j.patient == q:
 			return false
 	var at := Vector2(q.x, q.y)
 	for r in sim.people:
@@ -1343,9 +1343,9 @@ func load_state(d: Dictionary) -> void:
 	for e in loaded:
 		var pr: Dictionary = pairs[e.key]
 		_rederive(String(e.key), true, String(e.hint))
+		if String(pr.kind) == String(e.hint):
+			pr.since = int(e.since)    # (also for a pair with no kind: it keeps the day it has, it does not take the day of the load)
 		if String(pr.kind) != "":
-			if String(pr.kind) == String(e.hint):
-				pr.since = int(e.since)
 			if not bool(e.told):
 				pr.told = false
 				_untold[String(e.key)] = true

@@ -1,6 +1,8 @@
-## The call card (round 17, slice 1): a small board under the HUD's alerts for the OLDEST call of the radio that waits for an answer,
-## so a decision is never hidden behind the News panel being shut: the kind, the title, the line under it, a countdown bar, the
-## options as buttons. It never pauses the game and never takes a key. When the call is settled (answered, or its default taken by
+## The call card (round 17, slice 1): a small board under the HUD's alerts for the MOST URGENT call of the radio that waits for an answer
+## (round 19: a wall that is down or going before a brute on its way before the rest, then the one with the least time left; it was the
+## oldest, and a stale idea hid the wall that was going), so a decision is never hidden behind the News panel being shut: the kind, the
+## title, the line under it, a countdown bar, the options as buttons, and "+2 more in the News" when others wait. It never pauses the
+## game and never takes a key. When the call is settled (answered, or its default taken by
 ## the rules) the card shows what came of it for `result_ms`, then goes, or gives way at once to the next open call.
 ##
 ## `setup(host, radio_getter, options)` as call_view.gd (the HUD lends its looks; the radio comes from the Callable; the options are
@@ -101,7 +103,7 @@ func clear() -> void:
 	visible = false
 
 
-## The oldest open call; else, for a moment, what came of the one that was just settled; else nothing.
+## The most urgent open call (`RadioKit.most_urgent`); else, for a moment, what came of the one that was just settled; else nothing.
 func refresh() -> void:
 	var radio = _radio_getter.call() if _radio_getter.is_valid() else null
 	if radio == null:
@@ -109,15 +111,17 @@ func refresh() -> void:
 		return
 	var calls: Array = radio.open_calls()
 	if not calls.is_empty():
-		var e: Dictionary = calls[0]
+		var e: Dictionary = RadioKit.most_urgent(calls)
 		_showing_result = false
 		_result_until = 0
 		shown_id = int(e.id)
+		view.set_more(calls.size() - 1)
 		_show(e)
 		return
 	if shown_id != 0:
 		var e := RadioKit.entry_of(radio, shown_id)
 		if not e.is_empty() and String(e.answered) != "":
+			view.set_more(0)
 			var now := Time.get_ticks_msec()
 			if _result_until == 0:
 				_result_until = now + result_ms

@@ -279,15 +279,21 @@ func test_radio_a_friend_who_lies_hurt_keeps_someone_home_and_insisting_override
 	eq(r.company_reason(dez, "come"), "", "Ana is beside him: he is not alone")
 	_place(ana, 80.0, 40.0)
 	eq(r.company_reason(dez, "come"), "staying with Hector", "she goes: he is alone again")
-	# bleeding, a bed, a fever
+	# bleeding, a bed, a healer
 	hector.downed = false
 	eq(r.company_reason(dez, "come"), "", "he is up")
 	hector.bleeding = 2.0
 	eq(r.company_reason(dez, "come"), "staying with Hector", "bleeding")
 	hector.bleeding = 0.0
 	hector.resting_bed = Vector2(hector.x, hector.y)
-	eq(r.company_reason(dez, "come"), "staying with Hector", "in a bed")
+	eq(r.company_reason(dez, "come"), "", "in a bed he is looked after: his friends are free")
 	hector.resting_bed = null
+	hector.bleeding = 2.0
+	sim.medical.jobs.append({"patient": hector, "healer": ana})
+	eq(r.company_reason(dez, "come"), "", "bleeding, but somebody is treating him: his friends are free")
+	sim.medical.jobs.clear()
+	eq(r.company_reason(dez, "come"), "staying with Hector", "(and nobody is: they are not)")
+	hector.bleeding = 0.0
 	# insisting overrides it at the usual cost
 	hector.downed = true
 	var trust := float(dez.trust)
@@ -302,6 +308,83 @@ func test_radio_a_friend_who_lies_hurt_keeps_someone_home_and_insisting_override
 	eq(r.company_reason(dez, "come"), "", "nothing")
 	check(radio.willingness(dez, "come").ok, "off: willing as ever")
 	g.world.free()
+
+
+func test_radio_under_the_alarm_no_company_reason_refuses() -> void:
+	var g := _game()
+	var sim = g.sim
+	var r = sim.relations
+	var radio = sim.radio
+	var dez = _p(sim, "dez")
+	var walt = _p(sim, "walt")
+	var hector = _p(sim, "hector")
+	hector.downed = true
+	r.add("dez", "walt", -70.0, "x")
+	walt.stance = "follow"
+	walt.drafted = true
+	check(sim.jobs.assign(walt, "bench"), "Walt is at the bench")
+	eq(r.company_reason(dez, "come"), "staying with Hector", "(a friend is down: Dez stays)")
+	eq(r.company_reason(dez, "work", "bench"), "won't work beside Walt", "(and will not work beside Walt)")
+	radio.alarm(true)
+	for what in ["come", "cover", "search", "go"]:
+		eq(r.company_reason(dez, what, "", ["walt"]), "", "under the alarm: no company reason for %s" % what)
+	eq(r.company_reason(dez, "work", "bench"), "", "nor for work")
+	check(radio.willingness(dez, "come").ok and radio.willingness(dez, "cover").ok, "Dez comes and covers")
+	var trust := float(dez.trust)
+	check(radio.request(dez, "cover").ok, "asked, he does it")
+	near(float(dez.trust), trust, 0.0001, "and nobody has to insist")
+	radio.alarm(false)
+	eq(r.company_reason(dez, "come"), "staying with Hector", "stood down: he stays again")
+	g.world.free()
+
+
+func test_radio_pushing_a_party_past_a_company_reason_costs_once_per_request() -> void:
+	var g := _game()
+	var sim = g.sim
+	var r = sim.relations
+	var radio = sim.radio
+	var dez = _p(sim, "dez")
+	var ana = _p(sim, "ana")
+	var hector = _p(sim, "hector")
+	r.add("ana", "hector", 60.0, "x")
+	hector.downed = true
+	for q in [dez, ana]:
+		eq(r.company_reason(q, "go", "", ["dez", "ana"]), "staying with Hector", "%s would stay with Hector" % q.first)
+	var asked: Dictionary = radio.request_errand([dez, ana], "houses")
+	check(not asked.ok, "asked, both refuse: %s" % str(asked.why))
+	check(radio.errand_wait.is_empty(), "nothing is queued, nothing is paid")
+	var pushed: Dictionary = radio.request_errand([dez, ana], "houses", "loot", "", {"insist": true})
+	check(pushed.ok and pushed.insisted, "pushed, they go: %s" % str(pushed.why))
+	eq(pushed.going.size(), 2, "both")
+	var pushes := 0
+	var morale_blows := 0
+	for q in [dez, ana]:
+		for e in radio.trust_why(q):
+			if String(e.why) == "You pushed them to go when they could not":
+				pushes += 1
+		if not _reason(sim, q, "Pushed to go when they could not").is_empty():
+			morale_blows += 1
+	eq(pushes, 1, "the push costs trust once for the request, not once for each of them")
+	eq(morale_blows, 1, "and the blow to the mood is one")
+	g.world.free()
+	# a refusal of the person's own (a wound) is still paid for, besides the one for the company
+	var h := _game()
+	var hs = h.sim
+	var hr = hs.relations
+	var ha = _p(hs, "ana")
+	var hw = _p(hs, "walt")
+	hr.add("ana", "hector", 60.0, "x")
+	_p(hs, "hector").downed = true
+	hw.bleeding = 2.0
+	var hp: Dictionary = hs.radio.request_errand([ha, hw], "houses", "loot", "", {"insist": true})
+	check(hp.ok and hp.insisted, "(the same with a wound in the party: %s)" % str(hp.why))
+	var own := 0
+	for q in [ha, hw]:
+		for e in hs.radio.trust_why(q):
+			if String(e.why) == "You pushed them to go when they could not":
+				own += 1
+	eq(own, 2, "Walt's wound is his own reason: it is paid for as well")
+	h.world.free()
 
 
 func test_radio_an_enemy_in_the_squad_refuses_and_an_enemy_at_the_station_will_not_share_it() -> void:
@@ -499,9 +582,26 @@ func test_nothing_changes_without_an_avatar() -> void:
 	check(w.ok, "willing")
 	near(float(w.delay_s), radio.delay_for(float(dez.trust)), 0.0, "with the delay of his own trust, to the last digit")
 	eq(w.tone, radio.tone_for(float(dez.trust)), "and the tone")
-	var fit: float = sim.jobs._fit(dez, "builders")
-	var again: float = sim.jobs._fit(dez, "builders")
-	eq(fit, again, "the fit")
+	# the fit is what the jobs module made of it before the round: the skill, the trait's half point, the lookout's three
+	for who in sim.people:
+		for st in sim.jobs.stations():
+			var id := String(st.id)
+			var expected := 0.0
+			var skill := String(st.get("skill", ""))
+			if skill != "":
+				expected = float(who.skills.get(skill, 0))
+			else:
+				expected = 10.0 - maxf(maxf(float(who.skills.get("Shooting", 0)), float(who.skills.get("Building", 0))), maxf(float(who.skills.get("Medicine", 0)), float(who.skills.get("Leading", 0))))
+			var trait_id := String(sim.jobs.AUTO_TRAITS.get(id, ""))
+			if trait_id != "":
+				for t in sim.traits.of(who):
+					if String(t.id) == trait_id:
+						expected += 0.5
+			if id == "watch" and String(who.def.get("role", "")) == "Lookout":
+				expected += 3.0
+			eq(sim.jobs._fit(who, id), expected, "%s at %s: the fit is the plain one (no round 20 term)" % [who.first, id])
+			eq(sim.specialists.fit_bonus(who, id), 0.0, "%s at %s: no specialist's bonus" % [who.first, id])
+			eq(sim.relations.fit_adjust(who, id), 0.0, "%s at %s: no friend or rival term" % [who.first, id])
 	var reasons_before: int = sim.morale.explain(dez).size()
 	radio.add_trust(dez, -6.0, "x")
 	for q in sim.people:
@@ -509,10 +609,19 @@ func test_nothing_changes_without_an_avatar() -> void:
 			eq(float(q.trust), 55.0, "%s is not moved by an echo" % q.first)
 	eq(sim.morale.explain(dez).size(), reasons_before, "no new reasons")
 	sim.medical.kill(walt, "bled out")
+	var mourners := 0
 	for q in sim.people:
-		if q.id == "marcus":
-			for e in sim.morale.shocks.get("marcus", []):
-				if String(e.label) == "Walt died":
-					near(float(e.value), Morale.FRIEND_LOST * sim.traits.mult(q, "grief"), 0.0, "a friend's loss, to the last digit (no factor but one)")
+		if q == walt:
+			continue
+		var found := false
+		for e in sim.morale.shocks.get(String(q.id), []):
+			if String(e.label) == "Walt died":
+				found = true
+				var expected_value: float = Morale.FRIEND_LOST * sim.traits.mult(q, "grief") if sim.bonds.bonded(walt, q) else Morale.OTHER_LOST
+				near(float(e.value), expected_value, 0.0, "%s: the loss, to the last digit (a friend's grief times the trait only, no partner's factor)" % q.first)
+				if sim.bonds.bonded(walt, q):
+					mourners += 1
+		check(found, "%s felt the loss of Walt" % q.first)
+	check(mourners > 0, "(somebody was Walt's friend by the roster: the friend's figure was checked)")
 	eq(r.recent_loss(), {}, "no loss kept")
 	g.world.free()

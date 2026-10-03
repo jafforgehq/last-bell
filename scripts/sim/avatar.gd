@@ -478,7 +478,9 @@ func _shoot(p, gun: Dictionary) -> void:
 
 ## Follows a shot from `from` along `ang` for `reach` tiles: {"z": the first of the dead hit (or null), "end": where it
 ## stopped, "weak": whether the ray passed through the head of the plated brute it hit}. The dead hit are the nearest whose body
-## is within HIT_R (times their size) of the line before any wall. (The views can use it for an aim line.)
+## is within HIT_R (times their size) of the line before any wall, or, for a plated brute, whose head's disc the line crosses (the head sticks
+## out of the body's disc: a pellet through the top of it hits the brute, and is a head hit; `Nights.weak_along`). (The views use it: the weak
+## point's ring is full exactly when this says "weak".)
 func trace(from: Vector2, ang: float, reach: float) -> Dictionary:
 	_low = _low_tiles()
 	var dir := Vector2.from_angle(ang)
@@ -490,9 +492,11 @@ func trace(from: Vector2, ang: float, reach: float) -> Dictionary:
 			continue
 		var c := Vector2(z.x, z.y - BODY) - from
 		var along := c.dot(dir)
-		if along < 0.0 or along > best_t:
-			continue
-		if absf(c.cross(dir)) > HIT_R * float(z.size):
+		var hit := along >= 0.0 and absf(c.cross(dir)) <= HIT_R * float(z.size)
+		if not hit:
+			along = sim.nights.weak_along(z, from, dir)    # (a plated brute's head: -1 for anything else)
+			hit = along >= 0.0
+		if not hit or along > best_t:
 			continue
 		best = z
 		best_t = along

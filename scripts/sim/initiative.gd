@@ -15,15 +15,18 @@
 ## below. `candidates()` is pure; `propose_now()` raises the best one; `look()` does so when the schedule allows it (the slow
 ## look: every TICK_S seconds of rules time, 30 game minutes, `update`).
 ##
-## THE SCHEDULE. From day 3, by day (08:00 to 17:30, never in the radio hour), never under the alarm or with the dead at the wall;
-## at most two waiting (`MAX_OPEN`), four game hours between two proposals, three days between two of a kind, two days (one for
-## the voice) between two from one person, a person whose trust in the leader is under 25 brings nothing, and the whole camp is
-## silent while the community's trust is under 35 (the News says so, once). A call that is not answered in six game hours takes
-## "later" (nothing is paid): twice in a row on one kind and that kind is put away for a few days.
+## THE SCHEDULE. From day 3, by day (08:00 to 17:30, never in the radio hour, the last an hour before the dusk), never under the
+## alarm or with the dead at the wall, and never while a call of the other kinds (an attack, a fever, the night's) is open; at most
+## two waiting (`MAX_OPEN`), four game hours between two proposals, three days between two of a kind, two days (one for the voice)
+## between two from one person, a person whose trust in the leader is under 25 brings nothing, and the whole camp is silent while
+## the community's trust is under 35 (the News says so, once). A call that is not answered in six game hours, or by the dusk if that
+## comes first (no idea stands open into the night: the calls of the night come then), takes "later" (nothing is paid): twice in a
+## row on one kind and that kind is put away for a few days.
 ##
 ## THE ANSWERS. Yes: the proposer's trust and mood go up and the idea is TAKEN (it counts for their standing in
 ## `relations.standing`). A yes is checked again when it is given with the very predicate of the trigger: "Not now: it needs 20
-## scrap" and it counts as a later. No: a little trust and mood lost; the third no in four days and the person stops bringing ideas
+## scrap" and it counts as a later. No: a little trust and mood lost, and the same kind is not brought again by that person for a
+## good while (`REFUSED_KIND_DAYS`); the third no in a row (no yes between, within eight days) and the person stops bringing ideas
 ## for three days (the News says it), at a further cost. Later: nothing.
 ##
 ## THE VOICE. `voice_opinion(call)` is what the specialist of the matter (the marksman on an attack, the medic on a fever), else
@@ -47,6 +50,9 @@ const TICK_S := 10.0
 const FIRST_DAY := 3
 const HOURS_FROM := 8.0
 const HOURS_TO := 17.5
+## The last proposal of the day is this many hours before the dusk if that is earlier than HOURS_TO (a season of early dusks), and an
+## idea never lives past the dusk: no idea is open when the calls of the night come.
+const LAST_BEFORE_DUSK_H := 1.0
 ## The radio hour (the noon call): nothing is proposed in it.
 const RADIO_FROM_H := 11.5
 const RADIO_TO_H := 12.5
@@ -67,9 +73,12 @@ const YES_TRUST := 1.5
 const YES_MORALE := 3.0
 const NO_TRUST := -1.0
 const NO_MORALE := -2.0
-## Refusals in a window of days that silence a proposer, for how long, and what the last of them costs.
+## Refusals IN A ROW (a yes in between ends the run) within a span of days that silence a proposer, for how long, and what the last
+## of them costs. A proposer is asked at most every two days, so the span is wide enough for three of their ideas (days 3, 5, 7).
 const NO_STREAK := 3
-const NO_WINDOW_DAYS := 4
+const NO_WINDOW_DAYS := 8
+## How long a person does not bring again a kind of idea that was turned down (the kind's own gap, GAP_KIND_DAYS, is for the others).
+const REFUSED_KIND_DAYS := 8
 const QUIET_DAYS := 3
 const QUIET_TRUST_COST := -2.0
 const QUIET_MORALE := -3.0
@@ -85,7 +94,8 @@ const SIDES := {"N": "north", "S": "south", "E": "east", "W": "west"}
 
 var sim
 var enabled := true
-## Person id -> {"asked", "yes", "no", "later", "quiet_until" (a day), "last_day", "no_days" (the days of the last refusals)}.
+## Person id -> {"asked", "yes", "no", "later", "quiet_until" (a day), "last_day", "no_days" (the days of the last refusals in a row),
+## "refused" (kind -> the day it was turned down)}.
 var records := {}
 ## Kind -> the day of its last proposal; kind -> the day it may be proposed again (put away); kind -> laters in a row.
 var last_kind := {}
@@ -300,7 +310,7 @@ func _rec(p) -> Dictionary:
 
 
 static func _new_record() -> Dictionary:
-	return {"asked": 0, "yes": 0, "no": 0, "later": 0, "quiet_until": 0, "last_day": -999, "no_days": []}
+	return {"asked": 0, "yes": 0, "no": 0, "later": 0, "quiet_until": 0, "last_day": -999, "no_days": [], "refused": {}}
 
 
 ## What has come of this person's ideas: {"asked", "yes", "no", "later", "quiet_until" (a day), "last_day"}.
@@ -311,6 +321,7 @@ func record_of(p) -> Dictionary:
 		for k in ["asked", "yes", "no", "later", "quiet_until", "last_day"]:
 			out[k] = int(r.get(k, out[k]))
 	out.erase("no_days")
+	out.erase("refused")
 	return out
 
 
@@ -345,15 +356,24 @@ func allowed_now() -> bool:
 	if not active() or int(sim.day) < FIRST_DAY or sim.phase != "day":
 		return false
 	var h: float = sim.hour
-	if h < HOURS_FROM or h > HOURS_TO or (h >= RADIO_FROM_H and h <= RADIO_TO_H):
+	if h < HOURS_FROM or h > minf(HOURS_TO, float(sim.seasons.dusk_hour()) - LAST_BEFORE_DUSK_H) or (h >= RADIO_FROM_H and h <= RADIO_TO_H):
 		return false
-	if sim.radio.alarm_on or sim.threat_by_day():
+	if sim.radio.alarm_on or sim.threat_by_day() or _urgent_call_open():
 		return false
 	if _open_ideas().size() >= MAX_OPEN or float(sim.clock_min) - last_all < GAP_ALL_MIN:
 		return false
 	if _community() < COMMUNITY_MIN:
 		return false
 	return sim.radio.leader() != null
+
+
+## Whether a call that is not an idea waits for an answer (an attack, a fever, a wall that is going, the night's forecast: what the
+## player has to decide now). No idea is raised on top of it.
+func _urgent_call_open() -> bool:
+	for e in sim.radio.open_calls():
+		if String(e.kind) != "idea":
+			return true
+	return false
 
 
 func _open_ideas() -> Array:
@@ -406,7 +426,7 @@ func candidates() -> Array:
 	for kind in KINDS:
 		if _kd(kind).is_empty() or _held_back(kind) or not has_method("_find_" + kind):
 			continue
-		var c: Dictionary = call("_find_" + kind, ctx)
+		var c: Dictionary = call("_find_" + kind, _ctx_for(kind, ctx))
 		if c.is_empty():
 			continue
 		out.append(_finish(kind, c, ctx))
@@ -419,6 +439,26 @@ func candidates() -> Array:
 			return ia < ib
 		return String(a.who) < String(b.who))
 	return out
+
+
+## The finders' context for a kind: without those who were turned down on this kind lately (they do not bring it again for a while).
+func _ctx_for(kind: String, ctx: Dictionary) -> Dictionary:
+	var keep: Array = []
+	for p in ctx.proposers:
+		if not _turned_down(p, kind):
+			keep.append(p)
+	if keep.size() == ctx.proposers.size():
+		return ctx
+	var out: Dictionary = ctx.duplicate()
+	out["proposers"] = keep
+	return out
+
+
+## Whether this person's idea of this kind was turned down within REFUSED_KIND_DAYS.
+func _turned_down(p, kind: String) -> bool:
+	var rec: Dictionary = records.get(String(p.id), {})
+	var refused = rec.get("refused", {})
+	return refused is Dictionary and refused.has(kind) and int(sim.day) - int(refused[kind]) < REFUSED_KIND_DAYS
 
 
 ## What the finders share: the people at the base, who may bring an idea, the voice.
@@ -488,11 +528,17 @@ func propose_now() -> int:
 	return _raise(list[0]) if not list.is_empty() else 0
 
 
+## How long a call raised now lives (game minutes): what it asks for, but never past the dusk (nothing stands open into the night).
+func _life_min(wanted: float) -> float:
+	var to_dusk: float = (float(sim.seasons.dusk_hour()) - float(sim.hour)) * 60.0
+	return minf(wanted, to_dusk) if to_dusk > 0.0 else wanted
+
+
 func _raise(c: Dictionary) -> int:
 	var p = _person(String(c.who))
 	if p == null:
 		return 0
-	var ttl := minf(TTL_MIN, float(c.get("ttl", TTL_MIN)))
+	var ttl := _life_min(minf(TTL_MIN, float(c.get("ttl", TTL_MIN))))
 	var data := {"idea": String(c.kind), "who": String(c.who), "others": c.others.duplicate(), "args": c.args.duplicate(true), "cost": c.cost.duplicate(), "line": String(c.line)}
 	var options: Array = [{"id": "yes", "label": String(c.yes_label)}, {"id": "later", "label": "Later"}, {"id": "no", "label": "No"}]
 	var id: int = sim.radio.raise_call("idea", String(c.text), String(c.sub), options, "later", ttl, data, Vector2(p.x, p.y))
@@ -546,6 +592,7 @@ func _yes(kind: String, who, data: Dictionary) -> String:
 		return result
 	var rec := _rec(who)
 	rec["yes"] = int(rec.yes) + 1
+	rec["no_days"] = []    # (a yes ends a run of refusals)
 	streaks.erase(kind)
 	_count(kind, "yes")
 	var cost: Dictionary = data.get("cost", {}) if data.get("cost", {}) is Dictionary else {}
@@ -568,18 +615,22 @@ func _no(kind: String, who, data: Dictionary) -> String:
 	var args: Dictionary = data.get("args", {}) if data.get("args", {}) is Dictionary else {}
 	if has_method("_refused_" + kind):
 		call("_refused_" + kind, who, others, args)
+	var shelf: Dictionary = rec.refused if rec.get("refused") is Dictionary else {}
+	shelf[kind] = int(sim.day)    # (this person does not bring this kind again for a while)
+	rec["refused"] = shelf
 	var days: Array = []
 	for d in rec.no_days:
-		if int(sim.day) - int(d) < NO_WINDOW_DAYS:
-			days.append(int(d))
+		days.append(int(d))
 	days.append(int(sim.day))
+	while days.size() > NO_STREAK:
+		days.pop_front()
 	rec["no_days"] = days
-	if days.size() >= NO_STREAK:
+	if days.size() >= NO_STREAK and int(days[days.size() - 1]) - int(days[0]) <= NO_WINDOW_DAYS:
 		rec["quiet_until"] = int(sim.day) + QUIET_DAYS
 		rec["no_days"] = []
 		sim.radio.add_trust(who, QUIET_TRUST_COST, "Turned down three times: they stopped bringing ideas")
 		sim.morale.shock(who, QUIET_MORALE, "Turned down three times")
-		sim.radio.log_news("idea", "%s has stopped bringing ideas" % String(who.first), "Turned down three times in %d days" % NO_WINDOW_DAYS)
+		sim.radio.log_news("idea", "%s has stopped bringing ideas" % String(who.first), "Turned down three times in a row")
 	return ""
 
 
@@ -688,6 +739,10 @@ func _apply_fix_wall(p, _others: Array, args: Dictionary) -> String:
 	w["scrap"] = _scrap_for(seg, prm)
 	w["first"] = String(p.first)
 	sim.order_repair(p, seg)
+	if p.repair == seg:
+		# (marked as the wall crew's own job: `tactics.call_back` takes the mender off the wall when the scrap is gone, at dusk and when
+		# the dead come, as it does the crew's; the order itself still mends to full)
+		sim.tactics.auto_jobs[String(p.id)] = int(seg.id)
 	return _say("fix_wall", "done", w)
 
 
@@ -1151,6 +1206,12 @@ func _joined(words: Array) -> String:
 	return "%s and %s" % [", ".join(words.slice(0, words.size() - 1)), words[words.size() - 1]]
 
 
+## The longest the radio makes an errand wait before the party is made (the slowest answer, in game minutes): a yes given as late as the call
+## lives still leaves the party its time to set off before the parties stop leaving.
+func _errand_delay_min() -> float:
+	return float(sim.game_hours(float(sim.radio.DELAY_SLOW))) * 60.0
+
+
 func _find_errand(ctx: Dictionary) -> Dictionary:
 	var prm: Dictionary = _kd("errand").params
 	var h: float = sim.hour
@@ -1188,8 +1249,8 @@ func _find_errand(ctx: Dictionary) -> Dictionary:
 				rest.append(q)
 		mate = _best(rest, "Shooting")
 	var party: Array = [p, mate] if mate != null else [p]
-	if sim.scavenge.why_not_errand(party, String(found.site.id), "loot") != "":
-		return {}
+	if not bool(sim.radio.errand_willingness(party, String(found.site.id), "loot").ok):
+		return {}    # (the trip itself, the parties out and the errands waiting in the radio's queue, each one's reasons: the radio's list)
 	var terms := _errand_terms()
 	var share := float(terms.get("loot", 1.0))
 	var where := String(found.site.get("where", found.site.get("name", "the place")))
@@ -1201,7 +1262,7 @@ func _find_errand(ctx: Dictionary) -> Dictionary:
 	}
 	return {
 		"p": p, "others": [mate] if mate != null else [], "args": {"place": String(found.site.id), "covers": found.covers.duplicate()}, "cost": {},
-		"ttl": (float(sim.scavenge.SEND_TO_H) - h) * 60.0, "line": _say("errand", "line", w), "sub": _say("errand", "sub", w), "yes": _say("errand", "yes", w),
+		"ttl": (float(sim.scavenge.SEND_TO_H) - h) * 60.0 - _errand_delay_min(), "line": _say("errand", "line", w), "sub": _say("errand", "sub", w), "yes": _say("errand", "yes", w),
 	}
 
 
@@ -1234,16 +1295,20 @@ func _why_errand(p, others: Array, args: Dictionary) -> String:
 			needed = true
 	if site.is_empty() or not needed:
 		return "it is not needed now"
-	return _plain(String(sim.scavenge.why_not_errand(party, place, "loot")))
+	var asked: Dictionary = sim.radio.errand_willingness(party, place, "loot")    # (the trip, the parties out and waiting, each one's reasons)
+	return "" if bool(asked.ok) else _plain(String(asked.why))
 
 
+## The yes asks the radio for the errand, as the player's own request would be asked: it joins the radio's queue (`errand_wait`), is
+## counted against the parties that may be out, and the party is made after the delay of the people's trust (`scavenge.send` then).
 func _apply_errand(p, others: Array, args: Dictionary) -> String:
 	var party: Array = [p] + others
 	var place := String(args.place)
-	if not sim.scavenge.send(party, place, "loot"):
-		return "Not now: they cannot set off"
+	var asked: Dictionary = sim.radio.request_errand(party, place, "loot")
+	if not bool(asked.ok):
+		return "Not now: %s" % _plain(String(asked.why)) if String(asked.why) != "" else "Not now: they cannot set off"
 	var where := String(sim.scavenge._where(place)) if sim.scavenge.has_method("_where") else "the place"
-	return _say("errand", "done", {"party": _joined(_ids_first(party)), "where": where})
+	return _say("errand", "done", {"party": _joined(_ids_first(asked.going)), "where": where})
 
 
 # --------------------------------------------------------------------- swap_posts --
@@ -1902,7 +1967,7 @@ func save() -> Dictionary:
 	var rows := {}
 	for id in records:
 		var r: Dictionary = records[id]
-		rows[id] = {"asked": int(r.asked), "yes": int(r.yes), "no": int(r.no), "later": int(r.later), "quiet_until": int(r.quiet_until), "last_day": int(r.last_day), "no_days": r.no_days.duplicate()}
+		rows[id] = {"asked": int(r.asked), "yes": int(r.yes), "no": int(r.no), "later": int(r.later), "quiet_until": int(r.quiet_until), "last_day": int(r.last_day), "no_days": r.no_days.duplicate(), "refused": (r.get("refused", {}) as Dictionary).duplicate()}
 	return {
 		"acc": _acc, "last_all": last_all, "last_kind": last_kind.duplicate(), "shelved": shelved.duplicate(), "streaks": streaks.duplicate(),
 		"records": rows, "doing": doing.duplicate(true), "hushed": hushed, "stats": counts.duplicate(true),
@@ -1941,7 +2006,14 @@ func load_state(d: Dictionary) -> void:
 				for x in r.no_days:
 					if _num(x):
 						days.append(int(x))
+			while days.size() > NO_STREAK:
+				days.pop_front()
 			rec["no_days"] = days
+			var turned_down = r.get("refused")
+			if turned_down is Dictionary:
+				for k in turned_down:
+					if KINDS.has(String(k)) and _num(turned_down[k]):
+						rec.refused[String(k)] = clampi(int(turned_down[k]), -999, 100000)
 			records[String(id)] = rec
 	hushed = bool(d.hushed) if typeof(d.get("hushed")) == TYPE_BOOL else false
 	var stats = d.get("stats", {})

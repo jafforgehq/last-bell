@@ -528,13 +528,16 @@ func test_the_bot_swings_at_a_dead_one_within_reach_and_reloads_only_in_a_lull()
 	s.g.world.free()
 
 
-func test_the_bot_goes_to_a_bed_when_hurt_and_comes_back_when_mended() -> void:
+func test_the_bot_goes_to_a_bed_when_it_bleeds_and_comes_back_when_the_bleeding_stops() -> void:
+	# (round 19 fix: the retreat used to wait for a health that never comes back, nothing heals a person who stands: it now lasts while the wound
+	# bleeds, the medic bandages a bleeding person, and is bounded; tests/test_fix19_bot.gd plays it with the real medic)
 	var s := _scene()
 	var sim = s.sim
 	var me = s.me
 	var bot = s.bot
 	Helpers.attack(sim, 3, 2)
-	me.hp = bot.HURT_HP - 5.0
+	me.hp = bot.SAFE_HP - 10.0
+	me.bleeding = 3.0
 	_steps(bot, 20)
 	var bed: Vector2 = Vector2.ZERO
 	var bd := INF
@@ -545,20 +548,19 @@ func test_the_bot_goes_to_a_bed_when_hurt_and_comes_back_when_mended() -> void:
 			bed = Vector2(b.pos)
 	check(bot.destination.distance_to(bed) < 0.6, "the nearest bed: %s against %s" % [str(bot.destination), str(bed)])
 	check(not me.input_fire, "and it fires nothing on the way")
-	me.hp = bot.SAFE_HP - 5.0
+	me.hp = bot.HURT_HP - 5.0
 	_steps(bot, 20)
-	check(bot.destination.distance_to(bed) < 0.6, "still hurt at %.0f: it stays at the bed" % me.hp)
-	me.hp = bot.SAFE_HP + 5.0
+	check(bot.destination.distance_to(bed) < 0.6, "still bleeding at %.0f: it stays at the bed" % me.hp)
 	me.bleeding = 0.0
 	_steps(bot, 20)
-	check(bot.destination.distance_to(Vector2(bot.station.at)) < 0.6, "mended: back to its station")
+	check(bot.destination.distance_to(Vector2(bot.station.at)) < 0.6, "the bleeding has stopped (the medic's bandage): back to its station, at %.0f health" % me.hp)
+	me.hp = bot.HURT_HP - 5.0
+	_steps(bot, 40)
+	check(bot.destination.distance_to(Vector2(bot.station.at)) < 0.6, "a low health that does not bleed is no reason to lie down: nothing would heal it")
 	me.hp = bot.SAFE_HP + 5.0
 	me.bleeding = 3.0
 	_steps(bot, 5)
 	check(bot.destination.distance_to(Vector2(bot.station.at)) < 0.6, "(bleeding but whole: it stays on the wall)")
-	me.hp = bot.SAFE_HP - 10.0
-	_steps(bot, 20)
-	check(bot.destination.distance_to(bed) < 0.6, "(a wound that bleeds, below %.0f, sends it to the bed)" % bot.SAFE_HP)
 	s.g.world.free()
 
 

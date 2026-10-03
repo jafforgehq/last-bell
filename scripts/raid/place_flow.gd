@@ -269,7 +269,7 @@ func begin(people: Array, place: String, vehicle: String = "") -> bool:
 	if why != "":
 		error = why
 		return false
-	party = sim.scavenge.begin_played(people, place, action, vehicle)
+	party = sim.scavenge.begin_played(people, place, action, vehicle, live_for(sim))
 	if party.is_empty():
 		error = "They could not go out just now."
 		return false
@@ -441,6 +441,7 @@ func end_leg(r: Dictionary) -> void:
 	var saved := leg_road_min - elapsed
 	var broke: bool = bool(r.get("failed", false))
 	_take_health(r.get("hp", {}))
+	_take_trust(r.get("trust", {}))
 	# who is lost: out of the trip from here (the colony buries them when the party is home); with nobody standing, everyone is
 	var lost_now: Array = []
 	for id in r.get("lost", []):
@@ -480,10 +481,11 @@ func end_leg(r: Dictionary) -> void:
 	if vehicle_alive and vehicle_id != "":
 		wear = maxf(0.0, float(r.get("vehicle_hp_lost", 0.0)))
 		car_name = String(sim.vehicles.name_of(vehicle_id)).to_lower()
-		if bool(r.get("wrecked", false)):
-			wrecked = true
-		elif wear > 0.0 and not _road_wear(wear):
-			wrecked = true
+		# (the scene knows whether its car is a wreck: the fleet's hp floors at 1, so a car that was at 1 already and is scraped on the way
+		# home is not one: `road_wear` only wears it)
+		wrecked = bool(r.get("wrecked", false))
+		if not wrecked and wear > 0.0:
+			_road_wear(wear)
 		if wrecked:
 			_wreck_vehicle()
 	# who leads
@@ -596,6 +598,19 @@ static func _worse(a: String, b: String) -> String:
 	if a == "bite" or b == "bite":
 		return "bite"
 	return "scratch" if a == "scratch" or b == "scratch" else ""
+
+
+## The trust the road's own radio moved on this leg (a push to go on, an order insisted on, a bite while following) is paid now, to the
+## people who set out: the place's run reads their trust from the colony when it is made, and the place's own count comes on top of it.
+func _take_trust(moved) -> void:
+	if not moved is Dictionary:
+		return
+	var mine := {}
+	for id in moved:
+		if _started_has(String(id)) and is_finite(float(moved[id])) and float(moved[id]) != 0.0:
+			mine[String(id)] = float(moved[id])
+	if not mine.is_empty():
+		_apply_trust(mine)
 
 
 func _started_has(id: String) -> bool:

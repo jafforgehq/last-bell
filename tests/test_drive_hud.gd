@@ -41,6 +41,8 @@ class FakeDrive:
 	var plan: Array = []
 	var road: Dictionary = {}
 	var autopilot := false
+	var _wrecked := false
+	var fake_note := ""
 	var work_left := 0.0
 	var fake_speed := 0.0
 	var fake_progress := 0.0
@@ -51,6 +53,9 @@ class FakeDrive:
 	var toggles := 0
 	var options_of := {}
 	var left_of := {}
+
+	func road_note() -> String:
+		return fake_note
 
 	func mount_drive_hud() -> void:
 		var old = hud_layer
@@ -289,6 +294,68 @@ func test_the_hp_bar_goes_amber_under_half_and_red_under_a_third_with_the_engine
 	eq(h.gauge_words().hp_note, "The engine is smoking", "and it says so")
 	check(h.hp_note.visible, "on the board")
 	near(h.hp_bar.value, 20.0 / 90.0, 0.001, "the bar is the share")
+	await _leave(main)
+
+
+## Review of round 21, minor 3: a wrecked car kept the gauges ("0 km/h Stopped", "Pickup 0%", "The engine is smoking") and the Autopilot
+## button on foot, while the legend and the cards were the foot ones. The plan: on foot the road and the clock are all there is.
+func test_a_wrecked_car_keeps_no_gauges_and_no_autopilot_button() -> void:
+	var main := _game()
+	var scene := _open(main)
+	var h = scene.hud_layer
+	h.refresh()
+	check(h.auto_button.visible, "(in the car there is the button)")
+	check(h.roomy_box.visible or h.mini_box.visible, "(and the gauges)")
+	scene.car.hp = 0.0
+	scene._wrecked = true
+	scene.mode = "foot"
+	h.refresh()
+	check(not h.auto_button.visible, "a wreck has no Autopilot button")
+	check(not h.roomy_box.visible and not h.mini_box.visible, "and no gauges")
+	eq(h.gauge_words().hp, "", "no word of its hp")
+	eq(h.gauge_words().speed, "", "or its speed")
+	eq(h.fuel_now(), {}, "or its fuel")
+	check(not h.legend_text().contains("gas and brake"), "the legend is the foot one: %s" % h.legend_text())
+	await _leave(main)
+
+
+## Review of round 21, minor 5: `vehicles.come_home` takes 5 hp for each point of the place's danger at the gate, and the bar on the
+## road home did not say so: a car shown at 10% was lost at the gate. The bar says what the gate takes, and that it will not make it.
+func test_the_road_home_says_what_the_gate_will_take_of_the_car() -> void:
+	var main := _game()
+	var scene := _open(main, 3, "home")
+	var h = scene.hud_layer
+	for site in main.sim.scavenge.sites:
+		if String(site.id) == String(scene.flow.place_id):
+			site["danger"] = 2
+	scene.car.hp = 60.0
+	h.refresh()
+	eq(h.gauge_words().gate, "-10 more at the gate (the place's danger)", "a car at 60 hp: the gate takes 10")
+	check(not bool(h.gauge_words().gate_lost), "it makes it")
+	check(h.hp_gate.visible and h.hp_gate.text == h.gauge_words().gate, "on the board")
+	scene.car.hp = 8.0
+	h.refresh()
+	check(bool(h.gauge_words().gate_lost), "a car at 8 hp does not")
+	check(h.gauge_words().gate.begins_with("Lost at the gate"), "and says so: %s" % h.gauge_words().gate)
+	check(h.mini_hp.text.contains("Lost at gate") and h.mini_hp.tooltip_text.contains("Lost at the gate"), "in the narrow form too: %s" % h.mini_hp.text)
+	scene.leg = "there"
+	h.refresh()
+	eq(h.gauge_words().gate, "", "on the way there nothing is said")
+	await _leave(main)
+
+
+## Review of round 21, minor 7: the scene's own note (the head home asked for on the road there, a card's real default, a friend who is
+## down) is the line under the road's name when it has one; the plain "Drive to ..." otherwise.
+func test_the_line_under_the_roads_name_is_the_scenes_note_when_it_has_one() -> void:
+	var main := _game()
+	var scene := _open(main)
+	var h = scene.hud_layer
+	h.refresh()
+	check(h.road_line().begins_with("Drive to "), "no note: the plain line: %s" % h.road_line())
+	scene.fake_note = "Asked to head home: the place first, then straight back. The road home takes 1 h 20"
+	h.refresh()
+	eq(h.road_line(), scene.fake_note, "the note")
+	eq(h.line_label.text, scene.fake_note, "on the board")
 	await _leave(main)
 
 

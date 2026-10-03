@@ -858,13 +858,13 @@ func _gen(seed_value: int, length: int, dir: int, blocks: Array = [], verge_cars
 
 
 ## The autopilot drives `road` on `kind_id` ("" on foot) over `field` for up to `max_s` seconds; returns what it did.
-func _drive_road(g: Dictionary, kind_id: String, max_s: float, aware_extra := {}) -> Dictionary:
+func _drive_road(g: Dictionary, kind_id: String, max_s: float, aware_extra := {}, hp := -1.0) -> Dictionary:
 	var road: Dictionary = g.road
 	var f = g.field    # (a RoadField, or a SiteField: whatever has a `probe`)
 	var k: Dictionary = _kinds().get(kind_id, {})
 	var car = CarSim.new()
 	var head := NORTH if int(road.dir) < 0 else SOUTH
-	car.setup(k, road.start, head, float(k.get("hp", 100.0)))
+	car.setup(k, road.start, head, float(k.get("hp", 100.0)) if hp < 0.0 else hp)
 	var hp0: float = car.hp
 	var out := {"done": false, "t": max_s, "hits": 0, "ram": 0, "hp_lost": 0.0, "max_speed": 0.0, "min_gap_x": INF, "car": car, "xs": {}}
 	var aware := {"probe": f.probe, "dead": []}
@@ -965,18 +965,20 @@ func test_autopilot_stops_at_a_wall_of_dyn_rather_than_ramming() -> void:
 		check(nose_gap > 0.3 and nose_gap < 5.0, "%s: it stopped %.2f tiles short of the wall" % [kind_id, nose_gap])
 
 
-func test_autopilot_slows_for_the_dead_in_its_way_and_waits_for_a_card() -> void:
+func test_autopilot_slows_for_a_dead_one_it_cannot_afford_and_waits_for_a_card() -> void:
+	# (since FIX 21 a healthy car ploughs the dead at speed: see test_autopilot_ploughs_the_dead_and_creeps_only_when_it_is_hurt; a
+	# car with 8 hp cannot pay for a brute (6 hp) and creeps by it)
 	var length := _leg_len("pickup", 60.0)
 	var g := _gen(21, length, -1, [], false)
 	var road: Dictionary = g.road
 	var z_y: float = road.start.y - 120.0
-	var zombie := Vector2(_centre_x_at(road, z_y), z_y)
-	var r := _drive_road(g, "pickup", 100.0, {"dead": [zombie]})
-	check(r.done, "it drives past a dead one in the road")
+	var zombie := {"pos": Vector2(_centre_x_at(road, z_y), z_y), "kind": "brute"}
+	var r := _drive_road(g, "pickup", 100.0, {"dead": [zombie]}, 8.0)
+	check(r.done, "it drives past a brute in the road")
 	# the speed within 12 tiles before it
 	var car = CarSim.new()
 	var k: Dictionary = _kinds()["pickup"]
-	car.setup(k, road.start, NORTH, float(k.hp))
+	car.setup(k, road.start, NORTH, 8.0)
 	var f: RoadField = g.field
 	var fastest_near := 0.0
 	var fastest_far := 0.0
@@ -990,11 +992,11 @@ func test_autopilot_slows_for_the_dead_in_its_way_and_waits_for_a_card() -> void
 			fastest_far = maxf(fastest_far, car.speed)
 		if car.pos.y < z_y - 10.0:
 			break
-	check(fastest_near <= 2.8, "within 12 tiles of a dead one it is at %.2f t/s, under 2.8" % fastest_near)
+	check(fastest_near <= 2.8, "within 12 tiles of a brute a car with 8 hp is at %.2f t/s, under 2.8" % fastest_near)
 	check(fastest_far > 4.5, "far from it, it was going %.2f" % fastest_far)
-	# a dead one off to the side does not matter
-	var side := Vector2(_centre_x_at(road, z_y) + 3.5, z_y)
-	var r2 := _drive_road(g, "pickup", 100.0, {"dead": [side]})
+	# one off to the side does not matter
+	var side := {"pos": Vector2(_centre_x_at(road, z_y) + 3.5, z_y), "kind": "brute"}
+	var r2 := _drive_road(g, "pickup", 100.0, {"dead": [side]}, 8.0)
 	check(r2.t < r.t - 1.0, "one on the verge costs no time (%.1f against %.1f)" % [r2.t, r.t])
 	# an open stop's card: it stops, and goes on when the card is done
 	var c2 = CarSim.new()
@@ -1158,6 +1160,226 @@ func test_autopilot_drives_the_roads_the_generator_makes() -> void:
 	eq(runs, 40, "forty real roads")
 	check(blocks_met >= 10, "most of them had a roadblock (%d)" % blocks_met)
 	check(bad.is_empty(), "every real road driven in time, under 2 hits, nothing rammed: %s" % str(bad))
+
+
+# ------------------------------------------------------------------- the dead on the road (FIX 21) --
+
+## A small model of the dead for the autopilot (the scene's own rules, simplified): the dead of a strip wake when the car is within
+## 10 tiles and come for it (walker 1.2, brute 1.8, runner 3.0 t/s); one inside the body (grown by 0.35) is run over from
+## RUN_OVER_SPEED up (a brute costs BRUTE_HP and speed and stays), else pushed out of the body and, below 2 t/s, it claws. The
+## autopilot is told every live one within 24 x 12 tiles, a brute with its kind, as the scene does.
+func _drive_dead(g: Dictionary, kind_id: String, max_s: float, dead: Array, events: Array = []) -> Dictionary:
+	var road: Dictionary = g.road
+	var f = g.field
+	var k: Dictionary = _kinds().get(kind_id, {})
+	var car = CarSim.new()
+	var head := NORTH if int(road.dir) < 0 else SOUTH
+	car.setup(k, road.start, head, float(k.get("hp", 100.0)))
+	var out := {"done": false, "t": max_s, "hits": 0, "ram": 0, "killed": 0, "wrecked": false, "car": car, "slow_s": 0.0}
+	var speeds := {"walker": 1.2, "brute": 1.8, "runner": 3.0}
+	var hx: float = car.length * 0.5 + 0.35
+	var hy: float = car.width * 0.5 + 0.35
+	var brute_hit := -9.0
+	var pending: Array = events.duplicate()
+	for i in int(max_s / STEP):
+		var now := float(i) * STEP
+		var here: Vector2 = car.pos
+		# the events of the road: their dead come into the world as the car nears
+		while not pending.is_empty() and car.progress(road) >= float(pending[0].at) - 0.08:
+			dead.append_array(pending[0].dead)
+			pending.pop_front()
+		var near: Array = []
+		for z in dead:
+			if not z.alive:
+				continue
+			var to: Vector2 = here - z.pos
+			if z.state != "hunt" and to.length() < 10.0:
+				z.state = "hunt"
+			if z.state == "hunt" and to.length() < 30.0:
+				z.pos += to.normalized() * float(speeds[z.kind]) * STEP
+			if absf(z.pos.y - here.y) < 24.0 and absf(z.pos.x - here.x) < 12.0:
+				near.append({"pos": z.pos, "kind": z.kind} if z.kind == "brute" else z.pos)
+		var d: Dictionary = Autopilot.drive(car, road, STEP, {"probe": f.probe, "dead": near})
+		var r: Dictionary = car.step(STEP, d.throttle, d.steer, f.probe)
+		if r.hit > CarSim.SOFT_IMPACT:
+			out.hits += 1
+		out.ram += r.ram.size()
+		if car.speed < 4.0:
+			out.slow_s += STEP
+		var dir := Vector2.from_angle(car.heading)
+		var side := dir.rotated(PI / 2.0)
+		var claws := 0
+		for z in dead:
+			if not z.alive:
+				continue
+			var rel: Vector2 = z.pos - car.pos
+			var lx := rel.dot(dir)
+			var ly := rel.dot(side)
+			if absf(lx) > hx or absf(ly) > hy:
+				continue
+			if car.speed >= CarSim.RUN_OVER_SPEED:
+				if z.kind == "brute":
+					if brute_hit < now - 1.0:
+						brute_hit = now
+						car.run_over(true)
+				else:
+					car.run_over(false)
+					z.alive = false
+					out.killed += 1
+				continue
+			claws += 1
+			var nx := lx
+			var ny := ly
+			if hx - absf(lx) < hy - absf(ly):
+				nx = (hx + 0.03) * (1.0 if lx >= 0.0 else -1.0)
+			else:
+				ny = (hy + 0.03) * (1.0 if ly >= 0.0 else -1.0)
+			z.pos = car.pos + dir * nx + side * ny
+		if claws > 0:
+			car.claws(claws, STEP)
+		if car.hp <= 0.0 or car.wrecked:
+			out.wrecked = true
+			break
+		if car.progress(road) >= 1.0:
+			out.done = true
+			out.t = float(i + 1) * STEP
+			break
+	out["hp"] = car.hp
+	return out
+
+
+func _dead_of_site(site: Dictionary) -> Array:
+	var out: Array = []
+	for z in site.get("dead", []):
+		out.append({"pos": Vector2(z.pos), "kind": String(z.kind), "state": "wander" if String(z.state) == "wander" else "still", "alive": true})
+	return out
+
+
+## The dead an event brings (the deck's own counts, simplified): an ambush pours a dozen hunters round its slot's spawn point, a herd
+## fills 20 tiles of the road with the still ones.
+func _dead_of_event(entry: Dictionary, slot: Dictionary, danger: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(entry.seed)
+	var out: Array = []
+	var at: Vector2 = slot.spawn
+	if String(entry.id) == "herd":
+		for i in 30:
+			out.append({"pos": at + Vector2(rng.randf_range(-3.0, 3.0), -rng.randf_range(0.0, 20.0)), "kind": "walker", "state": "still", "alive": true})
+	else:
+		for i in 8 + 3 * danger:
+			out.append({"pos": at + Vector2(rng.randf_range(-6.0, 6.0), rng.randf_range(-4.0, 4.0)), "kind": "runner" if (danger >= 2 and i % 4 == 0) else "walker", "state": "hunt", "alive": true})
+	return out
+
+
+## FIX 21 (review of round 21, important 1): the Tab autopilot never recovered its speed: one dead one in its 14-tile corridor held it
+## at 2.5 t/s, under the 4.0 that runs anyone over, so more of them gathered and a whole leg took two to three times the cruise time
+## (the plan promises at most 1.35x). Real ROAD-GEN roads, every kind of vehicle, danger 1 to 3, both legs, the strip's own dead and
+## an ambush or a herd on the way: it arrives within 1.35x of the cruise time, a car that is not a wreck, hardly a crash.
+func test_autopilot_keeps_the_pace_with_the_dead_on_the_real_roads() -> void:
+	var gen = load("res://scripts/drive/road_gen.gd")
+	var places = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/town.json")).places
+	var by_id := {}
+	for p in places:
+		by_id[String(p.id)] = p
+	var ids := ["pharmacy", "farm_a", "scrapyard", "houses", "hospital", "estate"]
+	var kinds := ["sedan", "pickup", "van", "bus"]
+	var runs := 0
+	var killed := 0
+	var dead_met := 0
+	var worst := 0.0
+	var bad := []
+	for seed_value in range(1, 49):
+		var kind_id: String = kinds[seed_value % kinds.size()]
+		var place: Dictionary = by_id[ids[seed_value % ids.size()]]
+		var k: Dictionary = _kinds()[kind_id]
+		var cruise := CarSim.cruise_of(k)
+		var leg_s: float = [36.0, 50.0, 70.0, 90.0][seed_value % 4]
+		var len_t := mini(roundi(leg_s * cruise), 700)
+		var danger := 1 + seed_value % 3
+		var plan := []
+		var ev_ids := ["ambush", "herd", "ambush", "herd"]
+		for i in 2:
+			var id: String = ev_ids[(seed_value + i) % ev_ids.size()]
+			plan.append({"uid": "e%d" % (i + 1), "id": id, "kind": "dead", "at": 0.3 + 0.35 * float(i), "seed": seed_value * 10 + i, "night": false, "state": "pending", "def": {"title": id}})
+		var leg: String = "there" if seed_value % 2 == 0 else "home"
+		var ctx := {"kind": kind_id, "road_min": float(len_t) / cruise, "cruise": cruise, "len": len_t, "plan": plan, "danger": danger, "hour": 10.0, "leg": leg}
+		var site: Dictionary = gen.make(place, seed_value, leg, ctx)
+		var field := SiteField.new()
+		field.setup(site)
+		var events: Array = []
+		for slot in site.road.slots:
+			for e in plan:
+				if String(e.uid) == String(slot.uid):
+					events.append({"at": float(e.at), "dead": _dead_of_event(e, slot, danger)})
+		var dead := _dead_of_site(site)
+		dead_met += dead.size()
+		var r := _drive_dead({"road": site.road, "field": field}, kind_id, leg_s * 3.0, dead, events)
+		runs += 1
+		killed += int(r.killed)
+		var ratio: float = r.t / (float(len_t) / cruise)
+		worst = maxf(worst, ratio)
+		if not r.done or r.wrecked or r.hits >= 2 or r.ram > 0 or ratio > 1.35:
+			bad.append("seed %d %s %s %s danger %d: done %s, %.2fx, %d hits, %d rammed, hp %.0f" % [seed_value, kind_id, leg, String(place.id), danger, str(r.done), ratio, r.hits, r.ram, r.hp])
+	eq(runs, 48, "forty-eight real roads")
+	check(dead_met >= 100 and killed >= 60, "with the dead really on them (%d of the strips', %d run over)" % [dead_met, killed])
+	check(bad.is_empty(), "every road driven within 1.35x of the cruise time, a car that survives, under 2 hits (worst %.2fx; %d bad): %s" % [worst, bad.size(), str(bad.slice(0, 4))])
+
+
+## What a car should not plough it creeps through, and only that: a healthy car goes through a walker or a brute at speed (the dead are
+## run over from 4.0 t/s), a car too hurt to pay for the dead of its corridor (RUN_OVER_HP each, BRUTE_HP a brute, less 4 hp) creeps by
+## them at the caution speed (above the 2 t/s under which they claw).
+func test_autopilot_ploughs_the_dead_and_creeps_only_when_it_is_hurt() -> void:
+	var length := _leg_len("pickup", 90.0)
+	var g := _gen(21, length, -1, [], false)
+	var road: Dictionary = g.road
+	var f: RoadField = g.field
+	var k: Dictionary = _kinds()["pickup"]
+	var z_y: float = road.start.y - 100.0
+	var cases := {
+		"walker": [90.0, [{"pos": Vector2(_centre_x_at(road, z_y), z_y), "kind": "walker"}]],
+		"plain": [90.0, [Vector2(_centre_x_at(road, z_y), z_y)]],
+		"brute": [90.0, [{"pos": Vector2(_centre_x_at(road, z_y), z_y), "kind": "brute"}]],
+		"herd": [90.0, []],
+		"hurt brute": [9.0, [{"pos": Vector2(_centre_x_at(road, z_y), z_y), "kind": "brute"}]],
+		"hurt herd": [6.0, []],
+		"fine herd": [30.0, []],
+	}
+	for label in ["herd", "hurt herd", "fine herd"]:
+		for i in 12:    # twelve of them across the way ahead: 4.2 hp to plough through
+			cases[label][1].append({"pos": Vector2(_centre_x_at(road, z_y - float(i)), z_y - float(i)), "kind": "walker"})
+	var near_speed := {}
+	for label in cases:
+		var car = CarSim.new()
+		car.setup(k, road.start, NORTH, float(cases[label][0]))
+		var fastest := 0.0
+		var arrived := false
+		for i in 4000:
+			var d: Dictionary = Autopilot.drive(car, road, STEP, {"probe": f.probe, "dead": cases[label][1]})
+			car.step(STEP, d.throttle, d.steer, f.probe)
+			var to_it: float = car.pos.y - z_y
+			if to_it > 1.0 and to_it < 6.0:
+				fastest = maxf(fastest, car.speed)
+			if car.pos.y < z_y - 14.0:
+				arrived = true
+				break
+		check(arrived, "%s: it gets past" % label)
+		near_speed[label] = fastest
+	for label in ["walker", "plain", "brute", "herd", "fine herd"]:
+		check(near_speed[label] >= 4.2, "%s ahead: ploughed at speed (%.2f t/s within 6 tiles)" % [label, near_speed[label]])
+	for label in ["hurt brute", "hurt herd"]:
+		check(near_speed[label] <= 2.8 and near_speed[label] > 2.0, "%s: a car that cannot pay for them creeps at the caution speed (%.2f t/s)" % [label, near_speed[label]])
+	# the dead behind the car, or off the carriageway, cost the hurt car nothing either
+	var car2 = CarSim.new()
+	car2.setup(k, road.start, NORTH, 6.0)
+	var fastest_late := 0.0
+	for i in 600:
+		var behind: Vector2 = car2.pos - Vector2.from_angle(car2.heading) * 5.0
+		var beside: Vector2 = car2.pos + Vector2.from_angle(car2.heading + PI / 2.0) * 6.0
+		var d: Dictionary = Autopilot.drive(car2, road, STEP, {"probe": f.probe, "dead": [behind, beside]})
+		car2.step(STEP, d.throttle, d.steer, f.probe)
+		if i > 300:
+			fastest_late = maxf(fastest_late, car2.speed)
+	check(fastest_late >= 4.2, "dead behind it and beside it do not slow even a hurt car (%.2f t/s)" % fastest_late)
 
 
 func test_a_long_step_is_taken_in_short_ones() -> void:

@@ -48,7 +48,7 @@
 ##
 ## Events this module adds to sim.events: {"type": "radio_line", "who", "verb", "ok", "line", "tone"} when someone is asked,
 ## {"type": "stance", "who", "stance"} when a request takes effect, {"type": "alarm", "on"}, {"type": "radio_answered",
-## "id", "option", "by_default"} when a call is settled.
+## "id", "option", "by_default"} when a call is settled, {"type": "call_raised", "id", "kind", "urgent"} when one is raised.
 extends RefCounted
 
 const NightCalls := preload("res://scripts/sim/night_calls.gd")
@@ -107,6 +107,9 @@ const HURRY_COVER := 7.0
 
 ## The calls: how long they wait (game minutes), and what keeping a sick one apart costs.
 const ATTACK_TTL_MIN := 30.0
+## The calls that cannot wait (a wall that is down or going, a brute on its way, the old attack call, the night's own): when one is raised the
+## game drops to 1x once (main.gd: the `call_raised` event). Their times are game minutes, a few real seconds at 3x.
+const URGENT_KINDS := ["attack", "going", "brute", "breach", "night"]
 const SICK_TTL_MIN := 60.0
 const APART_MORALE := -4.0
 ## The alarm's threat is set this far ahead (game minutes).
@@ -709,7 +712,7 @@ func reason_not(p, kind: String, with_ids: Array = []) -> Dictionary:
 
 
 func _reason_not(p, kind: String, station_id: String, cant: String, with_ids: Array = []) -> Dictionary:
-	var out := {"ok": true, "why": "", "hard": false, "sentence": "", "line": ""}
+	var out := {"ok": true, "why": "", "hard": false, "sentence": "", "line": "", "company": false}
 	if p == null:
 		return _no(out, "Nobody answers", "Nobody answers", "", true)
 	var hard := _hard_reason(p)
@@ -726,6 +729,7 @@ func _reason_not(p, kind: String, station_id: String, cant: String, with_ids: Ar
 		reason = _health_reason(p)
 	if reason == "":
 		reason = sim.relations.company_reason(p, "go" if kind == "go" else "work", "" if kind == "go" else station_id, with_ids)
+		out["company"] = reason != ""    # (round 20: a reason of company, not of the person's own: insisting on it is paid once for a request)
 	if reason != "":
 		return _no(out, "%s: %s, can't %s" % [first, reason, cant], "%s is %s" % [first, reason], _capital(reason) + ", can't %s." % cant, false)
 	return out
@@ -790,7 +794,7 @@ func errand_willingness(people: Array, place_id: String, action: String = "loot"
 			sentence = "%s cannot go now" % String(p.first)
 		elif not hard and not sim.scavenge.can_go(p, false, true):
 			hard = true    # (a fever too far gone, kept apart, in a party: not a thing to push)
-		refused.append({"id": String(p.id), "name": String(p.first), "why": why, "hard": hard})
+		refused.append({"id": String(p.id), "name": String(p.first), "why": why, "hard": hard, "company": bool(r.get("company", false)) and not hard})
 		sentences.append(sentence)
 	out["going"] = going
 	out["refused"] = refused
@@ -830,10 +834,13 @@ func request_errand(people: Array, place_id: String, action: String = "loot", ve
 	for p in w.going:
 		agree[String(p.id)] = true
 	var soft := {}
+	var company := {}    # (the soft refusals that are of company: "staying with Dez", "won't go with Walt")
 	if bool(args.get("insist", false)):
 		for r in w.refused:
 			if not bool(r.hard):
 				soft[String(r.id)] = true
+				if bool(r.get("company", false)):
+					company[String(r.id)] = true
 	var go: Array = []
 	var pushed: Array = []
 	for p in people:
@@ -854,7 +861,13 @@ func request_errand(people: Array, place_id: String, action: String = "loot", ve
 	if trip_why != "":
 		out["why"] = trip_why
 		return out
+	var company_paid := false
 	for p in pushed:
+		if company.has(String(p.id)):
+			# (pushing past a reason of company costs once for the whole request, not once for each of the people who share it)
+			if company_paid:
+				continue
+			company_paid = true
 		add_trust(p, -INSIST_COST, "You pushed them to go when they could not")
 		sim.morale.shock(p, INSIST_MORALE, "Pushed to go when they could not")
 	var delay := 0.0
@@ -1371,6 +1384,8 @@ func raise_call(kind: String, text: String, sub: String, options: Array, default
 		ids.append(String(o.id))
 	var fallback := default_option if ids.has(default_option) else (String(ids[0]) if not ids.is_empty() else "")
 	var e := log_news(kind, text, sub, {"options": opts, "default": fallback, "due": float(sim.clock_min) + ttl_min, "data": data.duplicate(true), "at": at})
+	# (round 19: a call's time is the game's, and the game may be running at 3x: the view slows it for the calls that cannot wait, `URGENT_KINDS`)
+	sim.events.append({"type": "call_raised", "id": int(e.id), "kind": kind, "urgent": URGENT_KINDS.has(kind)})
 	return int(e.id)
 
 

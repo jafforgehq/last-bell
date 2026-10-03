@@ -262,7 +262,7 @@ static func make_ctx(flow, leg: String = "there") -> Dictionary:
 	var bed := false
 	var caller := ""
 	if sim.recruits.small and int(sim.recruits.housing_free()) - survivors >= 1:
-		var def: Dictionary = sim.recruits.current_caller()
+		var def: Dictionary = sim.recruits.caller_at(survivors)    # (the ones taken in so far are not met again)
 		if not def.is_empty():
 			bed = true
 			caller = String(def.get("name", "")).split(" ")[0]
@@ -481,7 +481,7 @@ static func _unmet(need: String, c: Dictionary) -> String:
 		"vehicle":
 			return "" if bool(c.by_vehicle) else "You are on foot"
 		"fuel_room":
-			return "" if float(c.fuel_room) >= 1.0 else "The base's tank is full"
+			return "" if float(c.fuel_room) >= FUEL_ROOM_MIN else "The base's tank is full"    # (the same room the stash is planned for)
 		"stock":
 			var name := String(parts[1]) if parts.size() > 1 else "scrap"
 			var need_n := int(parts[2]) if parts.size() > 2 else 1
@@ -812,7 +812,7 @@ static func _take_in(flow, aboard: Array) -> Array:
 	var seats := int(kind.get("seats", MAX_ON_FOOT)) if not kind.is_empty() else MAX_ON_FOOT
 	if aboard.size() + taken >= seats:
 		return ["There is no seat for them: they stay on the road."]
-	if not sim.recruits.small or int(sim.recruits.housing_free()) - taken < 1 or sim.recruits.current_caller().is_empty():
+	if not sim.recruits.small or int(sim.recruits.housing_free()) - taken < 1 or sim.recruits.caller_at(taken).is_empty():
 		return ["There is no bed for them at the base: they stay on the road."]
 	flow.road_survivors = taken + 1
 	return ["A survivor is aboard."]

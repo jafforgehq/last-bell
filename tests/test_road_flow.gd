@@ -11,6 +11,8 @@ const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const RaidScene := preload("res://scripts/raid/raid_scene.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
+const DriveKit := preload("res://tests/drive_kit.gd")
+const DriveScene := preload("res://scripts/drive/drive_scene.gd")
 
 const FIXTURE := "user://test_r21_flow_town.json"
 const DRIVE_SCENE := "res://scripts/drive/drive_scene.gd"
@@ -554,6 +556,46 @@ func test_road_wear_never_takes_a_car_below_one_hp() -> void:
 	_end(g)
 
 
+## Review of round 21, minor 4: a car at 1.0 hp (the floor of the fleet's hp, after a "Run it" on the leg there) that the scene drove all the
+## way home with a scrape (0.3 hp lost, `wrecked` false) was declared a wreck at the gate: `road_wear` says false for a car that was at 1
+## already. The scene knows whether its car is a wreck, and says so in `wrecked`.
+func test_a_car_at_one_hp_that_the_scene_says_survived_is_not_wrecked() -> void:
+	var g := _game()
+	var sim = g.sim
+	sim.vehicles.vehicle(g.vehicle)["hp"] = 1.0
+	var flow = _trip(g, ["ruth", "dez"], "houses", g.vehicle)
+	flow.begin_leg("there")
+	flow.end_leg(_leg({"vehicle_hp_lost": 0.3, "wrecked": false}))
+	check(flow.vehicle_alive, "the car drove on")
+	check(not bool(flow.last_leg.wrecked), "and the leg's entry does not call it a wreck")
+	check(not sim.vehicles.vehicle(g.vehicle).is_empty(), "it is still in the fleet")
+	near(float(sim.vehicles.vehicle(g.vehicle).hp), 1.0, 1e-9, "at the floor of one hp")
+	check(not _news_text(flow).contains("wreck"), "and the log does not say it is a wreck: %s" % _news_text(flow))
+	_end(g)
+
+
+## Review of round 21, minor 10: `leg_result` had no `trust`: what the road's own radio moved (a push to go on, an order insisted on, a bite
+## while following) was never paid to the colony's people. It is paid when the leg ends (the place and the colony read it from them).
+func test_the_trust_the_road_moved_is_paid_when_the_leg_ends() -> void:
+	var g := _game()
+	var sim = g.sim
+	var flow = _trip(g, ["ruth", "dez"], "houses", "")
+	var dez = _person(sim, "dez")
+	dez.trust = 60.0
+	var ruth_before: float = float(_person(sim, "ruth").trust)
+	flow.begin_leg("there")
+	flow.end_leg(_leg({"trust": {"dez": -4.0, "ruth": 0.0, "nobody": 9.0}}))
+	near(float(dez.trust), 56.0, 1e-9, "the push cost him 4")
+	near(float(_person(sim, "ruth").trust), ruth_before, 1e-9, "a zero moves nobody")
+	flow.arrive()
+	flow.finish(flow.merge_road(_place({"trust": {"dez": 1.0}})))
+	near(float(dez.trust), 57.0, 1e-9, "and the place's own is paid on top, once")
+	flow.begin_leg("home")
+	flow.end_leg(_leg({"trust": {"dez": 2.5}}))
+	near(float(dez.trust), 59.5, 1e-9, "the road home's too")
+	_end(g)
+
+
 func test_a_foot_trip_has_no_car_to_wear_and_the_same_flow() -> void:
 	var g := _game()
 	var sim = g.sim
@@ -576,7 +618,9 @@ func test_a_foot_trip_has_no_car_to_wear_and_the_same_flow() -> void:
 	_end(g)
 
 
-func test_fuel_is_taken_once_at_the_gate_and_an_eventless_drive_burns_the_abstract_trips_fuel() -> void:
+## (The flow takes the abstract trip's fuel once, at the gate, and burns no more on the road: what the gauge and the car's own `fuel_burnt`
+## say over a whole eventless trip is the whole-trip test's below, through the real scene; here nothing could burn fuel after the gate.)
+func test_fuel_is_taken_once_at_the_gate_and_the_flow_burns_no_more() -> void:
 	var g := _game()
 	var sim = g.sim
 	var fuel0: float = sim.vehicles.fuel
@@ -594,7 +638,7 @@ func test_fuel_is_taken_once_at_the_gate_and_an_eventless_drive_burns_the_abstra
 	_drive(flow, FakeRunSim.new(), 60.0)
 	flow.end_leg(_leg())
 	check(_until_home(sim), "home")
-	near(sim.vehicles.fuel, fuel0 - need, 1e-9, "an eventless drive there and back leaves the tank exactly as the abstract trip would")
+	near(sim.vehicles.fuel, fuel0 - need, 1e-9, "the tank is what the gate left, to the end")
 	near(sim.vehicles.fuel_per_leg("pharmacy", g.vehicle) * 2.0, need, 1e-9, "(a leg is half the trip's fuel)")
 	_end(g)
 
@@ -1073,6 +1117,45 @@ func _tick_until(scene: Node, limit: float, done: Callable) -> bool:
 	return done.call()
 
 
+## FIX 21 (review of round 21): the whole-trip test above runs with `no_events`. This one runs a seeded trip with the REAL events (a
+## checkpoint's toll on the way there, a wreck's search on the way home), the autopilot driving and the place stood in for by its loot and
+## its shots, and reconciles the books: the tank, the vehicle's hp, every store and the rounds, from what the trip itself recorded.
+func test_a_whole_live_trip_with_the_real_events_balances_its_books() -> void:
+	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 3, "avatar": true})
+	var t := DriveKit.open(main, "pharmacy", "van", 2, 13, true, 50.0)
+	var scene = t.scene
+	check(scene != null and main.raid_open(), "the live trip opens")
+	if scene == null:
+		DriveScene.stand_ins = {}
+		await TutorialKit.leave(main)
+		return
+	var sim = main.sim
+	var danger := int(sim.town.place("pharmacy").danger)
+	var steps := DriveKit.play(t, {}, DriveKit.place_gave({"meds": 4, "scrap": 6}, 5.0))
+	check(steps < 60000 and String(scene.phase) == "report", "the trip ends in the report (%d steps)" % steps)
+	eq(t.rec.planned.size(), 2, "both legs were planned by the real events: %s" % str(t.rec.planned))
+	check(t.answered.size() >= 2 and String(t.answered[0]).begins_with("checkpoint") and String(t.answered[1]).begins_with("wreck_supplies"), "a toll and a search were answered: %s" % str(t.answered))
+	eq(t.flow.legs.size(), 2, "two legs")
+	var settled := DriveKit.settle(sim)
+	check(sim.scavenge.parties.is_empty(), "the colony brought the party in (%d steps)" % settled)
+	var books: Dictionary = DriveKit.reconcile(t, danger)
+	for k in books:
+		near(float(books[k][1]), float(books[k][0]), 1e-6, "the books: %s expected %.3f, the colony has %.3f" % [k, float(books[k][0]), float(books[k][1])])
+	check(float(t.rec.stock.get("food", 0.0)) <= -10.0 + 1e-9, "(the toll was really paid: %s)" % str(t.rec.stock))
+	check(int(t.flow.result.loot.get("meds", 0)) >= 4 + 4, "(the wreck's boot is in the bags with what the place gave: %s)" % str(t.flow.result.loot))
+	# the clock: each leg took the colony steps it took, a tenth of a minute each
+	var legs_min := 0.0
+	for leg in t.flow.legs:
+		legs_min += float(leg.elapsed_min)
+		near(float(leg.elapsed_min), float(leg.road_min) - float(leg.saved_min), 1e-9, "a leg's minutes are the road's less what it saved")
+	check(legs_min > 30.0 and float(sim.clock_min) - float(t.before.clock) >= legs_min, "the clock moved by at least the legs' minutes (%.1f of %.1f)" % [legs_min, float(sim.clock_min) - float(t.before.clock)])
+	check(sim.people[1].away == null and sim.people[2].away == null and not sim.people[1].dead and not sim.people[2].dead, "everyone is home")
+	DriveScene.stand_ins = {}
+	scene.go_home()
+	PlaceFlow.no_events = false
+	await TutorialKit.leave(main)
+
+
 func test_a_whole_live_trip_through_the_real_scene_is_a_drive_a_place_and_a_drive() -> void:
 	if not ResourceLoader.exists(DRIVE_SCENE):
 		print("        (the drive scene is not in: the whole trip is not tested)")
@@ -1100,8 +1183,22 @@ func test_a_whole_live_trip_through_the_real_scene_is_a_drive_a_place_and_a_driv
 	check(flow.live and String(flow.stage) == "drive_there", "on the road there")
 	near(sim.vehicles.fuel, fuel0 - need, 1e-9, "the fuel of both legs was taken at the gate")
 	var clock0: float = sim.clock_min
-	# the way there (the autopilot drives: no real hands in a headless run)
-	check(_tick_until(scene, 200.0, func(): return String(scene.leg) != "there"), "the way there ends: %s" % scene.leg)
+	# the way there (the autopilot drives: no real hands in a headless run). The gauge (the HUD's trip tank draining by distance) and the car's
+	# own `fuel_burnt` are read all the way: over the whole trip they burn exactly what the abstract trip's `fuel_for` took at the gate.
+	var per_leg: float = sim.vehicles.fuel_per_leg("houses", vehicle)
+	var gauge := {"there": 0.0, "home": 0.0}
+	var car_burnt := {"there": 0.0, "home": 0.0}
+	var sample := func() -> void:
+		var which := String(scene.leg)
+		if (which == "there" or which == "home") and scene.car != null:
+			var f: Dictionary = scene.hud_layer.fuel_now()
+			if not f.is_empty():
+				var burnt: float = float(f.total) - float(f.left)
+				gauge[which] = maxf(float(gauge[which]), burnt - (per_leg if which == "home" else 0.0))
+			car_burnt[which] = maxf(float(car_burnt[which]), float(scene.car.fuel_burnt(per_leg, scene.car.progress(scene.road))))
+	check(_tick_until(scene, 200.0, func():
+		sample.call()
+		return String(scene.leg) != "there"), "the way there ends: %s" % scene.leg)
 	eq(String(scene.leg), "place", "at the place")
 	eq(String(flow.stage), "place", "the flow says so")
 	eq(flow.legs.size(), 1, "one leg is behind")
@@ -1115,10 +1212,16 @@ func test_a_whole_live_trip_through_the_real_scene_is_a_drive_a_place_and_a_driv
 	eq(String(scene.leg), "home", "the way home begins")
 	eq(String(flow.stage), "drive_home", "the flow too")
 	check(bool(flow.party.get("road_live", false)), "and the colony does not bring the party in by its own clock")
-	check(_tick_until(scene, 200.0, func(): return String(scene.phase) == "report"), "the way home ends in the report")
+	check(_tick_until(scene, 200.0, func():
+		sample.call()
+		return String(scene.phase) == "report"), "the way home ends in the report")
 	eq(String(flow.stage), "home", "the base")
 	eq(flow.legs.size(), 2, "both legs are in the report")
-	near(sim.vehicles.fuel, fuel0 - need, 1e-9, "an eventless drive burnt exactly the abstract trip's fuel")
+	near(sim.vehicles.fuel, fuel0 - need, 1e-9, "an eventless drive left the base tank exactly as the abstract trip's gate did")
+	near(float(gauge.there), per_leg, per_leg * 0.01, "the gauge burnt a leg's fuel on the road there (%.3f of %.3f)" % [gauge.there, per_leg])
+	near(float(gauge.home), per_leg, per_leg * 0.01, "and a leg's on the road home (%.3f of %.3f)" % [gauge.home, per_leg])
+	near(float(car_burnt.there) + float(car_burnt.home), need, need * 0.01, "the car's own `fuel_burnt` over both legs is the abstract `fuel_for` (%.3f of %.3f)" % [float(car_burnt.there) + float(car_burnt.home), need])
+	check(per_leg > 1.0, "(a real amount of fuel: %.2f a leg)" % per_leg)
 	var steps := 0
 	while not sim.scavenge.parties.is_empty() and steps < 60000:
 		sim.update(STEP)
