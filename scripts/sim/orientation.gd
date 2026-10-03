@@ -180,6 +180,9 @@ static func install(game, avatar_run: bool = false):
 	# the lesson is scripted: nobody's mood moves and no radio card is drawn
 	game.storyteller.enabled = false
 	game.morale.enabled = false
+	game.relations.enabled = false
+	game.specialists.enabled = false
+	game.initiative.enabled = false
 	var waves := OrientationWaves.new()
 	game.waves = waves
 	waves.setup(game)
