@@ -470,7 +470,7 @@ func _arrival_seconds(plan: Dictionary, sections: Array) -> Array:
 		var k: Dictionary = Kinds.KINDS[String(queue[i])]
 		var speed: float = (float(k.speed[0]) + float(k.speed[1])) * 0.5 * (0.94 if queue[i] == Kinds.WALKER else 1.0)
 		var let_in := 2.0 + (float(i) if i < by_dusk else float(by_dusk) + float(i - by_dusk) / 2.5) * mean
-		out.append(let_in + walk / speed)
+		out.append(sim.wave_let_in(i, queue.size(), let_in) + walk / speed)
 	return out
 
 

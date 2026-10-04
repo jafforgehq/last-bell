@@ -380,6 +380,12 @@ func _is_open_gate(s) -> bool:
 	return int(s.id) == gate.SEGMENT
 
 
+## When the `i`th of a night's `n` dead is let in, in seconds from the start of the dusk, as the forecast (`Waves._arrival_seconds`) works it out: `seconds` is the school's own
+## answer (the dusk's single ones, then groups, spread over the night). The town's nights come in surges and answer for them (town_rules.gd).
+func wave_let_in(_i: int, _n: int, seconds: float) -> float:
+	return seconds
+
+
 ## How many of the dead count against the night's cap (`Waves.update`): all that are alive.
 func alive_for_cap() -> int:
 	var alive := 0
