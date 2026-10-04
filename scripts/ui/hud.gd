@@ -49,6 +49,7 @@ const BuildScreen := preload("res://scripts/ui/build_screen.gd")
 const TownBoard := preload("res://scripts/ui/town_board.gd")
 const GameOver := preload("res://scripts/ui/game_over.gd")
 const DemoEndCard := preload("res://scripts/ui/demo_end_card.gd")
+const TownEndCard := preload("res://scripts/ui/town_end_card.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
@@ -656,6 +657,9 @@ var alarm_button: Button
 var _call_seen := false
 ## True while the clock's forecast lines are put away to leave a call card its room (see `_layout_news`).
 var _forecast_squeezed := false
+## The look of the HUD for the kind of game: "" is the school's (everything), "one_house" is the town's calm one (One House: the Town Board,
+## Scavenge, the car's fuel and the school's crew-seats strip are put away; the rest is the same). Set by `set_profile`.
+var profile := ""
 
 
 func setup(game_data: Dictionary, crew: Array) -> void:
@@ -688,6 +692,28 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	add_child(wheel)
 	resized.connect(_on_resized)
 	_on_resized()
+	# One House (WP7): a town run (the run's meta says so, or the data does) wears the town's calm profile; the town's HUD part and the first
+	# update (`is_one_house`) say it too, whichever comes first
+	var run = Engine.get_meta("run", {}) if Engine.has_meta("run") else {}
+	if bool(game_data.get("one_house", false)) or (run is Dictionary and bool(run.get("town", false))):
+		set_profile("one_house")
+
+
+## The HUD's profile: "one_house" puts away what only the school has (the Town Board's button, Scavenge, the car's fuel and the crew-seats strip); "" is the
+## school's whole HUD. Nothing else changes: the rules' own modules decide what is shown of them.
+func set_profile(name: String) -> void:
+	if name == profile:
+		return
+	profile = name
+	var school := name == ""
+	if town_button != null:
+		town_button.visible = town_button.visible and school
+	if crew_load_panel != null and not school:
+		crew_load_panel.visible = false
+	if help_g != null and not school:
+		help_g.text = "Map"
+	if not school:
+		_layout_dock.call_deferred()
 
 
 # ----------------------------------------------------------------- frames --
@@ -1013,7 +1039,7 @@ func _update_crew_load(sim) -> void:
 	if crew_load_panel == null:
 		return
 	var recruits = sim.get("recruits")
-	var on: bool = sim.get("jobs") != null and sim.get("build") != null and recruits != null and bool(recruits.small)
+	var on: bool = profile == "" and sim.get("jobs") != null and sim.get("build") != null and recruits != null and bool(recruits.small)
 	if crew_load_panel.visible != on:
 		crew_load_panel.visible = on
 		_layout_dock.call_deferred()
@@ -2804,7 +2830,7 @@ func is_free_to_go(p) -> bool:
 
 ## Whether the Scavenge button is offered for `p`.
 func _can_scavenge(p) -> bool:
-	return sim_ref != null and sim_ref.scavenge.can_send() and is_free_to_go(p)
+	return profile == "" and sim_ref != null and sim_ref.scavenge.can_send() and is_free_to_go(p)
 
 
 # ------------------------------------------------------------ time controls --
@@ -3520,7 +3546,11 @@ func _show_game_over(sim) -> void:
 	hint_spent = true
 	_refresh_hint()
 	# (round 26: the demo's three nights held end on its own card; a defeat is the ordinary report card)
-	game_over = DemoEndCard.new() if String(sim.over) == "victory" and sim.has_method("is_demo") and sim.is_demo() else GameOver.new()
+	if String(sim.over) == "victory" and sim.scenario != null and sim.scenario.has_method("end_card"):
+		# (One House, WP7: the town's held night ends on its own card, from the scenario's end_card(); a defeat is still the report card)
+		game_over = TownEndCard.new()
+	else:
+		game_over = DemoEndCard.new() if String(sim.over) == "victory" and sim.has_method("is_demo") and sim.is_demo() else GameOver.new()
 	add_child(game_over)
 	game_over.setup(self, sim)
 
@@ -3829,6 +3859,8 @@ func _fill_marks(c: Dictionary, marks: Array) -> void:
 
 func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	sim_ref = sim
+	if profile == "" and sim.has_method("is_one_house") and sim.is_one_house():
+		set_profile("one_house")
 	if cards.size() != sim.people.size():
 		_sync_cards(sim.people)
 	_layout_bar()
@@ -3937,7 +3969,7 @@ func _day_text(sim, speed: int = 1) -> String:
 ## amber while the tank is low and there is a vehicle to burn it. Not there, the panel is as it was.
 func _update_fuel(sim) -> void:
 	var rules = sim.get("vehicles")
-	var on: bool = rules != null and sim.get("town") != null and sim.town.on and (not rules.fleet.is_empty() or float(rules.fuel) > 0.0)
+	var on: bool = profile == "" and rules != null and sim.get("town") != null and sim.town.on and (not rules.fleet.is_empty() or float(rules.fuel) > 0.0)
 	if fuel_cells.is_empty():
 		return
 	# (the name is left out, as the others' are, in a narrow window: see _on_resized)
@@ -3961,7 +3993,7 @@ func _update_fuel(sim) -> void:
 
 ## The Town Board's button is in the toolbar, and the G of the help says so, only in a settlement game.
 func _sync_town(sim) -> void:
-	var on: bool = sim.get("town") != null and sim.town.on
+	var on: bool = profile == "" and sim.get("town") != null and sim.town.on
 	if town_button != null and town_button.visible != on:
 		town_button.visible = on
 		_layout_dock.call_deferred()
