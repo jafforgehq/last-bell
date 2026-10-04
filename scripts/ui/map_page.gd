@@ -81,6 +81,13 @@ var message_label: Label
 var hint_label: Label
 var key_button: Button
 var key_panel: PanelContainer
+## The strip with the two ways to go (round 22): the chosen place in a line, Take control and Ask <names> to go with what they say. It is
+## pinned under the panel's scroll (`RadioPanel.set_foot`) so that it is in view whatever the page is scrolled to; in a shell with no foot
+## to pin it to it sits in the page, before the other actions.
+var pin: PanelContainer
+var pin_name: Label
+var pin_danger: Label
+var pin_info: Label
 ## The card of the place and its parts.
 var card: PanelContainer
 var empty_label: Label
@@ -118,6 +125,8 @@ var out_caption: Label
 var out_box: VBoxContainer
 
 var _built := false
+var _compact := false
+var _shell
 var _departures := {}
 var _routes := {}
 var _map_sig := ""
@@ -137,12 +146,13 @@ var _memo := {}
 var _memoizing := false
 
 
-func setup(p_host, p_sim_getter: Callable, _options: Dictionary = {}) -> void:
+func setup(p_host, p_sim_getter: Callable, options: Dictionary = {}) -> void:
 	host = p_host
 	sim_getter = p_sim_getter
 	if _built:
 		return
 	_built = true
+	_shell = options.get("panel")
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_theme_constant_override("separation", 6)
 	mouse_filter = Control.MOUSE_FILTER_PASS
@@ -228,6 +238,11 @@ func _build() -> void:
 	body.add_child(_build_card())
 	body.add_child(_build_people())
 	body.add_child(_build_ride())
+	_build_pin()
+	if _shell != null and _shell.has_method("set_foot"):
+		_shell.set_foot("map", pin)
+	else:
+		body.add_child(pin)
 	body.add_child(_build_actions())
 
 	# the foot: who is out, and the way to the full page
@@ -412,25 +427,67 @@ func _build_ride() -> VBoxContainer:
 	return ride_box
 
 
-## The two ways to go, Claim and Recall, and the lines that say why anything is off.
-func _build_actions() -> VBoxContainer:
-	var col: VBoxContainer = host._vbox(6)
+## The strip of the two ways to go: the chosen place (its name and, under it, the danger and the trip in a line), Take control, what stands in
+## its way or what tonight means for it, and Ask <names> to go with why it is off and the radio's answer. (Everything about the errand but its
+## button, the switch, the terms, who refuses and Insist, stays in the page.)
+func _build_pin() -> PanelContainer:
+	pin = host._panel(_slip_style())
+	pin.mouse_filter = Control.MOUSE_FILTER_PASS
+	var col: VBoxContainer = host._vbox(4)
+	var head: HBoxContainer = host._hbox(8)
+	pin_name = host._label("", Fonts.cond(700), 17, host.INK)
+	pin_name.clip_text = true
+	pin_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	pin_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pin_name.mouse_filter = Control.MOUSE_FILTER_PASS
+	head.add_child(pin_name)
+	pin_danger = host._label("", Fonts.sans(400), 12, host.INK2)
+	pin_danger.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pin_danger.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	head.add_child(pin_danger)
+	col.add_child(head)
+	pin_info = _para("", 12, host.INK2)
+	col.add_child(pin_info)
+	var row: HBoxContainer = host._hbox(6)
 	var go: Button = host._button("Take control", true)
-	go.custom_minimum_size = Vector2(0, 38)
+	go.custom_minimum_size = Vector2(80, 34)
 	go.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	go.size_flags_stretch_ratio = 1.0
+	go.clip_text = true
 	go.set_meta("look", true)
 	go.pressed.connect(func(): act("go"))
-	col.add_child(go)
+	row.add_child(go)
 	buttons["go"] = go
+	var ask: Button = RadioKit.small_button(host, "Ask to go", 34.0, 14)
+	ask.custom_minimum_size.x = 80
+	ask.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ask.clip_text = true
+	ask.pressed.connect(func(): act("errand", {"insist": insist_on}))
+	row.add_child(ask)
+	buttons["errand"] = ask
+	col.add_child(row)
 	go_note = _para("", 12, host.WARN, 600)
 	go_note.visible = false
 	col.add_child(go_note)
-	stay_note = _para("", 12, host.WARN)
-	stay_note.visible = false
-	col.add_child(stay_note)
 	night_note = _para("", 12, host.INK2, 600)
 	night_note.visible = false
 	col.add_child(night_note)
+	summary_label = _para("", 12, host.INK3)
+	summary_label.visible = false
+	col.add_child(summary_label)
+	answer_label = _para("", 13, host.INK, 600)
+	answer_label.visible = false
+	col.add_child(answer_label)
+	pin.add_child(col)
+	return pin
+
+
+## The two ways to go, Claim and Recall, and the lines that say why anything is off.
+func _build_actions() -> VBoxContainer:
+	var col: VBoxContainer = host._vbox(6)
+	stay_note = _para("", 12, host.WARN)
+	stay_note.visible = false
+	col.add_child(stay_note)
 	col.add_child(_rule())
 
 	var errand_row: HFlowContainer = HFlowContainer.new()
@@ -448,15 +505,6 @@ func _build_actions() -> VBoxContainer:
 		errand_row.add_child(b)
 		segments[String(a)] = b
 	col.add_child(errand_row)
-	var ask: Button = RadioKit.small_button(host, "Ask to go", 34.0, 14)
-	ask.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	ask.clip_text = true
-	ask.pressed.connect(func(): act("errand", {"insist": insist_on}))
-	col.add_child(ask)
-	buttons["errand"] = ask
-	summary_label = _para("", 12, host.INK3)
-	summary_label.visible = false
-	col.add_child(summary_label)
 	terms_note = _para("", 12, host.INK3)
 	terms_note.visible = false
 	col.add_child(terms_note)
@@ -469,9 +517,6 @@ func _build_actions() -> VBoxContainer:
 	insist.visible = false
 	col.add_child(insist)
 	buttons["insist"] = insist
-	answer_label = _para("", 13, host.INK, 600)
-	answer_label.visible = false
-	col.add_child(answer_label)
 
 	col.add_child(_rule())
 	claim_row = HFlowContainer.new()
@@ -547,6 +592,11 @@ func _center_map(id: String) -> void:
 	map_scroll.scroll_horizontal = int(clampf(at - frame_w / 2.0, 0.0, sheet_w - frame_w))
 
 
+## The narrow form (the panel says so): the strip leaves out the prompt that nobody is ticked yet, which the people's header says too.
+func set_compact(on: bool) -> void:
+	_compact = on
+
+
 ## The map's width and the height it asks for (for the tests).
 func map_size() -> Vector2:
 	return map.custom_minimum_size if map != null else Vector2.ZERO
@@ -598,8 +648,11 @@ func focus_on(id: String) -> void:
 
 
 ## Brings the card into view when the map is tall enough to push it off the bottom of the panel (the panel's own scroll, which holds this page).
+## Not when the strip is pinned at the panel's foot: it says the place and has the two ways to go, and the map the pin was tapped on stays in view.
 func _reveal_card() -> void:
 	if not is_inside_tree() or not is_visible_in_tree():
+		return
+	if pin != null and pin.get_parent() != body:
 		return
 	var n := get_parent()
 	while n != null and not n is ScrollContainer:
@@ -954,6 +1007,7 @@ func refresh(force: bool = false) -> void:
 	message_label.visible = not on
 	body.visible = on
 	if not on:
+		pin.visible = false
 		return
 	_memo.clear()
 	_memoizing = true
@@ -1488,6 +1542,24 @@ func _refresh_actions() -> void:
 	var avatar = _avatar()
 	var on_raid_ok: bool = host != null and host.get("on_raid") is Callable and (host.on_raid as Callable).is_valid()
 
+	# the strip: pinned (under the panel's scroll) it is there once a place is chosen; in the page, always
+	pin.visible = has or not (_shell != null and pin.get_parent() != body)
+	if has:
+		var name_text := String(site.name)
+		if pin_name.text != name_text:
+			pin_name.text = name_text
+		pin_name.tooltip_text = String(site.get("blurb", ""))
+		var danger_text := String(facts.danger.label.text)
+		if pin_danger.text != danger_text:
+			pin_danger.text = danger_text
+		var trip_lines: PackedStringArray = trip_text(site).split("\n")
+		var info := trip_lines[1 if vehicle_id != "" and trip_lines.size() > 1 else 0]
+		if pin_info.text != info:
+			pin_info.text = info
+	pin_name.visible = has
+	pin_danger.visible = has
+	pin_info.visible = has
+
 	# Take control
 	var go: Button = buttons.go
 	var go_why := reason_for("go")
@@ -1561,7 +1633,7 @@ func _refresh_actions() -> void:
 	if insist.visible:
 		_style_segment(insist, insist_on)
 	# why the button is off, in words under it (a prompt while nobody is ticked, an amber refusal otherwise)
-	summary_label.visible = ask_why != "" and has
+	summary_label.visible = ask_why != "" and has and not (_compact and (view.people as Array).is_empty())
 	if summary_label.visible:
 		summary_label.text = ask_why
 		summary_label.add_theme_color_override("font_color", host.INK3 if (view.people as Array).is_empty() else host.WARN)

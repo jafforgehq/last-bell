@@ -28,6 +28,16 @@ const KIND_NAME := {
 }
 
 
+## Makes a wrapping control measure as it will be laid out at width `w`, laid out or not (a hidden one never is, and a label that has no
+## width measures as tall as the words can be, one to a line): its width first, then its least width (a control that has already been given a
+## height keeps it when only the least is set).
+static func wrap_at(c: Control, w: float) -> void:
+	if not is_equal_approx(c.size.x, w):
+		c.size = Vector2(w, c.size.y)
+	if not is_equal_approx(c.custom_minimum_size.x, w):
+		c.custom_minimum_size.x = w
+
+
 ## The colour of a kind of news (a word, readable on the panel): the dead at the wall (a wall going, a brute, a breach) and a death are
 ## red, a fever, the alarm and a falling out amber, a new face, a friendship and a building that went up green, a card of the
 ## storyteller, an idea, an errand and the night's notices (the forecast, the night, the road) blue, a stranger and a title earned

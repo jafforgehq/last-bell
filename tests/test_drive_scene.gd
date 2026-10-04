@@ -464,6 +464,24 @@ func test_a_stop_shows_its_pill_and_opens_its_card_without_pausing_anything() ->
 	await _leave(main)
 
 
+func test_the_ring_of_the_work_is_drawn_under_the_squads_names_and_tags() -> void:
+	# (the ring crossed the "Down" tag under a downed leader and cut its last letter off)
+	var main := _game()
+	var t := _event_trip(main, "wreck_supplies", 0.3, 0.25)
+	var scene = t.scene
+	scene.tick(STEP)
+	scene.press_stop()
+	check(bool(scene.choose("e1", "search").ok), "the squad goes out for the work")
+	eq(scene.mode, "out", "out")
+	await TutorialKit.settle()
+	scene.overlay.queue_redraw()
+	await TutorialKit.settle()
+	var order: PackedStringArray = scene.overlay.drawn_order
+	check(order.has("ring") and order.has("figures") and order.has("road"), "the road's overlay drew the ring, the squad and the stop: %s" % str(order))
+	check(order.find("ring") < order.find("figures"), "the ring is drawn before the names and tags, so they lie over it: %s" % str(order))
+	await _leave(main)
+
+
 func test_choose_applies_its_effects_once_and_the_squad_goes_out_for_the_work() -> void:
 	var main := _game()
 	var t := _event_trip(main, "wreck_supplies", 0.3, 0.25)

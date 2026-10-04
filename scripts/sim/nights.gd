@@ -16,6 +16,10 @@
 ## THE NUMBERS are in assets/data/nights.json (read through NightData: rally, plated, breach, mend); the weights of `section_threat` are
 ## below. `section_threat`, `contested` and `stand_for` are the one place the bot, the calls and the view's marks ask where a night is hot.
 ##
+## ROUND 22, ONE PRESS: a hand-mending session goes on until the wall is whole (`seg.hp == max_hp`), the scrap is gone, or something stops it
+## (a step, the trigger, a wound, one of the dead within `DANGER_R` tiles of him, a fall) and says why (`stop_words`, which the view toasts); it
+## used to stop silently after `mend.seconds`, three presses and three silent stops for a fallen container. `mend.seconds` is now the round
+## of the ring that shows the hands at work. When a fallen section stands again under his hands the News says "The <wall> is shut again".
 ## THE HAND-MENDING SESSION (`mend_wall`) lives here, not in interact.gd (round 18's E interactions are another branch when this was built):
 ## `wall_candidates()` is the list of E candidates of kind "wall" (the same dictionary shape as `Interact.candidates`: kind, id (the section's id
 ## as text), label, pos, dist, ok, why, and `seg` the id as a number), `mend_wall(seg_id)` starts a session, `stop_mend(why)` ends it, and
@@ -24,7 +28,7 @@
 ##
 ## Events this module adds to sim.events:
 ##   {"type": "wall_work", "on": true, "seg": id, "hp": 0.0} and {"type": "wall_work", "on": false, "seg": id, "hp": mended, "why": ...}
-##       (why: "done", "moved", "fired", "hurt", "whole", "no scrap", "stopped", or why the avatar cannot ("You are down"...))
+##       (why: "moved", "fired", "hurt", "danger", "whole", "no scrap", "stopped", or why the avatar cannot ("You are down"...))
 ## Alerts: "hot-<id>" when a fallen section turns hot, "nomend-<id>" when a mender gives up a hot breach.
 ##
 ## Saved with the modules (`save`/`load_state`): `warned` and the hot-breach alert marks. A session is never resumed.
@@ -42,6 +46,9 @@ const W_WOUND := 6.0
 const W_BREACHER := 0.8
 const BREACHER_R := 10.0
 const W_HOT := 4.0
+## Where the dead of a breach go when there is nobody they can reach (round 22: a lost wall lets them in): the middle of the yard, the
+## stores' place (the middle the waves' outlook uses too).
+const YARD_MIDDLE := Vector2(42.0, 32.0)
 ## `contested` names a section only when its threat is at least this.
 const CONTESTED_MIN := 2.0
 ## How often (rules seconds) the hot breaches are looked at for their alert.
@@ -51,6 +58,8 @@ const SOUND := 0.95
 ## The walking input this long is a hand on the keys; a hammer blow every this many seconds.
 const HANDS_ON := 0.25
 const HAMMER_EVERY := 0.45
+## One of the dead (approaching, clawing, in a breach or hunting) this near the avatar stops his hands at a wall, and keeps them from beginning.
+const DANGER_R := 2.0
 const EPS := 1.0e-6
 
 var sim
@@ -323,9 +332,49 @@ func _mend_refusal(p, seg) -> String:
 		return "Too far from the wall"
 	if p.input_move.length() > HANDS_ON or p.input_fire:
 		return "Stand still to mend"
+	if _danger_near(p):
+		return "One of the dead is on you"
 	if float(sim.stock.scrap) <= 0.0:
 		return "There is no scrap to spare"
 	return ""
+
+
+## Whether one of the dead that is after the compound or a person (not a straggler wandering, not one falling or going home) is within
+## `DANGER_R` tiles of this person.
+func _danger_near(p) -> bool:
+	var me := Vector2(p.x, p.y)
+	for z in sim.zombies:
+		var st := String(z.state)
+		if st != "approach" and st != "attack" and st != "breach" and st != "hunt":
+			continue
+		if me.distance_to(Vector2(z.x, z.y)) <= DANGER_R:
+			return true
+	return false
+
+
+## What to tell the player when the hands have left a wall (`wall_work`'s "why"): {"line": the words (empty: nothing to say, or the key
+## that stopped it has its own line), "warn": amber, for a danger or a want}. `wall` is the section's name in a sentence ("red container"),
+## `share` the percent of the wall the hands mended since they began.
+static func stop_words(why: String, wall: String, share: int) -> Dictionary:
+	var mended := " (%d%% mended)" % share if share > 0 else ""
+	match why:
+		"whole":
+			return {"line": "The %s is whole again" % wall, "warn": false}
+		"no scrap":
+			return {"line": "No scrap left to mend the %s with%s" % [wall, mended], "warn": true}
+		"hurt":
+			return {"line": "Hurt: stopped mending the %s%s" % [wall, mended], "warn": true}
+		"danger":
+			return {"line": "The dead are on you: stopped mending the %s%s" % [wall, mended], "warn": true}
+		"fired":
+			return {"line": "Stopped mending the %s to shoot%s" % [wall, mended], "warn": false}
+		"moved":
+			return {"line": "You moved: stopped mending the %s%s" % [wall, mended], "warn": false}
+		"done":
+			return {"line": "Mended the %s: %d%% more" % [wall, share], "warn": false} if share > 0 else {"line": "", "warn": false}
+		"You are down", "You are gone", "You are away":
+			return {"line": "%s: stopped mending the %s%s" % [why, wall, mended], "warn": true}
+	return {"line": "", "warn": false}
 
 
 ## What the avatar could mend from where it stands, nearest first: a compound section (a door too) that is under 95% or down, within
@@ -357,10 +406,11 @@ func wall_candidates() -> Array:
 	return out
 
 
-## The avatar's own hands at a wall for mend.seconds of rules time: {"ok", "line", "why", "seconds"}. Refused with the reason (no scrap to
+## The avatar's own hands at a wall, until it is whole (round 22; before, `mend.seconds` of rules time): {"ok", "line", "why", "seconds" (the round
+## of the ring: `mend.seconds`)}. Refused with the reason (no scrap to
 ## spare, too far from the wall, nothing to mend, a hand on the keys or the trigger). The work is any repairer's ((REPAIR_BASE + Building) x
 ## how well they are x their traits) through the scrap, the section's state follows, Building and morale are credited as for anyone; under
-## fire is allowed. Ends on walking, the trigger, a wound, a fall, a whole wall, the scrap gone or the seconds up.
+## fire is allowed. Ends on walking, the trigger, a wound, one of the dead at his back (`DANGER_R`), a fall, a whole wall or the scrap gone.
 func mend_wall(seg_id: int) -> Dictionary:
 	var p = _lead()
 	if p == null or not active():
@@ -441,6 +491,8 @@ func after_people(dt: float) -> void:
 		why = "fired"
 	elif float(p.hp) < _hp0 - 0.001:
 		why = "hurt"
+	elif _danger_near(p):
+		why = "danger"
 	elif seg.hp >= seg.max_hp:
 		why = "whole"
 	elif float(sim.stock.scrap) <= 0.0:
@@ -452,12 +504,15 @@ func after_people(dt: float) -> void:
 	var done: float = sim.supplies.repair_budget(dt * rate)
 	if done > 0.0:
 		var before: float = seg.hp
+		var was_down: bool = seg.state == 3
 		sim._repair_segment(seg, done)
 		var gain: float = seg.hp - before
 		_mended += gain
 		sim.skills.credit(p, "mended", gain)
 		if seg.hp >= seg.max_hp and gain > 0.0:
 			sim.morale.on_repaired(p)
+		if was_down and seg.state != 3:
+			sim.radio.night.shut_again(seg)    # (the News says so, once: the call's own watch of the wall finds the line made)
 	_hammer -= dt
 	if _hammer <= 0.0:
 		_hammer = HAMMER_EVERY
@@ -466,8 +521,7 @@ func after_people(dt: float) -> void:
 		sim.fx.hit_material(p.x + toward.x * 0.7, p.y + toward.y * 0.7, "metal")
 	work_left -= dt
 	if work_left <= EPS:
-		stop_mend("done")
-		return
+		work_left += maxf(NightData.num("mend.seconds"), 1.0)    # (the ring comes round again: one press goes on, round 22)
 	var to: Vector2 = seg.center - Vector2(p.x, p.y)
 	if to.length() > 0.3:
 		p.facing = sim.facing_of(to.x, to.y, String(p.facing))

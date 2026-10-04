@@ -46,6 +46,7 @@ var slim := false
 var _radio_getter: Callable
 var _buttons_box: Container
 var _built := false
+var wrap_w := 0.0
 
 
 func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
@@ -106,6 +107,18 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	add_child(_buttons_box)
 
 
+## The width the words and the buttons wrap at (see CallCard.set_wrap): given as their least, so the view measures right whether or not it
+## has been laid out at that width (a line that is put away and shown again is measured as it would be wrapped, not as it last was).
+func set_wrap(inner: float) -> void:
+	if not _built or is_equal_approx(wrap_w, inner):
+		return
+	wrap_w = inner
+	for l in [title_label, sub_label, opinion_label, count_label, result_label]:
+		RadioKit.wrap_at(l, inner)
+	for b in buttons.values():
+		RadioKit.wrap_at(b, inner)
+
+
 ## Points the view at an entry (a call, open or settled) and brings it up to date. The buttons are made once for each call.
 func show_entry(e: Dictionary) -> void:
 	if int(e.id) != entry_id:
@@ -155,6 +168,8 @@ func _rebuild(e: Dictionary) -> void:
 		# longest word and grows tall (the strip was 364 px high, with three options, and pushed the radio panel over the clock)
 		if not slim:
 			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if wrap_w > 0.0:
+			RadioKit.wrap_at(b, wrap_w)
 		b.pressed.connect(_on_pressed.bind(String(o.id)))
 		_buttons_box.add_child(b)
 		buttons[String(o.id)] = b

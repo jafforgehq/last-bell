@@ -28,6 +28,8 @@
 ## screen: anything it needs the coach has put in `state`, so the tests can drive it.
 extends RefCounted
 
+const NightData := preload("res://scripts/sim/night_data.gd")
+
 ## name -> Callable(sim, params, state), filled once.
 static var _table := {}
 
@@ -77,6 +79,11 @@ static func registry() -> Dictionary:
 			"kind_alive": _kind_alive,
 			"can_build": _can_build,
 			"town_on": _town_on,
+			"avatar_game": _avatar_game,
+			"can_use": _can_use,
+			"ring_night": _ring_night,
+			"big_night_ahead": _big_night_ahead,
+			"panel_page": _panel_page,
 			"season": _season,
 			"lot_open": _lot_open,
 			"has_vehicle": _has_vehicle,
@@ -460,6 +467,46 @@ static func _has_vehicle(sim, _p, _st) -> bool:
 	var town = sim.get("town")
 	return vehicles != null and town != null and town.on and not vehicles.fleet.is_empty()
 
+
+
+# ----------------------------------------- the avatar game's tips (round 22, the QA's list) --
+
+## The game is played by an avatar (a player named: the hand-played game of rounds 17 to 21).
+static func _avatar_game(sim, _p, _st) -> bool:
+	return sim.get("player_id") != null and String(sim.player_id) != ""
+
+
+## The avatar could use something where he stands (a person to talk to, a post, the bench, a car, a worn wall: `Interact.candidates`):
+## the moment to say what E is.
+static func _can_use(sim, _p, _st) -> bool:
+	var it = sim.get("interact")
+	return it != null and _avatar_game(sim, _p, _st) and not it.candidates().is_empty()
+
+
+## The rally's ring is up round the avatar in a night: the bell has rung, he is up and at the base, and the nights' rules apply.
+static func _ring_night(sim, _p, _st) -> bool:
+	var me = _me(sim)
+	if me == null or me.dead or me.downed or me.turned or me.away != null:
+		return false
+	var nights = sim.get("nights")
+	return nights != null and bool(nights.active()) and sim.bell_rung and sim.phase != "day"
+
+
+## A Big Night is on the way: tonight is one (any hour of its day), or it is past the notice hour and tomorrow's is. The forecast
+## the lookout gives and the notice at noon say the same, whoever hears them.
+static func _big_night_ahead(sim, _p, _st) -> bool:
+	var waves = sim.get("waves")
+	if waves == null or not _avatar_game(sim, _p, _st):
+		return false
+	if not waves.big_night(int(sim.day)).is_empty():
+		return true
+	return sim.phase == "day" and float(sim.hour) >= NightData.num("forecast.notice_hour", 12.0) and not waves.big_night(int(sim.day) + 1).is_empty()
+
+
+## {"page": "map"}: the radio panel is open on that page (the hints' own state, `{"panel": page}`, from the HUD: the rules do not know
+## the screen).
+static func _panel_page(_sim, p, st) -> bool:
+	return String(st.get("panel", "")) == String(p.get("page", "map"))
 
 
 # --------------------------------------------------- the avatar's lesson (round 17) --

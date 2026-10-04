@@ -119,6 +119,147 @@ func test_the_build_tip_comes_last_so_that_it_never_hides_a_warning() -> void:
 	eq(String(list[list.size() - 1].id), "build", "the last of the tips: the first whose moment has come is the one shown")
 
 
+# ------------------------------------------------------- the avatar game's tips (round 22) --
+
+## The tips of the avatar game, from the QA's list (I7): the ring round Ruth nobody had explained, E, a trip and its autopilot, a Big Night.
+const AVATAR_TIPS := ["use", "ring", "bignight", "trips"]
+
+
+func _holds_in(h_id: String, sim, state: Dictionary = {}) -> bool:
+	for h in Hints.load_hints():
+		if String(h.id) == h_id:
+			return Conditions.check(h.start, sim, state)
+	return false
+
+
+func test_the_avatar_tips_are_there_with_words_for_the_avatar_and_come_before_the_build_tip() -> void:
+	var list := Hints.load_hints()
+	var at := {}
+	for i in list.size():
+		at[String(list[i].id)] = i
+	for id in AVATAR_TIPS:
+		check(at.has(id), "the tip '%s' is in the file" % id)
+		if not at.has(id):
+			continue
+		var h: Dictionary = list[int(at[id])]
+		check(int(at[id]) < int(at["build"]), "'%s' comes before the build tip (which is last)" % id)
+		var words := String(h.get("text_avatar", h.get("text", "")))
+		check(Coach.words(words) >= 8 and Coach.words(words) <= Coach.MAX_WORDS, "'%s' says it in %d words" % [id, Coach.words(words)])
+	var text := {}
+	for h in list:
+		text[String(h.id)] = String(h.get("text_avatar", h.get("text", "")))
+	check(String(text.get("use", "")).contains("E"), "the E tip names the key: %s" % text.get("use", ""))
+	check(String(text.get("ring", "")).to_lower().contains("ring"), "the ring tip says ring: %s" % text.get("ring", ""))
+	check(String(text.get("ring", "")).to_lower().contains("shoot"), "and what it is for: %s" % text.get("ring", ""))
+	check(String(text.get("bignight", "")).to_lower().contains("big night") and String(text.get("bignight", "")).to_lower().contains("ring"), "the Big Night tip says what it needs and where the crew shoots better: %s" % text.get("bignight", ""))
+	check(String(text.get("trips", "")).contains("Tab") and String(text.get("trips", "")).to_lower().contains("autopilot"), "the trip tip names Tab and the autopilot: %s" % text.get("trips", ""))
+	check(String(text.get("trips", "")).contains("W A S D") or String(text.get("trips", "")).contains("WASD"), "and how the road is driven: %s" % text.get("trips", ""))
+
+
+func test_none_of_the_avatar_tips_comes_in_the_old_game() -> void:
+	var g := Helpers.make(5, 1)
+	var sim = g.sim
+	Helpers.at(sim, 9, 22.0)
+	for id in AVATAR_TIPS:
+		check(not _holds_in(id, sim, {"panel": "map"}), "%s: not without an avatar" % id)
+	g.world.free()
+
+
+func test_the_use_tip_comes_when_something_is_in_reach_of_the_avatar() -> void:
+	var g := Helpers.avatar_game(5, 5)
+	var sim = g.sim
+	var ruth = sim.avatar.player()
+	ruth.x = 34.5
+	ruth.y = 32.5
+	check(sim.interact.candidates().is_empty(), "(nothing is in reach in the open yard)")
+	check(not _holds_in("use", sim), "use: not with nothing to use")
+	var dez = null
+	for p in sim.people:
+		if p.id == "dez":
+			dez = p
+	ruth.x = dez.x + 0.5
+	ruth.y = dez.y
+	check(not sim.interact.candidates().is_empty(), "(Dez is in reach)")
+	check(_holds_in("use", sim), "use: with somebody to talk to it is time to say what E is")
+	ruth.downed = true
+	check(not _holds_in("use", sim), "use: not while he is down (nothing can be used)")
+	g.world.free()
+
+
+func test_the_ring_tip_comes_at_night_with_the_avatar_up_at_the_base() -> void:
+	var g := Helpers.avatar_game(5, 5)
+	var sim = g.sim
+	var ruth = sim.avatar.player()
+	Helpers.at(sim, 2, 14.0)
+	check(not _holds_in("ring", sim), "ring: not by day, though the ring is there")
+	Helpers.at(sim, 2, 22.0)
+	check(_holds_in("ring", sim), "ring: from the bell on")
+	ruth.downed = true
+	check(not _holds_in("ring", sim), "ring: not while he is down (the ring is not drawn)")
+	ruth.downed = false
+	ruth.away = {"kind": "party"}
+	check(not _holds_in("ring", sim), "ring: nor while he is away on a trip")
+	g.world.free()
+
+
+func test_the_big_night_tip_comes_from_noon_the_day_before() -> void:
+	var g := Helpers.avatar_game(5, 5)
+	var sim = g.sim
+	Helpers.at(sim, 3, 13.0)
+	check(not _holds_in("bignight", sim), "bignight: not on an ordinary day")
+	Helpers.at(sim, 9, 8.0)
+	check(not _holds_in("bignight", sim), "bignight: not in the morning before it")
+	Helpers.at(sim, 9, 12.5)
+	check(_holds_in("bignight", sim), "bignight: from the noon notice of the day before")
+	Helpers.at(sim, 10, 8.0)
+	check(_holds_in("bignight", sim), "bignight: all the day of it")
+	g.world.free()
+
+
+func test_the_trips_tip_comes_with_the_map_page_open() -> void:
+	var g := Helpers.avatar_game(5, 5)
+	var sim = g.sim
+	check(not _holds_in("trips", sim, {}), "trips: not with no page open")
+	check(not _holds_in("trips", sim, {"panel": "news"}), "trips: not on the News page")
+	check(_holds_in("trips", sim, {"panel": "map"}), "trips: on the map page")
+	g.world.free()
+
+
+func test_the_tips_for_the_avatar_come_on_the_real_scene_once_and_the_map_tip_with_the_map() -> void:
+	var main = Tut.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true})
+	await Tut.frames(main, 3)
+	_tips_on(main)
+	var hints = main.hints
+	Prefs.set_flag("hint_town")    # (the Town Board's own tip comes first in the file: it is not the one asked about)
+	Prefs.set_flag("hint_use")
+	Prefs.set_flag("hint_ring")
+	Prefs.set_flag("hint_bignight")
+	main.hud.open_radio("map")
+	await Tut.frames(main, 40)
+	eq(hints.shown_id(), "trips", "the trip tip is up with the map")
+	check(String(hints.text_label.text).contains("Tab"), "in the avatar's words: '%s'" % hints.text_label.text)
+	check(Prefs.flag("hint_trips"), "and is marked as shown the moment it was")
+	hints.ok_button.pressed.emit()
+	await Tut.frames(main, 4)
+	main.hud.close_radio()
+	main.hud.open_radio("map")
+	await Tut.frames(main, 40 + 45 * 30)
+	eq(hints.shown_id(), "", "and it does not come twice")
+	await Tut.leave(main)
+
+
+func test_the_green_ring_is_explained_on_the_card_of_the_one_who_wears_it() -> void:
+	var main = Tut.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true})
+	await Tut.frames(main, 3)
+	var tips := {}
+	for c in main.hud.cards:
+		main.hud._update_card(c, main.sim)
+		tips[String(c.p.id)] = String(c.card.tooltip_text)
+	check(String(tips.get("ruth", "")).contains("This is you") and String(tips.get("ruth", "")).contains("The green ring round you: the crew inside it shoots better"), "Ruth's card says what the ring is: '%s'" % tips.get("ruth", ""))
+	check(not String(tips.get("dez", "")).contains("green ring"), "and nobody else's does: '%s'" % tips.get("dez", ""))
+	await Tut.leave(main)
+
+
 # ------------------------------------------------------------------- the card --
 
 ## A normal run on the real scene with the tips armed (the tests run headless, where they are not).

@@ -175,17 +175,27 @@ func test_the_avatar_mends_at_the_rate_of_any_repairer_and_pays_in_scrap() -> vo
 	_free(m)
 
 
-func test_the_session_ends_after_its_seconds_and_tells_what_it_mended() -> void:
+func test_one_press_goes_on_past_the_first_seconds_until_the_wall_is_whole() -> void:
+	# (round 22: it used to stop silently every `mend.seconds`, three presses for a fallen container)
 	var m := _game(CONTAINER, 0.1)
 	var sim = m.sim
+	var scrap0: float = sim.stock.scrap
 	check(bool(sim.nights.mend_wall(CONTAINER).ok), "it starts")
-	_steps(sim, int(NightData.num("mend.seconds") * 30.0) + 5)
-	eq(sim.nights.working, "", "over")
+	_steps(sim, int(NightData.num("mend.seconds") * 2.0 * 30.0) + 5)
+	eq(sim.nights.working, "wall", "twice the plan's seconds later it is still going")
+	check(m.seg.hp < m.seg.max_hp, "(and the wall is not whole yet: %.0f of %.0f)" % [m.seg.hp, m.seg.max_hp])
+	check(_events(sim, "wall_work").filter(func(e): return e.on == false).is_empty(), "nothing has been said of an end")
+	var guard := 0
+	while sim.nights.working == "wall" and guard < 4000:
+		_steps(sim, 1)
+		guard += 1
 	var off: Array = _events(sim, "wall_work").filter(func(e): return e.on == false)
-	check(off.size() == 1, "one event says it ended: %s" % str(off))
+	eq(off.size(), 1, "one event says it ended: %s" % str(off))
 	if off.size() == 1:
-		eq(off[0].why, "done", "because the seconds ran out")
-		check(float(off[0].hp) > 30.0, "and says what it mended (%.1f)" % float(off[0].hp))
+		eq(off[0].why, "whole", "because the wall is whole")
+		check(float(off[0].hp) > 300.0, "and says what it mended (%.1f)" % float(off[0].hp))
+	near(m.seg.hp, m.seg.max_hp, 1.0e-6, "the wall is whole")
+	check(scrap0 - float(sim.stock.scrap) > 30.0, "and it cost its scrap (%.1f)" % (scrap0 - float(sim.stock.scrap)))
 	eq(m.me.work, "", "the pose is dropped")
 	_free(m)
 
@@ -356,16 +366,96 @@ func test_mending_goes_on_under_fire_and_shuts_a_breach_above_forty_percent() ->
 	_free(m)
 
 
-func test_a_big_breach_takes_more_than_one_session() -> void:
+func test_a_fallen_container_is_shut_again_by_one_press_and_the_news_says_so() -> void:
 	var m := _game(CONTAINER, 0.0)
 	var sim = m.sim
 	eq(int(m.seg.state), 3, "the container is down")
-	var sessions := 0
-	while int(m.seg.state) == 3 and sessions < 6:
-		sim.avatar.set_input(Vector2.ZERO, m.spot + Vector2(3.0, 0.0), false)
-		check(bool(sim.nights.mend_wall(CONTAINER).ok), "session %d starts" % (sessions + 1))
-		sessions += 1
-		_steps(sim, int(NightData.num("mend.seconds") * 30.0) + 5)
-	check(sessions >= 2 and sessions <= 4, "it took %d sessions" % sessions)
-	check(int(m.seg.state) < 3, "and it stands again")
+	check(bool(sim.nights.mend_wall(CONTAINER).ok), "one press")
+	var guard := 0
+	while int(m.seg.state) == 3 and guard < 4000:
+		_steps(sim, 1)
+		guard += 1
+	check(int(m.seg.state) < 3, "it stands again")
+	eq(sim.nights.working, "wall", "and the hands are still at it: the wall is not whole yet")
+	var shut: Array = []
+	for e in sim.radio.news:
+		if int(e.id) > 0 and e.kind == "breach" and String(e.text).contains("shut again"):
+			shut.append(e)
+	eq(shut.size(), 1, "the News has one line that it is shut: %s" % str(sim.radio.news.map(func(e): return e.text)))
+	if shut.size() == 1:
+		eq(shut[0].text, "The red container is shut again", "in these words")
+		check(shut[0].options.is_empty(), "news, not a call")
+	_steps(sim, 60)
+	eq(sim.radio.news.filter(func(e): return String(e.text).contains("shut again")).size(), 1, "and it is said once, not at every step")
 	_free(m)
+
+
+func test_the_line_is_in_the_news_when_a_wall_that_fell_by_day_is_shut_by_hand_too() -> void:
+	var m := _game(PALLETS, 0.0)
+	var sim = m.sim
+	Helpers.at(sim, 3, 14.0)
+	check(bool(sim.nights.mend_wall(PALLETS).ok), "it starts by day")
+	var guard := 0
+	while int(m.seg.state) == 3 and guard < 4000:
+		_steps(sim, 1)
+		guard += 1
+	var lines: Array = sim.radio.news.filter(func(e): return String(e.text).contains("shut again"))
+	eq(lines.size(), 1, "the line is there whatever the hour: %s" % str(sim.radio.news.map(func(e): return e.text)))
+	_free(m)
+
+
+func test_one_of_the_dead_at_the_avatars_back_is_a_danger_that_stops_it_and_says_why() -> void:
+	var m := _game(CONTAINER, 0.3)
+	var sim = m.sim
+	check(bool(sim.nights.mend_wall(CONTAINER).ok), "it starts")
+	_steps(sim, 20)
+	eq(sim.nights.working, "wall", "going")
+	var z = sim.spawn(m.me.x + 1.2, m.me.y, "wander")
+	z.state = "approach"
+	z.hp = 1.0e9
+	z.stagger = 1.0e9
+	_steps(sim, 2)
+	eq(sim.nights.working, "", "a dead one within reach of him stopped it")
+	eq(_ended_by(m), "danger", "why")
+	_free(m)
+
+
+func test_the_dead_in_the_breach_a_few_tiles_off_do_not_stop_it() -> void:
+	var m := _game(CONTAINER, 0.3)
+	var sim = m.sim
+	check(bool(sim.nights.mend_wall(CONTAINER).ok), "it starts")
+	var z = sim.spawn(m.me.x + 4.0, m.me.y, "wander")
+	z.state = "breach"
+	z.hp = 1.0e9
+	z.stagger = 1.0e9
+	_steps(sim, 30)
+	eq(sim.nights.working, "wall", "four tiles off is under fire, which is allowed")
+	_free(m)
+
+
+func test_a_press_while_a_dead_one_is_on_him_is_refused_with_the_reason() -> void:
+	var m := _game(CONTAINER, 0.3)
+	var sim = m.sim
+	var z = sim.spawn(m.me.x + 1.0, m.me.y, "wander")
+	z.state = "attack"
+	z.hp = 1.0e9
+	z.stagger = 1.0e9
+	var r: Dictionary = sim.nights.mend_wall(CONTAINER)
+	check(not bool(r.ok), "refused")
+	check(String(r.why).to_lower().contains("dead"), "with its reason: %s" % str(r.why))
+	_free(m)
+
+
+func test_the_words_for_each_way_it_ends() -> void:
+	var Nights = preload("res://scripts/sim/nights.gd")
+	var whole: Dictionary = Nights.stop_words("whole", "red container", 30)
+	check(String(whole.line).contains("red container") and String(whole.line).contains("whole"), "whole: %s" % str(whole))
+	check(not bool(whole.warn), "and it is good news")
+	var dry: Dictionary = Nights.stop_words("no scrap", "red container", 12)
+	check(String(dry.line).to_lower().contains("scrap") and bool(dry.warn), "no scrap is said and amber: %s" % str(dry))
+	for why in ["hurt", "danger", "fired", "moved"]:
+		var w: Dictionary = Nights.stop_words(why, "red container", 12)
+		check(String(w.line).contains("red container") and String(w.line).contains("12%"), "%s says what was done: %s" % [why, str(w)])
+		check(bool(w.warn) == (why == "hurt" or why == "danger"), "%s: amber only for a danger" % why)
+	eq(Nights.stop_words("stopped", "red container", 12).line, "", "a stop by E has its own line")
+	check(String(Nights.stop_words("You are down", "red container", 0).line).to_lower().contains("down"), "a fall is said")

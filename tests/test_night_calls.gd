@@ -250,6 +250,185 @@ func test_a_plain_brute_at_a_sound_wall_is_not_a_going_call() -> void:
 	g.world.free()
 
 
+# ---------------------------------------------------- going: a wall nobody covers --
+
+## The first non-door section of the compound none of whose places any defender's post reaches (the avatar's own gun left out), or null.
+func _uncovered(sim):
+	for s in sim.segments:
+		if s.kind == sim.DOOR_KIND or int(s.id) >= 100:
+			continue
+		var reached := false
+		for p in sim.people:
+			if p.player or p.dead:
+				continue
+			var at: Vector2 = sim.tactics.post_pos(p)
+			var reach: float = sim.reach_at(p.gun, at, true)
+			for sl in s.slots:
+				if at.distance_to(Vector2(sl.x, sl.y)) <= reach:
+					reached = true
+		if not reached:
+			return s
+	return null
+
+
+## The rules seconds that make `minutes` of the game's time.
+func _secs(sim, minutes: float) -> float:
+	return minutes / float(sim.min_per_sec)
+
+
+## A quiet game with one of the dead clawing at a wall nobody covers (and the avatar far away from it): the section, its state worked out.
+func _alone(hp_share: float = 0.9) -> Dictionary:
+	var g := _game()
+	var sim = g.sim
+	var s = _uncovered(sim)
+	check(s != null, "(a section that no post covers)")
+	_put(_p(sim, "ruth"), LEADER_AT)
+	_hurt(sim, int(s.id), hp_share)
+	Helpers.attack(sim, int(s.id), 1)
+	return {"g": g, "sim": sim, "seg": s}
+
+
+func test_one_of_the_dead_clawing_a_wall_nobody_covers_raises_going_after_half_an_hour() -> void:
+	var a := _alone()
+	var sim = a.sim
+	var s = a.seg
+	var wait: float = NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)
+	check(wait >= 20.0 and wait <= 60.0, "the wait is about half an hour: %s" % str(wait))
+	Helpers.run(sim, _secs(sim, wait) * 0.7)
+	eq(_calls(sim, "going").size(), 0, "not before the half hour: the guns of a covered wall are given that long, and this one has none")
+	Helpers.run(sim, _secs(sim, wait) * 0.6)
+	var calls := _calls(sim, "going")
+	eq(calls.size(), 1, "then the wall that is being worn down has a call")
+	var c: Dictionary = calls[0]
+	check(String(c.text).to_lower().contains("nobody"), "it says nobody is there: %s" % str(c.text))
+	check(String(c.text).to_lower().contains(String(s.name).to_lower()), "and which wall: %s" % str(c.text))
+	check(String(c.sub).contains("1 of the dead") and String(c.sub).contains("%"), "and what is at it and how much is left: %s" % str(c.sub))
+	eq(_ids(c), ["hold", "reinforce", "coming", "fall_back"], "the same options as a wall that is going")
+	eq(c.default, "hold", "it only asks: the default is still to hold")
+	eq(c.data.seg, int(s.id), "it keeps the section")
+	near(float(c.due) - float(c.t), NightData.num("calls.going_ttl_min"), 0.001, "it waits as long as the data says")
+	Helpers.run(sim, _secs(sim, wait))
+	eq(_calls(sim, "going").size(), 1, "once, however long it goes on")
+	a.g.world.free()
+
+
+func test_a_wall_nobody_covers_that_would_hold_until_the_dead_go_home_is_no_call() -> void:
+	var a := _alone()
+	var sim = a.sim
+	var s = a.seg
+	s.max_hp = 6000.0    # (a wall that one of the dead cannot get through before dawn)
+	s.hp = 6000.0
+	sim._segment_state(s)
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 2.0)
+	check(s.hp < s.max_hp, "(it is being clawed)")
+	eq(_calls(sim, "going").size(), 0, "a wall that will stand till the morning needs no one")
+	a.g.world.free()
+
+
+func test_a_covered_wall_or_one_the_avatar_stands_at_is_not_called_for_one_of_the_dead() -> void:
+	var g := _game()
+	var sim = g.sim
+	Helpers.attack(sim, BUS, 1)    # (Dez's post is at the bus)
+	check(sim.tactics.coverage_without_player(_seg(sim, BUS)) > 0, "(the bus has a gun on it)")
+	_hurt(sim, BUS, 0.5)
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 3.0)
+	eq(_calls(sim, "going").size(), 0, "a wall with a gun on it is the guns' business")
+	g.world.free()
+	var a := _alone()
+	var sim2 = a.sim
+	var s = a.seg
+	var me = _p(sim2, "ruth")
+	var spot: Vector2 = s.center + Vector2(-2.0, 0.0) if s.side == "E" else (s.center + Vector2(2.0, 0.0) if s.side == "W" else s.center + Vector2(0.0, 2.0))
+	_put(me, spot)
+	check(Vector2(me.x, me.y).distance_to(s.center) < NightData.num("rally.radius"), "(he stands within the rally's reach of it)")
+	Helpers.run(sim2, _secs(sim2, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 3.0)
+	eq(_calls(sim2, "going").size(), 0, "he is there: no call tells him so")
+	a.g.world.free()
+
+
+func test_the_half_hour_is_counted_from_the_dead_being_at_it_and_starts_again_when_it_is_left_alone() -> void:
+	var a := _alone()
+	var sim = a.sim
+	var wait: float = NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)
+	Helpers.run(sim, _secs(sim, wait) * 0.8)
+	for z in sim.zombies:    # (the guns, or a hand, put it down)
+		if z.slot != null:
+			z.slot.who = null
+		z.state = "dead"
+		z.remove = true
+	Helpers.run(sim, _secs(sim, 20.0))
+	Helpers.attack(sim, int(a.seg.id), 1)
+	Helpers.run(sim, _secs(sim, wait) * 0.8)
+	eq(_calls(sim, "going").size(), 0, "the time at it before is not counted again")
+	Helpers.run(sim, _secs(sim, wait) * 0.5)
+	eq(_calls(sim, "going").size(), 1, "but half an hour of the new one is")
+	a.g.world.free()
+
+
+func test_the_calls_for_a_lone_attacker_and_for_a_wall_that_is_going_are_each_made_once_and_the_first_is_settled() -> void:
+	var a := _alone()
+	var sim = a.sim
+	var s = a.seg
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 1.5)
+	var first := _calls(sim, "going")
+	eq(first.size(), 1, "(the call about the lone attacker)")
+	Helpers.attack(sim, int(s.id), 3)
+	_hurt(sim, int(s.id), NightData.num("calls.going_below") - 0.05)
+	Helpers.run(sim, 0.2)
+	var all := _calls(sim, "going")
+	eq(all.size(), 2, "the wall that goes under four tenths with the crowd at it is a second call, not the first again")
+	eq(first[0].answered, "hold", "and the first is settled by its default")
+	check(first[0].by_default, "as nobody answered it")
+	eq(_open(sim, "going").size(), 1, "one open call for the wall")
+	a.g.world.free()
+
+
+func test_a_lone_attacker_by_day_or_with_no_avatar_is_no_call() -> void:
+	var a := _alone()
+	var sim = a.sim
+	Helpers.at(sim, 3, 14.0)
+	sim.waves.enabled = false
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 3.0)
+	eq(_calls(sim, "going").size(), 0, "by day nothing is called")
+	a.g.world.free()
+	var g := Helpers.make(1, 1, 5)
+	var sim2 = g.sim
+	sim2.waves.enabled = false
+	sim2.zombies.clear()
+	sim2.stock.ammo = 0.0
+	Helpers.at(sim2, 3, 22.0)
+	var s = _uncovered(sim2)
+	check(s != null, "(a section nobody covers)")
+	_hurt(sim2, int(s.id), 0.9)
+	Helpers.attack(sim2, int(s.id), 1)
+	Helpers.run(sim2, _secs(sim2, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 3.0)
+	check(sim2.radio.news.is_empty(), "with no avatar the log stays empty: %s" % str(sim2.radio.news))
+	g.world.free()
+
+
+## A scenario that is Orientation Day's shape (it is told by its `after_step`) and not over.
+class FakeLesson:
+	extends "res://scripts/sim/scenario.gd"
+	var finished := false
+
+	func after_step() -> void:
+		pass
+
+
+func test_the_lessons_scripted_night_is_not_called_for_a_lone_attacker_and_the_real_nights_after_it_are() -> void:
+	var a := _alone()
+	var sim = a.sim
+	var lesson := FakeLesson.new()
+	lesson.setup(sim)
+	sim.scenario = lesson
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 3.0)
+	eq(_calls(sim, "going").size(), 0, "Orientation Day's night is the script's: no call about a wall nobody covers")
+	lesson.finished = true
+	Helpers.run(sim, _secs(sim, NightData.num("calls.unattended_min", NightCalls.UNATTENDED_MIN)) * 1.5)
+	eq(_calls(sim, "going").size(), 1, "and when the lesson is over the real nights have it")
+	a.g.world.free()
+
+
 func test_going_is_raised_once_for_a_section_a_night_and_again_the_next_night() -> void:
 	var g := _game()
 	var sim = g.sim
@@ -651,6 +830,27 @@ func test_a_section_that_falls_at_night_raises_breach_once() -> void:
 	check(String(_option(c, "close").label).to_lower().contains("needs you"), "it says closing needs him there: %s" % str(_option(c, "close")))
 	Helpers.run(sim, 3.0)
 	eq(_calls(sim, "breach").size(), 1, "one call, not one a step")
+	g.world.free()
+
+
+func test_a_wall_that_falls_again_the_same_night_after_it_was_shut_is_a_new_breach() -> void:
+	var g := _game()
+	var sim = g.sim
+	Helpers.run(sim, 0.1)
+	_fall(sim, BUS)
+	Helpers.run(sim, 0.1)
+	eq(_calls(sim, "breach").size(), 1, "the first fall")
+	_hurt(sim, BUS, 0.9)    # (mended above the rebuilding mark)
+	Helpers.run(sim, 0.1)
+	var shut := 0
+	for e in sim.radio.news:
+		if e.kind == "breach" and String(e.text).contains("shut again"):
+			shut += 1
+	eq(shut, 1, "it is shut again, in the news")
+	_fall(sim, BUS)
+	Helpers.run(sim, 0.1)
+	var calls := _calls(sim, "breach")
+	eq(calls.size(), 3, "and the second fall is a call of its own (the dead did not go home): %s" % str(calls.map(func(e): return e.text)))
 	g.world.free()
 
 

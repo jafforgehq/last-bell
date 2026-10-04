@@ -10,6 +10,7 @@ const GD := preload("res://scripts/game_data.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const S := preload("res://scripts/render/shapes.gd")
 const WorkAnim := preload("res://scripts/render/work_anim.gd")
+const PawnMesh := preload("res://scripts/render/pawn_mesh.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -41,10 +42,24 @@ var _prev := Vector2.ZERO
 var _cur := Vector2.ZERO
 var _steps_seen := -1
 var _frame_seen := 0
+## The step of the rules the picture was last made for (-2: none yet). One of the dead is drawn from what the rules have of it, which
+## changes once a step, so it is not drawn again until the next step: its place on the screen is the node's own position, moved every frame.
+var _drawn_steps := -2
+## How many times a node has drawn, over all nodes (what a test reads, in `draw_count`, to see that a node out of sight was left
+## alone; an underscore, so that the tests' guard of the shared state takes it for a counter, not a setting).
+static var _draws := 0
 var _style: Dictionary = Art.WALKER
 var _meshes := {} # view -> the warped sprite of this kind, or null for the plain one
 ## Where the drawing goes: this node, or a stand-in that records the calls (tests).
 var _pen = self
+## Whether the live parts (shadow, legs, arms, hands) are drawn as baked meshes (scripts/render/pawn_mesh.gd) rather than
+## command by command (pawn_art.gd): on the screen they are; a stand-in for the canvas gets the commands (what the tests
+## of the figure's look read), unless `meshes_on_tape` asks for the meshes (what the tests of the cached drawing read).
+var cached := true
+var meshes_on_tape := false
+var _fast := false
+## The colours of this figure for the meshes: one texel for each of the palette's colours.
+var _pal_tex: Texture2D
 
 ## Round 16, people at work (scripts/render/work_anim.gd): the pose is kept in one object and the work clock is shown between the
 ## rules' steps. `_wk` is how far into the pose the person is (0 the ordinary figure, 1 the pose), moved over WorkAnim.EASE seconds
@@ -78,6 +93,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	for v in ["S", "E", "N"]:
 		tex[v] = GD.tex(data.pawn.files[key][v])
 	pal = Art.palette(e.look)
+	_pal_tex = PawnMesh.palette_texture(pal)
 	if zombie:
 		kind = Art.kind_of(e)
 		_style = Art.style(kind)
@@ -119,8 +135,14 @@ func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
 	if modulate != tint:
 		modulate = tint
-	if redraw:
+	if redraw and (not zombie or steps < 0 or steps != _drawn_steps):
+		_drawn_steps = steps
 		queue_redraw()
+
+
+## How many times any node has drawn so far.
+static func draw_count() -> int:
+	return _draws
 
 
 ## Where the node is drawn, in tiles: the overlay's brackets and names go here.
@@ -214,6 +236,8 @@ func hit_box() -> Rect2:
 func _draw() -> void:
 	if entity == null:
 		return
+	_draws += 1
+	_fast = cached and (_pen == self or meshes_on_tape)
 	if zombie:
 		if entity.state == "dying" or entity.state == "dead":
 			_draw_dead()
@@ -233,6 +257,25 @@ func _view() -> String:
 	return "E" if entity.facing == "W" else entity.facing
 
 
+## The legs (and, drawn with them, the shadow when `shadow`) of this figure in the stride at `phase`: the mesh nearest that pose,
+## or, for a stand-in that wants the commands, the commands themselves (whose shadow is drawn by the caller, before the mirror).
+func _legs(view: String, phase: float, moving: bool, limp: bool, alpha: float, shadow: bool) -> void:
+	if _fast:
+		_pen.draw_mesh(PawnMesh.legs(kind, view, phase, moving, limp, shadow), _pal_tex, Transform2D.IDENTITY, Color(1.0, 1.0, 1.0, alpha))
+	else:
+		Art.legs(_pen, pal, view, phase, moving, limp, alpha, _style)
+
+
+## One layer of a walker's arms (see Art.arms), as a baked mesh or as commands.
+func _arms(view: String, t: float, attacking: bool, layer: String, phase: float) -> void:
+	if _fast:
+		var mesh := PawnMesh.arms(kind, view, layer, t, attacking, phase)
+		if mesh != null:
+			_pen.draw_mesh(mesh, _pal_tex)
+	else:
+		Art.arms(_pen, pal, view, t, attacking, layer, _style, phase)
+
+
 func _draw_person() -> void:
 	var p = entity
 	if _work_update(p):
@@ -243,11 +286,12 @@ func _draw_person() -> void:
 	var bob: float = absf(sin(p.walk_phase)) * 0.045 if p.moving else sin(anim_t * 2.2 + p.x * 3.0) * 0.008
 	_reset()
 	_apply()
-	Art.shadow(_pen)
+	if not _fast:
+		Art.shadow(_pen)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	Art.legs(_pen, pal, view, p.walk_phase, p.moving, false)
+	_legs(view, p.walk_phase, p.moving, false, 1.0, true)
 	_tr(0, -bob)
 	var aim: float = PI - p.aim if mirror else p.aim
 	if view == "N":
@@ -384,7 +428,10 @@ func _weapon(view: String, aim: float) -> void:
 	_tr(push, 0)
 	_apply()
 	_pen.draw_texture_rect(weapon_tex, weapon_rect, false)
-	Art.hands(_pen, gun_front, pal.skin)
+	if _fast:
+		_pen.draw_mesh(PawnMesh.hands(gun_front), _pal_tex)
+	else:
+		Art.hands(_pen, gun_front, pal.skin)
 	_m = saved
 
 
@@ -405,11 +452,12 @@ func _draw_zombie() -> void:
 	if fs != Vector2.ONE:
 		_fit_figure(fs)
 	_apply()
-	Art.shadow(_pen, st)
+	if not _fast:
+		Art.shadow(_pen, st)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	Art.legs(_pen, pal, view, z.walk_phase, z.moving, z.limp, 1.0, st)
+	_legs(view, z.walk_phase, z.moving, z.limp, 1.0, true)
 	_tr(0, 0.3)
 	_rot(sway)
 	_tr(0, -0.3 - bob)
@@ -419,9 +467,9 @@ func _draw_zombie() -> void:
 	else:
 		_tr(0, lunge * 0.5 if view == "S" else -lunge * 0.5)
 	_apply()
-	Art.arms(_pen, pal, view, z.t, attacking, "back", st, z.walk_phase)
+	_arms(view, z.t, attacking, "back", z.walk_phase)
 	_draw_body(view)
-	Art.arms(_pen, pal, view, z.t, attacking, "front", st, z.walk_phase)
+	_arms(view, z.t, attacking, "front", z.walk_phase)
 
 
 func _draw_dead() -> void:
@@ -441,7 +489,7 @@ func _draw_dead() -> void:
 		_sc(fs.x, fs.y)
 	_tr(0, -0.3)
 	_apply()
-	Art.legs(_pen, pal, view, 0.0, false, false, alpha, _style)
+	_legs(view, 0.0, false, false, alpha, false)
 	_draw_body(view, Color(1, 1, 1, alpha))
 
 
@@ -453,7 +501,7 @@ func _draw_downed() -> void:
 	_rot(PI / 2.0)
 	_tr(0, -0.3)
 	_apply()
-	Art.legs(_pen, pal, "S", 0.0, false, false)
+	_legs("S", 0.0, false, false, 1.0, false)
 	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
 
 

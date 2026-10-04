@@ -493,6 +493,164 @@ func test_a_session_of_mending_is_not_resumed_by_a_load() -> void:
 
 # ------------------------------------------------------------------------------ no avatar --
 
+# ------------------------------------------------------------------ a lost wall costs (round 22) --
+
+## The chain-link and wire of the east side (110 hp): no post reaches it, so strays wear it down unseen (the QA's far wall).
+const CHAIN_E := 13
+## Where a person nobody can walk to stands (off the map): the dead have no way to them.
+const UNREACHABLE := Vector2(300.0, 300.0)
+
+
+## Everyone is away on a trip, except `who` (a person, or null): the base is empty of those the dead could hunt.
+func _only(sim, who) -> void:
+	for p in sim.people:
+		p.away = null if p == who else {"kind": "party"}
+		p.downed = false
+	Helpers.no_work(sim)
+
+
+## One of the dead outside a fallen east wall, in the state of those who are getting in, with the health of a rock (the guns are not the test).
+func _at_the_gap(sim, seg, out: float = 4.0):
+	var z = sim.spawn(seg.center.x + out, seg.center.y, "wander")
+	z.state = "breach"
+	z.hp = 1.0e9
+	return z
+
+
+func _in_the_yard(z) -> bool:
+	return z.x > 20.5 and z.x < 63.0 and z.y > 18.5 and z.y < 44.0
+
+
+func test_the_dead_at_a_fallen_wall_come_into_the_yard_when_nobody_is_there_for_them_to_hunt() -> void:
+	var g := _game()
+	var sim = g.sim
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	_only(sim, null)
+	var z = _at_the_gap(sim, seg)
+	check(not _in_the_yard(z), "(it begins outside)")
+	Helpers.run(sim, 40.0)
+	check(_in_the_yard(z), "a lost wall lets them in: it stands in the yard at (%.1f, %.1f)" % [z.x, z.y])
+	check(sim.dead_inside() >= 1, "and they are in the stores")
+	g.world.queue_free()
+
+
+func test_the_dead_come_in_for_the_stores_when_the_people_cannot_be_reached() -> void:
+	var g := _game()
+	var sim = g.sim
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	var dez = _p(sim, "dez")
+	_only(sim, dez)
+	dez.x = UNREACHABLE.x
+	dez.y = UNREACHABLE.y
+	var dead := []
+	for i in 4:
+		dead.append(_at_the_gap(sim, seg, 3.0 + float(i) * 0.7))
+	var food: float = sim.stock.food
+	Helpers.run(sim, 60.0)
+	var inside := 0
+	for z in dead:
+		if _in_the_yard(z):
+			inside += 1
+	eq(inside, 4, "all of them are in the yard, not standing at the gap")
+	check(sim.stock.food < food - 0.001, "and the stores are being ruined: %.3f of %.3f left" % [sim.stock.food, food])
+	g.world.queue_free()
+
+
+func test_a_dead_one_that_can_reach_somebody_goes_for_them_and_not_the_stores() -> void:
+	var g := _game()
+	var sim = g.sim
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	var dez = _p(sim, "dez")
+	_only(sim, dez)
+	dez.x = 58.0
+	dez.y = 40.0
+	dez.hp = 100.0
+	dez.reloading = 1.0e6
+	check(sim.order_move(dez, 58.0, 40.0), "(Dez is told to stand there: he does not go to his post)")
+	var z = _at_the_gap(sim, seg)
+	Helpers.run(sim, 30.0)
+	check(dez.hp < 100.0 or dez.downed, "Dez is bitten: they hunt a person they can reach (hp %.1f)" % dez.hp)
+	g.world.queue_free()
+
+
+func test_with_no_avatar_the_dead_stand_as_they_did_when_nobody_can_be_reached() -> void:
+	var g := _game()
+	var sim = g.sim
+	check(sim.avatar.set_player(null), "no avatar")
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	var dez = _p(sim, "dez")
+	_only(sim, dez)
+	dez.x = UNREACHABLE.x
+	dez.y = UNREACHABLE.y
+	var z = _at_the_gap(sim, seg)
+	var x0: float = z.x
+	var y0: float = z.y
+	Helpers.run(sim, 20.0)
+	near(z.x, x0, 0.01, "it has not moved in x")
+	near(z.y, y0, 0.01, "or in y")
+	g.world.queue_free()
+
+
+func test_a_wall_that_is_shut_again_sends_the_dead_who_stood_outside_back_to_it() -> void:
+	var g := _game()
+	var sim = g.sim
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	var dez = _p(sim, "dez")
+	_only(sim, dez)
+	dez.x = UNREACHABLE.x
+	dez.y = UNREACHABLE.y
+	var dead := []
+	for i in 3:
+		var z = _at_the_gap(sim, seg, 6.0 + float(i))    # (they are out in the road when it is mended: a pocket the way in is shut to)
+		dead.append(z)
+	sim._repair_segment(seg, seg.max_hp * 0.9)
+	check(seg.state != 3, "(the wall is shut again)")
+	Helpers.run(sim, 6.0)
+	for z in dead:
+		check(z.state == "approach" or z.state == "attack", "it goes back to the wall (state %s)" % z.state)
+		check(z.slot != null, "and has a place at a wall")
+	Helpers.run(sim, 60.0)
+	check(seg.hp < seg.max_hp * 0.9, "and tears at it again (%.0f hp of %.0f)" % [seg.hp, seg.max_hp])
+	g.world.queue_free()
+
+
+func test_the_dead_inside_the_yard_stay_after_the_wall_is_shut_and_with_no_avatar_all_stand_as_they_did() -> void:
+	var g := _game()
+	var sim = g.sim
+	var seg = _seg(sim, CHAIN_E)
+	_fall(sim, seg)
+	var dez = _p(sim, "dez")
+	_only(sim, dez)
+	dez.x = UNREACHABLE.x
+	dez.y = UNREACHABLE.y
+	var inside = sim.spawn(40.0, 30.0, "wander")
+	inside.state = "breach"
+	inside.hp = 1.0e9
+	sim._repair_segment(seg, seg.max_hp * 0.9)
+	Helpers.run(sim, 6.0)
+	eq(inside.state, "breach", "one that is in the yard is still in it, and hunts")
+	g.world.queue_free()
+	var h := _game()
+	var sim2 = h.sim
+	check(sim2.avatar.set_player(null), "no avatar")
+	var seg2 = _seg(sim2, CHAIN_E)
+	_fall(sim2, seg2)
+	var dez2 = _p(sim2, "dez")
+	_only(sim2, dez2)
+	dez2.x = UNREACHABLE.x
+	dez2.y = UNREACHABLE.y
+	var out = _at_the_gap(sim2, seg2, 6.0)
+	sim2._repair_segment(seg2, seg2.max_hp * 0.9)
+	Helpers.run(sim2, 6.0)
+	eq(out.state, "breach", "with no avatar it stands where it stood (the game as it always was)")
+	h.world.queue_free()
+
+
 func test_with_no_avatar_every_hook_is_neutral_and_throws_no_die() -> void:
 	var g := _game()
 	var sim = g.sim

@@ -42,6 +42,7 @@ static var stand_ins := {}
 ## Where the dead of an event are spawned: this far ahead of the car (tiles) when it comes to them; and how far the streets' own
 ## dead are kept awake round the car (ahead, behind) and dropped behind it.
 const SPAWN_AHEAD := 40.0
+const NODES_PER_FRAME := 14
 const AWAKE_AHEAD := 60.0
 const AWAKE_BEHIND := 28.0
 const DROP_BEHIND := 46.0
@@ -149,6 +150,13 @@ var _hitch_layer: CanvasLayer
 var _hitch_label: Label
 var _pending: Callable
 var _pending_skip := 0
+## Whether a stage is built a part at a time behind its card, a frame apart, so that no one frame of the build is a long one (a real
+## window: yes; headless it is one call in the frame after the card, as the tests take it), and the parts that are still to be built:
+## each is a Callable that is run in a frame of its own and answers false when it wants to be run again in the next one.
+var step_build: bool = card_first and DisplayServer.get_name() != "headless"
+var _steps: Array = []
+var _build_site := {}
+var _swap_info := {}
 var _built := true
 var _probe_c := Callable()
 var _orig_goal := Callable()
@@ -173,6 +181,18 @@ static func module(name: String):
 ## the leg there is over (the place is made after the road: the squad is as the road left it), `going` the people who go (the avatar
 ## first), `ammo` what they may shoot, `vehicle_kind_id` the id of the kind they drive ("" on foot), `loot_mult` and `survivor` the place's.
 func setup_trip(game, game_hud, base_data: Dictionary, the_flow, the_place: Dictionary, the_maker: Callable, going: Array, ammo: float, vehicle_kind_id: String, loot_mult: float, survivor: bool) -> void:
+	_trip_prepare(game, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor)
+	var road_site := _make_road("there")
+	# (the road's own run has no survivor to find and no loot to count)
+	setup(game, game_hud, base_data, road_site, going, ammo, vehicle_kind_id, 1.0, false)
+	_roster = run.squad.duplicate()
+	_mount_parts()
+	_install_stage()
+	name = "DriveScene"
+
+
+## What the trip is, before anything is made (the first lines of `setup_trip`).
+func _trip_prepare(game, the_flow, the_place: Dictionary, the_maker: Callable, going: Array, ammo: float, vehicle_kind_id: String, loot_mult: float, survivor: bool) -> void:
 	flow = the_flow
 	place = the_place
 	_make_place_site = the_maker
@@ -187,13 +207,40 @@ func setup_trip(game, game_hud, base_data: Dictionary, the_flow, the_place: Dict
 	vehicle_kind_data = cs.vehicles.kind(vehicle_kind_id) if cs != null and vehicle_kind_id != "" else {}
 	_trip_seed = _seed_of(game, the_place, cs)
 	leg = "there"
-	var road_site := _make_road("there")
-	# (the road's own run has no survivor to find and no loot to count)
-	setup(game, game_hud, base_data, road_site, going, ammo, vehicle_kind_id, 1.0, false)
-	_roster = run.squad.duplicate()
-	_mount_parts()
-	_install_stage()
-	name = "DriveScene"
+
+
+## The build of a trip in parts (see `step_build`): what `setup_trip` and `begin_trip` do, a frame apart. The biggest of the parts is the
+## world's ground, and none of them is a long frame.
+func _trip_parts(game, game_hud, base_data: Dictionary, the_flow, the_place: Dictionary, the_maker: Callable, going: Array, ammo: float, vehicle_kind_id: String, loot_mult: float, survivor: bool) -> Array:
+	return [
+		func():
+			_trip_prepare(game, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor)
+			_build_site = _make_road("there"),
+		func(): setup_world(game, game_hud, base_data, _build_site, going, false),
+		func():
+			setup_run(going, ammo, vehicle_kind_id, 1.0, false)
+			setup_ui(),
+		func():
+			setup_finish(false)
+			_roster = run.squad.duplicate()
+			_mount_parts()
+			_install_stage()
+			name = "DriveScene",
+		func(): begin_trip(the_flow),
+		Callable(self, "_look_part"),
+		func():
+			_built = true,
+	]
+
+
+## The first look at a stage, a few nodes of the dead a frame (`node_budget`): false while some of them have none yet.
+func _look_part() -> bool:
+	node_budget = NODES_PER_FRAME
+	_sync_views(true)
+	if nodes_missing:
+		return false
+	node_budget = -1
+	return true
 
 
 ## The trip begins: the leg there is on (the flow counts it), the car stands on the start line with its nose north and the squad aboard,
@@ -229,10 +276,14 @@ func open_trip(game, game_hud, base_data: Dictionary, the_flow, the_place: Dicti
 		where = "the " + where.trim_prefix("The ")
 	_make_hitch_layer()
 	_hide_colony()
-	_hitch(("Driving to %s..." if vehicle_kind_id != "" else "Walking to %s...") % where, func():
-		setup_trip(game, game_hud, base_data, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor)
-		begin_trip(the_flow)
-		_built = true)
+	var words := ("Driving to %s..." if vehicle_kind_id != "" else "Walking to %s...") % where
+	if step_build:
+		_hitch_parts(words, _trip_parts(game, game_hud, base_data, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor))
+	else:
+		_hitch(words, func():
+			setup_trip(game, game_hud, base_data, the_flow, the_place, the_maker, going, ammo, vehicle_kind_id, loot_mult, survivor)
+			begin_trip(the_flow)
+			_built = true)
 	_pending_skip = 1    # (this frame's own step comes before the card is drawn: the build is the next frame's)
 
 
@@ -248,12 +299,12 @@ func _hide_colony() -> void:
 
 
 func _input(ev: InputEvent) -> void:
-	if _built:
+	if _built and _steps.is_empty():
 		super(ev)
 
 
 func _unhandled_input(ev: InputEvent) -> void:
-	if _built:
+	if _built and _steps.is_empty():
 		super(ev)
 
 
@@ -649,16 +700,26 @@ func _teardown_stage() -> void:
 ## The next stage from `next_site` and `members` (colony people, or the squad's own dicts `{"def", "hp", "skills", "trust"}`): the world, the
 ## run and the pawns are built as the base's `setup` does, then the camera, the tint and the HUD. `leg` is set by the caller.
 func _swap_stage(next_site: Dictionary, members: Array, kind_id: String, lead_id: String = "") -> void:
+	_swap_world(next_site, kind_id)
+	_swap_run(members, kind_id, lead_id)
+	_swap_look(kind_id)
+
+
+## The parts of `_swap_stage`, which a real window runs a frame apart (`step_build`): the old stage goes and the new world is built.
+func _swap_world(next_site: Dictionary, kind_id: String) -> void:
 	_teardown_stage()
 	site = next_site
 	has_survivor = _survivor and not _is_road()
 	vehicle_kind = kind_id if kind_id != "" else vehicle_kind
 	_build_world()
+
+
+## The run, the squad's pawns, the stage's installations, the camera and the HUD.
+func _swap_run(members: Array, kind_id: String, lead_id: String = "") -> void:
 	var ammo := maxf(0.0, float(colony().stock.ammo)) if colony() != null else _ammo0
 	var defs: Array = []
 	for m in members:
 		defs.append(m if m is Dictionary else RaidRun.squad_of([m])[0])
-	var by_car := kind_id != "" and _is_road()
 	run = RaidRun.new(site, world, fx, defs, ammo, kind_id, _loot_mult, has_survivor)
 	run.sim.jobs.clear()
 	run.sim.tactics.chores = false
@@ -689,9 +750,19 @@ func _swap_stage(next_site: Dictionary, members: Array, kind_id: String, lead_id
 	ended = false
 	_on_stage_hud()
 	hud_layer.refresh()
+
+
+## The first look at the new stage: every pawn is made and shown (`budget` of the dead's nodes at most: -1 for all; false is answered while
+## some have none yet) and, on a road in a car, everyone is seated.
+func _swap_look(kind_id: String, budget: int = -1) -> bool:
+	node_budget = budget
 	_sync_views(true)
-	if by_car:
+	if nodes_missing:
+		return false
+	node_budget = -1
+	if kind_id != "" and _is_road():
 		_seat_everyone()
+	return true
 
 
 func _on_stage_hud() -> void:
@@ -944,7 +1015,7 @@ func _hands() -> void:
 
 
 func _held_still() -> bool:
-	return super() or _pending.is_valid()
+	return super() or _pending.is_valid() or not _steps.is_empty()
 
 
 # ------------------------------------------------------------------------- keys --
@@ -2021,7 +2092,11 @@ func _end_leg() -> void:
 	if bool(r.get("failed", false)) or base_fell or leg == "home":
 		_to_report()
 		return
-	_hitch("At %s" % String(place.get("name", "the place")), Callable(self, "_arrive_place").bind(r))
+	var words := "At %s" % String(place.get("name", "the place"))
+	if step_build:
+		_hitch_parts(words, _arrive_parts(r))
+	else:
+		_hitch(words, Callable(self, "_arrive_place").bind(r))
 
 
 func leg_result() -> Dictionary:
@@ -2046,6 +2121,24 @@ func _hitch(words: String, then: Callable) -> void:
 	_pending = then
 
 
+## Like `_hitch`, but the build is given as parts (`step_build`): the first is run in the frame after the card was drawn (`tick`), the next
+## in the frame after that, and so on while the card stays up; the last takes it down.
+func _hitch_parts(words: String, parts: Array) -> void:
+	_hitch_label.text = words
+	_hitch_layer.visible = true
+	_steps = parts
+
+
+## The next part of the build, in this frame; a part that answers false is run again in the next.
+func _run_build_part() -> void:
+	var part: Callable = _steps[0]
+	if part.call() == false:
+		return
+	_steps.pop_front()
+	if _steps.is_empty():
+		_hitch_layer.visible = false
+
+
 func _begin_pending() -> void:
 	if not _pending.is_valid():
 		return
@@ -2057,6 +2150,13 @@ func _begin_pending() -> void:
 
 ## The way there is done: the place is made now (the squad is as the road left it) and played from here.
 func _arrive_place(r: Dictionary) -> void:
+	_arrive_start()
+	_swap_stage(_swap_info.site, _swap_info.people, _swap_info.kind, String(r.get("leader", "")))
+	_arrive_banner()
+
+
+## The place is made and the flow told (the first of the arrival's parts); what the rest of it is made from is in `_swap_info`.
+func _arrive_start() -> void:
 	var people: Array = flow.going if flow != null else _going
 	var by_car := _by_vehicle()
 	var squad_size := people.size()
@@ -2066,9 +2166,23 @@ func _arrive_place(r: Dictionary) -> void:
 	autopilot = false
 	if flow != null and flow.has_method("arrive"):
 		flow.arrive()
-	_swap_stage(place_site, people, vehicle_kind if by_car else "", String(r.get("leader", "")))
-	var where := String(place_site.get("name", "the place"))
+	_swap_info = {"site": place_site, "people": people, "kind": vehicle_kind if by_car else ""}
+
+
+func _arrive_banner() -> void:
+	var where := String(_swap_info.site.get("name", "the place"))
 	clock_banner("At %s" % where, "Get what you can and get out")
+
+
+## The arrival in parts (`step_build`): what `_arrive_place` does, a frame apart.
+func _arrive_parts(r: Dictionary) -> Array:
+	return [
+		func(): _arrive_start(),
+		func(): _swap_world(_swap_info.site, _swap_info.kind),
+		func(): _swap_run(_swap_info.people, _swap_info.kind, String(r.get("leader", ""))),
+		func(): return _swap_look(_swap_info.kind, NODES_PER_FRAME),
+		func(): _arrive_banner(),
+	]
 
 
 ## The place is over (everyone alive is at the exit, or nobody can stand, or the base has fallen): on a road leg, the leg ends here; in the
@@ -2095,7 +2209,11 @@ func _on_place_over() -> void:
 	if coming.is_empty() or base_fell:
 		_to_report()
 		return
-	_hitch("Driving home" if _by_vehicle() else "Walking home", Callable(self, "_begin_home").bind(coming))
+	var home_words := "Driving home" if _by_vehicle() else "Walking home"
+	if step_build:
+		_hitch_parts(home_words, _home_parts(coming))
+	else:
+		_hitch(home_words, Callable(self, "_begin_home").bind(coming))
 
 
 ## Who comes home from the place (the ones not lost), with the health the place left them.
@@ -2115,14 +2233,31 @@ func _coming_home() -> Array:
 
 
 func _begin_home(members: Array) -> void:
+	_home_start()
+	_swap_stage(_make_road("home"), members, _swap_info.kind, String(final_result.get("leader", "")))
+	_begin_leg_view()
+
+
+## The way home is on (the first of its parts): the flow counts the leg.
+func _home_start() -> void:
 	leg = "home"
 	mode = "foot"
-	var lead_id := String(final_result.get("leader", ""))
 	if flow != null and flow.has_method("begin_leg"):
 		flow.begin_leg("home")
-	var home_site := _make_road("home")
-	_swap_stage(home_site, members, vehicle_kind if _by_vehicle() else "", lead_id)
-	_begin_leg_view()
+	_swap_info = {"kind": vehicle_kind if _by_vehicle() else ""}
+
+
+## The way home in parts (`step_build`): what `_begin_home` does, a frame apart.
+func _home_parts(members: Array) -> Array:
+	return [
+		func():
+			_home_start()
+			_build_site = _make_road("home"),
+		func(): _swap_world(_build_site, _swap_info.kind),
+		func(): _swap_run(members, _swap_info.kind, String(final_result.get("leader", ""))),
+		func(): return _swap_look(_swap_info.kind, NODES_PER_FRAME),
+		func(): _begin_leg_view(),
+	]
 
 
 ## The trip is over: the report over the colony's view (the base's own `_come_home`), with the whole party on its cards.
@@ -2140,6 +2275,12 @@ func _to_report() -> void:
 
 
 func tick(delta: float) -> void:
+	if not _steps.is_empty() and not done:
+		if _pending_skip > 0:
+			_pending_skip -= 1    # (the card is drawn first)
+			return
+		_run_build_part()
+		return
 	if _pending.is_valid() and not done:
 		if _pending_skip > 0:
 			_pending_skip -= 1    # (the card is drawn first)
@@ -2196,6 +2337,7 @@ func stage(script: String) -> void:
 				no_events = true
 			_:
 				super.stage(step)
+	_finish_build()
 	_pose_car(true)
 	hud_layer.refresh()
 	overlay.queue_redraw()
@@ -2291,6 +2433,16 @@ func _stage_end() -> void:
 		guard += 1
 	if _pending.is_valid():
 		tick(1.0 / 30.0)
+	_finish_build()
+
+
+## What is left of a stage's build in parts, made at once: the staging of a screenshot takes the scene as the step left it.
+func _finish_build() -> void:
+	var guard := 0
+	while not _steps.is_empty() and guard < 200:
+		_pending_skip = 0
+		_run_build_part()
+		guard += 1
 
 
 # ----------------------------------------------------------------------- the overlay --
@@ -2300,16 +2452,35 @@ func _stage_end() -> void:
 class DriveOverlay:
 	extends "res://scripts/raid/raid_overlay.gd"
 
+	## What the last draw did, in order ("ring", "figures", "road"): for the tests (the ring of the work lies under the squad's names).
+	var drawn_order := PackedStringArray()
+
 	func _draw() -> void:
+		drawn_order = PackedStringArray()
 		if scene == null or scene.run == null or scene.phase != "place":
 			return
 		var by_car: bool = scene._is_road() and scene.in_car()
+		# the ring of the work goes down first: the squad's names and tags (a downed leader's "Down") lie over it, not under it
+		if scene._is_road():
+			_draw_work_ring()
+			drawn_order.append("ring")
 		if not by_car:
 			super()
 		else:
 			_draw_car()
+		drawn_order.append("figures")
 		if scene._is_road():
 			_draw_road()
+			drawn_order.append("road")
+
+	## The ring round the car while the squad works at a stop: a dark track and the work done so far.
+	func _draw_work_ring() -> void:
+		if scene.mode == "out" and scene.car != null:
+			var c: Vector2 = scene.to_screen(Vector2(scene.car.pos))
+			var r: float = 3.0 * scene.zoom_px
+			draw_arc(c, r, 0, TAU, 40, Color(PILL, 0.8), 6.0, true)
+			var k: float = 1.0 if scene.work_left <= 0.0 else clampf(1.0 - scene.work_left / maxf(scene._work_total, 0.1), 0.0, 1.0)
+			draw_arc(c, r, -PI / 2.0, -PI / 2.0 + k * TAU, 40, ACCENT if scene.work_left > 0.0 else OK, 4.0, true)
 
 	func _draw_car() -> void:
 		var run = scene.run
@@ -2380,14 +2551,8 @@ class DriveOverlay:
 		if scene.mode == "out" and scene.car != null:
 			var c: Vector2 = scene.to_screen(Vector2(scene.car.pos))
 			var r := 3.0 * z
-			draw_arc(c, r, 0, TAU, 40, Color(PILL, 0.8), 6.0, true)
-			var total := maxf(1.0, scene.work_left + 0.001) if scene.work_left > 0.0 else 1.0
-			var k: float = 1.0 if scene.work_left <= 0.0 else clampf(1.0 - scene.work_left / maxf(scene._work_total, 0.1), 0.0, 1.0)
-			draw_arc(c, r, -PI / 2.0, -PI / 2.0 + k * TAU, 40, ACCENT if scene.work_left > 0.0 else OK, 4.0, true)
 			var words := "%d s" % int(ceilf(scene.work_left)) if scene.work_left > 0.0 else "E  Back in the car"
 			_tag(c + Vector2(0.0, r + 16.0), words, font, ACCENT if scene.work_left > 0.0 else INK)
-			if total < 0.0:
-				return
 
 
 ## The skid marks the car leaves: short dark strokes at its wheels, the last few dozen.

@@ -43,6 +43,21 @@ const SITE_GEN := "res://scripts/raid/site_gen.gd"
 const SITE_STUB := "res://scripts/raid/stub_site.gd"    # TODO-SITEGEN: delete with the fallback in open_raid once SITE_GEN is there
 ## The live drive's scene (round 21): a RaidScene whose road is driven (see `open_raid`).
 const DRIVE_SCENE := "res://scripts/drive/drive_scene.gd"
+## The scripts a trip needs (the drive scene and, as it names them, its modules and the site generator): read in the background a few
+## seconds into a run, one now and then, so that the click on "Go" is not the moment they are compiled (that was a frame of 170 ms, and
+## more on the web). A test holds this list to the scene's own (DriveScene.PATHS).
+const TRIP_SCRIPTS := [
+	"res://scripts/raid/site_gen.gd",
+	"res://scripts/drive/drive_scene.gd",
+	"res://scripts/drive/road_gen.gd",
+	"res://scripts/drive/road_events.gd",
+	"res://scripts/drive/car_sim.gd",
+	"res://scripts/drive/autopilot.gd",
+	"res://scripts/drive/drive_hud.gd",
+]
+var _warm_left: Array = []
+var _warm_started := false
+var _warm_done := false
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -1529,6 +1544,7 @@ func _process(delta: float) -> void:
 		var h := minf(rem, StepClock.STEP)
 		_visual_step(h)
 		rem -= h
+	_warm_a_trip_script()
 
 	if title_mode:
 		_title_camera(dt)
@@ -1583,6 +1599,25 @@ func _process(delta: float) -> void:
 		sound.set_ambience(lighting.dark, minf(1.0, near / 14.0), 0.1)
 		music.follow(not title_mode and hud.game_over == null, raid_open(), lighting.dark, minf(1.0, near / 14.0), 0.1)
 	_shot_frame()
+
+
+## Asks for one of the trip's scripts to be read in the background, every 45th frame from the third second of a run (a real window that is
+## not taking a screenshot; the tests read what they need themselves).
+func _warm_a_trip_script() -> void:
+	if _warm_done or clock < 3.0 or Engine.get_process_frames() % 45 != 0:
+		return
+	if shot_path != "" or DisplayServer.get_name() == "headless":
+		_warm_done = true
+		return
+	if _warm_left.is_empty() and not _warm_started:
+		_warm_left = TRIP_SCRIPTS.duplicate()
+		_warm_started = true
+	if _warm_left.is_empty():
+		_warm_done = true
+		return
+	var path: String = _warm_left.pop_front()
+	if ResourceLoader.exists(path):
+		ResourceLoader.load_threaded_request(path)
 
 
 ## One frame of a screenshot run (it counts frames, measures a few and takes the shot): the yard's frame and a played trip's both end here.
@@ -2098,12 +2133,10 @@ func _on_wall_mended(e: Dictionary) -> void:
 	var share := 0
 	if seg != null:
 		share = roundi(100.0 * float(e.get("hp", 0.0)) / maxf(float(seg.max_hp), 1.0))
-	if why == "whole":
-		hud.toast("The %s is whole again" % wall)
-	elif why == "no scrap":
-		hud.toast("No scrap left to mend the %s with" % wall, "warn")
-	elif share > 0:
-		hud.toast("Mended the %s: %d%% more" % [wall, share])
+	# (round 22: one press mends until the wall is whole, so every way it ends is said: whole, no scrap, a wound, the dead at his back...)
+	var words: Dictionary = sim.nights.stop_words(why, wall, share)
+	if String(words.line) != "":
+		hud.toast(String(words.line), "warn" if bool(words.warn) else "info")
 
 
 ## Someone has reached the gate (a recruit, recruits.gd): a soft bell and the chime, and their card, lit for a moment

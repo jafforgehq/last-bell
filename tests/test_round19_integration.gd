@@ -199,9 +199,10 @@ func test_a_real_big_night_plated_brutes_arrive_the_calls_come_and_the_card_show
 	var hud = hud_set.hud
 	var seen := {"plated": 0, "multi": 0, "wrong": 0, "kinds": {}, "card": 0, "idea": 0, "urgent_with_idea": 0}
 	_play(m, func(mm):
-		# an idea that someone brought at 17:18 (round 20), open for six hours: the old card showed the OLDEST call, and so hid the wall
+		# an idea that someone brought at 17:18 (round 20), open for twelve hours: the old card showed the OLDEST call, and so hid the wall
+		# (it was six hours until the round 19 tuning, which moved the first wall's call, a plated brute's at about 23:45, past the idea's end)
 		if int(seen.idea) == 0 and float(mm.sim.hour) >= 17.3:
-			seen.idea = mm.sim.radio.raise_call("idea", "Ana has an idea", "A cot for the infirmary", [{"id": "yes", "label": "Yes"}, {"id": "later", "label": "Later"}], "later", 360.0)
+			seen.idea = mm.sim.radio.raise_call("idea", "Ana has an idea", "A cot for the infirmary", [{"id": "yes", "label": "Yes"}, {"id": "later", "label": "Later"}], "later", 720.0)
 		for z in mm.sim.zombies:
 			if bool(z.plated) and z.state != "dead" and z.state != "dying":
 				seen.plated = maxi(int(seen.plated), 1)

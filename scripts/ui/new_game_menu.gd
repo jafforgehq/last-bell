@@ -233,7 +233,7 @@ func _choose(i: int) -> void:
 		var s: Label = b.get_meta("sub")
 		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
 		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
-	facts_label.text = Kit.difficulty_facts(difficulty)
+	facts_label.text = Kit.difficulty_facts(difficulty, crew)
 
 
 ## Picks a crew (0 the small one, 1 the full one): its card lights up and the words under the cards say what it means.
@@ -250,6 +250,9 @@ func _choose_crew(i: int) -> void:
 		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
 		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
 	crew_facts_label.text = CREW_FACTS[i]
+	# (the nights' size is the avatar game's with a small crew and the old game's with six: the words under the difficulty follow the crew)
+	if facts_label != null:
+		facts_label.text = Kit.difficulty_facts(difficulty, crew)
 
 
 ## Picks a length (0 Autumn's thirty nights, 1 the campaign): its card lights up.

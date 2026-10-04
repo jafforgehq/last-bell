@@ -2,7 +2,7 @@
 ## place as a SITE in the shape of site_gen.gd (so `World.build(site.data)` and `RaidRun` take it as they take a place), with a
 ## `road` dictionary the drive scene and the car's autopilot read. Read the data in assets/data/road_layouts.json.
 ##
-##   {"name": "The road to The pharmacy", "kind": "road", "size": Vector2i(30, len + 24), "data": a map (SiteGen.map_data),
+##   {"name": "The road to the pharmacy" ("The road home from the pharmacy" on the way back), "kind": "road", "size": Vector2i(30, len + 24), "data": a map (SiteGen.map_data),
 ##    "entry": the leg's start, "entry_spread", "exit": Rect2 (6 rows, the whole width, from the leg's end onward),
 ##    "vehicle_spot": (-1, -1), "containers": [], "dead": [stragglers], "rooms": [], "seed", "danger",
 ##    "road": {"len", "width", "style", "start", "end", "dir", "centerline", "path", "slots", "dyn", "ambient", "leg"}}
@@ -153,6 +153,11 @@ static func _pick(table: Dictionary, rng: RandomNumberGenerator) -> String:
 	return last
 
 
+## The place's name as it reads in a sentence: "The pharmacy" is "the pharmacy", "Pell's bakery" stays.
+static func _in_a_sentence(place_name: String) -> String:
+	return "the " + place_name.trim_prefix("The ") if place_name.begins_with("The ") else place_name
+
+
 static func _build(place: Dictionary, seed: int, leg: String, ctx: Dictionary, salt: int, drop_wrecks: bool) -> Dictionary:
 	var lay := layouts()
 	var cfg: Dictionary = lay.geometry
@@ -202,7 +207,7 @@ static func _build(place: Dictionary, seed: int, leg: String, ctx: Dictionary, s
 	else:
 		ambient = _ambient_for(ctx)
 	return {
-		"name": "The road to %s" % String(place.get("name", "the place")),
+		"name": ("The road home from %s" if leg == "home" else "The road to %s") % _in_a_sentence(String(place.get("name", "the place"))),
 		"kind": "road",
 		"size": Vector2i(W, H),
 		"data": data,
