@@ -1645,6 +1645,13 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 			_follow(z, slow * 1.1, dt)
 		"breach":
 			z.repath -= dt
+			# (avatar mode, round 22: a wall that is mended while they stand outside is a wall again: they go back to tearing at it, they do
+			# not wait out the night by a shut gate)
+			if nights.active() and not _breached() and not _in_the_yard(z.x, z.y) and not inside_school(z.x, z.y):
+				z.path = []
+				z.path_i = 0
+				z.state = "approach"
+				return
 			var prey: Person = null
 			var pd := INF
 			for p in people:
@@ -1655,6 +1662,9 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 					pd = dist
 					prey = p
 			if prey == null:
+				# (avatar mode, round 22: a lost wall lets the dead in even when there is nobody to go for: they make for the stores)
+				if nights.active():
+					_come_in(z, slow * 1.1, dt)
 				return
 			if pd < 0.7:
 				z.facing = facing_of(prey.x - z.x, prey.y - z.y, z.facing)
@@ -1663,7 +1673,9 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 					z.attack_t = 1.3
 					_bite(z, prey)
 				return
-			if z.repath <= 0.0 or z.path.is_empty():
+			# (avatar mode asks again once a second, as a person is asked: a dead one with no way to anybody is not a search a step)
+			var avatar_game: bool = nights.active()
+			if z.repath <= 0.0 or (z.path.is_empty() and not avatar_game):
 				z.repath = 1.0
 				if world.is_solid(world.solid_z, z.x, z.y):
 					# a survivor who turned inside the school stands where the dead
@@ -1675,7 +1687,26 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 				if z.path.is_empty() and not school_open and in_school(prey) and _assign_door_slot(z):
 					z.state = "approach"
 					return
+				# a lost wall costs (round 22): no way to anybody, so they come in for the stores
+				if z.path.is_empty() and avatar_game:
+					z.path = path_z.find(world.solid_z, z.x, z.y, nights.YARD_MIDDLE.x, nights.YARD_MIDDLE.y)
+					z.path_i = 0
 			_follow(z, slow * 1.1, dt)
+
+
+## Whether a point is in the compound's yard (the ground between the walls and the school: where the dead ruin the stores).
+func _in_the_yard(x: float, y: float) -> bool:
+	return x > 20.0 and x < 64.0 and y > 18.0 and y < 44.0
+
+
+## Avatar mode (round 22): one of the dead in a breach with nobody to hunt walks to the middle of the yard, where the stores are (and stays
+## there until the dawn: `dead_inside` ruins what it finds). Asked once a second.
+func _come_in(z: Zombie, speed: float, dt: float) -> void:
+	if (z.path.is_empty() or z.path_i >= z.path.size()) and z.repath <= 0.0:
+		z.repath = 1.0
+		z.path = path_z.find(world.solid_z, z.x, z.y, nights.YARD_MIDDLE.x, nights.YARD_MIDDLE.y)
+		z.path_i = 0
+	_follow(z, speed, dt)
 
 
 func _claw(z: Zombie, s: Segment) -> void:

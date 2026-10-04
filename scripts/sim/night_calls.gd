@@ -8,6 +8,10 @@
 ## the base, so it reads as a plain warning):
 ##   going   a compound section under `calls.going_below` of its health with two of the dead at it, or a plated brute at it
 ##           (hold | send two | I'm on my way | fall back). It settles the section's open `attack` and `brute` calls by their defaults, quietly.
+##           Also (round 22, the QA's far walls): a section that one of the dead, or more, has been clawing for `calls.unattended_min`
+##           (UNATTENDED_MIN, 30 game minutes) while no gun is placed to reach them and the avatar is not within the rally's reach, and that
+##           the claws would bring down before the dead go home at dawn ("Nobody is covering the chain-link and wire"): the same options, once a
+##           section a night of its own (a lone stray used to wear a far wall down to nothing with only the `attack` call, whose default is hold).
 ##   brute   a brute on its way to a section, within `calls.brute_warn_r` tiles of it
 ##           (keep the guns on it | I'll take it | send two | draw it to the best defended other section, 3 scrap)
 ##   breach  a compound section has fallen in the night (hold the line | close it, needs you there | pull back | I'm on my way); it settles
@@ -41,11 +45,18 @@ const NightData := preload("res://scripts/sim/night_data.gd")
 const CLOSE_N := 2
 ## The notice of a Big Night is made when the desk is staffed within this many hours of the notice hour (a person walking to it).
 const NOTICE_WINDOW_H := 0.5
+## Game minutes of the dead clawing at a wall that nobody can shoot at before the radio says so (`calls.unattended_min`).
+const UNATTENDED_MIN := 30.0
+## `minutes_to_dawn` past this many minutes means the dead have already gone home (the dawn's own hour has been passed).
+const NIGHT_SPAN_MAX := 900.0
 
 ## Who has been called for what, and the day it is for: "going:3" (a section), "night", "road-soon"... to a day (`sim.day`).
 var called := {}
 ## What each wall section's state was last step (segment id to state): a fall is a change to 3.
 var seen := {}
+## Where the dead are clawing without a break (segment id to {"since": game minute, "hp": its health at the last look}): the clock of the
+## unattended-wall call. Not saved: a load starts the half hour again.
+var clawed := {}
 ## The breaches that have been called and are not shut yet (segment id to the day).
 var breaches := {}
 ## The day whose noon has been looked at for the day-ahead notice.
@@ -71,6 +82,7 @@ func setup(r) -> void:
 func reset() -> void:
 	called = {}
 	seen = {}
+	clawed = {}
 	breaches = {}
 	notice_day = 0
 	focus = {}
@@ -216,15 +228,17 @@ func _watch_walls() -> void:
 		var was := int(seen.get(id, 0))
 		seen[id] = int(s.state)
 		if s.state != 3 and breaches.has(id):
-			breaches.erase(id)
-			radio.log_news("breach", "%s is shut again" % _the_cap(s), "", {"at": s.center})
+			shut_again(s)
 		if not night:
+			clawed.erase(id)
 			continue
 		if s.state == 3:
+			clawed.erase(id)
 			if was != 3:
 				_raise_breach(s)
 			continue
 		var attackers := 0
+		var at_it: Array = []
 		var plated_at := false
 		var coming = null
 		for sl in s.slots:
@@ -233,6 +247,7 @@ func _watch_walls() -> void:
 				continue
 			if z.state == "attack":
 				attackers += 1
+				at_it.append(z)
 				if z.kind == Kinds.BRUTE and z.plated:
 					plated_at = true
 			elif z.state == "approach" and z.kind == Kinds.BRUTE and z.slot == sl and coming == null and Vector2(z.x, z.y).distance_to(s.center) <= warn_r:
@@ -241,20 +256,101 @@ func _watch_walls() -> void:
 		# (the wall that is going is told before a brute that comes to it: the brute's call then stands behind it, and is not settled by it)
 		if (share < below and attackers >= 2) or plated_at:
 			_raise_going(s, attackers, share, plated_at)
+		elif attackers > 0:
+			_watch_alone(s, at_it)
+		else:
+			clawed.erase(id)
 		if coming != null:
 			_raise_brute(s, coming)
 
 
-func _raise_going(s, attackers: int, share: float, plated: bool) -> void:
-	if not _once("going:%d" % int(s.id)):
+## The clock of a wall that is being clawed with nobody to shoot at the dead (round 22): it starts with the first of the dead at the wall and
+## starts again when they have all gone, when a gun or the avatar is placed to reach them, or when the wall has been mended. After
+## `UNATTENDED_MIN` game minutes of it, if the claws so far would bring the section down before the dead go home, the radio asks.
+func _watch_alone(s, at_it: Array) -> void:
+	var id := int(s.id)
+	if _lesson_on():
+		clawed.erase(id)    # (Orientation Day's night is scripted, and its walls are held up by the script: nothing is called for)
 		return
-	radio.settle_wall_calls(s, ["attack", "brute"])    # (a brute that was coming to it is in this call now: one open call for one wall)
+	var now := float(sim.clock_min)
+	var hp := float(s.hp)
+	var rec: Dictionary = clawed.get(id, {})
+	if rec.is_empty() or hp > float(rec.hp) + 1.0e-6 or _attended(s, at_it):
+		clawed[id] = {"since": now, "hp": hp, "start_hp": hp}
+		return
+	rec["hp"] = hp
+	var waited := now - float(rec.since)
+	if waited < NightData.num("calls.unattended_min", UNATTENDED_MIN):
+		return
+	var lost := float(rec.start_hp) - hp
+	if lost <= 0.0:
+		return    # (nothing is hurting it: it holds)
+	if hp / (lost / waited) > minutes_to_dawn():
+		return    # (at this rate it stands until the dead go home)
+	_raise_going(s, at_it.size(), hp / float(s.max_hp), false, waited)
+
+
+## Orientation Day is on (its scenario is the script, `after_step`, and has not finished).
+func _lesson_on() -> bool:
+	var sc = sim.scenario
+	return sc != null and sc.has_method("after_step") and not bool(sc.get("finished"))
+
+
+## Whether someone is placed to deal with the dead at a wall: the avatar within the rally's reach of it, or a defender whose post is within reach of
+## one of the dead (`Tactics.post_pos`, the gun's reach tonight).
+func _attended(s, at_it: Array) -> bool:
+	if _avatar_within(s):
+		return true
+	for p in _defenders():
+		var at: Vector2 = sim.tactics.post_pos(p)
+		var reach: float = sim.reach_at(p.gun, at, true)
+		for z in at_it:
+			if at.distance_to(Vector2(z.x, z.y)) <= reach:
+				return true
+	return false
+
+
+## Game minutes until the dead go home at the dawn (0 once they have).
+func minutes_to_dawn() -> float:
+	var end_h: float = float(sim.seasons.dawn_hour()) - float(sim.seasons.DAWN_H)
+	var left := fposmod(end_h * 60.0 - float(sim.minutes), 1440.0)
+	return 0.0 if left > NIGHT_SPAN_MAX else left
+
+
+## "The <wall> is shut again" (news, no options): a breach that has been closed, by whoever mended it (the crew at the dawn, the avatar's hands:
+## nights.gd), once for each time the wall was down.
+func shut_again(s) -> void:
+	var id := int(s.id)
+	breaches.erase(id)
+	radio.log_news("breach", "%s is shut again" % _the_cap(s), "", {"at": s.center})
+
+
+## Whether a call of this kind about this section still waits for an answer.
+func _has_open(s, kind: String) -> bool:
+	for e in radio.open_calls():
+		if String(e.kind) == kind and int(e.data.get("seg", -1)) == int(s.id):
+			return true
+	return false
+
+
+## `waited` (game minutes) is 0 for the call of a wall that is going, and the time the dead have been at a wall nobody covers for the other.
+func _raise_going(s, attackers: int, share: float, plated: bool, waited: float = 0.0) -> void:
+	var alone := waited > 0.0
+	if alone and _has_open(s, "going"):
+		return    # (the wall already has its call)
+	if not _once(("alone:%d" if alone else "going:%d") % int(s.id)):
+		return
+	# (a brute that was coming to it is in this call now: one open call for one wall; a wall that is going settles the call that said nobody was at it)
+	radio.settle_wall_calls(s, ["attack"] if alone else ["attack", "brute", "going"])
 	var pct := roundi(share * 100.0)
 	var text := "%s is going" % _the_cap(s)
-	if share >= NightData.num("calls.going_below", 0.4):
-		text = "A plated brute is tearing at %s" % _the(s)
 	var sub := "%d of the dead at it, %d%% intact" % [attackers, pct]
-	if plated and share < NightData.num("calls.going_below", 0.4):
+	if alone:
+		text = "Nobody is covering %s" % _the(s)
+		sub = "%d of the dead at it for %s, %d%% intact: it will not last the night" % [attackers, duration_text(waited), pct]
+	elif share >= NightData.num("calls.going_below", 0.4):
+		text = "A plated brute is tearing at %s" % _the(s)
+	if plated and not alone and share < NightData.num("calls.going_below", 0.4):
 		sub += ", a plated brute among them"
 	var options: Array = [
 		{"id": "hold", "label": "Hold"},
@@ -286,7 +382,8 @@ func _raise_brute(s, z) -> void:
 
 
 func _raise_breach(s) -> void:
-	if not _once("breach:%d" % int(s.id)):
+	# (a call for each time the wall falls: the dead who stand outside a wall that was mended tear at it again, round 22)
+	if breaches.has(int(s.id)):
 		return
 	breaches[int(s.id)] = int(sim.day)
 	radio.settle_wall_calls(s, ["attack", "going", "brute"])

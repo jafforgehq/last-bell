@@ -102,6 +102,31 @@
 			"start": {"cond": "has_vehicle"}
 		},
 		{
+			"id": "use",
+			"title": "E uses what is there",
+			"text": "E uses what is at your feet: talk to someone, take a post on the wall, work the bench, mend a worn wall, check a car. The prompt says what it will do.",
+			"start": {"cond": "can_use"}
+		},
+		{
+			"id": "ring",
+			"title": "The green ring",
+			"text": "The green ring round you: the crew inside it shoots better and faster. On a hard night stand where the dead come, and keep your people in the ring.",
+			"start": {"cond": "ring_night"}
+		},
+		{
+			"id": "bignight",
+			"title": "A Big Night is coming",
+			"text": "A Big Night needs you at the wall the forecast names, with plated brutes: shoot their heads. Be home before the dusk, and keep the crew inside your green ring.",
+			"anchor": ["clock"],
+			"start": {"cond": "big_night_ahead"}
+		},
+		{
+			"id": "trips",
+			"title": "Leading a trip",
+			"text": "Pick a place, then Take control to lead the trip, or send them without you. On the road W A S D drives, and Tab hands the wheel to the autopilot: slower, but safe.",
+			"start": {"cond": "all", "params": {"of": [{"cond": "avatar_game"}, {"cond": "panel_page", "params": {"page": "map"}}]}}
+		},
+		{
 			"id": "build",
 			"title": "Time to build",
 			"text": "The crew can build now. Press N and pick a building: a salvage bench pays for itself.",

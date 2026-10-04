@@ -5,6 +5,7 @@
 extends RefCounted
 
 const Waves := preload("res://scripts/sim/waves.gd")
+const Kinds := preload("res://scripts/sim/kinds.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
@@ -29,14 +30,22 @@ static func difficulty_line(i: int) -> String:
 
 ## What a difficulty really changes, worked out from the rules' own numbers (so that
 ## the words stay true when the numbers are tuned): how many of the dead come each
-## night, how likely a bite is to infect, and how dangerous a trip outside is.
-static func difficulty_facts(i: int) -> String:
+## night, how likely a bite is to infect, and how dangerous a trip outside is. `crew` is the crew the run begins with: a full crew of six
+## has no avatar and the classic nights (30 on the first, 3 more each night); a small one (3 or 5) plays the avatar game, whose nights
+## are smaller and grow by a little and every tenth is a Big Night (round 22: the words used to say the classic game's numbers for both).
+static func difficulty_facts(i: int, crew: int = 6) -> String:
 	i = clampi(i, 0, 2)
 	var dead := float(Waves.DIFFICULTY[i])
 	var infect := float(Medical.INFECT_CHANCE[i])
 	var trips := float(Scavenge.DANGER_MULT[i])
 	var first := roundi(Waves.BASE * dead)
 	var more := roundi(Waves.BASE * Waves.GROWTH * dead)
+	var big := 0
+	if crew < 6:
+		var outline := Waves.avatar_outline(dead, crew)
+		first = roundi(float(outline.first))
+		more = roundi(float(outline.more))
+		big = int(outline.big_every)
 	var parts: Array = []
 	if absf(dead - 1.0) < 0.005:
 		parts.append("As designed: about %d of the dead on the first night, %d more each night after." % [first, more])
@@ -44,6 +53,10 @@ static func difficulty_facts(i: int) -> String:
 		parts.append("%d%% fewer of the dead: about %d on the first night, %d more each night after." % [roundi((1.0 - dead) * 100.0), first, more])
 	else:
 		parts.append("%d%% more of the dead: about %d on the first night, %d more each night after." % [roundi((dead - 1.0) * 100.0), first, more])
+	if big > 0:
+		# (a brute counts for several of the dead in a night's budget: from its first night the number of bodies can drop while the night is no easier)
+		parts.append("From night %d a brute, worth %d of the dead, comes with them." % [int(Kinds.KINDS.brute.first), int(Kinds.KINDS.brute.cost)])
+		parts.append("Every %dth night is a Big Night: far more of them, with plated brutes, and it needs you at the wall." % big)
 	if infect >= 0.995:
 		parts.append("Every bite infects.")
 	else:

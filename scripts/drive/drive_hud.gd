@@ -257,7 +257,7 @@ func _squad_now() -> Array:
 	return scene.run.squad.duplicate() if scene != null and scene.run != null else []
 
 
-## The destination as a phrase: "The pharmacy" (the flow's place, else the road's name without "The road to").
+## The destination as a phrase: "The pharmacy" (the flow's place, else the road's name without "The road to" or "The road home from").
 func place_name() -> String:
 	var flow = _g("flow")
 	var cs = scene.colony() if scene != null else null
@@ -266,7 +266,7 @@ func place_name() -> String:
 		if not pl.is_empty():
 			return String(pl.get("name", ""))
 	var road_name := String(scene.site.get("name", "")) if scene != null else ""
-	return road_name.trim_prefix("The road to ") if road_name.begins_with("The road to ") else road_name
+	return road_name.trim_prefix("The road home from ").trim_prefix("The road to ")
 
 
 # ------------------------------------------------------------------- the road --

@@ -141,6 +141,10 @@ var _was_out := false
 var _tint_t := 0.0
 var _sound_t := 0.0
 var has_survivor := false
+## How many nodes of the dead one `_sync_views` makes at most (-1: as many as there are), and whether some of the dead have none yet.
+## A stage built a part at a time (drive_scene.gd) makes them a few every frame while its card is up.
+var node_budget := -1
+var nodes_missing := false
 ## The stand-ins for the radio that the verbs ask: the squad's (through the place) and the base's (at a distance).
 var squad_radio
 var base_radio
@@ -152,6 +156,15 @@ var base_radio
 ## `has_survivor` whether someone is to be found in the place. The colony's avatar (if there is one among them, else the first)
 ## leads. This is the place only: `begin_trip` puts the roads and the colony's running round it.
 func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_people: Array, ammo: float, vehicle_kind: String = "", loot_mult: float = 1.0, survivor: bool = false) -> void:
+	setup_world(game, game_hud, base_data, the_site, members_people, survivor)
+	setup_run(members_people, ammo, vehicle_kind, loot_mult, survivor)
+	setup_ui()
+	setup_finish()
+
+
+## The parts of `setup`, in the order it runs them: a scene that builds behind a card (drive_scene.gd) runs them a frame apart, so that no
+## one frame of the build is a long one. First the world (the ground, the effects, the camera), the biggest of them.
+func setup_world(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_people: Array, survivor: bool) -> void:
 	main = game
 	hud = game_hud
 	data = base_data
@@ -161,6 +174,10 @@ func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_
 	name = "RaidScene"
 	_hide_colony()
 	_build_world()
+
+
+## The rules' run on the world, the squad and its pawns, the vehicle and the radio's stand-ins.
+func setup_run(members_people: Array, ammo: float, vehicle_kind: String = "", loot_mult: float = 1.0, survivor: bool = false) -> void:
 	run = RaidRun.new(site, world, fx, RaidRun.squad_of(members_people), ammo, vehicle_kind, loot_mult, survivor)
 	# the run's own Sim gives each person the colony job their def names (a seat in the yard); nobody here works one
 	run.sim.jobs.clear()
@@ -176,6 +193,10 @@ func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_
 		_add_vehicle(vehicle_kind)
 	squad_radio = SquadRadio.new(self)
 	base_radio = BaseRadio.new(self)
+
+
+## The overlay and the HUD.
+func setup_ui() -> void:
 	overlay_layer = CanvasLayer.new()
 	overlay_layer.layer = 2
 	add_child(overlay_layer)
@@ -187,6 +208,11 @@ func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_
 	add_child(hud_layer)
 	hud_layer.setup(hud, self)
 	_mirror_colony()
+
+
+## The camera, the tint and the first look at everything (every pawn is shown once, `_sync_views(true)`; `first_look` false leaves that to the
+## caller, a build that makes the nodes of the dead a few at a time).
+func setup_finish(first_look: bool = true) -> void:
 	_frame_start()
 	_clamp_camera()
 	_apply_camera()
@@ -194,7 +220,8 @@ func setup(game, game_hud, base_data: Dictionary, the_site: Dictionary, members_
 	legend_t = RaidHud.LEGEND_HOLD
 	_update_tint()
 	hud_layer.refresh()
-	_sync_views(true)
+	if first_look:
+		_sync_views(true)
 
 
 ## The trip's flow (place_flow.gd, begun: the party is away, the road there is set) round the place: the scene shows the road
@@ -1229,11 +1256,17 @@ func _sync_views(first: bool) -> void:
 	var alpha := step_clock.alpha()
 	var alive := {}
 	var i := 0
+	var made := 0
+	nodes_missing = false
 	for z in run.sim.zombies:
 		i += 1
 		alive[z] = true
 		var dead: bool = z.state == "dead" or z.state == "dying"
 		if not pawn_nodes.has(z):
+			if node_budget >= 0 and made >= node_budget:
+				nodes_missing = true    # (the rest are made by the next look: a build behind a card makes so many a frame)
+				continue
+			made += 1
 			_add_pawn(z, true, "z%d" % z.look_index)
 		var n = pawn_nodes[z]
 		if dead and n.get_parent() == entities:

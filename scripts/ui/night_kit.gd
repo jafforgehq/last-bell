@@ -104,6 +104,38 @@ static func forecast_line(f: Dictionary, last: bool = true) -> String:
 	return text
 
 
+## The same, for a narrow window (the clock there is 164 px across and the whole line wrapped to six lines): the name, the size, the side and
+## the plated brutes, no hours (the tags in the yard give those): "The Siege: 34 to 46, north, 2 plated brutes".
+static func forecast_line_compact(f: Dictionary, last: bool = true) -> String:
+	var kind := String(f.get("kind", "ordinary"))
+	var name := String(f.get("name", ""))
+	if name == "":
+		name = ("The last night" if last else "The Big Night") if kind == "final" else ("The Big Night" if kind == "milestone" else "Tonight")
+	var total := int(f.get("total", 0))
+	var low := int(f.get("low", 0))
+	var high := int(f.get("high", 0))
+	var text := "%s: " % name
+	if low > 0 and high > low:
+		text += "%d to %d" % [low, high]
+	else:
+		text += "about %d" % (total if total > 0 else maxi(low, high))
+	if kind == "final":
+		text += ", everywhere"
+	else:
+		var side := String(f.get("side", f.get("heading", "")))
+		if side != "":
+			text += ", %s" % side
+	var plated := int(f.get("plated", 0))
+	var brutes := int(f.get("brutes", 0))
+	if plated > 0:
+		text += ", a plated brute" if plated == 1 else ", %d plated brutes" % plated
+	elif brutes > 0:
+		text += ", a brute" if brutes == 1 else ", %d brutes" % brutes
+	elif bool(f.get("runners", false)):
+		text += ", runners"
+	return text
+
+
 ## The tag of the walls the dead will come to ("brunt, about 21:00"), or "" for a forecast without the outlook.
 static func brunt_tag(f: Dictionary) -> String:
 	if not has_outlook(f):
@@ -138,6 +170,27 @@ static func ready_line(f: Dictionary) -> Dictionary:
 		text += ". This one needs you."
 	elif holds:
 		text = "Should hold: p" + text.substr(1)
+	return {"text": text, "holds": holds}
+
+
+## The ready line for a narrow clock: "Needs you: posts 1/4, walls 100%" (the guns are named only when too few, as in the whole line).
+static func ready_line_compact(f: Dictionary) -> Dictionary:
+	var r = f.get("ready", {})
+	if not (r is Dictionary) or (r as Dictionary).is_empty():
+		return {}
+	var posts := maxi(0, int(r.get("posts", 0)))
+	var manned := clampi(int(r.get("manned", 0)), 0, posts)
+	var walls := roundi(clampf(float(r.get("walls", 0.0)), 0.0, 1.0) * 100.0)
+	var text := "posts %d/%d, walls %d%%" % [manned, posts, walls]
+	if int(r.get("guns", 0)) < int(NightData.num("forecast.decent_guns", 2.0)):
+		text += ", guns %d" % int(r.get("guns", 0))
+	var holds := bool(r.get("holds", false))
+	if needs_you(f):
+		text = "Needs you: " + text
+	elif holds:
+		text = "Should hold: " + text
+	else:
+		text = text.substr(0, 1).to_upper() + text.substr(1)
 	return {"text": text, "holds": holds}
 
 

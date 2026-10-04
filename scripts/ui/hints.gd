@@ -5,6 +5,9 @@
 ## replaced by assets/data/hints.json and none of the teaching: it never holds the game, never
 ## locks an order and never hides a menu.
 ##
+## ROUND 22 (the QA's list): the avatar game has tips of its own, which the old game's conditions never meet (`avatar_game`): E and what is at
+## your feet (`can_use`), the green ring of the rally the first night it is up (`ring_night`), a Big Night on the way (`big_night_ahead`),
+## and the trip with its autopilot when the Map page is opened (`panel_page`: the one thing a condition is told of the screen, `_state`).
 ## - A tip comes when its `start` condition first holds and `Prefs.flag("hint_<id>")` is not set; the
 ##   flag is set the moment it is shown, so it comes once, ever. It stays until Got it or 25 seconds.
 ## - One at a time, and not more often than every 45 seconds. Not in the first 20 seconds of a run,
@@ -148,12 +151,21 @@ func tick(delta: float) -> void:
 
 ## The first tip whose moment has come and that has not been shown.
 func _next_tip() -> Dictionary:
+	var state := _state()
 	for h in hints:
 		if Prefs.flag("hint_%s" % String(h.id)):
 			continue
-		if Conditions.check(h.get("start", {}), sim, {}):
+		if Conditions.check(h.get("start", {}), sim, state):
 			return h
 	return {}
+
+
+## What the conditions may ask of the screen (they never read it themselves): the page of the radio panel that is open ("" for none).
+func _state() -> Dictionary:
+	var page := ""
+	if hud != null and is_instance_valid(hud) and hud.has_method("radio_page"):
+		page = String(hud.radio_page())
+	return {"panel": page}
 
 
 func _show(h: Dictionary) -> void:

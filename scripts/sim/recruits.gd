@@ -126,8 +126,14 @@ func housing_free() -> int:
 func crew_scale() -> float:
 	if not small:
 		return 1.0
-	var n := float(crew_size())
-	if sim.nights_on and sim.player_id != "" and _avatar_counted():
+	return scale_for(crew_size(), sim.nights_on and sim.player_id != "" and _avatar_counted())
+
+
+## The share of a full night that `people` make of it in the small start (`crew_scale` without a sim: the new-game menu's words use it);
+## `avatar`: the player is one of them, who counts for `ordinary.avatar_weight` of a defender.
+static func scale_for(people: int, avatar: bool) -> float:
+	var n := float(people)
+	if avatar:
 		n = n - 1.0 + NightData.num("ordinary.avatar_weight", 0.5)
 	return clampf(SCALE_BASE + SCALE_PER_SIX * n / 6.0, SCALE_MIN, SCALE_MAX)
 

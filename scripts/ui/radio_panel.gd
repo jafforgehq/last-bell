@@ -63,6 +63,11 @@ var close_button: Button
 ## The slim strip of the oldest call, under the tabs.
 var call_strip
 var scroll: ScrollContainer
+## The foot under the scroll: a page pins a strip there that stays in view while the page scrolls (`set_foot`; the Map's Take control and
+## Ask). It shows while its page is up and its strip is not hidden.
+var foot: VBoxContainer
+var _foot_page := ""
+var _foot_node: Control
 var _sim_getter: Callable
 var _page := ""
 var _compact := false
@@ -106,11 +111,42 @@ func setup(host_hud, sim_getter: Callable) -> void:
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(0, MIN_H - 80.0)
 	_col.add_child(scroll)
+	foot = host._vbox(0)
+	foot.visible = false
+	_col.add_child(foot)
 	visible = false
 
 
 func _sim():
 	return _sim_getter.call() if _sim_getter.is_valid() else null
+
+
+## Pins a strip of `page_id`'s under the scroll: it is in view whatever the page is scrolled to, while that page is up (and the strip is not
+## hidden by the page). One strip at a time.
+func set_foot(page_id: String, node: Control) -> void:
+	if _foot_node != null and is_instance_valid(_foot_node):
+		if _foot_node.visibility_changed.is_connected(_sync_foot):
+			_foot_node.visibility_changed.disconnect(_sync_foot)
+		if _foot_node.get_parent() == foot:
+			foot.remove_child(_foot_node)
+	_foot_page = page_id
+	_foot_node = node
+	if node == null:
+		_sync_foot()
+		return
+	if node.get_parent() != null:
+		node.get_parent().remove_child(node)
+	foot.add_child(node)
+	node.visibility_changed.connect(_sync_foot)
+	_sync_foot()
+
+
+func _sync_foot() -> void:
+	if foot == null:
+		return
+	var on: bool = visible and _foot_node != null and is_instance_valid(_foot_node) and _foot_node.visible and _page == _foot_page
+	if foot.visible != on:
+		foot.visible = on
 
 
 func _speed_getter() -> Callable:
@@ -304,6 +340,7 @@ func open(page_id: String = "", opts: Dictionary = {}) -> void:
 	visible = true
 	node.visible = true
 	_sync_tabs()
+	_sync_foot()
 	refresh()
 	if opts.has("focus") and node.has_method("focus_on"):
 		node.focus_on(String(opts.focus))
@@ -322,6 +359,7 @@ func close() -> void:
 	visible = false
 	_page = ""
 	_sync_tabs()
+	_sync_foot()
 	changed.emit()
 
 

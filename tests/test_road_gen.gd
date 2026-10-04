@@ -183,6 +183,16 @@ func test_both_legs_share_the_ground() -> void:
 	eq(bare_there.data.solidP, bare_home.data.solidP, "the same solid ground")
 
 
+func test_the_way_home_is_named_for_the_way_home_and_the_place_reads_in_a_sentence() -> void:
+	var place := _place("pharmacy")
+	var there := RoadGen.make(place, 3, "there", _ctx("sedan", 120, 2, []))
+	var home := RoadGen.make(place, 3, "home", _ctx("sedan", 120, 2, []))
+	eq(there.name, "The road to the pharmacy", "the way there")
+	eq(home.name, "The road home from the pharmacy", "the way home (the panel read 'The road to The pharmacy' on it)")
+	var bakery := {"id": "bakery", "name": "Pell's bakery", "kind": "bakery", "danger": 1}
+	eq(RoadGen.make(bakery, 3, "home", _ctx("sedan", 120, 2, [])).name, "The road home from Pell's bakery", "a name that does not begin with The stays as it is")
+
+
 func test_the_strip_is_30_wide_and_len_plus_24_tall() -> void:
 	var place := _place("pharmacy")
 	for pair in [["sedan", 231], ["pickup", 211], ["bus", 174], ["", 96], ["", 288]]:
@@ -196,7 +206,7 @@ func test_the_strip_is_30_wide_and_len_plus_24_tall() -> void:
 		eq(site.data.solidP.size(), 30 * (len_t + 24), "the solid grid covers the strip")
 		eq(site.data.solidZ.size(), 30 * (len_t + 24), "the other solid grid too")
 		eq(site.kind, "road")
-		eq(site.name, "The road to The pharmacy")
+		eq(site.name, "The road to the pharmacy")
 		eq(site.vehicle_spot, Vector2(-1, -1))
 		eq(site.containers, [])
 		eq(site.rooms, [])

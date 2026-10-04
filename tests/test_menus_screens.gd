@@ -14,6 +14,8 @@ const Waves := preload("res://scripts/sim/waves.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const Scavenge := preload("res://scripts/sim/scavenge.gd")
 const Helpers := preload("res://tests/helpers.gd")
+const NightData := preload("res://scripts/sim/night_data.gd")
+const Kinds := preload("res://scripts/sim/kinds.gd")
 
 
 func _done(ctx: Dictionary) -> void:
@@ -347,7 +349,53 @@ func test_the_difficulty_words_are_true_to_the_rules() -> void:
 	var screen = ctx.shell.open_new_game()
 	for i in 3:
 		screen.cards[i].pressed.emit()
-		eq(screen.facts_label.text, Kit.difficulty_facts(i), "the words under the cards for %s" % Kit.difficulty_name(i))
+		eq(screen.facts_label.text, Kit.difficulty_facts(i, screen.crew), "the words under the cards for %s" % Kit.difficulty_name(i))
+	_done(ctx)
+
+
+## The avatar game's nights (crews of 3 and 5: round 22, the QA's stale blurb): the words come from the rules of the avatar game's waves, not the
+## classic game's "about 30 on the first night and 3 more each night".
+func test_the_difficulty_words_for_an_avatar_crew_are_the_avatar_nights() -> void:
+	for crew in [3, 5]:
+		for i in 3:
+			var g := Helpers.make(1, i, crew)
+			var sim = g.sim
+			check(sim.avatar.set_player("ruth"), "(the avatar)")
+			var first: float = sim.waves.night_budget(1)
+			var more: float = sim.waves.night_budget(2) - first
+			var facts := Kit.difficulty_facts(i, crew)
+			check(facts.contains("about %d of the dead on the first night" % roundi(first)) or facts.contains("about %d on the first night" % roundi(first)), "crew %d, difficulty %d: the first night's %.1f is in the words: '%s'" % [crew, i, first, facts])
+			check(facts.contains("%d more each night" % roundi(more)), "crew %d, difficulty %d: the %.2f more a night is: '%s'" % [crew, i, more, facts])
+			check(facts.contains("Big Night") and facts.contains("%dth" % int(NightData.num("big_every", 10.0))), "the Big Nights are told, every tenth: '%s'" % facts)
+			check(facts.contains("From night %d a brute, worth %d of the dead" % [int(Kinds.KINDS.brute.first), int(Kinds.KINDS.brute.cost)]), "and the brutes, which make a night fewer bodies and no easier: '%s'" % facts)
+			check(not facts.contains("3 more each night") or roundi(more) == 3, "and the old '3 more each night' is gone: '%s'" % facts)
+			g.world.free()
+	var classic := Kit.difficulty_facts(1, 6)
+	eq(classic, Kit.difficulty_facts(1), "a full crew of six (no avatar) has the classic words")
+	check(classic.contains("about 30 of the dead on the first night, 3 more each night after"), "which are true of it: '%s'" % classic)
+	check(not classic.contains("Big Night"), "and have no Big Nights of the avatar game: '%s'" % classic)
+	# the other words of a difficulty do not depend on the crew
+	for i in 3:
+		var a := Kit.difficulty_facts(i, 5)
+		var b := Kit.difficulty_facts(i, 6)
+		check(a.contains(b.substr(b.find("A bite") if b.contains("A bite") else b.find("Every bite"))), "difficulty %d: the bites and the trips are the same words" % i)
+
+
+func test_the_words_under_the_difficulty_cards_follow_the_crew_too() -> void:
+	var ctx := Fakes.build()
+	var screen = ctx.shell.open_new_game()
+	await HudKit.settle()
+	screen.cards[1].pressed.emit()
+	screen.crew_cards[1].pressed.emit()
+	eq(screen.crew, 5, "a crew of five")
+	eq(screen.facts_label.text, Kit.difficulty_facts(1, 5), "the words are the avatar game's")
+	check(not screen.facts_label.text.contains("about 30 of the dead"), "not the classic ones: '%s'" % screen.facts_label.text)
+	screen.crew_cards[2].pressed.emit()
+	eq(screen.crew, 6, "a full crew")
+	eq(screen.facts_label.text, Kit.difficulty_facts(1, 6), "the words are the old game's")
+	check(screen.facts_label.text.contains("about 30 of the dead"), "with its thirty: '%s'" % screen.facts_label.text)
+	screen.crew_cards[0].pressed.emit()
+	eq(screen.facts_label.text, Kit.difficulty_facts(1, 3), "a crew of three: the avatar game's again")
 	_done(ctx)
 
 

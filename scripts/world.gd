@@ -1,4 +1,4 @@
-## The static map: the ground as a TileMapLayer, curbs and road markings, and
+## The static map: the ground as one mesh for each terrain, curbs and road markings, and
 ## every baked prop, wall piece and roof as sprites in draw order. Also owns
 ## the walkability grids the pathfinding reads.
 extends Node2D
@@ -155,28 +155,79 @@ func _apply_deck_barriers() -> void:
 	deck_tiles = usable
 
 
+## The ground: one mesh for each kind of terrain instead of a tile map, so the whole ground is a dozen draws rather than some hundreds
+## (a tile map draws the tiles of one texture only as long as they are next to each other in its rows). The pictures of a terrain are an
+## atlas of 4 x 4 pieces of 128 pixels, and the tile at (x, y) shows the piece (x % 4, y % 4): that is, the ground of a terrain is its
+## atlas laid over the world again and again, 4 tiles to a repeat, so each stretch of one terrain is a rectangle drawn with the atlas
+## repeating (its UVs run on past 1) and the stretches are the greedy rectangles of the terrain's tiles.
 func _build_ground() -> void:
-	var ts := TileSet.new()
-	ts.tile_size = Vector2i(128, 128)
+	var ground := Node2D.new()
+	ground.name = "Ground"
+	add_child(ground)
+	var types := {}
 	for type_name in d.terrainTypes:
 		var info: Dictionary = d.terrainTypes[type_name]
-		var src := TileSetAtlasSource.new()
-		src.texture = GD.tex(info.file)
-		src.texture_region_size = Vector2i(128, 128)
-		for y in 4:
-			for x in 4:
-				src.create_tile(Vector2i(x, y))
-		ts.add_source(src, int(info.id))
-	var ground := TileMapLayer.new()
-	ground.name = "Ground"
-	ground.tile_set = ts
-	ground.scale = Vector2(0.5, 0.5)
-	add_child(ground)
+		types[int(info.id)] = info
+	var pieces := {}
+	var taken := PackedByteArray()
+	taken.resize(W * H)
 	for y in H:
-		for x in W:
-			var t := terrain[y * W + x]
-			if t > 0:
-				ground.set_cell(Vector2i(x, y), t, Vector2i(x % 4, y % 4))
+		var x := 0
+		while x < W:
+			var i := y * W + x
+			var t := terrain[i]
+			if t <= 0 or taken[i] != 0 or not types.has(int(t)):
+				x += 1
+				continue
+			var x1 := x
+			while x1 + 1 < W and terrain[i + (x1 + 1 - x)] == t and taken[i + (x1 + 1 - x)] == 0:
+				x1 += 1
+			var y1 := y
+			while y1 + 1 < H:
+				var row := (y1 + 1) * W
+				var fits := true
+				for xx in range(x, x1 + 1):
+					if terrain[row + xx] != t or taken[row + xx] != 0:
+						fits = false
+						break
+				if not fits:
+					break
+				y1 += 1
+			for yy in range(y, y1 + 1):
+				var row := yy * W
+				for xx in range(x, x1 + 1):
+					taken[row + xx] = 1
+			if not pieces.has(t):
+				pieces[t] = PackedInt32Array()
+			pieces[t].append_array(PackedInt32Array([x, y, x1 + 1, y1 + 1]))
+			x = x1 + 1
+	for t in pieces:
+		var tex: Texture2D = GD.tex(String(types[t].file))
+		var piece_uv := Vector2(128.0 / float(tex.get_width()), 128.0 / float(tex.get_height()))
+		var rects: PackedInt32Array = pieces[t]
+		var verts := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		var idx := PackedInt32Array()
+		for k in range(0, rects.size(), 4):
+			var a := Vector2(rects[k], rects[k + 1])
+			var b := Vector2(rects[k + 2], rects[k + 3])
+			var base := verts.size()
+			verts.append_array(PackedVector2Array([a * TILE, Vector2(b.x, a.y) * TILE, b * TILE, Vector2(a.x, b.y) * TILE]))
+			uvs.append_array(PackedVector2Array([a * piece_uv, Vector2(b.x, a.y) * piece_uv, b * piece_uv, Vector2(a.x, b.y) * piece_uv]))
+			idx.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+		arrays[Mesh.ARRAY_INDEX] = idx
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		var mi := MeshInstance2D.new()
+		mi.name = "Terrain%d" % int(t)
+		mi.mesh = mesh
+		mi.texture = tex
+		mi.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		ground.add_child(mi)
 
 
 func _add_pieces(parent: Node, pieces: Array) -> void:

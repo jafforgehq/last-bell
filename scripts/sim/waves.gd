@@ -25,6 +25,7 @@ extends RefCounted
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const Lots := preload("res://scripts/sim/lots.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
+const Recruits := preload("res://scripts/sim/recruits.gd")
 
 ## Walkers on the first night at standard difficulty, and the growth per day
 ## after the first (0.10 means +10% of the base a day).
@@ -99,6 +100,16 @@ func budget_for(day: int) -> float:
 		var mult := NightData.num("ordinary.mult", 1.0)
 		return BASE * (1.0 + growth * float(maxi(eff, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)]) * sim.seasons.mult("waves") * mult
 	return BASE * (1.0 + GROWTH * float(maxi(eff, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)]) * sim.seasons.mult("waves")
+
+
+## What the avatar game's nights come to, for the new-game menu's words (round 22: they said the classic game's "about 30, 3 more each night"):
+## {"first": the points of the first night (about as many of the dead), "more": the points a night grows by, "big_every": the day of a
+## Big Night} for a crew of `crew` people at the difficulty whose share of the dead is `dead` (`DIFFICULTY`). The same numbers `budget_for`
+## and `Recruits.crew_scale` give a run that begins so (the tests check it).
+static func avatar_outline(dead: float, crew: int) -> Dictionary:
+	var scale := Recruits.scale_for(crew, true)
+	var base := BASE * dead * NightData.num("ordinary.mult", 1.0) * scale
+	return {"first": base, "more": base * NightData.num("ordinary.growth", GROWTH), "big_every": maxi(1, int(NightData.num("big_every", 10.0)))}
 
 
 ## Whether this night is the last one.

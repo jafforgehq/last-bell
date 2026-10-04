@@ -808,9 +808,10 @@ func test_tonight_is_told_under_take_control_in_the_scavenging_modules_own_words
 	check(String(page.night_note.text).begins_with("Big Night tonight: leave the place by"), "it says when to leave: '%s'" % page.night_note.text)
 	eq(page.night_note.get_theme_color("font_color"), ctx.hud.INK2, "calm while the party makes it")
 	var go: Button = page.buttons.go
+	# (round 22: Take control and Ask sit side by side in a row of the strip pinned at the panel's foot; the note is in that strip, under the row)
 	var after = page.night_note.get_parent()
-	check(after != null and after == go.get_parent(), "it sits with Take control")
-	check(page.night_note.get_index() > go.get_index(), "under the button")
+	check(after != null and after == go.get_parent().get_parent() and page.pin.is_ancestor_of(go), "it sits with Take control, in the strip")
+	check(page.night_note.get_index() > go.get_parent().get_index(), "under the button")
 	_free(ctx)
 
 

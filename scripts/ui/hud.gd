@@ -208,6 +208,8 @@ const ALERT_HOLD_MS := 6000
 ## The most alerts shown at once (fewer in a narrow window).
 const ALERTS_MAX := 5
 const ALERTS_MAX_COMPACT := 3
+## The gap between two alert slips (the feed's separation).
+const ALERT_GAP := 6.0
 ## The banner fades in and out over BANNER_FADE seconds and stays up BANNER_HOLD between.
 const BANNER_FADE := 0.7
 const BANNER_HOLD := 3.0
@@ -572,8 +574,8 @@ var last_speed := -1
 ## Round 17, the radio's views (scripts/ui/radio_verbs.gd, call_card.gd, news_panel.gd; avatar mode only, see `_sync_radio`). The
 ## dock's `radio_box` holds the verbs (`radio_verbs`) of the selected person in place of the order buttons; `call_card` hangs under the
 ## alerts in the right column; `news_panel` is the log, opened by `news_button` (with its `news_dot` while there is something unread:
-## key T), in the free band above the toolbar; `alarm_button` rings the call to arms. `_news_cap` is how many alerts the feed may show
-## while the News panel is up (-1: as many as always).
+## key T), in the free band above the toolbar; `alarm_button` rings the call to arms. (How many alerts the feed shows is worked out afresh
+## by `_layout_news` each time, from the room the column has: it is not remembered.)
 var radio_box: PanelContainer
 var radio_verbs
 var call_card
@@ -584,8 +586,9 @@ var news_panel
 var news_button: Button
 var news_dot: Control
 var alarm_button: Button
-var _news_cap := -1
 var _call_seen := false
+## True while the clock's forecast lines are put away to leave a call card its room (see `_layout_news`).
+var _forecast_squeezed := false
 
 
 func setup(game_data: Dictionary, crew: Array) -> void:
@@ -1598,7 +1601,7 @@ func _swing_bell() -> void:
 # ----------------------------------------------------------------- alerts --
 
 func _build_alerts() -> void:
-	alerts_box = _vbox(6)
+	alerts_box = _vbox(int(ALERT_GAP))
 	alerts_box.custom_minimum_size.x = CLOCK_W
 	right_col.add_child(alerts_box)
 
@@ -1707,8 +1710,17 @@ func _update_alert_panel(it: Dictionary) -> void:
 	if title.text != it.text:
 		title.text = it.text
 	var subl: Label = it.subl
-	if subl.text != it.sub:
-		subl.text = it.sub
+	var slip: Control = it.panel
+	# (a panel that has not been laid out yet, or is hidden for want of room, knows no width to wrap at: its height is worked out from the
+	# fonts, `_alert_height`, not read from it)
+	var inner := _alert_inner_w(slip)
+	var sub := _alert_sub(String(it.sub), inner, ALERT_SUB_LINES_COMPACT if compact else ALERT_SUB_LINES)
+	if subl.text != sub:
+		subl.text = sub
+	# (the whole of a line that was cut is the slip's tooltip)
+	var tip := String(it.sub) if sub != String(it.sub) else ""
+	if slip.tooltip_text != tip:
+		slip.tooltip_text = tip
 	subl.visible = it.sub != ""
 	if it.shown_level != it.level:
 		it.shown_level = it.level
@@ -1720,6 +1732,66 @@ func _update_alert_panel(it: Dictionary) -> void:
 		p.add_theme_stylebox_override("panel", _slip_style(String(it.level)))
 		p.set_meta("level", String(it.level))
 		p.queue_redraw()
+
+
+## The width an alert's words wrap at: the feed's, less the slip's margins, the icon and the gap after it.
+func _alert_inner_w(p: Control) -> float:
+	var st: StyleBox = p.get_theme_stylebox("panel")
+	var across := float(CLOCK_W_COMPACT if compact else CLOCK_W)
+	return maxf(60.0, across - (st.get_minimum_size().x if st != null else 28.0) - 16.0 - 9.0 - 1.0)
+
+
+## How many lines an alert's second line may take (the whole of it is the slip's tooltip, and the News has it).
+const ALERT_SUB_LINES := 4
+const ALERT_SUB_LINES_COMPACT := 3
+
+
+## An alert's second line kept to `lines` lines at `width`: the whole of it when it fits; else its first sentence and its last (the day-ahead
+## notice ends with the hour to be home by, which is the part to act on), else the last alone, else the start of it with an ellipsis.
+func _alert_sub(sub: String, width: float, lines: int) -> String:
+	if sub == "" or width < 20.0 or _wrapped_lines(sub, width) <= lines:
+		return sub
+	var parts := sub.split(". ", false)
+	if parts.size() >= 2:
+		for i in parts.size() - 1:
+			parts[i] = String(parts[i]).trim_suffix(".") + "."
+		var first := String(parts[0])
+		var last := String(parts[parts.size() - 1])
+		for candidate in [first + " ... " + last if parts.size() >= 3 else first + " " + last, last]:
+			if _wrapped_lines(candidate, width) <= lines:
+				return candidate
+		sub = last
+	var cut := sub
+	while cut.length() > 8 and _wrapped_lines(cut + "...", width) > lines:
+		cut = cut.substr(0, cut.length() - 4)
+	return cut.strip_edges() + "..."
+
+
+## How tall the slip of an alert is (or would be): its words wrapped at the width the slip gives them, between the slip's margins. Worked out
+## from the fonts, not read from the panel, whose labels know no width until they have been laid out (a hidden panel never is: it measured
+## as tall as the words can be, one to a line, and stayed hidden for it).
+func _alert_height(p: Control) -> float:
+	var it: Dictionary = alert_items.get(String(p.get_meta("id", "")), {})
+	if it.is_empty() or it.panel != p:
+		return p.get_combined_minimum_size().y
+	var st: StyleBox = p.get_theme_stylebox("panel")
+	var inner := _alert_inner_w(p)
+	var title_font: Font = Fonts.sans(600)
+	var title_box: Vector2 = title_font.get_multiline_string_size(String(it.title.text), HORIZONTAL_ALIGNMENT_LEFT, inner, 13, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
+	var col := maxf(title_box.y, title_font.get_height(13))
+	var sub := String(it.subl.text)
+	if sub != "":
+		var sub_font: Font = Fonts.sans(400)
+		col += 1.0 + sub_font.get_multiline_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, inner, 12, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE).y
+	return maxf(16.0, col) + (st.get_minimum_size().y if st != null else 16.0)
+
+
+## How many lines `text` takes in the alerts' second-line face at `width`.
+func _wrapped_lines(text: String, width: float) -> int:
+	var font: Font = Fonts.sans(400)
+	var size_px := 12
+	var box: Vector2 = font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, width, size_px, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
+	return maxi(1, roundi(box.y / maxf(1.0, font.get_height(size_px))))
 
 
 ## Takes the panel of an alert out of the feed and frees it; the alert's record stays.
@@ -2876,6 +2948,9 @@ func _refresh_hint() -> void:
 	# (and the controls help and the News panel are in its way too: it is only the first screen's)
 	if avatar_ui and ((help != null and help.visible) or radio_open()):
 		show = false
+	# (and so is a call that waits: the legend sat over the card's last option in a narrow window; it comes back when the call is settled)
+	if avatar_ui and call_card != null and call_card.shown_id != 0 and not call_card.suppressed:
+		show = false
 	if hint.visible != show:
 		hint.visible = show
 		_layout_toast()
@@ -3329,6 +3404,8 @@ func _on_resized() -> void:
 			l.visible = not compact
 		res_grid.columns = 2 if compact else 3
 		clock.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
+		_fit_clock_words()
+		_fit_card_words()
 		alerts_box.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
 		time_label.add_theme_font_size_override("font_size", 24 if compact else 30)
 		# a window too narrow for the hint loses it for good (as it always did; avatar mode's is two short lines and fits)
@@ -3357,7 +3434,6 @@ func _on_resized() -> void:
 		_refresh_people_rows(selection.ref)
 	_layout_dock()
 	_layout_toast()
-	_news_cap = -1
 	_layout_news()
 
 
@@ -3402,6 +3478,9 @@ func _card_tip(p, word: String, epitaph: String) -> String:
 	var tip := "%s, %s" % [p.name, String(p.def.role).to_lower()]
 	if p.player and word == "":
 		tip += "\nThis is you"
+		# (round 22: the faint ring round him was never explained: the rally's reach, as the nights' rules have it)
+		if sim_ref != null and sim_ref.get("nights") != null and bool(sim_ref.nights.active()):
+			tip += "\nThe green ring round you: the crew inside it shoots better"
 	if avatar_ui and word == "" and not p.player and STANCE_TIPS.has(String(p.stance)):
 		tip += "\n" + String(STANCE_TIPS[String(p.stance)])
 	# round 20: the title they are known by and who they are close to or at odds with (the card itself shows nothing more)
@@ -3667,28 +3746,60 @@ func _sync_lots(sim) -> void:
 ## The lookout's forecast under the clock: from the hour he tells it (17:00) until dawn,
 ## and only while he can tell it; at other times the line is not there.
 func _update_forecast(sim) -> void:
+	_fit_clock_words()
 	var f: Dictionary = sim.tactics.forecast()
 	var text := ""
+	var whole := ""
 	var ready := {}
 	if bool(f.get("given", false)) and sim.phase != "dawn":
 		# (in a campaign the last night of a season that has seasons to come is its Big Night, not the last)
 		var last: bool = NightKit.last_night(sim)
 		if String(sim.player_id) != "" and NightKit.has_outlook(f):
-			# round 19, avatar mode: the outlook of the night (its kind, size, side, brutes and hours) and the community's reading of it
-			text = NightKit.forecast_line(f, last)
-			ready = NightKit.ready_line(f)
+			# round 19, avatar mode: the outlook of the night (its kind, size, side, brutes and hours) and the community's reading of it; in a
+			# narrow window (the clock is 164 px across there) the short forms, with the whole line as the tooltip
+			whole = NightKit.forecast_line(f, last)
+			text = NightKit.forecast_line_compact(f, last) if compact else whole
+			ready = NightKit.ready_line_compact(f) if compact else NightKit.ready_line(f)
 		else:
 			text = _forecast_text(f, last)
 	if forecast_label.text != text:
 		forecast_label.text = text
-	forecast_label.visible = text != ""
+	forecast_label.visible = text != "" and not _forecast_squeezed
+	var forecast_tip := whole if whole != text else ""
+	if forecast_label.tooltip_text != forecast_tip:
+		forecast_label.tooltip_text = forecast_tip
+		forecast_label.mouse_filter = Control.MOUSE_FILTER_PASS if forecast_tip != "" else Control.MOUSE_FILTER_IGNORE
 	var ready_text := String(ready.get("text", ""))
 	if ready_label.text != ready_text:
 		ready_label.text = ready_text
-	ready_label.visible = ready_text != ""
+	ready_label.visible = ready_text != "" and not _forecast_squeezed
 	if ready_text != "":
 		ready_label.add_theme_color_override("font_color", OK if bool(ready.get("holds", false)) else WARN)
 	_update_night_badge(sim, f)
+
+
+## The call card's words and buttons wrap at the column's width less the card's margins (see CallCard.set_wrap).
+func _fit_card_words() -> void:
+	if call_card == null or call_card.get("view") == null:
+		return
+	var w := CLOCK_W_COMPACT if compact else CLOCK_W
+	call_card.set_wrap(float(w) - call_card.get_theme_stylebox("panel").get_minimum_size().x - 2.0)
+
+
+## The forecast lines wrap at the clock's width: given it as their least, they measure right whether they show or are put away (and are not
+## wider than the clock after the window has been made narrower).
+func _fit_clock_words() -> void:
+	if forecast_label == null or ready_label == null or clock == null:
+		return
+	var inner := _clock_inner_w()
+	for l in [forecast_label, ready_label]:
+		RadioKit.wrap_at(l, inner)
+
+
+## The width the clock's own words wrap at: its width less its board's margins.
+func _clock_inner_w() -> float:
+	var st: StyleBox = clock.get_theme_stylebox("panel")
+	return maxf(60.0, float(CLOCK_W_COMPACT if compact else CLOCK_W) - (st.get_minimum_size().x if st != null else 28.0) - 2.0)
 
 
 ## The badge of a Big Night by the day counter (avatar mode): "Big Night tomorrow" from the radio desk's notice, "Big Night" tonight once
@@ -4279,7 +4390,6 @@ func _apply_radio_mode(on: bool) -> void:
 	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
 	if not on:
 		radio_panel.close()
-		_news_cap = -1
 		news_dot.visible = false
 		call_card.clear()
 		_light(news_button, false)
@@ -4519,7 +4629,6 @@ func _on_radio_panel_changed() -> void:
 	_light(jobs_button, on and page == "jobs")
 	_light(build_button, on and page == "build")
 	_light(town_button, on and page == "map")
-	_news_cap = -1
 	if not on and sim_ref != null:
 		_sync_alerts(sim_ref)
 	if on and news_dot != null and page == "news":
@@ -4579,51 +4688,104 @@ func _sync_alarm(radio) -> void:
 		alarm_button.tooltip_text = ALARM_OFF_TIP if on else ALARM_TIP
 
 
-## How many alerts the feed may show: as many as it ever does, or fewer when the call card and the News panel need the room.
+## How many alerts the feed makes a panel for: as many as it ever does (what the column has room for is `_layout_news`'s say, and it only
+## hides the panels it has no room for: it never makes the feed shorter for good).
 func _alert_cap() -> int:
-	var base := ALERTS_MAX_COMPACT if compact else ALERTS_MAX
-	return mini(base, _news_cap) if _news_cap >= 0 and avatar_ui else base
+	return ALERTS_MAX_COMPACT if compact else ALERTS_MAX
 
 
-func _alerts_shown() -> int:
-	var n := 0
-	for id in alert_items:
-		if alert_items[id].panel != null:
-			n += 1
-	return n
+## The alert panels of the feed, in order (the most urgent first).
+func _alert_panels() -> Array:
+	var out: Array = []
+	for c in alerts_box.get_children():
+		if c is Control and not c.is_queued_for_deletion():
+			out.append(c)
+	return out
+
+
+## Shows the first `n` panels of the feed and hides the rest (-1: all of them).
+func _show_alert_panels(n: int) -> void:
+	var panels := _alert_panels()
+	for i in panels.size():
+		var on: bool = n < 0 or i < n
+		if panels[i].visible != on:
+			panels[i].visible = on
 
 
 ## The right column in avatar mode: the clock, the gun's readout, the alerts and the call card hang one under the other, and the radio
 ## panel (when it is open) takes what is left down to the toolbar; while it is open the call card steps aside, the panel keeping the oldest
-## open call in view itself (the News page lists them with their buttons, the other pages have a slim strip under the tabs). When there is
-## not enough room for the card, or for the panel's least height (MIN_H) when it is open, the alerts give up theirs, the least urgent first
-## (the call is a decision; an alert only says something). What does not fit in the panel scrolls.
+## open call in view itself (the News page lists them with their buttons, the other pages have a slim strip under the tabs). The call is a
+## decision and an alert only says something, so the card claims its room first (it tells less of itself only when it has none even with no
+## alert), then the alerts take what is left, the most urgent first, and when there is not enough for the panel's least height (MIN_H) when it
+## is open, the least urgent give up theirs. Every pass starts from the whole feed and counts afresh (the heights are those the panels would
+## have, laid out or not: see `_update_alert_panel`), so what was hidden comes back as soon as there is room. What does not fit in the panel
+## scrolls.
 func _layout_news() -> void:
 	if radio_panel == null:
 		return
 	var w := CLOCK_W_COMPACT if compact else CLOCK_W
 	call_card.custom_minimum_size.x = w
+	_fit_card_words()
 	if not avatar_ui:
+		_show_alert_panels(-1)
 		return
 	var lift := _help_lift()
 	var need := RadioPanel.MIN_H if radio_open() else 0.0
-	var avail := 0.0
 	call_card.set_suppressed(radio_open())
-	for i in 10:
-		avail = size.y - lift - (12.0 + right_col.get_combined_minimum_size().y + 8.0)
-		var shown := _alerts_shown()
-		if avail >= need or shown == 0 or sim_ref == null:
-			break
-		_news_cap = shown - 1
-		_sync_alerts(sim_ref)
+	var edge := lift + 12.0 + 8.0
+	var bare := right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y
 	# round 20: an idea tells more than the old calls did (the voice's line, a yes that wraps): when even with no alerts the card is
-	# taller than the room it has, it tells less of itself (the lines under its title first), and all of it again when there is room
+	# taller than the room it has, it tells less of itself (the lines under its title first), and all of it again when there is room.
+	# Before that (a narrow, short window) the clock puts its forecast lines away: the call says as much, and every option of a call must
+	# be in view
+	var squeeze := false
 	if call_card.visible:
-		call_card.fit(avail + call_card.get_combined_minimum_size().y)
+		call_card.set_level(0)
+		var held := _forecast_lines_height(true) if _forecast_squeezed else 0.0
+		var room_card: float = size.y - edge - (right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y - call_card.get_combined_minimum_size().y) - held
+		squeeze = call_card.get_combined_minimum_size().y > room_card and _forecast_lines_height(true) > 0.0
+		if squeeze != _forecast_squeezed:
+			_set_forecast_squeezed(squeeze)
+			room_card = size.y - edge - (right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y - call_card.get_combined_minimum_size().y)
+		call_card.fit(room_card)
+		bare = right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y
+	elif _forecast_squeezed:
+		_set_forecast_squeezed(false)
+		bare = right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y
+	var room := size.y - edge - bare
+	var panels := _alert_panels()
+	var shown := 0
+	var used := 0.0
+	for i in panels.size():
+		var h: float = _alert_height(panels[i]) + (ALERT_GAP if i > 0 else 0.0)
+		if room - (used + h) < need:
+			break
+		used += h
+		shown += 1
+	_show_alert_panels(shown)
+	var avail := size.y - edge - right_col.get_combined_minimum_size().y
 	if radio_open():
 		radio_panel.set_compact(compact)
 		radio_panel.fit(avail, size.x - 24.0)
 		_corner(radio_panel, true, true, 12.0, lift)
+
+
+## What the clock's forecast lines (the outlook and the readiness) take of its height while they show (`natural`: while they have words,
+## whether they are put away or not), the gaps between them included.
+func _forecast_lines_height(natural: bool = false) -> float:
+	var gap := float((forecast_label.get_parent() as BoxContainer).get_theme_constant("separation"))
+	var h := 0.0
+	for l in [forecast_label, ready_label]:
+		if (l.visible and not natural) or (natural and l.text != ""):
+			h += l.get_combined_minimum_size().y + gap
+	return h
+
+
+## Puts the clock's forecast lines away (or brings them back): `_update_forecast` keeps them away while it is on.
+func _set_forecast_squeezed(on: bool) -> void:
+	_forecast_squeezed = on
+	forecast_label.visible = forecast_label.text != "" and not on
+	ready_label.visible = ready_label.text != "" and not on
 
 
 ## Each update, in avatar mode: the call card and the News panel follow the radio, the dot says whether anything is unread, the alarm key
@@ -4637,7 +4799,7 @@ func _sync_radio(sim) -> void:
 	call_card.refresh()
 	if (call_card.shown_id != 0) != _call_seen:
 		_call_seen = call_card.shown_id != 0
-		_news_cap = -1
+		_refresh_hint()
 	radio_panel.refresh()
 	news_dot.visible = not news_open() and news_panel.unread() > 0
 	_sync_alarm(radio)

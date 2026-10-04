@@ -80,6 +80,19 @@ func set_suppressed(on: bool) -> void:
 	visible = shown_id != 0 and not on
 
 
+## The width the card's words and buttons wrap at (the host knows it: the column's width less the card's margins), so that the card measures
+## right at any level, laid out or not.
+func set_wrap(inner: float) -> void:
+	if view != null and not view.slim:
+		view.set_wrap(inner)
+
+
+## Tells all of the call (level 0) or less of it (see call_view.gd's `level`).
+func set_level(l: int) -> void:
+	if view != null:
+		view.set_level(l)
+
+
 ## Tells as much of the call as `room` pixels of height allow (the host's column has little): the whole of it, else without the line
 ## under the title, without the kind, with slimmer buttons. True if it fits (the card's own height is `get_combined_minimum_size`).
 func fit(room: float) -> bool:
