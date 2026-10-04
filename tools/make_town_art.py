@@ -1,5 +1,38 @@
 #!/usr/bin/env python3
-"""PLACEHOLDER: the full documentation is written at the end of the build (see the bottom of the file's history)."""
+"""Draws the art kit of the town (the one big open map of streets and houses, docs/superpowers/specs/2026-10-04-one-house-design.md): procedural drawing only,
+no reference pictures, no tools off the machine, deterministic (every random choice comes from a fixed seed: the same script writes the same files).
+
+    python3 tools/make_town_art.py                  # every category: assets/town/<category>/*.png and assets/data/town_art.json
+    python3 tools/make_town_art.py street roof      # only those (street house roof floor furniture outdoors fortify marker); the others stay in the manifest
+    TOWN_ART_SHEETS=some/dir python3 tools/make_town_art.py     # also a contact sheet PNG per category in that folder (to look at)
+    TOWN_ART_OUT=dir TOWN_ART_MANIFEST=file.json ...            # write somewhere else
+    TOWN_NOISE / TOWN_FREQ / TOWN_GRAIN / TOWN_COLOURS          # texture noise, its finest frequency, film grain and palette size: the kit's size knobs
+
+What it makes (the manifest, assets/data/town_art.json, describes every piece: read its `_doc` first; tools/town_art_sample.gd composes a sample
+scene from it at the game's tile size):
+
+    street     asphalt (3), sidewalk slabs (3), lawn (3), dirt (2), gravel (2) as seamless 4 x 4 atlases of 64 px pieces; lane paint, the kerb with its
+               corners, leaves (3), manholes (2), drains (2)
+    house      wall tops in brick, white siding, blue siding, stucco and three inside materials (a 128 px tile each) with ONE autotile set of outlines and
+               rims (wall_edges, by the mask of the open sides) and the soft wall shadows; front doors, inside doors and garage doors (closed / open / broken,
+               four facings), windows (intact / broken / boarded), the step, the porch
+    roof       terracotta, slate and brown shingle: lit and shaded slope tiles, ridge caps, an eave overlay (autotile, overhang and shadow), chimneys
+    floor      wood (2), hall boards, hallway runner (2 ways), kitchen lino (2), bedroom carpet (2), bathroom tile (2): 4 x 4 atlases, worn
+    furniture  39 things: kitchen, bedroom, living room, bathroom, workshop, containers (each with an `opened` look for 'searched'), rugs, a lamp, the base's radio
+               set and stash chest, clutter decals (papers, glass, blood, a bag, a mattress)
+    outdoors   picket (2), chain link, low brick wall and hedge as autotile lines, a yard gate, bushes, trees (reused), mailbox, bins, a bike, garden beds,
+               a shed, swing set, slide, bench, market stall, parked cars in four colours (reused from the yard's sedans) and two wrecks (reused)
+    fortify    wooden fence, reinforced fence and sandbags (autotile, built and damaged), a gate, a corner watchtower, a floodlight, window and door barricades
+               (each built and damaged)
+    marker     an 'enter' chevron and a 'searched' tick
+
+The style is the yard's (tools/make_building_art.py, whose drawing engine it imports: Art, noise, palette PNGs): seen from above with a slight tilt for
+what stands (its south face shows), light from the north west, a dark brown outline, a soft shadow to the south east, flat fills with a gentle gradient;
+every picture is drawn at three times the size and brought down to 128 px to the tile (the ground at 64), and saved as an indexed PNG with a short ladder of
+alphas for the shadow. Things with a front (furniture, doors, steps) are drawn facing south and turned for the other facings, and their shadow is thrown
+again after the turn, so it always falls to the south east. Several pictures of one thing are packed in one PNG (shelf packing); the manifest names each
+one's rectangle. It needs Pillow and numpy and reads from the repository: assets/trees and assets/objects (the reused trees and cars).
+"""
 import os
 import sys
 
@@ -1545,7 +1578,7 @@ def house_openings():
 # ======================================================================
 
 ROOFS = {
-    "terracotta": dict(label="Terracotta tiles", lit=(184, 108, 78), shade=(130, 78, 60), ridge=(172, 92, 62), fascia=(92, 64, 48)),
+    "terracotta": dict(label="Terracotta tiles", lit=(176, 108, 82), shade=(126, 78, 62), ridge=(172, 92, 62), fascia=(92, 64, 48)),
     "slate": dict(label="Slate", lit=(116, 124, 138), shade=(78, 86, 100), ridge=(66, 72, 84), fascia=(70, 62, 56)),
     "shingle": dict(label="Brown shingle", lit=(138, 102, 76), shade=(94, 68, 52), ridge=(98, 70, 52), fascia=(84, 62, 46)),
 }
@@ -1700,7 +1733,7 @@ def roof_edges(kind):
                "The eave of a %s roof, laid on a roof cell over its fill: cell index = mask of the OPEN sides (the neighbour is not roof): N 1 + E 2 + S 4 + W 8; "
                "col = index %% 4, row = index // 4. A cell is 224 px = 1.75 tiles with the roof cell at (0.25, 0.25) tiles, so lay the cell's picture with its "
                "top left 0.25 tile up and left of the roof cell. The roof reaches 0.2 tile past the cell on every open side (over the wall below), with "
-               "fascia, outline and a soft shadow to the south and east." % spec["label"].lower(), bg=(98, 128, 66), mode="sprite")
+               "fascia, outline and a soft shadow to the south and east." % spec["label"].lower(), bg=(98, 128, 66), mode="sprite", anchor=(0.25, 0.25))
 
 
 def chimney(state, v):
