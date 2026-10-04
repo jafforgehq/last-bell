@@ -504,7 +504,7 @@ func test_the_order_hotkeys_are_off_in_avatar_mode_but_the_pages_stay() -> void:
 	var ana = _person(main, "ana")
 	main._try_select({"kind": "person", "ref": ana})
 	var job: String = main.sim.jobs.job_of(ana)
-	for k in [KEY_P, KEY_C, KEY_T, KEY_X, KEY_B, KEY_M]:
+	for k in [KEY_P, KEY_T, KEY_X, KEY_B, KEY_M]:    # (C is the command wheel now, round 24: tests/test_r24w_wheel.gd)
 		_press(main, k)
 	eq(main.sim.jobs.job_of(ana), job, "B and M give no job")
 	check(ana.order == null and not ana.drafted, "P and R give no order")

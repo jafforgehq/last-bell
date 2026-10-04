@@ -435,6 +435,37 @@ func add(kind_id: String) -> Dictionary:
 	return v
 
 
+## ROUND 24, "a car to begin with": a new game of the avatar (settlement) game begins with ONE pickup, parked in the first bay of the motor pool
+## and in good repair (its full hp), with fuel for `START_TRIPS` trips to the farthest place the Map shows on the first morning, so that the
+## Map's Take control and the live drive can use it from day 1. Called by main.gd for a new run of the real game only (never for a load: an
+## older save has no starting car and is not given one, never for the no-avatar game, the tests' games or Orientation Day). Returns the
+## vehicle, or {} when nothing was given (a fleet that is not empty, no avatar, no town). A News line says so.
+const START_KIND := "pickup"
+const START_TRIPS := 2.0
+
+
+func give_starting_car() -> Dictionary:
+	if not fleet.is_empty() or String(sim.player_id) == "" or not bool(sim.town.on):
+		return {}
+	var v := add(START_KIND)
+	if v.is_empty():
+		return {}
+	sim.events.pop_back()    # (`add` told the rules a vehicle was found: it was not found, it was always here)
+	fuel = minf(FUEL_CAP, starting_fuel(String(v.id)))
+	sim.radio.log_news("road", "The %s is fuelled" % name_of(String(v.id)).to_lower(), "Take control on the Map (G) to drive it")
+	return v
+
+
+## The fuel the starting car gets: START_TRIPS times what the farthest of the places known at the start costs there and back, rounded up
+## (the pickup: 4.95 to the church, so 10).
+func starting_fuel(vehicle_id: String) -> float:
+	var worst := 0.0
+	for p in sim.town.places:
+		if sim.town.is_known(String(p.id)):
+			worst = maxf(worst, fuel_for(String(p.id), vehicle_id))
+	return ceilf(START_TRIPS * worst)
+
+
 ## What a vehicle kind's cargo multiplier is (1 for none or an unknown kind), for what has no module at hand.
 static func cargo_of(kind_id: String) -> float:
 	var out := 1.0

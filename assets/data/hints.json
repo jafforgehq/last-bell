@@ -150,6 +150,12 @@
 			"start": {"cond": "all", "params": {"of": [{"cond": "avatar_game"}, {"cond": "contact_picked"}]}}
 		},
 		{
+			"id": "wheel",
+			"title": "The command wheel",
+			"text": "Hold C, or the middle button, for the command wheel: release on a slice to ask someone. Shift asks everyone near you, 1 to 5 pick a person, Z repeats the last order.",
+			"start": {"cond": "all", "params": {"of": [{"cond": "avatar_game"}, {"cond": "contact_picked"}]}}
+		},
+		{
 			"id": "build",
 			"title": "Time to build",
 			"text": "The crew can build now. Press N and pick a building: a salvage bench pays for itself.",

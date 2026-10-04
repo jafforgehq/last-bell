@@ -11,6 +11,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const S := preload("res://scripts/render/shapes.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const RaidRun := preload("res://scripts/raid/raid_run.gd")
+const StanceMarks := preload("res://scripts/render/stance_marks.gd")
 
 const ACCENT := Color(0.941, 0.761, 0.29)
 const INK := Color("#eeeadd")
@@ -39,6 +40,9 @@ var drawn_aim_line := false
 var aim_end := Vector2.ZERO
 var drawn_reload_ring := false
 var drawn_prompt := ""
+## Round 24: how many glyph pills (what the squad was asked: following, holding, covering, searching) and dotted lines to a spot the last draw made.
+var drawn_stance_marks := 0
+var drawn_stance_links := 0
 
 
 func _pill(rect: Rect2, color: Color) -> void:
@@ -86,6 +90,8 @@ func _draw() -> void:
 	drawn_aim_line = false
 	drawn_reload_ring = false
 	drawn_prompt = ""
+	drawn_stance_marks = 0
+	drawn_stance_links = 0
 
 	# the way out: a dashed outline, so the squad knows where "back" is (lit while the one you lead stands in it)
 	var ex: Rect2 = run.site.exit
@@ -181,6 +187,27 @@ func _draw() -> void:
 			if screen.has_point(at2):
 				_dashed_circle(at2, 0.4 * z, Color(INFO if stance == "hold" else OK, 0.8), 1.8)
 				draw_line(at2, at2 + Vector2(0.0, -0.8 * z), Color(INFO if stance == "hold" else OK, 0.9), 2.0, true)
+
+	# round 24 (scripts/render/stance_marks.gd): the glyph of what each of the squad was asked, over their head, and a dotted line to the spot they hold or search
+	for p in run.squad:
+		if p.dead or p.downed or p == lead:
+			continue
+		var kind := StanceMarks.of_person(p)
+		if kind == "" or kind == "post":
+			continue
+		var pp3: Vector2 = scene.view_pos(p)
+		var head3: Vector2 = scene.to_screen(Vector2(pp3.x, pp3.y - 0.95))
+		if not screen.has_point(head3):
+			continue
+		var spot := StanceMarks.spot_of(p, kind)
+		if spot != Vector2.INF:
+			var to: Vector2 = scene.to_screen(spot)
+			var from: Vector2 = scene.to_screen(pp3)
+			if from.distance_to(to) > 14.0:
+				StanceMarks.draw_link(self, kind, from, to)
+				drawn_stance_links += 1
+		StanceMarks.draw_pill(self, kind, head3 + Vector2(0.0, -4.0))
+		drawn_stance_marks += 1
 
 	# the dead who hunt
 	for zb in run.sim.zombies:

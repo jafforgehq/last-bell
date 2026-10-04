@@ -32,6 +32,7 @@ const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
 
 const PAD := 12.0
 const GAP := 10.0
@@ -127,6 +128,8 @@ var base_chips: Dictionary = {}    # person id -> Button
 var contact_label: Label
 var contact_hint: Label
 var radio_verbs
+## Round 24: the command wheel (scripts/ui/command_wheel.gd), on top of the rest of the place's HUD; the scene's controller (scripts/ui/wheel_ctl.gd) opens it.
+var wheel
 var news_panel
 var news_open := false
 var call_card
@@ -213,6 +216,8 @@ func setup(game_hud, the_scene) -> void:
 	_build_banner()
 	_build_toast()
 	_build_road()
+	wheel = CommandWheel.new()
+	root.add_child(wheel)
 	root.resized.connect(_layout)
 	_layout()
 

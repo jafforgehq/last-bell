@@ -102,6 +102,16 @@ var veil: ColorRect
 var _veil_material: ShaderMaterial
 var _last_t := -1.0
 var _drift := 0.0
+## Round 24: whether the player asked for less motion (looked at twice a second): the lanterns then burn steadily.
+var calm := false
+var _calm_looked := -10.0
+
+
+## Round 24: how bright an oil lantern burns at the time `t` (a share of its light, 1 at best): `warm` is the lamp level, 0 to 1. While the
+## lamps come up at dusk it gutters a lot (down to half), later only a little (about a tenth).
+static func lamp_flicker(t: float, x: float, warm: float) -> float:
+	var k := 0.06 + 0.34 * (1.0 - clampf(warm, 0.0, 1.0))
+	return 1.0 - k * (0.5 + 0.5 * sin(t * 9.1 + x * 2.9)) - k * 0.5 * (0.5 + 0.5 * sin(t * 23.7 + x * 5.3))
 
 
 static func sky_at(hour: float) -> Color:
@@ -234,6 +244,9 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 		return
 	modulate_node.color = _tinted(sky) * tint
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
+	if t - _calm_looked >= 0.5 or t < _calm_looked:
+		_calm_looked = t
+		calm = Prefs.on("ui", "reduce_motion")
 	var energy_k := lerpf(1.0, FOG_LIGHT_ENERGY, fog)
 	var reach_k := lerpf(1.0, FOG_LIGHT_REACH, fog)
 	for l in lights:
@@ -249,6 +262,9 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 		var k: float = def.get("flicker", 0.0)
 		if k > 0.0:
 			f = 1.0 - 0.1 * k * (0.5 + 0.5 * sin(t * 13.7 + float(def.x) * 3.1)) - 0.06 * k * sin(t * 23.3 + float(def.y))
+		elif def.get("lantern", false) and not calm:
+			# (round 24) the oil lanterns burn unsteadily: a lot as they come up at dusk, a little all night
+			f = lamp_flicker(t, float(def.x), lamp_level)
 		var energy: float = minf(1.0, float(def.get("i", 1.0)) * level * f) * energy_k
 		l.node.energy = energy
 		l.node.texture_scale = float(l.scale) * reach_k

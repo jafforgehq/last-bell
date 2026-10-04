@@ -44,6 +44,7 @@ const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
 const WorldClick := preload("res://scripts/ui/world_click.gd")
+const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -163,6 +164,9 @@ var nodes_missing := false
 ## The stand-ins for the radio that the verbs ask: the squad's (through the place) and the base's (at a distance).
 var squad_radio
 var base_radio
+## Round 24, the command wheel (scripts/ui/wheel_ctl.gd): hold C or the middle button; the controller asks this scene the `wheel_*` questions at the end of the file's
+## orders. Made the first time it is needed, and given the HUD's wheel again when the HUD is another one (the drive's replaces the place's).
+var wheel_ctl = null
 
 
 ## Builds the place and the squad and takes the screen. `members_people` are the colony's people who go (their skills, weapon
@@ -730,8 +734,9 @@ func squad_request(p, verb: String, args: Dictionary = {}) -> Dictionary:
 
 ## The container "search that" means: the one under the pointer (not searched yet), else the nearest to the leader in reach,
 ## else the nearest to the pointer within a few tiles; {} when there is none.
-func search_target() -> Dictionary:
-	var c: Dictionary = run.container_at(aim_tile)
+func search_target(at: Vector2 = Vector2.INF) -> Dictionary:
+	var aimed: Vector2 = aim_tile if at == Vector2.INF else at    # (round 24: the wheel means the point it was opened on, not where the pointer is by now)
+	var c: Dictionary = run.container_at(aimed)
 	if not c.is_empty() and not bool(c.get("looted", false)):
 		return c
 	var lead = leader()
@@ -739,7 +744,7 @@ func search_target() -> Dictionary:
 		var near_lead: Array = run.containers_near(Vector2(lead.x, lead.y), E_REACH)
 		if not near_lead.is_empty():
 			return near_lead[0]
-	var near_aim: Array = run.containers_near(aim_tile, POINT_REACH)
+	var near_aim: Array = run.containers_near(aimed, POINT_REACH)
 	if not near_aim.is_empty():
 		return near_aim[0]
 	return {}
@@ -947,9 +952,17 @@ func _input(ev: InputEvent) -> void:
 		_mouse = ev.position
 		_staged_aim = false
 		over_hud = true
+		var w0 = _wheel()
+		if w0 != null:
+			w0.motion(ev.position)
 		return
 	if ev is InputEventMouseButton:
 		_mouse = ev.position
+		# (round 24: the command wheel has the buttons while it is up, and the middle one opens it)
+		var w1 = _wheel()
+		if w1 != null and w1.mouse(ev):
+			get_viewport().set_input_as_handled()
+			return
 		# the trigger is let go whenever the button is, wherever the pointer was (a release over a HUD control goes to the
 		# control and never reaches `_unhandled_input`); so is the aim
 		if ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
@@ -967,12 +980,18 @@ func _input(ev: InputEvent) -> void:
 		held.clear()
 		return
 	get_viewport().set_input_as_handled()
+	var w2 = _wheel()
 	if not ev.pressed:
 		held.erase(ev.keycode)
+		if w2 != null:
+			w2.key_up(ev.keycode)
 		return
 	if ev.echo:
 		return
 	held[ev.keycode] = true
+	# (round 24: C is the command wheel, Z the last order again, Esc shuts the wheel)
+	if w2 != null and w2.key_down(ev.keycode, ev.shift_pressed, ev.ctrl_pressed or ev.meta_pressed):
+		return
 	key_pressed(ev.keycode, ev.shift_pressed)
 
 
@@ -1182,6 +1201,134 @@ func _say_answer(p, r: Dictionary) -> void:
 		hud_layer.toast(String(r.why), "warn")
 
 
+# ------------------------------------------------------- the command wheel --
+# Round 24 (scripts/ui/wheel_ctl.gd, scripts/ui/command_wheel.gd): hold C, or the middle button, and a ring of the radio's verbs opens at the pointer; the controller
+# asks the place these things (the yard answers the same ones, scripts/main.gd). The squad is asked through the place's rules (`squad_request`), exactly as the
+# dock's verbs and the right click do; the people at the base can only be asked to go back or to the walls (the base's radio says why not for the rest).
+# 1 to 5 do not pick the crew here (the place has the road's cards on those keys): click a card.
+
+## The controller, made the first time it is asked for and given the HUD's wheel and verbs again when the HUD is another (the drive's replaces the place's).
+func _wheel():
+	if hud_layer == null or hud_layer.get("wheel") == null or hud_layer.get("radio_verbs") == null:
+		return null
+	if wheel_ctl == null:
+		wheel_ctl = WheelCtl.new(self)
+	if wheel_ctl.wheel != hud_layer.wheel:
+		wheel_ctl.attach(hud_layer.radio_verbs)
+	return wheel_ctl
+
+
+func wheel_view():
+	return hud_layer.get("wheel") if hud_layer != null else null
+
+
+## Whether the wheel may act now: in the place itself (not on a road, not over, not while the game's menu is up) with somebody to lead.
+func wheel_ok() -> bool:
+	if phase != "place" or ended or run == null or _menu_up() or leader() == null:
+		return false
+	return not (has_method("_is_road") and bool(call("_is_road")))
+
+
+func wheel_allowed() -> bool:
+	return true
+
+
+func wheel_crew_keys() -> bool:
+	return false
+
+
+func wheel_pointer() -> Vector2:
+	return _mouse if _mouse.x >= 0.0 else _vp() / 2.0
+
+
+func wheel_over_hud() -> bool:
+	return over_hud
+
+
+func wheel_me():
+	return leader()
+
+
+## The squad that can be asked, in card order (not the one you lead, not the lost).
+func wheel_crew() -> Array:
+	return squad_contacts()
+
+
+## The contact picked (a card, or a name at the base), or null.
+func wheel_selected():
+	var p = contact.get("p")
+	return p if p != null and not p.dead else null
+
+
+func wheel_pick(p) -> void:
+	hud_layer.pick_contact("squad" if run.squad.has(p) else "base", p)
+
+
+func wheel_hovered(tile: Vector2):
+	return squad_at(tile)
+
+
+func wheel_tile(screen: Vector2) -> Vector2:
+	return to_tile(screen)
+
+
+## The radio that answers a person: the squad's, through the place, or the base's.
+func wheel_radio(p):
+	return radio_of("squad" if run.squad.has(p) else "base")
+
+
+func wheel_place() -> bool:
+	return true
+
+
+func wheel_verbs():
+	return hud_layer.get("radio_verbs") if hud_layer != null else null
+
+
+## What a verb takes from the point of the place the wheel was opened on: Hold here, that tile (where you stand when it is solid); Search that, the container
+## there, else the one in reach (`search_target`: the wheel's own point, not where the pointer is by the time it is let go), else an error: nothing to search.
+func wheel_extra(verb: String, tile: Vector2) -> Dictionary:
+	if verb == "hold":
+		var spot := Vector2(floorf(tile.x) + 0.5, floorf(tile.y) + 0.5)
+		var lead = leader()
+		if world.is_solid(world.solid_p, spot.x, spot.y) and lead != null:
+			spot = Vector2(lead.x, lead.y)
+		return {"at": spot}
+	if verb == "search":
+		var c := search_target(tile)
+		if c.is_empty():
+			return {"error": "Aim at a shelf or a crate first"}
+		return {"at": Vector2(c.pos)}
+	return {}
+
+
+## One person of the squad asked without the dock (the second ring).
+func wheel_ask(p, verb: String, extra: Dictionary) -> Dictionary:
+	var args := {}
+	if extra.has("at") and (verb == "hold" or verb == "search"):
+		args["at"] = extra.at
+	return squad_request(p, verb, args)
+
+
+## (A place marks what it was told itself: `squad_request`.)
+func wheel_flag(_verb: String, _extra: Dictionary) -> void:
+	pass
+
+
+## What a person said to the wheel, in a toast, as a right click's order has it.
+func wheel_said(p, r: Dictionary) -> void:
+	_say_answer(p, r)
+
+
+func wheel_solid(pos: Vector2) -> bool:
+	return world.is_solid(world.solid_p, pos.x, pos.y)
+
+
+func wheel_toast(text: String, level: String = "info") -> void:
+	if hud_layer != null:
+		hud_layer.toast(text, level)
+
+
 func mouse_motion(mm: InputEventMouseMotion) -> void:
 	_mouse = mm.position
 	_staged_aim = false
@@ -1216,12 +1363,21 @@ func _hands() -> void:
 		fire = false
 	if lead.holstered != AimMode.holstered:
 		_mark_holster()
+	if wheel_ctl != null and wheel_ctl.is_open() and not wheel_ok():
+		wheel_ctl.cancel()    # (round 24: the game's menu, or the end of the place, came up over the wheel)
+	var wheel_up: bool = wheel_ctl != null and wheel_ctl.is_open()
+	if wheel_up:
+		fire = false    # (round 24: the command wheel is up: nothing is aimed or fired, the keys still walk)
+		fire_held = false
+		aim_held = false
 	var aim_for := aim_tile
 	if not AimMode.mouse_aims():
 		# "Right button aims" (or a weapon put away): no aim at all unless the right button (or Shift) is held on the world, and then the trigger counts
 		var on := aiming()
 		aim_for = aim_tile if on else Vector2.ZERO
 		fire = fire and on
+	if wheel_up:
+		aim_for = Vector2.ZERO
 	run.sim.avatar.set_input(move, aim_for, fire)
 
 
@@ -1245,7 +1401,7 @@ func _update_pointer() -> void:
 	if not _live():
 		return
 	var want := Input.MOUSE_MODE_VISIBLE
-	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse) and (AimMode.mouse_aims() or aiming()):
+	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse) and (AimMode.mouse_aims() or aiming()) and not (wheel_ctl != null and wheel_ctl.is_open()):
 		want = Input.MOUSE_MODE_HIDDEN
 	if Input.mouse_mode != want:
 		Input.mouse_mode = want
@@ -1261,6 +1417,8 @@ func crosshair_shown() -> bool:
 func aiming() -> bool:
 	if phase != "place" or ended or paused or _menu_up() or over_hud or _mouse.x < 0.0:
 		return false
+	if wheel_ctl != null and wheel_ctl.is_open():
+		return false    # (round 24: the command wheel is up)
 	if AimMode.holstered:
 		return false    # (the weapon is put away: nothing is aimed)
 	return AimMode.mouse_aims() or aim_held or _shift_down()
@@ -1300,6 +1458,8 @@ func _notification(what: int) -> void:
 		_mouse = Vector2(-1.0, -1.0)
 		_staged_aim = false
 		if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+			if wheel_ctl != null:
+				wheel_ctl.cancel()    # (round 24: the key that held the command wheel up is let go where we cannot see it)
 			held.clear()
 			fire_held = false
 			aim_held = false

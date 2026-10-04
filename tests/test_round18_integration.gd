@@ -628,9 +628,9 @@ func test_the_keys_of_avatar_mode_do_not_collide() -> void:
 	_press(main, KEY_SPACE)
 	eq(main.speed, 0, "Space pauses")
 	_press(main, KEY_SPACE)
-	_press(main, KEY_3)
-	eq(main.speed, 3, "3 is the fastest")
-	_press(main, KEY_1)
+	_press(main, KEY_3, true)
+	eq(main.speed, 3, "Shift and 3 is the fastest (round 24: the digits pick the crew in an avatar game)")
+	_press(main, KEY_1, true)
 	check(main.hud.radio_open(), "(the panel stayed open through all of it)")
 	check(not main.hud.talk_open(), "(and no card opened)")
 	# Esc: the talk card first, then the panel, then the pause menu

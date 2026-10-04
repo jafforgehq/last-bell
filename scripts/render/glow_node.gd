@@ -11,6 +11,8 @@ var fires: Array = []
 var lanterns: Array = []
 var floods: Array = []
 var lamps: Array = []
+## Extra painters of the glow (round 24, scripts/render/base_life.gd): Callables of (canvas item, radial texture, darkness).
+var extras: Array = []
 var lighting
 var t := 0.0
 
@@ -50,10 +52,13 @@ func _draw() -> void:
 		for f in fires:
 			_glow(f.x, f.y - 0.3, 3.0 if f.get("big", false) else 1.4, Color8(255, 150, 60), 0.32 * k * (0.85 + 0.15 * sin(t * 17.0 + float(f.x))))
 		for l in lanterns:
-			_glow(l.x, l.y, 0.7, Color8(255, 200, 120), 0.5 * lamp)
+			_glow(l.x, l.y, 0.7, Color8(255, 200, 120), 0.5 * lamp * (1.0 if lighting.calm else lighting.lamp_flicker(t, float(l.x), lamp)))
 		var floods_on: bool = lighting.floods_on
 		for l in floods:
 			_glow(l.x, l.y, 0.6, Color8(230, 238, 255), 0.4 * (lamp if floods_on else 0.0))
 		for l in lamps:
 			_glow(l.x, l.y, 0.6, Color8(255, 230, 180), 0.35 * lamp)
+	# (round 24) what the base's life adds to the glow, each a Callable(canvas item, radial texture, darkness) drawing in tile units: the mast's lamp
+	for extra in extras:
+		extra.call(self, radial, dark)
 	fx.draw_add(self)

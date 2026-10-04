@@ -27,8 +27,8 @@ const MODES := [RIGHT, ALWAYS]
 ## What the Settings screen calls them, and what each says in a line.
 const LABELS := {RIGHT: "Right button aims", ALWAYS: "Always aim at the mouse"}
 const NOTES := {
-	RIGHT: "Right button or Shift aims, left click shoots; the pointer stays free. Q puts the weapon away: a right click then orders the person picked.",
-	ALWAYS: "The survivor aims at the mouse all the time; the left button fires. Q puts the weapon away: a right click then orders the person picked.",
+	RIGHT: "Right button or Shift aims, left click shoots; the pointer stays free. Q puts the weapon away: a right click then orders. Hold C for the command wheel.",
+	ALWAYS: "The survivor aims at the mouse all the time; the left button fires. Q puts the weapon away: a right click then orders. Hold C for the command wheel.",
 }
 
 
