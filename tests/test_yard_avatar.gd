@@ -455,16 +455,21 @@ func test_a_succession_moves_the_camera_to_the_new_player_and_says_so() -> void:
 
 # ---------------------------------------------------- what is gone in avatar mode --
 
-func test_a_right_click_orders_nobody_in_avatar_mode() -> void:
+func test_a_right_click_asks_by_radio_and_never_drafts_in_avatar_mode() -> void:
+	# (round 23, "Orders": with someone picked a tapped right click is an ask over the radio, Hold here at the spot; it never sends them the old way)
 	var main := _game()
 	var dez = _person(main, "dez")
 	_stand(main, dez, Vector2(38.5, 30.5))
+	_frames(main, 4)    # (the HUD sees the game: its dock has a radio to ask)
 	main._try_select({"kind": "person", "ref": dez})
 	main.hud.toast_panel.visible = false
 	_click(main, _at(main, Vector2(46.5, 33.5)), MOUSE_BUTTON_RIGHT)
-	check(dez.order == null, "Dez has no order")
+	check(dez.order == null, "Dez has no order of the old kind")
 	check(main.order_mark == null, "no mark of one")
-	eq(_toast(main), "", "and no word about it")
+	eq(main.sim.radio.pending.size(), 1, "one request is waiting on the radio")
+	eq(String(main.sim.radio.pending[0].verb), "hold", "Hold here")
+	check(Vector2(main.sim.radio.pending[0].at).distance_to(Vector2(46.5, 33.5)) < 0.01, "at the tile that was clicked")
+	check(_toast(main).begins_with("Dez"), "and Dez answers: %s" % _toast(main))
 	await TutorialKit.leave(main)
 
 

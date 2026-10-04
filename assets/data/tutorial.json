@@ -46,7 +46,7 @@
 			"id": "reload",
 			"run_speed": 1,
 			"title": "Reload and swing",
-			"text": "The gun holds a few rounds: R reloads it, and the readout under the clock shows the magazine over the stores. When something gets close, F swings the butt.",
+			"text": "The gun holds a few rounds: R reloads it, and the readout under the clock shows the magazine over the stores. When something gets close, F swings the butt. Q puts the weapon away.",
 			"goal": "press R to reload",
 			"goals": [{"when": "reloaded", "text": "press F to swing"}],
 			"anchor": ["ammo"],

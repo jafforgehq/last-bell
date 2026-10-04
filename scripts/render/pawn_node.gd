@@ -276,6 +276,10 @@ func _arms(view: String, t: float, attacking: bool, layer: String, phase: float)
 		Art.arms(_pen, pal, view, t, attacking, layer, _style, phase)
 
 
+## Where a weapon that is put away points (radians in the figure's own frame: down and a little forward), and the strength it is drawn at.
+const LOW_AIM := 1.25
+
+
 func _draw_person() -> void:
 	var p = entity
 	if _work_update(p):
@@ -294,14 +298,24 @@ func _draw_person() -> void:
 	_legs(view, p.walk_phase, p.moving, false, 1.0, true)
 	_tr(0, -bob)
 	var aim: float = PI - p.aim if mirror else p.aim
+	# (round 23, Q: a weapon that is put away hangs low and a little faded, the hands off it, whatever way the survivor faces)
+	var away: bool = p.get("holstered") == true
 	if view == "N":
-		_weapon(view, aim)
+		_carry(view, aim, away)
 	_apply()
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if view != "N":
-		_weapon(view, aim)
+		_carry(view, aim, away)
 	if p.thrust > 0.0:
 		_swing(view, aim)
+
+
+## The weapon as it is carried: in the hand at the aim, or put away (low, a little faded, the hands off it).
+func _carry(view: String, aim: float, away: bool) -> void:
+	if away:
+		_weapon_faded(view, LOW_AIM, 0.75, false)
+	else:
+		_weapon(view, aim)
 
 
 ## A blow in the air (round 17: the avatar's F, and the pike's thrust and the butt of a gun for everyone): a pale crescent that

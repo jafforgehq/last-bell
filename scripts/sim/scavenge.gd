@@ -1563,6 +1563,7 @@ func begin_played(people: Array, place_id: String, action: String = "loot", vehi
 	parties.append(party)
 	for p in people:
 		_go_through(p, party)
+	sim.gate.let_out(_names_of(party))    # (round 23, avatar mode: the gate opens for the trip the avatar leads out, and a lock of theirs is lifted)
 	return party
 
 

@@ -198,6 +198,9 @@ class Person:
 	var input_melee := false
 	var melee_t := 0.0
 	var bloom := 0.0
+	## Round 23: the player has put the weapon away (Q): the view says so every frame, and only the drawing reads it (the pawn carries the gun low
+	## and slack, with the hands off it). The rules never read it: with it set the view sends no aim and no trigger. Not saved.
+	var holstered := false
 
 
 class Zombie:

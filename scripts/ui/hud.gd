@@ -216,6 +216,8 @@ const ALERT_GAP := 6.0
 const BANNER_FADE := 0.7
 const BANNER_HOLD := 3.0
 ## A toast is up this many real seconds, fading over the last TOAST_FADE of them.
+## The card of the offer to leave the base (round 23).
+const LEAVE_TEXT := "Leave the base?  E / click: open the Map"
 const TOAST_SECONDS := 2.5
 const TOAST_FADE := 0.4
 const TOAST_COLOR := {"danger": DANGER_TEXT, "warn": WARN, "info": INK}
@@ -274,13 +276,13 @@ const HELP := [
 ## keys, no selecting in the yard, no panning: the camera follows. G, the Town Board, and N, Build, keep their places so that
 ## the words the HUD gives them in a settlement game still reach them.)
 const HELP_AVATAR := [
-	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["Click", "Pick, use"], ["E", "Use"], ["R", "Reload"], ["F", "Melee"]]],
+	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["E Click", "Use, pick"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
 ]
 ## (With "Always aim at the mouse", round 22's setting: the mouse aims by itself and the left button fires, as it did.)
 const HELP_AVATAR_ALWAYS := [
-	["You", 2, [["W A S D", "Move"], ["Arrows", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R", "Reload"], ["F", "Melee"]]],
+	["You", 2, [["W A S D", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
 ]
@@ -292,12 +294,12 @@ const STANCE_TIPS := {"follow": "Following you", "hold": "Holding where you left
 const HINT := ["Click someone in the yard", [["Right-click", "to send them"], ["Scroll", "to zoom"], ["Space", "to pause"]]]
 ## (Avatar mode's is two lines, so that it fits a 700 px window: the survivor's hands, then the radio, the map and the news.)
 const HINT_AVATAR := [
-	["", [["WASD", "to move"], ["Right-click", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
-	["Click a crew card or a person to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
+	["", [["WASD", "to move"], ["Right-click", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["Q", "weapon away"]]],
+	["Click a person to radio; Q then right-click orders", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
 ## (and with "Always aim at the mouse": the mouse aims, a click fires.)
 const HINT_AVATAR_ALWAYS := [
-	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
+	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["Q", "weapon away"]]],
 	["Click a crew card to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
@@ -435,8 +437,16 @@ var on_town: Callable
 ## The toolbar's Alarm button was pressed (avatar mode): called first, with no arguments, and the alarm is only rung or stood down if
 ## it returns true (main.gd asks the tutorial's lock, which refuses it in the lessons that do not teach it). With nobody listening it is.
 var on_alarm: Callable
+## The weapon button under the gun's readout was pressed (avatar mode, round 23): main.gd puts the weapon away or draws it (Q does the same). With nobody
+## listening the HUD flips the state itself.
+var on_holster: Callable
 ## Opens a played trip (main.gd's `open_raid(people, place, vehicle_id, loot_mult, on_done)`): the Town Board's "Take control".
 var on_raid: Callable
+## The clock's Gate row was clicked (round 23, avatar mode): main.gd works the gate when the avatar is at it, else says where it is and glides the camera
+## to the lever. With nobody listening nothing happens.
+var on_gate: Callable
+## The offer of the Map on leaving the base (round 23): called with no arguments when its card is clicked or its button pressed (main.gd opens the Map).
+var on_leave: Callable
 ## The Build screen marks a plot in the world: called with {} when the pointer is not on a plot's slip or the screen
 ## is closed, else {"plot": id}; main.gd keeps it for the yard to draw (`build_hover`).
 var on_build_hover: Callable
@@ -597,6 +607,8 @@ var ammo_panel: PanelContainer
 var ammo_label: Label
 var ammo_name: Label
 var ammo_bar: Bar
+## The small button under the readout (round 23, scripts/aim_mode.gd): "Weapon: drawn (Q)" or "Weapon: put away (Q)"; pressing it is the Q key.
+var holster_button: Button
 var _help_col: Control = null
 var _hint_row: Control = null
 ## The one-line hint's job is done (the old yard's: the first selection, the end of the run, or a window too
@@ -613,6 +625,9 @@ var toast_tween: Tween
 ## The colour of the level of the toast now up (its bar, with the frame).
 var toast_col := INFO
 var toast_seconds := TOAST_SECONDS
+## The offer of the Map on leaving the base (round 23, avatar mode: scripts/sim/gate.gd `leave_offer`): a card above the toast, a click on it (or E) opens the Map.
+var leave_card: PanelContainer
+var leave_label: Label
 var last_speed := -1
 ## Round 17, the radio's views (scripts/ui/radio_verbs.gd, call_card.gd, news_panel.gd; avatar mode only, see `_sync_radio`). The
 ## dock's `radio_box` holds the verbs (`radio_verbs`) of the selected person in place of the order buttons; `call_card` hangs under the
@@ -657,6 +672,7 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	_build_help()
 	_build_hint()
 	_build_toast()
+	_build_leave_card()
 	_build_radio_ui()
 	_build_talk_card()
 	resized.connect(_on_resized)
@@ -1512,6 +1528,8 @@ func _build_clock() -> void:
 	# (round 22) in avatar mode, the gate under them (above the forecast, which is put away first when a call needs the room): a lamp and a word, with the tooltip that says what the lever does
 	gate_row = _hbox(6)
 	gate_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	gate_row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	gate_row.gui_input.connect(_on_gate_row_input)
 	gate_row.tooltip_text = GateKit.TIP
 	gate_lamp = Lamp.new()
 	gate_lamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1587,11 +1605,41 @@ func _build_ammo() -> void:
 	ammo_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ammo_bar.color = ACCENT
 	v.add_child(ammo_bar)
+	holster_button = RadioKit.small_button(self, AimMode.BUTTON_DRAWN, 22.0, 12)
+	holster_button.tooltip_text = AimMode.BUTTON_TIP_DRAWN
+	holster_button.pressed.connect(_on_holster_pressed)
+	v.add_child(holster_button)
 	ammo_panel.add_child(v)
 	ammo_panel.tooltip_text = AMMO_TIP
 	ammo_panel.visible = avatar_ui
 	right_col.add_child(ammo_panel)
 	right_col.move_child(ammo_panel, 1)
+
+
+## The weapon button was pressed: the Q key's own work (main.gd), or, with nobody to ask, the state itself.
+func _on_holster_pressed() -> void:
+	if on_holster.is_valid():
+		on_holster.call()
+	else:
+		AimMode.set_holstered(not AimMode.holstered)
+		update_holster()
+
+
+## The weapon button and the readout say whether the weapon is drawn or put away (the readout is dimmed, and amber says it is not in hand).
+func update_holster() -> void:
+	if holster_button == null:
+		return
+	var away: bool = AimMode.holstered
+	var words: String = AimMode.BUTTON_AWAY if away else AimMode.BUTTON_DRAWN
+	if holster_button.text != words:
+		holster_button.text = words
+		holster_button.tooltip_text = AimMode.BUTTON_TIP_AWAY if away else AimMode.BUTTON_TIP_DRAWN
+	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
+		holster_button.add_theme_color_override(state, WARN if away else INK2)
+	var dim := 0.5 if away else 1.0
+	ammo_label.modulate.a = dim
+	ammo_name.modulate.a = dim
+	ammo_bar.modulate.a = dim
 
 
 ## The readout's tooltip: what the two numbers are, and where rounds come from.
@@ -1636,6 +1684,7 @@ func _update_ammo(sim) -> void:
 		ammo_bar.value = 1.0 if melee or cap <= 0 else clampf(float(me.mag) / float(cap), 0.0, 1.0)
 		ammo_bar.color = col if col != INK else Color(0.82, 0.78, 0.64, 0.8)
 	ammo_bar.queue_redraw()
+	update_holster()
 
 
 ## Whether the player asked for less motion (Prefs ui/reduce_motion): the banner and the toast
@@ -3098,9 +3147,6 @@ func toast(text: String, level: String = "info") -> void:
 	toast_tween.tween_callback(func(): toast_panel.visible = false)
 
 
-## The toast sits at the bottom centre above the order buttons, above the hint while
-## that shows, and is moved clear of the selection panel in a window too narrow to
-## have both side by side.
 func _layout_toast() -> void:
 	if toast_panel == null:
 		return
@@ -3108,8 +3154,17 @@ func _layout_toast() -> void:
 	if hint != null and hint.visible:
 		lift += hint.get_combined_minimum_size().y + 8.0
 	toast_panel.offset_bottom = -lift
+	var shift := _toast_shift(toast_panel.get_combined_minimum_size().x * 0.5)
+	toast_panel.offset_left = shift
+	toast_panel.offset_right = shift
+	_layout_leave_card(lift)
+
+
+## The toast sits at the bottom centre above the order buttons, above the hint while
+## that shows, and is moved clear of the selection panel in a window too narrow to
+## have both side by side: how far from the centre (pixels, negative to the left) for a card of this half width.
+func _toast_shift(half: float) -> float:
 	var shift := 0.0
-	var half := toast_panel.get_combined_minimum_size().x * 0.5
 	# (with the radio panel up the toast keeps to the left of it when it can: it would cover the page's answer line, which says the same)
 	if radio_open():
 		var room_to := size.x - 12.0 - _radio_panel_width() - 8.0
@@ -3118,8 +3173,73 @@ func _layout_toast() -> void:
 	if inspect != null and inspect.visible:
 		shift = maxf(shift, 12.0 + _radio_dock_width() + 8.0 + half - size.x * 0.5)
 		shift = minf(shift, maxf(0.0, size.x * 0.5 - 12.0 - half))
-	toast_panel.offset_left = shift
-	toast_panel.offset_right = shift
+	return shift
+
+
+## The card of the offer to leave the base (round 23): "Leave the base?" and what to press, a gold-edged card above the toast; the whole of it is a button
+## (E does the same: main.gd). Hidden until the rules make the offer (`show_leave`).
+func _build_leave_card() -> void:
+	leave_card = PanelContainer.new()
+	leave_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	leave_card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	leave_card.focus_mode = Control.FOCUS_NONE
+	leave_card.tooltip_text = "You are outside the walls. The Map is where a trip is chosen: the places on the road, who goes. Walk back inside to forget it."
+	var st := _style(PANEL, 8, ACCENT, true, "toast")
+	if st is StyleBoxFlat:
+		st.border_width_left = 3
+		st.border_width_top = 2
+		st.border_width_right = 2
+		st.border_width_bottom = 2
+		st.content_margin_left = 14
+		st.content_margin_right = 14
+		st.content_margin_top = 8
+		st.content_margin_bottom = 9
+	leave_card.add_theme_stylebox_override("panel", st)
+	leave_label = _label(LEAVE_TEXT, Fonts.sans(600), 14, INK)
+	leave_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	leave_card.add_child(leave_label)
+	leave_card.visible = false
+	leave_card.gui_input.connect(_on_leave_card_input)
+	add_child(leave_card)
+	leave_card.anchor_left = 0.5
+	leave_card.anchor_right = 0.5
+	leave_card.anchor_top = 1.0
+	leave_card.anchor_bottom = 1.0
+	leave_card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	leave_card.grow_vertical = Control.GROW_DIRECTION_BEGIN
+
+
+func _on_leave_card_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		leave_card.accept_event()
+		if on_leave.is_valid():
+			on_leave.call()
+
+
+## Shows or hides the offer of the Map (the rules' `leave_offer`).
+func show_leave(on: bool) -> void:
+	if leave_card == null or leave_card.visible == on:
+		return
+	leave_card.visible = on and avatar_ui
+	_layout_toast()
+
+
+func leave_shown() -> bool:
+	return leave_card != null and leave_card.visible
+
+
+func leave_text() -> String:
+	return leave_label.text if leave_card != null and leave_card.visible else ""
+
+
+## Above the toast's place (a toast is about 36 pixels tall), and clear of the radio panel and the selection panel as the toast is.
+func _layout_leave_card(toast_lift: float) -> void:
+	if leave_card == null:
+		return
+	leave_card.offset_bottom = -(toast_lift + 46.0)
+	var shift := _toast_shift(leave_card.get_combined_minimum_size().x * 0.5)
+	leave_card.offset_left = shift
+	leave_card.offset_right = shift
 
 
 # ----------------------------------------------- dialog and game over --
@@ -3859,6 +3979,14 @@ func _update_forecast(sim) -> void:
 	if ready_text != "":
 		ready_label.add_theme_color_override("font_color", OK if bool(ready.get("holds", false)) else WARN)
 	_update_night_badge(sim, f)
+
+
+## A click on the clock's Gate row (round 23): main.gd works the gate (at the lever) or says where the lever is.
+func _on_gate_row_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		gate_row.accept_event()
+		if on_gate.is_valid():
+			on_gate.call()
 
 
 ## The gate's lamp and word in the clock (round 22): there only while the gate's rules are in charge (avatar mode). The lamp is the picture's

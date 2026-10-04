@@ -38,6 +38,18 @@
 ## bell's and the alarm's keeper). News ("gate" kind, `radio.log_news`) only for the dusk, a gate that cannot shut, a car or a caller that
 ## waits at a gate held shut: not for the player's own hand.
 ## Saved with the modules (`save`/`load_state`); an older save loads as a shut gate.
+##
+## ROUND 23, "we can't open the gate, we can't leave the map". (1) EASY TO WORK: the avatar works the gate from REACH (3.5) tiles of the working
+## ground (`reach_dist`: the lever and the front of the mouth, so that standing where a shut gate stops you is in reach), a click on the gate's
+## picture works it from CLICK_REACH (6) (`picked`), a hand that SHUTS it (E at the lever) LOCKS it (`held` "shut": cars and parties wait, the
+## News says so, until the player opens it again) and one that opens it holds it open until the bell; the keeper's automatic shutting (no hold) is
+## as it was. (2) THE AVATAR OUTSIDE: the gate is never shut behind the avatar. While the avatar is outside the compound (`outside_by`) the bell's
+## and the alarm's shutting waits ("The gate stays open for you", News) until they are back inside or it is day again, nothing else shuts it
+## either, and a shut gate opens by itself for an avatar who comes back to it (`demand("avatar_in")`: it overrides a lock). (3) LEAVING: the
+## avatar who walks out through the gateway and on past LEAVE_R tiles of the compound is offered the Map (`leave_offer`, the event
+## {"type": "leave_offer", "on": true | false, "why"}): once a crossing, with a cooldown, never at night, never without the rules (Orientation Day), and it is
+## dismissed by walking back inside the line, by `dismiss_leave` (the views: E, a click, the Map opening) or after LEAVE_CARD_S. A trip the avatar
+## leads out (`scavenge.begin_played`) opens the gate for them (`let_out`): a lock of theirs is lifted, with a line in the News.
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
@@ -48,8 +60,17 @@ const SEGMENT := 2
 const OPEN_S := 2.0
 ## Rules' seconds the gate stays open after the last one through (and with nothing in the gateway) when nobody holds it open.
 const KEEP_OPEN_AFTER_PASS_S := 4.0
-## Tiles from `control_spot()` within which the avatar works the gate.
-const REACH := 2.2
+## Tiles from the working ground (`reach_dist`) within which the avatar works the gate (round 23: it was 2.2 from the lever alone).
+const REACH := 3.5
+## A click on the gate's picture works it from this far (`Interact.gate_candidate`), and says "Too far: walk to the gate" from beyond; the floating
+## word over the lever shows from LABEL_R tiles (scripts/render/overlay_node.gd).
+const CLICK_REACH := 6.0
+const LABEL_R := 12.0
+## The working ground is the line from the lever to the front of the mouth (the apron under the bridge's face): the other end.
+const FRONT_END := Vector2(40.8, 21.6)
+## The gate's picture (the posts and the leaves, tiles) and how close to the lever's spot still counts as on the lever: `picked`.
+const PICK := Rect2(35.8, 16.6, 6.8, 2.2)
+const LEVER_PICK_R := 1.8
 ## From this `open` up the gate is passable (and the dead may come in).
 const PASS_AT := 0.5
 ## The tile columns of the mouth, the rows through the wall (the section's own) and the rows of the deck's face under the bridge (the barrier
@@ -78,6 +99,21 @@ const CALL_AFTER_DUSK_H := 0.5
 const CALL_TTL_MIN := 30.0
 ## The reasons a car, a party or a caller gives `demand`: the ones that want to GO OUT wait while the bell has rung or the alarm is on.
 const LEAVING := ["car_out", "foot_out"]
+## The compound (tiles: the walls and the school), for "outside": a point that is not in it, and how far it is from it (`outside_by`).
+const COMPOUND := Rect2(17.0, 15.0, 50.0, 45.0)
+## Past this many tiles from the compound the avatar is offered the Map; the offer is made once a crossing: it is armed again once the avatar is
+## within LEAVE_REARM_R of the compound (and the cooldown has run), put away when they walk back to LEAVE_BACK tiles short of the line, and goes
+## by itself after LEAVE_CARD_S rules seconds.
+const LEAVE_R := 5.5
+const LEAVE_BACK := 1.5
+const LEAVE_REARM_R := 2.0
+const LEAVE_COOLDOWN_S := 20.0
+const LEAVE_CARD_S := 15.0
+## A shut gate opens for the avatar who comes back to it from this close (tiles from the middle of the mouth's outer end).
+const RETURN_R := 4.5
+const OUTER_MOUTH := Vector2(39.0, 15.0)
+## Seconds the gate is kept open for a trip the avatar leads out.
+const ESCORT_S := 6.0
 
 var sim
 ## Whether the rules apply at all (Orientation Day, the tutorial's lesson and a test of something else switch it off).
@@ -97,6 +133,8 @@ var _hand_shut := false
 ## A shutting that waits to be done: "" | "dusk" | "alarm" (the bell, the alarm, an answer of the call).
 var _forced := ""
 var _forced_said := false
+## The day a shutting was asked for (round 23: one that waits for the avatar outside is not asked of the day after).
+var _forced_day := 0
 ## Who is the cause of what the gate is doing: "player", "auto" or "dusk".
 var _by := "auto"
 ## Whether the world's grids hold the gate open now (the gateway's tiles walkable).
@@ -114,6 +152,13 @@ var _faces_read := false
 var _marks := {}
 ## The wall section (found once).
 var _seg = null
+## Round 23: whether the offer of the Map is up (the views draw its card), whether the next crossing may make one, the cooldown (rules seconds),
+## the rules seconds the card has been up, and the rules seconds the gate is still kept open for a trip that leaves. Not saved.
+var leave_offer := false
+var _leave_armed := true
+var _leave_cool := 0.0
+var _leave_t := 0.0
+var _escort := 0.0
 
 
 func setup(s) -> void:
@@ -131,11 +176,17 @@ func start() -> void:
 	_hand_shut = false
 	_forced = ""
 	_forced_said = false
+	_forced_day = 0
 	_by = "auto"
 	_was_wrecked = false
 	_bell_day = 0
 	_call_day = 0
 	_noted = {}
+	leave_offer = false
+	_leave_armed = true
+	_leave_cool = 0.0
+	_leave_t = 0.0
+	_escort = 0.0
 	if _applied:
 		_apply_world(false)
 
@@ -191,9 +242,37 @@ func control_spot() -> Vector2:
 	return CONTROL_SPOT
 
 
+## Tiles from `at` to the working ground: the line from the lever to the front of the mouth (0 on it). A hand works the gate from REACH of it, so
+## that standing where a shut gate stops you (the face under the bridge) is in reach whichever side of the opening you came to.
+func reach_dist(at: Vector2) -> float:
+	var ab := FRONT_END - CONTROL_SPOT
+	var t := clampf((at - CONTROL_SPOT).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	return at.distance_to(CONTROL_SPOT + ab * t)
+
+
+## Whether a point of the world is on the gate for a click: its picture (the posts and the leaves) or the lever.
+func picked(at: Vector2) -> bool:
+	return PICK.has_point(at) or at.distance_to(CONTROL_SPOT) <= LEVER_PICK_R
+
+
 ## The mouth (tiles): from the street's end of the wall to the apron's end of the bridge.
 func gateway() -> Rect2:
 	return GATEWAY
+
+
+## How far (tiles) a point is from the compound: 0 inside it (the walls, the school and the gateway included), more outside.
+func outside_by(at: Vector2) -> float:
+	var dx := maxf(maxf(COMPOUND.position.x - at.x, at.x - COMPOUND.end.x), 0.0)
+	var dy := maxf(maxf(COMPOUND.position.y - at.y, at.y - COMPOUND.end.y), 0.0)
+	return Vector2(dx, dy).length()
+
+
+## Whether the avatar is up and outside the compound (the street beyond the north wall): the gate is never shut behind them.
+func _avatar_outside() -> bool:
+	if not _player_here():
+		return false
+	var lead = sim.avatar.player()
+	return outside_by(Vector2(lead.x, lead.y)) > 0.0
 
 
 ## Whether the point is in a tile of the mouth that is solid while the gate is shut (the wall's three rows and the deck's face under the bridge).
@@ -291,18 +370,22 @@ func refusal(want_open: bool) -> String:
 		return "The gate is wrecked"
 	if want_open:
 		return ""
+	if _avatar_outside():
+		return "You are outside: the gate stays open for you"
 	if open > 0.0:
 		return _blocked_line(_blockers())
 	return ""
 
 
 ## A hand at the gate: {"ok", "why" (the reason it was refused), "line" (what to say: "Opening the gate."), "warn" (true when it is dark and the
-## dead can walk in), "open" (the state wanted)}. Opening sets `held` to "open"; shutting sets it to "" and shuts the gate now (a demand may
-## open it again: `hold("shut")` keeps it shut). `who` is "player" (E at the lever) or another word ("radio").
+## dead can walk in), "open" (the state wanted), "locked" (the player's hand shut it and it stays shut)}. Opening sets `held` to "open" (it stays
+## open until the bell or until somebody shuts it); the PLAYER's hand shutting sets it to "shut" and shuts the gate now: it is LOCKED, cars and
+## parties wait outside (the News says so) until the player opens it again (round 23); another hand (the radio's answer, `who` another word) shuts
+## it and holds nothing (a demand may open it again). `who` is "player" (E at the lever, a click, the HUD's row, Y).
 func request(want_open: bool, who: String = "player") -> Dictionary:
 	var why := refusal(want_open)
 	if why != "":
-		return {"ok": false, "why": why, "line": "", "warn": false, "open": want_open}
+		return {"ok": false, "why": why, "line": "", "warn": false, "open": want_open, "locked": false}
 	var by := "player" if who == "player" else ("dusk" if who == "dusk" else "auto")
 	_forced = ""
 	_forced_said = false
@@ -313,11 +396,12 @@ func request(want_open: bool, who: String = "player") -> Dictionary:
 		_want = true
 		_idle = 0.0
 		var dark: bool = sim.is_night()
-		return {"ok": true, "why": "", "line": "Opening the gate: the dead can walk in." if dark else "Opening the gate.", "warn": dark, "open": true}
-	held = ""
+		return {"ok": true, "why": "", "line": "Opening the gate: the dead can walk in." if dark else "Opening the gate.", "warn": dark, "open": true, "locked": false}
+	var locked := who == "player"
+	held = "shut" if locked else ""
 	_hand_shut = true
 	_want = false
-	return {"ok": true, "why": "", "line": "Shutting the gate.", "warn": false, "open": false}
+	return {"ok": true, "why": "", "line": "Shutting the gate. Locked: cars wait outside" if locked else "Shutting the gate.", "warn": false, "open": false, "locked": locked}
 
 
 ## The standing choice: "open" (no auto-shut but the bell's), "shut" (shut even for a car: it waits, the News says why) or "" (automatic).
@@ -359,7 +443,7 @@ func demand(reason: String, who: String = "") -> bool:
 
 ## "" when a demand may open the gate; "shut" (held shut with the avatar here), "alarm" or "night" for a party that wants out.
 func _kept_shut(reason: String) -> String:
-	if held == "shut" and _player_here():
+	if held == "shut" and _player_here() and reason != "avatar_in":
 		return "shut"
 	if LEAVING.has(reason):
 		if sim.radio.alarm_on:
@@ -415,6 +499,7 @@ func shut_for(by: String) -> void:
 		return
 	_forced = by
 	_forced_said = false
+	_forced_day = int(sim.day)
 	_by = "dusk"
 
 
@@ -430,6 +515,7 @@ func update(dt: float) -> void:
 	if not active():
 		if _applied or open > 0.0 or _state != "shut":
 			_snap_shut()
+		_end_offer("off")
 		return
 	var down := wrecked()
 	if down != _was_wrecked:
@@ -437,11 +523,16 @@ func update(dt: float) -> void:
 		if down:
 			# the heap: nothing to work; the wreck opened the wall's rows itself, the face's rows are put back
 			_snap_shut(false)
+	_watch_leave(dt)
 	if down:
 		_demanded = false
 		return
 	_watch_bell()
-	var demanded := _demanded
+	var outside := _avatar_outside()
+	if outside:
+		_watch_return()
+	var demanded := _demanded or _escort > 0.0
+	_escort = maxf(0.0, _escort - dt)
 	_demanded = false
 	var blockers: Array = _blockers() if open > 0.0 else []
 	if demanded or not blockers.is_empty():
@@ -453,7 +544,7 @@ func update(dt: float) -> void:
 		want = false
 	elif held == "open":
 		want = true
-	elif held == "shut" and _player_here():
+	elif held == "shut" and _player_here() and not outside:
 		want = false
 	elif demanded:
 		want = true
@@ -461,6 +552,11 @@ func update(dt: float) -> void:
 		want = false
 	else:
 		want = open > 0.0 and _idle < KEEP_OPEN_AFTER_PASS_S
+	if not want and outside and open > 0.0:
+		# (round 23: the gate is never shut behind the avatar: the keeper waits for them, and says so once a day)
+		want = true
+		if _forced != "":
+			_say_waits_for_avatar()
 	_want = want
 	var prev := open
 	var next := move_toward(open, 1.0 if want else 0.0, dt / OPEN_S)
@@ -489,6 +585,29 @@ func _watch_bell() -> void:
 	if sim.bell_rung and _bell_day != int(sim.day):
 		_bell_day = int(sim.day)
 		shut_for("dusk")
+	elif _forced == "dusk" and _forced_day != int(sim.day) and not sim.is_night() and not sim.bell_rung:
+		# (round 23: a shutting that has waited for the avatar outside the wall is not asked of the day that has begun)
+		_forced = ""
+		_forced_said = false
+
+
+## The keeper has not shut the gate because the avatar is outside: one line a day.
+func _say_waits_for_avatar() -> void:
+	if _note("waits_for_avatar"):
+		sim.radio.log_news("gate", "The gate stays open for you", "It shuts when you are back inside")
+
+
+## The avatar is outside and the gate is not open: it opens for them as they come to it (a lock does not keep them out).
+func _watch_return() -> void:
+	if open >= PASS_AT:
+		return
+	var lead = sim.avatar.player()
+	if Vector2(lead.x, lead.y).distance_to(OUTER_MOUTH) > RETURN_R:
+		return
+	demand("avatar_in", "You")
+	if _note("returns"):
+		var k = keeper()
+		sim.radio.log_news("gate", "%s opens the gate for you" % String(k.first) if k != null else "The gate opens for you")
 
 
 func _say_shutting() -> void:
@@ -521,6 +640,73 @@ func _events(prev: float) -> void:
 	if now != _state:
 		_state = now
 		sim.events.append({"type": "gate", "state": now, "by": _by})
+
+
+# ---------------------------------------------------------------------------------------------------- leaving --
+
+## One step of the offer of the Map (round 23): the avatar who has walked out past LEAVE_R tiles of the compound is offered it once a crossing
+## (`leave_offer`, the event {"type": "leave_offer", "on": true}), never at night or under the call to arms, and it is put away when they walk back
+## (LEAVE_BACK short of the line), when the views say so (`dismiss_leave`) or after LEAVE_CARD_S seconds. It is armed again once the avatar is
+## within LEAVE_REARM_R of the compound and LEAVE_COOLDOWN_S seconds have run since the last card.
+func _watch_leave(dt: float) -> void:
+	_leave_cool = maxf(0.0, _leave_cool - dt)
+	if not _player_here():
+		_end_offer("away")
+		return
+	var lead = sim.avatar.player()
+	var d := outside_by(Vector2(lead.x, lead.y))
+	if leave_offer:
+		_leave_t += dt
+		if d < LEAVE_R - LEAVE_BACK:
+			_end_offer("back")
+		elif _leave_t >= LEAVE_CARD_S:
+			_end_offer("timeout")
+		elif sim.is_night() or bool(sim.radio.alarm_on):
+			_end_offer("night")
+		return
+	if d <= LEAVE_REARM_R:
+		_leave_armed = true
+	if d < LEAVE_R or not _leave_armed or _leave_cool > 0.0:
+		return
+	if sim.is_night() or bool(sim.radio.alarm_on):
+		return
+	leave_offer = true
+	_leave_armed = false
+	_leave_cool = LEAVE_COOLDOWN_S
+	_leave_t = 0.0
+	sim.events.append({"type": "leave_offer", "on": true, "why": ""})
+
+
+## Puts the offer away (the views: the key, a click or the Map opening; "back", "timeout", "night", "away", "off" are the rules'). False when none was up.
+func dismiss_leave(why: String = "taken") -> bool:
+	return _end_offer(why)
+
+
+func _end_offer(why: String) -> bool:
+	if not leave_offer:
+		return false
+	leave_offer = false
+	_leave_t = 0.0
+	sim.events.append({"type": "leave_offer", "on": false, "why": why})
+	return true
+
+
+## The avatar leads a trip out through the gate (the Map's Take control, scavenge.gd `begin_played`): the gate opens for them and shuts a few seconds
+## after, and a lock of the player's own is lifted (they are the one leaving). The line to say ("The gate opens for you", "Unlocked: the gate opens
+## for you"), "" with no rules, and nothing to do for a gate that is wrecked.
+func let_out(who: String = "") -> String:
+	if not active() or wrecked():
+		return ""
+	var unlocked := held == "shut"
+	if unlocked:
+		held = ""
+	_hand_shut = false
+	_escort = ESCORT_S
+	_by = "auto"
+	var line := "Unlocked: the gate opens for you" if unlocked else "The gate opens for you"
+	if unlocked:
+		sim.radio.log_news("gate", "The gate is unlocked for %s" % who if who != "" else "The gate is unlocked for the trip")
+	return line
 
 
 # ---------------------------------------------------------------------------------------------------- the world --
@@ -781,6 +967,7 @@ func save() -> Dictionary:
 ## from before the gate has none of it: a shut gate.
 func load_state(d: Dictionary) -> void:
 	start()
+	_leave_armed = false    # (a game loaded with the avatar outside makes no offer until they have been back at the wall)
 	var o = d.get("open", 0.0)
 	open = clampf(float(o), 0.0, 1.0) if (typeof(o) == TYPE_FLOAT or typeof(o) == TYPE_INT) else 0.0
 	var h = d.get("held", "")

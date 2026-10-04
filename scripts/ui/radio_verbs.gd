@@ -272,20 +272,30 @@ func press(verb: String) -> Dictionary:
 	return _ask(verb, false)
 
 
-## Asks again, pushing: the refusal that was not a hard one is overridden, at a cost of trust.
+## Asks again, pushing: the refusal that was not a hard one is overridden, at a cost of trust. (A click order asks again for the same spot.)
 func insist() -> Dictionary:
 	if last.is_empty() or bool(last.ok):
 		return {}
-	return _ask(String(last.verb), true)
+	return _ask(String(last.verb), true, last.get("extra", {}))
 
 
-func _ask(verb: String, push: bool) -> Dictionary:
+## A click order (round 23, scripts/aim_mode.gd): the same ask as the verb's button, but with what the click points at in place of what the
+## button means. `extra`: "at" (a Vector2: the spot of "hold", the container of "search") or "post" (a night post's id, for "to the walls": the
+## post becomes theirs, asked of the radio like the roster does, and they go to it). The answer, the dock's reply line and the Insist button
+## are the button's own.
+func order(verb: String, extra: Dictionary = {}) -> Dictionary:
+	return _ask(verb, false, extra)
+
+
+func _ask(verb: String, push: bool, extra: Dictionary = {}) -> Dictionary:
 	var radio = _radio()
 	if contact == null or radio == null:
 		return {}
 	var args := {}
 	if verb == "hold":
-		var at = _point("hold_at")
+		var at = extra.get("at")
+		if typeof(at) != TYPE_VECTOR2:
+			at = _point("hold_at")
 		if at == null and radio.has_method("leader"):
 			var lead = radio.leader()
 			if lead != null:
@@ -293,12 +303,23 @@ func _ask(verb: String, push: bool) -> Dictionary:
 		if at != null:
 			args["at"] = at
 	elif verb == "search":
-		var at = _point("search_at")
+		var at = extra.get("at")
+		if typeof(at) != TYPE_VECTOR2:
+			at = _point("search_at")
 		if at != null:
 			args["at"] = at
 	if push:
 		args["insist"] = true
-	var result: Dictionary = radio.request(contact, verb, args).duplicate()
+	var result: Dictionary
+	var post_id := String(extra.get("post", ""))
+	if verb == "post" and post_id != "" and radio.has_method("request_post") and not _holds_post(radio, post_id):
+		# (to a post that is not theirs: it is asked first, as the roster asks, with its own reasons; and then they go)
+		result = radio.request_post(contact, post_id, {"insist": true} if push else {}).duplicate()
+		if bool(result.get("ok", false)):
+			result = radio.request(contact, "post", {}).duplicate()
+			result["insisted"] = push
+	else:
+		result = radio.request(contact, verb, args).duplicate()
 	result["verb"] = verb
 	# whether insisting could change the refusal is the ANSWER's word (a place refuses some things before the radio is asked at all:
 	# "Already searched", "can't get there"); an answer that does not say is judged by the radio's willingness as it always was
@@ -308,10 +329,17 @@ func _ask(verb: String, push: bool) -> Dictionary:
 	else:
 		hard = bool(radio.willingness(contact, verb).get("hard", false))
 	last = {"who": String(contact.id), "verb": verb, "ok": bool(result.ok), "line": String(result.get("line", "")), "why": String(result.get("why", "")),
-		"hard": hard, "tone": String(result.get("tone", ""))}
+		"hard": hard, "tone": String(result.get("tone", "")), "extra": extra.duplicate()}
 	refresh()
 	requested.emit(contact, verb, result)
 	return result
+
+
+## Whether the contact already holds this night post.
+func _holds_post(radio, post_id: String) -> bool:
+	var sim = radio.get("sim")
+	var jobs = sim.get("jobs") if sim != null else null
+	return jobs != null and String(jobs.post_ids.get(String(contact.id), "")) == post_id
 
 
 func _point(key: String):

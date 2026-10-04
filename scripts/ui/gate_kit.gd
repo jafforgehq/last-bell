@@ -15,7 +15,7 @@ const LAMP_SHUT := Color("#e0584a")
 const LAMP_MOVING := Color("#f0b84a")
 const LAMP_OFF := Color("#2a3330")
 ## The HUD's tooltip of the indicator.
-const TIP := "The gate. Walk to the gate lever and press E to open or shut it. A green lamp is open, a red one shut.\nShut it at dusk: an open gate in the dark lets the dead in."
+const TIP := "The gate. Walk to the gate lever and press E (or Y, or click this row there) to open or shut it. A green lamp is open, a red one shut. Shut by your hand it stays locked: cars wait outside.\nShut it at dusk: an open gate in the dark lets the dead in."
 
 ## The states the indicator and the lamp tell apart.
 const SHUT := "shut"

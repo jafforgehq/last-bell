@@ -123,6 +123,13 @@
 			"start": {"cond": "gate_dusk"}
 		},
 		{
+			"id": "leave",
+			"title": "Leave the base",
+			"text": "Walk out through the open gate to leave the base: the Map opens. The Gate row in the clock, or Y at the lever, opens and shuts it.",
+			"anchor": ["clock"],
+			"start": {"cond": "gate_open_day"}
+		},
+		{
 			"id": "bignight",
 			"title": "A Big Night is coming",
 			"text": "A Big Night needs you at the wall the forecast names, with plated brutes: shoot their heads. Be home before the dusk, and keep the crew inside your green ring.",
@@ -134,6 +141,13 @@
 			"title": "Leading a trip",
 			"text": "Pick a place, then Take control to lead the trip, or send them without you. On the road W A S D drives, and Tab hands the wheel to the autopilot: slower, but safe.",
 			"start": {"cond": "all", "params": {"of": [{"cond": "avatar_game"}, {"cond": "panel_page", "params": {"page": "map"}}]}}
+		},
+		{
+			"id": "orders",
+			"title": "Orders on the ground",
+			"text": "Select a person, then right click the ground to tell them to hold there. Q puts your weapon away first, so the right button only gives orders.",
+			"text_avatar": "Select a person, then right click the ground to tell them to hold there. A night post sends them to the walls, a person means come with me. Q puts your weapon away.",
+			"start": {"cond": "all", "params": {"of": [{"cond": "avatar_game"}, {"cond": "contact_picked"}]}}
 		},
 		{
 			"id": "build",

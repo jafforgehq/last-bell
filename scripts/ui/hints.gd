@@ -161,12 +161,17 @@ func _next_tip() -> Dictionary:
 	return {}
 
 
-## What the conditions may ask of the screen (they never read it themselves): the page of the radio panel that is open ("" for none).
+## What the conditions may ask of the screen (they never read it themselves): the page of the radio panel that is open ("" for none) and the person
+## picked in the dock ("" for nobody).
 func _state() -> Dictionary:
 	var page := ""
 	if hud != null and is_instance_valid(hud) and hud.has_method("radio_page"):
 		page = String(hud.radio_page())
-	return {"panel": page}
+	var contact := ""
+	var sel = main.get("selection") if main != null else null
+	if sel != null and String(sel.get("kind", "")) == "person":
+		contact = String(sel.ref.id)
+	return {"panel": page, "contact": contact}
 
 
 func _show(h: Dictionary) -> void:
