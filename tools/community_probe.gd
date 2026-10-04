@@ -24,6 +24,8 @@
 ##   --policy=accept|affordable|refuse   how the player answers an idea                      default affordable
 ##   --noideas          the initiative module off (relations and specialists stay on): the same game with no ideas
 ##   --nocommunity      all three modules of the round off (the avatar game of before the round)
+##   --base             round 25: the base management (briefing, priorities, dials, problems, dilemma) is ON; without it the five modules are OFF (the numbers of round 20
+##                      hold). `--nobase` says the default out loud
 ##   --colony=informed|default|none   who plays the colony (the harness's policies)          default informed
 ##   --avatar=idle|gate|bot   what Ruth does with her hands                                   default idle
 ##   --hz=N, --fast     rules steps a second (default 15; --fast is 15, kept for the harness's habit)
@@ -128,6 +130,8 @@ static func play(opts: Dictionary, seed_value: int, save_state: Dictionary) -> D
 	sim.streets.enabled = true
 	sim.storyteller.enabled = true
 	sim.avatar.set_player("ruth")
+	if not bool(opts.get("base", false)):
+		Helpers.quiet_base(sim)    # (round 25: the base management is off unless --base)
 	if bool(opts.nocommunity):
 		sim.relations.enabled = false
 		sim.specialists.enabled = false
@@ -585,7 +589,7 @@ func _initialize() -> void:
 func _run() -> void:
 	var opts := {"games": "3", "days": "10", "difficulty": "1", "seed": "1", "seeds": "", "crew": "5", "policy": "affordable", "colony": "informed", "avatar": "idle",
 		"hz": "15", "read": "20", "keep_scrap": "5", "keep_food": "10", "out": "", "save": "", "save_day": "0"}
-	var flags := {"noideas": false, "nocommunity": false, "verbose": false, "quiet": false}
+	var flags := {"noideas": false, "nocommunity": false, "base": false, "nobase": false, "verbose": false, "quiet": false}
 	for arg in OS.get_cmdline_user_args():
 		var text := String(arg).trim_prefix("--")
 		var kv := text.split("=", true, 1)
@@ -616,13 +620,13 @@ func _run() -> void:
 	var play_opts := {
 		"days": days, "hz": clampf(float(opts.hz), 5.0, 60.0), "difficulty": clampi(int(opts.difficulty), 0, 2), "crew": clampi(int(opts.crew), 3, 6),
 		"policy": String(opts.policy), "colony": String(opts.colony), "avatar": String(opts.avatar), "read": float(opts.read),
-		"keep_scrap": float(opts.keep_scrap), "keep_food": float(opts.keep_food), "noideas": flags.noideas, "nocommunity": flags.nocommunity,
+		"keep_scrap": float(opts.keep_scrap), "keep_food": float(opts.keep_food), "noideas": flags.noideas, "nocommunity": flags.nocommunity, "base": flags.base and not flags.nobase,
 	}
 	var quiet: bool = flags.quiet
 	if not quiet:
-		print("Community probe: %d games of %d days, crew %d, colony %s, avatar %s, answers: %s%s%s, %d Hz, seeds from %d" % [
+		print("Community probe: %d games of %d days, crew %d, colony %s, avatar %s, answers: %s%s%s%s, %d Hz, seeds from %d" % [
 			seeds.size(), days, play_opts.crew, play_opts.colony, play_opts.avatar, play_opts.policy,
-			", NO IDEAS" if flags.noideas else "", ", NO COMMUNITY" if flags.nocommunity else "", roundi(play_opts.hz), seeds[0]])
+			", NO IDEAS" if flags.noideas else "", ", NO COMMUNITY" if flags.nocommunity else "", ", BASE ON" if play_opts.base else "", roundi(play_opts.hz), seeds[0]])
 		print("")
 	var save_state := {}
 	if String(opts.save) != "":

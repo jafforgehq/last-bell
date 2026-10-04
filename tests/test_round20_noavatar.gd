@@ -259,7 +259,7 @@ static func digest(game: String, seed_value: int, crew: int, days: float = 3.0, 
 			world = g.world
 			sim = g.sim
 			if game == "avatar_off":
-				for m in ["relations", "specialists", "initiative"]:
+				for m in ["relations", "specialists", "initiative", "briefing", "priorities", "policies", "problems", "dilemmas"]:    # (round 25 added the last five)
 					var mod = sim.get(m)    # (null in the baseline, which has none)
 					if mod != null:
 						mod.enabled = false

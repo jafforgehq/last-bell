@@ -30,6 +30,11 @@ const Radio := preload("res://scripts/sim/radio.gd")
 const Relations := preload("res://scripts/sim/relations.gd")
 const Specialists := preload("res://scripts/sim/specialists.gd")
 const Initiative := preload("res://scripts/sim/initiative.gd")
+const Briefing := preload("res://scripts/sim/briefing.gd")
+const Priorities := preload("res://scripts/sim/priorities.gd")
+const Policies := preload("res://scripts/sim/policies.gd")
+const Problems := preload("res://scripts/sim/problems.gd")
+const Dilemmas := preload("res://scripts/sim/dilemmas.gd")
 const Avatar := preload("res://scripts/sim/avatar.gd")
 const Interact := preload("res://scripts/sim/interact.gd")
 const Gate := preload("res://scripts/sim/gate.gd")
@@ -313,6 +318,13 @@ var radio
 var relations    # (round 20: who is close to whom)
 var specialists    # (round 20: the one to call for a trade)
 var initiative    # (round 20: what the community proposes over the radio)
+## The base management of round 25 (avatar mode in a small settlement start only; every hook is neutral otherwise): the morning briefing and the evening
+## debrief, the priorities the automation weighs (and the standing staffing), the four dials, the trouble that comes up and the fever dilemma.
+var briefing
+var priorities
+var policies
+var problems
+var dilemmas
 var avatar
 ## What the avatar uses where it stands (round 18, interact.gd): talk, a post, the bench, a car's fuel. Behind avatar mode.
 var interact
@@ -418,6 +430,16 @@ func _init(data: Dictionary, w, effects) -> void:
 	specialists.setup(self)
 	initiative = Initiative.new()
 	initiative.setup(self)
+	briefing = Briefing.new()
+	briefing.setup(self)
+	priorities = Priorities.new()
+	priorities.setup(self)
+	policies = Policies.new()
+	policies.setup(self)
+	problems = Problems.new()
+	problems.setup(self)
+	dilemmas = Dilemmas.new()
+	dilemmas.setup(self)
 	avatar = Avatar.new()
 	avatar.setup(self)
 	interact = Interact.new()
@@ -448,7 +470,7 @@ func make_person(def: Dictionary) -> Person:
 func add_person(def: Dictionary) -> Person:
 	var p := _make_person(def)
 	people.append(p)
-	for m in [morale, traits, bonds, jobs, skills, relations, specialists]:
+	for m in [morale, traits, bonds, jobs, skills, relations, specialists, priorities, policies]:
 		if m.has_method("person_added"):
 			m.person_added(p)
 	return p
@@ -594,7 +616,7 @@ func order_repair(p: Person, seg: Segment) -> void:
 ## How well a person does things right now (shooting, repairing): 1.0 normal,
 ## less when hungry, thirsty or hurt.
 func perf(p: Person) -> float:
-	return supplies.perf(p) * medical.perf(p) * morale.perf(p) * storyteller.perf(p)
+	return supplies.perf(p) * medical.perf(p) * morale.perf(p) * storyteller.perf(p) * policies.perf_mult(p) * problems.perf_mult(p)
 
 
 ## How much a person's traits, company and mood change their aim right now (1.0 normally): a
@@ -658,6 +680,11 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	relations.start()
 	specialists.start()
 	initiative.start()
+	policies.start()
+	priorities.start()
+	problems.start()
+	dilemmas.start()
+	briefing.start()
 	avatar.start()
 	interact.start()
 	gate.start()
@@ -751,6 +778,11 @@ func update(dt: float) -> void:
 	relations.update(dt)
 	specialists.update(dt)
 	initiative.update(dt)
+	policies.update(dt)    # (round 25: the base's management: the dials' weariness, the priorities' staffing, trouble, the dilemma, the briefing)
+	priorities.update(dt)
+	problems.update(dt)
+	dilemmas.update(dt)
+	briefing.update(dt)
 	radio.update(dt)
 	# Orientation Day's floor under the walls holds when the step is over too (the dead strike after the scenario's turn)
 	if scenario.has_method("after_step"):

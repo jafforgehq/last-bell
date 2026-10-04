@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "_about": "The four dials of the base (scripts/sim/policies.gd, S25.2 of the round 25 plan): the numbers and the words. A missing number is neutral (1.0 or 0.0). 'usual' boldness carries no numbers: it is scavenge.gd's own errand constants. Every option's mood line is what the Mood tooltip lists while it stands; 'fever' is the outbreak risk it adds to every slow look (dilemmas).",
+  "weariness": {
+    "gain_per_h": 2.5,
+    "decay_per_h": 0.6,
+    "worn": {
+      "at": 60.0,
+      "label": "Worn out",
+      "mood": -4.0,
+      "perf": 0.9,
+      "text": "{names} {verb} worn out",
+      "sub": "Overtime is wearing the crew down. The Rest priority rotates them; normal hours let them recover."
+    },
+    "spent": {
+      "at": 85.0,
+      "label": "Spent",
+      "mood": -8.0,
+      "perf": 0.8,
+      "text": "{names} {verb} spent",
+      "sub": "Work and mood are failing. Give them rest or call off the overtime."
+    },
+    "fever_worn_overtime": 0.02
+  },
+  "gate": {
+    "clear": "{checker} checked {name} at the gate: clear",
+    "clear_sub": "Let in a day after the call.",
+    "bitten": "{checker} checked {name} at the gate: bitten",
+    "bitten_sub": "Turned back. The radio will go on calling.",
+    "alert": "{name} was turned back at the gate",
+    "alert_sub": "Bitten"
+  },
+  "dials": {
+    "rations": {
+      "title": "Rations",
+      "ask": "How much does everyone eat and drink?",
+      "shock_cut": "Rations cut",
+      "shock_eased": "Rations eased",
+      "options": {
+        "full": {
+          "name": "Full",
+          "food": 1.0,
+          "water": 1.0,
+          "mood": 0.0,
+          "perf": 1.0,
+          "fever": 0.0,
+          "blurb": "Everyone eats and drinks their fill, as it is now.",
+          "pros": ["Nobody goes short on purpose"],
+          "cons": ["Food and water run down at the full rate"],
+          "news": "Rations: full. Everyone eats their fill again.",
+          "sub": "The stores run down at the full rate."
+        },
+        "half": {
+          "name": "Half",
+          "food": 0.75,
+          "water": 0.85,
+          "mood": -3.0,
+          "mood_label": "Half rations",
+          "perf": 1.0,
+          "fever": 0.01,
+          "blurb": "A quarter less food and 15% less water for everyone.",
+          "pros": ["Food lasts 33% longer, water 18% longer"],
+          "cons": ["Mood -3 (Half rations)", "A little more risk of fever"],
+          "news": "Rations: half. Everyone eats a quarter less.",
+          "sub": "The stores last longer. Mood -3 for everyone while it stands."
+        },
+        "hungry": {
+          "name": "Hungry",
+          "food": 0.5,
+          "water": 0.7,
+          "mood": -8.0,
+          "mood_label": "Hungry on purpose",
+          "perf": 0.92,
+          "fever": 0.03,
+          "blurb": "Half the food and 30% less water. It will show in the work.",
+          "pros": ["Food lasts twice as long, water 43% longer"],
+          "cons": ["Mood -8 (Hungry on purpose)", "Work and aim 8% worse", "More risk of fever"],
+          "news": "Rations: hungry. Everyone eats half, and it shows.",
+          "sub": "The stores last twice as long. Mood -8, work and aim 8% worse."
+        }
+      }
+    },
+    "hours": {
+      "title": "Work hours",
+      "ask": "How hard does the base work?",
+      "shock_cut": "Overtime ordered",
+      "shock_eased": "Back to normal hours",
+      "options": {
+        "normal": {
+          "name": "Normal",
+          "work": 1.0,
+          "tires": false,
+          "mood": 0.0,
+          "blurb": "A day's work, and then rest. Nobody wears out.",
+          "pros": ["Nobody wears out; the worn recover"],
+          "cons": ["The bench, the beds and the crew work at the usual pace"],
+          "news": "Work hours: normal. The crew eases off.",
+          "sub": "Nobody gains weariness; the worn begin to recover."
+        },
+        "overtime": {
+          "name": "Overtime",
+          "work": 1.25,
+          "tires": true,
+          "mood": -3.0,
+          "mood_label": "Overtime",
+          "blurb": "Everyone works longer: 25% more crafting, mending, building and garden food.",
+          "pros": ["25% more ammo, mending, building and food from the beds"],
+          "cons": ["Mood -3 (Overtime)", "Worn out in about six days: mood -4, work 10% worse", "Spent after that: mood -8, work 20% worse", "More risk of fever once someone is worn out"],
+          "news": "Work hours: overtime. Everyone works harder, and it will tell.",
+          "sub": "25% more made. Mood -3, and weariness builds while people work."
+        }
+      }
+    },
+    "boldness": {
+      "title": "Scavengers",
+      "ask": "How much do the scavenging parties risk?",
+      "options": {
+        "careful": {
+          "name": "Careful",
+          "loot": 0.5,
+          "wound": 1.2,
+          "loss_per_danger": 0.015,
+          "clear": -0.3,
+          "max_danger": 1,
+          "limit": "Careful: not to a place this dangerous (danger {danger} of 3).",
+          "blurb": "Parties keep to the quiet places and turn back from trouble.",
+          "pros": ["Wounds x1.2 instead of x1.5", "Half the chance of not coming back"],
+          "cons": ["Only places of danger 1 or less", "50% of the loot instead of 60%", "Clearing a place 10 points less likely"],
+          "news": "Scavengers: careful. They go only where it is quiet.",
+          "sub": "Only places of danger 1 or less; 50% of the loot, fewer wounds."
+        },
+        "usual": {
+          "name": "Usual",
+          "blurb": "As the parties have always gone.",
+          "pros": ["Nothing changes"],
+          "cons": ["60% of the loot, wounds x1.5, 3% a danger point of not coming back"],
+          "news": "Scavengers: as usual.",
+          "sub": "60% of the loot, wounds x1.5."
+        },
+        "bold": {
+          "name": "Bold",
+          "loot": 0.8,
+          "wound": 2.0,
+          "loss_per_danger": 0.05,
+          "clear": -0.1,
+          "blurb": "Parties push their luck: more to carry home, more to lose.",
+          "pros": ["80% of the loot instead of 60%", "Clearing a place 10 points likelier"],
+          "cons": ["Wounds x2.0 instead of x1.5", "5% a danger point of not coming back instead of 3%"],
+          "news": "Scavengers: bold. They push their luck for more.",
+          "sub": "80% of the loot, wounds x2, losses likelier."
+        }
+      }
+    },
+    "strangers": {
+      "title": "Strangers at the gate",
+      "ask": "Who is let in?",
+      "options": {
+        "let_in": {
+          "name": "Let in",
+          "blurb": "Anyone who calls and is told the way comes in at the gate the next morning.",
+          "pros": ["New hands as fast as the beds allow"],
+          "cons": ["A bitten stranger walks in with the rest"],
+          "news": "Strangers: let in. Callers are told the way and come in as before.",
+          "sub": "Nobody is checked."
+        },
+        "check": {
+          "name": "Check",
+          "arrival_delay_days": 1,
+          "catches_bitten": true,
+          "blurb": "Everyone who arrives is looked over at the gate, and comes a day later.",
+          "pros": ["A bitten stranger is turned back at the gate"],
+          "cons": ["Everyone arrives a day later"],
+          "news": "Strangers: checked. Callers come a day later and are looked over at the gate.",
+          "sub": "A bitten stranger is turned back. Arrivals come a day later."
+        },
+        "turn_away": {
+          "name": "Turn away",
+          "blocks_strangers": true,
+          "blurb": "No stranger's call is taken. Ana, Walt and Hector still come.",
+          "pros": ["No new mouths and no one bitten walks in"],
+          "cons": ["No new hands: the crew only shrinks"],
+          "news": "Strangers: turned away. The radio hour stays quiet.",
+          "sub": "No stranger's call comes. Ana, Walt and Hector still do."
+        }
+      }
+    }
+  }
+}

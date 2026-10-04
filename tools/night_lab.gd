@@ -24,6 +24,8 @@
 ##   --states=dir           keep the states there (and read them from there next time: the tuning runs the cells again on the same states)
 ##   --data=path            read another nights.json (a number tried before it is in the game)
 ##   --out=path.json        write every row, the table and the verdicts
+##   --base                 round 25: the base management (briefing, priorities, dials, problems, dilemma) is ON in the idle and bot modes (off by default, as in the
+##                          rounds before it)
 ##   --quiet                no lines (a worker's)
 ## It prints a line for each night, the table (a cell is a group of days and a mode; a cell of fewer than MIN_CELL nights is starred) and
 ## the verdict on each of the plan's numeric targets (docs/superpowers/plans/2026-10-03-round-19.md, H3.3).
@@ -130,6 +132,8 @@ static func start(state: Dictionary, seed_value: int, rep: int, mode: String, cr
 			var next = sim.avatar._next_in_line(null)
 			if next != null:
 				sim.avatar.set_player(next)
+		if not Balance.base_on:
+			Helpers.quiet_base(sim)
 		bot = BotLib.AvatarBot.new(sim, mode)
 	var policy := Balance.policy_for(sim, false, true)
 	# (it starts in the evening: the day's morning chores are done, as the game it was taken from did them)
@@ -478,6 +482,8 @@ func _run_lab() -> void:
 			Balance.campaign = true
 		elif kv[0] == "nostory":
 			Balance.story_on = false
+		elif kv[0] == "base":
+			Balance.base_on = true
 		elif opts.has(kv[0]) and kv.size() > 1:
 			opts[kv[0]] = kv[1]
 	if String(opts.data) != "":
@@ -556,6 +562,8 @@ func _in_workers(seeds: Array, jobs: int, opts: Dictionary, modes: Array) -> Arr
 			args.append("--data=%s" % opts.data)
 		if Balance.campaign:
 			args.append("--campaign")
+		if Balance.base_on:
+			args.append("--base")
 		if not Balance.story_on:
 			args.append("--nostory")
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})

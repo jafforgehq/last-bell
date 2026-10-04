@@ -219,7 +219,7 @@ func toggle_auto(p) -> void:
 
 ## The share of its health under which the wall crew mends a section (the station's setting).
 func repair_below() -> float:
-	return float(sim.jobs.setting("builders", "repair_below")) / 100.0
+	return clampf(float(sim.jobs.setting("builders", "repair_below")) / 100.0 + sim.priorities.wall_line_shift(), 0.3, 0.95)    # (round 25: the priorities move the line; +0.0 inactive and the setting is already in range)
 
 
 ## Once a second: by day the wall crew goes to the most worn section under its threshold, and

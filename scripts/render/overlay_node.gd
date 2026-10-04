@@ -13,7 +13,9 @@
 ## 21:00" (`_draw_targets`), the avatar a faint ring as wide as the rally radius, brighter while someone is rallied, and the rallied a
 ## small chevron (`_draw_rally`), a plated brute a steel tell and a ring at its weak point that lights when the aim is near
 ## (`_draw_plated`), a breach that is hot a pulsing ring that says nobody will mend it under fire (`_draw_hot_breaches`), and the
-## ring of the avatar's hands mending a wall (`_draw_mend`).
+## ring of the avatar's hands mending a wall (`_draw_mend`). And (round 25, avatar mode) the base's trouble: the markers of the open problems with their
+## words and their time, the quarantine's sign, the labels of the stations that wait on something and the ring of the hands at a fix (`_draw_base`,
+## scripts/render/base_marks.gd).
 ## All of it is a view: nothing here changes the rules.
 extends Node2D
 
@@ -30,6 +32,7 @@ const NightData := preload("res://scripts/sim/night_data.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const StanceMarks := preload("res://scripts/render/stance_marks.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
+const BaseMarks := preload("res://scripts/render/base_marks.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -211,12 +214,31 @@ var bench_progress := 0.0
 var drew_hover_ring := false
 var hover_key := ""
 var drew_far_tag := false
+## The base's trouble (round 25, scripts/render/base_marks.gd; avatar mode, the yard): the markers of the open problems and the quarantine's sign
+## (`drew_problem_marks`, how many in `drawn_problem_marks`, how many with their words in `drawn_problem_labels`), the labels of the stations that
+## wait on something (`drew_facility_labels`, `drawn_facility_labels`) and the ring of the avatar's own hands at a problem (`drew_fix_ring`, how far
+## round it is in `fix_progress`, 0 to 1). `base_marks.record` (a test sets it) keeps what was drawn in `base_marks.tags`.
+var base_marks := BaseMarks.new()
+var drew_problem_marks := false
+var drawn_problem_marks := 0
+var drawn_problem_labels := 0
+var drew_facility_labels := false
+var drawn_facility_labels := 0
+var drew_fix_ring := false
+var fix_progress := 0.0
+var _base_opts := {}
+var _screen_cb := Callable()
 var _bubble_sb: StyleBox = null
 var _bubble_framed := false
 
 
 func _screen(x: float, y: float) -> Vector2:
 	return get_viewport().get_canvas_transform() * (Vector2(x, y) * TILE)
+
+
+## `_screen` for a point (the callable the base's marks are given, so that they need no knowledge of the camera).
+func _screen_at(at: Vector2) -> Vector2:
+	return get_viewport().get_canvas_transform() * (at * TILE)
 
 
 func _pill(rect: Rect2, color: Color) -> void:
@@ -1454,6 +1476,10 @@ func prompt_candidate() -> Dictionary:
 		began.append("wall:%d" % int(mending.seg))
 	if String(_prop(it, "posted", "")) != "":
 		began.append("post:%s" % String(_prop(it, "posted", "")))
+	var pm = main.sim.get("problems")
+	var fixing = pm.get("fixing") if pm != null else null
+	if fixing is Dictionary and not (fixing as Dictionary).is_empty():
+		began.append("problem:%s" % String(fixing.get("id", "")))    # (round 25: the fix in hand: E is to end it, whoever stands as near)
 	var list := started_first(it.candidates(), began)
 	var pick := choose_prompt(list, prompt_key)
 	# (round 22, "Right button aims": the thing under the free pointer is the one the pill is on, so E does what a click would)
@@ -1515,6 +1541,44 @@ func _spot_of(c: Dictionary) -> Vector2:
 	return _screen(at.x, at.y)
 
 
+## The base's trouble on the world (round 25, scripts/render/base_marks.gd): the markers of the open problems with their words and their time, the
+## quarantine's sign, the labels of the stations that wait on something and the ring of the avatar's hands at a fix. The yard only: nothing in a
+## place, under a modal or without an avatar. A view: the rules' words, nothing of its own.
+func _draw_base(sim, z: float, vp: Vector2) -> void:
+	drew_problem_marks = false
+	drawn_problem_marks = 0
+	drawn_problem_labels = 0
+	drew_facility_labels = false
+	drawn_facility_labels = 0
+	drew_fix_ring = false
+	fix_progress = 0.0
+	if not _avatar_on(sim) or _modal_open() or (main.has_method("raid_open") and main.raid_open()):
+		base_marks.clear()
+		return
+	if not _screen_cb.is_valid():
+		_screen_cb = Callable(self, "_screen_at")
+		_base_opts["covered"] = Callable(self, "_covered_by_hud")
+	var me = sim.avatar.player()
+	var at := Vector2.INF
+	if me != null and not me.dead and not me.turned and me.away == null:
+		at = main.view_pos(me)
+	var hud = main.get("hud")
+	_base_opts["z"] = z
+	_base_opts["vp"] = vp
+	_base_opts["clock"] = float(main.clock)
+	_base_opts["calm"] = Prefs.on("ui", "reduce_motion")
+	_base_opts["me"] = at
+	_base_opts["base_page"] = hud != null and hud.has_method("radio_page") and String(hud.radio_page()) == "base"
+	base_marks.draw(self, sim, _screen_cb, _base_opts)
+	drawn_problem_marks = base_marks.drawn_marks
+	drawn_problem_labels = base_marks.drawn_labels
+	drew_problem_marks = drawn_problem_marks > 0
+	drawn_facility_labels = base_marks.drawn_facilities
+	drew_facility_labels = drawn_facility_labels > 0
+	drew_fix_ring = base_marks.fix_ring
+	fix_progress = base_marks.fix_progress
+
+
 ## The marks of what the avatar is doing with their hands on the yard (not the gun's: `_draw_avatar` has those): the steady stance on a
 ## post, the bench's ring while they work it, and the prompt of what E would do beside the nearest thing in reach.
 func _draw_interact(sim, z: float, vp: Vector2) -> void:
@@ -1573,15 +1637,16 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 	prompt_ok = bool(words.ok)
 	var spot := _spot_of(c)
 	var kind := String(c.kind)
-	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else (0.6 if kind == "wall" or kind == "gate" else 0.5))), 14.0, 70.0)
+	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else (0.8 if kind == "problem" else (0.6 if kind == "wall" or kind == "gate" else 0.5)))), 14.0, 70.0)
 	var ring: Color = ACCENT if prompt_ok else Hud.INK3
 	# the thing under the free pointer (round 22): a wider, brighter ring
 	var hovered := not _pointed_candidate([c]).is_empty()
 	if hovered:
 		drew_hover_ring = true
 		hover_key = key_of(c)
-	# (the post that is held has its own green ring: the steady stance)
-	if not (kind == "post" and String(_prop(it, "posted", "")) == String(c.id)):
+	# (the post that is held has its own green ring: the steady stance; a problem has its pulsing marker on the ground: the pill sits clear of it, and only
+	# the pointer over it draws this ring)
+	if not (kind == "post" and String(_prop(it, "posted", "")) == String(c.id)) and (kind != "problem" or hovered):
 		draw_set_transform(spot, 0.0, Vector2(1.0, 0.5))
 		draw_arc(Vector2.ZERO, rx * (1.18 if hovered else 1.0), 0.0, TAU, 40, Color(PILL, 0.75 if hovered else 0.65), 6.0 if hovered else 4.5, true)
 		draw_arc(Vector2.ZERO, rx * (1.18 if hovered else 1.0), 0.0, TAU, 40, Color(ring, 1.0 if hovered else ((0.6 + 0.4 * pulse) if prompt_ok else 0.6)), 3.5 if hovered else 2.5, true)
@@ -1780,6 +1845,8 @@ func _draw() -> void:
 	_draw_plated(sim, z, vp)
 	_draw_gate(sim, z, vp)
 	_draw_gate_label(sim, z, vp)
+	# the base's trouble: the markers, the quarantine's sign, the stations' labels (round 25)
+	_draw_base(sim, z, vp)
 
 	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
 	_draw_avatar(sim, z, vp)

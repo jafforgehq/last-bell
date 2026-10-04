@@ -1575,6 +1575,8 @@ func _order_pair(a, b) -> Array:
 
 
 func _find_quarrel(ctx: Dictionary) -> Dictionary:
+	if sim.problems.has_open("quarrel"):    # (round 25: a quarrel is already a problem on the base's list: no idea on top of it; false inactive)
+		return {}
 	var prm: Dictionary = _kd("quarrel").params
 	for a in ctx.here:
 		for b in _rivals(a):
@@ -1892,6 +1894,8 @@ func voice_opinion(e: Dictionary) -> Dictionary:
 			opinion = _on_sick(data, "medic")
 		"idea":
 			opinion = _on_idea(data)
+		"dilemma":
+			opinion = sim.dilemmas.opinion(e)    # (round 25: {"p", "option", "say"} as `_on_sick` makes it; the title and the line are made below)
 	if opinion.is_empty():
 		return {}
 	var has := false
@@ -1914,6 +1918,11 @@ func _opinion_giver(title_id: String, not_them = null):
 		if p == null or not _here(p) or _is_player(p) or p == not_them:
 			return null
 	return p
+
+
+## `_opinion_giver`, public (round 25: dilemmas.gd asks the medic for the fever outbreak's opinion).
+func opinion_giver(title_id: String, not_them = null):
+	return _opinion_giver(title_id, not_them)
 
 
 func _on_attack(data: Dictionary, title_id: String) -> Dictionary:

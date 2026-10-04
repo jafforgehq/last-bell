@@ -288,6 +288,8 @@ func bonus(key: String) -> float:
 
 ## The product of an effect over the standing buildings (1 when none has it).
 func factor(key: String) -> float:
+	if key == "night_reach_mult" and sim.problems.blocks("floodlights"):    # (round 25: a jammed generator: the floodlights are dark; false inactive)
+		return 1.0
 	var total := 1.0
 	for p in _plots:
 		if p.building != "":

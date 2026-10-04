@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "_doc": "Round 25, S25.1 (scripts/sim/priorities.gd and briefing.gd). names/blurbs: what the six priorities are called and say. short: how the News names a station ('the beds'). plan: the seat plan. D[s] = base[s] + sum over the ranked priorities of weight * lever[priority][s] + need[s]; the weights are 3, 2, 1.5, 1 by rank. The need rules read the stores and the walls (garden: days of food under `days`, +add, and `more_add` more under `more_days`; bench: ammo under `ammo` with scrap above the reserve + `scrap_over`; builders: +per_wall for each wall under the mending line (at most max_walls), +site with a building site up; infirmary: +patients with anyone bleeding, down, feverish or infected; salvage: +add when the scrap is under `scrap`). floors: the radio desk and the lookout post get a hand first when there are at least min_hands hands. rest: a ranked Rest of weight >= one_from leaves one weary hand (>= weary_from) out of the plan, >= two_from two. shifts: the wall line moves by wall_line_per_w for each weight of Defence (minus Rebuilding's), at most wall_line_max; the bench's ammo target by ammo_target_max * min(w, 3) / 3 to the step. staff: at most one run an hour (gap_min game minutes) and max_lines News lines a day. errand: the standing errand (hours, the stocks that count as short and the ones the base has least of, the most dangerous place it goes to: max_danger when nothing is short, max_danger_short for a stock that is). briefing: the thresholds of the concerns.",
+  "names": {
+    "food": "Food",
+    "water": "Water",
+    "defence": "Defence",
+    "rebuild": "Rebuilding",
+    "rest": "Rest",
+    "scavenge": "Scavenging"
+  },
+  "blurbs": {
+    "food": "More hands on the vegetable beds, and a standing errand for food when the stores run under three days.",
+    "water": "No station makes water, so the base sends scavengers for it when the stores run under three days.",
+    "defence": "The bench and the wall crew get more hands, the walls are mended from a higher line and the bench makes more ammo.",
+    "rebuild": "The wall crew and the salvage bench get more hands, and the walls are mended from a lower line so the crew stays on the site.",
+    "rest": "The weariest hands are left without a seat so that they rest.",
+    "scavenge": "A standing errand goes out each morning for what the base has least of."
+  },
+  "lever_text": {
+    "water": "No hands move for it: a standing errand goes for water when it is under three days.",
+    "rest": "The weariest hand worn out to 40 or more is left without a seat: two at weight 3, one at 2 or 1.5.",
+    "scavenge": "No hands move for it: a standing errand goes out each morning (06:30 to 09:30)."
+  },
+  "short": {
+    "bench": "the bench",
+    "builders": "the wall crew",
+    "garden": "the beds",
+    "infirmary": "the infirmary",
+    "radio": "the radio desk",
+    "watch": "the lookout",
+    "salvage": "the salvage bench"
+  },
+  "plan": {
+    "base": {"bench": 1.0, "builders": 1.0, "garden": 1.0, "infirmary": 0.5, "radio": 0.0, "watch": 0.0, "salvage": 0.5},
+    "lever": {
+      "food": {"garden": 2.0},
+      "water": {},
+      "defence": {"bench": 1.5, "builders": 1.0},
+      "rebuild": {"builders": 2.0, "salvage": 1.0},
+      "rest": {},
+      "scavenge": {}
+    },
+    "need": {
+      "garden": {"days": 4.0, "add": 1.5, "more_days": 2.0, "more_add": 1.5},
+      "bench": {"ammo": 90.0, "scrap_over": 3.0, "add": 1.5, "more_ammo": 40.0, "more_add": 1.5},
+      "builders": {"per_wall": 1.0, "max_walls": 3, "site": 1.5},
+      "infirmary": {"patients": 2.0},
+      "salvage": {"scrap": 12.0, "add": 1.0}
+    },
+    "floors": {"min_hands": 4, "stations": ["radio", "watch"]},
+    "rest": {"weary_from": 40.0, "one_from": 1.5, "two_from": 3.0}
+  },
+  "shifts": {"wall_line_per_w": 0.05, "wall_line_max": 0.15, "ammo_target_max": 100.0, "ammo_target_step": 25.0},
+  "staff": {"gap_min": 60.0, "max_lines": 3},
+  "errand": {
+    "from_h": 6.5,
+    "to_h": 9.5,
+    "short_days": 3.0,
+    "max_danger": 1,
+    "max_danger_short": 2,
+    "short": {"food": 4.0, "water": 4.0, "scrap": 12.0, "meds": 3.0, "ammo": 90.0},
+    "cover": {"food": 8.0, "water": 8.0, "scrap": 30.0, "meds": 8.0, "ammo": 200.0},
+    "stay_min": 2
+  },
+  "briefing": {
+    "brief_to_h": 12.0,
+    "days_warn": 4.0,
+    "days_alarm": 2.0,
+    "ammo_warn": 90.0,
+    "ammo_alarm": 40.0,
+    "wall_warn": 0.7,
+    "wall_alarm": 0.5,
+    "scrap_warn": 12.0,
+    "scrap_alarm": 3.0,
+    "meds_warn": 3.0,
+    "meds_alarm": 1.0,
+    "fuel_warn": 12.0,
+    "weary_warn": 60.0,
+    "weary_alarm": 85.0,
+    "convoy_from_day": 10
+  }
+}

@@ -27,6 +27,8 @@ const KIND_NAME := {
 	"going": "Wall", "brute": "Brute", "breach": "Breach", "night": "Night", "forecast": "Forecast", "night_road": "Road",
 	# round 22, the gate: "The gate is open and it is dark"
 	"gate": "Gate",
+	# round 25, the base: the morning's concerns, the evening's tally, a dial or a priority that was set, trouble in the yard, the hard choice
+	"briefing": "Briefing", "debrief": "Evening", "policy": "Policy", "problem": "Trouble", "dilemma": "Choice",
 }
 
 
@@ -43,18 +45,18 @@ static func wrap_at(c: Control, w: float) -> void:
 ## The colour of a kind of news (a word, readable on the panel): the dead at the wall (a wall going, a brute, a breach) and a death are
 ## red, a fever, the alarm, a falling out and the gate left open in the dark amber, a new face, a friendship and a building that went up green, a card of the
 ## storyteller, an idea, an errand and the night's notices (the forecast, the night, the road) blue, a stranger and a title earned
-## gold; anything else the dim chalk.
+## gold; round 25: the briefing and the evening's tally blue, a policy gold, trouble and the hard choice amber; anything else the dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
 		"attack", "succession", "going", "brute", "breach":
 			return host.DANGER_TEXT
-		"sick", "alarm", "rift", "gate":
+		"sick", "alarm", "rift", "gate", "problem", "dilemma":
 			return host.WARN
 		"recruit", "build", "bond":
 			return host.OK
-		"story", "errand", "road", "idea", "night", "forecast", "night_road":
+		"story", "errand", "road", "idea", "night", "forecast", "night_road", "briefing", "debrief":
 			return host.INFO
-		"stranger", "title":
+		"stranger", "title", "policy":
 			return host.ACCENT
 	return host.INK2
 
@@ -181,6 +183,88 @@ static func total_seconds(radio, e: Dictionary, speed: float = 1.0) -> float:
 
 static func _pace(speed: float) -> float:
 	return speed if speed > 0.0 else 1.0
+
+
+## ---------------------------------------------------------------------- round 25: the base --
+
+## The colour of a level of the briefing's concerns ("alarm", "warn", "info", "ok"), readable on the panel.
+static func level_color(host, level: String) -> Color:
+	match level:
+		"alarm":
+			return host.DANGER_TEXT
+		"warn":
+			return host.WARN
+		"ok":
+			return host.OK
+	return host.INK
+
+
+## The icon (the HUD's `icons` name) for a concern: by what its id is about, else by its level.
+const CONCERN_ICONS := [
+	["water", "water"], ["food", "food"], ["ammo", "ammo"], ["wall", "wall"], ["crack", "wall"], ["bleed", "wound"], ["wound", "wound"],
+	["fever", "fever"], ["sick", "fever"], ["infect", "fever"], ["quarantine", "fever"], ["down", "down"], ["scrap", "scrap"], ["meds", "meds"],
+	["fuel", "fuel"], ["radio", "radio"], ["watch", "post"], ["lookout", "post"], ["post", "post"], ["bed", "resting"], ["weary", "resting"],
+	["rest", "resting"], ["tonight", "moon"], ["night", "moon"], ["siege", "moon"], ["convoy", "car"], ["vehicle", "car"], ["leak", "water"],
+	["jam", "repair"], ["quarrel", "mood"], ["problem", "warn"], ["bench", "ammo"], ["garden", "food"], ["builder", "repair"], ["salvage", "scrap"],
+]
+const LEVEL_ICONS := {"alarm": "warn", "warn": "warn", "info": "bell", "ok": "sun"}
+
+
+static func concern_icon(id: String, level: String) -> String:
+	var key := id.to_lower()
+	for pair in CONCERN_ICONS:
+		if key.contains(String(pair[0])):
+			return String(pair[1])
+	return String(LEVEL_ICONS.get(level, "bell"))
+
+
+## The lines a briefing or debrief carries, as [{"text", "level" ("alarm"|"warn"|"info"|"ok"), "sub"}] in the order to read them. `source` is a log
+## entry or its `data`: the `lines` the sim gives (each a text, or a concern's dictionary with "text", "level" and "sub"); a debrief that has no `lines`
+## but its `done` and `slipped` (texts) is read from those (done is "ok", slipped "warn"). Anything that is not one of these is left out.
+static func line_items(source: Dictionary) -> Array:
+	var data: Dictionary = source
+	if source.get("data") is Dictionary:
+		data = source.get("data")
+	var out: Array = []
+	var lines = data.get("lines", [])
+	if lines is Array:
+		for l in lines:
+			var item := _line_item(l, "info")
+			if not item.is_empty():
+				out.append(item)
+	if out.is_empty():
+		for pair in [["done", "ok"], ["slipped", "warn"]]:
+			var group = data.get(String(pair[0]), [])
+			if group is Array:
+				for l in group:
+					var item := _line_item(l, String(pair[1]))
+					if not item.is_empty():
+						out.append(item)
+	return out
+
+
+static func _line_item(l, level: String) -> Dictionary:
+	if l is String or l is StringName:
+		var t := String(l).strip_edges()
+		return {"text": t, "level": level, "sub": ""} if t != "" else {}
+	if l is Dictionary:
+		var t := String(l.get("text", "")).strip_edges()
+		if t == "":
+			return {}
+		var lv := String(l.get("level", level))
+		return {"text": t, "level": lv if ["alarm", "warn", "info", "ok"].has(lv) else level, "sub": String(l.get("sub", ""))}
+	return {}
+
+
+## A script constant of an object's script (a module's rules), or `fallback` when it has none (a stand-in).
+static func rule_of(obj, key: String, fallback):
+	var sc = obj.get_script() if obj != null else null
+	while sc != null:
+		var table: Dictionary = sc.get_script_constant_map()
+		if table.has(key):
+			return table[key]
+		sc = sc.get_base_script()    # (a stand-in that extends the module has its constants)
+	return fallback
 
 
 ## A small button for a card: the HUD's own look (frame or flat), a word in the condensed bold, 12 px or more, never focused.

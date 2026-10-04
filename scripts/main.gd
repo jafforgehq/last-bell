@@ -504,6 +504,7 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.on_select = func(sel): _try_select(sel)
 	hud.on_focus = func(p): _focus(Vector2(p.x, p.y))
+	hud.set_meta("on_focus_problem", func(id): return focus_problem(String(id)))    # (round 25: the Trouble list's "Go there", scripts/ui/problem_list.gd)
 	hud.on_speed = func(s): _set_speed(s)
 	hud.on_gizmo = _gizmo
 	hud.on_alert = _on_alert
@@ -536,6 +537,7 @@ func _ready() -> void:
 	story_ui.speed_of = func(): return speed
 	story_ui.ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	story_ui.setup(hud, sim)
+	hud.briefing_gate = func(): return story_ui != null and (story_ui.dawn != null or story_ui.radio != null or story_ui._dawn_wanted)    # (round 25: the briefing card waits for the dawn card, up or about to be, and for the storyteller's)
 
 	sound = Sound.new()
 	add_child(sound)
@@ -1012,7 +1014,7 @@ func panel_mode() -> bool:
 	return avatar_mode and not tutorial
 
 
-## The key of a page ("jobs", "build" or "map"); `full` is the Shift form, the modal page.
+## The key of a page ("base", "jobs", "build" or "map"); `full` is the Shift form, the modal page (the Base page has none).
 func page_key(page: String, full: bool = false) -> void:
 	var panel := panel_mode() and not full and (page != "map" or bool(sim.town.on))
 	if not panel:
@@ -1542,9 +1544,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_3:
 				_set_speed(3)
 			KEY_ESCAPE:
-				# Esc closes, in this order: the talk card, the radio panel, the selection, else it opens the pause menu
+				# Esc closes, in this order: the talk card, the briefing card, the radio panel, the selection, else it opens the pause menu
 				if hud.talk_open():
 					hud.hide_talk()
+				elif hud.briefing_open():
+					hud.close_briefing("esc")
 				elif hud.radio_open():
 					hud.close_radio()
 				elif selection != null:
@@ -1606,8 +1610,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 				else:
 					_gizmo("lure")
 			KEY_B:
+				# the old yard's Builders job; with an avatar the Base page of the radio panel (round 25: priorities, dials, the briefing's concerns)
 				if not avatar:
 					_gizmo("job_builders")
+				else:
+					page_key("base", ev.shift_pressed)
 			KEY_M:
 				if not avatar:
 					_gizmo("job_bench")
@@ -2706,8 +2713,97 @@ func _handle_events() -> void:
 				_on_gate_event(e)
 			"leave_offer":
 				_on_leave_offer(e)
+			"briefing":
+				# the morning briefing is composed (round 25, briefing.gd): the card comes once the dawn card has gone (hud.gd, the last section)
+				hud.queue_briefing()
+			"problem":
+				_on_problem(e)
+			"fix_work":
+				_on_fix_work(e)
 	_watch_gate_news()
 	sim.events.clear()
+
+
+## The base's trouble takes a step (round 25, scripts/sim/problems.gd; the event is {"type": "problem", "state": "raised" | "stage2" | "fixed" |
+## "failed" | "escalated", "id", "kind"}): a soft tick of the menus' own sounds and a toast; a new one is also an alert whose click glides the camera
+## to the marker. The News and the call of stage 2 are the rules'.
+func _on_problem(e: Dictionary) -> void:
+	if hud == null:
+		return
+	var kind := String(e.get("kind", ""))
+	var noun: String = OverlayNode.BaseMarks.noun(kind)
+	match String(e.get("state", "")):
+		"raised":
+			sound.ui("ui_click", 0.5)
+			hud.toast("Trouble: %s" % noun, "warn")
+			var mark := _problem_mark(String(e.get("id", "")))
+			if not mark.is_empty():
+				sim.alert("trouble-%s" % String(e.get("id", "")), "warn", "Trouble: %s" % noun, String(mark.get("label", "")), mark.at, 25.0)
+		"stage2":
+			sound.ui("ui_click", 0.4)
+		"fixed":
+			sound.ui("ui_confirm", 0.7)
+			hud.toast("Fixed: %s" % noun)
+		"failed":
+			sound.ui("ui_error", 0.5)
+			hud.toast("Could not fix %s" % noun, "warn")
+		"escalated":
+			sound.ui("ui_error", 0.4)
+			hud.toast("%s has got worse" % noun.capitalize(), "warn")
+
+
+## The avatar's hands begin or leave a fix (round 25, problems.gd; the event is {"type": "fix_work", "on", "id"}): the stroke of the hammer as they begin,
+## as at the bench (the blows that follow are the rules' `hammer`).
+func _on_fix_work(e: Dictionary) -> void:
+	if bool(e.get("on", false)):
+		sound.play("hammer", 0.8, 0.1)
+
+
+## The mark of the open problem `id` as `sim.problems.marks()` has it ({} for none).
+func _problem_mark(id: String) -> Dictionary:
+	var pm = sim.get("problems")
+	if pm == null or not pm.has_method("marks"):
+		return {}
+	for m in pm.marks():
+		if String(m.get("id", "")) == id and m.get("at") is Vector2:
+			return m
+	return {}
+
+
+## The camera glides to the open problem `id` and rests there a moment (round 25: the Trouble list's "Go there", scripts/ui/problem_list.gd; the
+## avatar's camera is back on them after it, as at an alert). False when there is no such problem.
+func focus_problem(id: String) -> bool:
+	var mark := _problem_mark(id)
+	if mark.is_empty():
+		return false
+	_focus(mark.at)
+	return true
+
+
+## A screenshot's trouble (`--problem=leak|jam|quarrel|crack[:stage]`, round 25): a problem of that kind raised by the rules themselves
+## (`problems.raise_problem`: a leak at a rain barrel, a jam at the generator, a crack on a compound wall section, a quarrel of the best pair) and put at
+## the stage asked for, with the time used that goes with it, nothing paid and no dice. The avatar stands a step from it. False (and a word on the
+## console) when the rules will not raise one: an avatar game of the small start (`--crew=3`) only, and a quarrel needs two people who do not agree.
+func stage_problem(spec: String) -> bool:
+	var pm = sim.get("problems")
+	var me = sim.avatar.player() if avatar_mode else null
+	if pm == null or me == null or not pm.has_method("raise_problem"):
+		return false
+	var parts := spec.split(":")
+	var kind := String(parts[0])
+	var stage := clampi(int(parts[1]) if parts.size() > 1 and parts[1].is_valid_int() else 1, 0, 2)
+	var id := String(pm.raise_problem(kind))
+	if id == "":
+		print("--problem=%s: the rules would not raise one (an avatar game of the small start, --crew=3; a quarrel needs a pair who disagree)" % kind)
+		return false
+	for r in pm.records:
+		if String(r.id) == id:
+			var used := 0.62 if stage >= 2 else (0.3 if stage == 1 else 0.05)
+			r["stage"] = maxi(stage, 1)
+			r["t0"] = float(sim.clock_min) - float(r.ttl_h) * 60.0 * used
+			_stage_beside(Vector2(r.at))
+	sim.events.clear()
+	return true
 
 
 ## The gate's rules take a step (round 22, scripts/sim/gate.gd; the event is {"type": "gate", "state": "opening" | "open" | "closing" | "shut",
@@ -2841,6 +2937,9 @@ func _parse_args() -> void:
 	var post_id := ""
 	var bench_asked := false
 	var gate_asked := ""
+	var problem_spec := ""
+	var briefing_asked := false
+	var priorities_spec := ""
 	var drive_spec := ""
 	var drive_do := ""
 	var cam_asked := false
@@ -2954,6 +3053,10 @@ func _parse_args() -> void:
 				# (the lamp, the HUD's word, the faint outlines; --hour=20 for the pulsing ring of a gate open in the dark; --beside=gate
 				# stands the avatar at the lever, for the prompt). Put it after --hour and before --advance.
 				gate_asked = v
+			"problem":
+				# --problem=leak|jam|quarrel|crack[:stage] (round 25, an avatar game of the small start: --crew=3) puts that trouble up, at its place, at
+				# stage 0 to 2 (1 by default), with the avatar a step from it: its marker, its words and the prompt (--advance=1 to see it move)
+				problem_spec = v
 			"noavatar":
 				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
 			"calm":
@@ -3034,9 +3137,15 @@ func _parse_args() -> void:
 				# may be held by people, who are off the map): no scrap is paid for them
 				_stage_town(v)
 			"radio":
-				# --radio=<jobs|build|map|news>[,call][,news] opens the radio panel on that page (avatar mode), once the other arguments are
+				# --radio=<base|jobs|build|map|news>[,call][,news] opens the radio panel on that page (avatar mode), once the other arguments are
 				# in; with `call` a call waits for an answer (a wall under attack), with `news` there are a few lines in the log
 				radio_page = v
+			"briefing":
+				# --briefing shows the morning briefing's card (round 25; avatar mode, a small start: `--crew=3`), made from the concerns as they stand
+				briefing_asked = true
+			"priorities":
+				# --priorities=food,defence ranks those priorities (round 25), first first, before the radio panel or the briefing's card is up
+				priorities_spec = v
 			"town-ride":
 				# --town-ride=<vehicle kind or id> chooses that parked vehicle in the board's party picker when it opens (--vehicle first)
 				town_ride = v
@@ -3159,6 +3268,12 @@ func _parse_args() -> void:
 	if show_build:
 		hud.last_speed = speed
 		hud.open_build(build_plot, sim)
+	if priorities_spec != "" and sim.get("priorities") != null and sim.priorities.has_method("set_order"):
+		sim.priorities.set_order(Array(priorities_spec.split(",", false)))
+	if briefing_asked and avatar_mode:
+		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+		hud.last_speed = speed
+		hud.show_briefing()
 	if radio_page != "":
 		var radio_parts := radio_page.split(",")
 		if radio_parts.has("news"):
@@ -3207,6 +3322,8 @@ func _parse_args() -> void:
 		_stage_bench()
 	if gate_asked != "":
 		stage_gate(gate_asked)
+	if problem_spec != "":
+		stage_problem(problem_spec)
 	if order_spec != "":
 		_stage_order(order_spec)
 	if shot_wheel != "":

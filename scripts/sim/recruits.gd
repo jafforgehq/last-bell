@@ -160,6 +160,8 @@ func call_due() -> bool:
 		return false    # (the rescue comes at dawn of day 31: nobody could arrive in time)
 	if queue.is_empty() and generated >= MAX_GENERATED:
 		return false
+	if not sim.policies.strangers_call_ok():    # (round 25: "turn away" raises no stranger's call; true inactive)
+		return false
 	return housing_free() >= 1
 
 
@@ -207,7 +209,7 @@ func accept() -> bool:
 	if def.is_empty() or housing_free() < 1:
 		return false
 	queue.pop_front()
-	incoming.append({"def": def, "day": sim.day + 1})
+	incoming.append({"def": def, "day": sim.day + 1 + sim.policies.arrival_delay_days()})    # (round 25: "check" a day later; 0 inactive)
 	next_call_day = sim.day + gap_days()
 	sim.events.append({"type": "call_taken", "who": String(def.id)})
 	return true
@@ -251,6 +253,8 @@ func update(_dt: float) -> void:
 
 
 func _arrive(def: Dictionary) -> void:
+	if sim.policies.caught_at_gate(def):    # (round 25: "check": a bitten stranger is turned back at the gate, nobody is added; false inactive)
+		return
 	var p = sim.add_person(def)
 	# whoever they were, they come in at the gate
 	var spot := GATE_SPOT + Vector2(float(arrived.size() % 3) * 0.9 - 0.9, 0.0)

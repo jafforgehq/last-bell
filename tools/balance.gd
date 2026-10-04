@@ -42,6 +42,9 @@
 ##                    answers the radio's calls, mends the wall by hand). Either avatar mode adds each night's row (`nights`) to a game and
 ##                    a table of them to the summary (what the walls lost, who fell, how often the avatar stood where the pressure was)
 ##   --nightstats     the same rows and table without an avatar (the night lab's `none`)
+##   --base           round 25: in an avatar game (--avatar=idle|bot) the base management is ON (the briefing, the priorities, the dials, the problems and the
+##                    dilemma: scripts/sim/briefing.gd and its four). Without it the five are OFF, so that the numbers of rounds 19 and 20 hold. No effect with
+##                    --avatar=none
 ##   --data=path      read the nights' numbers (rally, plating, Big Nights...) from another nights.json (to try a number before it is in the game)
 ##   --out=path.json  also write everything (every game, every day) as JSON
 ##
@@ -91,6 +94,8 @@ static var streets_on := true
 static var avatar_mode := "none"
 ## The rows of each night are kept even with no avatar (see --nightstats).
 static var nightstats_on := false
+## The base management of round 25 is on in an avatar game (see --base); off, `Helpers.quiet_base` switches its five modules off.
+static var base_on := false
 
 
 ## What a sensible player does, step by step. Call tick() about once a second
@@ -973,6 +978,8 @@ static func play(seed_value: int, difficulty: int, days: int, hz: float = 30.0, 
 	var bot = null
 	if avatar_mode != "none":
 		sim.avatar.set_player("ruth")
+		if not base_on:
+			Helpers.quiet_base(sim)
 		bot = BotLib.AvatarBot.new(sim, avatar_mode)
 	var stats = BotLib.NightStats.new(sim, avatar_mode) if (avatar_mode != "none" or nightstats_on) else null
 	if setup.is_valid():
@@ -1309,6 +1316,8 @@ func _run() -> void:
 			streets_on = false
 		elif kv[0] == "nightstats":
 			nightstats_on = true
+		elif kv[0] == "base":
+			base_on = true
 		elif kv[0] == "avatar" and kv.size() > 1:
 			if not ["none", "idle", "bot"].has(String(kv[1])):
 				printerr("--avatar takes none, idle or bot (not '%s')" % kv[1])
@@ -1424,6 +1433,8 @@ func _play_in_workers(seeds: Array, jobs: int, days: int, difficulty: int, hz: f
 			args.append("--avatar=%s" % avatar_mode)
 		if nightstats_on:
 			args.append("--nightstats")
+		if base_on:
+			args.append("--base")
 		if NightData.data_path != NightData.DATA_PATH:
 			args.append("--data=%s" % NightData.data_path)
 		workers.append({"pid": OS.create_process(exe, args), "out": out, "seeds": mine})

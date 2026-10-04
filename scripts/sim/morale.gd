@@ -362,6 +362,8 @@ func _modifiers(p) -> Array:
 	var bed: float = sim.build.bonus("morale")
 	if bed != 0.0:
 		out.append({"label": BED_LABEL, "value": bed})
+	out.append_array(sim.policies.mood_lines(p))    # (round 25: the dials' standing lines: half rations, overtime, worn out; [] inactive)
+	out.append_array(sim.problems.mood_lines(p))    # (round 25: a quarrel, no power; [] inactive)
 	return out
 
 
