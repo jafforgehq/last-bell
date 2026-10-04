@@ -84,6 +84,13 @@ func on_ready(main_node) -> void:
 	perf.setup(main.sim)
 
 
+## Once, as the camera is first put (main.gd `_ready`, after the HUD): the parts that care say where it looks and how far it sees (`on_opening_view(main)`: the town's HUD part).
+func opening_view() -> void:
+	for part in parts:
+		if part.has_method("on_opening_view"):
+			part.on_opening_view(main)
+
+
 func part(name: String):
 	return by_name.get(name)
 
