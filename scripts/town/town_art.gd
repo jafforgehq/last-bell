@@ -108,6 +108,37 @@ static func fence(kit: String, state: String = "built") -> Dictionary:
 	return d
 
 
+## One sprite of a kit item by its manifest id (the perimeter view's: "fort_gate", "fort_tower", "floodlight", "barricade_door"...): `orient` "h" or "v" (or a facing),
+## `state` "closed", "open" or "", `variant` 0 built, 1 damaged. A missing item is a flat colour of `size` tiles.
+static func piece(id: String, orient: String = "", state: String = "", variant: int = 0, size: Vector2 = Vector2(1, 1)) -> Dictionary:
+	return _describe(_find([id]), orient, state, variant, _color_of(id), size)
+
+
+## An autotile atlas of the kit (a fence, sandbags...) by its manifest id: {"item", "file", "cell": Vector2 (px), "cols", "placeholder", "color"}; a missing item is a
+## placeholder. `atlas_rect(d, mask)` is the part of the picture for a mask of the CONNECTED sides (N 1, E 2, S 4, W 8).
+static func atlas(id: String) -> Dictionary:
+	var item := _find([id])
+	var d := {"item": "", "file": "", "cell": Vector2(128, 128), "cols": 4, "cells": {}, "placeholder": true, "color": _color_of(id)}
+	if item.is_empty() or item.get("sprites", []).is_empty():
+		return d
+	var cell: Array = item.get("cell_px", [128, 128])
+	d.item = id
+	d.file = _folder + String(item.sprites[0].file)
+	d.cell = Vector2(float(cell[0]), float(cell[1]))
+	d.cols = int(item.get("grid", [4, 4])[0])
+	d.cells = item.get("cells", {})
+	d.placeholder = false
+	return d
+
+
+static func atlas_rect(d: Dictionary, mask: int) -> Rect2:
+	var cell: Vector2 = d.cell
+	var at = d.cells.get(str(mask))
+	var col: int = int(at[0]) if at is Array else mask % int(d.cols)
+	var row: int = int(at[1]) if at is Array else mask / int(d.cols)
+	return Rect2(float(col) * cell.x, float(row) * cell.y, cell.x, cell.y)
+
+
 ## A piece of furniture or a marker by its kind ("bed", "stash", "radio", "bench", a container's kind...): `state` "" or "open" (a looted container),
 ## `facing` "s", "w", "n", "e".
 static func prop(kind: String, state: String = "", facing: String = "s") -> Dictionary:

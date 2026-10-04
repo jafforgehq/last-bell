@@ -3382,6 +3382,9 @@ func _parse_args() -> void:
 				# --stage=cleared|claimed|rescued2|fourth|night puts a town run in that stage at once (scripts/town/one_house.gd, for a screenshot)
 				if not OneHouse.stage_to(sim, v):
 					print("--stage=%s: not a town run (give --town), or no such stage" % v)
+			"slots":
+				# --slots=built|damaged|sites|stress|all (after --stage=fourth) puts the base's fence, gate, towers and lights up at once, worn or half built (scripts/town/perimeter_stage.gd)
+				load("res://scripts/town/perimeter_stage.gd").apply(sim, v, self)
 			"endcard":
 				# --demo --endcard plays the demo's three days quickly (the colony alone) to the run's end: the end card is up for the shot
 				endcard_asked = true
