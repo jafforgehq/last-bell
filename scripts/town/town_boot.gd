@@ -91,15 +91,22 @@ static func opts_of(args: Array) -> Dictionary:
 	return out
 
 
-## The map data of a town run: `run` is {"town": true | seed, "town_opts": {...}} (what `Main._ready` has); the generated town is the data's "town_data".
-static func data(run: Dictionary) -> Dictionary:
+## What town a run asks for: {"seed", "opts"} (the generator's arguments).
+static func plan_of(run: Dictionary) -> Dictionary:
 	var seed := seed_of(OS.get_cmdline_user_args(), run)
 	var opts: Dictionary = run.get("town_opts", opts_of(OS.get_cmdline_user_args()))
 	if String(run.get("load", "")) != "":
 		var t := _saved_town(String(run.load))
 		if not t.is_empty():
 			opts = {"blocks": int(t.blocks)}
-	var d := from_town(TownGen.make(seed, opts))
+	return {"seed": seed, "opts": opts}
+
+
+## The map data of a town run: `run` is {"town": true | seed, "town_opts": {...}} (what `Main._ready` has); the generated town is the data's "town_data". All of it at once (a
+## headless run, a test); a window makes it a few milliseconds a frame behind the loading card with scripts/town/town_loader.gd.
+static func data(run: Dictionary) -> Dictionary:
+	var plan := plan_of(run)
+	var d := from_town(TownGen.make(int(plan.seed), plan.opts))
 	warm_pawns(d)
 	return d
 
@@ -131,7 +138,15 @@ static func sim(data: Dictionary, world_node, fx):
 	return TownSim.new(data, world_node, fx)
 
 
-## The card shown while the town is made (`Main._ready`): a dark screen and a line, on a layer above everything; the caller frees it.
+## How many milliseconds of work a frame gives the loading steps (the rest of a 60 Hz frame is for drawing the card: a browser needs more of it than a desktop).
+const STEP_MS := 14.0
+const STEP_MS_WEB := 10.0
+## How many frames of the game itself are drawn under the card, the clock stopped, before it goes.
+const WARM_FRAMES := 6
+const BAR_W := 320.0
+
+
+## The card shown while the town is made (`Main._ready`): a dark screen, a line and a bar that fills as the work goes, on a layer above everything; the caller frees it.
 static func loading_card(parent: Node) -> Node:
 	var layer := CanvasLayer.new()
 	layer.name = "TownLoading"
@@ -147,17 +162,58 @@ static func loading_card(parent: Node) -> Node:
 	label.set_anchors_preset(Control.PRESET_CENTER)
 	label.position = Vector2(-120.0, -20.0)
 	layer.add_child(label)
+	var track := ColorRect.new()
+	track.color = Color(0.17, 0.155, 0.13, 1.0)
+	track.set_anchors_preset(Control.PRESET_CENTER)
+	track.position = Vector2(-BAR_W * 0.5, 34.0)
+	track.size = Vector2(BAR_W, 6.0)
+	layer.add_child(track)
+	var fill := ColorRect.new()
+	fill.color = Color(0.9, 0.78, 0.45, 1.0)
+	fill.size = Vector2(0.0, 6.0)
+	track.add_child(fill)
+	var note := Label.new()
+	note.add_theme_font_size_override("font_size", 15)
+	note.add_theme_color_override("font_color", Color(0.62, 0.58, 0.5))
+	note.set_anchors_preset(Control.PRESET_CENTER)
+	note.position = Vector2(-BAR_W * 0.5, 50.0)
+	layer.add_child(note)
+	layer.set_meta("fill", fill)
+	layer.set_meta("note", note)
 	parent.add_child(layer)
 	return layer
+
+
+static func step_ms() -> float:
+	return STEP_MS_WEB if OS.has_feature("web") else STEP_MS
+
+
+## Moves the card's bar to `share` (0 to 1) and puts a few words under it.
+static func card_progress(card: Node, share: float, text: String = "") -> void:
+	if card == null or not is_instance_valid(card):
+		return
+	var fill = card.get_meta("fill", null)
+	if fill != null:
+		fill.size.x = BAR_W * clampf(share, 0.0, 1.0)
+	var note = card.get_meta("note", null)
+	if note != null and text != "":
+		note.text = text
 
 
 ## Loads the pictures of every look of the dead now, under the loading card: a pawn node costs about 2 ms the first time a look is seen (its three pictures come off the disk) and
 ## 0.16 ms after, so without this the first wake of each look is a hitch (the windowed bench measured 10 ms at the 95th percentile and 60 ms at worst). Returns how many it loaded.
 static func warm_pawns(data: Dictionary) -> int:
-	var n := 0
+	var pics := pawn_pictures(data)
+	for path in pics:
+		GD.tex(path)
+	return pics.size()
+
+
+## The files of the pictures of every look of the dead (three views each), in the order `warm_pawns` loads them.
+static func pawn_pictures(data: Dictionary) -> Array:
+	var out: Array = []
 	for key in data.pawn.files:
 		if String(key).begins_with("z"):
 			for view in ["S", "E", "N"]:
-				GD.tex(data.pawn.files[key][view])
-				n += 1
-	return n
+				out.append(data.pawn.files[key][view])
+	return out

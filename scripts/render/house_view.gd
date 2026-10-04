@@ -12,6 +12,8 @@
 ##
 ## COST. Nodes exist only for houses within NEAR tiles of the view (freed beyond FAR), the doors inside a house only for the avatar's house; the scan is a few times a
 ## second; a frame does no allocation (the pawn positions go in a reused array, a roof fades by its node's alpha, a door redraws only while it swings).
+## WP9: a roof is ONE draw call (its pictures are cut from one atlas per roof kit, scripts/render/roof_atlas.gd, so the cells batch), and the furniture and floor marks of a
+## house are hidden (not drawn) while its roof is shut: under a roof nobody sees them, and in the street at the default zoom they were two thirds of the sprites drawn.
 ## Sources: the sim's `houses` (queries of plan 2.2; its `town` Dictionary gives the lists and the tile tables), `clearing`, `search` as the plan says, all soft: a missing
 ## one is the default (nothing hidden). A test or the demo hands them over with `bind`.
 extends Node2D
@@ -20,6 +22,7 @@ const GD := preload("res://scripts/game_data.gd")
 const TownArt := preload("res://scripts/town/town_art.gd")
 const DoorNode := preload("res://scripts/render/door_node.gd")
 const RoomVeil := preload("res://scripts/render/room_veil.gd")
+const RoofAtlas := preload("res://scripts/render/roof_atlas.gd")
 
 const TILE := GD.TILE
 const FADE := 0.25
@@ -62,6 +65,10 @@ var _scan_t := 0.0
 var _near_t := 0.0
 var _shown_house := -2
 var _pawns := PackedVector2Array()
+var _atlas = null
+## The sprites of the world's floor-mark and furniture layers by the house they are in (house id -> Array of nodes), and the houses whose sprites are shown now.
+var _interior := {}
+var _interior_on := {}
 
 
 func _init() -> void:
@@ -87,6 +94,8 @@ func on_ready(main) -> void:
 		world.add_child(self)
 	var s = main.get("sim")
 	bind(s, s.get("houses"), s.get("clearing"), s.get("search"))
+	_warm_atlas()
+	_collect_interiors(world)
 
 
 ## The facade tells the view's rectangle before it asks `pawn_visible` of each pawn: the avatar's house is refreshed here, so the rule is never a frame late.
@@ -101,6 +110,7 @@ func on_frame(dt: float) -> void:
 	if houses == null:
 		return
 	_find_avatar()
+	_hide_shut_interiors()
 	if avatar_house != _shown_house:
 		_shown_house = avatar_house
 		_enter_house()
@@ -260,6 +270,7 @@ func _drop_house(id: int) -> void:
 
 ## The avatar is in another house (or none): the veils and the inner doors are those of that house, the roofs aim at their targets.
 func _enter_house() -> void:
+	_show_interior(avatar_house)
 	for h in _roofs:
 		_roofs[h].alpha_t = 0.0 if int(h) == avatar_house else 1.0
 	var gone: Array = []
@@ -306,6 +317,17 @@ func _house_dict(id: int) -> Dictionary:
 	return {}
 
 
+## The atlases of the three roof kits, made now (under the loading card) and not at the first roof.
+func _warm_atlas() -> void:
+	if _atlas == null:
+		_atlas = RoofAtlas.new()
+	for kind in TownArt.ROOF_KINDS:
+		for variant in 3:
+			var tiles = TownArt.roof(String(kind), variant).get("tiles")
+			if tiles is Dictionary:
+				_atlas.for_tiles(tiles)
+
+
 func _make_roof(hd: Dictionary) -> void:
 	var id := int(hd.id)
 	var roof := Roof.new()
@@ -315,7 +337,9 @@ func _make_roof(hd: Dictionary) -> void:
 	for d in hd.doors:
 		if bool(d.exterior):
 			notches.append([d.tiles, String(d.side)])
-	roof.setup(id, Rect2i(hd.rect), TownArt.roof(String(hd.kind), id % 3), notches)
+	if _atlas == null:
+		_atlas = RoofAtlas.new()
+	roof.setup(id, Rect2i(hd.rect), TownArt.roof(String(hd.kind), id % 3), notches, _atlas)
 	roof.alpha_t = 0.0 if id == avatar_house else 1.0
 	roof.modulate.a = roof.alpha_t
 	roof.visible = roof.alpha_t > 0.01
@@ -378,6 +402,54 @@ func _measure_doors() -> void:
 			d.wedged = false
 
 
+# ------------------------------------------------------------- the interiors --
+
+## Sorts the sprites of the world's floor marks (layer 1) and furniture (layer 2) by the house they stand in, and hides them all: a house is drawn bare under its roof.
+## (A world with no `layers`, the tests' fakes, has none: nothing is hidden.)
+func _collect_interiors(world) -> void:
+	_interior.clear()
+	_interior_on.clear()
+	if world == null or _tile_house.is_empty() or not (world.get("layers") is Dictionary):
+		return
+	for key in [1, 2]:
+		var layer = world.layers.get(key)
+		if layer == null:
+			continue
+		for n in layer.get_children():
+			if not (n is Node2D):
+				continue
+			var h := _house_of(floori(n.position.x / TILE), floori(n.position.y / TILE))
+			if h < 0:
+				continue
+			if not _interior.has(h):
+				_interior[h] = []
+			_interior[h].append(n)
+			n.visible = false
+
+
+func _show_interior(h: int) -> void:
+	if not _interior.has(h):
+		return
+	if not _interior_on.has(h):
+		_interior_on[h] = true
+		for n in _interior[h]:
+			n.visible = true
+
+
+## The sprites of a house the avatar is not in go off when its roof is shut again.
+func _hide_shut_interiors() -> void:
+	if _interior_on.is_empty():
+		return
+	var gone: Array = []
+	for h in _interior_on:
+		if int(h) != avatar_house and roof_alpha(int(h)) >= 0.99:
+			gone.append(h)
+	for h in gone:
+		_interior_on.erase(h)
+		for n in _interior[h]:
+			n.visible = false
+
+
 # --------------------------------------------------------------- what tests read --
 
 ## The alpha of a house's roof (1.0 when it has none: a roof that is not there is shut).
@@ -427,10 +499,14 @@ class Roof extends Node2D:
 	var _shadow := PackedVector2Array()
 	var _color := Color.WHITE
 	var _batches: Array = []
+	## The kit's atlas (scripts/render/roof_atlas.gd) when there is one: every cell is then cut from the one texture and the roof is a single batch.
+	var _set = null
 
-	## `notches`: [[tiles (Vector2i), side], ...] of the outside doors.
-	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array) -> void:
+	## `notches`: [[tiles (Vector2i), side], ...] of the outside doors. `atlas`: the part's RoofAtlas (null: the pictures are drawn from their files).
+	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array, atlas = null) -> void:
 		house = id
+		if desc.has("tiles"):
+			_set = atlas.for_tiles(desc.tiles) if atlas != null else null
 		if desc.has("tiles") and _setup_tiles(id, rect, desc.tiles, notches):
 			return
 		var er := Rect2(rect).grow(EAVE_T)
@@ -553,12 +629,16 @@ class Roof extends Node2D:
 
 	## Files a draw command under its picture (consecutive commands of one picture are one batch for the renderer).
 	func _add(groups: Dictionary, order: Array, d: Dictionary, dst: Rect2, transpose: bool, src: Rect2 = Rect2()) -> void:
+		var from: Rect2 = src if src.size.x > 0.0 else Rect2(d.rect)
 		var key := "%s|%s" % [d.file, str(transpose)]
+		if _set != null:
+			key = "atlas|%s" % str(transpose)
+			from = RoofAtlas.rect_for(_set, d, from)
 		if not groups.has(key):
-			groups[key] = {"tex": TownArt.texture(d), "dst": [], "src": [], "t": transpose}
+			groups[key] = {"tex": _set.tex if _set != null else TownArt.texture(d), "dst": [], "src": [], "t": transpose}
 			order.append(key)
 		groups[key].dst.append(dst)
-		groups[key].src.append(src if src.size.x > 0.0 else Rect2(d.rect))
+		groups[key].src.append(from)
 
 	static func _texture(desc: Dictionary) -> Texture2D:
 		return TownArt.texture(desc)
