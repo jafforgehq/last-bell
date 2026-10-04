@@ -19,6 +19,8 @@ const BuildNode := preload("res://scripts/render/build_node.gd")
 const DressingNode := preload("res://scripts/render/dressing_node.gd")
 const ParkingNode := preload("res://scripts/render/parking_node.gd")
 const GateNode := preload("res://scripts/render/gate_node.gd")
+const TownBoot := preload("res://scripts/town/town_boot.gd")
+const TownGame := preload("res://scripts/town/town_game.gd")
 const BaseLife := preload("res://scripts/render/base_life.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
@@ -127,6 +129,8 @@ var parking_view
 ## (vehicle actors) calls `gate_node.follow(parking_view.gate_demand(), dt)` itself. In avatar mode (round 22) the node follows the rules' own
 ## `sim.gate.open` instead, and the gate's events are the sounds (`_on_gate_event`).
 var gate_node
+## The town's facade (scripts/town/town_game.gd) in a town run, else null (WP1: the hooks of main.gd ask it, each in one line).
+var town
 ## The base's little life (round 24, scripts/render/base_life.gd): flags, the radio mast, the school bell, washing, a dog, birds, leaves, rain's ripples,
 ## friends chatting. Decoration only; `--calm` leaves it out, and the title's backdrop has none of it.
 var life_view
@@ -295,31 +299,9 @@ var bench_proc := 0.0
 var bench_calls := 0.0
 
 
-## Whether the command line asks for the big town: `--spike-town`, or `--town` (with or without a value) in a line that has no `--crew` (the old Town Board's flag).
-static func wants_town(user_args: Array) -> bool:
-	var town := false
-	var crew := false
-	for a in user_args:
-		var s := String(a)
-		if s == "--spike-town" or s.begins_with("--spike-town="):
-			return true
-		if s == "--town" or s.begins_with("--town="):
-			town = true
-		if s.begins_with("--crew"):
-			crew = true
-	# in a browser: `index.html?town` (the flags are the query's: scripts/town/town_scene.gd)
-	if OS.has_feature("web") and not town:
-		var qs := String(JavaScriptBridge.eval("window.location.search"))
-		for part in qs.trim_prefix("?").split("&", false):
-			if String(part) == "town" or String(part).begins_with("town="):
-				town = true
-	return town and not crew
-
-
 func _ready() -> void:
-	# `--town` (alias `--spike-town`): the big town of feature/town-core takes the screen (scripts/town/town_scene.gd); the yard's game does not start.
-	# (The old `--town[=place]`, the Town Board of a `--crew=3` game, still works when `--crew` is given.)
-	if wants_town(OS.get_cmdline_user_args()):
+	# `--town-spike` (alias `--spike-town`): the foundation's standalone scene (scripts/town/town_scene.gd, a benchmark and a look at the town); the game does not start
+	if TownBoot.wants_spike(OS.get_cmdline_user_args()):
 		set_process(false)
 		set_process_input(false)
 		set_process_unhandled_input(false)
@@ -327,6 +309,23 @@ func _ready() -> void:
 		town_scene.name = "Town"
 		add_child(town_scene)
 		return
+	# `--town[=seed]`, or a run whose meta says `town` (the title's New game), or a save of a town run: the REAL game on the generated town (scripts/town/town_boot.gd makes the data,
+	# the world and the rules; the old `--town[=place]` of the school's Town Board is still that with `--crew`)
+	var run_meta: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else Scenario.run_from_args(OS.get_cmdline_user_args())
+	var town_run: bool = TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
+	# the town takes a moment to make (a few tenths of a second on the desktop, a few seconds in a browser): a card says so, drawn for two frames before the work begins
+	# (the game's own `_process` and input are off meanwhile; a headless run, the tests', has no card and no wait)
+	var town_card = null
+	if town_run and DisplayServer.get_name() != "headless":
+		town_card = TownBoot.loading_card(self)
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		set_process(true)
+		set_process_input(true)
+		set_process_unhandled_input(true)
 	var t0 := Time.get_ticks_msec()
 	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
@@ -335,7 +334,7 @@ func _ready() -> void:
 		Prefs.forget()
 		if prefs_path == SHOT_PREFS:
 			Prefs.reset()
-	data = GD.load_all()
+	data = TownBoot.data(run_meta) if town_run else GD.load_all()
 	var logical := Vector2i(1280, 800)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--size="):
@@ -346,7 +345,7 @@ func _ready() -> void:
 	get_window().size_changed.connect(_update_scale)
 	_update_scale()
 
-	world = World.new()
+	world = TownBoot.world() if town_run else World.new()
 	world.name = "World"
 	add_child(world)
 	world.build(data)
@@ -390,7 +389,7 @@ func _ready() -> void:
 	air.painter = fx.draw_air
 	world.add_child(air)
 
-	sim = Sim.new(data, world, fx)
+	sim = TownBoot.sim(data, world, fx) if town_run else Sim.new(data, world, fx)
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
 	# the walls of the lots (round 9) are made and taken away in play (and by a load): the world draws and forgets them
 	sim.on_segment_added = func(s): world.add_segment_art(s)
@@ -471,7 +470,7 @@ func _ready() -> void:
 			if avatar_wanted:
 				sim.avatar.set_player(first_starter_id(sim.people))
 				# (round 24: a new run of the real game also has a fuelled pickup in the motor pool; a test asks with {"car": true})
-				if bool(run.get("car", real)):
+				if bool(run.get("car", real)) and not town_run:
 					sim.vehicles.give_starting_car()
 
 	for tr in data.trees:
@@ -505,27 +504,29 @@ func _ready() -> void:
 	world.add_child(cm)
 	lighting.setup(data, cm)
 	lighting.seasons = sim.seasons
-	# the dressing of the streets (a settlement game only): decals under the people, light props sorted among them
-	dressing_view = DressingNode.new()
-	dressing_view.name = "Dressing"
-	world.add_child(dressing_view)
-	dressing_view.setup(sim, entities)
-	# the parked vehicles of the fleet (a settlement game only), by the main gate in the north street
-	parking_view = ParkingNode.new()
-	parking_view.name = "Parking"
-	world.add_child(parking_view)
-	parking_view.setup(sim, entities)
-	# the vehicle gate: the Main gate's picture as two posts and two leaves that slide apart (the segment's rules do not change)
-	gate_node = GateNode.new()
-	gate_node.name = "Gate"
-	world.add_child(gate_node)
-	gate_node.setup(world, sim)
-	parking_view.gate = gate_node    # (the vehicle view tells it every frame whether a car or a party on foot is about to pass)
+	# (a town run has none of the school's: no dressing, no parked vehicles, no gate leaves and lever)
+	if not town_run:
+		# the dressing of the streets (a settlement game only): decals under the people, light props sorted among them
+		dressing_view = DressingNode.new()
+		dressing_view.name = "Dressing"
+		world.add_child(dressing_view)
+		dressing_view.setup(sim, entities)
+		# the parked vehicles of the fleet (a settlement game only), by the main gate in the north street
+		parking_view = ParkingNode.new()
+		parking_view.name = "Parking"
+		world.add_child(parking_view)
+		parking_view.setup(sim, entities)
+		# the vehicle gate: the Main gate's picture as two posts and two leaves that slide apart (the segment's rules do not change)
+		gate_node = GateNode.new()
+		gate_node.name = "Gate"
+		world.add_child(gate_node)
+		gate_node.setup(world, sim)
+		parking_view.gate = gate_node    # (the vehicle view tells it every frame whether a car or a party on foot is about to pass)
 	# the base's little life: small animated props, hung or standing among the buildings and the people (the dog is one of the y-sorted)
 	life_view = BaseLife.new()
 	world.add_child(life_view)
 	life_view.setup(sim, world, entities)
-	life_view.set_enabled(not title_mode and not ("--calm" in OS.get_cmdline_user_args()))
+	life_view.set_enabled(not title_mode and not ("--calm" in OS.get_cmdline_user_args()) and not town_run)
 	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
 	build_view = BuildNode.new()
 	build_view.name = "Buildings"
@@ -604,7 +605,8 @@ func _ready() -> void:
 	add_child(sound)
 	sound.setup(data.sounds)
 	sound.attach(self)    # (the soundscape: the bells, the dead's groans, the steps, the gate... scripts/audio/soundscape.gd)
-	parking_view.wire(fx, sound, _vol_at)    # the cars' dust and sounds (doors, engine, the gate's motor), by distance to the camera
+	if parking_view != null:
+		parking_view.wire(fx, sound, _vol_at)    # the cars' dust and sounds (doors, engine, the gate's motor), by distance to the camera
 	# the real game keeps one music across the scene reloads of a new run, a load and the title; a test's or a
 	# screenshot's scene has its own
 	if get_tree().current_scene == self:
@@ -627,6 +629,10 @@ func _ready() -> void:
 	shell_layer.add_child(shell)
 	shell.setup(self, hud)
 	apply_settings()
+	# the town's facade (scripts/town/town_game.gd): the view parts of a town run (roofs, the card of a survivor...), asked at the nine hooks below; null in every other game
+	if town_run:
+		town = TownGame.make(self)
+		town.on_ready(self)
 	# the coach of Orientation Day, over the HUD and under the menus (none once the lesson is over)
 	if tutorial and not bool(sim.scenario.get("finished")):
 		_build_coach()
@@ -647,6 +653,8 @@ func _ready() -> void:
 		hud.show_banner("Could not load that save", "A new game was started instead")
 	if old_save_note != "":
 		hud.toast(old_save_note, "warn")
+	if town_card != null:
+		town_card.queue_free()
 	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0))
 
 
@@ -751,6 +759,7 @@ func _vp() -> Vector2:
 # ---------------------------------------------------------------- camera --
 
 func _min_zoom() -> float:
+	if town != null: return town.min_zoom(_vp(), world)
 	var vp := _vp()
 	return maxf(10.0, minf(vp.x / (world.W + 2.0), vp.y / (world.H + 2.0)))
 
@@ -765,6 +774,7 @@ func _clamp_camera() -> void:
 	var H: float = world.H
 	cam_center.x = W / 2.0 if hw * 2.0 >= W + 2.0 * m else clampf(cam_center.x, hw - m, W - hw + m + cam_pad_x)
 	cam_center.y = H / 2.0 if hh * 2.0 >= H + 2.0 * m else clampf(cam_center.y, hh - m, H - hh + m + cam_pad)
+	if town != null: town.clamp_camera(self)
 
 
 func _apply_camera() -> void:
@@ -857,7 +867,7 @@ func _did(kind: String, arg = null) -> void:
 ## The mouse cursor over a point of the yard (in tiles), `hit` being what _pick found there: a hand over what a click
 ## would do something with (a person, a walker, a wall section, a plot's sign), else the arrow.
 func _cursor_for(hit, at: Vector2) -> Input.CursorShape:
-	return Input.CURSOR_POINTING_HAND if hit != null or sim.build.sign_at(at) != "" or parking_view.vehicle_at(at) != "" else Input.CURSOR_ARROW
+	return Input.CURSOR_POINTING_HAND if hit != null or sim.build.sign_at(at) != "" or (parking_view != null and parking_view.vehicle_at(at) != "") else Input.CURSOR_ARROW
 
 
 ## What is under a point of the world (in tiles): a person, a walker or a wall section, or null.
@@ -1027,13 +1037,20 @@ func quick_save() -> bool:
 		return false
 	if sim.over != "":
 		hud.show_banner("The run is over", "Start a new game or load a save")
-	elif SaveGame.write(sim, _save_path()):
+	elif _write_save(_save_path()):
 		hud.show_banner("Game saved", "Quick save (F9 loads it)")
 		_did("save")
 		return true
 	else:
 		hud.show_banner("Could not save", "Nothing was written")
 	return false
+
+
+## SaveGame.write, after the town's rules have put the awake dead of its records to sleep (`TownSim.pre_save`; the school's Sim has none).
+func _write_save(path: String) -> bool:
+	if sim.has_method("pre_save"):
+		sim.pre_save()
+	return SaveGame.write(sim, path)
 
 
 ## Where F5 saves and F9 loads: the quick save, or in the tutorial a file of its own (so the
@@ -1508,6 +1525,7 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if town != null and town.on_key(ev): return
 	_track_pointer(ev, false)
 	# the title and the menus have the keys and the mouse: nothing here reaches the yard (and a drag that was
 	# going on when a page opened is over: its release goes to the page, not to us)
@@ -1569,7 +1587,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 					var sign_of: String = sim.build.sign_at(at) if hit == null else ""
 					if sign_of != "" and (coach == null or coach.would_allow("build")):
 						toggle_build(sign_of)
-					elif hit == null and parking_view.vehicle_at(at) != "":
+					elif hit == null and parking_view != null and parking_view.vehicle_at(at) != "":
 						# a click on a vehicle parked at the gate opens the Town Board, as its button does
 						toggle_town()
 					else:
@@ -1779,6 +1797,7 @@ func _process(delta: float) -> void:
 	_apply_camera()
 	_handle_events()
 	_sync_views()
+	if town != null: town.on_frame(dt)
 	var look: Dictionary = sim.storyteller.look()
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
 	# snow falls on a snow day of a campaign (and in no other game); the ground keeps a light cover all through a snowy season
@@ -1786,8 +1805,9 @@ func _process(delta: float) -> void:
 	snow.follow({"snow": campaign and bool(look.get("snow", false))}, campaign and sim.seasons.snow_share() > 0.0, lighting.dark, dt)
 	ground_snow.visible = snow.ground > 0.01
 	ground_snow.modulate.a = snow.ground
-	dressing_view.update()
-	parking_view.update(dt * gate_rate(speed))    # (the vehicles, and the gate's demand for gate_node: the gate keeps the cars' time)
+	if parking_view != null:
+		dressing_view.update()
+		parking_view.update(dt * gate_rate(speed))    # (the vehicles, and the gate's demand for gate_node: the gate keeps the cars' time)
 	life_view.update(dt, speed, view_rect().grow(3.0))    # (round 24: flags, bell, dog, birds... at the game's pace)
 	street_air.update(dt)
 	build_view.update(clock)
@@ -1914,7 +1934,7 @@ static func first_starter_id(crew: Array) -> String:
 
 ## Whether the avatar's hands are off: the title, a menu or a page over the yard, a played trip, the end of the run.
 func avatar_hands_off() -> bool:
-	return menu_open or sim.over != "" or (hud != null and hud.modal_open())
+	return menu_open or sim.over != "" or (hud != null and hud.modal_open()) or (town != null and town.modal())
 
 
 ## The tile of the world under the pointer: where the avatar's gun is aimed.
@@ -2655,7 +2675,7 @@ func _sync_views() -> void:
 		if dead and n.get_parent() == entities:
 			n.reparent(corpses)
 		n.anim_t = clock
-		n.visible = view.has_point(Vector2(z.x, z.y))
+		n.visible = view.has_point(Vector2(z.x, z.y)) and (town == null or town.pawn_visible(z))
 		if not n.visible:
 			continue
 		_under_the_bridge(n, not dead and sim.levels.under_bridge_dead(z))
@@ -2677,7 +2697,7 @@ func _sync_views() -> void:
 			_add_person_pawn(p)
 		var n = pawn_nodes[p]
 		n.anim_t = clock
-		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null
+		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null and (town == null or town.pawn_visible(p))
 		if n.visible:
 			_under_the_bridge(n, sim.levels.under_bridge(p))
 			n.sync(true, sim_steps, alpha)
@@ -2686,6 +2706,7 @@ func _sync_views() -> void:
 		f.visible = fire_view.has_point(f.position / TILE)
 		if f.visible and frame % 2 == 0:
 			f.tick(fire_t)
+	if town != null: town.on_sync_views(view)
 	ground_bits.queue_redraw()
 	air.queue_redraw()
 	if frame % 10 == 0:
@@ -2733,6 +2754,7 @@ func _music_context() -> Dictionary:
 			var dusk: float = seasons.dusk_hour()
 			var span: float = fposmod(seasons.dawn_hour() - dusk, 24.0)
 			ctx["progress"] = clampf(fposmod(float(sim.hour) - dusk, 24.0) / maxf(span, 1.0), 0.0, 1.0)
+	if town != null: ctx = town.music_context(ctx)
 	return ctx
 
 
@@ -2744,6 +2766,7 @@ func _handle_events() -> void:
 		if e.type == "season":
 			season_turned = true
 	for e in sim.events:
+		if town != null: town.on_event(e)
 		if coach != null:
 			coach.on_event(e)
 		life_view.on_event(e)    # (the bells swing the school bell, the noises startle the birds)
@@ -3003,7 +3026,7 @@ func _on_arrival(who: String) -> void:
 ## run, and not once the run is lost (that would replace the last good one).
 func _autosave() -> void:
 	if shot_path == "" and sim.over == "" and not title_mode and not tutorial and not raid_open():
-		SaveGame.write(sim, SaveGame.AUTO_PATH)
+		_write_save(SaveGame.AUTO_PATH)
 
 
 # ----------------------------------------------------------------- tutorial --
@@ -3227,8 +3250,9 @@ func _parse_args() -> void:
 			"town":
 				# --town opens the Town Board (--town=<place id> on that place) in a settlement game (--crew=3), once the other
 				# arguments are in (the board staged with --town-reveal, --town-state and --town-send; the --speed it pauses)
-				show_town = true
-				town_place = v
+				if town == null:    # (in a town run `--town` is the big town's own flag: nothing to open)
+					show_town = true
+					town_place = v
 			"raid":
 				# --raid=<place id or kind>[,<seed>] opens a played trip to that place with the people of the crew (up to three),
 				# once the other arguments are in (the screenshot then shows it: --frames long enough for the squad to walk)
