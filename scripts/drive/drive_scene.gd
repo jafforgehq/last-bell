@@ -1038,6 +1038,9 @@ func key_pressed(code: Key, shift: bool = false) -> void:
 			KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9:
 				_press_card_key(int(code) - int(KEY_1))
 				return
+			KEY_C:
+				hud_layer.toast("Not on the road: the command wheel is for the base and the places", "info")    # (round 24)
+				return
 	super(code, shift)
 
 

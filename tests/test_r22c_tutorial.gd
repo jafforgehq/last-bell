@@ -111,10 +111,10 @@ func test_the_bot_shoots_the_walker_with_the_right_button_then_the_left() -> voi
 		guard += 1
 		if main.coach.phase == "active" or main.coach.phase == "wait":
 			if main.coach.phase == "wait":
-				main._key(KEY_3)
+				main._set_speed(3)    # (round 24: the key is Shift and 3 with an avatar)
 			else:
 				if not main.coach.held and main.speed != 1:
-					main._key(KEY_1)
+					main._set_speed(1)
 				Bot.act(main, "shoot", {})
 		main._process(1.0 / 30.0)
 		if main.aim_held:

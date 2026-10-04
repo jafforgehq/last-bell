@@ -561,14 +561,14 @@ static func play(main, stop_at: String = "", max_frames: int = 400000, any_phase
 			break
 		if coach.phase == "wait":
 			if main.speed != 3:
-				main._key(KEY_3)
+				main._set_speed(3)    # (round 24: with an avatar the key is Shift and 3; the digits pick the crew)
 		elif coach.phase == "active" or coach.phase == "wrap":
 			if main.avatar_mode and (id == "walk" or id == "shoot"):
 				# (the walk and the climb are done at normal speed: a tile is the room a ladder leaves)
 				if not coach.held and main.speed != 1:
-					main._key(KEY_1)
+					main._set_speed(1)
 			elif not coach.held and main.speed < 3 and id != "scavenge" and id != "wrap":
-				main._key(KEY_3)
+				main._set_speed(3)
 			act(main, id, bot)
 		main._process(1.0 / 30.0)
 		if guard % 4 == 0:

@@ -28,6 +28,7 @@ const WorldClick := preload("res://scripts/ui/world_click.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
+const StanceMarks := preload("res://scripts/render/stance_marks.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
@@ -1187,6 +1188,53 @@ func _draw_bubbles(vp: Vector2) -> void:
 		drawn_bubbles += 1
 
 
+## How near the avatar (tiles) a person's order still shows over their head, as the person picked's always does.
+const STANCE_NEAR := 12.0
+## What the last frame drew of them (a test reads it): pills and dotted lines.
+var drawn_stance_marks := 0
+var drawn_stance_links := 0
+var stance_people: Array = []
+var stance_kinds := PackedStringArray()
+
+
+## Round 24 (scripts/render/stance_marks.gd): a glyph pill over the head of each person who carries an order of the radio (following, holding, covering,
+## searching, walking to a post) and a thin dotted line from them to the spot of a hold, a search or a post; for the person picked and for everyone within
+## STANCE_NEAR tiles of the avatar. A few draw calls each (a stylebox, a glyph, a dashed line), nothing made in the frame but those. Not in the old yard.
+func _draw_stance_marks(sim, vp: Vector2) -> void:
+	drawn_stance_marks = 0
+	drawn_stance_links = 0
+	stance_people.clear()
+	stance_kinds.clear()
+	if main.get("avatar_mode") != true:
+		return
+	var me = sim.avatar.player()
+	var sel = main.selection
+	var picked = sel.ref if sel != null and sel.kind == "person" else null
+	for p in sim.people:
+		if p.away != null or p.dead or p.turned or p == me:
+			continue
+		var kind := StanceMarks.of_person(p)
+		if kind == "":
+			continue
+		if p != picked and (me == null or Vector2(p.x, p.y).distance_to(Vector2(me.x, me.y)) > STANCE_NEAR):
+			continue
+		var pp: Vector2 = main.view_pos(p)
+		var head := _screen(pp.x, pp.y - BUBBLE_HEAD)
+		if head.x < -40.0 or head.x > vp.x + 40.0 or head.y < -30.0 or head.y > vp.y + 60.0:
+			continue
+		var spot := StanceMarks.spot_of(p, kind)
+		if spot != Vector2.INF:
+			var to := _screen(spot.x, spot.y)
+			var from := _screen(pp.x, pp.y)
+			if from.distance_to(to) > 14.0:
+				StanceMarks.draw_link(self, kind, from, to)
+				drawn_stance_links += 1
+		StanceMarks.draw_pill(self, kind, head + Vector2(0.0, -4.0))
+		drawn_stance_marks += 1
+		stance_people.append(p)
+		stance_kinds.append(kind)
+
+
 ## A selected person's marks: the ellipse of a ring at their feet (the primary's heavier), the four corner brackets, and for
 ## one person alone the dashed circle of how far their gun reaches.
 func _mark_person(e, primary: bool, alone: bool, z: float) -> void:
@@ -1722,6 +1770,9 @@ func _draw() -> void:
 				var hy := _screen(pp.x, pp.y - 0.53 - 0.45).y
 				draw_arc(Vector2(pos.x, hy), 6, 0, TAU, 24, Color(PILL, 0.7), 3.5, true)
 				draw_arc(Vector2(pos.x, hy), 6, -PI / 2, -PI / 2 + k * TAU, 24, ACCENT, 2.0, true)
+
+	# round 24: what the player has asked of people over the radio, over their heads (and the dotted line to the spot)
+	_draw_stance_marks(sim, vp)
 
 	# the nights' marks: the ring of the rally, the plated brutes and their weak points, the breaches that are hot
 	_draw_rally(sim, z, vp)

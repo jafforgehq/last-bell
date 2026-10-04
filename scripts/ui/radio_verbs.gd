@@ -166,16 +166,22 @@ func _is_you(p) -> bool:
 
 ## What a verb is now for the contact: {"enabled", "why", "soft" (a refusal that insisting can override), "w" (the radio's willingness)}.
 func verb_state(verb: String) -> Dictionary:
-	var out := {"enabled": true, "why": "", "soft": false, "w": {}}
 	var radio = _radio()
-	if contact == null or radio == null:
+	return state_for(radio, contact, verb, contact != null and radio != null and _is_you(contact), bool(options.get("place", false)))
+
+
+## The same, for any radio and person (the command wheel, scripts/ui/wheel_ctl.gd, asks it for people the dock is not on): `is_you` the contact
+## is the player, `place` the ask is made in a place (where Search that is on).
+static func state_for(radio, who, verb: String, is_you: bool, place: bool) -> Dictionary:
+	var out := {"enabled": true, "why": "", "soft": false, "w": {}}
+	if who == null or radio == null:
 		out.enabled = false
 		return out
-	if _is_you(contact):
+	if is_you:
 		out.enabled = false
 		out.why = "That is you"
 		return out
-	var w: Dictionary = radio.willingness(contact, verb)
+	var w: Dictionary = radio.willingness(who, verb)
 	out.w = w
 	if not bool(w.ok):
 		out.why = String(w.why)
@@ -183,7 +189,7 @@ func verb_state(verb: String) -> Dictionary:
 			out.enabled = false
 		else:
 			out.soft = true
-	if out.enabled and verb == "search" and not bool(options.get("place", false)):
+	if out.enabled and verb == "search" and not place:
 		out.enabled = false
 		out.why = "Nothing to search here: Search that is for a place, when you are out on a trip"
 	return out

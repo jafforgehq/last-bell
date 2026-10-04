@@ -59,6 +59,8 @@ const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
+const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
+const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 const CommunityKit := preload("res://scripts/ui/community_kit.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
@@ -277,14 +279,14 @@ const HELP := [
 ## the words the HUD gives them in a settlement game still reach them.)
 const HELP_AVATAR := [
 	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["E Click", "Use, pick"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
-	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
+	["Radio: card or wheel (C)", 2, [["C Middle", "Wheel (hold)"], ["Shift", "Wheel: all near"], ["1-5", "Pick crew"], ["Z", "Last order"], ["Click", "Crew card: pick"], ["Esc", "Wheel: cancel"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["Shift 1-3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
 ]
 ## (With "Always aim at the mouse", round 22's setting: the mouse aims by itself and the left button fires, as it did.)
 const HELP_AVATAR_ALWAYS := [
 	["You", 2, [["W A S D", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
-	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
+	["Radio: card or wheel (C)", 2, [["C Middle", "Wheel (hold)"], ["Shift", "Wheel: all near"], ["1-5", "Pick crew"], ["Z", "Last order"], ["Click", "Crew card: pick"], ["Esc", "Wheel: cancel"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["Shift 1-3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
 ]
 ## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
@@ -295,12 +297,12 @@ const HINT := ["Click someone in the yard", [["Right-click", "to send them"], ["
 ## (Avatar mode's is two lines, so that it fits a 700 px window: the survivor's hands, then the radio, the map and the news.)
 const HINT_AVATAR := [
 	["", [["WASD", "to move"], ["Right-click", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["Q", "weapon away"]]],
-	["Click a person to radio; Q then right-click orders", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
+	["Click a person to radio, or hold C for the wheel", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
 ## (and with "Always aim at the mouse": the mouse aims, a click fires.)
 const HINT_AVATAR_ALWAYS := [
 	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["Q", "weapon away"]]],
-	["Click a crew card to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
+	["Click a card to radio, or hold C for the wheel", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
@@ -637,6 +639,10 @@ var last_speed := -1
 var radio_box: PanelContainer
 var radio_verbs
 var call_card
+## Round 24: the key that picks each person of the crew (1 to 5, by card order: `WheelCtl.crew_of`), person to number; empty without an avatar.
+var crew_keys := {}
+## Round 24: the command wheel (scripts/ui/command_wheel.gd), a view on top of everything in the HUD that main.gd's controller (wheel_ctl.gd) opens and moves.
+var wheel
 ## Round 18: the radio panel (scripts/ui/radio_panel.gd), the colony's interface in avatar mode, with the pages Jobs, Build, Map and News;
 ## `news_panel` is its News page (the log of round 17, still the object the News wrappers and the tests speak to).
 var radio_panel
@@ -675,6 +681,8 @@ func setup(game_data: Dictionary, crew: Array) -> void:
 	_build_leave_card()
 	_build_radio_ui()
 	_build_talk_card()
+	wheel = CommandWheel.new()
+	add_child(wheel)
 	resized.connect(_on_resized)
 	_on_resized()
 
@@ -1221,6 +1229,14 @@ func _make_card(p) -> Dictionary:
 	you.size = Vector2(30, 15)
 	you.visible = false
 	card.add_child(you)
+	# the key that picks them in avatar mode (round 24: 1 to 5, by card order, not counting you): small, at the foot of the picture
+	var key := _label("", Fonts.cond(700, 0), 12, INK)
+	key.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	key.add_theme_color_override("font_outline_color", Color(0.02, 0.04, 0.035, 0.95))
+	key.add_theme_constant_override("outline_size", 4)
+	key.size = Vector2(14, 15)
+	key.visible = false
+	card.add_child(key)
 	var fight := Panel.new()
 	var fs := StyleBoxFlat.new()
 	fs.bg_color = DANGER
@@ -1248,7 +1264,7 @@ func _make_card(p) -> Dictionary:
 	marks_box.add_child(marks)
 	card.add_child(marks_box)
 	card.gui_input.connect(_on_card_input.bind(p))
-	return {"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "stance_box": stance_box, "stance": stance, "you": you, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""}
+	return {"card": card, "p": p, "pic": pic, "name": nm, "hp_bg": hp_bg, "hp": hp, "badge": badge, "stance_box": stance_box, "stance": stance, "you": you, "key": key, "fight": fight, "sel": false, "veil": veil, "word": word, "marks_box": marks_box, "marks": marks, "marks_sig": "", "marks_data": [], "state": "", "epitaph": ""}
 
 
 ## Someone has joined the crew (a recruit at the gate): their card goes in the row, and the row is laid out again.
@@ -1322,6 +1338,7 @@ func _size_cards(w: int) -> void:
 		c.badge.position = Vector2(inset.x + 2.0, inset.y + 2.0)
 		c.stance_box.position = Vector2(inset.x + 2.0, inset.y + 2.0)
 		c.you.position = Vector2(inset.x + 2.0, inset.y + 2.0)
+		c.key.position = Vector2(inset.x + pw - 16.0, inset.y + pw - 17.0)
 		c.marks_box.position = Vector2(inset.x + 2.0, inset.y + pw - 1.0 - mark_px - 4.0)
 		if was != mark_px:
 			_fill_marks(c, c.marks_data)
@@ -3748,6 +3765,11 @@ func _update_card(c: Dictionary, sim) -> void:
 	c.stance_box.visible = word_of != ""
 	c.badge.visible = p.drafted and present and word_of == ""
 	c.you.visible = p.player and present
+	var key_n := int(crew_keys.get(p, 0)) if avatar_ui and present and not p.player else 0
+	var key_text := str(key_n) if key_n > 0 else ""
+	if c.key.text != key_text:
+		c.key.text = key_text
+		c.key.visible = key_n > 0
 	c.fight.visible = p.target != null and not p.downed and present
 	if c.fight.visible:
 		c.fight.modulate.a = 1.0 if _calm() else 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
@@ -3823,6 +3845,13 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		var dl: Label = res_days[kind]
 		dl.text = _days_text(days)
 		dl.add_theme_color_override("font_color", DANGER_TEXT if days < 1.0 else (WARN if days < 3.0 else INK3))
+	crew_keys = {}
+	if avatar_ui:
+		var n := 0
+		for q in WheelCtl.crew_of(sim.people):
+			n += 1
+			if n <= WheelCtl.KEYS:
+				crew_keys[q] = n
 	for c in cards:
 		_update_card(c, sim)
 	# clock
@@ -4636,6 +4665,9 @@ func _apply_radio_mode(on: bool) -> void:
 		return
 	news_button.visible = on
 	alarm_button.visible = on
+	# (round 24: with an avatar the digits pick the crew, so the speeds are Shift and 1 2 3)
+	for i in speed_buttons.size():
+		speed_buttons[i].tooltip_text = "%s\nKey: %s" % [SPEED_TIPS[i][0], ("Shift+" + String(SPEED_TIPS[i][1])) if on and i > 0 else SPEED_TIPS[i][1]]
 	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on and not tutorial_ui else JOBS_TIP
 	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
 	if not on:

@@ -19,6 +19,7 @@ const BuildNode := preload("res://scripts/render/build_node.gd")
 const DressingNode := preload("res://scripts/render/dressing_node.gd")
 const ParkingNode := preload("res://scripts/render/parking_node.gd")
 const GateNode := preload("res://scripts/render/gate_node.gd")
+const BaseLife := preload("res://scripts/render/base_life.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Snow := preload("res://scripts/render/snow.gd")
@@ -29,6 +30,8 @@ const Music := preload("res://scripts/audio/music.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
 const WorldClick := preload("res://scripts/ui/world_click.gd")
+const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
+const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
@@ -121,6 +124,9 @@ var parking_view
 ## (vehicle actors) calls `gate_node.follow(parking_view.gate_demand(), dt)` itself. In avatar mode (round 22) the node follows the rules' own
 ## `sim.gate.open` instead, and the gate's events are the sounds (`_on_gate_event`).
 var gate_node
+## The base's little life (round 24, scripts/render/base_life.gd): flags, the radio mast, the school bell, washing, a dog, birds, leaves, rain's ripples,
+## friends chatting. Decoration only; `--calm` leaves it out, and the title's backdrop has none of it.
+var life_view
 ## The id of the last News entry the gate's banner looked at (-1: none yet: `_watch_gate_news`).
 var _gate_news_id := -1
 ## The soft groans of the streets by day, a settlement game's (round 12, scripts/audio/street_air.gd).
@@ -172,6 +178,10 @@ var pointed := {}
 ## draws it for FLAG_S seconds).
 var _rtap := {}
 var order_flag = null
+## Round 24, the command wheel (scripts/ui/wheel_ctl.gd): hold C or the middle button; the controller asks this scene the `wheel_*` questions below.
+var wheel_ctl = null
+## `--wheel=<person id>[:verb][+all]`: the wheel a screenshot shows (opened again a few frames before the shot if a focus change shut it).
+var shot_wheel := ""
 const FLAG_S := 4.0
 ## The person whose drawing is carrying the weapon low (`holstered`), to put it back in their hand if they stop being the player.
 var _holster_pawn = null
@@ -275,6 +285,7 @@ var bench_start := 0
 var bench_cpu := 0.0
 var bench_gpu := 0.0
 var bench_proc := 0.0
+var bench_calls := 0.0
 
 
 func _ready() -> void:
@@ -396,6 +407,9 @@ func _ready() -> void:
 			# Orientation Day and a test's game have none unless the test asks, and `--noavatar` is the old game)
 			if wants_avatar(OS.get_cmdline_user_args(), run, title_mode, tutorial, get_tree().current_scene == self, sim.crew_start):
 				sim.avatar.set_player(first_starter_id(sim.people))
+				# (round 24: a new run of the real game also has a fuelled pickup in the motor pool; a test asks with {"car": true})
+				if bool(run.get("car", get_tree().current_scene == self)):
+					sim.vehicles.give_starting_car()
 	if loaded and "--noavatar" in OS.get_cmdline_user_args():
 		sim.avatar.set_player(null)    # (the old yard was asked for: a saved game's player is given up)
 
@@ -446,6 +460,11 @@ func _ready() -> void:
 	world.add_child(gate_node)
 	gate_node.setup(world, sim)
 	parking_view.gate = gate_node    # (the vehicle view tells it every frame whether a car or a party on foot is about to pass)
+	# the base's little life: small animated props, hung or standing among the buildings and the people (the dog is one of the y-sorted)
+	life_view = BaseLife.new()
+	world.add_child(life_view)
+	life_view.setup(sim, world, entities)
+	life_view.set_enabled(not title_mode and not ("--calm" in OS.get_cmdline_user_args()))
 	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
 	build_view = BuildNode.new()
 	build_view.name = "Buildings"
@@ -463,6 +482,7 @@ func _ready() -> void:
 	glow = GlowNode.new()
 	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	glow.setup(data, fx, lighting, radial)
+	glow.extras.append(life_view.glow_paint)    # (the radio mast's red lamp at night)
 	glow_layer.add_child(glow)
 	# the flakes of a snow day: on the screen, over the world and the glow and under the HUD
 	var snow_layer := CanvasLayer.new()
@@ -508,6 +528,8 @@ func _ready() -> void:
 	hud.tutorial_ui = tutorial
 	hud.set_avatar(avatar_mode)
 	hud.radio_verbs.requested.connect(_on_order_answered)    # (a click order that was agreed to puts a flag on the spot)
+	wheel_ctl = WheelCtl.new(self)    # (round 24: the command wheel, 1 to 5 and Z; it listens to every order of the dock's verbs)
+	wheel_ctl.attach(hud.radio_verbs)
 	story_ui = StoryUi.new()
 	add_child(story_ui)
 	story_ui.blocked = func(): return menu_open
@@ -1374,6 +1396,16 @@ func _track_pointer(ev: InputEvent, early: bool) -> void:
 ## HUD control goes to the control and never reaches `_unhandled_input`).
 func _input(ev: InputEvent) -> void:
 	_track_pointer(ev, true)
+	if wheel_ctl != null and avatar_mode:
+		# (round 24: the command wheel has the pointer while it is up, and the key or the button that opened it is let go wherever it was)
+		if ev is InputEventMouseMotion:
+			wheel_ctl.motion(ev.position)
+		elif ev is InputEventMouseButton:
+			if wheel_ctl.mouse(ev):
+				get_viewport().set_input_as_handled()
+				return
+		elif ev is InputEventKey and not ev.pressed and not ev.echo:
+			wheel_ctl.key_up(ev.keycode)
 	if ev is InputEventMouseButton and not ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_LEFT:
 			firing = false
@@ -1392,6 +1424,8 @@ func _notification(what: int) -> void:
 		aim_held = false
 		_rtap = {}
 		_shift_lock = true
+		if wheel_ctl != null:
+			wheel_ctl.cancel()    # (round 24: the key that held the wheel up is let go where we cannot see it)
 	elif what == NOTIFICATION_WM_MOUSE_EXIT:
 		# the pointer has left the window: nowhere (no crosshair, no lean; the aim stays where it was), as the place does
 		mouse_screen = Vector2(-1.0, -1.0)
@@ -1494,6 +1528,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 	elif ev is InputEventPanGesture:
 		_zoom_at(exp(-ev.delta.y * 0.06), _vp() / 2.0 if avatar else ev.position)
 	elif ev is InputEventKey and ev.pressed and not ev.echo:
+		# round 24: C is the command wheel, 1 to 5 pick the crew (Shift and 1 2 3 are the speeds in an avatar game), Z the last order again, Esc shuts the wheel
+		if avatar and wheel_ctl != null and wheel_ctl.key_down(ev.keycode, ev.shift_pressed, ev.ctrl_pressed or ev.meta_pressed):
+			get_viewport().set_input_as_handled()
+			return
 		match ev.keycode:
 			KEY_SPACE:
 				_set_speed(1 if speed == 0 else 0)
@@ -1669,6 +1707,7 @@ func _process(delta: float) -> void:
 	ground_snow.modulate.a = snow.ground
 	dressing_view.update()
 	parking_view.update(dt * gate_rate(speed))    # (the vehicles, and the gate's demand for gate_node: the gate keeps the cars' time)
+	life_view.update(dt, speed, view_rect().grow(3.0))    # (round 24: flags, bell, dog, birds... at the game's pace)
 	street_air.update(dt)
 	build_view.update(clock)
 	glow.t = clock
@@ -1713,6 +1752,8 @@ func _warm_a_trip_script() -> void:
 func _shot_frame() -> void:
 	if shot_path != "":
 		frame_count += 1
+		if shot_wheel != "" and frame_count == maxi(2, shot_frames - 3) and (wheel_ctl == null or not wheel_ctl.is_open()):
+			_stage_wheel(shot_wheel)    # (a window that was not in front has lost and found its focus since: that shuts the wheel)
 		if shot_swing > 0.0 and avatar_mode:
 			sim.avatar.player().thrust = shot_swing
 		if frame_count == 50:
@@ -1724,6 +1765,7 @@ func _shot_frame() -> void:
 			bench_cpu += RenderingServer.viewport_get_measured_render_time_cpu(vp_rid) + RenderingServer.get_frame_setup_time_cpu()
 			bench_gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
 			bench_proc += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+			bench_calls += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
 		if frame_count == 10 and "--selftest" in OS.get_cmdline_user_args():
 			_selftest()
 		if frame_count == shot_frames:
@@ -1795,10 +1837,19 @@ func _feed_avatar() -> void:
 		return
 	if me.holstered != AimMode.holstered or _holster_pawn != me:
 		_mark_holster()    # (what the pawn's drawing reads: the gun carried low, the hands off it)
+	if wheel_ctl != null and wheel_ctl.is_open() and not wheel_ok():
+		wheel_ctl.cancel()    # (round 24: a menu or a page came up over the wheel)
 	if avatar_hands_off():
 		firing = false
 		aim_held = false    # (under a menu or a page the right button is not the aim's: its release goes to the page)
 		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
+		return
+	if wheel_ctl != null and wheel_ctl.is_open():
+		# (round 24: the command wheel is up: the hands do not aim or fire, the keys still walk)
+		firing = false
+		aim_held = false
+		_was_aiming = false
+		sim.avatar.set_input(_walk_keys(), Vector2.ZERO, false)
 		return
 	if not AimMode.mouse_aims():
 		# "Right button aims" (and a weapon that is put away, whatever the setting): with the right button (or Shift) held the survivor aims
@@ -1817,7 +1868,7 @@ func _feed_avatar() -> void:
 ## Whether the survivor is aiming now (`scripts/aim_mode.gd`): in "Right button aims" the right button or Shift is held with the pointer on the
 ## bare world; with "Always aim at the mouse" whenever the pointer is in the window. Nothing without an avatar.
 func aiming() -> bool:
-	if not avatar_mode:
+	if not avatar_mode or (wheel_ctl != null and wheel_ctl.is_open()):
 		return false
 	return AimMode.aiming(AimMode.current(), aim_held, _shift_down(), _pointer_in_window(), avatar_hands_off(), over_hud)
 
@@ -1825,6 +1876,8 @@ func aiming() -> bool:
 ## Whether the aim marks (the crosshair, the aim line) are to be drawn: with "Always aim at the mouse" as ever (the overlay's own rules
 ## say where), with "Right button aims" only while aiming.
 func aim_shown() -> bool:
+	if wheel_ctl != null and wheel_ctl.is_open():
+		return false    # (round 24: the wheel is up: the pointer is the arrow, and no crosshair)
 	return AimMode.mouse_aims() or aiming()
 
 
@@ -2033,11 +2086,126 @@ func _post_under(at: Vector2) -> Dictionary:
 	return sim.jobs.post(String(hit.id))
 
 
+# ------------------------------------------------------- the command wheel --
+# Round 24 (scripts/ui/wheel_ctl.gd, scripts/ui/command_wheel.gd): hold C, or the middle button, and a ring of the radio's verbs opens at the pointer; the
+# controller asks the yard these things (a place answers the same ones, scripts/raid/raid_scene.gd), and 1 to 5 and Z are its keys.
+
+## The wheel's view, in the HUD.
+func wheel_view():
+	return hud.wheel if hud != null else null
+
+
+## Whether the wheel and its keys may act now: an avatar in the yard, no menu, no page, the run not over.
+func wheel_ok() -> bool:
+	return avatar_mode and not title_mode and not raid_open() and not avatar_hands_off() and hud != null and hud.radio_verbs != null and sim.avatar.player() != null
+
+
+## Orientation Day's soft lock (the wheel is not a lesson: it waits, with the usual gentle word, until the tutorial is over).
+func wheel_allowed() -> bool:
+	return _allows("wheel")
+
+
+## Whether 1 to 5 pick the crew here (they do in the yard; Shift and 1 2 3 are the speeds).
+func wheel_crew_keys() -> bool:
+	return true
+
+
+func wheel_pointer() -> Vector2:
+	return mouse_screen if _pointer_in_window() else _vp() / 2.0
+
+
+func wheel_over_hud() -> bool:
+	return over_hud
+
+
+## The survivor played.
+func wheel_me():
+	return sim.avatar.player()
+
+
+## The people who can be asked, in card order (not you, the lost or those away).
+func wheel_crew() -> Array:
+	return WheelCtl.crew_of(sim.people)
+
+
+## The person picked (their dock is open), or null.
+func wheel_selected():
+	if selection != null and selection.kind == "person" and not selection.ref.player and not selection.ref.dead and selection.ref.away == null:
+		return selection.ref
+	return null
+
+
+## Picks a person (the click on their card: their dock opens with the answer line and Insist; the tutorial's lock may refuse).
+func wheel_pick(p) -> void:
+	_try_select({"kind": "person", "ref": p})
+
+
+## The person whose picture is under a point of the yard (not you), or null.
+func wheel_hovered(tile: Vector2):
+	return _pick_person(tile)
+
+
+func wheel_tile(screen: Vector2) -> Vector2:
+	return _screen_to_tile(screen)
+
+
+## The radio that answers a person (the colony's).
+func wheel_radio(_p):
+	return sim.radio
+
+
+func wheel_place() -> bool:
+	return false
+
+
+func wheel_verbs():
+	return hud.radio_verbs if hud != null else null
+
+
+## What a verb takes from the point of the world the wheel was opened on: Hold here, that tile (your own spot when it is solid ground you cannot stand
+## on); To the walls, the night post there if there is one (it becomes theirs, as a right click on it does); the rest nothing.
+func wheel_extra(verb: String, tile: Vector2) -> Dictionary:
+	if verb == "hold":
+		var spot := Vector2(floorf(tile.x) + 0.5, floorf(tile.y) + 0.5)
+		if world.is_solid(world.solid_p, spot.x, spot.y):
+			var me = sim.avatar.player()
+			spot = Vector2(me.x, me.y)
+		return {"at": spot}
+	if verb == "post":
+		var po := _post_under(tile)
+		return {"post": String(po.id)} if not po.is_empty() else {}
+	return {}
+
+
+## One person asked without the dock (the second ring: one request each, the controller says the answers in one line).
+func wheel_ask(p, verb: String, extra: Dictionary) -> Dictionary:
+	var args := {}
+	if extra.has("at") and (verb == "hold" or verb == "search"):
+		args["at"] = extra.at
+	return sim.radio.request(p, verb, args)
+
+
+## The flag of an order that went to a group: on the spot of a hold.
+func wheel_flag(verb: String, extra: Dictionary) -> void:
+	if verb == "hold" and typeof(extra.get("at")) == TYPE_VECTOR2:
+		order_flag = {"x": extra.at.x, "y": extra.at.y, "t": clock, "kind": "hold"}
+
+
+func wheel_solid(pos: Vector2) -> bool:
+	return world.is_solid(world.solid_p, pos.x, pos.y)
+
+
+func wheel_toast(text: String, level: String = "info") -> void:
+	if hud != null:
+		hud.toast(text, level)
+
+
 ## What the free pointer is over (`pointed`, `hover` and the hand cursor): a person, or a thing the rules can use (in reach or not). Nothing while
 ## aiming, with "Always aim at the mouse", under a menu or a page, over a HUD control or out of the window.
 func _update_pointed() -> void:
 	pointed = {}
-	if avatar_mode and not AimMode.mouse_aims() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
+	var wheel_up: bool = wheel_ctl != null and wheel_ctl.is_open()
+	if avatar_mode and not wheel_up and not AimMode.mouse_aims() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
 		var at := _screen_to_tile(mouse_screen)
 		var person = _pick_person(at)
 		if person != null:
@@ -2066,6 +2234,10 @@ func _update_pointed() -> void:
 		hover = pointed.ref if String(pointed.get("kind", "")) == "person" else null
 	elif avatar_mode and not AimMode.mouse_aims():
 		hover = null
+	if wheel_up:
+		# (round 24: the person the wheel is for wears the hover ring)
+		var wt = wheel_ctl.target()
+		hover = wt if wt != null and (selection == null or selection.ref != wt) else null
 	var shape := Input.CURSOR_POINTING_HAND if not pointed.is_empty() else Input.CURSOR_ARROW
 	if shape != cursor_shape and avatar_mode:
 		cursor_shape = shape
@@ -2438,6 +2610,7 @@ func _handle_events() -> void:
 	for e in sim.events:
 		if coach != null:
 			coach.on_event(e)
+		life_view.on_event(e)    # (the bells swing the school bell, the noises startle the birds)
 		match e.type:
 			"shot":
 				sound.play("shot_%s" % e.weapon, _vol_at(e.x, e.y) * 0.8)
@@ -2763,6 +2936,10 @@ func _parse_args() -> void:
 				# --order=<person id> picks that person (their dock opens); with --aim=x,y (or --order=<id>@x,y) they are also asked to hold that tile,
 				# as a right click on it would: the flag, the answer line and the toast
 				order_spec = v
+			"wheel":
+				# --wheel=<person id>[:verb][+all] opens the command wheel for that person (round 24; a screenshot's staging): at the pointer (`--aim`) or at the
+				# right of the middle, `:hold` lights that slice (the line under the ring says what it would do), `+all` is the second ring (everyone near)
+				shot_wheel = v
 			"beside":
 				# --beside=<person id>, post:<post id> or bench stands the avatar a step from it and no more: the prompt shows (--speed=0 keeps people still)
 				beside_spec = v
@@ -2779,6 +2956,8 @@ func _parse_args() -> void:
 				gate_asked = v
 			"noavatar":
 				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
+			"calm":
+				pass # --calm leaves the base's little life out (round 24: flags, bell, dog, birds...; read in _ready where it is made)
 			"wall":
 				# --wall=N selects wall section N (by its id)
 				for s in sim.segments:
@@ -3030,6 +3209,8 @@ func _parse_args() -> void:
 		stage_gate(gate_asked)
 	if order_spec != "":
 		_stage_order(order_spec)
+	if shot_wheel != "":
+		_stage_wheel(shot_wheel)
 	if advance > 0.0:
 		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
 		if shot_aim_at != "":
@@ -3163,6 +3344,38 @@ func _stage_order(spec: String) -> bool:
 			at = Vector2(float(xy[0]), float(xy[1]))
 	if at != Vector2.INF:
 		order_at(who, at)
+	return true
+
+
+## A screenshot's command wheel (--wheel=<person id>[:verb][+all]): the wheel is opened as the key would open it, for that person (picked first, so that the
+## dock shows their answers too), at the pointer when `--aim` put one there and else a little right of the middle; `:verb` lights that slice and `+all` is the
+## second ring. False when there is no such person or no avatar.
+func _stage_wheel(spec: String) -> bool:
+	var all := spec.ends_with("+all")
+	var word := spec.trim_suffix("+all")
+	var verb := ""
+	if word.contains(":"):
+		verb = word.get_slice(":", 1)
+		word = word.get_slice(":", 0)
+	var who = null
+	for p in sim.people:
+		if String(p.id) == word:
+			who = p
+	if who == null or not avatar_mode or wheel_ctl == null:
+		return false
+	_select({"kind": "person", "ref": who})
+	hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+	var at := _tile_to_screen(shot_aim) if shot_aim != Vector2.INF else _vp() * Vector2(0.66, 0.44)
+	mouse_screen = at
+	if not wheel_ctl.open(at, "key"):
+		return false
+	if all:
+		wheel_ctl.toggle_group()
+	var wheel = wheel_ctl.wheel
+	var i: int = WheelCtl.TIPS.keys().find(verb) if verb != "" else -1
+	if i >= 0:
+		wheel.move_pointer(wheel.centre + CommandWheel.slice_mid(i))
+		wheel.move_pointer(wheel.centre + CommandWheel.slice_mid(i) * 1.02)
 	return true
 
 
@@ -3694,5 +3907,5 @@ func _take_shot() -> void:
 		avg = frames / ((Time.get_ticks_usec() - bench_start) / 1e6)
 	print("shot saved: %s (%dx%d), walkers %d, avg fps after warm-up %.1f" % [shot_path, img.get_width(), img.get_height(), walkers, avg])
 	if frames > 0:
-		print("  per frame: process %.2f ms, render cpu %.2f ms, gpu %.2f ms" % [bench_proc / frames, bench_cpu / frames, bench_gpu / frames])
+		print("  per frame: process %.2f ms, render cpu %.2f ms, gpu %.2f ms, draw calls %.1f" % [bench_proc / frames, bench_cpu / frames, bench_gpu / frames, bench_calls / frames])
 	get_tree().quit()
