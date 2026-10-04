@@ -638,7 +638,7 @@ func test_the_workbench_keeps_its_place_and_the_apron_has_its_own_ground() -> vo
 			"apron":
 				found["apron"] = o
 	eq(found.get("worktable"), [43.9, 25.7], "the worktable has not moved")
-	eq(found.get("tarp"), [45.0, 26.7], "nor the tarp")
+	check(not found.has("tarp"), "and the tarp that used to hide them is gone")
 	eq(found.get("generator"), [46.8, 28.2], "nor the generator")
 	eq(found.get("crate"), [43.0, 27.9], "nor the crate")
 	check(found.has("apron"), "the apron has a ground picture")

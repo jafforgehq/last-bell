@@ -588,7 +588,7 @@ def set_pieces(d, rng, ground):
                 d.add(pick(rng, STAINS), h["x"] + rng.uniform(-0.6, 0.6), h["y"] + rng.uniform(0.2, 1.0), rot=rng.uniform(0, 180), scale=0.8, tries=8, wander=0.8)
     d.group = "tarp"
     for x, y, r in ((10.4, 2.2, -8.0), (82.7, 11.9, 80.0), (20.8, 61.9, 5.0), (62.0, 61.9, -6.0)):
-        t = d.add(TARP, x, y, rot=r, scale=0.42, flat=True, tries=14, wander=1.0)
+        t = None    # (the tarps were taken out on 2026-10-04: they hid what stood under them and read as nothing)
         if t is not None:
             d.add(pick(rng, CRATES), t["x"] + 1.5, t["y"] + 0.2, rot=rng.uniform(-30, 30), tries=10, wander=0.8)
             d.add(pick(rng, DRUMS), t["x"] - 1.4, t["y"] - 0.1, tries=10, wander=0.8)

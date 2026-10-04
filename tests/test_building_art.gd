@@ -9,7 +9,7 @@ const ART_PATH := "res://assets/data/building_art.json"
 const OBJECTS := "res://assets/objects/"
 ## The pictures tools/make_building_art.py writes (143, 144 and 117 are the tents and the tarp it replaced, in place): the file size cap is for these.
 const MADE := ["143_tent", "144_tent", "393_tent", "394_bunkroof", "395_bunkbed", "396_bunkbed", "397_bunkbed", "398_bunkbed",
-		"399_workshop", "400_tunnel", "401_tunnel", "402_floodlight", "403_floodlight", "117_tarp", "404_tarp"]
+		"399_workshop", "400_tunnel", "401_tunnel", "402_floodlight", "403_floodlight"]
 ## The four beds are strips that butt against each other, so their edges are solid (all but the bottom, where the shadow fades).
 const TILES := ["395_bunkbed", "396_bunkbed", "397_bunkbed", "398_bunkbed"]
 const MAX_KB := 64
@@ -198,38 +198,14 @@ func test_the_bunk_house_lies_the_beds_on_floor_and_keeps_its_roof_off_the_hurt(
 		check(a < 0.62, "nothing but the roof's shadow is over the bed at %s (alpha %.2f)" % [str(spot), a])
 
 
-func test_the_shade_shelter_keeps_the_shape_and_the_place_of_the_tarp_it_replaced_and_shows_what_is_under_it() -> void:
+func test_no_tarp_is_placed_in_the_yard_or_the_streets() -> void:
+	# the tarps hid what stood under them (the worktable, the generator, the crate) and read as nothing: they were taken out
 	var map = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/map.json"))
 	var dressing = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/dressing.json"))
-	var seen := 0
-	var pieces: Array = []
 	for o in map.objects:
+		check(String(o.get("kind", "")) != "tarp", "the map has no tarp object (id %s)" % str(o.get("id")))
 		for pc in o.get("pieces", []):
-			if String(pc.file).ends_with("/117_tarp.png"):
-				pieces.append({"f": "117_tarp", "w": float(pc.w), "h": float(pc.h), "where": "the yard"})
+			check(not String(pc.file).contains("_tarp"), "no map piece is a tarp: %s" % String(pc.file))
 	for pc in dressing.pieces:
-		if String(pc.f) == "117_tarp" or String(pc.f) == "404_tarp":
-			pieces.append({"f": String(pc.f), "w": float(pc.w), "h": float(pc.h), "where": "the street"})
-	check(pieces.size() >= 5, "the yard's shelter and the street's are placed: %d" % pieces.size())
-	var files := {}
-	for pc in pieces:
-		files[pc.f] = true
-		var img := _image(String(pc.f))
-		check(img != null and not img.is_empty(), "%s reads" % pc.f)
-		if img == null or img.is_empty():
-			continue
-		# placed at the shape it was drawn in (the same as the blue tarp's: 836 x 717 pixels, 7.46 x 6.40 tiles in the yard)
-		var shape := (float(img.get_width()) / float(img.get_height())) / (float(pc.w) / float(pc.h))
-		check(shape > 0.97 and shape < 1.03, "%s in %s is not stretched (%.3f)" % [pc.f, pc.where, shape])
-		seen += 1
-	check(files.has("117_tarp") and files.has("404_tarp"), "both colours are in use: %s" % str(files.keys()))
-	# it is shade cloth: the middle is see-through (the worktable, the generator and the crate under it show), its hem is not
-	for f in ["117_tarp", "404_tarp"]:
-		var img := _image(f)
-		img.convert(Image.FORMAT_RGBA8)
-		var w := img.get_width()
-		var h := img.get_height()
-		var mid := img.get_pixel(int(float(w) * 0.485), int(float(h) * 0.455)).a
-		check(mid > 0.25 and mid < 0.75, "%s: the middle of the awning is see-through (alpha %.2f)" % [f, mid])
-		var hem := img.get_pixel(int(float(w) * 0.485), int(float(h) * 0.125)).a
-		check(hem > 0.85, "%s: its hem is solid (alpha %.2f)" % [f, hem])
+		check(not String(pc.f).contains("_tarp"), "no dressing piece is a tarp: %s" % String(pc.f))
+

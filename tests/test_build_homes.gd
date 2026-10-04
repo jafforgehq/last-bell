@@ -412,13 +412,13 @@ func test_each_home_is_where_its_building_belongs() -> void:
 		if gh.intersects(t) and t.position.y >= 24.0 and t.position.y < 38.0:
 			touches = true
 	check(touches, "the greenhouse's lot touches the garden")
-	# the workshop is beside the workbench: its lot is within a tile and a half of the tarp the workbench stands under
+	# the workshop is beside the workbench: its lot is within a tile and a half of the worktable (the tarp over it was taken out)
 	var ws := _lot(sim.build.plot("workshop_home"))
-	var tarp := Rect2()
+	var table := Rect2()
 	for o in objs:
-		if String(o.kind) == "tarp":
-			tarp = _picture(o)
-	check(ws.grow(1.5).intersects(tarp), "the workshop is beside the workbench's tarp (%s and %s)" % [str(ws), str(tarp)])
+		if String(o.kind) == "worktable" or String(o.kind) == "generator":
+			table = _picture(o) if table.size == Vector2.ZERO else table.merge(_picture(o))
+	check(ws.grow(1.5).intersects(table), "the workshop is beside the workbench set (%s and %s)" % [str(ws), str(table)])
 	# the salvage bench is by the junk: a crate or the scrap pile within 3 tiles of its lot
 	var sb := _lot(sim.build.plot("salvage_bench_home")).grow(3.0)
 	var junk := false

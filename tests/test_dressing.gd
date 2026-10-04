@@ -81,7 +81,7 @@ func test_the_data_is_there_with_pictures_and_numbers_that_make_sense() -> void:
 			check(p.has("sort") and float(p.sort) > float(p.y) and float(p.sort) <= _box(p).end.y + 0.001, "%s stands on a line of its own inside its picture's lower part" % String(p.f))
 	check(flat >= 30 and standing >= 30, "some lie and some stand: %d and %d" % [flat, standing])
 	check(kinds.size() >= 12, "a good many kinds: %s" % str(kinds.keys()))
-	for must in ["blood", "corpse", "papers", "trashbags", "trashcan", "crate", "tires", "scrap", "hydrant", "sandbags", "tarp"]:
+	for must in ["blood", "corpse", "papers", "trashbags", "trashcan", "crate", "tires", "scrap", "hydrant", "sandbags"]:
 		check(kinds.has(must), "there are %s about" % must)
 
 
