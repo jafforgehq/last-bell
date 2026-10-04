@@ -75,6 +75,8 @@ static func _ids(sim) -> Array:
 ## What an empty seat at this station costs, in words (`staffed`: how many of its seats have someone).
 static func cost_of(sim, id: String, staffed: int) -> String:
 	if id == "radio":
+		if sim.is_one_house():
+			return "nobody listens to the set"    # (One House: no noon call and no callers; the set is how the avatar talks to the crew)
 		var recruits = sim.get("recruits")
 		if recruits != null and recruits.small:
 			return "no news at noon; the next survivor will still call" if recruits.call_guaranteed() else "no news at noon, and no call from a stranger"

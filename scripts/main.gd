@@ -21,6 +21,7 @@ const ParkingNode := preload("res://scripts/render/parking_node.gd")
 const GateNode := preload("res://scripts/render/gate_node.gd")
 const TownBoot := preload("res://scripts/town/town_boot.gd")
 const TownGame := preload("res://scripts/town/town_game.gd")
+const TownLoader := preload("res://scripts/town/town_loader.gd")
 const BaseLife := preload("res://scripts/render/base_life.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
@@ -297,6 +298,9 @@ var bench_cpu := 0.0
 var bench_gpu := 0.0
 var bench_proc := 0.0
 var bench_calls := 0.0
+## How long each part of `_ready` took (milliseconds, by name: a town run records them; `tools/town_bench.gd --what=game` and the ready line print them).
+var load_ms := {}
+var _load_t := 0
 
 
 func _ready() -> void:
@@ -313,8 +317,9 @@ func _ready() -> void:
 	# the world and the rules; the old `--town[=place]` of the school's Town Board is still that with `--crew`)
 	var run_meta: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else Scenario.run_from_args(OS.get_cmdline_user_args())
 	var town_run: bool = TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
-	# the town takes a moment to make (a few tenths of a second on the desktop, a few seconds in a browser): a card says so, drawn for two frames before the work begins
-	# (the game's own `_process` and input are off meanwhile; a headless run, the tests', has no card and no wait)
+	# the town takes a moment to make (a second or so on the desktop, several in a browser): a card says so, drawn for two frames before the work begins, and the work is done a few
+	# milliseconds a frame (`_card_gap`, the loader and the world's stepped build) so that the card's bar moves and a browser does not freeze. The game's own `_process` and input are
+	# off until the end of `_ready`; a headless run, the tests', has no card, no wait and does it all in one go.
 	var town_card = null
 	if town_run and DisplayServer.get_name() != "headless":
 		town_card = TownBoot.loading_card(self)
@@ -323,10 +328,8 @@ func _ready() -> void:
 		set_process_unhandled_input(false)
 		await get_tree().process_frame
 		await get_tree().process_frame
-		set_process(true)
-		set_process_input(true)
-		set_process_unhandled_input(true)
 	var t0 := Time.get_ticks_msec()
+	_load_t = Time.get_ticks_usec()
 	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
 	if prefs_path != "":
@@ -334,7 +337,16 @@ func _ready() -> void:
 		Prefs.forget()
 		if prefs_path == SHOT_PREFS:
 			Prefs.reset()
-	data = TownBoot.data(run_meta) if town_run else GD.load_all()
+	if town_card != null:
+		var loader = TownLoader.new()
+		loader.begin(run_meta)
+		while not loader.step(TownBoot.step_ms()):
+			TownBoot.card_progress(town_card, 0.5 * loader.progress(), loader.words())
+			await get_tree().process_frame
+		data = loader.result()
+	else:
+		data = TownBoot.data(run_meta) if town_run else GD.load_all()
+	_lmark("data")
 	var logical := Vector2i(1280, 800)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--size="):
@@ -345,10 +357,18 @@ func _ready() -> void:
 	get_window().size_changed.connect(_update_scale)
 	_update_scale()
 
+	_lmark("window")
 	world = TownBoot.world() if town_run else World.new()
 	world.name = "World"
 	add_child(world)
-	world.build(data)
+	if town_card != null:
+		world.begin_build(data)
+		while not world.step_build(TownBoot.step_ms()):
+			TownBoot.card_progress(town_card, 0.5 + 0.2 * world.build_progress(), "Laying the ground")
+			await get_tree().process_frame
+	else:
+		world.build(data)
+	_lmark("world")
 
 	var decals := Node2D.new()
 	decals.name = "Decals"
@@ -389,7 +409,10 @@ func _ready() -> void:
 	air.painter = fx.draw_air
 	world.add_child(air)
 
+	_lmark("fx_layers")
+	if town_card != null: await _card_gap(town_card, 0.72, "Waking the town")
 	sim = TownBoot.sim(data, world, fx) if town_run else Sim.new(data, world, fx)
+	_lmark("sim")
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
 	# the walls of the lots (round 9) are made and taken away in play (and by a load): the world draws and forgets them
 	sim.on_segment_added = func(s): world.add_segment_art(s)
@@ -473,6 +496,7 @@ func _ready() -> void:
 				if bool(run.get("car", real)) and not town_run:
 					sim.vehicles.give_starting_car()
 
+	_lmark("run")
 	for tr in data.trees:
 		var s := Sprite2D.new()
 		var tex := GD.tex(tr.file)
@@ -486,6 +510,7 @@ func _ready() -> void:
 		entities.add_child(s)
 	for p in sim.people:
 		_add_person_pawn(p)
+	_lmark("trees")
 
 	for l in data.lights:
 		if l.get("fire", false):
@@ -533,6 +558,7 @@ func _ready() -> void:
 	world.add_child(build_view)
 	build_view.setup(self, sim, entities, lighting)
 
+	_lmark("lights")
 	camera = Camera2D.new()
 	add_child(camera)
 	camera.make_current()
@@ -563,6 +589,8 @@ func _ready() -> void:
 	var hud_layer := CanvasLayer.new()
 	hud_layer.layer = 3
 	add_child(hud_layer)
+	_lmark("glow_overlay")
+	if town_card != null: await _card_gap(town_card, 0.86, "Lighting the lamps")
 	hud = Hud.new()
 	hud.on_select = func(sel): _try_select(sel)
 	hud.on_focus = func(p): _focus(Vector2(p.x, p.y))
@@ -599,12 +627,18 @@ func _ready() -> void:
 	story_ui.speed_of = func(): return speed
 	story_ui.ui_sound = func(sound_name, level): if sound != null: sound.ui(sound_name, level)
 	story_ui.setup(hud, sim)
+	if town_card != null:
+		story_ui.set_process(false)    # (until the card is gone: the loading frames are not game frames)
 	hud.briefing_gate = func(): return story_ui != null and (story_ui.dawn != null or story_ui.radio != null or story_ui._dawn_wanted)    # (round 25: the briefing card waits for the dawn card, up or about to be, and for the storyteller's)
 
+	_lmark("hud")
+	if town_card != null: await _card_gap(town_card, 0.9, "Tuning the radio")
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
 	sound.attach(self)    # (the soundscape: the bells, the dead's groans, the steps, the gate... scripts/audio/soundscape.gd)
+	if town_card != null:
+		sound.set_process(false)
 	if parking_view != null:
 		parking_view.wire(fx, sound, _vol_at)    # the cars' dust and sounds (doors, engine, the gate's motor), by distance to the camera
 	# the real game keeps one music across the scene reloads of a new run, a load and the title; a test's or a
@@ -616,6 +650,7 @@ func _ready() -> void:
 		music.name = "Music"
 		add_child(music)
 		music.setup()
+	_lmark("sound_music")
 	street_air = StreetAir.new()
 	street_air.name = "StreetAir"
 	world.add_child(street_air)
@@ -628,11 +663,16 @@ func _ready() -> void:
 	shell = Shell.new()
 	shell_layer.add_child(shell)
 	shell.setup(self, hud)
+	if town_card != null:
+		shell.set_process_input(false)
+	_lmark("shell")
 	apply_settings()
 	# the town's facade (scripts/town/town_game.gd): the view parts of a town run (roofs, the card of a survivor...), asked at the nine hooks below; null in every other game
 	if town_run:
 		town = TownGame.make(self)
+		if town_card != null: await _card_gap(town_card, 0.97, "Putting on the roofs")
 		town.on_ready(self)
+	_lmark("town_parts")
 	# the coach of Orientation Day, over the HUD and under the menus (none once the lesson is over)
 	if tutorial and not bool(sim.scenario.get("finished")):
 		_build_coach()
@@ -654,9 +694,39 @@ func _ready() -> void:
 		hud.show_banner("Could not load that save", "A new game was started instead")
 	if old_save_note != "":
 		hud.toast(old_save_note, "warn")
+	_lmark("args_shell")
 	if town_card != null:
+		# (the game's own loop runs a few frames under the card with the clock stopped: what the renderer makes the first time it draws something (the lighting, the glow, the HUD,
+		# the pictures of the street) is made now and not in the first frames of play, which were 100 ms and more)
+		await _card_gap(town_card, 1.0, "Ready")
+		var speed_was := speed
+		speed = 0
+		set_process(true)
+		set_process_input(true)
+		set_process_unhandled_input(true)
+		story_ui.set_process(true)
+		sound.set_process(true)
+		shell.set_process_input(true)
+		for i in TownBoot.WARM_FRAMES:
+			await get_tree().process_frame
+		speed = speed_was
 		town_card.queue_free()
-	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0))
+	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0), "  " + JSON.stringify(load_ms) if town_run else "")
+
+
+## A frame for the loading card (a windowed town run): the bar goes to `share`, the card is drawn, and the next piece of the work comes after it. No card (a headless run, a test): nothing.
+func _card_gap(card, share: float, text: String = "") -> void:
+	if card == null:
+		return
+	TownBoot.card_progress(card, share, text)
+	await get_tree().process_frame
+
+
+## Records the time since the last mark under `name` (a part of `_ready`).
+func _lmark(name: String) -> void:
+	var now := Time.get_ticks_usec()
+	load_ms[name] = snappedf(float(now - _load_t) / 1000.0, 0.1)
+	_load_t = now
 
 
 func _add_pawn(e, is_zombie: bool, key: String) -> void:
@@ -2666,6 +2736,7 @@ func _sync_views() -> void:
 	walkers = 0
 	var alive := {}
 	var i := 0
+	var made := 0
 	for z in sim.zombies:
 		i += 1
 		alive[z] = true
@@ -2673,7 +2744,11 @@ func _sync_views() -> void:
 		if not dead:
 			walkers += 1
 		if not pawn_nodes.has(z):
+			# (a town run, WP9: a dead one that nobody can see has no node yet, and a street woken all at once is given its nodes a few a frame, not in one hitch)
+			if town != null and (made >= TownGame.NODES_PER_FRAME or not view.has_point(Vector2(z.x, z.y))):
+				continue
 			_add_pawn(z, true, "z%d" % z.look_index)
+			made += 1
 		var n = pawn_nodes[z]
 		if dead and n.get_parent() == entities:
 			n.reparent(corpses)
@@ -3388,6 +3463,10 @@ func _parse_args() -> void:
 				# --stage=cleared|claimed|rescued2|fourth|night puts a town run in that stage at once (scripts/town/one_house.gd, for a screenshot)
 				if not OneHouse.stage_to(sim, v):
 					print("--stage=%s: not a town run (give --town), or no such stage" % v)
+			"rescue":
+				# --rescue=r0[:clear][:come|:stay|:gift] (a town run, after --stage=claimed): the avatar beside that survivor in their room, the card up (scripts/town/rescue.gd `stage`)
+				if sim.get("rescue") == null or not sim.rescue.stage(v):
+					print("--rescue=%s: not a town run (give --town), or no such survivor" % v)
 			"endcard":
 				# --demo --endcard plays the demo's three days quickly (the colony alone) to the run's end: the end card is up for the shot
 				endcard_asked = true
