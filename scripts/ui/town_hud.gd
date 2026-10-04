@@ -1,0 +1,525 @@
+## The town's part of the HUD (One House, WP7): what the player reads in the town that is not the stores, the clock or the crew bar.
+##
+##   - the OBJECTIVE card (top left, under the stores): the text of `sim.scenario.objective()` with what is under it, "2 of 3", and a bearing arrow
+##     to where it is ("at") with the distance in tiles; the same arrow is drawn round the avatar's feet while the place is far
+##   - the banner "The house is clear" the first time each house is cleared, and a toast for each room that is cleared, each container searched,
+##     each fence section built or lost
+##   - the RING of the session in hand (a search, the claim, a mend: `sim.uses.progress()` = {"label", "t", "of"}), round the avatar's body
+##   - the guide's LESSON card (bottom left, small, skippable): `sim.scenario.guide()` = {"id", "text", "goal", "done"}
+##   - the line "Nobody is on the radio yet" while the avatar is alone
+##   - the keys the town adds: M opens the Map page; Shift+N and Shift+G open the panel's pages (the modal school pages are not the town's)
+##
+## It is a VIEW PART of the town's facade (scripts/town/town_game.gd calls `on_ready(main)`, `on_frame(dt)`, `on_event(e)`, `modal()`, `on_key(ev)`).
+## It reads the rules through `sim.get(...)` and `has_method`, so a game without a module just has less on the screen, and it never writes the rules.
+## It also puts the HUD in the town's calm profile (`hud.set_profile("one_house")`: no Town Board, Scavenge or car).
+extends RefCounted
+
+const Fonts := preload("res://scripts/ui/fonts.gd")
+const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+
+const CARD_W := 292.0
+const CARD_W_COMPACT := 236.0
+## How often (seconds) the cards are read again; the ring and the arrow are redrawn every frame while they are up.
+const REFRESH_S := 0.1
+## The arrow round the avatar shows from this many tiles away; and how far from the avatar it sits (pixels, at least).
+const ARROW_FAR := 7.0
+const ARROW_RING_MIN := 58.0
+const RING_MIN_R := 18.0
+const TILE_WORD := "m"
+
+var main
+var hud
+var layer: Control
+var obj_card: PanelContainer
+var obj_caps: Label
+var obj_step: Label
+var obj_text: Label
+var obj_sub: Label
+var obj_arrow: Control
+var obj_dist: Label
+var lesson_card: PanelContainer
+var lesson_text: Label
+var lesson_goal: Label
+var lesson_done: Label
+var lesson_skip: Button
+var radio_card: PanelContainer
+
+## What the cards say now (the tests read them).
+var objective := {}
+var lesson := {}
+## The banners shown (house ids) and how many: "The house is clear" is said once for each house.
+var banners_shown: Array = []
+var banner_count := 0
+## The ring of the session in hand: its fraction (0 to 1) and words, "" while there is none.
+var ring_t := 0.0
+var ring_label := ""
+## The bearing of the objective from the avatar, radians on the screen (0 is east), and the distance in tiles; -1 when there is none.
+var bearing := 0.0
+var distance := -1.0
+## Lesson ids that were skipped.
+var skipped := {}
+
+var _t := 0.0
+var _dirty := true
+var _arrow_on := false
+var _last_obj_sig := ""
+var _last_lesson_sig := ""
+
+
+func on_ready(main_node) -> void:
+	main = main_node
+	hud = main.get("hud")
+	if hud == null:
+		return
+	if hud.has_method("set_profile"):
+		hud.set_profile("one_house")
+	_build()
+
+
+# ------------------------------------------------------------------------ the sim --
+
+func _sim():
+	return main.get("sim") if main != null else null
+
+
+func _module(name: String):
+	var s = _sim()
+	return s.get(name) if s != null else null
+
+
+func _scenario():
+	return _module("scenario")
+
+
+# --------------------------------------------------------------------------- build --
+
+func _build() -> void:
+	layer = Control.new()
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.draw.connect(_draw_layer)
+	hud.add_child(layer)
+	# (under the HUD's own boards: a ring and an arrow in the world are never over a panel)
+	hud.move_child(layer, 0)
+	_build_objective()
+	_build_lesson()
+	_build_radio_line()
+
+
+func _style(slim: bool = true) -> StyleBox:
+	var st: StyleBox = hud._style(hud.PANEL, 6, hud.LINE2, true, "panel_slim" if slim else "panel")
+	if st is StyleBoxFlat:
+		st.content_margin_left = 12
+		st.content_margin_right = 12
+		st.content_margin_top = 8
+		st.content_margin_bottom = 9
+	return st
+
+
+func _label(text: String, font: Font, size: int, color: Color) -> Label:
+	var l: Label = hud._label(text, font, maxi(size, 14), color)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size.x = 40
+	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return l
+
+
+func _build_objective() -> void:
+	obj_card = hud._panel(_style())
+	obj_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	obj_card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	obj_card.custom_minimum_size.x = CARD_W
+	obj_card.visible = false
+	var col: VBoxContainer = hud._vbox(3)
+	obj_card.add_child(col)
+	var head: HBoxContainer = hud._hbox(8)
+	obj_caps = hud._label("OBJECTIVE", Fonts.cond(700, 1), 14, hud.ACCENT)
+	head.add_child(obj_caps)
+	head.add_child(hud._spacer())
+	obj_dist = hud._label("", Fonts.cond(700), 14, hud.ACCENT)
+	head.add_child(obj_dist)
+	obj_step = hud._label("", Fonts.cond(700), 14, hud.INK2)
+	head.add_child(obj_step)
+	col.add_child(head)
+	var body: HBoxContainer = hud._hbox(8)
+	obj_arrow = Control.new()
+	obj_arrow.custom_minimum_size = Vector2(26, 26)
+	obj_arrow.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	obj_arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	obj_arrow.draw.connect(_draw_pill_arrow)
+	obj_arrow.visible = false
+	body.add_child(obj_arrow)
+	obj_text = _label("", Fonts.sans(600), 15, hud.INK)
+	body.add_child(obj_text)
+	col.add_child(body)
+	obj_sub = _label("", Fonts.sans(400), 14, hud.INK2)
+	col.add_child(obj_sub)
+	# under the stores, in the left column (the HUD lays it out and keeps the dock clear of it)
+	hud.left_col.add_child(obj_card)
+	hud.left_col.move_child(obj_card, mini(1, hud.left_col.get_child_count() - 1))
+
+
+func _build_lesson() -> void:
+	lesson_card = hud._panel(_style())
+	lesson_card.visible = false
+	lesson_card.custom_minimum_size.x = CARD_W
+	var col: VBoxContainer = hud._vbox(4)
+	lesson_card.add_child(col)
+	var head: HBoxContainer = hud._hbox(8)
+	head.add_child(hud._label("HOW TO", Fonts.cond(700, 1), 14, hud.INFO))
+	lesson_done = hud._label("Done", Fonts.cond(700), 14, hud.OK)
+	lesson_done.visible = false
+	head.add_child(lesson_done)
+	head.add_child(hud._spacer())
+	lesson_skip = RadioKit.small_button(hud, "Skip", 24.0, 14)
+	lesson_skip.tooltip_text = "Put this lesson away. The next one comes when you have done more"
+	lesson_skip.pressed.connect(skip_lesson)
+	head.add_child(lesson_skip)
+	col.add_child(head)
+	lesson_text = _label("", Fonts.sans(400), 14, hud.INK)
+	col.add_child(lesson_text)
+	lesson_goal = _label("", Fonts.sans(600), 14, hud.ACCENT)
+	col.add_child(lesson_goal)
+	layer.add_child(lesson_card)
+
+
+func _build_radio_line() -> void:
+	radio_card = hud._panel(_style())
+	radio_card.mouse_filter = Control.MOUSE_FILTER_PASS
+	radio_card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	radio_card.tooltip_text = "The radio is how you will hear from the people you find, and how you ask things of them. Open it with T"
+	radio_card.visible = false
+	var row: HBoxContainer = hud._hbox(8)
+	row.add_child(hud._icon("radio", 16, hud.INK3))
+	var l: Label = hud._label("Nobody is on the radio yet", Fonts.sans(400), 14, hud.INK2)
+	row.add_child(l)
+	radio_card.add_child(row)
+	hud.left_col.add_child(radio_card)
+	hud.left_col.move_child(radio_card, mini(2, hud.left_col.get_child_count() - 1))
+
+
+# -------------------------------------------------------------------------- frames --
+
+func on_frame(dt: float) -> void:
+	if hud == null or main == null:
+		return
+	_t += dt
+	if _t >= REFRESH_S or _dirty:
+		_t = 0.0
+		_dirty = false
+		refresh()
+	# the ring and the arrow follow the avatar: redrawn each frame while either is up
+	if ring_label != "" or _arrow_on:
+		layer.queue_redraw()
+		if _arrow_on:
+			obj_arrow.queue_redraw()
+	_place_lesson()
+
+
+## Reads the rules and brings the cards up to date (every REFRESH_S, and at once after an event).
+func refresh() -> void:
+	if hud == null:
+		return
+	_refresh_objective()
+	_refresh_lesson()
+	_refresh_radio()
+	_refresh_ring()
+
+
+func _player():
+	var sim = _sim()
+	if sim == null or sim.get("avatar") == null:
+		return null
+	return sim.avatar.player()
+
+
+func _refresh_objective() -> void:
+	var sc = _scenario()
+	var o := {}
+	if sc != null and sc.has_method("objective"):
+		var got = sc.objective()
+		if got is Dictionary:
+			o = got
+	objective = o
+	var text := String(o.get("text", ""))
+	var at = o.get("at")
+	var me = _player()
+	distance = -1.0
+	_arrow_on = false
+	if at is Vector2 and me != null:
+		var d: Vector2 = (at as Vector2) - Vector2(me.x, me.y)
+		distance = d.length()
+		bearing = d.angle()
+		_arrow_on = distance > ARROW_FAR and not _sleeping()
+	var of := int(o.get("of", 0))
+	var step := int(o.get("step", 0))
+	var dist_text := ""
+	if distance >= 0.0 and distance > ARROW_FAR:
+		dist_text = "%d %s" % [roundi(distance), TILE_WORD]
+	var sig := "%s|%s|%d|%d|%s" % [text, String(o.get("sub", "")), step, of, dist_text]
+	obj_arrow.visible = _arrow_on
+	if sig == _last_obj_sig:
+		return
+	_last_obj_sig = sig
+	obj_card.visible = text != ""
+	obj_text.text = text
+	obj_sub.text = String(o.get("sub", ""))
+	obj_sub.visible = obj_sub.text != ""
+	obj_step.text = ("%d of %d" % [step, of]) if of > 1 else ""
+	obj_dist.text = dist_text
+	obj_dist.visible = dist_text != ""
+	obj_card.tooltip_text = ""
+
+
+func _refresh_lesson() -> void:
+	var sc = _scenario()
+	var g := {}
+	if sc != null and sc.has_method("guide"):
+		var got = sc.guide()
+		if got is Dictionary:
+			g = got
+	lesson = g
+	var id := String(g.get("id", ""))
+	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id)
+	var sig := "%s|%s|%s|%s" % [id, String(g.get("text", "")), String(g.get("goal", "")), str(bool(g.get("done", false)))]
+	lesson_card.visible = shown
+	if sig == _last_lesson_sig:
+		return
+	_last_lesson_sig = sig
+	lesson_text.text = String(g.get("text", ""))
+	lesson_goal.text = String(g.get("goal", ""))
+	lesson_goal.visible = lesson_goal.text != ""
+	lesson_done.visible = bool(g.get("done", false))
+
+
+func _refresh_radio() -> void:
+	radio_card.visible = nobody_on_radio()
+
+
+## True while the avatar is the only person alive: the radio has nobody on it.
+func nobody_on_radio() -> bool:
+	var sim = _sim()
+	if sim == null or sim.get("people") == null:
+		return false
+	var pid := String(sim.get("player_id")) if sim.get("player_id") != null else ""
+	if pid == "":
+		return false
+	for p in sim.people:
+		if String(p.id) != pid and not p.dead and not p.turned:
+			return false
+	return true
+
+
+## Whether the avatar is asleep (the screen is black: no ring or arrow over it).
+func _sleeping() -> bool:
+	var sl = _module("sleep")
+	return sl != null and sl.has_method("active") and bool(sl.active())
+
+
+func _refresh_ring() -> void:
+	ring_t = 0.0
+	ring_label = ""
+	if _sleeping():
+		return
+	var uses = _module("uses")
+	if uses == null or not uses.has_method("progress"):
+		return
+	var pr = uses.progress()
+	if not (pr is Dictionary) or String(pr.get("label", "")) == "":
+		return
+	var total := float(pr.get("of", 0.0))
+	var t := float(pr.get("t", 0.0))
+	ring_t = clampf(t / total if total > 0.0 else t, 0.0, 1.0)
+	var left := ceili(maxf(total - t, 0.0)) if total > 1.0 else 0
+	ring_label = String(pr.label) if left <= 0 else "%s %ds" % [String(pr.label), left]
+
+
+## Puts the current lesson away (the next one is shown when it comes).
+func skip_lesson() -> void:
+	var id := String(lesson.get("id", ""))
+	if id != "":
+		skipped[id] = true
+	lesson_card.visible = false
+
+
+## The cards' widths (their words wrap at them, so that the cards are as tall as the words need) and the lesson card's place: the bottom left, clear of the
+## selection panel and the verbs of the dock.
+func _place_lesson() -> void:
+	var w := CARD_W_COMPACT if bool(hud.get("compact")) else CARD_W
+	obj_card.custom_minimum_size.x = w
+	RadioKit.wrap_at(obj_text, w - 24.0 - (34.0 if _arrow_on else 0.0))
+	RadioKit.wrap_at(obj_sub, w - 24.0)
+	lesson_card.custom_minimum_size.x = w
+	RadioKit.wrap_at(lesson_text, w - 24.0)
+	RadioKit.wrap_at(lesson_goal, w - 24.0)
+	if not lesson_card.visible:
+		return
+	var lift := 12.0
+	var dock = hud.get("dock")
+	if dock != null and dock is Control and ((hud.inspect != null and hud.inspect.visible) or (hud.radio_box != null and hud.radio_box.visible)):
+		lift = hud.size.y - dock.position.y + 8.0
+	lesson_card.size = lesson_card.get_combined_minimum_size()
+	lesson_card.position = Vector2(12.0, hud.size.y - lift - lesson_card.size.y)
+
+
+# -------------------------------------------------------------------------- events --
+
+func on_event(e: Dictionary) -> void:
+	if hud == null:
+		return
+	match String(e.get("type", "")):
+		"house_clear":
+			_dirty = true
+			_house_clear(int(e.get("house", -1)))
+		"room_clear":
+			_dirty = true
+			var name := String(e.get("name", "")).strip_edges()
+			hud.toast(("The %s is clear" % name) if name != "" else "This room is clear", "info")
+		"searched":
+			_dirty = true
+			var loot := loot_text(e.get("loot", {}))
+			hud.toast(("Found: %s" % loot) if loot != "" else "Nothing here", "info")
+		"claimed", "fourth", "attacks_on", "held", "rescue_joined", "rescue_talk", "entered", "left", "sleep":
+			_dirty = true
+		"slot_built":
+			_dirty = true
+			hud.toast("%s is up" % _slot_name(String(e.get("slot", ""))), "info")
+		"slot_lost":
+			_dirty = true
+			hud.toast("%s has fallen" % _slot_name(String(e.get("slot", ""))), "danger")
+
+
+func _house_clear(h: int) -> void:
+	if banners_shown.has(h):
+		return
+	banners_shown.append(h)
+	banner_count += 1
+	var sub := ""
+	var sc = _scenario()
+	if sc != null and sc.has_method("objective"):
+		var o = sc.objective()
+		if o is Dictionary:
+			sub = String(o.get("text", ""))
+	hud.show_banner("The house is clear", sub if sub != "" else "Claim it from the front door")
+
+
+## "3 scrap, 2 food" from a loot dictionary ({"scrap": 3, "food": 2}).
+static func loot_text(loot) -> String:
+	if not (loot is Dictionary):
+		return ""
+	var parts: Array = []
+	for k in ["ammo", "scrap", "food", "water", "meds"]:
+		var n := roundi(float(loot.get(k, 0.0)))
+		if n > 0:
+			parts.append("%d %s" % [n, "medicine" if k == "meds" else k])
+	return ", ".join(parts)
+
+
+func _slot_name(id: String) -> String:
+	var per = _module("perimeter")
+	if per != null and per.has_method("slots"):
+		for s in per.slots():
+			if String(s.get("id", "")) == id:
+				return String(s.get("name", "The fence"))
+	return "The fence"
+
+
+# ----------------------------------------------------------------------------- keys --
+
+## The keys the town adds (the facade asks first): M the Map page; Shift+N and Shift+G the panel's pages, not the school's modal ones.
+func on_key(ev: InputEvent) -> bool:
+	if main == null or hud == null or not (ev is InputEventKey):
+		return false
+	var k := ev as InputEventKey
+	if not k.pressed or k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed:
+		return false
+	var code: Key = k.keycode if k.keycode != KEY_NONE else k.physical_keycode
+	var page := ""
+	if code == KEY_M and not k.shift_pressed:
+		page = "map"
+	elif code == KEY_N and k.shift_pressed:
+		page = "build"
+	elif code == KEY_G and k.shift_pressed:
+		page = "map"
+	if page == "" or not main.has_method("page_key"):
+		return false
+	var sim = _sim()
+	if sim == null or not sim.has_method("is_one_house") or not sim.is_one_house():
+		return false
+	main.page_key(page, false)
+	return true
+
+
+func modal() -> bool:
+	return false
+
+
+# ---------------------------------------------------------------------------- drawing --
+
+## World tile -> HUD pixel (the camera is main's: centre tile and pixels per tile).
+func screen_of(tile: Vector2) -> Vector2:
+	var vp := layer.size if layer != null else Vector2(1280, 800)
+	var cam: Vector2 = main.get("cam_center") if main.get("cam_center") is Vector2 else Vector2.ZERO
+	var z: float = float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
+	return (tile - cam) * z + vp * 0.5
+
+
+func _avatar_body() -> Vector2:
+	var me = _player()
+	if me == null:
+		return Vector2(-100, -100)
+	var at := Vector2(me.x, me.y)
+	if main.has_method("view_pos"):
+		at = main.view_pos(me)
+	var z: float = float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
+	return screen_of(at) + Vector2(0, -0.45 * z)
+
+
+func _draw_layer() -> void:
+	if hud == null or main == null:
+		return
+	var z: float = float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
+	var body := _avatar_body()
+	if ring_label != "":
+		var r := maxf(RING_MIN_R, 0.55 * z)
+		layer.draw_arc(body, r, 0.0, TAU, 48, Color(0.04, 0.08, 0.07, 0.8), 6.0, true)
+		layer.draw_arc(body, r, -PI / 2.0, -PI / 2.0 + ring_t * TAU, 48, hud.ACCENT, 4.0, true)
+		var font := Fonts.cond(700)
+		var w := font.get_string_size(ring_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var rect := Rect2(body + Vector2(-w * 0.5 - 8.0, r + 8.0), Vector2(w + 16.0, 22.0))
+		layer.draw_rect(rect, Color(0.04, 0.08, 0.07, 0.82))
+		layer.draw_rect(rect, Color(hud.ACCENT, 0.7), false, 1.5)
+		layer.draw_string(font, rect.position + Vector2(8.0, 16.0), ring_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hud.INK)
+	if _arrow_on:
+		var dir := Vector2.from_angle(bearing)
+		var ring_r := maxf(ARROW_RING_MIN, 1.7 * z)
+		var tip := body + dir * ring_r
+		_draw_chevron(layer, tip, bearing, 11.0, hud.ACCENT, Color(0.04, 0.08, 0.07, 0.85))
+		var font2 := Fonts.cond(700)
+		var label := "%d %s" % [roundi(distance), TILE_WORD]
+		var w2 := font2.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var at := tip + dir * 20.0 - Vector2(w2 * 0.5, -5.0)
+		layer.draw_string_outline(font2, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
+		layer.draw_string(font2, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hud.ACCENT)
+
+
+func _draw_pill_arrow() -> void:
+	if not _arrow_on:
+		return
+	_draw_chevron(obj_arrow, obj_arrow.size * 0.5, bearing, 9.0, hud.ACCENT, Color(0.04, 0.08, 0.07, 0.6))
+
+
+## A pointing triangle at `at`, turned to `angle` (0 is east): the tip leads, a notch at the back, with a dark rim so it reads on any ground.
+static func _draw_chevron(ci: CanvasItem, at: Vector2, angle: float, size_px: float, color: Color, rim: Color) -> void:
+	var f := Vector2.from_angle(angle)
+	var s := Vector2(-f.y, f.x)
+	var pts := PackedVector2Array([
+		at + f * size_px,
+		at - f * size_px * 0.7 + s * size_px * 0.78,
+		at - f * size_px * 0.3,
+		at - f * size_px * 0.7 - s * size_px * 0.78,
+	])
+	var rim_pts := PackedVector2Array(pts)
+	rim_pts.append(pts[0])
+	ci.draw_colored_polygon(pts, color)
+	ci.draw_polyline(rim_pts, rim, 2.0, true)

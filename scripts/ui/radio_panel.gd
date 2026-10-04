@@ -51,6 +51,15 @@ const PAGE_PATHS := {
 	"build": "res://scripts/ui/build_page.gd",
 	"map": "res://scripts/ui/map_page.gd",
 }
+## One House (WP7): in the town the Build page is the perimeter's slots and the Map page is the district's map (built when `sim.is_one_house()`).
+const TOWN_PAGE_PATHS := {
+	"build": "res://scripts/ui/slot_page.gd",
+	"map": "res://scripts/ui/district_map.gd",
+}
+const TOWN_PAGE_TIPS := {
+	"build": "Build: the places round the house where a fence, a gate, a tower or a floodlight can go. Pick one, pick what to build, and the Builders raise it\nKey: N",
+	"map": "Map: the town, the houses you have been in, the base and the people you know of\nKey: M",
+}
 ## How wide a tab is at least in the whole form (five tabs, the close button and the gaps are under 340 px: a window that leaves the panel less is narrow).
 const TAB_W := {"base": 48.0, "jobs": 48.0, "build": 50.0, "map": 46.0, "news": 60.0}
 const WIDTH := 440.0
@@ -193,6 +202,8 @@ func _tab_width(page: String) -> float:
 
 ## The tooltip of a tab: what the page is, its key and, for the pages that have one, the key of its full (modal) page.
 func _tab_tip(page: String, call_waits: bool) -> String:
+	if TOWN_PAGE_TIPS.has(page) and _is_town():
+		return String(TOWN_PAGE_TIPS[page])
 	var key := String(PAGE_KEYS[page])
 	var text := "%s\nKey: %s" % [PAGE_TIPS[page], key]
 	if page != "news" and page != "base":
@@ -325,6 +336,12 @@ func _sync_tabs() -> void:
 	var news_tip := _tab_tip("news", bang)
 	if tabs["news"].tooltip_text != news_tip:
 		tabs["news"].tooltip_text = news_tip
+	# (One House: the Build and Map tabs say what the town's pages are; the tabs are made before the sim is known)
+	for town_page in TOWN_PAGE_TIPS:
+		if tabs.has(town_page):
+			var town_tip := _tab_tip(String(town_page), false)
+			if tabs[town_page].tooltip_text != town_tip:
+				tabs[town_page].tooltip_text = town_tip
 
 
 func _radio():
@@ -374,6 +391,12 @@ func note_briefing_seen() -> void:
 
 # ------------------------------------------------------------------------ the pages --
 
+## Whether this is a One House run (the town's pages and words), false in the school and when the sim has no such hook.
+func _is_town() -> bool:
+	var s = _sim()
+	return s != null and s.has_method("is_one_house") and s.is_one_house()
+
+
 ## The node of a page, made the first time it is asked for ("" for no such page, or one that does not load).
 func page_node(page: String) -> Control:
 	if pages.has(page):
@@ -388,7 +411,8 @@ func page_node(page: String) -> Control:
 		opts["embedded"] = true
 		node.setup(host, _sim_getter, opts)
 	else:
-		var script = load(String(PAGE_PATHS[page]))
+		var path := String(TOWN_PAGE_PATHS[page]) if TOWN_PAGE_PATHS.has(page) and _is_town() else String(PAGE_PATHS[page])
+		var script = load(path)
 		if script == null or not script.can_instantiate():
 			return null
 		node = script.new()
