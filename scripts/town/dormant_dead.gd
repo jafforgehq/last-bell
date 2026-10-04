@@ -36,6 +36,10 @@ var active_cap := 100
 var wake_r := WAKE_R
 var sleep_r := SLEEP_R
 var noise_r := NOISE_R
+## True while the night belongs to the wave (the base is under attack): no dormant one wakes, whatever wakes them (OneHouse sets it).
+var pause_wake := false
+## The wake radius is multiplied by this (1.0 by day; the dark carries sound and the streets are not safe: 1.4 at night, set by whoever knows the hour).
+var night_mult := 1.0
 ## The records (index = id).
 var n := 0
 var xs := PackedFloat32Array()
@@ -182,7 +186,7 @@ func update(dt: float, anchors: Array) -> void:
 	_sleep_far(anchors)
 	sleep_usec += Time.get_ticks_usec() - t_in
 	t_in = Time.get_ticks_usec()
-	_wake_near(Vector2(anchors[0]), wake_r, "", null, true)
+	_wake_near(Vector2(anchors[0]), wake_r * night_mult, "", null, true)
 	wake_usec += Time.get_ticks_usec() - t_in
 
 
@@ -199,6 +203,10 @@ func _collect_killed() -> void:
 
 func _sleep_far(anchors: Array) -> void:
 	for z in rec_of.keys():
+		# (the colony's dawn sweep sends the dead back to the city: a record's dead one just goes back to its record, where it stands)
+		if z.state == "retreat":
+			_sleep(z)
+			continue
 		if z.state == "chase" or z.state == "hunt" or z.state == "attack" or z.state == "dying" or z.state == "dead":
 			continue
 		var near := INF
@@ -226,6 +234,8 @@ func _sleep(z) -> void:
 
 ## Wakes the dormant records within `radius` of `at` (nearest first, up to the cap). `chase_prey` (a Person) sends them after that person.
 func _wake_near(at: Vector2, radius: float, cause: String, chase_prey = null, walls := false) -> int:
+	if pause_wake:
+		return 0
 	var c0 := clampi(floori((at.x - radius) / float(CELL)), 0, cols - 1)
 	var c1 := clampi(floori((at.x + radius) / float(CELL)), 0, cols - 1)
 	var r0 := clampi(floori((at.y - radius) / float(CELL)), 0, rows - 1)
