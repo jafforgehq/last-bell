@@ -607,7 +607,8 @@ DOC = {
                 "pictures a quarter turn counter clockwise for a ridge along y); lay the ridge strip along the middle line; lay roof_edge_<material> cell [mask of open sides] over "
                 "every cell (it overhangs 0.2 tile and throws its shadow). Hide all roof layer pieces while the avatar is inside that building.",
         "street": "asphalt cells (three variants in blocks), lane_markings cells over them, sidewalk cells with kerb cells over them where road touches, lawn / dirt_path / gravel "
-                  "for yards and drives, leaves / manhole / drain as decals.",
+                  "for yards and drives, leaves / manhole / drain as decals; lawn_edge on the lawn cells that touch paving or a wall and lawn_patch here and there on the lawn (soft transitions "
+                  "and no seen repeat); streetlamp and hydrant on the sidewalks. scripts/town/town_world.gd and town_chunk_paint.gd draw all of this.",
         "container": "a container has states closed / opened: draw closed until searched, then opened; the `marker_searched` tick can float over it.",
     },
 }
@@ -1090,6 +1091,114 @@ def street_misc():
               "turn: place its picture on the road cell next to the kerb). Flush with the ground.")
 
 
+def lawn_edge_cell(k):
+    """The edge of a lawn where it meets paving, road or a wall, on the lawn cell (128 px, the whole tile): a strip of bare soil along the
+    named edge with a ragged inner side, a soft shade under it, and blades growing in from it. Drawn for the north edge, turned k quarter turns
+    clockwise (0 n, 1 e, 2 s, 3 w)."""
+    rng = rng_for("lawn_edge")
+    a = Art(1, 1)
+    xs = np.linspace(0, 1, 40)
+    wob = 0.055 + 0.030 * np.sin(xs * 17.0 + 1.3) + 0.024 * np.sin(xs * 41.0 + 0.4)
+    top = [(float(x), 0.0) for x in xs]
+    soil = top + [(float(x), float(w)) for x, w in zip(xs[::-1], wob[::-1])]
+    soil_m = a.poly(soil)
+    shade_m = a.blur(a.poly(top + [(float(x), float(w) + 0.15) for x, w in zip(xs[::-1], wob[::-1])]), 0.035)
+    a.paint(shade_m, (28, 40, 20), 0.34)
+    a.paint(soil_m, lambda X, Y: np.array((70, 55, 36), np.float32)[None, None, :] * (0.88 + 0.22 * fbm(X, Y, 30.0, 17, 2))[..., None], 0.78)
+    a.paint(a.poly(top + [(float(x), float(w) * 0.45) for x, w in zip(xs[::-1], wob[::-1])]), (40, 32, 22), 0.55)
+    for _ in range(46):
+        x = rng.uniform(0.02, 0.98)
+        y0 = 0.045 + 0.05 * rng.random()
+        ang = np.pi / 2 + rng.normal(0, 0.55)
+        ln = rng.uniform(0.045, 0.11)
+        c = [(50, 80, 32), (74, 108, 44), (112, 144, 62)][rng.integers(0, 3)]
+        line(a, [(x, y0), (x + np.cos(ang) * ln, y0 + np.sin(ang) * ln)], 0.011, c, 0.85)
+    for _ in range(12):
+        x, y = rng.uniform(0.02, 0.98), rng.uniform(0.0, 0.06)
+        dot(a, x, y, 0.012, (116, 100, 76), 0.8)
+    im = a.image(grain=0.0)
+    if k:
+        im = im.rotate(-90 * k)
+    return im
+
+
+def lawn_patch(v):
+    """A soft patch of different grass or bare earth, laid over the lawn here and there to break up its repeat (1.5 tiles across)."""
+    rng = rng_for("lawn_patch", v)
+    n = int(PX * 1.5)
+    ys, xs = np.mgrid[0:n, 0:n].astype(np.float32)
+    d = np.sqrt(((xs - n / 2) / (n / 2.05)) ** 2 + ((ys - n / 2) / (n / 2.05 * (0.78 + 0.12 * v / 3))) ** 2)
+    nz = pnoise(n, 9.0, rng)
+    m = smooth(1.0 - d + 0.42 * nz, 0.0, 0.62)
+    cols = [((142, 132, 64), 0.36), ((52, 88, 40), 0.34), ((108, 88, 58), 0.42), ((126, 154, 74), 0.28)]
+    c, op = cols[v]
+    detail = 1.0 + 0.10 * pnoise(n, 1.6, rng)
+    rgb = np.clip(np.array(c, np.float32)[None, None, :] * detail[..., None], 0, 255)
+    al = np.clip(m * op, 0, 1)
+    if v == 2:
+        for _ in range(26):
+            px, py = rng.normal(n / 2, n * 0.14), rng.normal(n / 2, n * 0.12)
+            r = rng.uniform(1.0, 2.2)
+            dd = np.sqrt((xs - px) ** 2 + (ys - py) ** 2)
+            pm = (dd < r).astype(np.float32) * (m > 0.3)
+            rgb = rgb * (1 - pm[..., None]) + np.array((150, 134, 108), np.float32) * pm[..., None]
+            al = np.maximum(al, pm * 0.8)
+    out = np.dstack([rgb, al * 255.0]).astype(np.uint8)
+    return Image.fromarray(out)
+
+
+def hydrant(st, v):
+    a = body(1, 1)
+    c = [(196, 54, 44), (214, 176, 56)][v]
+    a.paint(a.ellipse(0.5, 0.5, 0.215), OUTLINE, 1.0)
+    disc(a, 0.5, 0.5, 0.185, shade(c, 0.8), lw=0.0, lo=0.78, hi=1.12)
+    for (cx, cy) in ((0.5, 0.2), (0.5, 0.8)):
+        a.paint(a.ellipse(cx, cy, 0.075, 0.06), OUTLINE, 1.0)
+        a.paint(a.ellipse(cx, cy, 0.055, 0.042), lit(c, 0.84, 1.12, cx - 0.05, cy - 0.04, cx + 0.05, cy + 0.04), 1.0)
+    disc(a, 0.5, 0.5, 0.13, c, lw=0.022, lo=0.80, hi=1.18)
+    a.paint(a.ellipse(0.46, 0.46, 0.05, 0.04), (255, 255, 255), 0.30)
+    a.paint(a.ellipse(0.5, 0.5, 0.034), (70, 28, 24) if v == 0 else (110, 88, 30), 1.0)
+    return a
+
+
+def streetlamp(st, v):
+    """A lamp post seen from above: the foot, the arm leaning out over the street (south) and the lamp head at its end."""
+    a = body(1, 1)
+    arm = [(0.5, 0.30), (0.5, 0.80)]
+    a.paint(a.stroke(arm, 0.095), OUTLINE, 1.0)
+    a.paint(a.stroke(arm, 0.056), lit((86, 90, 96), 0.80, 1.14, 0.44, 0.3, 0.56, 0.8), 1.0)
+    a.paint(a.ellipse(0.5, 0.30, 0.115), OUTLINE, 1.0)
+    disc(a, 0.5, 0.30, 0.088, (78, 82, 88), lw=0.0, lo=0.80, hi=1.15)
+    a.paint(a.ellipse(0.48, 0.28, 0.034), (170, 174, 180), 0.8)
+    # the head
+    slab(a, 0.36, 0.74, 0.64, 0.96, (62, 64, 70), r=0.07, lw=0.026, lo=0.80, hi=1.12)
+    a.paint(a.poly(rrect(0.41, 0.79, 0.59, 0.92, 0.04)), (244, 226, 160), 1.0)
+    a.paint(a.stroke([(0.43, 0.81), (0.57, 0.81)], 0.012, round_ends=False), (255, 255, 240), 0.8)
+    return a
+
+
+def street_extras():
+    sheet = sheet_cells(4, 1, PX, PX)
+    cells = {}
+    for i, name in enumerate(["n", "e", "s", "w"]):
+        sheet.alpha_composite(lawn_edge_cell(i), (i * PX, 0))
+        cells[name] = [i, 0]
+    atlas_item("street", "lawn_edge", sheet, 4, 1, cells, (PX, PX), ["decal", "lawn"], "decal",
+               "The edge of a LAWN cell where a side of it meets paving, road, wall or a fence (bare soil, a ragged line, blades): n/e/s/w name the side "
+               "that touches; a corner cell takes two. Laid on the lawn cell itself (128 px = the tile), over the lawn, under everything that stands.",
+               mode="rgba", bg=(78, 108, 48))
+    patches = put_atlas("street/lawn_patch.png", [(lawn_patch(v), {"variant": v, "look": ["dry", "lush", "bare", "fresh"][v]}) for v in range(4)], "rgba")
+    add_item("street", {"id": "lawn_patch", "category": "street", "kind": "overlay", "layer": "decal", "footprint": [1, 1], "anchor": [0, 0], "variants": 4,
+                        "tags": ["decal", "walkable", "lawn"], "sprites": patches, "_bg": (78, 108, 48),
+                        "note": "A soft patch of different grass (dry, lush, bare earth, fresh), 1.5 x 1.5 tiles, centred where you lay it, over a lawn here and there to "
+                                "break up the repeat of the lawn atlas (the three lawns are laid in blocks of 4 x 4)."})
+    prop("street", "hydrant", 1, 1, hydrant, facings=1, variants=2, tags=["street", "solid"], layer="object", solid=[], pad=(0.0625, 0.0625, 0.15, 0.15), bg=SIDEWALK,
+         shadow=(0.03, 0.04, 0.02, 0.38), note="A fire hydrant on a sidewalk (a: red, b: yellow). Walkable around it; it is only a picture that blocks nothing.")
+    prop("street", "streetlamp", 1, 1, streetlamp, facings=4, tags=["street", "solid", "light"], layer="object", solid="all", pad=(0.0625, 0.0625, 0.2, 0.2), bg=SIDEWALK,
+         shadow=(0.10, 0.12, 0.04, 0.34), note="A street lamp seen from above: the foot in the cell, the arm leaning out over the street and the lamp head at its end. "
+                                                 "Facing = the way the arm points (s: toward the south, so the post stands on the north sidewalk of an east-west street).")
+
+
 def job_street():
     ground_item("street", "asphalt", ["road"], [("street/asphalt_%s.png" % "abc"[v], asphalt(v)) for v in range(3)],
                 "Road surface: a 4 x 4 atlas of 64 px pieces, seamless when repeated (tile (x, y) shows piece (x % 4, y % 4), as assets/terrain does). "
@@ -1106,6 +1215,7 @@ def job_street():
     street_markings()
     street_kerbs()
     street_misc()
+    street_extras()
     contact("street", scale=1.0)
 
 
