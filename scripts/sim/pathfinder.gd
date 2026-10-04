@@ -16,6 +16,9 @@ var grid: AStarGrid2D
 ## How many times `sight` has been called. For tests and profiling: whoever reads
 ## it resets it.
 var sight_calls := 0
+## SPIKE (bigmap): how many times `find` was called and how long they took (microseconds), for the cost measurements. Whoever reads them resets them.
+var find_calls := 0
+var find_usec := 0
 
 
 func _init(w: int, h: int, solid: PackedByteArray) -> void:
@@ -59,6 +62,14 @@ func nearest_free(solid: PackedByteArray, x: int, y: int):
 ## Returns waypoints (Vector2, tile units) ending exactly at the target, or an
 ## empty array when there is no way through.
 func find(solid: PackedByteArray, sx: float, sy: float, tx: float, ty: float) -> Array:
+	var t_in := Time.get_ticks_usec()
+	var out := _find(solid, sx, sy, tx, ty)
+	find_calls += 1
+	find_usec += Time.get_ticks_usec() - t_in
+	return out
+
+
+func _find(solid: PackedByteArray, sx: float, sy: float, tx: float, ty: float) -> Array:
 	var s = nearest_free(solid, floori(sx), floori(sy))
 	var t = nearest_free(solid, floori(tx), floori(ty))
 	if s == null or t == null:

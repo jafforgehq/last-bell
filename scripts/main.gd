@@ -294,7 +294,38 @@ var bench_proc := 0.0
 var bench_calls := 0.0
 
 
+## Whether the command line asks for the big town: `--spike-town`, or `--town` (with or without a value) in a line that has no `--crew` (the old Town Board's flag).
+static func wants_town(user_args: Array) -> bool:
+	var town := false
+	var crew := false
+	for a in user_args:
+		var s := String(a)
+		if s == "--spike-town" or s.begins_with("--spike-town="):
+			return true
+		if s == "--town" or s.begins_with("--town="):
+			town = true
+		if s.begins_with("--crew"):
+			crew = true
+	# in a browser: `index.html?town` (the flags are the query's: scripts/town/town_scene.gd)
+	if OS.has_feature("web") and not town:
+		var qs := String(JavaScriptBridge.eval("window.location.search"))
+		for part in qs.trim_prefix("?").split("&", false):
+			if String(part) == "town" or String(part).begins_with("town="):
+				town = true
+	return town and not crew
+
+
 func _ready() -> void:
+	# `--town` (alias `--spike-town`): the big town of feature/town-core takes the screen (scripts/town/town_scene.gd); the yard's game does not start.
+	# (The old `--town[=place]`, the Town Board of a `--crew=3` game, still works when `--crew` is given.)
+	if wants_town(OS.get_cmdline_user_args()):
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+		var town_scene = load("res://scripts/town/town_scene.gd").new()
+		town_scene.name = "Town"
+		add_child(town_scene)
+		return
 	var t0 := Time.get_ticks_msec()
 	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
