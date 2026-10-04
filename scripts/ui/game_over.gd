@@ -79,7 +79,7 @@ func _build() -> void:
 			died += 1
 	var numbers := [
 		["days", str(_days_survived()), "Days survived"],
-		["kills", str(int(sim.kills)), "Walkers put down"],
+		["kills", str(int(sim.kills)), "The dead put down" if _town() else "Walkers put down"],
 		["lost", "%d of %d" % [died, sim.people.size()], "Died or turned"],
 	]
 	var lines: VBoxContainer = hud._vbox(0)
@@ -196,6 +196,11 @@ func _title(result: String) -> String:
 	return String(TITLES.get(result, "The run is over"))
 
 
+## Whether the run is the One House town's.
+func _town() -> bool:
+	return sim.has_method("is_one_house") and sim.is_one_house()
+
+
 ## Whether the run was the campaign of four seasons (round 10).
 func _campaign() -> bool:
 	return sim.get("seasons") != null and sim.seasons.campaign
@@ -206,6 +211,8 @@ func _campaign() -> bool:
 ## day 41").
 func _subtitle(result: String) -> String:
 	var line := String(SUBTITLES.get(result, ""))
+	if _town() and result == "defeat":
+		return "Nobody is left to hold the house. The dead are still out there."    # (One House: there is no bell to ring)
 	if not _campaign():
 		return line
 	if result == "victory":

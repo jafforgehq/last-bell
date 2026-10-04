@@ -109,7 +109,7 @@ static func door(kind: String, facing: String = "s", state: String = "closed", v
 
 ## A piece of the fortification of the base (WP5 asks): `kit` "fence", "fence_strong" (one cell of the line, straight along x), "sandbags", "gate", "door_plank", "tower", "floodlight"; `state` "built",
 ## "ghost" (a plan not yet built, drawn see-through) or "damaged" ("broken" is the same). Whole lines are drawn by `fort_cell` (the cell for each mask of connected sides); the built pieces of the base are
-## drawn by scripts/town/town_perimeter_paint.gd.
+## drawn by scripts/render/perimeter_view.gd.
 static func fence(kit: String, state: String = "built") -> Dictionary:
 	var damaged := state == "damaged" or state == "broken"
 	var color := _color_of(kit)
@@ -140,6 +140,37 @@ static func _cell_desc(id: String, key: String, color: Color) -> Dictionary:
 	d.anchor = Vector2(float((item.get("anchor", [0, 0]) as Array)[0]), float((item.get("anchor", [0, 0]) as Array)[1]))
 	d.placeholder = false
 	return d
+
+
+## One sprite of a kit item by its manifest id (the perimeter view's: "fort_gate", "fort_tower", "floodlight", "barricade_door"...): `orient` "h" or "v" (or a facing),
+## `state` "closed", "open" or "", `variant` 0 built, 1 damaged. A missing item is a flat colour of `size` tiles.
+static func piece(id: String, orient: String = "", state: String = "", variant: int = 0, size: Vector2 = Vector2(1, 1)) -> Dictionary:
+	return _describe(_find([id]), orient, state, variant, _color_of(id), size)
+
+
+## An autotile atlas of the kit (a fence, sandbags...) by its manifest id: {"item", "file", "cell": Vector2 (px), "cols", "placeholder", "color"}; a missing item is a
+## placeholder. `atlas_rect(d, mask)` is the part of the picture for a mask of the CONNECTED sides (N 1, E 2, S 4, W 8).
+static func atlas(id: String) -> Dictionary:
+	var item := _find([id])
+	var d := {"item": "", "file": "", "cell": Vector2(128, 128), "cols": 4, "cells": {}, "placeholder": true, "color": _color_of(id)}
+	if item.is_empty() or item.get("sprites", []).is_empty():
+		return d
+	var cell: Array = item.get("cell_px", [128, 128])
+	d.item = id
+	d.file = _folder + String(item.sprites[0].file)
+	d.cell = Vector2(float(cell[0]), float(cell[1]))
+	d.cols = int(item.get("grid", [4, 4])[0])
+	d.cells = item.get("cells", {})
+	d.placeholder = false
+	return d
+
+
+static func atlas_rect(d: Dictionary, mask: int) -> Rect2:
+	var cell: Vector2 = d.cell
+	var at = d.cells.get(str(mask))
+	var col: int = int(at[0]) if at is Array else mask % int(d.cols)
+	var row: int = int(at[1]) if at is Array else mask / int(d.cols)
+	return Rect2(float(col) * cell.x, float(row) * cell.y, cell.x, cell.y)
 
 
 ## A piece of furniture or a marker by its kind ("bed", "stash", "radio", "bench", a container's kind...): `state` "" or "open" (a looted container),

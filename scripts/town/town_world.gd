@@ -14,17 +14,17 @@
 ##   the objects    `data.objects` with a `kit` field (the generator's: item, facing, state, variant) are bucketed by chunk or house and drawn by those nodes, not one Sprite2D each
 ##                  (an object with no `kit` is the old picture and a Sprite2D as before)
 ## `_process` finds the camera's rectangle itself (the town's run never called `show_chunks`) and shows the chunks and the houses it needs, a few times a second.
-## Roofs are not here (scripts/render/house_view.gd). Perimeter pieces that get built are scripts/town/town_perimeter_paint.gd's.
+## Roofs are not here (scripts/render/house_view.gd). Perimeter pieces that get built are scripts/render/perimeter_view.gd's.
 extends "res://scripts/world.gd"
 
 const TownArt := preload("res://scripts/town/town_art.gd")
 const TownChunkPaint := preload("res://scripts/town/town_chunk_paint.gd")
 const TownHousePaint := preload("res://scripts/town/town_house_paint.gd")
-const TownPerimeterPaint := preload("res://scripts/town/town_perimeter_paint.gd")
 
 const CHUNK := 32
-const SPRITES_PER_STEP := 400
 const ROWS_PER_STEP := 24
+## The phases of the build (arrays, setup, keys, ground rectangles, ground meshes, looks, chunks, objects).
+const PHASES := 8
 ## The paint layers of a chunk (the z index of each node): ground detail, decals, low props, wall tops, tall things.
 const LAYERS := [0, 1, 2, 3, 4]
 ## A house keeps its interior drawn while the middle of the camera is this near its walls (tiles; the roof hides it anyway, and the avatar is at the middle of the camera).
@@ -54,6 +54,8 @@ var _taken := PackedByteArray()
 var _pieces := {}
 var _types := {}
 var _obj_i := 0
+var _mesh_keys: Array = []
+var _mesh_i := 0
 var _chunks_made := 0
 var _ground_node: Node2D
 var _legacy_tex := {}
@@ -109,6 +111,8 @@ func begin_build(data: Dictionary) -> void:
 	_phase = 0
 	_row = 0
 	_obj_i = 0
+	_mesh_keys = []
+	_mesh_i = 0
 	build_ms.clear()
 	kit = TownArt.has_item("lawn") and TownArt.has_item("asphalt") and TownArt.has_item("sidewalk") and not TownArt.ground("lawn").is_empty()
 
@@ -121,11 +125,13 @@ func build(data: Dictionary) -> void:
 
 
 func build_progress() -> float:
-	var total := 7.0
+	var total := float(PHASES)
 	var done := float(_phase)
 	if _phase == 2 or _phase == 3:
 		done += float(_row) / float(maxi(1, H))
-	elif _phase == 6:
+	elif _phase == 4:
+		done += float(_mesh_i) / float(maxi(1, _mesh_keys.size()))
+	elif _phase == 7:
 		done += float(_obj_i) / float(maxi(1, d.objects.size()))
 	return clampf(done / total, 0.0, 1.0)
 
@@ -137,7 +143,7 @@ func _tick(name: String, t_in: int) -> void:
 ## About `budget_ms` of the work (at least one piece); true when the world is built.
 func step_build(budget_ms: float) -> bool:
 	var t0 := Time.get_ticks_usec()
-	while _phase < 7:
+	while _phase < PHASES:
 		match _phase:
 			0:
 				_copy_arrays()
@@ -167,19 +173,34 @@ func step_build(budget_ms: float) -> bool:
 				if _row >= H:
 					_phase = 4
 			4:
-				_make_meshes()
-				_phase = 5
+				# (one ground picture's mesh at a time: each loads its picture, the longest single piece of the build)
+				if _mesh_keys.is_empty():
+					_mesh_keys = _pieces.keys()
+				_make_meshes(t0, budget_ms)
+				if _mesh_i >= _mesh_keys.size():
+					if kit:
+						_make_apron_ground()
+					_pieces.clear()
+					_keys = PackedInt32Array()
+					_phase = 5
 			5:
-				_make_chunks()
+				# (the looks of the paint: about forty kit pictures are loaded here)
+				var t2 := Time.get_ticks_usec()
+				if kit:
+					_make_looks()
+				_tick("looks", t2)
 				_phase = 6
 			6:
+				_make_chunks()
+				_phase = 7
+			7:
 				_add_objects(t0, budget_ms)
 				if _obj_i >= d.objects.size():
 					_finish_layers()
-					_phase = 7
+					_phase = 8
 		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
 			break
-	return _phase >= 7
+	return _phase >= PHASES
 
 
 func _copy_arrays() -> void:
@@ -330,11 +351,14 @@ func _texture_of(key: int) -> Texture2D:
 	return GD.tex(String(_types[key].file))
 
 
-func _make_meshes() -> void:
+## The meshes of the ground, one picture's at a time until `budget_ms` is spent (each loads its picture: the longest single piece of the build).
+func _make_meshes(t0: int, budget_ms: float) -> void:
 	var t1 := Time.get_ticks_usec()
 	# a quad reaches this far (world pixels) past its tile edges, so that no hairline shows between two pictures at a fractional zoom
 	var eps := 0.3 if kit else 0.0
-	for t in _pieces:
+	while _mesh_i < _mesh_keys.size():
+		var t = _mesh_keys[_mesh_i]
+		_mesh_i += 1
 		var tex := _texture_of(int(t))
 		if tex == null:
 			continue
@@ -386,10 +410,8 @@ func _make_meshes() -> void:
 		mi.texture = tex
 		mi.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 		_ground_node.add_child(mi)
-	_pieces.clear()
-	_keys = PackedInt32Array()
-	if kit:
-		_make_apron_ground()
+		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
+			break
 	_tick("ground_meshes", t1)
 
 
@@ -480,8 +502,6 @@ func _make_chunks() -> void:
 	var t1 := Time.get_ticks_usec()
 	chunks_x = ceili(float(W) / float(CHUNK))
 	chunks_y = ceili(float(H) / float(CHUNK))
-	if kit:
-		_make_looks()
 	_holder = Node2D.new()
 	_holder.name = "Paint"
 	add_child(_holder)
@@ -567,7 +587,6 @@ func _process(delta: float) -> void:
 		return
 	_t_show = 0.0
 	_stage_layers()
-	_attach_perimeter()
 	var view := _view_of_camera()
 	if view.size.x <= 0.0:
 		return
@@ -589,28 +608,8 @@ func _process(delta: float) -> void:
 		_show_interiors(centre)
 
 
-var _perimeter_checked := false
 var _pending: Array = []
 var _shown_once := false
-
-
-## Puts the painter of the base's perimeter in the world when the run's sim has one (the world's parent is the game; the soft wiring of the parts).
-func _attach_perimeter() -> void:
-	if _perimeter_checked:
-		return
-	var host = get_parent()
-	if host == null:
-		return
-	var host_sim = host.get("sim")
-	if host_sim == null:
-		return
-	_perimeter_checked = true
-	if host_sim.get("perimeter") == null:
-		return
-	var n = TownPerimeterPaint.new()
-	n.name = "PerimeterPaint"
-	add_child(n)
-	n.bind(host_sim)
 
 
 func _set_detail(holder: Node2D) -> void:
@@ -642,9 +641,12 @@ func _add_objects(t0: int, budget_ms: float) -> void:
 			n.z_index = spec[1]
 			add_child(n)
 			layers[spec[1]] = n
-	var stop := mini(d.objects.size(), _obj_i + SPRITES_PER_STEP)
 	var objs: Array = d.objects
-	while _obj_i < stop:
+	var n_objs := objs.size()
+	# (until the budget is spent, looked at every 16 objects: the first of each look loads its picture)
+	while _obj_i < n_objs:
+		if (_obj_i & 15) == 0 and _obj_i > 0 and float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
+			break
 		var o: Dictionary = objs[_obj_i]
 		var done := false
 		var kind := String(o.get("kit", ""))

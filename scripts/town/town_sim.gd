@@ -19,10 +19,14 @@
 extends "res://scripts/town/town_rules.gd"
 
 const GRID_W := 1024
-## The most dead awake at once (the plan's numbers, measured in the report: a desktop could carry three times as many, the web about as many as this).
-const ACTIVE_CAP := 60
-const ACTIVE_CAP_WEB := 40
+const TownPerf := preload("res://scripts/town/town_perf.gd")
+## The most dead awake at once (the plan's numbers, measured in the report: a desktop could carry three times as many, the web about as many as this). The platform's own
+## figure and the adaptive halving are scripts/town/town_perf.gd's.
+const ACTIVE_CAP := TownPerf.ACTIVE_CAP
+const ACTIVE_CAP_WEB := TownPerf.ACTIVE_CAP_WEB
 const TownMedical := preload("res://scripts/town/town_medical.gd")
+## The share of its radius a shot is heard at from inside a house (nine tiles: the dead of the houses round it, 10 to 16 tiles off, are left asleep).
+const INDOOR_NOISE := 0.3
 
 ## The town's modules, in the order they are made and stepped. (Plan 1.13.) `field` is stepped before the colony's step, the others after it.
 const PARTS := {
@@ -60,6 +64,13 @@ var _grid := {}
 var sep_usec := 0
 var chase_usec := 0
 var chase_n := 0
+## The most `Pathfinder.find` calls one rules step makes (`path_budget`): the chasing dead stop asking when the step's calls, whoever made them, reach it less PATH_RESERVE (kept for
+## the colony's own: a wanderer's new way, a dead one of the night looking for its place), and ask again a moment later. What the steps really made is in `finds_last`/`finds_max`.
+const PATH_RESERVE := 4
+var path_budget := TownPerf.path_budget()
+var finds_last := 0
+var finds_max := 0
+var _finds_base := 0
 
 
 func _init(data: Dictionary, w, effects) -> void:
@@ -83,7 +94,7 @@ func _make_parts() -> void:
 			set(name, m)
 		if name == "field":
 			m.setup(self, town_data)
-			m.active_cap = ACTIVE_CAP_WEB if OS.has_feature("web") else ACTIVE_CAP
+			m.active_cap = TownPerf.active_cap()
 			if not town_data.is_empty():
 				m.load_records(town_data.dead)
 		else:
@@ -163,6 +174,7 @@ func _notice() -> void:
 func update(dt: float) -> void:
 	if over != "":
 		return
+	_finds_base = path_z.find_calls
 	if field != null:
 		field.update(dt, _anchors())
 		_notice()
@@ -172,6 +184,8 @@ func update(dt: float) -> void:
 		if m.has_method("update") and bool(m.get("enabled") if "enabled" in m else true):
 			m.update(dt)
 	_town_events(first_new)
+	finds_last = path_z.find_calls - _finds_base
+	finds_max = maxi(finds_max, finds_last)
 
 
 ## Before the attacks begin (no scenario, or one that says so) the school's words about the wall and the horde do not fit a street: the bell tolls and the night falls, nobody is
@@ -205,7 +219,9 @@ func _town_events(first_new: int) -> void:
 ## The noise of a shot goes to the field: the dormant dead within its radius wake and come, the awake that stand or wander within it come.
 func _shot_noise(p: Person) -> void:
 	if field != null:
-		field.noise(Vector2(p.x, p.y), p)
+		# (a shot fired indoors is heard by the next house, not by the whole district: walls hold the sound, so that clearing the start house does not call the street)
+		var r: float = field.noise_r * (INDOOR_NOISE if houses != null and houses.house_at(p.x, p.y) >= 0 else 1.0)
+		field.noise(Vector2(p.x, p.y), p, r)
 
 
 func _update_zombie(z: Zombie, dt: float) -> void:
@@ -275,6 +291,9 @@ func _chase(z: Zombie, dt: float) -> void:
 			z.path = [you]
 			z.path_i = 0
 			z.repath = 0.25 + rng.randf() * 0.15
+		elif path_z.find_calls - _finds_base >= path_budget - PATH_RESERVE:
+			# (the step's searches are used up: this one asks again in a moment and goes on along the way it had)
+			z.repath = 0.06
 		else:
 			z.path = path_z.find(world.solid_z, z.x, z.y, prey.x, prey.y)
 			z.path_i = 0

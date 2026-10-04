@@ -1575,7 +1575,7 @@ func _people() -> void:
 				pool.erase(hid)
 				continue
 			var room := _roomiest(hid)
-			rescue.append({"house": hid, "pos": _free_spot(room), "room": room, "ring": ri + 1, "dist": c.distance_to(start_c)})
+			rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": ri + 1, "dist": c.distance_to(start_c)})
 			pool.erase(hid)
 			picked += 1
 	rescue.sort_custom(func(a, b): return float(a.dist) < float(b.dist))
@@ -1658,6 +1658,35 @@ func _free_spot(room: int) -> Vector2:
 			if dd < best_d:
 				best_d = dd
 				best = Vector2(float(x) + 0.5, float(y) + 0.5)
+	return best
+
+
+## Where a survivor hides in their room: the free tile farthest from every doorway of the house, a corner by preference (one who has barred themselves in keeps clear of the
+## way in: not in the line of the front door, where the avatar walks in and the dead stand). The middle of the room (`_free_spot`) when the room has no free tile.
+func _hide_spot(room: int, house_id: int) -> Vector2:
+	var rr: Rect2i = _rooms[room].rect
+	var best := _free_spot(room)
+	var best_score := -INF
+	var ways: Array = []
+	for d in _houses[house_id].doors:
+		for t in d.tiles:
+			ways.append(Vector2(float(t.x) + 0.5, float(t.y) + 0.5))
+	for y in range(rr.position.y, rr.end.y):
+		for x in range(rr.position.x, rr.end.x):
+			if _solid[y * _size + x] != 0:
+				continue
+			var at := Vector2(float(x) + 0.5, float(y) + 0.5)
+			var near := INF
+			for w in ways:
+				near = minf(near, at.distance_to(w))
+			var corners := 0
+			for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				if _solid[(y + dv.y) * _size + (x + dv.x)] != 0:
+					corners += 1
+			var score := (near if near < INF else 0.0) + 0.4 * float(corners)
+			if score > best_score:
+				best_score = score
+				best = at
 	return best
 
 

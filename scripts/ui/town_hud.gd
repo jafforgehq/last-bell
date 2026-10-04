@@ -16,6 +16,10 @@ extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const Prefs := preload("res://scripts/prefs.gd")
+
+## The setting (a flag in the player's own file) that puts the lessons of the first house away for good.
+const LESSONS_OFF_FLAG := "oh_lessons_off"
 
 const CARD_W := 292.0
 const CARD_W_COMPACT := 236.0
@@ -26,6 +30,10 @@ const ARROW_FAR := 7.0
 const ARROW_RING_MIN := 58.0
 const RING_MIN_R := 18.0
 const TILE_WORD := "m"
+## How long (seconds) the first view of the start house is held before the camera comes to the avatar.
+const OPENING_HOLD_S := 5.0
+## How long (rules seconds) the legend of the keys stays at the foot of the window.
+const LEGEND_S := 45.0
 
 var main
 var hud
@@ -42,6 +50,7 @@ var lesson_text: Label
 var lesson_goal: Label
 var lesson_done: Label
 var lesson_skip: Button
+var lesson_off: Button
 var radio_card: PanelContainer
 
 ## What the cards say now (the tests read them).
@@ -74,6 +83,31 @@ func on_ready(main_node) -> void:
 	if hud.has_method("set_profile"):
 		hud.set_profile("one_house")
 	_build()
+	var sim = _sim()
+	if sim != null and float(sim.t) > 5.0:
+		hud.hint_spent = true    # (a run that is loaded and on its way has seen the legend of the keys)
+
+
+## The camera of a new run (the facade asks once, as the camera is first put): the start house, whole, and the street in front of its lot, held there a few seconds before the
+## camera goes to the avatar and follows. Nothing for a run that is already on its way (a loaded save).
+func on_opening_view(main_node) -> void:
+	var sim = main_node.get("sim")
+	if sim == null or sim.get("houses") == null or sim.scenario == null or not sim.scenario.has_method("stage"):
+		return
+	if float(sim.t) > 2.0 or String(sim.scenario.stage()) != "alone" or int(sim.day) != 1:
+		return
+	var h: Dictionary = sim.houses.house(sim.houses.start_house())
+	if h.is_empty():
+		return
+	var rect := Rect2(Rect2i(h.get("rect", Rect2i())))
+	var lot := Rect2(Rect2i(h.get("lot", Rect2i())))
+	var north := String(h.get("front", "S")) == "N"
+	var top := (lot.position.y - 3.0) if north else (rect.position.y - 3.0)
+	var bottom := (rect.end.y + 3.0) if north else (lot.end.y + 3.0)
+	var vp: Vector2 = main_node._vp()
+	main_node.zoom_px = clampf(vp.y / maxf(bottom - top, 8.0), 30.0, 52.0)
+	main_node.cam_center = Vector2(rect.get_center().x, (top + bottom) * 0.5)
+	main_node.cam_hold = OPENING_HOLD_S
 
 
 # ------------------------------------------------------------------------ the sim --
@@ -171,6 +205,10 @@ func _build_lesson() -> void:
 	lesson_done.visible = false
 	head.add_child(lesson_done)
 	head.add_child(hud._spacer())
+	lesson_off = RadioKit.small_button(hud, "No lessons", 24.0, 14)
+	lesson_off.tooltip_text = "Put all the lessons away, in this game and the next"
+	lesson_off.pressed.connect(skip_all_lessons)
+	head.add_child(lesson_off)
 	lesson_skip = RadioKit.small_button(hud, "Skip", 24.0, 14)
 	lesson_skip.tooltip_text = "Put this lesson away. The next one comes when you have done more"
 	lesson_skip.pressed.connect(skip_lesson)
@@ -208,6 +246,11 @@ func on_frame(dt: float) -> void:
 		_t = 0.0
 		_dirty = false
 		refresh()
+		# (the legend of the keys at the foot of the window is the first minute's: with nobody to ask for anything it would stay up for ever, over the house)
+		var sim = _sim()
+		if not hud.hint_spent and sim != null and float(sim.t) > LEGEND_S:
+			hud.hint_spent = true
+			hud._refresh_hint()
 	# the ring and the arrow follow the avatar: redrawn each frame while either is up
 	if ring_label != "" or _arrow_on:
 		layer.queue_redraw()
@@ -280,7 +323,7 @@ func _refresh_lesson() -> void:
 			g = got
 	lesson = g
 	var id := String(g.get("id", ""))
-	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id)
+	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id) and not Prefs.flag(LESSONS_OFF_FLAG)
 	var sig := "%s|%s|%s|%s" % [id, String(g.get("text", "")), String(g.get("goal", "")), str(bool(g.get("done", false)))]
 	lesson_card.visible = shown
 	if sig == _last_lesson_sig:
@@ -332,6 +375,12 @@ func _refresh_ring() -> void:
 	ring_t = clampf(t / total if total > 0.0 else t, 0.0, 1.0)
 	var left := ceili(maxf(total - t, 0.0)) if total > 1.0 else 0
 	ring_label = String(pr.label) if left <= 0 else "%s %ds" % [String(pr.label), left]
+
+
+## Puts every lesson away, for this game and for the ones after it (a flag in the player's file).
+func skip_all_lessons() -> void:
+	Prefs.set_flag(LESSONS_OFF_FLAG)
+	lesson_card.visible = false
 
 
 ## Puts the current lesson away (the next one is shown when it comes).
