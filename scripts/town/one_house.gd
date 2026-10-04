@@ -195,6 +195,26 @@ static func wanted(game) -> bool:
 	return game != null and game.get("houses") != null
 
 
+## The tips of the school (assets/data/hints.json) for a town run: only the ones the run's data names (`hints`: the school's id to what it says here), each with the run's own
+## id (so that they come once in the town, whatever the player has seen in the school), its words and its numbers over the school's. Everything else of the school's is left out.
+static func town_hints(list: Array) -> Array:
+	var table: Dictionary = data().get("hints", {})
+	var out: Array = []
+	for h in list:
+		var id := String(h.get("id", ""))
+		if not table.has(id) or not table[id] is Dictionary:
+			continue
+		var mine: Dictionary = (h as Dictionary).duplicate(true)
+		var over: Dictionary = table[id]
+		if over.has("text"):
+			mine.erase("text_avatar")
+			mine.erase("text_avatar_always")
+		for k in over:
+			mine[k] = over[k].duplicate(true) if (over[k] is Dictionary or over[k] is Array) else over[k]
+		out.append(mine)
+	return out
+
+
 ## Whether the New game of this game begins the town run: the real game (the scene of scripts/main.gd, not a test's stand-in for it) unless `--school` asks for the old start
 ## (the school's yard, a crew of three or five) or the demo is on. `main_node` is the game's main node (`shell.main`).
 static func town_start(main_node) -> bool:
@@ -260,10 +280,27 @@ func _begin_run(difficulty: int, seed_value: int) -> void:
 		_size = [int(sz.x), int(sz.y)] if typeof(sz) == TYPE_VECTOR2I else [0, 0]
 	else:
 		_town_seed = seed_value
+	_calm_the_start()
 	_apply_static()
 	_apply_flags()
 	apply_stage()
 	sim.events.clear()
+
+
+## The first minutes are quiet: the dead round the start house that would wander (the generator lets some of the street's walk) stand where they are, as the ones inside the houses do, until
+## somebody is near them. A shot is heard and brings those near; nobody is brought by a dead one that happened to walk by in the first minute. (Only the records: nothing is awake yet.)
+func _calm_the_start() -> void:
+	var field = sim.get("field")
+	if field == null or not ("stands" in field) or not ("xs" in field):
+		return
+	var r := float(_cfg("calm_start_r", 32.0))
+	if r <= 0.0:
+		return
+	var at := _start_pos()
+	var r2 := r * r
+	for i in int(field.n):
+		if int(field.stands[i]) == 0 and Vector2(field.xs[i], field.ys[i]).distance_squared_to(at) < r2:
+			field.stands[i] = 1
 
 
 ## One person, Ruth, the player, and nobody on the radio: the recruits are a small start's with no caller (`recruits.small`, so that every module of the community sees a small
@@ -337,6 +374,9 @@ func _apply_static() -> void:
 	sim.gate.enabled = false
 	sim.levels.enabled = false
 	sim.seasons.campaign = false
+	# (a run of few rounds: forty is a fine start, the school's "running low" of sixty would be a standing alert)
+	if sim.supplies != null and sim.supplies.get("low_ammo") != null:
+		sim.supplies.low_ammo = float(_cfg("low_ammo", 10.0))
 
 
 ## What follows the stage of the run, looked at every tick: the nights' machinery is on from the first attack night, and the street's dead wake no more near the base through it.
@@ -346,6 +386,9 @@ func _apply_flags() -> void:
 	var field = sim.get("field")
 	if field != null and "pause_wake" in field:
 		var hold: bool = on and (sim.phase == "dusk" or sim.phase == "night" or sim.phase == "dawn")
+		var sleeper = sim.get("sleep")
+		if sleeper != null and sleeper.has_method("active") and bool(sleeper.active()):
+			hold = true    # (the avatar asleep keeps the street asleep: the sleep sets it, and this would put it back every tick)
 		if bool(field.pause_wake) != hold:
 			field.pause_wake = hold
 
@@ -553,14 +596,19 @@ func _watch_the_lessons() -> void:
 	var lessons = _cfg("guide", [])
 	if _done.size() >= lessons.size():
 		return
-	for l in lessons:
-		var id := String(l.get("id", ""))
+	var newest := -1
+	for i in lessons.size():
+		var id := String(lessons[i].get("id", ""))
 		if id == "" or _done.has(id):
 			continue
-		if _cond(l.get("cond", {})):
+		if _cond(lessons[i].get("cond", {})):
 			_done[id] = true
 			_flash_id = id
 			_flash_until = float(sim.t) + FLASH_S
+			newest = i
+	# (a player who has done a later lesson has the idea of the earlier ones: they are not asked again)
+	for i in newest:
+		_done[String(lessons[i].get("id", ""))] = true
 
 
 func _cond(c: Dictionary) -> bool:
@@ -619,6 +667,19 @@ func _searched() -> int:
 		for c in houses.containers_of(h):
 			if search.is_looted(String(c.id)):
 				n += 1
+	return n
+
+
+## How many containers of the start house nobody has searched yet.
+func _unsearched_here() -> int:
+	var search = sim.get("search")
+	var houses = sim.get("houses")
+	if search == null or houses == null:
+		return 0
+	var n := 0
+	for c in houses.containers_of(int(houses.start_house())):
+		if not search.is_looted(String(c.id)):
+			n += 1
 	return n
 
 
@@ -692,7 +753,8 @@ func objective() -> Dictionary:
 		"cleared":
 			out.id = "claim"
 			out.text = String(_cfg("objective.claim.text", "Claim the house"))
-			out.sub = String(_cfg("objective.claim.sub", ""))
+			var search_first := String(_cfg("objective.claim.sub_search", ""))
+			out.sub = search_first if search_first != "" and _unsearched_here() > 0 else String(_cfg("objective.claim.sub", ""))
 			out.at = _front_door()
 		"claimed", "growing":
 			var want := int(_cfg("attack.from_rescue", 4))

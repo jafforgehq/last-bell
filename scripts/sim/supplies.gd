@@ -59,6 +59,8 @@ const DANGER := Color("#e0584a")
 ## Less ammo than this in the stock is low: an alert (raised at most every six
 ## times LOW_REPEAT_MIN).
 const LOW_AMMO := 60.0
+## The stock below which the ammo alert is raised (`LOW_AMMO` unless a run says otherwise: the One House run keeps few rounds on purpose, 10).
+var low_ammo := LOW_AMMO
 ## Slack for float noise: a stock under this is empty; a meal time that came up
 ## within a step is on time to within this many game hours.
 const EPS := 1.0e-9
@@ -344,7 +346,7 @@ func _needs(gh: float) -> void:
 
 func _low_stock_alerts() -> void:
 	var rounds := float(sim.stock.ammo)
-	if rounds >= LOW_AMMO:
+	if rounds >= low_ammo:
 		sim.alerts.erase("low-ammo")
 	elif rounds > 0.0 and sim.clock_min - float(low_alert_min["ammo"]) >= LOW_REPEAT_MIN * 6.0:
 		low_alert_min["ammo"] = sim.clock_min

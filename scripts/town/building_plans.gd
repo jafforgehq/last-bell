@@ -32,7 +32,7 @@ static func _rect_plan(kind: String, avail_w: int, depth: int, rng: RandomNumber
 static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
 	match kind:
 		"start":
-			if avail_w < 14 or depth < 12:
+			if avail_w < 14 or depth < 13:
 				return {}
 			var p := _rect_plan(kind, avail_w, depth, rng, [10, 10], [8, 8], [4, 4], [2, 2])
 			if not p.is_empty():

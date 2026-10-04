@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dqt6s4s1wl5di"
-path="res://.godot/imported/water.png-3986f13674dba5a52ddfdf698bb110e3.ctex"
+uid="uid://dgnuc1gbhfu1x"
+path="res://.godot/imported/lawn_patch.png-11e4f4604a41f77b240ac859ee75463b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/terrain/water.png"
-dest_files=["res://.godot/imported/water.png-3986f13674dba5a52ddfdf698bb110e3.ctex"]
+source_file="res://assets/town/street/lawn_patch.png"
+dest_files=["res://.godot/imported/lawn_patch.png-11e4f4604a41f77b240ac859ee75463b.ctex"]
 
 [params]
 

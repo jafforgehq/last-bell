@@ -1,0 +1,21 @@
+{
+  "_doc": "One House tuning (WP8: the numbers tools/house_lab.gd finds). Read over assets/data/one_house.json by OneHouse.data() KEY BY KEY (an object is merged with the same object of one_house.json, any other value replaces it; keys that start with an underscore are notes and are skipped), and its `field` block by TownSim when the sim is made (scripts/town/town_sim.gd `_apply_tuning`, which hands it to DormantDead.apply_tuning). A key that is not here keeps the base number. SCHEMA. night: {first, growth}: the first attack night's size as a multiple of the colony's ordinary night, and the growth of each night after it. start: {hour, stock: {ammo, scrap, food, water, meds}}: the first morning and the stores a run begins with. attack: {from_rescue, cutoff_hour}. big_night: {} or a Big Night theme (brutes) for the first attack night. field (the dead of the street, scripts/town/dormant_dead.gd): wake_r tiles within which a sleeping dead one wakes near a person by day (halved for one inside a house the person is not in); night_wake the multiplier of wake_r from dusk to dawn; noise_by_gun {shotgun, other, melee} the tiles a shot of that gun is heard within (a third of that from inside a house); noise_cap how many of the dead one shot can draw, the nearest first (they go to look at where it was fired, they are not sent after the shooter); sleep_r tiles from every living person beyond which an awake dead one that is not after anybody goes back to sleep; active_cap (leave it out: it is the platform's, scripts/town/town_perf.gd). NOT YET READ BY ANYONE: kits: {fence|fence_strong|gate|door_plank|tower|floodlight: {scrap, work, hp}} over assets/data/base_kits.json, for the perimeter to merge when it makes its kits; packs: {scale} a multiplier on what a rescued survivor brings, for the rescue module. EVIDENCE: tools/house_lab.gd --seeds=1..8 --mode=bot,idle prints the milestones and the verdicts; `--set=field.wake_r=12,field.noise_by_gun.shotgun=16,night.first=2` puts a number over a run in memory so that it can be tried before it is written here.",
+  "version": 1,
+  "start": {
+    "stock": {
+      "meds": 4
+    }
+  },
+  "field": {
+    "wake_r": 10,
+    "noise_r": 16,
+    "sleep_r": 22,
+    "noise_cap": 4,
+    "night_wake": 1.8,
+    "noise_by_gun": {
+      "shotgun": 16,
+      "other": 12,
+      "melee": 4
+    }
+  }
+}

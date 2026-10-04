@@ -25,6 +25,7 @@ extends RefCounted
 const VIEW_PARTS := {
 	"house_view": "res://scripts/render/house_view.gd",
 	"base_props_view": "res://scripts/render/base_props_view.gd",
+	"perimeter_view": "res://scripts/render/perimeter_view.gd",
 	"bystander_view": "res://scripts/render/bystander_view.gd",
 	"rescue_card": "res://scripts/ui/rescue_card.gd",
 	"town_hud": "res://scripts/ui/town_hud.gd",
@@ -50,6 +51,8 @@ var _avatar_house := -1
 ## The adaptive cap on the awake dead (scripts/town/town_perf.gd).
 var perf
 var _chunk_drawn := {}
+## 0: not looked at yet, 1: the fresh run is held for the first input, 2: done (see _start_hold).
+var _hold_state := 0
 
 
 ## The facade for `main`'s run (null when the run is not a town's: its sim has no `houses`).
@@ -84,11 +87,46 @@ func on_ready(main_node) -> void:
 	perf.setup(main.sim)
 
 
+## Once, as the camera is first put (main.gd `_ready`, after the HUD): the parts that care say where it looks and how far it sees (`on_opening_view(main)`: the town's HUD part).
+func opening_view() -> void:
+	for part in parts:
+		if part.has_method("on_opening_view"):
+			part.on_opening_view(main)
+
+
 func part(name: String):
 	return by_name.get(name)
 
 
+## A fresh town run waits for the player: the game stays paused (with a line saying so) until the first move, click or key, so that nothing bites Ruth while the
+## town loads and the first card is being read. A load, a staged run (`--stage=`) and a screenshot run are never held.
+func _start_hold() -> void:
+	if _hold_state == 2:
+		return
+	if _hold_state == 0:
+		_hold_state = 2
+		var fresh: bool = main.sim_steps < 5 and main.shot_path == "" and main.speed != 0
+		var scn = main.sim.get("scenario")
+		if fresh and scn != null and scn.has_method("stage") and String(scn.stage()) == "alone":
+			main.speed = 0
+			main.hud.toast("Press W A S D to begin", "info")
+			_hold_state = 1
+		return
+	# held: the first key of the keyboard that moves her, the mouse, or the player's own unpause
+	var moved := false
+	for k in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_E, KEY_R]:
+		if Input.is_key_pressed(k):
+			moved = true
+	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		moved = true
+	if moved or main.speed != 0:
+		_hold_state = 2
+		if main.speed == 0:
+			main.speed = 1
+
+
 func on_frame(dt: float) -> void:
+	_start_hold()
 	if perf != null:
 		perf.frame()
 	if _roofs != null:

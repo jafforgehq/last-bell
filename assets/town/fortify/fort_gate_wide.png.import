@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://biycd5pjh3jxh"
-path="res://.godot/imported/wall_stucco.png-89ee20ead1ad939889f14e3e6ac19593.ctex"
+uid="uid://yely4bberebr"
+path="res://.godot/imported/fort_gate_wide.png-f6294efb1795e9cd33527b17e8433dbe.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/terrain/wall_stucco.png"
-dest_files=["res://.godot/imported/wall_stucco.png-89ee20ead1ad939889f14e3e6ac19593.ctex"]
+source_file="res://assets/town/fortify/fort_gate_wide.png"
+dest_files=["res://.godot/imported/fort_gate_wide.png-f6294efb1795e9cd33527b17e8433dbe.ctex"]
 
 [params]
 

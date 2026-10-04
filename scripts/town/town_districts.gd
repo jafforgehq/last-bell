@@ -1,5 +1,5 @@
 ## The districts of the town and the choices that go with them (One House, TOWNGEN): which kinds of building stand in which district, in what mix, in which wall material and
-## under which roof, and the extra ground and wall terrains the town uses beyond the base map's. Data and small pure helpers only; the street network and the lots are
+## under which roof. Data and small pure helpers only; the street network and the lots are
 ## scripts/town/town_layout.gd, the buildings scripts/town/building_gen.gd.
 ##
 ## DISTRICTS (a block belongs to exactly one; the ring of land round the town is "edge"):
@@ -27,25 +27,15 @@ const GROUND_TINT := {
 	"civic": Color("7a5a5a"), "park": Color("3f7f3f"), "edge": Color("8a8a3a"),
 }
 
-## The ground and wall terrains the town adds (ids well clear of the base map's 1 to 13 and the site layouts' 20 to 23). The pictures are 512 x 512 atlases of 128 px pieces
-## made by tools/make_town_terrain.gd from the art kit's wall fills; when a picture is not there the name is an alias of a base terrain (see `terrains`).
-const TERRAINS := {
-	"WALL_WHITE": {"id": 40, "file": "res://assets/terrain/wall_white.png", "alias": "WALL_PLASTER"},
-	"WALL_BLUE": {"id": 41, "file": "res://assets/terrain/wall_blue.png", "alias": "WALL_PLASTER"},
-	"WALL_STUCCO": {"id": 42, "file": "res://assets/terrain/wall_stucco.png", "alias": "WALL_PLASTER"},
-	"WALL_TIMBER": {"id": 43, "file": "res://assets/terrain/wall_timber.png", "alias": "WALL_BRICK"},
-	"WATER": {"id": 44, "file": "res://assets/terrain/water.png", "alias": "SOIL"},
-}
-
-## Walls of a district: [terrain name, weight].
+## The material of the outside walls of a district: [the kit's wall item (TownArt.WALL_MATS), weight].
 const WALLS := {
-	"suburb": [["WALL_WHITE", 0.3], ["WALL_BLUE", 0.24], ["WALL_STUCCO", 0.2], ["WALL_BRICK", 0.18], ["WALL_PLASTER", 0.08]],
-	"oldtown": [["WALL_BRICK", 0.72], ["WALL_STUCCO", 0.14], ["WALL_PLASTER", 0.14]],
-	"main": [["WALL_BRICK", 0.5], ["WALL_STUCCO", 0.2], ["WALL_PLASTER", 0.15], ["WALL_WHITE", 0.15]],
-	"industrial": [["WALL_METAL", 0.55], ["WALL_BRICK", 0.35], ["WALL_PLASTER", 0.1]],
-	"civic": [["WALL_BRICK", 0.4], ["WALL_STUCCO", 0.3], ["WALL_PLASTER", 0.3]],
-	"park": [["WALL_TIMBER", 0.6], ["WALL_WHITE", 0.4]],
-	"edge": [["WALL_TIMBER", 0.55], ["WALL_WHITE", 0.2], ["WALL_BRICK", 0.15], ["WALL_BLUE", 0.1]],
+	"suburb": [["wall_white", 0.3], ["wall_blue", 0.24], ["wall_stucco", 0.2], ["wall_brick", 0.18], ["wall_sage", 0.08]],
+	"oldtown": [["wall_brick", 0.72], ["wall_stucco", 0.14], ["wall_plaster", 0.14]],
+	"main": [["wall_brick", 0.5], ["wall_stucco", 0.2], ["wall_plaster", 0.15], ["wall_white", 0.15]],
+	"industrial": [["wall_brick", 0.45], ["wall_plaster", 0.3], ["wall_stucco", 0.15], ["wall_white", 0.1]],
+	"civic": [["wall_brick", 0.4], ["wall_stucco", 0.3], ["wall_plaster", 0.3]],
+	"park": [["wall_timber", 0.6], ["wall_white", 0.4]],
+	"edge": [["wall_timber", 0.55], ["wall_white", 0.2], ["wall_brick", 0.15], ["wall_blue", 0.1]],
 }
 
 ## Roofs of a district: the index of the kit's roofs (0 terracotta, 1 slate, 2 shingle) with weights.
@@ -95,21 +85,10 @@ static func pick(list: Array, rng: RandomNumberGenerator):
 	return list[list.size() - 1][0]
 
 
-## The terrain types the town adds, as {name: {"id", "file"}} (the ones whose picture is there) and the aliases of the others, {name: base name}.
-static func terrains() -> Dictionary:
-	var types := {}
-	var alias := {}
-	for k in TERRAINS:
-		var t: Dictionary = TERRAINS[k]
-		if ResourceLoader.exists(String(t.file)) or FileAccess.file_exists(String(t.file)):
-			types[k] = {"id": int(t.id), "file": String(t.file)}
-		else:
-			alias[k] = String(t.alias)
-	return {"types": types, "alias": alias}
-
-
-static func wall_for(district: String, rng: RandomNumberGenerator) -> String:
-	return String(pick(WALLS.get(district, WALLS.suburb), rng))
+## The kit's wall item of a district's outside walls, as the code of `data.kit.wall` (the index in TownArt.WALL_MATS; 1 brick when the name is not known).
+static func wall_code_for(district: String, rng: RandomNumberGenerator, mats: Array) -> int:
+	var name := String(pick(WALLS.get(district, WALLS.suburb), rng))
+	return maxi(1, mats.find(name))
 
 
 static func roof_for(district: String, rng: RandomNumberGenerator) -> int:

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://7yn7kkb6m5hq"
-path="res://.godot/imported/wall_timber.png-73689075156ec8cf5fc01f7d597b2718.ctex"
+uid="uid://3jeekufiq3n5"
+path="res://.godot/imported/fort_tower_post.png-ee569ac644ceb16624ef26d07581b618.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/terrain/wall_timber.png"
-dest_files=["res://.godot/imported/wall_timber.png-73689075156ec8cf5fc01f7d597b2718.ctex"]
+source_file="res://assets/town/fortify/fort_tower_post.png"
+dest_files=["res://.godot/imported/fort_tower_post.png-ee569ac644ceb16624ef26d07581b618.ctex"]
 
 [params]
 

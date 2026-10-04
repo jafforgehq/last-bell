@@ -36,10 +36,23 @@ func start() -> void:
 	claimed = false
 	house = -1
 	layout = {}
+	_put_bench_away()
 
 
 func _hs():
 	return sim.get("houses")
+
+
+## The generator leaves the school's "worktable" spot in the map data (`workshop`, at the start house): until a base has a bench of its own there is no bench to work (E would say
+## "Work the bench" in a house that is nobody's yet). The data's `workshop` is emptied here and put at the base's own bench when the layout is installed.
+func _put_bench_away() -> void:
+	if sim != null and sim.d is Dictionary and sim.d.has("workshop"):
+		sim.d["workshop"] = null
+
+
+func _set_bench(at: Vector2) -> void:
+	if sim != null and sim.d is Dictionary:
+		sim.d["workshop"] = {"x": at.x, "y": at.y, "what": "At the worktable"}
 
 
 func _lead():
@@ -194,6 +207,9 @@ func install(h: int, with_perimeter: bool = true) -> void:
 	var per = sim.get("perimeter")
 	if with_perimeter and per != null and per.has_method("activate"):
 		per.activate(layout)
+	var bench := prop("bench")
+	if not bench.is_empty():
+		_set_bench(Vector2(bench.pos))
 	var sp: Array = []
 	for s in layout.get("spawns", []):
 		sp.append(Vector2(s))
@@ -412,6 +428,11 @@ func restore(before) -> void:
 	house = int(before.house)
 	layout = before.layout
 	sim.spawns = before.spawns
+	var bench := prop("bench")
+	if bench.is_empty():
+		_put_bench_away()
+	else:
+		_set_bench(Vector2(bench.pos))
 	if not had:
 		if sim.build.has_method("clear_layout"):
 			sim.build.clear_layout()

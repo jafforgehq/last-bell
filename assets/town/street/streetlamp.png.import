@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c80er0qxm2kfk"
-path="res://.godot/imported/wall_blue.png-696486ea08339126a891c67264407d19.ctex"
+uid="uid://q24klwn6178m"
+path="res://.godot/imported/streetlamp.png-79dc8a68fa34ccbc1cf0bf9b355a0c36.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/terrain/wall_blue.png"
-dest_files=["res://.godot/imported/wall_blue.png-696486ea08339126a891c67264407d19.ctex"]
+source_file="res://assets/town/street/streetlamp.png"
+dest_files=["res://.godot/imported/streetlamp.png-79dc8a68fa34ccbc1cf0bf9b355a0c36.ctex"]
 
 [params]
 

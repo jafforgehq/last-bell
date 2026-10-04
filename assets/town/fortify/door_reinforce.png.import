@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cd46rblve33da"
-path="res://.godot/imported/wall_white.png-9b78e6a362d4b0d69ce53f3e5f2fbf78.ctex"
+uid="uid://d2ibx55o2nine"
+path="res://.godot/imported/door_reinforce.png-877e30fc67f94d7aafefe9e57735b546.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/terrain/wall_white.png"
-dest_files=["res://.godot/imported/wall_white.png-9b78e6a362d4b0d69ce53f3e5f2fbf78.ctex"]
+source_file="res://assets/town/fortify/door_reinforce.png"
+dest_files=["res://.godot/imported/door_reinforce.png-877e30fc67f94d7aafefe9e57735b546.ctex"]
 
 [params]
 

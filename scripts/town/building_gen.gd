@@ -5,19 +5,25 @@
 ## two, a church three: tower, nave, chancel; scripts/town/building_plans.gd draws them, the front at the top, and `build` turns a plan over for a lot whose front is south).
 ## Each part is partitioned into ROOMS (rectangles) by a BSP that follows a program of room names with shares of the floor (the entry room, the one the front door opens into,
 ## always touches the front wall of its part). Doors are cut in the partition walls where both sides are floor, between touching parts, and in the outer walls (a front door into the
-## entry room, a back door); a repair pass opens a door to any room that cannot be reached. Then the rooms are furnished with the site canvas's ops and the yard is dressed (a path,
-## a driveway, a car, lawn or garden or bare earth, trees, shrubs, a fence).
+## entry room, a back door); a repair pass opens a door to any room that cannot be reached. Then the rooms are furnished and the yard is dressed with the ART KIT's things
+## (scripts/town/town_kit.gd: the furniture of each room by its name, the path, the step, bushes, a mailbox, a fence or hedge, a car on gravel...).
+##
+## The outside walls are the terrain WALL_BRICK and the walls inside WALL_PLASTER (what the world draws as walls); the MATERIAL of the outside wall (brick, white or blue siding, stucco...)
+## is the generator's `data.kit.wall` code of the house, chosen by district (scripts/town/town_districts.gd).
 extends RefCounted
 
 const Canvas := preload("res://scripts/raid/site_canvas.gd")
 const Plans := preload("res://scripts/town/building_plans.gd")
 
+const WALL_OUT := "WALL_BRICK"
 const WALL_IN := "WALL_PLASTER"
 const DOOR_T := "DOOR_WOOD"
 ## The tiles each side of a doorway that no furniture may stand on (one: the rooms are small).
 const DOOR_KEEP := 1
 ## The kinds that are a yard and no building.
 const YARD_KINDS := ["pocket", "park", "plaza", "field", "woods", "meadow"]
+## The kinds whose lot is a home (a yard with a path, bushes, a mailbox...): the rest are shops, works and public buildings.
+const HOME_KINDS := ["start", "small", "medium", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "terrace", "terrace_ext", "cottage", "farmhouse"]
 ## Which stocks a room or a kind of building holds (multipliers on 1.0 for each of food, water, scrap, ammo, meds).
 const LOOT_ROOM := {
 	"kitchen": {"food": 3.0, "water": 2.0, "scrap": 0.3}, "pantry": {"food": 4.0, "water": 3.0}, "bedroom": {"scrap": 1.2, "meds": 1.2, "ammo": 0.6, "food": 0.3},
@@ -37,11 +43,16 @@ const LOOT_KIND := {
 
 var props: Dictionary = {}
 var tids: Dictionary = {}
+## The kit's toolbox (scripts/town/town_kit.gd).
+var kit
+var _size := 192
 
 
-func setup(prop_catalogue: Dictionary, terrain_ids: Dictionary) -> void:
+func setup(prop_catalogue: Dictionary, terrain_ids: Dictionary, kit_in, world_size: int = 192) -> void:
 	props = prop_catalogue
 	tids = terrain_ids
+	kit = kit_in
+	_size = world_size
 
 
 ## The weights of the five stocks for a container in a room of a building: {stock: weight}.
@@ -209,22 +220,23 @@ func _door_cell(cv, x: int, y: int, horiz_wall: bool) -> void:
 			cv._keep_tile(x + dd, y)
 
 
-## Everything of one lot. `spec`: {"kind", "district", "rect" (the lot, in the town), "front", "plan", "seed", "start", "wall" (terrain name), "fenced", "yard" (a yard type), "ruin",
-## "barricade", "shed"}. Returns {"cv": the canvas, "buildings": [{"kind", "parts": [Rect2i] (in the town), "box": Rect2i, "door": the tile outside the front door, "front_door": [tiles],
-## "landmark": "", "state": "intact"|"ruined", "drive": Rect2i (town) or empty}] (the main building first, then a shed), "reach": the flood from the entry}. The rooms of the canvas's
-## `areas` say which building they are in ("b"). A lot with no building has none.
+## Everything of one lot. `spec`: {"kind", "district", "rect" (the lot, in the town), "front", "plan", "seed", "start", "fenced", "yard" (a yard type), "ruin", "burnt", "barricade", "shed"}.
+## Returns {"cv": the canvas, "buildings": [{"kind", "parts": [Rect2i] (in the town), "box": Rect2i, "door": the tile outside the front door, "front_door": [tiles],
+## "landmark": "", "state": "intact"|"ruined"|"burnt", "drive": Rect2i (town) or empty}] (the main building first, then a shed), "reach": the flood from the entry, "dressing": {"ground":
+## [[x, y, code]], "lines": [[x, y, code]], "gates": [...]} (lot coordinates, for the kit's data)}. The rooms of the canvas's `areas` say which building they are in ("b").
+## A lot with no building has none.
 func build(spec: Dictionary) -> Dictionary:
 	var lot: Rect2i = spec.rect
 	var cv := Canvas.new()
 	cv.setup(lot.size.x, lot.size.y, int(spec.seed), props, tids, {})
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(spec.seed) * 31 + 7
-	var out := {"cv": cv, "buildings": [], "state": "intact", "drive": Rect2i(), "reach": PackedByteArray()}
+	var out := {"cv": cv, "buildings": [], "state": "intact", "reach": PackedByteArray(), "dressing": {"ground": [], "lines": [], "gates": []}}
 	if String(spec.kind) in YARD_KINDS:
 		_yard_lot(cv, rng, spec, out)
-		out.reach = cv.flood()
-		return out
-	_building_lot(cv, rng, spec, out)
+	else:
+		_building_lot(cv, rng, spec, out)
+	kit.kitify(cv, rng)
 	out.reach = cv.flood()
 	return out
 
@@ -245,8 +257,9 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	var by := fy if front == "N" else lh - fy - box.y
 	var attached := kind in ["terrace", "terrace_ext", "rowshop", "kiosk", "cornershop", "shop", "pharmacy", "bakery", "hardware", "diner", "bank", "office", "apartments"]
 	if start:
+		# two tiles of clear ground to the sides and behind, and the step before the door (a tile beyond the ring) in front
 		bx = 2
-		by = (lh - box.y) / 2
+		by = 3 if front == "N" else lh - box.y - 3
 	elif attached:
 		bx = 0 if margin < 4 else rng.randi_range(0, margin)
 	elif kind == "scrapyard" or kind == "containers":
@@ -260,9 +273,6 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	bx = clampi(bx, 0, maxi(0, lw - box.x))
 	by = clampi(by, 0, maxi(0, lh - box.y))
 	var parts := place_parts(plan.parts, box, front, bx, by)
-	var wall_name := String(spec.wall)
-	if not tids.has(wall_name):
-		wall_name = "WALL_BRICK"
 	var programs: Array = Plans.programs(kind, rng)
 	var ruin_part := -1
 	if bool(spec.get("ruin", false)) and parts.size() >= 2:
@@ -281,7 +291,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 		for y in range(pr.position.y, pr.end.y):
 			for x in range(pr.position.x, pr.end.x):
 				if x == pr.position.x or y == pr.position.y or x == pr.end.x - 1 or y == pr.end.y - 1:
-					cv._wall(x, y, wall_name)
+					cv._wall(x, y, WALL_OUT)
 				else:
 					cv._paint(x, y, first_floor, false)
 		var inner := pr.grow(-1)
@@ -335,11 +345,17 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	_repair(cv, rooms, room_at)
 	if ruin_part >= 0:
 		_rubble(cv, parts, ruin_part, rng)
-	_dress_ground(cv, rng, spec, out, parts, front_pair, doors, front, fenced)
-	var ops: Array = []
-	for i in rooms.size():
-		ops.append_array(_ops_for(String(rooms[i].name), "r%d" % i, rooms[i].rect, front, kind, rng))
-	cv.run({"ops": ops})
+	var fence_gates := _fence(cv, spec, parts, front_pair, doors, front, fenced)
+	# the furniture of every room, by its name
+	var has_kitchen := false
+	for rm in rooms:
+		if String(rm.name) == "kitchen":
+			has_kitchen = true
+	for rm in rooms:
+		var rn := String(rm.name)
+		kit.furnish_room(cv, rng, rn, rm.rect, front, kind, start, rn == "living room" and not has_kitchen and kind in ["small", "cottage"])
+	if start:
+		kit.start_extras(cv, rng)
 	if bool(spec.get("burnt", false)):
 		# a burnt house: soot and cracks over every room
 		var burn: Array = []
@@ -362,12 +378,107 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 		y0 = mini(y0, pr.position.y)
 		x1 = maxi(x1, pr.end.x)
 		y1 = maxi(y1, pr.end.y)
+	var bb := Rect2i(x0, y0, x1 - x0, y1 - y0)
 	out.buildings.append({"kind": kind, "parts": town_parts, "box": Rect2i(x0 + lot.position.x, y0 + lot.position.y, x1 - x0, y1 - y0),
 		"door": Vector2i(cv.entry.x + lot.position.x, cv.entry.y + lot.position.y), "front_door": fdt, "landmark": String(plan.get("landmark", "")), "state": String(out.state), "drive": Rect2i()})
 	if bool(spec.get("shed", false)) and not start:
-		_add_shed(cv, rng, spec, out, Rect2i(x0, y0, x1 - x0, y1 - y0), front)
-	_dress_yard(cv, rng, spec, out, parts, front_pair, front, fenced)
-	out.buildings[0].drive = out.drive
+		_add_shed(cv, rng, spec, out, bb, front)
+	# the yard: the path, the step, bushes, a fence or hedge, a car on gravel (the kit's)
+	var back_dir := Vector2i(0, 1) if front == "N" else Vector2i(0, -1)
+	var back_door := Vector2i(-1, -1)
+	for k in range(1, doors.all.size()):
+		if Vector2i(doors.dirs[k]) == back_dir:
+			back_door = Vector2i(doors.all[k][0]) + back_dir
+			break
+	var garage := Vector2i(doors.garage[0]) if not (doors.garage as Array).is_empty() else Vector2i(-1, -1)
+	var dressing: Dictionary = kit.dress_lot(cv, rng, kind, lot, front, bb, cv.entry, back_door, garage, start, fenced, kind in HOME_KINDS, _size)
+	out.dressing.ground.append_array(dressing.ground)
+	out.dressing.lines.append_array(dressing.lines)
+	out.dressing.gates.append_array(dressing.gates)
+	out.dressing.gates.append_array(fence_gates)
+	out.buildings[0].drive = dressing.drive
+	_dress_extra(cv, rng, spec, bb, front, front_pair)
+	_unblock(cv)
+
+
+## A room that the furniture has cut off from the way in (the kit's tests keep to a window round each thing, and a sofa and a bookshelf in a room of 4 x 2 can still shut the one way
+## through) gets its way back: the furniture of the rooms is taken away, the last put first, until every room can be reached.
+func _unblock(cv) -> void:
+	var lw: int = cv.W
+	for round in 14:
+		var reach: PackedByteArray = cv.flood()
+		var lost := false
+		for a in cv.areas:
+			if not bool(a.indoor):
+				continue
+			var rr: Rect2i = a.rect
+			var seen := false
+			for y in range(rr.position.y, rr.end.y):
+				for x in range(rr.position.x, rr.end.x):
+					if reach[y * lw + x] != 0:
+						seen = true
+			if not seen:
+				lost = true
+		if not lost:
+			return
+		for k in range(cv.objects.size() - 1, -1, -1):
+			var o: Dictionary = cv.objects[k]
+			if not bool(o.get("solid", false)):
+				continue
+			var tx := roundi(float(o.cx) - float(o.w) / 2.0)
+			var ty := roundi(float(o.cy) - float(o.h) / 2.0)
+			var inside := false
+			for a in cv.areas:
+				if bool(a.indoor) and Rect2i(a.rect).has_point(Vector2i(tx, ty)):
+					inside = true
+			if not inside:
+				continue
+			for yy in int(o.h):
+				for xx in int(o.w):
+					cv.solid[(ty + yy) * lw + tx + xx] = 0
+					cv.pmask[(ty + yy) * lw + tx + xx] = 0
+			cv.objects.remove_at(k)
+			var keep: Array = []
+			for c in cv.cands:
+				if c.obj != o:
+					keep.append(c)
+			cv.cands = keep
+			break
+
+
+## The fence round a lot (a band of WALL_METAL cells the world draws as the kit's fence), gates for the front and for every side or back door that opens on it. Returns the gates for
+## the kit's data.
+func _fence(cv, spec: Dictionary, _parts: Array, front_pair: Array, doors: Dictionary, front: String, fenced: bool) -> Array:
+	var out: Array = []
+	if not fenced:
+		return out
+	var lot: Rect2i = spec.rect
+	var lw := lot.size.x
+	var lh := lot.size.y
+	var gate_x := 1
+	if not front_pair.is_empty():
+		gate_x = clampi((front_pair[0] as Vector2i).x - 1, 1, maxi(1, lw - 5))
+	var gates: Array = [{"side": front, "at": gate_x, "w": 4}]
+	out.append({"x": gate_x, "y": lh - 1 if front == "S" else 0, "w": 4, "orient": "h", "fenced": true})
+	# a side or back door that opens on the fence line gets a gate of its own
+	for k in range(1, doors.all.size()):
+		var tiles: Array = doors.all[k]
+		var dir: Vector2i = doors.dirs[k]
+		var o: Vector2i = Vector2i(tiles[0]) + dir
+		if o.x <= 0:
+			gates.append({"side": "W", "at": o.y, "w": 2})
+			out.append({"x": 0, "y": o.y, "w": 2, "orient": "v", "fenced": true})
+		elif o.x >= lw - 1:
+			gates.append({"side": "E", "at": o.y, "w": 2})
+			out.append({"x": lw - 1, "y": o.y, "w": 2, "orient": "v", "fenced": true})
+		elif o.y <= 0:
+			gates.append({"side": "N", "at": o.x, "w": 2})
+			out.append({"x": o.x, "y": 0, "w": 2, "orient": "h", "fenced": true})
+		elif o.y >= lh - 1:
+			gates.append({"side": "S", "at": o.x, "w": 2})
+			out.append({"x": o.x, "y": lh - 1, "w": 2, "orient": "h", "fenced": true})
+	cv.run({"ops": [{"op": "fence", "rect": [0, 0, lw, lh], "t": "WALL_METAL", "gates": gates}]})
+	return out
 
 
 ## The ground under and round a building by district: paving in the town, concrete at the works, the earth of the yard.
@@ -395,15 +506,86 @@ func _ground_base(cv, rng: RandomNumberGenerator, spec: Dictionary, by: int, box
 			match yard:
 				"bare":
 					cv.run({"ops": [{"op": "patch", "rect": [0, 0, lw, lh], "t": "DIRT", "n": 4, "r": [2, 3.5]}]})
-				"garden":
-					var gy := (by + box.y + 1) if front == "N" else 1
-					var gh := lh - gy - 1 if front == "N" else by - 2
-					if gh >= 2 and lw >= 5:
-						cv.fill(Rect2i(1, gy, mini(6, lw - 2), mini(3, gh)), "SOIL")
 				"overgrown":
 					cv.run({"ops": [{"op": "patch", "rect": [0, 0, lw, lh], "t": "SOIL", "n": 2, "r": [1.5, 2.5]}]})
 	if kind == "supermarket":
 		cv.fill(front_strip, "CONCRETE")
+
+
+## What a lot has beyond the kit's yard: trees, and by the kind of building a car park, a school's grounds, a church's graves, a scrapyard's wrecks, sandbags before a barricaded door.
+func _dress_extra(cv, rng: RandomNumberGenerator, spec: Dictionary, bb: Rect2i, front: String, front_pair: Array) -> void:
+	var lot: Rect2i = spec.rect
+	var lw := lot.size.x
+	var lh := lot.size.y
+	var kind := String(spec.kind)
+	var district := String(spec.district)
+	var yard := String(spec.get("yard", "lawn"))
+	var start := bool(spec.get("start", false))
+	if start:
+		return
+	var all := [0, 0, lw, lh]
+	var ops: Array = []
+	var trees_n := 0
+	match district:
+		"suburb":
+			trees_n = rng.randi_range(0, 2)
+		"edge":
+			trees_n = rng.randi_range(1, 3)
+	if yard == "overgrown":
+		trees_n += 2
+	elif yard == "bare":
+		trees_n = 0
+	if trees_n > 0:
+		ops.append({"op": "trees", "rect": all, "n": trees_n, "on": ["GRASS"], "gap": 3})
+	if yard == "overgrown":
+		for k in 3:
+			kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
+	match kind:
+		"scrapyard":
+			for k in 8:
+				kit.scatter(cv, rng, ["crate", "box", "toolbox"][rng.randi() % 3], 1, lw - 2, 1, lh - 2)
+			for k in 2:
+				kit.scatter(cv, rng, "car_wreck", 1, lw - 5, 1, lh - 4)
+		"containers":
+			ops.append({"op": "scatter", "rect": all, "kinds": ["cont_red", "cont_blue", "cont_green_v", "cont_orange_v"], "n": 5, "apart": 1})
+			for k in 4:
+				kit.scatter(cv, rng, ["crate", "box"][rng.randi() % 2], 1, lw - 2, 1, lh - 2)
+		"supermarket":
+			var by0 := 1 if front == "N" else bb.end.y + 1
+			var hh := bb.position.y - 2 if front == "N" else lh - bb.end.y - 2
+			if hh >= 4:
+				ops.append({"op": "cars", "rect": [0, by0, lw, hh], "n": 7, "kinds": ["car_h"]})
+		"school":
+			# the grounds behind the school: a court with its hoop, a four square, a hopscotch, a swing set
+			var back_y := bb.end.y + 1 if front == "N" else 1
+			var back_h := lh - bb.end.y - 1 if front == "N" else bb.position.y - 2
+			if back_h >= 12 and lw >= 14:
+				ops.append({"op": "place", "kind": "court", "at": [1, back_y]})
+				ops.append({"op": "place", "kind": "hoop", "at": [6, back_y + 1]})
+				if lw >= 22:
+					ops.append({"op": "place", "kind": "foursquare", "at": [15, back_y + 2]})
+					ops.append({"op": "place", "kind": "hopscotch", "at": [lw - 3, back_y + 2]})
+			elif back_h >= 6 and lw >= 10:
+				ops.append({"op": "place", "kind": "foursquare", "at": [1, back_y + 1]})
+				ops.append({"op": "place", "kind": "hopscotch", "at": [7, back_y + 1]})
+			if back_h >= 4:
+				kit.scatter(cv, rng, "swing_set", 1, lw - 4, back_y, back_y + back_h - 2)
+				kit.scatter(cv, rng, "slide", 1, lw - 2, back_y, back_y + back_h - 3)
+		"church":
+			for k in 5:
+				kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
+			ops.append({"op": "trees", "rect": all, "n": 6, "on": ["GRASS"], "gap": 3})
+			for k in 2:
+				kit.scatter(cv, rng, "bench", 1, lw - 3, 1, lh - 2)
+	if rng.randf() < 0.5:
+		ops.append({"op": "decals", "rect": all, "kinds": ["papers", "broken_glass", "blood_stain"], "n": {"r": [0, 2]}})
+	# sandbags in front of the door of a barricaded house (the back is left open)
+	if bool(spec.get("barricade", false)) and not front_pair.is_empty():
+		var d0: Vector2i = front_pair[0]
+		var oy := d0.y - 2 if front == "N" else d0.y + 2
+		ops.append({"op": "place", "kind": "sandbags", "at": [d0.x - 1, oy]})
+	if not ops.is_empty():
+		cv.run({"ops": ops})
 
 
 ## Cuts a door in a wall of partitions (or a doorway to a corridor): where both sides are floor.
@@ -521,7 +703,7 @@ func _outer_candidates(cv, parts: Array, room_at: PackedInt32Array) -> Array:
 	return out
 
 
-## The outer doors: the front one (into the entry room, on the front side when it can be) and a back door or two. {"front": [tiles], "all": [[tiles]], "garage": [tiles]}.
+## The outer doors: the front one (into the entry room, on the front side when it can be) and a back door or two. {"front": [tiles], "all": [[tiles]], "dirs": [outward], "garage": [tiles]}.
 func _outer_doors(cv, parts: Array, rooms: Array, room_at: PackedInt32Array, front: String, kind: String, rng: RandomNumberGenerator, start: bool) -> Dictionary:
 	var res := {"front": [], "all": [], "dirs": [], "garage": []}
 	var cands := _outer_candidates(cv, parts, room_at)
@@ -657,17 +839,17 @@ func _rubble(cv, parts: Array, ruin: int, rng: RandomNumberGenerator) -> void:
 				continue
 			var edge := x == pr.position.x or y == pr.position.y or x == pr.end.x - 1 or y == pr.end.y - 1
 			if edge and rng.randf() < 0.3:
-				cv._wall(x, y, "WALL_BRICK")
+				cv._wall(x, y, WALL_OUT)
 			else:
 				cv._paint(x, y, "DIRT" if rng.randf() < 0.7 else "CONCRETE", false)
 	var inner := pr.grow(-1)
 	cv.run({"ops": [
-		{"op": "decals", "rect": [inner.position.x, inner.position.y, inner.size.x, inner.size.y], "kinds": ["scorch", "crack", "stain"], "n": 5},
-		{"op": "scatter", "rect": [inner.position.x, inner.position.y, inner.size.x, inner.size.y], "kinds": ["scrap", "crate", "tires"], "n": 2, "container": 0.5},
+		{"op": "decals", "rect": [inner.position.x, inner.position.y, inner.size.x, inner.size.y], "kinds": ["scorch", "crack", "blood_stain"], "n": 5},
+		{"op": "scatter", "rect": [inner.position.x, inner.position.y, inner.size.x, inner.size.y], "kinds": ["box", "crate"], "n": 2, "container": 0.5},
 	]})
 
 
-## A shed in the back yard: 5 x 5 outer (a room of 3 x 3), a two wide door on the side that faces the house, a shelf and a crate. A building of its own (the next of `buildings`).
+## A shed beside or behind the house: 7 x 5 outer (two small rooms, the shed and a store), a two wide door on the street side. A building of its own (the next of `buildings`).
 func _add_shed(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary, bb: Rect2i, front: String) -> void:
 	var lot: Rect2i = spec.rect
 	var lw := lot.size.x
@@ -692,13 +874,10 @@ func _add_shed(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary
 			break
 	if spot.x < 0:
 		return
-	var wall_name := String(spec.wall)
-	if not tids.has(wall_name) or wall_name == "WALL_METAL":
-		wall_name = "WALL_PLASTER"
 	for yy in 5:
 		for xx in 7:
 			if xx == 0 or yy == 0 or xx == 6 or yy == 4:
-				cv._wall(spot.x + xx, spot.y + yy, wall_name)
+				cv._wall(spot.x + xx, spot.y + yy, WALL_OUT)
 			else:
 				cv._paint(spot.x + xx, spot.y + yy, "WOOD", false)
 	# two small rooms: the shed and a store behind a partition with a doorway
@@ -707,12 +886,9 @@ func _add_shed(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary
 	var ws: Array = []
 	_partition(inner, Plans.programs("shed", rng)[0], front, rs, ws, rng)
 	var bi: int = out.buildings.size()
-	var ri := 0
 	for rm in rs:
 		cv.fill(rm.rect, "WOOD")
-		cv.rects["shed%d" % ri] = rm.rect
 		cv.areas.append({"name": String(rm.name), "rect": rm.rect, "dead": 1.0, "indoor": true, "b": bi})
-		ri += 1
 	for w3 in ws:
 		for t in range(int(w3.from), int(w3.to) + 1):
 			cv._wall(int(w3.pos) if not bool(w3.horiz) else t, t if not bool(w3.horiz) else int(w3.pos), WALL_IN)
@@ -727,299 +903,17 @@ func _add_shed(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary
 		cv._keep_tile(spot.x + dx + k, spot.y + dy + dir.y)
 		cv._keep_tile(spot.x + dx + k, spot.y + dy + 2 * dir.y)
 		door_tiles.append(Vector2i(spot.x + dx + k + lot.position.x, spot.y + dy + lot.position.y))
-	var shed_ops: Array = []
-	for k in ri:
-		shed_ops.append({"op": "place", "kind": "shelf_s", "in": "shed%d" % k, "anchor": "NW" if front == "S" else "SW", "container": true})
-		shed_ops.append({"op": "place", "kind": "crate", "in": "shed%d" % k, "anchor": "NE" if front == "S" else "SE", "container": 0.8})
-	cv.run({"ops": shed_ops})
+	for rm in rs:
+		kit.furnish_room(cv, rng, String(rm.name), rm.rect, front, "shed", false, false)
 	var door_out := Vector2i(spot.x + dx + lot.position.x, spot.y + dy + dir.y + lot.position.y)
 	var box := Rect2i(spot.x + lot.position.x, spot.y + lot.position.y, 7, 5)
 	out.buildings.append({"kind": "shed", "parts": [box], "box": box, "door": door_out, "front_door": door_tiles, "landmark": "", "state": "intact", "drive": Rect2i()})
 
 
-# ================================================================== the furniture ==
+# ================================================================= lots without a building ==
 
-## The ops that furnish a room of this name. `id` is the room's rectangle's name on the canvas.
-func _ops_for(name: String, id: String, r: Rect2i, front: String, kind: String, rng: RandomNumberGenerator) -> Array:
-	var ops: Array = []
-	var w := r.size.x
-	var h := r.size.y
-	var back := "S" if front == "N" else "N"
-	var near := "N" if front == "N" else "S"
-	match name:
-		"living room", "front room":
-			if w >= 4 and h >= 3:
-				ops.append({"op": "place", "kind": "rug", "in": id, "anchor": "C", "p": 0.7})
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["bench", "shelf_s", "desk"], "gap": [0, 1], "container": 0.5, "n": 2})
-			ops.append({"op": "place", "kind": "lamp", "in": id, "anchor": back + "E", "p": 0.5})
-			if kind == "small" or kind == "terrace" or kind == "cottage":
-				ops.append({"op": "line", "rect": id, "side": "N" if back == "S" else "S", "kinds": ["fridge", "stove", "counter2"], "gap": [0, 0], "container": 0.7, "n": 2, "start": 1})
-		"kitchen":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["fridge", "counter2", "stove"], "gap": [0, 0], "container": true, "n": 3})
-			if w >= 4 and h >= 4:
-				ops.append({"op": "place", "kind": "cans", "in": id, "anchor": "SW", "container": true, "p": 0.5})
-		"bedroom":
-			ops.append({"op": "place", "kind": "bed", "in": id, "anchor": "NW", "dx": {"r": [0, 1]}})
-			ops.append({"op": "place", "kind": "cabinet", "in": id, "anchor": "NE", "container": true})
-			ops.append({"op": "place", "kind": "lamp", "in": id, "anchor": "SW", "p": 0.5})
-			if w >= 4 and h >= 4:
-				ops.append({"op": "place", "kind": "rug", "in": id, "anchor": "C", "p": 0.5})
-		"nursery":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["cot"], "gap": [0, 1], "n": 2})
-			ops.append({"op": "place", "kind": "lamp", "in": id, "anchor": "SE", "p": 0.5})
-		"bathroom":
-			ops.append({"op": "place", "kind": "cabinet", "in": id, "anchor": "NE", "container": 0.9})
-		"hall", "lobby", "narthex":
-			if kind == "warehouse":
-				ops.append({"op": "rows", "rect": id, "kinds": ["shelf", "shelf", "crate"], "pitch": 3, "y0": 2 if front == "N" else 1, "margin": 1, "gap_every": 3, "container": 0.8})
-				ops.append({"op": "scatter", "rect": id, "kinds": ["crate", "barrel", "cans", "waterpack"], "n": 5, "container": 0.7})
-			else:
-				ops.append({"op": "place", "kind": "lamp", "in": id, "anchor": back + "W", "p": 0.6})
-				ops.append({"op": "place", "kind": "shelf_s", "in": id, "anchor": "NE", "container": 0.4, "p": 0.5})
-				ops.append({"op": "place", "kind": "trashcan", "in": id, "anchor": back + "E", "container": 0.5, "p": 0.4})
-		"study", "office", "reception":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["desk", "desk2", "shelf_s"], "gap": [0, 1], "container": 0.6, "n": 3})
-			ops.append({"op": "place", "kind": "lamp", "in": id, "anchor": "SE", "p": 0.6})
-		"dining room":
-			ops.append({"op": "place", "kind": "longtable" if (w >= 6 and h >= 4) else "desk2", "in": id, "anchor": "C"})
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["shelf_s", "cabinet"], "gap": [0, 1], "container": 0.6, "n": 2})
-		"pantry":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["shelf_s", "cans", "waterpack"], "gap": [0, 0], "container": true, "n": 4})
-		"garage":
-			if w >= 5 and h >= 2:
-				ops.append({"op": "place", "kind": "car_h", "in": id, "anchor": back + "W", "container": 0.7, "p": 0.7})
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["workbench", "tires", "barrel"], "gap": [0, 1], "container": 0.7, "n": 2})
-		"shop floor":
-			ops.append({"op": "rows", "rect": id, "kinds": ["shelf"], "pitch": 3, "y0": 2 if front == "N" else 1, "margin": 1, "container": 0.8})
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["counter3", "fridge", "counter2"], "gap": [0, 0], "container": true, "n": 2})
-		"storeroom":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["crate", "cans", "waterpack", "shelf_s"], "gap": [0, 0], "container": true, "n": 4})
-			if h >= 4 and w >= 4:
-				ops.append({"op": "rows", "rect": id, "kinds": ["crate", "barrel"], "pitch": 3, "y0": 2, "margin": 1, "n": 1, "container": 0.6})
-		"dining hall":
-			ops.append({"op": "rows", "rect": id, "kinds": ["picnic"], "pitch": 3, "y0": 2 if front == "N" else 1, "margin": 1, "n": 2, "container": false})
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["counter", "fridge"], "gap": [0, 0], "container": true, "n": 2})
-		"banking hall":
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["counter", "counter3"], "gap": [0, 0], "container": 0.6, "n": 2})
-			ops.append({"op": "place", "kind": "bench", "in": id, "anchor": near + "W", "dy": 2 if front == "N" else -2})
-		"vault", "armoury":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["locker", "crate_ammo", "locker"], "gap": [0, 0], "container": true, "n": 4})
-		"engine bay":
-			ops.append({"op": "place", "kind": "van_h", "in": id, "anchor": "C", "p": 0.8, "container": 0.8})
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["locker", "toolboard", "barrel"], "gap": [0, 1], "container": 0.6, "n": 3})
-		"dormitory":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["cot", "cot", "locker"], "gap": [0, 1], "container": 0.5, "n": 4})
-		"ward":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["cot"], "gap": [0, 1], "n": 3})
-			ops.append({"op": "place", "kind": "ivstand", "in": id, "anchor": "SE"})
-			ops.append({"op": "place", "kind": "locker", "in": id, "anchor": "SW", "container": 0.7})
-		"waiting room":
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["bench"], "gap": [0, 1], "n": 3})
-		"pharmacy":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["cabinet", "fridge", "shelf_s"], "gap": [0, 0], "container": true, "n": 4})
-		"cell":
-			ops.append({"op": "place", "kind": "cot", "in": id, "anchor": "NW"})
-			ops.append({"op": "place", "kind": "bench", "in": id, "anchor": "SE"})
-		"front desk":
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["counter3", "desk"], "gap": [0, 1], "container": 0.7, "n": 2})
-			ops.append({"op": "place", "kind": "bench", "in": id, "anchor": near + "E", "dy": 2 if front == "N" else -2})
-		"classroom":
-			ops.append({"op": "rows", "rect": id, "kinds": ["desk"], "pitch": 2, "y0": 1, "margin": 1, "skip": 0.15, "container": 0.15})
-			ops.append({"op": "place", "kind": "teacherdesk", "in": id, "anchor": "NE", "container": 0.5})
-		"gym":
-			ops.append({"op": "scatter", "rect": id, "kinds": ["crate", "bench", "locker"], "n": 4, "wall": true, "container": 0.5})
-		"flat":
-			ops.append({"op": "place", "kind": "bed", "in": id, "anchor": "NW"})
-			ops.append({"op": "place", "kind": "cabinet", "in": id, "anchor": "NE", "container": true})
-			ops.append({"op": "line", "rect": id, "side": "S", "kinds": ["fridge", "counter2", "stove"], "gap": [0, 0], "container": 0.6, "n": 2})
-		"reading room":
-			ops.append({"op": "rows", "rect": id, "kinds": ["desk2"], "pitch": 3, "y0": 2, "margin": 1, "n": 2, "container": 0.2})
-			ops.append({"op": "line", "rect": id, "side": back, "kinds": ["counter3", "shelf"], "gap": [0, 0], "container": 0.6, "n": 2})
-		"stacks":
-			ops.append({"op": "rows", "rect": id, "kinds": ["shelf"], "pitch": 3, "y0": 1, "margin": 1, "container": 0.5})
-		"nave":
-			# pews either side of a middle aisle
-			var c := w / 2
-			var y := r.position.y + 2
-			while y <= r.end.y - 2:
-				var xl := r.position.x + 1
-				while xl + 2 <= r.position.x + c:
-					ops.append({"op": "place", "kind": "bench", "at": [xl, y]})
-					xl += 3
-				var xr := r.position.x + c + 1
-				while xr + 2 <= r.end.x - 1:
-					ops.append({"op": "place", "kind": "bench", "at": [xr, y]})
-					xr += 3
-				y += 2
-		"chancel":
-			ops.append({"op": "place", "kind": "counter3", "in": id, "anchor": "C", "container": 0.6})
-		"workshop":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["workbench", "worktable", "generator"], "gap": [0, 1], "container": 0.8, "n": 3})
-			ops.append({"op": "scatter", "rect": id, "kinds": ["tires", "barrel", "crate"], "n": 4, "container": 0.5})
-			if kind == "garage" and w >= 7 and h >= 4:
-				ops.append({"op": "place", "kind": "car_h", "in": id, "anchor": "C", "container": 0.6, "p": 0.7})
-		"barn", "stable":
-			ops.append({"op": "scatter", "rect": id, "kinds": ["crate", "barrel", "wheelbarrow", "compost"], "n": 6 if name == "barn" else 3, "container": 0.5})
-		"shed", "store":
-			ops.append({"op": "line", "rect": id, "side": "N", "kinds": ["shelf_s", "crate", "barrel"], "gap": [0, 0], "container": 0.8, "n": 2})
-	ops.append({"op": "decals", "rect": [r.position.x, r.position.y, w, h], "kinds": ["papers", "blood", "stain"], "n": {"r": [0, 1]}})
-	var _unused := rng
-	return ops
-
-
-# ======================================================================= the yard ==
-
-## The path from the door to the street, a driveway, the fence.
-func _dress_ground(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary, parts: Array, front_pair: Array, doors: Dictionary, front: String, fenced: bool) -> void:
-	var garage_pair: Array = doors.garage
-	var lot: Rect2i = spec.rect
-	var lw := lot.size.x
-	var lh := lot.size.y
-	var kind := String(spec.kind)
-	var start := bool(spec.get("start", false))
-	var district := String(spec.district)
-	var bb: Rect2i = parts[0]
-	for p in parts:
-		bb = bb.merge(p)
-	if not front_pair.is_empty():
-		var d0: Vector2i = front_pair[0]
-		var y_a := 0 if front == "N" else d0.y + 1
-		var y_b := d0.y if front == "N" else lh
-		var span := Rect2i(d0.x, y_a, 2, y_b - y_a)
-		if span.size.y > 0:
-			cv.fill(span, "SIDEWALK")
-			cv._keep_rect(span, true)
-	# a driveway: to the garage when there is one, else beside the house (suburb)
-	var drive := Rect2i()
-	if district == "suburb" and not start and kind != "terrace":
-		if not garage_pair.is_empty():
-			var g0: Vector2i = garage_pair[0]
-			var ya := 0 if front == "N" else g0.y + 1
-			var yb := g0.y if front == "N" else lh
-			drive = Rect2i(g0.x, ya, 2, yb - ya)
-		elif rng.randf() < 0.5:
-			var left_room := bb.position.x
-			var right_room := lw - bb.end.x
-			if maxi(left_room, right_room) >= 3:
-				var dx := bb.position.x - 3 if left_room >= right_room else bb.end.x + 1
-				var ya2 := 0 if front == "N" else bb.position.y + bb.size.y / 2
-				var yb2 := bb.position.y + bb.size.y / 2 if front == "N" else lh
-				drive = Rect2i(dx, ya2, 2, yb2 - ya2)
-		if drive.size.x > 0 and drive.size.y >= 2 and drive.position.x >= 0 and drive.end.x <= lw:
-			cv.fill(drive, "CONCRETE")
-			out.drive = Rect2i(drive.position.x + lot.position.x, drive.position.y + lot.position.y, drive.size.x, drive.size.y)
-	if fenced:
-		var gate_x := 1
-		if not front_pair.is_empty():
-			gate_x = clampi((front_pair[0] as Vector2i).x - 1, 1, maxi(1, lw - 5))
-		var gates: Array = [{"side": front, "at": gate_x, "w": 4}]
-		# a side or back door that opens on the fence line gets a gate of its own
-		for k in range(1, doors.all.size()):
-			var tiles: Array = doors.all[k]
-			var dir: Vector2i = doors.dirs[k]
-			var o: Vector2i = Vector2i(tiles[0]) + dir
-			if o.x <= 0:
-				gates.append({"side": "W", "at": o.y, "w": 2})
-			elif o.x >= lw - 1:
-				gates.append({"side": "E", "at": o.y, "w": 2})
-			elif o.y <= 0:
-				gates.append({"side": "N", "at": o.x, "w": 2})
-			elif o.y >= lh - 1:
-				gates.append({"side": "S", "at": o.x, "w": 2})
-		cv.run({"ops": [{"op": "fence", "rect": [0, 0, lw, lh], "t": "WALL_METAL", "gates": gates}]})
-
-
-## Trees, shrubs, a parked car, the odd mark on the ground, by the kind of building and yard.
-func _dress_yard(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary, parts: Array, front_pair: Array, front: String, _fenced: bool) -> void:
-	var lot: Rect2i = spec.rect
-	var lw := lot.size.x
-	var lh := lot.size.y
-	var kind := String(spec.kind)
-	if bool(spec.get("start", false)):
-		return
-	var district := String(spec.district)
-	var yard := String(spec.get("yard", "lawn"))
-	var bb: Rect2i = parts[0]
-	for p in parts:
-		bb = bb.merge(p)
-	var all := [0, 0, lw, lh]
-	var ops: Array = []
-	var trees_n := 0
-	match district:
-		"suburb":
-			trees_n = rng.randi_range(0, 2)
-		"edge":
-			trees_n = rng.randi_range(1, 3)
-	if yard == "overgrown":
-		trees_n += 2
-	elif yard == "bare":
-		trees_n = 0
-	if trees_n > 0:
-		ops.append({"op": "trees", "rect": all, "n": trees_n, "on": ["GRASS"], "gap": 3})
-	if district == "suburb" or district == "edge":
-		ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": {"r": [0, 2]} if yard != "overgrown" else 4, "wall": true, "apart": 1})
-		if yard == "garden":
-			ops.append({"op": "place", "kind": "garden_h", "at": [1, (bb.end.y + 1) if front == "N" else 1], "p": 0.8})
-	var drive: Rect2i = out.drive
-	if drive.size.x > 0 and rng.randf() < 0.5:
-		var dl := Rect2i(drive.position.x - lot.position.x, drive.position.y - lot.position.y, drive.size.x, drive.size.y)
-		if dl.size.y >= 5:
-			ops.append({"op": "place", "kind": "car_v", "at": [dl.position.x, dl.position.y if front == "N" else dl.end.y - 5], "container": 0.6})
-	match kind:
-		"scrapyard":
-			ops.append({"op": "scatter", "rect": all, "kinds": ["scrap", "tires", "barrel", "crate"], "n": 10, "container": 0.7, "apart": 1})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["cont_blue", "cont_red"], "n": 1})
-		"containers":
-			ops.append({"op": "scatter", "rect": all, "kinds": ["cont_red", "cont_blue", "cont_green_v", "cont_orange_v"], "n": 5, "apart": 1})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["crate", "barrel"], "n": 4, "container": 0.6})
-		"supermarket":
-			var by0 := 1 if front == "N" else bb.end.y + 1
-			var hh := bb.position.y - 2 if front == "N" else lh - bb.end.y - 2
-			if hh >= 4:
-				ops.append({"op": "cars", "rect": [0, by0, lw, hh], "n": 7, "kinds": ["car_h"]})
-		"school":
-			# the grounds behind the school: a court with its hoop, a four square, a hopscotch
-			var back_y := bb.end.y + 1 if front == "N" else 1
-			var back_h := lh - bb.end.y - 1 if front == "N" else bb.position.y - 2
-			if back_h >= 12 and lw >= 14:
-				ops.append({"op": "place", "kind": "court", "at": [1, back_y]})
-				ops.append({"op": "place", "kind": "hoop", "at": [6, back_y + 1]})
-				if lw >= 22:
-					ops.append({"op": "place", "kind": "foursquare", "at": [15, back_y + 2]})
-					ops.append({"op": "place", "kind": "hopscotch", "at": [lw - 3, back_y + 2]})
-			elif back_h >= 6 and lw >= 10:
-				ops.append({"op": "place", "kind": "foursquare", "at": [1, back_y + 1]})
-				ops.append({"op": "place", "kind": "hopscotch", "at": [7, back_y + 1]})
-		"church":
-			ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": 5, "wall": true})
-			ops.append({"op": "trees", "rect": all, "n": 6, "on": ["GRASS"], "gap": 3})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["bench"], "n": 2, "apart": 2})
-		"farmhouse":
-			ops.append({"op": "place", "kind": "clothesline", "at": [1, lh - 3 if front == "N" else 2], "p": 0.4})
-	ops.append({"op": "decals", "rect": all, "kinds": ["papers", "stain", "blood", "crack"], "n": {"r": [0, 2]}})
-	# a hedge along the street side of a few suburban lawns (kept off the path, the driveway and the gate)
-	if district == "suburb" and yard == "lawn" and not bool(spec.get("fenced", false)) and rng.randf() < 0.22:
-		var hy := 0 if front == "N" else lh - 1
-		var skip: Array = []
-		for t in front_pair:
-			skip.append((t as Vector2i).x)
-		var dr := Rect2i(drive.position.x - lot.position.x, drive.position.y - lot.position.y, drive.size.x, drive.size.y)
-		var hx := 0
-		while hx < lw:
-			if not (hx in skip or (hx + 1) in skip or (hx - 1) in skip) and not (dr.size.x > 0 and hx >= dr.position.x - 1 and hx <= dr.end.x):
-				ops.append({"op": "place", "kind": "shrub", "at": [hx, hy]})
-			hx += 2
-	# sandbags in front of the door of a barricaded house (the back is left open)
-	if bool(spec.get("barricade", false)) and not front_pair.is_empty():
-		var d0: Vector2i = front_pair[0]
-		var oy := d0.y - 2 if front == "N" else d0.y + 2
-		ops.append({"op": "place", "kind": "sandbags", "at": [d0.x - 1, oy]})
-	if not ops.is_empty():
-		cv.run({"ops": ops})
-
-
-## A lot with no building: the ground and what grows or stands on it.
-func _yard_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary) -> void:
+## A lot with no building: the ground and what grows or stands on it (the kit's benches, stalls, swings and bushes).
+func _yard_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, _out: Dictionary) -> void:
 	var lot: Rect2i = spec.rect
 	var lw := lot.size.x
 	var lh := lot.size.y
@@ -1030,39 +924,56 @@ func _yard_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary
 	match kind:
 		"pocket":
 			ops.append({"op": "trees", "rect": all, "n": {"r": [1, 3]}, "on": ["GRASS"], "gap": 3})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": {"r": [0, 2]}, "apart": 1})
+			for k in rng.randi_range(0, 2):
+				kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
 			if lw >= 5 and rng.randf() < 0.4:
-				ops.append({"op": "place", "kind": "bench", "at": [lw / 2 - 1, lh / 2]})
-			ops.append({"op": "decals", "rect": all, "kinds": ["papers", "stain", "crack"], "n": {"r": [0, 2]}})
+				kit.scatter(cv, rng, "bench", 1, lw - 3, 1, lh - 2)
 		"park":
 			var px := lw / 2
 			var py := lh / 2
 			cv.fill(Rect2i(px - 1, 0, 2, lh), "DIRT")
 			cv.fill(Rect2i(0, py - 1, lw, 2), "DIRT")
 			var feature := rng.randi() % 3
-			if feature == 0 and lw >= 20 and lh >= 20:
-				var qx := 3 if rng.randf() < 0.5 else lw - 12
-				var qy := 3 if rng.randf() < 0.5 else lh - 10
-				_pond(cv, Vector2i(qx + 4, qy + 3), 4.5, 3.2)
+			if feature == 0 and lw >= 18 and lh >= 18:
+				# a clearing: bare earth round a ring of benches
+				var cx := (4 if rng.randf() < 0.5 else lw - 6) + 0
+				var cy := (4 if rng.randf() < 0.5 else lh - 6) + 0
+				for yy in range(cy - 3, cy + 4):
+					for xx in range(cx - 3, cx + 4):
+						if Vector2(xx - cx, yy - cy).length() <= 3.2 and cv._in(xx, yy):
+							cv._paint(xx, yy, "DIRT", false)
+				kit.put(cv, "bench", cx - 1, cy - 3)
+				kit.put(cv, "bench", cx - 1, cy + 3)
+				kit.put(cv, "dining_table", cx - 1, cy)
 			elif feature == 1 and lw >= 20 and lh >= 20:
-				var cx := 2 if rng.randf() < 0.5 else lw - 14
-				var cy := 2 if rng.randf() < 0.5 else lh - 14
-				ops.append({"op": "place", "kind": "court", "at": [cx, cy]})
-				ops.append({"op": "place", "kind": "hoop", "at": [cx + 5, cy + 1]})
-				ops.append({"op": "place", "kind": "foursquare", "at": [clampi(cx + (-5 if cx > lw / 2 else 13), 0, lw - 4), clampi(cy + 2, 0, lh - 4)]})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["picnic", "bench"], "n": {"r": [3, 5]}, "apart": 2})
+				var cx2 := 2 if rng.randf() < 0.5 else lw - 14
+				var cy2 := 2 if rng.randf() < 0.5 else lh - 14
+				ops.append({"op": "place", "kind": "court", "at": [cx2, cy2]})
+				ops.append({"op": "place", "kind": "hoop", "at": [cx2 + 5, cy2 + 1]})
+			else:
+				# a playground: swings, a slide, a bench for the parents
+				var qx := 3 if rng.randf() < 0.5 else lw - 8
+				var qy := 3 if rng.randf() < 0.5 else lh - 8
+				kit.put(cv, "swing_set", qx, qy)
+				kit.put(cv, "slide", qx + 4, qy)
+				kit.put(cv, "bench", qx, qy + 3)
+				kit.put(cv, "bin", qx + 3, qy + 3)
+			for k in rng.randi_range(3, 5):
+				kit.scatter(cv, rng, "bench" if rng.randf() < 0.5 else "dining_table", 1, lw - 3, 1, lh - 2)
 			ops.append({"op": "trees", "rect": all, "n": {"r": [10, 16]}, "on": ["GRASS"], "gap": 3})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": {"r": [2, 4]}})
+			for k in rng.randi_range(2, 4):
+				kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
 		"plaza":
 			cv.fill(Rect2i(0, 0, lw, lh), "SIDEWALK")
 			var n := mini(3, (lw - 2) / 5)
 			for i in n:
 				var sx := 1 + i * 5
 				var sy := 2 if String(spec.front) == "N" else lh - 4
-				ops.append({"op": "place", "kind": "counter3", "at": [sx, sy], "container": true})
-				ops.append({"op": "place", "kind": "awning_r" if i % 2 == 0 else "awning_b", "at": [sx - 1, sy - 1], "decor": true})
-				ops.append({"op": "place", "kind": "crate", "at": [sx + 3, sy], "container": 0.7})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["bench", "trashcan"], "n": 3, "apart": 2})
+				kit.put(cv, "market_stall", sx, sy)
+				kit.put(cv, "crate", sx + 3, sy, rng.randf() < 0.7)
+				kit.put(cv, "box", sx + 3, sy + 1, rng.randf() < 0.5)
+			for k in 3:
+				kit.scatter(cv, rng, ["bench", "bin"][rng.randi() % 2], 1, lw - 3, 1, lh - 2)
 			ops.append({"op": "trees", "rect": all, "n": 2, "on": ["SIDEWALK"], "gap": 4})
 		"field":
 			var y := 1
@@ -1072,20 +983,12 @@ func _yard_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictionary
 			ops.append({"op": "trees", "rect": all, "n": {"r": [0, 2]}, "on": ["GRASS"], "gap": 4})
 		"woods":
 			ops.append({"op": "trees", "rect": all, "n": maxi(3, lw * lh / 14), "on": ["GRASS"], "gap": 2})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": {"r": [2, 4]}})
+			for k in rng.randi_range(2, 4):
+				kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
 		"meadow":
 			ops.append({"op": "trees", "rect": all, "n": {"r": [2, 4]}, "on": ["GRASS"], "gap": 4})
-			ops.append({"op": "scatter", "rect": all, "kinds": ["shrub"], "n": {"r": [2, 4]}})
+			for k in rng.randi_range(2, 4):
+				kit.scatter(cv, rng, "bush", 0, lw - 1, 0, lh - 1)
 			ops.append({"op": "patch", "rect": all, "t": "DIRT", "n": 2, "r": [1.5, 3]})
 	if not ops.is_empty():
 		cv.run({"ops": ops})
-
-
-## A round pond of the WATER ground (a base ground when the picture is missing: see TownDistricts.terrains) that shuts the way.
-func _pond(cv, centre: Vector2i, rx: float, ry: float) -> void:
-	for y in range(centre.y - int(ry) - 1, centre.y + int(ry) + 2):
-		for x in range(centre.x - int(rx) - 1, centre.x + int(rx) + 2):
-			var dx := (float(x) + 0.5 - float(centre.x)) / rx
-			var dy := (float(y) + 0.5 - float(centre.y)) / ry
-			if dx * dx + dy * dy <= 1.0 and cv._in(x, y):
-				cv._paint(x, y, "WATER", true)

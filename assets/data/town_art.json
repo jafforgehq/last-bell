@@ -21,7 +21,7 @@
   "recipes": {
    "wall": "for each wall cell draw wall_<material> (variant a, b for one cell in six) then wall_edges cell [mask of open sides] over it. A door cell is not a wall for the mask; a window cell is. On every non wall cell next to a wall draw wall_shadows (n: wall to the north, w: to the west, nw: both, diag_nw: only the corner). Doors replace the wall cell; windows and barricades are laid over it.",
    "roof": "give a rectangle of roof cells: the ridge runs along the longer side; the half to the north (or west) uses the `lit` fill, the other the `shade` fill (turn the pictures a quarter turn counter clockwise for a ridge along y); lay the ridge strip along the middle line; lay roof_edge_<material> cell [mask of open sides] over every cell (it overhangs 0.2 tile and throws its shadow). Hide all roof layer pieces while the avatar is inside that building.",
-   "street": "asphalt cells (three variants in blocks), lane_markings cells over them, sidewalk cells with kerb cells over them where road touches, lawn / dirt_path / gravel for yards and drives, leaves / manhole / drain as decals.",
+   "street": "asphalt cells (three variants in blocks), lane_markings cells over them, sidewalk cells with kerb cells over them where road touches, lawn / dirt_path / gravel for yards and drives, leaves / manhole / drain as decals; lawn_edge on the lawn cells that touch paving or a wall and lawn_patch here and there on the lawn (soft transitions and no seen repeat); streetlamp and hydrant on the sidewalks. scripts/town/town_world.gd and town_chunk_paint.gd draw all of this.",
    "container": "a container has states closed / opened: draw closed until searched, then opened; the `marker_searched` tick can float over it."
   }
  },
@@ -664,6 +664,265 @@
    ],
    "variants": 2,
    "note": "A storm drain grate along a kerb (h: along x; the picture is 1 x 0.5 tiles and sits at the cell's top for h, left for v after the turn: place its picture on the road cell next to the kerb). Flush with the ground."
+  },
+  {
+   "id": "lawn_edge",
+   "category": "street",
+   "kind": "atlas",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    1
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "n": [
+     0,
+     0
+    ],
+    "e": [
+     1,
+     0
+    ],
+    "s": [
+     2,
+     0
+    ],
+    "w": [
+     3,
+     0
+    ]
+   },
+   "tags": [
+    "decal",
+    "lawn"
+   ],
+   "sprites": [
+    {
+     "file": "street/lawn_edge.png",
+     "rect": [
+      0,
+      0,
+      512,
+      128
+     ]
+    }
+   ],
+   "note": "The edge of a LAWN cell where a side of it meets paving, road, wall or a fence (bare soil, a ragged line, blades): n/e/s/w name the side that touches; a corner cell takes two. Laid on the lawn cell itself (128 px = the tile), over the lawn, under everything that stands."
+  },
+  {
+   "id": "lawn_patch",
+   "category": "street",
+   "kind": "overlay",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "variants": 4,
+   "tags": [
+    "decal",
+    "walkable",
+    "lawn"
+   ],
+   "sprites": [
+    {
+     "file": "street/lawn_patch.png",
+     "rect": [
+      0,
+      0,
+      192,
+      192
+     ],
+     "variant": 0,
+     "look": "dry"
+    },
+    {
+     "file": "street/lawn_patch.png",
+     "rect": [
+      194,
+      0,
+      192,
+      192
+     ],
+     "variant": 1,
+     "look": "lush"
+    },
+    {
+     "file": "street/lawn_patch.png",
+     "rect": [
+      388,
+      0,
+      192,
+      192
+     ],
+     "variant": 2,
+     "look": "bare"
+    },
+    {
+     "file": "street/lawn_patch.png",
+     "rect": [
+      582,
+      0,
+      192,
+      192
+     ],
+     "variant": 3,
+     "look": "fresh"
+    }
+   ],
+   "note": "A soft patch of different grass (dry, lush, bare earth, fresh), 1.5 x 1.5 tiles, centred where you lay it, over a lawn here and there to break up the repeat of the lawn atlas (the three lawns are laid in blocks of 4 x 4)."
+  },
+  {
+   "id": "hydrant",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "street",
+    "solid"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "street/hydrant.png",
+     "rect": [
+      0,
+      0,
+      155,
+      155
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "street/hydrant.png",
+     "rect": [
+      157,
+      0,
+      155,
+      155
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A fire hydrant on a sidewalk (a: red, b: yellow). Walkable around it; it is only a picture that blocks nothing."
+  },
+  {
+   "id": "streetlamp",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "street",
+    "solid",
+    "light"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "street/streetlamp.png",
+     "rect": [
+      0,
+      0,
+      162,
+      162
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s"
+    },
+    {
+     "file": "street/streetlamp.png",
+     "rect": [
+      164,
+      0,
+      162,
+      162
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w"
+    },
+    {
+     "file": "street/streetlamp.png",
+     "rect": [
+      328,
+      0,
+      162,
+      162
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n"
+    },
+    {
+     "file": "street/streetlamp.png",
+     "rect": [
+      492,
+      0,
+      162,
+      162
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e"
+    }
+   ],
+   "facings": [
+    "s",
+    "w",
+    "n",
+    "e"
+   ],
+   "note": "A street lamp seen from above: the foot in the cell, the arm leaning out over the street and the lamp head at its end. Facing = the way the arm points (s: toward the south, so the post stands on the north sidewalk of an east-west street)."
   },
   {
    "id": "wall_brick",
@@ -12973,7 +13232,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -12990,7 +13249,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "closed",
@@ -13005,7 +13264,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13022,7 +13281,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "open",
@@ -13037,7 +13296,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13054,7 +13313,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "closed",
@@ -13069,7 +13328,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13086,7 +13345,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "open",
@@ -13220,6 +13479,398 @@
    ],
    "variants": 2,
    "note": "A floodlight on a pole with four lamps, a block and sandbags at its foot: 1.4 x 3.4 tiles, the footprint is the block's cell at the bottom (anchor (0.2, 3.0) + padding). variant 0 BUILT (lamps lit: put the engine's light on the head), variant 1 DAMAGED (leaning, two lamps smashed, a cable hanging)."
+  },
+  {
+   "id": "fort_gate_wide",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    3,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "fortify",
+    "gate",
+    "door"
+   ],
+   "solid": {
+    "closed": true,
+    "open": false
+   },
+   "sprites": [
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      0,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "closed",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      418,
+      0,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "closed",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      580,
+      0,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "open",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      418,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "open",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      162,
+      418,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "closed",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      580,
+      418,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "closed",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      836,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "open",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      418,
+      836,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "open",
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "orients": [
+    "h",
+    "v"
+   ],
+   "states": [
+    "closed",
+    "open"
+   ],
+   "variants": 2,
+   "note": "The same gate three cells wide (the base's gate slot is three tiles): closed, or open (both leaves swung back); variant 0 BUILT, 1 DAMAGED; h: in a fence that runs along x with the outside to the south; v: along y. A closed gate blocks."
+  },
+  {
+   "id": "fort_tower_post",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.4025
+   ],
+   "tags": [
+    "fortify",
+    "tower",
+    "solid",
+    "post"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "fortify/fort_tower_post.png",
+     "rect": [
+      0,
+      0,
+      160,
+      332
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_tower_post.png",
+     "rect": [
+      162,
+      0,
+      160,
+      332
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "variants": 2,
+   "note": "A lookout post for one shooter on a 1 x 2 tile footprint (the tower's slot tile and the post tile beside it): a deck on stilts with a plank and sandbag parapet, a searchlight and a ladder. The picture is 2.34 tiles tall because the stilts show below the deck: the footprint is the bottom 2 rows (anchor y 0.34 + padding). variant 0 BUILT, variant 1 DAMAGED (a hole in the deck, a plank gone). The shooter stands on the deck: draw it under the people."
+  },
+  {
+   "id": "fence_rubble",
+   "category": "fortify",
+   "kind": "atlas",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    2
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "x0": [
+     0,
+     0
+    ],
+    "x1": [
+     1,
+     0
+    ],
+    "x2": [
+     2,
+     0
+    ],
+    "x3": [
+     3,
+     0
+    ],
+    "y0": [
+     0,
+     1
+    ],
+    "y1": [
+     1,
+     1
+    ],
+    "y2": [
+     2,
+     1
+    ],
+    "y3": [
+     3,
+     1
+    ]
+   },
+   "tags": [
+    "fortify",
+    "walkable",
+    "decal"
+   ],
+   "sprites": [
+    {
+     "file": "fortify/fence_rubble.png",
+     "rect": [
+      0,
+      0,
+      512,
+      256
+     ]
+    }
+   ],
+   "note": "What is left where a fence section has fallen: planks and splinters on the ground and the stump of a post, walkable. Cells are 128 x 128 px, anchor (0, 0), footprint 1 x 1; the top row lies along x (a fence that runs east to west), the bottom row along y; four looks each (pick one by the tile's coordinates). Draw it on every tile of a section that is down.",
+   "solid": [],
+   "name": "Fallen fence"
+  },
+  {
+   "id": "door_reinforce",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "wall",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0,
+    0.0
+   ],
+   "tags": [
+    "fortify",
+    "overlay",
+    "door",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      0,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "h",
+     "variant": 0
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      130,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "v",
+     "variant": 0
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      260,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "h",
+     "variant": 1
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      390,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "v",
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "orients": [
+    "h",
+    "v"
+   ],
+   "variants": 2,
+   "note": "Two planks crossed in an X with a steel strap, laid OVER `barricade_door`: the barred door that has the plank kit. variant 0 BUILT, 1 DAMAGED (one plank snapped)."
   },
   {
    "id": "barricade_window",
