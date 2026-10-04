@@ -1,6 +1,6 @@
 # One House: a solo start in a big town (design)
 
-Status: proposed by the owner on 2026-10-04, design agreed in chat, spec for review. Nothing here is built yet; a feasibility spike (`docs/superpowers/specs/2026-10-04-bigmap-spike-report.md`, when written) decides the technical shape.
+Status: COMMITTED by the owner on 2026-10-04 ("it's not a spike, I want to go with that direction, pivot fully"). The foundation (town generator, dormant dead, `--town`) is being built for real on branch feature/town-core; its measurements (`docs/superpowers/specs/2026-10-04-bigmap-spike-report.md`) set the active-dead caps and wake rules, not a go/no-go. The implementation plan with parallel work packages is `docs/superpowers/plans/2026-10-04-one-house-plan.md`.
 
 ## 1. Why
 
@@ -47,7 +47,7 @@ New: the big town and its generator; the dormant-dead system; roof cutaway and r
 
 ## 7. Staged plan
 
-- **Spike (now):** a town generator, dormant dead and measurements; verdict GO, GO WITH CHANGES or NO-GO.
+- **Foundation (now):** the town generator, the dormant-dead system, the `--town` start, and the measurements that set the caps.
 - **Slice 1, One House:** solo start, interiors with roof cutaway, clear and claim, the first quiet night, one rescue.
 - **Slice 2, The fortress:** the fourth rescue starts the nightly attacks; the perimeter kit; the held first fortified night; the end card (this is the demo).
 - **Slice 3, polish** of the new flow (the earlier polish work on combat feel, art and audio carries over).
