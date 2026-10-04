@@ -45,6 +45,11 @@ const STATE_ALIAS := {"open": "opened", "opened": "open"}
 static var _man = null
 static var _tex = null
 static var _folder := ""
+static var _tile_px := 128.0
+## The looks the world's painters ask for (`look`, `cell`): key -> {"tex", "src", "off", "size", "fp", "item"}; a miss is {} (kept, so it is asked once).
+static var _looks = {}
+## The ground atlases (`ground`): item id -> Array of Texture2D, one for each variant.
+static var _grounds = {}
 
 
 ## Reads a manifest (default: the game's). A missing or broken file leaves an empty table: every descriptor is then a placeholder.
@@ -52,12 +57,16 @@ static var _folder := ""
 static func load_manifest(path: String = MANIFEST) -> void:
 	_man = {}
 	_tex = {}
+	_looks = {}
+	_grounds = {}
+	_tile_px = 128.0
 	_folder = path.get_base_dir().get_base_dir().path_join("town") + "/"
 	if not FileAccess.file_exists(path):
 		return
 	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not (parsed is Dictionary) or not (parsed.get("items") is Array):
 		return
+	_tile_px = float(parsed.get("tile_px", 128.0))
 	for it in parsed.items:
 		if it is Dictionary and it.has("id"):
 			_man[String(it.id)] = it
@@ -98,13 +107,38 @@ static func door(kind: String, facing: String = "s", state: String = "closed", v
 	return _describe(_find([id]), facing, state, variant, _color_of(id), size)
 
 
-## A piece of the fortification of the base (WP5 asks): `kit` "fence", "fence_strong", "gate", "door_plank", "tower", "floodlight"; `state` "built", "ghost"
-## (a plan not yet built, drawn see-through) or "broken".
+## A piece of the fortification of the base (WP5 asks): `kit` "fence", "fence_strong" (one cell of the line, straight along x), "sandbags", "gate", "door_plank", "tower", "floodlight"; `state` "built",
+## "ghost" (a plan not yet built, drawn see-through) or "damaged" ("broken" is the same). Whole lines are drawn by `fort_cell` (the cell for each mask of connected sides); the built pieces of the base are
+## drawn by scripts/render/perimeter_view.gd.
 static func fence(kit: String, state: String = "built") -> Dictionary:
-	var item := _find(["fence_" + kit, kit, "fence"])
-	var d := _describe(item, "", "ghost" if state == "ghost" else state, 0, _color_of(kit), Vector2(1, 1))
+	var damaged := state == "damaged" or state == "broken"
+	var color := _color_of(kit)
+	var d: Dictionary
+	if FORT_LINES.has(kit):
+		d = _cell_desc(String(FORT_LINES[kit]) + ("damaged" if damaged else "built"), "10", color)
+	else:
+		var id := String({"gate": "fort_gate", "tower": "fort_tower", "floodlight": "floodlight", "door_plank": "barricade_door"}.get(kit, "fence_" + kit))
+		d = _describe(_find([id, "fence_" + kit, kit]), "h", "closed" if kit == "gate" else "", 1 if damaged else 0, color, Vector2(1, 1))
 	if state == "ghost":
 		d.color = Color(d.color.r, d.color.g, d.color.b, 0.45)
+	return d
+
+
+## The descriptor (the older shape, see the header) of one cell of an atlas item: its picture, the cell's rectangle, a footprint of one tile.
+static func _cell_desc(id: String, key: String, color: Color) -> Dictionary:
+	var item := _find([id])
+	if item.is_empty() or not item.get("cells", {}).has(key) or item.sprites.is_empty():
+		return _flat(color, Vector2(1, 1))
+	var sp: Dictionary = item.sprites[0]
+	var cp: Array = item.get("cell_px", [_tile_px, _tile_px])
+	var c: Array = item.cells[key]
+	var r: Array = sp.get("rect", [0, 0, 0, 0])
+	var d := _flat(color, Vector2(1, 1))
+	d.item = id
+	d.file = _folder + String(sp.file)
+	d.rect = Rect2(float(r[0]) + float(c[0]) * float(cp[0]), float(r[1]) + float(c[1]) * float(cp[1]), float(cp[0]), float(cp[1]))
+	d.anchor = Vector2(float((item.get("anchor", [0, 0]) as Array)[0]), float((item.get("anchor", [0, 0]) as Array)[1]))
+	d.placeholder = false
 	return d
 
 
@@ -143,8 +177,12 @@ static func atlas_rect(d: Dictionary, mask: int) -> Rect2:
 ## `facing` "s", "w", "n", "e".
 static func prop(kind: String, state: String = "", facing: String = "s") -> Dictionary:
 	var size: Vector2 = SIZES.get(kind, Vector2(1, 1))
-	var ids: Array = [kind]
+	# (the base's props go by the kit's names first: the layout's "bench" is the kit's workbench, not the garden bench)
+	var ids: Array = []
 	ids.append_array(PROP_ALIAS.get(kind, []))
+	ids.append(kind)
+	if KIND_ALIAS.has(kind):
+		ids.append(KIND_ALIAS[kind])
 	return _describe(_find(ids), facing, state, 0, _color_of(kind), size)
 
 
@@ -155,6 +193,11 @@ static func texture(d: Dictionary) -> Texture2D:
 	var file := String(d.get("file", ""))
 	if file == "":
 		return null
+	return _load(file)
+
+
+## A picture by its path (cached; a path that will not load is null, and is not tried again).
+static func _load(file: String) -> Texture2D:
 	if _tex == null:
 		_tex = {}
 	if _tex.has(file):
@@ -179,6 +222,12 @@ static func draw(ci: CanvasItem, d: Dictionary, rect: Rect2, tint: Color = Color
 		return false
 	if src.size.x <= 0.0:
 		src = Rect2(Vector2.ZERO, tex.get_size())
+	# a picture with an anchor (the soft shadow and the rim of a prop lie outside its footprint): `rect` is the footprint, the picture is laid round it
+	var anchor: Vector2 = d.get("anchor", Vector2.ZERO)
+	var fp: Vector2 = d.get("size", Vector2.ZERO)
+	if anchor != Vector2.ZERO and fp.x > 0.0 and fp.y > 0.0:
+		var u := Vector2(rect.size.x / fp.x, rect.size.y / fp.y)
+		rect = Rect2(rect.position - anchor * u, (src.size / _tile_px) * u)
 	var nine: Array = d.get("nine", [])
 	if nine.size() == 4:
 		var sb := StyleBoxTexture.new()
@@ -193,6 +242,125 @@ static func draw(ci: CanvasItem, d: Dictionary, rect: Rect2, tint: Color = Color
 		return true
 	ci.draw_texture_rect_region(tex, rect, src, tint)
 	return true
+
+
+# ------------------------------------------------------------ the world's lookups --
+# The painters of the town's ground, walls and things (scripts/town/town_world.gd, town_chunk_paint.gd) draw by the thousand and ask here once for each look: the answer is
+# a cached Dictionary {"tex": Texture2D, "src": Rect2 (the part of the picture, in its pixels), "off": Vector2 (screen pixels: where the picture's top left lies relative to
+# the top left of the thing's footprint, so the anchor), "size": Vector2 (the picture's size on the screen, in pixels at the game's tile), "fp": Vector2 (the footprint in
+# tiles), "item": the item's id}; a missing item or a picture that will not load is {} (the caller then draws nothing or its own flat shape).
+
+## Items whose picture is centred on the middle of the footprint instead of laid by the anchor (a wreck lies at an angle across its footprint).
+const CENTERED := ["car_wreck"]
+## The kit's ground atlases the world's ground is made of, in the order of the codes the generator writes in `data.kit.ground` (code = index + 1; 0 means "by the terrain"),
+## the materials of the wall tops (`data.kit.wall`, code = index; 0 none) and the lines of fence and hedge (`data.kit.line`).
+const GROUNDS := ["lawn", "asphalt", "sidewalk", "dirt_path", "gravel", "floor_wood", "floor_hall", "floor_kitchen", "floor_carpet", "floor_bath", "floor_runner_h", "floor_runner_v"]
+const WALL_MATS := ["", "wall_brick", "wall_white", "wall_blue", "wall_stucco", "wall_sage", "wall_timber", "wall_plaster"]
+const LINES := ["", "fence_picket_white", "fence_picket_brown", "fence_chainlink", "wall_low_brick", "hedge"]
+## The floor of a room by its name (the kit's ground ids), and the floors of the shop and of the doorways.
+const FLOOR_OF_ROOM := {
+	"living room": "floor_wood", "front room": "floor_wood", "bedroom": "floor_carpet", "side": "floor_wood", "kitchen": "floor_kitchen", "bathroom": "floor_bath",
+	"shop floor": "floor_kitchen", "storeroom": "floor_hall", "hall": "floor_hall",
+}
+## The kit's fortification lines: the base kit's art id ("fence", "fence_strong", "sandbags") and a look ("built", "damaged") to the item that holds the cells.
+const FORT_LINES := {"fence": "fort_fence_wood_", "fence_strong": "fort_fence_reinforced_", "sandbags": "sandbags_"}
+## What a container's kind (the generator's, for the sim: "fridge", "kitchen counter" as "kitchen_counter") is drawn as when the kit has no item of that name.
+const KIND_ALIAS := {"cabinet": "cupboard", "shelf": "shelf_tins", "counter": "kitchen_counter", "trunk": "crate", "locker": "wardrobe"}
+
+
+## The look of a thing of the kit: `id` the item, `facing` ("s", "w", "n", "e" or an orient "h", "v"), `state`, `variant` (taken modulo the item's variants).
+static func look(id: String, facing: String = "", state: String = "", variant: int = 0) -> Dictionary:
+	if _looks == null:
+		_looks = {}
+	var key := "%s|%s|%s|%d" % [id, facing, state, variant]
+	if _looks.has(key):
+		return _looks[key]
+	var out := {}
+	var item := _find([id])
+	if not item.is_empty():
+		var sp := _pick(item, facing, state, variant)
+		if not sp.is_empty():
+			out = _look_of(item, sp)
+	_looks[key] = out
+	return out
+
+
+## The look of one cell of an atlas item (an autotile set or a set of overlays): `key` is the name of the cell (the manifest's `cells`: "0".."15", "n", "double_h"...).
+static func cell(id: String, key: String) -> Dictionary:
+	if _looks == null:
+		_looks = {}
+	var ck := "%s#%s" % [id, key]
+	if _looks.has(ck):
+		return _looks[ck]
+	var out := {}
+	var item := _find([id])
+	if not item.is_empty() and item.get("cells", {}).has(key) and not item.sprites.is_empty():
+		var sp: Dictionary = item.sprites[0]
+		var cp: Array = item.get("cell_px", [_tile_px, _tile_px])
+		var c: Array = item.cells[key]
+		var r: Array = sp.get("rect", [0, 0, 0, 0])
+		var tex := _load(_folder + String(sp.file))
+		if tex != null:
+			var anchor: Array = item.get("anchor", [0, 0])
+			var k := float(GD.TILE) / _tile_px
+			out = {"tex": tex, "src": Rect2(float(r[0]) + float(c[0]) * float(cp[0]), float(r[1]) + float(c[1]) * float(cp[1]), float(cp[0]), float(cp[1])),
+				"off": -Vector2(float(anchor[0]), float(anchor[1])) * float(GD.TILE), "size": Vector2(float(cp[0]), float(cp[1])) * k, "fp": Vector2.ONE, "item": id}
+	_looks[ck] = out
+	return out
+
+
+## The pictures of a ground item (an atlas of 4 x 4 pieces, one picture for each variant), in the order of its variants; [] when the kit has no such item.
+static func ground(id: String) -> Array:
+	if _grounds == null:
+		_grounds = {}
+	if _grounds.has(id):
+		return _grounds[id]
+	var out: Array = []
+	var item := _find([id])
+	for sp in item.get("sprites", []):
+		var tex := _load(_folder + String(sp.file))
+		if tex == null:
+			out.clear()
+			break
+		out.append(tex)
+	_grounds[id] = out
+	return out
+
+
+## The look of a sprite of an item with its picture loaded: see the header of this section.
+static func _look_of(item: Dictionary, sp: Dictionary) -> Dictionary:
+	var tex := _load(_folder + String(sp.file))
+	if tex == null:
+		return {}
+	var r: Array = sp.get("rect", [0, 0, tex.get_width(), tex.get_height()])
+	var src := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
+	var fp: Array = sp.get("fp", item.get("footprint", [1, 1]))
+	var anchor: Array = item.get("anchor", [0, 0])
+	var k := float(GD.TILE) / _tile_px
+	var size := src.size * k
+	var off := -Vector2(float(anchor[0]), float(anchor[1])) * float(GD.TILE)
+	if String(item.id) in CENTERED:
+		off = (Vector2(float(fp[0]), float(fp[1])) * float(GD.TILE) - size) * 0.5
+	return {"tex": tex, "src": src, "off": off, "size": size, "fp": Vector2(float(fp[0]), float(fp[1])), "item": String(item.id)}
+
+
+## The number of variants of an item (1 when it has none or is not in the kit).
+static func variants_of(id: String) -> int:
+	return maxi(1, int(_find([id]).get("variants", 1)))
+
+
+## The kit item a container's kind stands for: the kind itself ("fridge", "kitchen_counter" for "kitchen counter"), else its alias; "" when the kit has none.
+static func item_of_kind(kind: String) -> String:
+	var id := kind.replace(" ", "_")
+	if _items().has(id):
+		return id
+	var alias := String(KIND_ALIAS.get(id, ""))
+	return alias if _items().has(alias) else ""
+
+
+## One cell of a fortification line of the base's kit (`kit` "fence", "fence_strong", "sandbags"; `look` "built" or "damaged"; `mask` the connected sides N 1, E 2, S 4, W 8).
+static func fort_cell(kit: String, look_name: String, mask: int) -> Dictionary:
+	return cell(String(FORT_LINES.get(kit, "fort_fence_wood_")) + ("damaged" if look_name != "built" else "built"), str(mask))
 
 
 # ------------------------------------------------------------------- internals --
