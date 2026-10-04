@@ -157,7 +157,7 @@ func start() -> void:
 ## Called once a run has been set up (after every module's start): the settlement game gets its board. `force`: a game
 ## that is not a small start has it too (Orientation Day of the avatar, which teaches the board G opens).
 func begin(force: bool = false) -> void:
-	if not sim.recruits.small and not force:
+	if (not sim.recruits.small and not force) or sim.is_one_house():
 		return
 	on = true
 	for p in places:

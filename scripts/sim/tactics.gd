@@ -351,6 +351,8 @@ func lookout():
 func forecast() -> Dictionary:
 	if forecast_day != sim.day or forecast_who == "":
 		return {"given": false}
+	if sim.scenario != null and sim.scenario.has_method("forecast_on") and not sim.scenario.forecast_on():
+		return {"given": false}    # (One House: no lookout forecast until the attacks are on)
 	var who = _person(forecast_who)
 	if who == null:
 		return {"given": false}
@@ -431,6 +433,8 @@ func _person(id: String):
 
 
 func _tell_the_forecast() -> void:
+	if sim.scenario != null and sim.scenario.has_method("forecast_on") and not sim.scenario.forecast_on():
+		return    # (One House: nothing is coming yet)
 	var who = lookout()
 	if who == null:
 		forecast_who = ""
