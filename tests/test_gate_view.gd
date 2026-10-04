@@ -643,28 +643,50 @@ func test_a_gate_whose_rules_give_no_line_is_still_told() -> void:
 
 # ------------------------------------------------------------------- the sounds --
 
+## The gate's sounds are the soundscape's now (scripts/audio/soundscape.gd `gate_event`, from the rules' event): a lever as the leaves begin to move and a slide
+## a third of a second after, a clang as they come to rest. What it is playing from the gate's voices, by file.
+func _gate_voices(scape: Node) -> Array:
+	var out: Array = []
+	for v in scape.voices:
+		if v.kind == "gate" and v.p.playing and v.p.stream != null:
+			out.append(String(v.p.stream.resource_path).get_file().get_basename())
+	out.sort()
+	return out
+
+
 func test_the_gates_sounds_are_the_rules_events_once_each() -> void:
 	var main := _game()
-	var rec := Recorder.new()
-	main.add_child(rec)
-	main.parking_view.sound = rec
-	main.parking_view.vol_at = Callable()
+	var scape = main.sound.scape
 	var sim = main.sim
+	sim.events.clear()
+	var base := int(scape.played.get("gate", 0))
 	sim.events.append({"type": "gate", "state": "opening", "by": "player"})
 	_frames(main, 1)
-	eq(rec.played, ["car_gate_motor"], "the motor as the leaves begin to move")
+	eq(int(scape.played.get("gate", 0)) - base, 1, "the lever as the leaves begin to move")
+	eq(_gate_voices(scape), ["gate_lever_0"], "which is the lever's")
 	_frames(main, 3)
-	eq(rec.played, ["car_gate_motor"], "and not again on the frames after (the event is handled once)")
+	eq(int(scape.played.get("gate", 0)) - base, 1, "and not again on the frames after (the event is handled once)")
+	scape.update(0.4)
+	eq(int(scape.played.get("gate", 0)) - base, 2, "the slide follows it")
+	eq(_gate_voices(scape), ["gate_lever_0", "gate_slide_0"], "the lever's and the slide's")
+	for v in scape.voices:
+		v.p.stop()
 	sim.events.append({"type": "gate", "state": "open", "by": "player"})
 	_frames(main, 1)
-	eq(rec.played, ["car_gate_motor"], "nothing as they come to rest open")
+	eq(int(scape.played.get("gate", 0)) - base, 3, "a clang as they come to rest open")
+	eq(_gate_voices(scape), ["gate_clang_0"], "which is the clang's")
+	for v in scape.voices:
+		v.p.stop()
 	sim.events.append({"type": "gate", "state": "closing", "by": "player"})
 	_frames(main, 1)
-	eq(rec.played, ["car_gate_motor", "car_gate_motor"], "the motor again as they begin to close")
+	scape.update(0.4)
+	eq(int(scape.played.get("gate", 0)) - base, 5, "the lever and the slide again as they begin to close")
+	for v in scape.voices:
+		v.p.stop()
 	sim.events.append({"type": "gate", "state": "shut", "by": "player"})
 	_frames(main, 1)
-	eq(rec.played, ["car_gate_motor", "car_gate_motor", "car_door_close"], "a latch as they meet")
-	rec.free()
+	eq(int(scape.played.get("gate", 0)) - base, 6, "a clang as they meet")
+	eq(_gate_voices(scape), ["gate_clang_0"], "and it is the clang's")
 	await _free(main)
 
 

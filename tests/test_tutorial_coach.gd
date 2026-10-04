@@ -513,8 +513,13 @@ func test_every_event_of_the_rules_reaches_the_coach() -> void:
 class FakeUiSound:
 	extends Node
 	var heard: Array = []
+	## The soundscape the real sound has (the game asks it where the avatar is for the music, and tells it the rules' events): none here.
+	var scape = null
 
 	func play(_n: String, _level: float = 1.0, _var: float = 0.04, _pitch: float = 1.0) -> void:
+		pass
+
+	func on_event(_e: Dictionary) -> void:
 		pass
 
 	func set_ambience(_a: float, _b: float, _c: float) -> void:
