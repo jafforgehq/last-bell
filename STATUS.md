@@ -7,10 +7,10 @@
 
 | Thing | State |
 | --- | --- |
-| Game | Rounds 0 to 21 are built. Rounds 17 to 21 (the **avatar game**: one survivor, a radio, Home, nights, a community, a live drive) live on **branches, not on `main`**; round 22 (easier controls and a real gate) is **in progress** on branch `feature/r22-controls-gate`. **Nobody has played rounds 11 to 21 by hand** (tests, screenshots, a scripted QA player and bots only). You played up to about round 10. |
-| Git | **Nothing from rounds 17 to 22 is pushed and `main` has none of it.** GitHub's `main` is at `c55f93c` (round 16 plus its STATUS); local `main` is two commits ahead (`eef7ec5`: the avatar and radio design draft and the brainstorm notes, documents only, not pushed). Branches and worktrees: 1c. |
-| Tests | **3987 passed, 0 failed**: the last full run (2026-10-04 08:43) on `feature/int` at `c36ab18`, with the tuned numbers and the QA fixes. |
-| itch (live) | Upload id 19534948 (2026-10-03 10:22): rounds 5 to 16 with the working audio fix, the louder sounds, the music, the crew of five and round 16's work life and animations. Nothing of the avatar game is on itch. Checked then: the embed loads to the title screen, the page is still Restricted, one file. |
+| Game | Rounds 0 to 23 are built and **on `main`**: the classic colony game plus the **avatar game** (rounds 17 to 21: one survivor, a radio, Home, nights, a community, a live drive), round 22 (easier controls: a free pointer, the right button aims, a real gate) and round 23 (Q puts the weapon away, right-click orders, an easy gate, leaving the base). The classic game is still there (`--noavatar`, or the Full crew start). **Nobody has played rounds 11 to 23 by hand** (tests, scripted QA players and a web smoke test only). |
+| Git | **`main` = `origin/main` = `d413a01`** (pushed 2026-10-04, 36 commits: everything above). The old feature branches and worktrees are kept (1c) and can be deleted. |
+| Tests | Last full run **4127 passed, 4 failed** on `894d189` (2026-10-04); the four were layout/text tests that the gate row and the Controls section moved, fixed in `d413a01` and re-run with 22 related files (**668 passed, 0 failed**). No second full run after that, by the owner's lean-tests rule. The no-avatar harness (12 games, informed, seed 1) is identical to the old `main` apart from the `took` field. |
+| itch (live) | **Upload id 19553346** (2026-10-04): `main` at `d413a01`, the avatar game, 37.2 MB. SHA-256 matched in the page, the embed box is ticked and saved, the page is still Restricted with its password, one file, the embed loads to the title screen. Web check before the upload: loads, no console errors, 60 fps through the first nights and with about 80 dead (12 to 13 ms a frame); about 160 dead 48 to 57 fps; 240 dead 19 fps (the simulation, not the drawing). |
 | Biggest open risk | **Nobody has played the avatar game with hands**: the feel of aiming and of standing at a wall, whether the Big Nights are fair, whether a trip by car is fun or a chore (a near trip is 2.5 to 4 real minutes), and **the web build has not been measured** since the performance work (5b). The nights were tuned by a bot (6c). |
 
 ### 1a. Rounds 17 to 21 (the avatar game), one line each
@@ -24,7 +24,8 @@ Design: `docs/superpowers/specs/2026-10-03-avatar-and-radio-design.md`, thread `
 | 19 | **Nights**: the community holds an ordinary night alone; Big Nights (a Siege on day 10, a Rush on day 20, the last night of each season) need you at one wall: plated brutes with a head weak point, a rally ring that sharpens the defenders' aim, hot breaches, calls of the night, a day-ahead notice and the forecast as tools, mending a wall by hand (E); a harness bot that plays the avatar and a night lab | built, reviewed, tuned, suite green |
 | 20 | **A community with ideas**: relationships (friends, rivals, couples), titles (the medic, the engineer, the marksman, the scout), the voice, and 13 kinds of idea brought over the radio (yes, later, no; a no costs trust, three noes go quiet) | built, reviewed, tuned, suite green |
 | 21 | **The live drive**: a trip you lead is a drive (or a walk) down a road, 30 to 90 real seconds a leg, with a car you steer, the squad shooting from the windows, 9 road events and a night road, Tab for the autopilot, the base running behind at the place's pace, and the clock as the bonus (fast and clean arrives early) | built, reviewed, tuned, suite green |
-| 22 | Easier controls and a real gate | **in progress on branch `feature/r22-controls-gate`** (not described as done anywhere) |
+| 22 | **Easier controls and a real gate**: the pointer is free, the right button (or Shift) aims, the left button fires only while aiming, a click selects a person or uses what is in reach; a setting restores always-aim; the Main gate is a real passage (`sim.gate`): E opens and shuts it, the dusk keeper shuts it, an open gate at night lets the dead in | built, on `main` |
+| 23 | **Orders and leaving**: Q puts the weapon away (a button by the gun readout); a tapped right click orders the picked person by radio (hold at that tile, to a post, come with me; in a place search that, go back); the gate is easy to work (3.5 tiles, a label, clickable, Y, E-shut locks it); a "Leave the base?" card past the wall opens the Map | built, on `main` |
 
 "Tuned" means: the night numbers (19) and the community's (20) were tuned with the lab and the probe (sections 6b and 6c); rounds 17, 18 and 21 run on their planned constants and were exercised by a scripted QA player (no crash or soft lock in about 60 runs; its report's important items were fixed in `6c2f001`).
 
@@ -32,12 +33,12 @@ Design: `docs/superpowers/specs/2026-10-03-avatar-and-radio-design.md`, thread `
 
 `README.md` (controls, the avatar game, nights, community, drive), then this file's 5b (open items), 6b and 6c (the numbers and what they cannot say), then the plan of the round you touch.
 
-### 1c. Branches and worktrees (nothing pushed; no code of rounds 17 to 22 on `main`)
+### 1c. Branches and worktrees (everything is on `main`; these are leftovers)
 
 | Branch | Where | What it holds |
 | --- | --- | --- |
-| `main` | no worktree (origin/main `c55f93c`) | rounds 0 to 16, plus two unpushed documents-only commits. No avatar code. |
-| `feature/avatar-radio` | `/Users/jaf_lab/last-bell` (the main folder has **this branch checked out**, not `main`) | round 17 and the first commit of round 18 (`a246185`): the base the round branches were cut from. Not the whole of round 18 (its QA pass is on `feature/r18-home`). |
+| **`main`** | `/Users/jaf_lab/last-bell` (checked out) | **rounds 0 to 23, `d413a01`, pushed.** |
+| `feature/avatar-radio` | `/Users/jaf_lab/last-bell` (old: at round 18's first commit) | round 17 and the first commit of round 18 (`a246185`): the base the round branches were cut from. Not the whole of round 18 (its QA pass is on `feature/r18-home`). |
 | `feature/r18-home`, `r19-nights`, `r20-ideas`, `r21-drive` | `.worktrees/r18`, `r19`, `r20`, `r21` | each round's own build; all merged into `feature/int`. |
 | `feature/fix`, `feature/tune`, `feature/fix2` | `.worktrees/fix`, `tune`, `fix2` | the review fixes for 19 to 21 (`65966bb`, suite hygiene); the tuning of 19 and 20 (night numbers, community constants, the probe: `d5b1eda`); the QA fixes (`6c2f001`: alerts, the Map page's Take control, 700x560 clipping, far walls, one-press mending, hints, draw cost). All merged into `feature/int`. |
 | **`feature/int`** | `.worktrees/int` | **everything through the QA fixes** (`c36ab18`, 27 commits ahead of `main`): rounds 17 to 21, the fixes, the tuning. The candidate to merge into `main` when you say so. |
@@ -105,7 +106,8 @@ Keys (the avatar game, the default for a new game; the full table is in `README.
 | 20 | **A community with ideas**: relationships, titles, 13 ideas | plan `...-round-20.md`; `scripts/sim/relations.gd`, `specialists.gd`, `initiative.gd`, `assets/data/chemistry.json`, `titles.json`, `ideas.json`, `scripts/ui/community_kit.gd`, `tools/community_probe.gd`; numbers in 6b |
 | 21 | **The live drive**: a road, a car, 9 road events, the colony running behind | plan `...-round-21.md`; `scripts/drive/` (`drive_scene`, `drive_hud`, `car_sim`, `autopilot`, `road_gen`, `road_events`, `car_node`), `scripts/raid/place_flow.gd`, `assets/data/road_events.json`, `road_layouts.json`, `tools/road_preview.gd` |
 | 17 to 21 fixes | review fixes, the QA fix pass (alerts, Map page, 700x560 clipping, far walls, one-press mending, hints), baked pawn meshes (`scripts/render/pawn_mesh.gd`: a dead one in 3 draw calls) and a ground mesh per terrain | section 1c |
-| 22 | **Easier controls and a real gate**: in progress on branch `feature/r22-controls-gate` | not on `feature/int` |
+| 22 | **Easier controls and a real gate**: the pointer is free, the right button (or Shift) aims, the left button fires only while aiming, a click selects a person or uses what is in reach; a setting restores always-aim; the Main gate is a real passage (`sim.gate`): E opens and shuts it, the dusk keeper shuts it, an open gate at night lets the dead in | built, on `main` |
+| 23 | **Orders and leaving**: Q puts the weapon away (a button by the gun readout); a tapped right click orders the picked person by radio (hold at that tile, to a post, come with me; in a place search that, go back); the gate is easy to work (3.5 tiles, a label, clickable, Y, E-shut locks it); a "Leave the base?" card past the wall opens the Map | built, on `main` |
 
 Not built yet (from the roadmap, `docs/superpowers/roadmap.md`, which is only current to round 10): blueprints and research, traders and raiders as events, power and fuel for the base (the fuel in round 13 is for cars), defence variety (traps, lures), the convoy ending where only some leave, a dog.
 
@@ -312,7 +314,7 @@ mv build/LastBell-web.zip build/LastBell-web-<date>-prev.zip     # keep the old 
 (cd build/web && zip -q -r ../LastBell-web.zip .)
 ```
 
-Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full details in the memory file `itch-and-github.md`. In short: split the zip into 9 MB parts, one `file_upload` per part into an injected `<input type=file>`, rebuild the file inside the page and check its SHA-256 against the local zip, capture itch's own input by patching `HTMLInputElement.prototype.click`, press **Upload files**, set the file with a DataTransfer, wait, tick **This file will be played in the browser**, press **Save**. The same file name replaces the old upload in place. The edit page is https://itch.io/game/edit/5076058; the embed loads from `html-classic.itch.zone/html/<upload id>/` (current upload id 19534948). The itch page's title, text and screenshots are still the old prototype's.
+Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full details in the memory file `itch-and-github.md`. In short: split the zip into 9 MB parts, one `file_upload` per part into an injected `<input type=file>`, rebuild the file inside the page and check its SHA-256 against the local zip, capture itch's own input by patching `HTMLInputElement.prototype.click`, press **Upload files**, set the file with a DataTransfer, wait, tick **This file will be played in the browser**, press **Save**. The same file name replaces the old upload in place. The edit page is https://itch.io/game/edit/5076058; the embed loads from `html-classic.itch.zone/html/<upload id>/` (current upload id 19553346). The itch page's title, text and screenshots are still the old prototype's.
 
 **Probe web audio** (no ears needed): serve a copy of `build/web` with a hook in `index.html` that records `AudioContext`s, `AudioBufferSourceNode.start` calls and an analyser on the destination (`.claude/launch.json` has a `web-test` config on port 8123 serving the scratchpad's `webtest` folder). Headless tests use a dummy audio driver and cannot catch web audio bugs.
 
@@ -380,6 +382,6 @@ build/                         exports and zips (git-ignored); LastBell-web.zip 
 
 Paste something like this:
 
-> Read `STATUS.md` in `/Users/jaf_lab/last-bell/.worktrees/int` (branch `feature/int`: rounds 17 to 21 and the QA fixes; `main` is round 16), sections 1 and 5b, then `README.md`. Do not push, merge into `main` or touch itch unless I ask. Round 22 is being built on `feature/r22-controls-gate`. First: tell me what you need from my playtest of the avatar game (the checklist after section 5b).
+> Read `STATUS.md` (branch `main`: the avatar game, rounds 17 to 23, pushed and on itch), sections 1 and 5b, then `README.md`. Do not push or touch itch unless I ask. First: tell me what you need from my playtest of the avatar game (the checklist after section 5b).
 
 Claude's own notes for this project live in `/Users/jaf_lab/.claude/projects/-Users-jaf-lab-last-bell/memory/` (index: `MEMORY.md`; the most useful: `colony-sandbox-direction.md`, `rounds-7-to-10.md`, `itch-and-github.md`, `audio-web-silence-2026-10-02.md`, `work-pace-and-safety.md`). They load automatically on this machine; this file is the same story for a fresh start or another machine.
