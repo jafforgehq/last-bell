@@ -23,6 +23,8 @@ const GRID_W := 1024
 const ACTIVE_CAP := 60
 const ACTIVE_CAP_WEB := 40
 const TownMedical := preload("res://scripts/town/town_medical.gd")
+## The share of its radius a shot is heard at from inside a house (nine tiles: the dead of the houses round it, 10 to 16 tiles off, are left asleep).
+const INDOOR_NOISE := 0.3
 
 ## The town's modules, in the order they are made and stepped. (Plan 1.13.) `field` is stepped before the colony's step, the others after it.
 const PARTS := {
@@ -205,7 +207,9 @@ func _town_events(first_new: int) -> void:
 ## The noise of a shot goes to the field: the dormant dead within its radius wake and come, the awake that stand or wander within it come.
 func _shot_noise(p: Person) -> void:
 	if field != null:
-		field.noise(Vector2(p.x, p.y), p)
+		# (a shot fired indoors is heard by the next house, not by the whole district: walls hold the sound, so that clearing the start house does not call the street)
+		var r: float = field.noise_r * (INDOOR_NOISE if houses != null and houses.house_at(p.x, p.y) >= 0 else 1.0)
+		field.noise(Vector2(p.x, p.y), p, r)
 
 
 func _update_zombie(z: Zombie, dt: float) -> void:

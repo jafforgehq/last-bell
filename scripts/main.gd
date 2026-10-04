@@ -644,6 +644,7 @@ func _ready() -> void:
 		# the camera begins on the avatar (`--cam=` below may put it elsewhere)
 		var me = sim.avatar.player()
 		cam_center = Vector2(me.x, me.y)
+	if town != null: town.opening_view()    # (a new town run shows the whole start house and the street in front of it for a moment)
 	_parse_args()
 	_clamp_camera()
 	_apply_camera()
@@ -1720,6 +1721,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_quick_save()
 			KEY_F9:
 				_quick_load()
+				if not is_inside_tree():
+					return    # (the scene was swapped out under the key: there is no viewport left to say the key was handled)
 			KEY_TAB:
 				# Tab goes round the people who are here and alive: not the lost, not those away
 				# (and in avatar mode not the one you are: they cannot be asked, and selecting them shows nothing)
@@ -3054,7 +3057,10 @@ func _start_hints() -> void:
 		return
 	hints = Hints.new()
 	add_child(hints)
-	hints.setup(self, hud, sim, Hints.load_hints())
+	var tips: Array = Hints.load_hints()
+	if town != null:
+		tips = OneHouse.town_hints(tips)    # (the school's tips talk of crews, posts and walls: a town run has its own few, said its own way)
+	hints.setup(self, hud, sim, tips)
 
 
 ## Builds the coach over the HUD and starts it where the scenario was left (a new run: the first

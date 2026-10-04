@@ -3,7 +3,7 @@
 ## until dawn (or the hour asked for), and wakes the avatar when something is near.
 ##
 ## REFUSED (`can_sleep`) with a reason: no bed yet (nothing claimed), the avatar is down or hurt and bleeding, an attack is on and it is dusk to dawn ("The dead are coming
-## tonight"), by day for "dawn", a dead one is awake within DEAD_R of the base, or it is nearly morning already.
+## tonight"), by day for "dawn", a dead one is after somebody or walks about near the base, or it is nearly morning already.
 ## WAKES (`wake`, with the reason): a dead one comes within WAKE_R of the avatar, a shot is heard or a kill is made, the avatar is hurt, the run is over, or whoever calls `wake`
 ## (the sleep screen's key). It heals the avatar a little each hour (HEAL_PER_H) and keeps the street's sleeping dead asleep meanwhile (`field.pause_wake`).
 ## `advance()` runs one frame's worth; `update(dt)` calls it, so the sleep runs by itself under the town's own step (a nested step of the fast-forward finds the module
@@ -13,7 +13,12 @@
 ## Candidates: kind "bed" ("Sleep until dawn"). Nothing is saved: a sleep never goes into a save (the save is taken awake).
 extends RefCounted
 
-const DEAD_R := 20.0
+## A dead one after somebody within THREAT_R of the base, or one that walks about within ABOUT_R of it (or stands within CLOSE_R), keeps the avatar from sleeping. The ones that stand
+## farther off are not in the way: they are put back to sleep where they stand as the avatar lies down (`begin`), so that the street is quiet all night (they are woken again, as ever, by
+## whoever comes near them in the morning). Without this the first night could never be slept: the dark wakes the dead far and wide, and one is always about.
+const THREAT_R := 40.0
+const ABOUT_R := 12.0
+const CLOSE_R := 6.0
 const WAKE_R := 12.0
 const BED_REACH := 1.8
 const HEAL_PER_H := 4.0
@@ -88,6 +93,27 @@ func _minutes_to(until: String) -> float:
 	return fposmod(target - fposmod(float(sim.minutes), 1440.0), 1440.0) + PAST_MIN
 
 
+## What of the awake dead stands in the way of sleep near `at`: "" nothing, "after" one that is after somebody within THREAT_R, "about" one that walks about within ABOUT_R or stands
+## within CLOSE_R.
+func _in_the_way(at: Vector2) -> String:
+	var about := false
+	for z in sim.zombies:
+		if z.state == "dead" or z.state == "dying" or z.state == "retreat":
+			continue
+		var d := Vector2(z.x - at.x, z.y - at.y).length()
+		match String(z.state):
+			"chase", "hunt", "approach", "attack", "breach":
+				if d < THREAT_R:
+					return "after"
+			"wander":
+				if d < ABOUT_R:
+					about = true
+			_:
+				if d < CLOSE_R:
+					about = true
+	return "about" if about else ""
+
+
 ## Is a dead one awake within `r` tiles of `at` (the sleeping ones are records, not in `sim.zombies`).
 func _dead_near(at: Vector2, r: float) -> bool:
 	for z in sim.zombies:
@@ -119,7 +145,10 @@ func can_sleep(until: String = "dawn") -> Dictionary:
 		return {"ok": false, "why": "It is nearly morning"}
 	if float(p.bleeding) > 0.0:
 		return {"ok": false, "why": "You are bleeding: see to the wound first"}
-	if _dead_near(base.center(), DEAD_R):
+	var way := _in_the_way(base.center())
+	if way == "after":
+		return {"ok": false, "why": "The dead are after you: you cannot sleep"}
+	if way == "about":
 		return {"ok": false, "why": "The dead are about: you cannot sleep"}
 	return {"ok": true, "why": ""}
 
@@ -143,6 +172,9 @@ func begin(until: String = "dawn") -> Dictionary:
 	_kills = int(sim.kills)
 	_on = true
 	_set_pause(true)
+	var field = sim.get("field")
+	if field != null and field.has_method("sleep_all"):
+		field.sleep_all()    # (the ones that stand or wander far off lie down again where they are: the street is quiet while the avatar sleeps)
 	_hands_off(p)
 	sim.events.append({"type": "sleep", "on": true, "why": ""})
 	return {"ok": true, "why": "", "minutes": mins}
