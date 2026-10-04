@@ -38,6 +38,7 @@ const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 const Demo := preload("res://scripts/demo.gd")
 const DemoRun := preload("res://scripts/sim/demo_run.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
 const Hints := preload("res://scripts/ui/hints.gd")
 const StoryUi := preload("res://scripts/ui/story_ui.gd")
@@ -439,6 +440,8 @@ func _ready() -> void:
 				tutorial = true
 			elif DemoRun.is_save(saved):
 				DemoRun.install(sim)    # (round 26: a demo save is the demo again: its switches are put before it is read)
+			elif OneHouse.is_save(saved) and OneHouse.wanted(sim):
+				OneHouse.install(sim)    # (One House: a save of the town run is that run again before it is read; `wanted`: the sim is a town's)
 			loaded = SaveGame.apply(sim, saved)
 			load_failed = not loaded
 			if loaded and avatar_wanted and not tutorial and String(sim.player_id) == "":
@@ -455,6 +458,9 @@ func _ready() -> void:
 			# the demo (round 26): the first three nights of one run, always the same: the seed, the crew, what is switched off, the player and
 			# the pickup are the scenario's (scripts/sim/demo_run.gd), whatever the choice says
 			DemoRun.begin(sim)
+		elif not title_mode and OneHouse.wanted(sim):
+			# One House (a town run: the sim is the town's): one survivor in one house, the lessons, the fourth voice (scripts/town/one_house.gd)
+			OneHouse.begin(sim, int(run.get("difficulty", 1)), int(run.get("seed", randi())))
 		else:
 			sim.crew_start = start_crew(run, real and not title_mode)
 			# (only a run asked for the long game is one: the tutorial, the title's yard and the tests are Autumn's)
@@ -3348,6 +3354,10 @@ func _parse_args() -> void:
 				pass # --campaign asks for the long game before the run starts (see _ready); --season=N is dealt with above
 			"demo":
 				pass # --demo is the demo (scripts/demo.gd): the run is the demo's three nights (see _ready)
+			"stage":
+				# --stage=cleared|claimed|rescued2|fourth|night puts a town run in that stage at once (scripts/town/one_house.gd, for a screenshot)
+				if not OneHouse.stage_to(sim, v):
+					print("--stage=%s: not a town run (give --town), or no such stage" % v)
 			"endcard":
 				# --demo --endcard plays the demo's three days quickly (the colony alone) to the run's end: the end card is up for the shot
 				endcard_asked = true
