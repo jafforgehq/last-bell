@@ -476,7 +476,7 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	var standing: Array = []
 	for c in h.tall.get_children():
 		standing.append(String(c.texture.resource_path).get_file().get_basename())
-	check("392_mast" in standing and "143_tent" in standing, "the mast and the tents are among the people: %s" % str(standing))
+	check("392_mast" in standing and "394_bunkroof" in standing, "the mast and the bunk house's roof are among the people: %s" % str(standing))
 	check(not ("082_cot" in standing), "the cots are not: %s" % str(standing))
 	var mast: Sprite2D = null
 	for c in h.tall.get_children():
@@ -488,7 +488,7 @@ func test_what_stands_up_is_among_the_people_and_what_lies_down_is_under_them() 
 	var flat := 0
 	for c in n._flat.get_children():
 		flat += 1
-	eq(flat, 4, "the four cots lie on the ground")
+	eq(flat, 4, "the four beds (a strip of floor and a cot each) lie on the ground")
 	g.world.free()
 
 
@@ -500,13 +500,13 @@ func test_the_two_tents_are_drawn_in_two_colours_one_for_each_home() -> void:
 	_stand(sim, "tents_home_1", "tents")
 	n.update(0.0)
 	var one: Array = n.files()
-	check("143_tent" in one and not ("144_tent" in one), "the first home has the orange tent: %s" % str(one))
+	check("143_tent" in one and not ("144_tent" in one), "the first home has the olive tent: %s" % str(one))
 	_stand(sim, "tents_home_2", "tents")
 	n.update(0.0)
 	var two: Array = n.files()
-	check("143_tent" in two and "144_tent" in two, "the second home has the green one: %s" % str(two))
-	eq(two.count("143_tent"), 1, "one orange tent")
-	eq(two.count("144_tent"), 1, "one green tent")
+	check("143_tent" in two and "144_tent" in two, "the second home has the sand one: %s" % str(two))
+	eq(two.count("143_tent"), 1, "one olive tent")
+	eq(two.count("144_tent"), 1, "one sand tent")
 	g.world.free()
 
 

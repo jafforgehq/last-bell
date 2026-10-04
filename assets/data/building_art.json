@@ -1,6 +1,6 @@
 {
  "version": 1,
- "_doc": "How the yard draws the buildings (scripts/render/build_node.gd) and what they shut and hold (scripts/sim/build.gd reads 'solid' and 'beds'). Everything is in tiles from the middle of the plot (a lot is three tiles by three, centred on the middle of a tile, so the back two rows are y -1.5 to 0.5 and the front row, where the crew stands, is y 0.5 to 1.5). A prop is {f: the picture in assets/objects without .png, x: the middle of the picture, y: its bottom edge, w and h: its size, flat: true for what lies on the ground (drawn under the people), flip: mirrored, e: another picture for the plots in the east half of the yard (x over 42), by_n: a picture for each of the building's homes in turn (the first home takes the first, the second the second), sort: the line the picture's feet stand on (what the people are sorted against: they walk behind it up to there; it is the bottom edge unless the picture has a shadow under it or stands on something), a: opacity}. The props are drawn in the order they are written. 'solid' is [x0, y0, x1, y1] and shuts those tiles for walking while the building stands (whole tiles only: keep the front row open and never close a lane; tests/test_build_view.gd checks it); 'beds' are where the hurt lie (the bunk house); 'lights' are the lamps that burn at night while it stands: {x, y, r: how far, energy, color}. 'scaffold' is the look of a site before it has a look of its own: the first stage whose 'upto' is above the share done ('ghost': the building's own props show faintly under it, at that opacity).",
+ "_doc": "How the yard draws the buildings (scripts/render/build_node.gd) and what they shut and hold (scripts/sim/build.gd reads 'solid' and 'beds'). Everything is in tiles from the middle of the plot (a lot is three tiles by three, centred on the middle of a tile, so the back two rows are y -1.5 to 0.5 and the front row, where the crew stands, is y 0.5 to 1.5). A prop is {f: the picture in assets/objects without .png, x: the middle of the picture, y: its bottom edge, w and h: its size, flat: true for what lies on the ground (drawn under the people), flip: mirrored, e: another picture for the plots in the east half of the yard (x over 42), by_n: a picture for each of the building's homes in turn (the first home takes the first, the second the second), sort: the line the picture's feet stand on (what the people are sorted against: they walk behind it up to there; it is the bottom edge unless the picture has a shadow under it or stands on something), a: opacity}. The props are drawn in the order they are written. 'solid' is [x0, y0, x1, y1] and shuts those tiles for walking while the building stands (whole tiles only: keep the front row open and never close a lane; tests/test_build_view.gd checks it); 'beds' are where the hurt lie (the bunk house); 'lights' are the lamps that burn at night while it stands: {x, y, r: how far, energy, color}. 'scaffold' is the look of a site before it has a look of its own: the first stage whose 'upto' is above the share done ('ghost': the building's own props show faintly under it, at that opacity). The pictures of the tents, the bunk house, the workshop, the greenhouse beds and the floodlights are drawn by tools/make_building_art.py (143_tent, 144_tent and 393_tent are the three tents, one for each home in turn; a picture is stretched to its w by h, so it keeps the shape it was drawn in, and the yard keeps every picture within two tiles of the plot's middle: tests/test_building_art.gd and tests/test_build_view.gd check both).",
  "scaffold": [
   {"upto": 0.34, "props": [
    {"f": "164_pallets_s3", "x": 0.0, "y": -0.05, "w": 2.8, "h": 1.65, "flat": true},
@@ -38,8 +38,8 @@
   "greenhouse": {
    "solid": [-1.5, -1.5, 1.5, 0.5],
    "props": [
-    {"f": "121_bed", "x": -0.85, "y": 0.5, "w": 0.9, "h": 2.0, "flat": true},
-    {"f": "123_bed", "x": 0.1, "y": 0.5, "w": 0.9, "h": 2.0, "flat": true},
+    {"f": "400_tunnel", "x": -0.85, "y": 0.82, "w": 1.3, "h": 2.5, "flat": true},
+    {"f": "401_tunnel", "x": 0.1, "y": 0.82, "w": 1.3, "h": 2.5, "flat": true},
     {"f": "125_rainbarrel", "x": 1.05, "y": -0.55, "w": 0.8, "h": 0.84},
     {"f": "129_compost", "x": 1.05, "y": 0.5, "w": 0.8, "h": 0.82}
    ]
@@ -47,7 +47,7 @@
   "workshop": {
    "solid": [-1.5, -1.5, 1.5, 0.5],
    "props": [
-    {"f": "117_tarp", "x": -0.15, "y": 0.1, "w": 2.24, "h": 1.92},
+    {"f": "399_workshop", "x": -0.3, "y": 0.1, "w": 3.0, "h": 3.1, "sort": -0.35},
     {"f": "058_workbench", "x": -0.3, "y": 0.5, "w": 2.23, "h": 0.65},
     {"f": "119_generator", "x": 1.15, "y": 0.4, "w": 1.1, "h": 0.82},
     {"f": "120_crate", "x": 1.2, "y": -0.7, "w": 0.8, "h": 0.84}
@@ -56,18 +56,17 @@
   "bunk_house": {
    "beds": [[-1.17, -0.5], [-0.39, -0.5], [0.39, -0.5], [1.17, -0.5]],
    "props": [
-    {"f": "143_tent", "x": -0.8, "y": -1.2, "w": 1.37, "h": 1.5},
-    {"f": "144_tent", "x": 0.8, "y": -1.2, "w": 1.35, "h": 1.49},
-    {"f": "082_cot", "x": -1.17, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true},
-    {"f": "073_mattress", "x": -0.39, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true},
-    {"f": "083_cot", "x": 0.39, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true},
-    {"f": "075_mattress", "x": 1.17, "y": 0.5, "w": 0.76, "h": 2.0, "flat": true}
+    {"f": "395_bunkbed", "x": -1.17, "y": 0.58, "w": 0.78, "h": 2.16, "flat": true},
+    {"f": "396_bunkbed", "x": -0.39, "y": 0.58, "w": 0.78, "h": 2.16, "flat": true},
+    {"f": "397_bunkbed", "x": 0.39, "y": 0.58, "w": 0.78, "h": 2.16, "flat": true},
+    {"f": "398_bunkbed", "x": 1.24, "y": 0.58, "w": 0.92, "h": 2.16, "flat": true},
+    {"f": "394_bunkroof", "x": 0.0, "y": 0.0, "w": 4.0, "h": 2.8, "sort": -0.6}
    ]
   },
   "tents": {
    "solid": [-1.5, -1.5, 1.5, 0.5],
    "props": [
-    {"f": "143_tent", "by_n": ["143_tent", "144_tent"], "x": -0.1, "y": 0.45, "w": 2.4, "h": 2.64},
+    {"f": "143_tent", "by_n": ["143_tent", "144_tent", "393_tent"], "x": -0.1, "y": 0.66, "w": 2.8, "h": 3.08, "sort": 0.2},
     {"f": "120_crate", "x": 1.15, "y": 0.4, "w": 0.7, "h": 0.74}
    ]
   },
@@ -75,14 +74,12 @@
    "solid": [-0.5, -0.5, 0.5, 0.5],
    "props": [
     {"f": "119_generator", "x": 0.0, "y": 0.4, "w": 1.16, "h": 0.86},
-    {"f": "243_lamppost", "x": -0.62, "y": 2.26, "w": 1.7, "h": 4.39, "sort": 0.15},
-    {"f": "243_lamppost", "x": 0.62, "y": 2.26, "w": 1.7, "h": 4.39, "sort": 0.15, "flip": true},
-    {"f": "081_lamp", "x": -1.2, "y": -1.6, "w": 0.55, "h": 0.74, "sort": 0.15},
-    {"f": "081_lamp", "x": 1.2, "y": -1.6, "w": 0.55, "h": 0.74, "sort": 0.15}
+    {"f": "402_floodlight", "x": -1.13, "y": 0.78, "w": 1.6, "h": 3.4, "sort": 0.14},
+    {"f": "403_floodlight", "x": 1.17, "y": 0.78, "w": 1.6, "h": 3.4, "sort": 0.14}
    ],
    "lights": [
-    {"x": -1.2, "y": -2.13, "r": 8.0, "energy": 0.95, "color": [255, 238, 205]},
-    {"x": 1.2, "y": -2.13, "r": 8.0, "energy": 0.95, "color": [255, 238, 205]}
+    {"x": -1.15, "y": -2.16, "r": 8.0, "energy": 0.95, "color": [255, 238, 205]},
+    {"x": 1.15, "y": -2.16, "r": 8.0, "energy": 0.95, "color": [255, 238, 205]}
    ]
   },
   "watchtower": {
