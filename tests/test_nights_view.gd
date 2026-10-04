@@ -6,6 +6,7 @@ extends "res://tests/case.gd"
 ## The rules these read are the sim's own (tests/test_forecast.gd, test_nights_*.gd, test_night_calls.gd); here the sim's answers are set by
 ## hand (the HUD kit's fake tactics, stand-ins for the nights module and the night calls), so this file does not depend on them landing.
 
+const AimMode := preload("res://scripts/aim_mode.gd")
 const Helpers := preload("res://tests/helpers.gd")
 const Kit := preload("res://tests/hud_kit.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
@@ -672,6 +673,7 @@ func test_the_avatar_wears_a_faint_ring_of_the_rally_radius_and_brighter_while_s
 
 func test_a_plated_brute_wears_its_plates_and_a_ring_at_the_weak_point_which_lights_when_the_aim_is_near() -> void:
 	var main := _game()
+	AimMode.set_mode("always")    # (round 22: the weak point lights only while the player aims; with "always" the mouse aims by itself, and this test sets the aim by hand)
 	var sim = main.sim
 	var wall = _walls(sim)[0]
 	var brute = Helpers.plated_brute(sim, wall.id)

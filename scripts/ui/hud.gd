@@ -4947,7 +4947,7 @@ var lock_allowed: Callable
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`; in avatar mode (round 17) `news` (the toolbar's News button), `news.panel`,
 ## `alarm` (the toolbar's call to arms), `radio` (the verbs in the dock), `radio.<verb>` (one verb's button: come, hold, cover, search,
 ## back, post), `radio.insist` (the Insist button, there after a refusal), `ammo` (the readout of the gun), `call` (the call card) and `talk` (the card E at a person opens);
-## round 18: `panel` (the radio panel), `panel.tab:<page>` (a tab: jobs, build, map, news) and `panel.page` (the page that is up).
+## round 18: `panel` (the radio panel), `panel.tab:<page>` (a tab: jobs, build, map, news) and `panel.page` (the page that is up; the part of it in view when it scrolls).
 func anchor_rect(name: String) -> Rect2:
 	if name.begins_with("stores."):
 		return _anchor_store(name.trim_prefix("stores."))
@@ -4957,6 +4957,9 @@ func anchor_rect(name: String) -> Rect2:
 	if c == null or not is_instance_valid(c) or not (c is Control) or not c.is_visible_in_tree():
 		return Rect2()
 	var r: Rect2 = c.get_global_rect()
+	# (a page that is taller than the room scrolls: the part of it that is on screen is the anchor, not the whole page, most of which may be out of view)
+	if name == "panel.page" and radio_panel.scroll != null:
+		r = r.intersection(radio_panel.scroll.get_global_rect())
 	return r if r.size.x > 0.0 and r.size.y > 0.0 else Rect2()
 
 

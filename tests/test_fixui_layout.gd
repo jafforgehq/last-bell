@@ -306,7 +306,13 @@ func test_the_forecast_takes_at_most_four_lines_of_a_narrow_clock_and_the_whole_
 			var lines: int = h.forecast_label.get_line_count() + h.ready_label.get_line_count()
 			check(lines <= 4, "%s: four lines of the forecast at most in the narrow clock: %d" % [where, lines])
 			# (with the whole lines it was 256 tall in this state)
-			check(Kit.rect(h.clock).size.y <= 230.0, "%s: the clock is %.0f tall" % [where, Kit.rect(h.clock).size.y])
+			# (round 22: in avatar mode the gate's row, the lamp and "Gate: shut", is a line of the clock of its own: its height and the gap
+			# above it are on top of the bound that the forecast's lines had, so the forecast is still held to the same room)
+			var gate := 0.0
+			if h.gate_row != null and h.gate_row.visible:
+				gate = Kit.rect(h.gate_row).size.y + float(h.gate_row.get_parent().get_theme_constant("separation"))
+			check(gate > 0.0, "%s: the gate's row is in the clock (avatar mode)" % where)
+			check(Kit.rect(h.clock).size.y <= 230.0 + gate, "%s: the clock is %.0f tall (the gate's row and its gap %.0f of it)" % [where, Kit.rect(h.clock).size.y, gate])
 		else:
 			eq(h.forecast_label.text, NightKit.forecast_line(_siege(), true), "%s: the whole line in a wide window" % where)
 		Kit.free_all(ctx)

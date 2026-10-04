@@ -9,6 +9,7 @@ extends "res://tests/case.gd"
 ##       is fought on with, as a person who cannot heal would.
 ## Real rules throughout (the nights' module, the medic, the waves are off).
 
+const AimMode := preload("res://scripts/aim_mode.gd")
 const Helpers := preload("res://tests/helpers.gd")
 const BotLib := preload("res://tools/avatar_bot.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
@@ -124,6 +125,7 @@ func test_the_traces_head_hit_is_the_weak_hit_of_the_rules_for_any_ray() -> void
 
 func test_the_ring_is_on_exactly_when_the_shot_would_land_on_the_head() -> void:
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true}, 1280, 800)
+	AimMode.set_mode("always")    # (round 22: the ring lights only while the player aims; with "always" the mouse aims by itself, as this test sets the aim by hand)
 	var sim = main.sim
 	sim.waves.enabled = false
 	sim.zombies.clear()
