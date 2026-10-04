@@ -51,7 +51,8 @@ func start() -> void:
 
 ## Whether the levels are kept: avatar mode.
 func active() -> bool:
-	return enabled and sim != null and String(sim.player_id) != ""
+	# (not in a place: a trip's map has its own size and no compound, decks or gate: `nights_on` is false in a RaidSim, as for the gate and the nights)
+	return enabled and sim != null and bool(sim.nights_on) and String(sim.player_id) != ""
 
 
 # ---------------------------------------------------------------------------------------------------- the world --
