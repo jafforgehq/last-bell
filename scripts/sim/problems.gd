@@ -1557,6 +1557,7 @@ func _record_in(e, clock: float) -> Dictionary:
 			if seg == null:
 				return {}
 			r.seg = int(seg.id)
+			r.label = "the cracked %s" % String(seg.name).to_lower()    # (as `_make` names it: a record loaded must be the one that was saved, to its label)
 	var tried = e.get("tried", [])
 	if tried is Array:
 		for x in tried:

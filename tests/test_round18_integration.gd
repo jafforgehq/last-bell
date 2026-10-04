@@ -261,8 +261,9 @@ func test_take_the_gate_post_and_fire_from_it() -> void:
 	eq(main.hud.toast_col, main.hud.WARN, "in amber")
 	eq(sim.interact.posted, "", "she is not on it")
 	eq(sim.jobs.post_ids, held_before, "and nobody was moved")
-	# the gate post is hers: she steps to it, E, steady
-	_stand(main, me, gate_at + Vector2(0.0, 0.9))
+	# the gate post is hers: she steps to it, E, steady (round 24: the post is on the catwalk, the bridge deck over the gateway, and is taken
+	# from that deck: she stands a step along the catwalk from it, where on the ground below the lever is what E is for: see the end)
+	_stand(main, me, gate_at + Vector2(0.9, 0.0))
 	_frames(main, 3)
 	await _draw_once(main)
 	eq(main.overlay.prompt_text, "E  Take the gate post", "the prompt is on the post")
@@ -291,6 +292,11 @@ func test_take_the_gate_post_and_fire_from_it() -> void:
 	var loose: float = sim.avatar.spread_of(me, me.gun)
 	near(braced_again / loose, sim.interact.BRACE, 0.001, "the post is worth x%.1f of the spread" % sim.interact.BRACE)
 	check(braced <= loose, "braced %.4f, loose %.4f" % [braced, loose])
+	# on the ground in front of it, in the lever's reach, the post is up on the other level: E there is for the gate's lever (round 22, 24)
+	_stand(main, me, gate_at + Vector2(0.0, 0.9))
+	_frames(main, 3)
+	eq(String(sim.interact.best().get("id", "")), "gate", "from the ground below the catwalk it is the lever that is offered")
+	check(not sim.interact.candidates().any(func(c): return String(c.kind) == "post" and String(c.id) == "gate"), "and the post is not offered from there")
 	await TutorialKit.leave(main)
 
 
@@ -303,7 +309,7 @@ func test_taking_a_held_post_by_day_swaps_with_its_holder() -> void:
 	var bus: Dictionary = sim.jobs.post("bus")
 	eq(String(sim.jobs.post_ids.get("dez", "")), "bus", "Dez holds the bus post")
 	eq(String(sim.jobs.post_ids.get("ruth", "")), "gate", "Ruth the gate")
-	_stand(main, me, Vector2(bus.pos) + Vector2(0.0, 0.9))
+	_stand(main, me, Vector2(bus.pos) + Vector2(0.9, 0.0))    # (round 24: the bus post is on the catwalk: she takes it from the deck, not from the ground below)
 	_frames(main, 3)
 	_press(main, KEY_E)
 	eq(sim.interact.posted, "bus", "she took it by day")

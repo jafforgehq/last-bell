@@ -741,13 +741,22 @@ func look() -> void:
 
 
 ## What changes the plan between two looks: the people (their ids: one lost or new; a trip is not a change, whoever is away keeps the seat and comes home to it)
-## and the buildings.
+## and the buildings. The buildings are read from the plots themselves (which stands on each open plot, and how many plots are open), NOT from `build.version`:
+## that counter is a cache key, it is not saved, and a loaded game counts it from its own start, so a signature that held it was a different string in a loaded
+## game from the one a game played straight through holds (the saves of the two differed, and the first look after a load saw a change that never was and
+## staffed again, which the straight game did not).
 func _signature() -> String:
 	var ids: Array = []
 	for p in sim.people:
 		if not (p.dead or p.turned or _is_player(p)):
 			ids.append(String(p.id))
-	return "%d|%s" % [int(sim.build.version), ",".join(ids)]
+	var stands: Array = []
+	var open := 0
+	for pl in sim.build.plots():
+		open += 1
+		if String(pl.get("building", "")) != "":
+			stands.append("%s=%s" % [String(pl.id), String(pl.building)])
+	return "%d.%d|%s" % [",".join(stands).hash(), open, ",".join(ids)]
 
 
 ## {station: game hours worked since the briefing}: each slow look adds 0.5 * jobs.working(id).size() (read by the debrief).

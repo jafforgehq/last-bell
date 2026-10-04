@@ -12,6 +12,7 @@ const GD := preload("res://scripts/game_data.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
 const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
+const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 const RaidScene := preload("res://scripts/raid/raid_scene.gd")
 const RaidHud := preload("res://scripts/raid/raid_hud.gd")
 const RaidOverlay := preload("res://scripts/raid/raid_overlay.gd")
@@ -662,8 +663,20 @@ func test_the_help_lists_the_radio_verbs_and_the_radio_button_says_what_it_is() 
 	var main := _yard()
 	main.hud.help.visible = true
 	var help := _texts(main.hud.help).to_lower()
-	for want in ["radio", "come", "hold", "cover", "search", "back"]:
+	# (round 24: the help no longer lists the six verbs one by one: it says how to reach them, the card or the wheel (C), and the keys of the
+	# wheel; each verb is explained where it is used, on the card's button tooltip and on the wheel's slice, and every one of the six is)
+	for want in ["radio", "card or wheel (c)", "wheel (hold)", "wheel: all near", "pick crew", "last order", "crew card"]:
 		check(help.contains(want), "the help says '%s': %s" % [want, help])
+	main._try_select({"kind": "person", "ref": _person(main, "dez")})
+	main.hud.update_hud(main.sim, 1, true, 0)
+	var verbs: Array = main.sim.radio.VERBS
+	eq(verbs, ["come", "hold", "cover", "search", "back", "post"], "the radio has these six verbs")
+	for verb in verbs:
+		var named := String(main.sim.radio.verb_name(verb)).to_lower()
+		var tip := String(main.hud.radio_verbs.buttons[verb].tooltip_text).to_lower()
+		check(tip.begins_with(named) and tip.contains("dez"), "the card's %s button explains it: %s" % [verb, tip])
+		var wheel_tip := String(WheelCtl.TIPS.get(verb, "")).to_lower()
+		check(wheel_tip.begins_with(named), "and so does the wheel's slice: %s" % wheel_tip)
 	check(main.hud.news_button.tooltip_text.to_lower().contains("radio"), "the radio's toolbar button says so: %s" % main.hud.news_button.tooltip_text)
 	check(main.hud.news_button.tooltip_text.contains("crew card"), "and how to use it: %s" % main.hud.news_button.tooltip_text)
 	await TutorialKit.leave(main)
