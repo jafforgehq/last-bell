@@ -216,7 +216,37 @@ func _evaluate() -> Array:
 	_c_tonight(out, outlook)
 	_c_big_night(out, outlook)
 	_c_convoy(out)
+	if sim.is_one_house():
+		return _town_words(out)
 	return out
+
+
+## One House: the school's words about scavenging, the walls, the radio desk's calls and tonight's wave do not fit a town of one house before the attacks begin. The concerns that
+## have no meaning here are dropped (the lookout, the radio desk and tonight's readiness are about the nightly attacks and the school's callers) and the others are said in the
+## town's words, with no scavenging priority behind them (nobody is sent out: the avatar goes and looks).
+func _town_words(out: Array) -> Array:
+	var attacks: bool = sim.scenario != null and sim.scenario.has_method("attacks_on") and bool(sim.scenario.attacks_on())
+	var kept: Array = []
+	for c in out:
+		var id := String(c.id)
+		if (id == "tonight" or id == "bignight") and not attacks:
+			continue
+		if id == "station:radio" or (id == "station:watch" and not attacks) or id == "beds":
+			continue
+		match id:
+			"food":
+				c["sub"] = "Search the houses for more, or put hands on the beds" if sim.jobs.unlocked("garden") else "Search the houses for more"
+			"water":
+				c["sub"] = "No station makes water: search the houses, or wait for rain"
+				c["priority"] = ""
+			"scrap":
+				c["sub"] = "The fence and the bench both eat it: search the houses"
+				c["priority"] = ""
+			"meds":
+				c["sub"] = "Treatment needs it: a house may have some"
+				c["priority"] = ""
+		kept.append(c)
+	return kept
 
 
 func _c_days(kind: String, out: Array) -> void:
