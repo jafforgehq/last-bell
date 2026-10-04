@@ -33,6 +33,7 @@ const Initiative := preload("res://scripts/sim/initiative.gd")
 const Avatar := preload("res://scripts/sim/avatar.gd")
 const Interact := preload("res://scripts/sim/interact.gd")
 const Gate := preload("res://scripts/sim/gate.gd")
+const Levels := preload("res://scripts/sim/levels.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 
@@ -318,6 +319,8 @@ var interact
 ## The Main gate as a real gate (round 22, gate.gd): opened and shut by the avatar's hands, by the keeper for a car or a party, and by the bell. Avatar
 ## mode only: `gate.active()` is false with no avatar and the section is the shut wall it always was.
 var gate
+## The ground and the decks (round 24, levels.gd): which level a person is on, and the solid tiles that keep the two apart. Avatar mode only.
+var levels
 ## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
 ## the avatar and the radio's news is behind this).
 var player_id := ""
@@ -421,6 +424,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	interact.setup(self)
 	gate = Gate.new()
 	gate.setup(self)
+	levels = Levels.new()
+	levels.setup(self)
 	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, nights, vehicles]:
 		m.setup(self)
 	_seed()
@@ -656,6 +661,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	avatar.start()
 	interact.start()
 	gate.start()
+	levels.start()
 	recruits.begin()
 	town.begin()
 	lots.begin()
@@ -716,6 +722,7 @@ func update(dt: float) -> void:
 	streets.update(dt)
 	# the gate (round 22, avatar mode only): after the trips and the callers have asked for it, before the people and the dead move
 	gate.update(dt)
+	levels.update(dt)    # (round 24: who is on the bridge, on which level; the solid tiles that keep the decks and the ground apart)
 	nights.update(dt)
 
 	if phase == "dawn":
@@ -947,9 +954,11 @@ func _update_person(p: Person, dt: float) -> void:
 		else:
 			if p.goal_key != key or p.path.is_empty():
 				p.goal_key = key
-				p.path = path_p.find(world.solid_p, p.x, p.y, goal.x, goal.y)
+				p.path = levels.find_path(p, goal.x, goal.y)    # (`path_p.find`; with an avatar the way off a deck is a ladder: levels.gd)
 				if p.path.is_empty():
-					p.path = [Vector2(goal.x, goal.y)]
+					# (no way there: the old yard walks straight at it. With an avatar the towers are shut, so a spot outside the shut gate has no way
+					# in the grid, and nobody walks through the wall for it: they stay where they are until there is one)
+					p.path = [Vector2(p.x, p.y)] if levels.active() else [Vector2(goal.x, goal.y)]
 				p.path_i = 0
 			_follow(p, radio.speed_of(p), dt)    # (3.0: whoever follows the player a long way behind hurries)
 	if p.repair != null and not p.moving and (repair_spot(p.repair) - Vector2(p.x, p.y)).length() < 0.3:

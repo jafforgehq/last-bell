@@ -273,7 +273,7 @@ func on_wall_claw(z, seg) -> void:
 			victim = p
 	if victim == null:
 		return
-	if sim.world.on_deck(victim.x, victim.y) and sim.rng.randf() >= DECK_SCRATCH:
+	if sim.levels.on_deck(victim) and sim.rng.randf() >= DECK_SCRATCH:    # (round 24: a person in the passage under the bridge is not on its deck)
 		return
 	if roll >= SCRATCH_CHANCE * sim.traits.mult(victim, "wound"):
 		return # a tough person shrugs it off (the Tough trait)

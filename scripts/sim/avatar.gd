@@ -26,6 +26,8 @@
 ## click instead (`fire_blocked`, which the crosshair reads to grey out; a `blocked_shot` event at most once in CLICK_EVERY
 ## seconds). A shot that passes (up a ladder's column, from the deck over the wall) and one that has one of the dead to hit
 ## before the face is fired as ever.
+## TWO LEVELS. The ground and a deck (the catwalk, the side walkways, the towers) are crossed at a ladder only: the world's solid tiles keep them apart
+## (scripts/world.gd), and where the catwalk crosses the gateway on the bridge `sim.levels.blocks` does (scripts/sim/levels.gd).
 ## RELOADING. `reload()` (R) when the magazine is not full and there is ammunition; the gun's own time; the last round
 ## starts one by itself, and an empty magazine starts one when the trigger is let go.
 ## MELEE. `melee()` (F): an arc of MELEE_REACH tiles and MELEE_ARC degrees toward the aim hits every one of the dead in
@@ -325,12 +327,12 @@ func _move(p, dt: float) -> void:
 		var before := Vector2(p.x, p.y)
 		if dir.x != 0.0:
 			var nx: float = p.x + dir.x * step
-			if free_standing and _blocked(nx, p.y):
+			if free_standing and (_blocked(nx, p.y) or sim.levels.blocks(p, nx, p.y)):
 				nx = _slide_x(p, nx)
 			p.x = nx
 		if dir.y != 0.0:
 			var ny: float = p.y + dir.y * step
-			if free_standing and _blocked(p.x, ny):
+			if free_standing and (_blocked(p.x, ny) or sim.levels.blocks(p, p.x, ny)):
 				ny = _slide_y(p, ny)
 			p.y = ny
 		moved += before.distance_to(Vector2(p.x, p.y))

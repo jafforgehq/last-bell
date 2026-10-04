@@ -4788,15 +4788,16 @@ func _radio_dock_width() -> float:
 	return float(INSPECT_W) + 8.0 + radio_box.get_combined_minimum_size().x
 
 
-## The rectangles of the boards that cover the world now: what a speech bubble keeps out from under (overlay_node.gd).
-func covered_rects() -> Array:
+## The rectangles of the boards that cover the world now: what a speech bubble keeps out from under (overlay_node.gd). `skip` are boards left
+## out (the talk card asks without itself).
+func covered_rects(skip: Array = []) -> Array:
 	var out: Array = []
 	var parts: Array = [res_panel, crew_load_panel, clock, ammo_panel, alerts_box, call_card, inspect, radio_box, gizmos, speed_panel, help, radio_panel, fields_legend]
 	for c in cards:
 		parts.append(c.card)
 	parts.append(talk_card)
 	for c in parts:
-		if c != null and is_instance_valid(c) and c is Control and c.is_visible_in_tree():
+		if c != null and is_instance_valid(c) and c is Control and not skip.has(c) and c.is_visible_in_tree():
 			var r: Rect2 = c.get_global_rect()
 			if r.size.x > 0.0 and r.size.y > 0.0:
 				out.append(r)

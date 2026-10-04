@@ -526,7 +526,7 @@ func test_the_lookout_turns_to_look_about_and_the_sweep_is_slow() -> void:
 		if o.sweep != last:
 			turns += 1
 			last = o.sweep
-		check(o.squash > 0.0 and o.squash <= 1.0, "the turn is a squash of the body, never nothing")
+		check(o.squash >= WorkAnim.TURN_SQUASH - 0.0001 and o.squash <= 1.0, "the turn is a dip of the body, never a line (%s)" % str(o.squash))
 	check(seen.has(0) and seen.has(1) and seen.has(-1), "looks both ways and back")
 	check(turns >= 4 and turns <= 6, "a few turns in a loop: %d" % turns)
 	# the view changes with the sweep: facing north, the lookout looks to the east and the west
@@ -541,6 +541,92 @@ func test_the_lookout_turns_to_look_about_and_the_sweep_is_slow() -> void:
 			views[String(c.args[0]).get_file()] = true
 		n.free()
 	check(views.has("dez_N.png") and views.has("dez_E.png"), "the lookout shows the back and the side: %s" % str(views.keys()))
+
+
+## How wide the body is drawn, against the full width of its picture: the picture's width on the screen over what it is unscaled
+## (1 for the ordinary figure). -1 when the body was not drawn.
+func _body_width(n, tape) -> float:
+	for c in tape.of("tex"):
+		if c.args[1] == n.pawn_rect:
+			return float(c.xf.x.length()) / PawnNode.TILE
+	return -1.0
+
+
+## The lookout on a guard post turned to the left or the right, over and over, and at each quarter turn the body went down to 0.18 of its
+## width ("thin like a line for a moment"). A turn is a short dip now: the body drawn is never thinner than MIN_SQUASH of its width.
+func test_the_lookout_turning_on_a_post_is_never_a_thin_line() -> void:
+	var loop: float = WorkAnim.loop_period("watch")
+	check(WorkAnim.TURN_SQUASH >= 0.6 and WorkAnim.MIN_SQUASH >= 0.6, "the narrowest allowed is about two thirds of the width or more")
+	var narrowest := {}
+	for facing in FACINGS:
+		var lo := 99.0
+		var hi := 0.0
+		var views := {}
+		for i in 400:
+			var p = _person("dez", facing, "idle")
+			var n = _node(p)
+			_working(n, "watch", loop * float(i) / 400.0)
+			n.sync(false)
+			var w := _body_width(n, _tape(n))
+			check(w > 0.0, "%s: the body is drawn" % facing)
+			lo = minf(lo, w)
+			hi = maxf(hi, w)
+			views[String(n._pen.of("tex")[0].args[0]).get_file()] = true
+			n.free()
+		check(lo >= 0.6 * hi, "%s: the body is never under 60%% of its widest (%.2f of %.2f)" % [facing, lo, hi])
+		check(lo < 0.95 * hi, "%s: a turn still shows (%.2f of %.2f)" % [facing, lo, hi])
+		narrowest[facing] = lo
+		check(views.size() >= 2, "%s: and the other side is shown (%s)" % [facing, str(views.keys())])
+
+
+## Whatever the pose (every word, from the front, the side and the back), the body is never made narrower than the floor.
+func test_no_pose_makes_the_body_thinner_than_the_floor() -> void:
+	for word in WorkAnim.WORDS:
+		var loop: float = WorkAnim.loop_period(word)
+		var lo := 99.0
+		for i in 240:
+			var o = WorkAnim.solve(WorkAnim.Pose.new(), word, loop * float(i) / 240.0, 0.3)
+			for view in ["S", "E", "N"]:
+				for w in [0.5, 1.0]:
+					lo = minf(lo, WorkAnim.body_xf(view, o, w).x.length())
+		check(lo >= WorkAnim.MIN_SQUASH - 0.0001, "%s: the body keeps %.2f of its width at the least" % [word, lo])
+	# and a pose that asks for a line is held to the floor
+	var o2 = WorkAnim.solve(WorkAnim.Pose.new(), "watch", 0.0, 0.0)
+	o2.squash = 0.05
+	for view in ["S", "E", "N"]:
+		near(WorkAnim.body_xf(view, o2, 1.0).x.length(), WorkAnim.MIN_SQUASH, 0.0001, "%s: a squash of 0.05 is held to the floor" % view)
+
+
+## The same flaw looked for elsewhere: a person on their feet turning through every angle (the avatar is drawn the same way) is the
+## picture of one view at its full width at each, and the dead's warped bodies keep a width of their own at every row.
+func test_people_and_the_dead_keep_their_width_through_a_full_turn() -> void:
+	var prev := "E"
+	var seen := {}
+	for i in 16:
+		var ang := TAU * float(i) / 16.0
+		prev = Sim.facing_of(cos(ang), sin(ang), prev)
+		var p = _person("ana", prev, "idle")
+		p.aim = ang
+		var n = _node(p)
+		n.sync(false)
+		near(_body_width(n, _tape(n)), 1.0, 0.0001, "facing %s (aim %d degrees): the body at its full width" % [prev, i * 22])
+		seen[prev] = true
+		n.free()
+	eq(seen.size(), 4, "all four facings were met")
+	var Art := preload("res://scripts/render/pawn_art.gd")
+	for kind in ["walker", "runner", "brute"]:
+		for view in ["S", "E", "N"]:
+			var mesh = Art.sprite_mesh(kind, view, Rect2(-1.15, -1.42, 2.3, 2.04))
+			if mesh == null:
+				continue
+			var v: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+			var lo := 99.0
+			var hi := 0.0
+			for j in range(0, v.size(), 2):
+				var w: float = v[j + 1].x - v[j].x
+				lo = minf(lo, w)
+				hi = maxf(hi, w)
+			check(lo >= 0.6 * hi, "%s/%s: the warped body is never under 60%% of its widest row (%.2f of %.2f)" % [kind, view, lo, hi])
 
 
 func test_the_node_keeps_one_pose_and_makes_no_picture_each_frame() -> void:

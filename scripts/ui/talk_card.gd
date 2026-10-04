@@ -475,11 +475,10 @@ func _place() -> void:
 	var here := _px(feet)
 	var tile_px := absf(_px(feet + Vector2(1.0, 0.0)).x - here.x)
 	var view := _free_view()
-	# (the boards of the HUD it keeps off; it is not one of them, so it is hidden while they are asked)
-	var was := visible
-	visible = false
-	var avoid: Array = host.covered_rects().duplicate() if host.has_method("covered_rects") else []
-	visible = was
+	# (the boards of the HUD it keeps off; it is not one of them, so it is left out of the ask. It must NOT be hidden for a moment to leave
+	# itself out: with every frame's hide and show the buttons in it lose a press that is going on (a button forgets its press when it is
+	# hidden), and no verb could be clicked)
+	var avoid: Array = host.covered_rects([self]) if host.has_method("covered_rects") else []
 	# (the line of tips at the foot of the window is not a board that covers the world, but the card keeps off it too)
 	var tips = host.get("hint")
 	if tips is Control and is_instance_valid(tips) and tips.is_visible_in_tree():

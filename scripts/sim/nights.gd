@@ -330,6 +330,9 @@ func _mend_refusal(p, seg) -> String:
 		return "The %s is sound" % String(seg.name).to_lower()
 	if Vector2(p.x, p.y).distance_to(sim.repair_spot(seg)) > NightData.num("mend.reach"):
 		return "Too far from the wall"
+	var level: String = sim.levels.why_not(p, sim.repair_spot(seg))
+	if level != "":
+		return level    # (round 24: the wall is mended from the level its mending place is on: levels.gd)
 	if p.input_move.length() > HANDS_ON or p.input_fire:
 		return "Stand still to mend"
 	if _danger_near(p):

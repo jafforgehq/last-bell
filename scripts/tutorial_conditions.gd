@@ -560,7 +560,7 @@ static func _walked(sim, p, st) -> bool:
 ## The player stands on a raised walkway (they climbed a ladder).
 static func _on_deck(sim, _p, _st) -> bool:
 	var me = _me(sim)
-	return me != null and sim.world.on_deck(me.x, me.y)
+	return me != null and sim.levels.on_deck(me)
 
 
 ## {"min": n}: the player has fired this many rounds since the step began.

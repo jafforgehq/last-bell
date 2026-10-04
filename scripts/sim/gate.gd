@@ -8,7 +8,8 @@
 ## `PASS_AT` (0.5) up the gate is a gateway, not solid for people, vehicles and the dead; below it the section is the wall again, with its
 ## health, and the dead claw at it as ever. The gateway is the mouth between the posts: four tile columns (37 to 40), through the wall (rows 15
 ## to 17) and under the catwalk bridge (the deck's face, rows 19 and 20: the one place in the whole front where the barrier lets ground
-## through), the catwalk's own row 18 between them is deck either way. The segment's health and damage state are independent of `open`:
+## through), the catwalk's own row 18 between them is deck either way (round 24: and the passage as well: whoever is in it is on the deck or on the ground
+## by the way they came in, `sim.levels`; the ground in the way of the leaves is in the gateway for `who_blocks`, the one on the bridge deck is not). The segment's health and damage state are independent of `open`:
 ## an open gate takes no damage (the dead who come to it walk in: `lets_dead_in`), a gate that is wrecked (state 3) is a heap that cannot be
 ## worked (`wrecked`, `request` says so) and is rubble to pass through (`is_passable`).
 ##
@@ -78,6 +79,8 @@ const PASS_AT := 0.5
 const MOUTH_COLS := [37, 38, 39, 40]
 const WALL_ROWS := [15, 16, 17]
 const FACE_ROWS := [19, 20]
+## The catwalk's row between them: the bridge deck over the passage (round 24: a person in its four tiles is on the deck or in the passage, `sim.levels`).
+const BRIDGE_ROW := 18
 ## The mouth as a rectangle (tiles).
 const GATEWAY := Rect2(37.0, 15.0, 4.0, 6.0)
 ## Where the avatar works the gate: a lever on the foot of the walkway's face, the west side of the opening, on the apron.
@@ -282,6 +285,12 @@ func _in_mouth(x: float, y: float) -> bool:
 	return MOUTH_COLS.has(col) and (WALL_ROWS.has(row) or FACE_ROWS.has(row))
 
 
+## Whether the point is in the bridge's tile of the mouth (the catwalk's row 18, which is also the passage under the planks). A person there is in the
+## way of the gate only on the ground (`sim.levels`): one on the bridge deck, the keeper at his post, is above it.
+func _in_bridge(x: float, y: float) -> bool:
+	return MOUTH_COLS.has(floori(x)) and floori(y) == BRIDGE_ROW
+
+
 ## The tiles of the mouth that the gate's state changes: the wall's rows (unless the section is down: the wreck opened those) and the face's.
 func _mouth_tiles(with_wall: bool = true) -> Array:
 	var out: Array = []
@@ -306,14 +315,14 @@ func _blockers() -> Array:
 		var st := String(z.state)
 		if st == "dying" or st == "dead" or st == "attack":
 			continue
-		if _in_mouth(z.x, z.y):
+		if _in_mouth(z.x, z.y) or _in_bridge(z.x, z.y):
 			out.append({"kind": "dead", "name": "A %s" % String(z.kind)})
 	for c in _cars_in_the_gateway():
 		out.append({"kind": "vehicle", "name": String(c)})
 	for p in sim.people:
 		if p.dead or p.turned or p.away != null:
 			continue
-		if _in_mouth(p.x, p.y):
+		if _in_mouth(p.x, p.y) or (_in_bridge(p.x, p.y) and not sim.levels.on_deck(p)):
 			out.append({"kind": "person", "name": String(p.first), "player": bool(p.player)})
 	return out
 

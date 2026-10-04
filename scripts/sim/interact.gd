@@ -18,6 +18,9 @@
 ## post is theirs now), unless the posts are manned and the holder stands within HOLDER_AT of the post (a fight is no time to be
 ## moved); the avatar's feet are put on the spot, and while it stays within POST_LEAVE of it the aim is steadier (`brace_factor`,
 ## avatar.gd `spread_of`). Walking away, a fall, a new player or the post going away ends it; the alarm does not.
+## TWO LEVELS (round 24, scripts/sim/levels.gd). A post on a deck (the catwalk, a side walkway, a tower) is taken only from that deck, the gate's lever
+## and the bench (on the ground) only from the ground, and a wall from the level its mending place is on: "Climb down first" and "It is up on the wall:
+## use a ladder" are the reasons, shown dim in the prompt and in the toast of a click.
 ## THE BENCH. `work_bench` is the avatar's own hands at the worktable for BENCH_SECONDS of rules time: the workshop (workshop.gd)
 ## counts the avatar among those at work while `working == "bench"`, at BENCH_MULT of the scrap an hour its Building skill gives.
 ## `Person.work` and `work_t` are set each step so that the drawing's hammer pose shows. Walking, firing, a wound, a fall, the end of the
@@ -153,6 +156,8 @@ func candidates() -> Array:
 		if d > POST_REACH:
 			continue
 		var id := String(po.id)
+		if posted != id and sim.levels.why_not(p, at) != "":
+			continue    # (round 24: a post on the other level is not within reach, however near it is on the map: a ladder is the way to it)
 		if posted == id:
 			out.append({"kind": "post", "id": id, "label": "Leave the %s post" % _post_short(po), "pos": at, "dist": d, "ok": true, "why": ""})
 		else:
@@ -164,6 +169,8 @@ func candidates() -> Array:
 			out.append({"kind": "bench", "id": "bench", "label": "Stop working the bench", "pos": bench, "dist": me.distance_to(bench), "ok": true, "why": ""})
 		else:
 			var why: String = sim.workshop.why_not_hand_craft(p)
+			if why == "":
+				why = sim.levels.why_not(p, bench)
 			out.append({"kind": "bench", "id": "bench", "label": "Work the bench", "pos": bench, "dist": me.distance_to(bench), "ok": why == "", "why": why})
 	# the gate's lever (round 22, scripts/sim/gate.gd; avatar mode only): E opens a shut gate and shuts an open one, refused with its reason
 	var gate_c := gate_candidate()
@@ -193,6 +200,8 @@ func gate_candidate(reach: float = -1.0) -> Dictionary:
 		return {}
 	var want_open: bool = not sim.gate.wants_open()
 	var gwhy: String = sim.gate.refusal(want_open)
+	if gwhy == "":
+		gwhy = sim.levels.why_not(p, sim.gate.control_spot())    # (round 24: the lever is on the ground: not to be worked from the catwalk above it)
 	return {"kind": "gate", "id": "gate", "label": "Open the gate" if want_open else "Shut the gate", "pos": sim.gate.control_spot(), "dist": gd,
 			"ok": gwhy == "", "why": gwhy, "click": gd > sim.gate.REACH}
 
@@ -311,6 +320,10 @@ func use(cand: Dictionary = {}) -> Dictionary:
 ## The hands are at one thing: a bench session in hand and a wall being mended are stopped when the gate is worked.
 func _use_gate() -> Dictionary:
 	var gate = sim.gate
+	var lead = _lead()
+	var level: String = sim.levels.why_not(lead, gate.control_spot()) if lead != null else ""
+	if level != "":
+		return {"ok": false, "line": "", "why": level}
 	var r: Dictionary = gate.request(not gate.wants_open(), "player")
 	if bool(r.get("ok", false)):
 		if working == "bench":
@@ -436,6 +449,9 @@ func _holder_of(post_id: String, except):
 
 ## Why the post cannot be taken now ("" when it can): the posts are manned and its holder is at it.
 func _post_refusal(p, po: Dictionary) -> String:
+	var level: String = sim.levels.why_not(p, Vector2(po.pos))
+	if level != "":
+		return level    # (round 24: a post on a deck is taken from that deck, never from the ground below it, nor a post on the ground from a deck: levels.gd)
 	var holder = _holder_of(String(po.id), p)
 	if holder == null or holder.away != null or holder.downed or not sim.posts_manned():
 		return ""
@@ -535,6 +551,8 @@ func work_bench() -> Dictionary:
 	var why: String = sim.workshop.why_not_hand_craft(p)
 	if why == "" and Vector2(p.x, p.y).distance_to(sim.workshop.bench()) > BENCH_REACH:
 		why = "Too far from the bench"
+	if why == "":
+		why = sim.levels.why_not(p, sim.workshop.bench())
 	if why == "" and (p.input_move.length() > HANDS_ON or p.input_fire):
 		why = "Stand still to work the bench"
 	if why != "":

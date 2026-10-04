@@ -91,6 +91,12 @@ const GAMES := [
 ## (food 31.3340 to 31.3503: the party was out a moment longer); the clock, the dead, the walls, the people, the deeds, the radio and the random
 ## generator's state did not. Checked by playing the game with `sim.gate.enabled = false`: it ends as the old pin to the digit. avatar_classic (no trip
 ## went through the gate) and avatar_orientation (the lesson switches the gate off) did not move, nor did any no-avatar game.
+## RE-PINNED A FIFTH TIME by the fix round 3 levels (2026-10-04, scripts/sim/levels.gd): in an avatar game the corner towers' outer sides are shut to the
+## street and to the ground outside (a figure could step off a tower or onto it without a ladder) and the dead are kept off the catwalk beside the gate's
+## mouth, so the dead and the crew find their ways round the corners a little differently: avatar_off, avatar_classic and avatar_orientation moved in
+## their stocks, kills and walls, each by a little. Checked by playing the three with the levels off (`sim.levels.enabled = false`): they end as the
+## fourth pin to the digit; and with only the solid tiles (`Levels._hold`) left out avatar_orientation ends as the old pin again, so they are what moves it.
+## No no-avatar game moved: plain, informed and orientation end as the baseline f23eee3.
 ## The digests of the baseline (f23eee3), by "name:seed:crew": the sections of the digest, in order (the comment above each is its summary line).
 const PINNED := {
 	# plain:1:6: day 4 7.00h | stock ammo=320.0598 food=26.8891 meds=9.9687 scrap=0.0000 water=40.8498 | kills 93 | alive 6/6 | rng 4705235142794603518
@@ -170,38 +176,38 @@ const PINNED := {
 		"radio: news=0 latest=0 alarm=false",
 		"rng: state=7896914316066857157 seed=1001",
 	],
-	# avatar_off:3:5: day 2 19.00h | stock ammo=368.8962 food=31.3503 meds=8.8286 scrap=0.0000 water=56.9907 | kills 21 | alive 3/5 | rng 8616171887323474408
+	# avatar_off:3:5: day 2 19.00h | stock ammo=379.4303 food=31.6246 meds=8.9039 scrap=0.0000 water=49.4342 | kills 14 | alive 3/5 | rng -803490718039976492
 	"avatar_off:3:5": [
 		"clock: day=2 min=1140.0000 clock=2160.0000 t=720.0000 phase=dusk over= player=walt",
-		"stock: ammo=368.8962 food=31.3503 meds=8.8286 scrap=0.0000 water=56.9907",
-		"field: kills=21 zombies=0",
-		"walls: 0=420.0000 1=130.0000 2=220.0000 3=320.0000 4=12.6000 5=73.2715 6=420.0000 7=110.0000 8=190.0000 9=59.7428 10=420.0000 11=180.0000 12=320.0000 13=110.0000 14=160.0000 15=160.0000",
-		"people: ruth:60.5000,46.6000,100.0000,70.6000,55.0000,x dez:58.4054,46.5897,100.0000,58.1333,45.0000,x ana:29.2480,41.2700,100.0000,62.3267,45.0000,- marcus:33.1897,29.7759,100.0000,44.0667,45.0000,- walt:60.4254,46.5897,100.0000,65.0667,45.0000,-",
-		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,4.5533|4.5533 dez:crafted=0.0000,kills=6.0000,kills_night=0.0000,mended=0.0000,shots=66.0000,treated=1.0000,skills=23.0000,job=builders,4.0533|4.0533 ana:crafted=0.0000,kills=1.0000,kills_night=0.0000,mended=392.3428,shots=8.0000,treated=0.0000,skills=23.0000,job=builders,0.0033|0.0033 marcus:crafted=0.0000,kills=13.0000,kills_night=0.0000,mended=0.0000,shots=41.0000,treated=0.0000,skills=12.0000,job=garden,0.0033|0.0033 walt:crafted=0.0000,kills=1.0000,kills_night=0.0000,mended=0.0000,shots=3.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033",
-		"radio: news=16 latest=16 alarm=false",
-		"rng: state=8616171887323474408 seed=3",
+		"stock: ammo=379.4303 food=31.6246 meds=8.9039 scrap=0.0000 water=49.4342",
+		"field: kills=14 zombies=0",
+		"walls: 0=420.0000 1=130.0000 2=220.0000 3=320.0000 4=180.0000 5=139.6500 6=420.0000 7=110.0000 8=190.0000 9=75.8996 10=0.0000 11=180.0000 12=320.0000 13=110.0000 14=160.0000 15=160.0000",
+		"people: ruth:60.5000,46.6000,100.0000,70.6000,55.0000,x dez:55.9254,46.5897,100.0000,49.5333,45.0000,x ana:29.2480,41.2700,100.0000,54.1600,45.0000,- marcus:33.1897,29.7759,100.0000,34.9333,45.0000,- walt:60.4254,46.5897,100.0000,57.0667,45.0000,-",
+		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,4.5533|4.5533 dez:crafted=0.0000,kills=3.0000,kills_night=0.0000,mended=0.0000,shots=40.0000,treated=1.0000,skills=23.0000,job=builders,4.0533|4.0533 ana:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=395.5496,shots=0.0000,treated=0.0000,skills=23.0000,job=builders,0.0033|0.0033 marcus:crafted=0.0000,kills=11.0000,kills_night=0.0000,mended=0.0000,shots=42.0000,treated=0.0000,skills=12.0000,job=garden,0.0033|0.0033 walt:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033",
+		"radio: news=18 latest=18 alarm=false",
+		"rng: state=-803490718039976492 seed=3",
 	],
-	# avatar_classic:4:6: day 2 19.00h | stock ammo=354.0999 food=29.4976 meds=3.8754 scrap=0.0000 water=42.7491 | kills 27 | alive 4/6 | rng 3864034759446752742
+	# avatar_classic:4:6: day 2 19.00h | stock ammo=357.1137 food=29.4989 meds=5.8745 scrap=0.0000 water=42.7510 | kills 24 | alive 4/6 | rng -1608668459523751576
 	"avatar_classic:4:6": [
 		"clock: day=2 min=1140.0000 clock=2160.0000 t=720.0000 phase=dusk over= player=walt",
-		"stock: ammo=354.0999 food=29.4976 meds=3.8754 scrap=0.0000 water=42.7491",
-		"field: kills=27 zombies=0",
-		"walls: 0=393.7428 1=105.7351 2=220.0000 3=320.0000 4=180.0000 5=410.7572 6=420.0000 7=110.0000 8=190.0000 9=0.0000 10=420.0000 11=180.0000 12=320.0000 13=110.0000 14=160.0000 15=160.0000",
-		"people: ruth:60.5000,46.6000,100.0000,72.0000,55.0000,x dez:53.5000,31.5000,100.0000,47.3333,45.0000,x ana:60.4923,46.3454,100.0000,68.0867,45.0000,- marcus:18.9444,16.9444,100.0000,60.2667,45.0000,- walt:60.4923,46.3454,100.0000,65.2000,45.0000,- hector:34.2000,18.8000,40.0000,47.8000,45.0000,-",
-		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,4.5533|4.5533 dez:crafted=0.0000,kills=22.0000,kills_night=0.0000,mended=0.0000,shots=191.0000,treated=3.0000,skills=23.0000,job=garden,4.0533|4.0533 ana:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=23.0000,job=builders,0.0033|0.0033 marcus:crafted=0.0000,kills=3.0000,kills_night=0.0000,mended=0.0000,shots=10.0000,treated=0.0000,skills=12.0000,job=watch,0.0033|0.0033 walt:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033 hector:crafted=0.0000,kills=2.0000,kills_night=0.0000,mended=393.7428,shots=0.0000,treated=1.0000,skills=19.0000,job=builders,0.0033|0.0033",
+		"stock: ammo=357.1137 food=29.4989 meds=5.8745 scrap=0.0000 water=42.7510",
+		"field: kills=24 zombies=0",
+		"walls: 0=393.7585 1=105.7351 2=220.0000 3=320.0000 4=180.0000 5=410.7572 6=420.0000 7=110.0000 8=190.0000 9=0.0000 10=420.0000 11=180.0000 12=320.0000 13=110.0000 14=160.0000 15=160.0000",
+		"people: ruth:60.5000,46.6000,100.0000,72.0000,55.0000,x dez:53.5000,31.5000,100.0000,46.9333,45.0000,x ana:60.4923,46.3454,100.0000,68.0867,45.0000,- marcus:18.9444,16.9444,100.0000,60.0667,45.0000,- walt:60.4923,46.3454,100.0000,65.2000,45.0000,- hector:34.2000,18.8000,40.0000,47.8000,45.0000,-",
+		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,4.5533|4.5533 dez:crafted=0.0000,kills=20.0000,kills_night=0.0000,mended=0.0000,shots=180.0000,treated=2.0000,skills=23.0000,job=garden,4.0533|4.0533 ana:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=23.0000,job=builders,0.0033|0.0033 marcus:crafted=0.0000,kills=2.0000,kills_night=0.0000,mended=0.0000,shots=6.0000,treated=0.0000,skills=12.0000,job=watch,0.0033|0.0033 walt:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033 hector:crafted=0.0000,kills=2.0000,kills_night=0.0000,mended=393.7585,shots=0.0000,treated=1.0000,skills=19.0000,job=builders,0.0033|0.0033",
 		"radio: news=10 latest=10 alarm=false",
-		"rng: state=3864034759446752742 seed=4",
+		"rng: state=-1608668459523751576 seed=4",
 	],
-	# avatar_orientation:0:6: day 2 7.00h | stock ammo=141.8000 food=30.6000 meds=7.0000 scrap=40.0000 water=55.0000 | kills 7 | alive 6/6 | rng 3298888767220174665
+	# avatar_orientation:0:6: day 2 7.00h | stock ammo=143.2000 food=30.6000 meds=7.0000 scrap=40.0000 water=47.0000 | kills 7 | alive 6/6 | rng -1555873122144604389
 	"avatar_orientation:0:6": [
 		"clock: day=2 min=420.0000 clock=1440.0000 t=480.0000 phase=day over= player=ruth",
-		"stock: ammo=141.8000 food=30.6000 meds=7.0000 scrap=40.0000 water=55.0000",
+		"stock: ammo=143.2000 food=30.6000 meds=7.0000 scrap=40.0000 water=47.0000",
 		"field: kills=7 zombies=1",
-		"walls: 0=420.0000 1=130.0000 2=220.0000 3=320.0000 4=180.0000 5=414.5616 6=184.8111 7=110.0000 8=190.0000 9=26.0000 10=214.0055 11=180.0000 12=320.0000 13=22.0000 14=160.0000 15=160.0000",
+		"walls: 0=420.0000 1=130.0000 2=220.0000 3=320.0000 4=180.0000 5=413.8039 6=192.3827 7=110.0000 8=190.0000 9=26.0000 10=215.0642 11=180.0000 12=320.0000 13=22.0000 14=160.0000 15=160.0000",
 		"people: ruth:43.0000,22.5000,100.0000,70.0000,55.0000,- dez:43.0000,22.5000,100.0000,70.0000,55.0000,- ana:20.8000,33.0000,100.0000,70.0000,55.0000,- marcus:43.0000,21.5000,100.0000,70.0000,55.0000,- walt:43.0000,22.5000,96.5067,70.0000,55.0000,- hector:43.0000,21.1500,100.0000,70.0000,55.0000,-",
-		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,0.0033|0.0033 dez:crafted=0.0000,kills=3.0000,kills_night=3.0000,mended=0.0000,shots=21.0000,treated=2.0000,skills=23.0000,job=,0.0033|0.0033 ana:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=23.0000,job=infirmary,0.0033|0.0033 marcus:crafted=0.0000,kills=4.0000,kills_night=4.0000,mended=0.0000,shots=19.0000,treated=0.0000,skills=12.0000,job=watch,0.0033|0.0033 walt:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=1.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033 hector:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=19.0000,job=,0.0033|0.0033",
+		"deeds: ruth:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=22.0000,job=,0.0033|0.0033 dez:crafted=0.0000,kills=2.0000,kills_night=2.0000,mended=0.0000,shots=16.0000,treated=2.0000,skills=23.0000,job=,0.0033|0.0033 ana:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=23.0000,job=infirmary,0.0033|0.0033 marcus:crafted=0.0000,kills=5.0000,kills_night=5.0000,mended=0.0000,shots=16.0000,treated=0.0000,skills=12.0000,job=watch,0.0033|0.0033 walt:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=2.0000,treated=0.0000,skills=21.0000,job=,0.0033|0.0033 hector:crafted=0.0000,kills=0.0000,kills_night=0.0000,mended=0.0000,shots=0.0000,treated=0.0000,skills=19.0000,job=,0.0033|0.0033",
 		"radio: news=6 latest=6 alarm=false",
-		"rng: state=3298888767220174665 seed=1001",
+		"rng: state=-1555873122144604389 seed=1001",
 	],
 }
 

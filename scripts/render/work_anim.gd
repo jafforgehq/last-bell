@@ -32,6 +32,11 @@ const DEPTH := 0.5
 const SH_Y := -0.2
 const SH_L := 0.27
 const HIPS_Y := 0.13
+## How narrow the body is shown at the middle of a quarter turn (the lookout's sweep), against its full width, and the narrowest any pose
+## may make it. It was 0.18 (a sliver, "a thin line" when the lookout turned on a guard post); a turn is a quick dip to about three
+## quarters of the width where the other side is shown, and the floor keeps a pose of the future from thinning the body past it.
+const TURN_SQUASH := 0.76
+const MIN_SQUASH := 0.6
 ## The pose that stands for a word when the player asked for less motion (a share of its loop).
 const STILL_U := {"hammer": 0.615, "bench": 0.6, "mend": 0.615, "haul": 0.12, "garden": 0.05, "nurse": 0.14, "radio": 0.7, "watch": 0.05, "sort": 0.45, "rest": 0.05}
 ## word -> [the beat in seconds, how many beats make the loop that repeats exactly]
@@ -528,11 +533,11 @@ static func _watch(o: Pose, u: float) -> void:
 		var b: float = turns[i * 2 + 1]
 		if u >= a and u < b:
 			var k := (u - a) / (b - a)
-			# a turn: the body gets narrow, shows the other side, and widens again
+			# a turn: the body gets a little narrower (never a line: TURN_SQUASH), shows the other side, and widens again
 			var from: int = 0 if i == 0 else int(dirs[i * 2 - 1])
 			var to: int = int(dirs[i * 2 + 1])
 			sw = from if k < 0.5 else to
-			sq = lerpf(1.0, 0.18, 1.0 - absf(k * 2.0 - 1.0))
+			sq = lerpf(1.0, TURN_SQUASH, 1.0 - absf(k * 2.0 - 1.0))
 			break
 		elif u >= b and (i == 3 or u < float(turns[i * 2 + 2])):
 			sw = int(dirs[i * 2 + 1])
@@ -629,7 +634,7 @@ static func body_xf(view: String, o: Pose, w: float) -> Transform2D:
 	var lean := o.lean * w
 	var dip := o.dip * w
 	var shift := o.shift * w
-	var sq := lerpf(1.0, o.squash, w)
+	var sq := maxf(MIN_SQUASH, lerpf(1.0, o.squash, w))
 	var xf := Transform2D.IDENTITY
 	if view == "E":
 		xf = xf.translated_local(Vector2(shift, dip)).translated_local(Vector2(0.0, HIPS_Y)).rotated_local(lean + o.tilt * w).translated_local(Vector2(0.0, -HIPS_Y)).scaled_local(Vector2(sq, 1.0))

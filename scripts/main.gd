@@ -1884,8 +1884,12 @@ func _click_world(pos: Vector2) -> void:
 	if not cand.is_empty():
 		_use_candidate(cand)
 		return
-	if not WorldClick.under(at, _far_things(it), ctx).is_empty() and _allows("interact"):
-		hud.toast(WorldClick.TOO_FAR, "warn")
+	var far := WorldClick.under(at, _far_things(it), ctx)
+	if not far.is_empty() and _allows("interact"):
+		# (round 24: a post beside the avatar on the other level, a deck above or the ground below, is not "too far": it is a ladder away)
+		var me = sim.avatar.player()
+		var level: String = sim.levels.why_not(me, far.pos) if me != null and String(far.get("kind", "")) == "post" and Vector2(me.x, me.y).distance_to(far.pos) <= sim.interact.POST_REACH else ""
+		hud.toast(level if level != "" else WorldClick.TOO_FAR, "warn")
 
 
 ## What the picture has under a point of the world, for `WorldClick.under`: the wall section and the parked vehicle.
@@ -2363,6 +2367,7 @@ func _sync_views() -> void:
 		n.visible = view.has_point(Vector2(z.x, z.y))
 		if not n.visible:
 			continue
+		_under_the_bridge(n, not dead and sim.levels.under_bridge_dead(z))
 		var redraw := true
 		if z.state == "dead":
 			redraw = z.dead_t < 0.2 or (z.dead_t > 55.0 and frame % 3 == 0)
@@ -2383,6 +2388,7 @@ func _sync_views() -> void:
 		n.anim_t = clock
 		n.visible = view.has_point(Vector2(p.x, p.y)) and p.away == null
 		if n.visible:
+			_under_the_bridge(n, sim.levels.under_bridge(p))
 			n.sync(true, sim_steps, alpha)
 	var fire_view := view_rect().grow(4.0)
 	for f in fire_nodes:
@@ -2393,6 +2399,19 @@ func _sync_views() -> void:
 	air.queue_redraw()
 	if frame % 10 == 0:
 		lanterns_node.queue_redraw()
+
+
+## Somebody on the ground in the passage under the catwalk's bridge is drawn below its planks, as the cars are (the people are over everything else of
+## the yard): they are walking under the bridge, not on it. (Round 24; the levels are scripts/sim/levels.gd's. A figure on the bridge deck, or anywhere else,
+## keeps the people's z.)
+func _under_the_bridge(n: Node2D, under: bool) -> void:
+	var z := (GateNode.Z_CAR - entities.z_index) if under else 0
+	if n.z_index != z:
+		n.z_index = z
+	# (in the shade of the planks: a little darker than the people in the light)
+	var shade := Color(0.62, 0.62, 0.68) if under else Color.WHITE
+	if n.self_modulate != shade:
+		n.self_modulate = shade
 
 
 func _draw_lanterns(ci: CanvasItem) -> void:

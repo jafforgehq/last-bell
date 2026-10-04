@@ -44,6 +44,14 @@ const SHADOW_REACH := 1.4
 const SHADOW_ALPHA := 0.72
 const SHADOW_THROW := 0.35
 
+## The passage under a bridge over the vehicle gate (round 24): the dark under the planks, as black as the void between the posts of the scaffold beside
+## it at the top and gone at the ground, so that the opening reads as a way through under a deck that rests on a post at each end, not as bare ground
+## under a floating floor. How dark it starts, where the middle of the fade is (a share of the face's height) and how dark that is.
+const PASSAGE_ALPHA := 0.9
+const PASSAGE_MID := 0.55
+const PASSAGE_MID_ALPHA := 0.6
+const PASSAGE_TINT := Color(0.06, 0.045, 0.035)
+
 const INK := Color("#241810")
 
 ## The decks to give a face: {"x0", "y0", "x1", "y1", "height", "tower"} (the
@@ -55,6 +63,7 @@ var decks: Array = []
 var ladders: Array = []
 var _shadow: GradientTexture2D
 var _shadow_h: GradientTexture2D
+var _passage: GradientTexture2D
 var _bays: Array = []
 var _posts: Array = []
 var _cap := {}
@@ -98,6 +107,7 @@ func setup(data: Dictionary, kinds: Array) -> void:
 	_load_art()
 	_shadow = _gradient(Vector2(0.0, 1.0), 4, 64)
 	_shadow_h = _gradient(Vector2(1.0, 0.0), 64, 4)
+	_passage = _passage_gradient()
 	queue_redraw()
 
 
@@ -125,6 +135,21 @@ func _gradient(to: Vector2, w: int, h: int) -> GradientTexture2D:
 	t.fill_to = to
 	t.width = w
 	t.height = h
+	return t
+
+
+## The dark of the passage under a bridge, from the underside of the planks (top) to the ground (bottom).
+func _passage_gradient() -> GradientTexture2D:
+	var g := Gradient.new()
+	g.offsets = PackedFloat32Array([0.0, PASSAGE_MID, 1.0])
+	g.colors = PackedColorArray([Color(PASSAGE_TINT, PASSAGE_ALPHA), Color(PASSAGE_TINT, PASSAGE_MID_ALPHA), Color(PASSAGE_TINT, 0.0)])
+	var t := GradientTexture2D.new()
+	t.gradient = g
+	t.fill = GradientTexture2D.FILL_LINEAR
+	t.fill_from = Vector2.ZERO
+	t.fill_to = Vector2(0.0, 1.0)
+	t.width = 4
+	t.height = 64
 	return t
 
 
@@ -200,6 +225,7 @@ func _draw_deck(d: Dictionary) -> void:
 	var from := x0
 	for g in d.get("gaps", []):
 		_draw_face(from, float(g[0]), d.y1, d.height, x0, x1)
+		_draw_passage(float(g[0]), float(g[1]), d.y1, d.height)
 		from = float(g[1])
 	_draw_face(from, x1, d.y1, d.height, x0, x1)
 
@@ -226,6 +252,13 @@ func _draw_face(a: float, b: float, ys: float, fh: float, whole0: float, whole1:
 		draw_texture_rect(post_tex, Rect2(posts[i] - POST_WIDTH / 2.0, ys - 0.02, POST_WIDTH, fh), false)
 	draw_texture_rect(_cap.w, Rect2(a, ys - 0.02, CAP_WIDTH, fh), false)
 	draw_texture_rect(_cap.e, Rect2(b - CAP_WIDTH, ys - 0.02, CAP_WIDTH, fh), false)
+
+
+## The passage under a bridge from `a` to `b` (the gap the end posts of the faces beside it frame): dark under the planks and the shadow the deck throws on
+## the ground at its foot, as the faces beside it do.
+func _draw_passage(a: float, b: float, ys: float, fh: float) -> void:
+	draw_texture_rect(_passage, Rect2(a, ys - 0.02, b - a, fh), false)
+	draw_texture_rect(_shadow, Rect2(a + SHADOW_THROW * fh, ys + fh - 0.04, b - a, SHADOW_REACH), false)
 
 
 ## The base of a corner tower: legs, two tiers of braces, the footings, and a
