@@ -68,6 +68,11 @@ func setup(door: Dictionary, passage_ns: bool, inward: Vector2, variant: int = 0
 	queue_redraw()
 
 
+## True when people walk through the door north to south (the wall runs along x).
+func passage_ns() -> bool:
+	return _ns
+
+
 ## One frame: `near` is whether a pawn is within the door's reach.
 func tick(dt: float, near: bool) -> void:
 	if near:
