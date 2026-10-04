@@ -529,6 +529,10 @@ func test_scavenge_a_trip_home_together_brings_a_party_closer_more_when_someone_
 	var dez = _p(sim, "dez")
 	var walt = _p(sim, "walt")
 	_at(sim, 3, 7.0)
+	# (the pairs of `_game` stand outside the compound, where an avatar game's walkers have no way in or to the gate (round 22 and 24: the
+	# grid is shut and nobody walks through a wall): the two who go out stand in the yard by the gate, and the gate opens for them)
+	_place(dez, 40.0, 25.0)
+	_place(walt, 43.0, 25.0)
 	check(sim.scavenge.send([dez, walt], "houses"), "Dez and Walt are sent")
 	var party: Dictionary = sim.scavenge.parties[0]
 	party.result = {"loot": {"food": 5}, "hurt": {"walt": "scratch"}, "lost": []}
