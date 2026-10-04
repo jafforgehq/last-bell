@@ -77,6 +77,8 @@ var _rest := {"what": "Resting", "work": "rest", "spots": []}
 var _posts: Array = []
 var _base_posts: Array = []
 var _post_by_id := {}
+## Whether a generated base's layout is installed (`install_layout`).
+var _layout_on := false
 
 
 func setup(s) -> void:
@@ -128,6 +130,85 @@ func _load_data() -> void:
 		_post_by_id[String(po.id)] = po
 
 
+## A generated base's stations, posts and resting spots in place of the file's (One House: the claim installs them, base_layout.gd).
+## `stations` are as stations.json's entries (pos as [x, y] or Vector2), `posts` likewise with their own `face` ("N", "E", "S", "W": the school's
+## `_face_of` is the file's fallback only), `rest` is {"what", "work", "spots": [{"pos", "face"}]}. Everyone's night post is made again
+## (kept where it is still a post) and the stations' settings are kept for the stations of the same id.
+func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
+	var kept := settings.duplicate(true)
+	_stations = []
+	_station_by_id.clear()
+	for r in stations:
+		var st: Dictionary = r.duplicate(true)
+		st["pos"] = _vec(r.pos)
+		if r.has("idle_pos"):
+			st["idle_pos"] = _vec(r.idle_pos)
+		st["seats"] = int(r.get("seats", 1))
+		st["skill"] = String(r.get("skill", ""))
+		st["settings"] = r.get("settings", {})
+		_stations.append(st)
+		_station_by_id[String(st.id)] = st
+	_posts = []
+	for r in posts:
+		var po: Dictionary = r.duplicate(true)
+		po["pos"] = _vec(r.pos)
+		po["face"] = String(r.get("face", _face_of(po.pos)))
+		_posts.append(po)
+	_base_posts = _posts
+	_post_by_id.clear()
+	for po in _posts:
+		_post_by_id[String(po.id)] = po
+	_rest = {"what": String(rest.get("what", "Resting")), "work": String(rest.get("work", "rest")), "spots": []}
+	for sp in rest.get("spots", []):
+		_rest.spots.append({"pos": _vec(sp.pos), "face": String(sp.get("face", ""))})
+	settings.clear()
+	for st in _stations:
+		var id := String(st.id)
+		var s := {}
+		for k in st.settings:
+			s[k] = kept.get(id, {}).get(k, st.settings[k].default)
+		settings[id] = s
+	var old := post_ids.duplicate()
+	post_ids.clear()
+	var taken := {}
+	for p in sim.people:
+		var po := String(old.get(String(p.id), ""))
+		if _post_by_id.has(po) and not taken.has(po):
+			post_ids[String(p.id)] = po
+			taken[po] = true
+	for p in sim.people:
+		if not post_ids.has(String(p.id)):
+			post_ids[String(p.id)] = _free_post(taken)
+			taken[post_ids[String(p.id)]] = true
+	for p in sim.people:
+		var job := String(assignments.get(String(p.id), ""))
+		if job != "" and not _station_by_id.has(job):
+			assignments[String(p.id)] = ""
+		p.goal_key = ""
+	_now_version = -1
+	_layout_on = true
+	if sim.get("build") != null:
+		sim.build.version += 1
+
+
+## The file's stations, posts and resting spots again (a new run, or a base is let go).
+func clear_layout() -> void:
+	_load_data()
+	_layout_on = false
+	var kept := settings.duplicate(true)
+	settings.clear()
+	for st in _stations:
+		var s := {}
+		for k in st.settings:
+			s[k] = kept.get(String(st.id), {}).get(k, st.settings[k].default)
+		settings[String(st.id)] = s
+	_now_version = -1
+
+
+static func _vec(v) -> Vector2:
+	return v if v is Vector2 else Vector2(float(v[0]), float(v[1]))
+
+
 ## The way someone at this spot on the wall faces.
 static func _face_of(at: Vector2) -> String:
 	if at.x < 22.0:
@@ -146,6 +227,8 @@ func person_added(p) -> void:
 
 
 func start() -> void:
+	if _layout_on:
+		clear_layout()    # (a new run on a sim that had a base)
 	_alert_day = {"radio": 0, "watch": 0}
 	_defaults()
 

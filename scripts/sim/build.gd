@@ -70,6 +70,12 @@ var _visible: Array = []
 var _visible_dirty := true
 ## The ids of the buildings the catalogue is held to (the demo's list); empty for no limit.
 var only: Array = []
+## The plots, catalogue entries and art of a generated base (`install_layout`, One House): their ids, so that `clear_layout` takes them out
+## again; and whether `_catalogue` and `_art` are this module's own copies (the file's are shared by every game in a process: `_cache`).
+var _layout_plot_ids: Array = []
+var _layout_building_ids: Array = []
+var _layout_art_ids: Array = []
+var _own_copy := false
 
 
 func setup(s) -> void:
@@ -113,6 +119,10 @@ func _load_data() -> void:
 	for b in _catalogue:
 		_building_by_id[String(b.id)] = b
 	_art = c.art
+	_own_copy = false
+	_layout_plot_ids.clear()
+	_layout_building_ids.clear()
+	_layout_art_ids.clear()
 	# the plots carry their live state (the building, the site) in the same dictionaries
 	_plots.clear()
 	_plot_by_id.clear()
@@ -159,7 +169,75 @@ func _add_lots_data(plots: Array, buildings: Array) -> void:
 
 
 func start() -> void:
+	if not _layout_plot_ids.is_empty():
+		clear_layout()    # (a new run on a sim that had a base: its plots and kits are gone)
 	_reset()
+
+
+## A generated base's plots (each {id, name, kind, home, n, why, pos, size, work, ...}; pos, size and work are Vector2 or [x, y]), catalogue
+## entries (the shape of buildings.json) and building art (building_art.json's, by building id) are added to the file's (One House: the
+## claim installs the layout of the house, `scripts/town/base_layout.gd`). A layout that was installed is replaced. The plots start empty.
+func install_layout(plots: Array, buildings: Array, art: Dictionary = {}) -> void:
+	clear_layout()
+	if not _own_copy:
+		_catalogue = _catalogue.duplicate()
+		_art = _art.duplicate()
+		_own_copy = true
+	for r in plots:
+		var live: Dictionary = r.duplicate(true)
+		for key in ["pos", "size", "work"]:
+			var v = r.get(key, Vector2.ZERO)
+			live[key] = v if v is Vector2 else Vector2(float(v[0]), float(v[1]))
+		live["id"] = String(r.id)
+		live["kind"] = String(r.get("kind", "yard"))
+		live["home"] = String(r.get("home", ""))
+		live["n"] = int(r.get("n", 1))
+		live["why"] = String(r.get("why", ""))
+		live["building"] = ""
+		live["site"] = {}
+		live["solid"] = []
+		_plots.append(live)
+		_plot_by_id[String(live.id)] = live
+		_layout_plot_ids.append(String(live.id))
+	for r in buildings:
+		var b: Dictionary = r.duplicate(true)
+		b["scrap"] = int(r.get("scrap", 0))
+		b["work"] = float(r.get("work", 1.0))
+		b["max"] = int(r.get("max", 1))
+		b["requires"] = String(r.get("requires", ""))
+		b["effects"] = r.get("effects", {})
+		_catalogue.append(b)
+		_building_by_id[String(b.id)] = b
+		_layout_building_ids.append(String(b.id))
+	for id in art:
+		_art[id] = art[id]
+		_layout_art_ids.append(String(id))
+	_visible_dirty = true
+	version += 1
+
+
+## Takes the installed layout's plots (opened again), entries and art out.
+func clear_layout() -> void:
+	if _layout_plot_ids.is_empty() and _layout_building_ids.is_empty() and _layout_art_ids.is_empty():
+		return
+	for id in _layout_plot_ids:
+		var pl: Dictionary = _plot_by_id.get(String(id), {})
+		if pl.is_empty():
+			continue
+		_unblock(pl)
+		_plots.erase(pl)
+		_plot_by_id.erase(String(id))
+		_queue.erase(String(id))
+	for id in _layout_building_ids:
+		_building_by_id.erase(String(id))
+	_catalogue = _catalogue.filter(func(b): return not _layout_building_ids.has(String(b.id)))
+	for id in _layout_art_ids:
+		_art.erase(String(id))
+	_layout_plot_ids.clear()
+	_layout_building_ids.clear()
+	_layout_art_ids.clear()
+	_visible_dirty = true
+	version += 1
 
 
 ## Everything unbuilt: the footprints opened again, the plots empty.
@@ -184,8 +262,11 @@ func plots() -> Array:
 ## that is the yard's own, always.
 func refresh_plots() -> void:
 	_visible = []
+	var perimeter = sim.get("perimeter")    # (One House: a slot plot is seen once its stage is open; null in every other game)
 	for p in _plots:
 		if sim.lots.plot_open(p) and (only.is_empty() or String(p.get("home", "")) == "" or only.has(String(p.home))):    # (the demo's plots are those of its short list)
+			if perimeter != null and String(p.kind) == "slot" and not perimeter.unlocked(p):
+				continue
 			_visible.append(p)
 	_visible_dirty = false
 
@@ -247,7 +328,7 @@ func catalogue() -> Array:
 		return _catalogue
 	var out: Array = []
 	for b in _catalogue:
-		if not b.has("wall_kit") and not bool(b.get("lots_only", false)) and (only.is_empty() or only.has(String(b.id))):
+		if not b.has("wall_kit") and not b.has("slot_kit") and not bool(b.get("lots_only", false)) and (only.is_empty() or only.has(String(b.id))):
 			out.append(b)
 	return out
 
@@ -423,12 +504,20 @@ func why_not(plot_id: String, building_id: String) -> String:
 		return "something is already going up here"
 	if not sim.lots.plot_open(pl):
 		return "claim the lot first"
+	if String(pl.kind) == "slot":    # (One House: a slot of the perimeter takes the kits that are listed for it, once its stage is open)
+		var perimeter = sim.get("perimeter")
+		if perimeter == null or not perimeter.unlocked(pl):
+			return "this place is not open yet"
+		if not pl.get("kits", []).has(building_id):
+			return "it does not fit here"
+	elif b.has("slot_kit"):
+		return "it only goes on the fence line"
 	if b.has("wall_kit"):
 		if pl.kind != "mouth" or not pl.kits.has(String(b.wall_kit)):
 			return "it does not fit across this street"
 	elif pl.kind == "mouth":
 		return "only a wall goes across a street"
-	elif String(pl.get("home", "")) != building_id:
+	elif String(pl.kind) != "slot" and String(pl.get("home", "")) != building_id:
 		var of := String(pl.get("home", ""))
 		return "this place is for the %s" % String(building(of).get("name", "")).to_lower() if _building_by_id.has(of) else "nothing is built here"
 	else:
@@ -517,6 +606,8 @@ func demolish(plot_id: String) -> bool:
 	pl.building = ""
 	version += 1
 	sim.jobs.trim()
+	if String(pl.kind) == "slot" and sim.get("perimeter") != null:
+		sim.perimeter.on_demolished(pl)    # (One House: the fence section of the slot comes down)
 	sim.events.append({"type": "demolished", "plot": plot_id, "building": id})
 	return true
 
@@ -606,6 +697,10 @@ func _finish(pl: Dictionary) -> void:
 		sim.events.append({"type": "built", "plot": pl.id, "building": id})
 		sim.lots.on_wall_built(String(pl.id), String(building(id).wall_kit))
 		return
+	if String(pl.kind) == "slot":    # (One House: a slot of the base's perimeter)
+		sim.events.append({"type": "built", "plot": pl.id, "building": id})
+		sim.perimeter.on_built(pl, id)
+		return
 	_block(pl)
 	var label := String(building(id).name)
 	sim.events.append({"type": "built", "plot": pl.id, "building": id})
@@ -671,7 +766,7 @@ const LEGACY_COSTS := {"orchard": 24, "cistern": 20}
 
 ## Whether a building is the one a plot is for (a wall across a street takes its kits, which the lots module checks).
 func _belongs(pl: Dictionary, building_id: String) -> bool:
-	return String(pl.kind) == "mouth" or String(pl.get("home", "")) == building_id
+	return String(pl.kind) == "mouth" or String(pl.kind) == "slot" or String(pl.get("home", "")) == building_id
 
 
 func load_state(d: Dictionary) -> void:

@@ -343,8 +343,8 @@ func _make_plan(day: int, scale: float, _mult: float) -> Dictionary:
 
 
 ## The name of the way a point lies from the middle of the compound.
-static func direction_name(v: Vector2) -> String:
-	var d := v - Vector2(42.0, 32.0)
+static func direction_name(v: Vector2, centre := Vector2(42.0, 32.0)) -> String:
+	var d := v - centre
 	var a := fposmod(atan2(d.y, d.x) + PI / 8.0, TAU)
 	var names := ["east", "south east", "south", "south west", "west", "north west", "north", "north east"]
 	return names[int(a / (TAU / 8.0)) % 8]
@@ -354,7 +354,7 @@ static func direction_name(v: Vector2) -> String:
 func heading_text(plan: Dictionary) -> String:
 	var names: Array = []
 	for i in plan.heading:
-		var nm := direction_name(sim.spawns[int(i)])
+		var nm := direction_name(sim.spawns[int(i)], sim.base_center())
 		if not names.has(nm):
 			names.append(nm)
 	return " and ".join(names)
@@ -453,7 +453,7 @@ func _arrival_seconds(plan: Dictionary, sections: Array) -> Array:
 	var size := maxi(queue.size(), 1)
 	var heading: Array = plan.heading
 	var from: Vector2 = sim.spawns[int(heading[0])]
-	var to := Vector2(42.0, 32.0)
+	var to: Vector2 = sim.base_center()
 	if not sections.is_empty():
 		var near := INF
 		for sl in sections[0].slots:
@@ -563,10 +563,7 @@ func update(dt: float) -> void:
 	sim.spawn_t -= dt
 	if sim.spawn_t > 0.0:
 		return
-	var alive := 0
-	for z in sim.zombies:
-		if z.state != "dead" and z.state != "dying":
-			alive += 1
+	var alive: int = sim.alive_for_cap()
 	var night: bool = sim.phase == "night"
 	var cap := int(p.get("cap", 0))
 	if cap <= 0:
@@ -590,12 +587,12 @@ func update(dt: float) -> void:
 			_draw_to_the_lure(z)
 		if kind == Kinds.BRUTE:
 			if z.plated:
-				sim.alert("brute", "danger", "A plated brute is coming", "From the %s. Only its head is soft." % direction_name(at), at, 25.0)
+				sim.alert("brute", "danger", "A plated brute is coming", "From the %s. Only its head is soft." % direction_name(at, sim.base_center()), at, 25.0)
 			else:
-				sim.alert("brute", "danger", "A brute is coming", "From the %s. It tears walls down." % direction_name(at), at, 25.0)
+				sim.alert("brute", "danger", "A brute is coming", "From the %s. It tears walls down." % direction_name(at, sim.base_center()), at, 25.0)
 		elif kind == Kinds.RUNNER and runners_told_day != night_day:
 			runners_told_day = night_day
-			sim.alert("runners", "warn", "Runners", "Fast ones, from the %s" % direction_name(at), at, 14.0)
+			sim.alert("runners", "warn", "Runners", "Fast ones, from the %s" % direction_name(at, sim.base_center()), at, 14.0)
 		if kind == Kinds.BRUTE:
 			break
 	var mean: float = SPREAD_S * sim.seasons.night_scale() * AVG_GROUP / maxf(float(queue.size()), 1.0)
