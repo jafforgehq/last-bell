@@ -8,25 +8,11 @@ extends "res://tests/case.gd"
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
+const Soundscape := preload("res://scripts/audio/soundscape.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 
 const NORTH_BUS := 3
 const DOOR := 14
-
-
-## What main.gd plays sounds through, written down instead of heard.
-class FakeSound:
-	extends Node
-	var plays: Array = []
-
-	func play(sound_name: String, level: float = 1.0, pitch_var: float = 0.04, pitch_scale: float = 1.0) -> void:
-		plays.append({"name": sound_name, "level": level, "var": pitch_var, "pitch": pitch_scale})
-
-	func set_ambience(_night: float, _horde: float, _dt: float) -> void:
-		pass
-
-	func set_muted(_m: bool) -> void:
-		pass
 
 
 ## How the test window was before the game scene changed it (it fits the window and sets its
@@ -548,49 +534,77 @@ func test_a_person_is_picked_as_before() -> void:
 
 # ------------------------------------------------------------------- sounds --
 
+## The sounds of the rules' events are the soundscape's now (scripts/audio/soundscape.gd: a groan is one of eight put where the groaner is, pitched by
+## the kind of the dead; a brute's is a roar; the alarm is the small bell), so these two tests read what the real soundscape of the game scene is made
+## to play. A voice that "plays" in a test does not end by itself, so the voices are stopped between the events.
+func _stop_voices(scape: Node) -> void:
+	for v in scape.voices:
+		v.p.stop()
+	for b in scape.bells:
+		b.stop()
+
+
 func test_a_groans_pitch_follows_the_kind_of_the_dead() -> void:
 	var main = _game()
 	var sim = main.sim
-	main.sound.queue_free()
-	var fake := FakeSound.new()
-	main.sound = fake
-	main.add_child(fake)
-	var at: Vector2 = main.cam_center + Vector2(40.0, 0.0)
-	for kind in ["walker", "runner", "brute"]:
-		for i in 200:
-			sim.events.append({"type": "groan", "x": at.x, "y": at.y, "kind": kind})
-	# an event from before the kinds had one
-	for i in 200:
-		sim.events.append({"type": "groan", "x": at.x, "y": at.y})
-	main._handle_events()
-	var by_kind := {}
-	for p in fake.plays:
-		eq(p.name, "groan", "only groans were played")
-		var key := "%.2f" % p.pitch
-		by_kind[key] = p
-	check(fake.plays.size() > 100, "a good many played (about 60%% of 800): %d" % fake.plays.size())
-	check(by_kind.has("0.72"), "a brute's groan is played at 0.72")
-	check(by_kind.has("1.30"), "a runner's at 1.3")
-	check(by_kind.has("1.00"), "a walker's, and one with no kind, at the normal pitch")
-	eq(by_kind.keys().size(), 3, "and no other pitch: %s" % str(by_kind.keys()))
-	# a brute is louder than a walker from the same place
-	check(by_kind["0.72"].level > by_kind["1.00"].level, "and a little louder: %.2f against %.2f" % [by_kind["0.72"].level, by_kind["1.00"].level])
-	check(by_kind["1.30"].level <= by_kind["1.00"].level + 0.0001, "a runner is not louder")
+	var scape = main.sound.scape
+	var at: Vector2 = main.cam_center + Vector2(6.0, 0.0)
+	# the walkers', the runners', and one with no kind (an event from before the kinds had one): each is heard now and then (most of a crowd is a murmur)
+	var heard := {}
+	for kind in ["walker", "runner", ""]:
+		heard[kind] = []
+		for i in 80:
+			_stop_voices(scape)
+			var e := {"type": "groan", "x": at.x, "y": at.y}
+			if kind != "":
+				e["kind"] = kind
+			sim.events.append(e)
+			main._handle_events()
+			for v in scape.voices:
+				if v.kind == "groan" and v.p.playing:
+					heard[kind].append(float(v.p.pitch_scale))
+	check(heard["walker"].size() > 10, "a good many walkers' groans were heard: %d" % heard["walker"].size())
+	check(heard["runner"].size() > 10, "and runners': %d" % heard["runner"].size())
+	for pair in [["walker", 1.0], ["runner", float(Soundscape.GROAN_PITCH.runner)], ["", 1.0]]:
+		for pitch in heard[pair[0]]:
+			check(pitch >= pair[1] * 0.9 - 0.001 and pitch <= pair[1] * 1.12 + 0.001, "%s: round %.2f, not %.2f" % [pair[0] if pair[0] != "" else "no kind", pair[1], pitch])
+	check(float(Soundscape.GROAN_PITCH.runner) > 1.0 and float(Soundscape.GROAN_PITCH.get("walker", 1.0)) == 1.0, "a runner's is the thinner one, a walker's the normal pitch")
+	# a brute does not groan: it roars (one at a time, so the clock is let go back each time)
+	var roared := false
+	var groaned := false
+	for i in 60:
+		_stop_voices(scape)
+		scape._last_roar = -100.0
+		sim.events.append({"type": "groan", "x": at.x, "y": at.y, "kind": "brute"})
+		main._handle_events()
+		for v in scape.voices:
+			if v.kind == "roar" and v.p.playing:
+				roared = true
+				check(v.p.volume_db > -3.0, "and it is louder than a groan (about -3 dB): %.1f" % v.p.volume_db)
+			if v.kind == "groan" and v.p.playing:
+				groaned = true
+	check(roared, "a brute's groan is heard, as a roar")
+	check(not groaned, "and never as a groan")
 	await _leave(main)
 
 
 func test_the_alarm_rings_a_bell_when_it_is_set() -> void:
 	var main = _game()
-	main.sound.queue_free()
-	var fake := FakeSound.new()
-	main.sound = fake
-	main.add_child(fake)
+	var scape = main.sound.scape
 	main.sim.events.clear()
+	_stop_voices(scape)
+	var before := int(scape.played.get("bell", 0))
 	main.sim.events.append({"type": "lure", "seg": NORTH_BUS})
 	main._handle_events()
-	eq(fake.plays.size(), 1, "one sound")
-	eq(fake.plays[0].name, "bell", "a bell")
-	check(fake.plays[0].pitch > 1.0, "higher than the dusk bell")
+	eq(int(scape.played.get("bell", 0)), before + 1, "one bell")
+	var rung := []
+	for b in scape.bells:
+		if b.playing:
+			rung.append(b.stream)
+	eq(rung.size(), 1, "one sound")
+	check(not rung.is_empty() and scape.streams["bell:alarm"].has(rung[0]), "and it is the alarm bell, not the dusk one")
+	for p in main.sound.players:
+		check(not p.playing, "and nothing else was played")
 	await _leave(main)
 
 
@@ -598,7 +612,7 @@ func test_the_player_moves_the_pitch_by_the_scale_and_keeps_the_old_calls_workin
 	var s := Sound.new()
 	Engine.get_main_loop().root.add_child(s)
 	s.setup({"groan": ["res://assets/audio/groan_0.wav"]})
-	check(s.streams.has("groan") and s.streams.groan.size() == 1, "the groan loaded")
+	check(s.streams.has("groan") and s.streams.groan.size() >= 1, "the groan loaded (with the four more groans the sound adds when their files are there)")
 	s.play("groan", 1.0, 0.0, 0.72)
 	near(s.players[0].pitch_scale, 0.72, 0.0001, "scaled down for a brute")
 	s.play("groan", 1.0, 0.0, 1.3)

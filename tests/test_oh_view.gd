@@ -163,10 +163,20 @@ func test_a_door_swings_for_a_pawn_and_shuts_half_a_second_after() -> void:
 	_frames(hv, 8)
 	var dn = hv.door_node(r.h, idx)
 	check(dn != null and dn.open_target, "the door of the room the avatar is in swings open")
-	av.x = c.x + 9.0
-	av.y = c.y
+	# the avatar goes to the far side of the same house (a door inside a house has its node only while the avatar is in that house, so a walk out of it, or into the
+	# next one, would take the node away, not shut it; where the walls of a town fall is the generator's, so the place is looked for, not fixed)
+	var far := c
+	for ty in range(int(c.y) - 12, int(c.y) + 13):
+		for tx in range(int(c.x) - 12, int(c.x) + 13):
+			var t := Vector2(tx, ty) + Vector2(0.5, 0.5)
+			if hv._house_of(tx, ty) == r.h and hv._room_of(tx, ty) >= 0 and (t - c).length() > (far - c).length():
+				far = t
+	check((far - c).length() > hv.DOOR_R + 0.5, "(the house has a place out of the door's reach: %.1f tiles off)" % (far - c).length())
+	av.x = far.x
+	av.y = far.y
 	_frames(hv, 4)
 	_frames(hv, 12)
+	eq(hv.avatar_house, r.h, "(still in the same house)")
 	check(dn.open_target == false or not dn.near_now, "and shuts when the avatar has gone")
 	_done(r)
 
