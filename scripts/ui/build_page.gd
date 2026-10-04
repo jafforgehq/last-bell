@@ -45,11 +45,11 @@ const ANSWER_S := 6.0
 const LOTS_PAGE := BuildScreen.LOTS_PAGE
 ## The list is at least this tall (it scrolls). The panel is as tall as its page asks (radio_panel.gd `fit`) and scrolls a page that asks for
 ## more than the window has, foot and all; this page scrolls its list instead, and keeps the foot where it is: the list is at most the
-## window's height less PANEL_RESERVE (the clock above the panel, the toolbar below it, its tabs and its frame: what is round the page)
-## and less the page's own head and foot. Should the panel still have to scroll the page (it knows its room better than this does), the
+## window's height less PANEL_RESERVE (the clock, the gun's readout and the gate's row above the panel, the toolbar below it, its tabs and its
+## frame: what is round the page) and less the page's own head and foot. Should the panel still have to scroll the page (it knows its room better than this does), the
 ## list gives up what was missing (`_squeeze`) until the window changes. A button is this tall, a slip's meter this tall.
-const MIN_LIST_H := 120.0
-const PANEL_RESERVE := 336.0
+const MIN_LIST_H := 96.0
+const PANEL_RESERVE := 372.0
 const BUTTON_H := 30.0
 const METER_H := 6.0
 

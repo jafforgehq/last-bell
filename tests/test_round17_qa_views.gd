@@ -584,8 +584,10 @@ func test_the_first_screen_says_what_the_radio_is_and_where_the_map_and_the_news
 	main.hud.update_hud(main.sim, 1, true, 0)
 	check(main.hud.hint.visible, "the hint is up")
 	var words := _texts(main.hud.hint).to_lower()
-	for want in ["crew card", "radio", "map", "news", "move", "aim", "fire", "reload"]:
+	for want in ["radio", "map", "news", "move", "aim", "fire", "reload"]:
 		check(words.contains(want), "the hint says '%s': %s" % [want, words])
+	# (round 22: who is clicked to be radioed is "a person" in the right-button mode, "a crew card" in the always-aim one)
+	check(words.contains("click a person") or words.contains("click a crew card"), "and whom to click to radio them: %s" % words)
 	var keys: Array = []
 	for l in main.hud.hint.find_children("*", "Label", true, false):
 		keys.append(l.text)

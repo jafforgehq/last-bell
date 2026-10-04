@@ -21,9 +21,12 @@ const SWITCHES := [
 	["fullscreen", "Fullscreen", "Fills the whole screen"],
 ]
 
-## In a window shorter than this the rows sit closer together, so that the whole screen fits the
+## In a window shorter than this the rows sit closer together and their buttons are a little slimmer, so that the whole screen fits the
 ## smallest window (700 by 560) without scrolling.
 const COMPACT_H := 640.0
+## How tall the buttons of the rows are (the size, the switches, the aiming), and in a short window.
+const ROW_H := 38.0
+const ROW_H_COMPACT := 32.0
 
 ## The sliders and their percent labels, by pref key.
 var sliders := {}
@@ -95,7 +98,18 @@ func default_focus() -> Control:
 
 func _layout() -> void:
 	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 1)
+	_fit_rows(ROW_H if size.y >= COMPACT_H else ROW_H_COMPACT)
 	super._layout()
+
+
+## The buttons of the rows are `h` tall (round 22's Controls section made the screen 12 px too tall for the smallest window).
+func _fit_rows(h: float) -> void:
+	var buttons: Array = [scale_minus, scale_plus]
+	buttons.append_array(toggles.values())
+	buttons.append_array(aim_buttons.values())
+	for b in buttons:
+		if b != null and not is_equal_approx(b.custom_minimum_size.y, h):
+			b.custom_minimum_size.y = h
 
 
 # -------------------------------------------------------------- volumes --

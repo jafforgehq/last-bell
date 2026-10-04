@@ -1882,12 +1882,18 @@ func _alert_height(p: Control) -> float:
 	var st: StyleBox = p.get_theme_stylebox("panel")
 	var inner := _alert_inner_w(p)
 	var title_font: Font = Fonts.sans(600)
+	# (a label puts its theme's line spacing between its lines, which the font's own measure does not know: left out, the slips were laid
+	# out 3 px short for each line after the first, and a column of them ran over the toolbar)
+	var spacing := float(it.title.get_theme_constant("line_spacing"))
 	var title_box: Vector2 = title_font.get_multiline_string_size(String(it.title.text), HORIZONTAL_ALIGNMENT_LEFT, inner, 13, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
-	var col := maxf(title_box.y, title_font.get_height(13))
+	var title_h := maxf(title_font.get_height(13), 1.0)
+	var col := maxf(title_box.y, title_h) + spacing * float(maxi(0, roundi(title_box.y / title_h) - 1))
 	var sub := String(it.subl.text)
 	if sub != "":
 		var sub_font: Font = Fonts.sans(400)
-		col += 1.0 + sub_font.get_multiline_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, inner, 12, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE).y
+		var sub_box: Vector2 = sub_font.get_multiline_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, inner, 12, -1, TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
+		var sub_h := maxf(sub_font.get_height(12), 1.0)
+		col += 1.0 + sub_box.y + spacing * float(maxi(0, roundi(sub_box.y / sub_h) - 1))
 	return maxf(16.0, col) + (st.get_minimum_size().y if st != null else 16.0)
 
 
@@ -4996,7 +5002,8 @@ func _layout_news() -> void:
 	elif _forecast_squeezed:
 		_set_forecast_squeezed(false)
 		bare = right_col.get_combined_minimum_size().y - alerts_box.get_combined_minimum_size().y
-	var room := size.y - edge - bare
+	# (the 8 px of `edge` past the column is the gap the radio panel keeps under the column: with no panel up the alerts have the room it would take)
+	var room := size.y - edge - bare + (0.0 if radio_open() else 8.0)
 	var panels := _alert_panels()
 	var shown := 0
 	var used := 0.0

@@ -109,7 +109,8 @@ func _loop(name: String, level: float) -> AudioStreamPlayer:
 ## `pitch_var` is the random wobble round the normal pitch; `pitch_scale` moves the
 ## whole sound up or down (0.72 is the deep groan of a brute, 1.3 a runner's thin one).
 func play(name: String, level: float = 1.0, pitch_var: float = 0.04, pitch_scale: float = 1.0) -> void:
-	if muted or not streams.has(name):
+	# (a game that has been replaced, by Continue or Load, is out of the tree with its voices: they cannot play, and the shell may still ask)
+	if muted or not is_inside_tree() or not streams.has(name):
 		return
 	var list: Array = streams[name]
 	if list.is_empty():
@@ -125,7 +126,7 @@ func play(name: String, level: float = 1.0, pitch_var: float = 0.04, pitch_scale
 ## A menu sound (`ui_click`, `ui_confirm`, `ui_error`, `ui_open`, `ui_close`) on the
 ## `UI` bus, from the menu sounds' own few voices. Silent while the game is muted.
 func ui(name: String, level: float = 1.0, pitch_var: float = 0.02) -> void:
-	if muted or not streams.has(name) or ui_players.is_empty():
+	if muted or not is_inside_tree() or not streams.has(name) or ui_players.is_empty():
 		return
 	var list: Array = streams[name]
 	if list.is_empty():
