@@ -40,7 +40,9 @@ const GD := preload("res://scripts/game_data.gd")
 const Canvas := preload("res://scripts/raid/site_canvas.gd")
 const SiteGen := preload("res://scripts/raid/site_gen.gd")
 
-const SIZE := 192
+## The size of the full town (6 blocks a side); `make(seed, {"blocks": n})` makes a smaller one (2: 64 x 64, for tests).
+const DEFAULT_SIZE := 192
+const DEFAULT_BLOCKS := 6
 const PITCH := 32
 const BLOCK := 28
 const ROAD := 4
@@ -66,6 +68,11 @@ const RESCUE_COUNT := 12
 # ------------------------------------------------------------------ the build --
 
 var seed_value := 1
+var _size := 192
+var _blocks := 6
+var _start_block := Vector2i(3, 3)
+var _start_house := -1
+var _clear_rect := Rect2i()
 var opts: Dictionary = {}
 var _phase := 0
 var _block := 0
@@ -115,14 +122,19 @@ func begin(seed_in: int, opts_in: Dictionary = {}) -> void:
 		_terrain_types[k] = {"id": int(_lay.terrain[k].id), "file": String(_lay.terrain[k].file)}
 	for k in _terrain_types:
 		_tids[k] = int(_terrain_types[k].id)
-	_terrain.resize(SIZE * SIZE)
+	_blocks = clampi(int(opts_in.get("blocks", DEFAULT_BLOCKS)), 2, 6)
+	_size = _blocks * PITCH
+	_start_block = Vector2i(_blocks / 2, _blocks / 2)
+	_start_house = -1
+	_clear_rect = Rect2i()
+	_terrain.resize(_size * _size)
 	_terrain.fill(int(_tids.GRASS))
-	_solid.resize(SIZE * SIZE)
+	_solid.resize(_size * _size)
 
 
 ## How far along the build is, 0 to 1 (a loading card's bar).
 func progress() -> float:
-	var n_blocks := float((SIZE / PITCH) * (SIZE / PITCH))
+	var n_blocks := float((_size / PITCH) * (_size / PITCH))
 	match _phase:
 		0:
 			return 0.0
@@ -147,7 +159,7 @@ func step(budget_ms: float) -> bool:
 				_phase = 1
 			1:
 				_blocks_until(t0, budget_ms)
-				if _block >= (SIZE / PITCH) * (SIZE / PITCH):
+				if _block >= (_size / PITCH) * (_size / PITCH):
 					_phase = 2
 			2:
 				_edge_and_furniture()
@@ -177,31 +189,31 @@ func _streets() -> void:
 	var t0 := Time.get_ticks_usec()
 	var road := int(_tids.ASPHALT)
 	var walk := int(_tids.SIDEWALK)
-	for y in SIZE:
+	for y in _size:
 		var ly := y % PITCH
-		for x in SIZE:
+		for x in _size:
 			var lx := x % PITCH
-			var i := y * SIZE + x
+			var i := y * _size + x
 			if lx >= BLOCK or ly >= BLOCK:
 				_terrain[i] = road
 			elif lx == 0 or lx == BLOCK - 1 or ly == 0 or ly == BLOCK - 1:
 				_terrain[i] = walk
 	var gaps: Array = []
-	for j in SIZE / PITCH:
+	for j in _size / PITCH:
 		gaps.append([float(BLOCK + PITCH * j), float(PITCH * (j + 1))])
-	for k in SIZE / PITCH:
+	for k in _size / PITCH:
 		var c := float(PITCH * k + BLOCK) + float(ROAD) / 2.0
-		_marks.append({"kind": "lanes", "cx": float(SIZE) / 2.0, "cy": c, "w": float(SIZE), "h": float(ROAD), "dir": "h", "gaps": gaps.duplicate(true), "seed": 1000 + k})
-		_marks.append({"kind": "lanes", "cx": c, "cy": float(SIZE) / 2.0, "w": float(ROAD), "h": float(SIZE), "dir": "v", "gaps": gaps.duplicate(true), "seed": 2000 + k})
+		_marks.append({"kind": "lanes", "cx": float(_size) / 2.0, "cy": c, "w": float(_size), "h": float(ROAD), "dir": "h", "gaps": gaps.duplicate(true), "seed": 1000 + k})
+		_marks.append({"kind": "lanes", "cx": c, "cy": float(_size) / 2.0, "w": float(ROAD), "h": float(_size), "dir": "v", "gaps": gaps.duplicate(true), "seed": 2000 + k})
 	_street_cv = Canvas.new()
-	_street_cv.setup(SIZE, SIZE, seed_value + 5, _lay.props, _tids, {})
+	_street_cv.setup(_size, _size, seed_value + 5, _lay.props, _tids, {})
 	_tick("streets", t0)
 
 
 # ------------------------------------------------------------------------ lots --
 
 func _blocks_until(t0: int, budget_ms: float) -> void:
-	var n := SIZE / PITCH
+	var n := _size / PITCH
 	while _block < n * n:
 		_one_block(_block % n, _block / n)
 		_block += 1
@@ -220,20 +232,28 @@ func _one_block(bx: int, by: int) -> void:
 		var prev_fenced := false
 		while x < BLOCK - 1:
 			var remaining := BLOCK - 1 - x
-			var pick := _pick_kind(remaining, x == 1)
+			# the start house: the first lot of the south row of the middle block, a medium house with two tiles to spare all round, no fence,
+			# no tree, no prop, no mark on its border and the tile inside it (a ring of free ground: the perimeter of the base goes there)
+			var is_start: bool = row == 1 and x == 1 and bx == _start_block.x and by == _start_block.y
+			var pick := "medium" if is_start else _pick_kind(remaining, x == 1)
 			if pick == "":
 				break
 			# a lot left empty now and then: grass and a tree or two
-			if _rng.randf() < 0.07 and remaining > 8:
+			if not is_start and _rng.randf() < 0.07 and remaining > 8:
 				x += mini(remaining, _rng.randi_range(3, 5))
 				continue
 			var hs: Vector2i = KINDS[pick]
 			var lot_w := hs.x if pick == "terrace" else hs.x + 2
+			if is_start:
+				lot_w = hs.x + 4
 			lot_w = mini(lot_w, remaining)
 			var lot := Rect2i(ox + x, oy + span.x, lot_w, span.y - span.x)
 			# (no fence on the north row of the top blocks: its gate would be on the world's edge, and the yard would be shut in)
-			var fenced: bool = pick != "terrace" and not prev_fenced and _rng.randf() < 0.35 and not (by == 0 and row == 0)
-			var built := _build_lot(seed_value * 100003 + _lot_index, pick, lot, front, fenced)
+			var fenced: bool = pick != "terrace" and not prev_fenced and _rng.randf() < 0.35 and not (by == 0 and row == 0) and not is_start
+			var built := _build_lot(seed_value * 100003 + _lot_index, pick, lot, front, fenced, is_start)
+			if is_start:
+				_clear_rect = lot
+				_start_house = _houses.size()
 			_stamp(built, lot, pick, front, fenced, Vector2i(bx, by), row)
 			_lot_index += 1
 			x += lot_w
@@ -268,7 +288,7 @@ func _pick_kind(remaining: int, first: bool) -> String:
 
 
 ## One lot on a canvas of its own (the lot's size, no more): the yard, an optional fence, the house with its rooms, furniture and trees.
-func _build_lot(lot_seed: int, kind: String, lot: Rect2i, front: String, fenced: bool) -> Dictionary:
+func _build_lot(lot_seed: int, kind: String, lot: Rect2i, front: String, fenced: bool, start: bool = false) -> Dictionary:
 	var lw := lot.size.x
 	var lh := lot.size.y
 	var hs: Vector2i = KINDS[kind]
@@ -276,7 +296,7 @@ func _build_lot(lot_seed: int, kind: String, lot: Rect2i, front: String, fenced:
 	cv.setup(lw, lh, lot_seed, _lay.props, _tids, {})
 	var rng := RandomNumberGenerator.new()
 	rng.seed = lot_seed * 31 + 7
-	var hx := 0 if kind == "terrace" else (lw - hs.x) >> 1
+	var hx := 0 if kind == "terrace" else (lw - hs.x) >> 1    # (the start lot is four wider than its house: two tiles each side)
 	var hy := 3 if front == "N" else lh - 3 - hs.y
 	var back := "S" if front == "N" else "N"
 	var fat := rng.randi_range(2, maxi(2, hs.x - 4))
@@ -289,9 +309,10 @@ func _build_lot(lot_seed: int, kind: String, lot: Rect2i, front: String, fenced:
 		doors = [{"side": front, "at": mini(fat, 3), "w": 2}, {"side": back, "at": hs.x - 3, "w": 2}]
 	ops.append({"op": "building", "rect": [hx, hy, hs.x, hs.y], "wall": "WALL_BRICK", "floor": "WOOD", "id": "h", "doors": doors})
 	ops.append_array(_interior(kind))
-	if kind != "terrace":
+	if kind != "terrace" and not start:
 		ops.append({"op": "trees", "rect": [0, 0, lw, lh], "n": {"r": [0, 2]}, "on": ["GRASS"], "gap": 3})
-	ops.append({"op": "decals", "rect": [0, 0, lw, lh], "kinds": ["papers", "stain", "blood", "crack"], "n": {"r": [1, 3]}})
+	if not start:
+		ops.append({"op": "decals", "rect": [0, 0, lw, lh], "kinds": ["papers", "stain", "blood", "crack"], "n": {"r": [1, 3]}})
 	var door := Vector2i(hx + (fat if kind != "shop" else mini(fat, 3)), hy - 1 if front == "N" else hy + hs.y)
 	cv.entry = door
 	cv.run({"ops": ops})
@@ -348,7 +369,7 @@ func _stamp(built: Dictionary, lot: Rect2i, kind: String, front: String, fenced:
 	var lh := lot.size.y
 	for y in lh:
 		for x in lw:
-			var i := (oy + y) * SIZE + ox + x
+			var i := (oy + y) * _size + ox + x
 			var j := y * lw + x
 			_terrain[i] = cv.terrain[j]
 			_solid[i] = cv.solid[j]
@@ -408,7 +429,7 @@ func _stamp(built: Dictionary, lot: Rect2i, kind: String, front: String, fenced:
 			"at": Vector2(float(c.obj.cx), float(c.obj.cy)),
 			"kind": String(c.kind), "loot": loot, "search_s": 4.0,
 		})
-	var street_k := clampi((block.y - 1) if row == 0 else block.y, 0, SIZE / PITCH - 1)
+	var street_k := clampi((block.y - 1) if row == 0 else block.y, 0, _size / PITCH - 1)
 	_houses.append({
 		"id": house_id, "kind": kind,
 		"address": "%d %s Street" % [lot.position.x, STREET_Y[street_k]],
@@ -426,20 +447,20 @@ func _doors_of(rect: Rect2i) -> Array:
 	var out: Array = []
 	for y in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):
-			if _terrain[y * SIZE + x] != door_t or seen.has(Vector2i(x, y)):
+			if _terrain[y * _size + x] != door_t or seen.has(Vector2i(x, y)):
 				continue
 			var tiles: Array = [Vector2i(x, y)]
 			seen[Vector2i(x, y)] = true
 			# a run along x, else along y
-			var horiz := x + 1 < rect.end.x and _terrain[y * SIZE + x + 1] == door_t
-			var vert := y + 1 < rect.end.y and _terrain[(y + 1) * SIZE + x] == door_t
+			var horiz := x + 1 < rect.end.x and _terrain[y * _size + x + 1] == door_t
+			var vert := y + 1 < rect.end.y and _terrain[(y + 1) * _size + x] == door_t
 			var cx := x
 			var cy := y
-			while horiz and cx + 1 < rect.end.x and _terrain[cy * SIZE + cx + 1] == door_t:
+			while horiz and cx + 1 < rect.end.x and _terrain[cy * _size + cx + 1] == door_t:
 				cx += 1
 				tiles.append(Vector2i(cx, cy))
 				seen[Vector2i(cx, cy)] = true
-			while not horiz and vert and cy + 1 < rect.end.y and _terrain[(cy + 1) * SIZE + cx] == door_t:
+			while not horiz and vert and cy + 1 < rect.end.y and _terrain[(cy + 1) * _size + cx] == door_t:
 				cy += 1
 				tiles.append(Vector2i(cx, cy))
 				seen[Vector2i(cx, cy)] = true
@@ -484,8 +505,8 @@ func _doors_of(rect: Rect2i) -> Array:
 
 func _edge_and_furniture() -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := SIZE
-	var H := SIZE
+	var W := _size
+	var H := _size
 	var rng := _rng
 	var road := int(_tids.ASPHALT)
 	for y in H:
@@ -515,7 +536,7 @@ func _edge_and_furniture() -> void:
 			if rng.randf() < 0.7:
 				_add_tree(tx, ty, false)
 	# cars on the roads, lying along the kerb
-	var block_n := SIZE / PITCH
+	var block_n := _size / PITCH
 	var cars := int(opts.get("cars", 70))
 	var placed := 0
 	var tries := cars * 30
@@ -586,7 +607,7 @@ func _edge_and_furniture() -> void:
 				var i := ty * W + tx
 				if tx < EDGE + 1 or ty < EDGE + 1 or tx >= W - EDGE - 1 or ty >= H - EDGE - 1:
 					continue
-				if _solid[i] != 0 or _terrain[i] != int(_tids.GRASS):
+				if _solid[i] != 0 or _terrain[i] != int(_tids.GRASS) or _clear_rect.has_point(Vector2i(tx, ty)):
 					continue
 				_add_tree(tx, ty, true)
 	_tick("street_furniture", t0)
@@ -596,15 +617,15 @@ func _add_tree(tx: int, ty: int, shut: bool) -> void:
 	var n := _rng.randi_range(0, 12)
 	_trees.append({"x": float(tx) + 0.5, "y": float(ty) + 0.55, "variant": n % 3, "file": "res://assets/trees/tree_%d.png" % n})
 	if shut:
-		_solid[ty * SIZE + tx] = 1
+		_solid[ty * _size + tx] = 1
 
 
 # ------------------------------------------------------------------ the map, the indexes --
 
 func _finish_map() -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := SIZE
-	var H := SIZE
+	var W := _size
+	var H := _size
 	_objects.sort_custom(func(a, b):
 		var ka: float = float(a.layer) * 1000.0 + float(a.cy) + float(a.h) / 2.0
 		var kb: float = float(b.layer) * 1000.0 + float(b.cy) + float(b.h) / 2.0
@@ -633,7 +654,7 @@ func _finish_map() -> void:
 	d["trees"] = _trees
 	d["lights"] = []
 	d["rooms"] = _rooms_dict
-	d["spawns"] = [[float(PITCH * 2 + BLOCK) + 2.0, 3.5]]
+	d["spawns"] = [[float(PITCH * (_blocks / 2 - 1) + BLOCK) + 2.5, float(EDGE) + 1.5]]
 	d["yard"] = [1, 1, W - 1, H - 1]
 	d["people"] = []
 	d["bonds"] = []
@@ -661,29 +682,26 @@ func _finish_map() -> void:
 
 func _people() -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := SIZE
-	var H := SIZE
+	var W := _size
+	var H := _size
 	var rng := _rng
 	var d: Dictionary = _result.data
-	# the start house: a medium one near the middle
-	var start_house := -1
-	var best := INF
-	for h in _houses:
-		if h.kind != "medium":
-			continue
-		var dist := Vector2(Rect2i(h.rect).get_center()).distance_to(Vector2(float(W) * 0.52, float(H) * 0.52))
-		if dist < best:
-			best = dist
-			start_house = int(h.id)
+	# the start house: the medium one of the clear lot the block loop made (the middle block's south row)
+	var start_house := _start_house
 	if start_house < 0:
 		start_house = 0
 	var start_room := _roomiest(start_house)
 	var start_pos := _free_spot(start_room)
 	d["workshop"] = {"x": start_pos.x, "y": start_pos.y - 1.0, "what": "At home"}
 	var start_c := Vector2(Rect2i(_houses[start_house].rect).get_center())
-	# the rescue candidates: four in each ring round the start (22 to 48 tiles, 48 to 80, 80 and more), spread apart
+	# the rescue candidates, one ring after another round the start (the rings are 22 to 48 tiles, 48 to 80, 80 and more in the full town, a third of that
+	# in a small one), spread apart: RESCUE_COUNT of the full town, `opts.rescue` of any
 	var rescue: Array = []
-	var rings := [[22.0, 48.0], [48.0, 80.0], [80.0, 400.0]]
+	var scale := float(_size) / float(DEFAULT_SIZE)
+	var want := int(opts.get("rescue", RESCUE_COUNT if _blocks >= 6 else 2))
+	var apart_min := 18.0 if _blocks >= 6 else 8.0
+	var rings := [[22.0 * scale, 48.0 * scale], [48.0 * scale, 80.0 * scale], [80.0 * scale, 400.0]]
+	var per_ring := int(ceil(float(want) / 3.0))
 	for ri in rings.size():
 		var pool: Array = []
 		for h in _houses:
@@ -694,13 +712,13 @@ func _people() -> void:
 				pool.append(int(h.id))
 		var picked := 0
 		var guard := 0
-		while picked < RESCUE_COUNT / 3 and not pool.is_empty() and guard < 200:
+		while picked < per_ring and rescue.size() < want and not pool.is_empty() and guard < 200:
 			guard += 1
 			var hid: int = pool[rng.randi() % pool.size()]
 			var c := Vector2(Rect2i(_houses[hid].rect).get_center())
 			var apart := true
 			for r in rescue:
-				if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < 18.0:
+				if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < apart_min:
 					apart = false
 			if not apart:
 				pool.erase(hid)
@@ -727,12 +745,40 @@ func _people() -> void:
 	_result["rooms"] = _rooms
 	_result["containers"] = _containers
 	_result["dead"] = dead
-	_result["start"] = {"house": start_house, "pos": start_pos, "room": start_room}
+	_result["start"] = {"house": start_house, "pos": start_pos, "room": start_room, "ring": _ring_report(start_house)}
 	_result["rescue"] = rescue
 	_result["tile_house"] = _tile_house
 	_result["tile_room"] = _tile_room
 	_result["streets"] = {"pitch": PITCH, "block": BLOCK, "road": ROAD, "names_x": STREET_X, "names_y": STREET_Y}
 	_result["stats"] = {"houses": _houses.size(), "by_kind": by_kind, "rooms": _rooms.size(), "containers": _containers.size(), "dead": dead.size(), "objects": _objects.size(), "trees": _trees.size(), "street_objects": _street_objs, "ms": _ms}
+
+
+## The clear ring of the start lot, for the tests and the layout: the lot's rectangle, and how many tiles of its border and the row inside it are free (open ground,
+## no picture of a prop, a tree or a mark on them). `free == total` is the promise.
+func _ring_report(house_id: int) -> Dictionary:
+	var lot: Rect2i = _houses[house_id].lot
+	var taken := {}
+	for o in _objects:
+		var x0 := floori(float(o.cx) - float(o.w) / 2.0 + 0.01)
+		var x1 := ceili(float(o.cx) + float(o.w) / 2.0 - 0.01)
+		var y0 := floori(float(o.cy) - float(o.h) / 2.0 + 0.01)
+		var y1 := ceili(float(o.cy) + float(o.h) / 2.0 - 0.01)
+		for y in range(y0, y1):
+			for x in range(x0, x1):
+				taken[Vector2i(x, y)] = true
+	for t in _trees:
+		taken[Vector2i(floori(float(t.x)), floori(float(t.y)))] = true
+	var total := 0
+	var free := 0
+	for y in range(lot.position.y, lot.end.y):
+		for x in range(lot.position.x, lot.end.x):
+			var edge := mini(mini(x - lot.position.x, lot.end.x - 1 - x), mini(y - lot.position.y, lot.end.y - 1 - y))
+			if edge > 1:
+				continue
+			total += 1
+			if _solid[y * _size + x] == 0 and not taken.has(Vector2i(x, y)):
+				free += 1
+	return {"rect": lot, "total": total, "free": free}
 
 
 ## The index of the roomiest room of a house.
@@ -755,7 +801,7 @@ func _free_spot(room: int) -> Vector2:
 	var best_d := INF
 	for y in range(rr.position.y, rr.end.y):
 		for x in range(rr.position.x, rr.end.x):
-			if _solid[y * SIZE + x] != 0:
+			if _solid[y * _size + x] != 0:
 				continue
 			var dd := Vector2(float(x) + 0.5, float(y) + 0.5).distance_to(mid)
 			if dd < best_d:
@@ -768,9 +814,10 @@ func _free_spot(room: int) -> Vector2:
 ## four in every house of the rescue list.
 func _dead(start_house: int, rescue: Array) -> Array:
 	var rng := _rng
-	var W := SIZE
-	var H := SIZE
-	var total := int(opts.get("dead", DEAD_TOTAL))
+	var W := _size
+	var H := _size
+	var total := int(opts.get("dead", maxi(40, roundi(float(DEAD_TOTAL) * float(_blocks * _blocks) / 36.0))))
+	var keep_clear := 22.0 * maxf(float(_size) / float(DEFAULT_SIZE), 0.4)    # (how near the start the yards and the streets hold none)
 	var out: Array = []
 	var near_house := roundi(float(total) * DEAD_NEAR_HOUSES)
 	var in_street := total - near_house
@@ -795,8 +842,20 @@ func _dead(start_house: int, rescue: Array) -> Array:
 	for w in weights:
 		total_w += float(w)
 	var made_in := 0
-	var put_inside := func(hid: int, kind: String, state: String) -> bool:
+	var guarded := {}
+	for r in rescue:
+		guarded[int(r.house)] = true
+		total_w -= float(weights[int(r.house)])
+		weights[int(r.house)] = 0.0
+	# `room` >= 0 puts it in that room, -1 anywhere in the house
+	var put_inside := func(hid: int, kind: String, state: String, room: int, avoid: int) -> bool:
 		var tiles: Array = floor_tiles[hid]
+		if room >= 0:
+			tiles = tiles.filter(func(t): return _tile_room[t.y * W + t.x] == room)
+		elif avoid >= 0:
+			var others: Array = tiles.filter(func(t): return _tile_room[t.y * W + t.x] != avoid)
+			if not others.is_empty():
+				tiles = others
 		if tiles.is_empty():
 			return false
 		for attempt in 40:
@@ -808,13 +867,17 @@ func _dead(start_house: int, rescue: Array) -> Array:
 			out.append({"pos": p, "kind": kind, "state": state, "house": hid, "room": _tile_room[tile.y * W + tile.x], "group": -1})
 			return true
 		return false
-	# the three of the start house, then the guards of the rescue houses
+	# the three of the start house, then the guards of the rescue houses: two to four, the first in the room of the survivor (who stands where it is
+	# not taken: the survivor's tile is kept clear of them)
 	for k in 3:
-		if put_inside.call(start_house, "walker", "still"):
+		if put_inside.call(start_house, "walker", "still", -1, -1):
 			made_in += 1
 	for r in rescue:
+		_take(taken, Vector2(r.pos))
+	for r in rescue:
 		for k in 2 + rng.randi() % 3:
-			if put_inside.call(int(r.house), "walker" if rng.randf() < 0.85 else "runner", "still"):
+			var in_room: int = int(r.room) if k == 0 else -1
+			if put_inside.call(int(r.house), "walker" if rng.randf() < 0.85 else "runner", "still", in_room, int(r.room)):
 				made_in += 1
 	var inside_n := roundi(float(near_house) * 0.78)
 	var guard := 0
@@ -829,7 +892,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 				break
 		if floor_tiles[hi].is_empty():
 			continue
-		if put_inside.call(hi, kinds_for.call(rng.randf()), "still" if rng.randf() < 0.85 else "wander"):
+		if put_inside.call(hi, kinds_for.call(rng.randf()), "still" if rng.randf() < 0.85 else "wander", -1, -1):
 			made_in += 1
 	# beside the houses: grass of the lots, front and back
 	var yard_n := near_house - made_in
@@ -838,7 +901,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 	while made < yard_n and guard < yard_n * 80:
 		guard += 1
 		var hi := rng.randi() % _houses.size()
-		if hi == start_house:
+		if hi == start_house or guarded.has(hi):
 			continue
 		var lot: Rect2i = _houses[hi].lot
 		var x := rng.randi_range(lot.position.x, lot.end.x - 1)
@@ -846,7 +909,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		if _solid[y * W + x] != 0 or _terrain[y * W + x] != int(_tids.GRASS) or _tile_house[y * W + x] >= 0:
 			continue
 		var p := Vector2(float(x) + rng.randf_range(0.25, 0.75), float(y) + rng.randf_range(0.25, 0.75))
-		if p.distance_to(start_c) < 22.0 or not _spaced(taken, p, 1.6):
+		if p.distance_to(start_c) < keep_clear or not _spaced(taken, p, 1.6):
 			continue
 		_take(taken, p)
 		out.append({"pos": p, "kind": kinds_for.call(rng.randf()), "state": "still" if rng.randf() < 0.8 else "wander", "house": hi, "room": -1, "group": -1})
@@ -863,7 +926,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		if (_terrain[ci] != road and _terrain[ci] != walk) or _solid[ci] != 0:
 			continue
 		var centre := Vector2(float(cx) + 0.5, float(cy) + 0.5)
-		if centre.distance_to(start_c) < 26.0:
+		if centre.distance_to(start_c) < keep_clear * 1.2:
 			continue
 		var n := mini(rng.randi_range(3, 8), in_street - made)
 		var got := 0
@@ -909,18 +972,20 @@ static func _take(taken: Dictionary, p: Vector2) -> void:
 static func house_at(town: Dictionary, x: float, y: float) -> int:
 	var tx := floori(x)
 	var ty := floori(y)
-	if tx < 0 or ty < 0 or tx >= SIZE or ty >= SIZE:
+	var w := int(town.size.x)
+	if tx < 0 or ty < 0 or tx >= w or ty >= int(town.size.y):
 		return -1
-	return int(town.tile_house[ty * SIZE + tx])
+	return int(town.tile_house[ty * w + tx])
 
 
 ## The room (index) whose floor holds a point, or -1 (a wall, a doorway, outside).
 static func room_at(town: Dictionary, x: float, y: float) -> int:
 	var tx := floori(x)
 	var ty := floori(y)
-	if tx < 0 or ty < 0 or tx >= SIZE or ty >= SIZE:
+	var w := int(town.size.x)
+	if tx < 0 or ty < 0 or tx >= w or ty >= int(town.size.y):
 		return -1
-	return int(town.tile_room[ty * SIZE + tx])
+	return int(town.tile_room[ty * w + tx])
 
 
 ## A number that is the same for the same town: the terrain, the houses, the containers and the dead (a test pins it for a seed).

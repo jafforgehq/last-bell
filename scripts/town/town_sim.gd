@@ -1,26 +1,61 @@
-## The rules of the town (feature/town-core): the colony's Sim as a place plays it (raid_sim.gd) with the three changes that a 192 x 192 town of
-## hundreds of dead needs, each switchable so that the cost of the old way can be measured against the new:
+## The rules of the town (feature/town-core, WP1): the colony's Sim on the generated 192 x 192 map, with the dead of the town dormant until the avatar, a shot or a light is
+## near (scripts/town/dormant_dead.gd) and the town's own modules wired in by name.
 ##
-##  1. `_separate` (the dead's crowd pass) is a square of how many there are in the old code (sim.gd `_separate`: every pair, every step); here a
-##     grid of one tile (`grid_separate`), and two dead that both stand still are not asked.
-##  2. a new state "chase" in place of "hunt" (`chase_on`): hunt gives a dead one up at 14 tiles (Streets.GIVE_UP), asks the region of both
-##     (a flood of the whole map the first time and after every door, wall or build) and searches a way every 0.8 s; chase gives up at
-##     `chase_give_up` (45), never asks a region, walks straight at the prey when a line of sight is clear and searches the grid only when it is not,
-##     less often the farther the prey.
-##  3. a new state "still" (stands where it is: the base `match` has no case for it, so the preamble of `_update_zombie` is all it costs).
+## THE CLASS. `TownSim extends sim.gd` (the colony: radio, jobs, build, nights, briefing...). The plan (docs/superpowers/plans/2026-10-04-one-house-plan.md, 1.1) puts the
+## school's assumptions in a `TownRules` between this class and Sim (WP5 owns `town_rules.gd`); until it lands the extends line below is `sim.gd`, and swapping it for
+## `town_rules.gd` is one line. The overrides marked INTERIM are TownRules' by the plan; they are here only so that the colony's `update` runs on a town map, and they are
+## deleted from this file when TownRules has them.
 ##
-## The noise of a shot goes to `on_noise` (the field's wake, scripts/town/dormant_dead.gd) instead of the base's loop over every dead one.
-extends "res://scripts/raid/raid_sim.gd"
+## WHAT THIS CLASS CHANGES (each measured, see the report):
+##  1. `_separate` (the dead's crowd pass) is a square of how many there are in the colony's code (sim.gd 1831: every pair, every step); here a grid of one tile, and two
+##     dead that both stand still are not asked: 100 awake dead cost 0.45 ms a step instead of 2.0.
+##  2. a state "chase" in place of "hunt": hunt gives a dead one up at 14 tiles (Streets.GIVE_UP), asks the region of both (a flood of the whole map the first time and after
+##     every door, wall or build) and searches a way every 0.8 s; chase gives up at `chase_give_up` (45), never asks a region, walks straight at the prey when a line of sight is
+##     clear and searches the grid only when it is not, less often the farther the prey.
+##  3. a state "still" (stands where it is: the base `match` has no case for it, so the preamble of `_update_zombie` is all it costs).
+##  4. the noise of a shot goes to the field (`field.noise`) instead of the base's loop over every dead one.
+##
+## THE PARTS. `PARTS` maps a variable name of this class to the file of the module; a file that does not exist is skipped, so a package can land any time. A part is a RefCounted
+## with `setup(sim)`, `start()`, `update(dt)`, `save()`, `load_state(d)` and optionally `prepare_load(data)`, `restore(before)`, `person_added(p)`, `pre_save()` and `enabled`;
+## SaveGame finds each of them by its variable (it can save and load). `scenario` replaces the colony's Scenario when `one_house.gd` exists.
+extends "res://scripts/sim/sim.gd"
 
 const GRID_W := 1024
+const TownMedical := preload("res://scripts/town/town_medical.gd")
+
+## The town's modules, in the order they are made and stepped. (Plan 1.13.) `field` is stepped before the colony's step, the others after it.
+const PARTS := {
+	"houses": "res://scripts/town/houses.gd",
+	"field": "res://scripts/town/dormant_dead.gd",
+	"clearing": "res://scripts/town/clearing.gd",
+	"search": "res://scripts/town/search.gd",
+	"base": "res://scripts/town/base.gd",
+	"sleep": "res://scripts/town/sleep.gd",
+	"uses": "res://scripts/town/uses.gd",
+	"rescue": "res://scripts/town/rescue.gd",
+	"perimeter": "res://scripts/town/perimeter.gd",
+	"scenario": "res://scripts/town/one_house.gd",
+}
+
+## The generated town (`TownGen.make`): the map data's "town_data".
+var town_data: Dictionary = {}
+var houses
+var field
+var clearing
+var search
+var base
+var sleep
+var uses
+var rescue
+var perimeter
+## The names of the parts that exist (made from PARTS).
+var parts_made: Array = []
 
 var grid_separate := true
 var chase_on := true
 var chase_give_up := 45.0
-## Called with the place of a shot: the dormant field wakes what is near it.
-var on_noise: Callable
 var _grid := {}
-## Microseconds spent in `_separate`, and how many chases were started, for the measurements (the reader resets them).
+## Microseconds spent in `_separate` and in `_chase`, and how many chases were stepped (for the measurements: whoever reads them resets them).
 var sep_usec := 0
 var chase_usec := 0
 var chase_n := 0
@@ -28,11 +63,170 @@ var chase_n := 0
 
 func _init(data: Dictionary, w, effects) -> void:
 	super(data, w, effects)
+	town_data = data.get("town_data", {})
+	medical = TownMedical.new()
+	medical.setup(self)
+	_make_parts()
 
 
+## INTERIM (TownRules): `Sim._seed` indexes the school's wall sections, which a town starts without.
+func _seed() -> void:
+	pass
+
+
+func _make_parts() -> void:
+	parts_made.clear()
+	for name in PARTS:
+		var path: String = PARTS[name]
+		if not ResourceLoader.exists(path):
+			continue
+		var m = (load(path) as GDScript).new()
+		if name == "scenario":
+			scenario = m
+		else:
+			set(name, m)
+		if name == "field":
+			m.setup(self, town_data)
+			if not town_data.is_empty():
+				m.load_records(town_data.dead)
+		else:
+			m.setup(self)
+		if name == "houses":
+			m.use_town(town_data)
+		parts_made.append(name)
+
+
+## The modules that are stepped after the colony's step (not the field, not the houses, not the scenario: the colony steps that one itself).
+func _stepped_parts() -> Array:
+	var out: Array = []
+	for name in parts_made:
+		if name == "field" or name == "houses" or name == "scenario":
+			continue
+		out.append(get(name))
+	return out
+
+
+## A new run: the colony's, then the town's: none of the dead the school starts with (INTERIM, TownRules), the school's night machinery off until the scenario switches it
+## on (`OneHouse.begin` does the rest), and everybody at the start house.
+func start_run(difficulty_index: int, seed_value: int) -> void:
+	super(difficulty_index, seed_value)
+	zombies.clear()
+	events.clear()
+	waves.enabled = false
+	storyteller.enabled = false
+	streets.enabled = false
+	gate.enabled = false
+	levels.enabled = false
+	if not town_data.is_empty():
+		var at: Vector2 = town_data.start.pos
+		for p in people:
+			p.x = at.x
+			p.y = at.y
+	for name in parts_made:
+		if name == "scenario":
+			continue
+		var m = get(name)
+		if m.has_method("start"):
+			m.start()
+
+
+func add_person(def: Dictionary) -> Person:
+	var p := super(def)
+	for m in _stepped_parts():
+		if m.has_method("person_added"):
+			m.person_added(p)
+	return p
+
+
+# ------------------------------------------------------------------ the step --
+
+func _anchors() -> Array:
+	var out: Array = []
+	for p in people:
+		if not p.dead and p.away == null:
+			out.append(Vector2(p.x, p.y))
+	return out
+
+
+## The "they see you" rule of a place (raid_run.gd `_wake_the_dead`): a dead one that stands or wanders within seven tiles of a living person with a clear line goes after
+## them. Only the awake ones are asked.
+func _notice() -> void:
+	for z in zombies:
+		if z.state != "still" and z.state != "wander":
+			continue
+		for p in people:
+			if p.dead or p.downed or p.away != null:
+				continue
+			var dx: float = p.x - z.x
+			var dy: float = p.y - z.y
+			if dx * dx + dy * dy < 49.0 and path_z.sight(world.solid_z, Vector2(z.x, z.y), Vector2(p.x, p.y), 0.15):
+				start_chase(z, p)
+				break
+
+
+func update(dt: float) -> void:
+	if over != "":
+		return
+	if field != null:
+		field.update(dt, _anchors())
+		_notice()
+	var first_new := events.size()
+	super(dt)
+	for m in _stepped_parts():
+		if m.has_method("update") and bool(m.get("enabled") if "enabled" in m else true):
+			m.update(dt)
+	_town_events(first_new)
+
+
+## Before the attacks begin (no scenario, or one that says so) the school's words about the wall and the horde do not fit a street: the bell tolls and the night falls, nobody is
+## sent to a wall. The banners that this step added are renamed in place, and the horde alert is dropped.
+func _town_events(first_new: int) -> void:
+	var attacks: bool = scenario.has_method("attacks_on") and bool(scenario.attacks_on())
+	if attacks:
+		return
+	for i in range(first_new, events.size()):
+		var e: Dictionary = events[i]
+		if String(e.get("type", "")) != "banner":
+			continue
+		var text := String(e.get("text", ""))
+		if text == "The bell rings":
+			e["text"] = "The bell"
+			e["sub"] = "Dusk: be indoors before dark"
+		elif text.begins_with("Night ") and String(e.get("sub", "")).begins_with("Hold the wall"):
+			e["sub"] = "The streets are not safe in the dark"
+		elif text == "Dawn":
+			e["sub"] = "The dead drift back to where they were"
+		elif text.begins_with("Day ") and String(e.get("sub", "")).begins_with("Repair the wall"):
+			e["sub"] = "Find survivors, search the houses"
+	if alerts.has("horde"):
+		alerts.erase("horde")
+	if alerts.has("bell"):
+		alerts.erase("bell")
+
+
+## INTERIM (TownRules): only the night's wave dead (the ones with no record in the field) go back to the city at dawn; the town's own dead stay where they are.
+func _dawn_sweep() -> void:
+	var left := DAWN_LEAVES_PER_STEP
+	for z in zombies:
+		if left <= 0:
+			return
+		if field != null and field.rec_of.has(z):
+			continue
+		if z.state != "dying" and z.state != "dead" and z.state != "retreat":
+			retreat(z)
+			left -= 1
+
+
+# ------------------------------------------------------------------ the dead --
+
+## The noise of a shot goes to the field: the dormant dead within its radius wake and come, the awake that stand or wander within it come.
 func _shot_noise(p: Person) -> void:
-	if on_noise.is_valid():
-		on_noise.call(Vector2(p.x, p.y))
+	if field != null:
+		field.noise(Vector2(p.x, p.y), p)
+
+
+func _hunt_allowed() -> bool:
+	return true
 
 
 func _update_zombie(z: Zombie, dt: float) -> void:
@@ -45,7 +239,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 		chase_n += 1
 
 
-## Starts one of the dead after somebody (a person of the sim): chase, or the base's hunt when `chase_on` is off.
+## Starts one of the dead after somebody: chase, or the colony's hunt when `chase_on` is off (the measurements compare the two).
 func start_chase(z: Zombie, prey: Person) -> void:
 	z.state = "chase" if chase_on else "hunt"
 	z.hunt_id = String(prey.id)
@@ -114,7 +308,7 @@ func _chase(z: Zombie, dt: float) -> void:
 	_follow(z, slow * 1.1, dt)
 
 
-## The crowd pass on a grid of one tile: the pairs the base asks (each pair once, nearer than sqrt(0.3)), not the square of everything.
+## The crowd pass on a grid of one tile: the pairs the colony asks (each pair once, nearer than sqrt(0.3)), not the square of everything.
 func _separate() -> void:
 	if not grid_separate:
 		var t_old := Time.get_ticks_usec()
@@ -169,3 +363,35 @@ func _separate() -> void:
 					if mb:
 						_nudge(b, ux * push * (1.0 if ma else 2.0), uy * push * (1.0 if ma else 2.0))
 	sep_usec += Time.get_ticks_usec() - t_in
+
+
+# ---------------------------------------------------------------------- saving --
+
+## Called by main.gd before a save is written (SaveGame has no hook of its own): the awake dead that are of the town's records go back to sleep (their place and hit points
+## kept), so that the whole population of the street is the field's compact array; the wave's dead have no record and are saved the old way. Parts with `pre_save` are told.
+func pre_save() -> void:
+	if field != null:
+		field.sleep_all()
+	for m in _stepped_parts():
+		if m.has_method("pre_save"):
+			m.pre_save()
+
+
+## Before a save is read (SaveGame `apply`, hook H11 of WP5): the parts re-make what a load needs to find (the rescued, the base, the perimeter's sections), in the plan's order.
+## Returns what `restore_load` needs to undo it.
+func prepare_load(data: Dictionary):
+	var before := {}
+	for name in ["rescue", "base", "perimeter"]:
+		var m = get(name)
+		if m != null and m.has_method("prepare_load"):
+			before[name] = m.prepare_load(data)
+	return before
+
+
+func restore_load(before) -> void:
+	if typeof(before) != TYPE_DICTIONARY:
+		return
+	for name in before:
+		var m = get(name)
+		if m != null and m.has_method("restore"):
+			m.restore(before[name])

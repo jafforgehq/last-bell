@@ -150,3 +150,32 @@ static func plated_brute(sim, seg_id: int):
 			z.attack_t = 0.0
 			return z
 	return null
+
+
+## --------------------------------------------------------------- the town (feature/town-core, WP1) --
+
+const TownGen := preload("res://scripts/town/town_gen.gd")
+const TownBoot := preload("res://scripts/town/town_boot.gd")
+
+
+## {"sim", "world", "town"}: a TownSim (the colony on the generated town, scripts/town/town_sim.gd) at the start, day 1 07:00, Ruth the player in the start house, the
+## storyteller off. A MINI town by default (`opts.blocks` 2: 64 x 64 tiles, 4 blocks, about 18 houses, the start house, 2 rescue spots, about 80 dead; made in about 0.1 s);
+## `{"blocks": 6}` is the whole town. Other options are the generator's (`dead`, `rescue`, `cars`). The modules of the town that other packages bring (`clearing`, `base`...)
+## are in `sim` when their files exist. Free `world` when the test is done. `OneHouse` (the scenario) is whatever `scripts/town/one_house.gd` is, or the colony's own
+## while it does not exist.
+static func town_game(seed_value: int = 1, opts: Dictionary = {}) -> Dictionary:
+	var o := opts.duplicate()
+	if not o.has("blocks"):
+		o["blocks"] = 2
+	var town: Dictionary = TownGen.make(seed_value, o)
+	var data := TownBoot.from_town(town)
+	var world = TownBoot.world()
+	Engine.get_main_loop().root.add_child(world)
+	world.build(data)
+	var sim = TownBoot.sim(data, world, FxNull.new())
+	sim.start_run(1, seed_value)
+	sim.storyteller.enabled = false
+	if not sim.avatar.set_player("ruth"):
+		push_error("town_game: Ruth cannot be the player")
+	sim.events.clear()
+	return {"sim": sim, "world": world, "town": town}
