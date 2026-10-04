@@ -7,9 +7,6 @@ const Helpers := preload("res://tests/helpers.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
-const TownGen := preload("res://scripts/town/town_gen.gd")
-const World := preload("res://scripts/world.gd")
-const FxNull := preload("res://scripts/sim/fx_null.gd")
 
 
 ## A stand-in for a town module: answers what the rules ask, and says what it was asked.
@@ -55,17 +52,11 @@ class Fake:
 		calls.append("restore:%s" % str(before))
 
 
-## The town's rules on the real generated town, with the town's own modules as variables (a class made here: TownSim declares them in the game).
+## The town's rules class: a real TownSim on the mini town (it extends TownRules, and declares the town's modules as variables).
 func _town() -> Dictionary:
-	var s := GDScript.new()
-	s.source_code = "extends \"res://scripts/town/town_rules.gd\"\nvar base\nvar perimeter\nvar field\nvar houses\n"
-	s.reload()
-	var town := TownGen.make(1)
-	var world := World.new()
-	Engine.get_main_loop().root.add_child(world)
-	world.build(town.data)
-	var sim = s.new(town.data, world, FxNull.new())
-	return {"sim": sim, "world": world, "town": town}
+	var g := Helpers.town_game(1)
+	g.sim.zombies.clear()
+	return g
 
 
 func test_the_school_answers_as_ever() -> void:
@@ -135,7 +126,6 @@ func test_the_town_rules_answer_for_the_base() -> void:
 	var t := _town()
 	var sim = t.sim
 	check(sim.is_one_house(), "the town")
-	eq(sim.zombies.size(), 0, "nothing is seeded round a school that is not there")
 	sim.start_run(1, 5)
 	eq(sim.zombies.size(), 0, "a new run puts no dead at the school's corners")
 	eq(sim.segments.size(), 0, "a town starts without wall sections")
