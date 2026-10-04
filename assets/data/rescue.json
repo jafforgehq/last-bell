@@ -1,0 +1,162 @@
+{
+	"version": 1,
+	"_note": "One House, WP4: the twelve people found in the town (sim.rescue, scripts/town/rescue.gd). They are met in the order of the generator's rescue spots, near to far. A role must be one of assets/data/recruits.json's roles (their skills and weapon come from it); a station is one of the base layout's (bench, builders, radio, watch, infirmary); a pack is what they bring (stock keys).",
+
+	"arrive_min": 3.0,
+	"arrive_per_tile": 0.4,
+	"reach": 1.9,
+	"join_trust": 5.0,
+	"gift_trust": 6.0,
+	"gift_items": ["food", "ammo"],
+	"gift_amount": 1.0,
+	"fourth_at": 4,
+	"lost_after_days": 0,
+
+	"choices": {
+		"come": "Come with me",
+		"stay": "Stay here, I will come back",
+		"gift": "Take this"
+	},
+	"why": {
+		"no_base": "You have no house to take them to yet",
+		"no_bed": "There is no bed for them",
+		"no_stock": "You have nothing to spare",
+		"gifted": "You have already given them something",
+		"blocked": "Get them out first"
+	},
+	"lines": {
+		"blocked": "Get them out first.",
+		"back": "You came back.",
+		"on_way": "I am on my way.",
+		"come": "All right. I will find the house."
+	},
+	"contact": [
+		"Radio check. Can you hear me?",
+		"I am on the set now. Say something.",
+		"Still here. Still breathing.",
+		"Got the radio. Does it do anything else?"
+	],
+
+	"survivors": [
+		{
+			"name": "Abe Tanner", "role": "Carpenter", "station": "builders",
+			"hiding": "Screwed a wardrobe to the wall and sat behind it",
+			"line": "I heard the shots. Then it went quiet. Is it quiet?",
+			"come": "Give me a minute for my tools. I will find you.",
+			"stay": "I am not going anywhere. I have a bolt and a lot of practice.",
+			"gift": "That is more than I would have offered you.",
+			"blocked": "Not with them in here. Get them out first.",
+			"pack": {"scrap": 6, "food": 1}
+		},
+		{
+			"name": "Priya Nair", "role": "Pharmacist", "station": "infirmary",
+			"hiding": "A stockroom, a bed made of cardboard",
+			"line": "Do not open that bag. Everything in it is counted.",
+			"come": "Let me take the labels with me. People will ask what is what.",
+			"stay": "Go and finish what you were doing. I will be here, counting.",
+			"gift": "Thank you. I will write it down.",
+			"blocked": "I can hear them in the next room. Get them out first.",
+			"pack": {"meds": 2, "food": 1, "scrap": 1}
+		},
+		{
+			"name": "Joel Brandt", "role": "Hunter", "station": "watch",
+			"hiding": "A loft, the ladder pulled up after him",
+			"line": "I could have shot the last one from up here. I did not want to teach the others the way.",
+			"come": "Fine. I will bring the rifle and my own boxes.",
+			"stay": "I will keep watch from here. Do not take long.",
+			"gift": "Shells? You should not have. Thanks.",
+			"blocked": "Two of them are still down there. Get them out first.",
+			"pack": {"ammo": 12, "food": 1}
+		},
+		{
+			"name": "Fenn Haddad", "role": "Electrician", "station": "bench",
+			"hiding": "The meter cupboard, the door held shut with a belt",
+			"line": "Is the power on where you are? No. I did not think so. I can still help.",
+			"come": "Give me a torch and a roof and I will do the rest.",
+			"stay": "I will be in the cupboard. It is quite comfortable.",
+			"gift": "Batteries would have been better. This will do.",
+			"blocked": "Something is breathing outside the door. Get them out first.",
+			"pack": {"scrap": 5, "ammo": 4, "food": 1}
+		},
+		{
+			"name": "Tess Moreno", "role": "Cook", "station": "bench",
+			"hiding": "Under the stairs with a bag of rice and a bad temper",
+			"line": "Nine days of rice and salt. Tell me you have anything else.",
+			"come": "Get me to a stove and I will make it worth your while.",
+			"stay": "Come back with a pan. A proper one.",
+			"gift": "Real food. Give me a second.",
+			"blocked": "Do not make me walk past that. Get them out first.",
+			"pack": {"food": 6, "scrap": 1}
+		},
+		{
+			"name": "Mara Lindqvist", "role": "Teacher", "station": "radio",
+			"hiding": "The pantry, the door barred with a mop",
+			"line": "I thought I was the last one on this street. I counted. It is a habit.",
+			"come": "I will bring my notes. I have written down everyone I saw.",
+			"stay": "I will keep counting. Come back when you can.",
+			"gift": "Thank you. That is one less thing to count.",
+			"blocked": "Not past them. Get them out first.",
+			"pack": {"scrap": 1, "ammo": 2, "food": 2}
+		},
+		{
+			"name": "Ruben Szabo", "role": "Mechanic", "station": "builders",
+			"hiding": "The garage, under a car that does not run",
+			"line": "I would say hello, but the last thing that came in here was not friendly.",
+			"come": "I will carry my own tools. Do not offer to help.",
+			"stay": "I am fixing the van. Come back when it is done.",
+			"gift": "That goes in the toolbox. Thanks.",
+			"blocked": "Not with those in the garage. Get them out first.",
+			"pack": {"scrap": 8, "ammo": 2, "food": 1}
+		},
+		{
+			"name": "Ines Calloway", "role": "Nurse", "station": "infirmary",
+			"hiding": "A landing, a lamp and a bag of dressings",
+			"line": "I heard a lot of shooting. Was anyone hurt? I can do something about that.",
+			"come": "Let me finish this. Then I am yours.",
+			"stay": "I will be here. Somebody is bound to need me.",
+			"gift": "Thank you. It goes with the dressings.",
+			"blocked": "I cannot go that way. Get them out first.",
+			"pack": {"meds": 3, "food": 1}
+		},
+		{
+			"name": "Gus Okafor", "role": "Bus driver", "station": "watch",
+			"hiding": "The back of a minibus in his own driveway",
+			"line": "I know every road out of here. They all end the same way. Is there one that does not?",
+			"come": "Somewhere with a wall is a start. Let me lock up.",
+			"stay": "I will be in the bus. Honk if you need me. Actually, do not.",
+			"gift": "That will get me through the evening.",
+			"blocked": "They are by the door. Get them out first.",
+			"pack": {"food": 2, "scrap": 2, "ammo": 3}
+		},
+		{
+			"name": "Dot Kessler", "role": "Shopkeeper", "station": "radio",
+			"hiding": "Behind the counter, the shutter down, the lights off",
+			"line": "Everything in here is for sale. I am joking. Mostly.",
+			"come": "I will take the till. Never mind why.",
+			"stay": "I have stock to count. Come back when you can.",
+			"gift": "I would call that a fair trade.",
+			"blocked": "Not with them in the shop. Get them out first.",
+			"pack": {"scrap": 3, "food": 3, "water": 4, "ammo": 2}
+		},
+		{
+			"name": "Ollie Park", "role": "Student", "station": "bench",
+			"hiding": "Under a desk, in a room with a view of the street",
+			"line": "Sorry. I have been quiet for so long I forgot how to be anything else.",
+			"come": "Yes. Yes, please. Do I bring my bag? I will bring my bag.",
+			"stay": "Okay. I will be here. Quietly.",
+			"gift": "Oh. Thanks. Are you sure?",
+			"blocked": "Please do not open that door. Get them out first.",
+			"pack": {"scrap": 1, "food": 1, "ammo": 2}
+		},
+		{
+			"name": "Nell Abara", "role": "Night guard", "station": "watch",
+			"hiding": "The back bedroom, a chair under the handle, a rifle across her knees",
+			"line": "Eleven years of night shifts. This one is the longest. Nobody has relieved me.",
+			"come": "Good. I will take the next shift.",
+			"stay": "I will hold here until you are ready. I am good at that.",
+			"gift": "It is not much. I will take it.",
+			"blocked": "I have one eye on the door. Get them out first.",
+			"pack": {"ammo": 10, "scrap": 1, "food": 1}
+		}
+	]
+}
