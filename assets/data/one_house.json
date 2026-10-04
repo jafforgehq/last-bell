@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_doc": "The One House run (scripts/town/one_house.gd, the scenario `OneHouse`): one survivor in one house of a big town, the same rules as the colony with the community modules switched on as people arrive. min_per_sec: game minutes per real second (2.0: a game hour is 30 s). difficulty: the run's difficulty (1 Standard). total_days: the run's nominal length for the clock and the briefing (the run really ends at the first held night, and `total_days()` is never less than the day after it). ideas_from_day: when the community starts to propose things. start: the hour of the first morning and the stores a run begins with (every stock named; the colony's full ones are not used). modules_from_crew: for each community module the number of living people (the avatar counted) from which it is on (99: never in this run). attack: from_rescue is how many rescued survivors make the dead come every night; cutoff_hour is the hour of day after which a fourth rescue puts the first attack on the next night instead of tonight. night: the size of the attack nights as a share of the colony's ordinary night (`first` is the first attack night, each one after is `growth` more). big_night: empty, or numbers of a Big Night theme (as demo.json) for the first attack night (brutes). held_rule: what a night needs to count as held at the dawn after it (the avatar or whoever leads is alive, no dead are in the house, a section of the base still stands). guide: the six lessons, in order; each is done when its cond is true (walked: tiles the avatar has walked; kills: the dead put down; rooms_seen: rooms of the house opened, or another house entered; house_clear; searched: containers searched; claimed) and none blocks anything. objective, words and end: what the player reads (%d and %s are filled in by the module). The enemy is 'the dead'.",
+  "_doc": "The One House run (scripts/town/one_house.gd, the scenario `OneHouse`): one survivor in one house of a big town, the same rules as the colony with the community modules switched on as people arrive. min_per_sec: game minutes per real second (2.0: a game hour is 30 s). difficulty: the run's difficulty (1 Standard). total_days: the run's nominal length for the clock and the briefing (the run really ends at the first held night, and `total_days()` is never less than the day after it). ideas_from_day: when the community starts to propose things. start: the hour of the first morning and the stores a run begins with (every stock named; the colony's full ones are not used). modules_from_crew: for each community module the number of living people (the avatar counted) from which it is on (99: never in this run). attack: from_rescue is how many rescued survivors make the dead come every night; cutoff_hour is the hour of day after which a fourth rescue puts the first attack on the next night instead of tonight (0: always the next night, a whole day to fortify: the pace of the demo). night: the size of the attack nights as a share of the colony's ordinary night (`first` is the first attack night, each one after is `growth` more); `surges` [{at: hours after the dusk begins, share: of the night's dead}] are the groups the dead are let in in, with lulls between (scripts/town/town_rules.gd), `surge_gap` the seconds between the groups of a surge, `tight` how alike the pace of a surge's dead is (0 the colony's wide spread, 1 all alike: they arrive together). big_night: the first attack night's theme (as demo.json: theme, name, blurb, factor, runners, brutes, min_brutes, brute_at, plated; `headings` how many sides the dead come from, 1 or 2; main_share; cap). held_rule: what a night needs to count as held, judged ONCE at the first moment of the day after it (a night that is not held goes on to the next): the avatar or whoever leads is alive, no dead are in the house, a section of the base still stands, and (`base_whole`) none of the base's sections (fence, gate, barred doors) is down: the dawn hour is the last chance to mend a breach. guide: the six lessons, in order; each is done when its cond is true (walked: tiles the avatar has walked; kills: the dead put down; rooms_seen: rooms of the house opened, or another house entered; house_clear; searched: containers searched; claimed) and none blocks anything. objective, words and end: what the player reads (%d and %s are filled in by the module). The enemy is 'the dead'.",
   "min_per_sec": 2.0,
   "difficulty": 1,
   "total_days": 5,
@@ -21,10 +21,10 @@
     "dilemmas": 99,
     "specialists": 99
   },
-  "attack": {"from_rescue": 4, "cutoff_hour": 17.0},
-  "night": {"first": 1.0, "growth": 0.15},
-  "big_night": {},
-  "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true},
+  "attack": {"from_rescue": 4, "cutoff_hour": 0.0},
+  "night": {"first": 1.8, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
+  "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and runners from two streets, and two plated brutes: only their heads are soft.", "factor": 1.0, "runners": 0.15, "brutes": 0.1, "min_brutes": 2, "brute_at": [0.4, 0.95], "headings": 2, "main_share": 0.85, "cap": 40, "plated": true},
+  "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true, "base_whole": true},
   "guide": [
     {"id": "walk", "title": "Walk", "text": "W A S D to move. The house is quiet. For now.", "goal": "Walk about", "cond": {"type": "walked", "n": 6}},
     {"id": "shoot", "title": "Aim and shoot", "text": "Hold the right mouse button to aim, click to fire. There are dead in this house, and a shot carries.", "goal": "Put one of the dead down", "cond": {"type": "kills", "n": 1}},
@@ -60,7 +60,13 @@
     "fourth_tomorrow": ["Four voices on the radio", "The dead will come tomorrow night"],
     "news_fourth": ["Four voices on the radio", "The dead can hear it too. They will come at dusk, and every dusk after"],
     "victory": ["The night is held", "Dawn, and the house is still standing"],
-    "defeat": ["The house is empty", "Nobody is left to hold it"]
+    "defeat": ["The house is empty", "Nobody is left to hold it"],
+    "not_held": {
+      "wall": ["The night is not held", "A wall is down at dawn. Mend it: the dead come back at dusk"],
+      "house": ["The night is not held", "The dead are in the house"],
+      "base": ["The night is not held", "Nothing of the wall is left standing"],
+      "avatar": ["The night is not held", "Nobody is leading the house"]
+    }
   },
   "end": {
     "caps": "One House: the demo",

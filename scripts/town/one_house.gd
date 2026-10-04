@@ -40,6 +40,8 @@ const FLASH_S := 3.0
 ## A move of more than this many tiles in one step is a jump (a placing), not a walk.
 const JUMP_TILES := 1.5
 const NEVER := 99999
+## The sections of the base are the ids below this (the lots' walls of the school are above: `Lots.FIRST_SEGMENT_ID`).
+const SEGMENT_LIMIT := 100
 
 ## What the run is when the files say nothing (or cannot be read): only the numbers, the words come with the file.
 const FALLBACK := {
@@ -73,6 +75,10 @@ var _done := {}
 var _walked := 0.0
 var _last_pos := Vector2.INF
 var _held_nights := 0
+## The day whose dawn has been judged (-1: none), and how the first attack night ended ("", "held" or "not_held").
+var _dawn_day := -1
+var _first_result := ""
+var _first_why := ""
 var _crew_seen := -1
 var _dirty := true
 var _t := 0.0
@@ -100,6 +106,9 @@ func start() -> void:
 	_walked = 0.0
 	_last_pos = Vector2.INF
 	_held_nights = 0
+	_dawn_day = -1
+	_first_result = ""
+	_first_why = ""
 	_crew_seen = -1
 	_dirty = true
 	_t = 0.0
@@ -533,31 +542,74 @@ func _nobody_left() -> bool:
 	return true
 
 
-## From the dawn after the first attack night, the night is held the moment the data's rule is true.
+## The reckoning of a night, ONCE, at the first moment of the day after it (the dawn has been the dead's hour to retreat and the crew's to mend: the dawn hour is the player's last
+## chance to shut a breach). The night is held when the data's rule is true then and the run is won; when it is not the night is not held (the banner says why), the run goes on
+## and the next dawn is judged the same way (the dead come every night, a little more each).
 func _watch_the_dawn() -> void:
-	if not _attacks or _stage == "held" or sim.day <= _first_day or sim.phase != "day":
+	if not _attacks or _stage == "held" or sim.day <= _first_day or sim.phase != "day" or _dawn_day == sim.day:
 		return
-	if _held_ok():
+	_dawn_day = sim.day
+	var why := _not_held_because()
+	if why == "":
 		_stage = "held"
 		_held_nights += 1
+		if _first_result == "":
+			_first_result = "held"
 		sim.over = "victory"
 		sim.events.append({"type": "held", "night": _first_day})
 		sim.events.append({"type": "over", "result": "victory"})
 		var words := victory_banner()
 		sim.events.append({"type": "banner", "text": words[0], "sub": words[1]})
+		return
+	if _first_result == "":
+		_first_result = "not_held"
+		_first_why = why
+	var told = _cfg("words.not_held", {})
+	var line = told.get(why, ["The night is not held", ""]) if told is Dictionary else ["The night is not held", ""]
+	sim.events.append({"type": "night_not_held", "why": why, "night": sim.day - 1})
+	sim.events.append({"type": "banner", "text": String(line[0]), "sub": String(line[1])})
+	if sim.get("radio") != null:
+		sim.radio.log_news("story", String(line[0]), String(line[1]))
+
+
+## How the first attack night ended, for the lab and the end card: "" while it has not been judged, "held", or "not_held" (the dawn found the base not whole, or somebody gone).
+func first_night_result() -> String:
+	return _first_result
+
+
+## Why the first attack night was not held ("wall", "house", "base" or "avatar"; "" when it was, or has not been judged).
+func first_night_why() -> String:
+	return _first_why
 
 
 func _held_ok() -> bool:
+	return _not_held_because() == ""
+
+
+## Why this dawn does not hold the night ("" when it does): "avatar" (whoever leads is gone), "house" (the dead are in it), "base" (nothing of the base stands) or "wall" (a section of the
+## base is down: a breach not mended by dawn).
+func _not_held_because() -> String:
 	var rule = _cfg("held_rule", {})
 	if bool(rule.get("avatar_alive", true)):
 		var p = sim.avatar.player()
 		if p == null or p.dead or p.turned:
-			return false
+			return "avatar"
 	if bool(rule.get("house_empty", true)) and _dead_in_the_house() > 0:
-		return false
+		return "house"
 	if bool(rule.get("base_standing", true)) and not _base_standing():
-		return false
-	return true
+		return "base"
+	if bool(rule.get("base_whole", false)) and _sections_down() > 0:
+		return "wall"
+	return ""
+
+
+## How many sections of the base are down now (the fence, the gate, the barred doors: ids below the lots').
+func _sections_down() -> int:
+	var n := 0
+	for s in sim.segments:
+		if int(s.id) < SEGMENT_LIMIT and int(s.state) == 3:
+			n += 1
+	return n
 
 
 ## The base's house, or the start house before a claim; -1 when the game has no town.
@@ -864,7 +916,7 @@ func big_night_for(day: int) -> Dictionary:
 	return {
 		"kind": "milestone", "id": "siege", "index": 0, "name": String(t.get("name", "The first night")), "factor": maxf(float(t.get("factor", 1.0)), 1.0),
 		"runners": clampf(float(t.get("runners", 0.0)), 0.0, 0.8), "brutes": clampf(float(t.get("brutes", 0.2)), 0.0, 0.8),
-		"min_brutes": maxi(0, int(t.get("min_brutes", 1))), "headings": 1, "main_share": clampf(float(t.get("main_share", 0.9)), 0.0, 1.0),
+		"min_brutes": maxi(0, int(t.get("min_brutes", 1))), "headings": clampi(int(t.get("headings", 1)), 1, 2), "main_share": clampf(float(t.get("main_share", 0.9)), 0.0, 1.0),
 		"brute_at": span, "cap": maxi(10, int(t.get("cap", 50))), "blurb": String(t.get("blurb", "")), "plated": bool(t.get("plated", false)),
 	}
 
@@ -1013,7 +1065,7 @@ func _stage_join(n: int) -> void:
 func save() -> Dictionary:
 	return {
 		"kind": KIND, "v": 1, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
-		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "town_seed": _town_seed, "size": _size,
+		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
 		"min_per_sec": float(sim.min_per_sec),
 	}
 
@@ -1033,6 +1085,9 @@ func load_state(s: Dictionary) -> void:
 		_done[String(id)] = true
 	_walked = float(s.get("walked", 0.0))
 	_held_nights = int(s.get("held", 0))
+	_dawn_day = int(s.get("dawn_day", -1))
+	_first_result = String(s.get("first_result", ""))
+	_first_why = String(s.get("first_why", ""))
 	_town_seed = int(s.get("town_seed", 0))
 	var sz = s.get("size", [0, 0])
 	_size = [int(sz[0]), int(sz[1])] if typeof(sz) == TYPE_ARRAY and sz.size() == 2 else [0, 0]

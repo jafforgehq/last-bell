@@ -180,6 +180,10 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 		if bot.avatar_dead and bool(o.get("stop_on_death", true)):
 			cut = "avatar died"
 			break
+		# the first attack night was judged at the dawn and not held (a section down, the dead in the house...): the run is lost to the lab (the game itself goes on to the next night)
+		if has_scenario and sim.scenario.has_method("first_night_result") and String(sim.scenario.first_night_result()) == "not_held":
+			cut = "not held at dawn"
+			break
 		bot.step(dt)
 		sim.update(dt)
 		bot.observe(dt)
@@ -216,6 +220,7 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 		"cpu_s": snappedf(float(Time.get_ticks_msec() - t0) / 1000.0, 0.1),
 		"errors": errors.count, "error_list": errors.list,
 		"people": _alive(sim), "task": String(bot.task.get("kind", "")), "bandaged": bandaged,
+		"why": String(sim.scenario.first_night_why()) if has_scenario and sim.scenario.has_method("first_night_why") else "",
 	}
 	var shots := 0
 	var kills := 0
@@ -294,7 +299,7 @@ static func verdict_of(run: Dictionary) -> Dictionary:
 	var result := "unfinished"
 	if _entry(run, "held").size() > 0 or String(run.over) == "victory":
 		result = "held"
-	elif String(run.over) == "defeat" or String(run.cut) == "avatar died":
+	elif String(run.over) == "defeat" or String(run.cut) == "avatar died" or String(run.cut) == "not held at dawn":
 		result = "lost"
 	v["result"] = result
 	var arc_done: bool = result != "unfinished" and String(run.cut) == ""
@@ -410,7 +415,7 @@ static func run_lines(r: Dictionary) -> Array:
 				if e.has("count"):
 					detail += " %s" % str(e.count)
 		lines.append("  %s  (+%5.0f min)  %s" % [at, float(e.min), detail])
-	lines.append("  ends %s after %.0f game minutes (%s), %d people, %d steps, %.0f CPU s" % [clock_text(int(r.end.day), float(r.end.hour)), float(r.end.min), String(r.over) if String(r.over) != "" else (String(r.cut) if String(r.cut) != "" else "no end"), int(r.people), int(r.steps), float(r.cpu_s)])
+	lines.append("  ends %s after %.0f game minutes (%s%s), %d people, %d steps, %.0f CPU s" % [clock_text(int(r.end.day), float(r.end.hour)), float(r.end.min), String(r.over) if String(r.over) != "" else (String(r.cut) if String(r.cut) != "" else "no end"), (": " + String(r.get("why", ""))) if String(r.get("why", "")) != "" else "", int(r.people), int(r.steps), float(r.cpu_s)])
 	var v: Dictionary = r.verdict
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))

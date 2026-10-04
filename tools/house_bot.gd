@@ -75,7 +75,7 @@ class Defender:
 		var best_score := 0.0
 		var scores := {}
 		for seg in base_sections_of(sim):
-			var sc := float(sim.nights.section_threat(seg))
+			var sc := _threat_of(seg)
 			if _called.has(int(seg.id)):
 				sc += CALL_BONUS
 			scores[int(seg.id)] = sc
@@ -91,6 +91,58 @@ class Defender:
 			_set_station({"seg": int(best.id), "at": _stand(best, me), "why": why})
 		elif best == null and cur >= 0 and float(scores.get(cur, 0.0)) <= 0.0 and int(station.get("seg", -1)) != -1:
 			_set_station(_home(me))
+
+	## How hard a section is pressed. The colony's `section_threat` answers 0 for a barred door (the school's doors are the last line behind its wall), but in a town the dead go for the
+	## doors whenever no fence is on their side, and a door that nobody defends falls: the same sum as the colony's for a door (the dead clawing at it, the ones on their way, what it has
+	## lost).
+	func _threat_of(seg) -> float:
+		if seg.kind != sim.DOOR_KIND:
+			return float(sim.nights.section_threat(seg))
+		var total := 0.0
+		for z in sim.zombies:
+			if z.slot == null or z.slot.seg != seg:
+				continue
+			if z.state == "attack":
+				total += 1.0 + (4.0 if z.kind == "brute" else 0.0)
+			elif z.state == "approach" and Vector2(z.x, z.y).distance_to(seg.center) <= 25.0:
+				total += 0.35
+		return total + 6.0 * (1.0 - clampf(float(seg.hp) / maxf(float(seg.max_hp), 1.0), 0.0, 1.0))
+
+	## Where a gunner covers a section; for a door, in the yard a little way off the place the dead stand at (the colony's answer is inside the house, where a shot cannot pass the door).
+	func _stand(seg, me) -> Vector2:
+		if seg.kind == sim.DOOR_KIND and not seg.slots.is_empty():
+			var sl = seg.slots[0]
+			var out := Vector2(sl.ax - sl.x, sl.ay - sl.y)
+			out = out.normalized() if out.length() > 0.01 else Vector2.ZERO
+			var far := Vector2(sl.ax, sl.ay) + out * 1.5
+			if sim.world.is_solid(sim.world.solid_p, far.x, far.y):
+				far = Vector2(sl.ax, sl.ay)
+			return far
+		return super(seg, me)
+
+	## The wall to mend now, as the colony's bot has it but the barred doors too (the house is what they are for).
+	func _mend_wanted(me):
+		if _mender() == null:
+			return null
+		var sid := int(station.get("seg", -1))
+		if sid < 0 or float(sim.stock.scrap) < 1.0:
+			return null
+		var seg = _seg(sid)
+		if seg == null or not (seg.state == 3 or float(seg.hp) < float(seg.max_hp) * MEND_BELOW):
+			return null
+		if _target != null:
+			return null
+		var spot: Vector2 = sim.repair_spot(seg)
+		var here := Vector2(me.x, me.y)
+		for z in sim.zombies:
+			if not _live(z):
+				continue
+			var zp := Vector2(z.x, z.y)
+			if zp.distance_to(spot) < MEND_CLEAR or zp.distance_to(here) < MEND_CLEAR:
+				return null
+			if z.slot != null and z.slot.seg == seg and (z.state == "attack" or z.state == "approach"):
+				return null
+		return seg
 
 	## (the static helper of the file, reachable from the inner class)
 	static func base_sections_of(sim) -> Array:
@@ -137,6 +189,9 @@ class HouseBot:
 	const CLOSE_R := 1.8
 	const STILL_FIRE_R := 7.0
 	const WALK_FIRE_R := 1.8
+	## At most this many of the street's dead after it within CHASE_COUNT_R tiles: it stands and shoots them (STILL_FIRE_R) instead of walking on with them behind it.
+	const FEW_CHASERS := 3
+	const CHASE_COUNT_R := 9.0
 	const AVOID_R := 3.0
 	const KITE_R := 2.6
 	## The nearest of the dead after it must be this far for it to stand and shoot (else it steps back first, unless it has nowhere to go).
@@ -535,6 +590,10 @@ class HouseBot:
 	## that the fourth brings the dead; 0, the default, is the player who does not).
 	func _wants_rescue() -> bool:
 		if _attacks_on():
+			return false
+		# the fourth voice has come ("fortify": the dead will come): the day after it is for the wall, not for more survivors
+		var sc = sim.scenario
+		if sc != null and sc.has_method("stage") and String(sc.stage()) == "fortify":
 			return false
 		var rs = sim.get("rescue")
 		var per = sim.get("perimeter")
@@ -1120,7 +1179,8 @@ class HouseBot:
 		var from: Vector2 = sim.avatar.shoulder(me)
 		var best = null
 		var best_key := INF
-		var still := _stationary_wanted(here)
+		# the hands are still, or a few of the dead are on its heels: a person turns and shoots two walkers rather than walk the street with them behind for an hour (a swarm is walked away from)
+		var still := _stationary_wanted(here) or _chased_by_few(here)
 		for z in sim.zombies:
 			if not _live(z):
 				continue
@@ -1142,6 +1202,14 @@ class HouseBot:
 
 	func _chasing(z) -> bool:
 		return z.state == "chase" or z.state == "hunt" or z.state == "approach" or z.state == "attack" or z.state == "breach"
+
+	## Whether one to FEW_CHASERS of the street's dead are after the avatar within CHASE_COUNT_R tiles (more is a crowd, which is walked away from).
+	func _chased_by_few(here: Vector2) -> bool:
+		var n := 0
+		for z in sim.zombies:
+			if (z.state == "chase" or z.state == "hunt") and _live(z) and (String(z.hunt_id) == _player_id() or String(z.hunt_id) == "") and here.distance_to(Vector2(z.x, z.y)) <= CHASE_COUNT_R:
+				n += 1
+		return n >= 1 and n <= FEW_CHASERS
 
 	## The street's rule: a shot wakes every dead one within 30 tiles and sends them after the shooter (scripts/town/dormant_dead.gd `noise`), and the avatar walks four times as fast as a
 	## walker. So the gun is for what has to be put down: the dead of the room or house being cleared, whatever is close enough to bite, and (when the hands must stand still for
