@@ -23,6 +23,8 @@ var _taken := PackedByteArray()
 var _pieces := {}
 var _types := {}
 var _obj_i := 0
+var _mesh_keys: Array = []
+var _mesh_i := 0
 var _chunks_made := 0
 var _ground_node: Node2D
 ## The time each phase took (milliseconds), for the report and the overlay.
@@ -40,6 +42,8 @@ func begin_build(data: Dictionary) -> void:
 	_phase = 0
 	_row = 0
 	_obj_i = 0
+	_mesh_keys = []
+	_mesh_i = 0
 	build_ms.clear()
 
 
@@ -55,6 +59,8 @@ func build_progress() -> float:
 	var done := float(_phase)
 	if _phase == 2:
 		done += float(_row) / float(maxi(1, H))
+	elif _phase == 3:
+		done += float(_mesh_i) / float(maxi(1, _mesh_keys.size()))
 	elif _phase == 5:
 		done += float(_obj_i) / float(maxi(1, d.objects.size()))
 	return clampf(done / total, 0.0, 1.0)
@@ -91,8 +97,12 @@ func step_build(budget_ms: float) -> bool:
 				if _row >= H:
 					_phase = 3
 			3:
-				_make_meshes()
-				_phase = 4
+				# (one terrain's mesh at a time: each loads its picture, the longest single piece of the build)
+				if _mesh_keys.is_empty():
+					_mesh_keys = _pieces.keys()
+				_make_meshes(t0, budget_ms)
+				if _mesh_i >= _mesh_keys.size():
+					_phase = 4
 			4:
 				_make_chunks()
 				_phase = 5
@@ -155,9 +165,11 @@ func _mesh_rows(t0: int, budget_ms: float) -> void:
 	_tick("ground_rects", t1)
 
 
-func _make_meshes() -> void:
+func _make_meshes(t0: int, budget_ms: float) -> void:
 	var t1 := Time.get_ticks_usec()
-	for t in _pieces:
+	while _mesh_i < _mesh_keys.size():
+		var t = _mesh_keys[_mesh_i]
+		_mesh_i += 1
 		var tex: Texture2D = GD.tex(String(_types[t].file))
 		var piece_uv := Vector2(128.0 / float(tex.get_width()), 128.0 / float(tex.get_height()))
 		var rects: PackedInt32Array = _pieces[t]
@@ -201,6 +213,8 @@ func _make_meshes() -> void:
 		mi.texture = tex
 		mi.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 		_ground_node.add_child(mi)
+		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
+			break
 	_tick("ground_meshes", t1)
 
 
