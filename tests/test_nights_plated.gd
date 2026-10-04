@@ -45,14 +45,16 @@ func _head_of(z) -> Vector2:
 
 # ------------------------------------------------------------------------- damage_to --
 
-func test_a_plated_brute_takes_a_fifth_on_the_body_and_triple_on_the_head() -> void:
+func test_a_plated_brute_takes_the_armoured_share_on_the_body_and_a_multiple_on_the_head() -> void:
 	var g := _game()
 	var sim = g.sim
 	var z = _brute(sim, 40.0, 30.0, true)
 	near(sim.nights.damage_to(z, 2.0, false), 2.0 * NightData.num("plated.armour"), 1.0e-9, "a body hit")
 	near(sim.nights.damage_to(z, 2.0, true), 2.0 * NightData.num("plated.weak_mult"), 1.0e-9, "a head hit")
-	near(NightData.num("plated.armour"), 0.2, 1.0e-9, "the plan's armour")
-	near(NightData.num("plated.weak_mult"), 3.0, 1.0e-9, "the plan's weak point")
+	# (the numbers are the tuning's: only their shape is pinned here, never a value)
+	var armour: float = NightData.num("plated.armour")
+	check(armour > 0.0 and armour < 0.5, "the armour takes most of a hit (%s)" % str(armour))
+	check(NightData.num("plated.weak_mult") > 1.0, "a head hit does more than a plain one")
 	g.world.queue_free()
 
 
@@ -136,7 +138,7 @@ func test_trace_says_whether_the_ray_found_the_head() -> void:
 
 # ---------------------------------------------------------------------------- npc_weak --
 
-func test_a_defenders_weak_shot_is_one_die_in_a_dozen_and_only_for_a_plated_brute() -> void:
+func test_a_defenders_weak_shot_is_one_die_at_the_datas_odds_and_only_for_a_plated_brute() -> void:
 	var g := _game()
 	var sim = g.sim
 	var z = _brute(sim, 40.0, 30.0, true)
@@ -145,7 +147,10 @@ func test_a_defenders_weak_shot_is_one_die_in_a_dozen_and_only_for_a_plated_brut
 	for i in 400:
 		if sim.nights.npc_weak(z):
 			weak += 1
-	check(weak >= 16 and weak <= 48, "%d of 400 shots found the head (about %d expected)" % [weak, int(400.0 * NightData.num("plated.npc_weak"))])
+	var odds: float = NightData.num("plated.npc_weak")
+	var expected := 400.0 * odds
+	var slack := 4.0 * sqrt(400.0 * odds * (1.0 - odds)) + 1.0
+	check(absf(float(weak) - expected) <= slack, "%d of 400 shots found the head (about %d expected, the data's %s)" % [weak, int(expected), str(odds)])
 	# no die for anything else
 	var plain = _brute(sim, 41.0, 30.0, false)
 	var walker = sim.spawn(42.0, 30.0, "wander")

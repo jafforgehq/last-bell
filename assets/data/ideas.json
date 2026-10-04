@@ -8,7 +8,7 @@
       "title": "engineer",
       "communal": false,
       "params": {
-        "under": 0.9,
+        "under": 0.85,
         "before_dusk_h": 3.0,
         "per_scrap": 10.0
       },

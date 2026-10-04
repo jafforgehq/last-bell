@@ -311,6 +311,9 @@ func test_the_ordinary_budget_follows_the_data_in_avatar_mode_only() -> void:
 	var without: float = plain.sim.waves.budget_for(11)
 	var plan_avatar: float = avatar.sim.waves.night_budget(11)
 	var plan_plain: float = plain.sim.waves.night_budget(11)
+	# (the crew's share is read in the same window: the temporary file has no avatar_weight, so the plan's own weight stands in it)
+	var scale_avatar: float = avatar.sim.recruits.crew_scale()
+	var scale_plain: float = plain.sim.recruits.crew_scale()
 	NightData.data_path = path + ".none"
 	NightData.forget()
 	var defaults: float = avatar.sim.waves.budget_for(11)
@@ -319,8 +322,8 @@ func test_the_ordinary_budget_follows_the_data_in_avatar_mode_only() -> void:
 	DirAccess.remove_absolute(path)
 	near(with_avatar, 30.0 * (1.0 + 0.07 * 10.0) * 0.5, 1e-9, "growth and share from the data with an avatar")
 	near(without, 60.0, 1e-9, "the old budget without one")
-	near(plan_avatar, with_avatar * avatar.sim.recruits.crew_scale(), 1e-9, "the night follows the budget")
-	near(plan_plain, 60.0 * plain.sim.recruits.crew_scale(), 1e-9, "and without an avatar the old one")
+	near(plan_avatar, with_avatar * scale_avatar, 1e-9, "the night follows the budget")
+	near(plan_plain, 60.0 * scale_plain, 1e-9, "and without an avatar the old one")
 	near(defaults, 30.0 * (1.0 + float(NightData.FALLBACK.ordinary.growth) * 10.0) * float(NightData.FALLBACK.ordinary.mult), 1e-9, "no file: the plan's numbers")
 	avatar.world.free()
 	plain.world.free()
@@ -363,7 +366,9 @@ func test_the_dead_of_a_big_night_come_from_its_heading_in_most_of_the_draws() -
 	for i in 1000:
 		if sim.waves._pick_spawn(plan).is_equal_approx(main):
 			hits += 1
-	check(hits >= 800 and hits <= 900, "%d of 1000 from the main spawn point" % hits)
+	# (the share is the data's: a draw that is not the main heading's still lands on it now and then, about half the time at most)
+	var share: float = float(plan.main_share)
+	check(hits >= int(share * 1000.0) - 40 and hits <= int((share + (1.0 - share) * 0.5) * 1000.0) + 30, "%d of 1000 from the main spawn point (the plan's share %.2f)" % [hits, share])
 	var ordinary: Dictionary = sim.waves.plan_for(9)
 	var from_main := 0
 	var spots: Array = []
@@ -488,16 +493,30 @@ func test_the_dusk_of_a_milestone_says_its_name_and_the_final_says_what_it_alway
 
 
 func test_no_more_than_the_plans_cap_are_alive_on_a_big_night() -> void:
+	# (the data's own file with the Rush's cap brought down to 30, so that the cap binds whatever the tuned sizes are)
+	var was: String = NightData.data_path
+	var path := "user://test_r19_nights_plan_cap.json"
+	var content = JSON.parse_string(FileAccess.get_file_as_string(NightData.DATA_PATH))
+	content["themes"]["rush"]["cap"] = 30
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify(content))
+	f.close()
+	NightData.data_path = path
+	NightData.forget()
 	var g := Helpers.avatar_game(9, 6)
 	var sim = g.sim
 	sim.zombies.clear()
 	var plan: Dictionary = sim.waves.plan_for(20)
+	eq(int(plan.cap), 30, "the plan carries the cap")
 	check(plan.queue.size() > int(plan.cap), "the night is bigger than the cap (%d against %d), so that it binds" % [plan.queue.size(), int(plan.cap)])
 	_let_in(sim, 20, true)
 	var alive := 0
 	for z in sim.zombies:
 		if z.state != "dead" and z.state != "dying":
 			alive += 1
+	NightData.data_path = was
+	NightData.forget()
+	DirAccess.remove_absolute(path)
 	check(alive <= int(plan.cap), "at most %d alive: %d" % [int(plan.cap), alive])
 	check(alive >= int(plan.cap) - 3, "and the cap is what stopped them: %d" % alive)
 	g.world.free()

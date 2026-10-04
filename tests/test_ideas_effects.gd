@@ -41,13 +41,20 @@ func _mood(sim, value: float) -> void:
 
 # ----------------------------------------------------------------------- fix_wall --
 
+## How worn a wall must be (a share of its health) for the wall idea, read from assets/data/ideas.json (never copied here).
+func _fix_wall_under() -> float:
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/ideas.json"))
+	return float(parsed.kinds.fix_wall.params.under)
+
+
 func test_fix_wall_is_on_the_table_for_a_worn_wall_that_nobody_is_on() -> void:
 	var g := Kit.game(4)
 	var sim = g.sim
-	Kit.wear(sim, 5, 0.91)
-	eq(_who(sim, "fix_wall"), "", "a wall at 91% is not worth it")
-	Kit.wear(sim, 5, 0.89)
-	eq(_who(sim, "fix_wall"), "dez", "at 89% Dez brings it (the best Building at the base)")
+	var under := _fix_wall_under()
+	Kit.wear(sim, 5, under + 0.01)
+	eq(_who(sim, "fix_wall"), "", "a wall at %d%% is not worth it" % roundi((under + 0.01) * 100.0))
+	Kit.wear(sim, 5, under - 0.01)
+	eq(_who(sim, "fix_wall"), "dez", "at %d%% Dez brings it (the best Building at the base)" % roundi((under - 0.01) * 100.0))
 	Kit.at(sim, 3, 16.0)
 	eq(_who(sim, "fix_wall"), "dez", "at 16:00, three hours before dusk, still")
 	Kit.at(sim, 3, 16.2)

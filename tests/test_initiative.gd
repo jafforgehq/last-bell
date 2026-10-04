@@ -240,9 +240,9 @@ func test_a_yes_is_checked_again_when_it_is_given() -> void:
 	_free(g)
 
 
-# ------------------------------------------------------ three refusals in four days --
+# ------------------------------------------------------ three refusals in a few days --
 
-func test_three_noes_in_four_days_and_the_proposer_goes_quiet() -> void:
+func test_three_noes_in_the_window_and_the_proposer_goes_quiet() -> void:
 	var g := Kit.game(4)
 	var sim = g.sim
 	var dez = Kit.who(sim, "dez")
@@ -279,10 +279,24 @@ func test_noes_that_are_far_apart_do_not_add_up() -> void:
 	var g := Kit.game(4)
 	var sim = g.sim
 	var dez = Kit.who(sim, "dez")
-	for day in [3, 5, 7]:
+	var window: int = sim.initiative.NO_WINDOW_DAYS
+	for day in [3, 3 + window, 3 + 2 * window]:
 		Kit.at(sim, day, 9.0)
 		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
-	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "three noes in five days are not three in four")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 0, "three noes, each a whole window after the last, are not three in the window")
+	_free(g)
+
+
+func test_noes_the_most_often_a_person_can_be_asked_still_add_up() -> void:
+	var g := Kit.game(4)
+	var sim = g.sim
+	var dez = Kit.who(sim, "dez")
+	var every: int = sim.initiative.GAP_PERSON_DAYS
+	check((sim.initiative.NO_STREAK - 1) * every < sim.initiative.NO_WINDOW_DAYS, "the window is wide enough for the streak at the pace a person is asked (else nobody could ever go quiet)")
+	for i in sim.initiative.NO_STREAK:
+		Kit.at(sim, 3 + i * every, 9.0)
+		sim.radio.answer(_fake_idea(sim, "supper", "dez"), "no")
+	eq(int(sim.initiative.record_of(dez).quiet_until), 3 + (sim.initiative.NO_STREAK - 1) * every + sim.initiative.QUIET_DAYS, "a person refused every time they are asked goes quiet")
 	_free(g)
 
 
@@ -358,15 +372,16 @@ func test_a_person_is_asked_again_after_two_days_and_the_voice_after_one() -> vo
 	_free(g)
 
 
-func test_a_kind_is_proposed_again_after_three_days() -> void:
+func test_a_kind_is_proposed_again_after_its_gap_of_days() -> void:
 	var g := _wall_game()
 	var sim = g.sim
+	var gap: int = sim.initiative.GAP_KIND_DAYS
 	sim.radio.answer(Kit.raise(sim, "fix_wall"), "no")
 	g.spec.holders["engineer"] = "marcus"    # (somebody else would be the proposer: it is the kind that is held back)
-	Kit.at(sim, 5, 9.0)
-	eq(_who(sim, "fix_wall"), "", "two days on: no")
-	Kit.at(sim, 6, 9.0)
-	eq(_who(sim, "fix_wall"), "marcus", "three days on: yes")
+	Kit.at(sim, 3 + gap - 1, 9.0)
+	eq(_who(sim, "fix_wall"), "", "a day short of the gap: no")
+	Kit.at(sim, 3 + gap, 9.0)
+	eq(_who(sim, "fix_wall"), "marcus", "the gap on: yes")
 	_free(g)
 
 
@@ -384,15 +399,17 @@ func test_a_kind_that_is_waiting_is_not_raised_again() -> void:
 func test_later_twice_shelves_the_kind_for_a_while() -> void:
 	var g := _wall_game()
 	var sim = g.sim
+	var gap: int = sim.initiative.GAP_KIND_DAYS
+	check(sim.initiative.SHELVE_DAYS > gap, "a kind put away stays away longer than the ordinary gap between two of a kind (else shelving means nothing)")
 	sim.radio.answer(Kit.raise(sim, "fix_wall"), "later")
-	Kit.at(sim, 6, 9.0)
+	Kit.at(sim, 3 + gap, 9.0)
 	Kit.wear(sim, 5, 0.8)
-	check(not Kit.candidate(sim, "fix_wall").is_empty(), "after one later it comes back in three days")
+	check(not Kit.candidate(sim, "fix_wall").is_empty(), "after one later it comes back when its gap of days is over")
 	sim.radio.answer(Kit.raise(sim, "fix_wall"), "later")
-	Kit.at(sim, 9, 9.0)
+	Kit.at(sim, 3 + gap + sim.initiative.SHELVE_DAYS - 1, 9.0)
 	Kit.wear(sim, 5, 0.8)
 	eq(_who(sim, "fix_wall"), "", "after the second later it is put away for a while")
-	Kit.at(sim, 6 + sim.initiative.SHELVE_DAYS, 9.0)
+	Kit.at(sim, 3 + gap + sim.initiative.SHELVE_DAYS, 9.0)
 	check(not Kit.candidate(sim, "fix_wall").is_empty(), "and comes back after %d days" % sim.initiative.SHELVE_DAYS)
 	_free(g)
 
@@ -400,11 +417,12 @@ func test_later_twice_shelves_the_kind_for_a_while() -> void:
 func test_a_yes_or_a_no_ends_a_run_of_laters() -> void:
 	var g := _wall_game()
 	var sim = g.sim
+	var gap: int = sim.initiative.GAP_KIND_DAYS
 	sim.radio.answer(Kit.raise(sim, "fix_wall"), "later")
-	Kit.at(sim, 6, 9.0)
+	Kit.at(sim, 3 + gap, 9.0)
 	Kit.wear(sim, 5, 0.8)
 	sim.radio.answer(Kit.raise(sim, "fix_wall"), "no")
-	Kit.at(sim, 9, 9.0)
+	Kit.at(sim, 3 + 2 * gap, 9.0)
 	Kit.wear(sim, 5, 0.8)
 	check(not Kit.candidate(sim, "fix_wall").is_empty(), "a no between the laters: not shelved")
 	_free(g)
@@ -469,7 +487,7 @@ func test_a_proposal_waits_four_game_hours_for_the_next() -> void:
 	sim.clock_min += sim.initiative.GAP_ALL_MIN - 1.0
 	check(not sim.initiative.allowed_now(), "not after 3 h 59 min")
 	sim.clock_min += 2.0
-	check(sim.initiative.allowed_now(), "after four hours")
+	check(sim.initiative.allowed_now(), "after the gap between two proposals")
 	_free(g)
 
 

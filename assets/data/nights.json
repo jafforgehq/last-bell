@@ -1,15 +1,15 @@
 {
 	"version": 1,
-	"ordinary": {"avatar_weight": 0.5, "mult": 1.0, "growth": 0.10},
+	"ordinary": {"avatar_weight": 0.0, "mult": 0.75, "growth": 0.07},
 	"big_every": 10,
 	"order": ["siege", "rush"],
 	"themes": {
-		"siege": {"name": "The Siege", "factor": 1.45, "runners": 0.10, "brutes": 0.22, "min_brutes": 2, "headings": 1, "main_share": 0.85, "brute_at": [0.25, 0.6], "cap": 70, "blurb": "Plated brutes at one wall. Be there."},
-		"rush": {"name": "The Rush", "factor": 1.55, "runners": 0.35, "brutes": 0.12, "min_brutes": 2, "headings": 1, "main_share": 0.80, "brute_at": [0.30, 0.7], "cap": 70, "blurb": "A wave of runners, brutes behind. Be there."},
+		"siege": {"name": "The Siege", "factor": 2.1, "runners": 0.10, "brutes": 0.22, "min_brutes": 2, "headings": 1, "main_share": 0.95, "brute_at": [0.25, 0.6], "cap": 70, "blurb": "Plated brutes at one wall. Be there."},
+		"rush": {"name": "The Rush", "factor": 1.75, "runners": 0.35, "brutes": 0.12, "min_brutes": 2, "headings": 1, "main_share": 0.90, "brute_at": [0.30, 0.7], "cap": 70, "blurb": "A wave of runners, brutes behind. Be there."},
 		"last": {"name": "The last night", "brute_at": [0.3, 0.8]}
 	},
 	"rally": {"radius": 9.0, "aim": 0.15, "fire": 0.85},
-	"plated": {"armour": 0.2, "weak_mult": 3.0, "weak_r": 0.2, "head": 0.62, "npc_weak": 0.08},
+	"plated": {"armour": 0.1, "weak_mult": 3.0, "weak_r": 0.25, "head": 0.62, "npc_weak": 0.03},
 	"breach": {"hot_r": 7.0, "hot_n": 2},
 	"mend": {"reach": 1.6, "seconds": 10.0},
 	"calls": {"going_below": 0.4, "going_ttl_min": 20, "brute_ttl_min": 45, "breach_ttl_min": 20, "reinforce_n": 2, "coming_morale": 4.0, "coming_window_min": 15, "kept_trust": 2.0, "broken_trust": -2.0, "brute_warn_r": 40.0},

@@ -16,14 +16,14 @@
 ## look: every TICK_S seconds of rules time, 30 game minutes, `update`).
 ##
 ## THE SCHEDULE. From day 3, by day (08:00 to 17:30, never in the radio hour), never under the alarm or with the dead at the wall;
-## at most two waiting (`MAX_OPEN`), four game hours between two proposals, three days between two of a kind, two days (one for
+## at most two waiting (`MAX_OPEN`), six game hours between two proposals, five days between two of a kind, two days (one for
 ## the voice) between two from one person, a person whose trust in the leader is under 25 brings nothing, and the whole camp is
 ## silent while the community's trust is under 35 (the News says so, once). A call that is not answered in six game hours takes
 ## "later" (nothing is paid): twice in a row on one kind and that kind is put away for a few days.
 ##
 ## THE ANSWERS. Yes: the proposer's trust and mood go up and the idea is TAKEN (it counts for their standing in
 ## `relations.standing`). A yes is checked again when it is given with the very predicate of the trigger: "Not now: it needs 20
-## scrap" and it counts as a later. No: a little trust and mood lost; the third no in four days and the person stops bringing ideas
+## scrap" and it counts as a later. No: a little trust and mood lost; the third no in five days and the person stops bringing ideas
 ## for three days (the News says it), at a further cost. Later: nothing.
 ##
 ## THE VOICE. `voice_opinion(call)` is what the specialist of the matter (the marksman on an attack, the medic on a fever), else
@@ -51,8 +51,8 @@ const HOURS_TO := 17.5
 const RADIO_FROM_H := 11.5
 const RADIO_TO_H := 12.5
 const MAX_OPEN := 2
-const GAP_ALL_MIN := 240.0
-const GAP_KIND_DAYS := 3
+const GAP_ALL_MIN := 360.0
+const GAP_KIND_DAYS := 5
 const GAP_PERSON_DAYS := 2
 const GAP_VOICE_DAYS := 1
 ## How long a call waits (game minutes) before it takes "later".
@@ -69,7 +69,7 @@ const NO_TRUST := -1.0
 const NO_MORALE := -2.0
 ## Refusals in a window of days that silence a proposer, for how long, and what the last of them costs.
 const NO_STREAK := 3
-const NO_WINDOW_DAYS := 4
+const NO_WINDOW_DAYS := 5
 const QUIET_DAYS := 3
 const QUIET_TRUST_COST := -2.0
 const QUIET_MORALE := -3.0

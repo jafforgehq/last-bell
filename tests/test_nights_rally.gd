@@ -55,10 +55,12 @@ func test_a_defender_outside_the_radius_is_not() -> void:
 	g.world.queue_free()
 
 
-func test_the_numbers_are_the_plans_unless_the_data_says_otherwise() -> void:
-	near(_radius(), 9.0, 1.0e-9, "the radius")
-	near(NightData.num("rally.aim"), 0.15, 1.0e-9, "the aim")
-	near(NightData.num("rally.fire"), 0.85, 1.0e-9, "the fire")
+func test_the_numbers_are_the_datas_and_of_the_right_shape() -> void:
+	# (the values are the tuning's and are read through NightData everywhere: only what a number means is pinned here)
+	check(_radius() > 1.0, "the radius reaches past the avatar's own tile (%s)" % str(_radius()))
+	check(NightData.num("rally.aim") > 0.0, "a rallied defender aims better")
+	var fire: float = NightData.num("rally.fire")
+	check(fire > 0.0 and fire < 1.0, "a rallied defender's cooldown is shorter (x%s)" % str(fire))
 
 
 func test_the_avatar_himself_is_never_rallied() -> void:
