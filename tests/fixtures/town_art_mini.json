@@ -1,0 +1,11 @@
+{"version": 1, "items": [
+ {"id": "door_front", "category": "house", "kind": "prop", "footprint": [1, 1], "anchor": [0, 0], "variants": 2, "sprites": [
+  {"file": "house/door_front.png", "rect": [0, 0, 128, 128], "fp": [1, 1], "facing": "s", "state": "closed", "variant": 0},
+  {"file": "house/door_front.png", "rect": [130, 0, 128, 128], "fp": [1, 1], "facing": "w", "state": "closed", "variant": 0},
+  {"file": "house/door_front.png", "rect": [520, 0, 128, 128], "fp": [1, 1], "facing": "s", "state": "open", "variant": 0}]},
+ {"id": "fridge", "category": "furniture", "kind": "prop", "footprint": [1, 1], "anchor": [0.0625, 0.0625], "sprites": [
+  {"file": "furniture/fridge.png", "rect": [0, 0, 160, 160], "fp": [1, 1], "facing": "s", "state": "closed"},
+  {"file": "furniture/fridge.png", "rect": [648, 0, 160, 160], "fp": [1, 1], "facing": "s", "state": "opened"}]},
+ {"id": "bed_single", "category": "furniture", "kind": "prop", "footprint": [1, 2], "anchor": [0.0625, 0.0625], "sprites": [
+  {"file": "furniture/bed_single.png", "rect": [0, 0, 160, 288], "fp": [1, 2], "facing": "s", "variant": 0}]}
+]}
