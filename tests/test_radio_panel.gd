@@ -194,7 +194,7 @@ func test_the_tabs_move_between_the_pages() -> void:
 	var names: Array = []
 	for page in RadioPanel.PAGES:
 		names.append(h.radio_panel.tab_button(page).text)
-	eq(names, ["Jobs", "Build", "Map", "News"], "the tabs are named for the pages")
+	eq(names, ["Base", "Jobs", "Build", "Map", "News"], "the tabs are named for the pages (round 25 added Base)")
 	Kit.free_all(ctx)
 
 

@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "_doc": "Round 25 (S25.3, scripts/sim/problems.gd): the small trouble the base throws up. Every number and word of the four kinds lives here; the contract's constants (FIRST_DAY, MAX_OPEN, TTL_H, FIX_REACH, the gap formula) are in the script. `base_s` is rules seconds of the avatar's own hands at the marker before the skill scales it (left = base_s / (speed.base + speed.per_skill x skill), then the title and the traits through traits.mult 'repair'); `scrap` the cost, paid when the work is done (a delegate pays when they begin); `min_skill` the floor for being asked over the radio. `late` is what happens once, past the time. The texts: `raise` is the News line, `where` its second line, `worse` the call at the halfway mark.",
+  "speed": {"base": 0.7, "per_skill": 0.08, "min": 0.25, "max": 1.6},
+  "delegate": {"base": 0.35, "per_skill": 0.07, "trust_div": 250.0, "title": 0.1, "min": 0.2, "max": 0.95, "walk_speed": 3.0, "walk_limit_s": 45.0},
+  "gap": {"from": 0.7, "span": 0.4, "_doc": "the next problem comes gap_h(day) x (from + span x a hash) game hours after this one, then waits for the working day (about 1.5 days between two in all)"},
+  "fixed_mood": 1.0,
+  "pair": {"affinity_base": 15.0, "station": 10.0, "post": 5.0, "post_tiles": 6.0, "friction": 8.0, "hungry": 6.0, "need": 30.0},
+  "kinds": {
+    "leak": {
+      "name": "the leak", "short": "Leak", "glyph": "drop", "skill": "Building", "min_skill": 1,
+      "base_s": 6.0, "scrap": 1,
+      "verb": "Fix the leak", "stop": "Stop fixing the leak", "doing": "Fixing the leak", "pose": "hammer",
+      "raise": "Trouble: the rain barrels are leaking", "where": "At the rain barrels: the water is draining",
+      "worse": "The leak is getting worse", "worse_sub": "The barrel is half empty",
+      "done": "Fixed: the leak", "done_sub": "The water stays in the barrels", "fail": "%s could not stop the leak",
+      "late_label": "draining fast", "late_news": "The leak has got worse", "late_sub": "The barrels are emptying twice as fast",
+      "bark": "That barrel is leaking!",
+      "drain_h": 0.6, "late_drain_mult": 2.0, "late_water": 8.0
+    },
+    "jam": {
+      "name": "the jammed generator", "short": "Jam", "glyph": "bolt", "skill": "Building", "min_skill": 3,
+      "base_s": 9.0, "scrap": 1,
+      "verb": "Clear the jam", "stop": "Stop clearing the jam", "doing": "Clearing the jam", "pose": "hammer",
+      "raise": "Trouble: the generator is jammed", "where": "By the workbench: no ammo is made while it is stuck",
+      "worse": "The generator is still jammed", "worse_sub": "The workbench stands idle",
+      "done": "Fixed: the generator", "done_sub": "The workbench runs again", "fail": "%s could not clear the jam",
+      "late_label": "wrecked", "late_news": "The generator is wrecked", "late_sub": "It will take 3 scrap and twice the time to mend",
+      "bark": "The generator has jammed!",
+      "late_scrap": 3, "late_time_mult": 2.0, "late_mood": -2.0, "late_mood_label": "No power"
+    },
+    "quarrel": {
+      "name": "the quarrel", "short": "Quarrel", "glyph": "heads", "skill": "Leading", "min_skill": 2,
+      "base_s": 7.0, "scrap": 0,
+      "verb": "Hear them out", "stop": "Stop hearing them out", "doing": "Hearing them out", "pose": "",
+      "raise": "Trouble: %s and %s are quarrelling", "where": "They are working side by side and it shows",
+      "worse": "The quarrel is getting worse", "worse_sub": "%s and %s will not look at each other",
+      "done": "Settled: the quarrel", "done_sub": "%s and %s talked it out", "fail": "%s could not settle the quarrel",
+      "late_label": "rivals now", "late_news": "The quarrel has gone too far", "late_sub": "%s and %s are rivals now",
+      "bark": "I cannot work with %s any more.",
+      "perf": 0.85, "mood": -3.0, "mood_label": "Quarrel with %s", "drift": -0.5,
+      "late_rift": -6.0, "late_mood": -5.0, "late_mood_label": "Quarrel gone too far",
+      "settle_gain": 4.0, "apart_mood": -1.0, "apart_label": "Kept apart", "fail_hours": 6.0, "fail_trust": -1.0,
+      "score": {"per_leading": 0.1, "per_trust": 0.01, "friend": 0.2, "settle": 1.0, "apart": 0.6}
+    },
+    "crack": {
+      "name": "the cracked wall", "short": "Crack", "glyph": "zigzag", "skill": "Building", "min_skill": 2,
+      "base_s": 8.0, "scrap": 2,
+      "verb": "Shore up the crack", "stop": "Stop shoring up the crack", "doing": "Shoring up the crack", "pose": "hammer",
+      "raise": "Trouble: a crack in the %s", "where": "It is widening every hour",
+      "worse": "The crack is widening", "worse_sub": "The %s is giving way",
+      "done": "Fixed: the crack in the wall", "done_sub": "It stops widening", "fail": "%s could not shore up the crack",
+      "late_label": "widened", "late_news": "The crack has split the wall", "late_sub": "The %s lost a fifth of its strength",
+      "bark": "There is a crack in the wall!",
+      "widen_pct": 0.015, "floor_pct": 0.25, "late_pct": 0.2, "late_floor_pct": 0.1, "min_hp_pct": 0.7
+    }
+  }
+}

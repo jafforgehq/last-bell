@@ -26,6 +26,8 @@ signal answered(call_id: int, option_id: String)
 const MAX_ROWS := 60
 ## The least the list is tall.
 const MIN_LIST_H := 40.0
+## The kinds of round 25 that carry ranked lines in their `data` (the latest of each is shown with them).
+const LINED_KINDS := ["briefing", "debrief"]
 
 var host
 var options := {}
@@ -262,20 +264,26 @@ func _rebuild_log(radio, open_ids: Array) -> void:
 		c.queue_free()
 	rows.clear()
 	var shown := 0
+	# round 25: the latest briefing and the latest debrief show their lines; the older ones are only their head
+	var expanded_kinds := {}
 	for i in range(radio.news.size() - 1, -1, -1):
 		var e: Dictionary = radio.news[i]
 		if open_ids.has(int(e.id)) or shown >= MAX_ROWS:
 			continue
 		shown += 1
 		var unread_now: bool = int(e.id) > seen_id
-		var box := _row(e, unread_now)
+		var kind := String(e.kind)
+		var expand: bool = LINED_KINDS.has(kind) and not expanded_kinds.has(kind)
+		if expand:
+			expanded_kinds[kind] = true
+		var box := _row(e, unread_now, expand)
 		_log_box.add_child(box)
 		rows.append({"id": int(e.id), "kind": String(e.kind), "unread": unread_now, "color": RadioKit.kind_color(host, String(e.kind)), "box": box})
 	_empty_label.visible = rows.is_empty() and call_views.is_empty()
 
 
 ## One line of the log.
-func _row(e: Dictionary, unread_now: bool) -> Control:
+func _row(e: Dictionary, unread_now: bool, expanded: bool = false) -> Control:
 	var kind_c: Color = RadioKit.kind_color(host, String(e.kind))
 	var outer: VBoxContainer = host._vbox(0)
 	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -320,6 +328,8 @@ func _row(e: Dictionary, unread_now: bool) -> Control:
 		sub.custom_minimum_size.x = 80
 		sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		col.add_child(sub)
+	if expanded:
+		_add_lines(col, e)
 	if String(e.answered) != "":
 		var said := String(e.result)
 		if said == "":
@@ -334,6 +344,37 @@ func _row(e: Dictionary, unread_now: bool) -> Control:
 			res.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			col.add_child(res)
 	return outer
+
+
+## The ranked lines of a briefing or a debrief under its head (round 25): a number (or a dot for an evening's tally) in the colour of its level, and the
+## words; the line's own sub in small type under it.
+func _add_lines(col: VBoxContainer, e: Dictionary) -> void:
+	var items: Array = RadioKit.line_items(e)
+	var ranked := String(e.kind) == "briefing"
+	var n := 0
+	for item in items:
+		n += 1
+		var tone: Color = RadioKit.level_color(host, String(item.level))
+		var line: HBoxContainer = host._hbox(6)
+		var mark: Label = host._label("%d" % n if ranked else "-", Fonts.cond(700, 0), 12, tone)
+		mark.custom_minimum_size.x = 12
+		mark.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		line.add_child(mark)
+		var words: VBoxContainer = host._vbox(0)
+		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var text: Label = host._label(String(item.text), Fonts.sans(600), 12, tone)
+		text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		text.custom_minimum_size.x = 60
+		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		words.add_child(text)
+		if String(item.sub) != "":
+			var sub: Label = host._label(String(item.sub), Fonts.sans(400), 12, host.INK2)
+			sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			sub.custom_minimum_size.x = 60
+			sub.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			words.add_child(sub)
+		line.add_child(words)
+		col.add_child(line)
 
 
 # ------------------------------------------------------------------------- fitting --

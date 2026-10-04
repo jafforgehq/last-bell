@@ -241,7 +241,10 @@ given moment without touching the game:
 | `--beside=ana` | Stand the avatar a step from a person, `post:<post id>` or `bench`, so that the E prompt shows (`--speed=0` keeps people still) |
 | `--post=<post id>` | Have the avatar take that post (E at it; `--hour=22` for a night); `--bench` has the avatar work the bench (`--advance=3` to see the ring and the hammer) |
 | `--bleed=<id>` | Have that person bleeding (the radio refuses them a trip, and a trip's overlay and report say who was left out) |
-| `--radio=news` | Open the radio panel on that page (`jobs`, `build`, `map`, `news`); add `,call` for a call that waits for an answer and `,news` for a few lines in the log |
+| `--radio=news` | Open the radio panel on that page (`base`, `jobs`, `build`, `map`, `news`); add `,call` for a call that waits for an answer and `,news` for a few lines in the log (`--radio=base` is the Base page of round 25: an avatar game of the small start, `--crew=3`) |
+| `--briefing` | Show the morning briefing's card (round 25: the base's concerns ranked and the six priority chips; an avatar game of the small start, `--crew=3`), made from the concerns as they stand |
+| `--priorities=food,defence` | Rank those priorities, first first (`food`, `water`, `defence`, `rebuild`, `rest`, `scavenge`), before the Base page or the briefing's card is up (round 25) |
+| `--problem=leak` | Put that trouble up at its place (`leak` at the rain barrel nearest the avatar, `jam` at the generator, `quarrel` between two of the crew, `crack` on the first compound wall section), at stage `:0` to `:2` (`--problem=leak:2`, 1 by default), the avatar a step from it: its pulsing marker with its words and time, and the E prompt (round 25, base management; an avatar game of the small start, `--crew=3`; `--advance=1` lets it move) |
 | `--night=siege` | Stage that kind of night (`ordinary`, `siege`, `rush`, `last`) at 18:30 of its day, the lookout's forecast given and the avatar at the wall the dead will come to (an avatar game; put it before `--plated`, `--advance` and the other staging of the night) |
 | `--forecast=ahead` | Noon of the day before the first Big Night with the Radio desk manned: the notice |
 | `--plated` | Put a plated brute at the wall of the brunt, the aim on its head (`--aim=x,y` puts it elsewhere) |

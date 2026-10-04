@@ -1,0 +1,66 @@
+{
+	"_doc": "The one hard choice of the base (round 25, scripts/sim/dilemmas.gd): a fever outbreak the medicine cannot cover for everyone, treat or quarantine. The numbers here are the ones the module does not keep as constants (the constants of the contract, S25.4 of docs/superpowers/plans/2026-10-04-round-25.md, are in the script: FIRST_DAY, TTL_MIN, GAP_DAYS, MEDS_SLACK, QUARANTINE_H, SICK_H). Everything is per slow look (every 10 rules seconds = 30 game minutes, 48 a day). spread: a healthy person within `reach` tiles of a sick one gains `per_look` of exposure (x `apart_mult` when the sick one lies apart, at most `cap_per_look` in all, `decay_per_look` lost when nobody sick is near); at `catch_at` they have the fever (SICK_H hours). risk: the outbreak risk, which grows from the player's own dials: `base` + `per_extra_person` for each person over `free_people`, plus the rations dial's number (`rations`), `overtime_worn` when the hours dial is overtime and somebody is worn out (weariness at `worn_at`), and `leak` while a leak is open; at 1.0 somebody (the most worn out, then the hungriest, then the id) has a fever of `fever_h` hours and the risk starts again. The contract named per-look numbers of 0.01 / 0.03 for half and hungry rations: with 48 looks a day they would bring a fever every 1.7 and every 0.65 days, against the round's target of one in 10 days at full rations and one in 3 at hungry; they are scaled here to that target (tune in this file). mood: the quarantine's standing lines (`apart` for the ones lying apart, while they do; `camp` for everyone else for `camp_hours` hours) and the shock for treating.",
+	"spread": {
+		"reach": 3.0,
+		"per_look": 0.35,
+		"apart_mult": 0.15,
+		"cap_per_look": 0.7,
+		"decay_per_look": 0.1,
+		"catch_at": 1.0
+	},
+	"risk": {
+		"base": 0.002,
+		"per_extra_person": 0.0005,
+		"free_people": 5,
+		"rations": {"full": 0.0, "half": 0.003, "hungry": 0.006},
+		"overtime_worn": 0.005,
+		"worn_at": 60.0,
+		"leak": 0.003,
+		"fever_h": 24.0
+	},
+	"mood": {
+		"apart": -4.0,
+		"camp": -2.0,
+		"camp_hours": 24.0,
+		"treated": 1.0
+	},
+	"labels": {
+		"apart": "Kept apart",
+		"camp": "Fever in the camp",
+		"treated": "They were treated"
+	},
+	"causes": {
+		"half": "half rations",
+		"hungry": "hungry rations",
+		"overtime": "overtime",
+		"leak": "the leak",
+		"crowd": "a crowded camp"
+	},
+	"words": {
+		"title": "Fever in the camp: {names}",
+		"sub": "Medicine: {meds}. Treating {all} costs {need}.",
+		"sub_short": "Medicine: {meds}. Treating {all} costs {need}: the stores cover {k} of {n}.",
+		"treat": "Treat {all}: {need} medicine ({meds} in the stores)",
+		"treat_some": "Treat {k} of {n}: {cost} medicine ({meds} in the stores), the rest apart",
+		"treat_none": "Treat {all}: nobody can (no medicine, or nobody who knows it)",
+		"quarantine": "Quarantine: apart for {span}, the bunks closed",
+		"say_treat": "treat them.",
+		"say_quarantine": "keep them apart, the medicine will not stretch.",
+		"done_treated": "{names} treated ({spent} medicine)",
+		"done_treated_some": "{treated} treated ({spent} medicine); {apart} kept apart for {span}",
+		"done_treated_none": "Nobody could be treated: {apart} kept apart for {span}",
+		"done_quarantine": "{names} kept apart for {span}: the bunks are closed",
+		"done_cannot": "Cannot keep {names} apart now",
+		"done_passed": "The fever passed before anyone answered",
+		"caught": "{name} caught it",
+		"caught_sub": "The fever is spreading",
+		"fever": "{name} has a fever",
+		"fever_sub": "Run down: {causes}",
+		"over": "The fever is over",
+		"over_sub": "The bunks are open again",
+		"lifted": "The quarantine is lifted",
+		"lifted_sub": "{names} still sick, resting apart",
+		"mark": "Quarantine: {span}",
+		"debrief_quarantine": "Quarantine: {names} apart, {span} left"
+	}
+}

@@ -830,7 +830,8 @@ func _why_not_played(s: Dictionary) -> String:
 
 ## The chance that this party clears this place, as the rules throw it (scavenge.gd's `_decide_town`: 0.35 plus
 ## 0.08 for each point of Shooting, less 0.12 for each point of danger and nest, kept between 0.1 and 0.95). `errand`: the party goes
-## without the player (the dice's trip in avatar mode: Clear), which is `scavenge.ERRAND_CLEAR` worse.
+## without the player (the dice's trip in avatar mode: Clear), which is `scavenge.errand_terms().clear` worse (the base's number, `ERRAND_CLEAR`, moved
+## by the boldness dial of round 25: the board asks the rules and keeps no copy of it).
 func clear_chance(people: Array, id: String, errand: bool = false) -> float:
 	var shooting := 0.0
 	for p in people:
@@ -838,7 +839,7 @@ func clear_chance(people: Array, id: String, errand: bool = false) -> float:
 	var cleared: bool = town.state_of(id) == "cleared"
 	var danger := 0 if cleared else int(town.place(id).get("danger", 0))
 	var nest := 0 if cleared else int(town.nest_strength(id))
-	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (float(scav.ERRAND_CLEAR) if errand else 0.0), 0.1, 0.95)
+	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (float(scav.errand_terms().get("clear", scav.ERRAND_CLEAR)) if errand else 0.0), 0.1, 0.95)
 
 
 ## "likely", "a risk" or "unlikely".

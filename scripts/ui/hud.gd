@@ -278,13 +278,13 @@ const HELP := [
 const HELP_AVATAR := [
 	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["E Click", "Use, pick"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
 ]
 ## (With "Always aim at the mouse", round 22's setting: the mouse aims by itself and the left button fires, as it did.)
 const HELP_AVATAR_ALWAYS := [
 	["You", 2, [["W A S D", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R F", "Reload, melee"], ["Q", "Weapon away"], ["Right-click", "Tap to order"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
 ]
 ## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
@@ -3875,6 +3875,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	_refresh_selection()
 	_sync_radio(sim)
 	_sync_talk()
+	_sync_briefing()
 	if jobs_screen != null:
 		jobs_screen.refresh()
 	if build_screen != null:
@@ -4796,6 +4797,7 @@ func covered_rects(skip: Array = []) -> Array:
 	for c in cards:
 		parts.append(c.card)
 	parts.append(talk_card)
+	parts.append(briefing_card.panel if briefing_open() else null)
 	for c in parts:
 		if c != null and is_instance_valid(c) and c is Control and not skip.has(c) and c.is_visible_in_tree():
 			var r: Rect2 = c.get_global_rect()
@@ -4822,7 +4824,7 @@ func dock_rect() -> Rect2:
 
 # ---- the radio panel (round 18), the News wrappers, the alarm, the call card
 
-## Opens the radio panel on `page` ("jobs", "build", "map" or "news"; "" for the page it was left on, News the first time), or moves it there;
+## Opens the radio panel on `page` ("base", "jobs", "build", "map" or "news"; "" for the page it was left on, News the first time), or moves it there;
 ## `opts.focus` goes to the page's `focus_on` (a person id, a station id, a building id, a place id). Avatar mode only: without an avatar, and
 ## while a modal page has the screen, nothing happens. The panel never pauses the game; opening it takes the place of the controls help.
 func open_radio(page: String = "", opts: Dictionary = {}) -> void:
@@ -5083,7 +5085,8 @@ var lock_allowed: Callable
 ## `dialog.cancel`, `dialog.site:<site id>` and `dialog.party`; in avatar mode (round 17) `news` (the toolbar's News button), `news.panel`,
 ## `alarm` (the toolbar's call to arms), `radio` (the verbs in the dock), `radio.<verb>` (one verb's button: come, hold, cover, search,
 ## back, post), `radio.insist` (the Insist button, there after a refusal), `ammo` (the readout of the gun), `call` (the call card) and `talk` (the card E at a person opens);
-## round 18: `panel` (the radio panel), `panel.tab:<page>` (a tab: jobs, build, map, news) and `panel.page` (the page that is up; the part of it in view when it scrolls).
+## round 18: `panel` (the radio panel), `panel.tab:<page>` (a tab: base, jobs, build, map, news) and `panel.page` (the page that is up; the part of it in view when it scrolls);
+## round 25: `briefing` (the morning briefing's card).
 func anchor_rect(name: String) -> Rect2:
 	if name.begins_with("stores."):
 		return _anchor_store(name.trim_prefix("stores."))
@@ -5180,6 +5183,8 @@ func _anchor_control(name: String):
 			return call_card
 		"talk":
 			return talk_card
+		"briefing":
+			return briefing_card.panel if briefing_card != null and is_instance_valid(briefing_card) and briefing_card.is_open() else null
 		"sound":
 			return sound_button
 		"legend":
@@ -5407,3 +5412,110 @@ func talk_person():
 func _sync_talk() -> void:
 	if talk_card != null and talk_card.is_open():
 		talk_card.refresh()
+
+
+# ---- the briefing card (round 25, V25.1: the morning briefing) ----
+# The slim card under the crew bar that the `briefing` event brings (scripts/ui/briefing_card.gd): the base's concerns, ranked, and the six priority chips.
+# A view only, never a modal (the game does not stop, WASD still walks, every control takes no focus). main.gd calls `queue_briefing()` on the event,
+# `close_briefing("esc")` for Esc (after the talk card, before the radio panel) and the staging flag `--briefing` `show_briefing()`; the Details
+# button opens the Base page (`open_radio("base")`). Anchor name: `briefing` (the card's board).
+
+const BriefingCard := preload("res://scripts/ui/briefing_card.gd")
+## The card waits for the dawn card to close, and shows anyway after this long (real seconds).
+const BRIEFING_WAIT_S := 18.0
+
+## The card (null while none is up), and what main.gd tells the HUD about the screen: a Callable() -> bool that is true while the dawn card or the storyteller's
+## card is up (unset: nothing is in the way).
+var briefing_card = null
+var briefing_gate: Callable
+## The briefing is waiting to be shown, and how many real seconds of waiting it has left before it is shown whatever is up.
+var briefing_wanted := false
+var briefing_wait_left := 0.0
+var _briefing_msec := 0
+var _briefing_compact := false
+
+
+## The `briefing` event: the card is shown once nothing is in the way (the dawn card has closed, no modal is up), or after BRIEFING_WAIT_S.
+func queue_briefing() -> void:
+	if not avatar_ui or tutorial_ui:
+		return
+	briefing_wanted = true
+	briefing_wait_left = BRIEFING_WAIT_S
+	_briefing_msec = Time.get_ticks_msec()
+
+
+## Shows the card now: `data` is the sim's `briefing.current` ({"day", "lines", "order", "suggested"}); without it the card is made from the sim's own
+## `briefing.current` of today, else from the concerns as they are now. False when there is no avatar, the tutorial has the screen or there is no game.
+func show_briefing(data: Dictionary = {}) -> bool:
+	if sim_ref == null or not avatar_ui or tutorial_ui or game_over != null:
+		return false
+	close_briefing("replaced")
+	briefing_wanted = false
+	var card := BriefingCard.new()
+	add_child(card)
+	card.setup(self, data if not data.is_empty() else _briefing_data())
+	card.closed.connect(_on_briefing_closed.bind(card))
+	briefing_card = card
+	_briefing_compact = compact
+	card.set_compact(compact)
+	if radio_panel != null:
+		radio_panel.note_briefing_seen()
+	return true
+
+
+## What the card shows when it is not handed the sim's snapshot: today's `briefing.current` or the concerns as they stand.
+func _briefing_data() -> Dictionary:
+	var sim = sim_ref
+	var b = sim.get("briefing") if sim != null else null
+	var out := {"day": int(sim.day) if sim != null else 1, "lines": [], "order": [], "suggested": []}
+	if b == null:
+		return out
+	var cur = b.get("current")
+	if cur is Dictionary and int((cur as Dictionary).get("day", 0)) == int(sim.day) and not ((cur as Dictionary).get("lines", []) as Array).is_empty():
+		return (cur as Dictionary).duplicate(true)
+	if b.has_method("concerns"):
+		var lines: Array = []
+		for c in b.concerns():
+			if c is Dictionary and String(c.get("level", "info")) != "ok":
+				lines.append(c)
+		out.lines = lines
+	return out
+
+
+func briefing_open() -> bool:
+	return briefing_card != null and is_instance_valid(briefing_card) and briefing_card.is_open()
+
+
+## Puts the card away (Esc, or the HUD when the avatar goes). `why` is for the card's `closed` signal.
+func close_briefing(why: String = "dismiss") -> void:
+	briefing_wanted = false
+	if briefing_open():
+		briefing_card.close(why)
+
+
+func _on_briefing_closed(_why: String, card) -> void:
+	if briefing_card == card:
+		briefing_card = null
+
+
+## Each update: the waiting card is shown when the way is clear (or its time is up), the open card follows the window's form and goes with the avatar.
+func _sync_briefing() -> void:
+	var now := Time.get_ticks_msec()
+	var dt := clampf(float(now - _briefing_msec) / 1000.0, 0.0, 1.0)
+	_briefing_msec = now
+	if not avatar_ui or tutorial_ui:
+		if briefing_wanted or briefing_open():
+			close_briefing("gone")
+		return
+	if briefing_open():
+		if compact != _briefing_compact:
+			_briefing_compact = compact
+			briefing_card.set_compact(compact)
+		return
+	if not briefing_wanted:
+		return
+	briefing_wait_left = maxf(0.0, briefing_wait_left - dt)
+	var in_the_way: bool = briefing_gate.is_valid() and bool(briefing_gate.call())
+	if (in_the_way and briefing_wait_left > 0.0) or modal_open():
+		return
+	show_briefing()

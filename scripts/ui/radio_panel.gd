@@ -1,5 +1,6 @@
-## The radio panel (round 18, slice 2): the colony's interface in avatar mode, one NON-MODAL board on the right of the window with four
-## pages, Jobs, Build, Map and News (the old Duty roster, Build screen, Town Board and News log, as pages one asks things of). It never
+## The radio panel (round 18, slice 2): the colony's interface in avatar mode, one NON-MODAL board on the right of the window with five
+## pages, Base, Jobs, Build, Map and News (the old Duty roster, Build screen, Town Board and News log, as pages one asks things of; round 25 adds
+## the Base page, where the base is run by priorities and dials and the briefing's concerns are handled). It never
 ## pauses the game, takes no key (every control of it is FOCUS_NONE: W A S D and E keep working while it is up) and never covers the clock,
 ## the gun's readout or the toolbar: the HUD puts it under the right column, over the toolbar, and keeps the avatar in view (`hud.free_view()`,
 ## main.gd's camera). The modal pages are still there as the FULL pages (Shift+J, Shift+N, Shift+G, and each page's "Full page" button).
@@ -15,12 +16,14 @@
 ##
 ## Every page node has the same four functions: `setup(host, sim_getter, options := {})`, `refresh()`, `focus_on(id)` (a person, a station, a
 ## building, a place) and `full_page()` (the modal version, through the HUD). Pages are built when first asked for and kept. The News page is
-## news_panel.gd; the others are scripts/ui/jobs_page.gd, build_page.gd and map_page.gd (loaded when needed: a page that does not load takes
-## down only itself). The Map page is there in a settlement game only (`sim.town.on`).
+## news_panel.gd; the others are scripts/ui/base_page.gd, jobs_page.gd, build_page.gd and map_page.gd (loaded when needed: a page that does not
+## load takes down only itself). The Map page is there in a settlement game only (`sim.town.on`), and so is the Base page (an avatar game of the
+## small start: `sim.priorities.active()`).
 ##
 ## While a page other than News is up, the oldest call that waits for an answer stays in view as a slim strip under the tabs (call_card.gd:
 ## a decision is never hidden behind a page); on News the page's own list has it, as in round 17. The News tab wears a gold dot while there
-## is something unread and a "!" while a call waits.
+## is something unread and a "!" while a call waits. The Base tab (round 25) wears a "!" while a problem is at its second stage or a dilemma waits, and
+## a gold dot while the morning's briefing has not been looked at (`note_briefing_seen`: the card or the page).
 extends PanelContainer
 
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
@@ -31,10 +34,11 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 ## The panel was opened, shut, or moved to another page.
 signal changed
 
-const PAGES := ["jobs", "build", "map", "news"]
-const PAGE_NAMES := {"jobs": "Jobs", "build": "Build", "map": "Map", "news": "News"}
-const PAGE_KEYS := {"jobs": "J", "build": "N", "map": "G", "news": "T"}
+const PAGES := ["base", "jobs", "build", "map", "news"]
+const PAGE_NAMES := {"base": "Base", "jobs": "Jobs", "build": "Build", "map": "Map", "news": "News"}
+const PAGE_KEYS := {"base": "B", "jobs": "J", "build": "N", "map": "G", "news": "T"}
 const PAGE_TIPS := {
+	"base": "Base: what the base worries about, your priorities, the four dials, what each station waits on and the trouble in the yard",
 	"jobs": "Jobs: who works where by day and holds which post at night. You ask, and they answer",
 	"build": "Build: pick a building, and the Builders raise it where it belongs",
 	"map": "Map: the places on the road and the parties out. Take control of a trip, or ask someone to go",
@@ -42,10 +46,13 @@ const PAGE_TIPS := {
 }
 ## Where the pages of the others are (loaded when first asked for).
 const PAGE_PATHS := {
+	"base": "res://scripts/ui/base_page.gd",
 	"jobs": "res://scripts/ui/jobs_page.gd",
 	"build": "res://scripts/ui/build_page.gd",
 	"map": "res://scripts/ui/map_page.gd",
 }
+## How wide a tab is at least in the whole form (five tabs, the close button and the gaps are under 340 px: a window that leaves the panel less is narrow).
+const TAB_W := {"base": 48.0, "jobs": 48.0, "build": 50.0, "map": 46.0, "news": 60.0}
 const WIDTH := 440.0
 const WIDTH_COMPACT := 316.0
 const MIN_H := 280.0
@@ -75,6 +82,9 @@ var _built := false
 var _head: HBoxContainer
 var _marks := {}
 var _lit := "?"
+## The day whose briefing has been looked at (the card was shown, or the Base page was opened).
+var _briefing_seen_day := 0
+var _seen_init := false
 var _col: VBoxContainer
 
 
@@ -157,7 +167,7 @@ func _speed_getter() -> Callable:
 
 func _make_tab(page: String) -> Button:
 	var b := RadioKit.small_button(host, String(PAGE_NAMES[page]), 26.0, 13)
-	b.custom_minimum_size.x = 66.0 if page == "news" else 52.0
+	b.custom_minimum_size.x = _tab_width(page)
 	b.tooltip_text = _tab_tip(page, false)
 	b.pressed.connect(_on_tab.bind(page))
 	# the marks (a dot for what is unread, a "!" for a call that waits) are drawn over the tab's right end
@@ -173,14 +183,22 @@ func _make_tab(page: String) -> Button:
 	return b
 
 
+## How wide a tab is at least: the whole form has room for a little more than the words; the narrow one (five tabs and the close button in 316 px) lets each be
+## as wide as its word.
+func _tab_width(page: String) -> float:
+	if _compact:
+		return 0.0
+	return float(TAB_W.get(page, 48.0))
+
+
 ## The tooltip of a tab: what the page is, its key and, for the pages that have one, the key of its full (modal) page.
 func _tab_tip(page: String, call_waits: bool) -> String:
 	var key := String(PAGE_KEYS[page])
 	var text := "%s\nKey: %s" % [PAGE_TIPS[page], key]
-	if page != "news":
+	if page != "news" and page != "base":
 		text += " (Shift+%s: the full page)" % key
 	if call_waits:
-		text += "\nA call waits for your answer"
+		text += "\nA call waits for your answer" if page == "news" else "\nSomething waits for you here"
 	return text
 
 
@@ -219,7 +237,8 @@ func tab_button(page: String) -> Button:
 	return tabs.get(page)
 
 
-## What a tab wears now: {"dot": there is something unread, "bang": a call waits for an answer} (only the News tab has either).
+## What a tab wears now: {"dot": there is something unread (Base: a briefing nobody has looked at), "bang": a call waits for an answer (Base: a problem is at its
+## second stage, or a dilemma waits)} (only the News and the Base tabs have either).
 func tab_marks(page: String) -> Dictionary:
 	var m = _marks.get(page)
 	if m == null:
@@ -238,6 +257,14 @@ func page_available(page: String) -> bool:
 		var sim = _sim()
 		var town = sim.get("town") if sim != null else null
 		return town != null and bool(town.on)
+	if page == "base":
+		# (round 25: the small start with an avatar, where the priorities and the dials are in play)
+		var sim2 = _sim()
+		var town2 = sim2.get("town") if sim2 != null else null
+		var pr = sim2.get("priorities") if sim2 != null else null
+		if town2 == null or not bool(town2.on) or pr == null or not pr.has_method("toggle"):
+			return false
+		return not pr.has_method("active") or bool(pr.active())
 	return true
 
 
@@ -259,6 +286,27 @@ func _sync_tabs() -> void:
 		marks.set_meta("dot", dot)
 		marks.set_meta("bang", bang)
 		marks.queue_redraw()
+	# round 25: the Base tab's own marks
+	if _marks.has("base"):
+		if not _seen_init:
+			# (a briefing that is already there when the panel first looks, a loaded game's, is not one that waits)
+			_seen_init = true
+			var sim0 = _sim()
+			var b0 = sim0.get("briefing") if sim0 != null else null
+			var cur0 = b0.get("current") if b0 != null else null
+			if cur0 is Dictionary and int((cur0 as Dictionary).get("day", 0)) == int(sim0.day):
+				_briefing_seen_day = int(sim0.day)
+		var shown_base := is_open() and _page == "base"
+		var base_bang := not shown_base and _base_bang()
+		var base_dot := not shown_base and _briefing_waits()
+		var bmarks: Control = _marks["base"]
+		if bool(bmarks.get_meta("dot")) != base_dot or bool(bmarks.get_meta("bang")) != base_bang:
+			bmarks.set_meta("dot", base_dot)
+			bmarks.set_meta("bang", base_bang)
+			bmarks.queue_redraw()
+		var base_tip := _tab_tip("base", base_bang)
+		if tabs["base"].tooltip_text != base_tip:
+			tabs["base"].tooltip_text = base_tip
 	var lit := _page if is_open() else ""
 	if lit != _lit:
 		for page in PAGES:
@@ -272,6 +320,46 @@ func _sync_tabs() -> void:
 func _radio():
 	var s = _sim()
 	return s.get("radio") if s != null else null
+
+
+## Round 25: something at the base that waits for the player, whichever page is up: a problem at its second stage (half its time gone: the call is
+## raised) or a dilemma (a call of the kind "dilemma" that is open). False in a game without the modules.
+func _base_bang() -> bool:
+	var sim = _sim()
+	if sim == null:
+		return false
+	var problems = sim.get("problems")
+	if problems != null and problems.has_method("open"):
+		var open = problems.open()
+		if open is Array:
+			for r in open:
+				if r is Dictionary and int(r.get("stage", 0)) >= 2:
+					return true
+	var radio = _radio()
+	if radio != null and radio.has_method("open_calls"):
+		for e in radio.open_calls():
+			if String(e.get("kind", "")) == "dilemma":
+				return true
+	return false
+
+
+## A briefing that was composed today and has not been looked at: the card was never shown (it waits for the dawn card, a tutorial step, a modal) or
+## it went by while the player was elsewhere, and the Base page has not been opened.
+func _briefing_waits() -> bool:
+	var sim = _sim()
+	if sim == null or not page_available("base"):
+		return false
+	var b = sim.get("briefing")
+	var cur = b.get("current") if b != null else null
+	return cur is Dictionary and int((cur as Dictionary).get("day", 0)) == int(sim.day) and _briefing_seen_day != int(sim.day)
+
+
+## The morning's briefing has been looked at (the HUD shows the card, or the Base page is opened): its dot on the tab goes.
+func note_briefing_seen() -> void:
+	var sim = _sim()
+	if sim != null:
+		_briefing_seen_day = int(sim.day)
+		_sync_tabs()
 
 
 # ------------------------------------------------------------------------ the pages --
@@ -339,6 +427,8 @@ func open(page_id: String = "", opts: Dictionary = {}) -> void:
 	last_page = want
 	visible = true
 	node.visible = true
+	if want == "base":
+		note_briefing_seen()
 	_sync_tabs()
 	_sync_foot()
 	refresh()
@@ -399,7 +489,7 @@ func full_page() -> void:
 func refresh() -> void:
 	if host == null or not _built:
 		return
-	if visible and _page == "map" and not page_available("map"):
+	if visible and (_page == "map" or _page == "base") and not page_available(_page):
 		open("news")
 		return
 	_sync_tabs()
@@ -420,6 +510,8 @@ func set_compact(on: bool) -> void:
 		return
 	_compact = on
 	custom_minimum_size.x = WIDTH_COMPACT if on else WIDTH
+	for page in tabs:
+		tabs[page].custom_minimum_size.x = _tab_width(String(page))
 	for node in pages.values():
 		if node.has_method("set_compact"):
 			node.set_compact(on)
