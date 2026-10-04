@@ -700,7 +700,8 @@ func _people() -> void:
 	var scale := float(_size) / float(DEFAULT_SIZE)
 	var want := int(opts.get("rescue", RESCUE_COUNT if _blocks >= 6 else 2))
 	var apart_min := 18.0 if _blocks >= 6 else 8.0
-	var rings := [[22.0 * scale, 48.0 * scale], [48.0 * scale, 80.0 * scale], [80.0 * scale, 400.0]]
+	# (WP8: the first ring is 14 to 28 tiles out, not 22 to 48: the first rescue is the demo's first goal, to be reached with a pump shotgun and 40 rounds)
+	var rings := [[14.0 * scale, 28.0 * scale], [28.0 * scale, 58.0 * scale], [58.0 * scale, 400.0]]
 	var per_ring := int(ceil(float(want) / 3.0))
 	for ri in rings.size():
 		var pool: Array = []
@@ -727,6 +728,7 @@ func _people() -> void:
 			rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": ri + 1, "dist": c.distance_to(start_c)})
 			pool.erase(hid)
 			picked += 1
+	_top_up_rescue(rescue, want, start_house, start_c, apart_min)
 	rescue.sort_custom(func(a, b): return float(a.dist) < float(b.dist))
 	var dead := _dead(start_house, rescue)
 	for i in dead.size():
@@ -808,6 +810,33 @@ func _free_spot(room: int) -> Vector2:
 				best_d = dd
 				best = Vector2(float(x) + 0.5, float(y) + 0.5)
 	return best
+
+
+## WP8: a ring that holds too few houses far enough apart leaves the rescue list short: the nearest houses not picked yet (two rooms or more, half the usual space from the others) make
+## it up, so that there are always `want` of them.
+func _top_up_rescue(rescue: Array, want: int, start_house: int, start_c: Vector2, apart_min: float) -> void:
+	var spare: Array = []
+	for h in _houses:
+		if int(h.id) == start_house or h.rooms.size() < 2:
+			continue
+		var taken := false
+		for r in rescue:
+			taken = taken or int(r.house) == int(h.id)
+		if not taken:
+			spare.append([Vector2(Rect2i(h.rect).get_center()).distance_to(start_c), int(h.id)])
+	spare.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+	for e in spare:
+		if rescue.size() >= want:
+			return
+		var hid := int(e[1])
+		var c := Vector2(Rect2i(_houses[hid].rect).get_center())
+		var apart := true
+		for r in rescue:
+			if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < apart_min * 0.5:
+				apart = false
+		if apart:
+			var room := _roomiest(hid)
+			rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": 3, "dist": c.distance_to(start_c)})
 
 
 ## Where a survivor hides in their room: the free tile farthest from every doorway of the house, a corner by preference (one who has barred themselves in keeps clear of the
@@ -947,7 +976,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 	made = 0
 	var group := 0
 	guard = 0
-	while made < in_street and guard < 400:
+	while made < in_street and guard < 900:
 		guard += 1
 		var cx := rng.randi_range(EDGE + 4, W - EDGE - 5)
 		var cy := rng.randi_range(EDGE + 4, H - EDGE - 5)
@@ -957,7 +986,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		var centre := Vector2(float(cx) + 0.5, float(cy) + 0.5)
 		if centre.distance_to(start_c) < keep_clear * 1.2:
 			continue
-		var n := mini(rng.randi_range(3, 8), in_street - made)
+		var n := mini(rng.randi_range(1, 4), in_street - made)    # (WP8: loose groups of one to four, not three to eight)
 		var got := 0
 		var t2 := 0
 		while got < n and t2 < 60:

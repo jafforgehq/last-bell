@@ -79,6 +79,18 @@ func _init(data: Dictionary, w, effects) -> void:
 	medical = TownMedical.new()
 	medical.setup(self)
 	_make_parts()
+	_apply_tuning()
+
+
+## The lab's numbers for the street's dead (the `field` block of assets/data/one_house_tuning.json, see DormantDead.apply_tuning): read when the sim is made, so that a new run and a
+## load both have them.
+func _apply_tuning() -> void:
+	var path := "res://assets/data/one_house_tuning.json"
+	if field == null or not FileAccess.file_exists(path):
+		return
+	var json := JSON.new()
+	if json.parse(FileAccess.get_file_as_string(path)) == OK and json.data is Dictionary and typeof(json.data.get("field")) == TYPE_DICTIONARY:
+		field.apply_tuning(json.data.field)
 
 
 func _make_parts() -> void:
@@ -176,6 +188,7 @@ func update(dt: float) -> void:
 		return
 	_finds_base = path_z.find_calls
 	if field != null:
+		field.night_mult = field.night_wake if phase != "day" else 1.0    # (the dark carries sound: the dead wake from farther)
 		field.update(dt, _anchors())
 		_notice()
 	var first_new := events.size()
@@ -216,11 +229,12 @@ func _town_events(first_new: int) -> void:
 
 # ------------------------------------------------------------------ the dead --
 
-## The noise of a shot goes to the field: the dormant dead within its radius wake and come, the awake that stand or wander within it come.
+## The noise of a shot goes to the field: at most a few of the dead within the gun's radius (a shotgun 16 tiles, the other guns 12, a blow 4: the field's `noise_by_gun`) hear it and go
+## to look at where it was fired from (DormantDead `noise`).
 func _shot_noise(p: Person) -> void:
 	if field != null:
 		# (a shot fired indoors is heard by the next house, not by the whole district: walls hold the sound, so that clearing the start house does not call the street)
-		var r: float = field.noise_r * (INDOOR_NOISE if houses != null and houses.house_at(p.x, p.y) >= 0 else 1.0)
+		var r: float = field.noise_radius_for(p) * (INDOOR_NOISE if houses != null and houses.house_at(p.x, p.y) >= 0 else 1.0)
 		field.noise(Vector2(p.x, p.y), p, r)
 
 

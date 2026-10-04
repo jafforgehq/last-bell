@@ -14,9 +14,21 @@ extends RefCounted
 
 const KIND_NAMES := ["walker", "runner", "brute"]
 const CELL := 16
-const WAKE_R := 28.0
-const SLEEP_R := 45.0
-const NOISE_R := 30.0
+## THE NUMBERS (One House, WP8: tools/house_lab.gd found that the first ones, a shot heard at 30 tiles that woke every dead one in it and sent them all after the shooter, with wake_r 28,
+## made every walk to a survivor deadly: at the integration tip the bot got a claim before noon in 8 of 8 seeds and four rescues in 0 of 8, and lost all eight). The defaults here are the
+## lab's and `apply_tuning` reads the `field` block of assets/data/one_house_tuning.json over them (the bot's first attack held in 4 of 8 seeds at wake_r 12, 6 at 11, 7 at 10 and 9). WAKING
+## by proximity: `wake_r` 10 tiles by day, `night_wake` 1.8 times that from dusk to dawn (TownSim sets `night_mult`), halved for one in a house the person is not in. A SHOT is heard within a radius by gun (`noise_by_gun`: the shotgun 16 tiles, the other guns 12, a blow 4,
+## a third of it from inside a house: TownSim `_shot_noise`), at most `noise_cap` (4; 6 held the bot's first attack in 17 of 24 seeds, 4 with two more medicine at the start in 21) of the dead are drawn by one shot, the nearest first (those behind the walls of a house the shot was
+## not fired in hear it as if MUFFLE times farther), and they go to the spot the shot came from to look (`investigate`, a wanderer's pace): they are not told where the shooter is, they
+## find them by sight within 7 tiles (TownSim `_notice`).
+const WAKE_R := 10.0
+const SLEEP_R := 22.0
+const NOISE_R := 16.0
+const NOISE_CAP := 4
+const MUFFLE := 1.35
+const NOISE_BY_GUN := {"shotgun": 16.0, "other": 12.0, "melee": 4.0}
+## The multiplier of the wake radius from dusk to dawn (the dark carries sound and the streets are not safe in it).
+const NIGHT_WAKE := 1.8
 const EVERY := 0.25
 ## The most dead the periodic look wakes at once (a street of sixty woken in one step is sixty path searches and sixty new pictures in one frame: they come over a few passes, the
 ## nearest first). A shout or a shot is not held to it: its dead have their own spread (`start_chase`).
@@ -39,6 +51,10 @@ var active_cap := 100
 var wake_r := WAKE_R
 var sleep_r := SLEEP_R
 var noise_r := NOISE_R
+var noise_cap := NOISE_CAP
+var noise_by_gun: Dictionary = NOISE_BY_GUN.duplicate()
+## What `night_mult` is from dusk to dawn (TownSim sets `night_mult` from the phase).
+var night_wake := NIGHT_WAKE
 ## True while the night belongs to the wave (the base is under attack): no dormant one wakes, whatever wakes them (OneHouse sets it).
 var pause_wake := false
 ## The wake radius is multiplied by this (1.0 by day; the dark carries sound and the streets are not safe: 1.4 at night, set by whoever knows the hour).
@@ -339,17 +355,91 @@ func trim(cap: int) -> int:
 	return put
 
 
-## A shot or a shout at `at`: the dormant within `noise_r` wake and go after `prey`; the real ones that stand or wander within it go after it too.
+## How far a shot of this person's gun is heard: by the gun ("shotgun"), a blow (a gun that is melee) and every other gun.
+func noise_radius_for(p) -> float:
+	var gun: Dictionary = sim.gun_of(p) if sim != null else {}
+	if bool(gun.get("melee", false)):
+		return float(noise_by_gun.get("melee", 4.0))
+	return float(noise_by_gun.get(String(p.weapon), noise_by_gun.get("other", 12.0)))
+
+
+## A shot or a shout at `at`: the dead that stand or wander within `radius` (the awake) and those that sleep within it (their records) hear it, at most `noise_cap` of them, the nearest
+## first (a dead one in a house the shot was not fired in is heard as if it were MUFFLE times farther), and go to `at` to look, at a wanderer's pace. They are not told who fired:
+## whoever they see on the way, they go after (TownSim `_notice`). `prey` is only the shooter, kept for the old callers.
 func noise(at: Vector2, prey, radius: float = -1.0) -> void:
 	var r := noise_r if radius < 0.0 else radius
 	var t_in := Time.get_ticks_usec()
+	var in_house := _house_at(at.x, at.y) if not tile_house.is_empty() else -1
+	var cand: Array = []    # [distance as heard, Zombie or null, record or -1]
 	for z in sim.zombies:
 		if z.state != "still" and z.state != "wander":
 			continue
-		if Vector2(z.x - at.x, z.y - at.y).length() < r:
-			sim.start_chase(z, prey)
-	_wake_near(at, r, "noise", prey)
+		var d := Vector2(z.x - at.x, z.y - at.y).length()
+		if d < r * MUFFLE:
+			var heard := _muffled(z.x, z.y, in_house, d)
+			if heard < r:
+				cand.append([heard, z, -1])
+	if not pause_wake:
+		var c0 := clampi(floori((at.x - r * MUFFLE) / float(CELL)), 0, cols - 1)
+		var c1 := clampi(floori((at.x + r * MUFFLE) / float(CELL)), 0, cols - 1)
+		var r0 := clampi(floori((at.y - r * MUFFLE) / float(CELL)), 0, rows - 1)
+		var r1 := clampi(floori((at.y + r * MUFFLE) / float(CELL)), 0, rows - 1)
+		for cy in range(r0, r1 + 1):
+			for cx in range(c0, c1 + 1):
+				for i in cells[cy * cols + cx]:
+					var d := Vector2(xs[i] - at.x, ys[i] - at.y).length()
+					if d >= r * MUFFLE:
+						continue
+					var heard := _muffled(xs[i], ys[i], in_house, d)
+					if heard < r:
+						cand.append([heard, null, int(i)])
+	cand.sort_custom(func(a, b): return a[0] < b[0])
+	var room := maxi(0, active_cap - active_of.size())
+	var drawn := 0
+	for e in cand:
+		if drawn >= noise_cap:
+			break
+		var z = e[1]
+		if z == null:
+			if room <= 0:
+				continue
+			z = _wake(int(e[2]))
+			room -= 1
+		_investigate(z, at)
+		drawn += 1
 	wake_usec += Time.get_ticks_usec() - t_in
+
+
+## The distance a sound at `d` tiles is heard as by a dead one at (x, y): farther if it stands in a house the sound did not start in.
+func _muffled(x: float, y: float, in_house: int, d: float) -> float:
+	if not tile_house.is_empty():
+		var h := _house_at(x, y)
+		if h >= 0 and h != in_house:
+			return d * MUFFLE
+	return d
+
+
+## Sends one of the dead to look at `at`: a wanderer's walk to it (the colony's own `wander` arm follows the path), and a long time before it picks another place.
+func _investigate(z, at: Vector2) -> void:
+	z.state = "wander"
+	z.hunt_id = ""
+	z.path = sim.path_z.find(sim.world.solid_z, z.x, z.y, at.x, at.y)
+	z.path_i = 0
+	z.wander_t = 90.0
+
+
+## The `field` block of the tuning file (assets/data/one_house_tuning.json, read by TownSim when the sim is made): wake_r, noise_r, sleep_r, active_cap, noise_cap, night_wake and
+## noise_by_gun ({"shotgun", "other", "melee"}). A key that is not there keeps the default. (`active_cap` is the platform's, scripts/town/town_perf.gd: only set when the file says so.)
+func apply_tuning(d: Dictionary) -> void:
+	for k in ["wake_r", "noise_r", "sleep_r", "night_wake"]:
+		if d.has(k):
+			set(k, float(d[k]))
+	for k in ["active_cap", "noise_cap"]:
+		if d.has(k):
+			set(k, int(d[k]))
+	if typeof(d.get("noise_by_gun")) == TYPE_DICTIONARY:
+		for g in d.noise_by_gun:
+			noise_by_gun[String(g)] = float(d.noise_by_gun[g])
 
 
 ## A light (a lamp, a fire, a torch beam) at `at`: the dormant within `radius` wake and wander, not after anybody.
