@@ -95,6 +95,15 @@ static func avatar_game(seed_value: int = 1, crew: int = 5) -> Dictionary:
 	return g
 
 
+## The base the way it was before round 25 (the older avatar tests that count News entries or calls call it): the briefing, the priorities, the dials, the problems
+## and the dilemma are switched off, as Orientation Day does. A sim that has none of them (an older fake) is left as it is.
+static func quiet_base(sim) -> void:
+	for m in ["briefing", "priorities", "policies", "problems", "dilemmas"]:
+		var mod = sim.get(m)
+		if mod != null:
+			mod.enabled = false
+
+
 ## The clock at `hour` (0 to 24) of `day`, as test_radio's `_at`: the day, the minutes, the game minutes since the start (day 1, 07:00 is 0), the
 ## phase, the bell (rung from 19:00 to 06:00) and the supplies' day, so that nothing is waiting to happen "again".
 static func at(sim, day: int, hour: float) -> void:

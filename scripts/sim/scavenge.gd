@@ -500,7 +500,8 @@ func is_errand(party) -> bool:
 
 ## What an errand does worse, for the Map page's note and the radio's `errand_willingness`: the numbers of the constants.
 func errand_terms() -> Dictionary:
-	return {"loot": ERRAND_LOOT, "wound": ERRAND_WOUND, "loss_per_danger": ERRAND_LOSS_PER_DANGER, "clear": ERRAND_CLEAR, "extras": false, "rescue": false, "vehicle": false}
+	# (round 25: the boldness dial changes the numbers; the base itself is returned inactive or at "usual")
+	return sim.policies.errand_terms({"loot": ERRAND_LOOT, "wound": ERRAND_WOUND, "loss_per_danger": ERRAND_LOSS_PER_DANGER, "clear": ERRAND_CLEAR, "extras": false, "rescue": false, "vehicle": false})
 
 
 ## Why these people cannot be sent on an errand to this place now ("" when they can): what `send` refuses, in the words the
@@ -508,6 +509,9 @@ func errand_terms() -> Dictionary:
 ## seats and the fuel, the place and the action, each person) or the classic start's. `healer_ok`: a healer on a case may go (the
 ## radio takes them off it).
 func why_not_errand(people: Array, place_id: String, action: String = "loot", vehicle_id: String = "", healer_ok: bool = false) -> String:
+	var limit: String = sim.policies.errand_limit(place_id)    # (round 25: a careful base goes only to a place of danger 1 or less; "" inactive)
+	if limit != "":
+		return limit
 	if town_mode and not errands.has(place_id):
 		return _why_not_town(people, place_id, action, vehicle_id, false, healer_ok)
 	var when := why_not_when()
@@ -1806,7 +1810,7 @@ func clear_chance(people: Array, place_id: String, errand: bool = false) -> floa
 	var cleared: bool = sim.town.state_of(place_id) == "cleared"
 	var danger := 0 if cleared else int(_site(place_id).get("danger", 0))
 	var nest: int = 0 if cleared else sim.town.nest_strength(place_id)
-	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (ERRAND_CLEAR if errand else 0.0), 0.1, 0.95)
+	return clampf(0.35 + 0.08 * shooting - 0.12 * float(danger + nest) + (float(errand_terms().clear) if errand else 0.0), 0.1, 0.95)
 
 
 ## The extras of a trip's end in the settlement game: the places shown, a nest gone, a survivor home, the
@@ -1855,9 +1859,10 @@ func _decide(party: Dictionary) -> Dictionary:
 		if p != null:
 			members.append(p)
 	var errand := is_errand(party)
+	var terms: Dictionary = errand_terms() if errand else {}    # (round 25: read once; the boldness dial)
 	var scale := loot_scale(String(party.site), members)
 	if errand:
-		scale *= ERRAND_LOOT
+		scale *= float(terms.loot)
 	var found := {}
 	for k in STOCKS:
 		if site.loot.has(k):
@@ -1880,14 +1885,14 @@ func _decide(party: Dictionary) -> Dictionary:
 		var roll_kind: float = sim.rng.randf()
 		var lose: bool = danger >= LOSS_MIN_DANGER and roll_loss < LOSS_BASE * mult
 		if errand and danger >= 1:
-			lose = lose or roll_loss < ERRAND_LOSS_PER_DANGER * mult * float(danger)
+			lose = lose or roll_loss < float(terms.loss_per_danger) * mult * float(danger)
 		if lose:
 			lost.append(p.id)
 			continue
 		var shooting := float(p.skills.Shooting)
 		var wound_p: float = WOUND_BASE * danger * mult * (1.0 - shooting / 15.0)
 		if errand:
-			wound_p *= ERRAND_WOUND
+			wound_p *= float(terms.wound)
 		if roll_wound < wound_p:
 			hurt[p.id] = "bite" if roll_kind < BITE_SHARE else "scratch"
 	var loot := {}
@@ -1920,11 +1925,12 @@ func _decide_town(party: Dictionary) -> Dictionary:
 	var cleared: bool = sim.town.state_of(id) == "cleared"
 	var vehicle_id := String(party.get("vehicle", ""))
 	var errand := is_errand(party)
+	var terms: Dictionary = errand_terms() if errand else {}    # (round 25: read once; the boldness dial)
 	var scale := loot_scale(id, members)
 	if vehicle_id != "":
 		scale *= float(sim.vehicles.kind_of(vehicle_id).get("cargo", 1.0))
 	if errand:
-		scale *= ERRAND_LOOT
+		scale *= float(terms.loot)
 	var found := {}
 	for k in STOCKS:
 		if site.loot.has(k):
@@ -1956,13 +1962,13 @@ func _decide_town(party: Dictionary) -> Dictionary:
 		var roll_kind: float = sim.rng.randf()
 		var lose: bool = effective >= float(LOSS_MIN_DANGER) and roll_loss < LOSS_BASE * mult * (effective / 2.0)
 		if errand and effective >= 1.0:
-			lose = lose or roll_loss < ERRAND_LOSS_PER_DANGER * mult * effective
+			lose = lose or roll_loss < float(terms.loss_per_danger) * mult * effective
 		if lose:
 			lost.append(p.id)
 			continue
 		var wound_p: float = (WOUND_BASE * effective * mult + (NIGHT_OUT_WOUND * mult if night_out else 0.0)) * (1.0 - float(p.skills.Shooting) / 15.0)
 		if errand:
-			wound_p *= ERRAND_WOUND
+			wound_p *= float(terms.wound)
 		if action == "clear" and not clear_ok:
 			wound_p = minf(0.95, wound_p * 2.5)
 		if roll_wound < wound_p:

@@ -81,7 +81,7 @@ func ammo_per_scrap() -> float:
 ## The ammo stock the bench makes ammo up to, and the scrap it keeps back for the walls: the
 ## Workbench's settings (assets/data/stations.json).
 func target() -> float:
-	return float(sim.jobs.setting("bench", "ammo_target"))
+	return float(sim.jobs.setting("bench", "ammo_target")) + sim.priorities.ammo_target_shift()    # (round 25: Defence first raises it; 0.0 inactive)
 
 
 func reserve() -> float:
@@ -154,6 +154,8 @@ func _why_not_work(p) -> String:
 		return "they cannot work right now"
 	if _night():
 		return "it is night: everyone is at their post"
+	if sim.problems.blocks("bench"):    # (round 25: a jammed generator)
+		return "the generator is jammed"
 	if float(sim.stock.scrap) < reserve() + 1.0:
 		return "there is no scrap to spare"
 	if float(sim.stock.ammo) >= target():
@@ -187,6 +189,9 @@ func status_of(p) -> Array:
 ## Every step: the people at work at the bench (`jobs.working`) turn scrap into ammo while there
 ## is something to make; the crew is told once when the scrap is down to the reserve.
 func update(dt: float) -> void:
+	if sim.problems.blocks("bench"):    # (round 25: a jammed generator makes no ammo; false inactive)
+		_beats.clear()
+		return
 	if _scrap_room() > EPS:
 		_told_idle = false
 	var crew: Array = sim.jobs.working("bench")

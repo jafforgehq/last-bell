@@ -699,6 +699,11 @@ func _fit(p, id: String) -> float:
 	return score
 
 
+## `_fit`, public (round 25: the staffing plan of priorities.gd picks the best of the free hands for a station).
+func fit_of(p, id: String) -> float:
+	return _fit(p, id)
+
+
 # ------------------------------------------------------------------ update --
 
 func update(_dt: float) -> void:

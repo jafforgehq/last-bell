@@ -142,7 +142,7 @@ func _garden(hours: float) -> void:
 		return
 	var hands: int = sim.jobs.working("garden").size()
 	if hands > 0:
-		sim.stock.food += GARDEN_FOOD_PER_HOUR * float(hands) * hours * sim.seasons.mult("garden")
+		sim.stock.food += GARDEN_FOOD_PER_HOUR * float(hands) * hours * sim.seasons.mult("garden") * sim.policies.work_mult(null, "garden")
 
 
 ## The day begins: rolls the day's weather (from the run's one random source) and,
@@ -185,9 +185,9 @@ func repair_budget(amount: float) -> float:
 func days_left(kind: String) -> float:
 	var per_day := 0.0
 	if kind == "food":
-		per_day = FOOD_PER_DAY * sim.seasons.mult("food")
+		per_day = FOOD_PER_DAY * sim.seasons.mult("food") * sim.policies.ration_mult("food")
 	elif kind == "water":
-		per_day = WATER_PER_DAY * sim.seasons.mult("water")
+		per_day = WATER_PER_DAY * sim.seasons.mult("water") * sim.policies.ration_mult("water")
 	var crew := 0
 	for p in sim.people:
 		if not p.dead:
@@ -289,8 +289,8 @@ func _serve_meal() -> void:
 	for p in sim.people:
 		if p.dead or p.away != null:
 			continue
-		var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food")
-		var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water")
+		var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food") * sim.policies.ration_mult("food")
+		var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water") * sim.policies.ration_mult("water")
 		var food := _take("food", food_share)
 		if food >= food_share * FED_PART:
 			p.hunger_h = 0.0

@@ -71,7 +71,7 @@ const AMMO_LOW := 20.0
 ## The walking input this long is a hand on the keys.
 const HANDS_ON := 0.25
 const EPS := 1.0e-6
-const RANK := {"person": 0, "post": 1, "bench": 2, "gate": 3, "vehicle": 4, "wall": 5}
+const RANK := {"person": 0, "post": 1, "bench": 2, "gate": 3, "vehicle": 4, "wall": 5, "problem": 1}
 
 var sim
 ## The post the avatar is on ("" none), what it is doing with its hands ("bench" or ""), the rules seconds of the session left, and
@@ -184,6 +184,7 @@ func candidates() -> Array:
 	# the walls the hands could mend (round 19: the nights' module lists them in this very shape, and none without its rules)
 	if sim.nights != null and sim.nights.has_method("wall_candidates"):
 		out.append_array(sim.nights.wall_candidates())
+	out.append_array(sim.problems.candidates())    # (round 25: the base's trouble, a marker within reach: problems.gd; [] inactive)
 	return _ordered(out)
 
 
@@ -305,6 +306,8 @@ func use(cand: Dictionary = {}) -> Dictionary:
 			r = check_vehicle(id)
 		"wall":
 			r = _use_wall(int(id))
+		"problem":
+			r = sim.problems.use(c)    # (round 25: the fix at the avatar's own hands: problems.gd)
 	r["kind"] = kind
 	r["id"] = id
 	if not r.has("why"):

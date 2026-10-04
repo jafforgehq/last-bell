@@ -144,7 +144,7 @@ func mult(p, key: String) -> float:
 			m *= float(t.crowded.effects[key])
 	if sim.specialists.active():    # (round 20: a title's bonus on its own work; exactly nothing changes without an avatar)
 		m *= sim.specialists.mult(p, key)
-	return m
+	return m * sim.policies.work_mult(p, key)    # (round 25: overtime makes more of the craft, the mending and the garden; 1.0 inactive)
 
 
 ## The sum of the traits' additive effects for `key` (0.0 when none apply). Keys: cure, bond.

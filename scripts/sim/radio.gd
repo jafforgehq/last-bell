@@ -109,7 +109,7 @@ const HURRY_COVER := 7.0
 const ATTACK_TTL_MIN := 30.0
 ## The calls that cannot wait (a wall that is down or going, a brute on its way, the old attack call, the night's own): when one is raised the
 ## game drops to 1x once (main.gd: the `call_raised` event). Their times are game minutes, a few real seconds at 3x.
-const URGENT_KINDS := ["attack", "going", "brute", "breach", "night", "gate"]
+const URGENT_KINDS := ["attack", "going", "brute", "breach", "night", "gate", "dilemma"]
 const SICK_TTL_MIN := 60.0
 const APART_MORALE := -4.0
 ## The alarm's threat is set this far ahead (game minutes).
@@ -1130,6 +1130,17 @@ func request_post(p, post_id: String, args: Dictionary = {}) -> Dictionary:
 	return _answer_work(p, w, args, "post_set", func(): return sim.jobs.set_post(p, post_id))
 
 
+## Whether this person would go and fix this problem of the base (round 25, problems.gd owns the rules and asks `reason_not` for the words):
+## {"ok", "why", "hard", "line", "tone", "delay_s", "chance", "cost", "eta_h"}. Pure.
+func fix_willingness(p, problem_id) -> Dictionary:
+	return sim.problems.fix_willingness(p, problem_id)
+
+
+## Asks this person to go and fix this problem ({"ok", "line", "why", "hard", "tone", "insisted", "chance"}); `args.insist` as `request_job`.
+func request_fix(problem_id, p, args: Dictionary = {}) -> Dictionary:
+	return sim.problems.request_fix(problem_id, p, args)
+
+
 ## The answer to a request for a day job or a night post: refused with their words (a soft refusal pushed at INSIST_COST when asked to),
 ## or done (`apply`) with their line. They say the line aloud (a radio_line, `verb` "job" or "post_set").
 func _answer_work(p, w: Dictionary, args: Dictionary, verb: String, apply: Callable) -> Dictionary:
@@ -1463,6 +1474,10 @@ func _carry_out(e: Dictionary, option_id: String) -> String:
 		"idea":
 			# an idea the community brought (initiative.gd, round 20): the module does what a yes asks and keeps the accounts
 			return sim.initiative.carry_out(e, option_id)
+		"dilemma":
+			return sim.dilemmas.carry_out(e, option_id)    # (round 25: the fever outbreak, treat or quarantine: dilemmas.gd)
+		"problem":
+			return sim.problems.carry_out(e, option_id)    # (round 25: trouble at the halfway mark, send someone or leave it: problems.gd)
 		_:
 			return night.carry_out(e, option_id)    # (the calls of the night, round 19: night_calls.gd)
 	return ""
@@ -1576,6 +1591,8 @@ func _watch_for_fever() -> void:
 			_sick_called.erase(id)
 			continue
 		if _sick_called.has(id) or sim.medical.treat_orders.has(p.id):
+			continue
+		if sim.dilemmas.claims(p):    # (round 25: an outbreak the camp is deciding on holds them: no plain call; false inactive)
 			continue
 		_sick_called[id] = true
 		var options: Array = [
