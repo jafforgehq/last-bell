@@ -397,17 +397,20 @@ func test_a_run_with_no_crew_in_its_meta_is_the_classic_six() -> void:
 func test_someone_who_arrives_at_the_gate_gets_a_pawn_a_card_and_a_cue() -> void:
 	var g := MenuFakes.game({"difficulty": 1, "seed": 7, "crew": 3})
 	var main = g.main
-	var sound = MenuFakes.FakeSound.new()
-	main.add_child(sound)
-	main.sound.queue_free()
-	main.sound = sound
+	# (the bell is the soundscape's now, from the rules' event: the small bell, as the real game's sound makes it; the chime is the menus' own)
+	var sound = main.sound
+	var rung_before := int(sound.scape.played.get("bell", 0))
 	var def := _let_in_the_first_caller(main)
 	eq(main.sim.people.size(), 4, "the newcomer is in the crew")
 	var p = main.sim.people[3]
 	eq(String(p.id), String(def.id), "it is the caller")
 	main._handle_events()
-	check(sound.played.has("bell"), "a bell for the arrival: %s" % str(sound.played))
-	check(sound.ui_played.has("ui_confirm"), "and the chime: %s" % str(sound.ui_played))
+	eq(int(sound.scape.played.get("bell", 0)), rung_before + 1, "a bell for the arrival")
+	var chimed := false
+	for u in sound.ui_players:
+		if u.playing and sound.streams["ui_confirm"].has(u.stream):
+			chimed = true
+	check(chimed, "and the chime")
 	eq(main.hud.cards.size(), 4, "a card at once")
 	check(main.hud.banner_title.text.contains("GATE"), "the banner says so: '%s'" % main.hud.banner_title.text)
 	check(main.hud.cards[3].card.modulate != Color.WHITE, "and the card is lit")

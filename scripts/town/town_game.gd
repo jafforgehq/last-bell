@@ -25,6 +25,7 @@ extends RefCounted
 const VIEW_PARTS := {
 	"house_view": "res://scripts/render/house_view.gd",
 	"base_props_view": "res://scripts/render/base_props_view.gd",
+	"perimeter_view": "res://scripts/render/perimeter_view.gd",
 	"bystander_view": "res://scripts/render/bystander_view.gd",
 	"rescue_card": "res://scripts/ui/rescue_card.gd",
 	"town_hud": "res://scripts/ui/town_hud.gd",
