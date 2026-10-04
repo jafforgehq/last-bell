@@ -24,7 +24,7 @@ func _base(sim) -> Dictionary:
 
 
 func test_the_registry_knows_them_all() -> void:
-	for name in ["walked", "on_deck", "shots", "player_kills", "reloaded", "asked", "has_stance", "insisted", "news_open", "news_seen", "call_open", "call_answered", "board_read", "alarm_on", "alarm_cycled"]:
+	for name in ["walked", "on_deck", "shots", "player_kills", "reloaded", "asked", "has_stance", "insisted", "news_open", "news_seen", "call_open", "call_answered", "board_read", "alarm_on", "alarm_cycled", "holstered", "wheel_open", "gate_shut"]:
 		check(Conditions.has(name), "'%s' is a condition" % name)
 	check(not Conditions.has("following"), "(and the one that was called 'following' is 'has_stance')")
 
@@ -234,3 +234,49 @@ func test_the_alarm_is_rung_and_stood_down() -> void:
 	check(_ok(_c("alarm_cycled"), sim, st), "stood down after it was rung: the cycle")
 	check(not _ok(_c("alarm_cycled"), sim, {}), "(with no note of it, it was never rung)")
 	g.world.free()
+
+
+# ---------------------------------------------------- round 26: the lessons of Q, the wheel and the gate --
+
+func test_the_weapon_put_away_is_what_the_person_played_carries_low() -> void:
+	var g := Tut.make_avatar()
+	var sim = g.sim
+	var me = sim.avatar.player()
+	check(not _ok(_c("holstered"), sim), "drawn to begin with")
+	me.holstered = true
+	check(_ok(_c("holstered"), sim), "put away (Q): the pawn carries it low")
+	me.holstered = false
+	check(not _ok(_c("holstered"), sim), "drawn again")
+	g.world.free()
+	var plain := Tut.make()
+	me = null
+	check(not _ok(_c("holstered"), plain.sim), "with no avatar nobody has a weapon to put away")
+	plain.world.free()
+
+
+func test_the_wheel_is_up_when_the_coach_says_so() -> void:
+	var g := Tut.make_avatar()
+	var sim = g.sim
+	check(not _ok(_c("wheel_open"), sim, {}) and not _ok(_c("wheel_open"), sim, {"wheel": {"open": false}}), "not up")
+	check(_ok(_c("wheel_open"), sim, {"wheel": {"open": true}}), "up")
+	g.world.free()
+
+
+func test_the_gate_is_shut_when_the_rules_of_the_real_gate_are_on_and_the_leaves_are_across() -> void:
+	var g := Tut.make_avatar()
+	var sim = g.sim
+	check(not _ok(_c("gate_shut"), sim), "the lesson's gate before its lesson is the old wall: the real gate's rules are off, so it is not 'shut' in this sense")
+	g.scenario.set_gate("open")
+	check(sim.gate.active() and sim.gate.held == "open", "the lesson's step puts the real gate to work, open")
+	check(not _ok(_c("gate_shut"), sim), "asked to open, the leaves not moved yet: not shut (the card must not say 'wait for the bell' at once)")
+	Tut.run(sim, 3.0)
+	check(sim.gate.open >= 1.0 - 0.001 and not _ok(_c("gate_shut"), sim), "all the way open: not shut")
+	check(bool(sim.gate.request(false).ok), "a hand at the lever shuts it")
+	Tut.run(sim, 0.5)
+	check(sim.gate.open > 0.0 and not _ok(_c("gate_shut"), sim), "half way across: not yet")
+	Tut.run(sim, 2.5)
+	check(_ok(_c("gate_shut"), sim), "across: shut")
+	g.world.free()
+	var plain := Tut.make()
+	check(not _ok(_c("gate_shut"), plain.sim), "with no avatar there is no real gate to be shut")
+	plain.world.free()

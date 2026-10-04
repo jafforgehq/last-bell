@@ -36,6 +36,8 @@ const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
+const Demo := preload("res://scripts/demo.gd")
+const DemoRun := preload("res://scripts/sim/demo_run.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
 const Hints := preload("res://scripts/ui/hints.gd")
 const StoryUi := preload("res://scripts/ui/story_ui.gd")
@@ -149,14 +151,18 @@ var order_mark = null
 var clock := 0.0
 var fire_t := 0.0
 var hud_t := 0.0
-## A left or middle press that may become a pan (the old yard's controls, without an avatar): {"pos", "center", "moved",
+## A left or middle press that may become a pan (the old yard's controls, a test fixture since round 26: see `avatar_mode`): {"pos", "center", "moved",
 ## "button", "pan" (the camera follows the pointer: the middle button, or Alt and the left)}. A left press that moves is a drag:
 ## nothing is picked when it is let go.
 var drag = null
 ## Avatar mode (round 17): the yard is played by one survivor, `sim.player_id` (a new run of the real game: the first starter,
-## Ruth; a saved game's own; never the title, Orientation Day or a test unless it asks). In it W A S D walk them, the mouse aims,
-## the left button held fires, R reloads and F swings; the camera follows them; the old yard controls (panning, right-click
-## orders, picking in the world, the order keys) are gone. Without it the yard is as it was, but for the box select that is gone.
+## Ruth; a saved game's own, or Ruth's or the first living person's when an old save has none: `_adopt_avatar`). In it W A S D walk them,
+## the mouse aims, the left button held fires, R reloads and F swings; the camera follows them; the old yard controls (panning, right-click
+## orders, picking in the world, the order keys) are gone.
+## ROUND 26: EVERY REAL RUN IS ONE (`wants_avatar`: the game's own scene, Orientation Day and a loaded save included). The branches below that
+## run only without it (`not avatar_mode`: the old yard's keys, drags and orders, the dock's order buttons in hud.gd) are what a test's helper
+## scene, with no avatar, and the title's yard still run: the simulation's no-player mode (the balance harness and the tests live on it) and the
+## classic Orientation Day (assets/data/tutorial_classic.json) that its tests play. No player, no flag and no save reaches them.
 var avatar_mode: bool:
 	get:
 		return sim != null and sim.player_id != ""
@@ -367,7 +373,8 @@ func _ready() -> void:
 		run = Engine.get_meta("run")
 		Engine.remove_meta("run")
 	else:
-		# --crew=3 plays the small start (the others come over the radio); without it a run is the classic six
+		# --crew=3 plays the small start (the others come over the radio); without it a run is the usual five (a test's game, which is no
+		# real run, is the classic six: see the crew below)
 		var crew_asked := crew_from_args(OS.get_cmdline_user_args())
 		if crew_asked > 0:
 			run["crew"] = crew_asked
@@ -383,35 +390,52 @@ func _ready() -> void:
 	tutorial = bool(run.get("tutorial", false)) and not title_mode
 	tutorial_step = int(run.get("step", 0))
 	var loaded := false
+	# the game's real scene (not a test's or a screenshot's helper scene) is always an avatar game: see `wants_avatar`
+	var real := get_tree().current_scene == self
+	var avatar_wanted := wants_avatar(run, title_mode, real)
+	var old_save_note := ""
 	if String(run.get("load", "")) != "":
 		var saved := SaveGame.read(String(run.load))
-		if Orientation.is_save(saved) and SaveGame.is_loadable(String(run.load)):
-			Orientation.install(sim)
+		var lesson_save := Orientation.is_save(saved) and SaveGame.is_loadable(String(run.load))
+		if lesson_save and avatar_wanted and not save_has_player(saved):
+			# an Orientation Day saved before the avatar's lesson (the old yard's one) cannot go on in a game with an avatar: nothing is
+			# loaded, and the lesson begins again (below), as it does for a save that cannot be read
 			tutorial = true
-		loaded = SaveGame.apply(sim, saved)
-		load_failed = not loaded
+			load_failed = true
+		else:
+			if lesson_save:
+				Orientation.install(sim)
+				tutorial = true
+			elif DemoRun.is_save(saved):
+				DemoRun.install(sim)    # (round 26: a demo save is the demo again: its switches are put before it is read)
+			loaded = SaveGame.apply(sim, saved)
+			load_failed = not loaded
+			if loaded and avatar_wanted and not tutorial and String(sim.player_id) == "":
+				# a save from before the avatar (round 17) or a Full crew run (round 26: the old game is gone): the game goes on with an
+				# avatar, Ruth or else the first of the living; the player is told (an old Full crew save has no town: the Map page says so)
+				old_save_note = _adopt_avatar()
 	if not loaded:
 		if tutorial:
-			# Orientation Day is the avatar's lesson in the real game (the old yard's with `--noavatar`, and in a test that does not ask)
-			var avatar_lesson := wants_avatar(OS.get_cmdline_user_args(), run, title_mode, true, get_tree().current_scene == self)
-			Orientation.begin(sim, avatar_lesson)
-			if avatar_lesson:
+			# Orientation Day is the avatar's lesson in the real game (a test's helper scene has the old yard's, as `wants_avatar` says)
+			Orientation.begin(sim, avatar_wanted)
+			if avatar_wanted:
 				sim.avatar.set_player(first_starter_id(sim.people))
+		elif not title_mode and (bool(run.get("demo", false)) or Demo.on()):
+			# the demo (round 26): the first three nights of one run, always the same: the seed, the crew, what is switched off, the player and
+			# the pickup are the scenario's (scripts/sim/demo_run.gd), whatever the choice says
+			DemoRun.begin(sim)
 		else:
-			# a run with no crew in its choice is six (the tests, the screenshots and the title's yard are classic)
-			sim.crew_start = clampi(int(run.get("crew", 6)), 3, 6)
+			sim.crew_start = start_crew(run, real and not title_mode)
 			# (only a run asked for the long game is one: the tutorial, the title's yard and the tests are Autumn's)
 			sim.seasons.campaign = bool(run.get("campaign", false))
 			sim.start_run(int(run.get("difficulty", 1)), int(run.get("seed", randi())))
-			# a new run of the real game is played by one survivor (a save keeps the player it had; the title's yard,
-			# Orientation Day and a test's game have none unless the test asks, and `--noavatar` is the old game)
-			if wants_avatar(OS.get_cmdline_user_args(), run, title_mode, tutorial, get_tree().current_scene == self, sim.crew_start):
+			# a new run of the real game is played by one survivor (a save keeps the player it had; the title's yard and a test's game
+			# have none unless the test asks)
+			if avatar_wanted:
 				sim.avatar.set_player(first_starter_id(sim.people))
 				# (round 24: a new run of the real game also has a fuelled pickup in the motor pool; a test asks with {"car": true})
-				if bool(run.get("car", get_tree().current_scene == self)):
+				if bool(run.get("car", real)):
 					sim.vehicles.give_starting_car()
-	if loaded and "--noavatar" in OS.get_cmdline_user_args():
-		sim.avatar.set_player(null)    # (the old yard was asked for: a saved game's player is given up)
 
 	for tr in data.trees:
 		var s := Sprite2D.new()
@@ -583,6 +607,8 @@ func _ready() -> void:
 	_start_hints()
 	if load_failed:
 		hud.show_banner("Could not load that save", "A new game was started instead")
+	if old_save_note != "":
+		hud.toast(old_save_note, "warn")
 	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0))
 
 
@@ -1008,15 +1034,18 @@ func _toggle_fields() -> void:
 
 ## Avatar mode's colony interface (round 18): J, N and G, and the toolbar's Jobs, Build and Town Board buttons, open the radio panel
 ## (scripts/ui/radio_panel.gd) on a page, Jobs, Build or Map; the same key shuts it, another page's key moves to that page. The modal pages
-## (Duty roster, Build screen, Town Board) are the FULL pages behind Shift+J, Shift+N, Shift+G. The old yard (no avatar) and Orientation
-## Day (whose lessons teach the modal pages) have the modal pages on the plain keys; a classic start has no Map page, so G is the old dialog.
+## (Duty roster, Build screen, Town Board) are the FULL pages behind Shift+J, Shift+N, Shift+G. Orientation Day (whose lessons teach the modal
+## pages) has the modal pages on the plain keys (so does a test's game with no avatar). A game with no town (an old Full crew save) has the
+## Map page too, which says so (`map_page.gd`); its Shift+G is a word and not the old scavenging dialog (`toggle_town`).
 func panel_mode() -> bool:
 	return avatar_mode and not tutorial
 
 
 ## The key of a page ("base", "jobs", "build" or "map"); `full` is the Shift form, the modal page (the Base page has none).
 func page_key(page: String, full: bool = false) -> void:
-	var panel := panel_mode() and not full and (page != "map" or bool(sim.town.on))
+	var panel := panel_mode() and not full
+	if page == "map" and panel_mode() and sim.is_demo():
+		panel = true    # (round 26: the demo's one trip is the Map page's; the Town Board's errands, outposts and garrisons are not in it)
 	if not panel:
 		match page:
 			"jobs":
@@ -1057,6 +1086,10 @@ func toggle_town() -> void:
 		hud.scavenge_dialog.close()
 		return
 	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	if panel_mode() and not bool(sim.town.on):
+		# an old save with no town (a Full crew run): the old scavenging dialog is not offered to an avatar game, the Map page says why
+		hud.toggle_radio("map")
 		return
 	_gizmo("scavenge")
 
@@ -1181,7 +1214,7 @@ static func wants_title(args: Array, has_meta: bool) -> bool:
 	if has_meta:
 		return false
 	for a in args:
-		if String(a).begins_with("--"):
+		if String(a).begins_with("--") and String(a) != Demo.FLAG:    # (round 26: `--demo` alone is the demo's title, not a run)
 			return false
 	return true
 
@@ -1447,6 +1480,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 		_rtap = {}
 		return
 	var avatar := avatar_mode
+	# (round 26: what runs below only when `avatar` is false (the picking, the drag and pan, the right-click orders, the order keys P C T X B M and
+	# R F as orders) is the old yard's: the title's yard and a test's helper scene, which the classic Orientation Day's tests play, are the only
+	# games without an avatar, so no player reaches it; see `avatar_mode`)
 	if ev is InputEventMouseButton:
 		var mb: InputEventMouseButton = ev
 		if mb.button_index == MOUSE_BUTTON_WHEEL_UP and mb.pressed:
@@ -1773,8 +1809,6 @@ func _shot_frame() -> void:
 			bench_gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
 			bench_proc += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 			bench_calls += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
-		if frame_count == 10 and "--selftest" in OS.get_cmdline_user_args():
-			_selftest()
 		if frame_count == shot_frames:
 			_take_shot()
 
@@ -1782,20 +1816,54 @@ func _shot_frame() -> void:
 # ----------------------------------------------------------------- avatar --
 # The player's hands, the camera and the pointer in avatar mode (round 17; the rules are scripts/sim/avatar.gd's).
 
-## Whether a run of these user arguments is played by an avatar: not the title's yard, not `--noavatar`; Orientation Day is the
-## avatar's lesson in the real game (its choice says so: the title's button and the wrap-up's Replay) and, like any run, the
-## run's own word (`"avatar"`: a test asks for it) or, with none, whether this is the real game's scene (`real`: a test's
-## and a screenshot's helper scenes are not the current scene of the tree) and not a loaded save (those are the caller's). A full
-## crew (`crew` 6, the old schoolyard: no recruits, no town to go to) plays as before, with no avatar, unless the run says so
-## itself: an avatar that can never leave the base is not a game; `crew` 0 is not named (the caller does not say).
-static func wants_avatar(args: Array, run: Dictionary, title: bool, tutorial_run: bool, real: bool, crew: int = 0) -> bool:
-	if title or "--noavatar" in args:
+## TESTS ONLY, not reachable by a player or a flag (round 26: the classic game, with nobody to play, is gone for players): what a game
+## scene that is NOT the tree's current scene (a test's helper scene, a screenshot's) is when its run does not say `"avatar"`: false, the
+## simulation's own no-player mode that the balance harness and the tests run on. A test that wants every such scene to be an avatar game
+## sets it true and puts it back.
+static var avatar_for_tests := false
+## The crew of a real run that names none (the New game screen's choice): five. A real run never has six (that was the old schoolyard, with
+## no recruits and no town to go to).
+const REAL_CREW := 5
+
+
+## How many people a new run begins with: for a real run (`playing`: not the title's yard) what its choice says, three to five, and with none
+## the five of the New game screen, never six (that was the old schoolyard: no recruits, no town to go to); for a test's, a screenshot's and
+## the title's yard (a quiet game of its own) three to six and, with none, the classic six.
+static func start_crew(run: Dictionary, playing: bool) -> int:
+	return clampi(int(run.get("crew", REAL_CREW if playing else 6)), 3, 5 if playing else 6)
+
+
+## Whether a run is played by an avatar. The real game's scene (`real`: the tree's current scene, not a test's or a screenshot's helper
+## scene) is ALWAYS an avatar game (Orientation Day too: the title's button and the wrap-up's Replay choose it, and so does a save that has no
+## player, see `_adopt_avatar`), whatever the run says; the title's yard is nobody's. A helper scene follows the run's own word (`"avatar"`,
+## a test asks) and, with none, `avatar_for_tests`.
+static func wants_avatar(run: Dictionary, title: bool, real: bool) -> bool:
+	if title:
 		return false
-	if tutorial_run:
-		return bool(run.get("avatar", real))
-	if not run.has("avatar") and crew >= 6:
-		return false
-	return bool(run.get("avatar", real))
+	if real:
+		return true
+	return bool(run.get("avatar", avatar_for_tests))
+
+
+## Whether a save (as `SaveGame.read` gives it) has a player: its avatar module names one. A save from before the avatar (round 17), a Full
+## crew run and the old yard's Orientation Day have none.
+static func save_has_player(saved: Dictionary) -> bool:
+	var modules = saved.get("modules")
+	var mine = modules.get("avatar") if typeof(modules) == TYPE_DICTIONARY else null
+	return typeof(mine) == TYPE_DICTIONARY and String(mine.get("player_id", "")) != ""
+
+
+## A game that was loaded with nobody to play (an old save) goes on with an avatar: Ruth if she lives, else the first of the living. The
+## words that tell the player, or "" when nobody could be (everyone is gone).
+func _adopt_avatar() -> String:
+	var living: Array = []
+	for p in sim.people:
+		if not p.dead and not p.turned:
+			living.append(p)
+	var who := first_starter_id(living)
+	if who == "" or not sim.avatar.set_player(who):
+		return ""
+	return "Old save: you are now %s" % String(sim.avatar.player().first)
 
 
 ## The id of the first starter of a crew (anything with an `id`): Ruth if she is there, else the first. "" for no crew.
@@ -1986,6 +2054,7 @@ func toggle_holster(want = null) -> bool:
 			aim_held = false
 			_was_aiming = false
 		hud.toast(AimMode.NOW_AWAY if on else AimMode.NOW_DRAWN)
+		_did("holster", on)    # (Orientation Day's lesson of Q)
 	_mark_holster()
 	return AimMode.holstered
 
@@ -2200,6 +2269,11 @@ func wheel_flag(verb: String, extra: Dictionary) -> void:
 
 func wheel_solid(pos: Vector2) -> bool:
 	return world.is_solid(world.solid_p, pos.x, pos.y)
+
+
+## The wheel asked one person (the controller tells its host, `ask_one`): Orientation Day's lesson of the wheel counts it, the dock's buttons do not.
+func wheel_said(_p, _answer: Dictionary) -> void:
+	_did("wheel")
 
 
 func wheel_toast(text: String, level: String = "info") -> void:
@@ -2898,6 +2972,15 @@ func start_tutorial() -> void:
 	_begin({"tutorial": true, "avatar": true})
 
 
+## The pause menu's Skip tutorial (Esc, while Orientation Day's coach is up): the coach's own Skip, which lands on its last card ("Skipped": Start a
+## real run, Replay, Keep playing here). False when there is no lesson to skip.
+func skip_tutorial() -> bool:
+	if coach == null or coach.phase == "ended" or coach.phase == "wrap":
+		return false
+	coach.skip()
+	return true
+
+
 ## The tips of a normal run, over the HUD (none in the tutorial, on the title or in a screenshot).
 func _start_hints() -> void:
 	if tutorial or title_mode or shot_path != "":
@@ -2944,6 +3027,7 @@ func _parse_args() -> void:
 	var drive_do := ""
 	var cam_asked := false
 	var want_notice := false
+	var endcard_asked := false
 	# --season=N begins the long game in season N (0 Autumn, 1 Winter, 2 Spring, 3 Summer), before --hour sets the clock
 	var season_asked := season_from_args(OS.get_cmdline_user_args())
 	if season_asked >= 0:
@@ -3057,8 +3141,6 @@ func _parse_args() -> void:
 				# --problem=leak|jam|quarrel|crack[:stage] (round 25, an avatar game of the small start: --crew=3) puts that trouble up, at its place, at
 				# stage 0 to 2 (1 by default), with the avatar a step from it: its marker, its words and the prompt (--advance=1 to see it move)
 				problem_spec = v
-			"noavatar":
-				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
 			"calm":
 				pass # --calm leaves the base's little life out (round 24: flags, bell, dog, birds...; read in _ready where it is made)
 			"wall":
@@ -3226,6 +3308,11 @@ func _parse_args() -> void:
 				pass # --tutorial[=N] picks the scenario, before the run starts (see _ready and Scenario.run_from_args)
 			"campaign", "season":
 				pass # --campaign asks for the long game before the run starts (see _ready); --season=N is dealt with above
+			"demo":
+				pass # --demo is the demo (scripts/demo.gd): the run is the demo's three nights (see _ready)
+			"endcard":
+				# --demo --endcard plays the demo's three days quickly (the colony alone) to the run's end: the end card is up for the shot
+				endcard_asked = true
 			"nohud":
 				hud.visible = false
 			"msaa":
@@ -3328,6 +3415,12 @@ func _parse_args() -> void:
 		_stage_order(order_spec)
 	if shot_wheel != "":
 		_stage_wheel(shot_wheel)
+	if endcard_asked:
+		if sim.is_demo():
+			sim.scenario.stage_end()
+			sim.events.clear()
+		else:
+			print("--endcard: this is not the demo run (give --demo)")
 	if advance > 0.0:
 		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
 		if shot_aim_at != "":
@@ -3933,84 +4026,6 @@ func _key(code: Key) -> void:
 	ev.keycode = code
 	ev.pressed = true
 	_unhandled_input(ev)
-
-
-## Drives the real input handlers once, so broken code paths show up in logs.
-func _selftest() -> void:
-	if avatar_mode:
-		print("selftest: this drives the old yard's controls: run it with --noavatar")
-		return
-	var ruth = sim.people[0]
-	_focus(Vector2(ruth.x, ruth.y))
-	_apply_camera()
-	_click(_tile_to_screen(Vector2(ruth.x, ruth.y - 0.3)), MOUSE_BUTTON_LEFT)
-	print("selftest: click selects ", selection.ref.name if selection != null else "nothing")
-	_click(_tile_to_screen(Vector2(ruth.x + 3, ruth.y + 6)), MOUSE_BUTTON_RIGHT)
-	print("selftest: right-click order ", ruth.order, " drafted ", ruth.drafted)
-	for k in [KEY_R, KEY_R, KEY_P, KEY_F, KEY_C, KEY_TAB, KEY_TAB, KEY_SPACE, KEY_SPACE, KEY_2, KEY_1]:
-		_key(k)
-	print("selftest: keys ok, selected ", selection.ref.name, ", speed ", speed)
-	var z0 := zoom_px
-	var wheel := InputEventMouseButton.new()
-	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
-	wheel.pressed = true
-	wheel.factor = 1.0
-	wheel.position = _vp() / 2.0
-	_unhandled_input(wheel)
-	print("selftest: wheel zoom %.1f -> %.1f" % [z0, zoom_px])
-	var c0 := cam_center
-	var press := InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_MIDDLE
-	press.pressed = true
-	press.position = Vector2(400, 400)
-	_unhandled_input(press)
-	var move := InputEventMouseMotion.new()
-	move.position = Vector2(300, 350)
-	_unhandled_input(move)
-	press.pressed = false
-	press.position = move.position
-	_unhandled_input(press)
-	print("selftest: middle-drag pans camera by ", (cam_center - c0).snapped(Vector2(0.01, 0.01)))
-	# a left-drag selects nobody (the box is gone): the camera stays and so does the selection
-	var picked = selection
-	var box_from := _vp() / 2.0 - Vector2(60, 60)
-	var box_to := _vp() / 2.0 + Vector2(60, 60)
-	var left := InputEventMouseButton.new()
-	left.button_index = MOUSE_BUTTON_LEFT
-	left.pressed = true
-	left.position = box_from
-	_unhandled_input(left)
-	var sweep := InputEventMouseMotion.new()
-	sweep.position = box_to
-	_unhandled_input(sweep)
-	left.pressed = false
-	left.position = box_to
-	_unhandled_input(left)
-	print("selftest: left-drag changed the selection: %s, camera stayed %s" % [selection != picked, (cam_center - c0).snapped(Vector2(0.01, 0.01))])
-	for z in sim.zombies:
-		if z.state == "attack":
-			_focus(Vector2(z.x, z.y))
-			_click(_tile_to_screen(Vector2(z.x, z.y - 0.3)), MOUSE_BUTTON_LEFT)
-			break
-	print("selftest: walker selected: ", selection != null and selection.kind == "zombie")
-	var bus = sim.segments[3]
-	_focus(bus.center)
-	_click(_tile_to_screen(Vector2(bus.obj.cx, bus.obj.cy)), MOUSE_BUTTON_LEFT)
-	print("selftest: segment selected: ", selection.ref.name if selection != null else "nothing")
-	bus.hp = bus.max_hp * 0.5
-	_gizmo("repair")
-	var fixer = null
-	for p in sim.people:
-		if p.repair == bus:
-			fixer = p
-	print("selftest: repair ordered for ", fixer.name if fixer != null else "nobody")
-	_key(KEY_ESCAPE)
-	print("selftest: done, selection cleared: ", selection == null)
-	var loaded := 0
-	for k in sound.streams:
-		loaded += sound.streams[k].size()
-	var w: AudioStreamWAV = sound.wind.stream
-	print("selftest: %d sounds loaded; wind loop %s, %.1f s, playing %s" % [loaded, w.loop_mode == AudioStreamWAV.LOOP_FORWARD, w.get_length(), sound.wind.playing])
 
 
 func _take_shot() -> void:

@@ -1,5 +1,5 @@
 {
-	"version": 2,
+	"version": 3,
 	"steps": [
 		{
 			"id": "you",
@@ -45,167 +45,95 @@
 		{
 			"id": "reload",
 			"run_speed": 1,
-			"title": "Reload and swing",
-			"text": "The gun holds a few rounds: R reloads it, and the readout under the clock shows the magazine over the stores. When something gets close, F swings the butt. Q puts the weapon away.",
+			"title": "Reload and put away",
+			"text": "The gun holds a few rounds: R reloads it, and the readout under the clock shows the magazine over the stores. Q puts the weapon away, and Q again draws it.",
 			"goal": "press R to reload",
-			"goals": [{"when": "reloaded", "text": "press F to swing"}],
+			"goals": [
+				{"when": "holstered", "text": "press Q again to draw it"},
+				{"when": "reloaded", "text": "press Q to put the weapon away"}
+			],
 			"anchor": ["ammo"],
 			"allow": [],
 			"dim": false,
 			"done": {"cond": "all", "params": {"of": [
 				{"cond": "reloaded"},
-				{"cond": "did", "params": {"what": "melee"}}
+				{"cond": "did", "params": {"what": "holster"}},
+				{"cond": "not", "params": {"of": {"cond": "holstered"}}}
 			]}},
 			"fire": ["spent"],
 			"jump": {"hour": 7.2, "at": [48.5, 18.6]}
 		},
 		{
-			"id": "crew",
-			"title": "Who is who",
-			"text": "Everyone else has a job, a mood and a say. Click Dez's picture at the top: his panel shows his work, his skills, and how far he trusts you.",
-			"goal": "click Dez's picture at the top",
-			"anchor": ["card:dez"],
-			"allow": ["select:person:dez"],
-			"done": {"cond": "selected", "params": {"who": "dez"}},
-			"pause": true,
-			"jump": {"hour": 7.3}
-		},
-		{
-			"id": "come",
+			"id": "ask",
 			"title": "Ask, do not order",
-			"text": "Nobody takes orders: you ask, over the radio. With Dez picked, press Come with me. He answers, then follows you. Go back sends him back to work.",
-			"goal": "press Come with me",
-			"goals": [{"when": "asked", "params": {"who": "dez", "verb": "come", "ok": true}, "text": "watch Dez come to you"}],
-			"anchor": ["radio.come", "card:dez"],
-			"allow": ["select:person:dez"],
-			"dim": false,
-			"done": {"cond": "has_stance", "params": {"who": "dez", "stance": "follow"}},
-			"pause_until": {"cond": "asked", "params": {"who": "dez", "verb": "come"}},
-			"jump": {"hour": 7.4, "select": "dez"}
-		},
-		{
-			"id": "refusal",
-			"title": "A refusal",
-			"text": "Ana is bandaging Walt, so she can't come. Ask her anyway: the reason shows. Insist pushes her to come regardless, at a cost to her trust.",
-			"goal": "click Ana, then press Come with me",
+			"text": "Nobody takes orders: you ask, over the radio. Click Dez's picture at the top, then press Come with me. Ana is nursing Walt: ask her too, and see why she cannot.",
+			"goal": "click Dez, then press Come with me",
 			"goals": [
-				{"when": "insisted", "params": {"who": "ana"}, "text": "watch Ana come to you"},
-				{"when": "asked", "params": {"who": "ana", "ok": false}, "text": "press Insist"}
+				{"when": "insisted", "params": {"who": "ana"}, "text": "watch Dez and Ana come to you"},
+				{"when": "asked", "params": {"who": "ana", "ok": false}, "text": "press Insist: she comes, and trusts you less"},
+				{"when": "asked", "params": {"who": "dez", "verb": "come", "ok": true}, "text": "now click Ana, then press Come with me"}
 			],
 			"anchor": [
 				{"name": "radio.insist", "when": "asked", "params": {"who": "ana", "ok": false}},
 				{"name": "radio.come", "when": "selected", "params": {"who": "ana"}},
-				"card:ana"
+				{"name": "card:ana", "when": "asked", "params": {"who": "dez", "verb": "come", "ok": true}},
+				{"name": "radio.come", "when": "selected", "params": {"who": "dez"}},
+				"card:dez"
 			],
-			"allow": ["select:person:ana"],
-			"dim": false,
-			"done": {"cond": "has_stance", "params": {"who": "ana"}},
-			"pause_until": {"cond": "insisted", "params": {"who": "ana"}},
-			"fire": ["scratch"],
-			"jump": {"hour": 7.5}
-		},
-		{
-			"id": "news",
-			"title": "News and calls",
-			"text": "T opens News, the radio's log. Some news waits for your answer: a wall is under attack, and the radio asks what to do. Answer it, or the default answer is taken.",
-			"goal": "press T to open the News",
-			"goals": [{"when": "news_seen", "text": "answer the call: pick one of the buttons"}],
-			"anchor": [
-				{"name": "news.panel", "when": "news_open"},
-				{"name": "call", "when": "news_seen"},
-				"news"
-			],
-			"allow": [],
+			"allow": ["select:person:dez", "select:person:ana"],
 			"dim": false,
 			"done": {"cond": "all", "params": {"of": [
-				{"cond": "news_seen"},
-				{"cond": "call_answered", "params": {"kind": "attack"}}
+				{"cond": "has_stance", "params": {"who": "dez", "stance": "follow"}},
+				{"cond": "insisted", "params": {"who": "ana"}},
+				{"cond": "has_stance", "params": {"who": "ana"}}
 			]}},
-			"pause": true,
-			"clear_selection": true,
-			"fire": ["home", "assault"],
-			"jump": {"hour": 7.7}
+			"pause_until": {"cond": "insisted", "params": {"who": "ana"}},
+			"fire": ["scratch"],
+			"jump": {"hour": 7.4}
 		},
 		{
-			"id": "map",
-			"title": "The map",
-			"text": "G opens the Town Board: the map of the town. Pick a place to see what it holds and how far it is. Take control plays a trip yourself, in the real game: not today.",
-			"goal": "press G, pick a place, then close it",
-			"goals": [{"when": "dialog_open", "text": "pick a place, then close the board with G"}],
-			"anchor": [
-				{"name": "dialog.close", "when": "site_chosen"},
-				{"name": "town", "when": "not", "params": {"of": {"cond": "dialog_open"}}}
-			],
-			"allow": ["gizmo:scavenge"],
-			"done": {"cond": "board_read"},
-			"pause": true,
-			"dialog_text": "Pick a place on the map, then press G or Close.",
+			"id": "wheel",
+			"run_speed": 1,
+			"title": "The radio wheel",
+			"text": "Quicker than the buttons: hold C and a ring of orders opens at the pointer, for Dez. Move onto Hold here and let go: he stays where you pointed.",
+			"goal": "hold C and pick Hold here",
+			"goals": [{"when": "wheel_open", "text": "move onto Hold here, then let go of C"}],
+			"allow": ["wheel", "select:person:dez"],
 			"dim": false,
-			"jump": {"hour": 7.8}
-		},
-		{
-			"id": "alarm",
-			"title": "The alarm",
-			"text": "When the dead are at the wall, ring the alarm: L, or the Alarm button. Everyone drops what they are doing and goes to their post. Press it again to stand down.",
-			"goal": "press L to ring the alarm",
-			"goals": [{"when": "alarm_on", "text": "press L again to stand down"}],
-			"anchor": ["alarm"],
-			"allow": ["alarm"],
-			"dim": false,
-			"done": {"cond": "alarm_cycled"},
-			"pause_until": {"cond": "alarm_on"},
-			"jump": {"hour": 8.0, "fired": ["assault", "home"]}
+			"select": "dez",
+			"done": {"cond": "all", "params": {"of": [
+				{"cond": "did", "params": {"what": "wheel"}},
+				{"cond": "has_stance", "params": {"who": "dez", "stance": "hold"}}
+			]}},
+			"jump": {"hour": 7.6, "select": "dez"}
 		},
 		{
 			"id": "dusk",
 			"run_speed": 1,
-			"title": "Dusk",
-			"text": "The bell rings at 19:00 and the dead come, a few more each night. Everyone goes to their post. Shots cost ammo: watch the Ammo store. Walls cost scrap to mend.",
-			"goal": "watch the Ammo number go down",
-			"anchor": ["stores.ammo"],
-			"allow": [],
-			"dim": false,
-			"done": {"cond": "ammo_spent", "params": {"min": 1}},
-			"start": {"cond": "bell_rung"},
-			"wait_title": "The day goes on",
-			"wait_text": "Marcus says how many are coming at 17:00: it shows in the clock. The bell rings at 19:00. Press 3 to hurry the day along.",
-			"wait_anchor": ["clock"],
-			"fire": ["dusk", "more"],
-			"jump": {"hour": 19.05}
-		},
-		{
-			"id": "jobs",
-			"title": "The duty roster",
-			"text": "Between your requests, everyone does a job: at a station by day, at a post on the wall by night. Press J, or click the clipboard, to open the Duty roster.",
-			"goal": "press J to open the Duty roster",
-			"goals": [
-				{"when": "jobs_given", "text": "close the page with J or the Close button", "line": "Now close the page: press J or Close."},
-				{"when": "jobs_open", "text": "give someone a job, or press Auto-assign", "line": "Give someone a job, or press Auto-assign."}
-			],
+			"title": "The gate and the bell",
+			"text": "Late afternoon: the gate stands open for the day's comings and goings. At 19:00 the bell rings and the dead come. Walk to the gate lever and press E to shut it.",
+			"goal": "walk to the gate lever, press E",
+			"goals": [{"when": "gate_shut", "text": "wait for the 19:00 bell", "speed": true}],
 			"anchor": [
-				{"name": "jobs.close", "when": "jobs_given"},
-				{"name": "jobs.auto", "when": "jobs_open"},
-				"jobs"
+				{"name": "clock", "when": "gate_shut"},
+				"spot:36.0,21.6"
 			],
-			"allow": ["jobs"],
+			"allow": ["interact"],
+			"dim": false,
+			"warp": true,
 			"done": {"cond": "all", "params": {"of": [
-				{"cond": "did", "params": {"what": "jobs"}},
-				{"cond": "jobs_given"},
-				{"cond": "not", "params": {"of": {"cond": "jobs_open"}}}
+				{"cond": "bell_rung"},
+				{"cond": "gate_shut"}
 			]}},
-			"pause": true,
-			"start": {"cond": "day_started", "params": {"day": 2}},
-			"wait_title": "The night goes on",
-			"wait_text": "Hold the wall until first light at 06:30. The dead drift away then. Press 3 to hurry the night along.",
-			"wait_anchor": ["clock"],
-			"clear_selection": true,
-			"jump": {"hour": 7.0, "day": 2}
+			"fire": ["home"],
+			"fire_when": {"cond": "bell_rung", "beats": ["dusk", "more"]},
+			"jump": {"hour": 17.0, "gate": "open"}
 		},
 		{
 			"id": "wrap",
 			"type": "wrap",
 			"title": "Well done",
-			"text": "You can walk, shoot, ask the crew over the radio, answer the News, read the map, ring the alarm and set the roster. The ? button lists every key. Ready for thirty nights?",
+			"text": "That is the basics. Next: the briefing card each morning, T for the News, G for the map and the pickup trip, and nights at the wall. The ? button lists every key.",
 			"anchor": ["help"],
 			"skipped_title": "Skipped",
 			"skipped_text": "No problem. The ? button lists every key, and you can play Orientation Day again from the main menu whenever you like.",
@@ -213,7 +141,7 @@
 			"done": {"cond": "never"},
 			"pause": true,
 			"place": "center",
-			"jump": {"hour": 7.0, "day": 2}
+			"jump": {"hour": 19.05, "gate": "shut"}
 		}
 	]
 }

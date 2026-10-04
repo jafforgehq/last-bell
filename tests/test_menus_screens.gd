@@ -180,7 +180,7 @@ func test_the_first_launch_card_is_offered_once() -> void:
 	check(texts.has("First time here?"), "it asks")
 	var said := false
 	for t in texts:
-		if String(t).begins_with("Orientation Day teaches the basics in about ten minutes"):
+		if String(t).begins_with("Orientation Day teaches the basics in about eight minutes"):
 			said = true
 	check(said, "and says what Orientation Day is: %s" % str(texts))
 	eq(ctx.shell.top().start_button.text, "Start Orientation Day", "with the answer yes")
@@ -390,10 +390,6 @@ func test_the_words_under_the_difficulty_cards_follow_the_crew_too() -> void:
 	eq(screen.crew, 5, "a crew of five")
 	eq(screen.facts_label.text, Kit.difficulty_facts(1, 5), "the words are the avatar game's")
 	check(not screen.facts_label.text.contains("about 30 of the dead"), "not the classic ones: '%s'" % screen.facts_label.text)
-	screen.crew_cards[2].pressed.emit()
-	eq(screen.crew, 6, "a full crew")
-	eq(screen.facts_label.text, Kit.difficulty_facts(1, 6), "the words are the old game's")
-	check(screen.facts_label.text.contains("about 30 of the dead"), "with its thirty: '%s'" % screen.facts_label.text)
 	screen.crew_cards[0].pressed.emit()
 	eq(screen.facts_label.text, Kit.difficulty_facts(1, 3), "a crew of three: the avatar game's again")
 	_done(ctx)

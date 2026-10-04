@@ -200,6 +200,11 @@ func _build() -> void:
 	_trouble_empty = _para("No trouble now.", 13, host.INK3)
 	_trouble_box.add_child(_trouble_empty)
 	_mount_trouble()
+	# (round 26: the demo has neither the four dials nor the trouble in the yard: their sections are not there at all)
+	var sim0 = _sim()
+	if sim0 != null and sim0.has_method("is_demo") and sim0.is_demo():
+		sections.policies.visible = false
+		sections.trouble.visible = false
 	# the foot
 	var foot: VBoxContainer = host._vbox(6)
 	foot.add_child(_rule())

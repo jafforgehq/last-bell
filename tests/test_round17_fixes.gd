@@ -1,7 +1,7 @@
 extends "res://tests/case.gd"
 ## The fixes of the round 17 review, simulation side (fixer A): a person who follows can go on a trip, and followers go back to
 ## work while the leader is out; the succession prefers somebody at the base; the seat an avatar leaves is filled again from
-## the people at the base; the fever call's options do what they say; a full crew (six) is not an avatar game; the trust a
+## the people at the base; the fever call's options do what they say; the trust a
 ## place costs reaches the base; the small seams (the aim's wall cache, "hard" refusals in a place).
 
 const GD := preload("res://scripts/game_data.gd")
@@ -12,8 +12,6 @@ const Town := preload("res://scripts/sim/town.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const RaidRun := preload("res://scripts/raid/raid_run.gd")
 const MainScript := preload("res://scripts/main.gd")
-const Fakes := preload("res://tests/menu_fakes.gd")
-const HudKit := preload("res://tests/hud_kit.gd")
 
 const FIXTURE := "user://test_round17_fixes_town.json"
 const DT := 1.0 / 30.0
@@ -537,34 +535,6 @@ func test_a_fever_that_cannot_be_sent_out_is_not_offered_the_gate() -> void:
 	check(not c.is_empty(), "a call for the fever")
 	eq(_ids(c.options), ["treat", "apart"], "no gate for a passing fever")
 	_free(g)
-
-
-# --------------------------------------------------------- #10 a full crew is classic --
-
-func test_a_full_crew_is_not_an_avatar_game() -> void:
-	check(MainScript.wants_avatar([], {}, false, false, true, 5), "a crew of five is")
-	check(MainScript.wants_avatar([], {}, false, false, true, 3), "so is three")
-	check(not MainScript.wants_avatar([], {}, false, false, true, 6), "six, with no town to go to, is the old game")
-	check(MainScript.wants_avatar([], {"avatar": true}, false, false, false, 6), "unless the run says so (a test asks)")
-	check(MainScript.wants_avatar([], {}, false, false, true), "a call that names no crew is as it was")
-
-
-func test_the_new_game_card_of_the_full_crew_says_there_is_no_avatar() -> void:
-	var ctx := Fakes.build()
-	var screen = ctx.shell.open_new_game()
-	await HudKit.settle()
-	var full: String = screen.CREW_LINES[2]
-	check(full.contains("No avatar"), "the card says it: %s" % full)
-	check(full.contains("plays as before"), "and what it means: %s" % full)
-	check(not String(screen.CREW_LINES[0]).contains("No avatar") and not String(screen.CREW_LINES[1]).contains("No avatar"), "only the full crew")
-	var sub: Label = screen.crew_cards[2].get_meta("sub")
-	check(sub.text.contains("No avatar"), "on the card itself: %s" % sub.text)
-	# (the longer line must still fit on its card, at the room the menu gives it)
-	for card in screen.crew_cards:
-		var c: Control = card
-		var inner: Label = c.get_meta("sub")
-		check(c.get_global_rect().grow(0.5).encloses(inner.get_global_rect()), "the words of a crew card are inside it: card %s, words %s" % [str(c.get_global_rect()), str(inner.get_global_rect())])
-	Fakes.free_all(ctx)
 
 
 # ------------------------------------------------ #3 what a place costs in trust --

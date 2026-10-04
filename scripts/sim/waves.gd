@@ -98,6 +98,8 @@ func budget_for(day: int) -> float:
 	if avatar_mode():
 		var growth := NightData.num("ordinary.growth", GROWTH)
 		var mult := NightData.num("ordinary.mult", 1.0)
+		if sim.scenario.has_method("night_mult"):
+			mult *= float(sim.scenario.night_mult(day))    # (round 26: the demo's nights 1 and 2 are gentle: scripts/sim/demo_run.gd)
 		return BASE * (1.0 + growth * float(maxi(eff, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)]) * sim.seasons.mult("waves") * mult
 	return BASE * (1.0 + GROWTH * float(maxi(eff, 1) - 1)) * float(DIFFICULTY[clampi(sim.difficulty, 0, 2)]) * sim.seasons.mult("waves")
 
@@ -128,6 +130,8 @@ func is_big(day: int) -> bool:
 func big_night(day: int) -> Dictionary:
 	if not avatar_mode():
 		return {}
+	if sim.scenario.has_method("big_night_for"):
+		return sim.scenario.big_night_for(day)    # (round 26: the demo names its own Big Night, and no other: scripts/sim/demo_run.gd)
 	var at := _locate(day)
 	if at.is_empty():
 		return {}

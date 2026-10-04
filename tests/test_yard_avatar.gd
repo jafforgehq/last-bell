@@ -176,7 +176,7 @@ func test_the_first_starter_is_the_avatar_when_ruth_is_not_there() -> void:
 	eq(MainScript.first_starter_id([]), "", "and nobody for an empty crew")
 
 
-func test_avatar_mode_is_off_in_the_tests_the_title_the_tutorial_and_with_noavatar() -> void:
+func test_avatar_mode_is_off_in_a_tests_scene_and_the_title_but_a_real_run_always_has_one() -> void:
 	var off := _game(false)
 	eq(off.sim.player_id, "", "a test's game has no avatar unless it asks")
 	check(not off.avatar_mode, "so avatar mode is off")
@@ -190,16 +190,14 @@ func test_avatar_mode_is_off_in_the_tests_the_title_the_tutorial_and_with_noavat
 	var lesson = TutorialKit.start({"tutorial": true, "avatar": true})
 	eq(lesson.sim.player_id, "ruth", "and the avatar's Orientation Day, which the title asks for, is played by Ruth")
 	await TutorialKit.leave(lesson)
-	check(MainScript.wants_avatar([], {}, false, false, true), "a real run wants one")
-	check(not MainScript.wants_avatar(["--noavatar"], {}, false, false, true), "--noavatar does not")
-	check(not MainScript.wants_avatar([], {}, true, false, true), "not the title")
-	check(MainScript.wants_avatar([], {"tutorial": true}, false, true, true), "the real game's Orientation Day wants one (the --tutorial flag, the title's button)")
-	check(MainScript.wants_avatar([], {"tutorial": true, "avatar": true}, false, true, false), "and a test's, when it asks")
-	check(not MainScript.wants_avatar([], {"tutorial": true}, false, true, false), "but not when it does not")
-	check(not MainScript.wants_avatar(["--noavatar"], {"tutorial": true, "avatar": true}, false, true, true), "--noavatar plays the old yard's Orientation Day")
-	check(not MainScript.wants_avatar([], {}, false, false, false), "not a test's scene")
-	check(MainScript.wants_avatar([], {"avatar": true}, false, false, false), "unless the run says so")
-	check(not MainScript.wants_avatar([], {"avatar": false}, false, false, true), "or says not")
+	check(MainScript.wants_avatar({}, false, true), "a real run wants one")
+	check(MainScript.wants_avatar({"avatar": false}, false, true), "whatever its choice says (round 26: no flag or choice gives a real run the old yard)")
+	check(not MainScript.wants_avatar({}, true, true), "not the title")
+	check(MainScript.wants_avatar({"tutorial": true}, false, true), "the real game's Orientation Day wants one (the --tutorial flag, the title's button)")
+	check(MainScript.wants_avatar({"tutorial": true, "avatar": true}, false, false), "and a test's, when it asks")
+	check(not MainScript.wants_avatar({"tutorial": true}, false, false), "but not when it does not")
+	check(not MainScript.wants_avatar({}, false, false), "not a test's scene")
+	check(MainScript.wants_avatar({"avatar": true}, false, false), "unless the run says so")
 
 
 func test_a_saved_game_with_a_player_restores_the_avatar() -> void:

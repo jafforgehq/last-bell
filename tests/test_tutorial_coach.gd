@@ -251,7 +251,7 @@ func test_the_last_card_offers_a_real_run_a_replay_and_staying() -> void:
 	eq(int(picked[0].get("crew", 6)), 5, "and the crew of five a new game begins with")
 	coach.replay_button.pressed.emit()
 	eq(picked.size(), 2, "Replay begins one too")
-	eq(picked[1], {"tutorial": true, "avatar": true}, "of Orientation Day (the avatar's: `--noavatar` still plays the old yard's)")
+	eq(picked[1], {"tutorial": true, "avatar": true}, "of Orientation Day (the avatar's: a real run has no other)")
 	check(main.coach == coach, "the coach is still there until one is chosen to stay")
 	coach.stay_button.pressed.emit()
 	check(main.coach == null, "Keep playing here lets the coach go")

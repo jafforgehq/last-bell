@@ -20,7 +20,7 @@
 ## Every word of a refusal is the sim's (`radio.reason_not`, `radio.errand_willingness`, `scavenge.why_not_played`, `town.why_not_recall`...);
 ## the page only lays them out. A control that is off has the reason as its tooltip. Nothing here takes focus (the panel's buttons never
 ## do: WASD and E keep working). The page is made once by `setup`, brought up to date by `refresh` (the panel does it ten times a second
-## while it is open) and does nothing while the game has no board (`sim.town.on`): a message says so.
+## while it is open) and does nothing while the game has no board (`sim.town.on`: an old Full crew save): `NO_TOWN` says so.
 ##
 ## What the page asks of the game (`host` is the HUD, which lends the looks and `on_raid`, `open_scavenge`, `ui_sound`, `close_radio`;
 ## all but the looks are optional, so a test's host can leave them out):
@@ -35,6 +35,7 @@ const MapData := preload("res://scripts/ui/map_data.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
+const Demo := preload("res://scripts/demo.gd")
 
 ## The map is made this wide at most when the pins need more room than the page has (the sheet then scrolls sideways).
 const MAP_MAX_W := 900.0
@@ -56,6 +57,8 @@ const ERRAND_TIP := {
 	"scout": "Look the way over: it shows the places near, and brings nothing back.",
 	"clear": "Turn the dead out of the place (and end its nest, if it has one). A failed attempt hurts.",
 }
+## What the page says in a game with no town (round 26: an old Full crew save, which the game now plays with an avatar; a new game is a settlement).
+const NO_TOWN := "This old save has no town: start a new game to take trips."
 ## The moment of sending is told in these words.
 const FOOT_NOBODY := "Nobody is out."
 
@@ -116,6 +119,9 @@ var stay_note: Label
 ## What tonight means for the trip as it is planned (round 19, in avatar mode: `scavenge.night_warning`; hidden when it has nothing to say).
 var night_note: Label
 var terms_note: Label
+## The parts of the page the demo does not have (round 26: the errand options, Claim and Recall are not in the demo's one trip): `_demo_hide` keeps them hidden.
+var demo_hidden: Array = []
+var _demo_chose := false
 var summary_label: Label
 var refusal_box: VBoxContainer
 var answer_label: Label
@@ -186,7 +192,7 @@ func _on() -> bool:
 # ------------------------------------------------------------------- build --
 
 func _build() -> void:
-	message_label = _para("There is no map in this game: only a settlement game has a town to go out to.", 13, host.INK2)
+	message_label = _para(NO_TOWN, 13, host.INK2)
 	message_label.visible = false
 	add_child(message_label)
 	# (the page is as tall as its content: the panel's own scroll shows what does not fit, the foot with it)
@@ -488,7 +494,8 @@ func _build_actions() -> VBoxContainer:
 	stay_note = _para("", 12, host.WARN)
 	stay_note.visible = false
 	col.add_child(stay_note)
-	col.add_child(_rule())
+	var rule_a := _rule()
+	col.add_child(rule_a)
 
 	var errand_row: HFlowContainer = HFlowContainer.new()
 	errand_row.add_theme_constant_override("h_separation", 6)
@@ -518,7 +525,9 @@ func _build_actions() -> VBoxContainer:
 	col.add_child(insist)
 	buttons["insist"] = insist
 
-	col.add_child(_rule())
+	var rule_b := _rule()
+	col.add_child(rule_b)
+	demo_hidden = [rule_a, errand_row, terms_note, refusal_box, insist, rule_b]
 	claim_row = HFlowContainer.new()
 	claim_row.add_theme_constant_override("h_separation", 6)
 	claim_row.add_theme_constant_override("v_separation", 4)
@@ -1013,6 +1022,7 @@ func refresh(force: bool = false) -> void:
 	_memoizing = true
 	_expire_answer()
 	_sync_sites(force)
+	_demo_first_choice()
 	_refresh_map(force)
 	_refresh_card(force)
 	_refresh_people()
@@ -1670,6 +1680,39 @@ func _refresh_actions() -> void:
 	# the reason a claim is off is said in words, not only on the button
 	claim_row.visible = claim.visible or recall.visible
 	_refresh_feedback(claim_why if claim.visible and claim.disabled and _feedback.text == "" else "")
+	_demo_hide()
+
+
+## Whether this is the demo's page (round 26): there is one trip, the pickup to a place, and the errand options (Loot, Scout, Clear, Ask to go, Insist), Claim
+## and Recall are not in it. The sim's own rules are untouched: the page only does not offer them.
+func is_demo() -> bool:
+	var s = _sim()
+	return s != null and s.has_method("is_demo") and s.is_demo()
+
+
+## The first time the demo's page is looked at, the place of the first morning's trip (the pharmacy) is the one chosen: Take control is one click away.
+func _demo_first_choice() -> void:
+	if _demo_chose or not is_demo():
+		return
+	_demo_chose = true
+	var first := String(Demo.data().get("trip_place", ""))
+	if site_id == "" and sites.has(first):
+		site_id = first
+		errand_action = _default_action(sites[first])
+		_center_map.call_deferred(first)
+
+
+func _demo_hide() -> void:
+	if not is_demo():
+		return
+	for n in demo_hidden:
+		if n != null:
+			n.visible = false
+	buttons.errand.visible = false
+	buttons.full.visible = false    # (the Town Board has the errands, outposts and garrisons the demo does not)
+	claim_row.visible = false
+	summary_label.visible = false
+	terms_note.visible = false
 
 
 func _soft_people(view: Dictionary) -> Array:

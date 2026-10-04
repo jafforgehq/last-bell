@@ -48,6 +48,7 @@ const JobsScreen := preload("res://scripts/ui/jobs_screen.gd")
 const BuildScreen := preload("res://scripts/ui/build_screen.gd")
 const TownBoard := preload("res://scripts/ui/town_board.gd")
 const GameOver := preload("res://scripts/ui/game_over.gd")
+const DemoEndCard := preload("res://scripts/ui/demo_end_card.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const Tactics := preload("res://scripts/sim/tactics.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
@@ -601,6 +602,8 @@ var hint: PanelContainer
 ## column under the clock: the weapon's name (`ammo_name`), "12 / 340" the rounds that can be fired over the stores (`ammo_label`: the
 ## magazine's, but never more than the stores hold, as shots come from them; amber while the magazine is low or the stores cannot fill
 ## it, red when they are dry) and a bar (`ammo_bar`, the reload while the gun is being reloaded, else how full the magazine is).
+## ROUND 26: a real run is always an avatar game, so `avatar_ui` is false only for the title's yard and a test's helper scene: the old yard's
+## help (HELP), hint (HINT) and the dock's order buttons (the gizmos) below are what those show. No player reaches them.
 var avatar_ui := false
 ## Orientation Day (main.gd sets it before `set_avatar`): the lessons teach the modal pages, locked by the coach, so the radio panel has
 ## the News page only and the toolbar's tips are the plain ones (`panel_ui`).
@@ -3516,7 +3519,8 @@ func _show_game_over(sim) -> void:
 		build_screen.close()
 	hint_spent = true
 	_refresh_hint()
-	game_over = GameOver.new()
+	# (round 26: the demo's three nights held end on its own card; a defeat is the ordinary report card)
+	game_over = DemoEndCard.new() if String(sim.over) == "victory" and sim.has_method("is_demo") and sim.is_demo() else GameOver.new()
 	add_child(game_over)
 	game_over.setup(self, sim)
 
@@ -3923,7 +3927,10 @@ func _day_text(sim, speed: int = 1) -> String:
 	if seasons != null and seasons.campaign:
 		var season_name := String(seasons.current().name).to_upper()
 		return ("%s %d/%d" if compact or speed == 0 else "%s, DAY %d OF %d") % [season_name, seasons.season_day(sim.scenario.day()), seasons.season_length()]
-	return ("DAY %d/%d" if compact else "DAY %d OF %d") % [sim.scenario.day(), sim.scenario.total_days()]
+	var day: int = sim.scenario.day()
+	if sim.has_method("is_demo") and sim.is_demo():
+		day = mini(day, int(sim.scenario.total_days()))    # (round 26: the dawn that ends the demo is not "DAY 4 OF 3")
+	return ("DAY %d/%d" if compact else "DAY %d OF %d") % [day, sim.scenario.total_days()]
 
 
 ## The fuel row of the stores (round 13): there in a settlement game once there is a vehicle or any fuel; the number is in the
@@ -3959,7 +3966,7 @@ func _sync_town(sim) -> void:
 		town_button.visible = on
 		_layout_dock.call_deferred()
 	if help_g != null:
-		var word := ("Map" if panel_ui() else "Town Board") if on else "Scavenge"
+		var word := ("Map" if panel_ui() else "Town Board") if on else ("Map" if panel_ui() else "Scavenge")    # (no town: an old save plays with an avatar, and its Map page says so)
 		if help_g.text != word:
 			help_g.text = word
 		var g_tip := HELP_G_TOWN_TIP if on else ""

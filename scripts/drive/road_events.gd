@@ -36,6 +36,7 @@
 ## block_cleared, and `pick` (a whole number `resolve` draws when there is a `hurt`: it points at the person of the party who is hurt).
 extends RefCounted
 
+const Demo := preload("res://scripts/demo.gd")
 const DATA_PATH := "res://assets/data/road_events.json"
 ## Where the deck is read from (tests may point it at another file; `forget()` after changing it).
 static var data_path := DATA_PATH
@@ -219,6 +220,7 @@ static func _ctx(raw: Dictionary) -> Dictionary:
 		"leading": int(raw.get("leading", 0)),
 		"building": int(raw.get("building", 0)),
 		"caller": String(raw.get("caller", "")),
+		"only": _strings(raw.get("only", [])),
 	}
 	var flow = raw.get("flow")
 	if flow is Object and "road_survivors" in flow and int(flow.road_survivors) > 0:
@@ -272,6 +274,7 @@ static func make_ctx(flow, leg: String = "there") -> Dictionary:
 		"dusk": float(sim.seasons.dusk_hour()), "dawn": float(sim.seasons.dawn_hour()), "bed": bed, "hp_share": hp_share,
 		"fuel_room": maxf(0.0, float(sim.vehicles.FUEL_CAP) - float(sim.vehicles.fuel)), "fuel": float(sim.vehicles.fuel),
 		"stock": stock, "leading": leading, "building": building, "caller": caller,
+		"only": Demo.road_events() if sim.has_method("is_demo") and sim.is_demo() else [],    # (round 26: the demo has five kinds of event)
 	})
 
 
@@ -337,6 +340,8 @@ static func plan(seed: int, ctx: Dictionary) -> Array:
 	var all := deck()
 	var ids: Array = all.keys()
 	ids.sort()
+	if not (c.only as Array).is_empty():
+		ids = ids.filter(func(id): return (c.only as Array).has(String(id)))    # (the demo's short deck: `ctx.only`)
 	var out: Array = []
 	var count := {}
 	var previous := ""

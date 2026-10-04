@@ -337,6 +337,10 @@ static func peek(path: String) -> Dictionary:
 	out["people"] = alive
 	out["crew"] = raw.people.size()
 	out["over"] = over
+	# (round 26: a save of the demo says so: the demo's menus keep to those)
+	var mods = raw.get("modules")
+	var scen = mods.get("scenario") if typeof(mods) == TYPE_DICTIONARY else null
+	out["demo"] = typeof(scen) == TYPE_DICTIONARY and String(scen.get("kind", "")) == "demo"
 	return out
 
 

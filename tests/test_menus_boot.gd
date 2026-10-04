@@ -37,7 +37,7 @@ func test_a_cold_start_with_nothing_chosen_shows_the_title() -> void:
 
 
 func test_a_run_that_was_chosen_goes_straight_into_the_yard() -> void:
-	for flag in ["--new=1", "--seed=7", "--load=user://quicksave.json", "--shot=a.png", "--tutorial", "--hour=21", "--advance=30", "--selftest", "--select=ruth", "--size=980x700", "--only=menus", "--frames=40", "--something-nobody-knows"]:
+	for flag in ["--new=1", "--seed=7", "--load=user://quicksave.json", "--shot=a.png", "--tutorial", "--hour=21", "--advance=30", "--calm", "--select=ruth", "--size=980x700", "--only=menus", "--frames=40", "--something-nobody-knows"]:
 		check(not Main.wants_title([flag], false), "%s is a choice" % flag)
 	check(not Main.wants_title(["--shot=a.png", "--new=0", "--seed=3"], false), "several flags")
 	check(not Main.wants_title([], true), "a run in Engine meta is a choice")

@@ -10,6 +10,7 @@ const FxNull := preload("res://scripts/sim/fx_null.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const MainScript := preload("res://scripts/main.gd")
 
 
 ## {"sim", "world", "data", "scenario"}: Orientation Day, begun (day 1, 07:00, Story, its
@@ -99,8 +100,9 @@ static var _window := {}
 static var _tutorial_save := ""
 
 
-## The real game scene as the classic Orientation Day (the old yard: no avatar, assets/data/tutorial_classic.json; what `--noavatar`
-## and the tests of the old controls play), from step `step`, in a window of `width` x `height`,
+## The real game scene as the classic Orientation Day (the old yard: no avatar, assets/data/tutorial_classic.json; the helper scene of a
+## test has no avatar unless its run says `"avatar"` or `Main.avatar_for_tests` is set, and no player can reach it since round 26: the
+## tests of the old controls and of the coach play it), from step `step`, in a window of `width` x `height`,
 ## with the preferences and the tutorial's save file pointed at files of the test's own. Its own
 ## per-frame work is switched off: the tests drive `_process` by hand (see `frames`). Give it back
 ## with `leave`.
@@ -144,6 +146,7 @@ static func leave(main: Node, keep_save: bool = false) -> void:
 	PlaceFlow.live_enabled = true
 	PlaceFlow.fast_road = false
 	PlaceFlow.no_events = false
+	MainScript.avatar_for_tests = false    # (the tests-only switch of main.gd: a test that set it leaves the next one the no-avatar default)
 	main.queue_free()
 	await Engine.get_main_loop().process_frame
 	var win: Window = Engine.get_main_loop().root

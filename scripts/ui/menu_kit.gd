@@ -30,9 +30,10 @@ static func difficulty_line(i: int) -> String:
 
 ## What a difficulty really changes, worked out from the rules' own numbers (so that
 ## the words stay true when the numbers are tuned): how many of the dead come each
-## night, how likely a bite is to infect, and how dangerous a trip outside is. `crew` is the crew the run begins with: a full crew of six
-## has no avatar and the classic nights (30 on the first, 3 more each night); a small one (3 or 5) plays the avatar game, whose nights
-## are smaller and grow by a little and every tenth is a Big Night (round 22: the words used to say the classic game's numbers for both).
+## night, how likely a bite is to infect, and how dangerous a trip outside is. `crew` is the crew the run begins with: a small one (3 or 5,
+## the only choices of the New game screen) plays the avatar game, whose nights are smaller and grow by a little and every tenth is a Big
+## Night (round 22: the words used to say the classic game's numbers for both). Six is the simulation's no-player mode, which no player can
+## start (round 26): it is only what a test or the harness asks, and has the classic nights (30 on the first, 3 more each night).
 static func difficulty_facts(i: int, crew: int = 6) -> String:
 	i = clampi(i, 0, 2)
 	var dead := float(Waves.DIFFICULTY[i])
@@ -80,6 +81,8 @@ static func clock_text(hour: float) -> String:
 static func save_line(info: Dictionary) -> String:
 	if not bool(info.get("ok", false)):
 		return String(info.get("reason", "Empty"))
+	if bool(info.get("demo", false)):
+		return "Demo, day %d, %s" % [int(info.day), clock_text(float(info.hour))]
 	return "Day %d, %s, %s" % [int(info.day), clock_text(float(info.hour)), difficulty_name(int(info.difficulty))]
 
 
