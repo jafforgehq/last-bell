@@ -3457,6 +3457,10 @@ func _parse_args() -> void:
 				# --stage=cleared|claimed|rescued2|fourth|night puts a town run in that stage at once (scripts/town/one_house.gd, for a screenshot)
 				if not OneHouse.stage_to(sim, v):
 					print("--stage=%s: not a town run (give --town), or no such stage" % v)
+			"rescue":
+				# --rescue=r0[:clear][:come|:stay|:gift] (a town run, after --stage=claimed): the avatar beside that survivor in their room, the card up (scripts/town/rescue.gd `stage`)
+				if sim.get("rescue") == null or not sim.rescue.stage(v):
+					print("--rescue=%s: not a town run (give --town), or no such survivor" % v)
 			"endcard":
 				# --demo --endcard plays the demo's three days quickly (the colony alone) to the run's end: the end card is up for the shot
 				endcard_asked = true

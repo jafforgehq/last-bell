@@ -236,6 +236,11 @@ func _days_survived() -> int:
 
 func _new_game() -> void:
 	var meta := {"difficulty": int(sim.difficulty), "seed": randi()}
+	# a town run (One House) begins as a town run again, alone
+	if sim.has_method("is_one_house") and sim.is_one_house():
+		meta["town"] = true
+		hud.start_run(meta)
+		return
 	# a run that began with a small crew (recruits.gd) begins that way again
 	if sim.get("recruits") != null and sim.recruits.small:
 		meta["crew"] = 3

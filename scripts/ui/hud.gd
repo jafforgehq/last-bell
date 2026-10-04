@@ -3921,7 +3921,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	var temp := roundi(seasons.temperature(h)) if seasons != null and seasons.campaign else roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
 	temp_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
 	temp_label.text = "%d°C, %s" % [temp, sim.weather]
-	walkers_label.text = "%d walkers" % walkers
+	walkers_label.text = ("%d dead near" if profile == "one_house" else "%d walkers") % walkers    # (the town's word is "the dead"; only the awake ones near are counted)
 	_update_forecast(sim)
 	_update_gate(sim)
 	# speed and sound

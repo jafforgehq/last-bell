@@ -90,7 +90,15 @@ func _run() -> void:
 	world = g.world
 	town = g.town
 	var start: Dictionary = town.start
+	if args.has("house"):
+		# another house: the avatar in the middle of its first room (the clear dead of the start house stay where they are)
+		var hh: Dictionary = town.houses[int(args.house)]
+		var r0 := int(hh.rooms[0])
+		start = {"house": int(args.house), "pos": Rect2(town.rooms[r0].rect).get_center().floor() + Vector2(0.5, 0.5), "room": r0}
 	var house: Dictionary = town.houses[int(start.house)]
+	if args.has("hour"):
+		sim.minutes = float(args.hour) * 60.0
+		sim.phase = sim.seasons.phase_at(sim.minutes)
 	entities = Node2D.new()
 	entities.name = "Entities"
 	entities.z_index = 6
@@ -112,7 +120,8 @@ func _run() -> void:
 	avatar = sim.avatar.player()
 	_place(house, start)
 	# the dead of the house, awake and standing where the records put them
-	sim.field._wake_near(Vector2(start.pos), 14.0, "stage", null)
+	if not args.has("nodead"):
+		sim.field._wake_near(Vector2(start.pos), 14.0, "stage", null)
 	_report(house)
 	hv = HouseView.new()
 	hv.name = "HouseView"
@@ -161,6 +170,25 @@ func _place(house: Dictionary, start: Dictionary) -> void:
 					if rr >= 0:
 						clearing.reveal(rr)
 			print("avatar near the door at ", c, " standing at ", at)
+	if args.has("door"):
+		# --door=N,S: the avatar stands by the Nth inner door of the house on its side S (0 or 1); that room is revealed, the other stays dark
+		var ds := String(args.door).split(",")
+		var inner: Array = []
+		for dd in house.doors:
+			if not bool(dd.exterior):
+				inner.append(dd)
+		var dd2: Dictionary = inner[int(ds[0]) % inner.size()]
+		var sides: Array = []
+		for t in dd2.tiles:
+			for off in [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]:
+				var nb: Vector2i = t + off
+				var rr2 := TownGen.room_at(town, nb.x, nb.y)
+				if rr2 >= 0 and not sides.any(func(e): return e[0] == rr2):
+					sides.append([rr2, Vector2(nb) + Vector2(0.5, 0.5)])
+		var pick: Array = sides[(int(ds[1]) if ds.size() > 1 else 0) % sides.size()]
+		at = pick[1]
+		clearing.revealed.clear()
+		clearing.reveal(int(pick[0]))
 	if args.has("at"):
 		var c2 := String(args.at).split(",")
 		at = Vector2(float(c2[0]), float(c2[1]))
@@ -313,6 +341,10 @@ func _tick() -> bool:
 	props.on_frame(dt)
 	if args.has("tour"):
 		_tour_step(dt)
+	if args.has("reveal-late") and frames == int(args.get("reveal-frame", "40")):
+		for rr in String(args["reveal-late"]).split(","):
+			clearing.reveal(int(rr))
+			hv.on_event({"type": "room_revealed", "room": int(rr), "house": hv.avatar_house})
 	var alpha := 1.0
 	for z in sim.zombies:
 		if not nodes.has(z):

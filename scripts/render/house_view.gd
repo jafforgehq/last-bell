@@ -64,6 +64,7 @@ var _door_layer: Node2D
 var _scan_t := 0.0
 var _near_t := 0.0
 var _shown_house := -2
+var _night := 0.0
 var _pawns := PackedVector2Array()
 var _atlas = null
 ## The sprites of the world's floor-mark and furniture layers by the house they are in (house id -> Array of nodes), and the houses whose sprites are shown now.
@@ -122,6 +123,7 @@ func on_frame(dt: float) -> void:
 	_near_t -= dt
 	if _near_t <= 0.0:
 		_near_t = NEAR_EVERY
+		_night = _night_of(float(sim.hour)) if sim.get("hour") != null else 0.0
 		_measure_doors()
 	for h in _roofs:
 		var r = _roofs[h]
@@ -129,6 +131,7 @@ func on_frame(dt: float) -> void:
 			r.tick(dt)
 	for room in _veils:
 		var v = _veils[room]
+		v.set_night(_night)
 		v.set_revealed(_revealed(int(room)))
 		v.tick(dt)
 	for k in _doors:
@@ -305,7 +308,29 @@ func _enter_house() -> void:
 				v.name = "Veil%d" % int(r)
 				_veil_layer.add_child(v)
 				v.setup(int(r), avatar_house, Rect2i(houses.room(int(r)).rect), _revealed(int(r)))
+				var mine: Array = []
+				for k in _doors:
+					var d = _doors[k]
+					if d.house == avatar_house and (d.room_a == int(r) or d.room_b == int(r)):
+						mine.append(d)
+				v.bind_doors(mine, Callable(self, "_room_lit"))
 				_veils[int(r)] = v
+
+
+## The light of the veils: 0 by day, 1 in the dark of the night, with the dusk and the dawn between.
+static func _night_of(hour: float) -> float:
+	if hour >= 19.5 or hour < 5.5:
+		return 1.0
+	if hour >= 17.5:
+		return smoothstep(17.5, 19.5, hour)
+	if hour < 7.0:
+		return 1.0 - smoothstep(5.5, 7.0, hour)
+	return 0.0
+
+
+## Whether the room on the other side of a door is lit (the outside, -1, is), so that its light falls into a dark room.
+func _room_lit(r: int) -> bool:
+	return r < 0 or _revealed(r)
 
 
 func _house_dict(id: int) -> Dictionary:

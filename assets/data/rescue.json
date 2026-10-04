@@ -9,13 +9,14 @@
 	"gift_trust": 6.0,
 	"gift_items": ["food", "ammo"],
 	"gift_amount": 1.0,
+	"gift_nouns": {"food": "food", "ammo": "round"},
 	"fourth_at": 4,
 	"lost_after_days": 0,
 
 	"choices": {
 		"come": "Come with me",
 		"stay": "Stay here, I will come back",
-		"gift": "Take this"
+		"gift": "Give them %s"
 	},
 	"why": {
 		"no_base": "You have no house to take them to yet",
@@ -89,7 +90,7 @@
 			"pack": {"food": 6, "scrap": 1}
 		},
 		{
-			"name": "Mara Lindqvist", "role": "Teacher", "station": "radio",
+			"name": "Mara Lindqvist", "role": "Teacher", "station": "bench",
 			"hiding": "The pantry, the door barred with a mop",
 			"line": "I thought I was the last one on this street. I counted. It is a habit.",
 			"come": "I will bring my notes. I have written down everyone I saw.",
@@ -129,7 +130,7 @@
 			"pack": {"food": 2, "scrap": 2, "ammo": 3}
 		},
 		{
-			"name": "Dot Kessler", "role": "Shopkeeper", "station": "radio",
+			"name": "Dot Kessler", "role": "Shopkeeper", "station": "builders",
 			"hiding": "Behind the counter, the shutter down, the lights off",
 			"line": "Everything in here is for sale. I am joking. Mostly.",
 			"come": "I will take the till. Never mind why.",

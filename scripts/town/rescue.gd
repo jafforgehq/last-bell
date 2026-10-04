@@ -354,7 +354,7 @@ func card(id: String) -> Dictionary:
 	m.choices.append({"id": "come", "text": String(labels.get("come", "Come with me")), "ok": come == "", "why": come})
 	m.choices.append({"id": "stay", "text": String(labels.get("stay", "Stay here, I will come back")), "ok": true, "why": ""})
 	var gift := _why_not_gift(rec)
-	m.choices.append({"id": "gift", "text": String(labels.get("gift", "Take this")), "ok": gift == "", "why": gift})
+	m.choices.append({"id": "gift", "text": _gift_text(String(labels.get("gift", "Give them %s"))), "ok": gift == "", "why": gift})
 	return m
 
 
@@ -386,6 +386,17 @@ func _why_not_gift(rec: Dictionary) -> String:
 	if bool(rec.gifted):
 		return _say("why", "gifted")
 	return "" if _gift_item() != "" else _say("why", "no_stock")
+
+
+## The gift's label with what it would be in it ("Give them 1 food"; "Give them something" when the stores have nothing to spare).
+func _gift_text(template: String) -> String:
+	if not template.contains("%s"):
+		return template
+	var item := _gift_item()
+	if item == "":
+		return template % "something"
+	var nouns: Dictionary = data.get("gift_nouns", {})
+	return template % ("%d %s" % [int(_num("gift_amount", 1.0)), String(nouns.get(item, item))])
 
 
 func _gift_item() -> String:
@@ -542,6 +553,57 @@ func use(c: Dictionary) -> Dictionary:
 	if m.is_empty():
 		return {"ok": false, "line": "", "why": "Nobody there"}
 	return {"ok": true, "line": String(m.line), "why": "", "card": m}
+
+
+# ------------------------------------------------------------------------- staging --
+
+## A screenshot's staging (`--rescue=r0[:clear][:come|:stay|:gift]`, main.gd `_parse_args`): the avatar a step from that survivor in their room, the room opened, the dead
+## of the room put down with `:clear`, the card up (E would have opened it), and the answer given with `:come`, `:stay` or `:gift`. False when there is no such survivor.
+func stage(spec: String) -> bool:
+	var parts := spec.split(":")
+	var rec := get_record(String(parts[0]))
+	var me = _avatar()
+	if rec.is_empty() or me == null:
+		return false
+	var room: Dictionary = {}
+	var houses = _mod("houses")
+	if houses != null and houses.has_method("room"):
+		room = houses.room(int(rec.room))
+	var spot: Vector2 = rec.pos + Vector2(0.0, 1.0)
+	if not room.is_empty() and room.get("rect") is Rect2i:
+		var rect: Rect2i = room.rect
+		var best := INF
+		for ty in range(rect.position.y, rect.end.y):
+			for tx in range(rect.position.x, rect.end.x):
+				var at := Vector2(float(tx) + 0.5, float(ty) + 0.5)
+				var d := at.distance_to(rec.pos)
+				if d >= 0.9 and d < best and not sim.world.is_solid(sim.world.solid_p, at.x, at.y):
+					best = d
+					spot = at
+	me.x = spot.x
+	me.y = spot.y
+	me.path = []
+	me.moving = false
+	var field = _mod("field")
+	var clearing = _mod("clearing")
+	if parts.has("clear") and field != null and houses != null:
+		for i in int(field.n):
+			if int(field.status[i]) == 0 and houses.room_at(field.xs[i], field.ys[i]) == int(rec.room):
+				field._wake(i)
+		for z in sim.zombies.duplicate():
+			if z.state != "dying" and z.state != "dead" and houses.room_at(z.x, z.y) == int(rec.room):
+				sim._hurt_zombie(z, 9999.0, 0.0, me)
+	if clearing != null:
+		clearing.reveal(int(rec.room), "stage")
+	for i in 12:
+		sim.update(1.0 / 30.0)
+	if rec.state == HIDING:
+		rec.state = WARY
+	var m := talk(String(rec.id))
+	for ans in ["come", "stay", "gift"]:
+		if parts.has(ans) and not m.is_empty():
+			choose(String(rec.id), ans)
+	return true
 
 
 # --------------------------------------------------------------------------- save --
