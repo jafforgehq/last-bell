@@ -150,7 +150,7 @@ func test_mending_starts_a_session_of_the_plans_length() -> void:
 	eq(m.sim.nights.working, "wall", "working")
 	eq(m.sim.nights.mend_seg, PALLETS, "at the pallets")
 	near(float(r.seconds), NightData.num("mend.seconds"), 1.0e-9, "for the plan's seconds")
-	near(NightData.num("mend.seconds"), 10.0, 1.0e-9, "ten")
+	check(NightData.num("mend.seconds") > 0.0, "a session has a length")
 	var on: Array = _events(m.sim, "wall_work")
 	check(on.size() == 1 and on[0].on == true and on[0].seg == PALLETS, "an event says it began: %s" % str(on))
 	check(m.sim.nights.wall_candidates()[0].label.begins_with("Stop mending"), "and the candidate now offers to stop")

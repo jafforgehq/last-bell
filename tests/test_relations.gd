@@ -119,13 +119,13 @@ func test_a_roster_bond_never_drifts_under_its_floor_but_an_event_can_break_it()
 	for d in range(4, 70):
 		sim.day = d
 		r.look()
-	near(r.affinity("dez", "hector"), Relations.ANCHOR_FLOOR, 0.0001, "55 less a point a day stops at the floor")
+	near(r.affinity("dez", "hector"), Relations.ANCHOR_FLOOR, 0.0001, "the anchor less the daily decay stops at the floor")
 	eq(r.kind("dez", "hector"), "friend", "still friends")
 	r.add("dez", "hector", -30.0, "A bitter row")
 	near(r.affinity("dez", "hector"), Relations.ANCHOR_FLOOR - 30.0, 0.0001, "an event goes through the floor")
 	sim.day = 70
 	r.look()
-	near(r.affinity("dez", "hector"), Relations.ANCHOR_FLOOR - 31.0, 0.0001, "and the bond is broken: nothing holds it up any more")
+	near(r.affinity("dez", "hector"), Relations.ANCHOR_FLOOR - 30.0 - Relations.DECAY_PER_DAY, 0.0001, "and the bond is broken: nothing holds it up any more")
 	g.world.free()
 
 
@@ -147,20 +147,20 @@ func test_a_late_caller_brings_the_roster_bonds_with_them() -> void:
 
 # ----------------------------------------------------------------------- kinds --
 
-func test_a_friendship_begins_at_35_and_ends_under_20() -> void:
+func test_a_friendship_begins_at_its_line_and_ends_under_the_lower_one() -> void:
 	var g := _game()
 	var sim = g.sim
 	var r = sim.relations
 	r.add("dez", "walt", Relations.FRIEND_AT - 1.0, "x")
-	eq(r.kind("dez", "walt"), "", "34 is not yet")
+	eq(r.kind("dez", "walt"), "", "one under the line is not yet")
 	r.add("dez", "walt", 2.0, "x")
-	eq(r.kind("dez", "walt"), "friend", "36 is")
-	r.add("dez", "walt", -15.0, "x")
-	eq(r.kind("dez", "walt"), "friend", "21 is still (it ends under 20)")
+	eq(r.kind("dez", "walt"), "friend", "one over is")
+	r.add("dez", "walt", (Relations.FRIEND_END + 1.0) - r.affinity("dez", "walt"), "x")
+	eq(r.kind("dez", "walt"), "friend", "one over the end is still (it ends under %d)" % int(Relations.FRIEND_END))
 	r.add("dez", "walt", -2.0, "x")
-	eq(r.kind("dez", "walt"), "", "19 is not")
-	r.add("dez", "walt", 12.0, "x")
-	eq(r.kind("dez", "walt"), "", "31 does not begin again (it begins at 35)")
+	eq(r.kind("dez", "walt"), "", "one under the end is not")
+	r.add("dez", "walt", (Relations.FRIEND_AT - 1.0) - r.affinity("dez", "walt"), "x")
+	eq(r.kind("dez", "walt"), "", "one under the line does not begin again (it begins at %d)" % int(Relations.FRIEND_AT))
 	g.world.free()
 
 
@@ -510,22 +510,22 @@ func test_a_pair_that_never_meets_gets_no_chemistry() -> void:
 	g.world.free()
 
 
-func test_every_pair_loses_a_point_a_day_toward_nothing() -> void:
+func test_every_pair_decays_by_the_daily_amount_toward_nothing() -> void:
 	var g := _game()
 	var sim = g.sim
 	var r = sim.relations
 	r.add("dez", "walt", 10.0, "x")
 	r.add("marcus", "ana", -4.0, "x")
-	r.add("dez", "ana", 0.4, "x")
+	r.add("dez", "ana", Relations.DECAY_PER_DAY / 2.0, "x")
 	r.look()    # (the day is taken as it is)
 	near(r.affinity("dez", "walt"), 10.0, 0.0001, "the same day")
 	sim.day = 4
 	r.look()
-	near(r.affinity("dez", "walt"), 9.0, 0.0001, "10 becomes 9")
-	near(r.affinity("marcus", "ana"), -3.0, 0.0001, "-4 becomes -3")
-	near(r.affinity("dez", "ana"), 0.0, 0.0001, "0.4 becomes nothing")
+	near(r.affinity("dez", "walt"), 10.0 - Relations.DECAY_PER_DAY, 0.0001, "10 loses the daily decay")
+	near(r.affinity("marcus", "ana"), -4.0 + Relations.DECAY_PER_DAY, 0.0001, "-4 loses it toward nothing")
+	near(r.affinity("dez", "ana"), 0.0, 0.0001, "half a day's decay becomes nothing, not a negative")
 	r.look()
-	near(r.affinity("dez", "walt"), 9.0, 0.0001, "once a day")
+	near(r.affinity("dez", "walt"), 10.0 - Relations.DECAY_PER_DAY, 0.0001, "once a day")
 	g.world.free()
 
 

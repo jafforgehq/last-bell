@@ -55,21 +55,39 @@ func _p(sim, id: String):
 	return null
 
 
-## What it takes: the skill and the practice for each title (the numbers the data names, with a little over).
-func _medic(p, medicine: int = 10, treated: int = 6) -> void:
+## The practice each title asks for, read from assets/data/titles.json (never copied here: a retune of the data moves it).
+var _needs := {}
+
+
+func _need(title_id: String) -> float:
+	if _needs.is_empty():
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/titles.json"))
+		for t in parsed.get("titles", []):
+			_needs[String(t.id)] = float(t.need)
+	return float(_needs[title_id])
+
+
+## What it takes: the skill and the practice for each title. A negative practice (the default) is exactly what the data asks for.
+func _medic(p, medicine: int = 10, treated: int = -1) -> void:
 	p.skills["Medicine"] = medicine
-	p.stats["treated"] = treated
+	p.stats["treated"] = int(ceil(_need("medic"))) if treated < 0 else treated
 
 
-func _engineer(p, building: int = 9, work: float = 30.0) -> void:
+func _engineer(p, building: int = 9, work: float = -1.0) -> void:
 	p.skills["Building"] = building
-	p.stats["crafted"] = work
+	p.stats["crafted"] = _need("engineer") if work < 0.0 else work
 	p.stats["mended"] = 0.0
 
 
-func _shot(p, shooting: int = 8, kills: int = 20) -> void:
+func _shot(p, shooting: int = 8, kills: int = -1) -> void:
 	p.skills["Shooting"] = shooting
-	p.stats["kills"] = kills
+	p.stats["kills"] = int(ceil(_need("marksman"))) if kills < 0 else kills
+
+
+## `n` trips home for each of these (a scout needs the number of trips the data names).
+func _trips(sim, people: Array, n: int) -> void:
+	for i in n:
+		sim.specialists.on_trip(people, [], {})
 
 
 func _news(sim, kind: String = "title") -> Array:
@@ -131,26 +149,29 @@ func test_a_title_needs_the_skill_and_the_practice() -> void:
 	var walt = _p(sim, "walt")
 	var marcus = _p(sim, "marcus")
 	var dez = _p(sim, "dez")
-	_medic(ana, 10, 5)
+	var m := int(_need("medic"))
+	var k := int(_need("marksman"))
+	var e := _need("engineer")
+	_medic(ana, 10, m - 1)
 	sim.specialists.look()
-	check(sim.specialists.holder("medic") == null, "Medicine 10 and 5 treated: not enough practice (6)")
+	check(sim.specialists.holder("medic") == null, "Medicine 10 and %d treated: not enough practice (%d)" % [m - 1, m])
 	check(not sim.specialists.eligible(ana, "medic"), "and not eligible")
-	ana.stats["treated"] = 6
-	check(sim.specialists.eligible(ana, "medic"), "6 treated: eligible")
-	_medic(walt, 5, 50)
+	ana.stats["treated"] = m
+	check(sim.specialists.eligible(ana, "medic"), "%d treated: eligible" % m)
+	_medic(walt, 5, 50 * m)
 	check(not sim.specialists.eligible(walt, "medic"), "Medicine 5 is under the floor (6), whatever the practice")
-	_shot(marcus, 8, 19)
-	check(not sim.specialists.eligible(marcus, "marksman"), "19 kills: one short of 20")
-	marcus.stats["kills"] = 20
-	check(sim.specialists.eligible(marcus, "marksman"), "20 kills")
+	_shot(marcus, 8, k - 1)
+	check(not sim.specialists.eligible(marcus, "marksman"), "%d kills: one short of %d" % [k - 1, k])
+	marcus.stats["kills"] = k
+	check(sim.specialists.eligible(marcus, "marksman"), "%d kills" % k)
 	_engineer(dez, 9, 0.0)
-	dez.stats["mended"] = 290.0
-	check(not sim.specialists.eligible(dez, "engineer"), "290 HP mended is 29 (a tenth): under 30")
-	dez.stats["mended"] = 300.0
-	check(sim.specialists.eligible(dez, "engineer"), "300 HP mended is 30")
+	dez.stats["mended"] = 10.0 * e - 10.0
+	check(not sim.specialists.eligible(dez, "engineer"), "a tenth of the HP mended, one under the %d" % int(e))
+	dez.stats["mended"] = 10.0 * e
+	check(sim.specialists.eligible(dez, "engineer"), "a tenth of the HP mended makes the %d" % int(e))
 	dez.stats["mended"] = 100.0
-	dez.stats["crafted"] = 20.0
-	check(sim.specialists.eligible(dez, "engineer"), "10 mended and 20 made add up to 30")
+	dez.stats["crafted"] = e - 10.0
+	check(sim.specialists.eligible(dez, "engineer"), "10 mended and %d made add up to %d" % [int(e - 10.0), int(e)])
 	_shot(dez, 5, 500)
 	check(not sim.specialists.eligible(dez, "marksman"), "Shooting 5 is under the floor, whatever the kills")
 	g.world.free()
@@ -161,10 +182,11 @@ func test_a_vacant_title_goes_to_the_best_score_at_once() -> void:
 	var sim = g.sim
 	var marcus = _p(sim, "marcus")
 	var walt = _p(sim, "walt")
-	_shot(marcus, 8, 30)    # 8 + 1.5
-	_shot(walt, 7, 1000)    # 7 + 2.0: the practice counts up to two points and no more
-	near(sim.specialists.score(marcus, "marksman"), 9.5, 1e-9, "skill plus practice over need, here 30 / 20")
-	near(sim.specialists.score(walt, "marksman"), 9.0, 1e-9, "a thousand kills is worth two points, not fifty")
+	var k := _need("marksman")
+	_shot(marcus, 8, int(k * 1.5))    # 8 + 1.5
+	_shot(walt, 7, int(k * 50.0))     # 7 + 2.0: the practice counts up to two points and no more
+	near(sim.specialists.score(marcus, "marksman"), 9.5, 1e-9, "skill plus practice over need, here one and a half times the need")
+	near(sim.specialists.score(walt, "marksman"), 9.0, 1e-9, "fifty times the need is worth two points, not fifty")
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == marcus, "the best score takes the vacant title at the first look")
 	eq(String(sim.specialists.title_of(marcus).id), "marksman", "and says so")
@@ -177,8 +199,9 @@ func test_a_tie_goes_by_id() -> void:
 	var sim = g.sim
 	var marcus = _p(sim, "marcus")
 	var walt = _p(sim, "walt")
-	_shot(marcus, 8, 20)    # 9.0
-	_shot(walt, 7, 40)      # 9.0
+	var k := int(_need("marksman"))
+	_shot(marcus, 8, k)        # 9.0
+	_shot(walt, 7, 2 * k)      # 9.0
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == marcus, "a tie: the lower id, always")
 	g.world.free()
@@ -189,16 +212,17 @@ func test_a_holder_is_displaced_only_by_a_clear_margin() -> void:
 	var sim = g.sim
 	var marcus = _p(sim, "marcus")
 	var walt = _p(sim, "walt")
-	_shot(marcus, 8, 20)    # 9.0
+	var k := int(_need("marksman"))
+	_shot(marcus, 8, k)    # 9.0
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == marcus, "Marcus is the marksman")
-	_shot(walt, 8, 30)      # 9.5: better, but not by a point
+	_shot(walt, 8, int(k * 1.5))      # 9.5: better, but not by a point
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == marcus, "9.5 against 9.0: he keeps it (no flip-flop)")
-	walt.stats["kills"] = 39    # 9.95
+	walt.stats["kills"] = 2 * k - 1    # just under 10.0
 	sim.specialists.look()
-	check(sim.specialists.holder("marksman") == marcus, "9.95 against 9.0: still his")
-	walt.stats["kills"] = 40    # 10.0
+	check(sim.specialists.holder("marksman") == marcus, "just under a point above: still his")
+	walt.stats["kills"] = 2 * k    # 10.0
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == walt, "10.0 against 9.0: a point above, Walt takes it")
 	check(sim.specialists.title_of(marcus).is_empty(), "and Marcus is not the marksman")
@@ -212,9 +236,9 @@ func test_a_person_holds_one_title() -> void:
 	var sim = g.sim
 	var dez = _p(sim, "dez")
 	var marcus = _p(sim, "marcus")
-	_engineer(dez, 9, 30.0)    # 10.0
-	_shot(dez, 6, 20)          # 7.0 as a marksman
-	_shot(marcus, 8, 20)       # 9.0
+	_engineer(dez, 9)    # 10.0
+	_shot(dez, 6)              # 7.0 as a marksman
+	_shot(marcus, 8)           # 9.0
 	sim.specialists.look()
 	eq(String(sim.specialists.title_of(dez).id), "engineer", "Dez takes the title he is best at")
 	check(sim.specialists.holder("marksman") == marcus, "the other title goes to the next best")
@@ -227,32 +251,32 @@ func test_the_scout_needs_trips_and_more_than_anyone() -> void:
 	var dez = _p(sim, "dez")
 	var marcus = _p(sim, "marcus")
 	var ruth = _p(sim, "ruth")
-	for i in 3:
-		sim.specialists.on_trip([dez, marcus], [], {})
-	eq(int(sim.specialists.record_of(dez).trips), 3, "each of those who came home has a trip")
+	var n := int(_need("scout"))
+	_trips(sim, [dez, marcus], n)
+	eq(int(sim.specialists.record_of(dez).trips), n, "each of those who came home has a trip")
 	eq(int(sim.specialists.record_of(ruth).trips), 0, "and nobody else")
 	sim.specialists.look()
-	check(sim.specialists.holder("scout") == null, "three trips each: nobody has more than the other")
+	check(sim.specialists.holder("scout") == null, "the same number of trips each: nobody has more than the other")
 	sim.specialists.on_trip([dez], [], {})
 	sim.specialists.look()
-	check(sim.specialists.holder("scout") == dez, "four against three: the scout")
+	check(sim.specialists.holder("scout") == dez, "one more than the other: the scout")
 	sim.specialists.on_trip([marcus], [], {})
 	sim.specialists.look()
 	check(sim.specialists.holder("scout") == dez, "a tie later does not take it from him")
 	g.world.free()
 
 
-func test_a_scout_needs_three_trips() -> void:
+func test_a_scout_needs_the_trips_the_data_asks_for() -> void:
 	var g := _game()
 	var sim = g.sim
 	var dez = _p(sim, "dez")
-	sim.specialists.on_trip([dez], [], {})
+	var n := int(_need("scout"))
+	_trips(sim, [dez], n - 1)
+	sim.specialists.look()
+	check(sim.specialists.holder("scout") == null, "%d trips are not enough, though nobody else has any" % (n - 1))
 	sim.specialists.on_trip([dez], [], {})
 	sim.specialists.look()
-	check(sim.specialists.holder("scout") == null, "two trips are not enough, though nobody else has any")
-	sim.specialists.on_trip([dez], [], {})
-	sim.specialists.look()
-	check(sim.specialists.holder("scout") == dez, "three are")
+	check(sim.specialists.holder("scout") == dez, "%d are" % n)
 	g.world.free()
 
 
@@ -277,7 +301,7 @@ func test_the_engineer_is_quicker_at_the_bench_and_the_hammer() -> void:
 	var scrap0: float = sim.workshop.scrap_per_hour(dez)
 	var rate0: float = sim.build.rate(dez)
 	var ruth_scrap: float = sim.workshop.scrap_per_hour(ruth)
-	_engineer(dez, 9, 30.0)
+	_engineer(dez, 9)
 	sim.specialists.look()
 	eq(String(sim.specialists.title_of(dez).id), "engineer", "Dez is the engineer")
 	near(sim.workshop.scrap_per_hour(dez) / scrap0, 1.15, 1e-9, "15% more scrap through the bench in an hour")
@@ -293,7 +317,7 @@ func test_the_engineer_mends_a_wall_faster() -> void:
 		var sim = g.sim
 		sim.stock.scrap = 200.0
 		var dez = _p(sim, "dez")
-		_engineer(dez, 9, 30.0)
+		_engineer(dez, 9)
 		if titled:
 			sim.specialists.look()
 			check(sim.specialists.holder("engineer") == dez, "Dez is the engineer")
@@ -321,7 +345,7 @@ func test_the_medic_bandages_faster_and_cures_more_often() -> void:
 		var ana = _p(sim, "ana")
 		var hector = _p(sim, "walt")
 		sim.traits.give(ana, [])
-		_medic(ana, 10, 6)
+		_medic(ana, 10)
 		if titled:
 			sim.specialists.look()
 			check(sim.specialists.holder("medic") == ana, "Ana is the medic")
@@ -345,7 +369,7 @@ func test_the_marksman_aims_a_little_better() -> void:
 	var walt = _p(sim, "walt")
 	var before: float = sim.aim_factor(marcus)
 	var walt_before: float = sim.aim_factor(walt)
-	_shot(marcus, 8, 20)
+	_shot(marcus, 8)
 	sim.specialists.look()
 	check(sim.specialists.holder("marksman") == marcus, "Marcus is the marksman")
 	near(sim.aim_factor(marcus) / before, 1.04, 1e-9, "4% on the aim")
@@ -357,7 +381,7 @@ func test_a_title_gives_a_bonus_only_for_its_own_work() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ana = _p(sim, "ana")
-	_medic(ana, 10, 6)
+	_medic(ana, 10)
 	sim.specialists.look()
 	check(sim.specialists.holder("medic") == ana, "Ana is the medic")
 	for key in ["aim", "craft", "repair", "reload", "wound", "xp", "morale_recover", "grief", "dead_morale"]:
@@ -379,7 +403,7 @@ func test_traits_and_a_title_multiply() -> void:
 	var dez = _p(sim, "dez")
 	var tinker := Helpers.trait_effect("tinkerer", "repair")
 	check(sim.traits.mult(dez, "repair") == tinker, "Dez with his Tinkerer, no title")
-	_engineer(dez, 9, 30.0)
+	_engineer(dez, 9)
 	sim.specialists.look()
 	near(sim.traits.mult(dez, "repair"), tinker * 1.2, 1e-12, "the trait and the title multiply")
 	g.world.free()
@@ -391,9 +415,9 @@ func test_everything_is_exactly_neutral_when_the_module_is_off() -> void:
 	var dez = _p(sim, "dez")
 	var ana = _p(sim, "ana")
 	var marcus = _p(sim, "marcus")
-	_engineer(dez, 9, 30.0)
-	_medic(ana, 10, 6)
-	_shot(marcus, 8, 20)
+	_engineer(dez, 9)
+	_medic(ana, 10)
+	_shot(marcus, 8)
 	sim.specialists.on_trip([dez], [], {})
 	sim.specialists.look()
 	check(sim.specialists.holder("engineer") == dez and sim.specialists.holder("medic") == ana, "the titles are held")
@@ -461,7 +485,7 @@ func _seat_game(titled: bool) -> Dictionary:
 		def.erase("station")
 		def.erase("post_id")
 		sim.add_person(def)
-	_medic(ana, 6, 6)
+	_medic(ana, 6)
 	if titled:
 		sim.specialists.look()
 		check(sim.specialists.holder("medic") == ana, "Ana is the medic")
@@ -498,8 +522,8 @@ func test_the_engineer_and_the_marksman_have_their_seats_too() -> void:
 	var sim = g.sim
 	var dez = _p(sim, "dez")
 	var marcus = _p(sim, "marcus")
-	_engineer(dez, 9, 30.0)
-	_shot(marcus, 8, 20)
+	_engineer(dez, 9)
+	_shot(marcus, 8)
 	sim.specialists.look()
 	near(sim.specialists.fit_bonus(dez, "bench"), 1.5, 1e-9, "the engineer at the bench")
 	near(sim.specialists.fit_bonus(marcus, "watch"), 1.5, 1e-9, "the marksman at the lookout post")
@@ -513,8 +537,7 @@ func test_the_scout_has_no_seat_and_a_party_with_them_finds_more() -> void:
 	var dez = _p(sim, "dez")
 	var marcus = _p(sim, "marcus")
 	var ruth = _p(sim, "ruth")
-	for i in 3:
-		sim.specialists.on_trip([dez], [], {})
+	_trips(sim, [dez], int(_need("scout")))
 	sim.specialists.look()
 	check(sim.specialists.holder("scout") == dez, "Dez is the scout")
 	for id in ["bench", "builders", "garden", "watch", "infirmary", "radio", "salvage"]:
@@ -577,14 +600,15 @@ func test_becoming_is_told_in_the_news_an_alert_and_a_bark() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ana = _p(sim, "ana")
-	_medic(ana, 10, 8)
+	var treated := int(_need("medic")) + 2
+	_medic(ana, 10, treated)
 	sim.events.clear()
 	sim.specialists.look()
 	var news := _news(sim)
 	eq(news.size(), 1, "one News line")
 	if news.size() == 1:
 		eq(String(news[0].text), "Ana is the camp's medic now", "in the camp's words")
-		eq(String(news[0].sub), "Medicine 10, 8 treated", "with what earned it")
+		eq(String(news[0].sub), "Medicine 10, %d treated" % treated, "with what earned it")
 	check(sim.alerts.has("title-medic"), "an alert")
 	if sim.alerts.has("title-medic"):
 		near(float(sim.alerts["title-medic"].ttl), 60.0, 0.001, "for a minute")
@@ -607,15 +631,15 @@ func test_a_title_tells_what_it_gives_in_words() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ana = _p(sim, "ana")
-	_medic(ana, 10, 6)
+	_medic(ana, 10)
 	sim.specialists.look()
 	var t: Dictionary = sim.specialists.title_of(ana)
 	eq(String(t.short), "Medic", "the short name")
 	eq(String(t.skill), "Medicine", "the skill")
 	eq(String(t.bonus), "Bandages 25% faster, cures 8% more often", "what it gives")
-	eq(String(t.practice), "Medicine 10, 6 treated", "what earned it")
+	eq(String(t.practice), "Medicine 10, %d treated" % int(_need("medic")), "what earned it")
 	check(String(t.blurb) != "", "a line about it")
-	near(float(t.score), 11.0, 1e-9, "and the score: skill 10 and the practice (6 / 6, one point)")
+	near(float(t.score), 11.0, 1e-9, "and the score: skill 10 and the practice (need / need, one point)")
 	eq(sim.specialists.bonus_text("engineer"), "Makes ammo 15% faster, mends and builds 20% faster", "the engineer's")
 	eq(sim.specialists.bonus_text("marksman"), "Shoots 4% truer", "the marksman's")
 	eq(sim.specialists.bonus_text("scout"), "Finds 12% more on trips", "the scout's")
@@ -627,14 +651,14 @@ func test_the_slow_look_and_the_dawn_evaluate() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ana = _p(sim, "ana")
-	_medic(ana, 10, 6)
+	_medic(ana, 10)
 	sim.specialists.update(sim.specialists.TICK_S - 0.5)
 	check(sim.specialists.holder("medic") == null, "not before the slow look (10 s of rules time)")
 	sim.specialists.update(1.0)
 	check(sim.specialists.holder("medic") == ana, "at it")
 	# a new title earned just before the dawn is named at the dawn
 	var marcus = _p(sim, "marcus")
-	_shot(marcus, 8, 20)
+	_shot(marcus, 8)
 	sim.phase = "night"
 	sim.specialists.update(0.1)
 	sim.phase = "dawn"
@@ -646,8 +670,8 @@ func test_the_slow_look_and_the_dawn_evaluate() -> void:
 func test_a_look_does_not_touch_the_dice() -> void:
 	var g := _game()
 	var sim = g.sim
-	_medic(_p(sim, "ana"), 10, 6)
-	_shot(_p(sim, "marcus"), 8, 20)
+	_medic(_p(sim, "ana"), 10)
+	_shot(_p(sim, "marcus"), 8)
 	var state: int = sim.rng.state
 	for i in 20:
 		sim.specialists.update(10.0)
@@ -662,7 +686,7 @@ func test_a_look_does_not_touch_the_dice() -> void:
 func _medic_game() -> Dictionary:
 	var g := _game()
 	var sim = g.sim
-	_medic(_p(sim, "ana"), 10, 6)
+	_medic(_p(sim, "ana"), 10)
 	sim.specialists.look()
 	check(sim.specialists.holder("medic") == _p(sim, "ana"), "Ana is the medic")
 	sim.radio.news.clear()
@@ -771,7 +795,7 @@ func test_an_heir_is_named_and_the_gap_closes() -> void:
 	sim.medical.kill(ana, "bled")
 	sim.specialists.look()
 	eq(sim.specialists.gaps().size(), 1, "a gap")
-	_medic(walt, 6, 6)
+	_medic(walt, 6)
 	sim.specialists.look()
 	check(sim.specialists.holder("medic") == walt, "Walt is the new medic")
 	check(sim.specialists.gaps().is_empty(), "no gap now")
@@ -787,7 +811,7 @@ func test_an_heir_at_once_means_no_gap_and_no_shock() -> void:
 	var sim = g.sim
 	var ana = _p(sim, "ana")
 	var walt = _p(sim, "walt")
-	_medic(walt, 6, 6)
+	_medic(walt, 6)
 	check(sim.specialists.holder("medic") == ana, "Ana holds it, Walt is behind her")
 	sim.medical.kill(ana, "bled")
 	sim.morale.shocks.clear()
@@ -834,8 +858,7 @@ func test_a_lost_scout_leaves_no_loot_bonus() -> void:
 	var g := _game()
 	var sim = g.sim
 	var dez = _p(sim, "dez")
-	for i in 3:
-		sim.specialists.on_trip([dez], [], {})
+	_trips(sim, [dez], int(_need("scout")))
 	sim.specialists.look()
 	near(sim.specialists.party_mult([dez]), 1.12, 1e-9, "the scout")
 	sim.medical.kill(dez, "bled")
@@ -853,11 +876,11 @@ func test_a_lost_scout_leaves_no_loot_bonus() -> void:
 func test_a_save_keeps_the_titles_the_trips_and_the_gaps() -> void:
 	var a := _game()
 	var sim = a.sim
-	_medic(_p(sim, "ana"), 10, 6)
-	_engineer(_p(sim, "dez"), 9, 31.0)
+	_medic(_p(sim, "ana"), 10)
+	_engineer(_p(sim, "dez"), 9, _need("engineer") + 1.0)
 	sim.specialists.look()
-	for i in 4:
-		sim.specialists.on_trip([_p(sim, "walt")], [], {})
+	var trips := int(_need("scout")) + 1
+	_trips(sim, [_p(sim, "walt")], trips)
 	sim.specialists.look()
 	sim.medical.kill(_p(sim, "ana"), "bled")
 	sim.specialists.look()
@@ -871,7 +894,7 @@ func test_a_save_keeps_the_titles_the_trips_and_the_gaps() -> void:
 	eq(_json(sb.save()), _json(sim.specialists.save()), "the same state, key for key")
 	check(sb.holder("engineer") != null and sb.holder("engineer").id == "dez", "Dez is still the engineer")
 	check(sb.holder("scout") != null and sb.holder("scout").id == "walt", "Walt is still the scout")
-	eq(int(sb.record_of(_p(b.sim, "walt")).trips), 4, "four trips")
+	eq(int(sb.record_of(_p(b.sim, "walt")).trips), trips, "the trips are kept")
 	eq(sb.gaps().size(), 1, "the gap")
 	eq(int(sb.title_of(_p(b.sim, "dez")).since_day), 4, "since the same day")
 	var before: int = _news(b.sim).size()
@@ -884,8 +907,8 @@ func test_a_save_keeps_the_titles_the_trips_and_the_gaps() -> void:
 func test_the_first_look_after_a_save_with_no_module_data_is_silent() -> void:
 	var a := _game()
 	var sim = a.sim
-	_medic(_p(sim, "ana"), 10, 6)
-	_shot(_p(sim, "marcus"), 8, 20)
+	_medic(_p(sim, "ana"), 10)
+	_shot(_p(sim, "marcus"), 8)
 	var d := SaveGame.to_dict(sim)
 	d.modules.erase("specialists")
 	var b := _bare()
@@ -906,8 +929,7 @@ func test_the_first_look_after_a_save_with_no_module_data_is_silent() -> void:
 	eq(barks, 0, "no bark")
 	# and the silence is used up: a title earned later is announced
 	var walt = _p(b.sim, "walt")
-	for i in 3:
-		sb.on_trip([walt], [], {})
+	_trips(b.sim, [walt], int(_need("scout")))
 	sb.look()
 	eq(_news(b.sim).size(), before + 1, "the next new title is told")
 	a.world.free()
@@ -917,14 +939,14 @@ func test_the_first_look_after_a_save_with_no_module_data_is_silent() -> void:
 func test_a_loaded_game_goes_on_the_same() -> void:
 	var a := _game()
 	var sim = a.sim
-	_medic(_p(sim, "ana"), 10, 6)
+	_medic(_p(sim, "ana"), 10)
 	Helpers.run(sim, 12.0)
 	var d := SaveGame.to_dict(sim)
 	var b := _bare()
 	check(SaveGame.apply(b.sim, SaveGame.from_text(SaveGame.to_text(d))), "it loads")
 	var seeds := [sim, b.sim]
-	_shot(_p(sim, "marcus"), 8, 20)
-	_shot(_p(b.sim, "marcus"), 8, 20)
+	_shot(_p(sim, "marcus"), 8)
+	_shot(_p(b.sim, "marcus"), 8)
 	for s in seeds:
 		Helpers.run(s, 25.0)
 	eq(_json(b.sim.specialists.save()), _json(sim.specialists.save()), "both have the same state after the same play")
@@ -936,8 +958,8 @@ func test_a_loaded_game_goes_on_the_same() -> void:
 func test_a_damaged_save_is_cleaned() -> void:
 	var g := _game()
 	var sim = g.sim
-	_medic(_p(sim, "ana"), 10, 6)
-	_shot(_p(sim, "marcus"), 8, 5)    # not enough practice: a claim of the title is false
+	_medic(_p(sim, "ana"), 10)
+	_shot(_p(sim, "marcus"), 8, int(_need("marksman")) - 1)    # not enough practice: a claim of the title is false
 	var bad := {
 		"holders": {"medic": "ana", "marksman": "marcus", "wizard": "ana", "scout": "nobody", "engineer": 7},
 		"since": {"medic": "soon", "marksman": 3.0, "wizard": 2.0},
@@ -974,7 +996,7 @@ func test_a_holder_who_is_dead_in_the_save_is_not_a_holder() -> void:
 	var g := _game()
 	var sim = g.sim
 	var ana = _p(sim, "ana")
-	_medic(ana, 10, 6)
+	_medic(ana, 10)
 	sim.specialists.look()
 	var d: Dictionary = sim.specialists.save()
 	ana.dead = true

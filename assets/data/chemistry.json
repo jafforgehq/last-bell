@@ -6,11 +6,11 @@
 		"nervous": 0.85
 	},
 	"friction": [
-		{"a": "nervous", "b": "tough", "per_look": -0.25},
-		{"a": "sharp_eyed", "b": "sharp_eyed", "per_look": -0.2}
+		{"a": "nervous", "b": "tough", "per_look": -0.5},
+		{"a": "sharp_eyed", "b": "sharp_eyed", "per_look": -0.4}
 	],
 	"warmth": [
-		{"a": "loyal", "b": "loyal", "per_look": 0.2},
-		{"a": "nervous", "b": "steady", "per_look": 0.2}
+		{"a": "loyal", "b": "loyal", "per_look": 0.4},
+		{"a": "nervous", "b": "steady", "per_look": 0.4}
 	]
 }

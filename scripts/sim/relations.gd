@@ -2,10 +2,10 @@
 ## same both ways (deliberately: one number a pair). The roster's bonds (`sim.bonds.list`: Dez and Hector, Ruth and Marcus...) start
 ## at an ANCHOR value and never drift under a floor; every other pair starts at nothing and moves with what people do together:
 ## working at one station, standing still side by side, holding neighbouring posts at night, sharing a meal, coming home from a trip,
-## being patched up (an event), going hungry together (it frays tempers); and it fades by a point a day. Temperaments
+## being patched up (an event), going hungry together (it frays tempers); and it fades by DECAY_PER_DAY a day. Temperaments
 ## (`assets/data/chemistry.json`) scale the warming or add a friction or a warmth to the pairs that meet.
 ##
-## KINDS. A pair of 35 or more is FRIENDS (until it falls under 20), 85 or more for five days as friends is a COUPLE (until it falls under
+## KINDS. A pair of 30 or more is FRIENDS (until it falls under 15), 85 or more for five days as friends is a COUPLE (until it falls under
 ## 60), -35 or less is RIVALS (until it rises over -20): hysteresis, so that a pair does not flicker. Nobody has more than three
 ## friends, one partner or two rivals (the strongest keep the kind); the player's own pairs are no part of that count. A kind that
 ## begins is News in the radio's log (at most two lines a day; a line that has to wait is told the next day).
@@ -31,8 +31,8 @@ const CHEMISTRY_PATH := "res://assets/data/chemistry.json"
 const TICK_S := 10.0
 
 ## The kinds: where they begin and where they end, and how many of each a person may have.
-const FRIEND_AT := 35.0
-const FRIEND_END := 20.0
+const FRIEND_AT := 30.0
+const FRIEND_END := 15.0
 const PARTNER_AT := 85.0
 const PARTNER_END := 60.0
 const PARTNER_DAYS := 5
@@ -51,18 +51,18 @@ const ANCHOR := {"friend": 55.0, "family": 60.0, "mentor": 50.0}
 const ANCHOR_FLOOR := 40.0
 
 ## What moves a pair (per slow look, unless it says otherwise). A gain is multiplied by (1 - |value| / 120).
-const STATION_GAIN := 0.25
-const NEAR_GAIN := 0.15
-const POST_GAIN := 0.2
-const MEAL_GAIN := 0.8
-const DECAY_PER_DAY := 1.0
+const STATION_GAIN := 0.5
+const NEAR_GAIN := 0.3
+const POST_GAIN := 0.4
+const MEAL_GAIN := 1.5
+const DECAY_PER_DAY := 0.8
 ## Events: a trip home together, with someone hurt (on top), a patient looked after, one who was down (on top), and going
 ## hungry or thirsty together (per look).
-const TRIP_GAIN := 2.5
-const TRIP_HURT_GAIN := 4.0
-const RESCUE_GAIN := 6.0
-const RESCUE_DOWNED_GAIN := 10.0
-const SCARCE_LOSS := -0.5
+const TRIP_GAIN := 4.0
+const TRIP_HURT_GAIN := 6.0
+const RESCUE_GAIN := 8.0
+const RESCUE_DOWNED_GAIN := 12.0
+const SCARCE_LOSS := -1.0
 ## "Together": within this many tiles (and, for the shared place, both still). Neighbouring night posts: within this many.
 const TOGETHER_TILES := 2.6
 const POST_NEIGHBOUR_TILES := 5.2
@@ -84,8 +84,8 @@ const FIT_FRIEND := 0.5
 const FIT_FRIEND_MAX := 1.0
 
 ## The voice: the best standing (at least VOICE_MIN) among the living at the base, who changes only when beaten by VOICE_SWITCH.
-const VOICE_MIN := 40.0
-const VOICE_SWITCH := 8.0
+const VOICE_MIN := 52.0
+const VOICE_SWITCH := 12.0
 ## The community's trust in the leader under which nobody brings ideas (initiative.gd reads this).
 const COMMUNITY_MIN := 35.0
 const NEWS_PER_DAY := 2

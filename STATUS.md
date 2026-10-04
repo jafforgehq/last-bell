@@ -107,6 +107,109 @@ Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standa
 - **Campaign:** on Standard the bot dies in Autumn; on Story it finishes in 3 of 8. It needs a human's judgement.
 - **Known balance gaps:** outposts are usually overrun in the harness (the policy never posts a garrison); the Campaign is not tuned for people.
 
+## 6b. Round 20 tuning (the community's numbers)
+
+`tools/community_probe.gd` plays avatar games of the settlement start headless (the colony by the harness's `Balance.Policy`, informed, crew 5; Ruth is the player and stands still in the school gym, `--avatar=idle`, or is round 19's bot, `--avatar=bot`) and answers every idea the community brings by `--policy=accept|affordable|refuse` (affordable: yes when the price leaves 5 scrap and 10 food, else later). It prints, by day: ideas raised and answered (and by kind), scrap and food spent on them, friendships, rivalries, couples, titles, the voice, the mean mood and trust, who was lost and whether the colony survived; and the plan's targets with a verdict. `--noideas` plays the same game with the initiative module off (relations and specialists stay on), `--nocommunity` all three, `--save=path --save-day=N` writes a save (SaveGame) at the first moment an idea is open from day N on (the staged game for the film), `--out=path.json` everything. A game of 10 days costs 1 to 2 minutes of processor time.
+
+```
+G=/Applications/Godot.app/Contents/MacOS/Godot
+$G --headless --path . --script res://tools/community_probe.gd -- --seeds=1,2,3 --days=10 --crew=5 --policy=affordable [--avatar=bot] [--noideas] [--verbose] [--out=p.json]
+```
+
+**What was changed (constants and data only; no rule):**
+
+| Where | Constant | Was | Now | Why |
+| --- | --- | --- | --- | --- |
+| `relations.gd` | `FRIEND_AT` / `FRIEND_END` | 35 / 20 | 30 / 15 | pairs that had one good day (a rescue, a trip) sat at 25 to 30 and decayed back; nobody beyond the roster was friends by day 10 |
+| | `STATION_GAIN`, `NEAR_GAIN`, `POST_GAIN`, `MEAL_GAIN` | 0.25, 0.15, 0.2, 0.8 | 0.5, 0.3, 0.4, 1.5 | the slow moves could not outrun the decay (a pair at one hour a day plateaued at 10) |
+| | `DECAY_PER_DAY` | 1.0 | 0.8 | the same |
+| | `TRIP_GAIN`, `TRIP_HURT_GAIN`, `RESCUE_GAIN`, `RESCUE_DOWNED_GAIN` | 2.5, 4, 6, 10 | 4, 6, 8, 12 | friendships in the probe come from shared trouble: the events are what moves a pair over the line |
+| | `SCARCE_LOSS` | -0.5 | -1.0 | doubled with the gains, so that hunger still outweighs working side by side |
+| | `VOICE_MIN` / `VOICE_SWITCH` | 40 / 8 | 52 / 12 | Walt's roster mentor bond alone stands at 37 (voice on day 3); and the voice changed two or three times in ten days |
+| `chemistry.json` | friction, warmth | -0.25, -0.2, +0.2, +0.2 | -0.5, -0.4, +0.4, +0.4 | doubled with the gains, so a pair's temperament weighs as much as before |
+| `titles.json` | `need`: medic / engineer / marksman / scout | 6 / 30 / 20 / 3 | 2 / 60 / 150 / 12 | the marksman was named on day 2 (20 kills in the first night) and flipped between two people in one night; the medic was never reached (Ana treats 2 to 6 people in ten days); the scout (3 trips) was named on day 3 and, holding a title, blocked the same person from the marksman's |
+| `initiative.gd` | `GAP_ALL_MIN` | 240 | 360 | up to two ideas a day, 12 to 15 in ten days in a crowded camp; now one or two a day and 7 to 10 |
+| | `GAP_KIND_DAYS` | 3 | 5 | the same idea (the radio desk, a lesson) came back every third day |
+| | `NO_WINDOW_DAYS` | 4 | 5 | a person is asked at most every `GAP_PERSON_DAYS` = 2 days, so three refusals can never fall in four days: the quiet after three noes could not happen (it can now: "Ana has stopped bringing ideas") |
+| `ideas.json` | `fix_wall.params.under` | 0.9 | 0.85 | fewer ideas to mend a wall at 85 to 90% for 3 to 7 scrap |
+
+Tests that copied these numbers now read them from the modules or the data (`test_specialists.gd`: the needs; `test_relations.gd`: the friend lines and the daily decay; `test_initiative.gd`: the kind gap and the refusal window; `test_ideas_effects.gd`: `under`). The three avatar digests of `test_round20_noavatar.gd` did not move (the three modules are off or inactive in those games), so nothing was re-pinned.
+
+**Result** (10 days, crew 5, `affordable`; the idle avatar is a hard case: the community alone holds the nights and the base game loses people in most games, with or without ideas):
+
+| Target | Shipped constants (idle, 3 seeds) | Tuned, idle avatar (6 seeds) | Tuned, avatar bot (4 seeds) |
+| --- | --- | --- | --- |
+| Ideas in all, 5 to 12 | 10.3 (max 12) | 7.3 (max 10) | 8.8 (max 10) |
+| Least gap between two ideas, 4 h or more | 4.5 h | 6.0 h | 6.0 h |
+| Friendships beyond the roster at the end, 1 to 3 | 0 | 0.7 (2.7 formed in the game) | 1.0 (2.8 formed) |
+| Rivalries, 0 to 2 | 0 | 0 | 0 |
+| Couples, at most 1 | 0 | 0 | 0 |
+| Titles at the end, 1 to 3; the medic first | 1.0; medic never, marksman day 2 | 1.0 (1.6 at dawn of day 10); medic first in 3 of 5 games with one | 1.5; medic first in 4 of 4 |
+| The voice, by about day 6 | days 3, 4, 5 | 3, 4, 5, 5, 6, 7 | 4, 5, 7, 7 |
+| Mean mood against `--noideas`, not under by more than 2 | | 63.0 against 64.3 (paired -1.2) | 68.2 against 67.9 (+0.3) |
+| Scrap spent on ideas / scrap that came in, under 25% | 0% (keep-12 refused every scrap idea) | 8% | 18% |
+| Survival (day 10) against `--noideas` | 2/3 against 3/3 | 5/6 against 6/6 (seed 6 collapsed on night 7 in both; 0 alive against 3) | 4/4 against 4/4 |
+
+`accept` (yes to everything, 3 seeds): 8.0 ideas, mood +0.0 against `--noideas`, 8% of the scrap. `refuse` (no to everything, 3 seeds): 7.3 ideas, mood -2.0 against `--noideas`, mean trust 53 against 55 in a game that held; with the window of 5 days Ana goes quiet in two of three games. About 40 rows of variants (and what each changed) are in the log of every run, `scratchpad/int/tune20.md`.
+
+**Not reachable by numbers (a rule or a driver is missing):**
+- **Rivalries never form.** Not one in over a hundred games. The two friction pairs (nervous with tough, two sharp-eyed) seem never to meet: chemistry only acts on a pair that has a gain in the same look (working at one station, standing still side by side, neighbouring posts, a meal), and Marcus (nervous) shares no station or post with Dez or Hector in the harness; the four games played with friction at -4 per look came out identical to those at -1.4. Scarcity needs hunger, which the camp does not reach in 10 days. Something has to push people apart (a clash at a shared station, a refused swap of posts that costs more, the storyteller's `argument` card feeding relations, or friction pairs for traits that do meet).
+- **Couples form only in a long game**: the roster pair Dez and Hector reaches 85 on day 9 to 11 at best; with `PARTNER_AT` 90 or slower roster growth none forms in ten days.
+- **A title blocks its holder from every other** (the rule): whoever is named first (the scout on day 3 at the old numbers) can never be the marksman; at need 12 the scout is rare (the person with the most trips is usually the marksman).
+- **The idle avatar loses the camp at night 7 to 10** in about half the games with or without ideas: survival comparisons need many more seeds than the 6 and 4 played here.
+
+## 6c. Round 19 tuning (the nights' numbers, 2026-10-04)
+
+Instrument: `tools/night_lab.gd` (crew 5, 15 Hz, states at 17:30 of days 3, 6, 9, 10 and 20 of no-avatar informed games, **16 seeds (1 to 16) x 3 reps**, the same dice for `none`, `idle` and `bot`), tried number by number with `--data=<a copy of nights.json>` on a snapshot of the tree (never on the tree being edited), 13 runs (about 3,500 nights). Only `assets/data/nights.json` moved; nothing in `nights.gd` or `night_calls.gd`.
+
+**What changed (and why):**
+
+| Number | Was | Now | Why |
+| --- | --- | --- | --- |
+| `ordinary.avatar_weight` | 0.5 | 0.0 | an idle avatar is not a gun: a night sized for 5 defenders, so that a 6th (the player) is a boon and not a need |
+| `ordinary.mult` | 1.0 | 0.75 | idle nights 1 to 9 held 72% at 0.5 / 1.0 / 0.10 (weight, mult, growth), 66% at 0 / 1.0 / 0.10 (96 nights), 79% at 0 / 0.85 / 0.07 (96), 80% at 0 / 0.8 / 0.07, 86% at 0 / 0.75 / 0.07 (144 each; the failures that stay are strays, not size); an ordinary night is now 21 dead (it was 36), the no-avatar game's is 39 |
+| `ordinary.growth` | 0.10 | 0.07 | the plan's suggestion; flattens the late nights (day 30's budget 91 against 117) |
+| `themes.siege.factor` | 1.45 | 2.1 | with the ordinary night 40% smaller the Big Night is made by its factor: day 10 now brings 45 (it brought 54), idle holds 15% (was 52), the bot 90% (was 92) |
+| `themes.rush.factor` | 1.55 | 1.75 | the Rush of day 20 is about 1.2 times the points of the Siege of day 10 (the crew is the same size) |
+| `themes.siege.main_share` / `themes.rush.main_share` | 0.85 / 0.80 | 0.95 / 0.90 | a target wall among the three hardest hit in the bot's Big Nights: 49 to 62% at 0.85, 85% at 0.95 (day 10) |
+| `plated.armour` | 0.2 | 0.1 | a plated brute lives 18 s (from its first claw) under the crew's fire at 0.2, 27 s at 0.1; unit duel (`test_nights_plated`): plain 4.1 s, plated 27.2 s, x6.6 |
+| `plated.npc_weak` | 0.08 | 0.03 | same: a defender finds the head on one hit in 33 |
+| `plated.weak_r` | 0.2 | 0.25 | the avatar's head hits had slipped to 8.8 s with the shotgun at 4 tiles (the body hits' share fell with the armour); now 6.8 s, rifle 4.4 s (bar 8 s). A larger head disc is also the plan's first fix if a human finds it unfair |
+
+Not changed: rally (`radius` 9, `aim` 0.15, `fire` 0.85: the bot at presence 0.68 holds Big Nights, at presence 0.25 it gains 17 points over `idle`, so "not a god"), `weak_mult`, breach, mend, calls, forecast (`first_k` 3, `decent_*`: see below). `night_data.gd`'s fallbacks still hold the plan's old numbers (a missing file gives them).
+
+**The table** (lab, 16 seeds x 3 reps; `none` is today's game for reference, a Big Night's `none` is that day's ordinary night):
+
+| Cell | `none` | `idle` before -> now | `bot` before -> now |
+| --- | --- | --- | --- |
+| nights 1 to 9, held | 76% | 72% -> **86%** | 96% -> 95% (+9 points over idle) |
+| nights 1 to 9, deaths a night / someone downed | 0.03 / 4% | 0.10 / 13% -> 0.05 / 8% | 0.01 -> 0.01 |
+| Big Night day 10, held | 60% | 52% -> **15%** | 92% -> **90%** |
+| day 10: sections fallen / deaths a night | 0.31 / 0.12 | 0.25 / 0.38 -> 0.79 / 0.96 | 0.04 / 0.06 -> 0.08 / 0.04 |
+| day 10: presence / avatar downed / dead a night | | | 0.71 / 0.04 / 0.00 -> 0.69 / 0.02 / 0.00 |
+| Big Night day 20, held (poor states, see below) | 42% | 0% -> 14% | 14% -> 31% (presence 0.27) |
+
+**The six targets** (the lab's own verdicts, `days=3,6,9,10`; with day 20 added: 2, 3 and part of 6 fail for the reasons below):
+
+1. **Not met, three of five parts**: held 86% (>= 80), someone downed 8% (<= 20) and the full harness (`--avatar=idle --policy=informed --crew=5 --days=10`, seeds 1, 9, 21, 40 x 8 games: **30 of 32 (94%) reach day 11**, >= 90%) are met; held when ready 88% (>= 90) and deaths 0.049 a night (<= 0.03) are not. (The full games' own nights 1 to 9 hold 72%, 64 to 81% by block, deaths 0.09 a night: their economy is the handicap of Risk 8, the idle avatar does no job and the stores run poorer than the lab's flipped states.)
+2. **Met on day 10**: idle held 15% (<= 35), a section fell or someone died 85% (>= 70), colonies that go on 100%. With day 20: 92% (the lab's day-20 colonies are dying anyway: an ordinary no-avatar night of day 20 loses 17% of them).
+3. **Met on day 10**: bot held 90% (>= 80), sections fallen 0.08 (<= 0.3), deaths 0.04 (<= 0.3), presence 0.69 (>= 0.6), avatar downed 0.02 (<= 0.25) and dead 0.00 (<= 0.05). With day 20 pooled: held 64%, fallen 0.51, presence 0.50: not met.
+4. **Met**: bot over idle +9 points on nights 1 to 9 (>= 5), never below idle minus 2 on any of days 3, 6, 9.
+5. **Met**: golden numbers equal (`test_nights_regression`, and the harness compared before and after for seeds 1 and 9: identical).
+6. **Partly**: a target wall among the three hardest hit in Big Nights 76% (>= 70) and the bot puts a plated brute down in 4.2 s from its first claw (<= 10) are met; the lab's brute ratio reads 1.8 (>= 2.5) and `first_at` within 1.5 h 4% (>= 80%) are not.
+
+**What the numbers cannot fix** (each needs a rule or a change of the instrument, not a number):
+
+- **The day-20 lab states are wrecks**, not nights to tune by: of the 12 (4 colonies were lost before day 20) 5 have no ammo (0 to 34), Ruth is dead in 3 and hurt (hp 14 to 53) in 6 (the bot lies in bed: presence 0.00, no shot), one colony is a single person; and 38 of the 46 day-10 idle deaths are in states that begin with a section already open (the harness runs out of scrap and nobody mends). Tuning day 20 to "bot >= 80%" would make the real game trivial. Fix in the lab (healthiest person as avatar, stores refilled, walls mended before the flip), then tune day 20; until then the Rush's factor (1.75) is a guess from day 10 and the growth.
+- **Ordinary deaths and `ready`**: all 7 deaths of idle nights 1 to 9 are in states with a section down at dusk or a crew under five (18 of the 144 nights); and `readiness()` looks at the two predicted sections only, while the nights that fail are strays at others (e.g. two walkers clawing a container for eleven hours, one gun covering half its places). Probe, 48 nights: whatever `decent_walls` (0.7 to 0.95) and `decent_guns` (2, 3), held-when-ready stays 79 to 88%; "no section down and none under 70% (the whole compound)" gives **92% held and 73% of nights ready**. A rule change (`tactics.readiness` and the lab's `_target_ids_for` over the whole compound) would meet it. Nights 8 and 9 also hold less (idle 77%, against 92% and 90% on days 3 and 6) for a rule the numbers do not reach: the first brute of every night comes on night 8 and `Kinds.counts` gives it at least one whatever the size.
+- **`first_at`**: no `forecast.first_k` gets near 80%. The lab compares the clock hour of the first claw at a target wall with `first_at` without wrapping at midnight (a claw at 00:30 against 22:00 reads -21.5 h: `tools/night_lab.gd` `targets`), takes the targets before the informed policy's lure moves the night, and finds a claw at the target walls in only 55% of Big Nights (the others are shot at range: no wall damage at all). Probe on the real arrivals (the k-th dead within 10 tiles of a target, 64 nights, 45 with any): `first_k` 3 to 5 is the best, 54 to 61% within 1.5 h of the 3rd or 5th arrival (k = 1: 60% for the first); the error is unbiased with a spread of about 2 h. So the forecast hour is honest to about plus or minus 2 hours; telling a window ("21:00 to 23:00") is the rule change.
+- **Brute ratio**: the lab's 1.8 is a survivors-only proxy (83% of plated brutes die before their first claw, and the plain ones it compares with are 8 brutes); the mechanism's own duel gives x6.6.
+- **The final night in avatar mode is about half of what it was** (day 30: budget 59 x the season's 2.4 = 142 against 281 without an avatar), because `ordinary.mult` and `growth` reach it and its factor is `seasons.json`'s `big`. If the owner wants it as hard as before, raise `big` there (not a number of this file).
+
+**Tuned only with the owner's playtest** (the plan said so): how a human's presence compares with the bot's (the bot is a decent shot with 0.03 rad of jitter and a 0.25 s reaction; a human may stand at the wall for 25% of the time and gain +17 points, or 70% and gain +75), the avatar-mode economy (a Big Night held in the lab is held in the game, not the reverse), and the feel of the call timers (`calls.*` untouched).
+
+Re-run: `$G --headless --path . --script res://tools/night_lab.gd -- --days=3,6,9,10 --seeds=1..16 --reps=3 --modes=none,idle,bot --crew=5 --jobs=2 --states=<dir>` (days 3,6,9,10 give the verdicts above; add 20 for the harsh cell). Tests that copied numbers now read them (`test_nights_plated`, `test_nights_rally`, `test_nights_mend`, `test_nights_plan`: the cap test uses a copy of the data with a lower cap); the two avatar digests of `test_round20_noavatar` that play the first avatar night were re-pinned (the no-avatar ones did not move).
+
 ## 7. How to do things
 
 Godot binary: `/Applications/Godot.app/Contents/MacOS/Godot` (alias `G` below). **You keep the Godot editor open on this folder: never `pkill`/`killall` Godot.**

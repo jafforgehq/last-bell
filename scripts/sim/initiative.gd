@@ -17,7 +17,7 @@
 ##
 ## THE SCHEDULE. From day 3, by day (08:00 to 17:30, never in the radio hour, the last an hour before the dusk), never under the
 ## alarm or with the dead at the wall, and never while a call of the other kinds (an attack, a fever, the night's) is open; at most
-## two waiting (`MAX_OPEN`), four game hours between two proposals, three days between two of a kind, two days (one for the voice)
+## two waiting (`MAX_OPEN`), six game hours between two proposals, five days between two of a kind, two days (one for the voice)
 ## between two from one person, a person whose trust in the leader is under 25 brings nothing, and the whole camp is silent while
 ## the community's trust is under 35 (the News says so, once). A call that is not answered in six game hours, or by the dusk if that
 ## comes first (no idea stands open into the night: the calls of the night come then), takes "later" (nothing is paid): twice in a
@@ -57,8 +57,8 @@ const LAST_BEFORE_DUSK_H := 1.0
 const RADIO_FROM_H := 11.5
 const RADIO_TO_H := 12.5
 const MAX_OPEN := 2
-const GAP_ALL_MIN := 240.0
-const GAP_KIND_DAYS := 3
+const GAP_ALL_MIN := 360.0
+const GAP_KIND_DAYS := 5
 const GAP_PERSON_DAYS := 2
 const GAP_VOICE_DAYS := 1
 ## How long a call waits (game minutes) before it takes "later".
