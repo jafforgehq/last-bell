@@ -1,25 +1,81 @@
 # Thirty Bells: status
 
-> **Read this first in a new session.** Written 2026-10-02 (end of a very long session) so that nothing lives only in a chat.
-> The game is a 2D zombie colony-defence game in Godot 4.7.2 / GDScript. Working title **Thirty Bells** (the repo and the itch page still say *Last Bell*). Repo: `/Users/jaf_lab/last-bell`, branch `main`. Private GitHub: `jafforgehq/last-bell`. Restricted itch page: https://jafforge.itch.io/last-bell (project id 5076058, account `jafforge`).
+> **Read this first in a new session.** Written 2026-10-02 (end of a very long session); the top of it (section 1) and the known issues (5b) were rewritten on 2026-10-04, when rounds 17 to 21 were integrated, so that nothing lives only in a chat.
+> The game is a 2D zombie colony-defence game in Godot 4.7.2 / GDScript. Working title **Thirty Bells** (the repo and the itch page still say *Last Bell*). Repo: `/Users/jaf_lab/last-bell` (the only git repo; extra worktrees live in `.worktrees/`, section 1c). Private GitHub: `jafforgehq/last-bell`. Restricted itch page: https://jafforge.itch.io/last-bell (project id 5076058, account `jafforge`).
 
 ## 1. Right now (the one-screen version)
 
 | Thing | State |
 | --- | --- |
-| Game | Rounds 0 to 16 are built. **Nobody has played rounds 11 to 16 by hand** (tests, screenshots, a film of a trip and the bot only). You played up to about round 10. |
-| Git | Everything is committed and **pushed**: GitHub's `main` is at the commit after `d97bb70` (rounds 15 and 16, the crew of five, the working audio fix). |
-| Tests | **2267 passed, 1 failed** on `d97bb70`: the one failure was a raid-banner test that failed now and then in whole runs (never alone); it has since been made to pin its own state and passes alone, but the whole suite has not been re-run since. |
-| itch (live) | Upload id 19534948 (2026-10-03 10:22): rounds 5 to 16 with the working audio fix, the louder sounds, the music, the crew of five and round 16's work life and animations. Checked: the embed loads to the title screen, the page is still Restricted, one file. |
-| Biggest open risk | Balance and feel of rounds 11 to 14 for a human; the settlement game is harder than at round 10 (section 6). |
+| Game | Rounds 0 to 21 are built. Rounds 17 to 21 (the **avatar game**: one survivor, a radio, Home, nights, a community, a live drive) live on **branches, not on `main`**; round 22 (easier controls and a real gate) is **in progress** on branch `feature/r22-controls-gate`. **Nobody has played rounds 11 to 21 by hand** (tests, screenshots, a scripted QA player and bots only). You played up to about round 10. |
+| Git | **Nothing from rounds 17 to 22 is pushed and `main` has none of it.** GitHub's `main` is at `c55f93c` (round 16 plus its STATUS); local `main` is two commits ahead (`eef7ec5`: the avatar and radio design draft and the brainstorm notes, documents only, not pushed). Branches and worktrees: 1c. |
+| Tests | **3987 passed, 0 failed**: the last full run (2026-10-04 08:43) on `feature/int` at `c36ab18`, with the tuned numbers and the QA fixes. |
+| itch (live) | Upload id 19534948 (2026-10-03 10:22): rounds 5 to 16 with the working audio fix, the louder sounds, the music, the crew of five and round 16's work life and animations. Nothing of the avatar game is on itch. Checked then: the embed loads to the title screen, the page is still Restricted, one file. |
+| Biggest open risk | **Nobody has played the avatar game with hands**: the feel of aiming and of standing at a wall, whether the Big Nights are fair, whether a trip by car is fun or a chore (a near trip is 2.5 to 4 real minutes), and **the web build has not been measured** since the performance work (5b). The nights were tuned by a bot (6c). |
 
-**Folders (home directory):** `/Users/jaf_lab/last-bell` is **the game** (the only Godot project, the only git repo, the one on GitHub and the one you open in Godot). `/Users/jaf_lab/last-bell-prototype-recovered` is only the old web prototype's JavaScript source, rebuilt on 2026-10-01 from an old chat transcript (`README.txt` inside says so); nothing in the game uses it, and it is outside git. Keep it (it is the generator of most of the art and sounds), but never work in it.
+### 1a. Rounds 17 to 21 (the avatar game), one line each
+
+Design: `docs/superpowers/specs/2026-10-03-avatar-and-radio-design.md`, thread `docs/superpowers/brainstorm-avatar-and-radio.md`, roadmap `docs/superpowers/plans/2026-10-03-avatar-radio-roadmap.md` (round 17's contracts), one plan for each later round (`2026-10-03-round-18.md` to `-21.md`). A new game is played by one survivor; `--noavatar` and a Full crew (6) start play the old yard.
+
+| Round | What it delivers | Status |
+| --- | --- | --- |
+| 17 | **Be one survivor**: the avatar (WASD, mouse aim, fire, R, F); the radio verbs (Come with me, Hold here, Cover me, Search that, Go back, To the walls) with trust and visible refusals; calls with a default (a wall under attack, a fever, a stranger); the alarm as the call to arms; succession when the survivor falls; played trips with the base running behind; box select and panning gone; an avatar Orientation Day | built, reviewed, tuned, suite green |
+| 18 | **Home**: one non-modal radio panel (Jobs, Build, Map, News; the old pages stay behind Shift+J/N/G); E at a person (a talk card), a post, the workbench, a car; errands by radio (loot x0.6, no rare finds, a worse chance everyone comes home); every refusal shows its reason | built, reviewed, tuned, suite green |
+| 19 | **Nights**: the community holds an ordinary night alone; Big Nights (a Siege on day 10, a Rush on day 20, the last night of each season) need you at one wall: plated brutes with a head weak point, a rally ring that sharpens the defenders' aim, hot breaches, calls of the night, a day-ahead notice and the forecast as tools, mending a wall by hand (E); a harness bot that plays the avatar and a night lab | built, reviewed, tuned, suite green |
+| 20 | **A community with ideas**: relationships (friends, rivals, couples), titles (the medic, the engineer, the marksman, the scout), the voice, and 13 kinds of idea brought over the radio (yes, later, no; a no costs trust, three noes go quiet) | built, reviewed, tuned, suite green |
+| 21 | **The live drive**: a trip you lead is a drive (or a walk) down a road, 30 to 90 real seconds a leg, with a car you steer, the squad shooting from the windows, 9 road events and a night road, Tab for the autopilot, the base running behind at the place's pace, and the clock as the bonus (fast and clean arrives early) | built, reviewed, tuned, suite green |
+| 22 | Easier controls and a real gate | **in progress on branch `feature/r22-controls-gate`** (not described as done anywhere) |
+
+"Tuned" means: the night numbers (19) and the community's (20) were tuned with the lab and the probe (sections 6b and 6c); rounds 17, 18 and 21 run on their planned constants and were exercised by a scripted QA player (no crash or soft lock in about 60 runs; its report's important items were fixed in `6c2f001`).
+
+### 1b. Reading order for the avatar game
+
+`README.md` (controls, the avatar game, nights, community, drive), then this file's 5b (open items), 6b and 6c (the numbers and what they cannot say), then the plan of the round you touch.
+
+### 1c. Branches and worktrees (nothing pushed; no code of rounds 17 to 22 on `main`)
+
+| Branch | Where | What it holds |
+| --- | --- | --- |
+| `main` | no worktree (origin/main `c55f93c`) | rounds 0 to 16, plus two unpushed documents-only commits. No avatar code. |
+| `feature/avatar-radio` | `/Users/jaf_lab/last-bell` (the main folder has **this branch checked out**, not `main`) | round 17 and the first commit of round 18 (`a246185`): the base the round branches were cut from. Not the whole of round 18 (its QA pass is on `feature/r18-home`). |
+| `feature/r18-home`, `r19-nights`, `r20-ideas`, `r21-drive` | `.worktrees/r18`, `r19`, `r20`, `r21` | each round's own build; all merged into `feature/int`. |
+| `feature/fix`, `feature/tune`, `feature/fix2` | `.worktrees/fix`, `tune`, `fix2` | the review fixes for 19 to 21 (`65966bb`, suite hygiene); the tuning of 19 and 20 (night numbers, community constants, the probe: `d5b1eda`); the QA fixes (`6c2f001`: alerts, the Map page's Take control, 700x560 clipping, far walls, one-press mending, hints, draw cost). All merged into `feature/int`. |
+| **`feature/int`** | `.worktrees/int` | **everything through the QA fixes** (`c36ab18`, 27 commits ahead of `main`): rounds 17 to 21, the fixes, the tuning. The candidate to merge into `main` when you say so. |
+| `feature/r22-controls-gate` | `.worktrees/r22` | round 22, in progress. Its README text is merged later. |
+
+Never edit another worktree's files from a session on a different one; never `git stash` (the stash is shared by all worktrees).
+
+### 1d. How to run things
+
+```bash
+G=/Applications/Godot.app/Contents/MacOS/Godot
+cd /Users/jaf_lab/last-bell/.worktrees/int          # or any worktree: each is a full copy of the project
+$G --headless --path . --script res://tests/run.gd                          # the whole suite (10+ minutes)
+$G --headless --path . --script res://tests/run.gd -- --only=test_x:        # one file (a trailing colon = exactly that file)
+```
+
+- **Balance harness** (`tools/balance.gd`; full flag list at the top of the file and in section 7). The avatar flags: `--avatar=none` (the default: nobody is the player, the games of before round 17), `--avatar=idle` (Ruth is the player and keeps her hands off in the school gym: the community alone), `--avatar=bot` (the bot of `tools/avatar_bot.gd` plays her); `--nightstats` gives each night's row and a table without an avatar; `--data=path` reads another `nights.json`. Example: `$G --headless --path . --script res://tools/balance.gd -- --games=8 --days=10 --seed=1 --fast --jobs=4 --policy=informed --crew=5 --avatar=idle`.
+- **Night lab** (`tools/night_lab.gd`): the same night played with no avatar, an idle one and the bot, from states saved at 17:30 of days 3, 6, 9, 10 and 20: `... --script res://tools/night_lab.gd -- --days=3,6,9,10 --seeds=1..16 --reps=3 --modes=none,idle,bot --crew=5 --jobs=2 --states=<dir>`. Prints the table and the plan's targets (6c).
+- **Community probe** (`tools/community_probe.gd`): avatar games of 10 days that answer every idea by `--policy=accept|affordable|refuse` (`--avatar=idle|gate|bot`, `--noideas`, `--nocommunity`, `--save=path` for a staged save); command in 6b.
+- **Road preview** (`tools/road_preview.gd`) draws generated roads; `tools/hud_shots.gd` and `tools/work_sheet.gd` draw sheets of screens and work poses.
+- **Staging flags** (a screenshot of a given moment: `--shot`, `--hour`, `--night=siege`, `--forecast=ahead`, `--plated`, `--breach`, `--radio=news`, `--talk=`, `--drive=pharmacy,3,pickup` and the rest): the table in `README.md`, "Automated checks".
+- **Never run a matrix on a tree you are editing**: `rsync` a snapshot first.
+
+### 1e. The NO-AVATAR PROMISE
+
+Every rule that rounds 17 to 21 added is behind avatar mode (`sim.player_id != ""`) or is only a view. **The harness without an avatar (`--avatar=none`, the default) must stay identical to `main`'s game, apart from the `took` field** (how many seconds a game took). The same goes for a plain `Helpers.make` game, the classic Orientation Day and a Full crew start. Two golden tests pin it, and a failure means a hook is not neutral (never re-pin to make it go away):
+
+- `tests/test_nights_regression.gd` (round 19, T-GOLD): the harness rows (`--policy=informed --crew=5 --hz=15 --days=6`, seeds 1, 9, 21) against `tests/golden/harness_noavatar.json`, the rules' random state at 18:00 of day 4 (seed 7: no draw added anywhere), `plan_for` and `night_budget` of 30 and 102 days (with `nights.json` renamed or absurd: the file is never read without an avatar) and the forecast's numbers and words.
+- `tests/test_round20_noavatar.gd` (round 20): whole-game digests (the clock, the stores, the kills, every person, the radio's log length, `sim.rng.state`) of plain, informed, classic-Orientation and avatar-with-the-modules-off games. The golden numbers were recorded at `f23eee3` (round 17's last commit). The avatar-mode digests were re-pinned after rounds 18 to 21 and the tuning; the no-avatar ones never moved.
+- **To compare two trees' harness**: run the same command on each with `--out=a.json` and `--out=b.json`, then `python3 tools/compare_harness.py a.json b.json` (it prints `identical` or the games that differ, ignores `took` and the `out` path; exit 0 identical, 1 different, 2 unreadable). Run the check against a checkout of `main` itself before any merge.
+
+**Folders (home directory):** `/Users/jaf_lab/last-bell` is **the game** (the only Godot project, the only git repo, the one on GitHub and the one you open in Godot; its worktrees under `.worktrees/` are more checkouts of the same repo). `/Users/jaf_lab/last-bell-prototype-recovered` is only the old web prototype's JavaScript source, rebuilt on 2026-10-01 from an old chat transcript (`README.txt` inside says so); nothing in the game uses it, and it is outside git. Keep it (it is the generator of most of the art and sounds), but never work in it.
 
 ## 2. What the game is
 
-A small crew holds a walled schoolyard against the dead for thirty nights (Autumn), or four seasons (Campaign, 102 days). You start with **three** survivors; the rest call in over the radio. Fixed 30 Hz rules loop with interpolated drawing; the sim is separate from the drawing so the harness and the tests run it headless. The design is `docs/superpowers/specs/2026-09-30-colony-sandbox-design.md` (sections 7a to 7m record what each round turned out to be; the appendix is the long-term wish list). Rules of play are in `README.md`.
+A small crew holds a walled schoolyard against the dead for thirty nights (Autumn), or four seasons (Campaign, 102 days). You start with **five** survivors (a Small crew of three and a Full crew of six, the old yard, are the other choices on the New game screen); the rest call in over the radio. In a new game you play **one** of them (Ruth), seen from above; the others are asked, not ordered (section 1a). Fixed 30 Hz rules loop with interpolated drawing; the sim is separate from the drawing so the harness and the tests run it headless. The design is `docs/superpowers/specs/2026-09-30-colony-sandbox-design.md` (sections 7a to 7m record what each round turned out to be; the appendix is the long-term wish list). Rules of play are in `README.md`.
 
-Keys: **G** Town Board, **N** Build screen, **J** Duty roster, **M** workshop, **B** wall crew, **V** fields of fire, **L** alarm, **F5/F9** save/load, **Esc** pause menu.
+Keys (the avatar game, the default for a new game; the full table is in `README.md`): **W A S D** walk, the **mouse** aims, the **left button** fires, **R** reload, **F** melee, **E** use what the prompt says (talk, take a post, work the bench, mend a wall, read a car's fuel), **T / J / N / G** the radio panel on News / Jobs / Build / Map (**Shift** with J, N or G opens the old full page), **L** call to arms, **V** fields of fire, **Tab** next person, **Space / 1 / 2 / 3** pause and speed, **F5 / F9** save and load, **Esc** closes a card, the panel or the selection, then the menu. On a road: **W S A D** drive, **E** stop, **1 2 3** answer a card, **Tab** autopilot. The old yard (`--noavatar`, Full crew, saves from before round 17) keeps the right-click orders and the order keys **M**, **B**, **P**, **C**, **X**.
 
 ## 3. What was built, round by round
 
@@ -43,6 +99,13 @@ Keys: **G** Town Board, **N** Build screen, **J** Duty roster, **M** workshop, *
 | audio | Music + web-audio fix + sound levels (2026-10-02, committed, on itch) | section 4 |
 | 16 | **People at work** (2026-10-03): by day nobody stands on a wall but the Lookout (Builders with nothing to build sort materials in a yard, the jobless rest at the picnic tables; a day threat sends everyone to posts and ten quiet minutes send them back); a pose, a tool and small effects for every job (`scripts/render/work_anim.gd`, `tools/make_tools.py`); the first callers need no one at the radio desk; a crew-load strip ("Seats 5 of 11") and a trip warning; tents (2 beds each); a crew of five is the default start | plan `docs/superpowers/plans/2026-10-03-round-16.md`; `scripts/sim/crew_load.gd` |
 | 15 | **The yard in motion**: drag-box select (removed again in round 17: one survivor, no box); trips by car are real (walk to the doors, doors open, car out through a sliding vehicle gate and off the map, back, U-turn and reverse into the bay, doors open, people out); a motor pool inside the base; car doors cut from the car pictures and car sounds; each building has its own home and the Build screen is a list of buildings | plan `docs/superpowers/plans/2026-10-02-round-15.md`; `scripts/sim/convoy.gd`, `scripts/render/vehicle_actor.gd`, `gate_node.gd`, `assets/data/motor_pool.json`, `tools/make_motor_pool.py` + `check_motor_pool.py`, `tools/make_car_doors.py`, `scripts/sim/build.gd` homes |
+| 17 | **Be one survivor** (2026-10-03): the avatar, the radio and the base that keeps living | plan `docs/superpowers/plans/2026-10-03-avatar-radio-roadmap.md`; `scripts/sim/avatar.gd`, `radio.gd`, `scavenge.gd` (`begin_played`), `scripts/ui/radio_*.gd`, `news_panel.gd`, `call_card.gd`, `scripts/raid/squad_ai.gd`, `assets/data/tutorial.json` (the avatar's lesson; the old one is `tutorial_classic.json`) |
+| 18 | **Home**: the radio panel, E interactions, errands by radio | plan `...-round-18.md`; `scripts/sim/interact.gd`, `radio.gd` (asking for work, errands), `scripts/ui/radio_panel.gd`, `jobs_page.gd`, `build_page.gd`, `map_page.gd`, `map_data.gd`, `talk_card.gd` |
+| 19 | **Nights**: Big Nights, plated brutes, breaches that need you, the forecast, the bot | plan `...-round-19.md`; `scripts/sim/nights.gd`, `night_calls.gd`, `night_data.gd`, `waves.gd`, `tactics.gd`, `assets/data/nights.json`, `tools/avatar_bot.gd`, `night_lab.gd`; numbers in 6c |
+| 20 | **A community with ideas**: relationships, titles, 13 ideas | plan `...-round-20.md`; `scripts/sim/relations.gd`, `specialists.gd`, `initiative.gd`, `assets/data/chemistry.json`, `titles.json`, `ideas.json`, `scripts/ui/community_kit.gd`, `tools/community_probe.gd`; numbers in 6b |
+| 21 | **The live drive**: a road, a car, 9 road events, the colony running behind | plan `...-round-21.md`; `scripts/drive/` (`drive_scene`, `drive_hud`, `car_sim`, `autopilot`, `road_gen`, `road_events`, `car_node`), `scripts/raid/place_flow.gd`, `assets/data/road_events.json`, `road_layouts.json`, `tools/road_preview.gd` |
+| 17 to 21 fixes | review fixes, the QA fix pass (alerts, Map page, 700x560 clipping, far walls, one-press mending, hints), baked pawn meshes (`scripts/render/pawn_mesh.gd`: a dead one in 3 draw calls) and a ground mesh per terrain | section 1c |
+| 22 | **Easier controls and a real gate**: in progress on branch `feature/r22-controls-gate` | not on `feature/int` |
 
 Not built yet (from the roadmap, `docs/superpowers/roadmap.md`, which is only current to round 10): blueprints and research, traders and raiders as events, power and fuel for the base (the fuel in round 13 is for cars), defence variety (traps, lures), the convoy ending where only some leave, a dog.
 
@@ -61,42 +124,47 @@ Verification: a Web Audio probe on the REAL fixed export (headless Chrome with a
 
 ## 5. What is verified and what is not
 
-- **Verified by machines:** the full test suite (rules, UI layout, saves, data), the balance harness (below), screenshots of the screens, a Web Audio probe of the web build (silent before the fix).
-- **Never played by a human:** rounds 11 to 15 (the cut yard, the streets by day, cars and fuel, Take control, the car trip animation, the gate, the new Build screen), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent and looked right from walking to the doors to unloading.
+- **Verified by machines:** the full test suite (3987 checks: rules, UI layout at five window sizes, saves, data, the no-avatar goldens), the balance harness, the night lab and the community probe (below), screenshots of the screens, a Web Audio probe of the web build (silent before the fix), and a scripted QA player on `feature/int` (about 60 runs of bases, nights, the community and the drive: no crash, no script error, no soft lock; its important findings were fixed in `6c2f001`).
+- **Never played by a human:** rounds 11 to 21 (the cut yard, the streets by day, cars and fuel, Take control, the car trip animation, the gate, the Build screen; and the whole avatar game: aiming and standing at a wall, the radio panel, E, a Big Night, ideas and friendships, a drive and its events), the Campaign's later seasons, outposts and garrisons, the new music and levels. A film of one real trip (a sedan with two people to the nearby houses, speed 1 and 3) was watched frame by frame by a tester agent in round 15 and looked right.
 - **Process slips on record:** two `rm` calls on scratch files (the rule is "delete only via `~/.Trash`"); an earlier `pkill -f Godot` killed your open editor (never again).
 
-### Known issues of round 17
+### 5b. Known issues and open items (rounds 15 to 21, one list)
 
-- **A stranger cannot be answered from a place and takes its default.** The storyteller's modal card (the radio card) waits while a trip is out and for the report to be dismissed, then opens and holds the game until it is answered; but a stranger at the gate is not a radio call with options (contract S1.2), so while the player is in a place it cannot be answered there and, if it is left, takes its default after two game hours. (The radio calls with options, the attack, the fever, are answered from the place.)
+**Not played, not measured**
+- **Nobody has played the avatar game by hand** (section 5). The numbers of the nights and of the community are a bot's and a probe's: a human may stand at a wall for 25% of the night and gain 17 points over an idle avatar, or for 70% and gain 75 (6c); the weak-point disc, the call timers and the avatar-mode economy are only tuned by a playtest. The lab's table (the bot holds 90% of Big Nights on day 10) and the QA player's sweep on fresh states (before the far-wall fix the bot held 1 of 4 and an idle avatar 0 of 4) disagree; more seeds and an informed colony are needed to say who is right.
+- **The web build has NOT been measured** since the performance work. It was done on the desktop: a dead one is drawn from a baked mesh in 3 calls instead of about 41 (`scripts/render/pawn_mesh.gd`; 80 dead went from 4288 to 641 draw calls), the ground is one mesh for each terrain, the live drive builds its road in parts behind its card, and the trip's scripts are read in a background thread (`_warm_a_trip_script`, `ResourceLoader.load_threaded_request`; the web export has threads off). Before the fix a crowd cost about 0.55 ms a dead one on an M1 (40 dead 35 fps, 80 dead 19 fps), and the web build is expected to be slower than the desktop. Measure a Big Night and a drive in a fresh export (section 7) before showing it.
+- **People at work still draw uncached:** the baked meshes cover a figure's shadow, legs, reaching arms and hands, but not the poses at work (tools, small effects) nor the weapons, so a busy base by day costs more than it should.
 
-### Known issues of round 16
+**Rules and numbers** (the analysis is in 6b and 6c; each of these needs a rule or a better instrument, not a number)
+- **Rivalries and couples never form in the community probe** (over a hundred games): chemistry only acts on pairs that share a station, a post or a meal and the friction pairs never meet. Something has to push people apart (a clash at a shared station, a refused swap of posts that costs more, the storyteller's `argument` card feeding relations). Friendships do form; couples need a long game. A title blocks its holder from every other title (the rule).
+- **The lab's day-20 states are wrecks** (no ammo, Ruth dead or hurt, one colony a single person), so the Rush's factor (1.75) is a guess from day 10 and the growth; fix the lab (healthiest person as avatar, stores refilled, walls mended before the flip), then tune day 20. **The `first_at` metric** cannot reach its 80% target by any number: the lab compares clock hours without wrapping at midnight, takes the targets before the lure moves the night and finds a claw at a target wall in only 55% of Big Nights; the forecast hour is honest to about plus or minus 2 hours (a window "21:00 to 23:00" would be the rule change). The brute ratio (1.8) is a survivors-only proxy; the mechanism's own duel gives x6.6. `readiness()` looks at two sections only (a whole-compound rule would meet its target).
+- **The final night in avatar mode is about half its old size** (day 30: budget 59 x the season's 2.4 = 142 against 281 without an avatar), because the ordinary multiplier and growth reach it and its factor is `seasons.json`'s `big`: raise `big` there if the owner wants it as hard as before. The idle avatar loses the camp on nights 7 to 10 in about half the games with or without ideas.
+- **Trips by foot and by car are long:** a leg is 30 to 90 real seconds whatever the road (a long road raises the base's pace instead), so **a near trip is 2.5 to 4 real minutes** (two legs and the place) and a far one 90 s each way plus the place; by foot 31 of 35 places are 90 s legs, in a pickup 24 of 35. Tab (the autopilot) is the escape for a leg you do not want to play; it is slower and never wins the clock bonus. Whether the road is fun or a chore is the playtest's call.
+- **A stranger cannot be answered from a place and takes its default.** The storyteller's modal card waits while a trip is out and for the report to be dismissed, then holds the game until it is answered; but a stranger at the gate is not a radio call with options, so while the player is in a place it cannot be answered there and, if left, takes its default after two game hours. (The radio calls with options, the attack, the fever, are answered from the place.)
+- **Dead standing in pockets with no path to the yard** (a map quirk south-east of wall 13).
+- **The Orientation Day teaches only part of the controls:** its 13 steps cover walk, aim, reload, who is who, ask, a refusal, News and calls, the map, the alarm, dusk and the duty roster; E (posts, bench, mending, a car), Tab, a trip, a Big Night and the forecast are left to the one-line hints (`assets/data/hints.json`: use, ring, bignight, trips, build). The rally ring round Ruth is explained only by its hint.
+- **The keys change meaning between a screen and the next:** Tab is the next person at the base and the autopilot on the road, 1 2 3 are the speed at the base and the options of a card on the road, L is the alarm at the base and has no key on the road (the Alarm button), G J N do nothing on the road. Consistent inside a screen, by design. (From the QA report, not re-checked: driving exactly at cruise reads "Behind: 1 min" because of the acceleration; the first seconds at a place have no grace: dead are within 8 tiles of a thick place at once, and an idle squad lost 60 hit points in 15 s.)
 
-- **Fixed after round 16's first report:** a mender now stands on the yard side of the wall piece (the first open ground in from the scaffold, `Sim.repair_spot`; the classic start and the lots' street walls keep the old spot), and the all-clear after a day threat is 45 game minutes (15 real seconds at the normal speed) instead of 10.
-- **The pose reads weakly from behind** (hauling a crate, the rest mug, the nurse) and the hoe looks crude from the front. A real artist's frames would replace these.
+**Older (rounds 15 and 16; found by review and the film, not fixed)**
+- The bus's U-turn is a pirouette (its tail pokes over the walkway at the gate; rare: the bus is the last vehicle); with four vehicles home the fourth shares a bay and overlaps; cars drive through the walls you can build across the north street's two ends (a walled lot does not stop a trip); the yard's cars have no headlights (only brake lights), come home only by day, and a vehicle found on a trip appears in its bay without driving in; the van's open left door can touch a neighbouring sedan. (The live drive's road does have headlights at night.)
+- The work pose reads weakly from behind (hauling a crate, the rest mug, the nurse) and the hoe looks crude from the front: a real artist's frames would replace these.
 - For a crew of five only Hector is guaranteed a call without the radio desk (the first three authored callers who did not start).
 - The harness bot grows its crew to nine with tents first (`--beds`, off by default): a bigger crew faces bigger nights.
+- `--town-send` staging needs the hour between 06:30 and 10:00 (`--hour=8`); at other hours the party is refused silently.
 
-### Known issues of round 15 (found by review and the film, not fixed)
+### First things to try by hand (the avatar game)
 
-- **The bus's U-turn is a pirouette:** the 8-tile bus swings on the sedan-sized route, its tail pokes over the walkway at the gate and it lies across the apron for a moment. Rare (the bus is the last vehicle you find).
-- **Three bays, four vehicles:** with all four home, the fourth shares a bay and overlaps.
-- **Cars drive through the walls** you can build across the north street's two ends (the lane is at the street's middle): a walled lot does not stop a trip.
-- **No headlights** (only brake lights), cars come home only by day, a vehicle found on a trip appears in its bay without driving in, and the van's open left door can touch a neighbouring sedan.
-- **`--town-send` staging** needs the hour between 06:30 and 10:00 (`--hour=8`); at other hours the party is refused silently.
-
-### First things to try by hand
-
-1. Start a small-crew game; look at the yard (the motor pool and the gate), walk the survivor with **W A S D** and shoot with the mouse (round 17: `--noavatar` plays the old yard with right-click orders), press **N** (the Build screen is a list of buildings now).
-1b. Send a trip **by car** early in the morning (06:30 to 10:00) and watch it from the doors to the unloading, at speed 1 and 3.
-2. Press **G**: scout, loot, clear. Send a trip with **Take control** (the button on the place's card): move the squad, search a container, help a downed friend, retreat.
-3. Send a trip **by car** (the Ride row on the board); watch the fuel line in the HUD; find fuel.
-4. Watch the streets by day: do a few of the dead wander, and does shooting near them bring them?
-5. Claim a lot on the Build screen and switch on "Wall the streets as the scrap allows".
-6. Listen: music on the title and by day; at dusk the night track; a crowd at the wall switches to danger; the Settings Music slider.
+1. Start a game (Crew of five): walk Ruth with **W A S D**, aim with the mouse, fire, press **R** and **F**. Click Dez's card and ask him to come (the dock's verbs); ask Ana while she nurses someone and read the refusal.
+2. Walk to Dez and press **E** (the talk card: what he is doing, what he needs). **E** at the gate post (a steadier aim), at the workbench (twelve seconds of ammo), at a damaged wall (it mends until whole).
+3. Press **T**, **J**, **N**, **G** (the radio panel on News, Jobs, Build, Map: the game does not pause; **Shift** with J, N or G opens the old full page). Order a building; ask someone to take a job.
+4. From day 3 watch for an idea on the radio (by day, never at noon): answer yes, later and no.
+5. By day press **G**, pick a place and **Take control**: drive (W S A D), meet a road event (1 2 3, **E** to stop), play the place, drive home; then once with **Tab** (the autopilot) and once on foot. Send someone on an **errand** without you and read what comes back.
+6. Day 9 at noon, with someone at the radio desk: the Big Night notice. Day 10, the Siege: stand among the defenders (the green ring), shoot the plated brutes in the head, mend the wall if it falls. Then once from a trip, to see the dusk line and the leave-by hour.
+7. Listen: music on the title and by day; at dusk the night track; a crowd at the wall switches to danger; the Settings Music slider. Old checks still worth a look: the streets by day (do a few of the dead wander?), a lot claimed on the Build screen with "Wall the streets as the scrap allows", a trip by car from the doors to the unloading.
 
 ## 6. Balance (the harness) and what it means
 
-Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standard difficulty, 30 days.
+Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standard difficulty, 30 days. **The numbers in this section are the game without an avatar (`--avatar=none`, the games of rounds 0 to 16, which the no-avatar promise of section 1e keeps unchanged);** the avatar game's nights and community are in 6b and 6c.
 
 - **Settlement game** (`--crew=3`, informed bot, 8 games per seed): **2/8 and 3/8 wins on seeds 1 and 9** (median day 26.5 on both) with the cars on; 2/8 and 2/8 with no cars; 3/8 and 3/8 with no streets. Before the streets (round 10) it was about 7/16. The streets made it a bit harder; one cause was found and fixed (day gunfire drew every straggler to the walls).
 - The bot's first use of cars (3 to 4 people by van to far places) lost games on days 16 to 21; sending 2 and only from 3 hours of road fixed it. That was the bot's policy, not the cars.
@@ -109,7 +177,7 @@ Harness: `tools/balance.gd` plays whole games headless with a bot policy. Standa
 
 ## 6b. Round 20 tuning (the community's numbers)
 
-`tools/community_probe.gd` plays avatar games of the settlement start headless (the colony by the harness's `Balance.Policy`, informed, crew 5; Ruth is the player and stands still in the school gym, `--avatar=idle`, or is round 19's bot, `--avatar=bot`) and answers every idea the community brings by `--policy=accept|affordable|refuse` (affordable: yes when the price leaves 5 scrap and 10 food, else later). It prints, by day: ideas raised and answered (and by kind), scrap and food spent on them, friendships, rivalries, couples, titles, the voice, the mean mood and trust, who was lost and whether the colony survived; and the plan's targets with a verdict. `--noideas` plays the same game with the initiative module off (relations and specialists stay on), `--nocommunity` all three, `--save=path --save-day=N` writes a save (SaveGame) at the first moment an idea is open from day N on (the staged game for the film), `--out=path.json` everything. A game of 10 days costs 1 to 2 minutes of processor time.
+`tools/community_probe.gd` plays avatar games of the settlement start headless (the colony by the harness's `Balance.Policy`, informed, crew 5; Ruth is the player and stands still in the school gym, `--avatar=idle`, or at the gate, `--avatar=gate`, or is round 19's bot, `--avatar=bot`) and answers every idea the community brings by `--policy=accept|affordable|refuse` (affordable: yes when the price leaves 5 scrap and 10 food, else later). It prints, by day: ideas raised and answered (and by kind), scrap and food spent on them, friendships, rivalries, couples, titles, the voice, the mean mood and trust, who was lost and whether the colony survived; and the plan's targets with a verdict. `--noideas` plays the same game with the initiative module off (relations and specialists stay on), `--nocommunity` all three, `--save=path --save-day=N` writes a save (SaveGame) at the first moment an idea is open from day N on (the staged game for the film), `--out=path.json` everything. A game of 10 days costs 1 to 2 minutes of processor time.
 
 ```
 G=/Applications/Godot.app/Contents/MacOS/Godot
@@ -212,23 +280,27 @@ Re-run: `$G --headless --path . --script res://tools/night_lab.gd -- --days=3,6,
 
 ## 7. How to do things
 
-Godot binary: `/Applications/Godot.app/Contents/MacOS/Godot` (alias `G` below). **You keep the Godot editor open on this folder: never `pkill`/`killall` Godot.**
+Godot binary: `/Applications/Godot.app/Contents/MacOS/Godot` (alias `G` below). **You keep the Godot editor open on the main folder: never `pkill`/`killall` Godot.** The commands run in any worktree (`cd` into it); section 1d has the short list for the avatar game.
 
 ```bash
 G=/Applications/Godot.app/Contents/MacOS/Godot
-cd /Users/jaf_lab/last-bell
-$G --headless --path . --script res://tests/run.gd                    # the full suite (about 10 minutes)
+cd /Users/jaf_lab/last-bell                                              # or a worktree under .worktrees/
+$G --headless --path . --script res://tests/run.gd                    # the full suite (10+ minutes; about 4000 checks)
 $G --headless --path . --script res://tests/run.gd -- --only=test_music:   # one file (a trailing colon = exact file)
 $G --headless --path . --import                                         # after adding assets (makes the .import files)
 ```
 
 Tests extend `res://tests/case.gd` (`check`, `eq`, `near`); any logged error fails the run; write the failing test first.
 
-Balance harness (flags: `--games --days --difficulty --seed --fast --jobs --policy=default|informed|none|keep --crew=3 --campaign --nolots --novehicles --nostreets --nobuild --out`):
+Balance harness (flags, all in the header of `tools/balance.gd`: `--games --days --difficulty --seed --seeds=a,b,c --fast|--hz=N --jobs --policy=default|informed|none|keep --crew=3..6 --campaign --nolots --novehicles --nostreets --nobuild --beds --build-order --nostory --verbose --sites=path --out`; since round 19 also **`--avatar=none|idle|bot`**, `--nightstats` and `--data=path`):
 
 ```bash
 $G --headless --path . --script res://tools/balance.gd -- --games=8 --days=30 --difficulty=1 --seed=1 --fast --jobs=4 --policy=informed --crew=3 --out=/tmp/x.json
+$G --headless --path . --script res://tools/balance.gd -- --games=8 --days=10 --seed=1 --fast --jobs=4 --policy=informed --crew=5 --avatar=bot --out=/tmp/y.json   # the avatar game: the bot plays Ruth, each night's row is in the output
+python3 tools/compare_harness.py before.json after.json                                   # identical? (the no-avatar promise, section 1e)
 ```
+
+The night lab and the community probe are in sections 1d, 6b and 6c.
 
 Never run a matrix on a tree you are editing: `rsync` a snapshot first.
 
@@ -240,17 +312,17 @@ mv build/LastBell-web.zip build/LastBell-web-<date>-prev.zip     # keep the old 
 (cd build/web && zip -q -r ../LastBell-web.zip .)
 ```
 
-Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full details in the memory file `itch-and-github.md`. In short: split the zip into 9 MB parts, one `file_upload` per part into an injected `<input type=file>`, rebuild the file inside the page and check its SHA-256 against the local zip, capture itch's own input by patching `HTMLInputElement.prototype.click`, press **Upload files**, set the file with a DataTransfer, wait, tick **This file will be played in the browser**, press **Save**. The same file name replaces the old upload in place. The edit page is https://itch.io/game/edit/5076058; the embed loads from `html-classic.itch.zone/html/<upload id>/` (current upload id 19523755). The itch page's title, text and screenshots are still the old prototype's.
+Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full details in the memory file `itch-and-github.md`. In short: split the zip into 9 MB parts, one `file_upload` per part into an injected `<input type=file>`, rebuild the file inside the page and check its SHA-256 against the local zip, capture itch's own input by patching `HTMLInputElement.prototype.click`, press **Upload files**, set the file with a DataTransfer, wait, tick **This file will be played in the browser**, press **Save**. The same file name replaces the old upload in place. The edit page is https://itch.io/game/edit/5076058; the embed loads from `html-classic.itch.zone/html/<upload id>/` (current upload id 19534948). The itch page's title, text and screenshots are still the old prototype's.
 
 **Probe web audio** (no ears needed): serve a copy of `build/web` with a hook in `index.html` that records `AudioContext`s, `AudioBufferSourceNode.start` calls and an analyser on the destination (`.claude/launch.json` has a `web-test` config on port 8123 serving the scratchpad's `webtest` folder). Headless tests use a dummy audio driver and cannot catch web audio bugs.
 
 **Regenerate assets:** `python3 tools/make_music.py [title|day|night|danger]`, `python3 tools/level_sounds.py [--check]`, and the other `tools/make_*.py` (art; Python with Pillow and NumPy).
 
-**Push:** only when you ask. `git push origin main` (fast-forward). The repo is private; scan the diff for keys first.
+**Push:** only when you ask. `git push origin main` (fast-forward) is how rounds 0 to 16 went; rounds 17 and later are on feature branches that have not been pushed: merge `feature/int` into `main` (after the no-avatar check of section 1e) only when you say so, then push. The repo is private; scan the diff for keys first.
 
 ## 8. Rules for working here (from your instructions)
 
-- Work and commit on **`main`**. Never push unless asked. Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
+- Work and commit on **`main`** (rounds 17 and later: on their feature branches in worktrees until you say merge; section 1c). Never push unless asked. Commit trailer: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`.
 - **Delete only by moving to `~/.Trash`**, never `rm`. **Never kill processes by pattern.**
 - Keep builds lean and fast; short honest status with real numbers; don't ask mid-build questions that have a sensible default.
 - The itch page stays Restricted with its password; the repo stays private.
@@ -261,9 +333,9 @@ Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full d
 
 0. **Twenty more ideas** for the base, management and building are in `docs/superpowers/ideas-2026-10-03-base-and-management.md` (the author's picks marked: an inner wall, a kitchen, sanitation, a timetable, things going wrong inside, tiers of the settlement). The eight earlier ones (the gate as the heart of the night, fuel for the base, traps, upgrades, road events, territory, a garage, a heat map) are in the 2026-10-02 reply and `docs/superpowers/roadmap.md`'s reserve list.
 
-1. **Finish the audio work** (section 4): confirm the web probe and the suite, commit, re-export, re-upload to itch, then listen.
-2. **Playtest rounds 11 to 14 by hand** (checklist in section 5) and write down what is wrong or boring. This matters more than anything the bot says.
-3. **Fix what the playtest finds**, then rebalance with the harness (the settlement game's win rate fell a little when the streets came in).
+1. **Playtest the avatar game by hand** (the checklist after 5b: aim and stand at a wall, E, the radio panel, ideas, a Big Night, a drive) and write down what is wrong or boring. This matters more than anything the bot says. Also still unplayed: rounds 11 to 16 (the old checks of that list) and **listening** to the audio (section 4; it is already on itch).
+2. **Land round 22** (easier controls and a real gate, `feature/r22-controls-gate`) on `feature/int`, run the suite and the no-avatar check (section 1e), then decide on the merge into `main`.
+3. **Fix what the playtest finds**, then rebalance with the lab and the probe (6b and 6c: the Big Nights and the community were tuned by a bot), and settle the open items of 5b (measure the web build first).
 4. **Update the itch page**: title, text, screenshots (still the old prototype's), once the build is worth showing.
 5. **Release prep** (spec section 8 and `docs/audit/appendix-d-assets.md`): rights audit, name decision (Thirty Bells vs Last Bell; one commit swaps it; the Steam game *The Last Bell* collides with the old name), a maker line in the credits (your studio name; the itch and GitHub names are `jafforge` and `jafforgehq`), a real score.
 6. **Later ideas** (roadmap, kept in reserve): blueprints/research, traders and raiders, base power, traps and lures, the convoy ending, a dog, controller support, Steam page and Early Access.
@@ -277,20 +349,27 @@ project.godot, export_presets.cfg   Godot project; the Web preset (threads off)
 scenes/main.tscn               the one scene; scripts/main.gd drives it
 scripts/sim/                   the rules (headless): sim.gd (coordinator) + modules: supplies, medical, scavenge,
                                scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller,
-                               build, jobs, recruits, town, lots, seasons, streets, vehicles, save_game
+                               build, jobs, recruits, town, lots, seasons, streets, vehicles, save_game;
+                               rounds 17 to 21: avatar, radio, interact, nights, night_calls, night_data, relations,
+                               specialists, initiative
 scripts/render/                world drawing: build_node, dressing_node, parking_node, lighting, snow, fx ...
 scripts/ui/                    HUD, menus, settings, Build screen (build_screen, build_lots, build_map), Town Board,
-                               Duty roster (jobs_screen), tutorial coach, hints
+                               Duty roster (jobs_screen), tutorial coach, hints; the radio panel (radio_panel with its
+                               pages jobs_page, build_page, map_page, news_panel; call_card, call_view, radio_verbs,
+                               talk_card, night_kit, community_kit)
 scripts/raid/                  round 14: raid_sim (a Sim for one place), raid_run (the squad rules), site_gen,
                                raid_scene / raid_hud / raid_overlay / site_canvas
+scripts/drive/                 round 21: drive_scene (a subclass of raid_scene), drive_hud, car_sim, autopilot, road_gen,
+                               road_events, car_node
 scripts/audio/                 buses, sound (one-shots + loops), music, street_air (far groans by day)
 assets/data/                   all the numbers: buildings, lots, town, seasons, vehicles, stations, posts, events,
                                barks, traits, hints, tutorial, site_layouts, dressing, map ...
 assets/audio/                  sounds and the four music loops
-tests/                         the suite (about 2000 checks); tests/run.gd runs it
-tools/                         balance.gd (harness) and the make_*.py asset generators
-docs/superpowers/specs/        the design (sections 7a to 7m = what each round became)
-docs/superpowers/plans/        one plan per round
+tests/                         the suite (about 4000 checks); tests/run.gd runs it; tests/golden/ is the no-avatar harness numbers
+tools/                         balance.gd (harness), avatar_bot.gd, night_lab.gd, community_probe.gd, compare_harness.py,
+                               road_preview.gd, hud_shots.gd, work_sheet.gd and the make_*.py asset generators
+docs/superpowers/specs/        the design (sections 7a to 7m = what each round became; 2026-10-03-avatar-and-radio-design.md is the avatar game's)
+docs/superpowers/plans/        one plan per round (17's contracts are in the avatar-radio roadmap)
 docs/superpowers/roadmap.md    the roadmap (current to round 10)
 docs/audit/                    the full audit of 2026-10-01 and its appendices
 docs/assets-log.md             every AI-made picture, with prompt, model and date (for the rights audit)
@@ -301,6 +380,6 @@ build/                         exports and zips (git-ignored); LastBell-web.zip 
 
 Paste something like this:
 
-> Read `STATUS.md` in `/Users/jaf_lab/last-bell`, then the spec sections it points to. Work on `main`. Do not push or touch itch unless I ask. First: finish the audio work in section 4 (check the web probe and the suite, commit), then tell me what you need from my playtest.
+> Read `STATUS.md` in `/Users/jaf_lab/last-bell/.worktrees/int` (branch `feature/int`: rounds 17 to 21 and the QA fixes; `main` is round 16), sections 1 and 5b, then `README.md`. Do not push, merge into `main` or touch itch unless I ask. Round 22 is being built on `feature/r22-controls-gate`. First: tell me what you need from my playtest of the avatar game (the checklist after section 5b).
 
 Claude's own notes for this project live in `/Users/jaf_lab/.claude/projects/-Users-jaf-lab-last-bell/memory/` (index: `MEMORY.md`; the most useful: `colony-sandbox-direction.md`, `rounds-7-to-10.md`, `itch-and-github.md`, `audio-web-silence-2026-10-02.md`, `work-pace-and-safety.md`). They load automatically on this machine; this file is the same story for a fresh start or another machine.
