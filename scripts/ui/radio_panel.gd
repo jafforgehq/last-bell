@@ -256,7 +256,8 @@ func page_available(page: String) -> bool:
 	if page == "map":
 		var sim = _sim()
 		var town = sim.get("town") if sim != null else null
-		return town != null and bool(town.on)
+		# (round 26: an avatar game with no town, an old Full crew save, has the tab too: the page says there is no town to go out to)
+		return (town != null and bool(town.on)) or (sim != null and String(sim.get("player_id")) != "")
 	if page == "base":
 		# (round 25: the small start with an avatar, where the priorities and the dials are in play)
 		var sim2 = _sim()
@@ -268,12 +269,21 @@ func page_available(page: String) -> bool:
 	return true
 
 
+## Whether a page has no tab although it can be had (round 26: the demo's Jobs page is advanced and the briefing replaces it: the Base page's "Jobs (advanced)"
+## and the full page, Shift+J, still open it).
+func tab_hidden(page: String) -> bool:
+	if page != "jobs":
+		return false
+	var sim = _sim()
+	return sim != null and sim.has_method("is_demo") and sim.is_demo()
+
+
 ## The marks and the lit tab, brought up to date.
 func _sync_tabs() -> void:
 	if tabs.is_empty():
 		return
 	for page in PAGES:
-		var here := page_available(String(page))
+		var here := page_available(String(page)) and not tab_hidden(String(page))
 		if tabs[page].visible != here:
 			tabs[page].visible = here
 	var news = page_node("news")

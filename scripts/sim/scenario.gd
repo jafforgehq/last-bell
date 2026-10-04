@@ -42,10 +42,15 @@ func update(_dt: float) -> void:
 	if sim.day > total_days():
 		sim.over = "victory"
 		sim.events.append({"type": "over", "result": "victory"})
-		if sim.seasons.campaign:
-			sim.events.append({"type": "banner", "text": "The seasons are over", "sub": "A convoy is on the road at dawn"})
-		else:
-			sim.events.append({"type": "banner", "text": "Thirty nights held", "sub": "A convoy is on the road at dawn"})
+		var words := victory_banner()
+		sim.events.append({"type": "banner", "text": words[0], "sub": words[1]})
+
+
+## The banner of the victory: [the headline, the line under it]. The demo's (scripts/sim/demo_run.gd) is its own.
+func victory_banner() -> Array:
+	if sim.seasons.campaign:
+		return ["The seasons are over", "A convoy is on the road at dawn"]
+	return ["Thirty nights held", "A convoy is on the road at dawn"]
 
 
 ## "DAY 7 OF 30" style numbers for the HUD.

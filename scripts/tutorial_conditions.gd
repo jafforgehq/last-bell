@@ -24,6 +24,7 @@
 ##   "dialog"     {"open": bool, "site": the place chosen in the scavenging dialog or ""}
 ##   "jobs"       {"open": bool}: the Duty roster's page (key J) is open
 ##   "news"       {"open": bool}: the News panel (key T, avatar mode) is open
+##   "wheel"      {"open": bool}: the command wheel (hold C, avatar mode) is up
 ## A condition may note something in `state` (a wound seen, say), but never reads the
 ## screen: anything it needs the coach has put in `state`, so the tests can drive it.
 extends RefCounted
@@ -106,6 +107,9 @@ static func registry() -> Dictionary:
 			"board_read": _board_read,
 			"alarm_on": _alarm_on,
 			"alarm_cycled": _alarm_cycled,
+			"holstered": _holstered,
+			"wheel_open": _wheel_open,
+			"gate_shut": _gate_shut,
 			"all": _all,
 			"any": _any,
 			"not": _not,
@@ -672,6 +676,26 @@ static func _alarm_cycled(sim, _p, st) -> bool:
 		st["alarm_seen"] = true
 		return false
 	return bool(st.get("alarm_seen", false))
+
+
+## The weapon of the person played is put away (Q): main.gd keeps `holstered` on them, as their drawing reads it (round 26: the lesson of Q).
+static func _holstered(sim, _p, _st) -> bool:
+	var me = _me(sim)
+	return me != null and bool(me.holstered)
+
+
+## The command wheel (hold C) is up now (the coach notes that in `state.wheel`).
+static func _wheel_open(_sim, _p, st) -> bool:
+	return bool(st.get("wheel", {}).get("open", false))
+
+
+## The gate's rules are in charge (avatar mode) and the gate is shut, all the way across, and nothing wants it open: shut by a hand at the lever or
+## by the bell's keeper (round 26: the lesson of the gate and the bell). A gate that has been asked to open and has not moved yet is not shut.
+static func _gate_shut(sim, _p, _st) -> bool:
+	var g = GateKit.active_gate(sim)
+	if g == null or GateKit.open_of(g) > GateKit.EPS:
+		return false
+	return not (g.has_method("wants_open") and bool(g.wants_open()))
 
 
 # ------------------------------------------------------------- combinators --

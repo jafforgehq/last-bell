@@ -9,11 +9,14 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Kit := preload("res://scripts/ui/menu_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
+const Demo := preload("res://scripts/demo.gd")
 
 const TAGLINE := "Hold the schoolyard for thirty nights."
+## The small tag of the demo's title (round 26).
+const DEMO_TAG := "DEMO: THE FIRST THREE NIGHTS"
 ## What the Orientation Day line says under its name: it teaches the game as it is played (the survivor you walk and shoot with,
 ## and the crew you ask over the radio), not the old yard's orders.
-const ORIENTATION_BLURB := "Walk, shoot, radio the crew: ten minutes"
+const ORIENTATION_BLURB := "Walk, shoot, radio the crew: eight minutes"
 ## The column's width, and the windows below which the small logo and the tighter menu are used.
 const COLUMN_W := 340.0
 const COLUMN_MIN_W := 280.0
@@ -28,6 +31,8 @@ var logo: Control
 var bell: Control
 var name_labels: Array = []
 var tagline: Label
+## The demo's tag under the tagline (null in the full game).
+var demo_tag: Label
 var hint: Label
 var vignette: TextureRect
 var shade: TextureRect
@@ -131,6 +136,13 @@ func _build_logo() -> Control:
 	tagline.add_theme_constant_override("outline_size", 5)
 	tagline.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.85))
 	box.add_child(tagline)
+	# (round 26: the demo's title says so: a small gold tag under the tagline)
+	if Demo.on():
+		demo_tag = hud._label(DEMO_TAG, Fonts.cond(700, 3), 15, hud.ACCENT)
+		demo_tag.add_theme_constant_override("outline_size", 5)
+		demo_tag.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.85))
+		demo_tag.tooltip_text = "The first three nights of the full game: thirty nights, a convoy at the last bell"
+		box.add_child(demo_tag)
 	return box
 
 

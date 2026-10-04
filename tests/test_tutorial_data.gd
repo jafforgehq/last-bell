@@ -2,7 +2,7 @@ extends "res://tests/case.gd"
 ## The lessons' files are data, not code: each has to be valid, every step has what the coach reads, every
 ## condition and beat and anchor it names exists, and the cards are short. There are two: the avatar's
 ## (assets/data/tutorial.json, tests/test_tutorial_avatar_data.gd looks at what is its own) and the old yard's
-## (assets/data/tutorial_classic.json, what `--noavatar` plays): the checks of the first kind run on both.
+## (assets/data/tutorial_classic.json, what a test's scene with no avatar plays: no player reaches it since round 26): the checks of the first kind run on both.
 
 const Coach := preload("res://scripts/ui/coach.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
@@ -10,7 +10,7 @@ const Orientation := preload("res://scripts/sim/orientation.gd")
 
 ## The order buttons' ids, and the orders and intents a step's allow list may name.
 const GIZMOS := ["draft", "post", "repair", "focus", "job_builders", "job_bench", "treat", "sendout", "scavenge", "lure"]
-const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed", "jobs", "build", "alarm"]
+const INTENTS := ["select", "gizmo", "move", "fields", "save", "load", "camera", "speed", "jobs", "build", "alarm", "interact", "wheel"]
 ## What the HUD's anchor_rect understands (the part before a ":" or a "."), and the world anchors.
 const HUD_ANCHORS := ["stores", "stores.ammo", "stores.scrap", "stores.food", "stores.water", "stores.meds", "bar", "clock", "clock.time", "clock.forecast", "alerts", "inspect", "inspect.weapon", "speed", "fields", "help", "sound", "jobs", "legend", "toast", "banner", "dialog.send", "dialog.cancel", "dialog.party", "dialog.close", "ammo", "town", "build", "news", "news.panel", "alarm", "radio", "call"]
 ## The verbs of the radio (the anchors `radio.<verb>` and `radio.insist`).
@@ -18,8 +18,8 @@ const RADIO_PARTS := ["come", "hold", "cover", "search", "back", "post", "insist
 ## The beats of each lesson's scenario.
 const CLASSIC_BEATS := ["dusk", "more", "scratch", "fever"]
 const AVATAR_BEATS := ["dusk", "more", "scratch", "fever", "stray", "spent", "assault", "home"]
-const OPTIONAL_KEYS := ["goal", "goals", "text_always", "goals_always", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed"]
-const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select", "at", "mag"]
+const OPTIONAL_KEYS := ["goal", "goals", "text_always", "goals_always", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed", "select", "warp", "fire_when"]
+const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select", "at", "mag", "gate"]
 ## The parts of the Duty roster's page (while it is open) that an anchor may name, and the stations a card is for.
 const JOBS_PARTS := ["screen", "auto", "clear", "close", "list"]
 const STATIONS := ["bench", "builders", "garden", "infirmary", "radio", "watch"]
@@ -123,7 +123,7 @@ func _every_condition_the_data_names_exists(steps: Array) -> void:
 	var table := Conditions.registry()
 	for s in steps:
 		var names: Array = []
-		for key in ["done", "start", "pause_until"]:
+		for key in ["done", "start", "pause_until", "fire_when"]:
 			_conds_in(s.get(key, {}), names)
 		for key in ["anchor", "wait_anchor"]:
 			for entry in s.get(key, []):

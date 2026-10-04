@@ -68,6 +68,8 @@ var _hammer := 0.0
 ## The plots that are open to use (see `plots`): the yard's own, and those of the lots that are claimed.
 var _visible: Array = []
 var _visible_dirty := true
+## The ids of the buildings the catalogue is held to (the demo's list); empty for no limit.
+var only: Array = []
 
 
 func setup(s) -> void:
@@ -183,7 +185,7 @@ func plots() -> Array:
 func refresh_plots() -> void:
 	_visible = []
 	for p in _plots:
-		if sim.lots.plot_open(p):
+		if sim.lots.plot_open(p) and (only.is_empty() or String(p.get("home", "")) == "" or only.has(String(p.home))):    # (the demo's plots are those of its short list)
 			_visible.append(p)
 	_visible_dirty = false
 
@@ -245,13 +247,22 @@ func catalogue() -> Array:
 		return _catalogue
 	var out: Array = []
 	for b in _catalogue:
-		if not b.has("wall_kit") and not bool(b.get("lots_only", false)):
+		if not b.has("wall_kit") and not bool(b.get("lots_only", false)) and (only.is_empty() or only.has(String(b.id))):
 			out.append(b)
 	return out
 
 
+## The demo's short list (round 26, scripts/sim/demo_run.gd): these are the only buildings the catalogue offers, in the order of the full catalogue
+## (empty: all of them, as ever). Not saved: the demo's scenario puts it again before a save is read.
+func restrict(ids: Array) -> void:
+	only = ids.duplicate()
+	_visible_dirty = true
+
+
 ## A building's data, or {} when there is no such building.
 func building(id: String) -> Dictionary:
+	if not only.is_empty() and not only.has(id):
+		return {}    # (round 26: in the demo a building outside its short list is not a building at all)
 	return _building_by_id.get(id, {})
 
 

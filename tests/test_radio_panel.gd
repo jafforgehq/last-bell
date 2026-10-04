@@ -199,17 +199,17 @@ func test_the_tabs_move_between_the_pages() -> void:
 
 
 func test_the_map_page_is_for_a_settlement_game() -> void:
-	var classic := _ctx(1280, 800, 6)
-	var h = classic.hud
-	check(not classic.sim.town.on, "(the classic start has no town)")
-	check(not h.radio_panel.tab_button("map").visible, "no Map tab in the classic start")
+	# (round 26: an avatar game with no town is an old Full crew save: its Map tab is there, and the page says there is no town)
+	var old_save := _ctx(1280, 800, 6)
+	var h = old_save.hud
+	check(not old_save.sim.town.on, "(an old save of the full crew has no town)")
+	check(h.radio_panel.tab_button("map").visible, "its Map tab is there")
 	h.open_radio("map")
-	check(not h.radio_open(), "and the Map cannot be opened")
+	eq(h.radio_page(), "map", "and opens")
+	check(h.radio_panel.page_node("map").message_label.visible and h.radio_panel.page_node("map").message_label.text.contains("no town"), "to a page that says there is no town")
 	h.open_radio("jobs")
-	eq(h.radio_page(), "jobs", "the others can")
-	h.open_radio("map")
-	eq(h.radio_page(), "jobs", "(and a try at the Map leaves it as it is)")
-	Kit.free_all(classic)
+	eq(h.radio_page(), "jobs", "the others open too")
+	Kit.free_all(old_save)
 	var town := _ctx(1280, 800, 3)
 	check(town.sim.town.on, "(a small start is a settlement game)")
 	town.hud.open_radio("map")
@@ -390,16 +390,16 @@ func test_shift_j_n_g_are_the_modal_full_pages() -> void:
 	await TutorialKit.leave(main)
 
 
-func test_in_the_classic_start_g_is_the_old_dialog() -> void:
+func test_in_an_old_save_with_no_town_g_opens_the_map_page_that_says_so() -> void:
 	var main := _main(6)
 	var h = main.hud
-	check(not main.sim.town.on, "(a classic start)")
+	check(not main.sim.town.on, "(an old save of the full crew: no town)")
 	_press(main, KEY_G)
-	check(h.scavenge_dialog != null and not h.radio_open(), "G opens the old dialog: there is no Map page")
-	h.scavenge_dialog.close()
+	check(h.scavenge_dialog == null and h.radio_page() == "map", "G opens the Map page, not the old scavenging dialog")
+	_press(main, KEY_G)
+	check(not h.radio_open(), "and the same key shuts it")
 	_press(main, KEY_G, true)
-	check(h.scavenge_dialog != null and not h.radio_open(), "and so does Shift+G")
-	h.scavenge_dialog.close()
+	check(h.scavenge_dialog == null and h.radio_page() == "map", "Shift+G, the full page, is the same page: the old dialog is not offered")
 	_press(main, KEY_J)
 	eq(h.radio_page(), "jobs", "(J is the panel as ever)")
 	await TutorialKit.leave(main)

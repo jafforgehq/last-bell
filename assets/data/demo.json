@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "_doc": "The demo (round 26, scripts/demo.gd and scripts/sim/demo_run.gd): the first three nights of one run, the same every time. seed and crew: the run (Standard, a crew of five: Ruth, Dez, Marcus, Ana and Walt; Hector calls in). nights: how many (the run ends at the dawn after them, with the end card); big_night_day: the day whose night is the Big Night, a Siege (plated brutes at one wall). briefing_from_day and ideas_from_day: when the morning briefing and the community's ideas begin (the full game's are 2 and 3). buildings: the only buildings the Build page offers. places: the only places on the Map (the rest of assets/data/town.json is not there at all). trip_place: the pharmacy, the place the first morning's alert sends the pickup to. road_events: the only kinds of road event (assets/data/road_events.json). start_stock: stocks that replace the full game's starting ones (medicine is short, so the pharmacy has a reason). night_mult: a share of the ordinary night's size by day (nights 1 and 2 are gentle). big_night: numbers of the Siege that replace nights.json's (themes.siege) in the demo: factor (its size over an ordinary night), runners and brutes (shares of the night's points), min_brutes, main_share, brute_at ([from, to] the share of the night when the brutes come), cap (most alive at once). wishlist_url: the store page the end card's Wishlist button opens; empty hides the button. copy: the end card's words. The hidden parts of the full game (the four dials, the trouble and the fever dilemma, relationships and specialists, the lots and the streets and the seasons, the errand options and the Jobs tab) are not data: they are `DemoRun.install`.",
+  "seed": 3003,
+  "crew": 5,
+  "nights": 3,
+  "big_night_day": 3,
+  "briefing_from_day": 2,
+  "ideas_from_day": 2,
+  "trip_place": "pharmacy",
+  "buildings": ["salvage_bench", "workshop", "bunk_house", "tents", "floodlights", "watchtower"],
+  "places": ["houses", "pharmacy"],
+  "road_events": ["ambush", "roadblock", "survivor", "wreck_supplies", "breakdown"],
+  "start_stock": {"meds": 4},
+  "night_mult": {"1": 0.7, "2": 0.9},
+  "big_night": {"factor": 2.5, "runners": 0.08, "brutes": 0.2, "min_brutes": 2, "main_share": 0.95, "brute_at": [0.3, 0.65], "cap": 60},
+  "wishlist_url": "",
+  "copy": {
+    "caps": "Three Bells: the demo",
+    "title": "Thanks for playing the Thirty Bells demo",
+    "line": "Three nights held. That was the first of thirty.",
+    "full": "The full game is thirty nights, with a convoy at the last bell."
+  }
+}

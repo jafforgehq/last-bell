@@ -1,6 +1,6 @@
 extends "res://tests/case.gd"
-## A headless bot plays the old yard's Orientation Day (the lesson with no avatar, which `--noavatar` and the tests of the old
-## controls play; tests/test_tutorial_avatar_bot.gd plays the avatar's) from the first card to the last through the real handlers
+## A headless bot plays the old yard's Orientation Day (the lesson with no avatar: a test's helper scene has it and no player can
+## reach it since round 26; tests/test_tutorial_avatar_bot.gd plays the avatar's) from the first card to the last through the real handlers
 ## (input events, the crew cards, the order keys and buttons, the scavenging dialog and the
 ## coach's own buttons) with the coach teaching and the rules stepping, and nothing goes wrong:
 ## every step is reached in order, the run is never over, and the lesson ends with the flag set.
@@ -21,7 +21,7 @@ func test_a_bot_plays_every_step_to_the_end() -> void:
 	await Tut.frames(main, 3)
 	var coach = main.coach
 	check(coach != null, "the coach is there")
-	check(not main.avatar_mode and sim.player_id == "", "the old yard's Orientation Day (`--noavatar`, a test that does not ask) has no avatar, as it never had")
+	check(not main.avatar_mode and sim.player_id == "", "the old yard's Orientation Day (a test's scene that does not ask for an avatar) has none, as it never had")
 	var all_ids: Array = []
 	for s in coach.steps:
 		all_ids.append(String(s.id))

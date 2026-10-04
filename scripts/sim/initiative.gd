@@ -146,6 +146,13 @@ func active() -> bool:
 	return enabled and sim != null and String(sim.player_id) != "" and bool(sim.recruits.small)
 
 
+## The first day of ideas: FIRST_DAY, or the scenario's own (the demo has three nights and brings them from its second day).
+func first_day() -> int:
+	if sim != null and sim.scenario != null and sim.scenario.has_method("idea_day"):
+		return int(sim.scenario.idea_day())
+	return FIRST_DAY
+
+
 # ------------------------------------------------------------------------ data --
 
 static func _data() -> Dictionary:
@@ -353,7 +360,7 @@ func lessons() -> Array:
 ## Whether an idea may be raised now: the day and the hour, no alarm and no dead at the wall, room on the table, the gap since the last,
 ## the community's trust, somebody to ask (the leader is alive).
 func allowed_now() -> bool:
-	if not active() or int(sim.day) < FIRST_DAY or sim.phase != "day":
+	if not active() or int(sim.day) < first_day() or sim.phase != "day":
 		return false
 	var h: float = sim.hour
 	if h < HOURS_FROM or h > minf(HOURS_TO, float(sim.seasons.dusk_hour()) - LAST_BEFORE_DUSK_H) or (h >= RADIO_FROM_H and h <= RADIO_TO_H):
@@ -389,7 +396,7 @@ func _open_ideas() -> Array:
 func look() -> int:
 	if not active():
 		return 0
-	var silent: bool = int(sim.day) >= FIRST_DAY and _community() < COMMUNITY_MIN
+	var silent: bool = int(sim.day) >= first_day() and _community() < COMMUNITY_MIN
 	if silent != hushed:
 		hushed = silent
 		if silent:

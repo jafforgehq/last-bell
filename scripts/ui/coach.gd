@@ -21,6 +21,11 @@
 ##   main.gd asks (`_allows`) in its input handlers while a coach exists.
 ## - Steps may wait for their moment (`start`), bring a beat of the scenario when they begin
 ##   (`fire`), move the camera (`focus`, `follow`) and clear the selection.
+## - Round 26 (the avatar's lesson cut to eight steps for the demo: you, walk, shoot, reload, ask, the radio wheel, the gate and the bell, the
+##   wrap-up): a step with `warp` brings its own `jump` (the afternoon, the gate open) as it begins, a step with `select` has that person picked,
+##   `fire_when` brings beats when a condition comes true (the dusk walkers at the bell) and a goal with `speed` offers Speed up on the card.
+##   Skip is on every card but the last, and the Esc menu has Skip tutorial while the coach is up (main.gd `skip_tutorial`): both end on the
+##   last card ("Skipped"), whose Keep playing here lets the game go on as a normal one (`_end`: the lock lifted, the game let go, the nights real).
 ## - Over a page of the HUD (the scavenging dialog, the Duty roster) a step that has a line for it (a
 ##   `dialog_text`, or a `line` on its goals) shrinks its card to that one line at the top of the window,
 ##   and the coach adds no dim of its own (the page has its veil) and offers no Show me (the ring pulses
@@ -29,8 +34,9 @@
 ##   middle resumes the same step.
 ##
 ## Orientation Day is taught in the game the player will play: with the avatar (round 17: walking, aiming and shooting, the
-## ladder, the radio, the News and its calls, the map, the alarm) from assets/data/tutorial.json, or, in the old yard
-## (`--noavatar`, a test), from assets/data/tutorial_classic.json (see `steps_path`). The card keeps out of the way of the
+## ladder, the radio, the News and its calls, the map, the alarm) from assets/data/tutorial.json, in every real run (round 26). The old yard's
+## lesson, assets/data/tutorial_classic.json (see `steps_path`), is what a test's helper scene with no avatar plays: a test fixture no player
+## can reach (the `--noavatar` flag is gone). The card keeps out of the way of the
 ## person the player plays, and of the gun's readout, as well as of the thing it points at (`best_rect`).
 ##
 ## It does nothing in a normal run: main.gd builds it only for Orientation Day, and every call
@@ -44,7 +50,7 @@ const AimMode := preload("res://scripts/aim_mode.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 
 const STEPS_PATH := "res://assets/data/tutorial.json"
-## The old yard's lesson (the one with no avatar: orders by right-click and by the keys).
+## The old yard's lesson (the one with no avatar: orders by right-click and by the keys): a test fixture, never played by a player (round 26).
 const CLASSIC_PATH := "res://assets/data/tutorial_classic.json"
 ## The card's width, the space kept round the window's edge and round the target.
 const CARD_W := 360.0
@@ -595,6 +601,10 @@ func _activate() -> void:
 	phase = "wrap" if String(step.get("type", "")) == "wrap" else "active"
 	state["phase"] = phase
 	state["t"] = 0.0
+	# a step that brings its own time of day (the lesson of the gate and the bell: late afternoon) puts the world the way it expects as it begins,
+	# as `jump` does for a lesson that is started at: the hours between are not played (what is noted below is noted after it)
+	if bool(step.get("warp", false)):
+		scenario.jump(step.get("jump", {}))
 	var pos := {}
 	for p in sim.people:
 		pos[p.id] = [p.x, p.y]
@@ -610,6 +620,12 @@ func _activate() -> void:
 	state["pre"] = Conditions.check(step.get("done", {}), sim, state) if phase == "active" else false
 	if bool(step.get("clear_selection", false)) and main.selection != null:
 		main._select(null)
+	# a step about one person has them picked as it begins (the radio wheel: the ring is for the one picked)
+	var pick := String(step.get("select", ""))
+	if pick != "" and phase == "active":
+		var who = _person(pick)
+		if who != null and who.away == null:
+			main._select({"kind": "person", "ref": who})
 	_aim_camera()
 	_card_key = ""
 	if phase == "wrap":
@@ -728,6 +744,8 @@ func _refresh_state() -> void:
 	var page = hud.get("jobs_screen")
 	state["jobs"] = {"open": page != null and is_instance_valid(page)}
 	state["news"] = {"open": hud.has_method("news_open") and hud.news_open()}
+	var ctl = main.get("wheel_ctl")
+	state["wheel"] = {"open": ctl != null and ctl.is_open()}
 
 
 ## The player did something (main.gd's _did): `kind` is "select" (with the selection), "move",
@@ -1081,6 +1099,7 @@ func tick(delta: float) -> void:
 				_activate()
 		"active":
 			idle_t += delta
+			_fire_when()
 			var ready := float(state["t"]) >= MIN_SHOW_S or not bool(state.get("pre", false))
 			if ready and Conditions.check(step.get("done", {}), sim, state):
 				_complete()
@@ -1093,6 +1112,19 @@ func tick(delta: float) -> void:
 	_update_hold()
 	_update_focus(delta)
 	_update_ui(delta)
+
+
+## A step may bring beats of the scenario when its moment comes, not when it begins (`fire_when`: {"cond", "params", "beats": [ids]}: the dead
+## of the dusk come when the bell rings, at the end of the lesson of the gate). Once.
+func _fire_when() -> void:
+	var spec = step.get("fire_when")
+	if typeof(spec) != TYPE_DICTIONARY or bool(state.get("fired_when", false)):
+		return
+	if not Conditions.check({"cond": String(spec.get("cond", "")), "params": spec.get("params", {})}, sim, state):
+		return
+	state["fired_when"] = true
+	for id in spec.get("beats", []):
+		scenario.fire(String(id))
 
 
 ## Called right after the HUD has updated itself (every tenth of a second): the clock's day
@@ -1178,7 +1210,8 @@ func _fill_card() -> void:
 	goal_label.visible = goal != ""
 	goal_label.add_theme_color_override("font_color", hud.OK if phase == "done" else hud.ACCENT)
 	next_button.visible = phase == "active" and next_type
-	speed_button.visible = phase == "wait"
+	# (Speed up is the card of a wait; and the goal of a step that is a wait itself, `speed`: for the bell, once the gate is shut)
+	speed_button.visible = phase == "wait" or (phase == "active" and bool(_goal_entry().get("speed", false)))
 	wrap_box.visible = is_wrap
 	# the wrapped words need a width to know how tall they are: give them the card's, at once
 	var inner := CARD_W - card.get_theme_stylebox("panel").get_minimum_size().x
@@ -1213,10 +1246,16 @@ func _over_page() -> bool:
 ## What the card says to do right now: the first of the step's `goals` whose `when` holds (the
 ## next part of a step with several), else its `goal` (what the toast says too).
 func _goal_text() -> String:
+	var g := _goal_entry()
+	return String(g.get("text", "")) if not g.is_empty() else String(step.get("goal", ""))
+
+
+## The first of the step's `goals` whose `when` holds ({} when none does).
+func _goal_entry() -> Dictionary:
 	for g in _say("goals", []):
 		if Conditions.check({"cond": String(g.get("when", "")), "params": g.get("params", {})}, sim, state):
-			return String(g.get("text", ""))
-	return String(step.get("goal", ""))
+			return g
+	return {}
 
 
 ## What the step says under `key` ("text", "goals"), or `fallback`: with "Always aim at the mouse" (round 22) a step that teaches the aim has

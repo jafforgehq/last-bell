@@ -1,7 +1,7 @@
 extends "res://tests/case.gd"
 ## What the title says about Orientation Day (the menu line and the first launch's card) is true of the lesson the player then plays:
 ## it is the game as it is played (walking and shooting as Ruth, the crew over the radio), not the old yard's orders, and its buttons
-## still do what they say. `--noavatar` and a run that is not the lesson are untouched.
+## still do what they say. A run that is not the lesson is untouched.
 
 const Tut := preload("res://tests/tutorial_kit.gd")
 const HudKit := preload("res://tests/hud_kit.gd")
@@ -41,10 +41,10 @@ func test_the_first_launch_card_says_what_the_lesson_teaches_and_its_buttons_are
 	check(texts.has("First time here?"), "it asks")
 	var body := ""
 	for t in texts:
-		if String(t).begins_with("Orientation Day teaches the basics in about ten minutes"):
+		if String(t).begins_with("Orientation Day teaches the basics in about eight minutes"):
 			body = String(t)
 	check(body != "", "and says what it is: %s" % str(texts))
-	for word in ["Ruth", "radio", "News", "map", "alarm"]:
+	for word in ["Ruth", "radio", "gate", "bell", "skip"]:
 		check(body.contains(word), "it names '%s': %s" % [word, body])
 	for old in OLD_YARD:
 		check(not body.to_lower().contains(old), "and not the old yard's '%s'" % old)
@@ -57,5 +57,7 @@ func test_the_first_launch_card_says_what_the_lesson_teaches_and_its_buttons_are
 
 
 func test_the_card_body_is_the_one_the_screen_shows() -> void:
-	check(OrientationCard.BODY.begins_with("Orientation Day teaches the basics in about ten minutes"), "it still begins as it did")
+	check(OrientationCard.BODY.begins_with("Orientation Day teaches the basics in about eight minutes"), "it still begins as it did")
 	check(OrientationCard.BODY.contains("main menu"), "and still says it can be played again from the main menu")
+	check(OrientationCard.BODY.contains("skip it"), "and that it can be skipped at any step")
+	check(TitleMenu.ORIENTATION_BLURB.contains("eight minutes"), "the menu's line says eight minutes too (%s)" % TitleMenu.ORIENTATION_BLURB)

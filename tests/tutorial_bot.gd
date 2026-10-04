@@ -3,8 +3,8 @@
 ## (tests/test_tutorial*.gd; this file has no test_ prefix so the runner skips it). It plays
 ## whichever lesson the game is: the avatar's (`act_avatar`: the keys W A S D held down as the engine
 ## has them, the mouse moved, its right button held to aim and its left button to shoot (round 22; its left button alone with the setting
-## "Always aim at the mouse"), R and F, a click on a crew card, the radio's
-## verb buttons and the call's, T, G and L, J) or the old yard's (`act_classic`: right-clicks and the
+## "Always aim at the mouse"), R and Q, a click on a crew card, the radio's
+## verb buttons, the wheel (C held, a slice, C let go) and E at the gate's lever; round 26: the lesson's eight steps) or the old yard's (`act_classic`: right-clicks and the
 ## order keys).
 extends RefCounted
 
@@ -386,9 +386,34 @@ static func call_button(main, option: String):
 	return null
 
 
+## Where the bot stands to work the gate: on the apron by the lever, in reach of it (the gate's own tests stand there too).
+const LEVER_STAND := Vector2(36.5, 22.3)
+
+
+## One key pressed and let go (the engine's way: `_input` first, then the world's `_unhandled_input` for a press), for the keys that are held
+## (the wheel's C is held while a slice is picked).
+static func key(main, code: int, pressed: bool) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.pressed = pressed
+	main._input(ev)
+	if pressed:
+		main._unhandled_input(ev)
+
+
+## The pointer moved to a point of the window (the wheel's slices light under it).
+static func pointer_to(main, at: Vector2) -> void:
+	main.mouse_screen = at
+	var ev := InputEventMouseMotion.new()
+	ev.position = at
+	main._input(ev)
+	main._unhandled_input(ev)
+
+
 ## What the bot does on one frame of step `id` of the avatar's lesson, with real hands: it walks with the keys held down, aims with
-## the mouse, holds the left button, presses R, F, T, G, L and J, clicks the crew's pictures and the buttons of the radio and the
-## pages, as a player does. `bot` holds its cool-down (for the things done once) and what it is in the middle of.
+## the mouse, holds the left button, presses R, Q, E and C, clicks the crew's pictures and the buttons of the radio, as a player does.
+## `bot` holds its cool-down (for the things done once) and what it is in the middle of.
 static func act_avatar(main, id: String, bot: Dictionary) -> void:
 	var coach = main.coach
 	var sim = main.sim
@@ -430,88 +455,80 @@ static func act_avatar(main, id: String, bot: Dictionary) -> void:
 					trigger(main, false)
 					aim_button(main, false)
 		"reload":
+			# R reloads; Q puts the weapon away, and Q again draws it
 			hold([])
 			if float(coach.state.did.get("reload", 0.0)) <= 0.0:
 				main._key(KEY_R)
 			elif me.reloading > 0.0 or int(me.mag) < int(me.gun.mag):
 				did = false
-			else:
-				main._key(KEY_F)
-		"crew":
-			if not selected(main, "dez"):
-				card_click(main, "dez")
+			elif float(coach.state.did.get("holster", 0.0)) <= 0.0 or me.holstered:
+				main._key(KEY_Q)
 			else:
 				did = false
-		"come":
-			if not selected(main, "dez"):
-				card_click(main, "dez")
-			elif String(person(main, "dez").stance) == "follow" or not sim.radio.pending.is_empty():
-				did = false
-			else:
-				main.hud.radio_verbs.buttons["come"].pressed.emit()
-		"refusal":
-			if not selected(main, "ana"):
-				card_click(main, "ana")
-			elif float(sim.radio.trust_of(person(main, "ana"))) >= float(sim.radio.TRUST_START) - 0.01:
-				# (ask her to come; once she has refused, the Insist button is there: press it)
-				if main.hud.radio_verbs.insist_button.visible:
+		"ask":
+			# a click on Dez's picture, Come with me; a click on Ana's, Come with me (she refuses: the reason shows), then Insist
+			hold([])
+			var ana = person(main, "ana")
+			var dez = person(main, "dez")
+			if float(sim.radio.trust_of(ana)) < float(sim.radio.TRUST_START) - 0.01:
+				# (pushed: the game runs, and both of them come; whoever a mash made do something else is asked again)
+				var who = ""
+				if String(dez.stance) != "follow":
+					who = "dez"
+				elif String(ana.stance) == "":
+					who = "ana"
+				if who == "" or not sim.radio.pending.is_empty():
+					did = false
+				elif not selected(main, who):
+					card_click(main, who)
+				elif main.hud.radio_verbs.insist_button.visible:
 					main.hud.radio_verbs.insist_button.pressed.emit()
 				else:
 					main.hud.radio_verbs.buttons["come"].pressed.emit()
-			else:
-				did = false
-		"news":
-			if not bool(coach.state.get("news_seen", false)) and not main.hud.news_open():
-				main._key(KEY_T)
-			else:
-				var b = call_button(main, "reinforce")
-				if b != null:
-					b.pressed.emit()
+			elif not asked_of(coach, "dez", "come"):
+				if not selected(main, "dez"):
+					card_click(main, "dez")
 				else:
-					did = false
-		"map":
-			var board = main.hud.scavenge_dialog
-			if board == null or not is_instance_valid(board):
-				if bool(coach.state.get("board_site", false)):
-					did = false
-				else:
-					main._key(KEY_G)
-			elif String(board.site_id) == "":
-				var known: Array = board.sites.keys()
-				board.select_place(String(known[0]))
+					main.hud.radio_verbs.buttons["come"].pressed.emit()
+			elif not selected(main, "ana"):
+				card_click(main, "ana")
+			elif main.hud.radio_verbs.insist_button.visible:
+				main.hud.radio_verbs.insist_button.pressed.emit()
 			else:
-				board.close()
-		"alarm":
+				main.hud.radio_verbs.buttons["come"].pressed.emit()
+		"wheel":
+			# hold C (the pointer on the ground a little off), move onto Hold here, let go
 			hold([])
-			if not sim.radio.alarm_on:
-				if bool(coach.state.get("alarm_seen", false)):
-					did = false
-				else:
-					main._key(KEY_L)
+			var ctl = main.wheel_ctl
+			if ctl.is_open():
+				var slice := -1
+				for i in main.hud.wheel.slices.size():
+					if String(main.hud.wheel.slices[i].verb) == "hold":
+						slice = i
+				pointer_to(main, main.hud.wheel.centre + main.hud.wheel.slice_mid(slice))
+				key(main, KEY_C, false)
+			elif float(coach.state.did.get("wheel", 0.0)) <= 0.0:
+				pointer_to(main, main._tile_to_screen(Vector2(me.x + 2.5, me.y + 1.5)))
+				key(main, KEY_C, true)
 			else:
-				bot["on_for"] = int(bot.get("on_for", 0)) + 1
-				if int(bot["on_for"]) > 20:
-					main._key(KEY_L)
 				did = false
 		"dusk":
+			# walk to the lever, press E once (the gate shuts and is locked), then wait for the bell
 			did = false
-		"jobs":
-			# J opens the Duty roster; a job is given with the page's own buttons; Close shuts the page again
-			var page = main.hud.jobs_screen
-			var given: bool = float(coach.state.events.get("assigned:job", 0.0)) > 0.0
-			if page == null:
-				if given:
-					did = false
-				else:
-					main._key(KEY_J)
-			elif given:
-				page.close_button.pressed.emit()
-			elif page.list != null and page.list_kind == "job":
-				page.list_items["builders"].pressed.emit()
-			elif page.list != null:
-				page.close_list()
+			var shut: bool = sim.gate.held == "shut" or (sim.gate.active() and sim.gate.open <= 0.0 and not sim.gate.wants_open())
+			if shut:
+				hold([])
+				bot["shut"] = true
+			elif not goto(main, LEVER_STAND, 0.25):
+				pass
 			else:
-				page.rows["hector"].job.pressed.emit()
+				hold([])
+				did = true
+				if main.hud.talk_open():
+					main.hud.hide_talk()
+					main._key(KEY_Y)    # (a person was in reach as well: Y works the gate from anywhere in its reach)
+				else:
+					main._key(KEY_E)
 		_:
 			did = false
 	bot["cool"] = 12 if did else 0
@@ -563,8 +580,8 @@ static func play(main, stop_at: String = "", max_frames: int = 400000, any_phase
 			if main.speed != 3:
 				main._set_speed(3)    # (round 24: with an avatar the key is Shift and 3; the digits pick the crew)
 		elif coach.phase == "active" or coach.phase == "wrap":
-			if main.avatar_mode and (id == "walk" or id == "shoot"):
-				# (the walk and the climb are done at normal speed: a tile is the room a ladder leaves)
+			if main.avatar_mode and (id == "walk" or id == "shoot" or (id == "dusk" and not bool(bot.get("shut", false)))):
+				# (the walk, the climb and the way to the lever are done at normal speed: a tile is the room a ladder leaves; the wait for the bell is not)
 				if not coach.held and main.speed != 1:
 					main._set_speed(1)
 			elif not coach.held and main.speed < 3 and id != "scavenge" and id != "wrap":

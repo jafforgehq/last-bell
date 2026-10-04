@@ -95,6 +95,25 @@ func _load() -> void:
 	_compute_hours()
 
 
+## The demo's board (round 26, scripts/sim/demo_run.gd): only these places are on it at all (the others are not unknown, they are not there), the
+## roads between them and the school what is left of the roads, the hours worked out again. Done before the run begins (and before a save is
+## read), so that everything that asks the board for places finds these.
+func restrict(ids: Array) -> void:
+	var keep: Array = []
+	_by_id = {}
+	for p in places:
+		if ids.has(String(p.id)):
+			keep.append(p)
+			_by_id[String(p.id)] = p
+	places = keep
+	var kept: Array = []
+	for r in roads:
+		if r is Array and r.size() >= 2 and (String(r[0]) == "home" or _by_id.has(String(r[0]))) and (String(r[1]) == "home" or _by_id.has(String(r[1]))):
+			kept.append(r)
+	roads = kept
+	_compute_hours()
+
+
 ## Road distances from the school by Dijkstra over the roads (a straight line to a place with no road).
 func _compute_hours() -> void:
 	_hours.clear()

@@ -13,6 +13,7 @@ extends Control
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Kit := preload("res://scripts/ui/menu_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Demo := preload("res://scripts/demo.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const TitleMenu := preload("res://scripts/ui/title_menu.gd")
 const PauseMenu := preload("res://scripts/ui/pause_menu.gd")
@@ -324,6 +325,10 @@ func open_settings() -> Control:
 
 
 func open_new_game() -> Control:
+	# (round 26: the demo has one game, its three nights: New game begins it, with no choice to make)
+	if Demo.on():
+		start_game(1, Demo.run_seed(), Demo.crew())
+		return null
 	return _open_screen(NewGameMenu.new(), "New game", "Choose the nights, the crew, the length and the seed")
 
 
@@ -390,6 +395,8 @@ func peeks() -> Array:
 ## The save to continue from: {"slot", "info"} for the newest one that can be loaded, else {}.
 func newest_save() -> Dictionary:
 	var all := peeks()
+	if Demo.on():
+		all = all.filter(func(p): return bool(p.info.get("demo", false)))    # (round 26: Continue in the demo is the demo's own save, never a full game's)
 	var infos: Array = []
 	for p in all:
 		infos.append(p.info)
@@ -414,6 +421,10 @@ func load_slot(path: String) -> bool:
 	if not bool(info.get("ok", false)):
 		play("ui_error")
 		toast("That save cannot be loaded: %s" % String(info.get("reason", "damaged")).to_lower(), "danger")
+		return false
+	if Demo.on() and not bool(info.get("demo", false)):
+		play("ui_error")
+		toast("That save is from the full game", "warn")    # (round 26: the demo plays its own three nights only)
 		return false
 	if main == null or not main.has_method("load_run") or not main.load_run(path):
 		play("ui_error")

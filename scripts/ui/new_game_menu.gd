@@ -1,7 +1,7 @@
 ## New game: how hard the nights are (Story, Standard, Brutal, each sold with a line and
 ## told truthfully underneath: what it really changes, from the rules' own numbers), how the
-## crew begins (a small crew of three, the others calling in over the radio, or all six from
-## the first morning), the length of the game (Autumn, the thirty nights as they always were, or the
+## crew begins (a small crew of three or a crew of five, the others calling in over the radio; round 26: the old all-six start, with no
+## town and no avatar, is gone), the length of the game (Autumn, the thirty nights as they always were, or the
 ## campaign of the four seasons, round 10) and the seed (a random one is shown; any whole number can be
 ## typed).
 ## Start hands the choice to the game, which reloads the scene with it. Enter starts
@@ -14,26 +14,24 @@ const Prefs := preload("res://scripts/prefs.gd")
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
 ## what it means for the game, in plain words, under the cards.
-const CREWS := [3, 5, 6]
+const CREWS := [3, 5]
 ## The crew a new player begins with: five (three felt too few to do the work and send a trip).
 const DEFAULT_CREW := 5
-const CREW_NAMES := ["Small crew (3)", "Crew of five", "Full crew (6)"]
+const CREW_NAMES := ["Small crew (3)", "Crew of five"]
 const CREW_LINES := [
 	"Ruth, Dez and Marcus. More survivors call in over the radio.",
 	"Ruth, Dez, Marcus, Ana and Walt. Hector and others call in over the radio.",
-	"All six from day one, no recruits. No avatar: the full crew plays as before.",
 ]
 const CREW_FACTS := [
 	"A call can come at noon from day 2 when a bed is free (the first three callers even with the desk empty, later ones when someone is at the radio desk). Nights are smaller while the crew is.",
 	"The school has six beds, so one caller fits before you build tents or a bunk house. Nights are a little smaller than the full night while the crew is.",
-	"The nights are the full nights from the first day, and there are no recruits (and no town to travel to).",
 ]
 ## The lengths of the game to choose from (the campaign is round 10): what each is called and the line on its card.
 const LENGTH_NAMES := ["Autumn: thirty nights", "Campaign: the four seasons"]
 const LENGTH_LINES := ["Hold the wall for thirty nights.", "Autumn, Winter, Spring and Summer, each with its own Big Night."]
 
 var difficulty := 1
-## How many people the run begins with: 3 (a small crew), 5 or 6.
+## How many people the run begins with: 3 (a small crew) or 5.
 var crew := DEFAULT_CREW
 ## The three difficulty buttons, Story first.
 var cards: Array = []
@@ -236,7 +234,7 @@ func _choose(i: int) -> void:
 	facts_label.text = Kit.difficulty_facts(difficulty, crew)
 
 
-## Picks a crew (0 the small one, 1 the full one): its card lights up and the words under the cards say what it means.
+## Picks a crew (0 the small one, 1 the crew of five): its card lights up and the words under the cards say what it means.
 func _choose_crew(i: int) -> void:
 	i = clampi(i, 0, CREWS.size() - 1)
 	crew = CREWS[i]
@@ -250,7 +248,7 @@ func _choose_crew(i: int) -> void:
 		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
 		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
 	crew_facts_label.text = CREW_FACTS[i]
-	# (the nights' size is the avatar game's with a small crew and the old game's with six: the words under the difficulty follow the crew)
+	# (the nights' size follows the crew: the words under the difficulty follow it too)
 	if facts_label != null:
 		facts_label.text = Kit.difficulty_facts(difficulty, crew)
 

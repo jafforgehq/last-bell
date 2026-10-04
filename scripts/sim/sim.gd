@@ -342,6 +342,12 @@ var nights_on := true
 ## How many people a run starts with: 6 (the classic start: tests, Orientation Day) or 3 (a small start:
 ## the others come over the radio, see recruits.gd). Set before `start_run`.
 var crew_start := 6
+
+
+## Whether this run is the demo (round 26: three nights, a short list of buildings and places, no dials, no trouble: scripts/sim/demo_run.gd is
+## its scenario and the only thing that says so). Every part of the full game that the demo changes asks this, and answers as ever when it is false.
+func is_demo() -> bool:
+	return scenario != null and scenario.has_method("is_demo")
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false

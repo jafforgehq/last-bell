@@ -234,3 +234,47 @@ func test_it_is_saved_with_the_run_and_stays_the_avatars_lesson() -> void:
 	again.world.free()
 	g.world.free()
 	OS.move_to_trash(ProjectSettings.globalize_path(path))
+
+
+# --------------------------------------------------------------- the gate (round 26) --
+
+func test_the_real_gate_is_switched_on_by_the_lesson_that_teaches_it_and_stays_on() -> void:
+	var g := Kit.make_avatar()
+	var sim = g.sim
+	check(not sim.gate.enabled and not g.scenario.gate_on, "the lesson begins with the gate the way it was: a shut wall section")
+	check(not sim.gate.active(), "(no real gate)")
+	g.scenario.jump({"hour": 17.0, "gate": "open"})
+	near(sim.hour, 17.0, 0.001, "jump brings the hour")
+	check(g.scenario.gate_on and sim.gate.enabled and sim.gate.active(), "and the real rules")
+	eq(sim.gate.held, "open", "with the gate open (held, as the day's traffic leaves it)")
+	Kit.run(sim, 3.0)
+	check(sim.gate.open >= 0.999, "and it opens")
+	# the bell shuts a gate that was left open
+	g.scenario.set_time(18.98, 1)
+	Kit.run(sim, 1.0)
+	check(sim.bell_rung, "the bell rang")
+	Kit.run(sim, 3.0)
+	near(sim.gate.open, 0.0, 0.001, "and the keeper shut it")
+	eq(sim.gate.held, "", "(nobody's hand: it is not locked)")
+	# a save keeps the switch (the gate module's own switch is the harness's, and is not saved)
+	var path := "user://tutorial_avatar_gate_test.json"
+	check(SaveGame.write(sim, path), "saved")
+	var again := Kit.make()
+	check(SaveGame.apply(again.sim, SaveGame.read(path)), "and loads")
+	check(again.sim.scenario.gate_on and again.sim.gate.enabled and again.sim.gate.active(), "the gate's rules are still on")
+	again.world.free()
+	g.world.free()
+	OS.move_to_trash(ProjectSettings.globalize_path(path))
+
+
+func test_the_lessons_end_leaves_the_gate_on_and_only_for_the_avatars_lesson() -> void:
+	var g := Kit.make_avatar()
+	g.scenario.finish()
+	check(g.scenario.gate_on and g.sim.gate.enabled and g.sim.gate.active(), "the avatar's lesson, finished: the real gate")
+	g.world.free()
+	var plain := Kit.make()
+	plain.scenario.finish()
+	check(not plain.scenario.gate_on and not plain.sim.gate.enabled, "the classic lesson, finished: nothing of the gate")
+	plain.scenario.set_gate("open")
+	check(not plain.sim.gate.enabled, "(and set_gate is not for it)")
+	plain.world.free()

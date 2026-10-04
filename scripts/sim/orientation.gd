@@ -35,7 +35,11 @@
 ## `spent` (the magazine of the player's gun is left low, so that R has something to do), `assault` (two of the dead are at a
 ## wall section and the radio calls: the call card's lesson) and `home` (everyone back to their work, any call answered by its
 ## default); and the scratch comes with Ana at Walt's side at once (the radio refuses her in the hearing of the player, who
-## has the game held). The classic Orientation Day (`avatar` false: `--noavatar`, a test) is as it was.
+## has the game held). The classic Orientation Day (`avatar` false: the no-player mode, which the golden tests and some others play; no player reaches it since round 26) is as it was.
+##
+## ROUND 26 (the demo's short lesson, eight steps): the lesson ends at the bell of the first day, and the step before it (the gate and the bell)
+## brings the afternoon (`jump`'s "hour" and "gate", applied when the step begins: `warp` in assets/data/tutorial.json) and puts the real gate to
+## work (`set_gate`: it is open, and the player shuts it at the lever or the bell does); the dusk beats come when the bell rings.
 ##
 ## When the lesson is over (`finish`, called by the coach on the last card or on Skip)
 ## the script stops and the real nights begin: the run goes on as a sandbox that still
@@ -167,6 +171,9 @@ var avatar := false
 var stray_open := false
 var stray_kills := 0
 var stray_tries := 0
+## The real gate's rules are on (round 26: the avatar's lesson of the gate and the bell switches them on when it begins, and `finish` leaves them on):
+## the lesson's earlier steps have the gate the way it was, a shut wall section. Saved.
+var gate_on := false
 
 
 ## Swaps this scenario, the scripted waves and the forgiving medicine into a freshly
@@ -234,6 +241,7 @@ func start() -> void:
 	stray_open = false
 	stray_kills = 0
 	stray_tries = 0
+	gate_on = false
 	sim.difficulty = 0
 	sim.permadeath = false
 	sim.stock.ammo = START_AMMO
@@ -373,6 +381,7 @@ func finish() -> void:
 	finished = true
 	stray_open = false
 	coached = false
+	set_gate("on")
 	sim.waves.enabled = true
 	if sim.waves.get("scripted") != null:
 		sim.waves.scripted = false
@@ -485,17 +494,32 @@ func _home() -> void:
 		sim.radio._settle(e, String(e.default), true)
 
 
+## The real gate (scripts/sim/gate.gd) is put to work, in the avatar's lesson only: the step that teaches the gate and the bell asks for it
+## (`jump`'s "gate"), and `finish` leaves it on, so a game that goes on after the lesson has the gate it will have. `mode`: "open" (the gate
+## stands open, held, as the day's traffic leaves it: "the lesson's gate is open until the player shuts it or the bell does"), "shut" or "on"
+## (the rules only: a shut gate).
+func set_gate(mode: String) -> void:
+	if not avatar:
+		return
+	gate_on = true
+	sim.gate.enabled = true
+	if mode == "open":
+		sim.gate.request(true, "auto")
+
+
 # --------------------------------------------------- setting the scene up --
 
 ## Puts the world the way a lesson expects it, for starting the tutorial at a step
 ## (a screenshot, a test): `spec` may hold "hour" (0 to 24) and "day", "bus" (the
 ## bus's health, 0 to 1), "stock" ({store: amount}), "drafted" (ids sent to stand
 ## where they are), "post" (ids sent to their posts and standing there) and "fired"
-## (beats to bring); and in the avatar's lesson "at" ([x, y]: where the player stands) and "mag" (the rounds left in their
-## gun). Nothing in a normal run calls it.
+## (beats to bring); and in the avatar's lesson "at" ([x, y]: where the player stands), "mag" (the rounds left in their
+## gun) and "gate" ("open", "shut" or "on": the gate's real rules, see `set_gate`). Nothing in a normal run calls it.
 func jump(spec: Dictionary) -> void:
 	if spec.has("hour"):
 		set_time(float(spec.hour), int(spec.get("day", sim.day)))
+	if spec.has("gate"):
+		set_gate(String(spec.gate))
 	if spec.has("bus"):
 		var bus = _segment(BUS_ID)
 		if bus != null:
@@ -554,6 +578,7 @@ func save() -> Dictionary:
 		"finished": finished,
 		"avatar": avatar,
 		"stray": [stray_open, stray_kills, stray_tries],
+		"gate": gate_on,
 		"coach": coach_state.duplicate(true),
 	}
 
@@ -573,6 +598,9 @@ func load_state(d: Dictionary) -> void:
 	avatar = bool(d.get("avatar", false))
 	if avatar:
 		sim.streets.enabled = false    # (the harness's switch is not saved)
+	gate_on = avatar and bool(d.get("gate", false))
+	if gate_on:
+		sim.gate.enabled = true    # (nor is this one)
 	stray_open = false
 	stray_kills = 0
 	stray_tries = 0
