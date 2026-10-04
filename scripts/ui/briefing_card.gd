@@ -129,7 +129,7 @@ func _build() -> void:
 	# the question
 	hint_label = _para("", 12, host.INK3)
 	_body.add_child(hint_label)
-	var made := PriorityKit.make(host, _on_chip)
+	var made := PriorityKit.make(host, _on_chip, PriorityKit.ids_of(_sim()))
 	chips = made.chips
 	_body.add_child(made.flow)
 	feedback_label = _para("", 12, host.WARN)

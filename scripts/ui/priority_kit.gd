@@ -41,7 +41,10 @@ static func module(sim):
 static func ids_of(sim) -> Array:
 	var m = module(sim)
 	var raw = RadioKit.rule_of(m, "IDS", IDS) if m != null else IDS
-	return (raw as Array).duplicate() if raw is Array else IDS.duplicate()
+	var out: Array = (raw as Array).duplicate() if raw is Array else IDS.duplicate()
+	if sim != null and sim.has_method("is_one_house") and sim.is_one_house():
+		out.erase("scavenge")    # (One House: nobody is sent out on an errand: the avatar goes and looks)
+	return out
 
 
 static func name_of(id: String) -> String:
