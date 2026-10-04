@@ -364,7 +364,9 @@ func _make_roof(hd: Dictionary) -> void:
 			notches.append([d.tiles, String(d.side)])
 	if _atlas == null:
 		_atlas = RoofAtlas.new()
-	roof.setup(id, Rect2i(hd.rect), TownArt.roof(String(hd.kind), id % 3), notches, _atlas)
+	# (TOWNGEN: a house says which of the kit's roofs it has (`roof` 0 terracotta, 1 slate, 2 shingle) and its `parts`: one roof for each)
+	var colour: Dictionary = TownArt.roof("", int(hd.roof)) if hd.has("roof") else TownArt.roof(String(hd.kind), id % 3)
+	roof.setup(id, Rect2i(hd.rect), colour, notches, _atlas, hd.parts if hd.has("parts") else [])
 	roof.alpha_t = 0.0 if id == avatar_house else 1.0
 	roof.modulate.a = roof.alpha_t
 	roof.visible = roof.alpha_t > 0.01
@@ -528,11 +530,11 @@ class Roof extends Node2D:
 	var _set = null
 
 	## `notches`: [[tiles (Vector2i), side], ...] of the outside doors. `atlas`: the part's RoofAtlas (null: the pictures are drawn from their files).
-	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array, atlas = null) -> void:
+	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array, atlas = null, parts: Array = []) -> void:
 		house = id
 		if desc.has("tiles"):
 			_set = atlas.for_tiles(desc.tiles) if atlas != null else null
-		if desc.has("tiles") and _setup_tiles(id, rect, desc.tiles, notches):
+		if desc.has("tiles") and _setup_tiles(id, rect, desc.tiles, notches, parts):
 			return
 		var er := Rect2(rect).grow(EAVE_T)
 		var e := Rect2(er.position * TILE_PX, er.size * TILE_PX)
@@ -585,7 +587,7 @@ class Roof extends Node2D:
 		queue_redraw()
 
 	## The roof from the kit's tiles. False (nothing drawn yet) when a picture it needs will not load.
-	func _setup_tiles(id: int, rect: Rect2i, tiles: Dictionary, notches: Array) -> bool:
+	func _setup_tiles(id: int, rect: Rect2i, tiles: Dictionary, notches: Array, parts: Array = []) -> bool:
 		var lit: Array = tiles.lit
 		var shade: Array = tiles.shade
 		var ridge: Dictionary = tiles.ridge
@@ -599,52 +601,67 @@ class Roof extends Node2D:
 			if TownArt.texture(d) == null:
 				return false
 		position = Vector2(rect.position) * TILE_PX
-		var w := rect.size.x
-		var h := rect.size.y
-		var wide := w >= h
+		# TOWNGEN: a building of several parts (an L, a T, a church...) has one roof for each part, all in this one node: every part is a rectangle of cells with its own ridge, and
+		# the eave is drawn only where a cell has no roof next to it (the seam between two parts has none). `parts` empty: one part, the whole rectangle.
+		var plist: Array = parts if parts.size() > 0 else [rect]
 		var open := {}
 		for n in notches:
 			for t in n[0]:
 				open[Vector2i(t.x - rect.position.x, t.y - rect.position.y)] = true
+		var cells := {}
+		for pr in plist:
+			var pq: Rect2i = pr
+			for cy in pq.size.y:
+				for cx in pq.size.x:
+					cells[Vector2i(pq.position.x - rect.position.x + cx, pq.position.y - rect.position.y + cy)] = true
 		var groups := {}
 		var order: Array = []
-		for cy in h:
-			for cx in w:
-				if open.has(Vector2i(cx, cy)):
-					continue
-				var slope := (cy if wide else cx) < (((h if wide else w) + 1) >> 1)
-				var variant := 1 if posmod(cx * 73 + cy * 31 + id * 17, 8) == 0 else 0
-				var d: Dictionary = (lit if slope else shade)[variant]
-				_add(groups, order, d, Rect2(Vector2(cx, cy) * TILE_PX, Vector2(TILE_PX, TILE_PX)), not wide)
-		var rows := h if wide else w
-		var line := (rows >> 1) - 1 if rows % 2 == 0 else rows >> 1
-		var off := 0.5 if rows % 2 == 0 else 0.0
-		var cap: Dictionary = ridge.get("h" if wide else "v", ridge.values()[0])
-		for i in (w if wide else h):
-			var c := Vector2i(i, line) if wide else Vector2i(line, i)
-			if open.has(c):
-				continue
-			var at := Vector2(c) * TILE_PX + (Vector2(0, off * TILE_PX) if wide else Vector2(off * TILE_PX, 0))
-			_add(groups, order, cap, Rect2(at, Vector2(TILE_PX, TILE_PX)), false)
+		var done := {}
 		var cell: Vector2 = edge.cell
 		var span := cell / 224.0 * 1.75 * TILE_PX
-		for cy in h:
-			for cx in w:
-				if open.has(Vector2i(cx, cy)):
+		for pr in plist:
+			var pq: Rect2i = pr
+			var ox := pq.position.x - rect.position.x
+			var oy := pq.position.y - rect.position.y
+			var w := pq.size.x
+			var h := pq.size.y
+			var wide := w >= h
+			for cy in h:
+				for cx in w:
+					var gc := Vector2i(ox + cx, oy + cy)
+					if open.has(gc) or done.has(gc):
+						continue
+					done[gc] = true
+					var slope := (cy if wide else cx) < (((h if wide else w) + 1) >> 1)
+					var variant := 1 if posmod(gc.x * 73 + gc.y * 31 + id * 17, 8) == 0 else 0
+					var d: Dictionary = (lit if slope else shade)[variant]
+					_add(groups, order, d, Rect2(Vector2(gc) * TILE_PX, Vector2(TILE_PX, TILE_PX)), not wide)
+			var rows := h if wide else w
+			var line := (rows >> 1) - 1 if rows % 2 == 0 else rows >> 1
+			var off := 0.5 if rows % 2 == 0 else 0.0
+			var cap: Dictionary = ridge.get("h" if wide else "v", ridge.values()[0])
+			for i in (w if wide else h):
+				var c := Vector2i(ox + i, oy + line) if wide else Vector2i(ox + line, oy + i)
+				if open.has(c):
 					continue
-				var mask := 0
-				if cy == 0 or open.has(Vector2i(cx, cy - 1)):
-					mask |= 1
-				if cx == w - 1 or open.has(Vector2i(cx + 1, cy)):
-					mask |= 2
-				if cy == h - 1 or open.has(Vector2i(cx, cy + 1)):
-					mask |= 4
-				if cx == 0 or open.has(Vector2i(cx - 1, cy)):
-					mask |= 8
-				if mask == 0:
-					continue
-				var src := Rect2(Rect2(edge.rect).position + Vector2(mask % int(edge.cols), mask / int(edge.cols)) * cell, cell)
-				_add(groups, order, edge, Rect2(Vector2(cx, cy) * TILE_PX - Vector2(0.25, 0.25) * TILE_PX, span), false, src)
+				var at := Vector2(c) * TILE_PX + (Vector2(0, off * TILE_PX) if wide else Vector2(off * TILE_PX, 0))
+				_add(groups, order, cap, Rect2(at, Vector2(TILE_PX, TILE_PX)), false)
+		for gc in done:
+			var cx: int = gc.x
+			var cy: int = gc.y
+			var mask := 0
+			if not cells.has(Vector2i(cx, cy - 1)) or open.has(Vector2i(cx, cy - 1)):
+				mask |= 1
+			if not cells.has(Vector2i(cx + 1, cy)) or open.has(Vector2i(cx + 1, cy)):
+				mask |= 2
+			if not cells.has(Vector2i(cx, cy + 1)) or open.has(Vector2i(cx, cy + 1)):
+				mask |= 4
+			if not cells.has(Vector2i(cx - 1, cy)) or open.has(Vector2i(cx - 1, cy)):
+				mask |= 8
+			if mask == 0:
+				continue
+			var src := Rect2(Rect2(edge.rect).position + Vector2(mask % int(edge.cols), mask / int(edge.cols)) * cell, cell)
+			_add(groups, order, edge, Rect2(Vector2(cx, cy) * TILE_PX - Vector2(0.25, 0.25) * TILE_PX, span), false, src)
 		_batches = []
 		for key in order:
 			_batches.append(groups[key])

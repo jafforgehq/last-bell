@@ -3,12 +3,21 @@
 ## `TownGen.make(seed)` does it in one go; `var g := TownGen.new(); g.begin(seed); while not g.step(8.0): await frame; g.result()` does it a few
 ## milliseconds a frame (a loading card; the web build is 3 to 4 times slower than the desktop's ~0.3 s). The same seed always gives the same town (`TownGen.digest`).
 ##
-## LAYOUT. A street grid: a 4 tile road every 32 tiles (road k, x or y = 28 + 32 k .. +4), a 28 x 28 block between two roads with a one tile sidewalk ring
-## and two rows of lots (the north row faces the north street, the south row the south one). Each lot is built on a SMALL LOCAL SiteCanvas
-## (scripts/raid/site_canvas.gd, the generator of the raid sites: walls, doors, named rooms, furniture, containers) and stamped into the map. A
-## canvas of the town's size cannot be used: `SiteCanvas._put` floods the whole canvas twice per prop. Houses are the templates of KINDS (small 8x7
-## with 3 rooms, medium 10x8 with 4, terrace 6x8 with 2, corner shop 10x9 with 2), some with a fenced yard. Roofs are NOT in the ground: the view
-## draws one roof per house over `rect` (scripts/town/town_roofs.gd) and hides it when the avatar is inside.
+## LAYOUT (TOWNGEN). The town is a PLACE, not a grid: scripts/town/town_layout.gd makes a district map (suburb, oldtown, main street, industrial, civic, park, and the farms and
+## woods of the edge ring), a street network from a BSP (one main avenue 6 wide through the middle, streets of 4 at irregular pitches, T-junctions, streets that run out of the town,
+## cul-de-sacs with a turning circle, alleys behind the terraces), the blocks between the streets (each with a one tile sidewalk ring) and the lots in them (a row of lots faces its
+## north or its south street, so a house's `front` is always "N" or "S"). scripts/town/building_gen.gd builds each lot on a SMALL LOCAL SiteCanvas (scripts/raid/site_canvas.gd, the
+## generator of the raid sites: walls, doors, named rooms, furniture, containers; a canvas of the town's size cannot be used, `SiteCanvas._put` floods the whole canvas twice per
+## prop): a house of rectangles of outer walls ("parts": an L, a T, a U, a bungalow and its garage, a church with a tower...), partitioned into rooms with doors, furnished, with a
+## yard, a path, a driveway, a fence; shops, flats, a diner, warehouses, a garage, a scrapyard, the church, the fire and police stations, a clinic, a school, farms, sheds. TownGen
+## stamps them into the map. A lot with a shed has a second House (the shed: two rooms). Every house has at least two rooms and one exterior door.
+## Roofs are NOT in the ground: the view draws one roof per PART of each house (scripts/render/house_view.gd) and hides it when the avatar is inside.
+## NEW KEYS (added to the contract below, nothing changed): result "districts" {"names", "map" (a byte per tile: 1 + the index in names, 0 for the streets), "blocks", "area", "ring"},
+## "lots" [{"id", "rect", "front", "district", "kind", "block", "street", "house" (or -1), "start"}], "landmarks" [{"kind": "bell_tower"|"supermarket"|"school"|"fire_station"|
+## "police"|"clinic"|"market"|"park"|"cul_de_sac", "pos", "house"}]; `streets` "roads" [{"id", "name", "dir": "h"|"v", "rect", "kind": "avenue"|"street"|"cul"|"alley", "through"}],
+## "avenue" (index); house "parts", "district" (suburb|oldtown|main|industrial|civic|park|edge), "type" (residential|commercial|industrial|civic|farm|outbuilding), "yard" (= lot),
+## "front_yard", "back_yard" (rects), "yard_type" (lawn|garden|bare|overgrown), "wall" (terrain name of its walls), "roof" (0 terracotta, 1 slate, 2 shingle), "state" (intact|ruined|
+## burnt), "boarded", "barricaded", "drive" (a rect or empty), "landmark", "street", "number", "main" (false for a shed).
 ##
 ## THE RESULT, a Dictionary (tile coordinates everywhere; Rect2i is {position, size}, a Vector2i a tile, a Vector2 a point in tiles):
 ##   "seed", "version" (1), "size" (Vector2i 192 x 192)
@@ -19,12 +28,13 @@
 ##   "dead"        [DeadRecord]  (data only: the DormantDead field turns them into real dead near the avatar)
 ##   "start"       {"house": id, "pos": Vector2 (a free tile of the roomiest room), "room": room index}
 ##   "rescue"      [{"house", "pos": Vector2 (where the survivor waits), "room", "ring": 1..3, "dist": from the start house}] 12 candidates, near to far
-##   "tile_house"  PackedInt32Array W*H: the id of the house whose walls' rectangle holds the tile, else -1   (which roof to lift, "am I inside?")
+##   "tile_house"  PackedInt32Array W*H: the id of the house one of whose parts holds the tile (walls and floor), else -1   (which roof to lift, "am I inside?")
 ##   "tile_room"   PackedInt32Array W*H: the index of the room whose floor holds the tile, else -1 (a wall, a doorway, outside)
-##   "streets"     {"pitch": 32, "block": 28, "road": 4, "names_x": [...], "names_y": [...]}  (road k runs along x = 28 + 32 k for names_x[k], along y for names_y[k])
+##   "streets"     {"pitch": 32, "block": 28, "road": 4 (the old grid's numbers, kept), "names_x": [names of the north-south streets], "names_y": [names of the east-west ones], "roads", "avenue"}
 ##   "stats"       counts and the milliseconds each phase took
 ##
-##   House      {"id", "kind": "small"|"medium"|"terrace"|"shop", "address": "14 Elm Street", "block": Vector2i, "rect": Rect2i (the outer walls = the footprint),
+##   House      {"id", "kind": "small"|"medium"|"terrace"|"shop"|... (the building program, see scripts/town/building_plans.gd), "address": "14 Elm Street", "block": Vector2i (x: the block's
+##               index), "rect": Rect2i (the bounding box of the outer walls), "parts": [Rect2i] (the rectangles of outer walls that make the footprint: one roof each),
 ##               "lot": Rect2i, "front": "N"|"S" (the side its front door is on), "fenced": bool, "door": Vector2i (the tile outside the front door),
 ##               "doors": [Door], "rooms": [room indexes], "containers": [container ids], "dead": [record indexes] (the ones that stand in it at the start)}
 ##   Door       {"tiles": [Vector2i] (the doorway: no wall, two wide, one for a small interior door), "exterior": bool, "side": "N"|"S"|"E"|"W" (exterior: the wall
@@ -39,30 +49,30 @@ extends RefCounted
 const GD := preload("res://scripts/game_data.gd")
 const Canvas := preload("res://scripts/raid/site_canvas.gd")
 const SiteGen := preload("res://scripts/raid/site_gen.gd")
+const TownLayout := preload("res://scripts/town/town_layout.gd")
+const BuildingGen := preload("res://scripts/town/building_gen.gd")
+const Districts := preload("res://scripts/town/town_districts.gd")
+const Streetscape := preload("res://scripts/town/town_streetscape.gd")
 
 ## The size of the full town (6 blocks a side); `make(seed, {"blocks": n})` makes a smaller one (2: 64 x 64, for tests).
 const DEFAULT_SIZE := 192
 const DEFAULT_BLOCKS := 6
+## (The streets are no longer a grid: PITCH is the size of one "block" of `opts.blocks`, the average pitch; see scripts/town/town_layout.gd.)
 const PITCH := 32
 const BLOCK := 28
 const ROAD := 4
 const EDGE := 2
-## Rows of lots inside a block (block-local y): the north row faces the north street, the south row the south one.
-const NORTH_ROW := Vector2i(1, 13)
-const SOUTH_ROW := Vector2i(14, 27)
 const VERSION := 1
-## The house templates: the outer size, the walls included.
-const KINDS := {
-	"small": Vector2i(8, 7),
-	"medium": Vector2i(10, 8),
-	"terrace": Vector2i(6, 8),
-	"shop": Vector2i(10, 9),
-}
-const STREET_X := ["Elm", "Oak", "Birch", "Cedar", "Maple", "Pine"]
-const STREET_Y := ["First", "Second", "Third", "Fourth", "Fifth", "Sixth"]
 ## Dead: how many (the owner's 600 to 800), the share that is in or beside the houses, and how many guard each house of the rescue list.
 const DEAD_TOTAL := 700
 const DEAD_NEAR_HOUSES := 0.6
+## How many dead stand in a building at the start, [least, most], by its kind (the houses one to four; the shops, the flats, the works and the civic buildings more).
+const DEAD_BY_KIND := {
+	"small": [1, 3], "cottage": [1, 2], "medium": [1, 3], "bungalow": [1, 3], "lhouse": [1, 4], "thouse": [1, 4], "uhouse": [2, 4], "twowing": [1, 4], "terrace": [1, 2], "terrace_ext": [1, 3],
+	"rowshop": [1, 3], "kiosk": [0, 1], "cornershop": [2, 3], "shop": [2, 4], "pharmacy": [2, 4], "bakery": [2, 4], "hardware": [2, 4], "diner": [3, 5], "bank": [2, 4], "office": [2, 4],
+	"apartments": [4, 8], "supermarket": [6, 10], "library": [2, 4], "clinic": [4, 7], "fire_station": [3, 5], "police": [3, 5], "church": [3, 6], "school": [4, 8],
+	"warehouse": [5, 9], "garage": [2, 4], "workshop": [2, 4], "scrapyard": [1, 2], "containers": [1, 2], "farmhouse": [1, 3], "barn": [1, 3], "shed": [0, 1],
+}
 const RESCUE_COUNT := 12
 
 # ------------------------------------------------------------------ the build --
@@ -91,6 +101,12 @@ var _containers: Array = []
 var _rooms_dict := {}
 var _marks: Array = []
 var _lot_index := 0
+## TOWNGEN: the layout (scripts/town/town_layout.gd), the building painter, the house of each lot (-1: none), the landmarks, whether the lot before was fenced.
+var _layout: Dictionary = {}
+var _builder
+var _lot_house: Array = []
+var _landmarks: Array = []
+var _prev_fenced := false
 var _street_cv
 var _street_objs := 0
 var _ms := {}
@@ -120,8 +136,13 @@ func begin(seed_in: int, opts_in: Dictionary = {}) -> void:
 	_terrain_types = _base.terrainTypes.duplicate(true)
 	for k in _lay.terrain:
 		_terrain_types[k] = {"id": int(_lay.terrain[k].id), "file": String(_lay.terrain[k].file)}
+	var extra: Dictionary = Districts.terrains()
+	for k in extra.types:
+		_terrain_types[k] = extra.types[k]
 	for k in _terrain_types:
 		_tids[k] = int(_terrain_types[k].id)
+	for k in extra.alias:
+		_tids[k] = int(_tids[String(extra.alias[k])])
 	_blocks = clampi(int(opts_in.get("blocks", DEFAULT_BLOCKS)), 2, 6)
 	_size = _blocks * PITCH
 	_start_block = Vector2i(_blocks / 2, _blocks / 2)
@@ -134,7 +155,7 @@ func begin(seed_in: int, opts_in: Dictionary = {}) -> void:
 
 ## How far along the build is, 0 to 1 (a loading card's bar).
 func progress() -> float:
-	var n_blocks := float((_size / PITCH) * (_size / PITCH))
+	var n_blocks := float(maxi(1, _layout.lots.size() if _layout.has("lots") else (_size / PITCH) * (_size / PITCH)))
 	match _phase:
 		0:
 			return 0.0
@@ -159,7 +180,7 @@ func step(budget_ms: float) -> bool:
 				_phase = 1
 			1:
 				_blocks_until(t0, budget_ms)
-				if _block >= (_size / PITCH) * (_size / PITCH):
+				if _block >= _layout.lots.size():
 					_phase = 2
 			2:
 				_edge_and_furniture()
@@ -187,186 +208,85 @@ func _tick(name: String, t_in: int) -> void:
 
 func _streets() -> void:
 	var t0 := Time.get_ticks_usec()
-	var road := int(_tids.ASPHALT)
-	var walk := int(_tids.SIDEWALK)
-	for y in _size:
-		var ly := y % PITCH
-		for x in _size:
-			var lx := x % PITCH
-			var i := y * _size + x
-			if lx >= BLOCK or ly >= BLOCK:
-				_terrain[i] = road
-			elif lx == 0 or lx == BLOCK - 1 or ly == 0 or ly == BLOCK - 1:
-				_terrain[i] = walk
-	var gaps: Array = []
-	for j in _size / PITCH:
-		gaps.append([float(BLOCK + PITCH * j), float(PITCH * (j + 1))])
-	for k in _size / PITCH:
-		var c := float(PITCH * k + BLOCK) + float(ROAD) / 2.0
-		_marks.append({"kind": "lanes", "cx": float(_size) / 2.0, "cy": c, "w": float(_size), "h": float(ROAD), "dir": "h", "gaps": gaps.duplicate(true), "seed": 1000 + k})
-		_marks.append({"kind": "lanes", "cx": c, "cy": float(_size) / 2.0, "w": float(ROAD), "h": float(_size), "dir": "v", "gaps": gaps.duplicate(true), "seed": 2000 + k})
+	var lg := TownLayout.new()
+	_layout = lg.make(seed_value, _size, _tids, opts)
+	_terrain = _layout.terrain
+	_marks = _layout.marks
 	_street_cv = Canvas.new()
 	_street_cv.setup(_size, _size, seed_value + 5, _lay.props, _tids, {})
+	_builder = BuildingGen.new()
+	_builder.setup(_lay.props, _tids)
 	_tick("streets", t0)
 
 
 # ------------------------------------------------------------------------ lots --
 
 func _blocks_until(t0: int, budget_ms: float) -> void:
-	var n := _size / PITCH
-	while _block < n * n:
-		_one_block(_block % n, _block / n)
+	var n: int = _layout.lots.size()
+	while _block < n:
+		_one_lot(_block)
 		_block += 1
 		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
 			return
 
 
-func _one_block(bx: int, by: int) -> void:
-	var t_block := Time.get_ticks_usec()
-	var ox := bx * PITCH
-	var oy := by * PITCH
-	for row in 2:
-		var span: Vector2i = NORTH_ROW if row == 0 else SOUTH_ROW
-		var front := "N" if row == 0 else "S"
-		var x := 1
-		var prev_fenced := false
-		while x < BLOCK - 1:
-			var remaining := BLOCK - 1 - x
-			# the start house: the first lot of the south row of the middle block, a medium house with two tiles to spare all round, no fence,
-			# no tree, no prop, no mark on its border and the tile inside it (a ring of free ground: the perimeter of the base goes there)
-			var is_start: bool = row == 1 and x == 1 and bx == _start_block.x and by == _start_block.y
-			var pick := "medium" if is_start else _pick_kind(remaining, x == 1)
-			if pick == "":
-				break
-			# a lot left empty now and then: grass and a tree or two
-			if not is_start and _rng.randf() < 0.07 and remaining > 8:
-				x += mini(remaining, _rng.randi_range(3, 5))
-				continue
-			var hs: Vector2i = KINDS[pick]
-			var lot_w := hs.x if pick == "terrace" else hs.x + 2
-			if is_start:
-				lot_w = hs.x + 4
-			lot_w = mini(lot_w, remaining)
-			var lot := Rect2i(ox + x, oy + span.x, lot_w, span.y - span.x)
-			# (no fence on the north row of the top blocks: its gate would be on the world's edge, and the yard would be shut in)
-			var fenced: bool = pick != "terrace" and not prev_fenced and _rng.randf() < 0.35 and not (by == 0 and row == 0) and not is_start
-			var built := _build_lot(seed_value * 100003 + _lot_index, pick, lot, front, fenced, is_start)
-			if is_start:
-				_clear_rect = lot
-				_start_house = _houses.size()
-			_stamp(built, lot, pick, front, fenced, Vector2i(bx, by), row)
-			_lot_index += 1
-			x += lot_w
-			prev_fenced = fenced
-	_tick("blocks", t_block)
-
-
-## Which template goes in the next lot: it must fit in `remaining` tiles of the row.
-func _pick_kind(remaining: int, first: bool) -> String:
-	var choices: Array = []
-	var weights: Array = []
-	for k in KINDS:
-		var hs: Vector2i = KINDS[k]
-		var need := hs.x if k == "terrace" else hs.x + 2
-		if need > remaining:
-			continue
-		choices.append(k)
-		weights.append({"small": 0.38, "medium": 0.3, "terrace": 0.26, "shop": 0.06 if first or remaining <= 12 else 0.0}[k])
-	if choices.is_empty():
-		return ""
-	var total := 0.0
-	for w in weights:
-		total += float(w)
-	if total <= 0.0:
-		return String(choices[0])
-	var at := _rng.randf() * total
-	for i in choices.size():
-		at -= float(weights[i])
-		if at < 0.0:
-			return String(choices[i])
-	return String(choices[choices.size() - 1])
-
-
-## One lot on a canvas of its own (the lot's size, no more): the yard, an optional fence, the house with its rooms, furniture and trees.
-func _build_lot(lot_seed: int, kind: String, lot: Rect2i, front: String, fenced: bool, start: bool = false) -> Dictionary:
-	var lw := lot.size.x
-	var lh := lot.size.y
-	var hs: Vector2i = KINDS[kind]
-	var cv := Canvas.new()
-	cv.setup(lw, lh, lot_seed, _lay.props, _tids, {})
+## Builds lot `i` of the layout (a house, a shop, a yard...) and stamps it into the map. The start lot: a medium house with two tiles to spare all round, no fence, no tree, no prop, no
+## mark on its border and the tile inside it (a ring of free ground: the perimeter of the base goes there).
+func _one_lot(i: int) -> void:
+	var t_lot := Time.get_ticks_usec()
+	var lot: Dictionary = _layout.lots[i]
 	var rng := RandomNumberGenerator.new()
-	rng.seed = lot_seed * 31 + 7
-	var hx := 0 if kind == "terrace" else (lw - hs.x) >> 1    # (the start lot is four wider than its house: two tiles each side)
-	var hy := 3 if front == "N" else lh - 3 - hs.y
-	var back := "S" if front == "N" else "N"
-	var fat := rng.randi_range(2, maxi(2, hs.x - 4))
-	var bat := rng.randi_range(1, maxi(1, hs.x - 3))
-	var ops: Array = []
-	if fenced:
-		ops.append({"op": "fence", "rect": [0, 0, lw, lh], "t": "WALL_METAL", "gates": [{"side": front, "at": clampi(hx + fat - 1, 1, lw - 5), "w": 4}]})
-	var doors: Array = [{"side": front, "at": fat, "w": 2}, {"side": back, "at": bat, "w": 2}]
-	if kind == "shop":
-		doors = [{"side": front, "at": mini(fat, 3), "w": 2}, {"side": back, "at": hs.x - 3, "w": 2}]
-	ops.append({"op": "building", "rect": [hx, hy, hs.x, hs.y], "wall": "WALL_BRICK", "floor": "WOOD", "id": "h", "doors": doors})
-	ops.append_array(_interior(kind))
-	if kind != "terrace" and not start:
-		ops.append({"op": "trees", "rect": [0, 0, lw, lh], "n": {"r": [0, 2]}, "on": ["GRASS"], "gap": 3})
-	if not start:
-		ops.append({"op": "decals", "rect": [0, 0, lw, lh], "kinds": ["papers", "stain", "blood", "crack"], "n": {"r": [1, 3]}})
-	var door := Vector2i(hx + (fat if kind != "shop" else mini(fat, 3)), hy - 1 if front == "N" else hy + hs.y)
-	cv.entry = door
-	cv.run({"ops": ops})
-	return {"cv": cv, "house": Rect2i(hx, hy, hs.x, hs.y), "door": door, "reach": cv.flood()}
+	rng.seed = seed_value * 100003 + i * 7919 + 11
+	var district := String(lot.district)
+	var kind := String(lot.kind)
+	var rect: Rect2i = lot.rect
+	var start: bool = bool(lot.start)
+	var residential: bool = Districts.TYPE_OF.get(kind, "") == "residential"
+	var spec := {"kind": kind, "district": district, "rect": rect, "front": String(lot.front), "plan": lot.plan, "seed": seed_value * 100003 + i, "start": start,
+		"wall": Districts.wall_for(district, rng), "fenced": false, "yard": "lawn", "ruin": false, "barricade": false, "boarded": false}
+	if district == Districts.SUBURB or district == Districts.EDGE:
+		var yard_roll := rng.randf()
+		spec.yard = "lawn" if yard_roll < (0.5 if district == Districts.SUBURB else 0.3) else ("garden" if yard_roll < 0.7 else ("bare" if yard_roll < 0.85 else "overgrown"))
+	if start:
+		spec.yard = "lawn"
+		spec.wall = "WALL_BRICK"
+	else:
+		var plan_d: Dictionary = lot.plan
+		var margin: int = rect.size.x - (int(Vector2i(plan_d.box).x) if not plan_d.is_empty() else rect.size.x)
+		if kind == "scrapyard" or kind == "containers":
+			spec.fenced = true
+		elif (kind == "warehouse" or kind == "garage") and rng.randf() < 0.5:
+			spec.fenced = true
+		elif (district == Districts.SUBURB or kind == "farmhouse") and kind != "terrace" and not _prev_fenced and margin >= 2 and rng.randf() < 0.3:
+			spec.fenced = true
+		if residential and not plan_d.is_empty() and Array(plan_d.parts).size() >= 2 and rng.randf() < 0.07:
+			spec.ruin = true
+		if residential and rng.randf() < 0.08:
+			spec.barricade = true
+		if residential and rng.randf() < 0.1:
+			spec.boarded = true
+		if residential and not bool(spec.ruin) and rng.randf() < 0.04:
+			spec["burnt"] = true
+		if district == Districts.SUBURB and kind != "terrace" and rng.randf() < 0.4:
+			spec["shed"] = true
+		elif district == Districts.EDGE and (kind == "farmhouse" or kind == "small" or kind == "medium") and rng.randf() < 0.6:
+			spec["shed"] = true
+	_prev_fenced = bool(spec.fenced)
+	var built: Dictionary = _builder.build(spec)
+	if start:
+		_clear_rect = rect
+	_stamp_lot(built, lot, spec)
+	_tick("blocks", t_lot)
 
 
-## The rooms and the furniture of a template, as site-canvas ops. The building's inner rectangle is "h".
-static func _interior(kind: String) -> Array:
-	var ops: Array = []
-	match kind:
-		"small":
-			# 6 x 5 inside: a living room and, behind a wall, a bedroom and a bathroom
-			ops.append({"op": "split", "id": "h", "dir": "v", "at": 3, "into": ["w", "e"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [1, 2]}, "w": 2}], "names": ["living room", "side"], "floors": ["WOOD", "WOOD"]})
-			ops.append({"op": "split", "id": "e", "dir": "h", "at": 2, "into": ["en", "es"], "wall": "WALL_PLASTER", "doors": [{"at": 0, "w": 1}], "names": ["bedroom", "bathroom"], "floors": ["WOOD", "KITCHEN"]})
-			ops.append({"op": "line", "rect": "w", "side": "N", "kinds": ["fridge", "stove", "counter2"], "gap": [0, 0], "container": 0.7, "n": 2})
-			ops.append({"op": "place", "kind": "shelf_s", "in": "w", "anchor": "SW", "container": true})
-			ops.append({"op": "place", "kind": "rug", "in": "w", "anchor": "C", "p": 0.7})
-			ops.append({"op": "place", "kind": "bed", "in": "en", "anchor": "NW"})
-			ops.append({"op": "place", "kind": "cabinet", "in": "es", "anchor": "NE", "container": true})
-		"medium":
-			# 8 x 6 inside: bedroom, living room, bathroom, kitchen
-			ops.append({"op": "split", "id": "h", "dir": "v", "at": 4, "into": ["w", "e"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [1, 3]}, "w": 2}], "names": ["west", "east"], "floors": ["WOOD", "WOOD"]})
-			ops.append({"op": "split", "id": "w", "dir": "h", "at": 3, "into": ["wn", "ws"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [0, 1]}, "w": 2}], "names": ["bedroom", "living room"], "floors": ["WOOD", "WOOD"]})
-			ops.append({"op": "split", "id": "e", "dir": "h", "at": 3, "into": ["en", "es"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [0, 1]}, "w": 1}], "names": ["bathroom", "kitchen"], "floors": ["KITCHEN", "KITCHEN"]})
-			ops.append({"op": "place", "kind": "bed", "in": "wn", "anchor": "NW", "dx": {"r": [0, 1]}})
-			ops.append({"op": "place", "kind": "shelf_s", "in": "wn", "anchor": "NE", "container": true})
-			ops.append({"op": "place", "kind": "lamp", "in": "wn", "anchor": "SW"})
-			ops.append({"op": "place", "kind": "rug", "in": "ws", "anchor": "C"})
-			ops.append({"op": "line", "rect": "ws", "side": "S", "kinds": ["bench", "shelf_s", "desk"], "gap": [0, 1], "container": 0.5, "n": 2})
-			ops.append({"op": "line", "rect": "es", "side": "S", "kinds": ["fridge", "counter2", "stove"], "gap": [0, 0], "container": true, "n": 2})
-			ops.append({"op": "place", "kind": "cabinet", "in": "en", "anchor": "NE", "container": true})
-		"terrace":
-			# 4 x 6 inside: a kitchen behind a front room
-			ops.append({"op": "split", "id": "h", "dir": "h", "at": 3, "into": ["tn", "ts"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [1, 2]}, "w": 2}], "names": ["kitchen", "front room"], "floors": ["KITCHEN", "WOOD"]})
-			ops.append({"op": "line", "rect": "tn", "side": "N", "kinds": ["fridge", "counter2", "stove"], "gap": [0, 0], "container": true, "n": 3})
-			ops.append({"op": "line", "rect": "ts", "side": "S", "kinds": ["bench", "shelf_s", "bed"], "gap": [0, 1], "container": 0.5, "n": 2})
-			ops.append({"op": "place", "kind": "lamp", "in": "ts", "anchor": "SE"})
-		_:
-			# the corner shop, 8 x 7 inside: a shop floor and a storeroom
-			ops.append({"op": "split", "id": "h", "dir": "v", "at": 5, "into": ["a", "b"], "wall": "WALL_PLASTER", "doors": [{"at": {"r": [3, 4]}, "w": 2}], "names": ["shop floor", "storeroom"], "floors": ["LINO", "WOOD"]})
-			ops.append({"op": "rows", "rect": "a", "kinds": ["shelf"], "pitch": 3, "y0": 1, "margin": 1, "container": 0.8})
-			ops.append({"op": "line", "rect": "a", "side": "N", "kinds": ["counter3", "fridge"], "gap": [0, 0], "container": true, "n": 2})
-			ops.append({"op": "line", "rect": "b", "side": "N", "kinds": ["crate", "cans", "waterpack"], "gap": [0, 0], "container": true, "n": 3})
-	ops.append({"op": "decals", "rect": "h", "kinds": ["papers", "blood", "stain"], "n": {"r": [1, 3]}})
-	return ops
-
-
-## Copies a built lot into the town's arrays and makes its House, Rooms, Doors and Containers.
-func _stamp(built: Dictionary, lot: Rect2i, kind: String, front: String, fenced: bool, block: Vector2i, row: int) -> void:
+## Copies a built lot into the town's arrays and, when it has a building, makes its House, Rooms, Doors and Containers.
+func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 	var cv = built.cv
-	var ox := lot.position.x
-	var oy := lot.position.y
-	var lw := lot.size.x
-	var lh := lot.size.y
+	var rect: Rect2i = lot.rect
+	var ox := rect.position.x
+	var oy := rect.position.y
+	var lw := rect.size.x
+	var lh := rect.size.y
 	for y in lh:
 		for x in lw:
 			var i := (oy + y) * _size + ox + x
@@ -374,242 +294,203 @@ func _stamp(built: Dictionary, lot: Rect2i, kind: String, front: String, fenced:
 			_terrain[i] = cv.terrain[j]
 			_solid[i] = cv.solid[j]
 	for o in cv.objects:
-		o["cx"] = float(o.cx) + float(ox)
-		o["cy"] = float(o.cy) + float(oy)
+		var shift_x := 0.0
+		var shift_y := 0.0
+		# a mark on the floor (a stain, papers: one tile) is kept inside its own lot, so that it never lies over a neighbour's ground (the start lot's ring is kept bare)
+		if int(o.layer) == 1 and float(o.w) <= 1.0 and float(o.h) <= 1.0:
+			shift_x = clampf(float(o.cx), 0.5, float(lw) - 0.5) - float(o.cx)
+			shift_y = clampf(float(o.cy), 0.5, float(lh) - 0.5) - float(o.cy)
+		o["cx"] = float(o.cx) + shift_x + float(ox)
+		o["cy"] = float(o.cy) + shift_y + float(oy)
 		for pc in o.pieces:
-			pc["x"] = float(pc.x) + float(ox)
-			pc["y"] = float(pc.y) + float(oy)
+			pc["x"] = float(pc.x) + shift_x + float(ox)
+			pc["y"] = float(pc.y) + shift_y + float(oy)
 		_objects.append(o)
 	for t in cv.trees:
 		t["x"] = float(t.x) + float(ox)
 		t["y"] = float(t.y) + float(oy)
 		_trees.append(t)
-	var hr: Rect2i = built.house
-	var house_id := _houses.size()
-	var rect := Rect2i(hr.position.x + ox, hr.position.y + oy, hr.size.x, hr.size.y)
+	var buildings: Array = built.buildings
+	if buildings.is_empty():
+		_lot_house.append(-1)
+		if String(spec.kind) == "plaza" or String(spec.kind) == "park":
+			_landmarks.append({"kind": "market" if String(spec.kind) == "plaza" else "park", "house": -1, "pos": Vector2(rect.get_center())})
+		return
+	var front := String(spec.front)
+	var first_id := _houses.size()
+	_lot_house.append(first_id)
+	if bool(lot.start):
+		_start_house = first_id
+	# the rooms of every building of the lot (a room's "b" is the building it is in)
 	var room_ids: Array = []
+	var by_building: Array = []
+	var name_count: Array = []
+	for bi in buildings.size():
+		room_ids.append([])
+		name_count.append({})
 	for a in cv.areas:
 		if not bool(a.indoor):
 			continue
+		var bi := int(a.get("b", 0))
+		var house_id := first_id + bi
 		var r: Rect2i = a.rect
 		var rr := Rect2i(r.position.x + ox, r.position.y + oy, r.size.x, r.size.y)
-		var room := {"id": "h%d:%s" % [house_id, String(a.name)], "house": house_id, "name": String(a.name), "rect": rr}
-		room_ids.append(_rooms.size())
+		var nm := String(a.name)
+		var n := int(name_count[bi].get(nm, 0)) + 1
+		name_count[bi][nm] = n
+		var room := {"id": "h%d:%s" % [house_id, nm] if n == 1 else "h%d:%s_%d" % [house_id, nm, n], "house": house_id, "name": nm, "rect": rr}
+		room_ids[bi].append(_rooms.size())
 		_rooms.append(room)
 		_rooms_dict[String(room.id)] = [rr.position.x, rr.position.y, rr.end.x, rr.end.y]
-	var door: Vector2i = built.door
+	# the containers: only what is inside the walls can be searched (the search asks the house the avatar stands in)
 	var reach: PackedByteArray = built.reach
 	var rng := RandomNumberGenerator.new()
-	rng.seed = _lot_index * 977 + 13
+	rng.seed = int(lot.id) * 977 + 13 + seed_value * 31
 	var affinity: Dictionary = _lay.affinity
-	var stocks := ["food", "water", "scrap", "ammo", "meds"]
 	var cont_ids: Array = []
+	for bi in buildings.size():
+		cont_ids.append([])
 	for c in cv.cands:
-		if rng.randf() > 0.8:
+		if rng.randf() > 0.85:
 			continue
 		var tile: Vector2i = SiteGen._stand_tile(cv, reach, c, rng)
 		if tile.x < 0:
 			continue
+		var tt := Vector2i(tile.x + ox, tile.y + oy)
+		var room_idx := -1
+		var owner := -1
+		for bi in buildings.size():
+			for ri in room_ids[bi]:
+				if Rect2i(_rooms[ri].rect).has_point(tt):
+					room_idx = ri
+					owner = bi
+		if room_idx < 0:
+			continue
+		var weights: Dictionary = BuildingGen.loot_weights(String(_rooms[room_idx].name), String(buildings[owner].kind))
 		var loot := {}
 		for k in 2:
-			var stock: String = stocks[rng.randi() % stocks.size()]
+			var stock := _pick_stock(weights, rng)
 			if SiteGen._fit(c, stock, affinity) > 0.0:
 				loot[stock] = int(loot.get(stock, 0)) + rng.randi_range(1, 3)
 		if loot.is_empty():
 			continue
-		var room_idx := -1
-		for ri in room_ids:
-			if Rect2i(_rooms[ri].rect).has_point(Vector2i(tile.x + ox, tile.y + oy)):
-				room_idx = ri
-		var cid := "h%dc%d" % [house_id, cont_ids.size()]
-		cont_ids.append(cid)
+		var cid := "h%dc%d" % [first_id + owner, cont_ids[owner].size()]
+		cont_ids[owner].append(cid)
 		_containers.append({
-			"id": cid, "house": house_id, "room": room_idx,
-			"pos": Vector2(float(tile.x + ox) + 0.5, float(tile.y + oy) + 0.5),
+			"id": cid, "house": first_id + owner, "room": room_idx,
+			"pos": Vector2(float(tt.x) + 0.5, float(tt.y) + 0.5),
 			"at": Vector2(float(c.obj.cx), float(c.obj.cy)),
 			"kind": String(c.kind), "loot": loot, "search_s": 4.0,
 		})
-	var street_k := clampi((block.y - 1) if row == 0 else block.y, 0, _size / PITCH - 1)
-	_houses.append({
-		"id": house_id, "kind": kind,
-		"address": "%d %s Street" % [lot.position.x, STREET_Y[street_k]],
-		"block": block, "rect": rect, "lot": lot, "front": front, "fenced": fenced,
-		"door": Vector2i(door.x + ox, door.y + oy),
-		"doors": _doors_of(rect),
-		"rooms": room_ids, "containers": cont_ids, "dead": [],
-	})
+	var roof := Districts.roof_for(String(lot.district), rng)
+	for bi in buildings.size():
+		var bd: Dictionary = buildings[bi]
+		var kind := String(bd.kind)
+		var box: Rect2i = bd.box
+		var front_h := box.position.y - rect.position.y if front == "N" else rect.end.y - box.end.y
+		var front_yard := Rect2i(rect.position.x, rect.position.y, rect.size.x, front_h) if front == "N" else Rect2i(rect.position.x, box.end.y, rect.size.x, front_h)
+		var back_yard := Rect2i(rect.position.x, box.end.y, rect.size.x, rect.end.y - box.end.y) if front == "N" else Rect2i(rect.position.x, rect.position.y, rect.size.x, box.position.y - rect.position.y)
+		var door: Vector2i = bd.door
+		var house := {
+			"id": first_id + bi, "kind": kind,
+			"address": "%d %s" % [int(lot.number) + bi * 2, String(lot.street)],
+			"block": Vector2i(int(lot.block), 0), "rect": box, "parts": bd.parts, "lot": rect, "front": front, "fenced": bool(spec.fenced),
+			"door": door,
+			"doors": _doors_of(bd.parts),
+			"rooms": room_ids[bi], "containers": cont_ids[bi], "dead": [],
+			"district": String(lot.district), "type": String(Districts.TYPE_OF.get(kind, "residential")), "yard": rect, "front_yard": front_yard, "back_yard": back_yard,
+			"yard_type": String(spec.yard), "wall": String(spec.wall), "roof": roof, "state": String(bd.state),
+			"boarded": bool(spec.get("boarded", false)), "barricaded": bool(spec.get("barricade", false)) and bi == 0, "drive": bd.drive, "landmark": String(bd.landmark),
+			"street": String(lot.street), "number": int(lot.number), "main": bi == 0,
+		}
+		if String(bd.landmark) != "":
+			# the bell tower is the first part of the church: the landmark stands on it
+			var tower: Rect2i = Array(bd.parts)[0]
+			_landmarks.append({"kind": String(bd.landmark), "house": first_id + bi, "pos": Vector2(tower.get_center())})
+		elif bi == 0 and kind in ["supermarket", "school", "fire_station", "police", "clinic"]:
+			_landmarks.append({"kind": kind, "house": first_id + bi, "pos": Vector2(box.get_center())})
+		_houses.append(house)
 
 
-## The doorways of a building: runs of door tiles in its rectangle (DOOR_WOOD), exterior ones on the ring.
-func _doors_of(rect: Rect2i) -> Array:
+static func _pick_stock(weights: Dictionary, rng: RandomNumberGenerator) -> String:
+	var total := 0.0
+	for k in weights:
+		total += float(weights[k])
+	var at := rng.randf() * total
+	for k in weights:
+		at -= float(weights[k])
+		if at < 0.0:
+			return String(k)
+	return "scrap"
+
+
+## The doorways of a building: runs of door tiles in its parts (DOOR_WOOD); a doorway with open ground (outside every part) on one side is an exterior door of that wall.
+func _doors_of(parts: Array) -> Array:
 	var door_t := int(_tids.DOOR_WOOD)
 	var seen := {}
 	var out: Array = []
-	for y in range(rect.position.y, rect.end.y):
-		for x in range(rect.position.x, rect.end.x):
-			if _terrain[y * _size + x] != door_t or seen.has(Vector2i(x, y)):
-				continue
-			var tiles: Array = [Vector2i(x, y)]
-			seen[Vector2i(x, y)] = true
-			# a run along x, else along y
-			var horiz := x + 1 < rect.end.x and _terrain[y * _size + x + 1] == door_t
-			var vert := y + 1 < rect.end.y and _terrain[(y + 1) * _size + x] == door_t
-			var cx := x
-			var cy := y
-			while horiz and cx + 1 < rect.end.x and _terrain[cy * _size + cx + 1] == door_t:
-				cx += 1
-				tiles.append(Vector2i(cx, cy))
-				seen[Vector2i(cx, cy)] = true
-			while not horiz and vert and cy + 1 < rect.end.y and _terrain[(cy + 1) * _size + cx] == door_t:
-				cy += 1
-				tiles.append(Vector2i(cx, cy))
-				seen[Vector2i(cx, cy)] = true
-			var first: Vector2i = tiles[0]
-			var side := ""
-			var out_tile: Vector2i
-			var in_tile: Vector2i
-			var exterior := false
-			if first.y == rect.position.y and not (not horiz and vert):
-				side = "N"
-				exterior = true
-				out_tile = Vector2i(first.x, first.y - 1)
-				in_tile = Vector2i(first.x, first.y + 1)
-			elif first.y == rect.end.y - 1 and not (not horiz and vert):
-				side = "S"
-				exterior = true
-				out_tile = Vector2i(first.x, first.y + 1)
-				in_tile = Vector2i(first.x, first.y - 1)
-			elif first.x == rect.position.x:
-				side = "W"
-				exterior = true
-				out_tile = Vector2i(first.x - 1, first.y)
-				in_tile = Vector2i(first.x + 1, first.y)
-			elif first.x == rect.end.x - 1:
-				side = "E"
-				exterior = true
-				out_tile = Vector2i(first.x + 1, first.y)
-				in_tile = Vector2i(first.x - 1, first.y)
-			elif horiz:
-				side = "H"
-				out_tile = Vector2i(first.x, first.y - 1)
-				in_tile = Vector2i(first.x, first.y + 1)
-			else:
-				side = "V"
-				out_tile = Vector2i(first.x - 1, first.y)
-				in_tile = Vector2i(first.x + 1, first.y)
-			out.append({"tiles": tiles, "exterior": exterior, "side": side, "out": out_tile, "in": in_tile})
+	for pr in parts:
+		var rect: Rect2i = pr
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				if _terrain[y * _size + x] != door_t or seen.has(Vector2i(x, y)):
+					continue
+				var p := Vector2i(x, y)
+				# which way the wall runs: a doorway in a wall along x has wall (or doorway) to its west and east
+				var horiz_wall := _wallish(x - 1, y) and _wallish(x + 1, y)
+				var vert_wall := _wallish(x, y - 1) and _wallish(x, y + 1)
+				if horiz_wall and vert_wall:
+					horiz_wall = _terrain[y * _size + x + 1] == door_t or _terrain[y * _size + x - 1] == door_t
+				elif not horiz_wall and not vert_wall:
+					horiz_wall = true
+				var tiles: Array = [p]
+				seen[p] = true
+				var step := Vector2i(1, 0) if horiz_wall else Vector2i(0, 1)
+				var q := p + step
+				while q.x < _size and q.y < _size and _terrain[q.y * _size + q.x] == door_t and not seen.has(q):
+					tiles.append(q)
+					seen[q] = true
+					q += step
+				var first: Vector2i = tiles[0]
+				var side_a := first + (Vector2i(0, -1) if horiz_wall else Vector2i(-1, 0))
+				var side_b := first + (Vector2i(0, 1) if horiz_wall else Vector2i(1, 0))
+				var a_out := not _in_parts(parts, side_a)
+				var b_out := not _in_parts(parts, side_b)
+				var side := ""
+				var exterior := true
+				var out_tile := side_a
+				var in_tile := side_b
+				if a_out and not b_out:
+					side = "N" if horiz_wall else "W"
+				elif b_out and not a_out:
+					side = "S" if horiz_wall else "E"
+					out_tile = side_b
+					in_tile = side_a
+				else:
+					exterior = false
+					side = "H" if horiz_wall else "V"
+				out.append({"tiles": tiles, "exterior": exterior, "side": side, "out": out_tile, "in": in_tile})
 	return out
+
+
+func _wallish(x: int, y: int) -> bool:
+	if x < 0 or y < 0 or x >= _size or y >= _size:
+		return false
+	return _solid[y * _size + x] != 0 or _terrain[y * _size + x] == int(_tids.DOOR_WOOD)
+
+
+static func _in_parts(parts: Array, p: Vector2i) -> bool:
+	for pr in parts:
+		if Rect2i(pr).has_point(p):
+			return true
+	return false
 
 
 # ----------------------------------------------------------- the edge, the streets' things --
 
 func _edge_and_furniture() -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := _size
-	var H := _size
-	var rng := _rng
-	var road := int(_tids.ASPHALT)
-	for y in H:
-		for x in W:
-			if x < EDGE or y < EDGE or x >= W - EDGE or y >= H - EDGE:
-				var i := y * W + x
-				_terrain[i] = int(_tids.GRASS)
-				_solid[i] = 1
-	for k in range(0, W, 3):
-		for side in 4:
-			var jitter := rng.randi_range(0, 1)
-			var tx := 0
-			var ty := 0
-			match side:
-				0:
-					tx = k
-					ty = jitter
-				1:
-					tx = k
-					ty = H - 1 - jitter
-				2:
-					tx = jitter
-					ty = k
-				_:
-					tx = W - 1 - jitter
-					ty = k
-			if rng.randf() < 0.7:
-				_add_tree(tx, ty, false)
-	# cars on the roads, lying along the kerb
-	var block_n := _size / PITCH
-	var cars := int(opts.get("cars", 70))
-	var placed := 0
-	var tries := cars * 30
-	while placed < cars and tries > 0:
-		tries -= 1
-		var horiz := rng.randf() < 0.5
-		var seg := rng.randi_range(0, block_n - 1)
-		var cell := rng.randi_range(0, block_n - 1)
-		var kind := "car_h" if horiz else "car_v"
-		var fp: Vector2i = _street_cv.tiles_of(kind)
-		var tx := 0
-		var ty := 0
-		if horiz:
-			ty = PITCH * seg + BLOCK + rng.randi_range(0, 1) * 2
-			tx = PITCH * cell + rng.randi_range(3, BLOCK - fp.x - 3)
-		else:
-			tx = PITCH * seg + BLOCK + rng.randi_range(0, 1) * 2
-			ty = PITCH * cell + rng.randi_range(3, BLOCK - fp.y - 3)
-		if tx < EDGE + 1 or ty < EDGE + 1 or tx + fp.x > W - EDGE - 1 or ty + fp.y > H - EDGE - 1:
-			continue
-		var clash := false
-		for yy in fp.y:
-			for xx in fp.x:
-				var i := (ty + yy) * W + tx + xx
-				if _solid[i] != 0 or _terrain[i] != road:
-					clash = true
-		if clash:
-			continue
-		var obj = _street_cv._decor(kind, tx, ty, 0.0, 0.0)
-		if obj == null:
-			continue
-		obj["solid"] = true
-		_objects.append(obj)
-		for yy in fp.y:
-			for xx in fp.x:
-				_solid[(ty + yy) * W + tx + xx] = 1
-		placed += 1
-		_street_objs += 1
-	# lamp posts and hydrants on the sidewalks, trees along them
-	for by in block_n:
-		for bx in block_n:
-			var ox := bx * PITCH
-			var oy := by * PITCH
-			for k in 3:
-				for kind in ["lamppost", "hydrant"]:
-					if kind == "hydrant" and rng.randf() < 0.5:
-						continue
-					var tx := 0
-					var ty := 0
-					if rng.randf() < 0.5:
-						tx = ox + rng.randi_range(2, BLOCK - 3)
-						ty = oy + (0 if rng.randf() < 0.5 else BLOCK - 1)
-					else:
-						tx = ox + (0 if rng.randf() < 0.5 else BLOCK - 1)
-						ty = oy + rng.randi_range(2, BLOCK - 3)
-					if tx < EDGE or ty < EDGE or tx >= W - EDGE or ty >= H - EDGE:
-						continue
-					var obj = _street_cv._decor(kind, tx, ty, 0.0, 0.0)
-					if obj != null:
-						_objects.append(obj)
-						_street_objs += 1
-			for k in 4:
-				var tx := ox + rng.randi_range(2, BLOCK - 3)
-				var ty := oy + (1 if rng.randf() < 0.5 else BLOCK - 2)
-				if rng.randf() < 0.5:
-					tx = ox + (1 if rng.randf() < 0.5 else BLOCK - 2)
-					ty = oy + rng.randi_range(2, BLOCK - 3)
-				var i := ty * W + tx
-				if tx < EDGE + 1 or ty < EDGE + 1 or tx >= W - EDGE - 1 or ty >= H - EDGE - 1:
-					continue
-				if _solid[i] != 0 or _terrain[i] != int(_tids.GRASS) or _clear_rect.has_point(Vector2i(tx, ty)):
-					continue
-				_add_tree(tx, ty, true)
+	Streetscape.run(self)
 	_tick("street_furniture", t0)
 
 
@@ -654,7 +535,7 @@ func _finish_map() -> void:
 	d["trees"] = _trees
 	d["lights"] = []
 	d["rooms"] = _rooms_dict
-	d["spawns"] = [[float(PITCH * (_blocks / 2 - 1) + BLOCK) + 2.5, float(EDGE) + 1.5]]
+	d["spawns"] = [_spawn_point()]
 	d["yard"] = [1, 1, W - 1, H - 1]
 	d["people"] = []
 	d["bonds"] = []
@@ -666,16 +547,29 @@ func _finish_map() -> void:
 	_tile_room.resize(W * H)
 	_tile_room.fill(-1)
 	for h in _houses:
-		var r: Rect2i = h.rect
-		for y in range(r.position.y, r.end.y):
-			for x in range(r.position.x, r.end.x):
-				_tile_house[y * W + x] = int(h.id)
+		for r in h.parts:
+			var pr: Rect2i = r
+			for y in range(pr.position.y, pr.end.y):
+				for x in range(pr.position.x, pr.end.x):
+					_tile_house[y * W + x] = int(h.id)
 	for ri in _rooms.size():
 		var rr: Rect2i = _rooms[ri].rect
 		for y in range(rr.position.y, rr.end.y):
 			for x in range(rr.position.x, rr.end.x):
 				_tile_room[y * W + x] = ri
 	_tick("finish", t0)
+
+
+## Where the waves come in until a base says otherwise: on the road that runs out of the town at the north, a little inside the border.
+func _spawn_point() -> Array:
+	var best: Array = []
+	for rd in _layout.roads:
+		var r: Rect2i = rd.rect
+		if bool(rd.through) and String(rd.dir) == "v" and r.position.y <= EDGE:
+			return [float(r.position.x) + float(r.size.x) * 0.5, float(EDGE) + 2.5]
+		if best.is_empty() and String(rd.kind) != "alley":
+			best = [float(r.position.x) + float(r.size.x) * 0.5, float(r.position.y) + float(r.size.y) * 0.5]
+	return best if not best.is_empty() else [float(_size) * 0.5, float(EDGE) + 2.5]
 
 
 # ------------------------------------------------------- the start, the rescues, the dead --
@@ -689,7 +583,16 @@ func _people() -> void:
 	# the start house: the medium one of the clear lot the block loop made (the middle block's south row)
 	var start_house := _start_house
 	if start_house < 0:
+		# (TOWNGEN: the layout always makes a start lot; if a seed ever fails to, the residential house nearest the middle of the town stands in)
+		var best_d := INF
 		start_house = 0
+		for h in _houses:
+			if String(h.type) == "residential" and h.rooms.size() >= 3:
+				var dd := Vector2(Rect2i(h.rect).get_center()).distance_to(Vector2(float(_size) * 0.5, float(_size) * 0.5))
+				if dd < best_d:
+					best_d = dd
+					start_house = int(h.id)
+		push_warning("town: no start lot, house %d stands in" % start_house)
 	var start_room := _roomiest(start_house)
 	var start_pos := _free_spot(start_room)
 	d["workshop"] = {"x": start_pos.x, "y": start_pos.y - 1.0, "what": "At home"}
@@ -749,8 +652,52 @@ func _people() -> void:
 	_result["rescue"] = rescue
 	_result["tile_house"] = _tile_house
 	_result["tile_room"] = _tile_room
-	_result["streets"] = {"pitch": PITCH, "block": BLOCK, "road": ROAD, "names_x": STREET_X, "names_y": STREET_Y}
-	_result["stats"] = {"houses": _houses.size(), "by_kind": by_kind, "rooms": _rooms.size(), "containers": _containers.size(), "dead": dead.size(), "objects": _objects.size(), "trees": _trees.size(), "street_objects": _street_objs, "ms": _ms}
+	var names_x: Array = []
+	var names_y: Array = []
+	var roads_sorted: Array = _layout.roads.duplicate()
+	roads_sorted.sort_custom(func(a, b): return (Rect2i(a.rect).position.x + Rect2i(a.rect).position.y) < (Rect2i(b.rect).position.x + Rect2i(b.rect).position.y))
+	for rd in roads_sorted:
+		if String(rd.kind) == "alley":
+			continue
+		if String(rd.dir) == "v":
+			names_x.append(String(rd.name))
+		else:
+			names_y.append(String(rd.name))
+	var roads_out: Array = []
+	for rd in _layout.roads:
+		roads_out.append({"id": int(rd.id), "name": String(rd.name), "dir": String(rd.dir), "rect": rd.rect, "kind": String(rd.kind), "through": bool(rd.through)})
+	_result["streets"] = {"pitch": PITCH, "block": BLOCK, "road": ROAD, "names_x": names_x, "names_y": names_y, "roads": roads_out, "avenue": int(_layout.avenue)}
+	# TOWNGEN: the districts (a tile map and the blocks), the lots, the landmarks
+	var area := {}
+	var district_names: Array = Districts.ALL
+	for v in _layout.district_map:
+		var di := int(v)
+		if di > 0:
+			var nm := String(district_names[di - 1])
+			area[nm] = int(area.get(nm, 0)) + 1
+	var blocks_out: Array = []
+	for b in _layout.blocks:
+		blocks_out.append({"id": int(b.id), "rect": b.rect, "district": String(b.district), "role": String(b.role)})
+	_result["districts"] = {"names": district_names, "map": _layout.district_map, "blocks": blocks_out, "area": area, "ring": int(_layout.ring)}
+	var lots_out: Array = []
+	for lot in _layout.lots:
+		lots_out.append({"id": int(lot.id), "rect": lot.rect, "front": String(lot.front), "district": String(lot.district), "kind": String(lot.kind), "block": int(lot.block),
+			"street": String(lot.street), "house": int(_lot_house[int(lot.id)]) if int(lot.id) < _lot_house.size() else -1, "start": bool(lot.start)})
+	_result["lots"] = lots_out
+	_result["landmarks"] = _landmarks + _layout.landmarks
+	var by_district := {}
+	var by_type := {}
+	var part_count := 0
+	var room_min := 1000
+	var room_max := 0
+	for h in _houses:
+		by_district[h.district] = int(by_district.get(h.district, 0)) + 1
+		by_type[h.type] = int(by_type.get(h.type, 0)) + 1
+		part_count += h.parts.size()
+		room_min = mini(room_min, h.rooms.size())
+		room_max = maxi(room_max, h.rooms.size())
+	_result["stats"] = {"houses": _houses.size(), "by_kind": by_kind, "by_district": by_district, "by_type": by_type, "parts": part_count, "rooms_per_house": [room_min, room_max],
+		"rooms": _rooms.size(), "containers": _containers.size(), "dead": dead.size(), "objects": _objects.size(), "trees": _trees.size(), "street_objects": _street_objs, "ms": _ms}
 
 
 ## The clear ring of the start lot, for the tests and the layout: the lot's rectangle, and how many tiles of its border and the row inside it are free (open ground,
@@ -908,23 +855,28 @@ func _dead(start_house: int, rescue: Array) -> Array:
 			var in_room: int = int(r.room) if k == 0 else -1
 			if put_inside.call(int(r.house), "walker" if rng.randf() < 0.85 else "runner", "still", in_room, int(r.room)):
 				made_in += 1
-	var inside_n := roundi(float(near_house) * 0.78)
+	# TOWNGEN: the dead of the buildings, a few in each by its kind (a house one to three or four, a block of flats or a shop more, a warehouse or the supermarket most), fewer
+	# near the start (a calm part of the town), the odd brute in a big one
 	var guard := 0
-	while made_in < inside_n and guard < inside_n * 60:
-		guard += 1
-		var at := rng.randf() * total_w
-		var hi := 0
-		for i in weights.size():
-			at -= float(weights[i])
-			if at < 0.0:
-				hi = i
-				break
-		if floor_tiles[hi].is_empty():
+	var scale_in := float(total) / float(DEAD_TOTAL)
+	for hi in _houses.size():
+		if hi == start_house or guarded.has(hi) or floor_tiles[hi].is_empty():
 			continue
-		if put_inside.call(hi, kinds_for.call(rng.randf()), "still" if rng.randf() < 0.85 else "wander", -1, -1):
-			made_in += 1
+		var hd: Dictionary = _houses[hi]
+		var rg: Array = DEAD_BY_KIND.get(String(hd.kind), [1, 3])
+		var n := rng.randi_range(int(rg[0]), int(rg[1]))
+		if Vector2(Rect2i(hd.rect).get_center()).distance_to(start_c) < 20.0:
+			n = roundi(float(n) * 0.35)
+		elif scale_in < 1.0:
+			n = roundi(float(n) * maxf(scale_in, 0.4))
+		for k in n:
+			var kd: String = kinds_for.call(rng.randf())
+			if k == 0 and n >= 5 and rng.randf() < 0.2:
+				kd = "brute"
+			if put_inside.call(hi, kd, "still" if rng.randf() < 0.85 else "wander", -1, -1):
+				made_in += 1
 	# beside the houses: grass of the lots, front and back
-	var yard_n := near_house - made_in
+	var yard_n := roundi(float(total) * 0.12)
 	var made := 0
 	guard = 0
 	while made < yard_n and guard < yard_n * 80:
@@ -943,11 +895,12 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		_take(taken, p)
 		out.append({"pos": p, "kind": kinds_for.call(rng.randf()), "state": "still" if rng.randf() < 0.8 else "wander", "house": hi, "room": -1, "group": -1})
 		made += 1
-	# the streets: loose groups of three to eight on the paving
+	# the streets: loose groups of one to four on the paving (the rest of the total)
+	in_street = maxi(0, total - made_in - made)
 	made = 0
 	var group := 0
 	guard = 0
-	while made < in_street and guard < 400:
+	while made < in_street and guard < 4000:
 		guard += 1
 		var cx := rng.randi_range(EDGE + 4, W - EDGE - 5)
 		var cy := rng.randi_range(EDGE + 4, H - EDGE - 5)
@@ -957,7 +910,7 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		var centre := Vector2(float(cx) + 0.5, float(cy) + 0.5)
 		if centre.distance_to(start_c) < keep_clear * 1.2:
 			continue
-		var n := mini(rng.randi_range(3, 8), in_street - made)
+		var n := mini(rng.randi_range(1, 4), in_street - made)
 		var got := 0
 		var t2 := 0
 		while got < n and t2 < 60:
