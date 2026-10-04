@@ -37,6 +37,19 @@ func start() -> void:
 	_look_t = 0.0
 
 
+## The state of the module: where the timer of the look is (a loaded game looks about when the saved one would have; a save without it
+## looks at once, as a new game does).
+func save() -> Dictionary:
+	return {"look_t": _look_t}
+
+
+func load_state(d: Dictionary) -> void:
+	var t = d.get("look_t", 0.0)
+	_look_t = 0.0
+	if (typeof(t) == TYPE_FLOAT or typeof(t) == TYPE_INT) and is_finite(float(t)):
+		_look_t = clampf(float(t), 0.0, LOOK_EVERY)
+
+
 ## How many stragglers a morning of this day puts in the streets.
 func target_count(day: int) -> int:
 	return mini(DAY_MAX, int(floorf(DAY_BASE + DAY_PER_DAY * float(maxi(day, 1) - 1))))

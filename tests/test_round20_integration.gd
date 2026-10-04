@@ -6,11 +6,11 @@ extends "res://tests/case.gd"
 ##
 ## What it asserts is what the round promises, not how fast the camp forms ties (the rates are the TUNING phase's: thresholds and gains
 ## in chemistry.json, titles.json and the module constants move with it, and this file must not): the schedule's rules hold in a whole
-## game (ideas by day, never in the radio hour, never within four game hours of one another, nothing open at night or on top of an
+## game (ideas by day, never in the radio hour, never within the gap (`Initiative.GAP_ALL_MIN`) of one another, nothing open at night or on top of an
 ## urgent call, an open call never lost from the News, at most two lines a day for bonds and rifts), every yes that is carried out does its
 ## thing (checked kind by kind from the state after the answer), and the MECHANICS of the community are asserted with a forced affinity,
 ## a forced practice and a forced circle of friends (a friendship begins and is told, a title is earned and its bonus is on the stat it
-## belongs to, a voice stands and gives its opinion under an idea), then through a save at day 6 (made with an idea waiting, as the game's
+## belongs to, a voice stands and gives its opinion under an idea), then through a save from day 6 on (made with an idea waiting, as the game's
 ## own save writes it: `SaveGame.to_text`) that loads and continues identically (eight game hours on, the digest of the no-avatar test every
 ## ten seconds of rules time, then the saved states of the three modules, the radio and the whole game, compared number for number), and a
 ## save made without the three modules (a game from before the round) that loads, names the titles silently and plays on. The second
@@ -31,9 +31,12 @@ const SEED := 1
 const CREW := 5
 const HZ := 5.0
 const LAST_DAY := 12
-## The save: at the first moment of day 6 from 08:00 when an idea waits for an answer (at 16:00 whatever there is), then both games
-## are played on for SPAN_H game hours with an answerer that has no memory, and compared.
+## The save: at the first moment from 08:00 of day 6 on when an idea waits for an answer, then both games are played on for SPAN_H game
+## hours with an answerer that has no memory, and compared. The schedule's own ideas come when the kinds' gaps, the people's gaps and the
+## people at home allow (the tuning's numbers, and a day of the small camp may have nobody to ask: the colony is out on a trip), so the
+## save waits for one up to the afternoon (SAVE_LATEST_H) of day SAVE_LAST_DAY and only then brings one by `propose_now`.
 const SAVE_DAY := 6
+const SAVE_LAST_DAY := 9
 const SAVE_FROM_H := 8.0
 const SAVE_LATEST_H := 16.0
 const SPAN_H := 8.0
@@ -71,9 +74,9 @@ static func _play() -> Dictionary:
 	var g := _new_game()
 	var sim = g.sim
 	# 1. day 1 to the save: the colony plays, ideas come and are answered, the three forced things are done and read
-	_play_to(sim, fx, SAVE_DAY, SAVE_LATEST_H, func(s): return int(s.day) == SAVE_DAY and float(s.hour) >= SAVE_FROM_H and not _open_ideas(s).is_empty())
+	_play_to(sim, fx, SAVE_LAST_DAY, SAVE_LATEST_H, func(s): return int(s.day) >= SAVE_DAY and float(s.hour) >= SAVE_FROM_H and not _open_ideas(s).is_empty())
 	if _open_ideas(sim).is_empty():
-		sim.initiative.propose_now()    # (the schedule may have had nothing for the day: the save is made with an idea waiting all the same, if one can be)
+		sim.initiative.propose_now()    # (the schedule had nothing for all those days: the save is made with an idea waiting all the same, if one can be)
 	var open_at_save := _open_ideas(sim).size()
 	var text := SaveGame.to_text(SaveGame.to_dict(sim))
 	# 2. the same game loaded into a new one; both are played on with an answerer that has no memory
@@ -598,7 +601,7 @@ func test_a_voice_stands_and_gives_its_opinion_under_an_idea() -> void:
 		check(["yes", "later"].has(String(o.option)), "yes or later: %s" % String(o.option))
 
 
-func test_a_save_at_day_six_with_an_idea_waiting_loads_and_continues_identically() -> void:
+func test_a_save_from_day_six_on_with_an_idea_waiting_loads_and_continues_identically() -> void:
 	var fx := _fixture()
 	var s: Dictionary = fx.save
 	check(bool(s.get("ok", false)), "the save of day %d loads (%d bytes)" % [int(s.get("day", 0)), int(s.get("bytes", 0))])

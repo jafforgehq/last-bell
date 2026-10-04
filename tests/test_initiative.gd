@@ -309,13 +309,15 @@ func test_a_no_does_not_come_back_from_the_same_person_for_a_while() -> void:
 		if _who(sim, "fix_wall") == "dez":
 			back = day
 			break
-	eq(back, 3 + sim.initiative.REFUSED_KIND_DAYS, "he does not bring the same idea again for %d days (the kind's own gap is only three)" % sim.initiative.REFUSED_KIND_DAYS)
+	var gap: int = sim.initiative.GAP_KIND_DAYS
+	check(gap < sim.initiative.REFUSED_KIND_DAYS, "a person is kept off a turned-down kind for longer than the kind's own gap (else the refusal means nothing)")
+	eq(back, 3 + sim.initiative.REFUSED_KIND_DAYS, "he does not bring the same idea again for %d days (the kind's own gap is only %d)" % [sim.initiative.REFUSED_KIND_DAYS, gap])
 	# somebody else may, after the kind's own gap
 	var h := _wall_game()
 	var hs = h.sim
 	_only_dez(hs)
 	_look_and_answer(hs, 3, 9.0, "no")
-	Kit.at(hs, 6, 9.0)
+	Kit.at(hs, 3 + gap, 9.0)
 	Kit.wear(hs, 5, 0.8)
 	Kit.who(hs, "marcus").trust = 55.0
 	h.spec.holders["engineer"] = "marcus"

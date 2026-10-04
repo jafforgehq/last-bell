@@ -169,6 +169,35 @@ func test_the_hunt_ends_at_dusk_and_a_save_keeps_it() -> void:
 	b.world.free()
 
 
+func test_a_save_keeps_the_look_timer_so_a_loaded_game_notices_when_the_saved_one_does() -> void:
+	# (the stragglers look about every LOOK_EVERY seconds; a load that started the timer afresh gave a loaded game its own moments of
+	# noticing: the same camp, saved and loaded, did not go on the same way, the digest of the round-20 integration test found it)
+	var g := _game()
+	var sim = g.sim
+	var half: float = Streets.LOOK_EVERY * 0.6
+	sim.streets._look_t = half
+	var text := SaveGame.to_text(SaveGame.to_dict(sim))
+	var b := Helpers.make(9, 1, 3)
+	check(SaveGame.apply(b.sim, SaveGame.from_text(text)), "it loads")
+	near(float(b.sim.streets._look_t), half, 1.0e-9, "the timer is where it was")
+	# a save from before the timer was kept (no streets in it) looks about at once, as a new game does
+	var old: Dictionary = SaveGame.from_text(text)
+	(old.modules as Dictionary).erase("streets")
+	var c := Helpers.make(9, 1, 3)
+	check(SaveGame.apply(c.sim, old), "an old save loads")
+	near(float(c.sim.streets._look_t), 0.0, 1.0e-9, "and its timer is the start's")
+	# and a damaged value is the start's too, never a timer that would not run out
+	var bad: Dictionary = SaveGame.from_text(text)
+	bad.modules["streets"] = {"look_t": 1.0e9}
+	var e := Helpers.make(9, 1, 3)
+	check(SaveGame.apply(e.sim, bad), "a save with a silly timer loads")
+	check(float(e.sim.streets._look_t) <= Streets.LOOK_EVERY, "and the timer is no longer than a look: %s" % str(e.sim.streets._look_t))
+	g.world.free()
+	b.world.free()
+	c.world.free()
+	e.world.free()
+
+
 func test_a_shot_by_day_draws_only_the_stragglers_close_by_and_not_to_the_walls() -> void:
 	var g := _game()
 	var sim = g.sim
