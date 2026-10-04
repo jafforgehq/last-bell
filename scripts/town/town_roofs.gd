@@ -20,6 +20,8 @@ var _alpha := PackedFloat32Array()
 var _target := PackedFloat32Array()
 var _multi: MultiMeshInstance2D
 var _mm: MultiMesh
+var _first := PackedInt32Array()
+var _count := PackedInt32Array()
 var _dirty := false
 var inside := -1
 ## How many roofs are not clear now (for the overlay).
@@ -42,18 +44,25 @@ func setup(town: Dictionary, data: Dictionary, roof_mode: String = "house") -> v
 		_setup_multi(tex_a)
 		return
 	for h in houses:
-		var r: Rect2i = h.rect
 		var tex: Texture2D = tex_a if int(h.id) % 3 != 0 else tex_b
 		var piece_uv := Vector2(128.0 / float(tex.get_width()), 128.0 / float(tex.get_height()))
-		var a := Vector2(r.position)
-		var b := Vector2(r.end)
-		var verts := PackedVector2Array([a * TILE, Vector2(b.x, a.y) * TILE, b * TILE, Vector2(a.x, b.y) * TILE])
-		var uvs := PackedVector2Array([a * piece_uv, Vector2(b.x, a.y) * piece_uv, b * piece_uv, Vector2(a.x, b.y) * piece_uv])
+		# one quad for each part of the house (a building of several parts: an L, a T...)
+		var verts := PackedVector2Array()
+		var uvs := PackedVector2Array()
+		var idx := PackedInt32Array()
+		for pr in _parts_of(h):
+			var r: Rect2i = pr
+			var a := Vector2(r.position)
+			var b := Vector2(r.end)
+			var k := verts.size()
+			verts.append_array(PackedVector2Array([a * TILE, Vector2(b.x, a.y) * TILE, b * TILE, Vector2(a.x, b.y) * TILE]))
+			uvs.append_array(PackedVector2Array([a * piece_uv, Vector2(b.x, a.y) * piece_uv, b * piece_uv, Vector2(a.x, b.y) * piece_uv]))
+			idx.append_array(PackedInt32Array([k, k + 1, k + 2, k, k + 2, k + 3]))
 		var arrays := []
 		arrays.resize(Mesh.ARRAY_MAX)
 		arrays[Mesh.ARRAY_VERTEX] = verts
 		arrays[Mesh.ARRAY_TEX_UV] = uvs
-		arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 0, 2, 3])
+		arrays[Mesh.ARRAY_INDEX] = idx
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		var mi := MeshInstance2D.new()
@@ -64,6 +73,12 @@ func setup(town: Dictionary, data: Dictionary, roof_mode: String = "house") -> v
 		add_child(mi)
 		_nodes.append(mi)
 	shown = houses.size()
+
+
+## The rectangles of a house's roofs: its `parts`, else its rectangle.
+static func _parts_of(h: Dictionary) -> Array:
+	var ps = h.get("parts")
+	return ps if (ps is Array and not ps.is_empty()) else [h.rect]
 
 
 func _setup_multi(tex: Texture2D) -> void:
@@ -78,12 +93,24 @@ func _setup_multi(tex: Texture2D) -> void:
 	_mm.transform_format = MultiMesh.TRANSFORM_2D
 	_mm.use_colors = true
 	_mm.mesh = quad
-	_mm.instance_count = houses.size()
+	# one instance for each part of each house (the first instance of a house is `_first[id]`, `_count[id]` of them)
+	var total := 0
 	for h in houses:
-		var r: Rect2i = h.rect
-		var t := Transform2D(0.0, Vector2(float(r.size.x), float(r.size.y)) * TILE, 0.0, Vector2(r.position) * TILE)
-		_mm.set_instance_transform_2d(int(h.id), t)
-		_mm.set_instance_color(int(h.id), Color(1, 1, 1, 1))
+		total += _parts_of(h).size()
+	_mm.instance_count = total
+	_first.resize(houses.size())
+	_count.resize(houses.size())
+	var k := 0
+	for h in houses:
+		_first[int(h.id)] = k
+		var ps := _parts_of(h)
+		_count[int(h.id)] = ps.size()
+		for pr in ps:
+			var r: Rect2i = pr
+			var t := Transform2D(0.0, Vector2(float(r.size.x), float(r.size.y)) * TILE, 0.0, Vector2(r.position) * TILE)
+			_mm.set_instance_transform_2d(k, t)
+			_mm.set_instance_color(k, Color(1, 1, 1, 1))
+			k += 1
 	_multi = MultiMeshInstance2D.new()
 	_multi.name = "Roofs"
 	_multi.multimesh = _mm
@@ -129,7 +156,8 @@ func update(house_id: int, dt: float) -> void:
 
 func _apply(i: int, a: float) -> void:
 	if mode == "multi":
-		_mm.set_instance_color(i, Color(1, 1, 1, a))
+		for k in _count[i]:
+			_mm.set_instance_color(_first[i] + k, Color(1, 1, 1, a))
 		return
 	var n: MeshInstance2D = _nodes[i]
 	n.visible = a > 0.01
