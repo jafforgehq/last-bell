@@ -18,7 +18,7 @@ const RADIO_PARTS := ["come", "hold", "cover", "search", "back", "post", "insist
 ## The beats of each lesson's scenario.
 const CLASSIC_BEATS := ["dusk", "more", "scratch", "fever"]
 const AVATAR_BEATS := ["dusk", "more", "scratch", "fever", "stray", "spent", "assault", "home"]
-const OPTIONAL_KEYS := ["goal", "goals", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed"]
+const OPTIONAL_KEYS := ["goal", "goals", "text_always", "goals_always", "anchor", "allow", "pause", "pause_until", "start", "wait_title", "wait_text", "wait_anchor", "wait_allow", "fire", "focus", "follow", "clear_selection", "needs", "place", "dim", "jump", "type", "skipped_title", "skipped_text", "dialog_text", "move_inside", "move_radius", "move_min", "run_speed"]
 const JUMP_KEYS := ["hour", "day", "bus", "stock", "drafted", "post", "fired", "select", "at", "mag"]
 ## The parts of the Duty roster's page (while it is open) that an anchor may name, and the stations a card is for.
 const JOBS_PARTS := ["screen", "auto", "clear", "close", "list"]

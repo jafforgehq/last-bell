@@ -2,10 +2,13 @@
 ## cards, the keys, the radio's buttons, the pages and the coach's own buttons), for the tests
 ## (tests/test_tutorial*.gd; this file has no test_ prefix so the runner skips it). It plays
 ## whichever lesson the game is: the avatar's (`act_avatar`: the keys W A S D held down as the engine
-## has them, the mouse moved and its left button held, R and F, a click on a crew card, the radio's
+## has them, the mouse moved, its right button held to aim and its left button to shoot (round 22; its left button alone with the setting
+## "Always aim at the mouse"), R and F, a click on a crew card, the radio's
 ## verb buttons and the call's, T, G and L, J) or the old yard's (`act_classic`: right-clicks and the
 ## order keys).
 extends RefCounted
+
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 ## The most frames the bot gives one step before it calls it stuck.
 const STEP_FRAMES := 9000
@@ -250,6 +253,20 @@ static func point_at(main, tile: Vector2) -> void:
 	main._unhandled_input(ev)
 
 
+## The right button down or up (the aim, "Right button aims"), where the mouse is: a press the HUD did not take reaches the world, a release
+## is seen by `_input` whoever took it.
+static func aim_button(main, down: bool) -> void:
+	var ev := InputEventMouseButton.new()
+	ev.button_index = MOUSE_BUTTON_RIGHT
+	ev.pressed = down
+	ev.position = main.mouse_screen
+	if down:
+		main._input(ev)
+	main._unhandled_input(ev)
+	if not down:
+		main._input(ev)
+
+
 ## The left button down or up (the trigger), where the mouse is.
 static func trigger(main, down: bool) -> void:
 	var ev := InputEventMouseButton.new()
@@ -396,6 +413,7 @@ static func act_avatar(main, id: String, bot: Dictionary) -> void:
 			did = false
 			if not sim.world.on_deck(me.x, me.y):
 				trigger(main, false)
+				aim_button(main, false)
 				# the way to the walkway is the ladder's
 				goto(main, DECK_AT, 0.15)
 			else:
@@ -403,9 +421,14 @@ static func act_avatar(main, id: String, bot: Dictionary) -> void:
 				var z = nearest_dead(main)
 				if z != null and Vector2(z.x, z.y).distance_to(Vector2(me.x, me.y)) < 6.0:
 					point_at(main, Vector2(z.x, z.y - 0.3))
-					trigger(main, true)
+					# (hold the right button to aim, then the left to shoot; with "Always aim at the mouse" the left button alone)
+					if not AimMode.always() and not main.aim_held:
+						aim_button(main, true)
+					if main.firing != true:
+						trigger(main, true)
 				else:
 					trigger(main, false)
+					aim_button(main, false)
 		"reload":
 			hold([])
 			if float(coach.state.did.get("reload", 0.0)) <= 0.0:
@@ -528,6 +551,7 @@ static func play(main, stop_at: String = "", max_frames: int = 400000, any_phase
 			if main.avatar_mode:
 				release_keys()
 				trigger(main, false)
+				aim_button(main, false)
 		if stop_at != "" and id == stop_at and (any_phase or coach.phase != "wait"):
 			break
 		guard += 1
@@ -555,4 +579,5 @@ static func play(main, stop_at: String = "", max_frames: int = 400000, any_phase
 	if main.avatar_mode:
 		release_keys()
 		trigger(main, false)
+		aim_button(main, false)
 	return {"seen": seen, "stuck": stuck, "frames": guard}

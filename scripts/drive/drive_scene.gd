@@ -1007,10 +1007,17 @@ func _hands() -> void:
 		_throttle = 0.0
 		_steer = 0.0
 		fire = false
+	var aim_for := aim_tile
+	if not AimMode.always():
+		# (round 22, "Right button aims": the mouse is free on the road, W A S D drive, and the survivor's own shot is the right button's
+		# and then the left's; the squad in the windows shoots by itself)
+		var on := aiming()
+		aim_for = aim_tile if on else Vector2.ZERO
+		fire = fire and on
 	# (the player's trigger is from the window: wider while the car moves, the bloom the gun's own spread reads)
 	if fire and speed_now() > FIRE_SLOW:
 		lead.bloom = maxf(lead.bloom, MOVE_BLOOM + 1.5 * StepClock.STEP + 0.001)
-	run.sim.avatar.set_input(Vector2.ZERO, aim_tile, fire)
+	run.sim.avatar.set_input(Vector2.ZERO, aim_for, fire)
 	lead.moving = speed_now() > 0.2
 
 

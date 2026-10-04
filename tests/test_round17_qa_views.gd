@@ -7,6 +7,7 @@ extends "res://tests/case.gd"
 ## windowed shot run (M10), no Search that in the yard (M11), the fever tip points at the call card (M12). The rules are the other
 ## tests' (test_avatar, test_radio, test_raid_run); the Town Board's own are at the end of test_town_board.gd.
 
+const AimMode := preload("res://scripts/aim_mode.gd")
 const GD := preload("res://scripts/game_data.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
 const Kit := preload("res://tests/hud_kit.gd")
@@ -54,6 +55,7 @@ func _site(h: int = 16, dead: Array = []) -> Dictionary:
 ## The real game (a small start: Ruth the avatar, Dez and Marcus) in a window of this size, its own frames off.
 func _main(width: int = 1280, height: int = 800, crew: int = 3) -> Node:
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": true}, width, height)
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
 	main.raid_stub = true
 	main.sim.waves.enabled = false
 	main.sim.zombies.clear()
@@ -258,6 +260,7 @@ const ARENA := Rect2i(32, 24, 24, 16)
 ## The real game (a classic start, six people, Ruth the avatar) in a window of this size, a clear arena round her.
 func _yard(width: int = 1280, height: int = 800) -> Node:
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 6, "avatar": true}, width, height)
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
 	for ty in range(ARENA.position.y, ARENA.end.y):
 		for tx in range(ARENA.position.x, ARENA.end.x):
 			main.world.solid_p[ty * main.world.W + tx] = 0

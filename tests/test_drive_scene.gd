@@ -13,6 +13,7 @@ const CarNode := preload("res://scripts/drive/car_node.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const SiteGen := preload("res://scripts/raid/site_gen.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 const STEP := 1.0 / 30.0
 
@@ -22,7 +23,9 @@ func _game(width: int = 1280, height: int = 800, crew: int = 3, avatar: bool = t
 	PlaceFlow.live_enabled = true
 	PlaceFlow.fast_road = false
 	PlaceFlow.no_events = false
-	return TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar}, width, height)
+	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar}, width, height)
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
+	return main
 
 
 func _leave(main: Node) -> void:

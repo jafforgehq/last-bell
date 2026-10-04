@@ -86,6 +86,11 @@ const GAMES := [
 ## line each (news=15 to 16 and 9 to 10); nothing else of either digest moved (the clock, the stocks, the dead, the walls, the people, the
 ## deeds and the random generator are the ones of the last pin: the call only asks, and its default is to hold). avatar_orientation is not
 ## re-pinned: the lesson's scripted night is not called for (`_lesson_on`), and it did not move.
+## RE-PINNED A FOURTH TIME by the round 22 gate (2026-10-04, scripts/sim/gate.gd): the real gate is avatar mode only, and avatar_off is the one avatar
+## game here whose crew goes out through it (a trip on foot now waits for the gate to open: a second at most). Its `stock` line moved by one token
+## (food 31.3340 to 31.3503: the party was out a moment longer); the clock, the dead, the walls, the people, the deeds, the radio and the random
+## generator's state did not. Checked by playing the game with `sim.gate.enabled = false`: it ends as the old pin to the digit. avatar_classic (no trip
+## went through the gate) and avatar_orientation (the lesson switches the gate off) did not move, nor did any no-avatar game.
 ## The digests of the baseline (f23eee3), by "name:seed:crew": the sections of the digest, in order (the comment above each is its summary line).
 const PINNED := {
 	# plain:1:6: day 4 7.00h | stock ammo=320.0598 food=26.8891 meds=9.9687 scrap=0.0000 water=40.8498 | kills 93 | alive 6/6 | rng 4705235142794603518
@@ -165,10 +170,10 @@ const PINNED := {
 		"radio: news=0 latest=0 alarm=false",
 		"rng: state=7896914316066857157 seed=1001",
 	],
-	# avatar_off:3:5: day 2 19.00h | stock ammo=368.8962 food=31.3340 meds=8.8286 scrap=0.0000 water=56.9907 | kills 21 | alive 3/5 | rng 8616171887323474408
+	# avatar_off:3:5: day 2 19.00h | stock ammo=368.8962 food=31.3503 meds=8.8286 scrap=0.0000 water=56.9907 | kills 21 | alive 3/5 | rng 8616171887323474408
 	"avatar_off:3:5": [
 		"clock: day=2 min=1140.0000 clock=2160.0000 t=720.0000 phase=dusk over= player=walt",
-		"stock: ammo=368.8962 food=31.3340 meds=8.8286 scrap=0.0000 water=56.9907",
+		"stock: ammo=368.8962 food=31.3503 meds=8.8286 scrap=0.0000 water=56.9907",
 		"field: kills=21 zombies=0",
 		"walls: 0=420.0000 1=130.0000 2=220.0000 3=320.0000 4=12.6000 5=73.2715 6=420.0000 7=110.0000 8=190.0000 9=59.7428 10=420.0000 11=180.0000 12=320.0000 13=110.0000 14=160.0000 15=160.0000",
 		"people: ruth:60.5000,46.6000,100.0000,70.6000,55.0000,x dez:58.4054,46.5897,100.0000,58.1333,45.0000,x ana:29.2480,41.2700,100.0000,62.3267,45.0000,- marcus:33.1897,29.7759,100.0000,44.0667,45.0000,- walt:60.4254,46.5897,100.0000,65.0667,45.0000,-",

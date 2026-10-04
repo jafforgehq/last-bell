@@ -25,9 +25,14 @@
 			"id": "shoot",
 			"run_speed": 1,
 			"title": "Aim and shoot",
-			"text": "A walker is coming to the north wall. Shots stop at its face, so climb the marked ladder to the walkway. Then aim with the mouse and hold the left button.",
+			"text": "A walker is coming to the north wall. Shots stop at its face, so climb the marked ladder to the walkway. Then hold the right mouse button to aim, and click to shoot.",
+			"text_always": "A walker is coming to the north wall. Shots stop at its face, so climb the marked ladder to the walkway. Then aim with the mouse and hold the left button.",
 			"goal": "climb the ladder to the walkway",
-			"goals": [{"when": "on_deck", "text": "aim at the walker, hold the left button"}],
+			"goals": [
+				{"when": "all", "params": {"of": [{"cond": "on_deck"}, {"cond": "did", "params": {"what": "aim"}}]}, "text": "now click to shoot"},
+				{"when": "on_deck", "text": "hold the right mouse button to aim at the walker"}
+			],
+			"goals_always": [{"when": "on_deck", "text": "aim at the walker, hold the left button"}],
 			"anchor": [
 				{"name": "zombie:near", "when": "on_deck"},
 				"spot:48.5,20.4"

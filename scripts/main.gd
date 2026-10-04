@@ -27,6 +27,8 @@ const Sound := preload("res://scripts/audio/sound.gd")
 const StreetAir := preload("res://scripts/audio/street_air.gd")
 const Music := preload("res://scripts/audio/music.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
+const WorldClick := preload("res://scripts/ui/world_click.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
@@ -116,8 +118,11 @@ var dressing_view
 ## The colony's vehicles in the motor pool and on the road, a settlement game's (round 13, scripts/render/parking_node.gd; round 15: each one an actor, scripts/render/vehicle_actor.gd).
 var parking_view
 ## The vehicle gate in the north wall (round 15, scripts/render/gate_node.gd): the Main gate's two leaves slide apart. The parking view
-## (vehicle actors) calls `gate_node.follow(parking_view.gate_demand(), dt)` itself.
+## (vehicle actors) calls `gate_node.follow(parking_view.gate_demand(), dt)` itself. In avatar mode (round 22) the node follows the rules' own
+## `sim.gate.open` instead, and the gate's events are the sounds (`_on_gate_event`).
 var gate_node
+## The id of the last News entry the gate's banner looked at (-1: none yet: `_watch_gate_news`).
+var _gate_news_id := -1
 ## The soft groans of the streets by day, a settlement game's (round 12, scripts/audio/street_air.gd).
 var street_air
 var pawn_nodes := {} # entity -> node
@@ -155,6 +160,19 @@ var avatar_mode: bool:
 var mouse_screen := Vector2.ZERO
 var over_hud := false
 var firing := false
+## "Right button aims" (round 22, scripts/aim_mode.gd, the setting `ui.aim_mode`): the right button is held (a press that reached the world;
+## any release lets it go), and what the free pointer is over now, for the ring, the pill and the hand: {"kind": "person", "ref": the person}
+## or {"kind": "thing", "cand": what the rules list (`near` true) or `far_things()` has (`near` false)}, {} for nothing. While it is held (or
+## Shift is) the survivor aims at the pointer and the left button fires; otherwise the pointer is free to click and nothing is aimed.
+var aim_held := false
+var pointed := {}
+## Shift was down when the window lost the focus: it does not count as the aim until it has been let go (the engine may keep it pressed).
+var _shift_lock := false
+var _was_aiming := false
+## The shape the system pointer was last given over the yard (the hand over a person or a thing to use, else the arrow).
+var cursor_shape := Input.CURSOR_ARROW
+## `--aiming`: the right button is held in a screenshot; `--aim-mode=`: the setting a screenshot has ("right" or "always").
+var shot_aiming := false
 ## Seconds the camera is to stay off the avatar after a jump (`_focus`).
 var cam_hold := 0.0
 ## The glide of the avatar camera to a point (a jump of `_focus`, a succession): where it set out, where it goes (`cam_glide_avatar`:
@@ -237,6 +255,8 @@ var shot_path := ""
 var shot_frames := 25
 ## `--aim=x,y`: the tile the screenshot has the mouse over (a screenshot has no pointer), and `--hold-fire`: the trigger is held.
 var shot_aim := Vector2.INF
+## `--aim=@dez`, `@post:gate`, `@bench`: the pointer over that person, post or bench (found each frame: `shot_aim` follows it).
+var shot_aim_at := ""
 ## Where a screenshot's staging of the nights (`--night`, `--plated`, `--breach`) wants the camera (INF: nowhere in particular).
 var _stage_focus := Vector2.INF
 ## `--swing[=0..1]`: the avatar is held in the middle of a melee swing (how far it has run out), for a screenshot of it.
@@ -725,7 +745,7 @@ func _allows(kind: String, arg = null) -> bool:
 	return coach.allows(kind, arg)
 
 
-## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs, build, and in avatar mode reload and melee), told
+## What the player just did (kinds: select, move, gizmo, speed, pan, zoom, save, load, fields, jobs, build, and in avatar mode reload, melee and aim), told
 ## to the coach so the lesson's conditions can use it.
 func _did(kind: String, arg = null) -> void:
 	if coach != null:
@@ -756,6 +776,11 @@ func _pick(w: Vector2):
 	for z in zs:
 		if hit.call(z, maxf(1.0, float(z.size))):
 			return {"kind": "zombie", "ref": z}
+	return _pick_wall(w)
+
+
+## The wall section under a point of the world, as `_pick` has it ({"kind": "segment", "ref"}), or null.
+func _pick_wall(w: Vector2):
 	for s in sim.segments:
 		var o: Dictionary = s.obj
 		var c := cos(-float(o.a))
@@ -766,6 +791,18 @@ func _pick(w: Vector2):
 		var ly := dx * sn + dy * c
 		if absf(lx) < o.w / 2.0 and absf(ly) < o.h / 2.0 + 0.3:
 			return {"kind": "segment", "ref": s}
+	return null
+
+
+## The person under a point of the world (the box `_pick` uses) in avatar mode, or null: not the one you are, nor the lost or the gone.
+func _pick_person(w: Vector2):
+	var ppl: Array = sim.people.duplicate()
+	ppl.sort_custom(func(a, b): return a.y > b.y)
+	for p in ppl:
+		if p.dead or p.turned or p.away != null or p.player:
+			continue
+		if w.x > p.x - 0.42 and w.x < p.x + 0.42 and w.y > p.y - 0.95 and w.y < p.y + 0.42:
+			return p
 	return null
 
 
@@ -1257,6 +1294,8 @@ func apply_settings() -> void:
 	Buses.apply_all()
 	SettingsMenu.apply_fullscreen()
 	_update_scale()
+	if hud != null and hud.has_method("controls_changed"):
+		hud.controls_changed()    # (the help and the hint say how the mouse aims now)
 	if hud != null and not Prefs.on("ui", "hints") and hud.hint != null:
 		hud.hint.visible = false
 		if hud.has_method("_layout_toast"):
@@ -1321,14 +1360,19 @@ func _track_pointer(ev: InputEvent, early: bool) -> void:
 ## HUD control goes to the control and never reaches `_unhandled_input`).
 func _input(ev: InputEvent) -> void:
 	_track_pointer(ev, true)
-	if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
-		firing = false
+	if ev is InputEventMouseButton and not ev.pressed:
+		if ev.button_index == MOUSE_BUTTON_LEFT:
+			firing = false
+		elif ev.button_index == MOUSE_BUTTON_RIGHT:
+			aim_held = false    # (the aim is let go at once: the pointer is the free arrow from this frame)
 
 
 func _notification(what: int) -> void:
 	# (a window that lost the focus under a held button never sees the release)
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		firing = false
+		aim_held = false
+		_shift_lock = true
 	elif what == NOTIFICATION_WM_MOUSE_EXIT:
 		# the pointer has left the window: nowhere (no crosshair, no lean; the aim stays where it was), as the place does
 		mouse_screen = Vector2(-1.0, -1.0)
@@ -1344,6 +1388,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if menu_open:
 		drag = null
 		firing = false
+		aim_held = false
 		return
 	var avatar := avatar_mode
 	if ev is InputEventMouseButton:
@@ -1353,10 +1398,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN and mb.pressed:
 			_zoom_at(exp(-0.2 * maxf(mb.factor, 0.2)), _vp() / 2.0 if avatar else mb.position)
 		elif avatar:
-			# the avatar's hands: the left button is the trigger (a press that reached the world, not a HUD control); there are
-			# no orders, no picking in the world and no panning
+			# the avatar's hands (a press that reached the world, not a HUD control): with "Always aim at the mouse" the left button is the
+			# trigger; with "Right button aims" the right button (or Shift) aims, the left button fires while it does and is a click when
+			# it does not. There are no orders, no box and no panning.
 			if mb.button_index == MOUSE_BUTTON_LEFT:
-				firing = mb.pressed
+				_avatar_left(mb)
+			elif mb.button_index == MOUSE_BUTTON_RIGHT:
+				aim_held = mb.pressed
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			if selection != null and selection.kind == "person":
 				var w := _screen_to_tile(mb.position)
@@ -1529,9 +1577,13 @@ func _process(delta: float) -> void:
 		coach.tick(dt)
 	if hints != null:
 		hints.tick(dt)
-	# a screenshot has no pointer: `--aim=x,y` puts one over that tile
+	# a screenshot has no pointer: `--aim=x,y` puts one over that tile (and `--aiming` has the right button held on it)
+	if shot_aim_at != "":
+		shot_aim = _aim_spot(shot_aim_at)
 	if shot_aim != Vector2.INF:
 		mouse_screen = _tile_to_screen(shot_aim)
+	if shot_aiming:
+		aim_held = true
 	# the avatar's hands for the steps of this frame (the keys, the pointer's tile, the trigger)
 	_feed_avatar()
 	# The rules only ever take whole steps of 1/30 s, however long the frame was,
@@ -1706,10 +1758,130 @@ func _feed_avatar() -> void:
 		return
 	if avatar_hands_off():
 		firing = false
+		aim_held = false    # (under a menu or a page the right button is not the aim's: its release goes to the page)
 		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
+		return
+	if not AimMode.always():
+		# "Right button aims": with the right button (or Shift) held the survivor aims at the pointer and the trigger counts; without it no
+		# aim is given at all (the survivor faces the way they walk, or stands as they were) and nothing fires
+		var on := aiming()
+		if on and not _was_aiming:
+			_did("aim")    # (Orientation Day's lesson of the aim: the right button, or Shift, went down on the world)
+		_was_aiming = on
+		sim.avatar.set_input(_walk_keys(), aim_tile() if on else Vector2.ZERO, firing and on)
 		return
 	# (a pointer that is not in the window aims nowhere new: the aim stays where it was)
 	sim.avatar.set_input(_walk_keys(), aim_tile() if _pointer_in_window() else me.input_aim, firing)
+
+
+## Whether the survivor is aiming now (`scripts/aim_mode.gd`): in "Right button aims" the right button or Shift is held with the pointer on the
+## bare world; with "Always aim at the mouse" whenever the pointer is in the window. Nothing without an avatar.
+func aiming() -> bool:
+	if not avatar_mode:
+		return false
+	return AimMode.aiming(AimMode.current(), aim_held, _shift_down(), _pointer_in_window(), avatar_hands_off(), over_hud)
+
+
+## Whether the aim marks (the crosshair, the aim line) are to be drawn: with "Always aim at the mouse" as ever (the overlay's own rules
+## say where), with "Right button aims" only while aiming.
+func aim_shown() -> bool:
+	return AimMode.always() or aiming()
+
+
+## Shift is the right button for one hand on the keys. After the window lost the focus it counts again only once it has been let go.
+func _shift_down() -> bool:
+	var down := _key_down(KEY_SHIFT)
+	if not down:
+		_shift_lock = false
+	return down and not _shift_lock
+
+
+## A left press that reached the world in avatar mode. With "Always aim at the mouse" it is the trigger. With "Right button aims" it is the
+## trigger while the right button (or Shift) is held, and otherwise a click: it never fires and never turns the survivor.
+func _avatar_left(mb: InputEventMouseButton) -> void:
+	if not mb.pressed:
+		firing = false
+		return
+	if AimMode.always() or aiming():
+		firing = true
+		return
+	firing = false
+	_click_world(mb.position)
+
+
+## What a click on the world means in avatar mode (the free pointer): a person is selected (their dock opens with the radio's verbs) and, within
+## reach, talked to; a thing the E prompt could be on (a post, the bench, a car, a wall that wants mending, the gate) is used as E would use it
+## when it is in reach, and says "Too far: walk closer" when it is not; the bare ground does nothing.
+func _click_world(pos: Vector2) -> void:
+	if not avatar_mode or avatar_hands_off() or raid_open():
+		return
+	var at := _screen_to_tile(pos)
+	var it = _interact()
+	var near: Array = it.candidates() if it != null else []
+	var person = _pick_person(at)
+	if person != null:
+		_try_select({"kind": "person", "ref": person})
+		# (and a word with them when they are within reach, unless the lesson of Orientation Day has not come to E: no toast for that)
+		for c in near:
+			if String(c.kind) == "person" and String(c.id) == String(person.id):
+				if not (hud.talk_open() and String(hud.talk_person().id) == String(person.id)) and (coach == null or coach.would_allow("interact")):
+					_use_candidate(c)
+				break
+		return
+	if it == null:
+		return
+	var ctx := _click_ctx(at)
+	var cand := WorldClick.under(at, near, ctx)
+	if not cand.is_empty():
+		_use_candidate(cand)
+		return
+	if not WorldClick.under(at, _far_things(it), ctx).is_empty() and _allows("interact"):
+		hud.toast(WorldClick.TOO_FAR, "warn")
+
+
+## What the picture has under a point of the world, for `WorldClick.under`: the wall section and the parked vehicle.
+func _click_ctx(at: Vector2) -> Dictionary:
+	var ctx := {"seg": -1, "vehicle": ""}
+	var wall = _pick_wall(at)
+	if wall != null:
+		ctx["seg"] = int(wall.ref.id)
+	if parking_view != null:
+		ctx["vehicle"] = parking_view.vehicle_at(at)
+	return ctx
+
+
+## The things a click could be on wherever the avatar stands (the rules' `far_things`, when the interact module has it).
+func _far_things(it) -> Array:
+	return it.far_things() if it != null and it.has_method("far_things") else []
+
+
+## What the free pointer is over (`pointed`, `hover` and the hand cursor): a person, or a thing the rules can use (in reach or not). Nothing while
+## aiming, with "Always aim at the mouse", under a menu or a page, over a HUD control or out of the window.
+func _update_pointed() -> void:
+	pointed = {}
+	if avatar_mode and not AimMode.always() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
+		var at := _screen_to_tile(mouse_screen)
+		var person = _pick_person(at)
+		if person != null:
+			pointed = {"kind": "person", "ref": person}
+		else:
+			var it = _interact()
+			if it != null:
+				var ctx := _click_ctx(at)
+				var cand := WorldClick.under(at, it.candidates(), ctx)
+				if not cand.is_empty():
+					pointed = {"kind": "thing", "cand": cand, "near": true}
+				else:
+					var far := WorldClick.under(at, _far_things(it), ctx)
+					if not far.is_empty():
+						pointed = {"kind": "thing", "cand": far, "near": false}
+		hover = pointed.ref if String(pointed.get("kind", "")) == "person" else null
+	elif avatar_mode and not AimMode.always():
+		hover = null
+	var shape := Input.CURSOR_POINTING_HAND if not pointed.is_empty() else Input.CURSOR_ARROW
+	if shape != cursor_shape and avatar_mode:
+		cursor_shape = shape
+		Input.set_default_cursor_shape(shape)
 
 
 ## The camera of avatar mode: it follows the avatar, eased, and leans toward the pointer (up to CAM_LEAD tiles); for CAM_HOLD
@@ -1727,7 +1899,9 @@ func _avatar_camera(dt: float) -> void:
 	cam_pad_x = _free_view_pad()
 	var goal_at: Vector2 = view_pos(me)
 	var lead := Vector2.ZERO
-	if _pointer_in_window():
+	# (with "Right button aims" the camera leans toward the pointer only while aiming: a camera that moved under the free pointer would be
+	# a click that lands elsewhere)
+	if _pointer_in_window() and aim_shown():
 		lead = (mouse_screen - _vp() / 2.0) / zoom_px * CAM_LEAD_K
 		if lead.length() > CAM_LEAD:
 			lead = lead.normalized() * CAM_LEAD
@@ -1812,20 +1986,21 @@ func _dock_offset_px() -> float:
 	return clampf(need, 0.0, (vp.y - dock.position.y) * 0.5)
 
 
-## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow; over the HUD, a menu or
-## a page it is the arrow as ever.
+## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow, with "Always aim at the mouse" and while
+## aiming in "Right button aims"; otherwise, and over the HUD, a menu or a page, it is the arrow as ever.
 func _update_pointer() -> void:
 	if raid_open():
 		return    # (the scene of a played trip has the pointer)
 	var want := pointer_mode()
 	if Input.mouse_mode != want:
 		Input.mouse_mode = want
+	_update_pointed()
 
 
-## The mode the system pointer is in over the yard: hidden over the bare world (the crosshair is drawn there), the arrow over the
-## HUD, off the window, under a menu or a page, and while a trip's report is up.
+## The mode the system pointer is in over the yard: hidden over the bare world while the crosshair is drawn there (always, or while aiming),
+## else the arrow: over the HUD, off the window, under a menu or a page, and while a trip's report is up.
 func pointer_mode() -> Input.MouseMode:
-	if not avatar_hands_off() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(mouse_screen):
+	if not avatar_hands_off() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(mouse_screen) and aim_shown():
 		return Input.MOUSE_MODE_HIDDEN
 	return Input.MOUSE_MODE_VISIBLE
 
@@ -1864,10 +2039,15 @@ func _interact():
 ## rules have them say their line, which the overlay shows over their head); a post, the bench, a wall (round 19: the avatar's hands mend it,
 ## E again stops them) and a car's gauge answer in a toast, in amber when it is a refusal. Nothing under a page, a menu or a place, nor while the tutorial's lock says no.
 func _interact_key() -> void:
+	var pick: Dictionary = overlay.prompt_candidate() if overlay != null else {}
+	_use_candidate(pick)
+
+
+## What E does with the candidate `pick` (or the best, with none): the key's, and a click's on a thing in reach.
+func _use_candidate(pick: Dictionary) -> void:
 	var it = _interact()
 	if it == null or avatar_hands_off() or raid_open() or not _allows("interact"):
 		return
-	var pick: Dictionary = overlay.prompt_candidate() if overlay != null else {}
 	var kind := String(pick.get("kind", ""))
 	var id := String(pick.get("id", ""))
 	if kind == "person" and hud.talk_open() and String(hud.talk_person().id) == id:
@@ -1889,8 +2069,12 @@ func _interact_key() -> void:
 		return
 	hud.hide_talk()
 	var line := String(res.get("line", ""))
+	if line == "" and got == "gate":
+		# (round 22: the rules' `request` has its own line; this is for one that has none, said as the prompt did)
+		line = "Shutting the gate" if String(pick.get("label", "")).begins_with("Shut") else "Opening the gate"
 	if line != "":
-		hud.toast(line)
+		# (the gate's `warn`: it was opened in the dark, and the dead can walk in)
+		hud.toast(line, "warn" if bool(res.get("warn", false)) else "info")
 	elif bool(res.get("left", false)):
 		hud.toast("Left the post")
 
@@ -2100,7 +2284,38 @@ func _handle_events() -> void:
 					_on_wall_mended(e)
 			"call_raised":
 				_on_call_raised(e)
+			"gate":
+				_on_gate_event(e)
+	_watch_gate_news()
 	sim.events.clear()
+
+
+## The gate's rules take a step (round 22, scripts/sim/gate.gd; the event is {"type": "gate", "state": "opening" | "open" | "closing" | "shut",
+## "by": "player" | "auto" | "dusk"}): the sounds (the motor as the leaves begin to move, a latch as they close: scripts/render/parking_node.gd
+## `gate_sound`), and a short banner only for what the player did not do themselves (E answers in a toast): the keeper shutting it at the bell
+## (`by` "dusk": the bell's and the call to arms') and, from the News, a gate that cannot shut for someone in the gateway (`_watch_gate_news`).
+func _on_gate_event(e: Dictionary) -> void:
+	var state := String(e.get("state", ""))
+	var by := String(e.get("by", ""))
+	if parking_view != null:
+		parking_view.gate_sound(state)
+	if by == "dusk" and state == "shut" and hud != null:
+		hud.show_banner("The gate is shut", "Call to arms: the gate keeper shut it" if bool(sim.radio.alarm_on) else "The gate keeper shut it for the night")
+
+
+## The News' gate line that says the gate cannot shut yet (for whoever is in the gateway) is also a short banner: the dusk will not wait. The
+## id of the last news entry seen is kept, so only what is new counts (a loaded game's old lines are not told again).
+func _watch_gate_news() -> void:
+	var radio = sim.get("radio")
+	if radio == null or hud == null or String(sim.player_id) == "":
+		return
+	if _gate_news_id < 0:
+		_gate_news_id = int(radio.latest_id())
+		return
+	for entry in radio.news_since(_gate_news_id):
+		_gate_news_id = maxi(_gate_news_id, int(entry.id))
+		if String(entry.kind) == "gate" and String(entry.text).begins_with("The gate cannot shut"):
+			hud.show_banner(String(entry.text), String(entry.sub))
 
 
 ## A call that cannot wait has been raised (radio.gd `URGENT_KINDS`; round 19). A call's time is game minutes, about two real seconds at 3x for
@@ -2204,6 +2419,7 @@ func _parse_args() -> void:
 	var beside_spec := ""
 	var post_id := ""
 	var bench_asked := false
+	var gate_asked := ""
 	var drive_spec := ""
 	var drive_do := ""
 	var cam_asked := false
@@ -2256,6 +2472,15 @@ func _parse_args() -> void:
 				var tile := v.split(",")
 				if tile.size() == 2 and tile[0].is_valid_float() and tile[1].is_valid_float():
 					shot_aim = Vector2(float(tile[0]), float(tile[1]))
+				elif v.begins_with("@"):
+					# --aim=@dez (a person), @post:gate or @bench: the pointer over that, wherever it is by the time of the shot
+					shot_aim_at = v.trim_prefix("@")
+			"aiming":
+				# --aiming holds the right button down (with "Right button aims" the survivor aims at --aim's tile, the crosshair and the line show)
+				shot_aiming = true
+			"aim-mode":
+				# --aim-mode=right|always is the setting for this screenshot (its own settings file)
+				AimMode.set_mode(v)
 			"bleed":
 				# --bleed=<id> has that person bleeding (a screenshot's staging: the radio refuses them a trip, and `--raid=` shows
 				# who was left out on the road's overlay and in the report)
@@ -2292,6 +2517,11 @@ func _parse_args() -> void:
 			"bench":
 				# --bench has the avatar work the bench (E at it); --advance=3 to see the ring and the hammer
 				bench_asked = true
+			"gate":
+				# --gate=open|shut|held (round 22) stages the gate: its leaves all the way open, or shut, or held open by the avatar's hand
+				# (the lamp, the HUD's word, the faint outlines; --hour=20 for the pulsing ring of a gate open in the dark; --beside=gate
+				# stands the avatar at the lever, for the prompt). Put it after --hour and before --advance.
+				gate_asked = v
 			"noavatar":
 				pass # --noavatar plays the old yard, with no avatar (see wants_avatar, which _ready asks before the run is built)
 			"wall":
@@ -2541,10 +2771,16 @@ func _parse_args() -> void:
 		_stage_post(post_id)
 	if bench_asked:
 		_stage_bench()
+	if gate_asked != "":
+		stage_gate(gate_asked)
 	if advance > 0.0:
 		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
+		if shot_aim_at != "":
+			shot_aim = _aim_spot(shot_aim_at)
 		if shot_aim != Vector2.INF:
 			mouse_screen = _tile_to_screen(shot_aim)
+		if shot_aiming:
+			aim_held = true
 		_feed_avatar()
 		var steps := int(advance * 30.0)
 		for i in steps:
@@ -2556,6 +2792,20 @@ func _parse_args() -> void:
 		sim.events.clear()
 	if want_notice:
 		ensure_notice()
+
+
+## The tile a screenshot's `--aim=@...` means: a person's chest, a night post's spot or the bench; INF when there is no such thing.
+func _aim_spot(spec: String) -> Vector2:
+	if spec.begins_with("post:"):
+		var po: Dictionary = sim.jobs.post(spec.trim_prefix("post:"))
+		return Vector2(po.pos) if not po.is_empty() else Vector2.INF
+	if spec == "bench":
+		var b: Vector2 = sim.workshop.bench()
+		return b if b != Vector2.ZERO else Vector2.INF
+	for p in sim.people:
+		if String(p.id) == spec:
+			return Vector2(p.x, p.y - 0.3)
+	return Vector2.INF
 
 
 ## Stands the avatar a step from a spot (a screenshot's staging): on the first open ground of the sides, `step` tiles away, the
@@ -2576,8 +2826,35 @@ func _stage_beside(spot: Vector2, step: float = 1.1) -> bool:
 	return false
 
 
-## --beside=<person id>, post:<post id> or bench: the avatar a step from that (nothing is used). False when there is no such thing.
+## A screenshot's gate (--gate=open|shut|held, round 22): "open" has its leaves all the way open (as if a car had just let itself through: the
+## keeper shuts it four seconds of the rules' time after), "shut" all the way shut by hand, "held" open and held open by the avatar's hand
+## (what E at the lever does). With the rules in charge (avatar mode) it is the rules' own state that is put, by their own `request` (so a
+## bell that has rung since `--hour` is seen first and does not shut it again); otherwise the leaves are put (as `--gate-open=` does).
+## False for another word.
+func stage_gate(what: String) -> bool:
+	if not what in ["open", "shut", "held"]:
+		return false
+	var open_to := 0.0 if what == "shut" else 1.0
+	var rules = Hud.GateKit.active_gate(sim)
+	if rules != null:
+		rules.update(0.0)
+		rules.request(what != "shut", "player")
+		rules.open = open_to
+		if what == "open":
+			rules.held = ""
+	if gate_node != null:
+		if rules != null:
+			gate_node.snap(open_to)    # (the leaves stand there at once and go on following the rules)
+		else:
+			gate_node.stage_open(open_to)
+	return true
+
+
+## --beside=<person id>, post:<post id>, gate or bench: the avatar a step from that (nothing is used). False when there is no such thing.
 func _stage_beside_spec(spec: String) -> bool:
+	if spec == "gate":
+		var lever: Vector2 = Hud.GateKit.spot_of(Hud.GateKit.gate_of(sim))
+		return lever != Vector2.INF and _stage_beside(lever, 0.9)
 	if spec == "bench":
 		var at: Vector2 = sim.workshop.bench()
 		return at != Vector2.ZERO and _stage_beside(at, 0.9)

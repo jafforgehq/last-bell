@@ -20,6 +20,9 @@
 ##           defended section, 3 scrap: it rings until the night's brutes are dead or the dawn, and not for three hours: the brutes
 ##           come after midnight), until the bell
 ##   night_road  a played trip is out and the dusk with a Big Night is coming (news at "soon", a call at "now", see `road_status`)
+##   gate    (round 22, scripts/sim/gate.gd) the Main gate stands open by the avatar's choice (`held` "open") in the dark, half an hour after the
+##           dusk, with the dead near: "The gate is open and it is dark" (shut it | keep it open, default shut). Once a night; `carry_out` hands the
+##           option to `sim.gate.carry_out`.
 ## NEWS ONLY: `forecast` (the day-ahead notice of a Big Night at noon, only when someone is at the Radio desk), `night_road`, and
 ## "The <wall> is shut again" (kind `breach`, no options) when a breach has been closed.
 ##
@@ -502,6 +505,8 @@ func carry_out(e: Dictionary, option_id: String) -> String:
 				leave_requested = true
 				return "Heading home"
 			return "Staying out: the base holds the night alone"
+		"gate":
+			return sim.gate.carry_out(e, option_id)    # (round 22: the open gate in the dark, gate.gd)
 	return ""
 
 

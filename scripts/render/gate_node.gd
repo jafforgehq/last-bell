@@ -11,6 +11,13 @@
 ##   pallets' end, and over the leaves.
 ## - `follow(open_target, dt)` eases `open` to 0 (shut) or 1 (open) in OPEN_TIME seconds; the vehicle view (ACTOR) calls it every
 ##   frame with its demand (1 while a car, or a person on a trip, is within 6 tiles of the gate and going through it).
+## - ROUND 22, "a proper gate": in avatar mode (`sim.gate.active()`, scripts/sim/gate.gd) the gate has rules of its own (the avatar opens and
+##   shuts it with E at the lever, the dusk keeper shuts it, a car or a party that has to pass asks it open), and `sim.gate.open` is the REAL
+##   state: `follow` then ignores the demand it is given and eases the leaves to that (a little quicker than OPEN_TIME so that they never
+##   lag the rules: the rules' clock is the game's, so `dt` is the view's own time scaled by `Main.gate_rate`, and the leaves keep the rules'
+##   pace at any game speed). With no avatar (the classic game, the tests, Orientation Day) the demand rules exactly as before.
+## - The control point's picture (`Lever`): a steel post with a panel box at `sim.gate.control_spot()` and a lamp on it that is green while the
+##   gate is open, red while it is shut and amber, blinking, while the leaves are on the move (with reduced motion: steady). Only in avatar mode.
 ## - ZONE is the ground the gate rules over (tiles): the mouth, the passage under the catwalk bridge and the street's end of
 ##   it; Z_CAR is the z a car is drawn in: over the ground and its paint (z 1 and 2), under the wall pieces and the bridge (z 4).
 ## - Started with `--gate-debug` the node also draws the motor pool's routes, the cars' bodies along them and the zones, over
@@ -20,14 +27,20 @@
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
+const GateKit := preload("res://scripts/ui/gate_kit.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 const TILE := GD.TILE
 
 ## The wall segment this is the picture of (the Main gate).
 const SEGMENT := 2
 const ZONE := Rect2(35.5, 14.0, 7.0, 7.5)
 const Z_CAR := 3
+## The lever's z: over the ground's bits (5), under the people (6).
+const LEVER_Z := 5
 ## How long the leaves take to go from shut to open or back, in seconds.
 const OPEN_TIME := 0.8
+## In avatar mode the leaves catch up with the rules' `open` this many times quicker than OPEN_TIME (so that they never lag the rules).
+const CHASE := 2.0
 ## How far each leaf slides (tiles): out of the opening between the posts, in behind the post and the wall piece beside it.
 const TRAVEL := 2.6
 ## Where the gate's picture is cut (pixels of its 729 px width): the left post ends, the leaves meet, the right post starts.
@@ -51,11 +64,18 @@ var _debug := false
 var _pool := {}
 ## A screenshot's open gate: `follow` leaves `open` as it is.
 var _held := false
+## The sim (the gate's rules, `sim.gate`), when `setup` was given it, and the lever's picture.
+var _sim
+var lever: Node2D
+## Which way the leaves were last seen to move (+1 opening, -1 closing, 0 still).
+var _dir := 0
 
 
 ## `w` is the world (its segment holders and `segment_painters`), `rules` the sim (the segment's state now, optional).
 func setup(w, rules = null) -> void:
 	world = w
+	_sim = rules
+	_make_lever()
 	_holder = w.segment_holders.get(SEGMENT)
 	if _holder == null:
 		return
@@ -79,9 +99,7 @@ func setup(w, rules = null) -> void:
 	set_state(now)
 	for a in OS.get_cmdline_user_args():
 		if String(a).begins_with("--gate-open="):
-			open = clampf(float(String(a).trim_prefix("--gate-open=")), 0.0, 1.0)
-			_held = true
-			_apply()
+			stage_open(float(String(a).trim_prefix("--gate-open=")))
 	for a in OS.get_cmdline_user_args():
 		if String(a).begins_with("--gate-cars="):
 			_demo_cars(String(a).trim_prefix("--gate-cars="))
@@ -154,16 +172,49 @@ func _sprite(file: String, x: float, y: float, w: float, h: float) -> Sprite2D:
 	return s
 
 
-## Moves `open` towards `open_target` (0 shut, 1 open) at the speed that takes OPEN_TIME seconds from one end to the other.
+## Moves `open` towards `open_target` (0 shut, 1 open) at the speed that takes OPEN_TIME seconds from one end to the other. In avatar mode
+## (`sim.gate.active()`) the target is the rules' own `sim.gate.open` instead, whatever is asked (the demand of the vehicle view is the
+## rules' business there: `sim.gate.demand`), and the leaves follow it CHASE times as fast. The lever's lamp follows the leaves.
 func follow(open_target: float, dt: float) -> void:
+	var rules = GateKit.active_gate(_sim)
+	_sync_lever(rules)
 	if _held:
 		return
 	var goal := clampf(open_target, 0.0, 1.0)
-	var next := move_toward(open, goal, maxf(dt, 0.0) / OPEN_TIME)
+	var rate := 1.0
+	if rules != null:
+		goal = GateKit.open_of(rules)
+		rate = CHASE
+	var next := move_toward(open, goal, maxf(dt, 0.0) * rate / OPEN_TIME)
 	if is_equal_approx(next, open):
 		return
+	_dir = 1 if next > open else -1
 	open = next
 	_apply()
+	_sync_lever(rules)
+
+
+## A screenshot's gate: the leaves stand `value` open (0 to 1) and `follow` leaves them there (`--gate-open=`, and `--gate=` when the rules
+## are not in charge).
+func stage_open(value: float) -> void:
+	open = clampf(value, 0.0, 1.0)
+	_held = true
+	_apply()
+	_sync_lever(GateKit.active_gate(_sim))
+
+
+## The leaves stand `value` open at once (0 to 1) and go on following (a screenshot's `--gate=` with the rules in charge).
+func snap(value: float) -> void:
+	open = clampf(value, 0.0, 1.0)
+	_held = false
+	_dir = 0
+	_apply()
+	_sync_lever(GateKit.active_gate(_sim))
+
+
+## Whether the leaves follow the rules' own state now (avatar mode), not the vehicles' demand.
+func ruled() -> bool:
+	return GateKit.is_active(_sim)
 
 
 ## The leaves' travel at `o` (0 to 1): slow at the ends, quick in the middle.
@@ -192,6 +243,134 @@ func _apply() -> void:
 		_leaf_l.position = _base_l + Vector2(-d, 0.0)
 	if _leaf_r != null:
 		_leaf_r.position = _base_r + Vector2(d, 0.0)
+
+
+# ---------------------------------------------------------------------------- the lever --
+
+## The control point's picture, made once (it is only shown in avatar mode).
+func _make_lever() -> void:
+	if lever != null:
+		return
+	lever = Lever.new()
+	lever.name = "Lever"
+	lever.z_index = LEVER_Z
+	lever.visible = false
+	add_child(lever)
+
+
+## Puts the lever where the rules say (`control_spot()`), shows it in avatar mode only, and sets its lamp to what the leaves are doing: the
+## state the picture shows is the picture's own (`open`: a leaf that is still moving is amber), so that the lamp never says what the leaves do not.
+func _sync_lever(rules) -> void:
+	if lever == null:
+		return
+	var spot := GateKit.spot_of(rules) if rules != null else Vector2.INF
+	var on: bool = rules != null and spot != Vector2.INF and state >= 0 and state < LEAF_STATES
+	if lever.visible != on:
+		lever.visible = on
+	if not on:
+		return
+	var at := spot * TILE
+	if not lever.position.is_equal_approx(at):
+		lever.position = at
+	lever.set_state(GateKit.state_of(open, _dir), GateKit.held_of(rules))
+
+
+## The state of the lever's lamp now: "shut", "open", "opening" or "closing" ("" while the lever is not shown).
+func lamp_state() -> String:
+	return lever.lamp_state if lever != null and lever.visible else ""
+
+
+## What the lever looks like: a steel post with a box on it, a handle that is up while the gate is open and down while it is shut, and a
+## lamp. The foot of the picture is the node's own position (the control spot). It is a few pixels of drawing and nothing else.
+class Lever:
+	extends Node2D
+
+	const GateKit := preload("res://scripts/ui/gate_kit.gd")
+	const Prefs := preload("res://scripts/prefs.gd")
+	const STEEL := Color("#8f9aa3")
+	const STEEL_DARK := Color("#3d474f")
+	const EDGE := Color(0.04, 0.06, 0.07, 0.95)
+	const PANEL := Color("#1d2529")
+	const YELLOW := Color("#e7b93e")
+	## The size of the picture in pixels of the world (64 to a tile): the box, the post and the lamp's radius.
+	const BOX := Vector2(30.0, 38.0)
+	const POST_H := 20.0
+	const LAMP_R := 6.0
+	var lamp_state := GateKit.SHUT
+	var held := ""
+	## How many times it has been drawn (for the tests).
+	var draws := 0
+	var _blink := 0.0
+
+	func _ready() -> void:
+		set_process(false)
+
+	func set_state(new_state: String, new_held: String) -> void:
+		if new_state == lamp_state and new_held == held:
+			return
+		lamp_state = new_state
+		held = new_held
+		set_process(_moving())
+		queue_redraw()
+
+	func _moving() -> bool:
+		return lamp_state == GateKit.OPENING or lamp_state == GateKit.CLOSING
+
+	func _process(delta: float) -> void:
+		# the lamp blinks while the leaves are on the move (steady with reduced motion)
+		if Prefs.on("ui", "reduce_motion"):
+			return
+		var before := _lit()
+		_blink += delta
+		if _lit() != before:
+			queue_redraw()
+
+	func _lit() -> bool:
+		return not _moving() or fmod(_blink, 0.5) < 0.3
+
+	## The lamp's colour now (dark for the off beat of a blink).
+	func lamp_color() -> Color:
+		return GateKit.lamp_color(lamp_state) if _lit() else GateKit.LAMP_OFF
+
+	func _draw() -> void:
+		draws += 1
+		# the foot: a small shadow and a plate
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
+		draw_circle(Vector2(0.0, 2.0), 17.0, Color(0, 0, 0, 0.28))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_rect(Rect2(-10.0, -4.0, 20.0, 6.0), EDGE)
+		draw_rect(Rect2(-9.0, -3.5, 18.0, 4.0), STEEL_DARK)
+		# the post
+		draw_rect(Rect2(-4.5, -4.0 - POST_H, 9.0, POST_H), EDGE)
+		draw_rect(Rect2(-3.5, -3.5 - POST_H, 7.0, POST_H - 0.5), STEEL)
+		# the box on it: a dark panel in a steel frame
+		var top := -4.0 - POST_H - BOX.y + 6.0
+		var box := Rect2(-BOX.x / 2.0, top, BOX.x, BOX.y)
+		draw_rect(box.grow(1.5), EDGE)
+		draw_rect(box, STEEL)
+		draw_rect(box.grow(-3.0), PANEL)
+		# the lamp, with its halo: the gate's state in a colour (the word is the HUD's)
+		var lamp := Vector2(0.0, top + 10.0)
+		var col := lamp_color()
+		draw_circle(lamp, LAMP_R + 3.5, Color(col, 0.22))
+		draw_circle(lamp, LAMP_R + 1.0, EDGE)
+		draw_circle(lamp, LAMP_R, col)
+		draw_circle(lamp + Vector2(-1.8, -1.8), 1.8, Color(1, 1, 1, 0.55))
+		# the lever: a knob in a slot, up while the gate is open, down while it is shut, half way on the move
+		var slot_top := top + 20.0
+		var slot_bottom := top + BOX.y - 5.0
+		draw_line(Vector2(0.0, slot_top), Vector2(0.0, slot_bottom), EDGE, 6.0)
+		draw_line(Vector2(0.0, slot_top), Vector2(0.0, slot_bottom), Color("#0b1012"), 4.0)
+		var mid := (slot_top + slot_bottom) / 2.0
+		var reach := (slot_bottom - slot_top) / 2.0 - 2.5
+		var tilt := -1.0 if lamp_state == GateKit.OPEN else (1.0 if lamp_state == GateKit.SHUT else 0.0)
+		var knob := Vector2(0.0, mid + reach * tilt)
+		draw_line(Vector2(0.0, mid), knob, YELLOW, 3.0, true)
+		draw_circle(knob, 4.0, EDGE)
+		draw_circle(knob, 3.0, YELLOW)
+		# a held gate wears a small pin: a bar across the slot
+		if held != "":
+			draw_rect(Rect2(-8.0, slot_bottom + 1.0, 16.0, 2.0), GateKit.LAMP_MOVING)
 
 
 # ---------------------------------------------------------------------- the debug picture --

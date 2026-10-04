@@ -183,6 +183,7 @@ static func install(game, avatar_run: bool = false):
 	game.relations.enabled = false
 	game.specialists.enabled = false
 	game.initiative.enabled = false
+	game.gate.enabled = false    # (round 22: the lesson's gate is the shut wall it was: gate.gd)
 	var waves := OrientationWaves.new()
 	game.waves = waves
 	waves.setup(game)

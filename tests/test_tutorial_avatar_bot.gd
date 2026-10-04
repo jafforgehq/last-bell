@@ -1,6 +1,6 @@
 extends "res://tests/case.gd"
 ## A headless bot plays the avatar's Orientation Day from the title to the last card through the real handlers (the keys held
-## down, the mouse and its left button, R F T G L J, a click on a crew card, the radio's buttons and the call's, the pages and the
+## down, the mouse, its right button to aim and its left to shoot, R F T G L J, a click on a crew card, the radio's buttons and the call's, the pages and the
 ## coach's own buttons), with the coach teaching and the rules stepping: every step is reached in order, each one's lesson really
 ## happened in the world (the walk, the kill from the walkway, the reload, the answer of the radio, the refusal and the push, the
 ## call, the map, the alarm, the duty roster), nothing is skipped and nothing logs an error, and the lesson ends with the flag set.
@@ -45,7 +45,7 @@ func test_the_bot_plays_every_step_of_the_avatars_lesson_to_the_end() -> void:
 			"shoot":
 				check(int(me.stats.kills) >= 1 and int(me.stats.shots) >= 1, "Aim and shoot: her own shot put a walker down (%d shots, %d kills)" % [me.stats.shots, me.stats.kills])
 				check(sim.world.on_deck(me.x, me.y), "from the walkway (the ladder)")
-				check(not main.firing and not Input.is_physical_key_pressed(KEY_D), "and the hands are let go")
+				check(not main.firing and not main.aim_held and not Input.is_physical_key_pressed(KEY_D), "and the hands are let go (the trigger, the aim, the keys)")
 			"reload":
 				check(int(me.mag) == int(me.gun.mag) and me.reloading <= 0.0, "Reload and swing: the gun is full again")
 			"crew":

@@ -7,6 +7,7 @@ extends "res://tests/case.gd"
 ## (#13). The rules these lean on are tests/test_radio.gd's, tests/test_raid_run.gd's, tests/test_place_flow.gd's and
 ## tests/test_raid_scene.gd's.
 
+const AimMode := preload("res://scripts/aim_mode.gd")
 const TutorialKit := preload("res://tests/tutorial_kit.gd")
 const Kit := preload("res://tests/hud_kit.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
@@ -23,6 +24,7 @@ const SENTINEL := "user://test_round17_views_save.json"
 func _main(crew: int = 3) -> Node:
 	PlaceFlow.live_enabled = false    # (round 21: these trips keep the overlay's road; the live drive is tests/test_road_flow.gd's)
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": true})
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
 	main.raid_stub = true
 	main.sim.waves.enabled = false
 	return main
@@ -104,6 +106,7 @@ func test_who_was_left_out_and_why_is_on_the_road_overlay_and_in_the_report() ->
 func test_the_lists_of_the_left_out_fit_the_window_on_the_road_and_in_the_report_even_in_the_smallest() -> void:
 	PlaceFlow.live_enabled = false    # (round 21: the overlay's road)
 	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": 5, "avatar": true}, 700, 560)
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
 	main.raid_stub = true
 	var sim = main.sim
 	sim.waves.enabled = false

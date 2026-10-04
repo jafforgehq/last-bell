@@ -11,7 +11,8 @@
 ## jumped, and somebody found a hair inside a wall (a person taken over from the AI stands where the pathfinder left
 ## them) is pushed out of it, never through it. The raised decks need nothing of their own: their rails are in the grid.
 ## AIMING. The person faces the mouse (`facing`) and the gun points at it (`aim`, radians, from the shoulder, as the
-## drawing wants it).
+## drawing wants it). With no aim given (`set_input` with the zero point: the pointer is free, round 22) they face the way they walk, the
+## gun turning to it at `TURN_RATE`, and stand still with their last facing and aim.
 ## SHOOTING. While the trigger is held and the gun is cool, loaded and not being reloaded, one round (a shell's pellets)
 ## leaves the muzzle along the aim, scattered inside a cone: the gun's `spread`, a worse shot for a poor Shooting skill,
 ## hunger, a wound or a shaken mind, wider with the kick of the last shots (`recoil`, `bloom`) and wider again while
@@ -43,6 +44,11 @@
 extends RefCounted
 
 const WALK_SPEED := 3.2
+## With the pointer free (no aim given) the gun turns to the way the person walks at this many radians a second: about a fifth of a second
+## for half a turn.
+const TURN_RATE := 14.0
+## Where each facing points, radians (the drawing's: east is 0, south is a quarter turn down the screen).
+const FACING_ANGLE := {"E": 0.0, "S": PI / 2.0, "W": PI, "N": -PI / 2.0}
 ## Half the width of the avatar's box, in tiles.
 const RADIUS := 0.3
 ## No walking sub-step is longer than this many tiles (a tile is one; nothing is jumped).
@@ -253,7 +259,7 @@ func update(p, dt: float) -> void:
 			p.reloading = 0.0
 			p.mag = int(p.gun.get("mag", 0))
 	_move(p, dt)
-	_aim(p)
+	_aim(p, dt)
 	if p.input_reload:
 		p.input_reload = false
 		_start_reload(p)
@@ -369,8 +375,26 @@ func shoulder(p) -> Vector2:
 	return Vector2(p.x - pv.x if p.facing == "W" else p.x + pv.x, p.y + pv.y)
 
 
-## Facing and aim from the mouse (or, with no mouse yet, from the way they walk).
-func _aim(p) -> void:
+## Standing with the pointer free, the gun points where the person faces: one who has never aimed or walked (aim 0, a facing of the start) or
+## who was turned by the rules (the bench) is squared up to their facing, so that a blow swings the way they look.
+func _square_up(p) -> void:
+	var look := Vector2.from_angle(float(p.aim))
+	if sim.facing_of(look.x, look.y, String(p.facing)) != String(p.facing):
+		p.aim = FACING_ANGLE.get(String(p.facing), float(p.aim))
+
+
+## `from` turned toward `to` by at most `max_step` radians, the short way round.
+static func turn_toward(from: float, to: float, max_step: float) -> float:
+	var d := atan2(sin(to - from), cos(to - from))
+	if absf(d) <= max_step:
+		return to
+	return from + signf(d) * max_step
+
+
+## Facing and aim from the mouse. With no aim given (the pointer is free: round 22's "Right button aims") the person faces the way they
+## walk, the gun turning to it smoothly (TURN_RATE), and when they stand still nothing changes: the last facing and aim stay, so that
+## they do not jitter.
+func _aim(p, dt: float = 0.0) -> void:
 	var at: Vector2 = p.input_aim
 	var has_aim: bool = at != Vector2.ZERO
 	var look := Vector2.ZERO
@@ -379,11 +403,18 @@ func _aim(p) -> void:
 	elif p.moving:
 		look = p.input_move
 	if look.length() < 0.05:
+		if not has_aim:
+			_square_up(p)
 		return
 	p.facing = sim.facing_of(look.x, look.y, p.facing)
-	var to: Vector2 = (at - shoulder(p)) if has_aim else look
-	if to.length() > 0.1:
-		p.aim = to.angle()
+	if has_aim:
+		var to: Vector2 = at - shoulder(p)
+		if to.length() > 0.1:
+			p.aim = to.angle()
+	elif dt > 0.0:
+		p.aim = turn_toward(float(p.aim), look.angle(), TURN_RATE * dt)
+	else:
+		p.aim = look.angle()
 
 
 # ----------------------------------------------------------------- shooting --

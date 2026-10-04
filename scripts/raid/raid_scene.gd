@@ -15,9 +15,12 @@
 ## "road_there", "place", "road_home" or "report". Without a flow (`setup` alone: the tests, a screenshot) the scene is only the
 ## place, the colony is held as it was, and the end card comes when the place is over.
 ##
-## CONTROLS. WASD walk, the mouse aims, the left button held fires (not through the HUD), R reloads, F swings the melee, E
-## searches the container in reach or gets a friend who is down up (E again stops), Space pauses (the place AND the base: nothing moves), the wheel zooms, the
-## camera follows the one you lead, Esc is the game's menu. There is no selecting, no box, no right-click order, no panning: the
+## CONTROLS. WASD walk, R reloads, F swings the melee, E searches the container in reach or gets a friend who is down up (E again
+## stops), Space pauses (the place AND the base: nothing moves), the wheel zooms, the camera follows the one you lead, Esc is the game's
+## menu. AIMING (round 22, scripts/aim_mode.gd): with "Right button aims" (the default) the pointer is a free arrow, the survivor faces the way
+## they walk, the right button (or Shift) held aims at the pointer and the left button fires only then; a left click picks a friend (the radio)
+## and uses the container or the friend who is down in reach (E's way), "Too far: walk closer" when it is not. With "Always aim at the mouse"
+## the mouse aims all the time and the left button held fires (not through the HUD). There is no box, no right-click order, no panning: the
 ## squad is asked over the radio (the HUD's panel: `contact`, `ask`; the verbs of `radio_verbs.gd` through `squad_radio` and
 ## `base_radio`, which stand in for the radio they ask). When the one you lead falls the next of the squad leads (the camera
 ## glides, a banner says who; the base is told when the trip ends, and only if she is lost: see `_watch_leader`).
@@ -39,6 +42,8 @@ const RaidHud := preload("res://scripts/raid/raid_hud.gd")
 const RaidOverlay := preload("res://scripts/raid/raid_overlay.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
+const WorldClick := preload("res://scripts/ui/world_click.gd")
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
@@ -105,6 +110,13 @@ var hover = null
 ## The hands: the keys held (code to true), the left button, and where the pointer was last seen (-1, -1: nowhere).
 var held := {}
 var fire_held := false
+## Round 22, "Right button aims": the right button is held (a press that reached the world; any release lets it go), Shift was down when the
+## window lost the focus (it does not count again until it has been let go), and what the free pointer is over for the hand cursor
+## ({"kind": "container" | "friend", "ref": ...} or {}).
+var aim_held := false
+var _shift_lock := false
+var pointed := {}
+var cursor_shape := Input.CURSOR_ARROW
 var _mouse := Vector2(-1.0, -1.0)
 ## A HUD control has the pointer now (no crosshair, the system's arrow): `_input` sees every pointer event first and says the
 ## HUD has it, `_unhandled_input` only the ones the HUD let through and says it has not.
@@ -935,9 +947,11 @@ func _input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton:
 		_mouse = ev.position
 		# the trigger is let go whenever the button is, wherever the pointer was (a release over a HUD control goes to the
-		# control and never reaches `_unhandled_input`)
+		# control and never reaches `_unhandled_input`); so is the aim
 		if ev.button_index == MOUSE_BUTTON_LEFT and not ev.pressed:
 			fire_held = false
+		elif ev.button_index == MOUSE_BUTTON_RIGHT and not ev.pressed:
+			aim_held = false
 		return
 	if not (ev is InputEventKey):
 		return
@@ -1018,8 +1032,53 @@ func mouse_button(mb: InputEventMouseButton) -> void:
 			if mb.pressed:
 				zoom_at(exp(-0.2 * maxf(mb.factor, 0.2)), mb.position)
 		MOUSE_BUTTON_LEFT:
-			fire_held = mb.pressed
 			_mouse = mb.position
+			if not mb.pressed:
+				fire_held = false
+			elif AimMode.always() or aiming():
+				fire_held = true
+			else:
+				# (a click: it never fires and never turns the survivor)
+				fire_held = false
+				click_place(mb.position)
+		MOUSE_BUTTON_RIGHT:
+			aim_held = mb.pressed
+			_mouse = mb.position
+
+
+## What a left click on the place means with a free pointer: a friend of the squad is asked over the radio (and a friend who is down within
+## reach is got up, E's way); a container is searched when it is in reach (E's way) and "Too far: walk closer" says it is not; the bare ground does
+## nothing.
+func click_place(pos: Vector2) -> void:
+	if phase != "place" or ended or _held_still() or run == null:
+		return
+	var at := to_tile(pos)
+	aim_tile = at
+	var lead = leader()
+	var friend = squad_at(at)
+	if friend != null:
+		hud_layer.pick_contact("squad", friend)
+		if friend.downed and lead != null and Vector2(lead.x, lead.y).distance_to(Vector2(friend.x, friend.y)) <= HELP_REACH:
+			search_key()
+		return
+	var c := pick_container(at)
+	if c.is_empty() or bool(c.get("looted", false)) or lead == null:
+		return
+	if Vector2(lead.x, lead.y).distance_to(Vector2(c.pos)) <= E_REACH:
+		search_key()
+	else:
+		hud_layer.toast(WorldClick.TOO_FAR, "warn")
+
+
+## The friend of the squad (not the one you lead, not the lost) whose picture is under a point of the place, or null.
+func squad_at(at: Vector2):
+	var lead = leader()
+	for p in run.squad:
+		if p == lead or p.dead:
+			continue
+		if at.x > p.x - 0.42 and at.x < p.x + 0.42 and at.y > p.y - 0.95 and at.y < p.y + 0.42:
+			return p
+	return null
 
 
 func mouse_motion(mm: InputEventMouseMotion) -> void:
@@ -1054,7 +1113,13 @@ func _hands() -> void:
 	if still:
 		move = Vector2.ZERO
 		fire = false
-	run.sim.avatar.set_input(move, aim_tile, fire)
+	var aim_for := aim_tile
+	if not AimMode.always():
+		# "Right button aims": no aim at all unless the right button (or Shift) is held on the world, and then the trigger counts
+		var on := aiming()
+		aim_for = aim_tile if on else Vector2.ZERO
+		fire = fire and on
+	run.sim.avatar.set_input(move, aim_for, fire)
 
 
 ## A key is down by what it says or by where it is (W A S D are the keys at the W A S D places on any layout); the events the
@@ -1073,18 +1138,54 @@ func _live() -> bool:
 ## The pointer over the bare world is the crosshair that the overlay draws, not the system's arrow; over the HUD or off the
 ## window, or when the place is not the screen, it is the arrow as ever.
 func _update_pointer() -> void:
+	_update_pointed()
 	if not _live():
 		return
 	var want := Input.MOUSE_MODE_VISIBLE
-	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse):
+	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse) and (AimMode.always() or aiming()):
 		want = Input.MOUSE_MODE_HIDDEN
 	if Input.mouse_mode != want:
 		Input.mouse_mode = want
 
 
-## Whether the overlay draws the crosshair now.
+## Whether the overlay draws the crosshair now: with "Always aim at the mouse" whenever the pointer is on the place, with "Right button aims"
+## only while the right button (or Shift) is held there.
 func crosshair_shown() -> bool:
-	return phase == "place" and not ended and not paused and not _menu_up() and not over_hud and _mouse.x >= 0.0
+	return aiming()
+
+
+## Whether the survivor is aiming now (scripts/aim_mode.gd).
+func aiming() -> bool:
+	if phase != "place" or ended or paused or _menu_up() or over_hud or _mouse.x < 0.0:
+		return false
+	return AimMode.always() or aim_held or _shift_down()
+
+
+## Shift is the right button for one hand on the keys; after the window lost the focus it counts again only once it has been let go.
+func _shift_down() -> bool:
+	var down := _key_down(KEY_SHIFT)
+	if not down:
+		_shift_lock = false
+	return down and not _shift_lock
+
+
+## The hand over a friend, a container or a friend who is down, with a free pointer.
+func _update_pointed() -> void:
+	pointed = {}
+	if phase == "place" and not ended and not AimMode.always() and not aiming() and not _menu_up() and not over_hud and _mouse.x >= 0.0 and run != null:
+		var at := to_tile(_mouse)
+		var friend = squad_at(at)
+		if friend != null:
+			pointed = {"kind": "friend", "ref": friend}
+		else:
+			var c := pick_container(at)
+			if not c.is_empty() and not bool(c.get("looted", false)):
+				pointed = {"kind": "container", "ref": c}
+	var shape := Input.CURSOR_POINTING_HAND if not pointed.is_empty() else Input.CURSOR_ARROW
+	if shape != cursor_shape:
+		cursor_shape = shape
+		if _live():
+			Input.set_default_cursor_shape(shape)
 
 
 func _notification(what: int) -> void:
@@ -1096,6 +1197,8 @@ func _notification(what: int) -> void:
 		if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 			held.clear()
 			fire_held = false
+			aim_held = false
+			_shift_lock = true
 
 
 # ------------------------------------------------------------------- loop --
@@ -1167,7 +1270,7 @@ func _tick_place(dt: float) -> void:
 	var lead = leader()
 	if lead != null:
 		var lean := Vector2.ZERO
-		if _mouse.x >= 0.0:
+		if _mouse.x >= 0.0 and (AimMode.always() or aiming()):
 			lean = (_mouse - _vp() / 2.0) / zoom_px * CAM_LEAD_K
 			if lean.length() > CAM_LEAD:
 				lean = lean.normalized() * CAM_LEAD

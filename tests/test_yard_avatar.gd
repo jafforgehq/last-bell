@@ -11,6 +11,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const MainScript := preload("res://scripts/main.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const Kinds := preload("res://tests/test_pawn_kinds.gd")
 
 const DT := 1.0 / 30.0
@@ -21,13 +22,17 @@ const ARENA := Rect2i(34, 26, 20, 12)
 
 # ----------------------------------------------------------------- helpers --
 
-## The real game (a classic start, six people) in a window of this size. `avatar` asks for avatar mode (the tests do not get it
-## unless they say so), and the camera is put on the spot with the avatar standing in the middle of a clear arena.
+## The real game (a classic start, six people) in a window of this size, with the setting "Always aim at the mouse" (see below). `avatar` asks
+## for avatar mode (the tests do not get it unless they say so), and the camera is put on the spot with the avatar standing in the middle of a
+## clear arena.
 func _game(avatar: bool = true, width: int = 1280, height: int = 800) -> Node:
 	var meta := {"difficulty": 1, "seed": 7, "crew": 6}
 	if avatar:
 		meta["avatar"] = true
 	var main = TutorialKit.start(meta, width, height)
+	# (round 22: the mouse aims by itself and the left button fires in these tests, which are of the round 17 controls: the setting
+	# "Always aim at the mouse". The default, "Right button aims", is tests/test_r22c_controls.gd's.)
+	AimMode.set_mode("always")
 	_arena(main)
 	var sim = main.sim
 	sim.zombies.clear()
