@@ -1493,12 +1493,18 @@ func _play() -> Dictionary:
 	var penalty: float = s.scavenge.raid_penalty(site_id)
 	var done := func(_result: Dictionary) -> void:
 		pass
+	# (round 23: the avatar is the one leaving: a shut gate, a lock of theirs included, opens for the party: the sim does it, the toast says it)
+	var gate_line := ""
+	if s.gate != null and s.gate.active() and not s.gate.is_passable():
+		gate_line = "Unlocked: the gate opens for you" if String(s.gate.held) == "shut" else "The gate opens for you"
 	var scene = host.on_raid.call(going, place, vehicle_id, penalty, done)
 	if scene == null:
 		_say("The trip could not begin.", "warn")
 		_sound("ui_error")
 		return {"ok": false, "why": "The trip could not begin.", "line": ""}
 	_sound("ui_confirm")
+	if gate_line != "" and host.has_method("toast"):
+		host.toast(gate_line, "info")
 	ticks.clear()
 	if host.has_method("close_radio"):
 		host.close_radio()

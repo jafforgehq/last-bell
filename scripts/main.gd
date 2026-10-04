@@ -166,6 +166,15 @@ var firing := false
 ## Shift is) the survivor aims at the pointer and the left button fires; otherwise the pointer is free to click and nothing is aimed.
 var aim_held := false
 var pointed := {}
+## Round 23, "Orders": the right button went down on the world at this moment: {"pos", "t" (`clock`, the frames' seconds)}, {} when it is up. When it is let
+## go within `AimMode.TAP_S` and has not moved, it was a tap: an order by radio for the person picked (`_tap_order`), else it was the aim. And the
+## flag the last order put on the ground to show where it was sent: {"x", "y", "t" (`clock`), "kind": "hold" or "post"}, null for none (the overlay
+## draws it for FLAG_S seconds).
+var _rtap := {}
+var order_flag = null
+const FLAG_S := 4.0
+## The person whose drawing is carrying the weapon low (`holstered`), to put it back in their hand if they stop being the player.
+var _holster_pawn = null
 ## Shift was down when the window lost the focus: it does not count as the aim until it has been let go (the engine may keep it pressed).
 var _shift_lock := false
 var _was_aiming := false
@@ -270,6 +279,7 @@ var bench_proc := 0.0
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
+	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
 	if prefs_path != "":
 		Prefs.path = prefs_path
@@ -485,7 +495,10 @@ func _ready() -> void:
 	hud.on_jobs_hover = func(marks): jobs_hover = marks
 	hud.on_build = func(): page_key("build", false)
 	hud.on_town = func(): page_key("map", false)
+	hud.on_gate = func(): gate_verb(true)
+	hud.on_leave = func(): leave_the_base()
 	hud.on_alarm = func(): return _allows("alarm")
+	hud.on_holster = func(): toggle_holster()
 	hud.on_raid = open_raid
 	hud.on_build_hover = func(marks): build_hover = marks
 	hud.talk_anchor = func(tile: Vector2) -> Vector2: return _tile_to_screen(tile)
@@ -494,6 +507,7 @@ func _ready() -> void:
 	hud.setup(data, sim.people)
 	hud.tutorial_ui = tutorial
 	hud.set_avatar(avatar_mode)
+	hud.radio_verbs.requested.connect(_on_order_answered)    # (a click order that was agreed to puts a flag on the spot)
 	story_ui = StoryUi.new()
 	add_child(story_ui)
 	story_ui.blocked = func(): return menu_open
@@ -1365,6 +1379,10 @@ func _input(ev: InputEvent) -> void:
 			firing = false
 		elif ev.button_index == MOUSE_BUTTON_RIGHT:
 			aim_held = false    # (the aim is let go at once: the pointer is the free arrow from this frame)
+			if not _rtap.is_empty():
+				var tap := _rtap
+				_rtap = {}
+				_tap_order(tap, ev.position)
 
 
 func _notification(what: int) -> void:
@@ -1372,6 +1390,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
 		firing = false
 		aim_held = false
+		_rtap = {}
 		_shift_lock = true
 	elif what == NOTIFICATION_WM_MOUSE_EXIT:
 		# the pointer has left the window: nowhere (no crosshair, no lean; the aim stays where it was), as the place does
@@ -1389,6 +1408,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		drag = null
 		firing = false
 		aim_held = false
+		_rtap = {}
 		return
 	var avatar := avatar_mode
 	if ev is InputEventMouseButton:
@@ -1405,6 +1425,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 				_avatar_left(mb)
 			elif mb.button_index == MOUSE_BUTTON_RIGHT:
 				aim_held = mb.pressed
+				# (a press that reached the world may turn out a tap: an order, when the button is let go at once; see `_tap_order`. The engine
+				# shows a release to `_input` first, which has settled it: what is left here is a release `_input` did not see)
+				var tap := _rtap
+				_rtap = {"pos": mb.position, "t": clock} if mb.pressed else {}
+				if not mb.pressed and not tap.is_empty():
+					_tap_order(tap, mb.position)
 		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
 			if selection != null and selection.kind == "person":
 				var w := _screen_to_tile(mb.position)
@@ -1490,10 +1516,17 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_R:
 				# the avatar's reload; the old yard's draft order
 				if avatar:
-					if not hud.modal_open() and sim.avatar.reload():
-						_did("reload")
+					if not hud.modal_open():
+						if AimMode.holstered:
+							hud.toast(AimMode.PUT_AWAY, "warn")    # (the weapon is put away: nothing to reload)
+						elif sim.avatar.reload():
+							_did("reload")
 				else:
 					_gizmo("draft")
+			KEY_Q:
+				# round 23: the weapon is put away or drawn (a free pointer, and a right click that orders); nothing in the old yard
+				if avatar and not hud.modal_open():
+					toggle_holster()
 			KEY_F:
 				# the avatar's melee swing; the old yard's repair order
 				if avatar:
@@ -1505,6 +1538,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				# E uses what the prompt points at: talk to a person, take a post, work the bench, read a car's gauge (round 18)
 				if avatar:
 					_interact_key()
+			KEY_Y:
+				# Y works the gate when the avatar is at it (round 23): the same as E at the lever, from anywhere in its reach
+				if avatar:
+					gate_verb(false)
 			KEY_P:
 				if not avatar:
 					_gizmo("post")
@@ -1756,14 +1793,17 @@ func _feed_avatar() -> void:
 	var me = sim.avatar.player()
 	if me == null:
 		return
+	if me.holstered != AimMode.holstered or _holster_pawn != me:
+		_mark_holster()    # (what the pawn's drawing reads: the gun carried low, the hands off it)
 	if avatar_hands_off():
 		firing = false
 		aim_held = false    # (under a menu or a page the right button is not the aim's: its release goes to the page)
 		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
 		return
-	if not AimMode.always():
-		# "Right button aims": with the right button (or Shift) held the survivor aims at the pointer and the trigger counts; without it no
-		# aim is given at all (the survivor faces the way they walk, or stands as they were) and nothing fires
+	if not AimMode.mouse_aims():
+		# "Right button aims" (and a weapon that is put away, whatever the setting): with the right button (or Shift) held the survivor aims
+		# at the pointer and the trigger counts; without it no aim is given at all (the survivor faces the way they walk, or stands as they
+		# were) and nothing fires (a weapon put away is never aimed: `aiming` is false)
 		var on := aiming()
 		if on and not _was_aiming:
 			_did("aim")    # (Orientation Day's lesson of the aim: the right button, or Shift, went down on the world)
@@ -1785,7 +1825,7 @@ func aiming() -> bool:
 ## Whether the aim marks (the crosshair, the aim line) are to be drawn: with "Always aim at the mouse" as ever (the overlay's own rules
 ## say where), with "Right button aims" only while aiming.
 func aim_shown() -> bool:
-	return AimMode.always() or aiming()
+	return AimMode.mouse_aims() or aiming()
 
 
 ## Shift is the right button for one hand on the keys. After the window lost the focus it counts again only once it has been let go.
@@ -1802,8 +1842,9 @@ func _avatar_left(mb: InputEventMouseButton) -> void:
 	if not mb.pressed:
 		firing = false
 		return
-	if AimMode.always() or aiming():
+	if AimMode.mouse_aims() or aiming():
 		firing = true
+		_rtap = {}    # (a shot taken with the right button down: that was the aim, however short, and not an order)
 		return
 	firing = false
 	_click_world(mb.position)
@@ -1831,6 +1872,14 @@ func _click_world(pos: Vector2) -> void:
 	if it == null:
 		return
 	var ctx := _click_ctx(at)
+	if bool(ctx.get("gate", false)) and it.has_method("gate_candidate"):
+		# (round 23: a click on the gate's picture works it from CLICK_REACH tiles; from farther it says where to walk)
+		var gc: Dictionary = it.gate_candidate(sim.gate.CLICK_REACH)
+		if not gc.is_empty():
+			_use_candidate(gc)
+		elif _allows("interact"):
+			hud.toast(WorldClick.TOO_FAR_GATE, "warn")
+		return
 	var cand := WorldClick.under(at, near, ctx)
 	if not cand.is_empty():
 		_use_candidate(cand)
@@ -1841,12 +1890,14 @@ func _click_world(pos: Vector2) -> void:
 
 ## What the picture has under a point of the world, for `WorldClick.under`: the wall section and the parked vehicle.
 func _click_ctx(at: Vector2) -> Dictionary:
-	var ctx := {"seg": -1, "vehicle": ""}
+	var ctx := {"seg": -1, "vehicle": "", "gate": false}
 	var wall = _pick_wall(at)
 	if wall != null:
 		ctx["seg"] = int(wall.ref.id)
 	if parking_view != null:
 		ctx["vehicle"] = parking_view.vehicle_at(at)
+	# (round 23: the gate's picture, the posts and the leaves, and its lever, when the gate has its rules)
+	ctx["gate"] = sim.gate != null and sim.gate.active() and sim.gate.picked(at)
 	return ctx
 
 
@@ -1855,11 +1906,134 @@ func _far_things(it) -> Array:
 	return it.far_things() if it != null and it.has_method("far_things") else []
 
 
+# ----------------------------------------------------------------- orders --
+# Round 23, "Orders" (scripts/aim_mode.gd): Q puts the weapon away or draws it; a right click that is TAPPED is an order by radio for the person picked.
+
+## Q: the weapon is put away, or drawn again. Put away: nothing aims and nothing fires (the trigger and the aim are let go), the pointer is the free
+## arrow and a toast says so. `want` true or false sets it, null flips it. Returns whether the weapon is put away now. Nothing without an avatar.
+func toggle_holster(want = null) -> bool:
+	if not avatar_mode:
+		return false
+	var on: bool = (not AimMode.holstered) if want == null else bool(want)
+	if on != AimMode.holstered:
+		AimMode.set_holstered(on)
+		if on:
+			firing = false
+			aim_held = false
+			_was_aiming = false
+		hud.toast(AimMode.NOW_AWAY if on else AimMode.NOW_DRAWN)
+	_mark_holster()
+	return AimMode.holstered
+
+
+## The pawn of the player and the HUD's button say the weapon's state now (and a player who is not the player any more is drawn as ever).
+func _mark_holster() -> void:
+	var me = sim.avatar.player() if avatar_mode else null
+	if _holster_pawn != null and _holster_pawn != me:
+		_holster_pawn.holstered = false
+	_holster_pawn = me
+	if me != null:
+		me.holstered = AimMode.holstered
+	if hud != null and hud.has_method("update_holster"):
+		hud.update_holster()
+
+
+## A right button let go (`_input`): if it was a tap (let go within AimMode.TAP_S, not moved) it is an order for the person picked, when the weapon is put
+## away or even when it is drawn (a held right button is the aim, and a tap with nobody picked is only a very short one). Put away, with nobody picked, it
+## says what to do.
+func _tap_order(tap: Dictionary, release_at: Vector2) -> void:
+	if not avatar_mode or avatar_hands_off() or raid_open():
+		return
+	if not AimMode.is_tap(clock - float(tap.get("t", 0.0)), Vector2(tap.pos).distance_to(release_at)):
+		return
+	var who = selection.ref if selection != null and selection.kind == "person" else null
+	if who == null:
+		if AimMode.holstered:
+			hud.toast(AimMode.NO_ONE)
+		return
+	order_at(who, _screen_to_tile(Vector2(tap.pos)))
+
+
+## An order by radio for `who` (the person picked: the dock's contact) to what is at the point `at` of the world, asked exactly as the dock's buttons
+## ask it (`RadioVerbs.order`: the same answer line, refusal in amber with its reason, Insist, and the HUD's toast): another person, or you, is "Come
+## with me"; a night post (or the wall section it is on) "To the walls" at that post; the bare ground "Hold here" on that tile. A flag marks the spot
+## for a few seconds when they agree. Returns the radio's answer ({} when nothing was asked).
+func order_at(who, at: Vector2) -> Dictionary:
+	var verbs = hud.radio_verbs if hud != null else null
+	if verbs == null or who == null or bool(who.player):
+		return {}
+	if verbs.contact != who:
+		verbs.set_contact(who)
+	var other = _person_under(at)
+	if other != null:
+		if other == who:
+			return {}
+		return verbs.order("come")
+	var post := _post_under(at)
+	if not post.is_empty():
+		return verbs.order("post", {"post": String(post.id)})
+	var spot := Vector2(floorf(at.x) + 0.5, floorf(at.y) + 0.5)
+	if world.is_solid(world.solid_p, spot.x, spot.y):
+		hud.toast(_why_not_there(who, spot), "warn")
+		return {}
+	return verbs.order("hold", {"at": spot})
+
+
+## The dock's verbs were asked (a button, a click order, Insist): when they agreed to a click order the flag goes up at the spot or the post, for a few seconds.
+func _on_order_answered(_contact, verb: String, result: Dictionary) -> void:
+	if not bool(result.get("ok", false)) or hud.radio_verbs == null:
+		return
+	var extra: Dictionary = hud.radio_verbs.last.get("extra", {})
+	if verb == "hold" and typeof(extra.get("at")) == TYPE_VECTOR2:
+		var at: Vector2 = extra.at
+		order_flag = {"x": at.x, "y": at.y, "t": clock, "kind": "hold"}
+	elif verb == "post" and String(extra.get("post", "")) != "":
+		var po: Dictionary = sim.jobs.post(String(extra.post))
+		if not po.is_empty():
+			order_flag = {"x": float(po.pos.x), "y": float(po.pos.y), "t": clock, "kind": "post"}
+
+
+## The person whose picture is under the point, the one you are too (the pick of a click leaves you out): null for none.
+func _person_under(at: Vector2):
+	var p = _pick_person(at)
+	if p != null:
+		return p
+	var me = sim.avatar.player()
+	if me != null and not me.dead and not me.turned and me.away == null:
+		if at.x > me.x - 0.42 and at.x < me.x + 0.42 and at.y > me.y - 0.95 and at.y < me.y + 0.42:
+			return me
+	return null
+
+
+## How far (tiles) along a wall section from a click the post "To the walls" means may be.
+const WALL_POST_REACH := 7.0
+
+
+## The night post a point of the yard is on: a post's own spot, or a wall section (the post nearest to the click along it, not more than
+## WALL_POST_REACH tiles away); {} for neither.
+func _post_under(at: Vector2) -> Dictionary:
+	var posts: Array = sim.jobs.posts()
+	var things: Array = []
+	for po in posts:
+		things.append({"kind": "post", "id": String(po.id), "pos": Vector2(po.pos)})
+	var hit := WorldClick.under(at, things)
+	if hit.is_empty() and _pick_wall(at) != null:
+		var best_d := WALL_POST_REACH
+		for t in things:
+			var d := at.distance_to(Vector2(t.pos))
+			if d <= best_d:
+				best_d = d
+				hit = t
+	if hit.is_empty():
+		return {}
+	return sim.jobs.post(String(hit.id))
+
+
 ## What the free pointer is over (`pointed`, `hover` and the hand cursor): a person, or a thing the rules can use (in reach or not). Nothing while
 ## aiming, with "Always aim at the mouse", under a menu or a page, over a HUD control or out of the window.
 func _update_pointed() -> void:
 	pointed = {}
-	if avatar_mode and not AimMode.always() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
+	if avatar_mode and not AimMode.mouse_aims() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
 		var at := _screen_to_tile(mouse_screen)
 		var person = _pick_person(at)
 		if person != null:
@@ -1869,14 +2043,24 @@ func _update_pointed() -> void:
 			if it != null:
 				var ctx := _click_ctx(at)
 				var cand := WorldClick.under(at, it.candidates(), ctx)
-				if not cand.is_empty():
+				if bool(ctx.get("gate", false)) and it.has_method("gate_candidate"):
+					# (round 23: over the gate's picture a click reaches CLICK_REACH tiles, E only REACH: in between, a thing to click, not a prompt)
+					var gc: Dictionary = it.gate_candidate(sim.gate.CLICK_REACH)
+					var far_gate := WorldClick.under(at, _far_things(it), ctx)
+					if not gc.is_empty() and bool(gc.get("click", false)):
+						pointed = {"kind": "thing", "cand": gc, "near": false, "click_ok": true}
+					elif not cand.is_empty():
+						pointed = {"kind": "thing", "cand": cand, "near": true}
+					elif not far_gate.is_empty():
+						pointed = {"kind": "thing", "cand": far_gate, "near": false}
+				elif not cand.is_empty():
 					pointed = {"kind": "thing", "cand": cand, "near": true}
 				else:
 					var far := WorldClick.under(at, _far_things(it), ctx)
 					if not far.is_empty():
 						pointed = {"kind": "thing", "cand": far, "near": false}
 		hover = pointed.ref if String(pointed.get("kind", "")) == "person" else null
-	elif avatar_mode and not AimMode.always():
+	elif avatar_mode and not AimMode.mouse_aims():
 		hover = null
 	var shape := Input.CURSOR_POINTING_HAND if not pointed.is_empty() else Input.CURSOR_ARROW
 	if shape != cursor_shape and avatar_mode:
@@ -2040,7 +2224,49 @@ func _interact():
 ## E again stops them) and a car's gauge answer in a toast, in amber when it is a refusal. Nothing under a page, a menu or a place, nor while the tutorial's lock says no.
 func _interact_key() -> void:
 	var pick: Dictionary = overlay.prompt_candidate() if overlay != null else {}
+	if pick.is_empty() and hud != null and hud.leave_shown() and not avatar_hands_off() and not raid_open() and _allows("interact"):
+		leave_the_base()    # (round 23: with nothing at the avatar's feet to use, E takes the offer of the Map)
+		return
 	_use_candidate(pick)
+
+
+## Works the gate from where the avatar stands (round 23: the key Y, and the clock's Gate row): within the gate's REACH it does what E does at the lever
+## (open or shut, its answer in a toast, a refusal in amber); farther it says where to walk, and with the row (`glide`) the camera goes to the lever
+## for a moment (the lever has its word, "GATE (E)"). Nothing without the gate's rules, under a page or a menu or in a place.
+func gate_verb(glide: bool) -> void:
+	if not avatar_mode or avatar_hands_off() or raid_open() or sim.gate == null or not sim.gate.active() or not _allows("interact"):
+		return
+	var it = _interact()
+	var c: Dictionary = it.gate_candidate() if it != null and it.has_method("gate_candidate") else {}
+	if not c.is_empty():
+		_use_candidate(c)
+		return
+	hud.toast("Walk to the gate lever (it is marked)" if glide else WorldClick.TOO_FAR_GATE, "warn")
+	if glide:
+		_focus(sim.gate.control_spot())
+
+
+## The offer of the Map on leaving the base (round 23, scripts/sim/gate.gd `leave_offer`): its card is up, or put away.
+func _on_leave_offer(e: Dictionary) -> void:
+	if hud == null:
+		return
+	hud.show_leave(bool(e.get("on", false)))
+	if bool(e.get("on", false)) and sound != null:
+		sound.ui("ui_open", 0.6)
+
+
+## E or a click on the card: opens the Map (the radio panel's Map page; the old dialog in a game without a town) and puts the offer away.
+func leave_the_base() -> void:
+	if sim.gate != null:
+		sim.gate.dismiss_leave("taken")
+	if hud != null:
+		hud.show_leave(false)
+	if title_mode or shell == null or shell.is_open() or hud.modal_open():
+		return
+	if panel_mode() and bool(sim.town.on):
+		hud.open_radio("map")
+	else:
+		page_key("map", false)
 
 
 ## What E does with the candidate `pick` (or the best, with none): the key's, and a click's on a thing in reach.
@@ -2286,6 +2512,8 @@ func _handle_events() -> void:
 				_on_call_raised(e)
 			"gate":
 				_on_gate_event(e)
+			"leave_offer":
+				_on_leave_offer(e)
 	_watch_gate_news()
 	sim.events.clear()
 
@@ -2416,6 +2644,7 @@ func _parse_args() -> void:
 	var raid_do := ""
 	var talk_id := ""
 	var talk_ask := ""
+	var order_spec := ""
 	var beside_spec := ""
 	var post_id := ""
 	var bench_asked := false
@@ -2508,6 +2737,13 @@ func _parse_args() -> void:
 			"talk-ask":
 				# --talk-ask=<verb> presses that verb in the talk card (come, hold, cover, back, post), to show the answer or the refusal
 				talk_ask = v
+			"holster":
+				# --holster: the weapon starts put away (no crosshair, no aim; Q draws it)
+				AimMode.set_holstered(true)
+			"order":
+				# --order=<person id> picks that person (their dock opens); with --aim=x,y (or --order=<id>@x,y) they are also asked to hold that tile,
+				# as a right click on it would: the flag, the answer line and the toast
+				order_spec = v
 			"beside":
 				# --beside=<person id>, post:<post id> or bench stands the avatar a step from it and no more: the prompt shows (--speed=0 keeps people still)
 				beside_spec = v
@@ -2773,6 +3009,8 @@ func _parse_args() -> void:
 		_stage_bench()
 	if gate_asked != "":
 		stage_gate(gate_asked)
+	if order_spec != "":
+		_stage_order(order_spec)
 	if advance > 0.0:
 		# (the avatar's hands are as they were asked for: the pointer over `--aim`, the trigger of `--hold-fire`)
 		if shot_aim_at != "":
@@ -2789,6 +3027,8 @@ func _parse_args() -> void:
 		for e in sim.events:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
+			elif e.type == "leave_offer":
+				hud.show_leave(bool(e.get("on", false)))    # (round 23: `--avatar-at=39.5,7.5 --gate=open --advance=2` shows the card of the offer of the Map)
 		sim.events.clear()
 	if want_notice:
 		ensure_notice()
@@ -2882,6 +3122,28 @@ func _stage_talk(id: String, ask: String) -> bool:
 	hud.show_talk(who, res)
 	if ask != "" and hud.talk_open() and hud.talk_card.verbs.buttons.has(ask):
 		hud.talk_card.verbs.press(ask)
+	return true
+
+
+## A screenshot's way of giving an order (--order=<person id>[@x,y]): the person is picked; given a spot (after the @, or `--aim=x,y`) they are asked to hold
+## it through the dock, as a right click there would. False when there is no such person.
+func _stage_order(spec: String) -> bool:
+	var parts := spec.split("@")
+	var who = null
+	for p in sim.people:
+		if String(p.id) == String(parts[0]):
+			who = p
+	if who == null or not avatar_mode:
+		return false
+	_select({"kind": "person", "ref": who})
+	hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
+	var at := shot_aim
+	if parts.size() > 1:
+		var xy := parts[1].split(",")
+		if xy.size() == 2 and xy[0].is_valid_float() and xy[1].is_valid_float():
+			at = Vector2(float(xy[0]), float(xy[1]))
+	if at != Vector2.INF:
+		order_at(who, at)
 	return true
 
 

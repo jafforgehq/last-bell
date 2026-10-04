@@ -6,7 +6,8 @@
 ##
 ## CANDIDATES. Within reach of the avatar's feet, nearest first, and a person beats a post beats the bench beats a car beats a wall on a
 ## tie (two things within TIE tiles of each other): a person within TALK_REACH, a post within POST_REACH of its spot, the bench within
-## BENCH_REACH, the gate's lever within `sim.gate.REACH` of `sim.gate.control_spot()` (round 22: avatar mode only, "Open the gate" or "Shut the gate"),
+## BENCH_REACH, the gate within `sim.gate.REACH` of its working ground (`sim.gate.reach_dist`: the lever and the front of the mouth; round 22, round 23:
+## avatar mode only, "Open the gate" or "Shut the gate"; `gate_candidate`),
 ## a parked car within CAR_REACH of the middle of its bay, a worn wall within `mend.reach` of its mending place (the nights'
 ## module lists those: `sim.nights.wall_candidates()`). A candidate that cannot be used now is still listed, with its
 ## reason (`ok` false, `why`), so the prompt can say so. Nothing at all while the avatar is down, away (on a trip) or gone.
@@ -165,13 +166,9 @@ func candidates() -> Array:
 			var why: String = sim.workshop.why_not_hand_craft(p)
 			out.append({"kind": "bench", "id": "bench", "label": "Work the bench", "pos": bench, "dist": me.distance_to(bench), "ok": why == "", "why": why})
 	# the gate's lever (round 22, scripts/sim/gate.gd; avatar mode only): E opens a shut gate and shuts an open one, refused with its reason
-	if sim.gate.active():
-		var lever: Vector2 = sim.gate.control_spot()
-		var gd := me.distance_to(lever)
-		if gd <= sim.gate.REACH:
-			var want_open: bool = not sim.gate.wants_open()
-			var gwhy: String = sim.gate.refusal(want_open)
-			out.append({"kind": "gate", "id": "gate", "label": "Open the gate" if want_open else "Shut the gate", "pos": lever, "dist": gd, "ok": gwhy == "", "why": gwhy})
+	var gate_c := gate_candidate()
+	if not gate_c.is_empty():
+		out.append(gate_c)
 	for v in sim.vehicles.parked():
 		var at: Vector2 = Convoy.bay(int(v.get("spot", -1)))
 		var d := me.distance_to(at)
@@ -181,6 +178,23 @@ func candidates() -> Array:
 	if sim.nights != null and sim.nights.has_method("wall_candidates"):
 		out.append_array(sim.nights.wall_candidates())
 	return _ordered(out)
+
+
+## The gate as something to use (round 22; round 23: from `reach` tiles of the working ground, `sim.gate.reach_dist`: by default the gate's REACH, a
+## click on the gate's picture asks for CLICK_REACH), {} when it is not in reach, the gate has no rules or the avatar cannot act. "Open the gate" or
+## "Shut the gate" (the other of what the gate is wanted at now); `ok` false with the reason when the rules refuse it; `click` true for one farther
+## than the key's reach, which only a click can use (`use` takes it as it is).
+func gate_candidate(reach: float = -1.0) -> Dictionary:
+	var p = _lead()
+	if p == null or _cannot(p) != "" or not sim.gate.active():
+		return {}
+	var gd: float = sim.gate.reach_dist(Vector2(p.x, p.y))
+	if gd > (sim.gate.REACH if reach < 0.0 else reach):
+		return {}
+	var want_open: bool = not sim.gate.wants_open()
+	var gwhy: String = sim.gate.refusal(want_open)
+	return {"kind": "gate", "id": "gate", "label": "Open the gate" if want_open else "Shut the gate", "pos": sim.gate.control_spot(), "dist": gd,
+			"ok": gwhy == "", "why": gwhy, "click": gd > sim.gate.REACH}
 
 
 ## The nearest first, but within TIE tiles of the nearest left, the kind that ranks first (a person, a post, the bench, the gate, a car, a wall).
@@ -239,6 +253,8 @@ func far_things() -> Array:
 
 ## A fresh candidate of the same kind and id as `cand` (or the best, with none given): {} when it is no longer in reach.
 func _fresh(cand: Dictionary) -> Dictionary:
+	if String(cand.get("kind", "")) == "gate" and bool(cand.get("click", false)):
+		return gate_candidate(sim.gate.CLICK_REACH)    # (round 23: a click on the gate's picture reaches farther than E)
 	var list := candidates()
 	if cand.is_empty():
 		return list[0] if not list.is_empty() else {}

@@ -85,7 +85,9 @@ static func registry() -> Dictionary:
 			"ring_night": _ring_night,
 			"big_night_ahead": _big_night_ahead,
 			"panel_page": _panel_page,
+			"contact_picked": _contact_picked,
 			"gate_dusk": _gate_dusk,
+			"gate_open_day": _gate_open_day,
 			"season": _season,
 			"lot_open": _lot_open,
 			"has_vehicle": _has_vehicle,
@@ -516,10 +518,24 @@ static func _gate_dusk(sim, _p, _st) -> bool:
 	return phase == "day" and float(sim.hour) >= float(sim.seasons.dusk_hour()) - 1.0
 
 
+## The gate's rules are in charge, it is day and the gate stands open (the avatar has opened it, or a car has): the moment to say that walking out
+## through it is how the base is left (round 23: the Map opens past the street).
+static func _gate_open_day(sim, _p, _st) -> bool:
+	if not GateKit.is_active(sim) or String(sim.phase) != "day":
+		return false
+	return GateKit.open_of(GateKit.active_gate(sim)) >= 0.99
+
+
 ## {"page": "map"}: the radio panel is open on that page (the hints' own state, `{"panel": page}`, from the HUD: the rules do not know
 ## the screen).
 static func _panel_page(_sim, p, st) -> bool:
 	return String(st.get("panel", "")) == String(p.get("page", "map"))
+
+
+## Somebody is picked in the dock (the hints' own state, `{"contact": the person's id}`, from the game: the rules do not know the screen): the moment to
+## say that a right click orders them (round 23).
+static func _contact_picked(_sim, _p, st) -> bool:
+	return String(st.get("contact", "")) != ""
 
 
 # --------------------------------------------------- the avatar's lesson (round 17) --

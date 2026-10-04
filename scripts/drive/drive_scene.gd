@@ -1007,8 +1007,10 @@ func _hands() -> void:
 		_throttle = 0.0
 		_steer = 0.0
 		fire = false
+	if lead.holstered != AimMode.holstered:
+		_mark_holster()
 	var aim_for := aim_tile
-	if not AimMode.always():
+	if not AimMode.mouse_aims():
 		# (round 22, "Right button aims": the mouse is free on the road, W A S D drive, and the survivor's own shot is the right button's
 		# and then the left's; the squad in the windows shoots by itself)
 		var on := aiming()

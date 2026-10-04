@@ -114,6 +114,9 @@ var fire_held := false
 ## window lost the focus (it does not count again until it has been let go), and what the free pointer is over for the hand cursor
 ## ({"kind": "container" | "friend", "ref": ...} or {}).
 var aim_held := false
+## Round 23, "Orders": the right button went down on the place at this moment ({"pos", "t" (`clock`)}, {} when it is up): let go at once without moving it is a tap, an
+## order by radio for the person picked (`tap_order`), else it was the aim.
+var _rtap := {}
 var _shift_lock := false
 var pointed := {}
 var cursor_shape := Input.CURSOR_ARROW
@@ -199,6 +202,7 @@ func setup_run(members_people: Array, ammo: float, vehicle_kind: String = "", lo
 	if lead != null:
 		run.set_player(lead)
 		_leader_id = String(lead.id)
+	AimMode.set_holstered(false)    # (a place and the road begin with the weapon drawn)
 	for p in run.squad:
 		_add_person_pawn(p)
 	if vehicle_kind != "" and Vector2(site.get("vehicle_spot", Vector2(-1, -1))).x >= 0.0:
@@ -952,6 +956,10 @@ func _input(ev: InputEvent) -> void:
 			fire_held = false
 		elif ev.button_index == MOUSE_BUTTON_RIGHT and not ev.pressed:
 			aim_held = false
+			if not _rtap.is_empty():
+				var tap := _rtap
+				_rtap = {}
+				tap_order(tap, ev.position)
 		return
 	if not (ev is InputEventKey):
 		return
@@ -990,7 +998,13 @@ func key_pressed(code: Key, _shift: bool = false) -> void:
 				main.open_pause()
 		KEY_R:
 			if not _held_still():
-				run.sim.avatar.reload()
+				if AimMode.holstered:
+					hud_layer.toast(AimMode.PUT_AWAY, "warn")
+				else:
+					run.sim.avatar.reload()
+		KEY_Q:
+			if not _held_still():
+				toggle_holster()
 		KEY_F:
 			if not _held_still():
 				run.sim.avatar.melee()
@@ -1035,8 +1049,9 @@ func mouse_button(mb: InputEventMouseButton) -> void:
 			_mouse = mb.position
 			if not mb.pressed:
 				fire_held = false
-			elif AimMode.always() or aiming():
+			elif AimMode.mouse_aims() or aiming():
 				fire_held = true
+				_rtap = {}    # (a shot taken with the right button down: that was the aim, however short, and not an order)
 			else:
 				# (a click: it never fires and never turns the survivor)
 				fire_held = false
@@ -1044,6 +1059,10 @@ func mouse_button(mb: InputEventMouseButton) -> void:
 		MOUSE_BUTTON_RIGHT:
 			aim_held = mb.pressed
 			_mouse = mb.position
+			var tap := _rtap
+			_rtap = {"pos": mb.position, "t": clock} if mb.pressed else {}
+			if not mb.pressed and not tap.is_empty():
+				tap_order(tap, mb.position)
 
 
 ## What a left click on the place means with a free pointer: a friend of the squad is asked over the radio (and a friend who is down within
@@ -1081,6 +1100,88 @@ func squad_at(at: Vector2):
 	return null
 
 
+# ----------------------------------------------------------------- orders --
+# Round 23 (scripts/aim_mode.gd): Q puts the weapon away or draws it; a right click that is TAPPED is an order by radio for the person picked.
+
+## Q: the weapon is put away, or drawn again (`want`: true or false sets it, null flips it). Returns whether it is put away now.
+func toggle_holster(want = null) -> bool:
+	var on: bool = (not AimMode.holstered) if want == null else bool(want)
+	if on != AimMode.holstered:
+		AimMode.set_holstered(on)
+		if on:
+			fire_held = false
+			aim_held = false
+		hud_layer.toast(AimMode.NOW_AWAY if on else AimMode.NOW_DRAWN)
+	_mark_holster()
+	hud_layer.refresh()
+	return AimMode.holstered
+
+
+## The pawn of the one you lead carries the weapon as the state says.
+func _mark_holster() -> void:
+	var lead = leader()
+	if lead != null:
+		lead.holstered = AimMode.holstered
+
+
+## A right button let go that was a tap (let go within AimMode.TAP_S, not moved) is an order for the squad member picked (the dock's contact), when the
+## weapon is put away and also when it is drawn and somebody is picked. Put away with nobody picked it says what to do.
+func tap_order(tap: Dictionary, release_at: Vector2) -> Dictionary:
+	if phase != "place" or ended or _held_still() or run == null or (has_method("_is_road") and bool(call("_is_road"))):
+		return {}    # (on the road nobody can be sent to a spot)
+	if not AimMode.is_tap(clock - float(tap.get("t", 0.0)), Vector2(tap.pos).distance_to(release_at)):
+		return {}
+	var p = contact.get("p")
+	if p == null:
+		if AimMode.holstered:
+			hud_layer.toast(AimMode.NO_ONE)
+		return {}
+	return order_at(p, to_tile(Vector2(tap.pos)))
+
+
+## An order by radio for `p` (the one picked) to what is at the point `at` of the place, asked as the dock's buttons ask it (the same answer line,
+## refusal and Insist, and a toast): a friend, or you, is "Come with me"; a container "Search that"; the exit "Go back"; the bare ground "Hold here".
+## A person at the base (not with the squad) is not asked this way: they are not here. Returns the answer ({} when nothing was asked).
+func order_at(p, at: Vector2) -> Dictionary:
+	var verbs = hud_layer.radio_verbs if hud_layer != null else null
+	if verbs == null or p == null:
+		return {}
+	if String(contact.get("kind", "squad")) != "squad":
+		hud_layer.toast("They are at the base: ask them with the buttons", "warn")
+		return {}
+	if verbs.contact != p:
+		verbs.set_contact(p)
+	var lead = leader()
+	var other = squad_at(at)
+	if other == null and lead != null and lead != p and at.x > lead.x - 0.42 and at.x < lead.x + 0.42 and at.y > lead.y - 0.95 and at.y < lead.y + 0.42:
+		other = lead
+	var r: Dictionary
+	if other != null:
+		if other == p:
+			return {}
+		r = verbs.order("come")
+	else:
+		var c := pick_container(at)
+		if not c.is_empty():
+			r = verbs.order("search", {"at": Vector2(c.pos)})
+		elif Rect2(site.exit).has_point(at):
+			r = verbs.order("back")
+		else:
+			r = verbs.order("hold", {"at": Vector2(floorf(at.x) + 0.5, floorf(at.y) + 0.5)})
+	_say_answer(p, r)
+	return r
+
+
+## The answer to an order in a toast, as the yard's HUD gives it: what they say, or the reason they cannot in amber.
+func _say_answer(p, r: Dictionary) -> void:
+	if bool(r.get("ok", false)):
+		var line := String(r.get("line", ""))
+		if line != "":
+			hud_layer.toast("%s: %s" % [String(p.first), line])
+	elif String(r.get("why", "")) != "":
+		hud_layer.toast(String(r.why), "warn")
+
+
 func mouse_motion(mm: InputEventMouseMotion) -> void:
 	_mouse = mm.position
 	_staged_aim = false
@@ -1113,9 +1214,11 @@ func _hands() -> void:
 	if still:
 		move = Vector2.ZERO
 		fire = false
+	if lead.holstered != AimMode.holstered:
+		_mark_holster()
 	var aim_for := aim_tile
-	if not AimMode.always():
-		# "Right button aims": no aim at all unless the right button (or Shift) is held on the world, and then the trigger counts
+	if not AimMode.mouse_aims():
+		# "Right button aims" (or a weapon put away): no aim at all unless the right button (or Shift) is held on the world, and then the trigger counts
 		var on := aiming()
 		aim_for = aim_tile if on else Vector2.ZERO
 		fire = fire and on
@@ -1142,7 +1245,7 @@ func _update_pointer() -> void:
 	if not _live():
 		return
 	var want := Input.MOUSE_MODE_VISIBLE
-	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse) and (AimMode.always() or aiming()):
+	if phase == "place" and not ended and not _menu_up() and not over_hud and Rect2(Vector2.ZERO, _vp()).has_point(_mouse) and (AimMode.mouse_aims() or aiming()):
 		want = Input.MOUSE_MODE_HIDDEN
 	if Input.mouse_mode != want:
 		Input.mouse_mode = want
@@ -1158,7 +1261,9 @@ func crosshair_shown() -> bool:
 func aiming() -> bool:
 	if phase != "place" or ended or paused or _menu_up() or over_hud or _mouse.x < 0.0:
 		return false
-	return AimMode.always() or aim_held or _shift_down()
+	if AimMode.holstered:
+		return false    # (the weapon is put away: nothing is aimed)
+	return AimMode.mouse_aims() or aim_held or _shift_down()
 
 
 ## Shift is the right button for one hand on the keys; after the window lost the focus it counts again only once it has been let go.
@@ -1172,7 +1277,7 @@ func _shift_down() -> bool:
 ## The hand over a friend, a container or a friend who is down, with a free pointer.
 func _update_pointed() -> void:
 	pointed = {}
-	if phase == "place" and not ended and not AimMode.always() and not aiming() and not _menu_up() and not over_hud and _mouse.x >= 0.0 and run != null:
+	if phase == "place" and not ended and not AimMode.mouse_aims() and not aiming() and not _menu_up() and not over_hud and _mouse.x >= 0.0 and run != null:
 		var at := to_tile(_mouse)
 		var friend = squad_at(at)
 		if friend != null:
@@ -1270,7 +1375,7 @@ func _tick_place(dt: float) -> void:
 	var lead = leader()
 	if lead != null:
 		var lean := Vector2.ZERO
-		if _mouse.x >= 0.0 and (AimMode.always() or aiming()):
+		if _mouse.x >= 0.0 and (AimMode.mouse_aims() or aiming()):
 			lean = (_mouse - _vp() / 2.0) / zoom_px * CAM_LEAD_K
 			if lean.length() > CAM_LEAD:
 				lean = lean.normalized() * CAM_LEAD

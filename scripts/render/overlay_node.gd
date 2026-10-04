@@ -151,6 +151,9 @@ var gate_tag := ""
 var gate_box := Rect2()
 var drew_gate_tag := false
 var gate_tag_rect := Rect2()
+## The floating word over the lever (round 23: "GATE (E)", from LABEL_R tiles, avatar mode): drawn at the last draw, and where it is on the screen.
+var drew_gate_label := false
+var gate_label_rect := Rect2()
 ## The gate's words waiting for their place (they are put down after the prompt, which they keep clear of): {"text", "color", "back", "ring"} or {}.
 var _gate_words := {}
 ## What the forecast said at the last look (it is asked a few times a second, not every frame) and when.
@@ -174,6 +177,8 @@ var drawn_selected := 0
 ## the aim line from the muzzle (and the tile where it stops, and whether it stops on one of the dead), the ring of a reload
 ## (and how far round it is, 0 to 1) and the YOU tag over the head.
 var drew_crosshair := false
+## The flag of an order was drawn at the last draw (round 23).
+var drew_flag := false
 var drew_aim_line := false
 var drew_reload_ring := false
 var drew_you := false
@@ -602,6 +607,30 @@ func _draw_plates(e, zp: Vector2, z: float) -> void:
 		draw_circle(chest[0].lerp(chest[1], k).lerp(chest[3].lerp(chest[2], k), 0.78), 1.6, STEEL_DARK)
 
 
+## The flag an order by radio put on the ground (round 23, main.gd `order_flag`: "Hold here" at a spot, "To the walls" at a post): a ring, a pole and a
+## pennant at the spot for `main.FLAG_S` seconds, fading in the last second. `drew_flag` says it was drawn (a test reads it).
+func _draw_order_flag(z: float) -> void:
+	drew_flag = false
+	var fl = main.get("order_flag")
+	if fl == null:
+		return
+	var age: float = float(main.clock) - float(fl.t)
+	var life: float = float(main.FLAG_S)
+	if age < 0.0 or age > life:
+		return
+	var a := clampf(life - age, 0.0, 1.0)
+	var foot := _screen(float(fl.x), float(fl.y))
+	var top := foot + Vector2(0.0, -0.95 * z)
+	draw_arc(foot, 0.3 * z, 0.0, TAU, 28, Color(0.04, 0.03, 0.02, 0.7 * a), 4.0, true)
+	draw_arc(foot, 0.3 * z, 0.0, TAU, 28, Color(ACCENT, 0.9 * a), 2.0, true)
+	draw_line(foot, top, Color(0.04, 0.03, 0.02, 0.85 * a), 4.0, true)
+	draw_line(foot, top, Color(INK, a), 2.0, true)
+	var sail := PackedVector2Array([top, top + Vector2(0.55 * z, 0.17 * z), top + Vector2(0.0, 0.36 * z)])
+	draw_colored_polygon(sail, Color(ACCENT, a))
+	draw_polyline(PackedVector2Array([sail[0], sail[1], sail[2], sail[0]]), Color(0.04, 0.03, 0.02, 0.8 * a), 1.5, true)
+	drew_flag = true
+
+
 ## Whether the aim's marks (the line, the crosshair, a weak point lighting) are shown: with "Always aim at the mouse" as ever, with "Right button
 ## aims" only while the right button (or Shift) is held (round 22).
 func _aim_marks() -> bool:
@@ -768,6 +797,40 @@ func _draw_gate(sim, z: float, vp: Vector2) -> void:
 		draw_set_transform(c, 0.0, Vector2(1.0, 0.5))
 		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(GATE_OUTLINE, GATE_FAINT), 2.0, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## The floating word over the lever (round 23, avatar mode): "GATE (E)" while the avatar is up and inside the walls within LABEL_R tiles of it, so that
+## the way to the gate is never a thing to find; it gives way to the prompt's own pill when that is on the gate, and it is not under a board of the HUD.
+func _draw_gate_label(sim, z: float, vp: Vector2) -> void:
+	if not _avatar_on(sim):
+		return
+	var g = GateKit.active_gate(sim)
+	if g == null:
+		return
+	var spot := GateKit.spot_of(g)
+	var me = sim.avatar.player()
+	if spot == Vector2.INF or me == null or me.dead or me.turned or me.away != null or me.downed:
+		return
+	var reach = g.get("LABEL_R")
+	var limit := float(reach) if reach != null else 12.0
+	if Vector2(me.x, me.y).distance_to(spot) > limit:
+		return
+	if g.has_method("outside_by") and float(g.outside_by(Vector2(me.x, me.y))) > 0.0:
+		return    # (the lever is on the inside of the wall)
+	var asked := prompt_candidate()
+	if String(asked.get("kind", "")) == "gate":
+		return
+	var c := _screen(spot.x, spot.y)
+	var font := Fonts.cond(700)
+	var text := "GATE (E)"
+	var at := Vector2(c.x, c.y - clampf(z * 1.15, 40.0, 110.0))
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 10.0
+	var r := Rect2(at.x - tw / 2.0, at.y - 8.0, tw, 16.0)
+	if not Rect2(4.0, 4.0, vp.x - 8.0, vp.y - 8.0).encloses(r) or _under_hud(r, _covered_by_hud()):
+		return
+	_tag(at, text, font, ACCENT, PROMPT_BACK, Color(ACCENT, 0.85))
+	drew_gate_label = true
+	gate_label_rect = r
 
 
 ## Puts the gate's words by the gateway (after the prompt is down: they keep clear of its pill, of the HUD's boards and of the window's edge): under
@@ -1447,7 +1510,11 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 		draw_arc(Vector2.ZERO, far_rx, 0.0, TAU, 40, Color(PILL, 0.6), 4.5, true)
 		draw_arc(Vector2.ZERO, far_rx, 0.0, TAU, 40, Color(Hud.INK3, 0.85), 2.5, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		_tag(far_spot + Vector2(0.0, -far_rx * 0.5 - 22.0), WorldClick.TOO_FAR, Fonts.cond(700), Hud.INK2, PROMPT_BACK, Color(Hud.INK3, 0.7))
+		var far_text := WorldClick.TOO_FAR
+		if String(pt.cand.get("kind", "")) == "gate":
+			# (round 23: the gate's picture is a click from CLICK_REACH tiles, E from REACH)
+			far_text = ("Click: %s" % String(pt.cand.get("label", "Open the gate")).to_lower()) if bool(pt.get("click_ok", false)) else WorldClick.TOO_FAR_GATE
+		_tag(far_spot + Vector2(0.0, -far_rx * 0.5 - 22.0), far_text, Fonts.cond(700), Hud.INK2, PROMPT_BACK, Color(Hud.INK3, 0.7))
 		drew_far_tag = true
 	# the prompt
 	var c := prompt_candidate()
@@ -1575,6 +1642,8 @@ func _draw() -> void:
 	gate_box = Rect2()
 	drew_gate_tag = false
 	gate_tag_rect = Rect2()
+	drew_gate_label = false
+	gate_label_rect = Rect2()
 	_gate_words = {}
 	if main.fields:
 		_draw_fields(sim, z, vp)
@@ -1625,6 +1694,7 @@ func _draw() -> void:
 	if om != null and main.clock - om.t < 0.7:
 		var k: float = (main.clock - om.t) / 0.7
 		draw_arc(_screen(om.x, om.y), (0.2 + k * 0.5) * z, 0, TAU, 32, Color(ACCENT, 1.0 - k), 2.0, true)
+	_draw_order_flag(z)
 
 	# names under people
 	if z >= 16.0:
@@ -1658,6 +1728,7 @@ func _draw() -> void:
 	_draw_hot_breaches(sim, z, vp)
 	_draw_plated(sim, z, vp)
 	_draw_gate(sim, z, vp)
+	_draw_gate_label(sim, z, vp)
 
 	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
 	_draw_avatar(sim, z, vp)

@@ -11,7 +11,7 @@ const IDS := ["you", "walk", "shoot", "reload", "crew", "come", "refusal", "news
 ## What no card of this lesson may say: the old yard's controls, which the avatar's game does not have.
 const REMOVED_WORDS := ["right-click", "right click", "middle-drag", "middle drag", "alt-drag", "alt and drag", "box", "drag", "select", "draft", "release", "send out", "repair", "lure", "pan "]
 ## The keys of single letters an avatar's game has (and the arrows): the only ones a card may name.
-const KEYS := ["W", "S", "D", "R", "F", "T", "G", "L", "J", "V", "N"]
+const KEYS := ["W", "S", "D", "R", "F", "T", "G", "L", "J", "V", "N", "Q"]    # (Q: round 23, the weapon put away)
 ## The keys of the old yard's orders, which are gone.
 const GONE_KEYS := ["P", "X", "C", "M", "B"]
 

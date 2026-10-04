@@ -172,7 +172,7 @@ func test_the_gate_is_a_gate_in_avatar_mode_and_the_lever_is_on_the_apron() -> v
 	eq(Gate.SEGMENT, 2, "the Main gate")
 	eq(Gate.OPEN_S, 2.0, "two seconds")
 	eq(Gate.KEEP_OPEN_AFTER_PASS_S, 4.0, "it waits four seconds after the last one through")
-	eq(Gate.REACH, 2.2, "the reach of the lever")
+	eq(Gate.REACH, 3.5, "the reach of the lever and the front of the mouth (round 23: it was 2.2 from the lever alone)")
 	eq(sim.gate.open, 0.0, "shut")
 	eq(sim.gate.held, "", "held at nothing")
 	eq(sim.gate.state(), "shut", "shut")
@@ -224,14 +224,15 @@ func test_a_hand_opens_it_in_two_seconds_and_it_is_passable_from_half() -> void:
 	g.world.free()
 
 
-func test_a_hand_shuts_it_in_two_seconds_and_holds_nothing() -> void:
+func test_a_hand_shuts_it_in_two_seconds_and_locks_it() -> void:
 	var g := _game()
 	var sim = g.sim
 	_opened(g)
 	var r: Dictionary = sim.gate.request(false)
 	check(bool(r.ok), "shut")
-	eq(String(r.line), "Shutting the gate.", "the line")
-	eq(sim.gate.held, "", "held at nothing")
+	eq(String(r.line), "Shutting the gate. Locked: cars wait outside", "the line (round 23: the player's hand locks it)")
+	check(bool(r.locked), "locked")
+	eq(sim.gate.held, "shut", "held shut: a car waits until the player opens it again")
 	check(not sim.gate.wants_open(), "not wanted open")
 	_go(sim, 0.7)
 	check(sim.gate.open > 0.5 and sim.gate.is_passable(), "still passable a moment later: %f" % sim.gate.open)
@@ -667,7 +668,7 @@ func test_e_at_the_lever_opens_the_gate_and_again_shuts_it() -> void:
 	eq(String(c.id), "gate", "its id")
 	check(bool(c.ok), "it can be used")
 	eq(c.pos, sim.gate.control_spot(), "at the control spot")
-	near(float(c.dist), AT_LEVER.distance_to(sim.gate.control_spot()), 1.0e-6, "its distance")
+	near(float(c.dist), sim.gate.reach_dist(AT_LEVER), 1.0e-6, "its distance (to the working ground)")
 	var r: Dictionary = sim.interact.use()
 	check(bool(r.ok), "E opens it")
 	eq(String(r.kind), "gate", "the answer says what was used")
@@ -677,7 +678,7 @@ func test_e_at_the_lever_opens_the_gate_and_again_shuts_it() -> void:
 	_go(sim, 2.3)
 	r = sim.interact.use()
 	check(bool(r.ok), "E again")
-	eq(String(r.line), "Shutting the gate.", "shuts it")
+	eq(String(r.line), "Shutting the gate. Locked: cars wait outside", "shuts it, and locks it")
 	eq(String(sim.interact.best().label), "Open the gate", "and the label is back")
 	_go(sim, 2.3)
 	eq(sim.gate.open, 0.0, "shut")
@@ -688,9 +689,9 @@ func test_the_lever_is_only_in_reach_near_it_and_ranks_below_the_bench_and_above
 	var g := _game()
 	var sim = g.sim
 	var spot: Vector2 = sim.gate.control_spot()
-	_put(g.ruth, spot + Vector2(Gate.REACH - 0.05, 0.0))
+	_put(g.ruth, spot + Vector2(0.0, Gate.REACH - 0.05))
 	check(not sim.interact.candidates().filter(func(c): return String(c.kind) == "gate").is_empty(), "just inside the reach")
-	_put(g.ruth, spot + Vector2(Gate.REACH + 0.1, 0.0))
+	_put(g.ruth, spot + Vector2(0.0, Gate.REACH + 0.1))
 	check(sim.interact.candidates().filter(func(c): return String(c.kind) == "gate").is_empty(), "just outside")
 	check(Interact.RANK.bench < Interact.RANK.gate and Interact.RANK.gate < Interact.RANK.vehicle, "between the bench and a car")
 	var far: Array = sim.interact.far_things().filter(func(c): return String(c.kind) == "gate")

@@ -71,12 +71,12 @@ const MAX_CHIPS := 14
 const STOCK_ORDER := ["food", "water", "scrap", "ammo", "meds", "fuel"]
 const STOCK_NAMES := {"food": "Food", "water": "Water", "scrap": "Scrap", "ammo": "Ammo", "meds": "Medicine", "fuel": "Fuel"}
 const LEGEND := [
-	[["W", "A", "S", "D"], "walk"], [["Right-click"], "aim"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "search"],
+	[["W", "A", "S", "D"], "walk"], [["Right-click"], "aim"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["Q"], "weapon away"], [["E"], "search"],
 	[["Space"], "pause"], [["T"], "news"], [["Scroll"], "zoom"],
 ]
 ## (With "Always aim at the mouse", round 22's setting, the mouse aims by itself: the legend as it was.)
 const LEGEND_ALWAYS := [
-	[["W", "A", "S", "D"], "walk"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "search"],
+	[["W", "A", "S", "D"], "walk"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["Q"], "weapon away"], [["E"], "search"],
 	[["Space"], "pause"], [["T"], "news"], [["Scroll"], "zoom"],
 ]
 const STATUS_COLOR := {
@@ -1340,6 +1340,11 @@ func _refresh_weapon(run) -> void:
 			mag_bar.value = clampf(float(lead.mag) / maxf(float(gun.mag), 1.0), 0.0, 1.0)
 			mag_bar.color = Hud.DANGER if lead.mag <= 0 else Hud.OK
 			stock_label.text = "%d rounds in the stores" % stock if stock > 0 else "No ammunition in the stores"
+	# (round 23: a weapon that is put away says so, in amber, where the stores' line was)
+	var away: bool = AimMode.holstered
+	if away:
+		stock_label.text = AimMode.PUT_AWAY
+	stock_label.add_theme_color_override("font_color", Hud.WARN if away else Hud.INK2)
 	mag_bar.queue_redraw()
 
 

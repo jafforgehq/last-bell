@@ -10,6 +10,8 @@ const RADIUS := {"post": 1.0, "bench": 1.4, "vehicle": 2.2, "wall": 1.6, "gate":
 const DEFAULT_RADIUS := 1.3
 ## What the toast says of a thing that is out of reach.
 const TOO_FAR := "Too far: walk closer"
+## ... of the gate (round 23: a click on its picture reaches CLICK_REACH tiles, scripts/sim/gate.gd).
+const TOO_FAR_GATE := "Too far: walk to the gate"
 
 
 ## How far (tiles) a point may be from the spot of a thing of this kind and still be on it.
@@ -19,8 +21,8 @@ static func radius_of(kind: String) -> float:
 
 ## The thing of `things` (the rules' shape: {"kind", "id", "pos", ...}) that the point `at` is on, the nearest to it when two are; {} for none. A
 ## person is never found here (the yard's own pick has people: their picture is taller than a spot). `ctx` may name what the picture says
-## is under the point: {"seg": the wall section's id, "vehicle": the parked vehicle's id}; a wall or a vehicle that the picture has under the
-## point is on it wherever its spot is.
+## is under the point: {"seg": the wall section's id, "vehicle": the parked vehicle's id, "gate": whether it is the gate's picture}; a wall, a vehicle
+## or the gate that the picture has under the point is on it wherever its spot is.
 static func under(at: Vector2, things: Array, ctx: Dictionary = {}) -> Dictionary:
 	var best := {}
 	var best_d := INF
@@ -35,6 +37,8 @@ static func under(at: Vector2, things: Array, ctx: Dictionary = {}) -> Dictionar
 			hit = true
 		elif kind == "vehicle" and String(ctx.get("vehicle", "")) != "" and String(ctx.get("vehicle", "")) == String(t.get("id", "")):
 			hit = true
+		elif kind == "gate" and bool(ctx.get("gate", false)):
+			hit = true    # (round 23: a click on the gate's picture, the posts and the leaves, is a click on the gate: `sim.gate.picked`)
 		if hit and d < best_d:
 			best = t
 			best_d = d
