@@ -8,7 +8,7 @@
 | Thing | State |
 | --- | --- |
 | Game | Rounds 0 to 23 are built and **on `main`**: the classic colony game plus the **avatar game** (rounds 17 to 21: one survivor, a radio, Home, nights, a community, a live drive), round 22 (easier controls: a free pointer, the right button aims, a real gate) and round 23 (Q puts the weapon away, right-click orders, an easy gate, leaving the base). The classic game is still there (`--noavatar`, or the Full crew start). **Nobody has played rounds 11 to 23 by hand** (tests, scripted QA players and a web smoke test only). |
-| Git | **`main` = `origin/main` = `d413a01`** (pushed 2026-10-04, 36 commits: everything above). The old feature branches and worktrees are kept (1c) and can be deleted. |
+| Git | **`main` = `origin/main` = `d413a01`** (pushed 2026-10-04, 36 commits: everything above). The old feature branches and worktrees are gone (1c). |
 | Tests | Last full run **4127 passed, 4 failed** on `894d189` (2026-10-04); the four were layout/text tests that the gate row and the Controls section moved, fixed in `d413a01` and re-run with 22 related files (**668 passed, 0 failed**). No second full run after that, by the owner's lean-tests rule. The no-avatar harness (12 games, informed, seed 1) is identical to the old `main` apart from the `took` field. |
 | itch (live) | **Upload id 19553346** (2026-10-04): `main` at `d413a01`, the avatar game, 37.2 MB. SHA-256 matched in the page, the embed box is ticked and saved, the page is still Restricted with its password, one file, the embed loads to the title screen. Web check before the upload: loads, no console errors, 60 fps through the first nights and with about 80 dead (12 to 13 ms a frame); about 160 dead 48 to 57 fps; 240 dead 19 fps (the simulation, not the drawing). |
 | Biggest open risk | **Nobody has played the avatar game with hands**: the feel of aiming and of standing at a wall, whether the Big Nights are fair, whether a trip by car is fun or a chore (a near trip is 2.5 to 4 real minutes), and **the web build has not been measured** since the performance work (5b). The nights were tuned by a bot (6c). |
@@ -33,24 +33,15 @@ Design: `docs/superpowers/specs/2026-10-03-avatar-and-radio-design.md`, thread `
 
 `README.md` (controls, the avatar game, nights, community, drive), then this file's 5b (open items), 6b and 6c (the numbers and what they cannot say), then the plan of the round you touch.
 
-### 1c. Branches and worktrees (everything is on `main`; these are leftovers)
+### 1c. Branches and worktrees
 
-| Branch | Where | What it holds |
-| --- | --- | --- |
-| **`main`** | `/Users/jaf_lab/last-bell` (checked out) | **rounds 0 to 23, `d413a01`, pushed.** |
-| `feature/avatar-radio` | `/Users/jaf_lab/last-bell` (old: at round 18's first commit) | round 17 and the first commit of round 18 (`a246185`): the base the round branches were cut from. Not the whole of round 18 (its QA pass is on `feature/r18-home`). |
-| `feature/r18-home`, `r19-nights`, `r20-ideas`, `r21-drive` | `.worktrees/r18`, `r19`, `r20`, `r21` | each round's own build; all merged into `feature/int`. |
-| `feature/fix`, `feature/tune`, `feature/fix2` | `.worktrees/fix`, `tune`, `fix2` | the review fixes for 19 to 21 (`65966bb`, suite hygiene); the tuning of 19 and 20 (night numbers, community constants, the probe: `d5b1eda`); the QA fixes (`6c2f001`: alerts, the Map page's Take control, 700x560 clipping, far walls, one-press mending, hints, draw cost). All merged into `feature/int`. |
-| **`feature/int`** | `.worktrees/int` | **everything through the QA fixes** (`c36ab18`, 27 commits ahead of `main`): rounds 17 to 21, the fixes, the tuning. The candidate to merge into `main` when you say so. |
-| `feature/r22-controls-gate` | `.worktrees/r22` | round 22, in progress. Its README text is merged later. |
-
-Never edit another worktree's files from a session on a different one; never `git stash` (the stash is shared by all worktrees).
+Only `main` exists (`origin/main` is the same). The feature branches of rounds 17 to 23 (`feature/avatar-radio`, `int`, `r18-home` to `r23-orders-leave`, `fix`, `fix2`, `tune`, and the old `colony-sandbox`) were all merged into `main` and deleted on 2026-10-04, and their ten worktrees (1.5 GB, nothing uncommitted) were moved to `~/.Trash/last-bell-worktrees-2026-10-04`. Every commit is still in `main`'s history. For new parallel work make a worktree again (`git worktree add .worktrees/<name> -b <branch> main`, copy `.godot` into it, add `.worktrees/` to `.git/info/exclude`); never `git stash` with several worktrees (the stash is shared).
 
 ### 1d. How to run things
 
 ```bash
 G=/Applications/Godot.app/Contents/MacOS/Godot
-cd /Users/jaf_lab/last-bell/.worktrees/int          # or any worktree: each is a full copy of the project
+cd /Users/jaf_lab/last-bell                          # (or a worktree: each is a full copy of the project)
 $G --headless --path . --script res://tests/run.gd                          # the whole suite (10+ minutes)
 $G --headless --path . --script res://tests/run.gd -- --only=test_x:        # one file (a trailing colon = exactly that file)
 ```
