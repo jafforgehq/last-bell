@@ -31,6 +31,7 @@ const CallCard := preload("res://scripts/ui/call_card.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 const PAD := 12.0
 const GAP := 10.0
@@ -70,6 +71,11 @@ const MAX_CHIPS := 14
 const STOCK_ORDER := ["food", "water", "scrap", "ammo", "meds", "fuel"]
 const STOCK_NAMES := {"food": "Food", "water": "Water", "scrap": "Scrap", "ammo": "Ammo", "meds": "Medicine", "fuel": "Fuel"}
 const LEGEND := [
+	[["W", "A", "S", "D"], "walk"], [["Right-click"], "aim"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "search"],
+	[["Space"], "pause"], [["T"], "news"], [["Scroll"], "zoom"],
+]
+## (With "Always aim at the mouse", round 22's setting, the mouse aims by itself: the legend as it was.)
+const LEGEND_ALWAYS := [
 	[["W", "A", "S", "D"], "walk"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "search"],
 	[["Space"], "pause"], [["T"], "news"], [["Scroll"], "zoom"],
 ]
@@ -706,7 +712,7 @@ func _build_legend() -> void:
 
 ## The keys the legend shows, as LEGEND has them ([[keys], "what"]): a hook, so that the live drive (drive_hud.gd) can show its own.
 func _legend_text() -> Array:
-	return LEGEND
+	return LEGEND_ALWAYS if AimMode.always() else LEGEND
 
 
 ## Whether the squad's radio verbs are off the panel (they ride with you: the drive's HUD says so while you are aboard). The people at

@@ -24,9 +24,11 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const Frames := preload("res://scripts/ui/frames.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const TalkCard := preload("res://scripts/ui/talk_card.gd")
+const WorldClick := preload("res://scripts/ui/world_click.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
+const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -109,6 +111,14 @@ const WEAK_NEAR := 3.0
 const WEAK_MIN_PX := 7.0
 ## How long the hatching's lines are apart, the brackets' arm and the dead's weak point height as the rules have it.
 const HATCH_GAP := 12.0
+## The gate's marks (round 22, avatar mode): the gateway and the lever are outlined faintly while the avatar is within GATE_NEAR tiles of the
+## lever, or the gate is held open as the day ends (gold, with its words); and the gateway's ring pulses red while the gate is open in the dark
+## (a breach that is not a wall: nobody mends it, a hand on the lever shuts it).
+const GATE_NEAR := 7.0
+## How long before the bell a gate held open is outlined in gold with its words (hours).
+const GATE_REMIND_H := 1.0
+const GATE_OUTLINE := Color("#9fc2d6")
+const GATE_FAINT := 0.42
 
 var main
 ## The nights' marks of the last draw (round 19; see the header): the brunt's brackets (how many were in the window, whether any, the tags
@@ -132,6 +142,17 @@ var drawn_hot_breach := 0
 var hot_tags: Array = []
 var drew_mend_ring := false
 var mend_progress := 0.0
+## The gate's marks of the last draw (round 22): the faint outline of the gateway and the lever's ring (`drew_gate_outline`), the pulsing ring of
+## an open gate in the dark (`drew_gate_pulse`), the words beside it (`gate_tag`: "held open", "gate open") and the gateway's box on the screen.
+var drew_gate_outline := false
+var drew_gate_pulse := false
+var drew_gate_spot := false
+var gate_tag := ""
+var gate_box := Rect2()
+var drew_gate_tag := false
+var gate_tag_rect := Rect2()
+## The gate's words waiting for their place (they are put down after the prompt, which they keep clear of): {"text", "color", "back", "ring"} or {}.
+var _gate_words := {}
 ## What the forecast said at the last look (it is asked a few times a second, not every frame) and when.
 var _night_f := {}
 var _night_t := -1.0e9
@@ -179,6 +200,11 @@ var prompt_key := ""
 var drew_brace := false
 var drew_bench_ring := false
 var bench_progress := 0.0
+## Round 22, "Right button aims": the free pointer is over a thing the rules can use and the ring and pill were drawn for it (`drew_hover_ring`,
+## the thing's "kind:id" in `hover_key`), or it is over one that is out of reach and its "Too far" tag was drawn (`drew_far_tag`).
+var drew_hover_ring := false
+var hover_key := ""
+var drew_far_tag := false
 var _bubble_sb: StyleBox = null
 var _bubble_framed := false
 
@@ -576,6 +602,12 @@ func _draw_plates(e, zp: Vector2, z: float) -> void:
 		draw_circle(chest[0].lerp(chest[1], k).lerp(chest[3].lerp(chest[2], k), 0.78), 1.6, STEEL_DARK)
 
 
+## Whether the aim's marks (the line, the crosshair, a weak point lighting) are shown: with "Always aim at the mouse" as ever, with "Right button
+## aims" only while the right button (or Shift) is held (round 22).
+func _aim_marks() -> bool:
+	return not main.has_method("aim_shown") or bool(main.aim_shown())
+
+
 ## The distance from a point to the line the avatar's shot travels along (-1 when the point is behind them).
 func _aim_miss(sim, me, point: Vector2) -> float:
 	var from: Vector2 = sim.avatar.shoulder(me)
@@ -594,7 +626,8 @@ func _aim_miss(sim, me, point: Vector2) -> float:
 func _draw_plated(sim, z: float, vp: Vector2) -> void:
 	var me = sim.avatar.player() if _avatar_on(sim) else null
 	var aiming: bool = me != null and not me.dead and not me.turned and not me.downed and me.away == null
-	var hands_off: bool = main.has_method("avatar_hands_off") and main.avatar_hands_off()
+	# (with "Right button aims" the weak point is quiet unless the right button is held: nothing is aimed)
+	var hands_off: bool = (main.has_method("avatar_hands_off") and main.avatar_hands_off()) or not _aim_marks()
 	var calm := Prefs.on("ui", "reduce_motion")
 	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 7.0)
 	var head_k: float = NightData.num("plated.head", 0.62)
@@ -673,6 +706,96 @@ func _draw_hot_breaches(sim, z: float, vp: Vector2) -> void:
 		var at := Vector2(clampf(c.x, 90.0, maxf(90.0, vp.x - 90.0)), c.y + r + 16.0)
 		_tag(at, text, font, INK, Color(HOT.darkened(0.65), 0.92), Color(HOT, 0.9))
 		hot_tags.append({"id": int(seg.id), "text": text, "at": at})
+
+
+## The marks of the gate (round 22, avatar mode, `sim.gate`): near the lever, or with the gate held open as the day ends, the gateway's box is
+## dashed faintly (gold and with "held open" while it is held open in the last hour before the bell) and the lever has a faint ring; and in the dark, while the leaves are
+## not all the way shut, the gateway's ring is red and pulses: an open gate at night is a way in, whoever opened it.
+func _draw_gate(sim, z: float, vp: Vector2) -> void:
+	if not _avatar_on(sim):
+		return
+	var g = GateKit.active_gate(sim)
+	if g == null:
+		return
+	var way := GateKit.gateway_of(g)
+	if way.size == Vector2.ZERO:
+		return
+	var spot := GateKit.spot_of(g)
+	var me = sim.avatar.player()
+	var near := false
+	if me != null and not me.dead and not me.turned and me.away == null and spot != Vector2.INF:
+		near = Vector2(me.x, me.y).distance_to(spot) <= GATE_NEAR
+	# held open as the day ends (the last hour before the bell, and after it): the reminder the lever's tip is about
+	var held_open := GateKit.held_of(g) == "open" and (String(sim.phase) != "day" or float(sim.hour) >= float(sim.seasons.dusk_hour()) - GATE_REMIND_H)
+	var breach := GateKit.is_ajar(g) and bool(sim.is_night())
+	if not (near or held_open or breach):
+		return
+	var a := _screen(way.position.x, way.position.y)
+	var b := _screen(way.end.x, way.end.y)
+	var box := Rect2(a, b - a).abs()
+	if not Rect2(-60.0, -60.0, vp.x + 120.0, vp.y + 120.0).intersects(box):
+		return
+	gate_box = box
+	var calm := Prefs.on("ui", "reduce_motion")
+	var pulse := 0.5 if calm else 0.5 + 0.5 * sin(float(main.clock) * 5.0)
+	if breach:
+		drew_gate_pulse = true
+		var r := minf(14.0, box.size.y * 0.5)
+		var ring := S.closed(S.rrect(box.position.x, box.position.y, box.size.x, box.size.y, r, 5))
+		draw_colored_polygon(S.rrect(box.position.x, box.position.y, box.size.x, box.size.y, r, 5), Color(HOT, 0.08 + 0.08 * pulse))
+		draw_polyline(ring, Color(0.05, 0.02, 0.02, 0.8), 5.0, true)
+		draw_polyline(ring, Color(HOT, 0.65 + 0.35 * pulse), 3.0, true)
+		var grow := 4.0 + pulse * 6.0
+		var halo := box.grow(grow)
+		draw_polyline(S.closed(S.rrect(halo.position.x, halo.position.y, halo.size.x, halo.size.y, r + grow, 5)), Color(HOT, 0.5 * (1.0 - pulse)), 2.0, true)
+		gate_tag = "gate held open" if GateKit.held_of(g) == "open" else "gate open"
+		_gate_words = {"text": gate_tag, "color": INK, "back": Color(HOT.darkened(0.65), 0.92), "ring": Color(HOT, 0.9)}
+	else:
+		drew_gate_outline = true
+		var col := Color(ACCENT, 0.8) if held_open else Color(GATE_OUTLINE, GATE_FAINT)
+		var tl := box.position
+		var br := box.end
+		for edge in [[tl, Vector2(br.x, tl.y)], [Vector2(br.x, tl.y), br], [br, Vector2(tl.x, br.y)], [Vector2(tl.x, br.y), tl]]:
+			_dashed_line(edge[0], edge[1], col, 2.0)
+		if held_open:
+			gate_tag = "held open"
+			_gate_words = {"text": gate_tag, "color": ACCENT, "back": PROMPT_BACK, "ring": Color(ACCENT, 0.7)}
+	if spot != Vector2.INF:
+		# the lever: a faint ring where the hand goes (the prompt's own ring is drawn over it)
+		drew_gate_spot = true
+		var c := _screen(spot.x, spot.y)
+		var rx := clampf(z * 0.6, 14.0, 70.0)
+		draw_set_transform(c, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(GATE_OUTLINE, GATE_FAINT), 2.0, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## Puts the gate's words by the gateway (after the prompt is down: they keep clear of its pill, of the HUD's boards and of the window's edge): under
+## the box in the middle, else under its right end, inside its right end at the foot, else over the box. Not drawn when there is no such place.
+func _draw_gate_tag(vp: Vector2) -> void:
+	if _gate_words.is_empty() or gate_box.size == Vector2.ZERO:
+		return
+	var font := Fonts.cond(700)
+	var text := String(_gate_words.text)
+	var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FIELD_PX).x + 10.0
+	var box := gate_box
+	var at_x := clampf(box.get_center().x, 90.0, maxf(90.0, vp.x - 90.0))
+	var spots := [
+		Vector2(at_x, box.end.y + 16.0),
+		Vector2(clampf(box.end.x - tw / 2.0, tw / 2.0 + 4.0, maxf(tw / 2.0 + 4.0, vp.x - tw / 2.0 - 4.0)), box.end.y + 16.0),
+		Vector2(clampf(box.end.x - tw / 2.0 - 6.0, tw / 2.0 + 4.0, maxf(tw / 2.0 + 4.0, vp.x - tw / 2.0 - 4.0)), box.end.y - 14.0),
+		Vector2(at_x, box.position.y - 14.0),
+	]
+	var view := Rect2(4.0, 4.0, vp.x - 8.0, vp.y - 8.0)
+	var covered := _covered_by_hud()
+	for c in spots:
+		var r := Rect2(c.x - tw / 2.0, c.y - 8.0, tw, 16.0)
+		if not view.encloses(r) or _under_hud(r, covered) or (prompt_rect.size != Vector2.ZERO and prompt_rect.grow(4.0).intersects(r)):
+			continue
+		_tag(c, text, font, _gate_words.color, _gate_words.back, _gate_words.ring)
+		drew_gate_tag = true
+		gate_tag_rect = r
+		return
 
 
 ## What the avatar's hands are doing at a wall (round 19): the session is the nights' module's (`sim.nights`: `working` is "wall" while
@@ -1053,8 +1176,9 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 	# (what is in the hand: a gun that the stores cannot feed is the butt of it, which has no line to draw)
 	var live: Dictionary = sim.gun_of(me)
 	var melee: bool = bool(live.get("melee", false))
+	var marks := _aim_marks()
 	# the line from the gun
-	if not hands_off and not me.downed and not melee and me.reloading <= 0.0:
+	if marks and not hands_off and not me.downed and not melee and me.reloading <= 0.0:
 		var shoulder: Vector2 = sim.avatar.shoulder(me)
 		var muzzle: Vector2 = sim.muzzle(me, me.aim)
 		var reach: float = sim.reach_of(live, me)
@@ -1101,8 +1225,8 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 			_pill(Rect2(head.x - w / 2.0, head.y - 22.0, w, 16.0), ACCENT)
 			draw_string(font, Vector2(head.x - w / 2.0, head.y - 22.0 + fs * 0.9), "YOU", HORIZONTAL_ALIGNMENT_CENTER, w, fs, Color("#1a1508"))
 			drew_you = true
-	# the crosshair (none for one who is down: there is nothing in their hands)
-	if hands_off or me.downed or bool(main.get("over_hud")):
+	# the crosshair (none for one who is down: there is nothing in their hands, nor with a free pointer)
+	if not marks or hands_off or me.downed or bool(main.get("over_hud")):
 		return
 	var at: Vector2 = main.mouse_screen
 	if not Rect2(Vector2.ZERO, vp).has_point(at):
@@ -1219,9 +1343,29 @@ func prompt_candidate() -> Dictionary:
 		began.append("wall:%d" % int(mending.seg))
 	if String(_prop(it, "posted", "")) != "":
 		began.append("post:%s" % String(_prop(it, "posted", "")))
-	var pick := choose_prompt(started_first(it.candidates(), began), prompt_key)
+	var list := started_first(it.candidates(), began)
+	var pick := choose_prompt(list, prompt_key)
+	# (round 22, "Right button aims": the thing under the free pointer is the one the pill is on, so E does what a click would)
+	var under := _pointed_candidate(list)
+	if not under.is_empty():
+		pick = under
 	prompt_key = key_of(pick)
 	return pick
+
+
+## The candidate of `list` the free pointer is over (a person's, a thing's that is in reach), or {}.
+func _pointed_candidate(list: Array) -> Dictionary:
+	var pt = main.get("pointed")
+	if not (pt is Dictionary) or pt.is_empty():
+		return {}
+	if String(pt.get("kind", "")) == "person":
+		for c in list:
+			if String(c.get("kind", "")) == "person" and String(c.get("id", "")) == String(pt.ref.id):
+				return c
+		return {}
+	if bool(pt.get("near", false)):
+		return WorldClick.listed(pt.cand, list)
+	return {}
 
 
 ## The words of a candidate's prompt: {"label", "why", "ok", "text" ("E  Talk to Dez", "E  Take the gate post: Dez is at the post")}.
@@ -1252,6 +1396,11 @@ func _spot_of(c: Dictionary) -> Vector2:
 			var pp: Vector2 = main.view_pos(who)
 			return _screen(pp.x, pp.y)
 	var at: Vector2 = c.get("pos", Vector2.ZERO)
+	if String(c.get("kind", "")) == "gate" and at == Vector2.ZERO:
+		# (the gate's candidate is the lever: where the rules put the control point, when the candidate does not say)
+		var lever := GateKit.spot_of(GateKit.active_gate(main.sim))
+		if lever != Vector2.INF:
+			at = lever
 	return _screen(at.x, at.y)
 
 
@@ -1289,6 +1438,17 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 		draw_arc(body, r, -PI / 2.0, -PI / 2.0 + bench_progress * TAU, 48, ACCENT, 3.5, true)
 		_tag(body + Vector2(-r - 40.0, -4.0), "Bench %ds" % ceili(left), Fonts.cond(700), ACCENT, PROMPT_BACK, Color(ACCENT, 0.6))
 		drew_bench_ring = true
+	# a thing under the free pointer that is out of reach (round 22): a dim ring and what a click would say
+	var pt = main.get("pointed")
+	if pt is Dictionary and String(pt.get("kind", "")) == "thing" and not bool(pt.get("near", true)) and not _modal_open():
+		var far_spot := _spot_of(pt.cand)
+		var far_rx := clampf(z * (1.1 if String(pt.cand.get("kind", "")) == "vehicle" else 0.55), 14.0, 70.0)
+		draw_set_transform(far_spot, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, far_rx, 0.0, TAU, 40, Color(PILL, 0.6), 4.5, true)
+		draw_arc(Vector2.ZERO, far_rx, 0.0, TAU, 40, Color(Hud.INK3, 0.85), 2.5, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_tag(far_spot + Vector2(0.0, -far_rx * 0.5 - 22.0), WorldClick.TOO_FAR, Fonts.cond(700), Hud.INK2, PROMPT_BACK, Color(Hud.INK3, 0.7))
+		drew_far_tag = true
 	# the prompt
 	var c := prompt_candidate()
 	if c.is_empty():
@@ -1298,13 +1458,18 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 	prompt_ok = bool(words.ok)
 	var spot := _spot_of(c)
 	var kind := String(c.kind)
-	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else (0.6 if kind == "wall" else 0.5))), 14.0, 70.0)
+	var rx := clampf(z * (1.1 if kind == "vehicle" else (0.7 if kind == "bench" else (0.6 if kind == "wall" or kind == "gate" else 0.5))), 14.0, 70.0)
 	var ring: Color = ACCENT if prompt_ok else Hud.INK3
+	# the thing under the free pointer (round 22): a wider, brighter ring
+	var hovered := not _pointed_candidate([c]).is_empty()
+	if hovered:
+		drew_hover_ring = true
+		hover_key = key_of(c)
 	# (the post that is held has its own green ring: the steady stance)
 	if not (kind == "post" and String(_prop(it, "posted", "")) == String(c.id)):
 		draw_set_transform(spot, 0.0, Vector2(1.0, 0.5))
-		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(PILL, 0.65), 4.5, true)
-		draw_arc(Vector2.ZERO, rx, 0.0, TAU, 40, Color(ring, (0.6 + 0.4 * pulse) if prompt_ok else 0.6), 2.5, true)
+		draw_arc(Vector2.ZERO, rx * (1.18 if hovered else 1.0), 0.0, TAU, 40, Color(PILL, 0.75 if hovered else 0.65), 6.0 if hovered else 4.5, true)
+		draw_arc(Vector2.ZERO, rx * (1.18 if hovered else 1.0), 0.0, TAU, 40, Color(ring, 1.0 if hovered else ((0.6 + 0.4 * pulse) if prompt_ok else 0.6)), 3.5 if hovered else 2.5, true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_prompt_pill(words, spot, rx, vp)
 
@@ -1380,6 +1545,9 @@ func _draw() -> void:
 	drew_reload_ring = false
 	drew_you = false
 	drew_prompt = false
+	drew_hover_ring = false
+	hover_key = ""
+	drew_far_tag = false
 	prompt_text = ""
 	prompt_rect = Rect2()
 	drew_brace = false
@@ -1400,6 +1568,14 @@ func _draw() -> void:
 	drawn_hot_breach = 0
 	hot_tags = []
 	drew_mend_ring = false
+	drew_gate_outline = false
+	drew_gate_pulse = false
+	drew_gate_spot = false
+	gate_tag = ""
+	gate_box = Rect2()
+	drew_gate_tag = false
+	gate_tag_rect = Rect2()
+	_gate_words = {}
 	if main.fields:
 		_draw_fields(sim, z, vp)
 	_draw_alarm(sim, z, vp)
@@ -1481,11 +1657,13 @@ func _draw() -> void:
 	_draw_rally(sim, z, vp)
 	_draw_hot_breaches(sim, z, vp)
 	_draw_plated(sim, z, vp)
+	_draw_gate(sim, z, vp)
 
 	# the avatar's marks: the aim line, the reload ring, the YOU tag and the crosshair
 	_draw_avatar(sim, z, vp)
 	# what E would do: the prompt, the steady stance, the bench's ring
 	_draw_interact(sim, z, vp)
+	_draw_gate_tag(vp)
 	_draw_mend(sim, z)
 
 	# what people say, over everything else

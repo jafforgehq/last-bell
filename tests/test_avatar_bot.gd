@@ -101,6 +101,13 @@ func test_the_policy_never_gives_the_player_a_seat_an_errand_or_a_post() -> void
 	for party in sim.scavenge.parties:
 		for who in party.get("people", []):
 			check(who != me, "the player is in no party")
+	# the party of the morning comes home at four (round 22: the keeper opens the gate for them a few seconds before they are due, so the
+	# clock is not jumped past their hour: a party that is due at once waits for the gate to open)
+	Helpers.at(sim, 2, 15.8)
+	for i in 8 * 15:
+		sim.update(1.0 / 15.0)
+		if i % 15 == 0:
+			policy.tick()
 	Helpers.at(sim, 2, 18.2)
 	for i in 120 * 15:
 		sim.update(1.0 / 15.0)

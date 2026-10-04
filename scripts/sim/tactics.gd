@@ -146,6 +146,8 @@ func why_not_lure(seg) -> String:
 		return "the dead are not drawn to the school doors"
 	if seg.state == 3:
 		return "that section is down"
+	if int(seg.id) == sim.gate.SEGMENT and sim.gate.lets_dead_in():
+		return "the gate stands open"    # (round 22: the dead walk in there, there is no wall to draw them to)
 	if lure_id >= 0:
 		return "an alarm is already ringing"
 	if float(sim.stock.scrap) < LURE_COST:

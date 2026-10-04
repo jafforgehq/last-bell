@@ -21,6 +21,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 const HINTS_PATH := "res://assets/data/hints.json"
 const CARD_W := 320.0
@@ -177,6 +178,9 @@ func _show(h: Dictionary) -> void:
 	var words := String(h.get("text", ""))
 	if sim != null and String(sim.get("player_id")) != "":
 		words = String(h.get("text_avatar", words))
+		# (a tip that says how to aim has other words when the mouse aims by itself: "Always aim at the mouse", round 22)
+		if AimMode.always():
+			words = String(h.get("text_avatar_always", words))
 	text_label.text = words
 	var inner := CARD_W - card.get_theme_stylebox("panel").get_minimum_size().x
 	for l in [title_label, text_label]:

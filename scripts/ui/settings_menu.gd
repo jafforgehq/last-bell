@@ -1,11 +1,13 @@
 ## Settings: five volumes (master, effects, ambience, music, interface), the size of the interface
-## (80% to 150%), hints, reduce motion and fullscreen (not on the web). Every change applies
+## (80% to 150%), hints, reduce motion and fullscreen (not on the web), and how the mouse aims (round 22:
+## "Right button aims" or "Always aim at the mouse", scripts/aim_mode.gd). Every change applies
 ## at once and is kept at once (`Prefs`, scripts/prefs.gd); the game reads them again when it
 ## starts. Used from the title and from the pause menu.
 extends "res://scripts/ui/menu_screen.gd"
 
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 ## The volume rows: [pref key, what the player reads, the audio bus].
 const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["ambience", "Ambience", "Ambience"], ["music", "Music", "Music"], ["ui", "Interface", "UI"]]
@@ -32,6 +34,9 @@ var scale_value: Label
 var scale_note: Label
 ## The switch buttons by pref key (fullscreen is missing on the web).
 var toggles := {}
+## The two ways to aim (AimMode.RIGHT, AimMode.ALWAYS) as buttons, and the line that says what the one chosen does.
+var aim_buttons := {}
+var aim_note: Label
 var back_button: Button
 var _dragging := false
 var _last_preview := 0
@@ -70,6 +75,11 @@ func _build_body() -> void:
 		if String(sw[0]) == "fullscreen" and shell.on_web():
 			continue
 		body.add_child(_switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
+	body.add_child(section("Controls"))
+	body.add_child(_aim_row())
+	aim_note = note("", ink3(), 13)
+	body.add_child(aim_note)
+	_refresh_aim()
 	_refresh_scale()
 
 
@@ -84,7 +94,7 @@ func default_focus() -> Control:
 
 
 func _layout() -> void:
-	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 2)
+	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 1)
 	super._layout()
 
 
@@ -108,7 +118,7 @@ func _volume_row(key: String, label_text: String, bus: String) -> Control:
 	s.value = Buses.volume_of(bus)
 	s.scrollable = false
 	s.focus_mode = Control.FOCUS_ALL
-	s.custom_minimum_size = Vector2(140, 30)
+	s.custom_minimum_size = Vector2(140, 20)
 	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_style_slider(s)
@@ -137,8 +147,8 @@ func _ring_box(on: bool) -> StyleBoxFlat:
 	b.expand_margin_bottom = 0
 	b.content_margin_left = 6
 	b.content_margin_right = 6
-	b.content_margin_top = 2
-	b.content_margin_bottom = 2
+	b.content_margin_top = 1
+	b.content_margin_bottom = 1
 	return b
 
 
@@ -266,6 +276,45 @@ func _on_switch(on: bool, key: String, b: Button) -> void:
 	Prefs.set_value("ui", key, on)
 	_paint_switch(b)
 	_changed()
+
+
+# ------------------------------------------------------------------ aiming --
+
+## "Aiming": the two ways the mouse aims, side by side (the one chosen is lit).
+func _aim_row() -> Control:
+	var row: HBoxContainer = hud._hbox(8)
+	var l: Label = hud._label("Aiming", Fonts.sans(500), 15, ink())
+	l.custom_minimum_size.x = 112
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	for mode in AimMode.MODES:
+		var b := button(String(AimMode.LABELS[mode]), false)
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(120, 38)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.tooltip_text = String(AimMode.NOTES[mode])
+		b.pressed.connect(_on_aim.bind(String(mode)))
+		row.add_child(b)
+		aim_buttons[String(mode)] = b
+	return row
+
+
+func _on_aim(mode: String) -> void:
+	AimMode.set_mode(mode)
+	_refresh_aim()
+	_changed()
+
+
+## The buttons and the line show the mode now.
+func _refresh_aim() -> void:
+	var now := AimMode.current()
+	for mode in aim_buttons:
+		var b: Button = aim_buttons[mode]
+		b.set_pressed_no_signal(mode == now)
+		shell.restyle(b, mode == now)
+	if aim_note != null:
+		aim_note.text = String(AimMode.NOTES[now])
 
 
 ## Tells the game to read the settings again (the size, the hints, fullscreen, the volumes).

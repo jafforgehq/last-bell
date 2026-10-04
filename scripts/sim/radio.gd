@@ -109,7 +109,7 @@ const HURRY_COVER := 7.0
 const ATTACK_TTL_MIN := 30.0
 ## The calls that cannot wait (a wall that is down or going, a brute on its way, the old attack call, the night's own): when one is raised the
 ## game drops to 1x once (main.gd: the `call_raised` event). Their times are game minutes, a few real seconds at 3x.
-const URGENT_KINDS := ["attack", "going", "brute", "breach", "night"]
+const URGENT_KINDS := ["attack", "going", "brute", "breach", "night", "gate"]
 const SICK_TTL_MIN := 60.0
 const APART_MORALE := -4.0
 ## The alarm's threat is set this far ahead (game minutes).
@@ -1723,6 +1723,7 @@ func alarm(on: bool, at_dawn: bool = false) -> void:
 		sim.alert("alarm", "warn", "Call to arms", "Everyone to their posts", null, 15.0)
 		sim.events.append({"type": "banner", "text": "Call to arms", "sub": "Everyone to their posts"})
 		log_news("alarm", "Call to arms", "Everyone to their posts")
+		sim.gate.on_alarm()    # (round 22, avatar mode: the gate shuts unless something is in the gateway, gate.gd)
 	else:
 		sim.tactics.threat_until = minf(float(sim.tactics.threat_until), float(sim.clock_min))
 		sim.alerts.erase("alarm")

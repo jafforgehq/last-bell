@@ -104,6 +104,13 @@
 ## trip does. `result.road_survivors` (a whole number) are the survivors the squad took in on the road: they join the crew as a
 ## rescue does (`recruits.rescue_home("road")`), the ones with no bed stay callers and an alert says so. A vehicle wrecked on the
 ## road (`vehicles.wreck`) turns its party into a party on foot.
+##
+## THE GATE (round 22, scripts/sim/gate.gd; avatar mode only: with no avatar nothing below applies and a trip is as it was). The Main gate is a real
+## gate then, and every part of a trip that passes it asks it (`sim.gate.demand`): a party on foot from FOOT_ASK_REACH tiles of it and only goes through
+## (`_walk_out`) when it is passable; a party on foot coming home has the gate opened for it from GATE_LEAD_MIN game minutes before it is due and comes
+## in when it is passable (`update`); a car's people board with the gate asked as the first goes in (`_board_out`) and the car waits at its stop line
+## on the drive out and on the drive in (`gate.drive_minutes`, called by `_drive_out` and `_drive_in`: the nose never meets a shut gate). A gate the
+## avatar holds shut (`gate.hold("shut")`) keeps them all waiting, each with a line of the News once a day, and nothing is ever shut on a car or a person.
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
@@ -123,6 +130,10 @@ const SEND_TO_H := 10.0
 const RETURN_H := 16.0
 ## A member is through the gate once this close to its centre (tiles).
 const GATE_REACH := 1.2
+## In avatar mode a party on foot asks the gate to open (gate.gd) once it is this close to it (tiles), so that it is open as they reach it, and the
+## keeper has it open for a party that is coming home from this many game minutes before it is due (three seconds at the usual pace).
+const FOOT_ASK_REACH := 6.0
+const GATE_LEAD_MIN := 9.0
 ## No party goes while this many living zombies are within DEAD_RADIUS tiles of the gate.
 const DEAD_LIMIT := 3
 const DEAD_RADIUS := 20.0
@@ -244,9 +255,14 @@ func update(dt: float) -> void:
 				if bool(party.get("orphan", false)):
 					open = _finish_party(party, {})    # (loaded from a save: the scene is gone, they turn back with nothing)
 		var waiting: bool = String(party.state) == "out" or String(party.state) == "away"
+		if open and not by_car and String(party.state) == "away" and sim.gate.active() and sim.gate.held != "shut" and not bool(party.get("road_live", false)) \
+				and sim.clock_min >= float(party.return_at) - GATE_LEAD_MIN:
+			sim.gate.demand("foot_in", _names_of(party))    # (round 22, avatar mode: the keeper has the gate open as they come home)
 		if open and waiting and _is_due(party):
 			if by_car and String(party.state) == "away":
 				open = _start_return(party)
+			elif not by_car and String(party.state) == "away" and not sim.gate.demand("foot_in", _names_of(party)):
+				pass    # (round 22, avatar mode: a party on foot waits outside until the gate is open)
 			else:
 				_come_back(party)
 				open = false
@@ -424,6 +440,20 @@ func free_survivors(played: bool = false, healer_ok: bool = false) -> Array:
 
 
 ## The centre of the gate: where parties leave and return.
+## "Dez", "Dez and Ana", "Dez, Ana and Marcus": the party's people by first name (the words of the gate's News lines).
+func _names_of(party: Dictionary) -> String:
+	var names: Array = []
+	for id in party.members:
+		var p = _person(String(id))
+		if p != null:
+			names.append(String(p.first))
+	if names.is_empty():
+		return "The party"
+	if names.size() == 1:
+		return String(names[0])
+	return "%s and %s" % [", ".join(PackedStringArray(names.slice(0, names.size() - 1))), String(names[names.size() - 1])]
+
+
 func gate_center() -> Vector2:
 	for s in sim.segments:
 		if s.id == GATE_SEGMENT:
@@ -679,7 +709,10 @@ func _walk_out(party: Dictionary) -> bool:
 			party.result.lost.erase(id)
 			dropped = true
 			continue
-		if Vector2(p.x - gate.x, p.y - gate.y).length() <= GATE_REACH:
+		var to_gate := Vector2(p.x - gate.x, p.y - gate.y).length()
+		if to_gate <= FOOT_ASK_REACH and sim.gate.active():
+			sim.gate.demand("foot_out", _names_of(party))    # (round 22, avatar mode: the gate opens as they come, and they wait for it)
+		if to_gate <= GATE_REACH and (not sim.gate.active() or sim.gate.is_passable()):
 			_go_through(p, party)
 	if party.members.is_empty():
 		_call_off(party)
@@ -829,6 +862,8 @@ func _board_out(party: Dictionary, mins: float) -> bool:
 	if dropped and not someone_was_through and not bool(party.get("played", false)):
 		# nobody has gone in yet, so the trip is simply a smaller one (a played trip's result stands: it was played)
 		party.result = _decide(party)
+	if _any_through(party) and sim.gate.active():
+		sim.gate.demand("car_out", "The %s" % String(sim.vehicles.name_of(String(party.get("vehicle", "")))).to_lower())    # (round 22: the gate opens while they board)
 	if _all_through(party) and party.doors.is_empty():
 		_depart(party)
 	return true
@@ -862,6 +897,7 @@ func _depart(party: Dictionary) -> void:
 
 
 func _drive_out(party: Dictionary, mins: float) -> void:
+	mins = sim.gate.drive_minutes(party, mins)    # (round 22, avatar mode: the car stops at a shut gate and waits)
 	party["drive_t"] = float(party.get("drive_t", 0.0)) + mins
 	if float(party.drive_t) < float(party.get("drive_len", 0.0)):
 		return
@@ -915,6 +951,7 @@ func _start_return(party: Dictionary) -> bool:
 
 
 func _drive_in(party: Dictionary, mins: float) -> void:
+	mins = sim.gate.drive_minutes(party, mins)    # (round 22, avatar mode: the car stops at a shut gate and waits)
 	party["drive_t"] = float(party.get("drive_t", 0.0)) + mins
 	if float(party.drive_t) < float(party.get("drive_len", 0.0)):
 		return

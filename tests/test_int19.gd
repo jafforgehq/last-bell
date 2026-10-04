@@ -118,7 +118,7 @@ func test_nothing_is_offered_with_no_avatar_or_where_the_nights_do_not_apply() -
 func test_a_wall_ranks_last_on_a_tie_and_a_nearer_thing_is_first() -> void:
 	var m := _game()
 	var it = m.sim.interact
-	eq(Interact.RANK.wall, 4, "the rank")
+	eq(Interact.RANK.wall, 5, "the rank")
 	var wall := {"kind": "wall", "id": "0", "dist": 1.0, "label": "", "pos": Vector2.ZERO, "ok": true, "why": ""}
 	var car := {"kind": "vehicle", "id": "v", "dist": 1.1, "label": "", "pos": Vector2.ZERO, "ok": true, "why": ""}
 	var bench := {"kind": "bench", "id": "bench", "dist": 1.2, "label": "", "pos": Vector2.ZERO, "ok": true, "why": ""}

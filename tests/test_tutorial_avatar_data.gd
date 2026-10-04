@@ -24,10 +24,10 @@ func _steps() -> Array:
 ## when it is skipped.
 func _words_of(s: Dictionary) -> Array:
 	var out: Array = []
-	for key in ["title", "text", "goal", "wait_title", "wait_text", "skipped_title", "skipped_text", "dialog_text"]:
+	for key in ["title", "text", "text_always", "goal", "wait_title", "wait_text", "skipped_title", "skipped_text", "dialog_text"]:
 		if s.has(key):
 			out.append(String(s[key]))
-	for g in s.get("goals", []):
+	for g in s.get("goals", []) + s.get("goals_always", []):
 		out.append(String(g.get("text", "")))
 		if g.has("line"):
 			out.append(String(g.line))

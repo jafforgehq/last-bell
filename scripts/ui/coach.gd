@@ -40,6 +40,7 @@ extends CanvasLayer
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 
 const STEPS_PATH := "res://assets/data/tutorial.json"
@@ -1150,7 +1151,7 @@ func _fill_card() -> void:
 	dots.queue_redraw()
 	skip_button.visible = not is_wrap
 	var title := String(step.get("title", ""))
-	var text := String(step.get("text", ""))
+	var text := String(_say("text", ""))
 	var goal := ""
 	match phase:
 		"wait":
@@ -1198,7 +1199,7 @@ func _page_open() -> bool:
 ## moment it is (a lesson whose line changes as it goes: the roster's, a job to give and then Close), else the
 ## step's `dialog_text`; "" for none (the card keeps its size).
 func _page_line() -> String:
-	for g in step.get("goals", []):
+	for g in _say("goals", []):
 		if g.has("line") and Conditions.check({"cond": String(g.get("when", "")), "params": g.get("params", {})}, sim, state):
 			return String(g.line)
 	return String(step.get("dialog_text", ""))
@@ -1212,10 +1213,18 @@ func _over_page() -> bool:
 ## What the card says to do right now: the first of the step's `goals` whose `when` holds (the
 ## next part of a step with several), else its `goal` (what the toast says too).
 func _goal_text() -> String:
-	for g in step.get("goals", []):
+	for g in _say("goals", []):
 		if Conditions.check({"cond": String(g.get("when", "")), "params": g.get("params", {})}, sim, state):
 			return String(g.get("text", ""))
 	return String(step.get("goal", ""))
+
+
+## What the step says under `key` ("text", "goals"), or `fallback`: with "Always aim at the mouse" (round 22) a step that teaches the aim has
+## words of its own under `<key>_always`.
+func _say(key: String, fallback):
+	if AimMode.always() and step.has(key + "_always"):
+		return step[key + "_always"]
+	return step.get(key, fallback)
 
 
 ## The Speed up button of a card that waits for the day to go by: the fastest speed.
@@ -1319,6 +1328,19 @@ static func best_rect(hud, sz: Vector2, vp: Vector2, t: Rect2, place: String, co
 			var cost := _hidden(r, keep_clear) * KEEP_WEIGHT + _hidden(r, obstacles) + float(i) * 400.0
 			if prev.size == sz and r.position.distance_to(prev.position) < 1.0:
 				cost -= STAY_BONUS + float(i) * 400.0
+			if cost < pick_cost:
+				pick_cost = cost
+				pick = r
+		# a last resort in a small window (700 x 560) with the person in the middle of it: the card at the very foot or head of the window,
+		# a few pixels from its edge, when that hides less of them than any of the places above (the camera leans toward the pointer only while
+		# aiming, so the person is in the middle: round 22)
+		var tight := Rect2(Vector2(4.0, 4.0), vp - Vector2(8.0, 8.0))
+		for r0 in [Rect2(Vector2(EDGE, vp.y - sz.y), sz), Rect2(Vector2(vp.x - sz.x - EDGE, vp.y - sz.y), sz), Rect2(Vector2(EDGE, 0.0), sz), Rect2(Vector2(vp.x - sz.x - EDGE, 0.0), sz)]:
+			var r := _fit(r0, tight)
+			var cost := _hidden(r, keep_clear) * KEEP_WEIGHT + _hidden(r, obstacles) + float(spots.size()) * 400.0
+			if t.size.x > 0.0:
+				var on_t := r.intersection(t.grow(10.0))
+				cost += on_t.size.x * on_t.size.y * 50.0    # (and never what the card points at)
 			if cost < pick_cost:
 				pick_cost = cost
 				pick = r

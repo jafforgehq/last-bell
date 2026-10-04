@@ -240,14 +240,27 @@ func _foot_party_at_gate() -> bool:
 	return false
 
 
-## The gate's motor as the demand rises, and the gate node (when there is one) following the demand.
+## The gate's motor as the demand rises, and the gate node (when there is one) following the demand. In avatar mode the gate's rules are in
+## charge (round 22, scripts/sim/gate.gd): the node follows `sim.gate.open` whatever the demand, and the sounds are the rules' events
+## (main.gd's `gate` event, `gate_sound`), so the demand makes no sound of its own there.
 func _drive_gate(dt: float) -> void:
 	var demand := gate_demand()
-	if _demand_before >= 0.0 and demand > _demand_before and _demand_before < 0.5:
+	var ruled: bool = gate != null and is_instance_valid(gate) and gate.has_method("ruled") and gate.ruled()
+	if not ruled and _demand_before >= 0.0 and demand > _demand_before and _demand_before < 0.5:
 		_on_sound("car_gate_motor", GATE_AT)
 	_demand_before = demand
 	if gate != null and is_instance_valid(gate):
 		gate.follow(demand, dt)
+
+
+## The sound of a step of the rules' gate (the `gate` event: "opening", "open", "closing", "shut"): the motor as the leaves begin to move, a
+## latch as they close, and nothing as they open all the way (the motor has done it). Heard by distance to the camera, like the cars'.
+func gate_sound(state: String) -> void:
+	match state:
+		"opening", "closing":
+			_on_sound("car_gate_motor", GATE_AT)
+		"shut":
+			_on_sound("car_door_close", GATE_AT)
 
 
 # ---------------------------------------------------------------------- sounds --

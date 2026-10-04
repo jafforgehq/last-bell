@@ -63,10 +63,19 @@ const SMOKING_BELOW := 0.3
 
 ## The keys on the road in a car, and on foot (the place's own are LEGEND).
 const CAR_LEGEND := [
-	[["W", "S"], "gas and brake"], [["A", "D"], "steer"], [["Click"], "shoot"], [["R"], "reload"], [["E"], "stop"], [["Tab"], "autopilot"],
+	[["W", "S"], "gas and brake"], [["A", "D"], "steer"], [["Right-click"], "aim"], [["Click"], "shoot"], [["R"], "reload"], [["E"], "stop"], [["Tab"], "autopilot"],
 	[["Space"], "pause"], [["T"], "news"],
 ]
 const FOOT_LEGEND := [
+	[["W", "A", "S", "D"], "walk"], [["Right-click"], "aim"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "stop"], [["Space"], "pause"], [["T"], "news"],
+	[["Scroll"], "zoom"],
+]
+## (With "Always aim at the mouse", round 22's setting: the legends as they were.)
+const CAR_LEGEND_ALWAYS := [
+	[["W", "S"], "gas and brake"], [["A", "D"], "steer"], [["Click"], "shoot"], [["R"], "reload"], [["E"], "stop"], [["Tab"], "autopilot"],
+	[["Space"], "pause"], [["T"], "news"],
+]
+const FOOT_LEGEND_ALWAYS := [
 	[["W", "A", "S", "D"], "walk"], [["Click"], "shoot"], [["R"], "reload"], [["F"], "melee"], [["E"], "stop"], [["Space"], "pause"], [["T"], "news"],
 	[["Scroll"], "zoom"],
 ]
@@ -981,7 +990,9 @@ func _update_prompt() -> void:
 func _legend_text() -> Array:
 	if scene == null or not _driving():
 		return super._legend_text()
-	return CAR_LEGEND if _has_car() and _in_car() else FOOT_LEGEND
+	if _has_car() and _in_car():
+		return CAR_LEGEND_ALWAYS if AimMode.always() else CAR_LEGEND
+	return FOOT_LEGEND_ALWAYS if AimMode.always() else FOOT_LEGEND
 
 
 ## The legend as one line of words ("W S gas and brake, A D steer, ..."), for the tests.

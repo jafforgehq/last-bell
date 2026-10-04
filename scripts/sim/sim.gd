@@ -32,6 +32,7 @@ const Specialists := preload("res://scripts/sim/specialists.gd")
 const Initiative := preload("res://scripts/sim/initiative.gd")
 const Avatar := preload("res://scripts/sim/avatar.gd")
 const Interact := preload("res://scripts/sim/interact.gd")
+const Gate := preload("res://scripts/sim/gate.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 
@@ -311,6 +312,9 @@ var initiative    # (round 20: what the community proposes over the radio)
 var avatar
 ## What the avatar uses where it stands (round 18, interact.gd): talk, a post, the bench, a car's fuel. Behind avatar mode.
 var interact
+## The Main gate as a real gate (round 22, gate.gd): opened and shut by the avatar's hands, by the keeper for a car or a party, and by the bell. Avatar
+## mode only: `gate.active()` is false with no avatar and the section is the shut wall it always was.
+var gate
 ## The id of the person the player controls ("" = no avatar: the old game, the harness and the tests; every rule of
 ## the avatar and the radio's news is behind this).
 var player_id := ""
@@ -412,6 +416,8 @@ func _init(data: Dictionary, w, effects) -> void:
 	avatar.setup(self)
 	interact = Interact.new()
 	interact.setup(self)
+	gate = Gate.new()
+	gate.setup(self)
 	for m in [supplies, medical, scavenge, scenario, waves, tactics, workshop, traits, morale, bonds, skills, barks, storyteller, build, jobs, recruits, town, lots, seasons, streets, nights, vehicles]:
 		m.setup(self)
 	_seed()
@@ -646,6 +652,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	initiative.start()
 	avatar.start()
 	interact.start()
+	gate.start()
 	recruits.begin()
 	town.begin()
 	lots.begin()
@@ -704,6 +711,8 @@ func update(dt: float) -> void:
 	town.update(dt)
 	lots.update(dt)
 	streets.update(dt)
+	# the gate (round 22, avatar mode only): after the trips and the callers have asked for it, before the people and the dead move
+	gate.update(dt)
 	nights.update(dt)
 
 	if phase == "dawn":
@@ -1248,9 +1257,12 @@ func assign_slot(z: Zombie, only) -> bool:
 	# in a game with lots the dead only choose a place they can get to (a wall of the lots may shut the way)
 	var gated: bool = lots.on
 	var home_region := region_at(z.x, z.y) if gated else 0
+	var gate_open: bool = gate.lets_dead_in()
 	for s in segments:
 		if s.state == 3:
 			continue
+		if gate_open and int(s.id) == gate.SEGMENT:
+			continue    # (round 22: the gate stands open: nothing to claw at, they walk in)
 		if only != null and s != only:
 			continue
 		if s.kind == DOOR_KIND and not yard_down:
@@ -1379,7 +1391,7 @@ func yard_open() -> bool:
 	for s in segments:
 		if s.kind != DOOR_KIND and s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
-	return false
+	return gate.lets_dead_in()    # (round 22: a gate that stands open is a way in, as a section that fell)
 
 
 ## A free place at a school door that is still up, for one of the dead who cannot
@@ -1513,7 +1525,7 @@ func _breached() -> bool:
 	for s in segments:
 		if s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
-	return false
+	return gate.lets_dead_in()    # (round 22: the gate stands open: the dead walk in as through a section that fell)
 
 
 ## Whether one of the dead of the streets may go on hunting a survivor now: in the yard only by day (it gives up at
@@ -1602,7 +1614,8 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 		"attack":
 			var s: Segment = z.slot.seg
 			z.facing = z.slot.face
-			if s.state == 3:
+			if s.state == 3 or (int(s.id) == gate.SEGMENT and gate.lets_dead_in()):
+				# (round 22: a gate that has been opened under them is a way in as a section that fell)
 				z.slot.who = null
 				z.slot = null
 				z.state = "breach"

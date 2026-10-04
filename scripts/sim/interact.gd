@@ -6,7 +6,8 @@
 ##
 ## CANDIDATES. Within reach of the avatar's feet, nearest first, and a person beats a post beats the bench beats a car beats a wall on a
 ## tie (two things within TIE tiles of each other): a person within TALK_REACH, a post within POST_REACH of its spot, the bench within
-## BENCH_REACH, a parked car within CAR_REACH of the middle of its bay, a worn wall within `mend.reach` of its mending place (the nights'
+## BENCH_REACH, the gate's lever within `sim.gate.REACH` of `sim.gate.control_spot()` (round 22: avatar mode only, "Open the gate" or "Shut the gate"),
+## a parked car within CAR_REACH of the middle of its bay, a worn wall within `mend.reach` of its mending place (the nights'
 ## module lists those: `sim.nights.wall_candidates()`). A candidate that cannot be used now is still listed, with its
 ## reason (`ok` false, `why`), so the prompt can say so. Nothing at all while the avatar is down, away (on a trip) or gone.
 ## TALKING. `talk_to` is a conversation, not a command: the person says what is the matter (`needs_of`, in a fixed order: bleeding,
@@ -27,7 +28,7 @@
 ##
 ## Events this module adds to sim.events:
 ##   {"type": "talk", "who": id, "line": the first-person status line}
-##   {"type": "interact", "kind": "person" | "post" | "bench" | "vehicle" | "wall", "id", "ok"}   (use())
+##   {"type": "interact", "kind": "person" | "post" | "bench" | "gate" | "vehicle" | "wall", "id", "ok"}   (use())
 ##   {"type": "post_taken", "post": id, "who": the player's id, "held_by_swap": id or ""}
 ##   {"type": "post_left", "post": id, "why"}
 ##   {"type": "bench_work", "on": true} and {"type": "bench_work", "on": false, "ammo": made, "scrap": used, "why"}  (why: "done",
@@ -36,6 +37,7 @@
 extends RefCounted
 
 const Convoy := preload("res://scripts/sim/convoy.gd")
+const Lots := preload("res://scripts/sim/lots.gd")
 
 ## Tiles from the avatar's feet (for a car, to the middle of its bay).
 const TALK_REACH := 1.9
@@ -65,7 +67,7 @@ const AMMO_LOW := 20.0
 ## The walking input this long is a hand on the keys.
 const HANDS_ON := 0.25
 const EPS := 1.0e-6
-const RANK := {"person": 0, "post": 1, "bench": 2, "vehicle": 3, "wall": 4}
+const RANK := {"person": 0, "post": 1, "bench": 2, "gate": 3, "vehicle": 4, "wall": 5}
 
 var sim
 ## The post the avatar is on ("" none), what it is doing with its hands ("bench" or ""), the rules seconds of the session left, and
@@ -162,6 +164,14 @@ func candidates() -> Array:
 		else:
 			var why: String = sim.workshop.why_not_hand_craft(p)
 			out.append({"kind": "bench", "id": "bench", "label": "Work the bench", "pos": bench, "dist": me.distance_to(bench), "ok": why == "", "why": why})
+	# the gate's lever (round 22, scripts/sim/gate.gd; avatar mode only): E opens a shut gate and shuts an open one, refused with its reason
+	if sim.gate.active():
+		var lever: Vector2 = sim.gate.control_spot()
+		var gd := me.distance_to(lever)
+		if gd <= sim.gate.REACH:
+			var want_open: bool = not sim.gate.wants_open()
+			var gwhy: String = sim.gate.refusal(want_open)
+			out.append({"kind": "gate", "id": "gate", "label": "Open the gate" if want_open else "Shut the gate", "pos": lever, "dist": gd, "ok": gwhy == "", "why": gwhy})
 	for v in sim.vehicles.parked():
 		var at: Vector2 = Convoy.bay(int(v.get("spot", -1)))
 		var d := me.distance_to(at)
@@ -173,7 +183,7 @@ func candidates() -> Array:
 	return _ordered(out)
 
 
-## The nearest first, but within TIE tiles of the nearest left, the kind that ranks first (a person, a post, the bench, a car, a wall).
+## The nearest first, but within TIE tiles of the nearest left, the kind that ranks first (a person, a post, the bench, the gate, a car, a wall).
 func _ordered(list: Array) -> Array:
 	var left: Array = list.duplicate()
 	var out: Array = []
@@ -200,6 +210,31 @@ func _ordered(list: Array) -> Array:
 func best() -> Dictionary:
 	var list := candidates()
 	return list[0] if not list.is_empty() else {}
+
+
+## The things that could be used wherever the avatar stands (round 22: a click on one that `candidates()` does not list says "Too far: walk
+## closer"): [{"kind", "id", "pos", "label"}] for a night post, the bench, a parked car and a wall that wants mending, with no reach and no
+## "ok". [] with no avatar, while it is down, away or gone.
+func far_things() -> Array:
+	var p = _lead()
+	if p == null or _cannot(p) != "":
+		return []
+	var out: Array = []
+	for po in sim.jobs.posts():
+		out.append({"kind": "post", "id": String(po.id), "pos": Vector2(po.pos), "label": "The %s post" % _post_short(po)})
+	var bench: Vector2 = sim.workshop.bench()
+	if bench != Vector2.ZERO:
+		out.append({"kind": "bench", "id": "bench", "pos": bench, "label": "The bench"})
+	if sim.gate.active():
+		out.append({"kind": "gate", "id": "gate", "pos": sim.gate.control_spot(), "label": "The gate lever"})
+	for v in sim.vehicles.parked():
+		out.append({"kind": "vehicle", "id": String(v.id), "pos": Convoy.bay(int(v.get("spot", -1))), "label": "The %s" % String(sim.vehicles.name_of(String(v.id))).to_lower()})
+	var nights = sim.nights
+	if nights != null and nights.has_method("active") and nights.active() and nights.has_method("_needs_mending"):
+		for s in sim.segments:
+			if int(s.id) < Lots.FIRST_SEGMENT_ID and nights._needs_mending(s):
+				out.append({"kind": "wall", "id": str(int(s.id)), "seg": int(s.id), "pos": sim.repair_spot(s), "label": "The %s" % String(s.name).to_lower()})
+	return out
 
 
 ## A fresh candidate of the same kind and id as `cand` (or the best, with none given): {} when it is no longer in reach.
@@ -239,6 +274,8 @@ func use(cand: Dictionary = {}) -> Dictionary:
 				r = {"ok": true, "line": "Stopped working the bench.", "why": "", "stopped": true}
 			else:
 				r = work_bench()
+		"gate":
+			r = _use_gate()
 		"vehicle":
 			r = check_vehicle(id)
 		"wall":
@@ -250,6 +287,20 @@ func use(cand: Dictionary = {}) -> Dictionary:
 	if not r.has("line"):
 		r["line"] = ""
 	sim.events.append({"type": "interact", "kind": kind, "id": id, "ok": bool(r.get("ok", false))})
+	return r
+
+
+## E at the gate's lever (round 22, scripts/sim/gate.gd): the rules' answer to a hand (`sim.gate.request`: {"ok", "why", "line", "warn", "open"}); a shut
+## gate (or one that is on its way to be shut) is opened, an open one shut, and a refusal says why ("Dez is in the gateway", "The gate is wrecked").
+## The hands are at one thing: a bench session in hand and a wall being mended are stopped when the gate is worked.
+func _use_gate() -> Dictionary:
+	var gate = sim.gate
+	var r: Dictionary = gate.request(not gate.wants_open(), "player")
+	if bool(r.get("ok", false)):
+		if working == "bench":
+			stop_work("stopped")
+		if sim.nights != null and String(sim.nights.working) == "wall":
+			sim.nights.stop_mend("stopped")
 	return r
 
 

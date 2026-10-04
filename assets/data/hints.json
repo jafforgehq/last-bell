@@ -5,7 +5,8 @@
 			"id": "dusk",
 			"title": "Dusk",
 			"text": "The bell has rung. The crew goes to their posts and the dead come, more every night. Press V to see which walls your guns cover, and keep a builder ready to repair (F).",
-			"text_avatar": "The bell has rung: the dead come. Aim with the mouse, fire with the button, R reloads. Climb a ladder to shoot over the wall. Click a crew card to radio them.",
+			"text_avatar": "The bell has rung: the dead come. Hold the right button to aim, click to fire, R reloads. Climb a ladder to shoot over the wall. Click a crew card to radio them.",
+			"text_avatar_always": "The bell has rung: the dead come. Aim with the mouse, fire with the button, R reloads. Climb a ladder to shoot over the wall. Click a crew card to radio them.",
 			"anchor": ["clock"],
 			"start": {"cond": "bell_rung"}
 		},
@@ -104,7 +105,8 @@
 		{
 			"id": "use",
 			"title": "E uses what is there",
-			"text": "E uses what is at your feet: talk to someone, take a post on the wall, work the bench, mend a worn wall, check a car. The prompt says what it will do.",
+			"text": "E, or a click, uses what is in reach: talk to someone, take a night post, work the bench, mend a worn wall, check a car. The prompt says what it will do.",
+			"text_avatar_always": "E uses what is at your feet: talk to someone, take a post on the wall, work the bench, mend a worn wall, check a car. The prompt says what it will do.",
 			"start": {"cond": "can_use"}
 		},
 		{
@@ -112,6 +114,13 @@
 			"title": "The green ring",
 			"text": "The green ring round you: the crew inside it shoots better and faster. On a hard night stand where the dead come, and keep your people in the ring.",
 			"start": {"cond": "ring_night"}
+		},
+		{
+			"id": "gate",
+			"title": "Shut the gate",
+			"text": "Shut the gate at dusk: E at the gate lever. Its lamp is green while the gate is open and red while it is shut. An open gate in the dark lets the dead in.",
+			"anchor": ["clock"],
+			"start": {"cond": "gate_dusk"}
 		},
 		{
 			"id": "bignight",

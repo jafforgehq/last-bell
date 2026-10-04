@@ -53,6 +53,7 @@ const Tactics := preload("res://scripts/sim/tactics.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const CrewLoad := preload("res://scripts/sim/crew_load.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const RadioVerbs := preload("res://scripts/ui/radio_verbs.gd")
 const CallCard := preload("res://scripts/ui/call_card.gd")
 const NewsPanel := preload("res://scripts/ui/news_panel.gd")
@@ -60,6 +61,7 @@ const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const RadioPanel := preload("res://scripts/ui/radio_panel.gd")
 const CommunityKit := preload("res://scripts/ui/community_kit.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
+const GateKit := preload("res://scripts/ui/gate_kit.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -272,6 +274,12 @@ const HELP := [
 ## keys, no selecting in the yard, no panning: the camera follows. G, the Town Board, and N, Build, keep their places so that
 ## the words the HUD gives them in a settlement game still reach them.)
 const HELP_AVATAR := [
+	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["Click", "Pick, use"], ["E", "Use"], ["R", "Reload"], ["F", "Melee"]]],
+	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
+]
+## (With "Always aim at the mouse", round 22's setting: the mouse aims by itself and the left button fires, as it did.)
+const HELP_AVATAR_ALWAYS := [
 	["You", 2, [["W A S D", "Move"], ["Arrows", "Move"], ["Mouse", "Aim and fire"], ["E", "Use"], ["R", "Reload"], ["F", "Melee"]]],
 	["Radio: click a crew card", 2, [["Come", "Follows you"], ["Hold", "Stays put"], ["Cover", "Watches your back"], ["Search", "In a place"], ["Back", "Back to work"], ["Walls", "To their post"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5", "Save"], ["Esc", "Close, or the menu", 76], ["F9", "Load"], ["Shift", "J N G: full"]]],
@@ -284,6 +292,11 @@ const STANCE_TIPS := {"follow": "Following you", "hold": "Holding where you left
 const HINT := ["Click someone in the yard", [["Right-click", "to send them"], ["Scroll", "to zoom"], ["Space", "to pause"]]]
 ## (Avatar mode's is two lines, so that it fits a 700 px window: the survivor's hands, then the radio, the map and the news.)
 const HINT_AVATAR := [
+	["", [["WASD", "to move"], ["Right-click", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
+	["Click a crew card or a person to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
+]
+## (and with "Always aim at the mouse": the mouse aims, a click fires.)
+const HINT_AVATAR_ALWAYS := [
 	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"]]],
 	["Click a crew card to radio them", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
@@ -364,6 +377,28 @@ class Strip:
 		var mx := size.x * hour / 24.0
 		draw_rect(Rect2(mx - 2.5, y - 4, 5, 14), Color(0, 0, 0, 0.55))
 		draw_rect(Rect2(mx - 1.5, y - 3, 3, 12), Color("#ece6d8"))
+
+
+## A small round lamp (round 22, the gate's indicator in the clock): a coloured disc with a dark rim and a glint, a faint halo when it is lit.
+class Lamp:
+	extends Control
+	var color := Color("#e0584a")
+	## Whether it is lit (a halo round it); the colour is the state's either way.
+	var lit := true
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		focus_mode = Control.FOCUS_NONE
+		custom_minimum_size = Vector2(14, 14)
+
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 1.0
+		if lit:
+			draw_circle(c, r + 1.0, Color(color, 0.25))
+		draw_circle(c, r - 1.0, Color(0.03, 0.05, 0.05, 0.95))
+		draw_circle(c, r - 2.0, color)
+		draw_circle(c + Vector2(-1.5, -1.5), 1.4, Color(1, 1, 1, 0.55))
 
 
 var data: Dictionary
@@ -491,6 +526,14 @@ var night_badge: PanelContainer
 var night_badge_icon: TextureRect
 var night_badge_label: Label
 var _badge_state := ""
+## Round 22, in avatar mode, in the clock above the forecast: the gate's state in a lamp and a word ("Gate: open", "Gate: shut", "Gate: held open"), the
+## lamp being green while it is open, red while it is shut and amber while the leaves move. Only there with the gate's rules in charge
+## (scripts/ui/gate_kit.gd). Anchor `clock.gate`. `_gate_last` and `_gate_dir` are the leaves' last `open` and which way they were going.
+var gate_row: HBoxContainer
+var gate_lamp: Lamp
+var gate_label: Label
+var _gate_last := -1.0
+var _gate_dir := 0
 var alerts_box: VBoxContainer
 ## The order the feed shows its alerts in ("id:level|..."): the panels are moved only when it changes.
 var alert_sig := ""
@@ -1466,6 +1509,19 @@ func _build_clock() -> void:
 	walkers_label = _label("", Fonts.sans(400), 12, INK2)
 	r4.add_child(walkers_label)
 	v.add_child(r4)
+	# (round 22) in avatar mode, the gate under them (above the forecast, which is put away first when a call needs the room): a lamp and a word, with the tooltip that says what the lever does
+	gate_row = _hbox(6)
+	gate_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	gate_row.tooltip_text = GateKit.TIP
+	gate_lamp = Lamp.new()
+	gate_lamp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	gate_row.add_child(gate_lamp)
+	gate_label = _label("Gate: shut", Fonts.sans(400), 12, INK2)
+	gate_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	gate_label.tooltip_text = GateKit.TIP
+	gate_row.add_child(gate_label)
+	gate_row.visible = false
+	v.add_child(gate_row)
 	# the lookout's forecast, once it is given (see update_hud); a long one wraps
 	forecast_label = _label("", Fonts.sans(400), 12, INK2)
 	forecast_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2833,7 +2889,33 @@ func _build_help() -> void:
 	_corner(help, true, true, 12, _help_lift())
 
 
-## The groups of the controls in the help panel: the old yard's (HELP) or avatar mode's (HELP_AVATAR).
+## The controls the help lists now: the old yard's (HELP), or avatar mode's for the way the mouse aims (HELP_AVATAR, or HELP_AVATAR_ALWAYS with
+## the setting "Always aim at the mouse").
+func help_groups() -> Array:
+	if not avatar_ui:
+		return HELP
+	return HELP_AVATAR_ALWAYS if AimMode.always() else HELP_AVATAR
+
+
+## The lines of the hint now (the same two ways).
+func hint_lines() -> Array:
+	if not avatar_ui:
+		return [HINT]
+	return HINT_AVATAR_ALWAYS if AimMode.always() else HINT_AVATAR
+
+
+## The setting of how the mouse aims has changed: the help and the hint say the new controls.
+func controls_changed() -> void:
+	if not avatar_ui:
+		return
+	if help != null:
+		_fill_help()
+	if hint != null:
+		_fill_hint()
+		_layout_toast()
+
+
+## The groups of the controls in the help panel: the old yard's (HELP) or avatar mode's (`help_groups`).
 func _fill_help() -> void:
 	if _help_col != null and is_instance_valid(_help_col):
 		help.remove_child(_help_col)
@@ -2841,7 +2923,7 @@ func _fill_help() -> void:
 	help_g = null
 	help_n = null
 	var col := _vbox(8)
-	for group in (HELP_AVATAR if avatar_ui else HELP):
+	for group in help_groups():
 		var g := _vbox(4)
 		g.add_child(_caps(String(group[0])))
 		var per_row: int = group[1]
@@ -2920,7 +3002,7 @@ func _fill_hint() -> void:
 	if _hint_row != null and is_instance_valid(_hint_row):
 		hint.remove_child(_hint_row)
 		_hint_row.queue_free()
-	var lines: Array = HINT_AVATAR if avatar_ui else [HINT]
+	var lines: Array = hint_lines()
 	var rows := _vbox(4)
 	for words in lines:
 		var row := _hbox(5)
@@ -3650,6 +3732,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	temp_label.text = "%d°C, %s" % [temp, sim.weather]
 	walkers_label.text = "%d walkers" % walkers
 	_update_forecast(sim)
+	_update_gate(sim)
 	# speed and sound
 	if speed != last_speed:
 		last_speed = speed
@@ -3776,6 +3859,39 @@ func _update_forecast(sim) -> void:
 	if ready_text != "":
 		ready_label.add_theme_color_override("font_color", OK if bool(ready.get("holds", false)) else WARN)
 	_update_night_badge(sim, f)
+
+
+## The gate's lamp and word in the clock (round 22): there only while the gate's rules are in charge (avatar mode). The lamp is the picture's
+## (green open, red shut, amber on the move); the word is amber when the gate is open in the dark.
+func _update_gate(sim) -> void:
+	if gate_row == null:
+		return
+	var open := GateKit.open_of(GateKit.active_gate(sim))
+	if _gate_last >= 0.0 and not is_equal_approx(open, _gate_last):
+		_gate_dir = 1 if open > _gate_last else -1
+	_gate_last = open
+	var st: Dictionary = GateKit.status(sim, _gate_dir, bool(sim.is_night()))
+	var on := bool(st.on)
+	if gate_row.visible != on:
+		gate_row.visible = on
+		_layout_dock.call_deferred()
+	if not on:
+		_gate_last = -1.0
+		_gate_dir = 0
+		return
+	if gate_label.text != String(st.text):
+		gate_label.text = String(st.text)
+	var col: Color = WARN if bool(st.dark) else INK2
+	if gate_label.get_theme_color("font_color") != col:
+		gate_label.add_theme_color_override("font_color", col)
+	if gate_lamp.color != st.lamp:
+		gate_lamp.color = st.lamp
+		gate_lamp.queue_redraw()
+
+
+## The words of the gate's indicator now ("" while it is not shown): "Gate: open".
+func gate_text() -> String:
+	return gate_label.text if gate_row != null and gate_row.visible else ""
 
 
 ## The call card's words and buttons wrap at the column's width less the card's margins (see CallCard.set_wrap).
@@ -4820,7 +4936,7 @@ var lock_allowed: Callable
 ## The global rectangle of a named part of the HUD, or an empty Rect2 when it is not there (not
 ## built, hidden, or the selection has no such button). Looked up by name each time: the cards,
 ## the order buttons and the dialog are rebuilt. Names: `stores`, `stores.<ammo|scrap|food|water|
-## meds|fuel>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `clock.night` (the badge of a Big Night, avatar mode), `alerts`, `inspect`,
+## meds|fuel>`, `card:<person id>`, `bar`, `clock`, `clock.time`, `clock.forecast`, `clock.night` (the badge of a Big Night, avatar mode), `clock.gate` (the gate's lamp and word, avatar mode), `alerts`, `inspect`,
 ## `inspect.weapon`, `gizmo:<order id>`, `speed`, `speed.<0 to 3>`, `fields`, `help`, `sound`, `jobs` (the
 ## toolbar's Jobs button, and while the Jobs screen is open its parts: `jobs.screen`, `jobs.auto`, `jobs.clear`,
 ## `jobs.close`, `jobs.list`, `jobs.row:<person id>`, `jobs.job:<id>`, `jobs.post:<id>`, `jobs.station:<id>` and
@@ -4887,6 +5003,8 @@ func _anchor_control(name: String):
 			return time_label
 		"clock.forecast":
 			return forecast_label
+		"clock.gate":
+			return gate_row
 		"clock.night":
 			return night_badge
 		"inspect":

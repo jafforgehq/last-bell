@@ -25,6 +25,8 @@ const KIND_NAME := {
 	# round 19, the nights: a wall that is going, a plated brute coming, a breach, the night itself (the forecast's call), the notice of a
 	# Big Night a day ahead, the road home of a trip that is out at dusk
 	"going": "Wall", "brute": "Brute", "breach": "Breach", "night": "Night", "forecast": "Forecast", "night_road": "Road",
+	# round 22, the gate: "The gate is open and it is dark"
+	"gate": "Gate",
 }
 
 
@@ -39,14 +41,14 @@ static func wrap_at(c: Control, w: float) -> void:
 
 
 ## The colour of a kind of news (a word, readable on the panel): the dead at the wall (a wall going, a brute, a breach) and a death are
-## red, a fever, the alarm and a falling out amber, a new face, a friendship and a building that went up green, a card of the
+## red, a fever, the alarm, a falling out and the gate left open in the dark amber, a new face, a friendship and a building that went up green, a card of the
 ## storyteller, an idea, an errand and the night's notices (the forecast, the night, the road) blue, a stranger and a title earned
 ## gold; anything else the dim chalk.
 static func kind_color(host, kind: String) -> Color:
 	match kind:
 		"attack", "succession", "going", "brute", "breach":
 			return host.DANGER_TEXT
-		"sick", "alarm", "rift":
+		"sick", "alarm", "rift", "gate":
 			return host.WARN
 		"recruit", "build", "bond":
 			return host.OK

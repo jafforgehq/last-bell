@@ -18,6 +18,7 @@ const RaidRun := preload("res://scripts/raid/raid_run.gd")
 const RaidHud := preload("res://scripts/raid/raid_hud.gd")
 const RaidOverlay := preload("res://scripts/raid/raid_overlay.gd")
 const PlaceFlow := preload("res://scripts/raid/place_flow.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 
@@ -61,7 +62,9 @@ func _site(dead: Array = []) -> Dictionary:
 ## (the real game's new run has her), unless `avatar` is false: then it is the old game.
 func _game(width: int = 1280, height: int = 800, crew: int = 3, avatar: bool = true) -> Node:
 	PlaceFlow.live_enabled = false    # (round 21: these trips keep the overlay's road; the live drive is tests/test_road_flow.gd's)
-	return TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar}, width, height)
+	var main = TutorialKit.start({"difficulty": 1, "seed": 7, "crew": crew, "avatar": avatar}, width, height)
+	AimMode.set_mode("always")    # (round 22: these tests are of the controls as they were: the mouse aims by itself and the left button fires; the default is tests/test_r22c_*.gd's)
+	return main
 
 
 ## A place opened over `main` with the first `n` of the crew; its own frames are off (the tests tick it by hand). With `trip`

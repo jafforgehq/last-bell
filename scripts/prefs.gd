@@ -4,13 +4,14 @@
 ## fine. Every change is saved at once.
 ##
 ## Sections: `audio` (master, sfx, ambience, ui, music: 0 to 1), `ui` (scale,
-## hints, reduce_motion, fullscreen) and `flags` (tutorial_done, tutorial_offered).
+## hints, reduce_motion, fullscreen, aim_mode: "right" or "always", see scripts/aim_mode.gd) and
+## `flags` (tutorial_done, tutorial_offered).
 extends RefCounted
 
 const DEFAULT_PATH := "user://prefs.cfg"
 const DEFAULTS := {
 	"audio": {"master": 1.0, "sfx": 1.0, "ambience": 1.0, "ui": 1.0, "music": 1.0},
-	"ui": {"scale": 1.0, "hints": true, "reduce_motion": false, "fullscreen": false},
+	"ui": {"scale": 1.0, "hints": true, "reduce_motion": false, "fullscreen": false, "aim_mode": "right"},
 	"flags": {"tutorial_done": false, "tutorial_offered": false},
 }
 

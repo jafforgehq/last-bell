@@ -278,9 +278,11 @@ func test_take_the_gate_post_and_fire_from_it() -> void:
 	# fire from it: the trigger is held, the magazine runs down, she stays on the post
 	var mag0: int = me.mag
 	main.mouse_screen = main._tile_to_screen(gate_at + Vector2(0.0, -6.0))
+	main.aim_held = true    # (round 22: the right button aims, and the left button's trigger counts while it is held)
 	main.firing = true
 	_frames(main, 20)
 	main.firing = false
+	main.aim_held = false
 	check(me.mag < mag0, "she fired from the post: %d rounds left of %d" % [me.mag, mag0])
 	eq(sim.interact.posted, "gate", "and is still on it")
 	# the same hands, off the post, are less steady

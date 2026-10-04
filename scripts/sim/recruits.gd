@@ -243,6 +243,9 @@ func update(_dt: float) -> void:
 		return
 	for entry in incoming.duplicate():
 		if sim.day >= int(entry.day):
+			# (round 22, avatar mode: the caller is at the gate and waits for it to open: gate.gd; with no avatar it is always "open")
+			if not sim.gate.demand("arrival", String(entry.def.get("name", "A survivor"))):
+				continue
 			incoming.erase(entry)
 			_arrive(entry.def)
 

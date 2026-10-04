@@ -29,6 +29,7 @@
 extends RefCounted
 
 const NightData := preload("res://scripts/sim/night_data.gd")
+const GateKit := preload("res://scripts/ui/gate_kit.gd")
 
 ## name -> Callable(sim, params, state), filled once.
 static var _table := {}
@@ -84,6 +85,7 @@ static func registry() -> Dictionary:
 			"ring_night": _ring_night,
 			"big_night_ahead": _big_night_ahead,
 			"panel_page": _panel_page,
+			"gate_dusk": _gate_dusk,
 			"season": _season,
 			"lot_open": _lot_open,
 			"has_vehicle": _has_vehicle,
@@ -501,6 +503,17 @@ static func _big_night_ahead(sim, _p, _st) -> bool:
 	if not waves.big_night(int(sim.day)).is_empty():
 		return true
 	return sim.phase == "day" and float(sim.hour) >= NightData.num("forecast.notice_hour", 12.0) and not waves.big_night(int(sim.day) + 1).is_empty()
+
+
+## The gate's rules are in charge (avatar mode: scripts/sim/gate.gd) and it is the last hour of the day, dusk or night: the moment to say what the
+## lever is for. The stand-in a test leaves in the sim's meta "gate_stub" counts (`GateKit.gate_of`).
+static func _gate_dusk(sim, _p, _st) -> bool:
+	if not GateKit.is_active(sim):
+		return false
+	var phase := String(sim.phase)
+	if phase == "dusk" or phase == "night":
+		return true
+	return phase == "day" and float(sim.hour) >= float(sim.seasons.dusk_hour()) - 1.0
 
 
 ## {"page": "map"}: the radio panel is open on that page (the hints' own state, `{"panel": page}`, from the HUD: the rules do not know
