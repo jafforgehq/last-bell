@@ -25,14 +25,14 @@ LEVELS = {
     "shot_rifle": -7.0,
     "shot_shotgun": -5.0,
     "bite": -10.0,
-    "hammer": -12.0,
     "stab": -12.0,
     "thud": -12.0,
     "scrape_metal": -20.0,
     "scrape_stone": -20.0,
     "scrape_wood": -20.0,
     # the beds: quiet on purpose (they sit under everything), but heard
-    "wind_loop": -22.0,
+    # (wind_loop, moan_loop, the bells, the groans, the hammer and the other generated sounds are written at their level by
+    # tools/make_ambience.py, make_bells.py and make_base_sounds.py, and are left out of this table: it would undo them)
     "crickets_loop": -26.0,
     # the car trip (round 15, tools/make_car_sounds.py writes them at this level already)
     "car_door_open": -8.0,

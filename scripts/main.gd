@@ -566,6 +566,7 @@ func _ready() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	sound.attach(self)    # (the soundscape: the bells, the dead's groans, the steps, the gate... scripts/audio/soundscape.gd)
 	parking_view.wire(fx, sound, _vol_at)    # the cars' dust and sounds (doors, engine, the gate's motor), by distance to the camera
 	# the real game keeps one music across the scene reloads of a new run, a load and the title; a test's or a
 	# screenshot's scene has its own
@@ -1768,7 +1769,7 @@ func _process(delta: float) -> void:
 			if (z.state == "attack" or z.state == "approach") and Vector2(z.x, z.y).distance_to(cam_center) < 30.0:
 				near += 1
 		sound.set_ambience(lighting.dark, minf(1.0, near / 14.0), 0.1)
-		music.follow(not title_mode and hud.game_over == null, raid_open(), lighting.dark, minf(1.0, near / 14.0), 0.1)
+		music.follow(not title_mode and hud.game_over == null, raid_open(), lighting.dark, minf(1.0, near / 14.0), 0.1, _music_context())
 	_shot_frame()
 
 
@@ -2681,6 +2682,23 @@ func _vol_at(x: float, y: float) -> float:
 	return clampf(1.0 - Vector2(x, y).distance_to(cam_center) / 50.0, 0.12, 1.0)
 
 
+## What the music needs of the rules and the world (scripts/audio/music.gd `follow`; it knows no map): the phase, whether the avatar is indoors (the
+## floor under them is an indoor one), whether tonight the dead attack the fortified house (today: a Big Night; read here, so that the rules that
+## decide it can change without the music), how far through the night it is (0 at the bell, 1 at the dawn) and how the run ended. Read only.
+func _music_context() -> Dictionary:
+	var phase := String(sim.phase)
+	var ctx := {"phase": phase, "over": String(sim.over), "indoors": sound != null and sound.scape != null and sound.scape.avatar_indoors()}
+	if phase == "dusk" or phase == "night" or phase == "dawn":
+		var waves = sim.get("waves")
+		ctx["fortress"] = waves != null and waves.has_method("big_night") and not waves.big_night(int(sim.day)).is_empty()
+		var seasons = sim.get("seasons")
+		if seasons != null:
+			var dusk: float = seasons.dusk_hour()
+			var span: float = fposmod(seasons.dawn_hour() - dusk, 24.0)
+			ctx["progress"] = clampf(fposmod(float(sim.hour) - dusk, 24.0) / maxf(span, 1.0), 0.0, 1.0)
+	return ctx
+
+
 func _handle_events() -> void:
 	# a season's first morning has its own banner ("Winter begins", with the season's line): the day's banner that
 	# follows it in the same moment would cover it, so it is left out
@@ -2692,23 +2710,16 @@ func _handle_events() -> void:
 		if coach != null:
 			coach.on_event(e)
 		life_view.on_event(e)    # (the bells swing the school bell, the noises startle the birds)
+		sound.on_event(e)    # (the soundscape's: the bells, the groans, the gate, the radio's tones, the news; the guns and blows are below)
 		match e.type:
 			"shot":
 				sound.play("shot_%s" % e.weapon, _vol_at(e.x, e.y) * 0.8)
 			"bell":
-				sound.play("bell", 1.0, 0.0)
+				pass    # (the dusk bell is the soundscape's: four tolls, and the music's dusk stinger follows the phase)
 			"groan":
-				# (the stragglers of the streets by day are far and many: a few of their groans are heard, and quietly)
-				if randf() < (0.2 if bool(e.get("stray", false)) else 0.6):
-					var d := Vector2(e.x, e.y).distance_to(cam_center)
-					# a brute groans deep and a little louder, a runner thin and high
-					var kind: String = String(e.get("kind", "walker"))
-					var pitch := 0.72 if kind == "brute" else (1.3 if kind == "runner" else 1.0)
-					var loud := 1.3 if kind == "brute" else 1.0
-					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3) * loud * (0.5 if bool(e.get("stray", false)) else 1.0), 0.12, pitch)
+				pass    # (the soundscape's: one of eight groans put where the groaner is, a brute's roar; the stragglers of the streets are far and quiet)
 			"lure":
-				# the alarm goes off: the bell, higher and thinner than the dusk bell
-				sound.play("bell", 0.6, 0.02, 1.4)
+				pass    # (the alarm goes off: the soundscape rings the small bell, five quick strikes)
 			"claw":
 				if randf() < 0.35:
 					sound.play("scrape_%s" % e.material, _vol_at(e.x, e.y))
@@ -2722,8 +2733,7 @@ func _handle_events() -> void:
 				sound.play("hammer", 0.8, 0.1)
 				build_view.hammer(e, fx)
 			"built":
-				# a building is finished: a small high bell and the menus' chime, and a little dust where it stands
-				sound.play("bell", 0.3, 0.02, 1.8)
+				# a building is finished: a small high bell (the soundscape's) and the menus' chime, and a little dust where it stands
 				sound.ui("ui_confirm", 0.9)
 				build_view.celebrate(String(e.plot), fx)
 			"demolished":
@@ -2740,8 +2750,7 @@ func _handle_events() -> void:
 				if not (season_turned and String(e.text).begins_with("Day ")):
 					hud.show_banner(e.text, e.sub)
 			"season":
-				# the season turns: a deep, slow bell
-				sound.play("bell", 0.7, 0.0, 0.7)
+				pass    # (the season turns: the soundscape rings a deep, slow bell)
 			"bark":
 				# what someone said: a speech bubble over their head (the overlay keeps quiet under a menu)
 				overlay.add_bark(e)
@@ -2887,8 +2896,7 @@ func stage_problem(spec: String) -> bool:
 func _on_gate_event(e: Dictionary) -> void:
 	var state := String(e.get("state", ""))
 	var by := String(e.get("by", ""))
-	if parking_view != null:
-		parking_view.gate_sound(state)
+	# (the gate's sounds are the soundscape's, from the same event: the lever and its chain, the slide, the clang at the stop)
 	if by == "dusk" and state == "shut" and hud != null:
 		hud.show_banner("The gate is shut", "Call to arms: the gate keeper shut it" if bool(sim.radio.alarm_on) else "The gate keeper shut it for the night")
 
@@ -2947,8 +2955,7 @@ func _on_wall_mended(e: Dictionary) -> void:
 ## Someone has reached the gate (a recruit, recruits.gd): a soft bell and the chime, and their card, lit for a moment
 ## among the others. (Their pawn is made by the next _sync_views; the banner is a "banner" event of its own.)
 func _on_arrival(who: String) -> void:
-	sound.play("bell", 0.4, 0.02, 1.35)
-	sound.ui("ui_confirm", 0.8)
+	sound.ui("ui_confirm", 0.8)    # (and the soundscape's small bell)
 	for p in sim.people:
 		if p.id == who:
 			hud.add_person(p)

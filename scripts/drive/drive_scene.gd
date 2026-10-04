@@ -1551,6 +1551,9 @@ func _car_step(dt: float) -> void:
 	_steer_now = steer
 	var res: Dictionary = car.step(dt, throttle, steer, _probe_c)
 	_after_car(res, dt)
+	var snd = main.get("sound")
+	if snd != null and car != null:
+		snd.engine(float(car.speed), float(car.top), throttle)    # (the engine's idle and the road, by speed: scripts/audio/soundscape.gd)
 
 
 func _brake_to_zero() -> float:

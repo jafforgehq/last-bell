@@ -1591,8 +1591,8 @@ func _colony_events() -> void:
 					su2.on_dawn_report()
 			"bell":
 				var sound = main.get("sound")
-				if sound != null:
-					sound.play("bell", 0.35, 0.0)
+				if sound != null and sound.scape != null:
+					sound.scape.ring("far")    # (the dusk bell heard from a trip: dull, smeared, a long way off)
 	cs.events.clear()
 
 
@@ -1733,12 +1733,8 @@ func _handle_events() -> void:
 			"shot":
 				sound.play("shot_%s" % e.weapon, _vol_at(e.x, e.y) * 0.8)
 			"groan":
-				if randf() < 0.6:
-					var d := Vector2(e.x, e.y).distance_to(cam_center)
-					var kind: String = String(e.get("kind", "walker"))
-					var pitch := 0.72 if kind == "brute" else (1.3 if kind == "runner" else 1.0)
-					var loud := 1.3 if kind == "brute" else 1.0
-					sound.play("groan", minf(1.0, 10.0 / (d + 12.0) / 0.3) * loud, 0.12, pitch)
+				if sound.scape != null:
+					sound.scape.groan(e, cam_center)    # (the soundscape's: positional, a brute roars)
 			"claw":
 				if randf() < 0.35:
 					sound.play("scrape_%s" % e.material, _vol_at(e.x, e.y))
@@ -1757,7 +1753,8 @@ func _handle_events() -> void:
 			"searched":
 				sound.ui("ui_confirm", 0.7)
 			"survivor":
-				sound.play("bell", 0.4, 0.02, 1.35)
+				if sound.scape != null:
+					sound.scape.ring("chime")
 				sound.ui("ui_confirm", 0.9)
 	run.events.clear()
 
