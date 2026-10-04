@@ -18,7 +18,7 @@
 ## THE PARTS. `PARTS` maps a variable name of this class to the file of the module; a file that does not exist is skipped, so a package can land any time. A part is a RefCounted
 ## with `setup(sim)`, `start()`, `update(dt)`, `save()`, `load_state(d)` and optionally `prepare_load(data)`, `restore(before)`, `person_added(p)`, `pre_save()` and `enabled`;
 ## SaveGame finds each of them by its variable (it can save and load). `scenario` replaces the colony's Scenario when `one_house.gd` exists.
-extends "res://scripts/sim/sim.gd"
+extends "res://scripts/town/town_rules.gd"
 
 const GRID_W := 1024
 const TownMedical := preload("res://scripts/town/town_medical.gd")

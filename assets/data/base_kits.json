@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "notes": "Owner: WP5 (BaseLayout reads it, perimeter.gd reads the kits). A kit is what a slot of the base's perimeter is built with. Its catalogue entry in the layout's `buildings` has the id \"kit_<kit>\" and `slot_kit` = the kit id; a slot's `kits` lists kit ids, its Build plot's `kits` lists the building ids. hp is the section's hit points (for door_plank, `bonus` true: hit points ADDED to the barred door). scrap and work (builder-hours) are the cost. effects are the building effects the colony reads through build.bonus/factor (tower: reach_bonus, reach_radius; floodlight: night_reach_mult). `stand` is how far outside the fence's outer face the dead stand to claw it. Starting numbers (WP8 tunes them in one_house_tuning.json).",
+  "kits": {
+    "fence": {
+      "name": "Fence section",
+      "blurb": "Cheap and weak: planks, wire and posts. The dead tear it down in a few minutes.",
+      "slot_kinds": ["fence"],
+      "hp": 120,
+      "scrap": 5,
+      "work": 3,
+      "stand": 0.55,
+      "art": "fence",
+      "effects": {}
+    },
+    "fence_strong": {
+      "name": "Reinforced fence",
+      "blurb": "Doubled planks and sheet metal. More than twice the hit points of a plain section.",
+      "slot_kinds": ["fence"],
+      "hp": 260,
+      "scrap": 12,
+      "work": 7,
+      "stand": 0.55,
+      "art": "fence_strong",
+      "effects": {}
+    },
+    "gate": {
+      "name": "Gate",
+      "blurb": "A gate on the front. People pass whole; shut, it is a wall, and left open it lets the dead in.",
+      "slot_kinds": ["gate"],
+      "hp": 200,
+      "scrap": 14,
+      "work": 8,
+      "stand": 0.55,
+      "art": "gate",
+      "effects": {}
+    },
+    "door_plank": {
+      "name": "Planked door",
+      "blurb": "Planks across the barred door: it holds much longer.",
+      "slot_kinds": ["door"],
+      "hp": 90,
+      "bonus": true,
+      "scrap": 4,
+      "work": 2,
+      "stand": 0.5,
+      "art": "door_plank",
+      "effects": {}
+    },
+    "tower": {
+      "name": "Small tower",
+      "blurb": "A lookout and a firing platform: shooters near it reach three tiles further.",
+      "slot_kinds": ["tower"],
+      "hp": 0,
+      "scrap": 22,
+      "work": 14,
+      "art": "tower",
+      "post": true,
+      "effects": {"reach_bonus": 3.0, "reach_radius": 4.0}
+    },
+    "floodlight": {
+      "name": "Floodlight",
+      "blurb": "A lamp on a pole and a generator: the guns reach a little further by night and a blackout costs no aim.",
+      "slot_kinds": ["floodlight"],
+      "hp": 0,
+      "scrap": 16,
+      "work": 8,
+      "art": "floodlight",
+      "effects": {"night_reach_mult": 1.08, "blackout_proof": 1}
+    }
+  },
+  "unlock": {
+    "door": 1,
+    "front_near": 1,
+    "front": 2,
+    "side": 3,
+    "gate": 3,
+    "tower": 3,
+    "back": 4,
+    "tower2": 4,
+    "floodlight": 4
+  },
+  "layout": {
+    "door_hp": 90,
+    "door_name": "Barred door",
+    "section_max": 5,
+    "gate_width": 3,
+    "ring": 3,
+    "spawn_range": [35, 60],
+    "spawn_count": 4,
+    "posts_min": 8
+  }
+}
