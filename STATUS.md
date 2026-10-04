@@ -309,7 +309,7 @@ Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full d
 
 **Probe web audio** (no ears needed): serve a copy of `build/web` with a hook in `index.html` that records `AudioContext`s, `AudioBufferSourceNode.start` calls and an analyser on the destination (`.claude/launch.json` has a `web-test` config on port 8123 serving the scratchpad's `webtest` folder). Headless tests use a dummy audio driver and cannot catch web audio bugs.
 
-**Regenerate assets:** `python3 tools/make_music.py [title|day|night|danger]`, `python3 tools/level_sounds.py [--check]`, and the other `tools/make_*.py` (art; Python with Pillow and NumPy).
+**Regenerate assets:** `python3 tools/make_score.py [title|indoors|outdoors|night|fortress|stingers|endcard]`, `python3 tools/make_bells.py`, `python3 tools/make_ambience.py`, `python3 tools/make_base_sounds.py`, `python3 tools/level_sounds.py [--check]`, and the other `tools/make_*.py` (art; Python with Pillow and NumPy).
 
 **Push:** only when you ask. `git push origin main` (fast-forward) is how rounds 0 to 16 went; rounds 17 and later are on feature branches that have not been pushed: merge `feature/int` into `main` (after the no-avatar check of section 1e) only when you say so, then push. The repo is private; scan the diff for keys first.
 

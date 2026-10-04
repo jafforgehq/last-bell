@@ -1,5 +1,7 @@
-## The audio buses: `Master`, and under it `SFX` (the one-shot sounds), `UI` (the
-## menu sounds), `Ambience` (wind, crickets, the horde's moan) and `Music`. They are
+## The audio buses: `Master` (with a hard limiter, so that the sum of the music and the guns never clips), and under it `SFX` (the
+## one-shot sounds), `UI` (the menu sounds), `Ambience` (wind, crickets, the horde's moan) and `Music`; and `Distant`, which is sent
+## to Ambience and has a low-pass and a reverb on it (a crow, a dog, a far gunshot: the sounds that are meant to be a long way
+## off, scripts/audio/soundscape.gd). Its volume is Ambience's slider. They are
 ## defined in `res://default_bus_layout.tres`, which the project loads at start-up, and
 ## NOT made at run time: on the web export a bus made with `AudioServer.add_bus()` is
 ## filed in the wrong slot (the engine hands the web layer -1 whatever position is
@@ -15,8 +17,11 @@ extends RefCounted
 
 const Prefs := preload("res://scripts/prefs.gd")
 
-## The buses made under Master, in the order they are made.
+## The buses made under Master, in the order they are made (`Distant` is made after them, under Ambience).
 const NAMES := ["SFX", "UI", "Ambience", "Music"]
+## The far-away bus: its name, where it is sent, and the filter on it.
+const DISTANT := "Distant"
+const DISTANT_CUTOFF_HZ := 3200.0
 ## The pref key of each bus (section `audio`).
 const PREF_KEY := {"Master": "master", "SFX": "sfx", "UI": "ui", "Ambience": "ambience", "Music": "music"}
 ## What a volume of 0 is, in decibels, for the volume knob (the mute switch does the rest).
@@ -34,6 +39,25 @@ static func ensure() -> void:
 			var i := AudioServer.bus_count - 1
 			AudioServer.set_bus_name(i, bus_name)
 			AudioServer.set_bus_send(i, "Master")
+	if AudioServer.get_bus_index(DISTANT) < 0:
+		AudioServer.add_bus(AudioServer.bus_count)
+		var d := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(d, DISTANT)
+		AudioServer.set_bus_send(d, "Ambience")
+		var low := AudioEffectLowPassFilter.new()
+		low.cutoff_hz = DISTANT_CUTOFF_HZ
+		AudioServer.add_bus_effect(d, low)
+		var room := AudioEffectReverb.new()
+		room.room_size = 0.65
+		room.damping = 0.7
+		room.dry = 0.75
+		room.wet = 0.3
+		AudioServer.add_bus_effect(d, room)
+
+
+## The bus the far-away sounds play on: Distant, or Ambience when the layout has no such bus.
+static func far_bus() -> String:
+	return DISTANT if AudioServer.get_bus_index(DISTANT) >= 0 else "Ambience"
 
 
 ## A volume from 0 to 1 as decibels: 1 is 0 dB, 0.5 about -6 dB, 0 is SILENT_DB.
