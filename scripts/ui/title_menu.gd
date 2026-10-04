@@ -10,6 +10,7 @@ const Kit := preload("res://scripts/ui/menu_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
 const Demo := preload("res://scripts/demo.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
 
 const TAGLINE := "Hold the schoolyard for thirty nights."
 ## The small tag of the demo's title (round 26).
@@ -130,7 +131,9 @@ func _build_logo() -> Control:
 		name_labels.append(l)
 	top.add_child(words)
 	box.add_child(top)
-	tagline = hud._label(TAGLINE, Fonts.sans(500), 16, hud.INK)
+	# (One House: the real game starts in the town, and its line says so; a test's stand-in for the game keeps the school's)
+	var line := OneHouse.text("words.tagline", TAGLINE) if OneHouse.town_start(shell.main) else TAGLINE
+	tagline = hud._label(line, Fonts.sans(500), 16, hud.INK)
 	tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tagline.custom_minimum_size.x = 200
 	tagline.add_theme_constant_override("outline_size", 5)

@@ -148,7 +148,7 @@ func start() -> void:
 
 ## Called once a run has been set up: the settlement game (the small start) has lots, if there is data.
 func begin() -> void:
-	on = sim.recruits.small and not _lots.is_empty() and not _mouths.is_empty() and not sim.is_demo()    # (round 26: the demo has no lots)
+	on = sim.recruits.small and not _lots.is_empty() and not _mouths.is_empty() and not sim.is_demo() and not sim.is_one_house()    # (round 26: the demo has no lots; the One House town has none either)
 
 
 func update(dt: float) -> void:
@@ -693,7 +693,7 @@ func load_state(d: Dictionary) -> void:
 	if s is Dictionary:
 		for id in s:
 			_sealed[String(id)] = bool(s[id])
-	on = sim.recruits.small and not _lots.is_empty() and not _mouths.is_empty() and not sim.is_demo()
+	on = sim.recruits.small and not _lots.is_empty() and not _mouths.is_empty() and not sim.is_demo() and not sim.is_one_house()
 	if on:
 		_after_claim_quiet()
 

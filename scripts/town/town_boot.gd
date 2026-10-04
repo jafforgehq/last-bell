@@ -12,10 +12,14 @@ const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownWorld := preload("res://scripts/town/town_world.gd")
 const TownSim := preload("res://scripts/town/town_sim.gd")
 const GD := preload("res://scripts/game_data.gd")
+const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 
-## Whether this process plays the town (not the foundation's standalone scene).
+## Whether this process plays the town (not the foundation's standalone scene): `--town[=seed]`, a run whose meta says `town` (the title's New game), or a run that loads a save of
+## a One House run (the save names its town's seed and size: `OneHouse.town_seed_of`).
 static func wants(args: Array, meta: Dictionary = {}) -> bool:
+	if String(meta.get("load", "")) != "":
+		return not _saved_town(String(meta.load)).is_empty()
 	if meta.has("town") and meta.town:
 		return true
 	var town := false
@@ -34,6 +38,25 @@ static func wants(args: Array, meta: Dictionary = {}) -> bool:
 	return town and not crew
 
 
+## The town a save of a One House run was made in: {"seed", "blocks"}, or {} when the file is not such a save (or the scenario module is not there yet).
+static func _saved_town(path: String) -> Dictionary:
+	if not ResourceLoader.exists("res://scripts/town/one_house.gd"):
+		return {}
+	var one = load("res://scripts/town/one_house.gd")
+	var saved: Dictionary = SaveGame.read(path)
+	if saved.is_empty() or not one.is_save(saved):
+		return {}
+	var seed: int = one.town_seed_of(saved)
+	if seed < 0:
+		return {}
+	var blocks := TownGen.DEFAULT_BLOCKS
+	var mine = saved.modules.scenario
+	var size = mine.get("size", [0, 0])
+	if typeof(size) == TYPE_ARRAY and size.size() == 2 and int(size[0]) >= 64:
+		blocks = int(size[0]) / TownGen.PITCH
+	return {"seed": seed, "blocks": blocks}
+
+
 ## Whether this process runs the standalone scene (`--town-spike`, or the old `--spike-town`).
 static func wants_spike(args: Array) -> bool:
 	for a in args:
@@ -45,6 +68,10 @@ static func wants_spike(args: Array) -> bool:
 
 ## The seed of the town: `--town=<n>`, the run's meta `town` when it is a number, else 1.
 static func seed_of(args: Array, meta: Dictionary = {}) -> int:
+	if String(meta.get("load", "")) != "":
+		var t := _saved_town(String(meta.load))
+		if not t.is_empty():
+			return int(t.seed)
 	if meta.has("town") and (typeof(meta.town) == TYPE_INT or typeof(meta.town) == TYPE_FLOAT):
 		return int(meta.town)
 	for a in args:
@@ -68,7 +95,13 @@ static func opts_of(args: Array) -> Dictionary:
 static func data(run: Dictionary) -> Dictionary:
 	var seed := seed_of(OS.get_cmdline_user_args(), run)
 	var opts: Dictionary = run.get("town_opts", opts_of(OS.get_cmdline_user_args()))
-	return from_town(TownGen.make(seed, opts))
+	if String(run.get("load", "")) != "":
+		var t := _saved_town(String(run.load))
+		if not t.is_empty():
+			opts = {"blocks": int(t.blocks)}
+	var d := from_town(TownGen.make(seed, opts))
+	warm_pawns(d)
+	return d
 
 
 ## The map data for an already generated town: its map with Ruth, the one survivor, at the start, and the town itself.
@@ -96,3 +129,35 @@ static func world() -> Node2D:
 
 static func sim(data: Dictionary, world_node, fx):
 	return TownSim.new(data, world_node, fx)
+
+
+## The card shown while the town is made (`Main._ready`): a dark screen and a line, on a layer above everything; the caller frees it.
+static func loading_card(parent: Node) -> Node:
+	var layer := CanvasLayer.new()
+	layer.name = "TownLoading"
+	layer.layer = 100
+	var back := ColorRect.new()
+	back.color = Color(0.07, 0.065, 0.055, 1.0)
+	back.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(back)
+	var label := Label.new()
+	label.text = "Making the town..."
+	label.add_theme_font_size_override("font_size", 28)
+	label.add_theme_color_override("font_color", Color(0.9, 0.86, 0.74))
+	label.set_anchors_preset(Control.PRESET_CENTER)
+	label.position = Vector2(-120.0, -20.0)
+	layer.add_child(label)
+	parent.add_child(layer)
+	return layer
+
+
+## Loads the pictures of every look of the dead now, under the loading card: a pawn node costs about 2 ms the first time a look is seen (its three pictures come off the disk) and
+## 0.16 ms after, so without this the first wake of each look is a hitch (the windowed bench measured 10 ms at the 95th percentile and 60 ms at worst). Returns how many it loaded.
+static func warm_pawns(data: Dictionary) -> int:
+	var n := 0
+	for key in data.pawn.files:
+		if String(key).begins_with("z"):
+			for view in ["S", "E", "N"]:
+				GD.tex(data.pawn.files[key][view])
+				n += 1
+	return n

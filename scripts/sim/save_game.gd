@@ -455,6 +455,8 @@ class Reader:
 ## Applies saved data to a freshly built `sim`. Returns false (and leaves the
 ## sim alone) if the data is missing, from another version or damaged.
 static func apply(sim, data: Dictionary) -> bool:
+	# the town's own modules put what the save needs in place first (the base's layout, the fence sections: found by id below)
+	var town_before = sim.prepare_load(data) if sim.has_method("prepare_load") else null
 	# a small start's people are not the roster's: the saved ones are made first (and given back if the save is no good)
 	var before: Array = sim.recruits.prepare_load(data) if sim.get("recruits") != null else []
 	# the walls built at the lots' mouths are made before the wall sections are read (they are found by id)
@@ -465,6 +467,8 @@ static func apply(sim, data: Dictionary) -> bool:
 			sim.people = before
 		if sim.get("lots") != null:
 			sim.lots.restore(walls)
+		if sim.has_method("restore_load"):
+			sim.restore_load(town_before)
 		return false
 	_commit(sim, plan)
 	return true

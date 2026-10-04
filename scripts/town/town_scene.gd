@@ -163,6 +163,9 @@ func _process(delta: float) -> void:
 
 func _finish_loading() -> void:
 	var t0 := Time.get_ticks_usec()
+	var warmed: int = load("res://scripts/town/town_boot.gd").warm_pawns(data)
+	load_report["warm_ms"] = float(Time.get_ticks_usec() - t0) / 1000.0
+	warmed = warmed
 	fx_setup()
 	roofs = TownRoofs.new()
 	roofs.name = "Roofs"

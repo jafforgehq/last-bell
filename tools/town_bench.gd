@@ -9,6 +9,7 @@ extends SceneTree
 
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownRun := preload("res://scripts/town/town_run.gd")
+const TownBoot := preload("res://scripts/town/town_boot.gd")
 const World := preload("res://scripts/world.gd")
 const TownWorld := preload("res://scripts/town/town_world.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
@@ -82,7 +83,7 @@ func _bench_build() -> void:
 	t = Time.get_ticks_usec()
 	t = Time.get_ticks_usec()
 	m0 = OS.get_static_memory_usage()
-	var sim = (load("res://scripts/town/town_sim.gd") as GDScript).new(_town.data, _world, FxNull.new())
+	var sim = (load("res://scripts/town/town_sim.gd") as GDScript).new(TownBoot.from_town(_town), _world, FxNull.new())
 	var ms_sim := float(Time.get_ticks_usec() - t) / 1000.0
 	print("memory: TownSim (two AStarGrid2D %dx%d, the colony's modules) %.1f MB" % [sim.W, sim.H, float(OS.get_static_memory_usage() - m0) / 1048576.0])
 	print("TownSim.new (all the colony modules + path_z + path_p AStarGrid2D %dx%d): %.1f ms" % [sim.W, sim.H, ms_sim])
@@ -179,7 +180,7 @@ func _walkable_pairs(count: int, dist_lo: float, dist_hi: float, rng: RandomNumb
 func _bench_paths() -> void:
 	if _world == null:
 		_make_world()
-	var sim = (load("res://scripts/town/town_sim.gd") as GDScript).new(_town.data, _world, FxNull.new())
+	var sim = (load("res://scripts/town/town_sim.gd") as GDScript).new(TownBoot.from_town(_town), _world, FxNull.new())
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
 	for band in [[6.0, 12.0], [12.0, 25.0], [25.0, 45.0], [45.0, 90.0]]:
@@ -273,7 +274,7 @@ func _fight(n: int, chase: bool, grid: bool, steps: int, seed_value: int) -> Dic
 	var steps_n := float(times.size())
 	var res := {
 		"n": n, "mean_ms": total / steps_n / 1000.0, "p50_ms": times[times.size() / 2] / 1000.0, "p95_ms": times[int(steps_n * 0.95)] / 1000.0, "max_ms": times[times.size() - 1] / 1000.0,
-		"zombies_ms": float(run.prof.zombies) / steps_n / 1000.0, "sep_ms": float(run.prof.separate) / steps_n / 1000.0, "people_ms": float(run.prof.people) / steps_n / 1000.0,
+		"sep_ms": float(sim.sep_usec) / steps_n / 1000.0, "chase_ms": float(sim.chase_usec) / steps_n / 1000.0,
 		"astar_calls_s": float(sim.path_z.find_calls) / (steps_n / 30.0), "astar_ms_step": float(sim.path_z.find_usec) / steps_n / 1000.0,
 		"alive": sim.zombies.size(), "chasing": 0,
 	}
@@ -294,7 +295,7 @@ func _bench_fight() -> void:
 	for cfg in [["base (hunt, square crowd pass)", false, false], ["grid crowd pass only (hunt)", false, true], ["new (chase, grid crowd pass)", true, true]]:
 		for n in ns:
 			var r := _fight(int(n), cfg[1], cfg[2], steps, 5)
-			print("%-34s N=%3d  step mean %6.2f  p50 %6.2f  p95 %6.2f  max %6.2f ms | zombies %6.2f  crowd %6.2f  people %5.2f | A* %5.1f/s %5.2f ms/step | chasing %d of %d" % [cfg[0], r.n, r.mean_ms, r.p50_ms, r.p95_ms, r.max_ms, r.zombies_ms, r.sep_ms, r.people_ms, r.astar_calls_s, r.astar_ms_step, r.chasing, r.alive])
+			print("%-34s N=%3d  step mean %6.2f  p50 %6.2f  p95 %6.2f  max %6.2f ms | crowd pass %6.2f  chase %5.2f | A* %5.1f/s %5.2f ms/step | chasing %d of %d" % [cfg[0], r.n, r.mean_ms, r.p50_ms, r.p95_ms, r.max_ms, r.sep_ms, r.chase_ms, r.astar_calls_s, r.astar_ms_step, r.chasing, r.alive])
 
 
 func _bench_churn() -> void:

@@ -348,6 +348,45 @@ var crew_start := 6
 ## its scenario and the only thing that says so). Every part of the full game that the demo changes asks this, and answers as ever when it is false.
 func is_demo() -> bool:
 	return scenario != null and scenario.has_method("is_demo")
+
+
+## One House hooks (scripts/town/town_rules.gd overrides them for the town; in every other game each answers as the school always did).
+## Whether this is the One House town (a generated base, no school, no lots).
+func is_one_house() -> bool:
+	return false
+
+
+## The middle of the base: where the night is "from" and the dead walk to when a wall is lost (the school's compound).
+func base_center() -> Vector2:
+	return Vector2(42.0, 32.0)
+
+
+## Where the dead make for once they are in (the middle of the yard, where the stores are).
+func yard_middle() -> Vector2:
+	return nights.YARD_MIDDLE
+
+
+## Whether the bell turns the wanderers of the streets into attackers.
+func _wanderers_rally() -> bool:
+	return true
+
+
+## Whether the gate stands open to the dead (the school's gate), and whether this wall section is that gate.
+func _any_gate_open() -> bool:
+	return gate.lets_dead_in()
+
+
+func _is_open_gate(s) -> bool:
+	return int(s.id) == gate.SEGMENT
+
+
+## How many of the dead count against the night's cap (`Waves.update`): all that are alive.
+func alive_for_cap() -> int:
+	var alive := 0
+	for z in zombies:
+		if z.state != "dead" and z.state != "dying":
+			alive += 1
+	return alive
 ## Whether the school's inside is open to the dead right now: a door is down or one
 ## of the dead is already in there.
 var school_open := false
@@ -1307,11 +1346,11 @@ func assign_slot(z: Zombie, only) -> bool:
 	# in a game with lots the dead only choose a place they can get to (a wall of the lots may shut the way)
 	var gated: bool = lots.on
 	var home_region := region_at(z.x, z.y) if gated else 0
-	var gate_open: bool = gate.lets_dead_in()
+	var gate_open: bool = _any_gate_open()
 	for s in segments:
 		if s.state == 3:
 			continue
-		if gate_open and int(s.id) == gate.SEGMENT:
+		if gate_open and _is_open_gate(s):
 			continue    # (round 22: the gate stands open: nothing to claw at, they walk in)
 		if only != null and s != only:
 			continue
@@ -1441,7 +1480,7 @@ func yard_open() -> bool:
 	for s in segments:
 		if s.kind != DOOR_KIND and s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
-	return gate.lets_dead_in()    # (round 22: a gate that stands open is a way in, as a section that fell)
+	return _any_gate_open()    # (round 22: a gate that stands open is a way in, as a section that fell)
 
 
 ## A free place at a school door that is still up, for one of the dead who cannot
@@ -1575,7 +1614,7 @@ func _breached() -> bool:
 	for s in segments:
 		if s.state == 3 and s.id < Lots.FIRST_SEGMENT_ID:
 			return true
-	return gate.lets_dead_in()    # (round 22: the gate stands open: the dead walk in as through a section that fell)
+	return _any_gate_open()    # (round 22: the gate stands open: the dead walk in as through a section that fell)
 
 
 ## Whether one of the dead of the streets may go on hunting a survivor now: in the yard only by day (it gives up at
@@ -1625,7 +1664,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 						z.path_i = 0
 						break
 			_follow(z, slow * 0.55, dt)
-			if bell_rung and rng.randf() < dt * 0.1:
+			if bell_rung and _wanderers_rally() and rng.randf() < dt * 0.1:
 				z.state = "approach"
 		"retreat":
 			if _follow(z, slow, dt):
@@ -1664,7 +1703,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 		"attack":
 			var s: Segment = z.slot.seg
 			z.facing = z.slot.face
-			if s.state == 3 or (int(s.id) == gate.SEGMENT and gate.lets_dead_in()):
+			if s.state == 3 or (_is_open_gate(s) and _any_gate_open()):
 				# (round 22: a gate that has been opened under them is a way in as a section that fell)
 				z.slot.who = null
 				z.slot = null
@@ -1752,7 +1791,7 @@ func _update_zombie(z: Zombie, dt: float) -> void:
 					return
 				# a lost wall costs (round 22): no way to anybody, so they come in for the stores
 				if z.path.is_empty() and avatar_game:
-					z.path = path_z.find(world.solid_z, z.x, z.y, nights.YARD_MIDDLE.x, nights.YARD_MIDDLE.y)
+					z.path = path_z.find(world.solid_z, z.x, z.y, yard_middle().x, yard_middle().y)
 					z.path_i = 0
 			_follow(z, slow * 1.1, dt)
 
@@ -1767,7 +1806,7 @@ func _in_the_yard(x: float, y: float) -> bool:
 func _come_in(z: Zombie, speed: float, dt: float) -> void:
 	if (z.path.is_empty() or z.path_i >= z.path.size()) and z.repath <= 0.0:
 		z.repath = 1.0
-		z.path = path_z.find(world.solid_z, z.x, z.y, nights.YARD_MIDDLE.x, nights.YARD_MIDDLE.y)
+		z.path = path_z.find(world.solid_z, z.x, z.y, yard_middle().x, yard_middle().y)
 		z.path_i = 0
 	_follow(z, speed, dt)
 

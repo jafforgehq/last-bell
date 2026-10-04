@@ -1,10 +1,8 @@
 ## The rules of the town (feature/town-core, WP1): the colony's Sim on the generated 192 x 192 map, with the dead of the town dormant until the avatar, a shot or a light is
 ## near (scripts/town/dormant_dead.gd) and the town's own modules wired in by name.
 ##
-## THE CLASS. `TownSim extends sim.gd` (the colony: radio, jobs, build, nights, briefing...). The plan (docs/superpowers/plans/2026-10-04-one-house-plan.md, 1.1) puts the
-## school's assumptions in a `TownRules` between this class and Sim (WP5 owns `town_rules.gd`); until it lands the extends line below is `sim.gd`, and swapping it for
-## `town_rules.gd` is one line. The overrides marked INTERIM are TownRules' by the plan; they are here only so that the colony's `update` runs on a town map, and they are
-## deleted from this file when TownRules has them.
+## THE CLASS. `TownSim extends town_rules.gd extends sim.gd` (the colony: radio, jobs, build, nights, briefing...). The plan (docs/superpowers/plans/2026-10-04-one-house-plan.md,
+## 1.1) puts the school's assumptions in `TownRules` (WP5 owns `town_rules.gd`) and the dead, the field, the loop and the parts here.
 ##
 ## WHAT THIS CLASS CHANGES (each measured, see the report):
 ##  1. `_separate` (the dead's crowd pass) is a square of how many there are in the colony's code (sim.gd 1831: every pair, every step); here a grid of one tile, and two
@@ -18,9 +16,12 @@
 ## THE PARTS. `PARTS` maps a variable name of this class to the file of the module; a file that does not exist is skipped, so a package can land any time. A part is a RefCounted
 ## with `setup(sim)`, `start()`, `update(dt)`, `save()`, `load_state(d)` and optionally `prepare_load(data)`, `restore(before)`, `person_added(p)`, `pre_save()` and `enabled`;
 ## SaveGame finds each of them by its variable (it can save and load). `scenario` replaces the colony's Scenario when `one_house.gd` exists.
-extends "res://scripts/sim/sim.gd"
+extends "res://scripts/town/town_rules.gd"
 
 const GRID_W := 1024
+## The most dead awake at once (the plan's numbers, measured in the report: a desktop could carry three times as many, the web about as many as this).
+const ACTIVE_CAP := 60
+const ACTIVE_CAP_WEB := 40
 const TownMedical := preload("res://scripts/town/town_medical.gd")
 
 ## The town's modules, in the order they are made and stepped. (Plan 1.13.) `field` is stepped before the colony's step, the others after it.
@@ -69,11 +70,6 @@ func _init(data: Dictionary, w, effects) -> void:
 	_make_parts()
 
 
-## INTERIM (TownRules): `Sim._seed` indexes the school's wall sections, which a town starts without.
-func _seed() -> void:
-	pass
-
-
 func _make_parts() -> void:
 	parts_made.clear()
 	for name in PARTS:
@@ -87,6 +83,7 @@ func _make_parts() -> void:
 			set(name, m)
 		if name == "field":
 			m.setup(self, town_data)
+			m.active_cap = ACTIVE_CAP_WEB if OS.has_feature("web") else ACTIVE_CAP
 			if not town_data.is_empty():
 				m.load_records(town_data.dead)
 		else:
@@ -106,11 +103,10 @@ func _stepped_parts() -> Array:
 	return out
 
 
-## A new run: the colony's, then the town's: none of the dead the school starts with (INTERIM, TownRules), the school's night machinery off until the scenario switches it
+## A new run: the colony's and TownRules' (none of the dead the school starts with), then the town's: the school's night machinery off until the scenario switches it
 ## on (`OneHouse.begin` does the rest), and everybody at the start house.
 func start_run(difficulty_index: int, seed_value: int) -> void:
 	super(difficulty_index, seed_value)
-	zombies.clear()
 	events.clear()
 	waves.enabled = false
 	storyteller.enabled = false
@@ -204,29 +200,12 @@ func _town_events(first_new: int) -> void:
 		alerts.erase("bell")
 
 
-## INTERIM (TownRules): only the night's wave dead (the ones with no record in the field) go back to the city at dawn; the town's own dead stay where they are.
-func _dawn_sweep() -> void:
-	var left := DAWN_LEAVES_PER_STEP
-	for z in zombies:
-		if left <= 0:
-			return
-		if field != null and field.rec_of.has(z):
-			continue
-		if z.state != "dying" and z.state != "dead" and z.state != "retreat":
-			retreat(z)
-			left -= 1
-
-
 # ------------------------------------------------------------------ the dead --
 
 ## The noise of a shot goes to the field: the dormant dead within its radius wake and come, the awake that stand or wander within it come.
 func _shot_noise(p: Person) -> void:
 	if field != null:
 		field.noise(Vector2(p.x, p.y), p)
-
-
-func _hunt_allowed() -> bool:
-	return true
 
 
 func _update_zombie(z: Zombie, dt: float) -> void:
@@ -375,23 +354,3 @@ func pre_save() -> void:
 	for m in _stepped_parts():
 		if m.has_method("pre_save"):
 			m.pre_save()
-
-
-## Before a save is read (SaveGame `apply`, hook H11 of WP5): the parts re-make what a load needs to find (the rescued, the base, the perimeter's sections), in the plan's order.
-## Returns what `restore_load` needs to undo it.
-func prepare_load(data: Dictionary):
-	var before := {}
-	for name in ["rescue", "base", "perimeter"]:
-		var m = get(name)
-		if m != null and m.has_method("prepare_load"):
-			before[name] = m.prepare_load(data)
-	return before
-
-
-func restore_load(before) -> void:
-	if typeof(before) != TYPE_DICTIONARY:
-		return
-	for name in before:
-		var m = get(name)
-		if m != null and m.has_method("restore"):
-			m.restore(before[name])

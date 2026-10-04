@@ -5,9 +5,15 @@
 ## The one-shots play on the `SFX` bus, the loops on `Ambience` and the menu sounds on
 ## `UI` (see buses.gd: the four buses are made here, and their volumes are the player's
 ## settings).
+##
+## Everything else the base sounds like (the bells, the groans and the brute's roar with their places, the footsteps, the gate, the doors,
+## the hum of the generator and the radio, the night bed, the rain, the crows and dogs a long way off, the truck's engine) is the
+## SOUNDSCAPE (scripts/audio/soundscape.gd), a child of this node: `attach(game)` gives it the game, `on_event(e)` the rules' events,
+## `set_ambience` the darkness and the dead. The guns, the blows, the reload and the casings are played by `play` as they always were.
 extends Node
 
 const Buses := preload("res://scripts/audio/buses.gd")
+const Soundscape := preload("res://scripts/audio/soundscape.gd")
 
 const POOL := 24
 ## The menu sounds have a small pool of their own, so a burst of clicks never takes a
@@ -21,6 +27,20 @@ const UI_SOUNDS := {
 	"ui_error": ["res://assets/audio/ui_error_0.wav"],
 	"ui_open": ["res://assets/audio/ui_open_0.wav"],
 	"ui_close": ["res://assets/audio/ui_close_0.wav"],
+	# (the polish round: a hover tick, a card sliding onto the table, a soft chime for the briefing and the news, the radio's call tone and
+	# the click of a button pressed and let go; tools/make_base_sounds.py)
+	"ui_hover": ["res://assets/audio/ui_hover_0.wav"],
+	"ui_card": ["res://assets/audio/ui_card_0.wav"],
+	"ui_notify": ["res://assets/audio/ui_notify_0.wav"],
+	"ui_radio_call": ["res://assets/audio/ui_radio_call_0.wav"],
+	"ui_radio_on": ["res://assets/audio/ui_radio_on_0.wav"],
+	"ui_radio_off": ["res://assets/audio/ui_radio_off_0.wav"],
+}
+## More of the sounds the map data names, added to their lists when the files are there (the data has the first of each: groan_0 to 3,
+## hammer_0 and 1): four more groans and two more hammer strokes, so that no one pitch and no one blow is heard twice running.
+const EXTRA := {
+	"groan": ["res://assets/audio/groan_4.wav", "res://assets/audio/groan_5.wav", "res://assets/audio/groan_6.wav", "res://assets/audio/groan_7.wav"],
+	"hammer": ["res://assets/audio/hammer_2.wav", "res://assets/audio/hammer_3.wav"],
 }
 ## The sounds of a car trip (round 15, made by tools/make_car_sounds.py): a door opening and closing, the engine
 ## starting, the gate's motor. Declared here like the menu sounds and played the same way as the game's own one-shots,
@@ -43,6 +63,10 @@ var moan: AudioStreamPlayer
 var muted := false
 var cricket_level := 0.0
 var moan_level := 0.0
+var wind_level := 0.8
+## The soundscape (scripts/audio/soundscape.gd).
+var scape: Node
+var _hover_ms := 0
 
 
 func setup(sounds: Dictionary) -> void:
@@ -72,9 +96,21 @@ func setup(sounds: Dictionary) -> void:
 		p.bus = "UI"
 		add_child(p)
 		ui_players.append(p)
+	for name in EXTRA:
+		for s2 in _load_list(EXTRA[name]):
+			if not streams.has(name):
+				streams[name] = []
+			streams[name].append(s2)
 	wind = _loop("wind_loop", 0.8)
 	crickets = _loop("crickets_loop", 0.0)
 	moan = _loop("moan_loop", 0.0)
+	scape = Soundscape.new()
+	scape.name = "Soundscape"
+	add_child(scape)
+	scape.setup(self)
+	# a tick when the pointer comes onto a button that is made from now on (the menus and the pages are made when they are opened)
+	if is_inside_tree() and not get_tree().node_added.is_connected(_on_node_added):
+		get_tree().node_added.connect(_on_node_added)
 
 
 ## The sounds at `paths` that are there (a file that is not imported yet is skipped,
@@ -139,15 +175,72 @@ func ui(name: String, level: float = 1.0, pitch_var: float = 0.02) -> void:
 	p.play()
 
 
-## night: 0..1 darkness; horde: 0..1 how close and many the dead are.
+## night: 0..1 darkness; horde: 0..1 how close and many the dead are. The wind is the day's and gives way to the night bed (the
+## soundscape's); rain brings it up again; a bed that is silent is stopped (a loop that plays at nothing still costs a voice).
 func set_ambience(night: float, horde: float, dt: float) -> void:
 	var k := minf(1.0, dt * 2.0)
 	cricket_level = lerpf(cricket_level, night * (1.0 - horde * 0.7), k)
 	moan_level = lerpf(moan_level, horde, k)
+	var rain: float = float(scape.bed_level.get("rain", 0.0)) if scape != null else 0.0
+	wind_level = lerpf(wind_level, 0.8 * (1.0 - 0.55 * night) + 0.3 * rain, k)
+	if wind != null:
+		wind.volume_db = linear_to_db(maxf(wind_level, 0.0001))
 	if crickets != null:
 		crickets.volume_db = linear_to_db(maxf(cricket_level, 0.0001))
+		_keep_playing(crickets, cricket_level)
 	if moan != null:
 		moan.volume_db = linear_to_db(maxf(moan_level, 0.0001))
+		_keep_playing(moan, moan_level)
+	if scape != null:
+		scape.beds_set(night, horde, dt)
+
+
+## A loop is played while it is audible: stopped when it has gone (a voice saved), started again when it comes back.
+func _keep_playing(p: AudioStreamPlayer, level: float) -> void:
+	if p.stream == null:
+		return
+	if level < 0.003 and p.playing:
+		p.stop()
+	elif level >= 0.003 and not p.playing:
+		p.play()
+
+
+## Gives the soundscape the game (main.gd: the camera, the people, the hour), and tells it the rules' events as they happen (`on_event`).
+func attach(game) -> void:
+	if scape != null:
+		scape.attach(game)
+
+
+func on_event(e: Dictionary) -> void:
+	if scape != null:
+		scape.on_event(e)
+
+
+## The truck on a trip (scripts/drive/drive_scene.gd): its engine and the road under it, by speed (tiles a second), top speed and throttle.
+func engine(speed: float, top: float, throttle: float) -> void:
+	if scape != null and not muted:
+		scape.engine(speed, top, throttle)
+
+
+func _process(dt: float) -> void:
+	if scape != null:
+		scape.update(dt)
+
+
+func _on_node_added(n: Node) -> void:
+	if n is BaseButton and not n.has_meta("tb_hover"):
+		n.set_meta("tb_hover", true)
+		(n as BaseButton).mouse_entered.connect(_on_hover.bind(n))
+
+
+func _on_hover(b: BaseButton) -> void:
+	if muted or not is_instance_valid(b) or b.disabled or not b.is_visible_in_tree():
+		return
+	var now := Time.get_ticks_msec()
+	if now - _hover_ms < 70:
+		return
+	_hover_ms = now
+	ui("ui_hover", 0.55, 0.03)
 
 
 ## The HUD's sound button. It mutes the Master bus and, apart from that, the volume
