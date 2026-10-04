@@ -301,6 +301,8 @@ func _rebuild() -> void:
 ## Where a site's heap of materials stands: the middle of the plot, or, for a wall across a street, every few tiles along it.
 func _heaps(pl: Dictionary) -> Array:
 	var c := Vector2(pl.pos)
+	if String(pl.get("kind", "")) == "slot":
+		return []    # (One House: a slot of the base's perimeter shows its own ghost and ring: scripts/render/perimeter_view.gd)
 	if String(pl.get("kind", "")) != "mouth":
 		return [c]
 	var horizontal: bool = String(pl.get("dir", "h")) == "h"

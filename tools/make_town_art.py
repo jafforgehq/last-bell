@@ -22,8 +22,9 @@ scene from it at the game's tile size):
                set and stash chest, clutter decals (papers, glass, blood, a bag, a mattress)
     outdoors   picket (2), chain link, low brick wall and hedge as autotile lines, a yard gate, bushes, trees (reused), mailbox, bins, a bike, garden beds,
                a shed, swing set, slide, bench, market stall, parked cars in four colours (reused from the yard's sedans) and two wrecks (reused)
-    fortify    wooden fence, reinforced fence and sandbags (autotile, built and damaged), a gate, a corner watchtower, a floodlight, window and door barricades
-               (each built and damaged)
+    fortify    wooden fence, reinforced fence and sandbags (autotile, built and damaged), a gate (two cells, and three cells wide for the base's gate slot), a corner
+               watchtower and a one-shooter lookout post (1 x 2), a floodlight, window and door barricades and a second layer of planks for a barred door (each built
+               and damaged), and the rubble of a fallen fence section
     marker     an 'enter' chevron and a 'searched' tick
 
 The style is the yard's (tools/make_building_art.py, whose drawing engine it imports: Art, noise, palette PNGs): seen from above with a slight tilt for
@@ -3493,9 +3494,10 @@ def job_fortify_lines():
                    extra={"look": look, "pair": "sandbags_" + ("damaged" if not d else "built"), "slot": "sandbags"}, bg=(98, 128, 66), folder="fortify")
 
 
-def gate_body(st, v):
-    """A two cell gate between two thick posts, running along x, the outside south. v 0 built, 1 damaged."""
-    a = body(2, 1)
+def gate_body(st, v, W=2.0):
+    """A gate of W cells (2 by default) between two thick posts, running along x, the outside south. v 0 built, 1 damaged."""
+    a = body(W, 1)
+    mid = W / 2.0
     d = v == 1
     wood = WOOD_OLD if d else WOOD_BUILT
     iron = (70, 74, 80)
@@ -3534,14 +3536,14 @@ def gate_body(st, v):
             a.paint(a.stroke([(hx, 0.60), (ex, 0.34)], 0.040), iron, 0.9)
 
     if st == "closed":
-        leaf(0.20, 1.0, True, False)
-        leaf(1.0, 1.80, False, False)
-        a.paint(a.rect(0.98, 0.56, 1.02, 0.90), (24, 18, 14), 0.8)
-        a.paint(a.rect(0.90, 0.64, 1.10, 0.70), iron, 1.0)                  # the bar across the join
+        leaf(0.20, mid, True, False)
+        leaf(mid, W - 0.20, False, False)
+        a.paint(a.rect(mid - 0.02, 0.56, mid + 0.02, 0.90), (24, 18, 14), 0.8)
+        a.paint(a.rect(mid - 0.10, 0.64, mid + 0.10, 0.70), iron, 1.0)      # the bar across the join
     else:
-        leaf(0.20, 1.0, True, True)
-        leaf(1.0, 1.80, False, True)
-    for px_ in (0.10, 1.90):             # the two posts
+        leaf(0.20, mid, True, True)
+        leaf(mid, W - 0.20, False, True)
+    for px_ in (0.10, W - 0.10):         # the two posts
         slab(a, px_ - 0.10, 0.34, px_ + 0.10, 0.54, shade(wood, 0.9), r=0.01, lw=0.026, lo=0.8, hi=1.12, rim=False)
         a.paint(a.rect(px_ - 0.10, 0.54, px_ + 0.10, 0.92), boards_face(shade(wood, 0.82), 3, 25))
         a.paint(a.stroke([(px_ - 0.10, 0.34), (px_ - 0.10, 0.92), (px_ + 0.10, 0.92), (px_ + 0.10, 0.34)], 0.026), OUTLINE, 1.0)
@@ -3645,6 +3647,122 @@ def floodlight_body(st, v):
     return a
 
 
+def tower_post_body(st, v):
+    """A lookout post on stilts for one shooter: a 1 x 2 deck with a plank and sandbag parapet and a ladder, drawn 1 x 2.34 (the stilts show a little below the deck)."""
+    a = body(1, 2.34)
+    d = v == 1
+    wood = WOOD_OLD if d else (146, 108, 74)
+    deck = (0.04, 0.04, 0.96, 1.96)
+    # the stilts at the south edge, and a shadow under the deck
+    a.paint(a.rect(0.08, 1.96, 0.92, 2.30), (30, 22, 16), 0.35)
+    for px_ in (0.16, 0.84):
+        a.paint(a.rect(px_ - 0.07, 1.96, px_ + 0.07, 2.32), lit(shade(wood, 0.80), 0.84, 1.1, px_ - 0.07, 1.96, px_ + 0.07, 2.32, 0.1, 31, 10.0, "y"))
+        a.paint(a.stroke([(px_ - 0.07, 1.96), (px_ - 0.07, 2.32), (px_ + 0.07, 2.32), (px_ + 0.07, 1.96)], 0.022), OUTLINE, 1.0)
+    a.paint(a.stroke([(0.16, 2.0), (0.84, 2.28)], 0.05), OUTLINE, 1.0)
+    a.paint(a.stroke([(0.16, 2.0), (0.84, 2.28)], 0.030), shade(wood, 0.9), 1.0)
+    a.paint(a.rect(0.06, 1.96, 0.94, 2.04), (10, 8, 6), 0.35)
+    # the deck, its boards across
+    a.paint(a.poly(rrect(*deck, 0.03)), lit(wood, 0.80, 1.12, 0.04, 0.04, 0.96, 1.96, 0.16, 32, 12.0, "x"))
+    for yy in np.arange(0.04 + 0.19, 1.96, 0.19):
+        a.paint(a.stroke([(0.06, yy), (0.94, yy)], 0.012, round_ends=False), (30, 22, 16), 0.6)
+    a.paint(a.stroke(rrect(*deck, 0.03), 0.030, closed=True), OUTLINE, 1.0)
+    # the parapet: planks along the north and the west, sandbags along the east, the south open for the ladder
+    for (x0, y0, x1, y1) in ((0.04, 0.04, 0.96, 0.28), (0.04, 0.04, 0.26, 1.96)):
+        a.paint(a.rect(x0, y0, x1, y1), lit(shade(wood, 0.78), 0.80, 1.14, x0, y0, x1, y1, 0.14, 33, 10.0, "x"))
+        a.paint(a.stroke([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], 0.024, closed=True), OUTLINE, 1.0)
+    bags = sandbag_fn()
+    a.paint(a.rect(0.74, 0.28, 0.96, 1.30), lambda X, Y: bags(X * 1.0, Y * 1.0))
+    a.paint(a.stroke([(0.74, 0.28), (0.74, 1.30), (0.96, 1.30), (0.96, 0.28)], 0.022), OUTLINE, 1.0)
+    for (cx, cy) in ((0.15, 0.15), (0.85, 0.15), (0.15, 1.85)):         # corner posts
+        slab(a, cx - 0.08, cy - 0.08, cx + 0.08, cy + 0.08, shade(wood, 0.7), r=0.01, lw=0.022, lo=0.8, hi=1.1, rim=False)
+    # the ladder: a gap in the south edge and rungs going down
+    a.paint(a.rect(0.38, 1.80, 0.64, 1.96), (20, 14, 10), 0.9)
+    for lx in (0.40, 0.62):
+        a.paint(a.stroke([(lx, 1.82), (lx, 2.30)], 0.040), OUTLINE, 1.0)
+        a.paint(a.stroke([(lx, 1.82), (lx, 2.30)], 0.022), (170, 132, 92), 1.0)
+    for yy in np.arange(1.9, 2.30, 0.12):
+        a.paint(a.stroke([(0.40, yy), (0.62, yy)], 0.018), (170, 132, 92), 1.0)
+    # a searchlight on the north parapet
+    disc(a, 0.50, 0.16, 0.09, (60, 64, 70), lw=0.02)
+    a.paint(a.ellipse(0.50, 0.16, 0.05), (250, 240, 190) if not d else (70, 66, 60), 1.0)
+    if d:
+        a.paint(a.poly([(0.30, 0.60), (0.66, 0.50), (0.72, 0.96), (0.34, 1.06)]), (20, 14, 10), 0.92)          # a hole in the deck
+        a.paint(a.stroke([(0.30, 0.60), (0.66, 0.50), (0.72, 0.96), (0.34, 1.06)], 0.020, closed=True), (200, 160, 110), 0.8)
+        a.paint(a.poly([(0.42, 0.04), (0.70, 0.04), (0.62, 0.28), (0.46, 0.24)]), (20, 14, 10), 0.92)            # a plank gone from the parapet
+    return a
+
+
+def rubble_cell(along, k):
+    """What lies where a fence has fallen: planks and splinters on the ground and the stump of a post, in one cell (along x or along y); k picks one of four."""
+    a = Art(1, 1)
+    rng = rng_for("fence_rubble", k * 2 + (1 if along == "y" else 0))
+    base = np.pi / 2 if along == "y" else 0.0
+
+    def plank(cx, cy, ang, ln, th, tone):
+        c, s_ = np.cos(ang), np.sin(ang)
+        pts = [(cx + dx * c - dy * s_, cy + dx * s_ + dy * c) for dx, dy in ((-ln / 2, -th / 2), (ln / 2, -th / 2 + rng.uniform(-0.02, 0.02)), (ln / 2, th / 2), (-ln / 2, th / 2 + rng.uniform(-0.02, 0.02)))]
+        a.paint(a.blur(a.poly([(x + 0.02, y + 0.03) for x, y in pts]), 0.012), (8, 6, 4), 0.30)
+        a.paint(a.poly(pts), lit(shade(WOOD_OLD, tone), 0.8, 1.12, cx - 0.2, cy - 0.1, cx + 0.2, cy + 0.1, 0.16, 90 + k, 12.0, "x"))
+        a.paint(a.stroke(pts, 0.022, closed=True), OUTLINE, 1.0)
+        a.paint(a.stroke([pts[0], pts[1]], 0.010, round_ends=False), (210, 170, 120), 0.45)
+    n = 3 + (k % 2)
+    spots = [(0.22 + 0.56 * rng.random(), 0.22 + 0.56 * rng.random()) for _ in range(n)]
+    for i, (cx, cy) in enumerate(spots):
+        plank(cx, cy, base + rng.uniform(-0.55, 0.55), rng.uniform(0.34, 0.62), rng.uniform(0.09, 0.13), rng.uniform(0.85, 1.12))
+    if k % 2 == 0:               # the stump of a post, splintered
+        px_, py_ = rng.uniform(0.3, 0.7), rng.uniform(0.3, 0.7)
+        pts = [(px_ - 0.09, py_ + 0.06), (px_ - 0.08, py_ - 0.07), (px_ - 0.02, py_ - 0.11), (px_ + 0.04, py_ - 0.07), (px_ + 0.09, py_ - 0.09), (px_ + 0.09, py_ + 0.07)]
+        a.paint(a.poly(pts), lit(shade(WOOD_OLD, 0.8), 0.8, 1.1, px_ - 0.1, py_ - 0.1, px_ + 0.1, py_ + 0.1, 0.1, 95 + k, 10.0))
+        a.paint(a.stroke(pts, 0.022, closed=True), OUTLINE, 1.0)
+        a.paint(a.stroke([pts[1], pts[2], pts[3]], 0.010, round_ends=False), (210, 170, 120), 0.7)
+    for _ in range(5):           # splinters
+        sx, sy = rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)
+        ang = rng.uniform(0, 6.28)
+        a.paint(a.poly([(sx, sy), (sx + 0.06 * np.cos(ang), sy + 0.06 * np.sin(ang)), (sx + 0.02 * np.cos(ang + 1.6), sy + 0.02 * np.sin(ang + 1.6))]), (196, 156, 108), 0.9)
+    sil = a.alpha.copy()
+    a.shadow_under(0.03, 0.045, 0.024, 0.30, mask_of=sil)
+    return a.image(grain=GRAIN, seed=7 + k)
+
+
+def fence_rubble_atlas():
+    """4 x 2 cells of 128 px: the top row lies along x, the bottom row along y; four looks each."""
+    sheet = sheet_cells(4, 2, PX, PX)
+    cells = {}
+    for row, along in enumerate(("x", "y")):
+        for k in range(4):
+            sheet.alpha_composite(rubble_cell(along, k), (k * PX, row * PX))
+            cells["%s%d" % (along, k)] = [k, row]
+    atlas_item("fortify", "fence_rubble", sheet, 4, 2, cells, (PX, PX), ["fortify", "walkable", "decal"], "decal",
+               "What is left where a fence section has fallen: planks and splinters on the ground and the stump of a post, walkable. Cells are 128 x 128 px, anchor (0, 0), "
+               "footprint 1 x 1; the top row lies along x (a fence that runs east to west), the bottom row along y; four looks each (pick one by the tile's coordinates). "
+               "Draw it on every tile of a section that is down.",
+               mode="sprite", bg=(98, 128, 66), folder="fortify", extra={"solid": [], "name": "Fallen fence"})
+
+
+def door_reinforce(st, v):
+    """A second layer of planks over a barricaded door (lay it over `barricade_door`): two planks crossed in an X with a steel strap, bolts at the ends; the wall runs along x."""
+    a = body(1, 1)
+    d = v == 1
+    wood = WOOD_OLD if d else (134, 98, 66)
+    iron = (70, 74, 80)
+    rng = rng_for("door_reinforce", v)
+    for (p0, p1) in (((0.02, 0.06), (0.98, 0.94)), ((0.02, 0.94), (0.98, 0.06))):
+        if d and p0[1] > 0.5:
+            p1 = (0.52, 0.52)               # one of them snapped half way
+        ang = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
+        nx_, ny_ = -np.sin(ang) * 0.075, np.cos(ang) * 0.075
+        poly = [(p0[0] + nx_, p0[1] + ny_), (p1[0] + nx_, p1[1] + ny_), (p1[0] - nx_, p1[1] - ny_), (p0[0] - nx_, p0[1] - ny_)]
+        a.paint(a.blur(a.poly([(x + 0.01, y + 0.03) for x, y in poly]), 0.012), (8, 6, 4), 0.35)
+        a.paint(a.poly(poly), lit(wood, 0.8, 1.12, 0, 0, 1, 1, 0.16, 100, 12.0, "x"))
+        a.paint(a.stroke(poly, 0.022, closed=True), OUTLINE, 1.0)
+        a.paint(a.stroke([p0, p1], 0.020, round_ends=False), iron, 0.9)
+    for (bx, by) in ((0.10, 0.12), (0.90, 0.12), (0.10, 0.88), (0.90, 0.88)):
+        nail(a, bx, by, 0.018)
+    a.paint(a.ellipse(0.5, 0.5, 0.055), iron, 1.0)
+    a.paint(a.stroke([(0.5 - 0.055 * np.cos(t), 0.5 - 0.055 * np.sin(t)) for t in np.linspace(0, 6.3, 16)], 0.014, closed=True), OUTLINE, 0.95)
+    return a
+
+
 def barricade_window(st, v):
     """Heavy planks over a window cell (it lies over the wall cell and its window), the wall running along x."""
     a = body(1, 1)
@@ -3731,6 +3849,18 @@ def job_fortify():
          anchor_extra=(0.2, 3.0), bg=(98, 128, 66),
          note="A floodlight on a pole with four lamps, a block and sandbags at its foot: 1.4 x 3.4 tiles, the footprint is the block's cell at the bottom (anchor "
               "(0.2, 3.0) + padding). variant 0 BUILT (lamps lit: put the engine's light on the head), variant 1 DAMAGED (leaning, two lamps smashed, a cable hanging).")
+    prop("fortify", "fort_gate_wide", 3, 1, lambda st, v: gate_body(st, v, 3.0), facings="hv", states=("closed", "open"), variants=2, variant_names=names, tags=["fortify", "gate", "door"],
+         layer="object", solid={"closed": True, "open": False}, bg=(98, 128, 66),
+         note="The same gate three cells wide (the base's gate slot is three tiles): closed, or open (both leaves swung back); variant 0 BUILT, 1 DAMAGED; h: in a fence that runs "
+              "along x with the outside to the south; v: along y. A closed gate blocks.")
+    prop("fortify", "fort_tower_post", 1, 2, tower_post_body, facings=1, variants=2, variant_names=names, tags=["fortify", "tower", "solid", "post"], bg=(98, 128, 66), anchor_extra=(0.0, 0.34),
+         note="A lookout post for one shooter on a 1 x 2 tile footprint (the tower's slot tile and the post tile beside it): a deck on stilts with a plank and sandbag parapet, "
+              "a searchlight and a ladder. The picture is 2.34 tiles tall because the stilts show below the deck: the footprint is the bottom 2 rows (anchor y 0.34 + padding). "
+              "variant 0 BUILT, variant 1 DAMAGED (a hole in the deck, a plank gone). The shooter stands on the deck: draw it under the people.")
+    fence_rubble_atlas()
+    prop("fortify", "door_reinforce", 1, 1, door_reinforce, facings="hv", variants=2, variant_names=names, tags=["fortify", "overlay", "door", "solid"], layer="wall",
+         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
+         note="Two planks crossed in an X with a steel strap, laid OVER `barricade_door`: the barred door that has the plank kit. variant 0 BUILT, 1 DAMAGED (one plank snapped).")
     prop("fortify", "barricade_window", 1, 1, barricade_window, facings="hv", variants=2, variant_names=names, tags=["fortify", "overlay", "window", "solid"], layer="wall",
          pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
          note="Heavy planks and a brace over a window cell: lay it OVER the wall cell and the window (h: a wall that runs along x). variant 0 BUILT, variant 1 "

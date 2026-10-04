@@ -12973,7 +12973,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -12990,7 +12990,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "closed",
@@ -13005,7 +13005,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13022,7 +13022,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "open",
@@ -13037,7 +13037,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13054,7 +13054,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "closed",
@@ -13069,7 +13069,7 @@
       160
      ],
      "fp": [
-      2,
+      2.0,
       1
      ],
      "orient": "h",
@@ -13086,7 +13086,7 @@
      ],
      "fp": [
       1,
-      2
+      2.0
      ],
      "orient": "v",
      "state": "open",
@@ -13220,6 +13220,398 @@
    ],
    "variants": 2,
    "note": "A floodlight on a pole with four lamps, a block and sandbags at its foot: 1.4 x 3.4 tiles, the footprint is the block's cell at the bottom (anchor (0.2, 3.0) + padding). variant 0 BUILT (lamps lit: put the engine's light on the head), variant 1 DAMAGED (leaning, two lamps smashed, a cable hanging)."
+  },
+  {
+   "id": "fort_gate_wide",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    3,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "fortify",
+    "gate",
+    "door"
+   ],
+   "solid": {
+    "closed": true,
+    "open": false
+   },
+   "sprites": [
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      0,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "closed",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      418,
+      0,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "closed",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      580,
+      0,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "open",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      418,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "open",
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      162,
+      418,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "closed",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      580,
+      418,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "closed",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      0,
+      836,
+      416,
+      160
+     ],
+     "fp": [
+      3.0,
+      1
+     ],
+     "orient": "h",
+     "state": "open",
+     "variant": 1
+    },
+    {
+     "file": "fortify/fort_gate_wide.png",
+     "rect": [
+      418,
+      836,
+      160,
+      416
+     ],
+     "fp": [
+      1,
+      3.0
+     ],
+     "orient": "v",
+     "state": "open",
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "orients": [
+    "h",
+    "v"
+   ],
+   "states": [
+    "closed",
+    "open"
+   ],
+   "variants": 2,
+   "note": "The same gate three cells wide (the base's gate slot is three tiles): closed, or open (both leaves swung back); variant 0 BUILT, 1 DAMAGED; h: in a fence that runs along x with the outside to the south; v: along y. A closed gate blocks."
+  },
+  {
+   "id": "fort_tower_post",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.4025
+   ],
+   "tags": [
+    "fortify",
+    "tower",
+    "solid",
+    "post"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "fortify/fort_tower_post.png",
+     "rect": [
+      0,
+      0,
+      160,
+      332
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "fortify/fort_tower_post.png",
+     "rect": [
+      162,
+      0,
+      160,
+      332
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "variants": 2,
+   "note": "A lookout post for one shooter on a 1 x 2 tile footprint (the tower's slot tile and the post tile beside it): a deck on stilts with a plank and sandbag parapet, a searchlight and a ladder. The picture is 2.34 tiles tall because the stilts show below the deck: the footprint is the bottom 2 rows (anchor y 0.34 + padding). variant 0 BUILT, variant 1 DAMAGED (a hole in the deck, a plank gone). The shooter stands on the deck: draw it under the people."
+  },
+  {
+   "id": "fence_rubble",
+   "category": "fortify",
+   "kind": "atlas",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    2
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "x0": [
+     0,
+     0
+    ],
+    "x1": [
+     1,
+     0
+    ],
+    "x2": [
+     2,
+     0
+    ],
+    "x3": [
+     3,
+     0
+    ],
+    "y0": [
+     0,
+     1
+    ],
+    "y1": [
+     1,
+     1
+    ],
+    "y2": [
+     2,
+     1
+    ],
+    "y3": [
+     3,
+     1
+    ]
+   },
+   "tags": [
+    "fortify",
+    "walkable",
+    "decal"
+   ],
+   "sprites": [
+    {
+     "file": "fortify/fence_rubble.png",
+     "rect": [
+      0,
+      0,
+      512,
+      256
+     ]
+    }
+   ],
+   "note": "What is left where a fence section has fallen: planks and splinters on the ground and the stump of a post, walkable. Cells are 128 x 128 px, anchor (0, 0), footprint 1 x 1; the top row lies along x (a fence that runs east to west), the bottom row along y; four looks each (pick one by the tile's coordinates). Draw it on every tile of a section that is down.",
+   "solid": [],
+   "name": "Fallen fence"
+  },
+  {
+   "id": "door_reinforce",
+   "category": "fortify",
+   "kind": "prop",
+   "layer": "wall",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0,
+    0.0
+   ],
+   "tags": [
+    "fortify",
+    "overlay",
+    "door",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      0,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "h",
+     "variant": 0
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      130,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "v",
+     "variant": 0
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      260,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "h",
+     "variant": 1
+    },
+    {
+     "file": "fortify/door_reinforce.png",
+     "rect": [
+      390,
+      0,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "orient": "v",
+     "variant": 1
+    }
+   ],
+   "variant_names": [
+    "built",
+    "damaged"
+   ],
+   "orients": [
+    "h",
+    "v"
+   ],
+   "variants": 2,
+   "note": "Two planks crossed in an X with a steel strap, laid OVER `barricade_door`: the barred door that has the plank kit. variant 0 BUILT, 1 DAMAGED (one plank snapped)."
   },
   {
    "id": "barricade_window",
