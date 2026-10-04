@@ -306,6 +306,15 @@ const HINT_AVATAR_ALWAYS := [
 	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["Q", "weapon away"]]],
 	["Click a card to radio, or hold C for the wheel", [["E", "to use"], ["G", "the map"], ["T", "News"]]],
 ]
+## (The town's: one survivor alone has nobody to radio yet, and the walls are not the school's.)
+const HINT_TOWN := [
+	["", [["WASD", "to move"], ["Right-click", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["E", "to use"]]],
+	["", [["Q", "weapon away"], ["M", "the map"], ["T", "the radio"], ["Esc", "the menu"]]],
+]
+const HINT_TOWN_ALWAYS := [
+	["", [["WASD", "to move"], ["Mouse", "to aim"], ["Click", "to fire"], ["R", "to reload"], ["F", "to swing"], ["E", "to use"]]],
+	["", [["Q", "weapon away"], ["M", "the map"], ["T", "the radio"], ["Esc", "the menu"]]],
+]
 ## The legend of the fields-of-fire view: the tint of a wall section by how many guns
 ## reach it, [colour, words] (the overlay tints with the same colours).
 const FIELDS_LEGEND := [[DANGER, "Red: no gun reaches it"], [WARN, "Amber: one gun"], [OK, "Green: two or more"]]
@@ -714,6 +723,8 @@ func set_profile(name: String) -> void:
 		help_g.text = "Map"
 	if not school:
 		_layout_dock.call_deferred()
+		if hint != null:
+			_fill_hint()    # (the town's words)
 
 
 # ----------------------------------------------------------------- frames --
@@ -3002,6 +3013,8 @@ func help_groups() -> Array:
 func hint_lines() -> Array:
 	if not avatar_ui:
 		return [HINT]
+	if profile != "":
+		return HINT_TOWN_ALWAYS if AimMode.always() else HINT_TOWN
 	return HINT_AVATAR_ALWAYS if AimMode.always() else HINT_AVATAR
 
 
@@ -3871,7 +3884,8 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		var v := roundi(float(sim.stock[s[0]]))
 		var lbl: Label = res_values[s[0]]
 		lbl.text = str(v)
-		var low: bool = (s[0] == "ammo" and v < 60) or (s[0] == "meds" and v < 3)
+		var low_ammo: float = float(sim.supplies.get("low_ammo")) if sim.supplies != null and sim.supplies.get("low_ammo") != null else 60.0
+		var low: bool = (s[0] == "ammo" and v < low_ammo) or (s[0] == "meds" and v < 3)
 		lbl.add_theme_color_override("font_color", WARN if low else INK)
 	_update_fuel(sim)
 	_update_crew_load(sim)
@@ -3921,7 +3935,11 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 	var temp := roundi(seasons.temperature(h)) if seasons != null and seasons.campaign else roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
 	temp_icon.texture = icons[PHASE_ICON.get(sim.phase, "sun")]
 	temp_label.text = "%d°C, %s" % [temp, sim.weather]
-	walkers_label.text = "%d walkers" % walkers
+	if profile != "":
+		# (the town's word is "the dead", and the count is the ones awake round you: the rest are asleep where they stand)
+		walkers_label.text = "no dead about" if walkers == 0 else "%d dead about" % walkers
+	else:
+		walkers_label.text = "%d walkers" % walkers
 	_update_forecast(sim)
 	_update_gate(sim)
 	# speed and sound
@@ -3960,6 +3978,8 @@ func _day_text(sim, speed: int = 1) -> String:
 		var season_name := String(seasons.current().name).to_upper()
 		return ("%s %d/%d" if compact or speed == 0 else "%s, DAY %d OF %d") % [season_name, seasons.season_day(sim.scenario.day()), seasons.season_length()]
 	var day: int = sim.scenario.day()
+	if profile != "" and sim.has_method("is_one_house") and sim.is_one_house():
+		return "DAY %d" % day    # (the One House run has no day limit: it ends when the first attack night is held)
 	if sim.has_method("is_demo") and sim.is_demo():
 		day = mini(day, int(sim.scenario.total_days()))    # (round 26: the dawn that ends the demo is not "DAY 4 OF 3")
 	return ("DAY %d/%d" if compact else "DAY %d OF %d") % [day, sim.scenario.total_days()]

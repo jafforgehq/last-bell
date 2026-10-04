@@ -23,6 +23,7 @@ const LoadMenu := preload("res://scripts/ui/load_menu.gd")
 const CreditsScreen := preload("res://scripts/ui/credits.gd")
 const ConfirmMenu := preload("res://scripts/ui/confirm_menu.gd")
 const OrientationCard := preload("res://scripts/ui/orientation_card.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
 
 ## How long a toast stays up, in real seconds.
 const TOAST_SECONDS := 2.5
@@ -312,7 +313,8 @@ func show_title(offer: bool = true) -> void:
 	move_child(title, 0)
 	title.setup(self)
 	title.focus_default.call_deferred()
-	if offer and not Prefs.flag("tutorial_offered"):
+	# (the town's New game has lessons of its own in the first house; Orientation Day is the school's, left for `--school`)
+	if offer and not Prefs.flag("tutorial_offered") and not OneHouse.town_start(main):
 		offer_orientation()
 
 

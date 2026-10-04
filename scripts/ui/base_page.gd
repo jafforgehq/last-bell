@@ -144,7 +144,7 @@ func _build() -> void:
 	today.add_child(_debrief_box)
 	# Priorities
 	var prio := _section("priorities", "Priorities")
-	var made := PriorityKit.make(host, _on_chip)
+	var made := PriorityKit.make(host, _on_chip, PriorityKit.ids_of(_sim()))
 	chips = made.chips
 	prio.add_child(made.flow)
 	answer_label = _para("", 12, host.WARN, 600)

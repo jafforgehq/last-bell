@@ -34,7 +34,13 @@ const VIEW_PARTS := {
 }
 ## The foundation's own roofs, drawn while no `house_view` part exists (it is the working fallback: one roof for each house, fading when the avatar is inside).
 const FALLBACK_ROOFS := "res://scripts/town/town_roofs.gd"
+const TownPerf := preload("res://scripts/town/town_perf.gd")
+## The furthest zoom out in pixels to the tile whatever the window (the area bound of `TownPerf.min_zoom` is what normally holds).
 const MIN_ZOOM := 5.0
+## How many pawn nodes a frame may make (`Main._sync_views`).
+const NODES_PER_FRAME := TownPerf.NODES_PER_FRAME
+## How many chunks of ground paint may be drawn for the first time in one frame (a chunk is about 4 ms of GDScript on the desktop the first time).
+const CHUNKS_PER_FRAME := 1
 
 var main
 var parts: Array = []
@@ -42,6 +48,9 @@ var parts: Array = []
 var by_name := {}
 var _roofs
 var _avatar_house := -1
+## The adaptive cap on the awake dead (scripts/town/town_perf.gd).
+var perf
+var _chunk_drawn := {}
 
 
 ## The facade for `main`'s run (null when the run is not a town's: its sim has no `houses`).
@@ -72,6 +81,15 @@ func on_ready(main_node) -> void:
 	for part in parts:
 		if part.has_method("on_ready"):
 			part.on_ready(main)
+	perf = TownPerf.new()
+	perf.setup(main.sim)
+
+
+## Once, as the camera is first put (main.gd `_ready`, after the HUD): the parts that care say where it looks and how far it sees (`on_opening_view(main)`: the town's HUD part).
+func opening_view() -> void:
+	for part in parts:
+		if part.has_method("on_opening_view"):
+			part.on_opening_view(main)
 
 
 func part(name: String):
@@ -79,6 +97,8 @@ func part(name: String):
 
 
 func on_frame(dt: float) -> void:
+	if perf != null:
+		perf.frame()
 	if _roofs != null:
 		var me = main.sim.avatar.player()
 		_roofs.update(main.sim.houses.house_at(me.x, me.y) if me != null else -1, dt)
@@ -88,6 +108,7 @@ func on_frame(dt: float) -> void:
 
 
 func on_sync_views(view: Rect2) -> void:
+	_show_chunks(view)
 	for part in parts:
 		if part.has_method("on_sync_views"):
 			part.on_sync_views(view)
@@ -127,11 +148,37 @@ func on_key(ev: InputEvent) -> bool:
 	return false
 
 
-## The camera may zoom out further than the school's yard allows (the whole town is 192 tiles across): never below MIN_ZOOM pixels to the tile.
+## The camera may zoom out further than the school's yard allows, but not to the whole town (192 tiles across: 2,100 draw calls and 500 roofs on a desktop, measured with
+## tools/town_bench.gd --what=game): it never shows more of the town than `TownPerf.max_view_tiles()` (about 24 houses); the district map (M) is the way to see it all.
 func min_zoom(vp: Vector2, world) -> float:
-	return maxf(MIN_ZOOM, minf(vp.x / (float(world.W) + 2.0), vp.y / (float(world.H) + 2.0)))
+	var whole := minf(vp.x / (float(world.W) + 2.0), vp.y / (float(world.H) + 2.0))
+	return maxf(MIN_ZOOM, maxf(whole, TownPerf.min_zoom(vp)))
 
 
 ## The camera's bounds in a town: the map's own (`Main._clamp_camera` has already done them); a part may add to them here later.
 func clamp_camera(_main) -> void:
 	pass
+
+
+## The ground paint (curbs, lane dashes) of the chunks in view, the new ones one at a time (`CHUNKS_PER_FRAME`) so that crossing the town is not a hitch every 32 tiles: a chunk is
+## drawn when it is first shown and kept. The standalone scene did this each frame with `world.show_chunks`; the real game had no caller.
+func _show_chunks(view: Rect2) -> void:
+	var world = main.get("world")
+	if world == null or not (world.get("chunks") is Array):
+		return
+	var fresh := 0
+	var i := 0
+	for c in world.chunks:
+		var seen: bool = view.intersects(c.rect)
+		var node = c.node
+		if seen and not node.visible:
+			if not _chunk_drawn.has(i):
+				if fresh >= CHUNKS_PER_FRAME:
+					i += 1
+					continue
+				fresh += 1
+				_chunk_drawn[i] = true
+			node.visible = true
+		elif not seen and node.visible:
+			node.visible = false
+		i += 1

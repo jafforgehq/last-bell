@@ -118,6 +118,8 @@ func claimable(h: int) -> Dictionary:
 			return {"ok": false, "why": "You have not looked in the %s yet" % name}
 		if _dead_in(r) > 0:
 			return {"ok": false, "why": "There are still dead in the %s" % name}
+	if int(hs.dead_in_house(h)) > 0:
+		return {"ok": false, "why": "There are still dead in the house"}
 	if not done.has(h):
 		return {"ok": false, "why": "The house is not clear yet"}
 	return {"ok": true, "why": ""}
@@ -277,6 +279,9 @@ func _check(h: int) -> void:
 			sim.events.append({"type": "room_clear", "room": r, "house": h, "name": String(hs.room(r).get("name", ""))})
 		else:
 			all = false
+	# (a dead one in the passage between the rooms is in no room, but it is in the house)
+	if all and int(hs.dead_in_house(h)) > 0:
+		all = false
 	if all:
 		done[h] = true
 		_open.erase(h)

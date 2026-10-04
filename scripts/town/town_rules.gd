@@ -77,15 +77,18 @@ func inside_school(x: float, y: float) -> bool:
 	return b != null and hs != null and int(hs.house_at(x, y)) == int(b.house)
 
 
-## How many of the dead are in the yard or the house (not counting those on their way out): the stores are theirs to ruin.
+## How many of the dead are in the yard or the house (not counting those on their way out): the stores are theirs to ruin. With no fence or gate built the barred doors
+## are the base's outer wall (`yard_open`), so the lawn is still the street: only the dead in the house count, not a wanderer crossing the lot.
 func dead_inside() -> int:
 	if _claimed_base() == null:
 		return 0
+	var per = get("perimeter")
+	var fenced: bool = per == null or not bool(per.no_outer_wall())
 	var n := 0
 	for z in zombies:
 		if z.state == "dying" or z.state == "dead" or z.state == "retreat":
 			continue
-		if _in_yard(z.x, z.y) or inside_school(z.x, z.y):
+		if (fenced and _in_yard(z.x, z.y)) or inside_school(z.x, z.y):
 			n += 1
 	return n
 

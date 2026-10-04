@@ -158,9 +158,11 @@ func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
 	_post_by_id.clear()
 	for po in _posts:
 		_post_by_id[String(po.id)] = po
-	_rest = {"what": String(rest.get("what", "Resting")), "work": String(rest.get("work", "rest")), "spots": []}
+	_rest = {"what": String(rest.get("what", "Resting")), "work": String(rest.get("work", "rest")), "spots": [], "night": []}
 	for sp in rest.get("spots", []):
 		_rest.spots.append({"pos": _vec(sp.pos), "face": String(sp.get("face", ""))})
+	for sp in rest.get("night", []):
+		_rest.night.append({"pos": _vec(sp.pos), "face": String(sp.get("face", ""))})
 	settings.clear()
 	for st in _stations:
 		var id := String(st.id)
@@ -453,6 +455,9 @@ func seat_pos(p) -> Vector2:
 	# the Builders' seat is the active building site, while there is one
 	if String(st.id) == "builders" and not sim.build.active_site().is_empty():
 		return sim.build.work_spot(p)
+	var own = st.get("seat_offsets")    # (One House: a station of a generated base may name where its seats are, for a worktable in a room too small for the usual ones)
+	if own is Array and not own.is_empty():
+		return Vector2(st.pos) + _vec(own[mini(seat_index(p), own.size() - 1)])
 	return Vector2(st.pos) + Vector2(SEAT_OFFSETS[mini(seat_index(p), SEAT_OFFSETS.size() - 1)])
 
 
@@ -601,6 +606,8 @@ func post_goal(p) -> Dictionary:
 ## The day goal (after any order, treatment or trip): stand at the seat (with `work`, the word of what they do
 ## there); with no job, rest at a rest spot in the settlement game and stand at ease in the classic one.
 func goal_for(p) -> Dictionary:
+	if _quiet_night():
+		return night_goal(p)
 	var id := job_of(p)
 	if id == "":
 		return rest_goal(p)
@@ -618,6 +625,33 @@ func goal_for(p) -> Dictionary:
 		else:
 			work = ""    # the classic start's Builders walk the wall
 	return {"x": at.x, "y": at.y, "face": "N" if id == "radio" else "", "what": what, "work": work}
+
+
+## One House: a night with no attack on (the town's quiet nights before the fourth rescue; `posts_manned` is false then). The crew is in the house by the bell, not at the
+## bench or in the yard in the dark. Always false in every other game, and in a base with no night spots.
+func _quiet_night() -> bool:
+	if not sim.is_one_house() or _rest.get("night", []).is_empty():
+		return false
+	return (sim.phase == "night" or (sim.phase == "dusk" and sim.bell_rung)) and not sim.posts_manned()
+
+
+## One House: the lookout's forecast is told (the attacks have begun).
+func _forecast_on() -> bool:
+	var sc = sim.get("scenario")
+	return sc != null and sc.has_method("forecast_on") and bool(sc.forecast_on())
+
+
+## Where someone turns in on a quiet night: the base's night spots in turn, in the order of the crew list (the player has no job and no spot).
+func night_goal(p) -> Dictionary:
+	var spots: Array = _rest.night
+	var rank := 0
+	for q in sim.people:
+		if q == p:
+			break
+		if not (q.dead or q.turned) and not q.player:
+			rank += 1
+	var spot: Dictionary = spots[rank % spots.size()]
+	return {"x": spot.pos.x, "y": spot.pos.y, "face": String(spot.face), "what": String(_rest.what), "work": String(_rest.work)}
 
 
 ## What someone with no job does by day: rests at their rest spot (the settlement game: the picnic tables and the
@@ -793,14 +827,15 @@ func update(_dt: float) -> void:
 	if sim.phase != "day":
 		return
 	var h: float = sim.hour
-	if h >= RADIO_ALERT_HOUR and h < 12.0 and int(_alert_day.radio) != sim.day and operator("radio") == null:
+	var town: bool = sim.is_one_house()    # (One House: no noon call and no forecast before the attacks begin: nothing to be told about an empty desk or tower)
+	if not town and h >= RADIO_ALERT_HOUR and h < 12.0 and int(_alert_day.radio) != sim.day and operator("radio") == null:
 		_alert_day.radio = sim.day
 		# (round 16: the first survivors' calls come with the desk empty; the day's news and a stranger's call do not)
 		var told := "The next survivor's call will still come, but no news unless someone sits there" if sim.recruits.call_due() and sim.recruits.call_guaranteed() else "There will be no call at noon unless someone sits there"
 		sim.alert("job-radio", "info", "Nobody is at the radio desk", told, Vector2(station("radio").pos), ALERT_TTL)
 	# half an hour before the forecast (16:30 in Autumn, when it comes at 17:00)
 	var forecast_at: float = sim.seasons.dusk_hour() - 2.0    # (tactics.forecast_hour)
-	if h >= forecast_at - 0.5 and h < forecast_at and int(_alert_day.watch) != sim.day and operator("watch") == null:
+	if (not town or _forecast_on()) and h >= forecast_at - 0.5 and h < forecast_at and int(_alert_day.watch) != sim.day and operator("watch") == null:
 		_alert_day.watch = sim.day
 		sim.alert("job-watch", "info", "Nobody is on watch", "There will be no forecast tonight unless someone is at the lookout post", Vector2(station("watch").pos), ALERT_TTL)
 

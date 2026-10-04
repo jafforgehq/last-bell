@@ -18,6 +18,9 @@ const WAKE_R := 28.0
 const SLEEP_R := 45.0
 const NOISE_R := 30.0
 const EVERY := 0.25
+## The most dead the periodic look wakes at once (a street of sixty woken in one step is sixty path searches and sixty new pictures in one frame: they come over a few passes, the
+## nearest first). A shout or a shot is not held to it: its dead have their own spread (`start_chase`).
+const WAKE_PER_PASS := 12
 ## A dead one that stands inside a house the avatar is not in wakes at this share of the radius (walls: they do not see or hear you): a noise or a light is another matter.
 const INDOOR_SHARE := 0.5
 const DORMANT := 0
@@ -186,7 +189,7 @@ func update(dt: float, anchors: Array) -> void:
 	_sleep_far(anchors)
 	sleep_usec += Time.get_ticks_usec() - t_in
 	t_in = Time.get_ticks_usec()
-	_wake_near(Vector2(anchors[0]), wake_r * night_mult, "", null, true)
+	_wake_near(Vector2(anchors[0]), wake_r * night_mult, "", null, true, WAKE_PER_PASS)
 	wake_usec += Time.get_ticks_usec() - t_in
 
 
@@ -233,7 +236,7 @@ func _sleep(z) -> void:
 
 
 ## Wakes the dormant records within `radius` of `at` (nearest first, up to the cap). `chase_prey` (a Person) sends them after that person.
-func _wake_near(at: Vector2, radius: float, cause: String, chase_prey = null, walls := false) -> int:
+func _wake_near(at: Vector2, radius: float, cause: String, chase_prey = null, walls := false, most: int = 100000) -> int:
 	if pause_wake:
 		return 0
 	var c0 := clampi(floori((at.x - radius) / float(CELL)), 0, cols - 1)
@@ -265,7 +268,7 @@ func _wake_near(at: Vector2, radius: float, cause: String, chase_prey = null, wa
 		return 0
 	cand.sort_custom(func(a, b): return a[0] < b[0])
 	var woke := 0
-	for k in mini(room, cand.size()):
+	for k in mini(mini(room, most), cand.size()):
 		_wake(int(cand[k][1]), chase_prey)
 		woke += 1
 	last_wake_n = woke
@@ -314,6 +317,26 @@ func _wake(i: int, chase_prey = null):
 	if chase_prey != null:
 		sim.start_chase(z, chase_prey)
 	return z
+
+
+## The adaptive cap went down (scripts/town/town_perf.gd): the awake dead above `cap` that are not after anybody go back to sleep, the farthest from the player first.
+## Returns how many. (The ones that chase, attack or are dying stay: the cap holds back new wakes from now on.)
+func trim(cap: int) -> int:
+	var extra := active_of.size() - cap
+	if extra <= 0:
+		return 0
+	var me = sim.avatar.player() if sim.get("avatar") != null else null
+	var at := Vector2(me.x, me.y) if me != null else Vector2.ZERO
+	var cand: Array = []
+	for z in rec_of.keys():
+		if z.state == "wander" or z.state == "still":
+			cand.append([Vector2(z.x, z.y).distance_squared_to(at), z])
+	cand.sort_custom(func(a, b): return a[0] > b[0])
+	var put := 0
+	for k in mini(extra, cand.size()):
+		_sleep(cand[k][1])
+		put += 1
+	return put
 
 
 ## A shot or a shout at `at`: the dormant within `noise_r` wake and go after `prey`; the real ones that stand or wander within it go after it too.

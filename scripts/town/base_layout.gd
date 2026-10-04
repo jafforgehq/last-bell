@@ -25,6 +25,11 @@ const PROPS := ["bed", "stash", "radio", "bench"]
 ## The rooms each prop likes (the first name that is in the house, else the largest free room).
 const PROP_ROOMS := {"bed": ["bedroom", "side"], "stash": ["kitchen", "storeroom"], "radio": ["living room", "front room", "shop floor"], "bench": ["living room", "front room", "shop floor", "kitchen"]}
 const COMPASS := {"N": "North", "E": "East", "S": "South", "W": "West"}
+## What the stations say in a town of one house (the school's words are about its noon call and its tower).
+const TOWN_BLURBS := {
+	"radio": "Keeps an ear on the set. The people you find in the town answer on it.",
+	"watch": "Watches the street from the yard and, once the dead come every night, tells the crew two hours before dusk what tonight looks like.",
+}
 ## The cost of looking round a door for a free tile: how far from the wanted one a slot may slide.
 const SLIDE := 3
 
@@ -345,9 +350,11 @@ static func make(town: Dictionary, house_id: int, opts: Dictionary = {}) -> Dict
 	var avoid := {}
 	var claim_spot := Vector2.ZERO
 	var yard_middle := _center_of(lot)
+	var doorway := {}
 	for d in h.doors:
 		for t in d.tiles:
 			avoid[Vector2i(t)] = true
+			doorway[Vector2i(t)] = true
 		var o: Vector2i = d.out
 		var inn: Vector2i = d["in"]
 		for c in [o, inn]:
@@ -360,22 +367,54 @@ static func make(town: Dictionary, house_id: int, opts: Dictionary = {}) -> Dict
 				avoid[Vector2i(front_door["in"].x + dx, front_door["in"].y + dy)] = true
 	var interior: Array = []
 	var used := {}
-	for pid in PROPS:
+	# (the bench and the radio are worked from in front of them: the tile in front of each is kept free, `fronts`, so that whoever works there does not stand in the furniture)
+	var fronts := {}
+	for pid in ["bed", "stash", "bench", "radio"]:    # (the bench first: the radio is then put as far from it as the room allows, so that their seats are not one crowd)
 		var wide := 2 if pid == "bench" else 1
 		var room_i := _room_for(town, h, String(pid), grid, avoid, used, wide)
 		if room_i < 0:
 			continue
-		var tile := _spare(grid, town.rooms[room_i].rect, avoid, used, wide)
+		var room_rect: Rect2i = town.rooms[room_i].rect
+		var away: Vector2 = fronts.get("bench", Vector2(-1.0, -1.0)) if pid == "radio" else Vector2(-1.0, -1.0)
+		var tile := _spare(grid, room_rect, avoid, used, wide, pid == "bench" or pid == "radio", away)
+		if tile.x < 0:
+			tile = _spare(grid, room_rect, avoid, used, wide, false, away)
 		for k in wide:
 			used[Vector2i(tile.x + k, tile.y)] = true
-		interior.append({"id": pid, "kind": pid, "pos": _tile_center(tile), "room": room_i, "face": "S"})
+		if pid == "bench" or pid == "radio":
+			# (the stand may be beside a doorway: a small room has no better place; it is never in one)
+			var stand := _stand_for(grid, doorway, used, tile, wide, wide)
+			var offsets: Array = []
+			if stand.x < 0 and pid == "bench":
+				# no two free tiles in a row: one person at the bench, the second seat on any free tile beside the first
+				stand = _stand_for(grid, doorway, used, tile, wide, 1)
+				if stand.x >= 0:
+					for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var other: Vector2i = stand + dv
+						if offsets.is_empty() and grid.open(other.x, other.y) and not doorway.has(other) and not used.has(other) and not (other.y == tile.y and other.x >= tile.x and other.x < tile.x + wide):
+							offsets = [Vector2.ZERO, Vector2(dv)]
+							used[other] = true
+			if stand.x >= 0:
+				for k in (wide if offsets.is_empty() else 1):
+					used[Vector2i(stand.x + k, stand.y)] = true
+				fronts[String(pid)] = _tile_center(stand)
+				if pid == "bench" and not offsets.is_empty():
+					fronts["bench_offsets"] = offsets
+		# (a prop is drawn about its pos: the bench is two tiles wide, so its middle is the line between them)
+		var at := _tile_center(tile) + (Vector2(0.5, 0.0) if wide == 2 else Vector2.ZERO)
+		interior.append({"id": pid, "kind": pid, "pos": at, "room": room_i, "face": "S"})
+	interior.sort_custom(func(a, b): return PROPS.find(String(a.id)) < PROPS.find(String(b.id)))
 	var prop_at := {}
 	for p in interior:
 		prop_at[String(p.id)] = p
+		if fronts.has(String(p.id)):
+			prop_at[String(p.id)]["front"] = fronts[String(p.id)]
+	if fronts.has("bench_offsets") and prop_at.has("bench"):
+		prop_at["bench"]["seat_offsets"] = fronts["bench_offsets"]
 
 	# the stations and the resting spots (stations.json's words, this base's places)
 	var stations: Array = _stations(grid, town, h, interior, prop_at, slots, tower_ids, yard_middle, front_door, xl, xr, yt, yb, used, avoid)
-	var rest := _rest(grid, yard_middle, front_door, xl, xr, yt, yb, posts)
+	var rest := _rest(grid, yard_middle, front_door, xl, xr, yt, yb, posts, town, h, avoid, used)
 
 	# the plots (a slot is a Build plot) and the catalogue entries of the kits the slots use
 	var plots: Array = []
@@ -595,24 +634,46 @@ static func _slot_at_border(taken: Dictionary, grid: Grid, t: Vector2i, lx: int,
 # ------------------------------------------------------------- the interior --
 
 ## The room (an index) a prop goes in: the first room of the house with one of the names the prop likes that has a free tile, else the roomiest with one.
-static func _room_for(town: Dictionary, h: Dictionary, pid: String, grid: Grid, avoid: Dictionary, used: Dictionary, wide: int) -> int:
+static func _room_for(town: Dictionary, h: Dictionary, pid: String, grid: Grid, avoid: Dictionary, used: Dictionary, wide: int, front := false) -> int:
 	var rooms: Array = h.rooms
 	for want in PROP_ROOMS[pid]:
 		for ri in rooms:
-			if String(town.rooms[ri].name) == String(want) and _spare(grid, town.rooms[ri].rect, avoid, used, wide).x >= 0:
+			if String(town.rooms[ri].name) == String(want) and _spare(grid, town.rooms[ri].rect, avoid, used, wide, front).x >= 0:
 				return int(ri)
 	var best := -1
 	var best_area := -1
 	for ri in rooms:
 		var r: Rect2i = town.rooms[ri].rect
-		if r.size.x * r.size.y > best_area and _spare(grid, r, avoid, used, wide).x >= 0:
+		if r.size.x * r.size.y > best_area and _spare(grid, r, avoid, used, wide, front).x >= 0:
 			best = int(ri)
 			best_area = r.size.x * r.size.y
 	return best
 
 
+## Where to stand to work a prop on `tile` (`wide` tiles wide): the first of `n` free tiles in a row, in the row south of it first (the way the people are drawn, facing it), then the row
+## north, then beside it. (-1, -1) when there is no room.
+static func _stand_for(grid: Grid, doorway: Dictionary, used: Dictionary, tile: Vector2i, wide: int, n: int) -> Vector2i:
+	var tries: Array = []
+	for dy in [1, -1]:
+		for dx in [0, -1, 1]:
+			tries.append(Vector2i(tile.x + dx, tile.y + dy))
+	tries.append(Vector2i(tile.x - n, tile.y))
+	tries.append(Vector2i(tile.x + wide, tile.y))
+	for t in tries:
+		var ok := true
+		for k in n:
+			var c := Vector2i(t.x + k, t.y)
+			if not grid.open(c.x, c.y) or doorway.has(c) or used.has(c):
+				ok = false
+		if ok:
+			return t
+	return Vector2i(-1, -1)
+
+
 ## A free tile of a floor (`wide` tiles in a row), not by a door and not used: the one with the most free neighbours, the first of them in reading order.
-static func _spare(grid: Grid, r: Rect2i, avoid: Dictionary, used: Dictionary, wide: int) -> Vector2i:
+## `front`: the tiles just south of it (in the same room) must be free too (a place to stand in front of it).
+## `away` (a point, or (-1, -1) for none): of the tiles that fit the one farthest from it wins, the free neighbours only break a tie.
+static func _spare(grid: Grid, r: Rect2i, avoid: Dictionary, used: Dictionary, wide: int, front := false, away := Vector2(-1.0, -1.0)) -> Vector2i:
 	var best := Vector2i(-1, -1)
 	var best_n := -1
 	for y in range(r.position.y, r.end.y):
@@ -622,6 +683,10 @@ static func _spare(grid: Grid, r: Rect2i, avoid: Dictionary, used: Dictionary, w
 				var c := Vector2i(x + k, y)
 				if not grid.open(c.x, c.y) or avoid.has(c) or used.has(c) or c.x >= r.end.x:
 					ok = false
+				if front:
+					var f := Vector2i(x + k, y + 1)
+					if f.y >= r.end.y or not grid.open(f.x, f.y) or avoid.has(f) or used.has(f):
+						ok = false
 			if not ok:
 				continue
 			var n := 0
@@ -629,6 +694,8 @@ static func _spare(grid: Grid, r: Rect2i, avoid: Dictionary, used: Dictionary, w
 				for dx in range(-1, wide + 1):
 					if grid.open(x + dx, y + dy):
 						n += 1
+			if away.x >= 0.0:
+				n += int(Vector2(float(x) + 0.5, float(y) + 1.5).distance_to(away) * 10.0)
 			if n > best_n:
 				best_n = n
 				best = Vector2i(x, y)
@@ -644,10 +711,13 @@ static func _stations(grid: Grid, town: Dictionary, h: Dictionary, interior: Arr
 			for st in raw.get("stations", []):
 				file[String(st.id)] = st
 	var spots := {}
+	var seat_offsets := {}
 	if prop_at.has("bench"):
-		spots["bench"] = [prop_at.bench.pos, "the worktable"]
+		spots["bench"] = [prop_at.bench.get("front", prop_at.bench.pos), "the worktable"]
+		if prop_at.bench.has("seat_offsets"):
+			seat_offsets["bench"] = prop_at.bench.seat_offsets
 	if prop_at.has("radio"):
-		spots["radio"] = [prop_at.radio.pos, "the radio"]
+		spots["radio"] = [prop_at.radio.get("front", prop_at.radio.pos), "the radio"]
 	# the lookout stands where the first tower's post is, else at the first tower's tile, else by the front gate
 	var watch_at := yard_middle
 	for s in slots:
@@ -689,6 +759,10 @@ static func _stations(grid: Grid, town: Dictionary, h: Dictionary, interior: Arr
 		var spot: Array = spots.get(id, [yard_middle, "the yard"])
 		st["pos"] = _pt(Vector2(spot[0]))
 		st["where"] = String(spot[1])
+		if TOWN_BLURBS.has(id):
+			st["blurb"] = String(TOWN_BLURBS[id])
+		if seat_offsets.has(id):
+			st["seat_offsets"] = [_pt(seat_offsets[id][0]), _pt(seat_offsets[id][1])]
 		if st.has("idle_pos"):
 			st["idle_pos"] = _pt(yard_spot)
 			st["idle_where"] = "the front yard"
@@ -697,8 +771,9 @@ static func _stations(grid: Grid, town: Dictionary, h: Dictionary, interior: Arr
 
 
 ## Where the people with no job rest by day: free tiles of the front yard and the inner ring (the words of stations.json's `rest`).
-static func _rest(grid: Grid, yard_middle: Vector2, front_door: Dictionary, xl: int, xr: int, yt: int, yb: int, posts: Array) -> Dictionary:
-	var out := {"what": "Resting", "work": "rest", "spots": []}
+## `night`: where everyone turns in on a quiet night (no attack is on): free floor tiles of the house's rooms (the bedroom's first), not a doorway, a prop or a seat.
+static func _rest(grid: Grid, yard_middle: Vector2, front_door: Dictionary, xl: int, xr: int, yt: int, yb: int, posts: Array, town: Dictionary = {}, h: Dictionary = {}, avoid: Dictionary = {}, used: Dictionary = {}) -> Dictionary:
+	var out := {"what": "Resting", "work": "rest", "spots": [], "night": []}
 	if FileAccess.file_exists(STATIONS_PATH):
 		var raw = JSON.parse_string(FileAccess.get_file_as_string(STATIONS_PATH))
 		if raw is Dictionary and raw.get("rest") is Dictionary:
@@ -718,6 +793,47 @@ static func _rest(grid: Grid, yard_middle: Vector2, front_door: Dictionary, xl: 
 			if c.x < xl or c.x > xr or c.y < yt or c.y > yb or post_tiles.has(c) or not grid.open(c.x, c.y):
 				continue
 			out["spots"].append({"pos": _pt(_tile_center(c)), "face": "S" if step > 0 else "N"})
+	if not h.is_empty() and town.has("rooms"):
+		# (nobody turns in in the bathroom: it is used only when the rest of the house has fewer than three places)
+		var order := ["bedroom", "living room", "front room", "shop floor", "kitchen", "storeroom"]
+		var rooms: Array = []
+		for ri in h.rooms:
+			if String(town.rooms[ri].name) != "bathroom":
+				rooms.append(ri)
+		rooms.sort_custom(func(a, b): return (order.find(String(town.rooms[a].name)) if order.has(String(town.rooms[a].name)) else 9) < (order.find(String(town.rooms[b].name)) if order.has(String(town.rooms[b].name)) else 9))
+		var taken := {}
+		for pass_n in 3:
+			if pass_n == 2:
+				if out["night"].size() >= 3:
+					break
+				for ri in h.rooms:
+					if String(town.rooms[ri].name) == "bathroom":
+						rooms.append(ri)
+			for ri in rooms:
+				var r: Rect2i = town.rooms[ri].rect
+				var best := Vector2i(-1, -1)
+				var best_n := -1
+				for y in range(r.position.y, r.end.y):
+					for x in range(r.position.x, r.end.x):
+						var c := Vector2i(x, y)
+						if not grid.open(x, y) or avoid.has(c) or used.has(c) or taken.has(c):
+							continue
+						var n := 0
+						var crowded := false
+						for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+							var q: Vector2i = c + dv
+							if grid.open(q.x, q.y):
+								n += 1
+							if taken.has(q):
+								crowded = true
+						if crowded and pass_n == 0:
+							continue    # (the first round puts nobody shoulder to shoulder)
+						if n > best_n:
+							best_n = n
+							best = c
+				if best.x >= 0 and out["night"].size() < 6:
+					taken[best] = true
+					out["night"].append({"pos": _pt(_tile_center(best)), "face": "S"})
 	return out
 
 
