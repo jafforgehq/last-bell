@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "_doc": "The One House run (scripts/town/one_house.gd, the scenario `OneHouse`): one survivor in one house of a big town, the same rules as the colony with the community modules switched on as people arrive. min_per_sec: game minutes per real second (2.0: a game hour is 30 s). difficulty: the run's difficulty (1 Standard). total_days: the run's nominal length for the clock and the briefing (the run really ends at the first held night, and `total_days()` is never less than the day after it). ideas_from_day: when the community starts to propose things. start: the hour of the first morning and the stores a run begins with (every stock named; the colony's full ones are not used). modules_from_crew: for each community module the number of living people (the avatar counted) from which it is on (99: never in this run). attack: from_rescue is how many rescued survivors make the dead come every night; cutoff_hour is the hour of day after which a fourth rescue puts the first attack on the next night instead of tonight. night: the size of the attack nights as a share of the colony's ordinary night (`first` is the first attack night, each one after is `growth` more). big_night: empty, or numbers of a Big Night theme (as demo.json) for the first attack night (brutes). held_rule: what a night needs to count as held at the dawn after it (the avatar or whoever leads is alive, no dead are in the house, a section of the base still stands). guide: the six lessons, in order; each is done when its cond is true (walked: tiles the avatar has walked; kills: the dead put down; rooms_seen: rooms of the house opened, or another house entered; house_clear; searched: containers searched; claimed) and none blocks anything. objective, words and end: what the player reads (%d and %s are filled in by the module). The enemy is 'the dead'.",
+  "min_per_sec": 2.0,
+  "difficulty": 1,
+  "total_days": 5,
+  "ideas_from_day": 2,
+  "start": {
+    "hour": 8.0,
+    "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}
+  },
+  "modules_from_crew": {
+    "briefing": 3,
+    "priorities": 3,
+    "initiative": 3,
+    "relations": 4,
+    "policies": 99,
+    "problems": 99,
+    "dilemmas": 99,
+    "specialists": 99
+  },
+  "attack": {"from_rescue": 4, "cutoff_hour": 17.0},
+  "night": {"first": 1.0, "growth": 0.15},
+  "big_night": {},
+  "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true},
+  "guide": [
+    {"id": "walk", "title": "Walk", "text": "W A S D walk Ruth, and the camera goes with her. The house is quiet. Enjoy it.", "goal": "Walk six steps", "cond": {"type": "walked", "n": 6}},
+    {"id": "shoot", "title": "Aim and shoot", "text": "Hold the right mouse button to aim, and click to fire. One of the dead is in here with you.", "goal": "Put one of the dead down", "cond": {"type": "kills", "n": 1}},
+    {"id": "door", "title": "Doors", "text": "A closed door hides the room behind it. Walk through one and the dark lifts.", "goal": "Open a door and go in", "cond": {"type": "rooms_seen", "n": 2}},
+    {"id": "clear", "title": "Clear it", "text": "Every room has to be empty of the dead. The count is under the objective.", "goal": "Clear the house", "cond": {"type": "house_clear"}},
+    {"id": "search", "title": "Search", "text": "Stand at a cupboard or a chest and press E. Hold still while you look.", "goal": "Search a container", "cond": {"type": "searched", "n": 1}},
+    {"id": "claim", "title": "Claim it", "text": "Once the house is clear, stand inside the front door and press E. It is yours.", "goal": "Claim the house", "cond": {"type": "claimed"}}
+  ],
+  "objective": {
+    "clear": {"text": "Clear the house", "sub": "%d of %d rooms clear", "sub_unknown": "Open the doors. Mind what is behind them"},
+    "claim": {"text": "Claim the house", "sub": "Stand inside the front door and press E"},
+    "rescue": {"text": "Find survivors: %d of %d", "sub": "Clear a house, then talk to who is hiding in it"},
+    "fortify": {"text": "Fortify the house before dark", "sub": "Fence, gate, tower: order them on the Build page"},
+    "hold": {"text": "Hold the night", "sub": "Until dawn. Shoot, and mend what breaks"},
+    "held": {"text": "The night is held", "sub": ""}
+  },
+  "words": {
+    "tagline": "One house. One survivor. A town full of the dead.",
+    "new_game": "One house and one survivor. Clear it, claim it, find people. When four voices are on the radio, the dead come every night.",
+    "new_game_caption": "How hard the nights are, and the seed",
+    "fourth_tonight": ["Four voices on the radio", "The dead will come tonight"],
+    "fourth_tomorrow": ["Four voices on the radio", "The dead will come tomorrow night"],
+    "news_fourth": ["Four voices on the radio", "The dead can hear it too. They will come at dusk, and every dusk after"],
+    "victory": ["The night is held", "Dawn, and the house is still standing"],
+    "defeat": ["The house is empty", "Nobody is left to hold it"]
+  },
+  "end": {
+    "caps": "One House: the demo",
+    "title": "The night is held",
+    "line": "Four voices, a fence and a roof. The dead will be back at dusk, and so will you.",
+    "full": "The full game has more of the town to clear, more people to find and worse nights.",
+    "thanks": "Thanks for playing.",
+    "labels": {"nights": "Nights held", "people": "People at the house", "houses": "Houses cleared", "kills": "The dead put down", "built": "Fence and gate built", "days": "Days"}
+  }
+}

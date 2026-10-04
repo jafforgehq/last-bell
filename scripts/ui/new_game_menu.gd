@@ -10,6 +10,9 @@
 extends "res://scripts/ui/menu_screen.gd"
 
 const Prefs := preload("res://scripts/prefs.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
+const Waves := preload("res://scripts/sim/waves.gd")
+const Medical := preload("res://scripts/sim/medical.gd")
 
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
@@ -31,6 +34,9 @@ const LENGTH_NAMES := ["Autumn: thirty nights", "Campaign: the four seasons"]
 const LENGTH_LINES := ["Hold the wall for thirty nights.", "Autumn, Winter, Spring and Summer, each with its own Big Night."]
 
 var difficulty := 1
+## Whether this New game starts the town run (One House: one survivor in one house; no crew and no length to choose) rather than the school's (`--school`, and a test's stand-in for the
+## game). Set when the screen is built, unless it was set before.
+var town_mode := false
 ## How many people the run begins with: 3 (a small crew) or 5.
 var crew := DEFAULT_CREW
 ## The three difficulty buttons, Story first.
@@ -72,6 +78,7 @@ static func random_seed() -> int:
 
 
 func _build_body() -> void:
+	town_mode = town_mode or OneHouse.town_start(shell.main)
 	difficulty = clampi(int(Prefs.get_value("ui", "difficulty", 1)), 0, 2)
 	body.add_child(section("Difficulty"))
 	var row: HBoxContainer = hud._hbox(8)
@@ -84,6 +91,12 @@ func _build_body() -> void:
 	facts_label = note("", ink(), 14)
 	slip.add_child(facts_label)
 	body.add_child(slip)
+	if town_mode:
+		caption_label.text = OneHouse.text("words.new_game_caption", "The nights and the seed").to_upper()    # (the caption is the shell's: it speaks of the crew and the length)
+		body.add_child(note(OneHouse.text("words.new_game", "One house, one survivor. Clear it, claim it, find people."), ink2(), 14))
+		_build_seed()
+		_choose(difficulty)
+		return
 
 	crew = int(Prefs.get_value("ui", "crew", DEFAULT_CREW))
 	if not CREWS.has(crew):
@@ -109,6 +122,14 @@ func _build_body() -> void:
 		length_cards.append(length_card)
 	body.add_child(length_row)
 
+	_build_seed()
+	_choose(difficulty)
+	_choose_crew(CREWS.find(crew))
+	_choose_length(1 if campaign else 0)
+
+
+## The seed's line: the box with a random one in it, and the words under it.
+func _build_seed() -> void:
 	body.add_child(section("Seed"))
 	var seed_row: HBoxContainer = hud._hbox(8)
 	seed_edit = LineEdit.new()
@@ -130,9 +151,6 @@ func _build_body() -> void:
 	seed_error.visible = false
 	body.add_child(seed_error)
 	body.add_child(note("Any whole number. The same seed and the same orders play the same game.", ink3(), 13))
-	_choose(difficulty)
-	_choose_crew(CREWS.find(crew))
-	_choose_length(1 if campaign else 0)
 
 
 func _build_foot() -> void:
@@ -231,7 +249,25 @@ func _choose(i: int) -> void:
 		var s: Label = b.get_meta("sub")
 		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
 		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
-	facts_label.text = Kit.difficulty_facts(difficulty, crew)
+	facts_label.text = _town_facts(difficulty) if town_mode else Kit.difficulty_facts(difficulty, crew)
+
+
+## What a difficulty changes in the town run, from the rules' own numbers: the size of the nights (they begin with the fourth survivor) and the bite.
+func _town_facts(i: int) -> String:
+	var dead := float(Waves.DIFFICULTY[clampi(i, 0, 2)])
+	var infect := float(Medical.INFECT_CHANCE[clampi(i, 0, 2)])
+	var parts: Array = []
+	if absf(dead - 1.0) < 0.005:
+		parts.append("The nights are as designed.")
+	elif dead < 1.0:
+		parts.append("%d%% fewer of the dead each night." % roundi((1.0 - dead) * 100.0))
+	else:
+		parts.append("%d%% more of the dead each night." % roundi((dead - 1.0) * 100.0))
+	if infect >= 0.995:
+		parts.append("Every bite infects.")
+	else:
+		parts.append("A bite infects %d times in 10." % roundi(infect * 10.0))
+	return " ".join(parts)
 
 
 ## Picks a crew (0 the small one, 1 the crew of five): its card lights up and the words under the cards say what it means.
@@ -287,6 +323,13 @@ func _start() -> void:
 		shell.play("ui_error")
 		return
 	Prefs.set_value("ui", "difficulty", difficulty)
+	if town_mode:
+		# (One House: the town is the demo's own, the same every time; the seed is the run's dice)
+		close_sound = ""
+		shell.play("ui_confirm")
+		hud.start_run({"difficulty": difficulty, "seed": int(parsed.value), "town": true})
+		close()
+		return
 	Prefs.set_value("ui", "crew", crew)
 	Prefs.set_value("ui", "campaign", campaign)
 	close_sound = ""
