@@ -5,6 +5,9 @@
 ## Everything is the art kit's (`kit` fields on the objects, drawn by scripts/town/town_world.gd from assets/data/town_art.json through scripts/town/town_art.gd). Rooms are small (a living
 ## room of 4 x 2, a bathroom of 2 x 2), so a recipe lists where each thing may go, in order of liking, and the first spot that does not shut a door or cut the floor in two takes it
 ## (`put` says no, and the next spot is tried). Everything stands with its back to a wall (`kitify` turns it); only what faces south, or is the same from all sides, can be searched.
+## CLEARANCE (the bathroom bug: "I get stuck around the toilet"): the floor of every ROOM stays one piece of free tiles that a body can walk all over without going out (`room_stays_clear`,
+## which `put` asks for every solid thing it sets; small rooms also keep a share of the floor free), so no door opens on a pocket and no bed, sofa or loveseat is set across a narrow room
+## from wall to wall; and `solid` is the art's own (assets/data/town_art.json). `BuildingGen._unblock` is the net under it for what the canvas's own ops lay (the shops' shelves).
 extends RefCounted
 
 const SiteGen := preload("res://scripts/raid/site_gen.gd")
@@ -14,16 +17,18 @@ const TownArt := preload("res://scripts/town/town_art.gd")
 ## `kit` the item, `container` the kind the sim knows it by (the kit's item id, so that the picture of a searched one is the kit's `opened`), `orient` for the things drawn along an axis.
 static var _town_lay := {}
 ## kind, folder of the picture, footprint w, h, layer (1 decal, 2 low, 4 tall), solid, the container kind
+## (`solid` is the art's own, assets/data/town_art.json: a chair, a toolbox, a laundry basket and a wall cabinet are not solid there, "the dead and the people can walk over it", and they
+## are not here either: they used to shut a tile of a small room and made pockets of it.)
 const KIT_PROPS := [
 	["fridge", "furniture", 1, 1, 2, true, "fridge"], ["kitchen_counter", "furniture", 1, 1, 2, true, "kitchen_counter"], ["kitchen_sink", "furniture", 1, 1, 2, true, ""],
 	["stove", "furniture", 1, 1, 2, true, ""], ["cupboard", "furniture", 1, 1, 2, true, "cupboard"], ["wardrobe", "furniture", 2, 1, 2, true, "wardrobe"],
 	["dresser", "furniture", 2, 1, 2, true, "dresser"], ["nightstand", "furniture", 1, 1, 2, true, "nightstand"], ["bed_single", "furniture", 1, 2, 2, true, ""],
 	["bed_double", "furniture", 2, 2, 2, true, ""], ["sofa", "furniture", 3, 1, 2, true, ""], ["loveseat", "furniture", 2, 1, 2, true, ""], ["armchair", "furniture", 1, 1, 2, true, ""],
-	["tv_stand", "furniture", 2, 1, 2, true, ""], ["coffee_table", "furniture", 2, 1, 2, true, ""], ["dining_table", "furniture", 2, 1, 2, true, ""], ["chair", "furniture", 1, 1, 2, true, ""],
+	["tv_stand", "furniture", 2, 1, 2, true, ""], ["coffee_table", "furniture", 2, 1, 2, true, ""], ["dining_table", "furniture", 2, 1, 2, true, ""], ["chair", "furniture", 1, 1, 2, false, ""],
 	["bookshelf", "furniture", 2, 1, 2, true, "bookshelf"], ["desk", "furniture", 2, 1, 2, true, "desk"], ["toilet", "furniture", 1, 1, 2, true, ""],
-	["bathtub", "furniture", 2, 1, 2, true, ""], ["washbasin", "furniture", 1, 1, 2, true, ""], ["medicine_cabinet", "furniture", 1, 1, 2, true, "medicine_cabinet"],
-	["toolbox", "furniture", 1, 1, 2, true, "toolbox"], ["workbench", "furniture", 2, 1, 2, true, "workbench"], ["box", "furniture", 1, 1, 2, true, "box"],
-	["crate", "furniture", 1, 1, 2, true, "crate"], ["laundry_basket", "furniture", 1, 1, 2, true, ""], ["shelf_tins", "furniture", 2, 1, 2, true, "shelf_tins"],
+	["bathtub", "furniture", 2, 1, 2, true, ""], ["washbasin", "furniture", 1, 1, 2, true, ""], ["medicine_cabinet", "furniture", 1, 1, 2, false, "medicine_cabinet"],
+	["toolbox", "furniture", 1, 1, 2, false, "toolbox"], ["workbench", "furniture", 2, 1, 2, true, "workbench"], ["box", "furniture", 1, 1, 2, true, "box"],
+	["crate", "furniture", 1, 1, 2, true, "crate"], ["laundry_basket", "furniture", 1, 1, 2, false, ""], ["shelf_tins", "furniture", 2, 1, 2, true, "shelf_tins"],
 	["lamp_floor", "furniture", 1, 1, 2, false, ""],
 	["rug_rect", "furniture", 3, 2, 1, false, ""], ["rug_round", "furniture", 2, 2, 1, false, ""], ["papers", "furniture", 1, 1, 1, false, ""],
 	["broken_glass", "furniture", 1, 1, 1, false, ""], ["blood_stain", "furniture", 1, 1, 1, false, ""], ["dropped_bag", "furniture", 1, 1, 1, false, ""],
@@ -129,6 +134,9 @@ func put(cv, kind: String, tx: int, ty: int, container: bool = false, keep: bool
 	var loose: bool = info[3]
 	var sol: PackedByteArray = cv.solid
 	var terr: PackedInt32Array = cv.terrain
+	# (a thing of the yard, `keep`, is not put on the floor of a room: a bush in a bedroom was a pocket of its own)
+	if keep and room_at(cv, tx, ty).size.x > 0:
+		return false
 	if solid_item and not loose:
 		for yy in range(ty, ty + fh):
 			for xx in range(tx, tx + fw):
@@ -151,10 +159,117 @@ func put(cv, kind: String, tx: int, ty: int, container: bool = false, keep: bool
 					return false
 		if not loose and not safe(cv, tx, ty, fw, fh):
 			return false
+		if not loose and not room_stays_clear(cv, Rect2i(tx, ty, fw, fh)):
+			return false
 	var opts := {"force": true}
 	if container:
 		opts["container"] = true
 	return cv._put(kind, tx, ty, opts) != null
+
+
+# ------------------------------------------------------------------ clearance --
+
+## The floor of a room is one piece of free tiles, and a body (the avatar's box is 0.6 wide: it goes wherever a tile goes, four ways, never across a corner) can walk from any of them to
+## any other without leaving the room. `safe` only asks that the town stays joined as a whole, which a pocket survives: a toilet and a basin on both sides of the tile behind a door,
+## a bed or a loveseat across a narrow room from wall to wall, left one door on each side of a barrier, and whoever came in by one of them was shut in the half it opened on.
+## Small rooms (up to 12 tiles) also keep a share of their floor free (`free_needed`).
+const FREE_SHARE := 0.35
+const SMALL_ROOM := 12
+
+
+## The floor rectangle of the indoor room that holds the tile (tx, ty), or an empty rectangle (a yard, a street, a wall).
+func room_at(cv, tx: int, ty: int) -> Rect2i:
+	var p := Vector2i(tx, ty)
+	for a in cv.areas:
+		if bool(a.get("indoor", false)):
+			var rr: Rect2i = a.rect
+			if rr.has_point(p):
+				return rr
+	return Rect2i()
+
+
+## How many tiles of a room of this size must stay free.
+static func free_needed(floor_tiles: int) -> int:
+	if floor_tiles > SMALL_ROOM:
+		return 1
+	return maxi(2, ceili(FREE_SHARE * float(floor_tiles)))
+
+
+## How the free floor of a room lies, with the tiles of `extra` counted as shut: {"free": tiles, "reached": the tiles of the piece the first one is in}. A room is clear when
+## the two are the same number and `free_needed` is met.
+func room_floor(cv, rr: Rect2i, extra: Rect2i = Rect2i()) -> Dictionary:
+	var W: int = cv.W
+	var sol: PackedByteArray = cv.solid
+	var rw := rr.size.x
+	var rh := rr.size.y
+	var open := PackedByteArray()
+	open.resize(rw * rh)
+	var free := 0
+	var first := -1
+	for yy in rh:
+		for xx in rw:
+			var tx := rr.position.x + xx
+			var ty := rr.position.y + yy
+			if sol[ty * W + tx] == 0 and not extra.has_point(Vector2i(tx, ty)):
+				open[yy * rw + xx] = 1
+				free += 1
+				if first < 0:
+					first = yy * rw + xx
+	if first < 0:
+		return {"free": 0, "reached": 0}
+	var queue := PackedInt32Array()
+	queue.append(first)
+	open[first] = 2
+	var head := 0
+	while head < queue.size():
+		var c := queue[head]
+		head += 1
+		@warning_ignore("integer_division")
+		var cy := c / rw
+		var cx := c - cy * rw
+		if cx > 0 and open[c - 1] == 1:
+			open[c - 1] = 2
+			queue.append(c - 1)
+		if cx < rw - 1 and open[c + 1] == 1:
+			open[c + 1] = 2
+			queue.append(c + 1)
+		if cy > 0 and open[c - rw] == 1:
+			open[c - rw] = 2
+			queue.append(c - rw)
+		if cy < rh - 1 and open[c + rw] == 1:
+			open[c + rw] = 2
+			queue.append(c + rw)
+	return {"free": free, "reached": queue.size()}
+
+
+## Whether shutting a footprint leaves its room clear (a footprint that is not in a room is not this rule's business).
+func room_stays_clear(cv, fp: Rect2i) -> bool:
+	var rr := room_at(cv, fp.position.x, fp.position.y)
+	if rr.size.x <= 0:
+		return true
+	var f := room_floor(cv, rr, fp)
+	return int(f.free) >= free_needed(rr.size.x * rr.size.y) and int(f.reached) == int(f.free)
+
+
+## Whether a room's floor is clear as it stands.
+func room_is_clear(cv, rr: Rect2i) -> bool:
+	var f := room_floor(cv, rr)
+	return int(f.free) >= free_needed(rr.size.x * rr.size.y) and int(f.reached) == int(f.free)
+
+
+## The tiles just inside a room where its doors open (a doorway cell of the ring and the floor tile next to it).
+func door_tiles(cv, rr: Rect2i) -> Array:
+	var out: Array = []
+	var W: int = cv.W
+	for yy in range(rr.position.y - 1, rr.end.y + 1):
+		for xx in range(rr.position.x - 1, rr.end.x + 1):
+			if not cv._in(xx, yy) or cv.terrain[yy * W + xx] != door_t:
+				continue
+			for dv in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var q: Vector2i = Vector2i(xx, yy) + dv
+				if rr.has_point(q) and not out.has(q):
+					out.append(q)
+	return out
 
 
 ## Whether shutting a footprint leaves the open tiles round it joined. First the cheap proof: if the open tiles of the ring round it are one run, nothing can be cut off; else if they are
@@ -517,24 +632,64 @@ func kitchen(cv, rng: RandomNumberGenerator, r: Rect2i, table: bool) -> void:
 			put(cv, "chair", r.position.x + 3, ty)
 
 
+## A bathroom: the fittings stand along ONE wall, the north or the south row, whichever has fewer doors in it, each on the spot farthest from the doors (the tub, two long, takes a corner
+## of it); the other row is the lane from the doors, and the wall cabinet and the basket (walkable, as in the art) stand on it. A room of 3 x 3 and more has a tub, a smaller one a toilet and
+## a basin and no more. `put` keeps the floor in one piece, so a fitting that would shut a door's pocket in, or leave a one tile gap between two of them that leads nowhere, is not set.
 func bathroom(cv, rng: RandomNumberGenerator, r: Rect2i) -> void:
 	var x := r.position.x
 	var y := r.position.y
 	var w := r.size.x
 	var h := r.size.y
-	var rev := rng.randf() < 0.5
-	if w >= 3 and h >= 3:
-		var n := line(cv, y, x, r.end.x, [["bathtub", false], ["toilet", false]], rev)
-		if n < 2:
-			line(cv, r.end.y - 1, x, r.end.x, [["bathtub", false], ["toilet", false]].slice(n), rev)
-		try_spots(cv, "washbasin", [Vector2i(x + w - 1, y + 1), Vector2i(x, y + 1), Vector2i(x + w - 1, y + h - 1), Vector2i(x, y + h - 1)])
-		try_spots(cv, "medicine_cabinet", [Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1)], true)
-	elif w >= 2:
-		var n := line(cv, y, x, r.end.x, [["toilet", false], ["washbasin", false]], rev)
-		if n < 2:
-			line(cv, r.end.y - 1, x, r.end.x, [["toilet", false], ["washbasin", false]].slice(n), rev)
-		if h >= 2 and rng.randf() < 0.5:
-			try_spots(cv, "laundry_basket", [Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1), Vector2i(x, y)])
+	if w < 2 or h < 2:
+		return
+	var doors := door_tiles(cv, r)
+	var north := 0
+	var south := 0
+	for d in doors:
+		if d.y == y:
+			north += 1
+		if d.y == r.end.y - 1:
+			south += 1
+	var row_y := y if (north < south or (north == south and rng.randf() < 0.5)) else r.end.y - 1
+	var lane_y := r.end.y - 1 if row_y == y else y
+	var fittings: Array = ["bathtub", "toilet", "washbasin"] if (w >= 3 and h >= 3) else ["toilet", "washbasin"]
+	for kind in fittings:
+		var fw: int = cv.tiles_of(kind).x
+		if not try_spots(cv, kind, _far_from(_row_spots(x, w, row_y, fw), doors, rng)):
+			try_spots(cv, kind, _far_from(_row_spots(x, w, lane_y, fw), doors, rng))
+	# the wall cabinet and the basket are not solid (they are walkable in the art), so they must not share a tile
+	var taken: Array = []
+	for sp in _far_from(_row_spots(x, w, lane_y, 1) + _row_spots(x, w, row_y, 1), doors, rng):
+		if cv.solid[int(sp.y) * cv.W + int(sp.x)] == 0 and put(cv, "medicine_cabinet", int(sp.x), int(sp.y), true):
+			taken.append(sp)
+			break
+	if rng.randf() < 0.5:
+		for sp in _far_from(_row_spots(x, w, lane_y, 1), doors, rng):
+			if not taken.has(sp) and put(cv, "laundry_basket", int(sp.x), int(sp.y)):
+				break
+
+
+## The top left spots along a row `y` from `x` for `w` tiles for a footprint `fw` wide.
+func _row_spots(x: int, w: int, y: int, fw: int) -> Array:
+	var out: Array = []
+	for sx in range(x, x + w - fw + 1):
+		out.append(Vector2i(sx, y))
+	return out
+
+
+## `spots` with the one farthest from the given tiles (the doors' inside tiles) first, a little at random among those about as far.
+func _far_from(spots: Array, from: Array, rng: RandomNumberGenerator) -> Array:
+	var keyed: Array = []
+	for sp in spots:
+		var d := 99
+		for f in from:
+			d = mini(d, absi(int(sp.x) - int(f.x)) + absi(int(sp.y) - int(f.y)))
+		keyed.append([float(d) + rng.randf() * 0.5, sp])
+	keyed.sort_custom(func(a, b): return float(a[0]) > float(b[0]))
+	var out: Array = []
+	for k in keyed:
+		out.append(k[1])
+	return out
 
 
 func bedroom(cv, rng: RandomNumberGenerator, r: Rect2i, _start: bool) -> void:
