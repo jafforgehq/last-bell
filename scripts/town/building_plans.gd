@@ -5,6 +5,12 @@
 ## "margin": the yard to the sides of it, "fy": the front yard's depth, "landmark": ""|"bell_tower", "garage": 1 when a part is a garage}.
 extends RefCounted
 
+## The start house (ROOMY HOUSES): the outer walls of a family home of eight rooms round a hall, and the least lot it will stand in (its box and two tiles of ground to each side, three in
+## front and three behind). The layout's START_W and START_DEPTH are these.
+const START_BOX := Vector2i(22, 16)
+const START_MIN_W := 26
+const START_MIN_DEPTH := 22
+
 
 static func _r(rng: RandomNumberGenerator, pair: Array) -> int:
 	return rng.randi_range(int(pair[0]), int(pair[1]))
@@ -28,28 +34,29 @@ static func _rect_plan(kind: String, avail_w: int, depth: int, rng: RandomNumber
 
 
 ## The plan of a building of `kind` that fits `avail_w` tiles of a row and `depth` of its depth, or {} when it does not fit. BIGGER HOUSES: "start" is the start house, a FAMILY HOME of
-## 18 x 14 (eight rooms round a central hall) in a lot of 24 x 21 with three tiles to spare on every side; "family" is the same kind of home at 16 to 19 x 13 to 14; the detached houses
-## ("medium", "small", the bungalow with its garage, the L, T, U and two wing houses) are 11 to 14 wide and 9 to 10 deep and up; the "cottage" is the one tiny house left (a few percent of
-## the town) and is never a rescue house or the start.
+## 22 x 16 (eight rooms round a central hall) in a lot of 28 x 23 with three tiles to spare on every side; "family" is the same kind of home at 20 to 22 x 15 to 16; the detached houses
+## ("medium", "small", the bungalow with its garage, the L, T, U and two wing houses) are 12 to 16 wide and 10 to 11 deep and up; the "cottage" is the one tiny house left (a few percent of
+## the town) and is never a rescue house or the start. ROOMY HOUSES (the owner: "I can barely move inside"): the rooms of a home are 4 x 4 and more (the living room 5 x 5, the kitchen
+## 5 x 4: `WANT`), the halls and the doors between them two wide, and the furniture keeps a lane (scripts/town/town_kit.gd); the footprints above are what that takes.
 static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
 	match kind:
 		"start":
-			if avail_w < 22 or depth < 20:
+			if avail_w < START_MIN_W or depth < START_MIN_DEPTH:
 				return {}
 			# (three tiles of ground to each side and four in front where the block has the room, two and three where it has not)
-			return {"kind": kind, "box": Vector2i(18, 14), "parts": [Rect2i(0, 0, 18, 14)], "margin": mini(3, (avail_w - 18) / 2), "fy": 4 if depth >= 21 else 3}
+			return {"kind": kind, "box": START_BOX, "parts": [Rect2i(0, 0, START_BOX.x, START_BOX.y)], "margin": mini(3, (avail_w - START_BOX.x) / 2), "fy": 4 if depth >= START_BOX.y + 7 else 3}
 		"family":
-			return _rect_plan(kind, avail_w, depth, rng, [16, 19], [13, 14], [1, 3], [2, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [20, 22], [15, 16], [1, 3], [2, 3])
 		"small":
-			return _rect_plan(kind, avail_w, depth, rng, [11, 12], [9, 9], [1, 3], [1, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [10, 10], [1, 3], [1, 3])
 		"medium":
-			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [9, 10], [1, 3], [1, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [14, 16], [10, 11], [1, 3], [1, 3])
 		"terrace":
-			return _rect_plan(kind, avail_w, depth, rng, [7, 7], [9, 11], [0, 0], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [8, 9], [9, 11], [0, 0], [1, 2])
 		"cottage":
-			return _rect_plan(kind, avail_w, depth, rng, [7, 7], [6, 7], [1, 2], [1, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [8, 8], [7, 8], [1, 2], [1, 3])
 		"rowshop":
-			return _rect_plan(kind, avail_w, depth, rng, [8, 10], [9, 11], [0, 0], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [9, 11], [9, 12], [0, 0], [1, 2])
 		"shed":
 			return {"kind": kind, "box": Vector2i(7, 5), "parts": [Rect2i(0, 0, 7, 5)], "margin": 0, "fy": 0}
 		"shed_lot":
@@ -58,33 +65,33 @@ static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenera
 		"kiosk":
 			return _rect_plan(kind, avail_w, depth, rng, [7, 8], [5, 6], [0, 1], [1, 1])
 		"cornershop":
-			return _rect_plan(kind, avail_w, depth, rng, [10, 12], [9, 11], [0, 1], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [11, 13], [9, 12], [0, 1], [1, 2])
 		"shop":
-			return _rect_plan(kind, avail_w, depth, rng, [11, 14], [9, 12], [0, 2], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [12, 15], [9, 13], [0, 2], [1, 2])
 		"pharmacy":
-			return _rect_plan(kind, avail_w, depth, rng, [11, 13], [9, 11], [0, 1], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [9, 12], [0, 1], [1, 2])
 		"bakery":
-			return _rect_plan(kind, avail_w, depth, rng, [10, 12], [9, 11], [0, 1], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [11, 13], [9, 12], [0, 1], [1, 2])
 		"hardware":
-			return _rect_plan(kind, avail_w, depth, rng, [12, 15], [10, 12], [0, 2], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [13, 16], [10, 13], [0, 2], [1, 2])
 		"diner":
-			return _rect_plan(kind, avail_w, depth, rng, [13, 16], [9, 11], [0, 2], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [14, 17], [9, 12], [0, 2], [1, 2])
 		"bank":
-			return _rect_plan(kind, avail_w, depth, rng, [11, 13], [9, 11], [0, 1], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [9, 12], [0, 1], [1, 2])
 		"office":
-			return _rect_plan(kind, avail_w, depth, rng, [11, 14], [9, 12], [0, 2], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [12, 15], [9, 13], [0, 2], [1, 2])
 		"apartments":
-			return _rect_plan(kind, avail_w, depth, rng, [18, 22], [12, 14], [0, 2], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [20, 24], [12, 15], [0, 2], [1, 2])
 		"supermarket":
 			return _rect_plan(kind, avail_w, depth, rng, [16, 19], [10, 11], [3, 6], [7, 8])
 		"library":
-			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [9, 10], [2, 4], [2, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [13, 15], [9, 11], [2, 4], [2, 3])
 		"clinic":
-			return _rect_plan(kind, avail_w, depth, rng, [14, 16], [10, 11], [2, 4], [2, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [15, 17], [10, 12], [2, 4], [2, 3])
 		"fire_station":
-			return _rect_plan(kind, avail_w, depth, rng, [14, 16], [10, 11], [2, 4], [3, 4])
+			return _rect_plan(kind, avail_w, depth, rng, [15, 17], [10, 12], [2, 4], [3, 4])
 		"police":
-			return _rect_plan(kind, avail_w, depth, rng, [12, 14], [9, 10], [2, 4], [2, 3])
+			return _rect_plan(kind, avail_w, depth, rng, [13, 15], [9, 11], [2, 4], [2, 3])
 		"warehouse":
 			return _rect_plan(kind, avail_w, depth, rng, [17, 22], [11, 13], [2, 4], [2, 4])
 		"garage":
@@ -103,9 +110,9 @@ static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenera
 				var l := _plan_l(kind, avail_w, depth, rng, [12, 14], [7, 8], [8, 9], [7, 8], [2, 4], [1, 2])
 				if not l.is_empty():
 					return l
-			return _rect_plan(kind, avail_w, depth, rng, [13, 15], [7, 8], [2, 4], [1, 2])
+			return _rect_plan(kind, avail_w, depth, rng, [14, 17], [7, 8], [2, 4], [1, 2])
 		"lhouse":
-			return _plan_l(kind, avail_w, depth, rng, [14, 16], [8, 8], [9, 10], [8, 9], [2, 4], [1, 3])
+			return _plan_l(kind, avail_w, depth, rng, [18, 20], [9, 10], [11, 12], [9, 10], [2, 4], [1, 3])
 		"thouse":
 			return _plan_t(kind, avail_w, depth, rng)
 		"uhouse":
@@ -148,19 +155,19 @@ static func _plan_l(kind: String, avail_w: int, depth: int, rng: RandomNumberGen
 
 
 static func _plan_t(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
-	var w1 := _r(rng, [16, 18])
-	var h1 := _r(rng, [7, 8])
-	var w2 := _r(rng, [8, 9])
-	var h2 := _r(rng, [7, 8])
+	var w1 := _r(rng, [18, 20])
+	var h1 := _r(rng, [8, 9])
+	var w2 := _r(rng, [10, 11])
+	var h2 := _r(rng, [8, 9])
 	var fy := _r(rng, [1, 3])
 	if w1 > avail_w:
 		w1 = avail_w
-	if w1 < 16:
+	if w1 < 18:
 		return {}
 	while h1 + h2 - 1 + fy + 1 > depth:
-		if h2 > 7:
+		if h2 > 8:
 			h2 -= 1
-		elif h1 > 7:
+		elif h1 > 8:
 			h1 -= 1
 		elif fy > 1:
 			fy -= 1
@@ -171,23 +178,23 @@ static func _plan_t(kind: String, avail_w: int, depth: int, rng: RandomNumberGen
 
 
 static func _plan_u(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
-	var w := _r(rng, [18, 20])
-	var h := _r(rng, [13, 14])
+	var w := _r(rng, [20, 22])
+	var h := _r(rng, [14, 15])
 	var fy := _r(rng, [1, 2])
 	if w > avail_w:
 		w = avail_w
-	if w < 18 or h + fy + 2 > depth:
+	if w < 20 or h + fy + 2 > depth:
 		return {}
-	var hb := 7
-	var ws := 6
+	var hb := 8
+	var ws := 7
 	return {"kind": kind, "box": Vector2i(w, h), "parts": [Rect2i(0, h - hb, w, hb), Rect2i(0, 0, ws, h - hb + 1), Rect2i(w - ws, 0, ws, h - hb + 1)], "margin": _r(rng, [2, 3]), "fy": fy}
 
 
 static func _plan_two(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
-	var w1 := _r(rng, [10, 12])
-	var h1 := _r(rng, [8, 9])
-	var w2 := _r(rng, [9, 10])
-	var h2 := _r(rng, [8, 9])
+	var w1 := _r(rng, [12, 14])
+	var h1 := _r(rng, [9, 10])
+	var w2 := _r(rng, [11, 12])
+	var h2 := _r(rng, [9, 10])
 	var fy := _r(rng, [1, 3])
 	if w1 + w2 - 1 > avail_w:
 		return {}
@@ -195,7 +202,7 @@ static func _plan_two(kind: String, avail_w: int, depth: int, rng: RandomNumberG
 	while maxi(h1, dy + h2) + fy + 1 > depth:
 		if dy > 0:
 			dy -= 1
-		elif h2 > 8:
+		elif h2 > 9:
 			h2 -= 1
 		elif fy > 1:
 			fy -= 1
@@ -208,10 +215,10 @@ static func _plan_two(kind: String, avail_w: int, depth: int, rng: RandomNumberG
 
 
 static func _plan_bungalow(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
-	var w1 := _r(rng, [11, 13])
-	var h1 := _r(rng, [9, 9])
-	var gw := 6
-	var gh := 6
+	var w1 := _r(rng, [14, 16])
+	var h1 := _r(rng, [11, 11])
+	var gw := 7
+	var gh := 7
 	var fy := _r(rng, [1, 3])
 	if w1 + gw - 1 > avail_w or h1 + fy + 1 > depth:
 		return {}
@@ -225,12 +232,12 @@ static func _plan_bungalow(kind: String, avail_w: int, depth: int, rng: RandomNu
 
 
 static func _plan_terrace_ext(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
-	var w := 7
+	var w := 9
 	var h1 := _r(rng, [8, 9])
 	var fy := 1
-	if w > avail_w or h1 + 3 + fy + 1 > depth:
-		return _rect_plan("terrace", avail_w, depth, rng, [7, 7], [9, 11], [0, 0], [1, 2])
-	return {"kind": kind, "box": Vector2i(w, h1 + 3), "parts": [Rect2i(0, 0, w, h1), Rect2i(1, h1 - 1, 4, 4)], "margin": 0, "fy": fy}
+	if w > avail_w or h1 + 4 + fy + 1 > depth:
+		return _rect_plan("terrace", avail_w, depth, rng, [8, 9], [10, 11], [0, 0], [1, 2])
+	return {"kind": kind, "box": Vector2i(w, h1 + 4), "parts": [Rect2i(0, 0, w, h1), Rect2i(1, h1 - 1, 6, 5)], "margin": 0, "fy": fy}
 
 
 static func _plan_church(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
@@ -273,10 +280,34 @@ const ROOMY := ["start", "family", "medium", "small", "bungalow", "lhouse", "tho
 const RESCUE_KINDS := ["family", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "medium", "farmhouse"]
 ## Which wing of a house a room belongs in: the day rooms on one side of the hall, the night ones on the other.
 const NIGHT_ROOMS := ["bedroom", "bathroom", "nursery"]
+## ROOMY HOUSES: what a room of a home wants of its floor before the furniture goes in, [the shortest side, the area in tiles] (a living room of 8 x 5 or 6 x 5, a kitchen of 6 x 4 or 5 x 5, a
+## bedroom of 4 x 4 or more, a bathroom of 3 x 3); the layout (`BuildingGen._pack`) cuts a part so that every room of its program gets this, and drops the last rooms of the program when the
+## floor holds no more. A room that is not here wants 3 x 3.
+const WANT := {
+	"living room": [5, 30], "front room": [3, 12], "kitchen": [4, 24], "dining room": [4, 16], "study": [4, 16], "bedroom": [4, 16], "nursery": [3, 12], "bathroom": [3, 9],
+	"utility": [3, 18], "garage": [4, 20], "pantry": [3, 9],
+}
+## The same for the homes that are not the family home (the start house's kind): a bungalow of 15 x 11, a small house of 12 x 10, the wings of an L or a T hold the rooms of their program only at
+## this size (a living room of 5 x 4, a bedroom of 4 x 3): bigger than they were (3 x 3 and a share), and every room of the program is kept.
+const WANT_TIGHT := {
+	"living room": [4, 20], "front room": [3, 12], "kitchen": [3, 15], "dining room": [3, 12], "study": [3, 12], "bedroom": [3, 12], "nursery": [3, 12], "bathroom": [3, 9],
+	"utility": [3, 12], "garage": [4, 20], "pantry": [3, 9],
+}
+
+
+## [the shortest side, the area] a room wants of its floor: `tier` 0 for the family home, 1 for the other homes.
+static func want(room_name: String, tier: int = 0) -> Vector2i:
+	var w: Array = (WANT if tier == 0 else WANT_TIGHT).get(room_name, [3, 9])
+	return Vector2i(int(w[0]), int(w[1]))
 
 
 static func is_roomy(kind: String) -> bool:
 	return ROOMY.has(kind)
+
+
+## The kinds whose rooms are furnished along the walls with a lane kept (`TownKit.strict`): the roomy homes and the small ones, the terrace, its extension and the cottage.
+static func is_homely(kind: String) -> bool:
+	return ROOMY.has(kind) or kind in ["terrace", "terrace_ext", "cottage"]
 
 
 ## A room of a program: name, the share of the floor, the floor, flags ("e" the front door opens into it, "f" it wants the front of its part, "b" the back).
@@ -284,8 +315,18 @@ static func it(name: String, share: float, floor_name: String, flags: String = "
 	return {"name": name, "share": share, "floor": floor_name, "entry": "e" in flags, "pref": -1 if "f" in flags else (1 if "b" in flags else 0)}
 
 
-## The rooms of a kind, one list for each part (in the order of the plan's parts); the first of a list is the first to be kept when the part is too small for them all.
+## The rooms of a kind, one list for each part (in the order of the plan's parts); the first of a list is the first to be kept when the part is too small for them all. The rooms of every home but
+## the family home want the smaller floor (`WANT_TIGHT`, "t": 1).
 static func programs(kind: String, rng: RandomNumberGenerator) -> Array:
+	var out: Array = _programs(kind, rng)
+	if kind != "start" and kind != "family":
+		for part in out:
+			for o in part:
+				o["t"] = 1
+	return out
+
+
+static func _programs(kind: String, rng: RandomNumberGenerator) -> Array:
 	match kind:
 		"start":
 			# the family home of the start: a hall down the middle, the day rooms on one side of it (the living room at the front, the kitchen, the utility room where the bench goes) and the
@@ -298,15 +339,17 @@ static func programs(kind: String, rng: RandomNumberGenerator) -> Array:
 			return [[it("hall", 2.0, "WOOD", "e"), it("living room", 3.4, "WOOD", "f"), it("kitchen", 2.4, "KITCHEN", "b"), it("bedroom", 2.6, "WOOD", "b"), it("bedroom", 2.4, "WOOD", "b"),
 				it("bathroom", 1.2, "KITCHEN", "b"), third[first], it("bedroom", 2.2, "WOOD", "b"), third[(first + 1) % 3]]]
 		"medium":
+			# (the rooms in the order they are kept when the floor holds no more: the dining room or the study is the first to go)
 			var m: Array = [it("living room", 3.0, "WOOD", "ef"), it("kitchen", 2.0, "KITCHEN", "b"), it("bedroom", 2.4, "WOOD", "b"), it("bathroom", 1.1, "KITCHEN", "b"), it("bedroom", 2.2, "WOOD", "b")]
-			m.insert(2, it("dining room", 1.6, "WOOD") if rng.randf() < 0.5 else it("study", 1.4, "WOOD"))
+			m.append(it("dining room", 1.6, "WOOD") if rng.randf() < 0.5 else it("study", 1.4, "WOOD"))
 			return [m]
 		"small":
 			var l := [it("living room", 3.0, "WOOD", "ef"), it("bedroom", 2.2, "WOOD", "b"), it("bathroom", 1.0, "KITCHEN", "b"), it("bedroom", 2.0, "WOOD", "b")]
 			l.insert(1, it("kitchen", 1.8, "KITCHEN", "b"))
 			return [l]
 		"bungalow":
-			return [[it("hall", 2.0, "WOOD", "e"), it("living room", 3.2, "WOOD", "f"), it("kitchen", 2.2, "KITCHEN", "b"), it("bedroom", 2.4, "WOOD", "b"), it("bathroom", 1.1, "KITCHEN", "b"), it("bedroom", 2.2, "WOOD", "b"),
+			# (ROOMY HOUSES: no hall, a bungalow is 14 to 16 wide and 11 deep and the living room is where the front door opens; the garage is the other part, 7 x 7)
+			return [[it("living room", 3.2, "WOOD", "ef"), it("kitchen", 2.2, "KITCHEN", "b"), it("bedroom", 2.4, "WOOD", "b"), it("bathroom", 1.1, "KITCHEN", "b"), it("bedroom", 2.2, "WOOD", "b"),
 				it("dining room", 1.6, "WOOD", "b")], [it("garage", 1.0, "CONCRETE", "ef")]]
 		"lhouse":
 			return [[it("living room", 3.0, "WOOD", "ef"), it("kitchen", 2.2, "KITCHEN"), it("dining room", 1.8, "WOOD")], [it("bedroom", 2.4, "WOOD"), it("bedroom", 2.4, "WOOD"), it("bathroom", 1.1, "KITCHEN"), it("study", 1.4, "WOOD")]]

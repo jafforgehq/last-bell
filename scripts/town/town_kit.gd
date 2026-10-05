@@ -61,6 +61,10 @@ const FLOOR_OF := {
 
 var tids := {}
 var kit_info := {}
+## ROOMY HOUSES: whether the building being furnished is a home (set by BuildingGen for each building): see `ROOMY_FREE`.
+var strict := false
+var _lane_cv = null
+var _lane_cache := {}
 var door_t := 23
 var _ring := PackedByteArray()
 var _seen := PackedByteArray()
@@ -178,6 +182,10 @@ func put(cv, kind: String, tx: int, ty: int, container: bool = false, keep: bool
 const FREE_SHARE := 0.35
 ## (a room of up to 5 x 5 keeps its share of the floor free: the homes' rooms are 3 x 3 to 5 x 5)
 const SMALL_ROOM := 25
+## ROOMY HOUSES (the owner: "I can barely move inside"): in a home (`strict`) the furniture stands along the walls and keeps what a person needs to walk, turn and fight: the free floor of a
+## room is at least `ROOMY_FREE` of it by its size (so a third at the most is furniture, the bathroom's tub and basin and the bedroom's bed and wardrobe being what a small room has), and there is
+## always a LANE: a way two tiles wide (a 2 x 2 landing at every door and the floor joining them, `_lanes_ok`) from each of the room's doors to every other.
+const ROOMY_FREE := [[9, 0.5], [15, 0.62], [24, 0.68], [999, 0.72]]
 
 
 ## The floor rectangle of the indoor room that holds the tile (tx, ty), or an empty rectangle (a yard, a street, a wall).
@@ -196,6 +204,18 @@ static func free_needed(floor_tiles: int) -> int:
 	if floor_tiles > SMALL_ROOM:
 		return 1
 	return maxi(2, ceili(FREE_SHARE * float(floor_tiles)))
+
+
+## How many tiles of a room of this size must stay free in the kit's present mood: `free_needed` for a shop, a works, a public building; for a home (`strict`) the share of `ROOMY_FREE`.
+func need_for(floor_tiles: int) -> int:
+	if not strict:
+		return free_needed(floor_tiles)
+	var share := 0.72
+	for row in ROOMY_FREE:
+		if floor_tiles <= int(row[0]):
+			share = float(row[1])
+			break
+	return maxi(2, ceili(share * float(floor_tiles)))
 
 
 ## How the free floor of a room lies, with the tiles of `extra` counted as shut: {"free": tiles, "reached": the tiles of the piece the first one is in}. A room is clear when
@@ -251,13 +271,117 @@ func room_stays_clear(cv, fp: Rect2i) -> bool:
 	if rr.size.x <= 0:
 		return true
 	var f := room_floor(cv, rr, fp)
-	return int(f.free) >= free_needed(rr.size.x * rr.size.y) and int(f.reached) == int(f.free)
+	if int(f.free) < need_for(rr.size.x * rr.size.y) or int(f.reached) != int(f.free):
+		return false
+	if not strict:
+		return true
+	var info := _lane_info(cv, rr)
+	return not bool(info.on) or _lanes_ok(cv, rr, fp, info.doors)
 
 
 ## Whether a room's floor is clear as it stands.
 func room_is_clear(cv, rr: Rect2i) -> bool:
 	var f := room_floor(cv, rr)
-	return int(f.free) >= free_needed(rr.size.x * rr.size.y) and int(f.reached) == int(f.free)
+	if int(f.free) < need_for(rr.size.x * rr.size.y) or int(f.reached) != int(f.free):
+		return false
+	if not strict:
+		return true
+	var info := _lane_info(cv, rr)
+	return not bool(info.on) or _lanes_ok(cv, rr, Rect2i(), info.doors)
+
+
+## The doors of a room and whether its lanes are asked for at all (only when the empty room has them: a room whose doors are two tiles from a corner of a 3 x 3 floor has none to keep), for
+## the canvas being furnished.
+func _lane_info(cv, rr: Rect2i) -> Dictionary:
+	if _lane_cv != cv:
+		_lane_cv = cv
+		_lane_cache = {}
+	if _lane_cache.has(rr):
+		return _lane_cache[rr]
+	var info := {"doors": door_tiles(cv, rr), "on": false}
+	info.on = _lanes_ok(cv, rr, Rect2i(), info.doors)
+	_lane_cache[rr] = info
+	return info
+
+
+## Whether the free floor of a room (with the tiles of `extra` counted as shut) keeps a lane: every door has a free 2 x 2 block of floor at it, and the blocks of the doors are all in one piece
+## of the floor's free 2 x 2 blocks (two blocks are joined when they share a row or a column of two tiles, so that two bodies side by side can go all the way from one door to another).
+func _lanes_ok(cv, rr: Rect2i, extra: Rect2i, doors: Array) -> bool:
+	var rw := rr.size.x
+	var rh := rr.size.y
+	if rw < 2 or rh < 2 or doors.is_empty():
+		return true
+	var W: int = cv.W
+	var sol: PackedByteArray = cv.solid
+	var open := PackedByteArray()
+	open.resize(rw * rh)
+	for yy in rh:
+		var row := (rr.position.y + yy) * W + rr.position.x
+		for xx in rw:
+			if sol[row + xx] == 0 and not extra.has_point(Vector2i(rr.position.x + xx, rr.position.y + yy)):
+				open[yy * rw + xx] = 1
+	# the free 2 x 2 blocks, named by their top left tile: label 0 shut, then the pieces 1, 2...
+	var bw := rw - 1
+	var bh := rh - 1
+	var lab := PackedInt32Array()
+	lab.resize(bw * bh)
+	var pieces := 0
+	var stack := PackedInt32Array()
+	for by in bh:
+		for bx in bw:
+			var i := by * rw + bx
+			if open[i] == 0 or open[i + 1] == 0 or open[i + rw] == 0 or open[i + rw + 1] == 0:
+				lab[by * bw + bx] = -1
+	for by in bh:
+		for bx in bw:
+			if lab[by * bw + bx] != 0:
+				continue
+			pieces += 1
+			lab[by * bw + bx] = pieces
+			stack.clear()
+			stack.append(by * bw + bx)
+			while not stack.is_empty():
+				var c: int = stack[stack.size() - 1]
+				stack.resize(stack.size() - 1)
+				@warning_ignore("integer_division")
+				var cy := c / bw
+				var cx := c - cy * bw
+				if cx > 0 and lab[c - 1] == 0:
+					lab[c - 1] = pieces
+					stack.append(c - 1)
+				if cx < bw - 1 and lab[c + 1] == 0:
+					lab[c + 1] = pieces
+					stack.append(c + 1)
+				if cy > 0 and lab[c - bw] == 0:
+					lab[c - bw] = pieces
+					stack.append(c - bw)
+				if cy < bh - 1 and lab[c + bw] == 0:
+					lab[c + bw] = pieces
+					stack.append(c + bw)
+	if pieces == 0:
+		return false
+	# the pieces every door touches (the blocks that hold its tile)
+	var common := {}
+	var first := true
+	for d in doors:
+		var lx: int = int(d.x) - rr.position.x
+		var ly: int = int(d.y) - rr.position.y
+		var mine := {}
+		for by in range(maxi(0, ly - 1), mini(bh, ly + 1)):
+			for bx in range(maxi(0, lx - 1), mini(bw, lx + 1)):
+				var l: int = lab[by * bw + bx]
+				if l > 0:
+					mine[l] = true
+		if first:
+			common = mine
+			first = false
+		else:
+			for k in common.keys():
+				if not mine.has(k):
+					common.erase(k)
+		if common.is_empty():
+			return false
+	return true
 
 
 ## The tiles just inside a room where its doors open (a doorway cell of the ring and the floor tile next to it).
@@ -495,14 +619,23 @@ func furnish_room(cv, rng: RandomNumberGenerator, name: String, r: Rect2i, front
 				desk_with_chair(cv, x, x + w, y + h - 2, rng.randf() < 0.5)
 		"dining room":
 			if w >= 3 and h >= 3:
-				var ty := y + h / 2
-				var tx := x + (w - 2) / 2
-				if put(cv, "dining_table", tx, ty):
-					put(cv, "chair", tx - 1, ty)
-					put(cv, "chair", tx + 2, ty)
-					if h >= 5:
-						put(cv, "chair", tx, ty - 1)
-						put(cv, "chair", tx + 1, ty + 1)
+				# the table where it stands best: the nearest the middle of the floor that keeps the lanes (`put` says), else along a wall
+				var spots: Array = []
+				for ty in range(y + 1, y + h - 1):
+					for tx in range(x + 1, x + w - 2):
+						spots.append(Vector2i(tx, ty))
+				var mid := Vector2(float(x) + float(w) * 0.5 - 1.0, float(y) + float(h) * 0.5 - 0.5)
+				spots.sort_custom(func(a, b): return Vector2(a).distance_to(mid) < Vector2(b).distance_to(mid))
+				spots.append_array(_along(x, w - 1, y))
+				spots.append_array(_along(x, w - 1, y + h - 1))
+				for sp in spots:
+					if put(cv, "dining_table", sp.x, sp.y):
+						put(cv, "chair", sp.x - 1, sp.y)
+						put(cv, "chair", sp.x + 2, sp.y)
+						if h >= 5:
+							put(cv, "chair", sp.x, sp.y - 1)
+							put(cv, "chair", sp.x + 1, sp.y + 1)
+						break
 			try_spots(cv, "cupboard", _along(x, w, y), true)
 			if w >= 4 and rng.randf() < 0.6:
 				try_spots(cv, "cupboard", _along(x, w, y + h - 1), true)
@@ -783,6 +916,7 @@ func living(cv, rng: RandomNumberGenerator, r: Rect2i, kitchenette: bool, start:
 	var south_first := rng.randf() < 0.6 or kitchenette or start
 	var rows: Array = [r.end.y - 1, top] if south_first else [top, r.end.y - 1]
 	var seat_row := -1
+	var seat_x := x
 	for row in rows:
 		if row < top:
 			continue
@@ -792,8 +926,12 @@ func living(cv, rng: RandomNumberGenerator, r: Rect2i, kitchenette: bool, start:
 		if start:
 			spots.reverse()
 			spots = [spots[spots.size() - 1]]
-		if try_spots(cv, seat, spots):
-			seat_row = row
+		for sp in spots:
+			if put(cv, seat, sp.x, sp.y):
+				seat_row = row
+				seat_x = sp.x
+				break
+		if seat_row >= 0:
 			break
 	if seat_row < 0 and w >= 2 and not start:
 		# no room for the sofa between the doors: a loveseat
@@ -812,8 +950,10 @@ func living(cv, rng: RandomNumberGenerator, r: Rect2i, kitchenette: bool, start:
 			try_spots(cv, "bookshelf", spots, other == top)
 	if rh >= 3 and w >= 3:
 		try_spots(cv, "armchair", [Vector2i(x + w - 1, top + 1), Vector2i(x, top + 1)])
-	if rh >= 4 and w >= 3:
-		put(cv, "coffee_table", x + (w - 2) / 2, top + rh / 2)
+	# (ROOMY HOUSES: the low table stands before the sofa, not in the middle of the floor, and only where the room is big enough to walk round it)
+	if seat_row >= 0 and rh >= 5 and w >= 5:
+		var ty := seat_row - 1 if seat_row > top else seat_row + 1
+		try_spots(cv, "coffee_table", [Vector2i(seat_x + 1, ty), Vector2i(seat_x, ty)])
 	if rng.randf() < 0.55:
 		try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, top), Vector2i(x, top), Vector2i(x + w - 1, r.end.y - 1)])
 	# something to search in a living room too (a cupboard along a wall, where nothing in it can be)

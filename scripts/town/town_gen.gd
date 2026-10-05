@@ -41,7 +41,7 @@
 ##                 "big"|"small"|"none", "yard_tiles": int (the lot less the walls' footprint), "dist": float (tiles from the entry to the front door), "door": Vector2 (the tile outside the front
 ##                 door), "walk": int (the length in tiles of the way from the entry to that tile, 4 ways, the walkable ground), "problems": [] (what `BaseLayout.validate` says of the base made
 ##                 on it: only candidates with none stand), "ring": {"free", "blocked"} (the base's report of the lot's border)}. A town of 160 tiles or more has three: the family home (the start
-##                 lot: 8 rooms, 24 x 20 or more of lot, a clear ring), a house of the middle sort (4 to 6 rooms, 18 x 15 to 17) and a cottage (3 rooms, 14 x 13: no yard), 29 to 54 tiles from the
+##                 lot: 8 rooms, 28 x 22 or more of lot, a clear ring), a house of the middle sort (4 to 6 rooms, 22 x 15 to 17) and a cottage (3 rooms, 14 x 13: no yard), 29 to 54 tiles from the
 ##                 entry; the title's small town has the start house alone. Each has 3 to 5 dead standing in rooms of their own (2 or 3 in the cottage), its containers with loot, a lot ring free of
 ##                 trees, props, parked cars and marks; no dead in the streets or yards within 20 tiles of the entry or of any candidate
 ##   "rescue"      [{"house", "pos": Vector2 (where the survivor waits), "room", "ring": 1..3, "dist": from the start house}] 12 candidates, near to far: the list of the start house
@@ -59,8 +59,9 @@
 ##   "streets"     {"pitch": 32, "block": 28, "road": 4 (the old grid's numbers, kept), "names_x": [names of the north-south streets], "names_y": [names of the east-west ones], "roads", "avenue"}
 ##   "stats"       counts and the milliseconds each phase took
 ##
-##   House      {"id", "kind": "start"|"family"|"medium"|"small"|"terrace"|"shop"|... (the building program, see scripts/town/building_plans.gd; BIGGER HOUSES: the start house is a family home of
-##               18 x 14 with eight rooms round a hall, the family homes and the detached houses 11 to 19 wide with four to eight rooms, a town of about 105 houses), "address": "14 Elm Street", "block": Vector2i (x: the block's
+##   House      {"id", "kind": "start"|"family"|"medium"|"small"|"terrace"|"shop"|... (the building program, see scripts/town/building_plans.gd; BIGGER HOUSES, ROOMY HOUSES: the start house is a family home of
+##               22 x 16 with eight rooms round a two wide hall, the family homes 20 to 22 x 15 to 16, the detached houses 12 to 22 wide with four to eight rooms (a living room 5 x 4 to 8 x 5, a bedroom
+##               4 x 3 or 4 x 4 and more, doors two wide but a bathroom's, the furniture along the walls with a lane two tiles wide from door to door), a town of about 95 to 105 houses), "address": "14 Elm Street", "block": Vector2i (x: the block's
 ##               index), "rect": Rect2i (the bounding box of the outer walls), "parts": [Rect2i] (the rectangles of outer walls that make the footprint: one roof each),
 ##               "lot": Rect2i, "front": "N"|"S" (the side its front door is on), "fenced": bool, "door": Vector2i (the tile outside the front door),
 ##               "doors": [Door], "rooms": [room indexes], "containers": [container ids], "dead": [record indexes] (the ones that stand in it at the start)}
@@ -311,7 +312,7 @@ func _blocks_until(t0: int, budget_ms: float) -> void:
 			return
 
 
-## Builds lot `i` of the layout (a house, a shop, a yard...) and stamps it into the map. The start lot: a family home of 18 x 14 (eight rooms) in a lot of 22 to 24 x 20 to 24 with two or three tiles to spare to the sides, no fence, no tree, no prop, no
+## Builds lot `i` of the layout (a house, a shop, a yard...) and stamps it into the map. The start lot: a family home of 22 x 16 (eight rooms) in a lot of 28 x 22 to 24 with two or three tiles to spare to the sides, no fence, no tree, no prop, no
 ## mark on its border and the tile inside it (a ring of free ground: the perimeter of the base goes there).
 func _one_lot(i: int) -> void:
 	var t_lot := Time.get_ticks_usec()

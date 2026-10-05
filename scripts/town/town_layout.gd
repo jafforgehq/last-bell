@@ -18,8 +18,8 @@
 ##
 ## THE ARRIVAL (docs/superpowers/specs/2026-10-05-arrival-design.md; towns of 160 tiles and more, `arrival` is {} in a smaller one, which keeps the old start block). The way into the town is
 ## the end of the main avenue at its west or its east border (at random; the avenue is kept in the middle half of the town). The two blocks that stand beside the avenue at that end are made
-## by hand, a strip of 17 to 25 tiles deep each (`_arrival_side`: the strip, a street across the town behind it, the rest of the area cut as ever): on one side the best candidate (the start
-## lot: a family home in a lot of 24 x 20 or more with a clear ring) and on the other a house of the middle sort (a lot of 18 x 15 to 17) and a cottage (10 x 8 in a lot of 14 x 13, the rest of
+## by hand, a strip of 17 to 26 tiles deep each (`_arrival_side`: the strip, a street across the town behind it, the rest of the area cut as ever): on one side the best candidate (the start
+## lot: a family home in a lot of 28 x 22 or more with a clear ring) and on the other a house of the middle sort (a lot of 22 x 15 to 17) and a cottage (10 x 8 in a lot of 14 x 13, the rest of
 ## the strip's depth behind it a pocket of grass and trees), after a few ordinary lots (the base's spawn rule, scripts/town/base_layout.gd, wants a candidate's middle 36 tiles from the
 ## map's edge, so the first lots can be no candidate: that is why the third is 46 to 54 tiles from the entry). Their lots carry `tier` ("best" | "ok" | "poor") and `clear` (a bare yard
 ## and ring, like the start lot's). `arrival` = {"east": bool, "ay": the avenue's row, "road": Rect2i of the avenue's end, "pos": the tile the avatar stands on, "face": "E" | "W", "best":
@@ -43,17 +43,20 @@ const DMIN := {"suburb": 13, "oldtown": 10, "main": 10, "industrial": 12, "civic
 const NEED_DEPTH := {"church": 22, "school": 22, "supermarket": 19}
 ## The buildings (lots with one) a full town is topped up to (BIGGER HOUSES: houses are twice the size, so a town has about 115 of them, sheds of some lots counted as houses by the town).
 const WANT_BUILDINGS := 115
-## The start lot: the family home of 18 x 14 with three tiles of ground to each side, four in front and three behind. Its block must be this big inside its sidewalk.
-const START_W := 22
-const START_DEPTH := 20
+## The start lot: the family home of 22 x 16 (ROOMY HOUSES) with two or three tiles of ground to each side, three or four in front and three behind. Its block must be this big inside its sidewalk.
+const START_W := Plans.START_MIN_W
+const START_DEPTH := Plans.START_MIN_DEPTH
 ## The arrival's blocks (see the header): a town of this size or more has them; the width of the block along the avenue (its sidewalk ring included), the ordinary lots before the
 ## candidates on the best side and on the other, and the width of the lot of each tier (the house stands in the middle of it).
 const ARRIVAL_MIN_SIZE := 160
 const ARR_BLOCK_W := 52
 const ARR_GATE_BEST := 14
-const ARR_GATE_OTHER := 16
-const ARR_BEST_W := 24
-const ARR_OK_W := 18
+## (ROOMY HOUSES: the house of the middle sort is 14 to 16 wide, so its lot is 22 wide: three tiles of ground to each side for the base's fence and the people who work at it; the gate before
+## it is two tiles shorter, so that the three lots still fill the block's 50)
+const ARR_GATE_OTHER := 14
+## (ROOMY HOUSES: the best candidate is the family home of 22 x 16, so its lot is 28 wide and its strip 24 to 26 deep (two tiles of ground to the side, three in front, three behind at the least))
+const ARR_BEST_W := 28
+const ARR_OK_W := 22
 const ARR_POOR_W := 14
 const ARR_COTTAGE := Vector2i(10, 8)
 const ARR_COTTAGE_GROUND := 5
@@ -131,7 +134,7 @@ func _roads_and_blocks() -> void:
 func _arrival_blocks(ay: int) -> void:
 	var east := rng.randf() < 0.5
 	var best_north := rng.randf() < 0.5
-	var d_best := rng.randi_range(22, 25)
+	var d_best := rng.randi_range(24, 26)
 	var d_other := rng.randi_range(17, 19)
 	arrival = {"east": east, "ay": ay, "best": "N" if best_north else "S",
 		"road": Rect2i(size - EDGE - 14 if east else EDGE, ay, 14, AVENUE_W),
