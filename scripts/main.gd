@@ -984,6 +984,11 @@ func _select(sel) -> void:
 ## What the player does about the selection (a click, a crew card, Tab): the tutorial's soft lock may
 ## refuse it; the coach is told when it goes through.
 func _try_select(sel) -> void:
+	if wheel_simple():
+		# One House: nobody is "picked" while you move. A click on a person, or on their card, opens the order wheel round them; nothing else is selected.
+		if sel != null and String(sel.get("kind", "")) == "person" and wheel_ctl != null:
+			wheel_ctl.open_for(sel.ref, mouse_screen if _pointer_in_window() else _vp() * 0.5)
+		return
 	if not _allows("select", Coach.sel_key(sel)):
 		return
 	_select(sel)
@@ -1891,8 +1896,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 					return    # (the scene was swapped out under the key: there is no viewport left to say the key was handled)
 			KEY_TAB:
 				# Tab goes round the people who are here and alive: not the lost, not those away
-				# (and in avatar mode not the one you are: they cannot be asked, and selecting them shows nothing)
+				# (and in avatar mode not the one you are: they cannot be asked, and selecting them shows nothing; One House: nothing is picked, so no Tab)
 				var here: Array = []
+				if wheel_simple():
+					get_viewport().set_input_as_handled()
+					return
 				for q in sim.people:
 					if not q.dead and q.away == null and not (avatar_mode and q.player):
 						here.append(q)
@@ -2152,14 +2160,14 @@ func _feed_avatar() -> void:
 		return
 	if me.holstered != AimMode.holstered or _holster_pawn != me:
 		_mark_holster()    # (what the pawn's drawing reads: the gun carried low, the hands off it)
-	if wheel_ctl != null and wheel_ctl.is_open() and not wheel_ok():
+	if wheel_ctl != null and wheel_ctl.busy() and not wheel_ok():
 		wheel_ctl.cancel()    # (round 24: a menu or a page came up over the wheel)
 	if avatar_hands_off():
 		firing = false
 		aim_held = false    # (under a menu or a page the right button is not the aim's: its release goes to the page)
 		sim.avatar.set_input(Vector2.ZERO, me.input_aim, false)
 		return
-	if wheel_ctl != null and wheel_ctl.is_open():
+	if wheel_ctl != null and wheel_ctl.busy():
 		# (round 24: the command wheel is up: the hands do not aim or fire, the keys still walk)
 		firing = false
 		aim_held = false
@@ -2183,7 +2191,7 @@ func _feed_avatar() -> void:
 ## Whether the survivor is aiming now (`scripts/aim_mode.gd`): in "Right button aims" the right button or Shift is held with the pointer on the
 ## bare world; with "Always aim at the mouse" whenever the pointer is in the window. Nothing without an avatar.
 func aiming() -> bool:
-	if not avatar_mode or (wheel_ctl != null and wheel_ctl.is_open()):
+	if not avatar_mode or (wheel_ctl != null and wheel_ctl.busy()):
 		return false
 	return AimMode.aiming(AimMode.current(), aim_held, _shift_down(), _pointer_in_window(), avatar_hands_off(), over_hud)
 
@@ -2191,7 +2199,7 @@ func aiming() -> bool:
 ## Whether the aim marks (the crosshair, the aim line) are to be drawn: with "Always aim at the mouse" as ever (the overlay's own rules
 ## say where), with "Right button aims" only while aiming.
 func aim_shown() -> bool:
-	if wheel_ctl != null and wheel_ctl.is_open():
+	if wheel_ctl != null and wheel_ctl.busy():
 		return false    # (round 24: the wheel is up: the pointer is the arrow, and no crosshair)
 	return AimMode.mouse_aims() or aiming()
 
@@ -2261,7 +2269,9 @@ func _click_world(pos: Vector2) -> void:
 	var near: Array = it.candidates() if it != null else []
 	var person = _pick_person(at)
 	if person != null:
-		_try_select({"kind": "person", "ref": person})
+		_try_select({"kind": "person", "ref": person})    # (One House: opens the wheel round them, and that is all)
+		if wheel_simple():
+			return
 		# (and a word with them when they are within reach, unless the lesson of Orientation Day has not come to E: no toast for that)
 		for c in near:
 			if String(c.kind) == "person" and String(c.id) == String(person.id):
@@ -2347,8 +2357,8 @@ func _mark_holster() -> void:
 ## away or even when it is drawn (a held right button is the aim, and a tap with nobody picked is only a very short one). Put away, with nobody picked, it
 ## says what to do.
 func _tap_order(tap: Dictionary, release_at: Vector2) -> void:
-	if not avatar_mode or avatar_hands_off() or raid_open():
-		return
+	if not avatar_mode or avatar_hands_off() or raid_open() or wheel_simple():
+		return    # (One House: the right button only aims; orders come from the wheel)
 	if not AimMode.is_tap(clock - float(tap.get("t", 0.0)), Vector2(tap.pos).distance_to(release_at)):
 		return
 	var who = selection.ref if selection != null and selection.kind == "person" else null
@@ -2453,9 +2463,58 @@ func wheel_allowed() -> bool:
 	return _allows("wheel")
 
 
-## Whether 1 to 5 pick the crew here (they do in the yard; Shift and 1 2 3 are the speeds).
+## Whether 1 to 5 pick the crew here (they do in the school's yard; Shift and 1 2 3 are the speeds there; the One House has no picking: 1 2 3 are the speeds).
 func wheel_crew_keys() -> bool:
-	return true
+	return not wheel_simple()
+
+
+## ONE HOUSE: the crew are commanded in one way only (scripts/ui/wheel_ctl.gd `simple`): click a person or their card and the wheel opens round them, by radio, from
+## any distance; hold C for the nearest, Shift and C for everyone near, Z for the last order. Nobody is picked and there is no dock, no right-click order, no Tab and
+## no talk card for the crew. The school's yard (`--school`, `--demo`, the tests' helper scenes) has its own, as it was.
+func wheel_simple() -> bool:
+	return avatar_mode and sim != null and sim.is_one_house()
+
+
+## What the wheel says of a person under their name: {"short" (a word for the middle of the ring), "line" (the line under it)}: how they are and what they do.
+func wheel_status(p) -> Dictionary:
+	var mood := String(sim.morale.mood(p)).to_lower()
+	var doing := String(hud.doing_of(p)).strip_edges().trim_suffix(".") if hud != null else ""
+	var short := mood
+	match String(p.stance):
+		"follow":
+			short = "following"
+		"hold":
+			short = "holding"
+		"cover":
+			short = "covering"
+		"search":
+			short = "searching"
+	if p.downed:
+		short = "down"
+	var line := "%s: %s%s" % [String(p.first), mood, (", " + doing.to_lower()) if doing != "" else ""]
+	return {"short": short, "line": line}
+
+
+## The middle of the ring: a word with them, from wherever they are. Their line, a toast, and the first word of the day earns trust (the rules' `talk_to`).
+func wheel_talk(p) -> Dictionary:
+	var it = _interact()
+	if it == null or not it.has_method("talk_to"):
+		return {}
+	var res: Dictionary = it.talk_to(p)
+	if not bool(res.get("ok", false)):
+		hud.toast(String(res.get("why", "Nobody there")), "warn")
+		return res
+	var gain := float(res.get("gain", 0.0))
+	hud.toast("%s: %s%s" % [String(p.first), String(res.get("line", "")), "  (trust +%d)" % roundi(gain) if gain > 0.0 else ""])
+	return res
+
+
+## Where "click where" puts a verb: Hold here, the tile that was clicked (`{"at"}`), or why not (`{"error"}`: the note stays up for another try).
+func wheel_spot(verb: String, tile: Vector2, who) -> Dictionary:
+	var spot := Vector2(floorf(tile.x) + 0.5, floorf(tile.y) + 0.5)
+	if world.is_solid(world.solid_p, spot.x, spot.y):
+		return {"error": _why_not_there(who, spot) if who != null else "Nobody can stand there"}
+	return {"at": spot}
 
 
 func wheel_pointer() -> Vector2:
@@ -2546,6 +2605,9 @@ func wheel_solid(pos: Vector2) -> bool:
 ## The wheel asked one person (the controller tells its host, `ask_one`): Orientation Day's lesson of the wheel counts it, the dock's buttons do not.
 func wheel_said(_p, _answer: Dictionary) -> void:
 	_did("wheel")
+	# (the One House's lesson of "ask them": the scenario counts an ask from the wheel, a refusal included)
+	if wheel_simple() and sim.scenario != null and sim.scenario.has_method("on_asked"):
+		sim.scenario.on_asked()
 
 
 func wheel_toast(text: String, level: String = "info") -> void:
@@ -2557,7 +2619,7 @@ func wheel_toast(text: String, level: String = "info") -> void:
 ## aiming, with "Always aim at the mouse", under a menu or a page, over a HUD control or out of the window.
 func _update_pointed() -> void:
 	pointed = {}
-	var wheel_up: bool = wheel_ctl != null and wheel_ctl.is_open()
+	var wheel_up: bool = wheel_ctl != null and wheel_ctl.busy()
 	if avatar_mode and not wheel_up and not AimMode.mouse_aims() and not aiming() and not avatar_hands_off() and not over_hud and _pointer_in_window() and not raid_open():
 		var at := _screen_to_tile(mouse_screen)
 		var person = _pick_person(at)
@@ -2805,6 +2867,12 @@ func _use_candidate(pick: Dictionary) -> void:
 		return
 	var kind := String(pick.get("kind", ""))
 	var id := String(pick.get("id", ""))
+	if kind == "person" and wheel_simple():
+		# One House: E at a person is a click on them: the wheel opens round them (no talk card; the middle of the ring is the word)
+		for p in sim.people:
+			if String(p.id) == id and wheel_ctl != null:
+				wheel_ctl.open_for(p, _tile_to_screen(Vector2(p.x, p.y - 0.5)), "key")
+		return
 	if kind == "person" and hud.talk_open() and String(hud.talk_person().id) == id:
 		hud.hide_talk()
 		return
@@ -3913,13 +3981,22 @@ func _stage_wheel(spec: String) -> bool:
 	for p in sim.people:
 		if String(p.id) == word:
 			who = p
+	if who == null and word.is_valid_int():
+		# (a number: the nth person of the crew, in card order, not counting you: the town's people have made-up names)
+		var crew := WheelCtl.crew_of(sim.people)
+		if int(word) >= 1 and int(word) <= crew.size():
+			who = crew[int(word) - 1]
 	if who == null or not avatar_mode or wheel_ctl == null:
 		return false
-	_select({"kind": "person", "ref": who})
+	if not wheel_simple():
+		_select({"kind": "person", "ref": who})
 	hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
 	var at := _tile_to_screen(shot_aim) if shot_aim != Vector2.INF else _vp() * Vector2(0.66, 0.44)
 	mouse_screen = at
-	if not wheel_ctl.open(at, "key"):
+	if wheel_simple():
+		if not wheel_ctl.open_for(who, at, "click"):
+			return false
+	elif not wheel_ctl.open(at, "key"):
 		return false
 	if all:
 		wheel_ctl.toggle_group()

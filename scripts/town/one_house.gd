@@ -10,9 +10,11 @@
 ## school's town board, lots, streets, storyteller, gate and levels off, the waves off until the fourth rescue, and the community modules (`briefing`, `priorities`, `initiative`,
 ## `relations`...) switched on by how many people there are (`apply_stage`, from the data's `modules_from_crew`, again at every change of the crew).
 ##
-## THE GUIDE. Six lessons, none blocking (walk; aim and shoot; open a door and go in; clear the house; search; claim). Each is DONE when its condition is true, read from the
+## THE GUIDE. Seven lessons, none blocking (walk; aim and shoot; open a door and go in; clear the house; search; claim; and, once someone is on the radio, ask them for something:
+## click a person or a card, pick a verb on the wheel; `on_asked`, which main.gd calls). Each is DONE when its condition is true, read from the
 ## state of the rules (not from the event stream: a scenario's `update` runs before the step's events exist, and the screen clears them every frame). `guide()` is the first
-## one not done (the one just done is shown as done for three seconds), `{}` when there is none (or the first survivor has come: the lessons are for the first day). `objective()` is the line under the clock, with a bearing target.
+## one not done (the one just done is shown as done for three seconds), `{}` when there is none (the first six are the first day's, until the first survivor has come; the lesson
+## marked `crew` has that stage). `objective()` is the line under the clock, with a bearing target.
 ##
 ## THE END. The first attack night is the night of `first_day` (the day of the fourth rescue, or the next one when it comes after the cutoff hour). From the dawn after it
 ## the night is HELD as soon as the data's `held_rule` is true (whoever leads is alive, no dead are in the house, a section of the base still stands): `sim.over = "victory"`.
@@ -73,6 +75,8 @@ var _first_day := -1
 var _cleared := {}
 var _done := {}
 var _walked := 0.0
+## How many times the player has picked a verb on the command wheel (the lesson of asking the crew).
+var _asked := 0
 var _last_pos := Vector2.INF
 var _held_nights := 0
 ## The day whose dawn has been judged (-1: none), and how the first attack night ended ("", "held" or "not_held").
@@ -104,6 +108,7 @@ func start() -> void:
 	_cleared = {}
 	_done = {}
 	_walked = 0.0
+	_asked = 0
 	_last_pos = Vector2.INF
 	_held_nights = 0
 	_dawn_day = -1
@@ -677,6 +682,8 @@ func _cond(c: Dictionary) -> bool:
 			return _searched() >= int(c.get("n", 1))
 		"claimed":
 			return _stage_idx() >= 2
+		"asked":
+			return _asked >= int(c.get("n", 1))
 	return false
 
 
@@ -738,9 +745,15 @@ func _unsearched_here() -> int:
 ## The lesson of now: {"id", "title", "text", "goal", "done", "n", "of", "progress"}: the first not done (the one just done, for a few seconds, with `done` true), {} when
 ## there is none to give. `progress` is a short count when the lesson has one ("2 of 3 rooms clear").
 func guide() -> Dictionary:
-	if not _begun or _stage_idx() >= 3:
-		return {}    # (the lessons are for the first day: once survivors are coming they are over)
-	var lessons = _cfg("guide", [])
+	if not _begun or _stage_idx() >= 5:
+		return {}
+	# (the lessons are for the first day, the lone survivor's: with the first voice on the radio they are over, and the lessons of the crew (`"crew": true`: how to ask
+	# them for something) take their place until the fortify stage ends; the night itself teaches nothing)
+	var crew := _stage_idx() >= 3
+	var lessons: Array = []
+	for l in _cfg("guide", []):
+		if bool(l.get("crew", false)) == crew:
+			lessons.append(l)
 	if _flash_id != "" and float(sim.t) < _flash_until:
 		for i in lessons.size():
 			if String(lessons[i].get("id", "")) == _flash_id:
@@ -749,6 +762,12 @@ func guide() -> Dictionary:
 		if not _done.has(String(lessons[i].get("id", ""))):
 			return _lesson_out(lessons[i], i, lessons.size(), false)
 	return {}
+
+
+## The player gave an order from the command wheel (main.gd: a verb was picked on someone, and they said yes or no): the lesson of asking the crew counts it.
+func on_asked() -> void:
+	_asked += 1
+	_dirty = true
 
 
 func _lesson_out(l: Dictionary, i: int, n: int, done: bool) -> Dictionary:

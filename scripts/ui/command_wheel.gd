@@ -1,7 +1,8 @@
 ## The command wheel (round 24): hold C (or the middle button) and a ring of six slices opens round the pointer, one for each verb of the radio
 ## (Come with me, Hold here, Cover me, Search that, Go back, To the walls); release over a slice, or click it, and the person it is for is asked.
-## A VIEW only: it draws what the controller (scripts/ui/wheel_ctl.gd) tells it and says where the pointer is; it never reads the game, never
-## asks the radio and never takes the mouse (the controller gets the events first). It does not pause anything.
+## A VIEW only: it draws what the controller (scripts/ui/wheel_ctl.gd) tells it and says where the pointer is; it never reads the game and never
+## asks the radio (the controller gets the events first). While the ring is up it takes the mouse (so that no card under it shows its tooltip through the ring); a note
+## that waits for a spot (`show_place`) does not. It does not pause anything.
 ##
 ##   wheel.open_at(screen, {"title": "Dez", "caption": "", "slices": [...], "group": false})   # a slice: {"verb", "name", "enabled", "soft", "tip"}
 ##   wheel.move_pointer(pos)       # the pointer moved; the slice under it lights once it has moved a little (`armed`)
@@ -64,6 +65,13 @@ var hover := -1
 var over_centre := false
 ## How many times it was drawn (a test reads it: a wheel that is shut draws nothing).
 var drawn := 0
+## One House: the line under the ring says something amber (a refusal), and what the middle does when it is clicked ("" = the old second-ring words).
+var hint_warn := false
+var caption_warn := false
+var centre_tip := ""
+## One House: a verb that needs a spot (Hold here) was chosen and the next click puts it down: no ring, only a note at the pointer.
+var placing := false
+var place_text := ""
 
 var _polys: Array = []
 var _edges: Array = []
@@ -143,8 +151,12 @@ func open_at(screen: Vector2, info: Dictionary = {}) -> void:
 	latched = bool(info.get("latched", false))
 	active = true
 	visible = true
+	mouse_filter = Control.MOUSE_FILTER_STOP    # (while it is up nothing under it is hovered: no tooltip of a card comes up through the ring; the controller has every click first)
 	hover = -1
 	over_centre = false
+	hint_warn = false
+	caption_warn = false
+	centre_tip = ""
 	set_info(info)
 
 
@@ -160,22 +172,51 @@ func set_info(info: Dictionary) -> void:
 		group = bool(info.group)
 	if info.has("hint"):
 		hint = String(info.hint)
+	if info.has("hint_warn"):
+		hint_warn = bool(info.hint_warn)
+	if info.has("caption_warn"):
+		caption_warn = bool(info.caption_warn)
+	if info.has("centre_tip"):
+		centre_tip = String(info.centre_tip)
 	_aim()
 	queue_redraw()
 
 
 func close() -> void:
 	active = false
-	visible = false
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visible = placing
 	armed = false
 	latched = false
 	hover = -1
 	over_centre = false
+	hint_warn = false
+	caption_warn = false
+	centre_tip = ""
+	queue_redraw()
+
+
+## A verb that needs a spot was chosen: a note follows the pointer ("Hold here: click where. Esc: cancel") until the click, or Esc, ends it.
+func show_place(text: String) -> void:
+	placing = true
+	place_text = text
+	visible = true
+	queue_redraw()
+
+
+func hide_place() -> void:
+	placing = false
+	place_text = ""
+	visible = active
+	queue_redraw()
 
 
 ## The pointer is at `pos` now.
 func move_pointer(pos: Vector2) -> void:
 	pointer = pos
+	if placing and not active:
+		queue_redraw()
+		return
 	if not armed and pos.distance_to(origin) >= ARM_PX:
 		armed = true
 	_aim()
@@ -214,13 +255,34 @@ func line_text() -> String:
 	if hover >= 0 and hover < slices.size():
 		return String(slices[hover].get("tip", ""))
 	if over_centre:
+		if centre_tip != "":
+			return centre_tip
 		return "Click the middle: %s" % ("back to one person" if group else "the same verbs for everyone near you")
 	return hint
 
 
 # ---------------------------------------------------------------- the drawing --
 
+## The note of a verb that waits for its spot: a small ring at the pointer and the words beside it, kept inside the window.
+func _draw_place() -> void:
+	var view := get_viewport_rect().size if is_inside_tree() else Vector2(1280.0, 800.0)
+	draw_arc(pointer, 11.0, 0.0, TAU, 24, Color(0.02, 0.04, 0.035, 0.8), 4.0, true)
+	draw_arc(pointer, 11.0, 0.0, TAU, 24, ACCENT, 2.0, true)
+	draw_circle(pointer, 2.0, ACCENT)
+	var font := Fonts.sans(600, 0)
+	var size := font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
+	var rect := Rect2(pointer + Vector2(18.0, 14.0), size + Vector2(14.0, 10.0))
+	rect.position.x = clampf(rect.position.x, MARGIN, maxf(MARGIN, view.x - rect.size.x - MARGIN))
+	if rect.end.y > view.y - MARGIN:
+		rect.position.y = pointer.y - 14.0 - rect.size.y
+	draw_style_box(_line_box, rect)
+	draw_string(font, rect.position + Vector2(7.0, 5.0 + font.get_ascent(13)), place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, INK)
+
+
 func _draw() -> void:
+	if placing and not active:
+		_draw_place()
+		return
 	if not active:
 		return
 	drawn += 1
@@ -260,7 +322,7 @@ func _draw() -> void:
 		var ink := Color(ACCENT if lit else INK, alpha)
 		draw_string(name_font, mid + Vector2(-tw * 0.5, 17.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
 		if soft:
-			var word := "Insist"
+			var word := String(s.get("word", "Insist"))
 			var ww := small.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 			draw_string(small, mid + Vector2(-ww * 0.5, 31.0), word, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(WARN, 0.95))
 	# the middle: who it is for
@@ -275,7 +337,7 @@ func _draw() -> void:
 	draw_string(name_font, Vector2(-hw * 0.5, 2.0 if caption != "" else 6.0), head, HORIZONTAL_ALIGNMENT_LEFT, -1, hf, INK)
 	if caption != "":
 		var cw := small.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
-		draw_string(small, Vector2(-cw * 0.5, 17.0), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, INK2)
+		draw_string(small, Vector2(-cw * 0.5, 17.0), caption, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, WARN if caption_warn else INK2)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# the line under the ring
 	var text := line_text()
@@ -288,4 +350,5 @@ func _draw() -> void:
 		var rect := Rect2(clampf(centre.x - w * 0.5, MARGIN, maxf(MARGIN, view.x - w - MARGIN)), centre.y + (R_GROUP if group else R_OUT) + 12.0, w, box.y + 12.0)
 		draw_style_box(_line_box, rect)
 		var warn_line := hover >= 0 and hover < slices.size() and (bool(slices[hover].get("soft", false)) or not bool(slices[hover].get("enabled", true)))
+		warn_line = warn_line or (hint_warn and hover < 0 and not over_centre)
 		draw_multiline_string(font, rect.position + Vector2(6.0, 6.0 + font.get_ascent(13)), text, HORIZONTAL_ALIGNMENT_LEFT, inner, 13, 3, Color(WARN if warn_line else INK))

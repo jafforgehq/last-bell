@@ -12,7 +12,15 @@
 ## wheel's centre. A slice is greyed when `radio.willingness` says it is a refusal nobody can argue with, and marked "Insist" when it is one a push could
 ## override (it is asked, and refused in amber, and the dock's Insist button is there: choosing it never pushes by itself).
 ##
-## THE HOST (main.gd or raid_scene.gd) answers these, so that nothing here knows which of the two it is in:
+## ONE HOUSE (`simple()`: the host says `wheel_simple()`; the school's yard and a place never do): ONE way to command the crew. Nobody is "picked": a click on a person or
+## on their card (`open_for`) opens the wheel round them, by radio, from any distance; hold C is the same for the nearest (Shift and C: everyone within NEAR_ALL); the
+## middle button is nothing, 1 to 5 and Tab are nothing, and Z repeats the last order for the same people (`last_order.who`). Hold here and Search that need a spot: the
+## wheel goes and a note follows the pointer until the next click puts the spot down (`begin_place`, `place_click`; Esc or the right button gives it up). A refusal that a
+## push could override keeps the wheel up (`_after_one`): the reason in amber, and that slice reads Insist (`verbs.insist()`, at a cost of trust). The middle of the
+## ring is a word with the person (`wheel_talk`). A click that is the one that opened the wheel (a double click on a card) picks nothing.
+##
+## THE HOST (main.gd or raid_scene.gd) answers these, so that nothing here knows which of the two it is in (the One House's also: wheel_simple() -> bool,
+## wheel_status(p) -> {"short", "line"}, wheel_talk(p), wheel_spot(verb, tile, who) -> {"at"} / {"error"}):
 ##   wheel_view() -> the CommandWheel node          wheel_ok() -> whether the wheel and the keys may act now (an avatar, no menu, no page)
 ##   wheel_allowed() -> Orientation Day's lock      wheel_pointer() -> the pointer in screen pixels      wheel_over_hud() -> a control has the pointer
 ##   wheel_me() -> the survivor played              wheel_crew() -> the people who can be asked, in card order (not you)
@@ -44,15 +52,38 @@ const TIPS := {
 	"back": "Go back: %s goes back to what they were doing",
 	"post": "To the walls: %s goes to their post on the wall",
 }
+## (The One House's: a spot comes with the next click.)
+const TIPS_SIMPLE := {
+	"come": "Come with me: %s follows you",
+	"hold": "Hold here: %s holds the spot you click next",
+	"cover": "Cover me: %s stands behind you, watching your back",
+	"search": "Search that: %s searches what you click next",
+	"back": "Go back: %s goes back to what they were doing",
+	"post": "To the walls: %s goes to their post on the wall",
+}
 const HINT_ONE := "Release on a slice. Shift: everyone near you. Esc: cancel"
 const HINT_GROUP := "Everyone within 8 tiles. Shift again: just one. Esc: cancel"
+## ONE HOUSE (the host says `wheel_simple()`): the one way to give an order. The wheel opens round a person (a click on them or their card; hold C for the
+## nearest, Shift and C for everyone near), by radio from any distance. The verbs that need a spot take it from the next click ("click where"). A refusal
+## keeps the wheel up with the reason, and its slice reads Insist. The middle of the ring is a word with them. Nobody is ever "picked".
+const HINT_SIMPLE := "Pick a slice. The middle: a word with them. Esc: close"
+const HINT_SIMPLE_GROUP := "Everyone within 8 tiles. Shift again: just one. Esc: close"
+const HINT_REFUSED := "Insist pushes them, and it costs trust. Or ask for something else."
+const TIP_CENTRE := "Have a word with %s: how they are, what they need. The first word of the day earns trust"
+## The verbs that need a spot: the next click puts it down.
+const PLACE_VERBS := ["hold", "search"]
+const PLACE_NOTES := {"hold": "Hold here: click where. Esc: cancel", "search": "Search that: click what. Esc: cancel"}
+## A click this soon after the wheel opened is the one that opened it (a double click on a card): it picks nothing.
+const OPEN_GUARD_MS := 220
 
 var host
 var wheel
-## The last order given, for Z: {"verb", "at" (a Vector2 or null), "post" (a night post's id or "")}; {} before the first.
+## The last order given, for Z: {"verb", "at" (a Vector2 or null), "post" (a night post's id or ""), "who" (the ids of the people it went to)}; {} before the first.
 var last_order := {}
-## While the wheel is up: {"who", "tile", "extras" (a verb to what `wheel_extra` said of it), "group", "members"}.
+## While the wheel is up: {"who", "tile", "extras" (a verb to what `wheel_extra` said of it), "group", "members", "refused" ({"verb", "why"}: the verb they just refused)}.
 var info := {}
+## While a verb waits for its spot (One House): {"verb", "who", "group", "members", "centre"}; {} otherwise.
+var pending := {}
 var _src := ""
 var _open_ms := 0
 
@@ -73,9 +104,28 @@ func is_open() -> bool:
 	return wheel != null and wheel.active and not info.is_empty()
 
 
-## The person the wheel is up for (null in the group's ring with nobody single to ask).
+## Whether this is the One House's one-way commanding (the host says so).
+func simple() -> bool:
+	return host != null and host.has_method("wheel_simple") and bool(host.wheel_simple())
+
+
+## A verb waits for its spot: the next click puts it down.
+func is_placing() -> bool:
+	return not pending.is_empty()
+
+
+## The wheel is up or a verb waits for its spot: the hands do not aim or fire meanwhile.
+func busy() -> bool:
+	return is_open() or is_placing()
+
+
+## The person the wheel is up for (null in the group's ring with nobody single to ask), or the one a verb waits to place for.
 func target():
-	return info.get("who") if is_open() else null
+	if is_open():
+		return info.get("who")
+	if is_placing():
+		return pending.get("who")
+	return null
 
 
 # ------------------------------------------------------------------ whom --
@@ -118,6 +168,20 @@ func target_for(tile: Vector2):
 	return near[0] if not near.is_empty() else null
 
 
+## The crew member nearest the avatar, wherever they are (the radio reaches them all): one on their feet first, else one who is down. Null with no crew.
+func nearest_crew():
+	var me = host.wheel_me()
+	if me == null:
+		return null
+	var crew: Array = host.wheel_crew()
+	var from := Vector2(me.x, me.y)
+	var up := within(_on_their_feet(crew), from, INF)
+	if not up.is_empty():
+		return up[0]
+	var any := within(crew, from, INF)
+	return any[0] if not any.is_empty() else null
+
+
 ## Everyone the second ring reaches: the crew within NEAR_ALL tiles of the avatar.
 func group_now() -> Array:
 	var me = host.wheel_me()
@@ -137,12 +201,24 @@ static func _on_their_feet(people: Array) -> Array:
 
 # ----------------------------------------------------------------- opening --
 
-## Opens the wheel at `screen`. False when it cannot (not now, locked, nobody to ask).
-func open(screen: Vector2, src: String = "key") -> bool:
+## Opens the wheel at `screen` for the nearest crew member (One House: hold C; `all` is Shift and C, everyone near) or, in the school's way, the person
+## picked, under the pointer or near. False when it cannot (not now, locked, nobody to ask).
+func open(screen: Vector2, src: String = "key", all: bool = false) -> bool:
 	if is_open() or wheel == null or not host.wheel_ok() or not host.wheel_allowed():
 		return false
 	if host.wheel_me() == null:
 		return false
+	if simple():
+		cancel_place()
+		var near = nearest_crew()
+		var members := group_now()
+		if near == null:
+			host.wheel_toast("Nobody is on the radio yet. Find someone first", "info")
+			return false
+		if all and members.is_empty():
+			host.wheel_toast("Nobody is near enough. Click their picture to call them", "info")
+			return false
+		return _open_with(screen, src, near, members, all, false)
 	var tile: Vector2 = host.wheel_tile(screen)
 	var who = target_for(tile)
 	var members := group_now()
@@ -158,6 +234,36 @@ func open(screen: Vector2, src: String = "key") -> bool:
 	return true
 
 
+## ONE HOUSE: a click on a person, or on their card, opens the wheel round them (it stays up until a slice is clicked, or Esc, or a click outside it). By radio:
+## they may be anywhere. False when it cannot.
+func open_for(p, screen: Vector2, src: String = "click") -> bool:
+	if p == null or wheel == null or not host.wheel_ok() or not host.wheel_allowed() or host.wheel_me() == null:
+		return false
+	if bool(p.player):
+		host.wheel_toast("That is you. Click somebody else", "info")
+		return false
+	if p.dead or p.turned or p.away != null:
+		return false    # (a card of the lost: nobody to ask)
+	cancel_place()
+	if is_open():
+		cancel()
+	return _open_with(screen, src, p, group_now(), false, true)
+
+
+## The wheel up at `screen` for `who` (and, in the second ring, `members`); `latched`: it stays for a click.
+func _open_with(screen: Vector2, src: String, who, members: Array, group: bool, latched: bool) -> bool:
+	var tile: Vector2 = host.wheel_tile(screen)
+	info = {"who": who, "tile": tile, "extras": {}, "group": group, "members": members}
+	for verb in Radio.VERBS:
+		info.extras[verb] = {}
+	_src = src
+	_open_ms = Time.get_ticks_msec()
+	var words := _words()
+	words["latched"] = latched
+	wheel.open_at(screen, words)
+	return true
+
+
 ## What the wheel says now: its centre, its slices and the line under it.
 func _words() -> Dictionary:
 	var group: bool = bool(info.group)
@@ -168,7 +274,32 @@ func _words() -> Dictionary:
 		slices.append(_slice(String(verb), group, who, members))
 	var title := "Everyone" if group else String(who.first)
 	var caption := "%d near you" % members.size() if group else ("Shift: all near" if members.size() > 1 else "")
+	if simple():
+		return _words_simple(title, slices, group, who, members)
 	return {"title": title, "caption": caption, "slices": slices, "group": group, "hint": HINT_GROUP if group else HINT_ONE}
+
+
+## The One House's words: the name in the middle with a word of how they are, and under the ring what they are doing (or why they said no).
+func _words_simple(title: String, slices: Array, group: bool, who, members: Array) -> Dictionary:
+	var out := {"title": title, "slices": slices, "group": group, "hint_warn": false, "caption_warn": false}
+	if group:
+		out["caption"] = "%d near you" % members.size()
+		out["hint"] = HINT_SIMPLE_GROUP
+		out["centre_tip"] = "Everyone within 8 tiles: the same ask goes to each of them, one answer each"
+		return out
+	var st: Dictionary = host.wheel_status(who) if host.has_method("wheel_status") else {}
+	out["caption"] = String(st.get("short", ""))
+	out["centre_tip"] = TIP_CENTRE % String(who.first)
+	var refused: Dictionary = info.get("refused", {})
+	if not refused.is_empty():
+		out["hint"] = "%s\n%s" % [String(refused.why), HINT_REFUSED]
+		out["hint_warn"] = true
+		out["caption"] = "said no"
+		out["caption_warn"] = true
+	else:
+		var line := String(st.get("line", ""))
+		out["hint"] = ("%s\n%s" % [line, HINT_SIMPLE]) if line != "" else HINT_SIMPLE
+	return out
 
 
 ## One slice: {"verb", "name", "enabled", "soft", "tip"} for the verb, asked of one person or of the group.
@@ -194,23 +325,36 @@ func _slice(verb: String, group: bool, who, members: Array) -> Dictionary:
 			s.enabled = false
 			s.tip = "None of them can: %s" % ("; ".join(why.slice(0, 2)) if not why.is_empty() else "nobody is near")
 		else:
-			s.tip = String(TIPS[verb]).replace("%s", "everyone near you (%d)" % ok if ok > 1 else "the one person near you")
+			s.tip = String((TIPS_SIMPLE if simple() else TIPS)[verb]).replace("%s", "everyone near you (%d)" % ok if ok > 1 else "the one person near you")
 			if not why.is_empty():
 				s.tip += "\nNot: %s" % "; ".join(why.slice(0, 2))
 		return s
 	var st := RadioVerbs.state_for(host.wheel_radio(who), who, verb, false, place)
 	var err2 := String(extra.get("error", ""))
-	if err2 != "":
+	var refused: Dictionary = info.get("refused", {})
+	if simple() and not refused.is_empty() and String(refused.verb) == verb and st.enabled:
+		# they just said no to this one: the slice now pushes them
+		s.soft = true
+		s.insist = true
+		s.word = "Insist"
+		s.tip = "Insist: ask again and push. It costs their trust, and they will do it grudgingly"
+	elif err2 != "":
 		s.enabled = false
 		s.tip = err2
 	elif not st.enabled:
 		s.enabled = false
 		s.tip = String(st.why)
+		if simple() and verb == "search" and not place:
+			s.tip = "Nobody searches for you yet. Search the shelves yourself: E at one"
+	elif st.soft and simple():
+		s.soft = true
+		s.word = "may refuse"
+		s.tip = "%s. Ask anyway: they will say so, and then Insist pushes them (it costs trust)" % String(st.why)
 	elif st.soft:
 		s.soft = true
 		s.tip = "%s. Release to ask: they will say so, and Insist pushes them (it costs trust)" % String(st.why)
 	else:
-		s.tip = String(TIPS[verb]).replace("%s", String(who.first))
+		s.tip = String((TIPS_SIMPLE if simple() else TIPS)[verb]).replace("%s", String(who.first))
 		var delay := float(st.w.get("delay_s", 0.0)) if not st.w.is_empty() else 0.0
 		if delay > 0.0:
 			s.tip += " (answers in about %s)" % ("%d s" % int(delay) if absf(delay - roundf(delay)) < 0.05 else "%.1f s" % delay)
@@ -239,6 +383,16 @@ func cancel() -> void:
 		wheel.close()
 	info = {}
 	_src = ""
+	cancel_place()
+
+
+## A verb that waited for its spot is given up (Esc, the right button, another click that was not on the world).
+func cancel_place() -> void:
+	if pending.is_empty():
+		return
+	pending = {}
+	if wheel != null:
+		wheel.hide_place()
 
 
 # ------------------------------------------------------------- choosing --
@@ -255,7 +409,7 @@ func release(held_s: float = -1.0) -> Dictionary:
 		return _choose(int(c.index))
 	if held_s < TAP_S and String(c.zone) != "out":
 		wheel.latched = true
-		wheel.set_info({"hint": "Click a slice. Shift: everyone near you. Esc: cancel"})
+		wheel.set_info({"hint": HINT_SIMPLE if simple() else "Click a slice. Shift: everyone near you. Esc: cancel"})
 		return {"latched": true}
 	cancel()
 	return {"cancelled": true}
@@ -266,6 +420,19 @@ func click(pos: Vector2) -> Dictionary:
 	if not is_open():
 		return {}
 	var c: Dictionary = wheel.choice_at(pos)
+	if simple():
+		# (the click that opened the wheel, or a double click on a card, picks nothing: the pointer has to move first)
+		if not wheel.armed or Time.get_ticks_msec() - _open_ms < OPEN_GUARD_MS:
+			return {}
+		match String(c.zone):
+			"slice":
+				return _choose(int(c.index), true)
+			"centre":
+				if bool(info.group):
+					return {}
+				return talk()
+		cancel()
+		return {"cancelled": true}
 	match String(c.zone):
 		"slice":
 			return _choose(int(c.index), true)
@@ -274,6 +441,15 @@ func click(pos: Vector2) -> Dictionary:
 			return {"toggled": true}
 	cancel()
 	return {"cancelled": true}
+
+
+## The middle of the ring (One House): a word with the person. The wheel goes; the host has them say how they are.
+func talk() -> Dictionary:
+	var who = info.get("who")
+	cancel()
+	if who == null:
+		return {}
+	return {"talked": host.wheel_talk(who)}
 
 
 ## Slice `i` was picked. A greyed one says why and closes the wheel (a click keeps it up: the person may pick another).
@@ -289,13 +465,77 @@ func _choose(i: int, keep_if_refused: bool = false) -> Dictionary:
 		host.wheel_toast(why, "warn")
 		return {"refused": why}
 	var was := info
+	var centre: Vector2 = wheel.centre
 	wheel.close()
 	info = {}
 	_src = ""
+	if simple():
+		return _choose_simple(was, verb, bool(s.get("insist", false)), centre)
 	var extra: Dictionary = was.extras.get(verb, {})
 	if bool(was.group):
 		return {"asked": ask_group(verb, extra, was.members)}
 	return {"asked": ask_one(was.who, verb, extra)}
+
+
+## ONE HOUSE: a verb that needs a spot waits for the next click; the others ask at once. A refusal that a push could override keeps the wheel up, with
+## the reason and its slice reading Insist.
+func _choose_simple(was: Dictionary, verb: String, insisting: bool, centre: Vector2) -> Dictionary:
+	if PLACE_VERBS.has(verb) and not insisting:
+		return begin_place(verb, was, centre)
+	if bool(was.group):
+		return {"asked": ask_group(verb, {}, was.members)}
+	var r: Dictionary = {}
+	if insisting:
+		var verbs = host.wheel_verbs()
+		if verbs != null and verbs.contact == was.who and not verbs.last.is_empty() and not bool(verbs.last.ok) and String(verbs.last.verb) == verb:
+			r = verbs.insist()
+			if host.has_method("wheel_said"):
+				host.wheel_said(was.who, r)
+	if r.is_empty():
+		r = ask_one(was.who, verb, {})
+	_after_one(was, verb, r, centre)
+	return {"asked": r}
+
+
+## They said no and a push could change it: the wheel comes back where it was, with the reason, and the verb's slice says Insist.
+func _after_one(was: Dictionary, verb: String, r: Dictionary, centre: Vector2) -> void:
+	if r.is_empty() or bool(r.get("ok", false)) or bool(r.get("hard", true)) or bool(r.get("insisted", false)):
+		return
+	info = {"who": was.who, "tile": was.get("tile", Vector2.ZERO), "extras": was.get("extras", {}), "group": false, "members": group_now(),
+		"refused": {"verb": verb, "why": String(r.get("why", ""))}}
+	_open_ms = Time.get_ticks_msec()
+	var words := _words()
+	words["latched"] = true
+	wheel.open_at(centre, words)
+
+
+# ---------------------------------------------------------- click where (One House) --
+
+## Hold here, Search that: the wheel is put away and a note follows the pointer until the next click on the world puts the spot down.
+func begin_place(verb: String, was: Dictionary, centre: Vector2) -> Dictionary:
+	pending = {"verb": verb, "who": was.who, "group": bool(was.group), "members": was.members, "centre": centre}
+	wheel.show_place(String(PLACE_NOTES.get(verb, "Click where. Esc: cancel")))
+	wheel.move_pointer(host.wheel_pointer())
+	return {"placing": verb}
+
+
+## The click that puts the spot down: {"asked"} when it was asked, {"refused"} when the spot is no good (the note stays, for another try).
+func place_click(pos: Vector2) -> Dictionary:
+	if not is_placing():
+		return {}
+	var verb := String(pending.verb)
+	var spot: Dictionary = host.wheel_spot(verb, host.wheel_tile(pos), pending.get("who"))
+	if spot.has("error"):
+		host.wheel_toast(String(spot.error), "warn")
+		return {"refused": String(spot.error)}
+	var was := pending
+	cancel_place()
+	var extra := {"at": spot.at}
+	if bool(was.group):
+		return {"asked": ask_group(verb, extra, was.members)}
+	var r := ask_one(was.who, verb, extra)
+	_after_one({"who": was.who, "tile": host.wheel_tile(pos), "extras": {}}, verb, r, was.centre)
+	return {"asked": r}
 
 
 ## Asks one person for `verb` through the dock's own path: they are picked (their dock opens, with the answer line and Insist), the radio's verbs
@@ -308,7 +548,7 @@ func ask_one(p, verb: String, extra: Dictionary = {}) -> Dictionary:
 	if not st.enabled:
 		host.wheel_toast(String(st.why), "warn")
 		return {"ok": false, "line": "", "why": String(st.why), "hard": true, "verb": verb}
-	if host.wheel_selected() != p:
+	if not simple() and host.wheel_selected() != p:
 		host.wheel_pick(p)
 	if verbs.contact != p:
 		verbs.set_contact(p)
@@ -351,7 +591,9 @@ func ask_group(verb: String, extra: Dictionary, members: Array) -> Dictionary:
 	host.wheel_toast(String(sum.text), "warn" if int(sum.refused) > 0 else "info")
 	if int(sum.ok) > 0:
 		host.wheel_flag(verb, ex)
-	_remember(verb, ex)
+	_remember(verb, ex, members)
+	if simple() and host.has_method("wheel_said") and not members.is_empty():
+		host.wheel_said(members[0], {"ok": int(sum.ok) > 0})    # (the lesson of the wheel counts an ask to everyone too)
 	sum["results"] = results
 	return sum
 
@@ -414,32 +656,38 @@ static func join_names(names: Array) -> String:
 # ------------------------------------------------------------ the last order --
 
 ## Every order the dock's verbs give (a button, a right click, the wheel's own, Z's): what Z repeats.
-func on_requested(_contact, verb: String, _result: Dictionary) -> void:
+func on_requested(contact, verb: String, _result: Dictionary) -> void:
 	var verbs = host.wheel_verbs()
 	var ex: Dictionary = verbs.last.get("extra", {}) if verbs != null else {}
 	var at = ex.get("at")
 	if verb == "hold" and typeof(at) != TYPE_VECTOR2:
 		var me = host.wheel_me()
 		at = Vector2(me.x, me.y) if me != null else null
-	_remember_at(verb, at if typeof(at) == TYPE_VECTOR2 else null, String(ex.get("post", "")))
+	_remember_at(verb, at if typeof(at) == TYPE_VECTOR2 else null, String(ex.get("post", "")), [String(contact.id)] if contact != null else [])
 
 
-func _remember(verb: String, extra: Dictionary) -> void:
+func _remember(verb: String, extra: Dictionary, members: Array = []) -> void:
 	var at = extra.get("at")
-	_remember_at(verb, at if typeof(at) == TYPE_VECTOR2 else null, String(extra.get("post", "")))
+	var ids: Array = []
+	for p in members:
+		ids.append(String(p.id))
+	_remember_at(verb, at if typeof(at) == TYPE_VECTOR2 else null, String(extra.get("post", "")), ids)
 
 
-func _remember_at(verb: String, at, post: String) -> void:
-	last_order = {"verb": verb, "at": at, "post": post}
+func _remember_at(verb: String, at, post: String, ids: Array = []) -> void:
+	last_order = {"verb": verb, "at": at, "post": post, "who": ids}
 
 
 ## Z: the last order again, for the person picked (else the one under the pointer, else the nearest). Returns the answer ({} when nothing was asked).
+## One House: to the same people it went to (they are on the radio wherever they are), the same spot.
 func repeat() -> Dictionary:
 	if not host.wheel_ok() or not host.wheel_allowed():
 		return {}
 	if last_order.is_empty():
-		host.wheel_toast("No order to repeat yet: give one first (hold C for the wheel)", "info")
+		host.wheel_toast("No order to repeat yet. Click someone first", "info")
 		return {}
+	if simple():
+		return _repeat_simple()
 	var who = target_for(host.wheel_tile(host.wheel_pointer()))
 	if who == null:
 		host.wheel_toast("Pick someone first (their card, or 1 to 5)", "info")
@@ -449,6 +697,30 @@ func repeat() -> Dictionary:
 		extra["at"] = last_order.at
 	if String(last_order.post) != "":
 		extra["post"] = last_order.post
+	var r := ask_one(who, String(last_order.verb), extra)
+	if bool(r.get("ok", false)):
+		var line := plain(String(r.get("line", "")))
+		host.wheel_toast("%s: %s (again)" % [String(who.first), line] if line != "" else "%s (again)" % String(who.first))
+	return r
+
+
+func _repeat_simple() -> Dictionary:
+	var ids: Array = last_order.get("who", [])
+	var people: Array = []
+	for p in host.wheel_crew():
+		if ids.has(String(p.id)):
+			people.append(p)
+	if people.is_empty():
+		host.wheel_toast("Nobody to ask again. Click someone first", "info")
+		return {}
+	var extra := {}
+	if typeof(last_order.at) == TYPE_VECTOR2:
+		extra["at"] = last_order.at
+	if String(last_order.post) != "":
+		extra["post"] = last_order.post
+	if people.size() > 1:
+		return ask_group(String(last_order.verb), extra, people)
+	var who = people[0]
 	var r := ask_one(who, String(last_order.verb), extra)
 	if bool(r.get("ok", false)):
 		var line := plain(String(r.get("line", "")))
@@ -472,6 +744,11 @@ func pick_number(n: int) -> bool:
 func key_down(code: int, shift: bool = false, command: bool = false) -> bool:
 	if command:
 		return false    # (Ctrl or Cmd with a letter is a command, not the wheel's)
+	if is_placing():
+		if code == KEY_ESCAPE or code == KEY_C:
+			cancel_place()
+			return true
+		return code == KEY_Z    # (W A S D still walk; the rest is the game's)
 	if is_open():
 		if code == KEY_ESCAPE or code == KEY_C:
 			cancel()
@@ -479,13 +756,15 @@ func key_down(code: int, shift: bool = false, command: bool = false) -> bool:
 		if code == KEY_SHIFT:
 			toggle_group()
 			return true
+		if simple():
+			return code == KEY_Z
 		# (the keys that would pick someone else, ask again or go round the crew leave the wheel as it is; the rest is the game's: W A S D walk)
 		return (code >= KEY_1 and code <= KEY_5) or code == KEY_Z or code == KEY_TAB
 	if not host.wheel_ok():
 		return false
 	if code == KEY_C:
-		return open(host.wheel_pointer(), "key")
-	if code >= KEY_1 and code <= KEY_5 and host.wheel_crew_keys():
+		return open(host.wheel_pointer(), "key", shift and simple())
+	if code >= KEY_1 and code <= KEY_5 and not simple() and host.wheel_crew_keys():
 		if shift and code <= KEY_3:
 			return false    # (Shift and 1 2 3 are the speeds)
 		return pick_number(int(code) - int(KEY_1) + 1)
@@ -506,6 +785,22 @@ func key_up(code: int) -> bool:
 ## A mouse button: the middle one opens the wheel (on a press that no control took) and releases it; with it up, the left button clicks it and the right
 ## one cancels it. True when the event was the wheel's.
 func mouse(ev: InputEventMouseButton) -> bool:
+	if is_placing():
+		# (One House: a verb waits for its spot: the next left click on the world puts it down; the right or middle button, or a click on a control, gives it up)
+		if not ev.pressed:
+			return false
+		if ev.button_index == MOUSE_BUTTON_LEFT:
+			if host.wheel_over_hud():
+				cancel_place()
+				return false
+			place_click(ev.position)
+			return true
+		if ev.button_index == MOUSE_BUTTON_RIGHT or ev.button_index == MOUSE_BUTTON_MIDDLE:
+			cancel_place()
+			return true
+		return false
+	if ev.button_index == MOUSE_BUTTON_MIDDLE and simple():
+		return false    # (hold C is the one accelerator)
 	if ev.button_index == MOUSE_BUTTON_MIDDLE:
 		if ev.pressed:
 			if is_open() or host.wheel_over_hud() or not host.wheel_ok():
@@ -528,5 +823,5 @@ func mouse(ev: InputEventMouseButton) -> bool:
 
 ## The pointer moved.
 func motion(pos: Vector2) -> void:
-	if is_open():
+	if is_open() or is_placing():
 		wheel.move_pointer(pos)
