@@ -37,6 +37,8 @@ const KIT_PROPS := [
 	["garden_bed", "outdoors", 3, 1, 2, true, ""], ["shed", "outdoors", 3, 2, 4, true, ""], ["swing_set", "outdoors", 3, 2, 4, true, ""], ["slide", "outdoors", 1, 3, 4, true, ""],
 	["bench", "outdoors", 2, 1, 2, true, ""], ["car_wreck", "outdoors", 4, 3, 4, true, ""], ["hydrant", "street", 1, 1, 2, false, ""], ["streetlamp", "street", 1, 1, 4, false, ""],
 	["market_stall", "outdoors", 3, 2, 4, true, ""],
+	# (ARRIVAL: the arrows of the way in: double chevrons painted on the road at the entry, pointing into the town)
+	["marker_enter", "marker", 1, 1, 1, false, ""],
 ]
 ## Things drawn along an axis (the manifest has `orient`, not `facing`, for them) and their axis; and the cars (the kit's `car`).
 const KIT_ORIENT := {"bike": "h", "garden_bed": "h", "swing_set": "h"}
