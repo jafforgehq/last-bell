@@ -571,11 +571,13 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	var fy := int(plan.fy)
 	var margin := lw - box.x
 	var start := bool(spec.get("start", false))
-	var fenced := bool(spec.get("fenced", false)) and margin >= 2 and not start
+	# (ARRIVAL: a candidate's lot is a clear one as the start lot is: the house in the middle, no fence, a bare ring and yard; the start house itself is the only one with the rest of its tricks)
+	var clear := start or bool(spec.get("clear", false))
+	var fenced := bool(spec.get("fenced", false)) and margin >= 2 and not clear
 	var bx := 0
 	var by := fy if front == "N" else lh - fy - box.y
 	var attached := kind in ["terrace", "terrace_ext", "rowshop", "kiosk", "cornershop", "shop", "pharmacy", "bakery", "hardware", "diner", "bank", "office", "apartments"]
-	if start:
+	if clear:
 		# three tiles of clear ground to the sides, four in front (the step before the door lies beyond the ring) and the rest behind (two to the sides and three in front in a lot that is no
 		# bigger than it must be)
 		bx = maxi(0, (lw - box.x) / 2)
@@ -668,7 +670,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 		for j in range(i + 1, parts.size()):
 			if i != ruin_part and j != ruin_part:
 				_door_between(cv, parts[i], parts[j], rng, room_at, hop_of)
-	var doors := _outer_doors(cv, parts, rooms, room_at, front, kind, rng, start)
+	var doors := _outer_doors(cv, parts, rooms, room_at, front, kind, rng, clear)
 	var front_pair: Array = doors.front
 	var fd: Vector2i = front_pair[0] if not front_pair.is_empty() else Vector2i(lw / 2, by)
 	var out_dir := Vector2i(0, -1) if front == "N" else Vector2i(0, 1)
@@ -715,7 +717,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	var bb := Rect2i(x0, y0, x1 - x0, y1 - y0)
 	out.buildings.append({"kind": kind, "parts": town_parts, "box": Rect2i(x0 + lot.position.x, y0 + lot.position.y, x1 - x0, y1 - y0),
 		"door": Vector2i(cv.entry.x + lot.position.x, cv.entry.y + lot.position.y), "front_door": fdt, "landmark": String(plan.get("landmark", "")), "state": String(out.state), "drive": Rect2i()})
-	if bool(spec.get("shed", false)) and not start:
+	if bool(spec.get("shed", false)) and not clear:
 		_add_shed(cv, rng, spec, out, bb, front)
 	# the yard: the path, the step, bushes, a fence or hedge, a car on gravel (the kit's)
 	var back_dir := Vector2i(0, 1) if front == "N" else Vector2i(0, -1)
@@ -725,7 +727,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 			back_door = Vector2i(doors.all[k][0]) + back_dir
 			break
 	var garage := Vector2i(doors.garage[0]) if not (doors.garage as Array).is_empty() else Vector2i(-1, -1)
-	var dressing: Dictionary = kit.dress_lot(cv, rng, kind, lot, front, bb, cv.entry, back_door, garage, start, fenced, kind in HOME_KINDS, _size)
+	var dressing: Dictionary = kit.dress_lot(cv, rng, kind, lot, front, bb, cv.entry, back_door, garage, clear, fenced, kind in HOME_KINDS, _size)
 	out.dressing.ground.append_array(dressing.ground)
 	out.dressing.lines.append_array(dressing.lines)
 	out.dressing.gates.append_array(dressing.gates)
@@ -930,8 +932,7 @@ func _dress_extra(cv, rng: RandomNumberGenerator, spec: Dictionary, bb: Rect2i, 
 	var kind := String(spec.kind)
 	var district := String(spec.district)
 	var yard := String(spec.get("yard", "lawn"))
-	var start := bool(spec.get("start", false))
-	if start:
+	if bool(spec.get("start", false)) or bool(spec.get("clear", false)):
 		return
 	var all := [0, 0, lw, lh]
 	var ops: Array = []

@@ -14,7 +14,16 @@
 ## (TownDistricts.MIX), each a lot dictionary:
 ##   {"id", "rect": Rect2i, "front": "N"|"S", "district", "kind" (a building kind or "pocket", "park", "plaza", "field", "woods", "meadow", "yard"), "plan" (BuildingPlans.plan),
 ##    "block": index, "street": the name of the road it faces, "number": its number in that street, "start": bool}
-## `make` returns {"size", "ring", "roads", "blocks", "lots", "start_lot", "terrain", "district_map", "marks", "avenue", "landmarks"}.
+## `make` returns {"size", "ring", "roads", "blocks", "lots", "start_lot", "terrain", "district_map", "marks", "avenue", "landmarks", "arrival"}.
+##
+## THE ARRIVAL (docs/superpowers/specs/2026-10-05-arrival-design.md; towns of 160 tiles and more, `arrival` is {} in a smaller one, which keeps the old start block). The way into the town is
+## the end of the main avenue at its west or its east border (at random; the avenue is kept in the middle half of the town). The two blocks that stand beside the avenue at that end are made
+## by hand, a strip of 17 to 25 tiles deep each (`_arrival_side`: the strip, a street across the town behind it, the rest of the area cut as ever): on one side the best candidate (the start
+## lot: a family home in a lot of 24 x 20 or more with a clear ring) and on the other a house of the middle sort (a lot of 18 x 15 to 17) and a cottage (10 x 8 in a lot of 14 x 13, the rest of
+## the strip's depth behind it a pocket of grass and trees), after a few ordinary lots (the base's spawn rule, scripts/town/base_layout.gd, wants a candidate's middle 36 tiles from the
+## map's edge, so the first lots can be no candidate: that is why the third is 46 to 54 tiles from the entry). Their lots carry `tier` ("best" | "ok" | "poor") and `clear` (a bare yard
+## and ring, like the start lot's). `arrival` = {"east": bool, "ay": the avenue's row, "road": Rect2i of the avenue's end, "pos": the tile the avatar stands on, "face": "E" | "W", "best":
+## "N" | "S" the side of the avenue the best candidate is on}.
 extends RefCounted
 
 const D := preload("res://scripts/town/town_districts.gd")
@@ -37,6 +46,17 @@ const WANT_BUILDINGS := 115
 ## The start lot: the family home of 18 x 14 with three tiles of ground to each side, four in front and three behind. Its block must be this big inside its sidewalk.
 const START_W := 22
 const START_DEPTH := 20
+## The arrival's blocks (see the header): a town of this size or more has them; the width of the block along the avenue (its sidewalk ring included), the ordinary lots before the
+## candidates on the best side and on the other, and the width of the lot of each tier (the house stands in the middle of it).
+const ARRIVAL_MIN_SIZE := 160
+const ARR_BLOCK_W := 52
+const ARR_GATE_BEST := 14
+const ARR_GATE_OTHER := 16
+const ARR_BEST_W := 24
+const ARR_OK_W := 18
+const ARR_POOR_W := 14
+const ARR_COTTAGE := Vector2i(10, 8)
+const ARR_COTTAGE_GROUND := 5
 const TREES := ["Elm", "Oak", "Birch", "Cedar", "Maple", "Pine", "Ash", "Willow", "Alder", "Hazel", "Linden", "Rowan", "Poplar", "Holly"]
 const ROADS_NS := ["Mill Road", "Station Road", "Chapel Lane", "Orchard Road", "School Lane", "Park Road", "Bridge Street", "Garden Way", "Quarry Road", "Field Lane", "Kiln Road", "Hill Road", "Market Lane", "Ferry Road", "Bell Lane", "Tannery Road", "Church Street"]
 
@@ -52,6 +72,8 @@ var marks: Array = []
 var start_lot := -1
 var avenue := -1
 var landmarks: Array = []
+## The arrival (see the header): {} when the town has none.
+var arrival: Dictionary = {}
 var _tid := {}
 var _area := Rect2i()
 var _cul_used := 0
@@ -77,7 +99,7 @@ func make(seed_in: int, size_in: int, tids: Dictionary, _opts: Dictionary = {}) 
 	_names()
 	_marks()
 	return {"size": size, "ring": ring, "roads": roads, "blocks": blocks, "lots": lots, "start_lot": start_lot, "terrain": terrain, "district_map": district_map,
-		"marks": marks, "avenue": avenue, "landmarks": landmarks}
+		"marks": marks, "avenue": avenue, "landmarks": landmarks, "arrival": arrival}
 
 
 # ----------------------------------------------------------------- streets, blocks --
@@ -93,10 +115,54 @@ func _roads_and_blocks() -> void:
 	if hi < lo:
 		_bsp(_area, "")
 		return
-	var ay := lo + int(float(hi - lo) * rng.randf_range(0.3, 0.7))
+	var with_arrival := size >= ARRIVAL_MIN_SIZE
+	# (the arrival's houses want roads 35 to 60 tiles out on every side of them, the base's spawns: the avenue stays in the middle half of the town)
+	var ay := lo + int(float(hi - lo) * (rng.randf_range(0.42, 0.58) if with_arrival else rng.randf_range(0.3, 0.7)))
 	avenue = _add_road("h", Rect2i(EDGE, ay, size - 2 * EDGE, AVENUE_W), "avenue", true)
+	if with_arrival:
+		_arrival_blocks(ay)
+		return
 	_bsp(Rect2i(_area.position.x, _area.position.y, _area.size.x, ay - _area.position.y), "N")
 	_bsp(Rect2i(_area.position.x, ay + AVENUE_W, _area.size.x, _area.end.y - ay - AVENUE_W), "S")
+
+
+## The streets and blocks of a town with an arrival: the avenue's west or east end, and on each side of it a strip of blocks beside the avenue, the first of which is the arrival's block
+## (made by hand in `_arrival_lots`); the rest of the two areas is cut as ever.
+func _arrival_blocks(ay: int) -> void:
+	var east := rng.randf() < 0.5
+	var best_north := rng.randf() < 0.5
+	var d_best := rng.randi_range(22, 25)
+	var d_other := rng.randi_range(17, 19)
+	arrival = {"east": east, "ay": ay, "best": "N" if best_north else "S",
+		"road": Rect2i(size - EDGE - 14 if east else EDGE, ay, 14, AVENUE_W),
+		"pos": Vector2(float(size) - 4.5 if east else 4.5, float(ay) + 3.5), "face": "W" if east else "E"}
+	_arrival_side("N", Rect2i(_area.position.x, _area.position.y, _area.size.x, ay - _area.position.y), d_best if best_north else d_other, east, best_north)
+	_arrival_side("S", Rect2i(_area.position.x, ay + AVENUE_W, _area.size.x, _area.end.y - ay - AVENUE_W), d_other if best_north else d_best, east, not best_north)
+
+
+## One side of the avenue: the strip beside it (`depth` tiles deep), the street across the town behind the strip, the rest of the area cut as ever (`through` = the side, the street that
+## runs out of the town), and the strip itself: the arrival's block at the entry's end, a street, then the rest of the strip cut as ever.
+func _arrival_side(side: String, area: Rect2i, depth: int, east: bool, has_best: bool) -> void:
+	var strip: Rect2i
+	var behind: Rect2i
+	var rest: Rect2i
+	if side == "N":
+		strip = Rect2i(area.position.x, area.end.y - depth, area.size.x, depth)
+		behind = Rect2i(area.position.x, strip.position.y - ROAD_W, area.size.x, ROAD_W)
+		rest = Rect2i(area.position.x, area.position.y, area.size.x, behind.position.y - area.position.y)
+	else:
+		strip = Rect2i(area.position.x, area.position.y, area.size.x, depth)
+		behind = Rect2i(area.position.x, strip.end.y, area.size.x, ROAD_W)
+		rest = Rect2i(area.position.x, behind.end.y, area.size.x, area.end.y - behind.end.y)
+	_add_road("h", behind, "street")
+	_bsp(rest, side)
+	var bx := strip.end.x - ARR_BLOCK_W if east else strip.position.x
+	blocks.append({"id": blocks.size(), "rect": Rect2i(bx, strip.position.y, ARR_BLOCK_W, depth), "district": "", "role": "rows", "front_pref": "", "required": [], "cul": true, "start": false,
+		"arrival": side, "has_best": has_best})
+	var sx := bx - ROAD_W if east else bx + ARR_BLOCK_W
+	_add_road("v", Rect2i(sx, strip.position.y, ROAD_W, depth), "street")
+	var rest_w := strip.size.x - ARR_BLOCK_W - ROAD_W
+	_bsp(Rect2i(strip.position.x if east else sx + ROAD_W, strip.position.y, rest_w, depth), "")
 
 
 ## Splits an area of the town with a street until its pieces are blocks. `through`: "N" or "S" makes the first vertical street run out to that border of the world.
@@ -203,6 +269,10 @@ func _districts() -> void:
 				b.front_pref = "N"
 			if b.front_pref != "" and u > 0.18 and u < 0.82:
 				b.district = D.MAIN
+	# the arrival's blocks are houses (`_arrival_lots` makes their lots)
+	for b in blocks:
+		if String(b.get("arrival", "")) != "":
+			b.district = D.SUBURB
 	# one park (the smallest of the blocks the seed gave it), the rest houses
 	var parks: Array = []
 	for b in blocks:
@@ -231,7 +301,14 @@ func _districts() -> void:
 	# the start block: the suburban block with room for the start lot nearest the middle of the town and farthest from the shops and the works
 	var best_score := 1.0e9
 	var pick := -1
+	if not arrival.is_empty():
+		# (a town with an arrival: the start lot is the best candidate, in the arrival's block on the best side of the avenue)
+		for b in blocks:
+			if String(b.get("arrival", "")) != "" and bool(b.get("has_best", false)):
+				pick = int(b.id)
 	for b in blocks:
+		if not arrival.is_empty():
+			break
 		# (a block of the old town or the works will do when no suburban one is placed right: it becomes a suburb)
 		if b.district != D.SUBURB and b.district != D.OLDTOWN and b.district != D.INDUSTRIAL:
 			continue
@@ -332,7 +409,7 @@ func _ensure(kind: String, u: float, v: float, count: int) -> void:
 		var best := 1.0e9
 		var pick := -1
 		for b in blocks:
-			if b.district == kind or b.start:
+			if b.district == kind or b.start or String(b.get("arrival", "")) != "":
 				continue
 			var left := 0
 			for o in blocks:
@@ -588,6 +665,9 @@ func _block_lots() -> void:
 		if String(b.role) == "park":
 			_add_lot(inner, "N", d, "park", int(b.id), inner.size.y)
 			continue
+		if String(b.get("arrival", "")) != "":
+			_arrival_lots(b, inner)
+			continue
 		var single := String(b.role) == "single"
 		var req: Array = (b.required as Array).duplicate()
 		var rows := _rows_for(b, inner, single)
@@ -626,6 +706,55 @@ func _block_lots() -> void:
 			if as_start and placed:
 				start_done = true
 			ri += 1
+
+
+## The lots of an arrival block (one row beside the avenue), from the end of the town the entry is at: a few ordinary lots (the gate), then the candidates: on the best side the start lot
+## (the family home, 24 wide) and on the other side a house of the middle sort (18 wide) and a cottage (14 wide); the rest of the row as any row. A candidate's lot has `tier` and `clear`.
+func _arrival_lots(b: Dictionary, inner: Rect2i) -> void:
+	var east := bool(arrival.east)
+	var front := "S" if String(b.arrival) == "N" else "N"
+	var depth := inner.size.y
+	var list: Array = [["", ARR_GATE_BEST, ""], ["start", ARR_BEST_W, "best"]] if bool(b.get("has_best", false)) else [["", ARR_GATE_OTHER, ""], ["ok", ARR_OK_W, "ok"], ["cottage", ARR_POOR_W, "poor"]]
+	var t := 0
+	for e in list:
+		var w: int = e[1]
+		var rect := _arrival_span(inner, east, t, w)
+		t += w
+		var kind := String(e[0])
+		if kind == "ok":
+			kind = "medium" if rng.randf() < 0.7 else "small"
+		# (the cottage's lot is no deeper than its house and a tile of ground in front and behind: no yard to speak of; the rest of the row's depth behind it is a pocket)
+		var lot_depth := mini(depth, ARR_COTTAGE.y + ARR_COTTAGE_GROUND) if kind == "cottage" else depth
+		var plan: Dictionary = Plans.plan(kind, w, lot_depth, rng) if kind != "" else {}
+		if plan.is_empty():
+			# (the gate, or a lot the plan does not fit: an ordinary row there)
+			_fill_row(b, {"rect": rect, "front": front}, [], false)
+			continue
+		if kind == "cottage":
+			# (the arrival's cottage is 10 x 8, not 7 x 6 or 7: its three rooms must have room for the base's four props)
+			plan["box"] = ARR_COTTAGE
+			plan["parts"] = [Rect2i(0, 0, ARR_COTTAGE.x, ARR_COTTAGE.y)]
+			if lot_depth < depth:
+				var behind := depth - lot_depth
+				if front == "N":
+					_add_lot(Rect2i(rect.position.x, rect.position.y + lot_depth, w, behind), front, b.district, "pocket", int(b.id), behind)
+				else:
+					_add_lot(Rect2i(rect.position.x, rect.position.y, w, behind), front, b.district, "pocket", int(b.id), behind)
+					rect = Rect2i(rect.position.x, rect.position.y + behind, w, lot_depth)
+				rect.size.y = lot_depth
+		var id := _add_lot(rect, front, b.district, kind, int(b.id), lot_depth, plan)
+		lots[id]["tier"] = String(e[2])
+		lots[id]["clear"] = true
+		if kind == "start":
+			lots[id].start = true
+			start_lot = id
+	if inner.size.x - t >= 4:
+		_fill_row(b, {"rect": _arrival_span(inner, east, t, inner.size.x - t), "front": front}, [], false)
+
+
+## The rectangle of a lot of an arrival block: `t` tiles from the end of the block the entry is at, `w` wide, the block's whole depth.
+func _arrival_span(inner: Rect2i, east: bool, t: int, w: int) -> Rect2i:
+	return Rect2i(inner.end.x - t - w if east else inner.position.x + t, inner.position.y, w, inner.size.y)
 
 
 ## The rows of lots in a rectangle of a block: two (a north one facing north, a south one facing south, with an alley between them in the old town) when it is deep enough,

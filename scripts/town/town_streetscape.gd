@@ -5,6 +5,7 @@
 extends RefCounted
 
 const EDGE := 2
+const AVENUE_W := 6
 
 
 ## The pieces of `run`, for the stepped build (`TownGen.step` does one a step).
@@ -70,6 +71,7 @@ static func _road_ends(g) -> void:
 	var H: int = g._size
 	var rng: RandomNumberGenerator = g._rng
 	var cv = g._street_cv
+	var arrival: Dictionary = g._layout.arrival
 	for rd in g._layout.roads:
 		if not bool(rd.through):
 			continue
@@ -88,6 +90,9 @@ static func _road_ends(g) -> void:
 			if r.end.y >= H - EDGE:
 				ends.append([H - EDGE - 1, false])
 		for e in ends:
+			# ARRIVAL: the end of the avenue the avatar comes in at has no roadblock (the way in from the forest): `_entry` puts a wreck, a car and a sign on it
+			if not arrival.is_empty() and int(rd.id) == int(g._layout.avenue) and bool(e[1]) != bool(arrival.east):
+				continue
 			var at: int = int(e[0])
 			if horiz:
 				for y0 in [r.position.y, r.end.y - 5]:
@@ -111,6 +116,40 @@ static func _road_ends(g) -> void:
 						g._solid[at * W + x0 + xx] = 1
 				var wy := at + 3 if bool(e[1]) else at - 8
 				_put_car(g, "car_v", r.position.x + rng.randi_range(0, r.size.x - 2), wy)
+	if not arrival.is_empty():
+		_entry(g, arrival)
+
+
+## ARRIVAL: the way in. The avenue's end the avatar stands at has no roadblock: a wreck across the lane nearer the north side, a car in the other lane a few tiles on (so that the way in
+## winds between them and stays at least three tiles wide) and, for the road sign (the kit has none), three double chevrons painted on the lane the avatar stands in, pointing into the town
+## (the kit's `marker_enter`). `g._entry_arrows` are their middles (tiles), `g._entry_sign` the middle one, (-1, -1) when none stands.
+static func _entry(g, arrival: Dictionary) -> void:
+	var rng: RandomNumberGenerator = g._art_rng
+	var W: int = g._size
+	var east: bool = bool(arrival.east)
+	var ay: int = int(arrival.ay)
+	var wreck_fp: Vector2i = g._street_cv.tiles_of("car_wreck")
+	var car_fp: Vector2i = g._street_cv.tiles_of("car_h")
+	var wx := EDGE + 8 + rng.randi_range(0, 2)
+	var cx := EDGE + 16 + rng.randi_range(0, 3)
+	for wy in [ay, ay + 1]:
+		if _put_wreck(g, true, W - wx - wreck_fp.x if east else wx, wy):
+			break
+	_put_car(g, "car_h", W - cx - car_fp.x if east else cx, ay + 4)
+	# the sign: three double chevrons painted on the avatar's lane, pointing into the town (the kit's `marker_enter`)
+	g._entry_arrows = []
+	for ax in [8, 12, 16]:
+		var tx: int = W - 1 - ax if east else ax
+		var o = g._street_cv._decor("marker_enter", tx, ay + 3, 0.0, 0.0)
+		if o == null:
+			continue
+		g._kit.kit_set(o, g._street_cv.props["marker_enter"], rng)
+		o["facing"] = "w" if east else "e"
+		o["solid"] = false
+		g._objects.append(o)
+		g._street_objs += 1
+		g._entry_arrows.append(Vector2(float(tx) + 0.5, float(ay) + 3.5))
+	g._entry_sign = g._entry_arrows[g._entry_arrows.size() >> 1] if not g._entry_arrows.is_empty() else Vector2(-1.0, -1.0)
 
 
 ## Puts a car on the asphalt at a top left tile when its tiles are free road. True when it stands.
@@ -197,9 +236,12 @@ static func _cars(g) -> void:
 	var placed := 0
 	var wrecked := 0
 	var tries := (total + wrecks) * 40
-	var start_c := Vector2(-1000.0, -1000.0)
-	if g._start_house >= 0:
-		start_c = Vector2(Rect2i(g._houses[g._start_house].rect).get_center())
+	# (the houses whose spawn roads are kept clear: the start house, and in a town with an arrival every candidate)
+	var base_centers: Array = g._base_centers()
+	# (ARRIVAL: the way in from the entry is left clear of parked cars and wrecks for 26 tiles: the walk in is not a hunt for a gap; the entry's own wreck and car are `_entry`'s)
+	var entry_pos := Vector2(-1000.0, -1000.0)
+	if not g._layout.arrival.is_empty():
+		entry_pos = Vector2(g._layout.arrival.pos)
 	while (placed < total or wrecked < wrecks) and tries > 0:
 		tries -= 1
 		var at := rng.randf() * sum
@@ -246,8 +288,14 @@ static func _cars(g) -> void:
 		if clash:
 			continue
 		# no cars on the streets 34 to 62 tiles from the start house: the base's spawns want clear stretches of road there (scripts/town/base_layout.gd `_spawns`)
-		var sd: float = Vector2(tx, ty).distance_to(start_c)
-		if sd > 33.0 and sd < 63.0:
+		if Vector2(tx, ty).distance_to(entry_pos) < 26.0:
+			continue
+		var on_spawn_road := false
+		for bc in base_centers:
+			var sd: float = Vector2(tx, ty).distance_to(bc)
+			if sd > 33.0 and sd < 63.0:
+				on_spawn_road = true
+		if on_spawn_road:
 			continue
 		if wreck:
 			if wrecked < wrecks and _put_wreck(g, horiz, tx, ty):
@@ -296,7 +344,7 @@ static func _lamps(g) -> void:
 				var o: Vector2i = c[1]
 				if o.x < 0 or o.y < 0 or o.x >= W or o.y >= W or g._terrain[o.y * W + o.x] != road:
 					continue
-				if g._terrain[t.y * W + t.x] != walk or g._clear_rect.has_point(t):
+				if g._terrain[t.y * W + t.x] != walk or g._in_clear(t, 0):
 					continue
 				var kind := "streetlamp" if rng.randf() < 0.8 else "hydrant"
 				var obj = g._street_cv._decor(kind, t.x, t.y, 0.0, 0.0)
@@ -339,7 +387,7 @@ static func _litter(g) -> void:
 			if tx < EDGE + 1 or ty < EDGE + 1 or tx >= W - EDGE - 1 or ty >= W - EDGE - 1:
 				continue
 			var ti := ty * W + tx
-			if g._solid[ti] != 0 or (g._terrain[ti] != walk and g._terrain[ti] != road) or (g._clear_rect.size.x > 0 and g._clear_rect.grow(2).has_point(Vector2i(tx, ty))):
+			if g._solid[ti] != 0 or (g._terrain[ti] != walk and g._terrain[ti] != road) or g._in_clear(Vector2i(tx, ty), 2):
 				continue
 			var obj = g._street_cv._decor(kind, tx, ty, rng.randf_range(-0.25, 0.25), rng.randf_range(-0.25, 0.25))
 			if obj != null:
