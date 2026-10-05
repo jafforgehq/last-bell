@@ -1,6 +1,8 @@
 ## The whole town as one colour-coded PNG (One House, TOWNGEN), to LOOK at the layout: the districts tinted, the streets (the main avenue and every street named), the buildings by
 ## type (residential brown, commercial blue, industrial violet, civic red, farm yellow; the floor lighter than the walls, doors white), the start house (a green frame), the rescue
-## spots (cyan, numbered near to far), the landmarks (a yellow diamond), the trees and the cars. No window needed:
+## spots (cyan, numbered near to far; of the other candidates a small dot in the colour of their frame), the landmarks (a yellow diamond), the trees and the cars. ARRIVAL: the entry (a
+## magenta dot and an arrow into the town, the painted chevrons small yellow marks) and every candidate (a frame of its lot: green best, yellow ok, orange poor, under it the tier, rooms, yard and the
+## distance from the entry). No window needed:
 ##
 ##   godot --headless --path <project> --script tools/town_overview.gd -- --seed=1 --out=/tmp/town1.png [--scale=6] [--blocks=6] [--stats]
 ##
@@ -393,10 +395,25 @@ func _draw(town: Dictionary) -> void:
 			var half := rad - absi(dy)
 			_rect(cx - half, cy + dy, half * 2 + 1, 1, Color("ffd400"))
 		_text(String(lm.kind).to_upper().substr(0, 6), cx + rad + 2, cy - 4, 2, Color("ffd400"))
-	# the start house and the rescue spots
+	# the start house (the best candidate) and the rescue spots
 	var sh: Dictionary = houses[int(town.start.house)]
 	_frame(Rect2i(sh.lot), Color("39ff14"), 2)
 	_text("START", sh.lot.position.x * S, maxi(0, sh.lot.position.y * S - 12), 2, Color("39ff14"))
+	# ARRIVAL: the rescue spots of the other candidates (small dots in the colour of their candidate), the candidates (a frame of their lot, tier, rooms and the distance from the entry), the entry
+	var tier_colors := {"best": Color("39ff14"), "ok": Color("ffe000"), "poor": Color("ff8a1f")}
+	if town.has("rescue_for"):
+		for c in town.get("candidates", []):
+			if int(c.house) == int(town.start.house):
+				continue
+			var col: Color = tier_colors.get(String(c.tier), Color.WHITE)
+			for r in town.rescue_for.get(str(int(c.house)), []):
+				var p: Vector2 = r.pos
+				var cx := int(p.x * S)
+				var cy := int(p.y * S)
+				for dy in range(-3, 4):
+					for dx in range(-3, 4):
+						if dx * dx + dy * dy <= 9:
+							_px(cx + dx, cy + dy, col)
 	var n := 1
 	for r in town.rescue:
 		var p: Vector2 = r.pos
@@ -408,13 +425,37 @@ func _draw(town: Dictionary) -> void:
 					_px(cx + dx, cy + dy, Color("00e5ff"))
 		_text(str(n), cx + 7, cy - 5, 2, Color("00e5ff"))
 		n += 1
+	for c in town.get("candidates", []):
+		var ch: Dictionary = houses[int(c.house)]
+		var col2: Color = tier_colors.get(String(c.tier), Color.WHITE)
+		_frame(Rect2i(ch.lot), col2, 2)
+		var lot_r: Rect2i = ch.lot
+		_text("%s %dR %s %d" % [String(c.tier), int(c.rooms), String(c.yard), roundi(float(c.dist))], lot_r.position.x * S, lot_r.end.y * S + 3, 2, col2)
+	if town.has("entry"):
+		var e: Dictionary = town.entry
+		var ep: Vector2 = e.pos
+		var ex := int(ep.x * S)
+		var ey := int(ep.y * S)
+		var dirv := Vector2(1, 0) if String(e.face) == "E" else (Vector2(-1, 0) if String(e.face) == "W" else (Vector2(0, 1) if String(e.face) == "S" else Vector2(0, -1)))
+		var magenta := Color("ff2bd6")
+		for dy in range(-7, 8):
+			for dx in range(-7, 8):
+				if dx * dx + dy * dy <= 40:
+					_px(ex + dx, ey + dy, magenta)
+		for k in range(8, 34):
+			var half := maxi(0, 6 - (k - 8) / 3)
+			for w in range(-half, half + 1):
+				_px(ex + int(dirv.x) * k + int(dirv.y) * w, ey + int(dirv.y) * k + int(dirv.x) * w, magenta)
+		for ap in e.get("arrows", []):
+			_rect(int(float(Vector2(ap).x) * S) - 3, int(float(Vector2(ap).y) * S) - 3, 6, 6, Color("ffe38a"))
+		_text("ENTRY", clampi(ex - 20 if String(e.face) == "W" else ex + 10, 0, img.get_width() - 40), maxi(0, ey - 22), 2, magenta)
 	_legend()
 
 
 func _legend() -> void:
 	var x := 6
 	var y := 6
-	var items := [["RESIDENTIAL", TYPE_COLORS.residential], ["COMMERCIAL", TYPE_COLORS.commercial], ["INDUSTRIAL", TYPE_COLORS.industrial], ["CIVIC", TYPE_COLORS.civic], ["FARM", TYPE_COLORS.farm], ["START", Color("39ff14")], ["RESCUE", Color("00e5ff")], ["LANDMARK", Color("ffd400")]]
+	var items := [["RESIDENTIAL", TYPE_COLORS.residential], ["COMMERCIAL", TYPE_COLORS.commercial], ["INDUSTRIAL", TYPE_COLORS.industrial], ["CIVIC", TYPE_COLORS.civic], ["FARM", TYPE_COLORS.farm], ["START/BEST", Color("39ff14")], ["OK", Color("ffe000")], ["POOR", Color("ff8a1f")], ["ENTRY", Color("ff2bd6")], ["RESCUE", Color("00e5ff")], ["LANDMARK", Color("ffd400")]]
 	_rect(x - 3, y - 3, 120, items.size() * 14 + 4, Color(0, 0, 0, 0.7))
 	for it in items:
 		_rect(x, y, 10, 10, it[1])
