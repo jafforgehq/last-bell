@@ -46,6 +46,8 @@ var clearing
 var search
 var avatar_house := -1
 var avatar_room := -1
+## The title screen's house (scripts/town/title_scene.gd): shown open, as the house the avatar is in is (its roof gone, its rooms seen, its people drawn), though nobody is the avatar there. -1: none.
+var showcase := -1
 
 var _town: Dictionary = {}
 var _list: Array = []
@@ -213,7 +215,7 @@ func _room_of(tx: int, ty: int) -> int:
 
 
 func _revealed(room: int) -> bool:
-	return clearing == null or room == avatar_room or clearing.is_revealed(room)
+	return clearing == null or room == avatar_room or (showcase >= 0 and avatar_house == showcase) or clearing.is_revealed(room)
 
 
 func _find_avatar() -> void:
@@ -223,7 +225,7 @@ func _find_avatar() -> void:
 		av = module.player()
 	_avatar = av
 	if av == null:
-		avatar_house = -1
+		avatar_house = showcase
 		avatar_room = -1
 		return
 	_avatar_at = Vector2(av.x, av.y)

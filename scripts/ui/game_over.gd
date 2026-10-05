@@ -7,7 +7,9 @@ extends Control
 
 const GD := preload("res://scripts/game_data.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
 
+## (The school's words; the town's are the data's `words.defeat`, see `_town_defeat`.)
 const TITLES := {"defeat": "Everyone is gone"}
 const SUBTITLES := {"defeat": "Nobody is left to ring the bell.", "victory": "A convoy is on the road at dawn. You held."}
 const MAX_W := 560.0
@@ -59,7 +61,7 @@ func _build() -> void:
 	panel.add_child(col)
 
 	# the head of the form, then the verdict
-	var header: Label = hud._caps("Report card", hud.PAPER_INK3)
+	var header: Label = hud._caps("The record" if _town() else "Report card", hud.PAPER_INK3)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(header)
 	var result := String(sim.over)
@@ -189,6 +191,8 @@ func _fate(p) -> String:
 ## The headline for how the run ended. A win names the length of the run ("The
 ## thirty days are over"), which is the scenario's, not a fixed number.
 func _title(result: String) -> String:
+	if _town() and result == "defeat":
+		return _town_defeat()[0]
 	if result == "victory":
 		if _campaign():
 			return "The seasons are over"
@@ -199,6 +203,14 @@ func _title(result: String) -> String:
 ## Whether the run is the One House town's.
 func _town() -> bool:
 	return sim.has_method("is_one_house") and sim.is_one_house()
+
+
+## The town's defeat, [headline, line] from the data (`words.defeat`: "The house is empty", "Nobody is left to hold it").
+func _town_defeat() -> Array:
+	var words = OneHouse.data().get("words", {}).get("defeat", [])
+	if words is Array and words.size() >= 2:
+		return [String(words[0]), String(words[1])]
+	return ["The house is empty", "Nobody is left to hold it"]
 
 
 ## Whether the run was the campaign of four seasons (round 10).
@@ -212,7 +224,7 @@ func _campaign() -> bool:
 func _subtitle(result: String) -> String:
 	var line := String(SUBTITLES.get(result, ""))
 	if _town() and result == "defeat":
-		return "Nobody is left to hold the house. The dead are still out there."    # (One House: there is no bell to ring)
+		return "%s. The dead are still out there." % _town_defeat()[1]    # (One House: there is no bell to ring)
 	if not _campaign():
 		return line
 	if result == "victory":

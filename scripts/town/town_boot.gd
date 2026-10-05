@@ -107,7 +107,8 @@ static func plan_of(run: Dictionary) -> Dictionary:
 static func data(run: Dictionary) -> Dictionary:
 	var plan := plan_of(run)
 	var d := from_town(TownGen.make(int(plan.seed), plan.opts))
-	warm_pawns(d)
+	if not bool(run.get("title", false)):    # (the title's few dead take their pictures as they come: 2 ms each, under the loading card)
+		warm_pawns(d)
 	return d
 
 
@@ -146,8 +147,9 @@ const WARM_FRAMES := 6
 const BAR_W := 320.0
 
 
-## The card shown while the town is made (`Main._ready`): a dark screen, a line and a bar that fills as the work goes, on a layer above everything; the caller frees it.
-static func loading_card(parent: Node) -> Node:
+## The card shown while the town is made (`Main._ready`): a dark screen, a line and a bar that fills as the work goes, on a layer above everything; the caller frees it. `label` is
+## its line ("Making the town..."; the title's is the game's name).
+static func loading_card(parent: Node, label_text: String = "Making the town...") -> Node:
 	var layer := CanvasLayer.new()
 	layer.name = "TownLoading"
 	layer.layer = 100
@@ -156,7 +158,7 @@ static func loading_card(parent: Node) -> Node:
 	back.set_anchors_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(back)
 	var label := Label.new()
-	label.text = "Making the town..."
+	label.text = label_text
 	label.add_theme_font_size_override("font_size", 28)
 	label.add_theme_color_override("font_color", Color(0.9, 0.86, 0.74))
 	label.set_anchors_preset(Control.PRESET_CENTER)

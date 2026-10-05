@@ -56,9 +56,14 @@ void fragment() {
 var _mat: ShaderMaterial
 ## The share of them that show now (0 to 1: 0 in rain), for the tests.
 var fade := 1.0
+## The stretch of ground they cross: the yard's (`AREA`), or the one `setup` was given (the title's street).
+var area := AREA
 
 
-func setup(seed_value: int = 5) -> void:
+## `area_override`: another stretch of ground in tiles (the title's town), with an area of its own; left out, the school's yard.
+func setup(seed_value: int = 5, area_override: Rect2 = Rect2()) -> void:
+	if area_override.has_area():
+		area = area_override
 	z_index = 5
 	name = "Litter"
 	var b := Kit.Builder.new()
@@ -77,11 +82,11 @@ func setup(seed_value: int = 5) -> void:
 		mm.set_instance_custom_data(i, Color(rng.randf(), rng.randf(), rng.randf_range(11.0, 16.0) if not paper else rng.randf_range(11.0, 15.0), 0.9 if paper else rng.randf() * 0.78))
 	multimesh = mm
 	_mat = Kit.material(SHADER)
-	_mat.set_shader_parameter("area_px", AREA.size * TILE)
-	_mat.set_shader_parameter("origin_px", AREA.position * TILE)
+	_mat.set_shader_parameter("area_px", area.size * TILE)
+	_mat.set_shader_parameter("origin_px", area.position * TILE)
 	material = _mat
 	# the bits are placed by the shader, far from the instances' own (all at the origin): tell the renderer where they are, or it culls them
-	RenderingServer.canvas_item_set_custom_rect(get_canvas_item(), true, Rect2(AREA.position * TILE, AREA.size * TILE))
+	RenderingServer.canvas_item_set_custom_rect(get_canvas_item(), true, Rect2(area.position * TILE, area.size * TILE))
 
 
 ## Called every frame while shown: `drift` is how far the wind has carried them (tiles), `rain` how wet it is (0 to 1).
@@ -93,4 +98,4 @@ func apply(drift: float, rain: float) -> void:
 
 ## The ground it covers (tiles), for the culling.
 func bounds() -> Rect2:
-	return AREA
+	return area
