@@ -1,7 +1,11 @@
 ## The town (feature/town-core): ONE BIG OPEN TOWN, 192 x 192 tiles, made from a seed in the schema of assets/data/map.json that World and Sim are built on.
 ##
 ## `TownGen.make(seed)` does it in one go; `var g := TownGen.new(); g.begin(seed); while not g.step(8.0): await frame; g.result()` does it a few
-## milliseconds a frame (a loading card; the web build is 3 to 4 times slower than the desktop's ~0.3 s). The same seed always gives the same town (`TownGen.digest`).
+## milliseconds a frame (a loading card; about 0.3 s on the desktop and about the same in Chrome's WebAssembly). The same seed always gives the same town (`TownGen.digest`).
+## STEPS: `step` returns after one PIECE of work when the budget is spent: the streets, one lot, one fifth of the street furniture, a third of the map's finish, a quarter of the people; none is
+## more than about 10 ms on a desktop (a lot nine at most). The generator loads no pictures: it reads the size of a prop's picture from assets/data/prop_sizes.json (`GD.tex_size`, made by
+## tools/make_prop_sizes.gd; loading a prop's 1000 x 1500 pixel picture was half of the time and made the first lot of each kind a 60 ms step), and the loader loads them after, one at a time
+## (scripts/town/town_loader.gd).
 ##
 ## LAYOUT (TOWNGEN). The town is a PLACE, not a grid: scripts/town/town_layout.gd makes a district map (suburb, oldtown, main street, industrial, civic, park, and the farms and
 ## woods of the edge ring), a street network from a BSP (one main avenue 6 wide through the middle, streets of 4 at irregular pitches, T-junctions, streets that run out of the town,
@@ -95,6 +99,8 @@ var _clear_rect := Rect2i()
 var opts: Dictionary = {}
 var _phase := 0
 var _block := 0
+## Which piece of the phase after the lots is next (`step`).
+var _sub := 0
 var _rng := RandomNumberGenerator.new()
 var _lay: Dictionary
 var _base: Dictionary
@@ -147,6 +153,7 @@ func begin(seed_in: int, opts_in: Dictionary = {}) -> void:
 	opts = opts_in
 	_phase = 0
 	_block = 0
+	_sub = 0
 	_started = Time.get_ticks_usec()
 	_rng.seed = seed_in * 7919 + 17
 	_lay = TownKit.layouts()
@@ -186,15 +193,22 @@ func progress() -> float:
 		1:
 			return 0.05 + 0.75 * float(_block) / n_blocks
 		2:
-			return 0.85
+			return 0.80 + 0.05 * float(_sub) / float(Streetscape.STEPS)
 		3:
-			return 0.92
+			return 0.85 + 0.07 * float(_sub) / float(FINISH_STEPS)
 		4:
-			return 0.97
+			return 0.92 + 0.07 * float(_sub) / float(PEOPLE_STEPS)
 	return 1.0
 
 
-## Does about `budget_ms` of the work (always at least one piece of it) and says whether the town is done.
+## The pieces of the phases after the lots (the street furniture's own, the map's indexes', the people's): `step` does one of them at a time, so that none is more than a few milliseconds on a
+## desktop (a browser is slower: a step of 20 ms there is a hitch of the loading card's bar).
+const FINISH_STEPS := 3
+const PEOPLE_STEPS := 4
+
+
+## Does about `budget_ms` of the work (always at least one piece of it) and says whether the town is done. A piece is the streets, one lot, or one piece of the street furniture, of the map's
+## indexes or of the people (each a few milliseconds on a desktop, a lot nine at most).
 func step(budget_ms: float) -> bool:
 	var t0 := Time.get_ticks_usec()
 	while _phase < 5:
@@ -206,15 +220,24 @@ func step(budget_ms: float) -> bool:
 				_blocks_until(t0, budget_ms)
 				if _block >= _layout.lots.size():
 					_phase = 2
+					_sub = 0
 			2:
-				_edge_and_furniture()
-				_phase = 3
+				_edge_and_furniture(_sub)
+				_sub += 1
+				if _sub >= Streetscape.STEPS:
+					_phase = 3
+					_sub = 0
 			3:
-				_finish_map()
-				_phase = 4
+				_finish_map(_sub)
+				_sub += 1
+				if _sub >= FINISH_STEPS:
+					_phase = 4
+					_sub = 0
 			4:
-				_people()
-				_phase = 5
+				_people(_sub)
+				_sub += 1
+				if _sub >= PEOPLE_STEPS:
+					_phase = 5
 		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:
 			break
 	return _phase >= 5
@@ -238,6 +261,7 @@ func _streets() -> void:
 	_marks = _layout.marks
 	_street_cv = Canvas.new()
 	_street_cv.setup(_size, _size, seed_value + 5, _lay.props, _tids, {})
+	_street_cv.size_by_table = true
 	_builder = BuildingGen.new()
 	_builder.setup(_lay.props, _tids, _kit, _size)
 	_tick("streets", t0)
@@ -676,9 +700,9 @@ static func _in_parts(parts: Array, p: Vector2i) -> bool:
 
 # ----------------------------------------------------------- the edge, the streets' things --
 
-func _edge_and_furniture() -> void:
+func _edge_and_furniture(piece: int) -> void:
 	var t0 := Time.get_ticks_usec()
-	Streetscape.run(self)
+	Streetscape.step(self, piece)
 	_tick("street_furniture", t0)
 
 
@@ -691,19 +715,51 @@ func _add_tree(tx: int, ty: int, shut: bool) -> void:
 
 # ------------------------------------------------------------------ the map, the indexes --
 
-func _finish_map() -> void:
+## The piece `piece` (0 to FINISH_STEPS - 1) of the map's finish: the objects in drawing order, the arrays of the data, the tile indexes.
+func _finish_map(piece: int) -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := _size
-	var H := _size
-	_objects.sort_custom(func(a, b):
-		var ka: float = float(a.layer) * 1000.0 + float(a.cy) + float(a.h) / 2.0
-		var kb: float = float(b.layer) * 1000.0 + float(b.cy) + float(b.h) / 2.0
+	match piece:
+		0:
+			_finish_objects()
+		1:
+			_finish_data()
+		_:
+			_finish_tiles()
+	_tick("finish", t0)
+
+
+## The objects in drawing order: by layer and the bottom of their footprint, then by their id in the lot they were made in. (The keys are made once and an index list is sorted by them, the same
+## comparison as the objects' own, so that the order is what sorting the dictionaries gave; reading a dictionary four times a comparison was most of this piece.)
+func _finish_objects() -> void:
+	var n := _objects.size()
+	var keys := PackedFloat64Array()
+	var ids := PackedInt32Array()
+	keys.resize(n)
+	ids.resize(n)
+	for i in n:
+		var o: Dictionary = _objects[i]
+		keys[i] = float(o.layer) * 1000.0 + float(o.cy) + float(o.h) / 2.0
+		ids[i] = int(o.id)
+	var order: Array = range(n)
+	order.sort_custom(func(a: int, b: int):
+		var ka := keys[a]
+		var kb := keys[b]
 		if ka != kb:
 			return ka < kb
-		return int(a.id) < int(b.id))
-	for i in _objects.size():
-		_objects[i]["id"] = i
-		_objects[i]["order"] = i
+		return ids[a] < ids[b])
+	var sorted: Array = []
+	sorted.resize(n)
+	for i in n:
+		var o: Dictionary = _objects[int(order[i])]
+		o["id"] = i
+		o["order"] = i
+		sorted[i] = o
+	_objects = sorted
+
+
+func _finish_data() -> void:
+	var W := _size
+	var H := _size
 	var shut: Array = Array(_solid)
 	var zeros: Array = []
 	zeros.resize(W * H)
@@ -734,7 +790,12 @@ func _finish_map() -> void:
 	d["kit"] = {"ground": _kit_ground, "wall": _kit_wall, "line": _kit_line, "windows": _windows, "gates": _gates, "houses": house_rects}
 	d["workshop"] = {"x": 0.0, "y": 0.0, "what": "At home"}
 	_result = {"data": d}
-	# which house and which room holds each tile
+
+
+## Which house and which room holds each tile.
+func _finish_tiles() -> void:
+	var W := _size
+	var H := _size
 	_tile_house.resize(W * H)
 	_tile_house.fill(-1)
 	_tile_room.resize(W * H)
@@ -750,7 +811,6 @@ func _finish_map() -> void:
 		for y in range(rr.position.y, rr.end.y):
 			for x in range(rr.position.x, rr.end.x):
 				_tile_room[y * W + x] = ri
-	_tick("finish", t0)
 
 
 ## Where the waves come in until a base says otherwise: on the road that runs out of the town at the north, a little inside the border.
@@ -767,10 +827,29 @@ func _spawn_point() -> Array:
 
 # ------------------------------------------------------- the start, the rescues, the dead --
 
-func _people() -> void:
+## What the pieces of `_people` hand on to each other: "start_house", "start_room", "start_pos", "rescue", "dead".
+var _pp := {}
+
+
+## The piece `piece` (0 to PEOPLE_STEPS - 1) of the people: the start and the rescue list, the dead, the result's lists of the map, the streets, districts, lots and the stats.
+func _people(piece: int) -> void:
 	var t0 := Time.get_ticks_usec()
-	var W := _size
-	var H := _size
+	match piece:
+		0:
+			_people_rescue()
+			_tick("people_and_dead", t0)
+		1:
+			_people_dead()
+			_tick("people_and_dead", t0)
+		2:
+			_people_result()
+			_tick("result", t0)
+		_:
+			_people_lists()
+			_tick("result", t0)
+
+
+func _people_rescue() -> void:
 	var rng := _rng
 	var d: Dictionary = _result.data
 	# the start house: the family home of the clear lot the block loop made (the middle block's start row)
@@ -830,15 +909,23 @@ func _people() -> void:
 				picked += 1
 	_top_up_rescue(rescue, want, start_house, start_c, apart_min)
 	rescue.sort_custom(func(a, b): return float(a.dist) < float(b.dist))
-	var dead := _dead(start_house, rescue, start_room)
+	_pp = {"start_house": start_house, "start_room": start_room, "start_pos": start_pos, "rescue": rescue}
+
+
+func _people_dead() -> void:
+	var rescue: Array = _pp.rescue
+	var dead := _dead(int(_pp.start_house), rescue, int(_pp.start_room))
 	for i in dead.size():
 		var hid := int(dead[i].house)
 		if hid >= 0:
 			_houses[hid].dead.append(i)
-	_tick("people_and_dead", t0)
-	var by_kind := {}
-	for h in _houses:
-		by_kind[h.kind] = int(by_kind.get(h.kind, 0)) + 1
+	_pp["dead"] = dead
+
+
+## The result's own entries: the lists of the town, the start, the rescue list and the streets.
+func _people_result() -> void:
+	var W := _size
+	var H := _size
 	_ms["total"] = float(Time.get_ticks_usec() - _started) / 1000.0
 	_result["seed"] = seed_value
 	_result["version"] = VERSION
@@ -846,9 +933,9 @@ func _people() -> void:
 	_result["houses"] = _houses
 	_result["rooms"] = _rooms
 	_result["containers"] = _containers
-	_result["dead"] = dead
-	_result["start"] = {"house": start_house, "pos": start_pos, "room": start_room, "ring": _ring_report(start_house)}
-	_result["rescue"] = rescue
+	_result["dead"] = _pp.dead
+	_result["start"] = {"house": int(_pp.start_house), "pos": _pp.start_pos, "room": int(_pp.start_room), "ring": _ring_report(int(_pp.start_house))}
+	_result["rescue"] = _pp.rescue
 	_result["tile_house"] = _tile_house
 	_result["tile_room"] = _tile_room
 	var names_x: Array = []
@@ -866,14 +953,28 @@ func _people() -> void:
 	for rd in _layout.roads:
 		roads_out.append({"id": int(rd.id), "name": String(rd.name), "dir": String(rd.dir), "rect": rd.rect, "kind": String(rd.kind), "through": bool(rd.through)})
 	_result["streets"] = {"pitch": PITCH, "block": BLOCK, "road": ROAD, "names_x": names_x, "names_y": names_y, "roads": roads_out, "avenue": int(_layout.avenue)}
+
+
+## The result's districts, lots, landmarks and stats.
+func _people_lists() -> void:
+	var dead: Array = _pp.dead
+	var by_kind := {}
+	for h in _houses:
+		by_kind[h.kind] = int(by_kind.get(h.kind, 0)) + 1
 	# TOWNGEN: the districts (a tile map and the blocks), the lots, the landmarks
 	var area := {}
 	var district_names: Array = Districts.ALL
+	# (a count by index first and the names after, in the order the districts first appear on the map: a tile map is 36864 bytes, and a dictionary update a tile was most of this piece)
+	var counts := PackedInt32Array()
+	counts.resize(district_names.size() + 1)
+	var order: Array = []
 	for v in _layout.district_map:
-		var di := int(v)
-		if di > 0:
-			var nm := String(district_names[di - 1])
-			area[nm] = int(area.get(nm, 0)) + 1
+		if v > 0:
+			if counts[v] == 0:
+				order.append(v)
+			counts[v] += 1
+	for di in order:
+		area[String(district_names[di - 1])] = counts[di]
 	var blocks_out: Array = []
 	for b in _layout.blocks:
 		blocks_out.append({"id": int(b.id), "rect": b.rect, "district": String(b.district), "role": String(b.role)})
@@ -909,6 +1010,9 @@ func _ring_report(house_id: int) -> Dictionary:
 		var x1 := ceili(float(o.cx) + float(o.w) / 2.0 - 0.01)
 		var y0 := floori(float(o.cy) - float(o.h) / 2.0 + 0.01)
 		var y1 := ceili(float(o.cy) + float(o.h) / 2.0 - 0.01)
+		# (only what touches the lot matters: the tiles are asked about inside it below)
+		if x1 <= lot.position.x or x0 >= lot.end.x or y1 <= lot.position.y or y0 >= lot.end.y:
+			continue
 		for y in range(y0, y1):
 			for x in range(x0, x1):
 				taken[Vector2i(x, y)] = true

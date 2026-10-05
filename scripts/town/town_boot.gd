@@ -190,6 +190,20 @@ static func step_ms() -> float:
 	return STEP_MS_WEB if OS.has_feature("web") else STEP_MS
 
 
+## A frame this slow is one nobody is watching smoothly: a browser draws a tab it has put in the background once a second (and a slow machine, a few times). At 10 ms of work a frame the card then
+## creeps for minutes (a town is 130 or so steps of the generator and the world's build), so the work a frame gets grows with the frame (a quarter of it, 250 ms at the most); at a normal
+## frame rate it stays `base_ms` and the bar is smooth.
+const SLOW_FRAME_MS := 300.0
+const SLOW_STEP_MS := 250.0
+
+
+## The work (milliseconds) the next loading step may do, given `base_ms` and how long the last frame of the card took (`frame_ms`, the time between two calls, work included).
+static func paced(base_ms: float, frame_ms: float) -> float:
+	if frame_ms <= SLOW_FRAME_MS:
+		return base_ms
+	return clampf(frame_ms * 0.25, base_ms, SLOW_STEP_MS)
+
+
 ## Moves the card's bar to `share` (0 to 1) and puts a few words under it.
 static func card_progress(card: Node, share: float, text: String = "") -> void:
 	if card == null or not is_instance_valid(card):
@@ -209,6 +223,39 @@ static func warm_pawns(data: Dictionary) -> int:
 	for path in pics:
 		GD.tex(path)
 	return pics.size()
+
+
+## The looks the kit draws the town's things with, each once, in the order of the objects: [kind, facing, state, variant] for `TownArt.look`, the lookup the world makes for every object (the
+## kind is the `kit` of the object, the facing its `facing` or `orient`). The generator does not load the pictures (it reads their sizes from the table, `GD.tex_size`): the loader asks for
+## the looks one at a time under the card (scripts/town/town_loader.gd), the first of each picture loads it, so that none is loaded for the first time in the world's build or in play.
+static func object_looks(data: Dictionary) -> Array:
+	var seen := {}
+	var out: Array = []
+	for o in data.objects:
+		var kind := String(o.get("kit", ""))
+		if kind == "":
+			continue
+		var facing := String(o.get("facing", o.get("orient", "")))
+		var state := String(o.get("state", ""))
+		var variant := int(o.get("variant", 0))
+		var key := "%s|%s|%s|%d" % [kind, facing, state, variant]
+		if not seen.has(key):
+			seen[key] = true
+			out.append([kind, facing, state, variant])
+	return out
+
+
+## The files of the pictures the plain objects (those with no kit look) are drawn with: the pieces of the map data's objects, each file once.
+static func object_pictures(data: Dictionary) -> Array:
+	var seen := {}
+	var out: Array = []
+	for o in data.objects:
+		for pc in o.pieces:
+			var f := String(pc.file)
+			if not seen.has(f):
+				seen[f] = true
+				out.append(f)
+	return out
 
 
 ## The files of the pictures of every look of the dead (three views each), in the order `warm_pawns` loads them.

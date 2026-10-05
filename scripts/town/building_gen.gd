@@ -547,6 +547,7 @@ func build(spec: Dictionary) -> Dictionary:
 	var lot: Rect2i = spec.rect
 	var cv := Canvas.new()
 	cv.setup(lot.size.x, lot.size.y, int(spec.seed), props, tids, {})
+	cv.size_by_table = true
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(spec.seed) * 31 + 7
 	var out := {"cv": cv, "buildings": [], "state": "intact", "reach": PackedByteArray(), "dressing": {"ground": [], "lines": [], "gates": []}}

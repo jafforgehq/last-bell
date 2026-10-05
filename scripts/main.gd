@@ -361,14 +361,20 @@ func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
 	_load_t = Time.get_ticks_usec()
 	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
+	# (how long the last frame of the loading card took: `TownBoot.paced` gives a frame that takes a second, a tab in the background, more work than a frame of 16 ms)
+	var frame_ms := 0.0
+	var frame_t := Time.get_ticks_usec()
 	if town_card != null:
 		var loader = TownLoader.new()
 		loader.begin(run_meta)
 		# (the title's town is a tenth of the game's: the card does not need a smooth bar, so a frame gives the work three times the time and the title is up sooner)
 		var step_budget := TownBoot.step_ms() * (3.0 if _title_town else 1.0)
-		while not loader.step(step_budget):
+		while not loader.step(TownBoot.paced(step_budget, frame_ms)):
 			TownBoot.card_progress(town_card, 0.5 * loader.progress(), loader.words())
 			await get_tree().process_frame
+			var now := Time.get_ticks_usec()
+			frame_ms = float(now - frame_t) / 1000.0
+			frame_t = now
 		data = loader.result()
 	else:
 		data = TownBoot.data(run_meta) if town_run else GD.load_all()
@@ -379,9 +385,14 @@ func _ready() -> void:
 	add_child(world)
 	if town_card != null:
 		world.begin_build(data)
-		while not world.step_build(TownBoot.step_ms() * (3.0 if _title_town else 1.0)):
+		var world_base := TownBoot.step_ms() * (3.0 if _title_town else 1.0)
+		frame_t = Time.get_ticks_usec()
+		while not world.step_build(TownBoot.paced(world_base, frame_ms)):
 			TownBoot.card_progress(town_card, 0.5 + 0.2 * world.build_progress(), "Laying the ground")
 			await get_tree().process_frame
+			var now2 := Time.get_ticks_usec()
+			frame_ms = float(now2 - frame_t) / 1000.0
+			frame_t = now2
 	else:
 		world.build(data)
 	_lmark("world")
