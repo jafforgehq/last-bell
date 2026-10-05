@@ -14,8 +14,9 @@ scene from it at the game's tile size):
     street     asphalt (3), sidewalk slabs (3), lawn (3), dirt (2), gravel (2) as seamless 4 x 4 atlases of 64 px pieces; lane paint, the kerb with its
                corners, leaves (3), manholes (2), drains (2)
     house      wall tops in brick, white siding, blue siding, stucco and three inside materials (a 128 px tile each) with ONE autotile set of outlines and
-               rims (wall_edges, by the mask of the open sides) and the soft wall shadows; front doors, inside doors and garage doors (closed / open / broken,
-               four facings), windows (intact / broken / boarded), the step, the porch
+               rims (wall_edges, by the mask of the open sides) and the soft wall shadows; front doors (16 variants: 4 colours x the side of the hinge), inside
+               doors (16) and garage doors (closed / open / broken, four facings, each facing lit from the north west: see LIGHTS), windows (intact / broken /
+               boarded), the step, the porch
     roof       terracotta, slate and brown shingle: lit and shaded slope tiles, ridge caps, an eave overlay (autotile, overhang and shadow), chimneys
     floor      wood (2), hall boards, hallway runner (2 ways), kitchen lino (2), bedroom carpet (2), bathroom tile (2): 4 x 4 atlases, worn
     furniture  39 things: kitchen, bedroom, living room, bathroom, workshop, containers (each with an `opened` look for 'searched'), rugs, a lamp, the base's radio
@@ -24,7 +25,7 @@ scene from it at the game's tile size):
                a shed, swing set, slide, bench, market stall, parked cars in four colours (reused from the yard's sedans) and two wrecks (reused)
     fortify    wooden fence, reinforced fence and sandbags (autotile, built and damaged), a gate (two cells, and three cells wide for the base's gate slot), a corner
                watchtower and a one-shooter lookout post (1 x 2), a floodlight, window and door barricades and a second layer of planks for a barred door (each built
-               and damaged), and the rubble of a fallen fence section
+               and damaged; the boards are drawn one by one by `plank`, which the boarded windows and the rubble use too), and the rubble of a fallen fence section
     marker     an 'enter' chevron and a 'searched' tick
 
 The style is the yard's (tools/make_building_art.py, whose drawing engine it imports: Art, noise, palette PNGs): seen from above with a slight tilt for
@@ -469,10 +470,11 @@ def nail(a, x, y, r=0.012):
 
 
 def prop(cat, id, w, h, draw, facings=4, states=None, variants=1, tags=(), layer="object", solid="all", note="", pad=PAD,
-         shadow=(0.05, 0.065, 0.032, 0.42), folder=None, mode="sprite", bg=None, grain=None, anchor_extra=(0.0, 0.0), variant_names=None, sort_y=None):
+         shadow=(0.05, 0.065, 0.032, 0.42), folder=None, mode="sprite", bg=None, grain=None, anchor_extra=(0.0, 0.0), variant_names=None, sort_y=None, turn=False):
     """Draw a prop: one picture per facing (4 by default: s, w, n, e), per state and per variant, all packed into ONE png,
     <folder>/<id>.png, and described by one manifest item whose sprites each name their rectangle.
-    draw(state, variant) returns an Art of w x h tiles with the body drawn facing south."""
+    draw(state, variant) returns an Art of w x h tiles with the body drawn facing south; with turn=True it is draw(state, variant, k) with k the quarter turns
+    it will be given afterwards, so that it can light and shade the drawing as the turned picture is lit (see LIGHTS)."""
     folder = folder or cat
     hv = facings == "hv"                 # a thing with two looks, along x ('h') and along y ('v')
     if hv:
@@ -488,7 +490,7 @@ def prop(cat, id, w, h, draw, facings=4, states=None, variants=1, tags=(), layer
     for v in range(variants):
         for st in states_l:
             for k in facing_ks:
-                a = draw(st, v)
+                a = draw(st, v, k) if turn else draw(st, v)
                 im, fp, anchor = finish_prop(a, k, pad, shadow, GRAIN if grain is None else grain, seed=1 + v * 7 + k)
                 meta = {"fp": ([w, h] if k % 2 == 0 else [h, w]) if anchor_extra != (0.0, 0.0) else [round(fp[0], 3), round(fp[1], 3)]}
                 if nf > 1:
@@ -1403,8 +1405,229 @@ def job_house():
 
 
 BRASS = (200, 170, 84)
-FRONT_DOORS = [(122, 72, 54), (82, 116, 100)]          # oxblood, sage green
-INT_DOORS = [(226, 222, 210), (146, 106, 72)]          # white painted, stained wood
+STEEL = (112, 116, 124)
+# A door picture is drawn facing south and turned for the other facings, so the light has to be turned back before it is drawn: LIGHTS[k] is the way a shadow falls
+# (south east in the finished picture) in the drawing of a picture that is turned k quarter turns clockwise afterwards. The bevels, the gradients and the shadows
+# of the doors, windows and planks all take it, so a door on the west wall is lit from the north west like every other thing.
+LIGHTS = ((1, 1), (1, -1), (-1, -1), (-1, 1))
+# the leaves, one colour to each pair of variants (2 * colour + hinge side: even variants are hinged on the left of the picture, odd on the right):
+# (leaf, frame, panel style)
+FRONT_LEAVES = [((142, 64, 54), (226, 220, 204), "glazed"),          # oxblood with three lights, in a cream frame
+                ((98, 118, 140), (224, 224, 218), "tall"),           # blue grey
+                ((60, 98, 80), (226, 220, 204), "panels"),           # dark green
+                ((124, 148, 112), (226, 220, 204), "boards"),        # sage green, ledged boards on strap hinges
+                ((170, 122, 78), (88, 62, 44), "tall"),              # natural stained wood in a dark frame
+                ((116, 80, 56), (88, 62, 44), "panels")]             # walnut
+# the game gives the two cells of a doorway the variants n and n + 1, so when n is odd the pair is two different colours: they go round in a ring in which most
+# colours are next to a near neighbour (green and sage, wood and walnut, walnut and oxblood, blue grey and green), so such a pair is two shades of one family.
+# (The start house, house 53 of the town of seed 1, gets the variants 53 and 54, which are 5 and 6 of 12: dark green and sage green.)
+INT_LEAVES = [((238, 234, 222), (190, 150, 102), "panel"),           # white painted in a light oak frame
+              ((224, 212, 184), (184, 144, 98), "panel"),            # cream
+              ((204, 160, 104), (234, 230, 216), "plain"),           # light oak in a white frame
+              ((142, 170, 192), (234, 230, 216), "panel")]           # powder blue painted in a white frame
+
+
+def _lit_edges(L):
+    """Which edges of a box face the light (the light comes from the opposite side of the way a shadow falls)."""
+    return {"n": L[1] > 0, "s": L[1] < 0, "w": L[0] > 0, "e": L[0] < 0}
+
+
+def _lit2(base, L, x0, y0, x1, y1, lo=0.84, hi=1.14, noise=0.0, seed=1, freq=14.0, along=None):
+    """`lit` for a drawing that is turned afterwards: `hi` times the colour at the corner the light comes from, `lo` times at the opposite one."""
+    b = np.array(base, np.float32)
+    noise = noise * NOISE
+    freq = min(freq, FREQ_MAX)
+
+    def f(X, Y):
+        t = (L[0] * (X - (x0 + x1) / 2) / max(x1 - x0, 1e-6) + L[1] * (Y - (y0 + y1) / 2) / max(y1 - y0, 1e-6)) / 2.0 + 0.5
+        k = hi + (lo - hi) * np.clip(t, 0, 1)
+        if noise:
+            if along == "x":
+                n = fbm(X, Y, freq, seed, 2, fx=0.12, fy=1.0)
+            elif along == "y":
+                n = fbm(X, Y, freq, seed, 2, fx=1.0, fy=0.12)
+            else:
+                n = fbm(X, Y, freq, seed, 2)
+            k = k * (1 - noise / 2 + noise * n)
+        return b[None, None, :] * k[..., None]
+    return f
+
+
+def _rims(a, m, x0, y0, x1, y1, L, ins=0.02, w=0.012, la=0.30, da=0.24):
+    """A light rim inside the edges that face the light and a dark one inside the others (through the mask m)."""
+    le = _lit_edges(L)
+    edges = {"n": [(x0 + ins, y0 + ins), (x1 - ins, y0 + ins)], "s": [(x0 + ins, y1 - ins), (x1 - ins, y1 - ins)],
+             "w": [(x0 + ins, y0 + ins), (x0 + ins, y1 - ins)], "e": [(x1 - ins, y0 + ins), (x1 - ins, y1 - ins)]}
+    for e, pts in edges.items():
+        if le[e]:
+            a.paint(a.stroke(pts, w, round_ends=False), (255, 250, 235), la, clip=m)
+        else:
+            a.paint(a.stroke(pts, w, round_ends=False), (10, 8, 6), da, clip=m)
+
+
+def _slab2(a, x0, y0, x1, y1, base, L, r=0.04, lw=0.026, lo=0.84, hi=1.12, noise=0.0, seed=1, rim=True, freq=14.0, along=None, outline=OUTLINE, la=0.28, da=0.22):
+    """`slab` lit from the light's side (see LIGHTS). Returns the mask."""
+    pts = rrect(x0, y0, x1, y1, r)
+    m = a.poly(pts)
+    a.paint(m, _lit2(base, L, x0, y0, x1, y1, lo, hi, noise, seed, freq, along))
+    if rim:
+        _rims(a, m, x0, y0, x1, y1, L, lw * 0.9 + 0.012, 0.012, la, da)
+    if lw > 0:
+        a.paint(a.stroke(pts, lw, closed=True), outline, 1.0)
+    return m
+
+
+def _cast(a, pts, L, d=(0.025, 0.04), blur=0.014, op=0.34, clip=None):
+    """The soft shadow of a polygon on what lies under it, thrown the way the light falls."""
+    a.paint(a.blur(a.poly([(x + L[0] * d[0], y + L[1] * d[1]) for x, y in pts]), blur), (8, 6, 4), op, clip=clip)
+
+
+def _knob(a, x, y, r, L, base=BRASS):
+    """A round knob or bolt head: a small shadow, a dark ring, a lit disc and a highlight."""
+    a.paint(a.ellipse(x + L[0] * 0.010, y + L[1] * 0.014, r + 0.010), (8, 6, 4), 0.38)
+    a.paint(a.ellipse(x, y, r + 0.012), OUTLINE, 1.0)
+
+    def f(X, Y):
+        t = np.clip((L[0] * (X - x) + L[1] * (Y - y)) / (2.0 * r) * 0.5 + 0.5, 0, 1)
+        return np.array(base, np.float32)[None, None, :] * (1.20 - 0.42 * t)[..., None]
+    a.paint(a.ellipse(x, y, r), f)
+    a.paint(a.ellipse(x - L[0] * r * 0.32, y - L[1] * r * 0.32, r * 0.34), (255, 246, 214), 0.85)
+
+
+def _rot(p, c, ang):
+    """The point p turned about c by ang radians (y down: a positive angle turns clockwise on the screen)."""
+    ca, sa = np.cos(ang), np.sin(ang)
+    dx, dy = p[0] - c[0], p[1] - c[1]
+    return (c[0] + dx * ca - dy * sa, c[1] + dx * sa + dy * ca)
+
+
+# ---- weathered boards: the planks of a barricade, a boarded window, the rubble of a fence ----
+PLANK = (134, 114, 94)          # grey brown, weathered
+PLANK_NEW = (152, 128, 98)      # a fresher board laid over the first layer
+PLANK_OLD = (118, 102, 86)      # a damaged barricade: greyer, darker
+
+
+def _teeth(rng, n=4, depth=0.04):
+    """The jagged end of a snapped board: (across, along) pairs from one edge to the other (across in boards, -0.5 .. 0.5; along: how far past the end)."""
+    out = [(0.5, float(rng.uniform(-depth * 0.4, depth * 0.3)))]
+    for i in range(1, n):
+        out.append((0.5 - i / float(n), float(rng.uniform(-depth, depth * 0.8))))
+    out.append((-0.5, float(rng.uniform(-depth * 0.4, depth * 0.3))))
+    return out
+
+
+def plank(a, p0, p1, th, L, base=PLANK, seed=1, nails=(0.07, 0.93), skew=(0.0, 0.0), teeth0=None, teeth1=None, shadow=True, nail_r=0.016, tone=1.0,
+          outline=0.022, knot=None, pits=2):
+    """One weathered board from p0 to p1 (the middle of its two ends), th thick: a soft shadow under it, the grain along it, a light edge on the lit side and a dark one
+    on the other, end grain at the cut ends, nail heads (with a rust streak) at the fractions `nails` of its length, and perhaps a knot. `skew` slants the cut of each end;
+    `teeth0` / `teeth1` (see _teeth) replace an end by a jagged break. Returns the polygon."""
+    p0 = np.array(p0, np.float32)
+    p1 = np.array(p1, np.float32)
+    d = p1 - p0
+    ln = float(np.hypot(d[0], d[1]))
+    u = d / ln
+    n = np.array((-u[1], u[0]), np.float32)
+    h = th / 2.0
+
+    def end(p, sgn, sk, teeth):
+        if teeth:
+            return [tuple(p + n * (f * th) + u * (sgn * off)) for f, off in teeth]
+        return [tuple(p + n * h + u * (sgn * sk)), tuple(p - n * h - u * (sgn * sk))]
+    e1 = end(p1, 1.0, skew[1], teeth1)
+    e0 = end(p0, -1.0, skew[0], teeth0)
+    poly = e1 + e0[::-1]
+    if shadow:
+        _cast(a, poly, L, (0.020, 0.034), 0.011, 0.52)
+    m = a.poly(poly)
+    s_light = 1.0 if (n[0] * -L[0] + n[1] * -L[1]) > 0 else -1.0       # +1: the + side of the board faces the light
+    bse = np.array(base, np.float32) * tone
+
+    def f(X, Y):
+        dx, dy = X - p0[0], Y - p0[1]
+        du = dx * u[0] + dy * u[1]
+        dv = dx * n[0] + dy * n[1]
+        t = np.clip(0.5 - dv / th * s_light, 0, 1)
+        g = fbm(du, dv, 8.0, seed, 2, fx=0.35, fy=1.0)
+        streak = 0.5 + 0.5 * np.sin(dv * 95.0 + 7.0 * fbm(du, dv, 3.0, seed + 7, 2, fx=0.5, fy=1.0))
+        k = (1.12 - 0.30 * t) * (0.88 + 0.24 * g) * (1.0 - 0.10 * streak * NOISE / 0.6)
+        return bse[None, None, :] * k[..., None]
+    a.paint(m, f)
+    # the light and the dark edge along the board
+    ins = 0.016
+    for sgn, op, col in ((s_light, 0.42, (255, 246, 222)), (-s_light, 0.30, (10, 8, 6))):
+        q0 = p0 + n * (sgn * (h - ins)) + u * 0.02
+        q1 = p1 + n * (sgn * (h - ins)) - u * 0.02
+        a.paint(a.stroke([tuple(q0), tuple(q1)], 0.011, round_ends=False), col, op, clip=m)
+    # end grain: a paler strip at each cut end (not at a jagged one)
+    for p, sgn, teeth in ((p0, -1.0, teeth0), (p1, 1.0, teeth1)):
+        if teeth:
+            continue
+        q = [tuple(p + n * h), tuple(p - n * h), tuple(p - n * h - u * (sgn * 0.030)), tuple(p + n * h - u * (sgn * 0.030))]
+        a.paint(a.poly(q), (214, 192, 156), 0.42, clip=m)
+    if knot is not None:
+        kx, ky = tuple(p0 + u * (knot * ln) + n * (h * 0.15))
+        a.paint(a.ellipse(kx, ky, th * 0.20, th * 0.15), (58, 44, 34), 0.55, clip=m)
+        a.paint(a.stroke([(kx - th * 0.30, ky + th * 0.04), (kx - th * 0.20, ky - th * 0.10), (kx + th * 0.20, ky - th * 0.10), (kx + th * 0.30, ky + th * 0.04)], 0.007, round_ends=False), (80, 60, 44), 0.35, clip=m)
+    rng = rng_for("plank_pits", seed)
+    for _ in range(pits):                       # worm holes and dents
+        pt = p0 + u * (float(rng.uniform(0.15, 0.85)) * ln) + n * (float(rng.uniform(-0.25, 0.25)) * th)
+        a.paint(a.ellipse(float(pt[0]), float(pt[1]), 0.007), (30, 22, 16), 0.45, clip=m)
+    a.paint(a.stroke(poly, outline, closed=True), OUTLINE, 1.0)
+    for teeth, e in ((teeth0, e0), (teeth1, e1)):
+        if teeth:                               # the raw wood of a break
+            a.paint(a.stroke(e, 0.008, round_ends=False), (228, 198, 152), 0.80)
+    for t in nails:
+        pt = p0 + u * (t * ln)
+        nx_, ny_ = float(pt[0]), float(pt[1])
+        a.paint(a.stroke([(nx_ + L[0] * 0.004, ny_ + L[1] * 0.010), (nx_ + L[0] * 0.006, ny_ + L[1] * 0.030)], 0.009, round_ends=False), (112, 78, 52), 0.30, clip=m)
+        a.paint(a.ellipse(nx_ + L[0] * 0.007, ny_ + L[1] * 0.009, nail_r + 0.002), (8, 6, 4), 0.35, clip=m)
+        nail(a, nx_, ny_, nail_r)
+    return poly
+
+
+def nail_stub(a, x, y, L, r=0.016):
+    """A nail left in the frame where a board was torn off: a bent bright shaft and a head, a speck of shadow."""
+    a.paint(a.ellipse(x + L[0] * 0.008, y + L[1] * 0.010, r + 0.002), (8, 6, 4), 0.40)
+    a.paint(a.stroke([(x, y), (x + 0.020, y - 0.030)], 0.010), (198, 190, 172), 0.95)
+    a.paint(a.stroke([(x, y), (x + 0.020, y - 0.030)], 0.003), OUTLINE, 0.0)
+    nail(a, x, y, r)
+
+
+def snapped_plank(a, p0, p1, th, L, at=0.5, drop=0.5, hang_end=1, **kw):
+    """A board broken in two at the fraction `at` of its length: the part on the side of `hang_end` (0: p0, 1: p1) is still nailed at that end and hangs down turned by
+    `drop` radians, the other part stays. Both ends of the break are jagged."""
+    p0 = np.array(p0, np.float32)
+    p1 = np.array(p1, np.float32)
+    seed = kw.get("seed", 1)
+    rng = rng_for("snap", seed)
+    pb = p0 + (p1 - p0) * at
+    gap = (p1 - p0) / np.hypot(*(p1 - p0)) * 0.012
+    if hang_end == 1:
+        keep = (tuple(p0), tuple(pb - gap))
+        hang_a, hang_b = pb + gap, p1
+        piv = hang_b
+    else:
+        keep = (tuple(pb + gap), tuple(p1))
+        hang_a, hang_b = p0, pb - gap
+        piv = hang_a
+    t_keep = dict(kw)
+    t_keep["nails"] = (0.08,) if hang_end == 1 else (0.92,)
+    if hang_end == 1:
+        t_keep["teeth1"] = _teeth(rng, 4, 0.035)
+    else:
+        t_keep["teeth0"] = _teeth(rng, 4, 0.035)
+    plank(a, keep[0], keep[1], th, L, **t_keep)
+    q0 = _rot(tuple(hang_a), tuple(piv), -drop if hang_end == 1 else drop)
+    q1 = _rot(tuple(hang_b), tuple(piv), -drop if hang_end == 1 else drop)
+    t_hang = dict(kw)
+    t_hang["nails"] = (0.92,) if hang_end == 1 else (0.08,)
+    t_hang["seed"] = seed + 3
+    t_hang["tone"] = kw.get("tone", 1.0) * 0.93
+    if hang_end == 1:
+        t_hang["teeth0"] = _teeth(rng, 4, 0.035)
+    else:
+        t_hang["teeth1"] = _teeth(rng, 4, 0.035)
+    plank(a, q0, q1, th, L, **t_hang)
 
 
 def _planks_floor(a, x0, y0, x1, y1, base, seed, along="y", n=3):
@@ -1427,259 +1650,501 @@ def _wood_fn(base, seed, along="y", grain=0.28):
     return f
 
 
-def door_cell(state, v, kind):
-    """A door in a wall cell, facing south (the outside is south, the room north). kind 'front' or 'int'."""
+def _leaf_closed(a, L, x0, x1, y0, y1, dc, style, hl, top_h, seed, front):
+    """The shut leaf of a door between its jambs, seen from above and a little from the south: its top edge, then its south face with the panels (or lights, or boards on
+    strap hinges), two hinge plates on the hinge side and a brass knob on the free side. It throws a soft shadow on the doorway."""
+    pts = rrect(x0, y0, x1, y1, 0.014)
+    m = a.poly(pts)
+    _cast(a, pts, L, (0.026, 0.040), 0.014, 0.40)
+    a.paint(m, _lit2(dc, L, x0, y0, x1, y1, 0.80, 1.10, 0.12, seed, 16.0, "x"))
+    a.paint(a.rect(x0, y0, x1, y0 + top_h), shade(dc, 1.20), 0.60, clip=m)                         # the top of the leaf
+    a.paint(a.stroke([(x0, y0 + top_h), (x1, y0 + top_h)], 0.010, round_ends=False), shade(dc, 0.40), 0.70, clip=m)
+    fa, fb = y0 + top_h + 0.022, y1 - 0.024
+    edge = shade(dc, 0.46)
+    side_h, side_f = 0.065, (0.115 if front else 0.10)        # the stile on the hinge side, the wider one on the free side
+    px0 = x0 + (side_h if hl else side_f)
+    px1 = x1 - (side_f if hl else side_h)
+    if style in ("panels", "tall"):
+        n_p = 2 if style == "panels" else 3
+        gap = 0.03
+        w = ((px1 - px0) - gap * (n_p - 1)) / n_p
+        for i in range(n_p):
+            qx = px0 + i * (w + gap)
+            _slab2(a, qx, fa, qx + w, fb, shade(dc, 1.06), L, r=0.008, lw=0.0, lo=0.88, hi=1.10, noise=0.05, seed=seed + i, rim=True)
+            a.paint(a.stroke(rrect(qx, fa, qx + w, fb, 0.008), 0.010, closed=True), edge, 0.85, clip=m)
+    elif style == "panel":                                      # one long recessed panel (the light falls into it from the other side)
+        _slab2(a, px0, fa, px1, fb, shade(dc, 0.98), (-L[0], -L[1]), r=0.008, lw=0.0, lo=0.90, hi=1.06, rim=True)
+        a.paint(a.stroke(rrect(px0, fa, px1, fb, 0.008), 0.010, closed=True), edge, 0.75, clip=m)
+    elif style == "plain":                                      # a flush leaf with a faint grain
+        for i in range(1, 4):
+            yy = fa + (fb - fa) * i / 4.0
+            line(a, [(x0 + 0.05, yy), (x1 - 0.05, yy)], 0.007, edge, 0.28, round_ends=False)
+    elif style == "glazed":
+        def sky(X, Y):
+            t = np.clip((Y - fa) / (fb - fa), 0, 1)[..., None]
+            return np.array((184, 208, 220), np.float32)[None, None, :] * (1 - t) + np.array((112, 144, 170), np.float32)[None, None, :] * t
+        cw = (px1 - px0) / 3.0
+        for i in range(3):
+            qx = px0 + i * cw + 0.012
+            a.paint(a.rect(qx, fa + 0.004, qx + cw - 0.024, fb - 0.004), sky)
+            a.paint(a.poly([(qx + 0.02, fb - 0.004), (qx + 0.05, fa + 0.004), (qx + 0.075, fa + 0.004), (qx + 0.045, fb - 0.004)]), (250, 250, 250), 0.26, clip=m)
+            a.paint(a.stroke(rrect(qx, fa + 0.004, qx + cw - 0.024, fb - 0.004, 0.004), 0.013, closed=True), shade(dc, 0.40), 0.95, clip=m)
+            a.paint(a.stroke([(qx, fb - 0.004), (qx + cw - 0.024, fb - 0.004)], 0.007, round_ends=False), (255, 250, 235), 0.25, clip=m)
+    elif style == "boards":
+        for i in range(1, 8):
+            xx = x0 + (x1 - x0) * i / 8.0
+            line(a, [(xx, y0 + top_h), (xx, y1)], 0.009, edge, 0.55, round_ends=False)
+            line(a, [(xx + 0.009, y0 + top_h), (xx + 0.009, y1)], 0.006, (255, 250, 235), 0.16, round_ends=False)
+        for yy in (fa + 0.22 * (fb - fa), fa + 0.78 * (fb - fa)):       # strap hinges: the iron bands run from the hinge side across the boards
+            sx0, sx1 = (x0, x0 + 0.34) if hl else (x1 - 0.34, x1)
+            _slab2(a, sx0, yy - 0.024, sx1, yy + 0.024, (62, 60, 62), L, r=0.006, lw=0.012, lo=0.8, hi=1.25, rim=False)
+            for t in (0.12, 0.5, 0.88):
+                nail(a, sx0 + 0.34 * t, yy, 0.009)
+    if style != "boards":
+        hx0 = x0 if hl else x1 - 0.055
+        for yy in (fa + 0.20 * (fb - fa), fa + 0.80 * (fb - fa)):      # the hinge plates
+            _slab2(a, hx0, yy - 0.021, hx0 + 0.055, yy + 0.021, STEEL, L, r=0.004, lw=0.012, lo=0.8, hi=1.2, rim=False)
+    kx = (x1 - 0.052) if hl else (x0 + 0.052)
+    ky = (fa + fb) / 2.0
+    if style != "glazed":
+        _slab2(a, kx - 0.026, fa + 0.012, kx + 0.026, fb - 0.012, shade(BRASS, 0.95), L, r=0.012, lw=0.012, lo=0.80, hi=1.15, rim=False)
+    _knob(a, kx, ky, 0.040 if front else 0.032, L)
+    _rims(a, m, x0, y0, x1, y1, L, 0.020, 0.012, 0.26, 0.24)
+    a.paint(a.stroke(pts, 0.026, closed=True), OUTLINE, 1.0)
+
+
+def _leaf_open(a, L, piv, hl, th, Ll, To, dc, style, front, seed):
+    """A leaf swung inward about its hinge at `piv`: a slab at the angle th from the shut position (th radians, towards the room), its top edge pale on the side of the
+    light, two darker panel insets on the face, the hinge pin and the knob."""
+    sgn = 1.0 if hl else -1.0
+    u = np.array((sgn * np.cos(th), -np.sin(th)), np.float32)
+    n = np.array((-u[1], u[0]), np.float32)
+    P = np.array(piv, np.float32)
+    h = To / 2.0
+    poly = [tuple(P + n * h), tuple(P + u * Ll + n * h), tuple(P + u * Ll - n * h), tuple(P - n * h)]
+    xs = [p[0] for p in poly]
+    ys = [p[1] for p in poly]
+    _cast(a, poly, L, (0.032, 0.046), 0.016, 0.42)
+    m = a.poly(poly)
+    a.paint(m, _lit2(dc, L, min(xs), min(ys), max(xs), max(ys), 0.84, 1.08, 0.10, seed, 16.0))
+    s_l = 1.0 if (n[0] * -L[0] + n[1] * -L[1]) > 0 else -1.0       # the side of the leaf that faces the light: its top edge
+    strip = [tuple(P + n * (s_l * h)), tuple(P + u * Ll + n * (s_l * h)), tuple(P + u * Ll + n * (s_l * (h - To * 0.40))), tuple(P + n * (s_l * (h - To * 0.40)))]
+    a.paint(a.poly(strip), shade(dc, 1.22), 0.65, clip=m)
+    face = -s_l
+    if style == "boards":
+        for i in range(1, 6):
+            q = P + u * (Ll * i / 6.0)
+            a.paint(a.stroke([tuple(q + n * (face * h * 0.1)), tuple(q + n * (face * h * 0.95))], 0.008, round_ends=False), shade(dc, 0.45), 0.55, clip=m)
+    elif style == "glazed":
+        for t0, t1 in ((0.13, 0.32), (0.38, 0.57), (0.63, 0.82)):
+            q = [tuple(P + u * (t0 * Ll) + n * (face * h * 0.80)), tuple(P + u * (t1 * Ll) + n * (face * h * 0.80)),
+                 tuple(P + u * (t1 * Ll) + n * (face * h * 0.14)), tuple(P + u * (t0 * Ll) + n * (face * h * 0.14))]
+            a.paint(a.poly(q), (170, 196, 212), 0.90, clip=m)
+            a.paint(a.stroke(q, 0.008, closed=True), shade(dc, 0.42), 0.9, clip=m)
+    else:
+        for t0, t1 in ((0.12, 0.46), (0.54, 0.88)):
+            q = [tuple(P + u * (t0 * Ll) + n * (face * h * 0.82)), tuple(P + u * (t1 * Ll) + n * (face * h * 0.82)),
+                 tuple(P + u * (t1 * Ll) + n * (face * h * 0.12)), tuple(P + u * (t0 * Ll) + n * (face * h * 0.12))]
+            a.paint(a.poly(q), shade(dc, 0.74), 0.55, clip=m)
+    a.paint(a.stroke(poly, 0.024, closed=True), OUTLINE, 1.0)
+    kp = P + u * (Ll - 0.075) + n * (face * h * 0.42)
+    _knob(a, float(kp[0]), float(kp[1]), 0.024 if front else 0.020, L)
+    _knob(a, float(P[0]), float(P[1]), 0.026, L, STEEL)
+
+
+def _leaf_broken(a, L, piv, hl, dc, front, seed, jam_x, floor_y):
+    """A forced door: the leaf hangs from its hinge at an angle, snapped off short with a jagged end, the piece that fell off lies on the sill with its knob, the latch side of
+    the frame is splintered, and there are splinters on the floor."""
+    rng = rng_for("door_broken", seed)
+    sgn = 1.0 if hl else -1.0
+    th = np.radians(30)
+    u = np.array((sgn * np.cos(th), -np.sin(th)), np.float32)
+    To = 0.15 if front else 0.11
+    P = np.array(piv, np.float32)
+    Ll = 0.50
+    plank(a, tuple(P), tuple(P + u * Ll), To, L, base=dc, seed=seed + 5, nails=(), teeth1=_teeth(rng, 5, 0.05), tone=0.95, outline=0.024, pits=0)
+    _knob(a, float(P[0]), float(P[1]), 0.026, L, STEEL)
+    # a bent hinge strap and a few panel marks on what is left of the leaf
+    n = np.array((-u[1], u[0]), np.float32)
+    q = P + u * 0.18
+    a.paint(a.stroke([tuple(q + n * 0.03), tuple(q - n * 0.03)], 0.012, round_ends=False), shade(dc, 0.42), 0.55)
+    # the broken off piece, on the sill, with the knob
+    c0 = np.array((0.5 - sgn * 0.02, floor_y), np.float32)
+    ua = np.array((np.cos(0.14), np.sin(0.14)), np.float32)
+    p0 = c0 - ua * 0.19
+    p1 = c0 + ua * 0.19
+    plank(a, tuple(p0), tuple(p1), To * 0.95, L, base=dc, seed=seed + 9, nails=(), teeth0=_teeth(rng, 4, 0.04), teeth1=_teeth(rng, 4, 0.04), tone=0.9, outline=0.022, pits=0)
+    kp = p0 + (p1 - p0) * 0.78
+    _knob(a, float(kp[0]), float(kp[1]), 0.024 if front else 0.020, L)
+    # the splintered latch side of the frame
+    jx = 1.0 - jam_x if hl else jam_x                       # the inner edge of the jamb on the latch side
+    sg = -1.0 if hl else 1.0                                # which way the opening lies from that jamb
+    ys = [0.36, 0.43, 0.50, 0.57, 0.64, 0.70]
+    jag = [(jx, ys[0])] + [(jx + sg * (0.020 + float(rng.uniform(0.0, 0.060))) * (1 if i % 2 else -0.3), y) for i, y in enumerate(ys[1:-1], 1)] + [(jx, ys[-1])]
+    a.paint(a.poly(jag + [(jx - sg * 0.05, ys[-1]), (jx - sg * 0.05, ys[0])]), (192, 156, 110), 1.0)
+    a.paint(a.stroke(jag, 0.012, round_ends=False), OUTLINE, 0.9)
+    # splinters
+    for _ in range(7):
+        sx = float(rng.uniform(0.2, 0.8))
+        sy = float(rng.uniform(0.30, 0.95))
+        an = float(rng.uniform(0, 6.28))
+        ln = float(rng.uniform(0.04, 0.08))
+        tri = [(sx, sy), (sx + ln * np.cos(an), sy + ln * np.sin(an)), (sx + 0.012 * np.cos(an + 1.6), sy + 0.012 * np.sin(an + 1.6))]
+        a.paint(a.poly(tri), (200, 164, 114), 0.95)
+        a.paint(a.stroke(tri, 0.006, closed=True), OUTLINE, 0.7)
+
+
+def door_cell(state, v, kind, k=0):
+    """A door in a wall cell, drawn facing south (the outside is south, the room north) and turned k quarter turns afterwards. kind 'front' or 'int'; v = 2 * colour + side
+    of the hinge (even: hinged on the left of the drawing, odd: on the right). The cell is whole and opaque, with the floor of the doorway, the frame and the leaf, and no
+    shadow outside it: the engine lays the open picture over the shut one while the door swings."""
+    L = LIGHTS[k % 4]
     a = Art(1, 1)
-    dc = (FRONT_DOORS if kind == "front" else INT_DOORS)[v]
-    floor = (146, 108, 74) if kind == "front" else (150, 114, 80)
-    _planks_floor(a, 0, 0, 1, 1, floor, 4 + v)
-    if kind == "front":      # the sill: a concrete lip on the outside half
-        a.paint(a.rect(0.0, 0.70, 1.0, 1.0), lambda X, Y: np.array((160, 156, 146), np.float32)[None, None, :] * (0.94 + 0.10 * fbm(X, Y, 10.0, 8, 2))[..., None])
-        line(a, [(0.0, 0.70), (1.0, 0.70)], 0.014, (70, 64, 56), 0.7, round_ends=False)
-        line(a, [(0.0, 0.715), (1.0, 0.715)], 0.010, (214, 210, 198), 0.5, round_ends=False)
-    # the frame: a jamb each side
-    jc = (86, 62, 44) if kind == "front" else ((196, 192, 180) if v == 0 else (104, 76, 52))
-    for x0, x1 in ((0.0, 0.085), (0.915, 1.0)):
-        a.paint(a.rect(x0, 0, x1, 1), lit(jc, 0.85, 1.1, x0, 0, x1, 1, 0.12, 6, 12, "y"))
-    line(a, [(0.085, 0), (0.085, 1)], 0.022, OUTLINE, 0.95, round_ends=False)
-    line(a, [(0.915, 0), (0.915, 1)], 0.022, OUTLINE, 0.95, round_ends=False)
-    line(a, [(0.0, 0.0), (1.0, 0.0)], 0.0, OUTLINE, 0.0)
-    left_hinged = v == 0
-
-    def leaf_closed():
-        slab(a, 0.085, 0.40, 0.915, 0.60, dc, r=0.012, lw=0.026, lo=0.80, hi=1.14, noise=0.10, seed=12, freq=18.0, along="x")
-        if kind == "front":
-            for x0, x1 in ((0.17, 0.46), (0.54, 0.83)):
-                a.paint(a.rect(x0, 0.445, x1, 0.555), shade(dc, 0.72), 0.55)
-                line(a, [(x0, 0.445), (x1, 0.445)], 0.008, shade(dc, 1.3), 0.5, round_ends=False)
-        hx = 0.80 if left_hinged else 0.20
-        dot(a, hx, 0.50, 0.030, (40, 32, 26))
-        dot(a, hx, 0.50, 0.022, BRASS)
-        dot(a, hx - 0.006, 0.494, 0.008, (250, 240, 200), 0.9)
-
+    front = kind == "front"
+    dc, fc, style = (FRONT_LEAVES[(v // 2) % 6] if front else INT_LEAVES[(v // 4) % 4])
+    hl = v % 2 == 0
+    jw = 0.11 if front else 0.10                       # a jamb
+    x0, x1 = jw + 0.004, 1.0 - jw - 0.004              # the leaf between the jambs
+    if front:
+        top_h, ly0, ly1, piv_y, to_open, ll_open, th_open = 0.09, 0.35, 0.82, 0.76, 0.17, 0.74, 62
+    else:
+        top_h, ly0, ly1, piv_y, to_open, ll_open, th_open = 0.07, 0.32, 0.68, 0.64, 0.15, 0.66, 70
+    seed = 40 + v
+    # --- the floor of the doorway: boards along the way through
+    fl = (124, 90, 62) if front else (116, 84, 58)
+    _planks_floor(a, 0, 0, 1, 1, fl, 4 + v, "y", 4)
+    if front:
+        # a stone sill on the outside, the same stone as the step
+        a.paint(a.rect(0.0, 0.82, 1.0, 1.0), lambda X, Y: np.array((172, 166, 154), np.float32)[None, None, :] * (0.94 + 0.10 * fbm(X, Y, 9.0, 8, 2))[..., None])
+        line(a, [(0.0, 0.82), (1.0, 0.82)], 0.016, (60, 54, 46), 0.75, round_ends=False)
+        line(a, [(0.0, 0.838), (1.0, 0.838)], 0.010, (232, 228, 214), 0.55, round_ends=False)
+    else:
+        # a threshold: a darker board across the doorway under the leaf, with a seam at each edge
+        a.paint(a.rect(jw, ly0 - 0.05, 1.0 - jw, ly1 + 0.05), (40, 26, 16), 0.20)
+        for yy in (ly0 - 0.05, ly1 + 0.05):
+            line(a, [(jw, yy), (1.0 - jw, yy)], 0.012, (40, 28, 18), 0.60, round_ends=False)
+            line(a, [(jw, yy + 0.012), (1.0 - jw, yy + 0.012)], 0.008, (236, 214, 176), 0.28, round_ends=False)
+    piv = (x0 if hl else x1, piv_y)
+    th = np.radians(th_open)
+    if state == "open":                                  # the swing: a pale fan on the floor and a dashed arc where the free end went
+        sgn = 1.0 if hl else -1.0
+        arc = [(piv[0] + sgn * ll_open * np.cos(t), piv[1] - ll_open * np.sin(t)) for t in np.linspace(0.0, th, 16)]
+        a.paint(a.poly([piv] + arc), (255, 250, 232), 0.11)
+        a.paint(a.dashes(arc, 0.010, 0.030, 0.022), (255, 250, 232), 0.42)
+    # --- the frame: a jamb each side, painted wood, with a rim on the lit side and the shadow of the jamb on the lit side falling into the doorway
+    for jx0, jx1 in ((0.0, jw), (1.0 - jw, 1.0)):
+        a.paint(a.rect(jx0, 0, jx1, 1), _lit2(fc, L, jx0, 0, jx1, 1, 0.86, 1.10, 0.10, 6 + v, 12, "y"))
+    if L[0] > 0:
+        a.paint(a.blur(a.rect(jw, 0, jw + 0.032, 1.0), 0.014), (8, 6, 4), 0.30)
+    else:
+        a.paint(a.blur(a.rect(1.0 - jw - 0.032, 0, 1.0 - jw, 1.0), 0.014), (8, 6, 4), 0.30)
+    for xx in (jw, 1.0 - jw):
+        line(a, [(xx, 0), (xx, 1)], 0.022, OUTLINE, 0.95, round_ends=False)
+    for xx in (jw - 0.030, 1.0 - jw + 0.030):
+        line(a, [(xx, 0), (xx, 1)], 0.009, (255, 250, 235) if fc[0] > 150 else (10, 8, 6), 0.30, round_ends=False)
+    if front:                                           # the outside trim: a block at the foot of each jamb
+        for jx0, jx1 in ((jw - 0.002, jw + 0.058), (1.0 - jw - 0.058, 1.0 - jw + 0.002)):
+            _slab2(a, jx0, 0.90, jx1, 0.995, fc, L, r=0.01, lw=0.018, lo=0.86, hi=1.10, rim=True)
+    # --- the leaf
     if state == "closed":
-        # a thin shadow under the leaf on the sill side
-        a.paint(a.blur(a.rect(0.09, 0.60, 0.91, 0.66), 0.012), (8, 6, 4), 0.32)
-        leaf_closed()
+        _leaf_closed(a, L, x0, x1, ly0, ly1, dc, style, hl, top_h, seed, front)
     elif state == "open":
-        hx0, hx1 = (0.085, 0.215) if left_hinged else (0.785, 0.915)
-        a.paint(a.blur(a.rect(hx0 + 0.02, 0.12, hx1 + 0.10, 0.92), 0.02), (8, 6, 4), 0.30)
-        slab(a, hx0, 0.10, hx1, 0.90, dc, r=0.012, lw=0.026, lo=0.80, hi=1.14, noise=0.10, seed=14, freq=18.0, along="y")
-        a.paint(a.rect(hx0 + 0.03, 0.22, hx1 - 0.03, 0.42), shade(dc, 0.74), 0.5)
-        a.paint(a.rect(hx0 + 0.03, 0.54, hx1 - 0.03, 0.74), shade(dc, 0.74), 0.5)
-        hx = (hx0 + hx1) / 2
-        dot(a, hx, 0.84, 0.026, (40, 32, 26))
-        dot(a, hx, 0.84, 0.019, BRASS)
-        for yy in (0.18, 0.62):
-            a.paint(a.rect(hx0 - 0.012 if left_hinged else hx1 - 0.02, yy, hx0 + 0.02 if left_hinged else hx1 + 0.012, yy + 0.05), (44, 38, 34), 0.95)
-    else:   # broken: the leaf hangs from its top hinge, torn, the frame splintered
-        px_, py_ = (0.10, 0.20) if left_hinged else (0.90, 0.20)
-        ang = np.radians(58 if left_hinged else 122)
-        ux, uy = np.cos(ang), np.sin(ang)
-        vx, vy = -uy, ux
-        L, T = 0.78, 0.13
-        pts = [(px_ + vx * T / 2, py_ + vy * T / 2), (px_ - vx * T / 2, py_ - vy * T / 2)]
-        far = []
-        for i, t in enumerate(np.linspace(-T / 2, T / 2, 5)):
-            r = L - (0.07 if i % 2 else 0.0) - (0.04 if i == 2 else 0)
-            far.append((px_ + ux * r + vx * t, py_ + uy * r + vy * t))
-        poly = [(px_ + vx * T / 2, py_ + vy * T / 2)] + far[::-1] + [(px_ - vx * T / 2, py_ - vy * T / 2)]
-        poly = [(px_ - vx * T / 2, py_ - vy * T / 2), (px_ + vx * T / 2, py_ + vy * T / 2)] + far[::-1]
-        a.paint(a.blur(a.poly([(x + 0.03, y + 0.04) for x, y in poly]), 0.02), (8, 6, 4), 0.35)
-        a.paint(a.poly(poly), lit(shade(dc, 0.82), 0.8, 1.1, 0, 0, 1, 1, 0.15, 21, 16))
-        a.paint(a.stroke(poly, 0.024, closed=True), OUTLINE, 1.0)
-        a.paint(a.poly([(px_ + ux * 0.3 + vx * 0.02, py_ + uy * 0.3 + vy * 0.02), (px_ + ux * 0.46 + vx * 0.03, py_ + uy * 0.46 + vy * 0.03),
-                        (px_ + ux * 0.44 - vx * 0.02, py_ + uy * 0.44 - vy * 0.02)]), (26, 20, 16), 0.9)
-        # splinters on the floor and a raw broken edge on the jamb
-        for sx, sy, ang2 in ((0.42, 0.88, 0.4), (0.60, 0.78, 1.2), (0.30, 0.74, 2.0), (0.70, 0.90, 0.1)):
-            if not left_hinged:
-                sx = 1.0 - sx
-            q = [(sx, sy), (sx + 0.07 * np.cos(ang2), sy + 0.07 * np.sin(ang2)), (sx + 0.07 * np.cos(ang2) - 0.012, sy + 0.07 * np.sin(ang2) + 0.014)]
-            a.paint(a.poly(q), (176, 138, 96), 0.95)
-            a.paint(a.stroke(q, 0.008, closed=True), OUTLINE, 0.7)
-        jx = 0.915 if left_hinged else 0.085
-        sg = 1 if left_hinged else -1
-        a.paint(a.poly([(jx, 0.34), (jx - sg * 0.07, 0.40), (jx, 0.46), (jx - sg * 0.05, 0.54), (jx, 0.62), (jx + sg * 0.01, 0.34)]), (176, 138, 96), 1.0)
-        a.paint(a.stroke([(jx, 0.34), (jx - sg * 0.07, 0.40), (jx, 0.46), (jx - sg * 0.05, 0.54), (jx, 0.62)], 0.012, round_ends=False), OUTLINE, 0.9)
+        _leaf_open(a, L, piv, hl, th, ll_open, to_open, dc, style, front, seed)
+    else:
+        _leaf_broken(a, L, piv, hl, dc, front, seed, jw, 0.90)
     return a
 
 
-def window_overlay(state, v):
-    """A window set in a wall top (picture 1 x 1, glass strip across the middle of the wall's thickness), wall running along x."""
+def window_overlay(state, v, k=0):
+    """A window set in a wall top (picture 1 x 1, glass strip across the middle of the wall's thickness), wall running along x; k: the quarter turns it is given afterwards.
+    A stone sill sticks out on the outside, the frame is a lit slab, the glass sits back in it (the edges of the opening on the light's side shade it), the glass has its
+    reflections and a mullion; v 1 has its curtains drawn back (while intact). A broken pane is cracked from a hole with shards on the sill, a boarded one is crossed by planks."""
+    L = LIGHTS[k % 4]
     a = Art(1, 1)
     frame = (232, 228, 216) if v == 0 else (126, 92, 62)
-    y0, y1 = 0.22, 0.78
-    # a lip of sill on both sides of the strip
-    slab(a, 0.02, y0, 0.98, y1, frame, r=0.02, lw=0.03, lo=0.80, hi=1.08, noise=0.05, seed=3)
-    gx0, gx1, gy0, gy1 = 0.10, 0.90, 0.32, 0.68
+    y0, y1 = 0.20, 0.78
+    gx0, gx1, gy0, gy1 = 0.11, 0.89, 0.30, 0.68
+    # the sill: a stone lip on the outside of the wall under the frame
+    _slab2(a, 0.0, 0.66, 1.0, 0.90, (196, 192, 180), L, r=0.02, lw=0.026, lo=0.84, hi=1.08, noise=0.06, seed=17, freq=9.0)
+    _slab2(a, 0.02, y0, 0.98, y1, frame, L, r=0.02, lw=0.028, lo=0.80, hi=1.10, noise=0.05, seed=3)
 
     def sky(X, Y):
         t = np.clip((Y - gy0) / (gy1 - gy0), 0, 1)[..., None]
-        top = np.array((176, 200, 214), np.float32)[None, None, :]
-        bot = np.array((108, 138, 164), np.float32)[None, None, :]
+        top = np.array((178, 202, 216), np.float32)[None, None, :]
+        bot = np.array((106, 136, 162), np.float32)[None, None, :]
         return top * (1 - t) + bot * t
+    glass = a.rect(gx0, gy0, gx1, gy1)
     if state == "boarded":
-        a.paint(a.rect(gx0, gy0, gx1, gy1), (34, 30, 30), 1.0)
+        a.paint(glass, (34, 30, 30), 1.0)
         a.paint(a.stroke([(gx0, gy0), (gx1, gy0), (gx1, gy1), (gx0, gy1)], 0.02, closed=True), OUTLINE, 1.0)
         rng = rng_for("boards", v)
-        for i, (py0, py1) in enumerate(((0.20, 0.38), (0.41, 0.58), (0.60, 0.80))):
-            x0, x1 = rng.uniform(-0.01, 0.06), rng.uniform(0.94, 1.01)
-            tilt = rng.uniform(-0.025, 0.025)
-            poly = [(x0, py0 + tilt), (x1, py0 - tilt), (x1, py1 - tilt), (x0, py1 + tilt)]
-            a.paint(a.blur(a.poly([(x + 0.01, y + 0.025) for x, y in poly]), 0.015), (8, 6, 4), 0.45)
-            a.paint(a.poly(poly), lit((150 + 8 * i, 114 + 6 * i, 78 + 4 * i), 0.82, 1.1, 0, py0, 1, py1, 0.18, 30 + i, 20, "x"))
-            a.paint(a.stroke(poly, 0.020, closed=True), OUTLINE, 1.0)
-            line(a, [(x0 + 0.02, py0 + 0.02 + tilt), (x1 - 0.02, py0 + 0.02 - tilt)], 0.008, (214, 180, 134), 0.5, round_ends=False)
-            for nx_ in (0.14, 0.50, 0.86):
-                nail(a, nx_, (py0 + py1) / 2 + tilt * (1 - 2 * nx_), 0.014)
+        for i, yc in enumerate((0.27, 0.49, 0.71)):
+            x0_, x1_ = float(rng.uniform(0.005, 0.045)), float(rng.uniform(0.955, 0.995))
+            tilt = float(rng.uniform(-0.016, 0.016))
+            plank(a, (x0_, yc - tilt), (x1_, yc + tilt), 0.19 + float(rng.uniform(-0.01, 0.01)), L, base=PLANK_OLD if v else PLANK, seed=30 + i + 5 * v,
+                  nails=(0.10, 0.5, 0.90), skew=(float(rng.uniform(-0.012, 0.012)), float(rng.uniform(-0.012, 0.012))), tone=float(rng.uniform(0.92, 1.08)),
+                  knot=(0.6 if i == 1 else None))
         return a
-    a.paint(a.rect(gx0, gy0, gx1, gy1), sky)
-    a.paint(a.poly([(0.16, gy1), (0.30, gy0), (0.38, gy0), (0.24, gy1)]), (250, 250, 250), 0.22)
-    a.paint(a.poly([(0.50, gy1), (0.64, gy0), (0.70, gy0), (0.56, gy1)]), (250, 250, 250), 0.16)
+    a.paint(glass, sky)
+    a.paint(a.poly([(0.16, gy1), (0.30, gy0), (0.38, gy0), (0.24, gy1)]), (250, 250, 250), 0.24, clip=glass)
+    a.paint(a.poly([(0.52, gy1), (0.66, gy0), (0.72, gy0), (0.58, gy1)]), (250, 250, 250), 0.16, clip=glass)
+    le = _lit_edges(L)                           # the glass sits back in the frame: the edges of the opening on the light's side shade it
+    for e, rect in (("n", (gx0, gy0, gx1, gy0 + 0.05)), ("s", (gx0, gy1 - 0.05, gx1, gy1)), ("w", (gx0, gy0, gx0 + 0.04, gy1)), ("e", (gx1 - 0.04, gy0, gx1, gy1))):
+        if le[e]:
+            a.paint(a.blur(a.rect(*rect), 0.012), (10, 8, 6), 0.34, clip=glass)
     if state == "broken":
-        hole = [(0.50, gy0), (0.66, gy0), (0.76, 0.44), (0.70, 0.52), (0.78, gy1), (0.58, gy1), (0.54, 0.54), (0.60, 0.46)]
-        a.paint(a.poly(hole), (26, 24, 28), 1.0)
-        a.paint(a.stroke(hole, 0.012, closed=True), (236, 244, 250), 0.85)
-        for p0, p1 in (((0.58, 0.50), (0.40, 0.42)), ((0.60, 0.50), (0.44, 0.62)), ((0.70, 0.5), (0.86, 0.40)), ((0.66, 0.54), (0.84, 0.62))):
-            line(a, [p0, p1], 0.008, (236, 244, 250), 0.85)
-        for sx, sy in ((0.46, 0.84), (0.64, 0.86), (0.54, 0.90), (0.80, 0.88)):
-            a.paint(a.poly([(sx, sy), (sx + 0.045, sy + 0.012), (sx + 0.012, sy + 0.04)]), (210, 228, 238), 0.9)
+        ix, iy = 0.64, 0.49
+        rng = rng_for("crack", v)
+        hole = [(ix - 0.02, iy - 0.10), (ix + 0.05, iy - 0.08), (ix + 0.09, iy - 0.01), (ix + 0.06, iy + 0.03), (ix + 0.10, iy + 0.12), (ix + 0.01, iy + 0.10),
+                (ix - 0.03, iy + 0.04), (ix - 0.06, iy - 0.02)]
+        for i in range(10):                              # cracks run out from the hole, each in two or three kinks, and are cut by the frame
+            an = i * 0.628 + float(rng.uniform(-0.2, 0.2))
+            ln = float(rng.uniform(0.14, 0.42))
+            pts = [(ix, iy)]
+            ang = an
+            for j in range(3):
+                ang += float(rng.uniform(-0.25, 0.25))
+                pts.append((ix + np.cos(ang) * ln * (j + 1) / 3.0, iy + np.sin(ang) * ln * (j + 1) / 3.0))
+            a.paint(a.stroke(pts, 0.008, round_ends=False), (236, 244, 250), 0.85, clip=glass)
+            a.paint(a.stroke([(x + 0.004, y + 0.005) for x, y in pts], 0.005, round_ends=False), (20, 24, 32), 0.40, clip=glass)
+        for r_ in (0.12, 0.21):                          # and the rings between them
+            pts = [(ix + np.cos(t) * r_, iy + np.sin(t) * r_ * 0.9) for t in np.linspace(0.4, 5.9, 11)]
+            a.paint(a.stroke(pts, 0.006, round_ends=False), (236, 244, 250), 0.55, clip=glass)
+        a.paint(a.poly(hole), (24, 22, 26), 1.0, clip=glass)
+        a.paint(a.stroke(hole, 0.010, closed=True), (240, 246, 252), 0.85, clip=glass)
+        for sx, sy, sa in ((0.46, 0.86, 0.3), (0.58, 0.82, 1.2), (0.72, 0.87, 0.6), (0.84, 0.83, 2.0), (0.30, 0.84, 1.6)):         # shards on the sill
+            tri = [(sx, sy), (sx + 0.05 * np.cos(sa), sy + 0.05 * np.sin(sa)), (sx + 0.02 * np.cos(sa + 1.7), sy + 0.02 * np.sin(sa + 1.7))]
+            a.paint(a.poly(tri), (214, 232, 242), 0.95)
+            a.paint(a.stroke(tri, 0.006, closed=True), OUTLINE, 0.6)
     # the middle bar and the frame of the glass
     a.paint(a.rect(0.485, gy0, 0.515, gy1), frame, 1.0)
     a.paint(a.stroke([(0.485, gy0), (0.485, gy1)], 0.010, round_ends=False), OUTLINE, 0.8)
     a.paint(a.stroke([(0.515, gy0), (0.515, gy1)], 0.010, round_ends=False), OUTLINE, 0.8)
     a.paint(a.stroke([(gx0, gy0), (gx1, gy0), (gx1, gy1), (gx0, gy1)], 0.022, closed=True), OUTLINE, 1.0)
-    if v == 1 and state == "intact":      # curtains drawn back to both sides
-        for x0, x1, flip in ((gx0 + 0.012, 0.31, 1), (0.69, gx1 - 0.012, -1)):
-            a.paint(a.rect(x0, gy0 + 0.015, x1, gy1 - 0.015), lit((230, 214, 188), 0.9, 1.08, x0, gy0, x1, gy1, 0.0, 1), 0.96)
+    if v == 1 and state == "intact":      # curtains drawn back to both sides, gathered, on a rod
+        for x0_, x1_ in ((gx0 + 0.012, 0.32), (0.68, gx1 - 0.012)):
+            cw = x1_ - x0_
+            a.paint(a.rect(x0_, gy0 + 0.015, x1_, gy1 - 0.015),
+                    lambda X, Y: np.array((226, 208, 178), np.float32)[None, None, :] * (0.88 + 0.14 * np.sin((X - x0_) / cw * 18.0))[..., None])
+            a.paint(a.blur(a.rect(x0_, gy0 + 0.015, x1_, gy0 + 0.05), 0.01), (10, 8, 6), 0.25, clip=glass)
             for i in range(1, 4):
-                xx = x0 + (x1 - x0) * i / 4
-                line(a, [(xx, gy0 + 0.02), (xx, gy1 - 0.02)], 0.008, (140, 120, 92), 0.55, round_ends=False)
-        line(a, [(gx0, gy0 + 0.012), (gx1, gy0 + 0.012)], 0.012, (90, 70, 50), 0.9)
+                xx = x0_ + cw * i / 4.0
+                line(a, [(xx, gy0 + 0.02), (xx, gy1 - 0.02)], 0.007, (130, 108, 80), 0.45, round_ends=False)
+        line(a, [(gx0 - 0.01, gy0 + 0.014), (gx1 + 0.01, gy0 + 0.014)], 0.014, (84, 62, 44), 0.95)
     return a
 
 
-def garage_door(state, v):
-    """3 x 1: an overhead door in a wall, facing south."""
+def _sheet_poly(a, pts, base, L, seed, lw=0.026, seams=(), seam_col=None, lo=0.80, hi=1.08):
+    """A piece of sheet (a garage door section) as a polygon: lit across its bounding box, outlined, with `seams` (pairs of points) drawn through it."""
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    m = a.poly(pts)
+    a.paint(m, _lit2(base, L, min(xs), min(ys), max(xs), max(ys), lo, hi, 0.05, seed, 12.0))
+    for p, q in seams:
+        a.paint(a.stroke([p, q], 0.011, round_ends=False), seam_col or shade(base, 0.58), 0.85, clip=m)
+        a.paint(a.stroke([(p[0] + L[0] * -0.007, p[1] + L[1] * -0.007), (q[0] + L[0] * -0.007, q[1] + L[1] * -0.007)], 0.006, round_ends=False), (255, 252, 240), 0.30, clip=m)
+    a.paint(a.stroke(pts, lw, closed=True), OUTLINE, 1.0)
+    return m
+
+
+def garage_door(state, v, k=0):
+    """3 x 1: a sectional overhead door in a wall, drawn facing south (turned k quarter turns afterwards). Shut it is a stack of four ribbed sections with a row of small
+    lights in the top one, a lift handle and a rubber foot, between steel jambs and the track rails; open it is rolled up overhead (the sections bunched at the inside edge,
+    the floor and its oil stain under it); broken it is buckled off its track, torn open, with a section lying on the floor."""
+    L = LIGHTS[k % 4]
     a = Art(3, 1)
+    panel = (208, 206, 196)
     a.paint(a.rect(0, 0, 3, 1), lambda X, Y: np.array((140, 136, 126), np.float32)[None, None, :] * (0.95 + 0.08 * fbm(X, Y, 4.0, 9, 2))[..., None])
-    rng = rng_for("garage", v)
-    a.paint(a.blur(a.ellipse(1.4, 0.55, 0.45, 0.25), 0.06), (40, 36, 30), 0.35)         # an oil stain
-    # the jambs and the track rails
-    for x0, x1 in ((0.0, 0.10), (2.90, 3.0)):
-        a.paint(a.rect(x0, 0, x1, 1), (100, 98, 94), 1.0)
-    for xx in (0.10, 2.90):
-        line(a, [(xx, 0), (xx, 1)], 0.022, OUTLINE, 0.95, round_ends=False)
-    for xx in (0.17, 2.83):
-        line(a, [(xx, 0.0), (xx, 1.0)], 0.030, (70, 72, 76), 0.95, round_ends=False)
-    panel = (206, 204, 194) if v == 0 else (150, 164, 150)
+    for xx in (1.0, 2.0):                                                               # the joints of the slab
+        line(a, [(xx, 0.0), (xx, 0.88)], 0.008, (60, 56, 50), 0.35, round_ends=False)
+    a.paint(a.blur(a.ellipse(1.45, 0.55, 0.45, 0.20), 0.06), (40, 36, 30), 0.32)         # an oil stain
+    a.paint(a.rect(0.0, 0.88, 3.0, 1.0), lambda X, Y: np.array((174, 168, 156), np.float32)[None, None, :] * (0.94 + 0.10 * fbm(X, Y, 8.0, 12, 2))[..., None])      # the apron
+    line(a, [(0.0, 0.88), (3.0, 0.88)], 0.016, (60, 54, 46), 0.75, round_ends=False)
+    line(a, [(0.0, 0.905), (3.0, 0.905)], 0.010, (234, 230, 216), 0.5, round_ends=False)
+    # the jambs (steel) and the track rails
+    for x0, x1 in ((0.0, 0.12), (2.88, 3.0)):
+        a.paint(a.rect(x0, 0, x1, 0.88), _lit2((150, 152, 158), L, x0, 0, x1, 1, 0.84, 1.10, 0.06, 8, 10, "y"))
+    for xx in (0.12, 2.88):
+        line(a, [(xx, 0), (xx, 0.88)], 0.022, OUTLINE, 0.95, round_ends=False)
+    for xx in (0.165, 2.835):
+        line(a, [(xx, 0.0), (xx, 0.88)], 0.030, (70, 72, 78), 0.95, round_ends=False)
+        line(a, [(xx - 0.008, 0.0), (xx - 0.008, 0.88)], 0.008, (170, 174, 180), 0.45, round_ends=False)
+    X0, X1 = 0.19, 2.81
     if state == "closed":
-        a.paint(a.blur(a.rect(0.12, 0.60, 2.88, 0.68), 0.012), (8, 6, 4), 0.30)
-        slab(a, 0.10, 0.38, 2.90, 0.60, panel, r=0.012, lw=0.026, lo=0.82, hi=1.10, noise=0.05, seed=22)
-        for i in range(1, 6):
-            line(a, [(0.10 + i * 2.8 / 6, 0.38), (0.10 + i * 2.8 / 6, 0.60)], 0.012, shade(panel, 0.62), 0.9, round_ends=False)
-        for i in range(4):          # a row of small glazed lights
-            x0 = 0.40 + i * 0.65
-            a.paint(a.rect(x0, 0.45, x0 + 0.42, 0.53), (120, 150, 172), 0.95)
-            a.paint(a.stroke([(x0, 0.45), (x0 + 0.42, 0.45), (x0 + 0.42, 0.53), (x0, 0.53)], 0.008, closed=True), OUTLINE, 0.8)
-        line(a, [(1.30, 0.585), (1.70, 0.585)], 0.020, (60, 56, 52), 0.9)
+        y0, top_h, y1 = 0.30, 0.07, 0.84
+        pts = rrect(X0, y0, X1, y1, 0.012)
+        m = a.poly(pts)
+        _cast(a, pts, L, (0.040, 0.050), 0.020, 0.40)
+        a.paint(m, _lit2(panel, L, X0, y0, X1, y1, 0.82, 1.08, 0.05, 22, 6.0, "x"))
+        a.paint(a.rect(X0, y0, X1, y0 + top_h), shade(panel, 1.10), 0.65, clip=m)                  # the top of the door
+        fa, fb = y0 + top_h + 0.012, y1 - 0.030
+        sec = (fb - fa) / 4.0
+        for i in range(4):
+            sy0, sy1 = fa + i * sec, fa + (i + 1) * sec
+            a.paint(a.rect(X0 + 0.02, sy0 + 0.014, X1 - 0.02, sy1 - 0.014), shade(panel, 0.94), 0.5, clip=m)             # the embossed panel of each section
+            a.paint(a.stroke(rrect(X0 + 0.02, sy0 + 0.014, X1 - 0.02, sy1 - 0.014, 0.008), 0.007, closed=True), shade(panel, 0.66), 0.55, clip=m)
+            if i > 0:                                                                              # the joint between sections
+                line(a, [(X0, sy0), (X1, sy0)], 0.012, shade(panel, 0.46), 0.85, round_ends=False)
+                line(a, [(X0, sy0 + 0.013), (X1, sy0 + 0.013)], 0.006, (255, 252, 240), 0.32, round_ends=False)
+        for xx in (1.0, 2.0):
+            line(a, [(xx, fa), (xx, fb)], 0.007, shade(panel, 0.62), 0.45, round_ends=False)
+        for i in range(4):                                                                          # a row of small lights in the top section
+            cx = X0 + (X1 - X0) * (i + 0.5) / 4.0
+            gx0, gx1, gy0, gy1 = cx - 0.22, cx + 0.22, fa + 0.022, fa + sec - 0.022
+
+            def glass(X, Y, gy0=gy0, gy1=gy1):
+                t = np.clip((Y - gy0) / (gy1 - gy0), 0, 1)[..., None]
+                return np.array((166, 190, 204), np.float32)[None, None, :] * (1 - t) + np.array((98, 128, 152), np.float32)[None, None, :] * t
+            a.paint(a.rect(gx0, gy0, gx1, gy1), glass)
+            a.paint(a.poly([(gx0 + 0.06, gy1), (gx0 + 0.12, gy0), (gx0 + 0.17, gy0), (gx0 + 0.11, gy1)]), (250, 250, 250), 0.24)
+            a.paint(a.stroke([(gx0, gy0), (gx1, gy0), (gx1, gy1), (gx0, gy1)], 0.014, closed=True), shade(panel, 0.42), 0.95)
+        a.paint(a.rect(1.38, fb - sec * 0.5 - 0.014, 1.62, fb - sec * 0.5 + 0.014), (44, 42, 44), 0.95)         # the lift handle
+        a.paint(a.stroke([(1.38, fb - sec * 0.5 - 0.014), (1.62, fb - sec * 0.5 - 0.014), (1.62, fb - sec * 0.5 + 0.014), (1.38, fb - sec * 0.5 + 0.014)], 0.007, closed=True), OUTLINE, 0.9)
+        a.paint(a.rect(X0, fb, X1, y1), (52, 50, 50), 0.95, clip=m)                                # the rubber foot
+        _rims(a, m, X0, y0, X1, y1, L, 0.020, 0.012, 0.26, 0.24)
+        a.paint(a.stroke(pts, 0.026, closed=True), OUTLINE, 1.0)
     elif state == "open":
-        # rolled up: the door hangs overhead against the ceiling, the lower part of the cell open to the floor
-        slab(a, 0.10, 0.02, 2.90, 0.20, shade(panel, 0.92), r=0.010, lw=0.024, lo=0.78, hi=1.0, noise=0.05, seed=24)
-        for i in range(1, 6):
-            line(a, [(0.10 + i * 2.8 / 6, 0.02), (0.10 + i * 2.8 / 6, 0.20)], 0.010, shade(panel, 0.6), 0.9, round_ends=False)
-        a.paint(a.rect(0.12, 0.21, 2.88, 0.36), (14, 12, 12), 0.30)
-    else:   # broken: buckled, one end off its track
-        pts_top = [(0.10, 0.34), (0.9, 0.38), (1.6, 0.30), (2.1, 0.44), (2.40, 0.52)]
-        pts_bot = [(2.44, 0.76), (2.1, 0.66), (1.6, 0.52), (0.9, 0.58), (0.10, 0.56)]
-        poly = pts_top + pts_bot
-        a.paint(a.blur(a.poly([(x + 0.03, y + 0.05) for x, y in poly]), 0.02), (8, 6, 4), 0.35)
-        a.paint(a.poly(poly), lit(shade(panel, 0.88), 0.78, 1.08, 0, 0.3, 3, 0.8, 0.12, 25, 12))
-        a.paint(a.stroke(poly, 0.026, closed=True), OUTLINE, 1.0)
-        for x in (0.7, 1.3, 1.9):
-            line(a, [(x, 0.36 + 0.03 * (x > 1.2)), (x + 0.02, 0.56)], 0.012, shade(panel, 0.55), 0.9, round_ends=False)
-        a.paint(a.poly([(0.74, 0.40), (1.0, 0.42), (0.96, 0.54), (0.70, 0.54)]), (26, 24, 24), 0.9)         # a panel torn out
-        for px_, py_ in ((2.55, 0.62), (2.62, 0.82), (2.74, 0.70)):
-            a.paint(a.poly([(px_, py_), (px_ + 0.10, py_ + 0.02), (px_ + 0.04, py_ + 0.08)]), shade(panel, 0.8), 0.95)
+        # rolled up overhead: three bunched sections at the inside edge, a dark gap under them, the floor open to the apron
+        a.paint(a.blur(a.rect(X0, 0.24, X1, 0.46), 0.03), (10, 8, 6), 0.34)
+        for i, (sy0, sy1) in enumerate(((0.02, 0.09), (0.09, 0.16), (0.16, 0.23))):
+            pts = rrect(X0, sy0, X1, sy1, 0.008)
+            m = a.poly(pts)
+            a.paint(m, _lit2(shade(panel, 0.96 - 0.03 * i), L, X0, sy0, X1, sy1, 0.80, 1.10, 0.04, 24 + i, 6.0, "x"))
+            _rims(a, m, X0, sy0, X1, sy1, L, 0.012, 0.008, 0.30, 0.26)
+            a.paint(a.stroke(pts, 0.020, closed=True), OUTLINE, 1.0)
+        a.paint(a.blur(a.rect(X0, 0.23, X1, 0.27), 0.012), (10, 8, 6), 0.45)
+    else:   # broken: buckled, a section hanging, one end off its track, a section on the floor, a hole torn in it
+        hang = [(X0, 0.30), (1.30, 0.33), (1.52, 0.46), (1.40, 0.56), (1.62, 0.70), (1.20, 0.74), (0.96, 0.84), (X0, 0.84)]
+        _cast(a, hang, L, (0.040, 0.050), 0.020, 0.38)
+        seams = [((X0, 0.46), (1.46, 0.50)), ((X0, 0.58), (1.40, 0.58)), ((X0, 0.70), (1.20, 0.74))]
+        m = _sheet_poly(a, hang, panel, L, 25, seams=seams)
+        a.paint(a.rect(X0, 0.30, 1.3, 0.37), shade(panel, 1.10), 0.55, clip=m)
+        a.paint(a.poly([(0.56, 0.50), (0.98, 0.52), (0.92, 0.70), (0.52, 0.66)]), (26, 24, 24), 0.92, clip=m)      # a panel torn out
+        a.paint(a.stroke([(0.56, 0.50), (0.98, 0.52), (0.92, 0.70)], 0.010, round_ends=False), (228, 228, 224), 0.7, clip=m)
+        fall = [(1.78, 0.62), (2.42, 0.52), (2.80, 0.56), (2.84, 0.78), (2.20, 0.90), (1.84, 0.84)]
+        _cast(a, fall, L, (0.030, 0.040), 0.016, 0.38)
+        _sheet_poly(a, fall, shade(panel, 0.90), L, 26, seams=[((1.92, 0.70), (2.80, 0.66)), ((2.00, 0.80), (2.82, 0.76))], lo=0.74, hi=1.0)
+        a.paint(a.blur(a.ellipse(2.28, 0.74, 0.18, 0.06), 0.02), (20, 24, 30), 0.30)                                  # a dent
+        for px_, py_ in ((1.66, 0.84), (1.74, 0.94), (2.90, 0.90), (1.50, 0.80)):
+            tri = [(px_, py_), (px_ + 0.09, py_ + 0.02), (px_ + 0.03, py_ + 0.07)]
+            a.paint(a.poly(tri), shade(panel, 0.84), 0.95)
+            a.paint(a.stroke(tri, 0.008, closed=True), OUTLINE, 0.8)
     return a
 
 
-def step_body(state, v):
-    """The step in front of a door (3 x 1, facing south): one concrete or wooden tread."""
+def step_body(state, v, k=0):
+    """The step in front of a door (3 x 1, drawn facing south, turned k quarter turns afterwards): a stoop of two treads that starts at the wall (nothing between the
+    wall and its top tread), each tread with the face of its riser showing below it. v 0 concrete (cracked, stained), v 1 wooden boards on nails."""
+    L = LIGHTS[k % 4]
     a = Art(3, 1)
+    rng = rng_for("stoop", v)
     if v == 0:
-        slab(a, 0.04, 0.06, 2.96, 0.60, (162, 158, 148), r=0.03, lw=0.028, lo=0.84, hi=1.10, noise=0.07, seed=31, freq=9.0)
-        slab(a, 0.20, 0.52, 2.80, 0.94, (150, 146, 136), r=0.03, lw=0.028, lo=0.82, hi=1.08, noise=0.07, seed=32, freq=9.0)
-        line(a, [(0.26, 0.54), (2.74, 0.54)], 0.012, (214, 210, 198), 0.6, round_ends=False)
-        a.paint(a.blur(a.ellipse(1.8, 0.78, 0.22, 0.07), 0.02), (60, 56, 48), 0.35)
+        conc = (172, 166, 154)
+        # the lower tread and its riser first, the upper one over them
+        _slab2(a, 0.20, 0.54, 2.80, 0.94, shade(conc, 0.74), L, r=0.03, lw=0.026, lo=0.80, hi=1.0, noise=0.05, seed=33, freq=8.0)         # its riser
+        _slab2(a, 0.20, 0.54, 2.80, 0.83, conc, L, r=0.03, lw=0.0, lo=0.86, hi=1.10, noise=0.09, seed=32, freq=9.0, rim=False)
+        a.paint(a.stroke([(0.24, 0.835), (2.76, 0.835)], 0.012, round_ends=False), (232, 228, 214), 0.45)
+        a.paint(a.stroke(rrect(0.20, 0.54, 2.80, 0.94, 0.03), 0.026, closed=True), OUTLINE, 1.0)
+        a.paint(a.blur(a.rect(0.22, 0.54, 2.78, 0.62), 0.02), (10, 8, 6), 0.26)                                                          # the upper step shades it
+        _slab2(a, 0.04, -0.10, 2.96, 0.58, shade(conc, 0.74), L, r=0.03, lw=0.026, lo=0.80, hi=1.0, noise=0.05, seed=31, freq=9.0)         # the upper riser
+        _slab2(a, 0.04, -0.10, 2.96, 0.47, conc, L, r=0.03, lw=0.0, lo=0.86, hi=1.12, noise=0.09, seed=30, freq=9.0, rim=False)
+        a.paint(a.stroke([(0.08, 0.475), (2.92, 0.475)], 0.012, round_ends=False), (232, 228, 214), 0.45)
+        a.paint(a.stroke(rrect(0.04, -0.10, 2.96, 0.58, 0.03), 0.026, closed=True), OUTLINE, 1.0)
+        a.paint(a.blur(a.rect(0.0, 0.0, 3.0, 0.08), 0.03), (10, 8, 6), 0.30)                                                             # the shadow of the wall
+        for (cx, cy, an, ln) in ((0.9, 0.22, 0.5, 0.34), (2.15, 0.30, -0.4, 0.28), (1.5, 0.70, 0.2, 0.30)):      # hairline cracks
+            pts = crack_walk(rng, (cx, cy), an, ln, step=0.05, jit=0.5)
+            a.paint(a.stroke(pts, 0.007, round_ends=False), (62, 58, 52), 0.60)
+            a.paint(a.stroke([(x + 0.005, y + 0.006) for x, y in pts], 0.005, round_ends=False), (236, 232, 218), 0.30)
+        a.paint(a.blur(a.ellipse(1.85, 0.74, 0.22, 0.06), 0.02), (60, 56, 48), 0.30)
+        a.paint(a.blur(a.ellipse(0.7, 0.28, 0.30, 0.10), 0.04), (80, 74, 60), 0.20)
     else:
-        for i, (y0, y1, x0, x1) in enumerate(((0.06, 0.34, 0.04, 2.96), (0.36, 0.64, 0.04, 2.96), (0.68, 0.94, 0.16, 2.84))):
-            slab(a, x0, y0, x1, y1, (146 + 6 * i, 108 + 5 * i, 72 + 3 * i), r=0.012, lw=0.026, lo=0.80, hi=1.10, noise=0.18, seed=40 + i, freq=16.0, along="x")
-            for nx_ in (x0 + 0.12, x1 - 0.12, (x0 + x1) / 2):
-                nail(a, nx_, (y0 + y1) / 2, 0.011)
+        base = (150, 112, 78)
+        # the lower tread (two boards) and its riser
+        a.paint(a.blur(a.rect(0.24, 0.90, 2.84, 0.97), 0.014), (8, 6, 4), 0.34)
+        _slab2(a, 0.20, 0.82, 2.80, 0.93, shade(base, 0.66), L, r=0.006, lw=0.022, lo=0.80, hi=1.0, noise=0.12, seed=41, freq=14.0, along="x", rim=False)
+        for i, (y0, y1) in enumerate(((0.54, 0.685), (0.685, 0.82))):
+            xj = float(rng.uniform(1.0, 2.0))
+            for (xa, xb) in ((0.20, xj - 0.01), (xj + 0.01, 2.80)):
+                plank(a, (xa, (y0 + y1) / 2), (xb, (y0 + y1) / 2), y1 - y0, L, base=base, seed=50 + i, nails=(0.07, 0.93), tone=float(rng.uniform(0.94, 1.06)), shadow=False, outline=0.016, nail_r=0.011, pits=1)
+        # the upper riser, shaded by the tread, and the upper tread: four boards
+        _slab2(a, 0.04, 0.46, 2.96, 0.585, shade(base, 0.66), L, r=0.006, lw=0.022, lo=0.80, hi=1.0, noise=0.12, seed=42, freq=14.0, along="x", rim=False)
+        a.paint(a.blur(a.rect(0.06, 0.585, 2.94, 0.66), 0.014), (8, 6, 4), 0.24)
+        for i in range(4):
+            y0, y1 = i * 0.1175, (i + 1) * 0.1175
+            xj = float(rng.uniform(0.9, 2.1))
+            for (xa, xb) in ((0.04, xj - 0.01), (xj + 0.01, 2.96)):
+                plank(a, (xa, (y0 + y1) / 2), (xb, (y0 + y1) / 2), y1 - y0, L, base=base, seed=60 + i, nails=(0.07, 0.93), tone=float(rng.uniform(0.92, 1.08)), shadow=False, outline=0.016, nail_r=0.011, pits=1)
+        a.paint(a.blur(a.rect(0.0, 0.0, 3.0, 0.07), 0.025), (10, 8, 6), 0.30)
     return a
 
 
-def porch_body(state, v):
-    """A wooden porch deck 3 x 2 facing south: boards, a rail along both sides and the front, steps in the middle of the front."""
+def porch_body(state, v, k=0):
+    """A wooden porch deck 3 x 2, drawn facing south (turned k quarter turns afterwards): ten rows of weathered boards with butt joints and nails, a rail along both sides
+    and the front with a post at each corner and beside the steps, two steps down in the middle of the front."""
+    L = LIGHTS[k % 4]
     a = Art(3, 2)
+    rng = rng_for("porch", v)
     wood = (150, 112, 76)
-    a.paint(a.rect(0.04, 0.04, 2.96, 1.80), _wood_fn(wood, 51, "x", 0.30))
-    for i in range(1, 10):
-        yy = 0.04 + i * 0.176
-        line(a, [(0.04, yy), (2.96, yy)], 0.012, (42, 30, 20), 0.55, round_ends=False)
-    rng = rng_for("porch")
     for i in range(10):
-        yy = 0.04 + i * 0.176
-        for _ in range(2):
-            x = rng.uniform(0.3, 2.7)
-            line(a, [(x, yy), (x, yy + 0.176)], 0.010, (42, 30, 20), 0.5, round_ends=False)
-    blotch_ = a.blur(a.ellipse(2.2, 1.0, 0.45, 0.28), 0.08)
-    a.paint(blotch_, (60, 44, 30), 0.20)
+        y0 = 0.04 + i * 0.176
+        xj = float(rng.uniform(0.7, 2.3))
+        for xa, xb in ((0.04, xj - 0.006), (xj + 0.006, 2.96)):
+            plank(a, (xa, y0 + 0.088), (xb, y0 + 0.088), 0.176, L, base=wood, seed=300 + i, nails=(0.04, 0.96), tone=float(rng.uniform(0.93, 1.07)),
+                  shadow=False, outline=0.012, nail_r=0.010, pits=1)
+    a.paint(a.blur(a.ellipse(2.2, 1.0, 0.45, 0.28), 0.08), (60, 44, 30), 0.20)
+    a.paint(a.blur(a.rect(0.0, 0.0, 3.0, 0.07), 0.025), (10, 8, 6), 0.30)                     # the shadow of the wall
     a.paint(a.stroke([(0.04, 0.04), (2.96, 0.04)], 0.03, round_ends=False), OUTLINE, 1.0)
-    # the rail all round (but for the steps in the middle of the front), with a post at each corner
-    rail = (214, 208, 192) if v == 0 else (112, 84, 58)
-    for pts in (([(0.04, 0.04), (0.04, 1.80), (1.05, 1.80)]), ([(2.96, 0.04), (2.96, 1.80), (1.95, 1.80)])):
-        line(a, pts, 0.07, shade(rail, 0.86), 1.0, round_ends=False)
-        line(a, [(x + 0.012, y - 0.012) for x, y in pts], 0.026, shade(rail, 1.12), 0.9, round_ends=False)
-    for px_, py_ in ((0.04, 0.10), (0.04, 1.80), (1.05, 1.80), (1.95, 1.80), (2.96, 1.80), (2.96, 0.10)):
-        slab(a, px_ - 0.055, py_ - 0.055, px_ + 0.055, py_ + 0.055, shade(rail, 1.0), r=0.01, lw=0.02, lo=0.8, hi=1.1, rim=False)
-    # the steps down at the front, in the middle
+    # the two steps down in the middle of the front
     for i, (y0, y1) in enumerate(((1.80, 1.89), (1.89, 1.98))):
-        slab(a, 1.06, y0, 1.94, y1, (140 - 8 * i, 104 - 6 * i, 70 - 4 * i), r=0.008, lw=0.022, lo=0.82, hi=1.06, noise=0.14, seed=60 + i, freq=16.0, along="x")
+        _slab2(a, 1.06, y0, 1.94, y1, (140 - 8 * i, 104 - 6 * i, 70 - 4 * i), L, r=0.008, lw=0.022, lo=0.82, hi=1.06, noise=0.14, seed=60 + i, freq=16.0, along="x")
+    # the rail all round (but for the steps), then a post at each corner
+    rail = (214, 208, 192) if v == 0 else (112, 84, 58)
+    for x0, y0, x1, y1 in ((0.01, 0.04, 0.09, 1.82), (2.91, 0.04, 2.99, 1.82), (0.01, 1.76, 1.05, 1.84), (1.95, 1.76, 2.99, 1.84)):
+        _slab2(a, x0, y0, x1, y1, rail, L, r=0.01, lw=0.02, lo=0.80, hi=1.10)
+    for px_, py_ in ((0.05, 0.10), (0.05, 1.80), (1.05, 1.80), (1.95, 1.80), (2.95, 1.80), (2.95, 0.10)):
+        _slab2(a, px_ - 0.060, py_ - 0.060, px_ + 0.060, py_ + 0.060, shade(rail, 1.05), L, r=0.012, lw=0.022, lo=0.8, hi=1.12)
     return a
 
 
 def house_openings():
     # ---------------------------------------------------------- doors
     door_solid = {"closed": True, "open": False, "broken": False}
-    prop("house", "door_front", 1, 1, lambda st, v: door_cell(st, v, "front"), facings=4, states=("closed", "open", "broken"), variants=2,
-         tags=["door", "opening", "exterior"], layer="wall", solid=door_solid, pad=(0, 0, 0, 0), shadow=None, grain=0.01, bg=(150, 90, 70),
-         note="A front door in a wall cell (replaces the wall cell: a full 128 px picture with its threshold floor and its frame). facing = the side "
-              "the OUTSIDE is on (s: the wall runs along x with the street to the south; e: the wall runs along y with the street to the east). "
-              "Variants are door styles (a: oxblood, hinged on the left of the frame as seen facing out; b: green, hinged on the right) and "
-              "are the same in every state, so a door keeps its look when it is opened or broken. A closed door blocks; open and broken do not. "
-              "Not a wall for wall_edges (the wall ends beside it get their outline).")
-    prop("house", "door_interior", 1, 1, lambda st, v: door_cell(st, v, "int"), facings=4, states=("closed", "open"), variants=2,
-         tags=["door", "opening", "interior"], layer="wall", solid={"closed": True, "open": False}, pad=(0, 0, 0, 0), shadow=None, grain=0.01, bg=(222, 216, 200),
-         note="An inside door in a partition wall cell, same rules as door_front (facing: the side the door's front is on; a: white painted, hinged "
-              "left; b: stained wood, hinged right). A doorway with no door needs no picture: leave a floor cell in the wall.")
-    prop("house", "door_garage", 3, 1, garage_door, facings=4, states=("closed", "open", "broken"), variants=1,
+    hinge = ["hinged left", "hinged right"]
+    prop("house", "door_front", 1, 1, lambda st, v, k: door_cell(st, v, "front", k), facings=4, states=("closed", "open", "broken"), variants=12, turn=True,
+         variant_names=["%s, %s" % (("oxblood", "blue grey", "dark green", "sage green", "natural wood", "walnut")[v // 2], hinge[v % 2]) for v in range(12)],
+         tags=["door", "opening", "exterior"], layer="wall", solid=door_solid, pad=(0, 0, 0, 0), shadow=None, grain=0.0, bg=(150, 90, 70),
+         note="A front door in a wall cell (replaces the wall cell: a full 128 px picture with its doorway floor, its frame and its leaf: opaque, so the open picture "
+              "can be faded in over the shut one). facing = the side the OUTSIDE is on (s: the wall runs along x with the street to the south; e: the wall runs along y "
+              "with the street to the east). 12 variants: 6 door colours (0-1 oxblood with three lights, 2-3 blue grey, 4-5 dark green with panels, 6-7 sage green "
+              "ledged boards on strap hinges, 8-9 natural wood, 10-11 walnut) x the side of the hinge (even variants hinged on the left of the picture as seen from "
+              "outside, odd on the right). The game gives the two cells of a doorway the variants n and n + 1: one colour hinged at the outer jambs when n is even; "
+              "when n is odd the pair is the right hand leaf of one colour and the left hand leaf of the next in the ring of colours, mostly a near neighbour "
+              "(green and sage, wood and walnut, walnut and oxblood, blue grey and green; oxblood and blue grey, sage and wood are the odd pairs). Open: the leaf swung inward about 60 degrees with its swing drawn on the floor; broken: the leaf hangs splintered, a piece on the sill, the "
+              "frame torn. The look is the same in every state, so a door keeps its colour when it is opened or broken. A closed door blocks; open and broken do not. "
+              "Not a wall for wall_edges (the wall ends beside it get their outline). Every facing is lit from the north west like the rest.")
+    prop("house", "door_interior", 1, 1, lambda st, v, k: door_cell(st, v, "int", k), facings=[0, 3], states=("closed", "open"), variants=16, turn=True,
+         variant_names=["%s, %s" % (("white", "cream", "light oak", "powder blue")[v // 4], hinge[v % 2]) for v in range(16)],
+         tags=["door", "opening", "interior"], layer="wall", solid={"closed": True, "open": False}, pad=(0, 0, 0, 0), shadow=None, grain=0.0, bg=(222, 216, 200),
+         note="An inside door in a partition wall cell, same rules as door_front: a thinner, lighter leaf in a plain frame, on a threshold board. facing: s for a "
+              "partition that runs along x, e for one that runs along y (the only two the game asks for: a door in a partition has no outside, so there is no n or w). "
+              "16 variants: 4 leaves in runs of four (0-3 white, 4-7 cream, 8-11 light oak, 12-15 powder blue) x the side of the hinge (even: left, odd: right). "
+              "A doorway with no door needs no picture: leave a floor cell in the wall.")
+    prop("house", "door_garage", 3, 1, garage_door, facings=4, states=("closed", "open", "broken"), variants=1, turn=True,
          tags=["door", "opening", "exterior", "garage"], layer="wall", solid={"closed": True, "open": False, "broken": False}, pad=(0, 0, 0, 0), shadow=None,
          bg=(150, 90, 70),
          note="An overhead garage door, 3 cells wide (the wall run it replaces), facing the way the outside is (s: the wall runs along x). Picture "
               "3 x 1 tiles for s and n, 1 x 3 for e and w.")
     # ---------------------------------------------------------- windows
-    prop("house", "window", 1, 1, window_overlay, facings="hv", states=("intact", "broken", "boarded"), variants=2,
+    prop("house", "window", 1, 1, window_overlay, facings="hv", states=("intact", "broken", "boarded"), variants=2, turn=True,
          tags=["window", "opening", "overlay"], layer="wall", solid="all", pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
          note="A window set into a wall top: laid OVER a wall cell (the wall fill and its edges stay underneath), h for a wall that runs along x, v "
               "for one that runs along y. The cell stays a wall (solid, and a wall for wall_edges) in every state; the sim decides who can see or "
               "climb through. Variants: a plain white frame, b wooden frame with curtains (curtains only while intact).")
     # ---------------------------------------------------------- steps and porch
-    prop("house", "step", 3, 1, step_body, facings=4, variants=2, tags=["decor", "walkable", "step"], layer="decal", solid=[], bg=(98, 128, 66),
+    prop("house", "step", 3, 1, step_body, facings=4, variants=2, turn=True, tags=["decor", "walkable", "step"], layer="decal", solid=[], bg=(98, 128, 66),
          note="The step in front of a door: 3 cells wide, 1 deep, laid on the ground cells outside the door, centred on it (a: concrete, b: wooden "
               "planks). Facing = the side it faces, away from the house (s: it lies south of a door in a wall that runs along x). Walkable.")
-    prop("house", "porch", 3, 2, porch_body, facings=4, variants=1, tags=["decor", "walkable", "porch"], layer="decal", solid=[], bg=(98, 128, 66),
+    prop("house", "porch", 3, 2, porch_body, facings=4, variants=1, turn=True, tags=["decor", "walkable", "porch"], layer="decal", solid=[], bg=(98, 128, 66),
          note="A porch deck 3 x 2 cells in front of a door with a rail round its sides and the front, open in the middle for the steps. Facing = the "
               "side it faces, away from the house. Walkable. White rail. Its roof, if any, is a roof piece.")
 
@@ -3808,29 +4273,31 @@ def rubble_cell(along, k):
     rng = rng_for("fence_rubble", k * 2 + (1 if along == "y" else 0))
     base = np.pi / 2 if along == "y" else 0.0
 
-    def plank(cx, cy, ang, ln, th, tone):
-        c, s_ = np.cos(ang), np.sin(ang)
-        pts = [(cx + dx * c - dy * s_, cy + dx * s_ + dy * c) for dx, dy in ((-ln / 2, -th / 2), (ln / 2, -th / 2 + rng.uniform(-0.02, 0.02)), (ln / 2, th / 2), (-ln / 2, th / 2 + rng.uniform(-0.02, 0.02)))]
-        a.paint(a.blur(a.poly([(x + 0.02, y + 0.03) for x, y in pts]), 0.012), (8, 6, 4), 0.30)
-        a.paint(a.poly(pts), lit(shade(WOOD_OLD, tone), 0.8, 1.12, cx - 0.2, cy - 0.1, cx + 0.2, cy + 0.1, 0.16, 90 + k, 12.0, "x"))
-        a.paint(a.stroke(pts, 0.022, closed=True), OUTLINE, 1.0)
-        a.paint(a.stroke([pts[0], pts[1]], 0.010, round_ends=False), (210, 170, 120), 0.45)
+    L = LIGHTS[0]
+
+    def lying(cx, cy, ang, ln, th, tone, i):
+        """A board on the ground: weathered like the barricade's, a broken end or two, a nail or two left in it."""
+        u = np.array((np.cos(ang), np.sin(ang)), np.float32)
+        p0 = (float(cx - u[0] * ln / 2), float(cy - u[1] * ln / 2))
+        p1 = (float(cx + u[0] * ln / 2), float(cy + u[1] * ln / 2))
+        plank(a, p0, p1, th, L, base=PLANK, seed=90 + k * 5 + i, tone=tone, nails=((0.12,) if rng.random() < 0.6 else ()) + ((0.9,) if rng.random() < 0.3 else ()),
+              teeth0=_teeth(rng, 3, 0.04) if rng.random() < 0.55 else None, teeth1=_teeth(rng, 3, 0.04) if rng.random() < 0.55 else None,
+              skew=(float(rng.uniform(-0.015, 0.015)), float(rng.uniform(-0.015, 0.015))), shadow=True, pits=1)
     n = 3 + (k % 2)
     spots = [(0.22 + 0.56 * rng.random(), 0.22 + 0.56 * rng.random()) for _ in range(n)]
     for i, (cx, cy) in enumerate(spots):
-        plank(cx, cy, base + rng.uniform(-0.55, 0.55), rng.uniform(0.34, 0.62), rng.uniform(0.09, 0.13), rng.uniform(0.85, 1.12))
+        lying(cx, cy, base + rng.uniform(-0.55, 0.55), rng.uniform(0.34, 0.62), rng.uniform(0.09, 0.13), rng.uniform(0.90, 1.10), i)
     if k % 2 == 0:               # the stump of a post, splintered
         px_, py_ = rng.uniform(0.3, 0.7), rng.uniform(0.3, 0.7)
         pts = [(px_ - 0.09, py_ + 0.06), (px_ - 0.08, py_ - 0.07), (px_ - 0.02, py_ - 0.11), (px_ + 0.04, py_ - 0.07), (px_ + 0.09, py_ - 0.09), (px_ + 0.09, py_ + 0.07)]
-        a.paint(a.poly(pts), lit(shade(WOOD_OLD, 0.8), 0.8, 1.1, px_ - 0.1, py_ - 0.1, px_ + 0.1, py_ + 0.1, 0.1, 95 + k, 10.0))
+        _cast(a, pts, L, (0.020, 0.035), 0.012, 0.42)
+        a.paint(a.poly(pts), lit(shade(PLANK, 0.92), 0.8, 1.1, px_ - 0.1, py_ - 0.1, px_ + 0.1, py_ + 0.1, 0.1, 95 + k, 10.0))
         a.paint(a.stroke(pts, 0.022, closed=True), OUTLINE, 1.0)
-        a.paint(a.stroke([pts[1], pts[2], pts[3]], 0.010, round_ends=False), (210, 170, 120), 0.7)
+        a.paint(a.stroke([pts[1], pts[2], pts[3]], 0.010, round_ends=False), (228, 198, 152), 0.7)
     for _ in range(5):           # splinters
         sx, sy = rng.uniform(0.1, 0.9), rng.uniform(0.1, 0.9)
         ang = rng.uniform(0, 6.28)
         a.paint(a.poly([(sx, sy), (sx + 0.06 * np.cos(ang), sy + 0.06 * np.sin(ang)), (sx + 0.02 * np.cos(ang + 1.6), sy + 0.02 * np.sin(ang + 1.6))]), (196, 156, 108), 0.9)
-    sil = a.alpha.copy()
-    a.shadow_under(0.03, 0.045, 0.024, 0.30, mask_of=sil)
     return a.image(grain=GRAIN, seed=7 + k)
 
 
@@ -3849,97 +4316,96 @@ def fence_rubble_atlas():
                mode="sprite", bg=(98, 128, 66), folder="fortify", extra={"solid": [], "name": "Fallen fence"})
 
 
-def door_reinforce(st, v):
-    """A second layer of planks over a barricaded door (lay it over `barricade_door`): two planks crossed in an X with a steel strap, bolts at the ends; the wall runs along x."""
+def _crack_across(a, p, n, th, rng):
+    """A crack right across a board at p (n: the unit vector across the board): a dark kinked line with a pale edge, as a board splits along a nail."""
+    h = th / 2.0
+    pts = []
+    for t in np.linspace(-1.15, 1.15, 6):
+        q = np.array(p, np.float32) + np.array(n, np.float32) * (t * h)
+        pts.append((float(q[0]) + float(rng.uniform(-0.016, 0.016)) * abs(n[1]), float(q[1]) + float(rng.uniform(-0.016, 0.016)) * abs(n[0])))
+    a.paint(a.stroke(pts, 0.013, round_ends=False), (20, 14, 10), 0.92)
+    a.paint(a.stroke([(x + 0.006, y + 0.004) for x, y in pts], 0.005, round_ends=False), (228, 198, 152), 0.65)
+
+
+def barricade_door(st, v, k=0):
+    """The light barricade of a door cell (it lies over the door cell, the wall running along x; turned k quarter turns afterwards): three weathered boards nailed across the
+    doorway from frame to frame, a little uneven in length and slant, each throwing its shadow on the door. v 1 is the damaged look: one board torn off (its nails left
+    in the frame), one snapped and hanging by a nail, the third split."""
+    L = LIGHTS[k % 4]
     a = body(1, 1)
     d = v == 1
-    wood = WOOD_OLD if d else (134, 98, 66)
-    iron = (70, 74, 80)
-    rng = rng_for("door_reinforce", v)
-    for (p0, p1) in (((0.02, 0.06), (0.98, 0.94)), ((0.02, 0.94), (0.98, 0.06))):
-        if d and p0[1] > 0.5:
-            p1 = (0.52, 0.52)               # one of them snapped half way
-        ang = np.arctan2(p1[1] - p0[1], p1[0] - p0[0])
-        nx_, ny_ = -np.sin(ang) * 0.075, np.cos(ang) * 0.075
-        poly = [(p0[0] + nx_, p0[1] + ny_), (p1[0] + nx_, p1[1] + ny_), (p1[0] - nx_, p1[1] - ny_), (p0[0] - nx_, p0[1] - ny_)]
-        a.paint(a.blur(a.poly([(x + 0.01, y + 0.03) for x, y in poly]), 0.012), (8, 6, 4), 0.35)
-        a.paint(a.poly(poly), lit(wood, 0.8, 1.12, 0, 0, 1, 1, 0.16, 100, 12.0, "x"))
-        a.paint(a.stroke(poly, 0.022, closed=True), OUTLINE, 1.0)
-        a.paint(a.stroke([p0, p1], 0.020, round_ends=False), iron, 0.9)
-    for (bx, by) in ((0.10, 0.12), (0.90, 0.12), (0.10, 0.88), (0.90, 0.88)):
-        nail(a, bx, by, 0.018)
-    a.paint(a.ellipse(0.5, 0.5, 0.055), iron, 1.0)
-    a.paint(a.stroke([(0.5 - 0.055 * np.cos(t), 0.5 - 0.055 * np.sin(t)) for t in np.linspace(0, 6.3, 16)], 0.014, closed=True), OUTLINE, 0.95)
-    return a
-
-
-def barricade_window(st, v):
-    """Heavy planks over a window cell (it lies over the wall cell and its window), the wall running along x."""
-    a = body(1, 1)
-    d = v == 1
-    wood = WOOD_OLD if d else (150, 112, 76)
-    rng = rng_for("fort_window", v)
-    rows = [(0.14, 0.34), (0.38, 0.58), (0.62, 0.84)]
-    for i, (y0, y1) in enumerate(rows):
-        if d and i == 1:
-            # a plank broken in two, one half hanging
-            for (x0, x1, dy) in ((0.0, 0.40, 0.0), (0.58, 1.0, 0.10)):
-                poly = [(x0, y0 + dy), (x1, y0 + dy + 0.02), (x1, y1 + dy + 0.02), (x0, y1 + dy)]
-                a.paint(a.blur(a.poly([(x + 0.01, y + 0.03) for x, y in poly]), 0.012), (8, 6, 4), 0.35)
-                a.paint(a.poly(poly), lit(wood, 0.8, 1.12, 0, y0, 1, y1, 0.16, 70 + i, 12.0, "x"))
-                a.paint(a.stroke(poly, 0.022, closed=True), OUTLINE, 1.0)
-            a.paint(a.poly([(0.40, y0), (0.46, y0 + 0.07), (0.40, y0 + 0.12), (0.46, y1)]), (24, 18, 14), 0.9)
-            continue
-        tilt = rng.uniform(-0.02, 0.02)
-        poly = [(0.0, y0 + tilt), (1.0, y0 - tilt), (1.0, y1 - tilt), (0.0, y1 + tilt)]
-        a.paint(a.blur(a.poly([(x + 0.01, y + 0.03) for x, y in poly]), 0.012), (8, 6, 4), 0.35)
-        a.paint(a.poly(poly), lit(wood, 0.8, 1.12, 0, y0, 1, y1, 0.16, 70 + i, 12.0, "x"))
-        a.paint(a.stroke(poly, 0.024, closed=True), OUTLINE, 1.0)
-        line(a, [(0.02, y0 + 0.025 + tilt), (0.98, y0 + 0.025 - tilt)], 0.010, (220, 184, 140), 0.45, round_ends=False)
-        for nx_ in (0.10, 0.50, 0.90):
-            nail(a, nx_, (y0 + y1) / 2 + tilt * (1 - 2 * nx_), 0.016)
-    # a cross brace and, built, a steel strap
-    if not d:
-        a.paint(a.stroke([(0.12, 0.10), (0.88, 0.90)], 0.060), OUTLINE, 1.0)
-        a.paint(a.stroke([(0.12, 0.10), (0.88, 0.90)], 0.036), shade(wood, 0.86), 1.0)
-        for p in ((0.30, 0.30), (0.70, 0.70)):
-            nail(a, p[0], p[1], 0.016)
-    else:
-        a.paint(a.stroke([(0.12, 0.10), (0.40, 0.38)], 0.060), OUTLINE, 1.0)
-        a.paint(a.stroke([(0.12, 0.10), (0.40, 0.38)], 0.036), shade(wood, 0.86), 1.0)
-    return a
-
-
-def barricade_door(st, v):
-    """A door cell barricaded from inside: planks nailed across and a dresser pushed against it; the wall runs along x."""
-    a = body(1, 1)
-    d = v == 1
-    wood = WOOD_OLD if d else (146, 108, 74)
+    base = PLANK_OLD if d else PLANK
     rng = rng_for("fort_door", v)
-    a.paint(a.rect(0.0, 0.0, 1.0, 1.0), (30, 22, 16), 0.0)
-    # a heavy bar across
-    for i, (y0, y1) in enumerate(((0.08, 0.30), (0.34, 0.56), (0.60, 0.82))):
-        if d and i == 2:
-            poly = [(0.0, y0 + 0.08), (0.46, y0 + 0.04), (0.52, y1 + 0.10), (0.0, y1 + 0.14)]
+    th = 0.19
+    for i, yc in enumerate((0.20, 0.50, 0.80)):
+        xa = 0.035 + float(rng.uniform(-0.008, 0.02))
+        xb = 0.965 - float(rng.uniform(-0.008, 0.02))
+        tilt = float(rng.uniform(-0.014, 0.014))
+        p0, p1 = (xa, yc - tilt), (xb, yc + tilt)
+        kw = dict(base=base, seed=80 + i + 9 * v, tone=float(rng.uniform(0.92, 1.08)), nails=(0.075, 0.925),
+                  skew=(float(rng.uniform(-0.012, 0.012)), float(rng.uniform(-0.012, 0.012))))
+        if d and i == 1:                                      # torn off: the nails stay in the frame
+            nail_stub(a, 0.11, yc, L)
+            nail_stub(a, 0.89, yc, L)
+        elif d and i == 2:
+            snapped_plank(a, p0, p1, th, L, at=0.52, drop=0.15, hang_end=0, **kw)
         else:
-            poly = [(0.0, y0), (1.0, y0 + rng.uniform(-0.01, 0.01)), (1.0, y1), (0.0, y1)]
-        a.paint(a.blur(a.poly([(x + 0.01, y + 0.03) for x, y in poly]), 0.012), (8, 6, 4), 0.35)
-        a.paint(a.poly(poly), lit(wood, 0.8, 1.12, 0, y0, 1, y1, 0.16, 80 + i, 12.0, "x"))
-        a.paint(a.stroke(poly, 0.024, closed=True), OUTLINE, 1.0)
-        for nx_ in (0.10, 0.9):
-            nail(a, nx_, (y0 + y1) / 2, 0.016)
-    iron = (70, 74, 80)
-    a.paint(a.rect(0.0, 0.40, 1.0, 0.50), iron, 0.0)
-    a.paint(a.stroke([(0.50, 0.06), (0.50, 0.94)], 0.070), OUTLINE, 1.0 if not d else 0.0)
-    if not d:
-        a.paint(a.stroke([(0.50, 0.06), (0.50, 0.94)], 0.044), shade(wood, 0.82), 1.0)
-        nail(a, 0.5, 0.2, 0.016)
-        nail(a, 0.5, 0.5, 0.016)
-        nail(a, 0.5, 0.8, 0.016)
+            plank(a, p0, p1, th, L, knot=(0.62 if i == 0 else None), **kw)
+            if d:
+                _crack_across(a, (0.44, yc - tilt * 0.2), (0.0, 1.0), th, rng)
+    return a
+
+
+def door_reinforce(st, v, k=0):
+    """The second layer of a barred door (it lies over `barricade_door`): fresher boards, a middle board across and two diagonals crossed over it in an X, a bolt through
+    the crossing. v 1 is the damaged look: the middle board split, one diagonal snapped and hanging."""
+    L = LIGHTS[k % 4]
+    a = body(1, 1)
+    d = v == 1
+    base = PLANK_OLD if d else PLANK_NEW
+    rng = rng_for("door_reinforce", v)
+    plank(a, (0.035, 0.494), (0.965, 0.506), 0.17, L, base=base, seed=100 + v, tone=0.98, nails=(0.075, 0.925), skew=(0.01, -0.012), knot=0.28)
+    if d:
+        _crack_across(a, (0.72, 0.50), (0.0, 1.0), 0.17, rng)
+    for j, (p0, p1) in enumerate((((0.085, 0.075), (0.915, 0.925)), ((0.085, 0.925), (0.915, 0.075)))):
+        kw = dict(base=base, seed=110 + j + 7 * v, tone=0.96 + 0.08 * j, nails=(0.06, 0.94), skew=(0.01 * (1 - 2 * j), -0.01))
+        if d and j == 1:
+            snapped_plank(a, p0, p1, 0.15, L, at=0.46, drop=0.5, hang_end=1, **kw)
+        else:
+            plank(a, p0, p1, 0.15, L, **kw)
+    _knob(a, 0.5, 0.5, 0.030, L, STEEL)
+    return a
+
+
+def barricade_window(st, v, k=0):
+    """Heavy planks over a window cell (it lies over the wall cell and its window, the wall running along x; turned k quarter turns afterwards): three boards across the
+    frame and a diagonal brace over them. v 1 is the damaged look: the middle board torn off, the lowest split, the brace snapped."""
+    L = LIGHTS[k % 4]
+    a = body(1, 1)
+    d = v == 1
+    base = PLANK_OLD if d else PLANK
+    rng = rng_for("fort_window", v)
+    th = 0.20
+    for i, yc in enumerate((0.255, 0.50, 0.745)):
+        xa = 0.02 + float(rng.uniform(0.0, 0.025))
+        xb = 0.98 - float(rng.uniform(0.0, 0.025))
+        tilt = float(rng.uniform(-0.016, 0.016))
+        p0, p1 = (xa, yc - tilt), (xb, yc + tilt)
+        kw = dict(base=base, seed=70 + i + 9 * v, tone=float(rng.uniform(0.92, 1.08)), nails=(0.08, 0.5, 0.92),
+                  skew=(float(rng.uniform(-0.012, 0.012)), float(rng.uniform(-0.012, 0.012))))
+        if d and i == 1:
+            for nx_ in (0.10, 0.50, 0.90):
+                nail_stub(a, nx_, yc, L)
+        else:
+            plank(a, p0, p1, th, L, knot=(0.35 if i == 2 else None), **kw)
+            if d and i == 2:
+                _crack_across(a, (0.62, yc - tilt * 0.1), (0.0, 1.0), th, rng)
+    pa, pb = (0.10, 0.08), (0.90, 0.92)
+    kw = dict(base=base, seed=75 + 9 * v, tone=0.94, nails=(0.07, 0.30, 0.50, 0.70, 0.93), skew=(0.01, -0.01), nail_r=0.015)
+    if d:
+        snapped_plank(a, pa, pb, 0.11, L, at=0.42, drop=0.55, hang_end=0, **kw)
     else:
-        a.paint(a.poly([(0.46, 0.06), (0.56, 0.06), (0.54, 0.40), (0.48, 0.44)]), shade(wood, 0.82), 1.0)
-        a.paint(a.stroke([(0.46, 0.06), (0.56, 0.06), (0.54, 0.40), (0.48, 0.44)], 0.020, closed=True), OUTLINE, 1.0)
-        a.paint(a.poly([(0.30, 0.70), (0.42, 0.64), (0.50, 0.74), (0.36, 0.80)]), (186, 146, 104), 0.95)
+        plank(a, pa, pb, 0.11, L, **kw)
     return a
 
 
@@ -3969,14 +4435,14 @@ def job_fortify():
               "variant 0 BUILT, variant 1 DAMAGED (a hole in the deck, a plank gone). The shooter stands on the deck: draw it under the people.")
     fence_rubble_atlas()
     prop("fortify", "door_reinforce", 1, 1, door_reinforce, facings="hv", variants=2, variant_names=names, tags=["fortify", "overlay", "door", "solid"], layer="wall",
-         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
+         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70), turn=True,
          note="Two planks crossed in an X with a steel strap, laid OVER `barricade_door`: the barred door that has the plank kit. variant 0 BUILT, 1 DAMAGED (one plank snapped).")
     prop("fortify", "barricade_window", 1, 1, barricade_window, facings="hv", variants=2, variant_names=names, tags=["fortify", "overlay", "window", "solid"], layer="wall",
-         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
+         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70), turn=True,
          note="Heavy planks and a brace over a window cell: lay it OVER the wall cell and the window (h: a wall that runs along x). variant 0 BUILT, variant 1 "
               "DAMAGED (a plank broken, the brace snapped).")
     prop("fortify", "barricade_door", 1, 1, barricade_door, facings="hv", variants=2, variant_names=names, tags=["fortify", "overlay", "door", "solid"], layer="wall",
-         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70),
+         pad=(0, 0, 0, 0), shadow=None, bg=(150, 90, 70), turn=True,
          note="A door cell barricaded with planks and a heavy bar: lay it OVER the door cell (h: the wall runs along x). variant 0 BUILT, variant 1 DAMAGED.")
     contact("fortify", scale=0.7, bg=(98, 128, 66))
 
