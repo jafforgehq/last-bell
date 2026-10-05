@@ -32,6 +32,8 @@
 ##   "dead"        [DeadRecord]  (data only: the DormantDead field turns them into real dead near the avatar)
 ##   "start"       {"house": id, "pos": Vector2 (a free tile of the roomiest room), "room": room index}
 ##   "rescue"      [{"house", "pos": Vector2 (where the survivor waits), "room", "ring": 1..3, "dist": from the start house}] 12 candidates, near to far
+##   "data" also carries `shot_low` (PackedByteArray W*H: 1 on the tiles of the LOW solid props, a bed, a sofa, a table, a counter...: shut to walking as ever but a shot, a blow and the dead's eye go over them;
+##                 the lists are assets/data/prop_heights.json, scripts/town/prop_heights.gd; the world keeps it as `world.shot_low`, the sim's `clear_shot` and the avatar's `trace` read it)
 ##   "data" also carries `kit`, what the art kit needs (scripts/town/town_world.gd reads it, all of it optional): "ground" (PackedByteArray W*H: the ground a tile has, an index into
 ##                 TownArt.GROUNDS + 1, 0 = by the terrain: the floors of the rooms by type, the paths), "wall" (PackedByteArray: the material of a wall top, TownArt.WALL_MATS), "line"
 ##                 (PackedByteArray: a fence or hedge cell, TownArt.LINES), "windows" ([{"x", "y", "orient": "h"|"v", "state": "intact"|"broken"|"boarded", "variant", "bar"}]), "gates"
@@ -66,6 +68,7 @@ const BuildingGen := preload("res://scripts/town/building_gen.gd")
 const Districts := preload("res://scripts/town/town_districts.gd")
 const Streetscape := preload("res://scripts/town/town_streetscape.gd")
 const Plans := preload("res://scripts/town/building_plans.gd")
+const PropHeights := preload("res://scripts/town/prop_heights.gd")
 
 ## The size of the full town (6 blocks a side); `make(seed, {"blocks": n})` makes a smaller one (2: 64 x 64, for tests).
 const DEFAULT_SIZE := 192
@@ -771,6 +774,9 @@ func _finish_data() -> void:
 	d["terrain"] = Array(_terrain)
 	d["solidZ"] = shut
 	d["solidP"] = shut.duplicate()
+	# (SHOT OVER FURNITURE: the tiles under the LOW props, 1 where a bed, a sofa, a table or a counter stands: a bullet, a blow and the dead's eye go over them though nobody walks through;
+	# assets/data/prop_heights.json. Rebuilt from the seed with the town, saved nowhere; the school's and the raid sites' data have no such key)
+	d["shot_low"] = PropHeights.shot_low_grid(_objects, W, H)
 	d["wall"] = zeros
 	d["objects"] = _objects
 	d["marks"] = _marks
