@@ -127,6 +127,31 @@ func sight(solid: PackedByteArray, a: Vector2, b: Vector2, r: float = 0.3) -> bo
 	return true
 
 
+## `sight` for a shot or a look (the town's: scripts/town/town_rules.gd `clear_shot`): a tile that `solid` shuts but `low` marks (the tiles under a bed, a sofa, a table, a counter,
+## `World.shot_low`) does not stop the line, which is the only difference; the line is sampled and counted as `sight`'s. (A walker's line, the one of `smooth` and of the dead's straight
+## walk, is `sight`: nobody walks through a bed.)
+func sight_over(solid: PackedByteArray, low: PackedByteArray, a: Vector2, b: Vector2, r: float = 0.3) -> bool:
+	sight_calls += 1
+	var dv := b - a
+	var dist := dv.length()
+	var n := maxi(1, ceili(dist / SIGHT_STEP))
+	var fn := float(n)
+	var nrm := Vector2.ZERO if dist == 0.0 else Vector2(-dv.y, dv.x) / dist * r
+	var w := W
+	var h := H
+	for i in n + 1:
+		var p := a + dv * (float(i) / fn)
+		for k in 3:
+			var x := floori(p.x + nrm.x * float(k - 1))    # (the left edge of the corridor, the middle, the right edge)
+			var y := floori(p.y + nrm.y * float(k - 1))
+			if x < 0 or y < 0 or x >= w or y >= h:
+				return false
+			var t := y * w + x
+			if solid[t] != 0 and low[t] == 0:
+				return false
+	return true
+
+
 ## String-pulling: from each kept point, on to the farthest of the next LOOKAHEAD
 ## points that can be seen from it (a path that has no line of sight to the next
 ## point takes it anyway: neighbouring cells always do).

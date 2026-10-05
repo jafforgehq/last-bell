@@ -1,0 +1,13 @@
+{
+	"_doc": "How high the things of the town stand, for a SHOT and for a LOOK (scripts/town/prop_heights.gd; the town generator builds the grid `data.shot_low` from it). Every kind the generator can put on the ground (scripts/town/town_kit.gd KIT_PROPS and the site layouts' props, assets/data/site_layouts.json) is in one list. `low`: about waist high or less (a bed, a sofa, a table, a counter, a desk, a chest, a crate, a bench, a bathtub, a barrel...): people and the dead still cannot walk through it, but a bullet, a blow and a look go over it. `tall`: a wardrobe, a fridge, a bookshelf, a shelf, a locker, a machine, a vehicle, a shed, a container, a bush: it stops them as a wall does. A kind that is in neither list is tall (what it did before the lists). Things that are not solid (a rug, a chair, a lamp, a hydrant, a street lamp, the marks on the floor) shut nothing and are in neither. Walls, windows, fences, hedges, trees and the doors are not props and are always tall; the grid is only the other way: it marks the tiles of a LOW prop.",
+	"low": [
+		"bed_single", "bed_double", "bed", "cot", "sofa", "loveseat", "armchair", "chair", "coffee_table", "dining_table", "tv_stand", "desk", "desk2", "teacherdesk", "longtable",
+		"nightstand", "dresser", "kitchen_counter", "kitchen_sink", "stove", "counter", "counter2", "counter3", "radiodesk", "workbench", "worktable",
+		"toilet", "bathtub", "washbasin", "box", "crate", "crate_ammo", "cans", "waterpack", "scrap", "tires", "barrel", "rainbarrel", "trashcan", "trashbags", "compost",
+		"bench", "picnic", "sandbags", "garden_bed", "mailbox", "bin", "swing_set"
+	],
+	"tall": [
+		"wardrobe", "fridge", "bookshelf", "shelf_tins", "cupboard", "shelf", "shelf_s", "cabinet", "locker", "generator", "pump", "waterpump", "ibc", "tent", "shrub", "bush",
+		"shed", "slide", "market_stall", "car_wreck", "car_h", "car_v", "car_police", "van_h", "pickup_v", "bus_h", "bus_v", "cont_red", "cont_blue", "cont_green_v", "cont_orange_v", "blocks_v"
+	]
+}
