@@ -13,6 +13,7 @@ const Coach := preload("res://scripts/ui/coach.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 const MainScript := preload("res://scripts/main.gd")
+const Demo := preload("res://scripts/demo.gd")
 
 
 func _ids(main) -> Array:
@@ -91,7 +92,10 @@ func test_the_bot_plays_every_step_of_the_avatars_lesson_to_the_end() -> void:
 ## The title: the first launch's card (flag `tutorial_offered`) or the menu's own line asks for Orientation Day, the title asks the
 ## game for it, and the run that begins is played by the bot to the end, with the flag `tutorial_done` set at the last card.
 func test_the_bot_plays_the_lesson_that_the_titles_first_launch_card_starts() -> void:
+	# (the real game's title is the town's now and has no Orientation Day: the school's title, as `--school` or `--demo` makes it, is the one with the card)
+	Demo.force(true)
 	var title = Tut.start({"title": true})
+	Demo.force(null)
 	await Tut.frames(title, 3)
 	var picked: Array = []
 	title.restart = func(meta): picked.append(meta)
