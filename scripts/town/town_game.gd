@@ -110,7 +110,8 @@ func _start_hold() -> void:
 		return
 	if _hold_state == 0:
 		_hold_state = 2
-		var fresh: bool = main.sim_steps < 5 and main.shot_path == "" and main.speed != 0
+		# (fresh: the first morning, still at the start of it: the loading card runs a few steps of the sim, so a count of steps is no test)
+		var fresh: bool = float(main.sim.hour) < 8.5 and main.shot_path == "" and main.speed != 0
 		var scn = main.sim.get("scenario")
 		if fresh and scn != null and scn.has_method("stage") and String(scn.stage()) == "alone":
 			main.speed = 0
