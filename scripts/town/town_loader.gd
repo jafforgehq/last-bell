@@ -17,6 +17,7 @@ var _data: Dictionary = {}
 var _plan: Dictionary = {}
 var _pics: Array = []
 var _pic_i := 0
+var _title := false
 var _words := "Laying out the streets"
 
 
@@ -24,6 +25,7 @@ func begin(run: Dictionary) -> void:
 	_plan = TownBoot.plan_of(run)
 	_phase = 0
 	_pic_i = 0
+	_title = bool(run.get("title", false))
 
 
 ## Does about `budget_ms` of the work (always at least one piece); true when the data is ready.
@@ -43,7 +45,7 @@ func step(budget_ms: float) -> bool:
 					_words = "Putting up the houses"
 			2:
 				_data = TownBoot.from_town(_town)
-				_pics = TownBoot.pawn_pictures(_data)
+				_pics = [] if _title else TownBoot.pawn_pictures(_data)    # (the title's few dead take their pictures as they come)
 				_phase = 3
 				_words = "Learning the faces"
 		if float(Time.get_ticks_usec() - t0) / 1000.0 >= budget_ms:

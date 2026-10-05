@@ -331,7 +331,9 @@ func open_new_game() -> Control:
 	if Demo.on():
 		start_game(1, Demo.run_seed(), Demo.crew())
 		return null
-	return _open_screen(NewGameMenu.new(), "New game", "Choose the nights, the crew, the length and the seed")
+	# (the town's New game has no crew and no length to choose: its caption says what there is)
+	var caption := OneHouse.text("words.new_game_caption", "The nights and the seed") if OneHouse.town_start(main) else "Choose the nights, the crew, the length and the seed"
+	return _open_screen(NewGameMenu.new(), "New game", caption)
 
 
 ## The saves, to load one. `replaces_game` is true from the pause menu, where a load throws

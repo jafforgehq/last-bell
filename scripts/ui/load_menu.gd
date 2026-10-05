@@ -39,7 +39,9 @@ func _build_body() -> void:
 ## The second line of a slot: what is in it, or why it cannot be loaded.
 func _words(info: Dictionary, slot: Dictionary, now: int) -> String:
 	if bool(info.get("ok", false)):
-		var line_text := "%s · %d of %d alive" % [Kit.save_line(info), int(info.people), int(info.crew)]
+		# (a town run begins with one survivor: "1 of 1 alive" is "alone")
+		var who := "alone" if int(info.crew) == 1 and int(info.people) == 1 else "%d of %d alive" % [int(info.people), int(info.crew)]
+		var line_text := "%s · %s" % [Kit.save_line(info), who]
 		var ago := Kit.ago_text(int(info.modified), now)
 		return line_text + (" · " + ago if ago != "" else "")
 	if not bool(info.get("exists", false)):

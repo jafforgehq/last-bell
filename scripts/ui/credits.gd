@@ -1,6 +1,9 @@
 ## The credits: the game, what it is built on, and the honest word about the pictures.
 extends "res://scripts/ui/menu_screen.gd"
 
+const OneHouse := preload("res://scripts/town/one_house.gd")
+
+## The school's line (`--school`, the demo and a test's stand-in for the game); the real game says the town's (`OneHouse.text("words.tagline")`).
 const TAGLINE := "Hold the schoolyard for thirty nights."
 ## [what, who]. The font's line is the one its licence file carries.
 const ENTRIES := [
@@ -22,7 +25,7 @@ func _init() -> void:
 func _build_body() -> void:
 	var name_label: Label = hud._label("THIRTY BELLS", Fonts.cond(700, 3), 34, hud.ACCENT)
 	body.add_child(name_label)
-	body.add_child(note(TAGLINE, ink2(), 15))
+	body.add_child(note(OneHouse.text("words.tagline", TAGLINE) if OneHouse.town_start(shell.main) else TAGLINE, ink2(), 15))
 	body.add_child(line())
 	var grid := GridContainer.new()
 	grid.columns = 2

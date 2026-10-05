@@ -150,7 +150,9 @@ func _build_seed() -> void:
 	seed_error = note("", hud.DANGER_TEXT, 13)
 	seed_error.visible = false
 	body.add_child(seed_error)
-	body.add_child(note("Any whole number. The same seed and the same orders play the same game.", ink3(), 13))
+	# (the town is always the same one: the seed is the dice)
+	var seed_words := "The town is always the same. The seed is the dice: the same seed and the same orders play the same game." if town_mode else "Any whole number. The same seed and the same orders play the same game."
+	body.add_child(note(seed_words, ink3(), 13))
 
 
 func _build_foot() -> void:

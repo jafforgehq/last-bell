@@ -4,7 +4,7 @@
 
 A small crew holds a walled schoolyard against the dead for thirty nights: five survivors to begin with (three if you choose), one of whom you play, and more who call in over the radio. Built in Godot 4.7. (Working title; it was Last Bell until 2026-10-01, when it turned out a Steam game called The Last Bell is coming. The itch.io page and the GitHub repository still carry the old name.)
 
-Open the project and press **F5**. The main scene is `scenes/main.tscn`; a cold start shows the title screen (Continue, New game, Orientation Day, Load, Settings, Credits, Quit). A start with a run choice on the command line (`--new=1`, `--seed=N`, `--crew=3`, `--load=path`, `--shot=...`) goes straight into the yard.
+Open the project and press **F5**. The main scene is `scenes/main.tscn`; a cold start shows the title screen, a town at dusk (Continue, New game, Load, Settings, Credits, Quit; Orientation Day too with `--school`). A start with a run choice on the command line (`--new=1`, `--seed=N`, `--crew=3`, `--load=path`, `--shot=...`) goes straight into the yard.
 
 ## Controls
 
@@ -282,7 +282,13 @@ given moment without touching the game:
 | `--forecast=ahead` | Noon of the day before the first Big Night with the Radio desk manned: the notice |
 | `--plated` | Put a plated brute at the wall of the brunt, the aim on its head (`--aim=x,y` puts it elsewhere) |
 | `--work=ana:hammer` | Show that person at that job (bench, hammer, mend, haul, garden, nurse, radio, watch, sort, rest); `--work=ana:hammer@0.7` holds one moment of its loop. `tools/work_sheet.gd` draws every pose at several moments on one sheet |
-| `--title` | Show the title screen |
+| `--title` | Show the title screen: a small town at dusk (`scripts/town/title_scene.gd`: the real generator at `blocks: 2` with a fixed seed, the start house open and lit with Ruth at a window, a flickering streetlamp, long shadows, seven of the dead in the street that notice nobody, leaves, smoke, birds, and the dusk bell every 20 to 30 seconds). `--school` (and `--demo`) keep the old schoolyard behind it |
+| `--title-seed=N` | The town behind the title (another seed, to choose by looking; 11 by default) |
+| `--title-sky=r,g,b` | The colour of the title's evening, each 0 to 1 (a screenshot helper) |
+| `--title-at=SECONDS`, `--title-bell`, `--title-birds`, `--title-real=N` | Title screenshot helpers: the scene's clock begins at that second (another moment of the camera's drift), a stroke of the dusk bell at once (the menu's bell swings and the edges close in), a flock of birds at once, and how many of the lights are real PointLight2Ds (none by default: each cost about 0.7 ms a frame at 1080p) |
+| `--title-off=lights,shadows,leaves,glow,dead,sky,showcase` | Leave parts of the title's picture out (to measure what each costs) |
+| `--title-bench=SECONDS` | A windowed title measures its frames for that long (frame times, draw calls), prints them and quits; give `--winpx=1920x1080 --os-scale=1`, and `--disable-vsync` before the `--` to see the headroom under 60 Hz |
+| `--school` | The old schoolyard where the real game would show the town: behind the title, and the New game screen's old crew and length choices (a crew of three or five); the demo is that too |
 | `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
 | `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours) |
 | `--tutorial[=N]` | Start Orientation Day (at step N: the world is put as that step expects, the avatar included: 0 This is you, 1 Walk, 2 Aim and shoot, 3 Reload and put away, 4 Ask, do not order, 5 The radio wheel, 6 The gate and the bell, 7 the last card) |
@@ -319,6 +325,7 @@ given moment without touching the game:
 | `--size=WxH` | The window's logical size in points (a screenshot run opens at `1280x800` unless told; a normal start opens at 1920x1080 points, kept inside the screen; screenshots are read at `1600x1000` and `1280x800`, and the layouts are tested at 1280x800, 980x700, 700x700, 960x600 and 700x560). The interface is made bigger for a window with room to spare (a 1920x1080 window 120%, 2560x1440 160%: both are laid out in 1600x900 points; `Main.auto_ui_scale`), the Settings size is on top of that |
 | `--winpx=WxH` | The window's size in PIXELS, exactly, whatever the screen can hold (a shot at 2560x1440 or 3440x1440 on a laptop); with `--os-scale=1` (an ordinary monitor; 2 is a Retina screen) so that the interface is sized as that display would |
 | `--nohud`, `--nolights`, `--msaa=N` | Hide the HUD, hide the lighting, set the 2D anti-aliasing (screenshot helpers) |
+| `--help-panel` | Show the controls panel (the pause menu's How to play) in a screenshot |
 | `--calm` | Leave out the base's little life (flags, mast, bell, washing, dog, birds, leaves, ripples, chat bubbles: see Base life); `tools/life_bench.gd` measures what it costs |
 | `--trip-phase=out,0.5` | Put the first party that has a vehicle in that state of its trip at the gate (`out`, `driving_out`, `away`, `driving_in`, `unloading`, and the share of it; `--vehicle` and `--town-send` first, `--speed=0` so that it stays) |
 | `--breach[=N]` | Break wall segment N (the first without N); in an avatar game it is a hot breach with the dead in it |

@@ -1,6 +1,6 @@
-## Thirty Bells: six survivors hold a walled schoolyard against the dead.
+## Thirty Bells: one survivor alone in a town full of the dead (the old schoolyard game is kept for `--school`, the demo and the tests).
 ## Builds the world from the baked data, runs the simulation, the camera,
-## input, sound and HUD.
+## input, sound and HUD. The title screen is a small town at dusk (scripts/town/title_scene.gd).
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
@@ -22,6 +22,7 @@ const GateNode := preload("res://scripts/render/gate_node.gd")
 const TownBoot := preload("res://scripts/town/town_boot.gd")
 const TownGame := preload("res://scripts/town/town_game.gd")
 const TownLoader := preload("res://scripts/town/town_loader.gd")
+const TitleScene := preload("res://scripts/town/title_scene.gd")
 const BaseLife := preload("res://scripts/render/base_life.gd")
 const RecruitArt := preload("res://scripts/render/recruit_art.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
@@ -72,9 +73,8 @@ var _warm_done := false
 
 const TILE := GD.TILE
 const MAX_ZOOM := 84.0
-## The title screen's yard: the clock is held at this hour (a warm dusk with the lamps and
-## the fires lit, before the bell), the camera drifts about this point, and a few of the
-## dead shuffle about in the street north of the wall.
+## The OLD title screen's yard (`--school`, the demo and the tests' stand-in scenes: the real game's title is the town, scripts/town/title_scene.gd): the clock is held at this
+## hour (a warm dusk with the lamps and the fires lit, before the bell), the camera drifts about this point, and a few of the dead shuffle about in the street north of the wall.
 const TITLE_HOUR := 18.0 + 40.0 / 60.0
 const TITLE_CAM := Vector2(36.5, 18.8)
 const TITLE_SEED := 11
@@ -241,6 +241,10 @@ var shell
 ## The title screen is up instead of a run: the clock is held, the HUD is hidden and the
 ## input is the menu's. (A cold start with no run chosen; see wants_title.)
 var title_mode := false
+## The title screen's town (scripts/town/title_scene.gd) while the real game shows its title, else null: it holds the camera, the dusk and the little life of the street.
+var title_scene = null
+## The title is the town's (the real game: not `--school`, not the demo, not a test's scene): `_ready` decides it before the town is made.
+var _title_town := false
 ## A menu screen is open over the game: the camera keys are the menu's, not the camera's. (The Jobs screen and the
 ## Build screen, the HUD's own pages, count: they have the keys while they are up, and the cards of the radio and the
 ## tips wait.)
@@ -328,7 +332,13 @@ func _ready() -> void:
 	# `--town[=seed]`, or a run whose meta says `town` (the title's New game), or a save of a town run: the REAL game on the generated town (scripts/town/town_boot.gd makes the data,
 	# the world and the rules; the old `--town[=place]` of the school's Town Board is still that with `--crew`)
 	var run_meta: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else Scenario.run_from_args(OS.get_cmdline_user_args())
-	var town_run: bool = TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
+	# the title of the real game is a small town at dusk (scripts/town/title_scene.gd), made as a town run is, with a seed and a size of its own; the school's yard behind the title is
+	# for `--school`, the demo and a test's stand-in scene
+	var title_asked: bool = bool(run_meta.get("title", false)) or wants_title(OS.get_cmdline_user_args(), Engine.has_meta("run"))
+	_title_town = TitleScene.wanted(get_tree().current_scene == self, OS.get_cmdline_user_args(), title_asked)
+	if _title_town:
+		run_meta = TitleScene.run_meta(OS.get_cmdline_user_args())
+	var town_run: bool = _title_town or TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
 	# the settings file and the window come first (its size, fullscreen, the interface size): the loading card is drawn in the window the player will play in
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
 	if prefs_path != "":
@@ -342,7 +352,7 @@ func _ready() -> void:
 	# off until the end of `_ready`; a headless run, the tests', has no card, no wait and does it all in one go.
 	var town_card = null
 	if town_run and DisplayServer.get_name() != "headless":
-		town_card = TownBoot.loading_card(self)
+		town_card = TownBoot.loading_card(self, "Thirty Bells" if _title_town else "Making the town...")
 		set_process(false)
 		set_process_input(false)
 		set_process_unhandled_input(false)
@@ -354,7 +364,9 @@ func _ready() -> void:
 	if town_card != null:
 		var loader = TownLoader.new()
 		loader.begin(run_meta)
-		while not loader.step(TownBoot.step_ms()):
+		# (the title's town is a tenth of the game's: the card does not need a smooth bar, so a frame gives the work three times the time and the title is up sooner)
+		var step_budget := TownBoot.step_ms() * (3.0 if _title_town else 1.0)
+		while not loader.step(step_budget):
 			TownBoot.card_progress(town_card, 0.5 * loader.progress(), loader.words())
 			await get_tree().process_frame
 		data = loader.result()
@@ -367,7 +379,7 @@ func _ready() -> void:
 	add_child(world)
 	if town_card != null:
 		world.begin_build(data)
-		while not world.step_build(TownBoot.step_ms()):
+		while not world.step_build(TownBoot.step_ms() * (3.0 if _title_town else 1.0)):
 			TownBoot.card_progress(town_card, 0.5 + 0.2 * world.build_progress(), "Laying the ground")
 			await get_tree().process_frame
 	else:
@@ -554,7 +566,10 @@ func _ready() -> void:
 	# the base's little life: small animated props, hung or standing among the buildings and the people (the dog is one of the y-sorted)
 	life_view = BaseLife.new()
 	world.add_child(life_view)
-	life_view.setup(sim, world, entities)
+	# (its parts are the school's: flags on the towers, the mast, the bell by the gate, the washing, the dog, the birds on the wall. The title's town makes none of them: it has its own
+	# little life, scripts/town/title_scene.gd; a town run keeps them off, as it always has)
+	if not _title_town:
+		life_view.setup(sim, world, entities)
 	life_view.set_enabled(not title_mode and not ("--calm" in OS.get_cmdline_user_args()) and not town_run)
 	# the plots, the sites and the buildings: over the ground, sorted among the people, lit by the night
 	build_view = BuildNode.new()
@@ -1568,12 +1583,17 @@ func _start_shell() -> void:
 func _enter_title() -> void:
 	title_mode = true
 	sim.min_per_sec = 0.0
-	sim.minutes = TITLE_HOUR * 60.0
-	sim.clock_min = fposmod(sim.minutes - 420.0, 1440.0)
-	sim.phase = Sim.phase_at(sim.minutes)
-	sim.bell_rung = false
-	for at in TITLE_DEAD:
-		sim.spawn(at.x, at.y, "wander")
+	if _title_town:
+		# the real game's title: the town at dusk (the scene sets the clock, the dead, Ruth, the lights and the camera)
+		title_scene = TitleScene.new()
+		title_scene.begin(self)
+	else:
+		sim.minutes = TITLE_HOUR * 60.0
+		sim.clock_min = fposmod(sim.minutes - 420.0, 1440.0)
+		sim.phase = Sim.phase_at(sim.minutes)
+		sim.bell_rung = false
+		for at in TITLE_DEAD:
+			sim.spawn(at.x, at.y, "wander")
 	hud.visible = false
 	overlay.visible = false
 	selection = null
@@ -1584,6 +1604,9 @@ func _enter_title() -> void:
 
 ## A slow drift of the camera about TITLE_CAM (still, if the settings ask for less motion).
 func _title_camera(dt: float) -> void:
+	if title_scene != null:
+		title_scene.update(dt)    # (the town's title drifts its own camera, and keeps its own little life)
+		return
 	if not Prefs.on("ui", "reduce_motion"):
 		_title_t += dt
 	zoom_px = clampf(_vp().x / 36.0, 28.0, 64.0)
@@ -1929,6 +1952,8 @@ func _process(delta: float) -> void:
 	if town != null: town.on_frame(dt)
 	var look: Dictionary = sim.storyteller.look()
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
+	if title_scene != null:
+		title_scene.after_lighting(lighting)    # (the title's own evening)
 	# snow falls on a snow day of a campaign (and in no other game); the ground keeps a light cover all through a snowy season
 	var campaign: bool = sim.seasons.campaign
 	snow.follow({"snow": campaign and bool(look.get("snow", false))}, campaign and sim.seasons.snow_share() > 0.0, lighting.dark, dt)
@@ -3531,6 +3556,9 @@ func _parse_args() -> void:
 				endcard_asked = true
 			"nohud":
 				hud.visible = false
+			"help-panel":
+				# --help-panel shows the controls panel (the pause menu's How to play) for a screenshot of its words
+				hud.help.visible = true
 			"msaa":
 				get_viewport().msaa_2d = int(v) as Viewport.MSAA
 			"nolights":
