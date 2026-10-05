@@ -3,11 +3,11 @@
   "version": 1,
   "start": {
     "stock": {
-      "meds": 4
+      "meds": 6
     }
   },
   "field": {
-    "wake_r": 10,
+    "wake_r": 8,
     "noise_r": 16,
     "sleep_r": 22,
     "noise_cap": 4,

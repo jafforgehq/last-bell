@@ -22,7 +22,7 @@
     "specialists": 99
   },
   "attack": {"from_rescue": 4, "cutoff_hour": 0.0},
-  "night": {"first": 1.8, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
+  "night": {"first": 1.6, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
   "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and runners from two streets, and two plated brutes: only their heads are soft.", "factor": 1.0, "runners": 0.15, "brutes": 0.1, "min_brutes": 2, "brute_at": [0.4, 0.95], "headings": 2, "main_share": 0.85, "cap": 40, "plated": true},
   "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true, "base_whole": true},
   "guide": [
