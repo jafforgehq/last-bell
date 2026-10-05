@@ -16,6 +16,13 @@
 ##
 ## `no_outer_wall()` is true while no fence or gate stands (the dead then go for the barred doors: `TownRules.yard_open`).
 ##
+## PROJECTS. What the player orders is not a slot but a PROJECT (assets/data/base_kits.json, `projects`): the front fence, the side fences, the back fence, the gate, a
+## watchtower (and a second one), the floodlights, the door planks, and 'reinforce the fences' (the built plain fences made strong, one section at a time, each standing
+## while it is done: an upgrade entry of the Build module, `upgrade_of`). `projects()` is what the Build page shows (state, cost, time, why not), `next_project()` the
+## recommended one, `order_project(id)` orders every slot of it that the scrap pays for, front to back (the builders work the orders in the order they were given),
+## `cancel_project(id)` takes the orders back, `order_affordable()` is the page's "build everything I can afford". The slot calls (`order`, `cancel`, `demolish`) stay: the
+## projects are made of them.
+##
 ## STAGES. A slot opens by the crew count (people alive, the avatar too): the plot's `unlock` {"crew": n}. `unlocked(plot)` is what `Build.refresh_plots` and
 ## `Build.why_not` ask; `update` bumps the Build page when the count changes.
 ##
@@ -23,7 +30,8 @@
 ## `prepare_load` (hook H11, before the save is read) re-makes the doors and the built slots' sections BY ID from the layout that `base.prepare_load` put in place,
 ## so that `SaveGame._parse` finds every section; `restore` puts the old ones back when the save is refused.
 ##
-## Events: {"type": "slot_ordered"|"slot_built"|"slot_lost", "slot": id, "kit": kit id} (plan 2.4), {"type": "gate_base", "open": bool}.
+## Events: {"type": "slot_ordered"|"slot_built"|"slot_lost", "slot": id, "kit": kit id} (plan 2.4), {"type": "gate_base", "open": bool},
+## {"type": "project_done", "project": id, "line": "The front fence is up"} (the last section of a project is up).
 ## It is also an E provider (`candidates`, `use`): the base's gate ("gate_base").
 extends RefCounted
 
@@ -76,17 +84,19 @@ func start() -> void:
 
 # ---------------------------------------------------------------------- data --
 
-## The kits file: {"kits": {id: {...}}, "unlock": {...}, "layout": {...}} (empty without a file).
+## The kits file: {"kits": {id: {...}}, "unlock": {...}, "layout": {...}, "projects": [...]} (empty without a file).
 static func load_kits(path: String = "") -> Dictionary:
 	var p := path if path != "" else kits_path
 	if not _cache.has(p):
-		var out := {"kits": {}, "unlock": {}, "layout": {}}
+		var out := {"kits": {}, "unlock": {}, "layout": {}, "projects": []}
 		var raw = JSON.parse_string(FileAccess.get_file_as_string(p)) if FileAccess.file_exists(p) else null
 		if raw is Dictionary:
 			for k in raw.get("kits", {}):
 				out.kits[String(k)] = raw.kits[k]
 			out["unlock"] = raw.get("unlock", {})
 			out["layout"] = raw.get("layout", {})
+			if raw.get("projects") is Array:
+				out["projects"] = raw.projects
 		_cache[p] = out
 	return _cache[p]
 
@@ -138,13 +148,14 @@ func _index_layout() -> void:
 			"id": String(r.id), "kind": String(r.get("kind", "fence")), "name": String(r.get("name", r.id)),
 			"rect": _rect(r.get("rect")), "dir": String(r.get("dir", "h")), "side": String(r.get("side", "N")),
 			"crew": _crew_need(r.get("unlock", 1)), "kits": kits, "places": r.get("dead_places", null),
-			"plot": String(r.get("plot", r.id)), "door": String(r.get("door", "")), "seg": -1,
+			"plot": String(r.get("plot", r.id)), "door": String(r.get("door", "")), "seg": -1, "role": String(r.get("role", "")), "project": "",
 		}
 		if (s.kind == "fence" or s.kind == "gate") and next_seg <= LAST_SLOT_ID:
 			s.seg = next_seg
 			next_seg += 1
 		_slots[s.id] = s
 		_order.append(s.id)
+	_index_projects()
 
 
 # ------------------------------------------------------------------ activation --
@@ -167,6 +178,8 @@ func _clear_all() -> void:
 	_made.clear()
 	_slots.clear()
 	_order.clear()
+	_defs = []
+	_proj_slots = {}
 	_doors.clear()
 	_built.clear()
 	_lost.clear()
@@ -363,9 +376,10 @@ func _locked_why(s: Dictionary) -> String:
 	return "Opens when %d people are here (%d now)" % [int(s.crew), crew_count()]
 
 
-## The slots as the Build page shows them: [{"id", "kind", "name", "rect", "state": "locked|open|ordered|building|built|broken", "kit", "kit_name", "hp", "max_hp",
-## "unlock": {"crew": n}, "why_not", "plot"}]. `kit` is the kit built or going up; `why_not` says why an order cannot be placed now ("" when it can); `plot` is the
-## Build plot's id. A fallen slot (broken) can be ordered again.
+## The slots, each as {"id", "kind", "name", "rect", "state": "locked|open|ordered|building|built|broken", "kit", "kit_name", "hp", "max_hp",
+## "unlock": {"crew": n}, "why_not", "plot", "project", "up"}. `kit` is the kit built or going up; `why_not` says why an order cannot be placed now ("" when it can); `plot` is the
+## Build plot's id; `project` the id of the project the slot is in; `up` is "ordered" or "building" while a fence that stands is being reinforced ("" otherwise). A fallen
+## slot (broken) can be ordered again.
 func slots() -> Array:
 	var out: Array = []
 	if layout.is_empty():
@@ -388,10 +402,14 @@ func slots() -> Array:
 				why = "Something is already going up here"
 			"built":
 				why = "It is built already"
+		var up := ""
+		if st == "built" and not pl.is_empty() and not pl.site.is_empty():
+			up = "building" if float(pl.site.progress) > 0.0 else "ordered"
 		out.append({
 			"id": id, "kind": String(s.kind), "name": String(s.name), "rect": Rect2i(s.rect), "state": st, "kit": kit,
 			"kit_name": String(_kit_data(kit).get("name", kit)), "hp": float(seg.hp) if seg != null else 0.0,
 			"max_hp": float(seg.max_hp) if seg != null else 0.0, "unlock": {"crew": int(s.crew)}, "why_not": why, "plot": String(s.plot),
+			"project": String(s.project), "up": up,
 		})
 	return out
 
@@ -438,9 +456,29 @@ func _building_for(s: Dictionary, kit: String) -> String:
 	var listed: Array = pl.get("kits", [])
 	for bid in listed:
 		var b: Dictionary = sim.build.building(String(bid))
-		if not b.is_empty() and (String(b.get("slot_kit", _kit_id(String(bid)))) == kit):
+		if not b.is_empty() and not b.has("upgrade_of") and (String(b.get("slot_kit", _kit_id(String(bid)))) == kit):
 			return String(bid)
 	return ""
+
+
+## The catalogue entry that makes the plain kit that stands on a slot into `kit` ("" when there is none): the upgrade entry of the plot.
+func _upgrade_for(s: Dictionary, kit: String) -> String:
+	var pl: Dictionary = sim.build.plot(String(s.plot))
+	if pl.is_empty():
+		return ""
+	for bid in pl.get("kits", []):
+		var b: Dictionary = sim.build.building(String(bid))
+		if not b.is_empty() and b.has("upgrade_of") and String(b.get("slot_kit", "")) == kit and String(b.upgrade_of) == String(pl.building):
+			return String(bid)
+	return ""
+
+
+## The hit points of a kit on a slot: its catalogue entry's (a fence section's are in proportion to its length), else the kit's.
+func _slot_hp(s: Dictionary, kit: String) -> float:
+	var bid := _building_for(s, kit)
+	if bid != "":
+		return float(sim.build.building(bid).get("hp", _kit_data(kit).get("hp", 100.0)))
+	return float(_kit_data(kit).get("hp", 100.0))
 
 
 func _kit_of_building(bid: String) -> String:
@@ -457,10 +495,17 @@ func order(slot_id: String, kit_id: String) -> bool:
 	var kit := _kit_id(kit_id)
 	if not s.kits.has(kit):
 		return false
+	var st := _state_of(s)
+	if st == "built" and String(_built.get(slot_id, "")) != kit and String(s.kind) == "fence":
+		# a plain fence that stands is made strong in place (the upgrade entry of its plot: the fence stands while it is done)
+		var up := _upgrade_for(s, kit)
+		if up == "" or not sim.build.plot(String(s.plot)).site.is_empty() or not sim.build.order(String(s.plot), up):
+			return false
+		sim.events.append({"type": "slot_ordered", "slot": String(slot_id), "kit": kit})
+		return true
 	var bid := _building_for(s, kit)
 	if bid == "":
 		return false
-	var st := _state_of(s)
 	if st == "broken":
 		if float(sim.stock.scrap) + 1.0e-9 < float(sim.build.building(bid).scrap):
 			return false
@@ -474,19 +519,23 @@ func order(slot_id: String, kit_id: String) -> bool:
 	return true
 
 
-## Stops an order: all the scrap back if no work was done, else half.
+## Stops an order: all the scrap back if no work was done, else half. (Also the upgrade of a fence that stands: the fence is left as it was.)
 func cancel(slot_id: String) -> bool:
 	var s = _slots.get(slot_id)
-	if s == null or not (_state_of(s) in ["ordered", "building"]):
+	if s == null or not (_state_of(s) in ["ordered", "building", "built"]):
 		return false
-	return sim.build.cancel(String(s.plot))
+	if not sim.build.plot(String(s.plot)).site.is_empty():
+		return sim.build.cancel(String(s.plot))
+	return false
 
 
-## Takes down what stands on a slot: half the scrap back (`build.demolish`), the section goes.
+## Takes down what stands on a slot: half the scrap back (`build.demolish`), the section goes (an upgrade that is going up on it is taken back first).
 func demolish(slot_id: String) -> bool:
 	var s = _slots.get(slot_id)
 	if s == null or not (_state_of(s) in ["built", "broken"]):
 		return false
+	if not sim.build.plot(String(s.plot)).site.is_empty():
+		sim.build.cancel(String(s.plot))
 	return sim.build.demolish(String(s.plot))
 
 
@@ -500,6 +549,7 @@ func on_built(plot: Dictionary, building_id: String) -> void:
 	if s == null:
 		return
 	var kit := _kit_of_building(building_id)
+	var upgraded: bool = String(_built.get(String(s.id), "")) != "" and sim.build.building(building_id).has("upgrade_of")
 	_built[String(s.id)] = kit
 	_lost.erase(String(s.id))
 	var seg = null
@@ -509,10 +559,18 @@ func on_built(plot: Dictionary, building_id: String) -> void:
 		"door":
 			_plank(s, kit, 1.0)
 	sim.events.append({"type": "slot_built", "slot": String(s.id), "kit": kit})
-	var label := String(sim.build.building(building_id).get("name", kit))
-	sim.alert("slot-%s" % String(s.id), "info", "%s is up" % label, String(s.name), Vector2(plot.pos), 14.0)
 	if seg != null:
 		_refresh_build()
+	# a project whose last section this was is news; the sections of one that has more than one are not (one line for the lot)
+	for def in _defs:
+		var pid := String(def.id)
+		if bool(def.get("upgrade", false)) != upgraded or not (_proj_slots.get(pid, []) as Array).has(String(s.id)):
+			continue
+		var info := _project_info(def)
+		if String(info.state) == "done":
+			var line := String(def.get("done", "%s is up" % String(def.name)))
+			sim.events.append({"type": "project_done", "project": pid, "line": line})
+			sim.alert("project-%s" % pid, "info", line, "", project_center(pid), 14.0)
 
 
 ## Build took the building of a slot's plot down.
@@ -616,6 +674,431 @@ func _free_near(at: Vector2, shut: Dictionary) -> Vector2:
 	return at
 
 
+# --------------------------------------------------------------------- projects --
+
+## A project takes this much longer than the hours of work in it say: the builders walk from one section to the next.
+const WALK_FACTOR := 1.15
+const NUMBER_WORDS := ["no", "one", "two", "three", "four", "five", "six"]
+
+## The projects this base has (base_kits.json's, in the page's order) and, for each, its slots' ids from the front of the base to the back.
+var _defs: Array = []
+var _proj_slots := {}
+
+
+## The role of a slot of a layout that gives none (an older layout): the unlock table's key.
+func _role_of(r: Dictionary) -> String:
+	match String(r.get("kind", "fence")):
+		"gate":
+			return "gate"
+		"door":
+			return "door"
+		"tower":
+			return "tower"
+		"floodlight":
+			return "floodlight"
+	var side := String(r.get("side", "N"))
+	var front := String(layout.get("front", "S"))
+	if side == front:
+		return "front"
+	if (side == "N" and front == "S") or (side == "S" and front == "N") or (side == "E" and front == "W") or (side == "W" and front == "E"):
+		return "back"
+	return "side"
+
+
+## Which slots are in which project (each slot of the layout is in one, by its role), each project's slots front to back (nearest the gate first, so that the sections the dead
+## come to first go up first), and `_defs`, the projects that have slots.
+func _index_projects() -> void:
+	_defs = []
+	_proj_slots = {}
+	var from := _front_point()
+	for def in load_kits().get("projects", []):
+		if not def is Dictionary:
+			continue
+		var ids: Array = []
+		var upgrade := bool(def.get("upgrade", false))
+		for sid in _order:
+			var s: Dictionary = _slots[sid]
+			if String(s.role) == "":
+				s["role"] = _role_of({"kind": s.kind, "side": s.side})
+			if Array(def.get("roles", [])).has(String(s.role)) and (not upgrade or String(s.kind) == "fence"):
+				ids.append(String(sid))
+				if not upgrade:
+					s["project"] = String(def.id)
+		if ids.is_empty():
+			continue
+		ids.sort_custom(func(a, b):
+			var da := from.distance_to(Vector2(Rect2i(_slots[a].rect).get_center()))
+			var db := from.distance_to(Vector2(Rect2i(_slots[b].rect).get_center()))
+			return da < db - 0.001 or (absf(da - db) <= 0.001 and _order.find(a) < _order.find(b)))
+		_proj_slots[String(def.id)] = ids
+		_defs.append(def)
+
+
+## The front of the base: the middle of the gate, else the layout's yard middle.
+func _front_point() -> Vector2:
+	for sid in _order:
+		if String(_slots[sid].kind) == "gate":
+			return Vector2(Rect2i(_slots[sid].rect).get_center())
+	var ym = layout.get("yard_middle")
+	return Vector2(ym) if ym is Vector2 else Vector2.ZERO
+
+
+func _def_of(project_id: String) -> Dictionary:
+	for def in _defs:
+		if String(def.id) == project_id:
+			return def
+	return {}
+
+
+## The projects' ids in the page's order (the recommended order).
+func project_ids() -> Array:
+	var out: Array = []
+	for def in _defs:
+		out.append(String(def.id))
+	return out
+
+
+## A project's name ("" for no such project).
+func project_name(project_id: String) -> String:
+	return String(_def_of(project_id).get("name", ""))
+
+
+## The ids of a project's slots, front to back ([] for no such project).
+func project_slot_ids(project_id: String) -> Array:
+	return (_proj_slots.get(project_id, []) as Array).duplicate()
+
+
+## The middle of a project's sections (tiles).
+func project_center(project_id: String) -> Vector2:
+	var box := Rect2()
+	var first := true
+	for sid in _proj_slots.get(project_id, []):
+		var r := Rect2(Vector2(Rect2i(_slots[sid].rect).position), Vector2(Rect2i(_slots[sid].rect).size))
+		box = r if first else box.merge(r)
+		first = false
+	return box.get_center()
+
+
+## How many people (the avatar too) it takes before a project opens: its slots' stage (the first of them to open), or the project's own `crew` (the upgrade).
+func _project_need(def: Dictionary) -> int:
+	if bool(def.get("upgrade", false)):
+		return int(def.get("crew", 3))
+	var need := 99
+	for sid in _proj_slots.get(String(def.id), []):
+		need = mini(need, int(_slots[sid].crew))
+	return need if need < 99 else 1
+
+
+## "section" for the fence kits, "door" for the planks...: what one slot of a project is called.
+static func _unit(kit: String) -> String:
+	match kit:
+		"fence", "fence_strong":
+			return "section"
+		"door_plank":
+			return "door"
+		"floodlight":
+			return "floodlight"
+		"tower":
+			return "tower"
+	return "part"
+
+
+## The people who build: those on the Builders job, else (nobody is on it yet: the job is given when there is a site) the people of the house who could, at most two.
+func _builder_count() -> int:
+	var n := 0
+	var jobs = sim.get("jobs")
+	if jobs != null:
+		for p in jobs.crew_of("builders"):
+			if not p.player:
+				n += 1
+	if n == 0:
+		for p in sim.people:
+			if not p.dead and not p.turned and not p.player and p.away == null:
+				n += 1
+		n = mini(n, 2)
+	return n
+
+
+## Builder-hours a builder does in a game hour, on the average of those on the job (the base rate when nobody is).
+func _builder_rate() -> float:
+	var jobs = sim.get("jobs")
+	var sum := 0.0
+	var k := 0
+	if jobs != null:
+		for p in jobs.crew_of("builders"):
+			if not p.player:
+				sum += float(sim.build.rate(p))
+				k += 1
+	return sum / float(k) if k > 0 else float(sim.build.RATE_BASE)
+
+
+## "about 40 minutes", "about an hour and a half", "about 3 hours" for game minutes.
+static func time_text(minutes: float) -> String:
+	if minutes < 12.0:
+		return "a few minutes"
+	if minutes < 57.0:
+		return "about %d minutes" % (roundi(minutes / 5.0) * 5)
+	if minutes >= 170.0:
+		return "about %d hours" % roundi(minutes / 60.0)
+	var halves := roundi(minutes / 30.0)
+	var hours := halves >> 1
+	var half := (halves & 1) == 1
+	if hours == 0:
+		return "about half an hour"
+	if hours == 1:
+		return "about an hour and a half" if half else "about an hour"
+	return ("about %d and a half hours" % hours) if half else ("about %d hours" % hours)
+
+
+static func builders_text(n: int) -> String:
+	return "%s builder%s" % [NUMBER_WORDS[n] if n < NUMBER_WORDS.size() else str(n), "" if n == 1 else "s"]
+
+
+## What a project is now: {"id", "name", "noun", "button", "icon", "gives", "unit", "state": "locked|ready|building|done", "slots": [ids], "n" (slots in it), "built", "going"
+## (ordered or going up), "open" (could be ordered now), "fallen", "locked", "need_crew", "scrap" (the price of what is left to order), "work" (builder-hours of all that is
+## left to do: the ordered too), "first_scrap" (the price of the first section to order), "can_n" and "pay" (how many sections of it the scrap pays for now, and what they cost),
+## "minutes" (game minutes the rest takes, with `builders` builders: 0 when nobody can build it yet), "time" ("about 40 minutes": "" when nobody can build it or there is
+## nothing left to do), "builders_text" ("two builders") and "spills" (it is longer than the daylight left: the builders carry on tomorrow), "why" (why it cannot be ordered now, "" when it can),
+## "progress" (0..1 of the sections up, the ones going up counted by the work done), "todo" ([{"slot", "kit", "scrap", "work"}] in the order they are ordered)}.
+func _project_info(def: Dictionary) -> Dictionary:
+	var pid := String(def.id)
+	var upgrade := bool(def.get("upgrade", false))
+	var n := 0
+	var built := 0
+	var going := 0
+	var fallen := 0
+	var locked := 0
+	var todo: Array = []
+	var work_todo := 0.0
+	var work_going := 0.0
+	var share_going := 0.0
+	var unit_kit := String(def.get("kit", ""))
+	for sid in _proj_slots.get(pid, []):
+		var s: Dictionary = _slots[sid]
+		var st := _state_of(s)
+		var pl: Dictionary = sim.build.plot(String(s.plot))
+		if upgrade:
+			var have := String(_built.get(sid, ""))
+			if st != "built" or have == "":
+				continue
+			if have == unit_kit and pl.site.is_empty():
+				n += 1
+				built += 1
+			elif have != unit_kit:
+				n += 1
+				if not pl.site.is_empty():
+					going += 1
+					work_going += maxf(0.0, float(pl.site.work) - float(pl.site.progress))
+					share_going += sim.build.progress_of(String(s.plot))
+				else:
+					var up := _upgrade_for(s, unit_kit)
+					if up != "":
+						var b: Dictionary = sim.build.building(up)
+						todo.append({"slot": String(sid), "kit": unit_kit, "scrap": int(b.scrap), "work": float(b.work)})
+						work_todo += float(b.work)
+			continue
+		n += 1
+		match st:
+			"built":
+				built += 1
+			"ordered", "building":
+				going += 1
+				work_going += maxf(0.0, float(pl.site.work) - float(pl.site.progress))
+				share_going += sim.build.progress_of(String(s.plot))
+			"locked":
+				locked += 1
+			_:    # open, or broken (a fallen one is ordered again, as the kind it was)
+				var kit := unit_kit
+				if st == "broken":
+					fallen += 1
+					var had := String(_built.get(sid, ""))
+					if had != "" and s.kits.has(had):
+						kit = had
+				var bid := _building_for(s, kit)
+				if bid == "":
+					continue
+				var b: Dictionary = sim.build.building(bid)
+				todo.append({"slot": String(sid), "kit": kit, "scrap": int(b.scrap), "work": float(b.work)})
+				work_todo += float(b.work)
+	var need := _project_need(def)
+	var crew := crew_count()
+	var state := "ready"
+	var why := ""
+	if going > 0:
+		state = "building"
+	elif not todo.is_empty():
+		state = "ready"
+	elif n > 0 and built == n:
+		state = "done"
+	else:
+		state = "locked"
+	if state == "locked" or (state == "ready" and crew < need and built + fallen == 0 and upgrade):
+		if upgrade and n == 0:
+			why = "Build a fence first"
+		else:
+			why = "Opens when %d people are here (%d now)" % [need, crew]
+		state = "locked"
+		todo = []
+	var scrap_all := 0
+	var budget := float(sim.stock.scrap)
+	var can_n := 0
+	var pay := 0
+	var stopped := false
+	for t in todo:
+		scrap_all += int(t.scrap)
+		if not stopped and budget + 1.0e-9 >= float(t.scrap):
+			can_n += 1
+			pay += int(t.scrap)
+			budget -= float(t.scrap)
+		else:
+			stopped = true
+	var first_scrap: int = int(todo[0].scrap) if not todo.is_empty() else 0
+	var builders := _builder_count()
+	var hours := work_todo + work_going
+	var minutes := hours / (float(builders) * _builder_rate()) * 60.0 * WALK_FACTOR if builders > 0 and hours > 0.0 else 0.0
+	var time := time_text(minutes) if hours > 0.0 and builders > 0 else ""
+	# the builders work by day: a project that is longer than the daylight left carries on into tomorrow
+	var spills := false
+	if time != "":
+		var seasons = sim.get("seasons")
+		var left := float(seasons.dusk_hour()) - float(sim.hour) if seasons != null and String(sim.phase) == "day" else 0.0
+		spills = minutes / 60.0 > left
+	if state == "ready" and can_n == 0:
+		why = "Needs %d scrap" % first_scrap
+	return {
+		"id": pid, "name": String(def.name), "noun": String(def.get("noun", String(def.name).to_lower())), "icon": String(def.get("icon", "fence")),
+		"button": String(def.get("button", "Build %s" % String(def.get("noun", String(def.name).to_lower())))), "gives": String(def.get("gives", "")),
+		"done_line": String(def.get("done", "")), "unit": _unit(unit_kit), "state": state, "slots": (_proj_slots.get(pid, []) as Array).duplicate(), "n": n, "built": built,
+		"going": going, "open": todo.size(), "fallen": fallen, "locked": locked, "need_crew": need, "scrap": scrap_all, "work": hours, "first_scrap": first_scrap,
+		"can_n": can_n, "pay": pay, "minutes": minutes, "builders": builders, "time": time, "builders_text": builders_text(builders), "spills": spills, "why": why, "recommended": false,
+		"progress": clampf((float(built) + share_going) / float(maxi(n, 1)), 0.0, 1.0), "todo": todo,
+	}
+
+
+## The projects as the Build page shows them (see `_project_info`), in the recommended order; the one to do next has "recommended" true.
+func projects() -> Array:
+	var out: Array = []
+	if layout.is_empty():
+		return out
+	for def in _defs:
+		out.append(_project_info(def))
+	var next := _next_of(out)
+	for info in out:
+		info["recommended"] = String(info.id) == next
+	return out
+
+
+## The id of the project to do next ("" when there is none): a fallen section first, else the first project in the order that can be ordered (whether the scrap is there or not).
+func next_project() -> String:
+	var infos: Array = []
+	for def in _defs:
+		infos.append(_project_info(def))
+	return _next_of(infos)
+
+
+func _next_of(infos: Array) -> String:
+	for info in infos:
+		if String(info.state) == "ready" and int(info.fallen) > 0:
+			return String(info.id)
+	for info in infos:
+		if String(info.state) == "ready":
+			return String(info.id)
+	return ""
+
+
+## Orders what a project still needs, front to back, as far as the scrap above `reserve` pays: {"ok" (something was ordered), "project", "ordered" (sections), "of" (how many it
+## needed), "scrap" (spent), "left" (not ordered), "need" (scrap the rest costs), "why", "line" (what to say: "Ordered the front fence: 21 scrap.")}.
+func order_project(project_id: String, reserve: float = 0.0) -> Dictionary:
+	var out := {"ok": false, "project": project_id, "ordered": 0, "of": 0, "scrap": 0, "left": 0, "need": 0, "why": "", "line": ""}
+	var def := _def_of(project_id)
+	if def.is_empty():
+		out.why = "There is no such project"
+		out.line = String(out.why)
+		return out
+	var info := _project_info(def)
+	match String(info.state):
+		"locked":
+			out.why = String(info.why)
+		"done":
+			out.why = "It is built already"
+		"building":
+			out.why = "It is going up already"
+	if String(out.why) != "":
+		out.line = String(out.why) + "."
+		return out
+	var todo: Array = info.todo
+	out.of = todo.size()
+	var budget := float(sim.stock.scrap) - reserve
+	var k := 0
+	for t in todo:
+		if budget + 1.0e-9 < float(t.scrap):
+			break
+		k += 1
+		if order(String(t.slot), String(t.kit)):
+			out.ordered = int(out.ordered) + 1
+			out.scrap = int(out.scrap) + int(t.scrap)
+			budget -= float(t.scrap)
+	out.left = todo.size() - int(out.ordered)
+	for i in range(k, todo.size()):
+		out.need = int(out.need) + int(todo[i].scrap)
+	out.ok = int(out.ordered) > 0
+	var noun := String(info.noun)
+	if not bool(out.ok):
+		out.why = "Needs %d scrap" % int(info.first_scrap)
+		out.line = String(out.why) + ("." if reserve <= 0.0 else " (and the %d kept back)." % roundi(reserve))
+	elif int(out.left) == 0:
+		out.line = "Ordered %s: %d scrap." % [noun, int(out.scrap)]
+	else:
+		out.line = "Ordered %d of %d %ss of %s (%d scrap). The rest needs %d more." % [int(out.ordered), int(out.of), String(info.unit), noun, int(out.scrap), maxi(1, int(out.need) - roundi(budget))]
+	return out
+
+
+## Takes back every order of a project that has not been built yet (a reinforcement that is going up leaves the fence as it was): {"ok", "cancelled", "line"}.
+func cancel_project(project_id: String) -> Dictionary:
+	var out := {"ok": false, "cancelled": 0, "line": "There is nothing to take back."}
+	for sid in _proj_slots.get(project_id, []):
+		var s: Dictionary = _slots[sid]
+		var pl: Dictionary = sim.build.plot(String(s.plot))
+		if pl.is_empty() or pl.site.is_empty():
+			continue
+		if bool(_def_of(project_id).get("upgrade", false)) != (String(pl.building) != ""):
+			continue    # (a plain section's order is not the reinforcement's, and the other way round)
+		if sim.build.cancel(String(s.plot)):
+			out.cancelled = int(out.cancelled) + 1
+	if int(out.cancelled) > 0:
+		out.ok = true
+		out.line = "Order taken back. The scrap comes back, half of it where work had begun."
+	return out
+
+
+## The page's "build everything I can afford": every project that can be ordered, in the recommended order, as far as the scrap above `reserve` goes: {"ok", "ordered" (sections),
+## "scrap", "projects" (names), "line"}.
+func order_affordable(reserve: float = 0.0) -> Dictionary:
+	var out := {"ok": false, "ordered": 0, "scrap": 0, "projects": [], "line": ""}
+	var first_need := -1
+	var first_noun := ""
+	for def in _defs:
+		var info := _project_info(def)
+		if String(info.state) != "ready":
+			continue
+		if first_need < 0:
+			first_need = int(info.first_scrap)
+			first_noun = String(info.noun)
+		var r := order_project(String(def.id), reserve)
+		if bool(r.ok):
+			out.ordered = int(out.ordered) + int(r.ordered)
+			out.scrap = int(out.scrap) + int(r.scrap)
+			(out.projects as Array).append(String(info.noun))
+	out.ok = int(out.ordered) > 0
+	if bool(out.ok):
+		out.line = "Ordered: %s. %d scrap." % [", ".join(out.projects), int(out.scrap)]
+	elif first_need < 0:
+		out.line = "There is nothing left to order."
+	else:
+		out.line = "Nothing you can pay for yet: %s needs %d scrap." % [first_noun, first_need]
+	return out
+
+
 # ---------------------------------------------------------------- what stands --
 
 func built_count() -> int:
@@ -710,13 +1193,13 @@ func update(dt: float) -> void:
 		_stage_crew = n
 		_refresh_build()
 		if was >= 0 and n > was:
-			var fresh := 0
-			for id in _order:
-				var need: int = _slots[id].crew
+			var fresh: Array = []
+			for def in _defs:
+				var need := _project_need(def)
 				if need > was and need <= n:
-					fresh += 1
-			if fresh > 0:
-				sim.alert("slots-open", "info", "The base can grow", "%d new place%s to build on" % [fresh, "" if fresh == 1 else "s"], null, 12.0)
+					fresh.append(String(def.name).to_lower())
+			if not fresh.is_empty():
+				sim.alert("slots-open", "info", "The base can grow", "On the Build page: %s" % ", ".join(fresh), null, 12.0)
 	for id in _built:
 		var s: Dictionary = _slots.get(id, {})
 		var seg = _seg_of(s) if not s.is_empty() else null
@@ -809,8 +1292,7 @@ func prepare_load(data: Dictionary):
 			var kit := String(built[id])
 			_built[String(id)] = kit
 			if String(s.kind) == "fence" or String(s.kind) == "gate":
-				var hp := float(_kit_data(kit).get("hp", 100.0))
-				_make_section(s, kit, hp)
+				_make_section(s, kit, _slot_hp(s, kit))
 	_gate_open = bool(mine.get("gate_open", false))
 	return before
 
@@ -838,7 +1320,7 @@ func restore(before) -> void:
 			continue
 		_built[String(id)] = String(before.built[id])
 		if String(s.kind) == "fence" or String(s.kind) == "gate":
-			_make_section(s, String(before.built[id]), 100.0)
+			_make_section(s, String(before.built[id]), _slot_hp(s, String(before.built[id])))
 	_gate_open = bool(before.get("gate_open", false))
 	for e in before.segs:
 		var seg = _made.get(int(e.id))

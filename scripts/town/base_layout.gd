@@ -6,8 +6,10 @@
 ## is the side the house's front door is on: its fence has the gate in front of the door. Slots (plan 2.2, scripts/town/perimeter.gd): the barred
 ## doors (door slots: a plank upgrade), the fence sections (the front ones next to the gate first, then the rest of the front, the sides, the back),
 ## the gate, two towers (inner corners) and two floodlights (inner side tiles). Each slot is also a Build plot (`plots`, id == the slot's id, kind
-## "slot"); the kits are the catalogue entries of `buildings` (id "kit_<kit>", `slot_kit` = the kit id). The tiles of the ring that are not free
-## (a neighbour's wall, a tree) are not slots: the runs of free tiles are split into sections of at most `section_max` tiles.
+## "slot"); the kits are the catalogue entries of `buildings` (id "kit_<kit>", `slot_kit` = the kit id; a fence slot has its own, "kit_<kit>@<slot id>", priced by its length, and an
+## upgrade entry "kit_<strong kit>_up@<slot id>" that makes the plain fence that stands on it strong). The tiles of the ring that are not free (a neighbour's wall, a tree) are not
+## slots: the runs of free tiles are split into sections of at most `section_max` tiles (12: about nine sections round a lot of 24 by 22). What the player orders is a PROJECT
+## (base_kits.json: the slots of a `role`, scripts/town/perimeter.gd), not a slot.
 ##
 ## Added to the plan's shape (nothing changed): `doors[i]` has "side", "name", "dead_places", "slot" (the door's plank slot id); `slots[i]` has
 ## "role" (the unlock table's key), "center" (Vector2), "work" (Vector2: where the builders stand), "door" (a door slot's door id), "tiles" (the
@@ -55,21 +57,32 @@ class Grid:
 
 # ------------------------------------------------------------------ the data --
 
-## {"kits", "unlock", "layout"} of assets/data/base_kits.json (a missing file gives empty tables: the layout then has no kits and validate says so).
+## {"kits", "unlock", "layout", "projects"} of assets/data/base_kits.json (a missing file gives empty tables: the layout then has no kits and validate says so).
 static func load_kits() -> Dictionary:
-	var out := {"kits": {}, "unlock": {}, "layout": {}}
+	var out := {"kits": {}, "unlock": {}, "layout": {}, "projects": []}
 	if not FileAccess.file_exists(KITS_PATH):
 		return out
 	var raw = JSON.parse_string(FileAccess.get_file_as_string(KITS_PATH))
 	if raw is Dictionary:
 		for k in out:
-			if raw.get(k) is Dictionary:
+			if k == "projects":
+				if raw.get(k) is Array:
+					out[k] = raw[k]
+			elif raw.get(k) is Dictionary:
 				out[k] = raw[k]
 	return out
 
 
 static func _num(d: Dictionary, key: String, fallback: float) -> float:
 	return float(d.get(key, fallback))
+
+
+## The id of the project (base_kits.json) that builds the slots of this role ("" for none; the upgrade project has no slots of its own).
+static func project_of(role: String, table: Dictionary) -> String:
+	for p in table.get("projects", []):
+		if not bool(p.get("upgrade", false)) and Array(p.get("roles", [])).has(role):
+			return String(p.id)
+	return ""
 
 
 static func _grid(town: Dictionary) -> Grid:
@@ -419,30 +432,46 @@ static func make(town: Dictionary, house_id: int, opts: Dictionary = {}) -> Dict
 	var rest := _rest(grid, yard_middle, front_door, xl, xr, yt, yb, posts, town, h, avoid, used)
 
 	# the plots (a slot is a Build plot) and the catalogue entries of the kits the slots use
+	# (a fence section is priced by its length: the kit's numbers are for `per_tiles` tiles, so that a ring costs and holds the same however it is cut up; the dearer kit also
+	# has an UPGRADE entry for the slot, the difference in price, which the Build module lets be ordered on a plot where the cheaper one stands)
 	var plots: Array = []
-	var counts := {}
+	var buildings: Array = []
+	var made := {}
+	var per_tiles := maxf(1.0, _num(knobs, "per_tiles", 5.0))
 	for s in slots:
 		var r: Rect2i = s.rect
 		var kit_buildings: Array = []
+		var sized := String(s.kind) == "fence"
+		var share := float(r.size.x * r.size.y) / per_tiles if sized else 1.0
+		var plain_id := ""
 		for k in s.kits:
-			kit_buildings.append("kit_" + String(k))
-			counts[String(k)] = int(counts.get(String(k), 0)) + 1
+			var kd: Dictionary = kits[k]
+			var bid := "kit_%s@%s" % [k, s.id] if sized else "kit_" + String(k)
+			if not made.has(bid):
+				made[bid] = true
+				buildings.append(_entry(bid, String(k), kd, share))
+			kit_buildings.append(bid)
+			if plain_id == "":
+				plain_id = bid
+		if sized and s.kits.size() > 1:
+			# the upgrade of the first kit to the second (a plain fence made strong)
+			var strong_k := String(s.kits[1])
+			var up_id := "kit_%s_up@%s" % [strong_k, s.id]
+			var plain: Dictionary = kits[s.kits[0]]
+			var strong: Dictionary = kits[strong_k]
+			var diff := _entry(up_id, strong_k, strong, share)
+			diff["name"] = "Reinforce"
+			diff["blurb"] = "Sheet metal and doubled planks over the fence that stands."
+			diff["scrap"] = maxi(1, roundi((float(strong.get("scrap", 0)) - float(plain.get("scrap", 0))) * share))
+			diff["work"] = maxf(1.0, snappedf((float(strong.get("work", 1.0)) - float(plain.get("work", 0.0))) * share, 0.5))
+			diff["upgrade_of"] = plain_id
+			buildings.append(diff)
+			kit_buildings.append(up_id)
 		plots.append({
 			"id": String(s.id), "name": String(s.name), "kind": "slot", "lot": "", "home": "", "n": 1, "why": _why(s),
 			"pos": _pt(_center_of(r)), "size": [float(r.size.x), float(r.size.y)], "work": _pt(Vector2(s.work)),
 			"kits": kit_buildings, "dir": String(s.dir), "side": String(s.side), "unlock": s.unlock.duplicate(),
 		})
-	var buildings: Array = []
-	for k in kits:
-		if not counts.has(String(k)):
-			continue
-		var kd: Dictionary = kits[k]
-		var b := {
-			"id": "kit_" + String(k), "name": String(kd.get("name", k)), "blurb": String(kd.get("blurb", "")), "scrap": int(kd.get("scrap", 0)),
-			"work": float(kd.get("work", 1.0)), "max": 99, "requires": "", "effects": kd.get("effects", {}).duplicate(), "slot_kit": String(k),
-			"hp": float(kd.get("hp", 0.0)), "bonus": bool(kd.get("bonus", false)),
-		}
-		buildings.append(b)
 
 	var spawn_info := _spawns(town, grid, _center_of(rect), opts, table)
 	return {
@@ -477,6 +506,15 @@ static func _slot(id: String, kind: String, nm: String, r: Rect2i, dir: String, 
 			tiles.append(y * grid.w + x)
 	return {"id": id, "kind": kind, "name": nm, "rect": r, "dir": dir, "side": side, "role": role, "unlock": {"crew": int(unlock.get(role, 1))},
 		"kits": ok_kits, "dead_places": places, "post": "", "center": _center_of(r), "work": work, "door": door, "tiles": tiles}
+
+
+## The catalogue entry of a kit on a slot: the kit's numbers times `share` (a fence section's length over the kit's `per_tiles`; 1 for the rest), hit points to the nearest 5.
+static func _entry(id: String, kit_id: String, kd: Dictionary, share: float) -> Dictionary:
+	return {
+		"id": id, "name": String(kd.get("name", kit_id)), "blurb": String(kd.get("blurb", "")), "scrap": maxi(1, roundi(float(kd.get("scrap", 0)) * share)),
+		"work": maxf(1.0, snappedf(float(kd.get("work", 1.0)) * share, 0.5)), "max": 99, "requires": "", "effects": kd.get("effects", {}).duplicate(), "slot_kit": kit_id,
+		"hp": snappedf(float(kd.get("hp", 0.0)) * share, 5.0), "bonus": bool(kd.get("bonus", false)),
+	}
 
 
 static func _take(taken: Dictionary, grid: Grid, r: Rect2i, id: String) -> void:
@@ -973,6 +1011,8 @@ static func validate(layout: Dictionary, town: Dictionary) -> Array:
 		var crew := int(s.unlock.get("crew", 0))
 		if crew < 1 or crew > 4:
 			bad.append("unlock stage out of range: " + id)
+		if project_of(String(s.get("role", "")), table) == "":
+			bad.append("slot in no project: " + id)
 		if String(s.kind) in ["gate", "door"] and Array(s.dead_places).is_empty():
 			bad.append("no place for the dead at " + id)
 		if String(s.kind) == "fence":

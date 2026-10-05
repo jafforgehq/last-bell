@@ -3,7 +3,7 @@
 ##   - the OBJECTIVE card (top left, under the stores): the text of `sim.scenario.objective()` with what is under it, "2 of 3", and a bearing arrow
 ##     to where it is ("at") with the distance in tiles; the same arrow is drawn round the avatar's feet while the place is far
 ##   - the banner "The house is clear" the first time each house is cleared, and a toast for each room that is cleared, each container searched,
-##     each fence section built or lost
+##     each fence section lost (a project finished is an alert card: "The front fence is up")
 ##   - the RING of the session in hand (a search, the claim, a mend: `sim.uses.progress()` = {"label", "t", "of"}), round the avatar's body
 ##   - the guide's LESSON card (bottom left, small, skippable): `sim.scenario.guide()` = {"id", "text", "goal", "done"}
 ##   - the line "Nobody is on the radio yet" while the avatar is alone
@@ -431,8 +431,9 @@ func on_event(e: Dictionary) -> void:
 		"claimed", "fourth", "attacks_on", "held", "rescue_joined", "rescue_talk", "entered", "left", "sleep":
 			_dirty = true
 		"slot_built":
-			_dirty = true
-			hud.toast("%s is up" % _slot_name(String(e.get("slot", ""))), "info")
+			_dirty = true    # (a section is not news: the project is, below)
+		"project_done":
+			_dirty = true    # (the alert card in the right column says it: "The front fence is up")
 		"slot_lost":
 			_dirty = true
 			hud.toast("%s has fallen" % _slot_name(String(e.get("slot", ""))), "danger")

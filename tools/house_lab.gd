@@ -19,6 +19,7 @@
 ##   --human=1.25        the factor of a person's pace over the bot's (reading a card, a menu, a look round): `real_min` is the awake game time over min_per_sec times this, plus 40 s a night
 ##                       slept in the bed; `bot_min` is the same without the factor
 ##   --keepgoing         do not end a run when the avatar falls and the game goes on with somebody else (by default that is a lost run)
+##   --orders=projects   how the bot orders the base: projects (the Build page's NEXT project, `perimeter.order_project`) or slots (a section at a time, `perimeter.order`)
 ##   --prep=N            the bot does not bring the FOURTH survivor home until N slots of the perimeter stand (0: it does not wait: the player who does not know that the fourth
 ##                       brings the dead every night; 3: the player who does)
 ##   --standin           a stand-in for the medic the lone avatar does not have (for a build in which the player cannot bandage themselves): a bleeding avatar with meds is bandaged
@@ -163,6 +164,7 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 			sim.field.set(String(k).trim_prefix("field."), float(sets_all[k]) if not ["field.active_cap", "field.noise_cap"].has(String(k)) else int(sets_all[k]))
 	var bot = HouseLib.HouseBot.new(sim, mode)
 	bot.prep = int(o.get("prep", 0))
+	bot.orders = String(o.get("orders", "projects"))
 	bot.note_start()
 	var stats = BotLib.NightStats.new(sim, mode)
 	var dt := 1.0 / hz
@@ -443,7 +445,7 @@ func _initialize() -> void:
 
 
 func _main() -> void:
-	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "human": "1.25", "jobs": "1", "trace": "0", "out": ""}
+	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": ""}
 	var quiet := false
 	var worker := false
 	var standin := false
@@ -469,7 +471,7 @@ func _main() -> void:
 		printerr("house lab: nothing to play (seeds %s, mode %s)" % [opts.seeds, opts.mode])
 		quit(2)
 		return
-	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "human": float(opts.human), "stop_on_death": not keep_going}
+	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going}
 	opts["bandage"] = standin
 	opts["keepgoing"] = keep_going
 	var jobs := clampi(int(opts.jobs), 1, 16)
@@ -544,7 +546,7 @@ func _in_workers(seeds: Array, modes: Array, opts: Dictionary, jobs: int) -> Arr
 	var rows: Array = []
 	var args_of := func(pair: Array) -> Array:
 		var a := ["--headless", "--path", project, "--script", "res://tools/house_lab.gd", "--", "--worker", "--seeds=%d" % int(pair[0]), "--mode=%s" % String(pair[1])]
-		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "human"]:
+		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human"]:
 			if String(opts[k]) != "" and String(opts[k]) != "0":
 				a.append("--%s=%s" % [k, String(opts[k])])
 		if bool(opts.get("bandage", false)):

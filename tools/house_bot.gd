@@ -215,6 +215,9 @@ class HouseBot:
 	var mode := "bot"
 	## Slots that must stand before it brings the fourth survivor home (0: it does not wait: the player who does not know what the fourth brings).
 	var prep := 0
+	## How it orders the base: "projects" (the Build page's next project, as a player who does what the page recommends: `perimeter.order_project`) or "slots" (one section at a
+	## time through `perimeter.order`, the first plan's way).
+	var orders := "projects"
 	## What the lab reads: [{"what", "day", "hour", "min" (game minutes since the start), ...}] in the order they happened.
 	var timeline: Array = []
 	## "<what>: missing: <module>" for every step that was skipped for a module that is not there (once each).
@@ -777,12 +780,23 @@ class HouseBot:
 		var slots: Array = per.slots()
 		var pending := 0
 		for s in slots:
-			if String(s.state) == "ordered" or String(s.state) == "building":
+			if String(s.state) == "ordered" or String(s.state) == "building" or String(s.get("up", "")) != "":
 				pending += 1
 		var hands := maxi(1, _crew() - 1)
 		if pending >= hands:
 			return
 		var reserve := MEND_RESERVE if _attacks_on() else 0.0
+		if orders == "projects" and per.has_method("order_project"):
+			# what the Build page's NEXT card says (a fallen section first, then the plan's order), ordered as far as the scrap goes
+			# (the scrap kept back for mending is not kept from the next section: it is the cheapest thing the wall can have, as it was for the slot-wise bot)
+			var next: String = per.next_project()
+			if next != "":
+				var r: Dictionary = per.order_project(next)
+				if not bool(r.ok):
+					r = per.order_affordable()    # (the NEXT project is not within reach: the page's "build everything I can afford" spends what there is on what is)
+				if bool(r.ok):
+					stats.orders = int(stats.orders) + int(r.ordered)
+			return
 		var order := ["door", "gate", "fence", "tower", "floodlight"]
 		for kind in order:
 			for s in slots:
