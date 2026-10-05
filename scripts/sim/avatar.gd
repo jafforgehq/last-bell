@@ -481,9 +481,11 @@ func _shoot(p, gun: Dictionary) -> void:
 	p.bloom = minf(1.0, p.bloom + BLOOM_PER_SHOT)
 	p.cooldown = float(gun.cooldown)
 	var m: Vector2 = sim.muzzle(p, p.aim)
+	if sim.feel != null:
+		sim.feel.shot(p, p.weapon, p.aim)
 	sim.fx.muzzle(m.x, m.y, p.aim, p.weapon == "shotgun" or p.weapon == "hunting")
 	sim.fx.casing(p.x, p.y - 0.15, p.aim, p.weapon == "shotgun")
-	sim.events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
+	sim.events.append({"type": "shot", "weapon": gun.sound, "gun": p.weapon, "x": p.x, "y": p.y})
 	sim.stock.ammo = maxf(0.0, sim.stock.ammo - sim.shot_cost(p))
 	var from := shoulder(p)
 	var reach: float = sim.reach_of(gun, p)
@@ -499,7 +501,7 @@ func _shoot(p, gun: Dictionary) -> void:
 			sim.fx.smoke(res.end.x, res.end.y, 0.12, false)
 			# (a shot stopped by a wall, not one that ran out of reach, throws sparks where it struck)
 			if res.end.distance_to(from) < reach - 0.15:
-				sim.fx.hit_material(res.end.x, res.end.y, "metal")
+				sim.fx.hit_material(res.end.x, res.end.y, "bullet")
 		sim.fx.tracer(m.x, m.y, res.end.x, res.end.y)
 	for z in dealt:
 		sim._hurt_zombie(z, float(dealt[z]), p.aim, p)
@@ -621,6 +623,8 @@ func _strike(p, reach: float, half_arc: float, dmg: float) -> int:
 	_low = _low_tiles()
 	p.thrust = 1.0
 	sim.events.append({"type": "stab", "x": p.x, "y": p.y})
+	if sim.feel != null:
+		sim.feel.blow(p, reach, half_arc)
 	var from := Vector2(p.x, p.y - CHEST)
 	var hits := 0
 	for z in sim.zombies:

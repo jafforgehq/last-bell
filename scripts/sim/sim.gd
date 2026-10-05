@@ -250,6 +250,9 @@ class Zombie:
 
 var world
 var fx
+## The feel of a fight, a render-only sink (scripts/render/combat_fx.gd): told who fired, what was hit and what was killed, and never asked
+## anything. null in the tests and the balance harness; nothing it does is read by the rules.
+var feel = null
 var d: Dictionary
 var W: int
 var H: int
@@ -1265,9 +1268,11 @@ func _fire(p: Person, z: Zombie, ang: float) -> void:
 	p.recoil = 1.0
 	p.cooldown = float(gun.cooldown) * (0.85 + rng.randf() * 0.3) * nights.fire_mult(p)
 	var m := muzzle(p, ang)
+	if feel != null:
+		feel.shot(p, p.weapon, ang)
 	fx.muzzle(m.x, m.y, ang, p.weapon == "shotgun" or p.weapon == "hunting")
 	fx.casing(p.x, p.y - 0.15, ang, p.weapon == "shotgun")
-	events.append({"type": "shot", "weapon": gun.sound, "x": p.x, "y": p.y})
+	events.append({"type": "shot", "weapon": gun.sound, "gun": p.weapon, "x": p.x, "y": p.y})
 	stock.ammo = maxf(0.0, stock.ammo - shot_cost(p))
 	var pellets := int(gun.get("pellets", 1))
 	var aim_f: float = aim_factor(p) * storyteller.aim_mult(dist)
@@ -1318,6 +1323,8 @@ func _shot_noise(p: Person) -> void:
 func _hurt_zombie(z: Zombie, dmg: float, ang: float, shooter: Person = null, melee := false) -> void:
 	z.hp -= dmg
 	z.stagger = 0.25
+	if feel != null:
+		feel.hit(z, ang, dmg, melee, shooter)    # (before the blood: it says whether this one is told, a hit on steel does not bleed)
 	fx.blood(z.x, z.y - 0.25, cos(ang), sin(ang), 9)
 	if z.hp <= 0.0 and z.state != "dying" and z.state != "dead":
 		z.state = "dying"
@@ -1333,6 +1340,8 @@ func _hurt_zombie(z: Zombie, dmg: float, ang: float, shooter: Person = null, mel
 			barks.on_kill(shooter)
 		fx.decal(z.x + z.fall_dir * 0.35, z.y + 0.2, 0.25, 0.9)
 		events.append({"type": "thud", "x": z.x, "y": z.y})
+		if feel != null:
+			feel.kill(z, ang, melee, shooter)
 
 
 # ----------------------------------------------------------------- zombies --

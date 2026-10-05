@@ -1727,6 +1727,10 @@ func _update_ammo(sim) -> void:
 	var short: bool = not melee and rounds < cap
 	ammo_name.text = String(gun.get("name", me.weapon))
 	ammo_label.text = "-" if melee else "%d / %d" % [ready, rounds]
+	# a round fired from a low magazine (and the last one above all) makes the readout flash: it is hard to miss that it is running out
+	if not melee and _ammo_seen >= 0 and me.mag < _ammo_seen and (low or me.mag <= 0):
+		pulse_ammo(me.mag <= 0)
+	_ammo_seen = -1 if melee else me.mag
 	var col := INK
 	if dry:
 		col = DANGER_TEXT
@@ -1742,6 +1746,28 @@ func _update_ammo(sim) -> void:
 		ammo_bar.color = col if col != INK else Color(0.82, 0.78, 0.64, 0.8)
 	ammo_bar.queue_redraw()
 	update_holster()
+
+
+## The magazine's rounds at the last look (-1: none, or a gun with no magazine), and the flash of the readout when it runs low.
+var _ammo_seen := -1
+var _ammo_tween: Tween = null
+
+
+## The readout's flash: it swells a little and goes bright and back in under a fifth of a second, longer and brighter for the last round (and
+## for a trigger pulled on an empty gun, main.gd). Under "reduce motion" nothing moves: the amber and the red of the number already say it.
+func pulse_ammo(last: bool) -> void:
+	if _calm() or ammo_label == null or not ammo_label.is_inside_tree():
+		return
+	if _ammo_tween != null and _ammo_tween.is_valid():
+		_ammo_tween.kill()
+	ammo_label.pivot_offset = Vector2(ammo_label.size.x, ammo_label.size.y * 0.5)
+	var bright := Color(2.2, 1.5, 1.2) if last else Color(1.7, 1.45, 1.2)
+	var big := 1.3 if last else 1.18
+	_ammo_tween = create_tween().set_parallel(true)
+	ammo_label.scale = Vector2.ONE * big
+	ammo_label.self_modulate = bright
+	_ammo_tween.tween_property(ammo_label, "scale", Vector2.ONE, 0.22 if last else 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_ammo_tween.tween_property(ammo_label, "self_modulate", Color.WHITE, 0.3 if last else 0.2)
 
 
 ## Whether the player asked for less motion (Prefs ui/reduce_motion): the banner and the toast

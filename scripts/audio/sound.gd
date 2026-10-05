@@ -14,6 +14,7 @@ extends Node
 
 const Buses := preload("res://scripts/audio/buses.gd")
 const Soundscape := preload("res://scripts/audio/soundscape.gd")
+const CombatSounds := preload("res://scripts/audio/combat_sounds.gd")
 
 const POOL := 24
 ## The menu sounds have a small pool of their own, so a burst of clicks never takes a
@@ -86,6 +87,11 @@ func setup(sounds: Dictionary) -> void:
 	for name in CAR_SOUNDS:
 		if not streams.has(name):
 			streams[name] = _load_list(CAR_SOUNDS[name])
+	# the gunfight's own (scripts/audio/combat_sounds.gd): the heavier rifles' shots, the hits, the clicks of a reload
+	var fight := CombatSounds.sounds()
+	for name in fight:
+		if not streams.has(name):
+			streams[name] = _load_list(fight[name])
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"
