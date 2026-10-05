@@ -48,6 +48,9 @@ var templates: Dictionary = {}
 ## What is true of the place being drawn: "vehicle" (it holds one), "nest", "survivor"; ops may ask for them with "if".
 var flags: Dictionary = {}
 var danger := 1
+## Whether a prop's picture is measured from the table of sizes (`GD.tex_size`) and not by loading it: the town's lots say so (scripts/town/building_gen.gd, town_gen.gd); a raid site's canvas loads
+## its pictures here as it always did.
+var size_by_table := false
 
 
 func setup(width: int, height: int, seed_value: int, catalogue: Dictionary, terrain_ids: Dictionary, tmpl: Dictionary = {}) -> void:
@@ -61,9 +64,7 @@ func setup(width: int, height: int, seed_value: int, catalogue: Dictionary, terr
 	solid.resize(W * H)
 	keep.resize(W * H)
 	pmask.resize(W * H)
-	var fill_id := int(tids.get("GRASS", 4))
-	for i in W * H:
-		terrain[i] = fill_id
+	terrain.fill(int(tids.get("GRASS", 4)))
 
 
 # ------------------------------------------------------------------ numbers --
@@ -634,12 +635,21 @@ func _decor(kind: String, tx: int, ty: int, ox: float, oy: float, opts: Dictiona
 func _add_obj(kind: String, p: Dictionary, cx: float, cy: float, tw: int, th: int, file: String, is_solid: bool, opts: Dictionary):
 	var dir := String(p.get("dir", "objects"))
 	var path := "res://assets/%s/%s.png" % [dir, file]
-	var tex: Texture2D = GD.tex(path)
-	if tex == null:
+	var pw := 0.0
+	var ph := 0.0
+	if size_by_table:
+		# (the town's lots: the size from the table of prop pictures, the picture is not loaded here: `GD.tex_size`)
+		var psize := GD.tex_size(path)
+		pw = psize.x
+		ph = psize.y
+	else:
+		var tex: Texture2D = GD.tex(path)
+		if tex != null:
+			pw = float(tex.get_width())
+			ph = float(tex.get_height())
+	if pw <= 0.0:
 		push_error("site layout: no picture %s" % path)
 		return null
-	var pw := float(tex.get_width())
-	var ph := float(tex.get_height())
 	var ppt := float(p.get("ppt", 96))
 	var w := pw / ppt
 	var h := ph / ppt

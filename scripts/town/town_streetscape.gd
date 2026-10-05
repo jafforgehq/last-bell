@@ -7,12 +7,28 @@ extends RefCounted
 const EDGE := 2
 
 
+## The pieces of `run`, for the stepped build (`TownGen.step` does one a step).
+const STEPS := 5
+
+
 static func run(g) -> void:
-	_border(g)
-	_road_ends(g)
-	_cars(g)
-	_lamps(g)
-	_litter(g)
+	for i in STEPS:
+		step(g, i)
+
+
+## The piece `i` (0 to STEPS - 1) of `run`: in this order the border, the road ends, the cars, the lamps, the litter.
+static func step(g, i: int) -> void:
+	match i:
+		0:
+			_border(g)
+		1:
+			_road_ends(g)
+		2:
+			_cars(g)
+		3:
+			_lamps(g)
+		_:
+			_litter(g)
 
 
 static func _border(g) -> void:

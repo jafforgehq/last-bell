@@ -27,6 +27,34 @@ static func tex(path: String) -> Texture2D:
 	return _textures[path]
 
 
+## The size in pixels of a prop's picture, without loading it when the table has it (assets/data/prop_sizes.json, made by tools/make_prop_sizes.gd): the town generator measures every thing it
+## puts on a lot, and the pictures of the art kit are up to 1000 x 1700 pixels (about 5 ms each to load on a desktop). A path the table does not know is measured by loading it.
+## Vector2.ZERO when the picture is not there.
+const PROP_SIZES_PATH := "res://assets/data/prop_sizes.json"
+static var _prop_sizes: Dictionary = {}
+static var _prop_sizes_read := false
+
+
+static func tex_size(path: String) -> Vector2:
+	var s := table_size(path)
+	if s.x > 0.0:
+		return s
+	var t := tex(path)
+	return Vector2(float(t.get_width()), float(t.get_height())) if t != null else Vector2.ZERO
+
+
+## The size the table has for a picture, or Vector2.ZERO when it has none (the loader checks the pictures it loads against it).
+static func table_size(path: String) -> Vector2:
+	if not _prop_sizes_read:
+		_prop_sizes_read = true
+		if FileAccess.file_exists(PROP_SIZES_PATH):
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(PROP_SIZES_PATH))
+			if typeof(parsed) == TYPE_DICTIONARY:
+				_prop_sizes = parsed
+	var s = _prop_sizes.get(path)
+	return Vector2(float(s[0]), float(s[1])) if s != null else Vector2.ZERO
+
+
 static func col(hex: String, a: float = 1.0) -> Color:
 	var c := Color.html(hex)
 	c.a = a
