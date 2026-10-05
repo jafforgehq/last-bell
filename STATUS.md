@@ -3,7 +3,17 @@
 > **Read this first in a new session.** Written 2026-10-02 (end of a very long session); the top of it (section 1) and the known issues (5b) were rewritten on 2026-10-04, when rounds 17 to 21 were integrated, so that nothing lives only in a chat.
 > The game is a 2D zombie colony-defence game in Godot 4.7.2 / GDScript. Working title **Thirty Bells** (the repo and the itch page still say *Last Bell*). Repo: `/Users/jaf_lab/last-bell` (the only git repo; extra worktrees live in `.worktrees/`, section 1c). Private GitHub: `jafforgehq/last-bell`. Restricted itch page: https://jafforge.itch.io/last-bell (project id 5076058, account `jafforge`).
 
-## 1. Right now (the one-screen version)
+## 0. One House (2026-10-05): read this first
+
+**State.** `main` is the **One House** game (merge `c7350b4`; the old main is tagged `pre-one-house`). Final full suite on it: **4301 passed, 0 failed**. Local only: nothing pushed to GitHub, nothing uploaded to itch (the live itch build is still the old avatar-school build 19557255). The design, plan and contracts are in `docs/superpowers/specs/2026-10-04-one-house-design.md` and `docs/superpowers/plans/2026-10-04-one-house-plan.md`; the town's code is `scripts/town/` (generator `town_gen.gd` + `town_layout.gd`, `building_plans.gd`, `building_gen.gd`, `town_districts.gd`, `town_streetscape.gd`, `town_kit.gd`; dormant dead `dormant_dead.gd`; the sim `town_sim.gd` on `town_rules.gd`; modules `clearing`, `search`, `base`, `sleep`, `uses`, `rescue`, `perimeter`, scenario `one_house.gd`; facade `town_game.gd`; world `town_world.gd`), views in `scripts/render/` (`house_view`, `room_veil`, `perimeter_view`, `roof_atlas`, `door_node`, `bystander_view`), UI in `scripts/ui/` (`town_hud`, `slot_page`, `district_map`, `town_end_card`, `rescue_card`), data in `assets/data/` (`one_house.json`, `one_house_tuning.json`, `base_kits.json`, `rescue.json`, `town_art.json`), art kit `assets/town/` (generator `tools/make_town_art.py`).
+
+**Balance (lab, `tools/house_lab.gd`).** First attack night held by the bot in 8/8 (seeds 1..8), 8/8 (9..16), 15/16 (17..32); by an idle avatar 3/8, 2/8, 5/16. Claim before noon on day 1 in 16/16, four rescues by day 3 in 16/16, 22.6 real minutes median (16.7 to 31.6).
+
+**Web.** Preset "Web (one house)" exports to `build/web-town/`; `.pck` 38 MB, `.wasm` 38 MB; ready in about 9 s on a loaded machine; 60 fps in the start house. The browser console shows about 260 `GL_INVALID_FRAMEBUFFER_OPERATION ... zero size` warnings (not seen on the first export; picture and frame rate fine; probably a pane-resize artifact: check on a real run).
+
+**Open (not done).** The title backdrop is still the school yard; the combat-feel polish (muzzle flash, hits, deaths) is uncommitted in the old `.worktrees/p-combat`; the first night still has two plated brutes (with one, idle holds 10/16); the bot never builds a tower and rarely the gate (tower untested in play); bell-tower roof, water tower, silo, per-part roof colour, pond edge are missing from the generator; a fresh run starts paused until the first key (`town_game.gd _start_hold`); nobody has played it by hand yet; no itch upload, no push. About 30 old worktrees sit under `.worktrees/` (all merged or shelved; removal needs a move to the Trash).
+
+## 1. Right now (the school-yard game, before 2026-10-05; the one-screen version)
 
 | Thing | State |
 | --- | --- |
