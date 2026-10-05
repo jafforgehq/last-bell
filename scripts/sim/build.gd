@@ -499,7 +499,10 @@ func why_not(plot_id: String, building_id: String) -> String:
 	if b.is_empty():
 		return "there is no such building"
 	if pl.building != "":
-		return "the %s is already built here" % String(building(String(pl.building)).name).to_lower()
+		if String(b.get("upgrade_of", "")) != String(pl.building):    # (One House: an upgrade entry goes on the very building it upgrades, which stands while it is done)
+			return "the %s is already built here" % String(building(String(pl.building)).name).to_lower()
+	elif b.has("upgrade_of"):
+		return "there is nothing here to upgrade"
 	if not pl.site.is_empty():
 		return "something is already going up here"
 	if not sim.lots.plot_open(pl):
@@ -788,12 +791,12 @@ func load_state(d: Dictionary) -> void:
 			var keep_b := not pl.is_empty() and b != "" and _building_by_id.has(b) and _belongs(pl, b)
 			if b != "" and not keep_b:
 				refund += float(LEGACY_COSTS.get(b, building(b).get("scrap", 0))) * REFUND_SHARE
-			var keep_s := not pl.is_empty() and not keep_b and site_b != "" and _building_by_id.has(site_b) and _belongs(pl, site_b)
+			var keep_s := not pl.is_empty() and (not keep_b or building(site_b).has("upgrade_of")) and site_b != "" and _building_by_id.has(site_b) and _belongs(pl, site_b)
 			if site_b != "" and not keep_s:
 				refund += float(s.get("scrap", 0.0))
 			if keep_b:
 				pl.building = b
-			elif keep_s:
+			if keep_s:    # (an upgrade's site is kept beside the building it upgrades)
 				var data := building(site_b)
 				pl.site = {"building": site_b, "progress": float(s.get("progress", 0.0)),
 					"work": float(s.get("work", data.work)), "scrap": float(s.get("scrap", data.scrap))}

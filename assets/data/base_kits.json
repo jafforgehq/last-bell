@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "notes": "Owner: WP5 (BaseLayout reads it, perimeter.gd reads the kits). A kit is what a slot of the base's perimeter is built with. Its catalogue entry in the layout's `buildings` has the id \"kit_<kit>\" and `slot_kit` = the kit id; a slot's `kits` lists kit ids, its Build plot's `kits` lists the building ids. hp is the section's hit points (for door_plank, `bonus` true: hit points ADDED to the barred door). scrap and work (builder-hours) are the cost. effects are the building effects the colony reads through build.bonus/factor (tower: reach_bonus, reach_radius; floodlight: night_reach_mult). `stand` is how far outside the fence's outer face the dead stand to claw it. Tuned by the One House balance pass with tools/house_lab.gd (these are the numbers the perimeter reads; the `kits` block of one_house_tuning.json is not read): a plain fence 200, a reinforced one 360, the gate 260, and planks add 110 to a barred door's 90, so that a door holds as long as a fence.",
+  "version": 2,
+  "notes": "Owner: WP5 (BaseLayout reads it, perimeter.gd reads the kits and the projects). A kit is what a slot of the base's perimeter is built with. Its catalogue entry in the layout's `buildings` has the id \"kit_<kit>\" (a fence slot's entries are \"kit_<kit>@<slot id>\": see per_tiles) and `slot_kit` = the kit id; a slot's `kits` lists kit ids, its Build plot's `kits` lists the building ids. hp is the section's hit points (for door_plank, `bonus` true: hit points ADDED to the barred door). scrap and work (builder-hours) are the cost. effects are the building effects the colony reads through build.bonus/factor (tower: reach_bonus, reach_radius; floodlight: night_reach_mult). `stand` is how far outside the fence's outer face the dead stand to claw it. `per_tiles` (fence kits): the numbers are for a section of that many tiles, and a longer or shorter section has its scrap, work and hit points in proportion, so a ring costs and holds the same however it is cut up (layout.per_tiles). Tuned by the One House balance pass with tools/house_lab.gd (these are the numbers the perimeter reads; the `kits` block of one_house_tuning.json is not read): a plain fence 200 for 5 tiles, a reinforced one 360, the gate 260, and planks add 110 to a barred door's 90, so that a door holds as long as a fence. PROJECTS: what the player orders, with one click each (the Build page, scripts/ui/slot_page.gd): a project is the slots of its `roles` (the unlock table's keys, base_layout.gd gives each slot one), built with its `kit`, and the page lists them in this order, which is also the recommended order (the first that is ready is 'Next'). `crew`: a project with `upgrade` true (it makes the built plain fences into the `kit`) has no slot stage of its own and opens with this many people. `gives` is the one line on its card, `noun` how the objective and the card name it, `done` what the toast says when the last section of it is up.",
   "kits": {
     "fence": {
       "name": "Fence section",
@@ -9,6 +9,7 @@
       "hp": 200,
       "scrap": 5,
       "work": 3,
+      "per_tiles": 5,
       "stand": 0.55,
       "art": "fence",
       "effects": {}
@@ -20,6 +21,7 @@
       "hp": 360,
       "scrap": 12,
       "work": 7,
+      "per_tiles": 5,
       "stand": 0.55,
       "art": "fence_strong",
       "effects": {}
@@ -72,18 +74,67 @@
   "unlock": {
     "door": 1,
     "front_near": 1,
-    "front": 2,
+    "front": 1,
+    "gate": 2,
+    "tower": 2,
     "side": 3,
-    "gate": 3,
-    "tower": 3,
-    "back": 4,
+    "back": 3,
     "tower2": 4,
     "floodlight": 4
   },
+  "projects": [
+    {
+      "id": "front", "name": "Front fence", "noun": "the front fence", "icon": "fence", "roles": ["front_near", "front"], "kit": "fence",
+      "gives": "Walls off the street side. The dead have to tear it down, or go round.",
+      "done": "The front fence is up"
+    },
+    {
+      "id": "gate", "name": "The gate", "noun": "the gate", "icon": "gate", "roles": ["gate"], "kit": "gate",
+      "gives": "A way in for people, in front of the door. Shut, it holds like a fence. Open, it lets the dead in.",
+      "done": "The gate is up"
+    },
+    {
+      "id": "tower", "name": "Watchtower", "noun": "a watchtower", "icon": "tower", "roles": ["tower"], "kit": "tower",
+      "gives": "A lookout and a firing platform: the guns near it reach three tiles further.",
+      "done": "The watchtower is up"
+    },
+    {
+      "id": "sides", "name": "Side fences", "noun": "the side fences", "icon": "fence", "roles": ["side"], "kit": "fence",
+      "gives": "Closes both flanks, so the dead cannot just walk round the front.",
+      "done": "Both side fences are up"
+    },
+    {
+      "id": "back", "name": "Back fence", "noun": "the back fence", "icon": "fence", "roles": ["back"], "kit": "fence",
+      "gives": "Shuts the last side. With it the ring is closed.",
+      "done": "The back fence is up"
+    },
+    {
+      "id": "lights", "name": "Floodlights", "noun": "the floodlights", "icon": "floodlight", "roles": ["floodlight"], "kit": "floodlight",
+      "gives": "Lamps on poles with their own generator: the guns reach a little further by night, and a blackout costs no aim.",
+      "done": "The floodlights are up"
+    },
+    {
+      "id": "planks", "name": "Door planks", "noun": "planks on the doors", "icon": "planks", "roles": ["door"], "kit": "door_plank",
+      "gives": "Planks across both doors of the house. The last line holds much longer.",
+      "done": "The doors are planked"
+    },
+    {
+      "id": "tower2", "name": "Second watchtower", "noun": "a second watchtower", "icon": "tower", "roles": ["tower2"], "kit": "tower",
+      "gives": "Covers the other corner of the yard. Towers do not add up: each one reaches the guns that stand near it.",
+      "done": "The second watchtower is up"
+    },
+    {
+      "id": "reinforce", "name": "Reinforce the fences", "noun": "stronger fences", "button": "Reinforce the fences", "icon": "reinforce", "roles": ["front_near", "front", "side", "back"],
+      "kit": "fence_strong", "upgrade": true, "crew": 3,
+      "gives": "Sheet metal and doubled planks on every fence you have built, one section at a time. Close to twice the hit points. The fence stands while it is done.",
+      "done": "The fences are reinforced"
+    }
+  ],
   "layout": {
     "door_hp": 90,
     "door_name": "Barred door",
-    "section_max": 5,
+    "section_max": 12,
+    "per_tiles": 5,
     "gate_width": 3,
     "ring": 3,
     "spawn_range": [35, 60],

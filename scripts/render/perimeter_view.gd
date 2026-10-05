@@ -8,9 +8,11 @@
 ##  GATE. The kit's gate, closed or open (`perimeter.gate_open()`), built or damaged. BARRED DOORS. Planks over each door of the house (`barricade_door`), the plank kit adds a second
 ##  layer, a door that has fallen shows splinters. TOWER. A deck on stilts over its slot tile and the post tile of the shooter (the post is the layout's), under the people so the
 ##  shooter on it is seen. FLOODLIGHT. A pole standing among the people (sorted by its foot, in `main.entities`) with a PointLight2D that burns at dusk and a glow round the head.
-##  BUILD SITES. A slot that is ordered or going up shows what it will be as a ghost (a fence fills in from one end as the work is done), under a progress ring at its middle.
-##  OPEN SLOTS. A calm dashed outline round each slot that can be ordered when the avatar is within NEAR_SLOT tiles (the Build screen's own gold outline takes over when the screen is open,
-##  `build_node.gd`); with the Build page open the locked slots are drawn dim with a padlock and the crew they need; a section that has fallen is outlined in red.
+##  BUILD SITES. A slot that is ordered or going up shows what it will be as a ghost (a fence fills in from one end as the work is done), under a progress ring at its middle; a fence
+##  that stands and is being reinforced keeps its picture and wears the ring.
+##  THE PROJECT ON THE BUILD PAGE. Nothing is outlined by itself: with the Build page open, the project under the pointer (or picked, or else the NEXT one, softly: `main.build_hover`,
+##  {"project": id, "soft": bool}) has a dashed outline round each of its sections, its name over the first, and a padlock with the crew it needs on those that are locked. A section
+##  that has fallen is outlined in red whatever the page is.
 ##  HITS. A claw on a section (`claw` event) shakes it for a moment and puffs a little dust through `sim.fx` (smoke, shortened; wood chips for the wooden kits). A section that is
 ##  mended or finished flashes white for a moment.
 ##
@@ -30,8 +32,6 @@ const TILE := GD.TILE
 ## The kit's pictures are 128 px to the tile, the world's tile is 64.
 const PX := 0.5
 const EVERY := 0.25
-## An open slot is outlined when the avatar is this near (tiles from the edge of the slot).
-const NEAR_SLOT := 6.0
 ## How many of the cells of a section that is under 66% show damage.
 const WEAR_PCT := 45
 const SHAKE_S := 0.26
@@ -53,6 +53,7 @@ const GLOW_R := 0.8
 const GLOW_ALPHA := 0.5
 
 const OPEN_COL := Color(0.62, 0.87, 0.80)
+const GOOD_COL := Color(0.56, 0.72, 0.35)
 const LOCK_COL := Color(0.74, 0.78, 0.86)
 const BREACH_COL := Color(0.90, 0.36, 0.30)
 const GOLD := Color(0.941, 0.761, 0.29)
@@ -103,8 +104,8 @@ var _marks: Node2D
 var _glow: Node2D
 var _flood := {}
 var _lamp_on := 0.0
-var _avatar_tile := Vector2i(-99999, -99999)
 var _build_open := false
+## The project the Build page marks ("id|soft"; "" for none).
 var _hover := ""
 ## What the last draw put on the screen (a screenshot or a probe reads them).
 var drawn_ops := 0
@@ -190,14 +191,8 @@ func on_frame(dt: float) -> void:
 		_scan()
 	_tick_fx(dt)
 	_tick_lamps()
-	var me = _avatar()
-	if me != null:
-		var t := Vector2i(floori(me.x), floori(me.y))
-		if t != _avatar_tile:
-			_avatar_tile = t
-			_marks.queue_redraw()
 	var open := _screen_open()
-	var hover := _hover_plot()
+	var hover := _hover_project()
 	if open != _build_open or hover != _hover:
 		_build_open = open
 		_hover = hover
@@ -210,19 +205,16 @@ func _exit_tree() -> void:
 
 # ------------------------------------------------------------------------ data --
 
-func _avatar():
-	if sim == null or sim.get("avatar") == null:
-		return null
-	return sim.avatar.player()
-
-
 func _screen_open() -> bool:
 	return main != null and bool(main.get("build_open"))
 
 
-func _hover_plot() -> String:
+## The project the Build page marks, as "id|soft" ("" when it marks none).
+func _hover_project() -> String:
 	var h = main.get("build_hover") if main != null else null
-	return String(h.get("plot", "")) if h is Dictionary else ""
+	if not h is Dictionary or String(h.get("project", "")) == "":
+		return ""
+	return "%s|%s" % [String(h.project), "1" if bool(h.get("soft", false)) else "0"]
 
 
 ## Everything the part holds is dropped (a new base, a load, the part is freed).
@@ -268,9 +260,9 @@ func _scan() -> void:
 		_note_state(s)
 	for sl in _slots:
 		var share := 0.0
-		if sl.state == "building" or sl.state == "ordered":
+		if sl.state == "building" or sl.state == "ordered" or String(sl.up) != "":
 			share = sim.build.progress_of(String(sl.plot))
-		sig.append([String(sl.id), String(sl.state), String(sl.kit), int(share * 24.0)])
+		sig.append([String(sl.id), String(sl.state), String(sl.kit), int(share * 24.0), String(sl.up)])
 	var h := hash(sig)
 	if h != _sig or hash(_fx.keys()) != _fx_sig:
 		_sig = h
@@ -883,42 +875,66 @@ func _screen_scale() -> float:
 	return maxf(get_viewport().get_canvas_transform().get_scale().x, 0.01)
 
 
-## The marks of the slots: the calm outlines of the open ones near the avatar, the locked ones' padlocks while the Build page is open, the red outline of a breach, a progress ring on a site.
+## The marks of the slots: the dashed outline of each section of the project the Build page marks, the red outline of a breach, a progress ring on a site (and on a fence that is
+## being reinforced). Nothing else: a base is not outlined by itself.
 func _paint_marks(ci) -> void:
 	drawn_marks = 0
 	if per == null or _slots.is_empty():
 		return
 	var k := 1.0 / _screen_scale()
-	var me = _avatar()
-	var at := Vector2(me.x, me.y) if me != null else Vector2(-9999.0, -9999.0)
-	var bv = main.get("build_view") if main != null else null
 	var pulse := 0.5 + 0.5 * sin(_clock * 3.0)
+	var marked := String(_hover).get_slice("|", 0) if _build_open else ""
+	var soft := _hover.ends_with("|1")
+	var named := false
 	for sl in _slots:
 		var rect := Rect2(Vector2(Rect2i(sl.rect).position), Vector2(Rect2i(sl.rect).size))
 		if _view.has_area() and not _view.grow(3.0).intersects(rect):
 			continue
-		match String(sl.state):
-			"open":
-				var near := _gap(rect, at) <= NEAR_SLOT
-				var lit := false
-				if bv != null:
-					var pl: Dictionary = sim.build.plot(String(sl.plot))
-					lit = not pl.is_empty() and float(bv.outline_alpha(pl)) > 0.01
-				if near and not lit and not _build_open:
-					_outline(ci, rect, Color(OPEN_COL, 0.66), 0.05, k, 2.0)
-					drawn_marks += 1
-			"locked":
-				if _build_open:
-					var hot: bool = String(sl.plot) == _hover
-					_outline(ci, rect, Color(LOCK_COL, 0.62 if hot else 0.34), 0.0, k, 1.6)
-					_padlock(ci, rect, int(sl.unlock.crew), 0.9 if hot else 0.62, k)
-					drawn_marks += 1
+		var in_project: bool = marked != "" and String(sl.project) == marked
+		var state := String(sl.state)
+		if in_project and state != "broken":
+			var a := 0.55 if soft else 0.95
+			match state:
+				"open":
+					_outline(ci, rect, Color(OPEN_COL, a), 0.0 if soft else 0.07, k, 2.2)
+				"locked":
+					_outline(ci, rect, Color(LOCK_COL, a * 0.8), 0.0, k, 1.8)
+					_padlock(ci, rect, int(sl.unlock.crew), 0.55 if soft else 0.9, k)
+				"built":
+					_outline(ci, rect, Color(GOOD_COL, a), 0.0, k, 2.0)
+				_:
+					_outline(ci, rect, Color(GOLD, a * 0.8), 0.0, k, 2.0)
+			drawn_marks += 1
+			if not named and not soft:
+				named = true
+				_name_plate(ci, rect, String(per.project_name(marked)), k)
+		match state:
 			"broken":
 				_outline(ci, rect, Color(BREACH_COL, 0.55 + 0.4 * pulse), 0.07, k, 2.4)
 				drawn_marks += 1
 			"ordered", "building":
-				_ring(ci, rect, sim.build.progress_of(String(sl.plot)), String(sl.state) == "ordered", k)
+				_ring(ci, rect, sim.build.progress_of(String(sl.plot)), state == "ordered", k)
 				drawn_marks += 1
+			"built":
+				if String(sl.up) != "":
+					_ring(ci, rect, sim.build.progress_of(String(sl.plot)), String(sl.up) == "ordered", k)
+					drawn_marks += 1
+
+
+## The name of the marked project on a plate over its first section.
+func _name_plate(ci, r: Rect2, text: String, k: float) -> void:
+	if text == "":
+		return
+	var font: Font = Fonts.cond(700)
+	var size := 13
+	var w: float = font.get_string_size(text.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var c := (r.position + Vector2(r.size.x * 0.5, 0.0)) * TILE + Vector2(0.0, -0.9 * TILE)
+	ci.draw_set_transform(c, 0.0, Vector2(k, k))
+	var plate := Rect2(Vector2(-w * 0.5 - 7.0, -15.0), Vector2(w + 14.0, 21.0))
+	ci.draw_rect(plate, Color(PLATE, 0.82))
+	ci.draw_rect(plate, Color(GOLD, 0.8), false, 1.2)
+	ci.draw_string(font, Vector2(-w * 0.5, 0.0), text.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, size, GOLD)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## A dashed rectangle in tiles (screen-constant width), with a faint wash.
