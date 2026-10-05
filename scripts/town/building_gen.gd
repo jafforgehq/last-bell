@@ -3,6 +3,9 @@
 ##
 ## FOOTPRINTS. A building is a set of PARTS: rectangles of outer walls that touch along a one tile wall they share (an L is two parts, a T two, a U three, a bungalow with its garage
 ## two, a church three: tower, nave, chancel; scripts/town/building_plans.gd draws them, the front at the top, and `build` turns a plan over for a lot whose front is south).
+## BIGGER HOUSES: the homes (`BuildingPlans.ROOMY`) are laid out by `_layout_part`: a hall down the middle of a big part with the day rooms on one side and the night rooms on the other, every
+## room 3 x 3 floor tiles at least, and the doors planned between neighbours (`_plan_doors`: every room opens onto the hall or onto a neighbour that does, so none is more than two rooms from it);
+## the shops, flats, works and terraces still use the older partition below.
 ## Each part is partitioned into ROOMS (rectangles) by a BSP that follows a program of room names with shares of the floor (the entry room, the one the front door opens into,
 ## always touches the front wall of its part). Doors are cut in the partition walls where both sides are floor, between touching parts, and in the outer walls (a front door into the
 ## entry room, a back door); a repair pass opens a door to any room that cannot be reached. Then the rooms are furnished and the yard is dressed with the ART KIT's things
@@ -27,7 +30,7 @@ const DOOR_KEEP := 1
 ## The kinds that are a yard and no building.
 const YARD_KINDS := ["pocket", "park", "plaza", "field", "woods", "meadow"]
 ## The kinds whose lot is a home (a yard with a path, bushes, a mailbox...): the rest are shops, works and public buildings.
-const HOME_KINDS := ["start", "small", "medium", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "terrace", "terrace_ext", "cottage", "farmhouse"]
+const HOME_KINDS := ["start", "family", "small", "medium", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "terrace", "terrace_ext", "cottage", "farmhouse"]
 ## Which stocks a room or a kind of building holds (multipliers on 1.0 for each of food, water, scrap, ammo, meds).
 const LOOT_ROOM := {
 	"kitchen": {"food": 3.0, "water": 2.0, "scrap": 0.3}, "pantry": {"food": 4.0, "water": 3.0}, "bedroom": {"scrap": 1.2, "meds": 1.2, "ammo": 0.6, "food": 0.3},
@@ -38,6 +41,8 @@ const LOOT_ROOM := {
 	"engine bay": {"scrap": 2.0, "water": 1.5, "ammo": 0.3}, "dormitory": {"scrap": 1.0, "food": 0.6, "meds": 0.5}, "barn": {"food": 2.0, "scrap": 1.5, "water": 1.0},
 	"classroom": {"scrap": 1.0, "food": 0.5}, "gym": {"water": 1.0, "scrap": 1.0}, "nave": {"food": 0.5}, "chancel": {"food": 1.0, "meds": 0.6}, "stacks": {"scrap": 0.6, "food": 0.2},
 	"dining hall": {"food": 3.0, "water": 2.0}, "flat": {"food": 1.2, "water": 1.0, "scrap": 0.8, "meds": 0.8, "ammo": 0.4},
+	"utility": {"scrap": 3.0, "ammo": 1.0, "water": 0.6, "food": 0.3}, "garage": {"scrap": 3.0, "ammo": 1.4, "water": 0.3}, "study": {"ammo": 1.0, "scrap": 1.0, "meds": 0.4, "food": 0.2},
+	"dining room": {"food": 2.0, "water": 1.4, "scrap": 0.4}, "nursery": {"meds": 1.2, "scrap": 0.6, "food": 0.4},
 }
 const LOOT_KIND := {
 	"pharmacy": {"meds": 4.0, "food": 0.3}, "bakery": {"food": 4.0, "water": 1.5}, "hardware": {"scrap": 3.0, "ammo": 1.2}, "supermarket": {"food": 3.0, "water": 3.0},
@@ -135,6 +140,315 @@ static func _partition(r: Rect2i, items: Array, front: String, rooms: Array, wal
 		_partition(Rect2i(r.position.x, r.position.y, wa, h), ga, front, rooms, walls, rng)
 		_partition(Rect2i(r.position.x + wa + 1, r.position.y, w - wa - 1, h), gb, front, rooms, walls, rng)
 		walls.append({"horiz": false, "pos": r.position.x + wa, "from": r.position.y, "to": r.end.y - 1})
+
+
+# ================================================ the layout of the homes (BIGGER HOUSES) ==
+
+## The rooms of a home are at least MIN_ROOM floor tiles each way (the hall is HALL_W wide).
+const MIN_ROOM := 3
+const HALL_W := 2
+
+
+## How many rooms of at least MIN_ROOM x MIN_ROOM a floor of w x h holds (a room and the wall after it take MIN_ROOM + 1 each way).
+static func _cap(w: int, h: int) -> int:
+	if w < MIN_ROOM or h < MIN_ROOM:
+		return 0
+	@warning_ignore("integer_division")
+	return ((w + 1) / (MIN_ROOM + 1)) * ((h + 1) / (MIN_ROOM + 1))
+
+
+## One part of a home cut into rooms. When its program starts with a "hall" and the part is big enough, the hall runs down the middle from the front wall to the back wall, the day rooms
+## (living room, kitchen, dining room, study, utility room) on one side of it and the night rooms (bedrooms, bathroom) on the other, each side a stack or a block of rooms; else the
+## rooms by shares in a partition that keeps every room at 3 x 3 or more. A program longer than the floor holds loses its last rooms. `rooms` gets {"name", "rect", "floor", "entry"}, `walls`
+## the walls to paint (and, from `_plan_doors`, the doors to cut: every room opens to a neighbour, the hall's neighbours onto the hall).
+static func _layout_part(r: Rect2i, prog: Array, front: String, rooms: Array, walls: Array, rng: RandomNumberGenerator, others: Array = []) -> Array:
+	var spine: bool = not prog.is_empty() and String(prog[0].name) == "hall" and r.size.x >= 3 * 2 + HALL_W + 2 and r.size.y >= 7
+	var hall_i := -1
+	if spine:
+		hall_i = _spine(r, prog, front, rooms, walls, rng)
+	else:
+		var use: Array = []
+		for o in prog:
+			if String(o.name) != "hall":
+				use.append(o)
+		_cap_bsp(r, use, front, rooms, walls, rng)
+	# (a part without the front door's room: the doors of its rooms are planned from the room that touches the rest of the house the most)
+	var has_entry := false
+	for o in prog:
+		has_entry = has_entry or bool(o.entry)
+	var root := -1
+	if not has_entry and not others.is_empty():
+		root = _contact_root(rooms, r.grow(1), others)
+	return _plan_doors(rooms, hall_i, walls, rng, root)
+
+
+## The room of a part that has the longest shared wall with the other parts of the building (-1 when none touches).
+static func _contact_root(rooms: Array, part: Rect2i, others: Array) -> int:
+	var best := -1
+	var best_len := 0
+	for i in rooms.size():
+		var rr: Rect2i = rooms[i].rect
+		var total := 0
+		for o in others:
+			var inter: Rect2i = part.intersection(o)
+			if inter.size.x <= 0 or inter.size.y <= 0:
+				continue
+			if inter.size.y == 1:
+				if rr.position.y - 1 == inter.position.y or rr.end.y == inter.position.y:
+					total += maxi(0, mini(rr.end.x, inter.end.x) - maxi(rr.position.x, inter.position.x))
+			elif inter.size.x == 1:
+				if rr.position.x - 1 == inter.position.x or rr.end.x == inter.position.x:
+					total += maxi(0, mini(rr.end.y, inter.end.y) - maxi(rr.position.y, inter.position.y))
+		if total > best_len:
+			best_len = total
+			best = i
+	return best
+
+
+## The hall and the two sides of a part. Returns the hall's index in `rooms`.
+static func _spine(r: Rect2i, prog: Array, front: String, rooms: Array, walls: Array, rng: RandomNumberGenerator) -> int:
+	var hall: Dictionary = prog[0]
+	var day: Array = []
+	var night: Array = []
+	for k in range(1, prog.size()):
+		if Plans.NIGHT_ROOMS.has(String(prog[k].name)):
+			night.append(prog[k])
+		else:
+			day.append(prog[k])
+	var h := r.size.y
+	var side_total := r.size.x - HALL_W - 2
+	# the width of the day side: the one that keeps the most of the program, then the one nearest the day rooms' share of the floor
+	var best_ld := MIN_ROOM
+	var best_kept := -1
+	var best_err := 1.0e9
+	for ld in range(MIN_ROOM, side_total - MIN_ROOM + 1):
+		var nd := mini(day.size(), _cap(ld, h))
+		var nn := mini(night.size(), _cap(side_total - ld, h))
+		var sd := 0.0
+		var sn := 0.0
+		for k in nd:
+			sd += float(day[k].share)
+		for k in nn:
+			sn += float(night[k].share)
+		var err := absf(float(ld) - float(side_total) * sd / maxf(0.01, sd + sn))
+		if nd + nn > best_kept or (nd + nn == best_kept and err < best_err):
+			best_kept = nd + nn
+			best_err = err
+			best_ld = ld
+	var day_left := rng.randf() < 0.5
+	var lw := best_ld if day_left else side_total - best_ld
+	var left := Rect2i(r.position.x, r.position.y, lw, h)
+	var hall_rect := Rect2i(r.position.x + lw + 1, r.position.y, HALL_W, h)
+	var right := Rect2i(hall_rect.end.x + 1, r.position.y, side_total - lw, h)
+	rooms.append({"name": hall.name, "rect": hall_rect, "floor": hall.floor, "entry": true})
+	var hall_i := rooms.size() - 1
+	walls.append({"horiz": false, "pos": left.end.x, "from": r.position.y, "to": r.end.y - 1, "door": false})
+	walls.append({"horiz": false, "pos": hall_rect.end.x, "from": r.position.y, "to": r.end.y - 1, "door": false})
+	_cap_bsp(left, day if day_left else night, front, rooms, walls, rng)
+	_cap_bsp(right, night if day_left else day, front, rooms, walls, rng)
+	return hall_i
+
+
+## The rooms of `items` in a rectangle, by a partition by shares that gives every room 3 x 3 floor tiles at least: the last of the items are dropped until the rest fit.
+static func _cap_bsp(r: Rect2i, items_in: Array, front: String, rooms: Array, walls: Array, rng: RandomNumberGenerator) -> void:
+	var items: Array = items_in.duplicate()
+	while not items.is_empty() and items.size() > _cap(r.size.x, r.size.y):
+		items.pop_back()
+	while items.size() > 1:
+		var cut := _find_cut(r, items, front, rng)
+		if not cut.is_empty():
+			var sorted: Array = cut.sorted
+			var k: int = cut.k
+			var sa: int = cut.size_a
+			if bool(cut.rows):
+				walls.append({"horiz": true, "pos": r.position.y + sa, "from": r.position.x, "to": r.end.x - 1, "door": false})
+				_cap_bsp(Rect2i(r.position.x, r.position.y, r.size.x, sa), sorted.slice(0, k), front, rooms, walls, rng)
+				_cap_bsp(Rect2i(r.position.x, r.position.y + sa + 1, r.size.x, r.size.y - sa - 1), sorted.slice(k), front, rooms, walls, rng)
+			else:
+				walls.append({"horiz": false, "pos": r.position.x + sa, "from": r.position.y, "to": r.end.y - 1, "door": false})
+				_cap_bsp(Rect2i(r.position.x, r.position.y, sa, r.size.y), sorted.slice(0, k), front, rooms, walls, rng)
+				_cap_bsp(Rect2i(r.position.x + sa + 1, r.position.y, r.size.x - sa - 1, r.size.y), sorted.slice(k), front, rooms, walls, rng)
+			return
+		items.pop_back()
+	if items.is_empty():
+		return
+	var o: Dictionary = items[0]
+	rooms.append({"name": o.name, "rect": r, "floor": o.floor, "entry": bool(o.entry)})
+
+
+## The best cut of a rectangle for `items`: across its longer side when it can be, else the other; the rooms that want the front first (at the front side: the top of a part whose street is
+## north); the size of the first piece the nearest to its rooms' share of the floor among those that hold each group (`_cap`). {} when no cut holds them.
+static func _find_cut(r: Rect2i, items: Array, front: String, rng: RandomNumberGenerator) -> Dictionary:
+	var w := r.size.x
+	var h := r.size.y
+	var n := items.size()
+	var rows_first: bool = float(h) >= float(w) * 1.1 or (absf(float(w) - float(h)) < 0.9 and rng.randf() < 0.5)
+	var keyed: Array = []
+	for k in n:
+		keyed.append([(-10.0 if bool(items[k].entry) else 0.0) + float(items[k].pref), k])
+	keyed.sort_custom(func(a, b): return float(a[0]) < float(b[0]) or (float(a[0]) == float(b[0]) and int(a[1]) < int(b[1])))
+	var base: Array = []
+	for kk in keyed:
+		base.append(items[int(kk[1])])
+	for pass_n in 2:
+		var rows: bool = rows_first if pass_n == 0 else not rows_first
+		var sorted: Array = base.duplicate()
+		if rows:
+			if front == "S":
+				sorted.reverse()
+		elif rng.randf() < 0.5:
+			sorted.reverse()
+		var length := h if rows else w
+		var across := w if rows else h
+		var total := 0.0
+		for o in sorted:
+			total += float(o.share)
+		var best := {}
+		var best_score := 1.0e9
+		var acc := 0.0
+		for k in range(1, n):
+			acc += float(sorted[k - 1].share)
+			for sa in range(MIN_ROOM, length - 1 - MIN_ROOM + 1):
+				var sb := length - 1 - sa
+				if _cap(across, sa) < k or _cap(across, sb) < n - k:
+					continue
+				var score := absf(float(sa) / float(length - 1) - acc / total)
+				if score < best_score:
+					best_score = score
+					best = {"rows": rows, "k": k, "size_a": sa, "sorted": sorted}
+		if not best.is_empty():
+			return best
+	return {}
+
+
+## The two floor rectangles' shared wall (the wall between them, a wall of one tile): {"horiz", "pos", "from", "to"} over the tiles both rooms have beside it, or {}.
+static func _shared_wall(a: Rect2i, b: Rect2i) -> Dictionary:
+	if a.end.x + 1 == b.position.x or b.end.x + 1 == a.position.x:
+		var lo := maxi(a.position.y, b.position.y)
+		var hi := mini(a.end.y, b.end.y) - 1
+		if hi >= lo:
+			return {"horiz": false, "pos": a.end.x if a.end.x + 1 == b.position.x else b.end.x, "from": lo, "to": hi}
+	if a.end.y + 1 == b.position.y or b.end.y + 1 == a.position.y:
+		var lo2 := maxi(a.position.x, b.position.x)
+		var hi2 := mini(a.end.x, b.end.x) - 1
+		if hi2 >= lo2:
+			return {"horiz": true, "pos": a.end.y if a.end.y + 1 == b.position.y else b.end.y, "from": lo2, "to": hi2}
+	return {}
+
+
+## The doors between the rooms of a part: the tree of the SHORTEST ways from the hall (the entry room when there is none, or `root_pref`: for a wing, the room that touches the rest of the
+## house) in which the hall's neighbours open onto the hall, the others onto the neighbour that is the likeliest way (a bathroom only from the hall or a bedroom), so that no room is more
+## than two rooms from the first; then loops where rooms belong together (the kitchen and the dining room, the living room and the kitchen). Appends the doors as walls with "door": true,
+## "paint": false (the wall is there already). Returns the doors each room is from the first one (the hops of the door graph), one for every room of `rooms`.
+static func _plan_doors(rooms: Array, hall_i: int, walls: Array, rng: RandomNumberGenerator, root_pref: int = -1) -> Array:
+	var n := rooms.size()
+	var hops: Array = []
+	for i in n:
+		hops.append(0)
+	if n < 2:
+		return hops
+	var root := hall_i
+	if root < 0:
+		root = maxi(0, root_pref)
+		if root_pref < 0:
+			for i in n:
+				if bool(rooms[i].entry):
+					root = i
+					break
+	var edges: Array = []
+	for i in n:
+		for j in range(i + 1, n):
+			var seg := _shared_wall(rooms[i].rect, rooms[j].rect)
+			if seg.is_empty():
+				continue
+			var na := String(rooms[i].name)
+			var nb := String(rooms[j].name)
+			# (a door costs about one; fewer doors beat the likelier way: the jitter and the likings add up to less than a door)
+			var wgt := 1.0 + rng.randf() * 0.2
+			if i == hall_i or j == hall_i:
+				wgt = 0.0 + rng.randf() * 0.1
+			elif na == "bathroom" or nb == "bathroom":
+				wgt = 0.85 if (na == "bedroom" or nb == "bedroom") else 1.3
+			elif (na == "kitchen" and nb == "dining room") or (nb == "kitchen" and na == "dining room"):
+				wgt = 0.8 + rng.randf() * 0.1
+			edges.append({"a": i, "b": j, "seg": seg, "w": wgt})
+	# the tree of the shortest ways (an edge costs its weight: about one door, a hall's a tenth of one)
+	var cost := {root: 0.0}
+	var via := {}
+	var done := {}
+	while done.size() < n:
+		var u := -1
+		var u_cost := 1.0e9
+		for k in cost:
+			if not done.has(k) and float(cost[k]) < u_cost:
+				u_cost = float(cost[k])
+				u = int(k)
+		if u < 0:
+			break
+		done[u] = true
+		for ei in edges.size():
+			var e: Dictionary = edges[ei]
+			var v := -1
+			if int(e.a) == u:
+				v = int(e.b)
+			elif int(e.b) == u:
+				v = int(e.a)
+			if v < 0 or done.has(v):
+				continue
+			var nc := u_cost + float(e.w)
+			if not cost.has(v) or nc < float(cost[v]):
+				cost[v] = nc
+				via[v] = ei
+	var used := {}
+	for v in via:
+		used[int(via[v])] = true
+	for ei in edges.size():
+		if used.has(ei):
+			continue
+		var e: Dictionary = edges[ei]
+		var na := String(rooms[int(e.a)].name)
+		var nb := String(rooms[int(e.b)].name)
+		var pair := [na, nb]
+		var chance := 0.08
+		if pair.has("bathroom"):
+			chance = 0.45 if (pair.has("bedroom") and not pair.has("hall")) else 0.0
+		elif pair.has("kitchen") and pair.has("dining room"):
+			chance = 0.9
+		elif pair.has("living room") and pair.has("dining room"):
+			chance = 0.8
+		elif pair.has("kitchen") and pair.has("living room"):
+			chance = 0.5
+		elif pair.has("kitchen") and pair.has("utility"):
+			chance = 0.7
+		elif pair.has("living room") and pair.has("study"):
+			chance = 0.5
+		if rng.randf() < chance and int(e.seg.to) - int(e.seg.from) >= 1:
+			used[ei] = true
+	for ei in used:
+		var e: Dictionary = edges[ei]
+		var seg: Dictionary = e.seg
+		var pair := [String(rooms[int(e.a)].name), String(rooms[int(e.b)].name)]
+		var open_pair: bool = pair.has("hall") or pair.has("living room") or pair.has("dining room")
+		var span := int(seg.to) - int(seg.from) + 1
+		walls.append({"horiz": seg.horiz, "pos": seg.pos, "from": seg.from, "to": seg.to, "door": true, "paint": false, "wide": open_pair and not pair.has("bathroom") and span >= 4 and rng.randf() < 0.6, "end": true})
+	# the hops of the door graph from the first room
+	var seen := {root: 0}
+	var queue: Array = [root]
+	while not queue.is_empty():
+		var c: int = queue.pop_front()
+		for ei in used:
+			var e: Dictionary = edges[ei]
+			var o := -1
+			if int(e.a) == c:
+				o = int(e.b)
+			elif int(e.b) == c:
+				o = int(e.a)
+			if o >= 0 and not seen.has(o):
+				seen[o] = int(seen[c]) + 1
+				queue.append(o)
+	for i in n:
+		hops[i] = int(seen.get(i, 9))
+	return hops
 
 
 ## A corridor with rooms along it (flats, classrooms): `double` rooms on both sides of a two wide corridor with a lobby on the front side, else the corridor along the front wall and
@@ -261,9 +575,11 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	var by := fy if front == "N" else lh - fy - box.y
 	var attached := kind in ["terrace", "terrace_ext", "rowshop", "kiosk", "cornershop", "shop", "pharmacy", "bakery", "hardware", "diner", "bank", "office", "apartments"]
 	if start:
-		# two tiles of clear ground to the sides and behind, and the step before the door (a tile beyond the ring) in front
-		bx = 2
-		by = 3 if front == "N" else lh - box.y - 3
+		# three tiles of clear ground to the sides, four in front (the step before the door lies beyond the ring) and the rest behind (two to the sides and three in front in a lot that is no
+		# bigger than it must be)
+		bx = maxi(0, (lw - box.x) / 2)
+		var gap := 4 if lh >= box.y + 7 else 3
+		by = gap if front == "N" else lh - box.y - gap
 	elif attached:
 		bx = 0 if margin < 4 else rng.randi_range(0, margin)
 	elif kind == "scrapyard" or kind == "containers":
@@ -286,6 +602,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	# walls, floors, rooms
 	var rooms: Array = []
 	var walls: Array = []
+	var hop_of: Array = []
 	for i in parts.size():
 		if i == ruin_part:
 			continue
@@ -300,8 +617,17 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 					cv._paint(x, y, first_floor, false)
 		var inner := pr.grow(-1)
 		var rs: Array = []
+		var part_hops: Array = []
 		if kind == "apartments" or (kind == "school" and i == 0):
 			_corridor(inner, front, kind == "apartments", "flat" if kind == "apartments" else "classroom", "WOOD" if kind == "apartments" else "LINO", rs, walls, rng)
+		elif Plans.is_roomy(kind):
+			var others: Array = []
+			for j in parts.size():
+				if j != i and j != ruin_part:
+					others.append(parts[j])
+			part_hops = _layout_part(inner, prog, front, rs, walls, rng, others)
+			if rs.is_empty():
+				_partition(inner, [Plans.it("room", 1.0, "WOOD", "ef")], front, rs, walls, rng)
 		else:
 			var n_rooms := clampi(inner.size.x * inner.size.y / 7, 1, maxi(1, prog.size()))
 			if start:
@@ -310,9 +636,12 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 			if use.is_empty():
 				use = [Plans.it("room", 1.0, "WOOD", "ef")]
 			_partition(inner, use, front, rs, walls, rng)
-		for rm in rs:
-			rooms.append(rm)
-			cv.fill(rm.rect, String(rm.floor))
+		for k in rs.size():
+			rooms.append(rs[k])
+			cv.fill(rs[k].rect, String(rs[k].floor))
+			# (the doors each room is from the first room of its part, for the doors between the parts)
+			if Plans.is_roomy(kind):
+				hop_of.append(int(part_hops[k]) if k < part_hops.size() else 0)
 	for w3 in walls:
 		if not bool(w3.get("paint", true)):
 			continue
@@ -337,7 +666,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	for i in parts.size():
 		for j in range(i + 1, parts.size()):
 			if i != ruin_part and j != ruin_part:
-				_door_between(cv, parts[i], parts[j], rng)
+				_door_between(cv, parts[i], parts[j], rng, room_at, hop_of)
 	var doors := _outer_doors(cv, parts, rooms, room_at, front, kind, rng, start)
 	var front_pair: Array = doors.front
 	var fd: Vector2i = front_pair[0] if not front_pair.is_empty() else Vector2i(lw / 2, by)
@@ -681,6 +1010,22 @@ func _door_in_wall(cv, w: Dictionary, rng: RandomNumberGenerator) -> void:
 			cands.append(t)
 	if cands.is_empty():
 		return
+	# (a planned door, `_plan_doors`: one tile wide unless it says "wide", at an end of the wall they share so that the rest of that wall is left to the furniture)
+	if w.has("wide"):
+		if bool(w.wide):
+			var wp: Array = []
+			for i in cands.size() - 1:
+				if int(cands[i + 1]) == int(cands[i]) + 1:
+					wp.append(i)
+			if not wp.is_empty():
+				var first_or_last: int = wp[0] if rng.randf() < 0.5 else wp[wp.size() - 1]
+				_cut(cv, horiz, int(w.pos), int(cands[first_or_last]), 2)
+				return
+		var t0: int = int(cands[rng.randi() % cands.size()])
+		if bool(w.get("end", false)) and cands.size() >= 3:
+			t0 = int(cands[0]) if rng.randf() < 0.5 else int(cands[cands.size() - 1])
+		_cut(cv, horiz, int(w.pos), t0, 1)
+		return
 	var pair: Array = []
 	for i in cands.size() - 1:
 		if int(cands[i + 1]) == int(cands[i]) + 1:
@@ -699,7 +1044,7 @@ func _cut(cv, horiz: bool, pos: int, t0: int, width: int) -> void:
 
 
 ## A door between two parts that share a wall.
-func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator) -> void:
+func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator, room_at: PackedInt32Array = PackedInt32Array(), hop_of: Array = []) -> void:
 	var inter := a.intersection(b)
 	if inter.size.x <= 0 or inter.size.y <= 0:
 		return
@@ -707,15 +1052,32 @@ func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator) -> void
 	if not horiz and inter.size.x != 1:
 		return
 	var cands: Array = []
+	var scores: Array = []
 	for t in (range(inter.position.x, inter.end.x) if horiz else range(inter.position.y, inter.end.y)):
 		var x: int = t if horiz else inter.position.x
 		var y: int = inter.position.y if horiz else t
 		var p := Vector2i(x, y - 1) if horiz else Vector2i(x - 1, y)
 		var q := Vector2i(x, y + 1) if horiz else Vector2i(x + 1, y)
-		if cv.is_open(p.x, p.y) and cv.is_open(q.x, q.y):
+		# (a door between parts opens between the floors of two rooms, never into the doorway of a wall inside a part)
+		var floors_ok := room_at.is_empty() or (room_at[p.y * cv.W + p.x] >= 0 and room_at[q.y * cv.W + q.x] >= 0)
+		if cv.is_open(p.x, p.y) and cv.is_open(q.x, q.y) and floors_ok:
 			cands.append(t)
+			# (the doors of a home: where the rooms that are the fewest doors from the front door are, so that a wing is no deeper in the house than it need be)
+			var sc := 0
+			if not hop_of.is_empty():
+				var rp: int = room_at[p.y * cv.W + p.x]
+				var rq: int = room_at[q.y * cv.W + q.x]
+				sc = (int(hop_of[rp]) if rp >= 0 else 0) + (int(hop_of[rq]) if rq >= 0 else 0)
+			scores.append(sc)
 	if cands.is_empty():
 		return
+	if not hop_of.is_empty():
+		var best_sc: int = scores.min()
+		var keep: Array = []
+		for k in cands.size():
+			if int(scores[k]) == best_sc:
+				keep.append(cands[k])
+		cands = keep
 	var pair: Array = []
 	for i in cands.size() - 1:
 		if int(cands[i + 1]) == int(cands[i]) + 1:
@@ -836,6 +1198,7 @@ func _outer_doors(cv, parts: Array, rooms: Array, room_at: PackedInt32Array, fro
 	for n in back_n + front_extra:
 		var want_front := n >= back_n
 		var tries: Array = []
+		var day_tries: Array = []
 		for c in _outer_candidates(cv, parts, room_at):
 			var is_front_side := Vector2i(c.dir) == front_dir
 			if is_front_side != want_front:
@@ -848,6 +1211,11 @@ func _outer_doors(cv, parts: Array, rooms: Array, room_at: PackedInt32Array, fro
 							far = false
 			if far:
 				tries.append(c)
+				# (a back door of a home opens into the hall, the kitchen or the like, not into a bedroom or the bathroom)
+				if not Plans.NIGHT_ROOMS.has(String(rooms[int(c.room)].name)):
+					day_tries.append(c)
+		if Plans.is_roomy(kind) and not day_tries.is_empty():
+			tries = day_tries
 		if tries.is_empty():
 			continue
 		var extra: Dictionary = tries[rng.randi() % tries.size()]

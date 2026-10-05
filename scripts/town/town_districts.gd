@@ -51,18 +51,18 @@ const ROOFS := {
 
 ## What a lot of a district is built with: [building kind, weight]. A kind that does not fit the lot is skipped; "pocket" is a small lot left to trees and grass.
 const MIX := {
-	"suburb": [["small", 0.24], ["medium", 0.18], ["bungalow", 0.07], ["lhouse", 0.09], ["twowing", 0.07], ["thouse", 0.04], ["uhouse", 0.03], ["terrace", 0.12], ["cottage", 0.14], ["pocket", 0.02]],
-	"oldtown": [["terrace", 0.42], ["terrace_ext", 0.16], ["cottage", 0.12], ["cornershop", 0.08], ["rowshop", 0.1], ["small", 0.09], ["pocket", 0.03]],
+	"suburb": [["family", 0.22], ["medium", 0.14], ["small", 0.05], ["bungalow", 0.10], ["lhouse", 0.09], ["twowing", 0.07], ["thouse", 0.04], ["uhouse", 0.03], ["terrace", 0.10], ["cottage", 0.03], ["pocket", 0.03]],
+	"oldtown": [["terrace", 0.42], ["terrace_ext", 0.16], ["cottage", 0.05], ["cornershop", 0.08], ["rowshop", 0.1], ["small", 0.14], ["pocket", 0.05]],
 	"main": [["rowshop", 0.44], ["shop", 0.1], ["apartments", 0.08], ["pharmacy", 0.06], ["bakery", 0.06], ["hardware", 0.05], ["diner", 0.05], ["bank", 0.03], ["office", 0.06], ["pocket", 0.02]],
 	"industrial": [["warehouse", 0.2], ["garage", 0.26], ["scrapyard", 0.12], ["containers", 0.1], ["workshop", 0.32]],
-	"civic": [["library", 0.2], ["clinic", 0.1], ["small", 0.18], ["medium", 0.17], ["office", 0.1], ["terrace", 0.1], ["pocket", 0.15]],
+	"civic": [["library", 0.2], ["clinic", 0.1], ["small", 0.12], ["medium", 0.2], ["family", 0.08], ["office", 0.1], ["terrace", 0.1], ["pocket", 0.1]],
 	"edge": [["farmhouse", 0.5], ["barn", 0.5]],
 }
 
 
 ## The type of each building kind (the `type` of a house): residential, commercial, industrial, civic, farm.
 const TYPE_OF := {
-	"start": "residential", "small": "residential", "medium": "residential", "bungalow": "residential", "lhouse": "residential", "thouse": "residential", "uhouse": "residential",
+	"start": "residential", "family": "residential", "small": "residential", "medium": "residential", "bungalow": "residential", "lhouse": "residential", "thouse": "residential", "uhouse": "residential",
 	"twowing": "residential", "terrace": "residential", "terrace_ext": "residential", "apartments": "residential", "cottage": "residential",
 	"shed": "outbuilding", "kiosk": "commercial", "rowshop": "commercial",
 	"cornershop": "commercial", "shop": "commercial", "pharmacy": "commercial", "bakery": "commercial", "hardware": "commercial", "diner": "commercial", "bank": "commercial",
