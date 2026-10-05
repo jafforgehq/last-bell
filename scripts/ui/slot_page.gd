@@ -1,64 +1,123 @@
 extends VBoxContainer
-## The Build page of the radio panel in the town (One House, WP7): the PERIMETER of the claimed house. The school's page lists buildings; the
-## town's Build page is the places round the house where something can go up. At the top a plan of the lot (slot_plan.gd) with a marker for each slot,
-## under it the slot that is picked, and under that the list of every slot (a click on a row picks it as a click on the plan does).
+## The Build page of the radio panel in the town (One House, WP7): PROJECTS, not places. Fortifying the house is a few clear jobs (the front fence, the gate, a watchtower,
+## the side fences, the back fence, the floodlights, planks on the doors, a second tower, reinforcing the fences), each ordered with ONE click. From the top:
+##   - the NEXT card: the project to do now (the first that can be ordered, a fallen section first), with its one button, and under it **Build everything I can afford**
+##   - the list of the projects, in the recommended order, finished ones last: each has a name and a picture, what it gives in one line, its price in scrap and builder-hours,
+##     about how long it takes with the builders there are, its state (locked and why / ready / building n of m / done) and one button (Build, Cancel)
+##   - the plan of the lot (slot_plan.gd): every section, the project under the pointer lit and the rest dimmed
+##   - Advanced: every section on its own (build it, cancel it, take it down), shut by default
+## A project that the scrap does not pay for in full is ordered as far as it goes, front to back (the builders work the orders in the order they were given); the page says what
+## was ordered and what the rest needs. Under the pointer (or picked by a click) a project is marked in the yard with a dashed outline round each of its sections
+## (`host.set_build_hover({"project": id})`, scripts/render/perimeter_view.gd); with nothing under the pointer the NEXT project is marked, softly.
 ##
-## For the slot that is picked, by what it is now:
-##   - locked: why, in the rules' own words ("Opens when 3 people are here"); nothing to press
-##   - open (and fallen, for it can be raised again): the kits it can have, each with what it costs in scrap and builder-hours and how many hit points
-##     it has; a kit that cannot be had says why in amber; **Order** (`perimeter.order(slot, kit)`)
-##   - ordered or going up: **Cancel** (`perimeter.cancel`)
-##   - built: its hit points, and **Demolish** (the first press arms it and says what comes back, the second, within CONFIRM_S seconds, does it)
+## What it asks of `sim.perimeter` (scripts/town/perimeter.gd): `projects()` ([{"id", "name", "noun", "button", "icon", "gives", "unit", "state": "locked|ready|building|done", "n",
+## "built", "going", "open", "fallen", "scrap", "work", "first_scrap", "can_n", "pay", "time", "builders", "builders_text", "why", "recommended", "progress", "slots"}]),
+## `order_project(id)`, `cancel_project(id)`, `order_affordable()`, and for Advanced `slots()`, `kits_for`, `order`, `cancel`, `demolish`. And of the rest, only to draw the plan:
+## `sim.base.layout` ("plot", "front", "posts"), `sim.houses.house(id).rect`, `sim.stock.scrap`. A game with no perimeter says "Nothing to build yet".
 ##
-## What it asks of `sim.perimeter` (plan 2.2, WP5): `slots()` ([{"id", "kind", "name", "rect", "state": "locked|open|ordered|building|built|broken", "kit",
-## "hp", "max_hp", "unlock": {"crew": n}, "why_not", "plot"}]), `kits_for(slot_id)` ([{"id", "name", "blurb", "scrap", "work", "hp", "ok", "why"}]), `order`,
-## `cancel`, `demolish`. And of the rest, only to draw the plan: `sim.base.layout` ("plot", "front", "posts"), `sim.houses.house(id).rect`, `sim.stock.scrap`.
-## It writes nothing but through those three calls, and a game with no perimeter says "Nothing to build yet".
-##
-## One of the radio panel's pages: `setup(host, sim_getter, options)`, `refresh()` (each HUD update while it is shown; only what changed is redrawn),
-## `focus_on(id)` (a slot's id or its plot's), `full_page()` (the town has no modal Build page: it does nothing). Every control is FOCUS_NONE: the panel never
-## steals the keyboard from the avatar.
+## One of the radio panel's pages: `setup(host, sim_getter, options)`, `refresh()` (each HUD update while it is shown; only what changed is redrawn), `focus_on(id)` (a project's
+## id, or a slot's or its plot's: it is picked), `full_page()` (the town has no modal Build page: it does nothing). Every control is FOCUS_NONE: the panel never steals the
+## keyboard from the avatar.
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const BuildScreen := preload("res://scripts/ui/build_screen.gd")
 const SlotPlan := preload("res://scripts/ui/slot_plan.gd")
 
-## The second press on Demolish must come within this many seconds (real time).
+## The answer to an order stays this many seconds (real time); the second press on Take down must come within CONFIRM_S.
+const ANSWER_S := 8.0
 const CONFIRM_S := 4.0
-## The answer to an order stays this many seconds (real time).
-const ANSWER_S := 6.0
-const BUTTON_H := 30.0
-const STATE_WORD := {"locked": "Locked", "open": "Open", "ordered": "Ordered", "building": "Going up", "built": "Built", "broken": "Fallen"}
-const EMPTY_UNCLAIMED := "Nothing to build yet. Claim the house, and the places round it show here: a fence, a gate, a tower, a floodlight."
+const BUTTON_H := 32.0
+const EMPTY_UNCLAIMED := "Nothing to build yet. Claim the house, and its projects show here: fences, a gate, a tower, lights."
 const EMPTY_CLAIMED := "There is nothing to build round the house yet."
-const KIND_WORD := {"fence": "Fence", "gate": "Gate", "tower": "Tower", "floodlight": "Floodlight", "door": "Door"}
+const STATE_WORD := {"locked": "Locked", "open": "Free", "ordered": "Ordered", "building": "Going up", "built": "Built", "broken": "Fallen"}
+const PLURAL := {"section": "sections", "door": "doors", "floodlight": "floodlights", "tower": "towers", "part": "parts"}
+
+
+## The little picture of a project: fence, gate, tower, floodlight, planks, reinforce. Drawn in a box of 32 units, in `tint`.
+class ProjectIcon:
+	extends Control
+	var kind := "fence"
+	var tint := Color.WHITE
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(36, 36)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var s := minf(size.x, size.y) / 32.0
+		draw_set_transform(Vector2((size.x - 32.0 * s) * 0.5, (size.y - 32.0 * s) * 0.5), 0.0, Vector2(s, s))
+		match kind:
+			"gate":
+				draw_rect(Rect2(2, 5, 4, 23), tint)
+				draw_rect(Rect2(26, 5, 4, 23), tint)
+				draw_rect(Rect2(8, 10, 16, 14), tint, false, 2.0)
+				draw_line(Vector2(8, 24), Vector2(24, 10), tint, 2.0)
+			"tower":
+				draw_rect(Rect2(5, 9, 22, 4), tint)
+				draw_line(Vector2(8, 13), Vector2(6, 29), tint, 2.5)
+				draw_line(Vector2(24, 13), Vector2(26, 29), tint, 2.5)
+				draw_line(Vector2(8, 18), Vector2(25, 27), tint, 1.5)
+				draw_line(Vector2(24, 18), Vector2(7, 27), tint, 1.5)
+				draw_line(Vector2(7, 4), Vector2(7, 9), tint, 2.0)
+				draw_line(Vector2(25, 4), Vector2(25, 9), tint, 2.0)
+				draw_line(Vector2(7, 5), Vector2(25, 5), tint, 2.0)
+			"floodlight":
+				draw_line(Vector2(12, 29), Vector2(12, 11), tint, 3.0)
+				draw_rect(Rect2(7, 5, 13, 7), tint)
+				draw_line(Vector2(22, 9), Vector2(30, 6), tint, 2.0)
+				draw_line(Vector2(22, 12), Vector2(30, 14), tint, 2.0)
+				draw_line(Vector2(21, 15), Vector2(27, 22), tint, 2.0)
+			"planks":
+				draw_rect(Rect2(8, 3, 16, 26), tint, false, 2.0)
+				for y in [9.0, 16.0, 23.0]:
+					draw_line(Vector2(4, y), Vector2(28, y), tint, 3.5)
+			"reinforce":
+				draw_line(Vector2(2, 20), Vector2(30, 20), tint, 3.0)
+				draw_line(Vector2(2, 27), Vector2(30, 27), tint, 3.0)
+				for x in [4.0, 13.0, 22.0, 30.0]:
+					draw_rect(Rect2(x - 1.5, 16, 3, 15), tint)
+				draw_line(Vector2(8, 11), Vector2(16, 3), tint, 2.5)
+				draw_line(Vector2(24, 11), Vector2(16, 3), tint, 2.5)
+				draw_line(Vector2(16, 3), Vector2(16, 14), tint, 2.5)
+			_:
+				draw_line(Vector2(2, 13), Vector2(30, 13), tint, 2.5)
+				draw_line(Vector2(2, 21), Vector2(30, 21), tint, 2.5)
+				for x in [4.0, 12.0, 20.0, 28.0]:
+					draw_rect(Rect2(x - 1.5, 7, 3, 20), tint)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 
 var host
 var sim_getter: Callable
 var options := {}
 var plan
-var detail: PanelContainer
-var detail_col: VBoxContainer
-var list_box: VBoxContainer
-var list_caption: Label
+var next_card := {}
+var all_button: Button
+var answer_label: Label
 var empty_label: Label
+var list_caption: Label
+var plan_caption: Label
+var list_box: VBoxContainer
+var adv_toggle: Button
+var adv_box: VBoxContainer
 var stock_label: Label
 var people_label: Label
-## slot id -> {"id", "slot", "slip", "state"} for the list's rows.
-var rows := {}
-## The slot that is picked ("" for none) and the kit chosen for it.
+var foot_box: Control
+## project id -> the refs of its card in the list (see `_make_card`).
+var cards := {}
+## The project that is picked (a click on a card or a section of the plan), the one under the pointer on the page, the one the NEXT card is about.
 var selected := ""
-var kit_id := ""
-## The buttons of the detail now (null when it has none).
-var order_button: Button
-var cancel_button: Button
-var demolish_button: Button
-## What the last order, cancel or demolish said: {"slot", "text", "color", "left"}; {} when nothing is up.
+var card_hover := ""
+var next_id := ""
+## What the last order, cancel or take-down said: {"text", "color", "left"}; {} when nothing is up.
 var answer := {}
-var armed := false
+## Advanced: slot id -> {"slot", "button", "state"} for the rows; the slot whose Take down is armed, and for how long.
+var adv_rows := {}
+var armed_slot := ""
 var armed_left := 0.0
-var _sig := ""
+var _adv_sig := ""
+var _plan_sig := ""
 var _marked := ""
 var _built := false
 
@@ -86,13 +145,28 @@ func _per():
 	return s.get("perimeter") if s != null else null
 
 
-## The slots now, or [] in a game that has no perimeter.
+## The projects now, or [] in a game that has no perimeter.
+func projects() -> Array:
+	var per = _per()
+	if per == null or not per.has_method("projects"):
+		return []
+	var got = per.projects()
+	return got if got is Array else []
+
+
 func slots() -> Array:
 	var per = _per()
 	if per == null or not per.has_method("slots"):
 		return []
 	var got = per.slots()
 	return got if got is Array else []
+
+
+func project_of(id: String) -> Dictionary:
+	for p in projects():
+		if String(p.get("id", "")) == id:
+			return p
+	return {}
 
 
 ## Whether the house has been claimed (the page says what to do first when it has not).
@@ -102,46 +176,45 @@ func _claimed() -> bool:
 	return b != null and b.get("claimed") == true
 
 
-func slot_of(id: String) -> Dictionary:
-	for s in slots():
-		if String(s.get("id", "")) == id or String(s.get("plot", "")) == id and id != "":
-			return s
-	return {}
-
-
 # ------------------------------------------------------------------------- build --
 
 func _build() -> void:
-	add_theme_constant_override("separation", 6)
+	add_theme_constant_override("separation", 8)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(_caps("Round the house"))
-	plan = SlotPlan.new()
-	plan.setup(host)
-	plan.picked.connect(select)
-	plan.hovered.connect(_on_hover)
-	add_child(plan)
 	empty_label = _para(14, host.INK2, 400)
 	empty_label.text = EMPTY_UNCLAIMED
 	empty_label.visible = false
 	add_child(empty_label)
-	detail = PanelContainer.new()
-	detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var st: StyleBoxFlat = host._flat(Color(host.PANEL_HI, 1.0), 5, host.LINE2, false)
-	st.content_margin_left = 10
-	st.content_margin_right = 10
-	st.content_margin_top = 8
-	st.content_margin_bottom = 9
-	detail.add_theme_stylebox_override("panel", st)
-	detail_col = host._vbox(5)
-	detail.add_child(detail_col)
-	add_child(detail)
-	list_caption = _caps("Every place")
+	# the NEXT card and the one-click buttons
+	next_card = _make_card(true)
+	add_child(next_card.panel)
+	all_button = _button("Build everything I can afford")
+	all_button.tooltip_text = "Orders every project the scrap pays for, in this order: the next one first"
+	all_button.pressed.connect(_on_all)
+	add_child(all_button)
+	answer_label = _para(14, host.INK, 600)
+	answer_label.visible = false
+	add_child(answer_label)
+	list_caption = _caps("Projects")
 	add_child(list_caption)
-	list_box = host._vbox(3)
+	list_box = host._vbox(5)
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	add_child(list_box)
+	plan_caption = _caps("The plan")
+	add_child(plan_caption)
+	plan = SlotPlan.new()
+	plan.setup(host)
+	plan.picked.connect(_on_pick)
+	plan.hovered.connect(_on_plan_hover)
+	add_child(plan)
+	adv_toggle = _button("Advanced: every section on its own")
+	adv_toggle.pressed.connect(_on_adv_toggle)
+	add_child(adv_toggle)
+	adv_box = host._vbox(3)
+	adv_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	adv_box.visible = false
+	add_child(adv_box)
 	_build_foot()
 
 
@@ -161,8 +234,8 @@ func _button(text: String, primary: bool = false) -> Button:
 	var b: Button
 	if primary:
 		b = host._button(text, true)
-		b.custom_minimum_size = Vector2(0, BUTTON_H)
-		b.add_theme_font_size_override("font_size", 15)
+		b.custom_minimum_size = Vector2(0, BUTTON_H + 4.0)
+		b.add_theme_font_size_override("font_size", 16)
 		for state in ["normal", "hover", "pressed", "disabled"]:
 			var st: StyleBox = b.get_theme_stylebox(state)
 			st.content_margin_left = 14
@@ -175,11 +248,14 @@ func _button(text: String, primary: bool = false) -> Button:
 
 
 func _build_foot() -> void:
+	var foot := VBoxContainer.new()
+	foot.add_theme_constant_override("separation", 6)
+	foot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var rule := ColorRect.new()
 	rule.color = host.LINE2
 	rule.custom_minimum_size = Vector2(0, 1)
 	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(rule)
+	foot.add_child(rule)
 	var counts := HFlowContainer.new()
 	counts.add_theme_constant_override("h_separation", 16)
 	counts.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -191,10 +267,87 @@ func _build_foot() -> void:
 	stock.add_child(stock_label)
 	counts.add_child(stock)
 	people_label = host._label("", Fonts.cond(700), 15, host.INK)
-	people_label.tooltip_text = "The people in the house, you included: more of them open more places round it"
+	people_label.tooltip_text = "The people in the house, you included: more of them open more projects"
 	people_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	counts.add_child(people_label)
-	add_child(counts)
+	foot.add_child(counts)
+	foot_box = foot
+	add_child(foot)
+
+
+## One project's card: the picture, the name and the state, what it gives, what it costs, how long it takes, why it cannot be ordered, the buttons. `big` is the NEXT card (a gold
+## edge, a caption over the name, the full words on its button). Made once; `_apply_card` brings it up to date, so that a button is never swapped under the pointer.
+func _make_card(big: bool) -> Dictionary:
+	var c := {"id": "", "sig": "", "big": big}
+	var panel := PanelContainer.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_PASS
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb: StyleBoxFlat = host._flat(Color(host.PANEL_HI, 1.0), 6, Color(host.ACCENT, 0.9) if big else host.LINE2, false)
+	sb.set_border_width_all(2 if big else 1)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 8 if not big else 9
+	sb.content_margin_bottom = 9 if not big else 10
+	panel.add_theme_stylebox_override("panel", sb)
+	var row: HBoxContainer = host._hbox(10)
+	var icon := ProjectIcon.new()
+	icon.custom_minimum_size = Vector2(46, 46) if big else Vector2(36, 36)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(icon)
+	var col: VBoxContainer = host._vbox(3)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var head: HBoxContainer = host._hbox(8)
+	if big:
+		var cap: Label = host._label("NEXT", Fonts.cond(700, 1), 14, host.ACCENT)
+		c["caption"] = cap
+		head.add_child(cap)
+	var name_l: Label = host._label("", Fonts.cond(700), 20 if big else 17, host.INK)
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.clip_text = true
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	head.add_child(name_l)
+	var chip: Label = host._label("", Fonts.cond(700, 1), 14, host.INK3)
+	head.add_child(chip)
+	col.add_child(head)
+	var gives := _para(14, host.INK2, 400)
+	col.add_child(gives)
+	var stats := _para(14, host.INK, 600)
+	col.add_child(stats)
+	var time := _para(14, host.INK3, 400)
+	col.add_child(time)
+	var meter = BuildScreen.Meter.new()
+	meter.custom_minimum_size = Vector2(40, 6)
+	meter.track = Color(host.INK, 0.16)
+	meter.fill = host.WARN
+	col.add_child(meter)
+	var why := _para(14, host.WARN, 600)
+	col.add_child(why)
+	var actions: HBoxContainer = host._hbox(8)
+	var action := _button("Build", big)
+	if big:
+		action.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var cancel := _button("Cancel")
+	actions.add_child(action)
+	actions.add_child(cancel)
+	col.add_child(actions)
+	row.add_child(col)
+	panel.add_child(row)
+	panel.gui_input.connect(_on_card_input.bind(c))
+	c["panel"] = panel
+	c["icon"] = icon
+	c["name"] = name_l
+	c["chip"] = chip
+	c["gives"] = gives
+	c["stats"] = stats
+	c["time"] = time
+	c["meter"] = meter
+	c["why"] = why
+	c["action"] = action
+	c["cancel"] = cancel
+	c["style"] = sb
+	action.pressed.connect(_on_build_pressed.bind(c))
+	cancel.pressed.connect(_on_cancel_pressed.bind(c))
+	return c
 
 
 # ------------------------------------------------------------------------ the words --
@@ -203,16 +356,8 @@ static func _num(x: float) -> String:
 	return str(roundi(x)) if absf(x - roundf(x)) < 0.05 else "%.1f" % x
 
 
-## "5 scrap, 3 builder-hours, 120 hit points" for a kit.
-static func cost_text(kit: Dictionary) -> String:
-	var parts: Array = []
-	if kit.has("scrap"):
-		parts.append("%s scrap" % _num(float(kit.scrap)))
-	if kit.has("work"):
-		parts.append("%s builder-hours" % _num(float(kit.work)))
-	if kit.has("hp"):
-		parts.append("%s hit points" % _num(float(kit.hp)))
-	return ", ".join(parts)
+static func plural(unit: String, n: int) -> String:
+	return unit if n == 1 else String(PLURAL.get(unit, unit + "s"))
 
 
 func crew_now() -> int:
@@ -230,79 +375,260 @@ func crew_now() -> int:
 	return n
 
 
-## Why a locked slot is locked, in the module's own words, else from its unlock rule.
-func locked_reason(s: Dictionary) -> String:
-	var why := String(s.get("why_not", ""))
-	if why != "":
-		return why
-	var unlock = s.get("unlock", {})
-	if unlock is Dictionary and unlock.has("crew"):
-		var need := int(unlock.crew)
-		return "Opens when %d people are here (%d now)" % [need, crew_now()]
-	return "Not yet"
-
-
-## The one line a slot's row says: what stands there, or what is the matter.
-func line_of(s: Dictionary) -> String:
-	var state := String(s.get("state", "open"))
+## The state chip of a project: its word and colour.
+func chip_of(p: Dictionary) -> Array:
+	var state := String(p.get("state", "ready"))
 	match state:
 		"locked":
-			return locked_reason(s)
-		"built":
-			var hp := float(s.get("hp", 0.0))
-			var mx := float(s.get("max_hp", 0.0))
-			var kit := String(s.get("kit_name", s.get("kit", "")))
-			return ("%s, %s of %s hit points" % [kit.capitalize(), _num(hp), _num(mx)]) if mx > 0.0 else kit.capitalize()
-		"ordered":
-			return "Ordered: waiting for the Builders"
+			return ["LOCKED", host.INK3]
 		"building":
-			return "Going up"
-		"broken":
-			return "Fallen: it can be raised again"
-		_:
-			return "Free: pick something to build"
+			return ["BUILDING %d OF %d" % [int(p.built), int(p.n)], host.WARN]
+		"done":
+			return ["DONE", host.OK]
+	if int(p.get("fallen", 0)) > 0:
+		return ["%d FALLEN" % int(p.fallen), host.DANGER_TEXT]
+	if int(p.get("built", 0)) > 0:
+		return ["%d OF %d UP" % [int(p.built), int(p.n)], host.ACCENT]
+	return ["READY", host.ACCENT]
 
 
-func state_color(state: String) -> Color:
-	return SlotPlan.STATE_COLOR.get(state, host.INK3)
+## What the price line of a project says: "5 sections, 21 scrap, 13 builder-hours".
+func stats_of(p: Dictionary) -> String:
+	var open := int(p.get("open", 0))
+	var parts: Array = ["%d %s" % [open, plural(String(p.get("unit", "part")), open)]] if open > 1 else []
+	parts.append("%d scrap" % int(p.scrap))
+	parts.append("%s builder-hours" % _num(float(p.work)))
+	return ", ".join(parts)
 
 
-# ------------------------------------------------------------------------ the sim -> the page --
+## The line under a project's price: how long it takes (with how many builders), or that there is nobody to build it.
+func time_of(p: Dictionary) -> String:
+	var state := String(p.get("state", "ready"))
+	if state != "ready" and state != "building":
+		return ""
+	if int(p.get("builders", 0)) <= 0:
+		return "Nobody here to build it yet" if state == "ready" else "Waiting for somebody to build it"
+	var t := String(p.get("time", ""))
+	if t == "":
+		return ""
+	var line := ("Takes %s with %s" if state == "ready" else "Done in %s with %s") % [t, String(p.builders_text)]
+	return line + (", so into tomorrow" if bool(p.get("spills", false)) else "")
 
-## Brings the page up to date; without `force` only if something it shows changed.
+
+## What the button of a project says (`big`: the NEXT card's, with the whole of the job in it): "Build", "Build the front fence", "Rebuild", "Reinforce the fences", "Start with 2 of 5".
+func action_text(p: Dictionary, big: bool) -> String:
+	var open := int(p.get("open", 0))
+	var can_n := int(p.get("can_n", 0))
+	var fallen := int(p.get("fallen", 0))
+	if can_n > 0 and can_n < open:
+		return "Build %d of %d %s" % [can_n, open, plural(String(p.get("unit", "part")), open)]
+	if fallen > 0 and fallen >= open:
+		return ("Rebuild %s" % String(p.noun)) if big else "Rebuild"
+	if big:
+		return String(p.button)
+	return "Reinforce" if String(p.get("icon", "")) == "reinforce" else "Build"
+
+
+## The small line under the button: what a part payment pays for, or what is missing.
+func missing_of(p: Dictionary) -> String:
+	if String(p.get("state", "")) != "ready":
+		return ""
+	var open := int(p.get("open", 0))
+	var can_n := int(p.get("can_n", 0))
+	var unit := String(p.get("unit", "part"))
+	if can_n == 0:
+		var all := int(p.scrap)
+		var first := int(p.first_scrap)
+		return ("%s to start." % String(p.why) + ((" All of it is %d." % all) if open > 1 else "")) if first > 0 else String(p.why)
+	if can_n < open:
+		return "The scrap pays for %d of %d %s. The rest needs %d more." % [can_n, open, plural(unit, open), maxi(1, int(p.scrap) - _scrap_now())]
+	return ""
+
+
+func _scrap_now() -> int:
+	var s = _sim()
+	return int(float(s.stock.scrap)) if s != null and s.get("stock") != null else 0
+
+
+# ----------------------------------------------------------------------- the sim -> the page --
+
+## Brings the page up to date; without `force` only what changed is touched.
 func refresh(force: bool = false) -> void:
 	if host == null or not _built:
 		return
-	var list := slots()
-	var per = _per()
-	var sig := _signature(list)
+	var infos: Array = projects()
+	var any := not infos.is_empty()
 	_tick_labels()
-	if sig == _sig and not force:
-		return
-	_sig = sig
-	if selected != "" and slot_of(selected).is_empty():
-		selected = ""
-		kit_id = ""
-	var any := not list.is_empty()
 	empty_label.text = EMPTY_CLAIMED if _claimed() else EMPTY_UNCLAIMED
 	empty_label.visible = not any
-	list_caption.visible = any
-	plan.visible = any
-	detail.visible = any
-	_fill_plan(list)
-	_rebuild_list(list)
-	_rebuild_detail(slot_of(selected), per)
-	_mark_selected()
+	for n in [next_card.panel, all_button, plan_caption, plan, list_caption, adv_toggle, foot_box]:
+		if (n as Control).visible != any:
+			(n as Control).visible = any
+	if not any:
+		adv_box.visible = false
+		return
+	_sync_cards(infos)
+	next_id = ""
+	for p in infos:
+		if bool(p.get("recommended", false)):
+			next_id = String(p.id)
+	_apply_next(infos)
+	var can_any := false
+	for p in infos:
+		if String(p.state) == "ready" and int(p.can_n) > 0:
+			can_any = true
+	all_button.disabled = not can_any
+	for id in cards:
+		var c: Dictionary = cards[id]
+		var info := _info(infos, String(id))
+		if not info.is_empty():
+			_apply_card(c, info, force)
+	_fill_plan(infos)
+	if adv_box.visible:
+		_sync_adv()
+	_sync_mark()
 
 
-func _signature(list: Array) -> String:
-	var sig := "%s|%s|%s|%s|%d|%s" % [selected, kit_id, str(armed), String(answer.get("text", "")), crew_now(), str(_claimed())]
-	for s in list:
-		sig += "|%s,%s,%s,%s,%s" % [String(s.get("id", "")), String(s.get("state", "")), String(s.get("kit", "")), str(snappedf(float(s.get("hp", 0.0)), 0.5)), String(s.get("why_not", ""))]
-	var sim = _sim()
-	if sim != null and sim.get("stock") != null:
-		sig += "|%d" % roundi(float(sim.stock.scrap))
-	return sig
+func _info(infos: Array, id: String) -> Dictionary:
+	for p in infos:
+		if String(p.id) == id:
+			return p
+	return {}
+
+
+## The cards of the list are made for the projects there are (once) and put in order: not finished first, in the recommended order; finished ones after.
+func _sync_cards(infos: Array) -> void:
+	var have := {}
+	for p in infos:
+		have[String(p.id)] = true
+	for id in cards.keys():
+		if not have.has(id):
+			var gone: Dictionary = cards[id]
+			list_box.remove_child(gone.panel)
+			gone.panel.queue_free()
+			cards.erase(id)
+	for p in infos:
+		if not cards.has(String(p.id)):
+			var c := _make_card(false)
+			c["id"] = String(p.id)
+			cards[String(p.id)] = c
+			list_box.add_child(c.panel)
+	var at := 0
+	for pass_n in 2:
+		for p in infos:
+			var done := String(p.state) == "done"
+			if (pass_n == 0) == (not done):
+				var node: Control = cards[String(p.id)].panel
+				if node.get_index() != at:
+					list_box.move_child(node, at)
+				at += 1
+
+
+## Fills a card from a project (only when something it shows changed, or `force`).
+func _apply_card(c: Dictionary, p: Dictionary, force: bool = false) -> void:
+	var big: bool = bool(c.big)
+	var sig := "%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%s|%d|%d|%s" % [String(p.id), String(p.state), int(p.built), int(p.going), int(p.open), int(p.can_n), int(p.scrap), int(p.fallen), String(p.time),
+		roundi(float(p.progress) * 50.0), String(p.why), int(p.builders), crew_now(), str(p.get("spills", false))]
+	if not force and sig == String(c.sig):
+		return
+	c.sig = sig
+	c.id = String(p.id)
+	var state := String(p.state)
+	c.icon.kind = String(p.icon)
+	c.icon.tint = host.OK if state == "done" else (host.ACCENT if big else host.INK2) if state != "locked" else Color(host.INK3, 0.8)
+	c.icon.queue_redraw()
+	c.name.text = String(p.name)
+	c.name.add_theme_color_override("font_color", host.INK if state != "locked" else host.INK2)
+	var chip: Array = chip_of(p)
+	c.chip.text = String(chip[0])
+	c.chip.add_theme_color_override("font_color", chip[1])
+	var done := state == "done"
+	c.gives.text = String(p.gives)
+	c.gives.visible = not done or big
+	c.gives.add_theme_color_override("font_color", host.INK2 if state != "locked" else host.INK3)
+	var money := state == "ready" or state == "building"
+	if state == "building":
+		c.stats.text = "%d of %d %s up" % [int(p.built), int(p.n), plural(String(p.unit), int(p.n))]
+	else:
+		c.stats.text = stats_of(p) if money else ""
+	c.stats.visible = money and String(c.stats.text) != ""
+	var time_line := time_of(p)
+	c.time.text = time_line
+	c.time.visible = time_line != ""
+	c.meter.visible = state == "building"
+	c.meter.value = float(p.progress)
+	c.meter.queue_redraw()
+	var line := ""
+	var warn := true
+	match state:
+		"locked":
+			line = String(p.why)
+		"ready":
+			line = missing_of(p)
+			warn = int(p.can_n) == 0
+	c.why.text = line
+	c.why.visible = line != ""
+	c.why.add_theme_color_override("font_color", host.WARN if warn else host.INK3)
+	var ready := state == "ready"
+	c.action.visible = ready
+	c.action.text = action_text(p, big)
+	c.action.disabled = int(p.can_n) <= 0
+	c.action.tooltip_text = String(p.why) if int(p.can_n) <= 0 else ""
+	c.cancel.visible = state == "building"
+	c.cancel.tooltip_text = "Take the order back: the scrap comes back (half of it where work had begun)"
+	var sb: StyleBoxFlat = c.style
+	if not big:
+		var picked := String(p.id) == selected
+		sb.border_color = Color(host.ACCENT, 0.85) if picked else host.LINE2
+		sb.set_border_width_all(2 if picked else 1)
+		sb.bg_color = Color(host.PANEL_HI, 1.0) if state != "done" else Color(host.PANEL, 1.0)
+
+
+## The NEXT card: the recommended project, or what to say when there is none.
+func _apply_next(infos: Array) -> void:
+	var c := next_card
+	if next_id != "":
+		var p := _info(infos, next_id)
+		c.caption.text = "NEXT: REBUILD" if int(p.fallen) > 0 else "NEXT"
+		_apply_card(c, p, false)
+		c.panel.visible = true
+		return
+	# nothing can be ordered: say why, and what opens next
+	var going := 0
+	var waiting: Array = []
+	var locked_at := 99
+	var locked_name := ""
+	for p in infos:
+		match String(p.state):
+			"building":
+				going += 1
+			"locked":
+				if int(p.need_crew) < locked_at and int(p.need_crew) > crew_now():
+					locked_at = int(p.need_crew)
+					locked_name = String(p.name).to_lower()
+				waiting.append(p)
+	var sig := "none|%d|%d|%s" % [going, locked_at, locked_name]
+	if String(c.sig) == sig:
+		return
+	c.sig = sig
+	c.caption.text = "ALL SET" if going == 0 and waiting.is_empty() else "NOTHING TO ORDER"
+	c.icon.kind = "fence"
+	c.icon.tint = host.OK if going == 0 and waiting.is_empty() else host.INK2
+	c.icon.queue_redraw()
+	if going > 0:
+		c.name.text = "It is all going up"
+		c.gives.text = "The builders are on it. Orders you give wait their turn."
+	elif waiting.is_empty():
+		c.name.text = "The house is as strong as it gets"
+		c.gives.text = "Everything is built. Mend what the dead break."
+	else:
+		c.name.text = "Nothing more to order yet"
+		c.gives.text = ("More opens when %d people are here: %s." % [locked_at, locked_name]) if locked_at < 99 else "More opens when more people are here."
+	c.chip.text = ""
+	c.gives.visible = true
+	c.gives.add_theme_color_override("font_color", host.INK2)
+	for k in ["stats", "time", "why", "meter", "action", "cancel"]:
+		(c[k] as Control).visible = false
 
 
 func _tick_labels() -> void:
@@ -312,7 +638,7 @@ func _tick_labels() -> void:
 	people_label.text = "%d in the house" % crew_now()
 
 
-func _fill_plan(list: Array) -> void:
+func _fill_plan(infos: Array) -> void:
 	var sim = _sim()
 	var base = sim.get("base") if sim != null else null
 	var layout: Dictionary = base.layout if base != null and base.get("layout") is Dictionary else {}
@@ -322,337 +648,147 @@ func _fill_plan(list: Array) -> void:
 		var hh = houses.house(int(base.house))
 		if hh is Dictionary:
 			house_rect = hh.get("rect")
+	var names := {}
+	for p in infos:
+		names[String(p.id)] = String(p.name)
+	var list: Array = []
+	var sig := "%s" % [str(selected)]
+	for s in slots():
+		var d: Dictionary = (s as Dictionary).duplicate()
+		d["project_name"] = String(names.get(String(d.get("project", "")), ""))
+		list.append(d)
+		sig += "|%s,%s,%s" % [String(d.get("id", "")), String(d.get("state", "")), String(d.get("project", ""))]
+	plan.selected_project = selected
+	if sig == _plan_sig:
+		return
+	_plan_sig = sig
 	var posts: Array = []
 	for p in layout.get("posts", []):
 		if p is Dictionary and p.get("pos") is Array and (p.pos as Array).size() >= 2:
 			posts.append(Vector2(float(p.pos[0]) + 0.5, float(p.pos[1]) + 0.5))
-	plan.selected = selected
 	plan.set_data({"lot": layout.get("plot"), "house": house_rect, "front": String(layout.get("front", "S")), "slots": list, "posts": posts})
-
-
-func _rebuild_list(list: Array) -> void:
-	for c in list_box.get_children():
-		list_box.remove_child(c)
-		c.queue_free()
-	rows.clear()
-	for s in list:
-		list_box.add_child(_make_row(s))
-
-
-func _make_row(s: Dictionary) -> Control:
-	var id := String(s.get("id", ""))
-	var state := String(s.get("state", "open"))
-	var chosen := id == selected
-	var slip := PanelContainer.new()
-	slip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb: StyleBoxFlat = host._flat(Color(host.PANEL_HI, 1.0), 5, Color(host.ACCENT, 0.85) if chosen else host.LINE2, false)
-	sb.set_border_width_all(2 if chosen else 1)
-	sb.content_margin_left = 0
-	sb.content_margin_right = 0
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 0
-	slip.add_theme_stylebox_override("panel", sb)
-	var b := Button.new()
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_filter = Control.MOUSE_FILTER_PASS
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	for st in ["normal", "focus", "disabled"]:
-		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
-	for st in ["hover", "pressed"]:
-		var hv := StyleBoxFlat.new()
-		hv.bg_color = Color(1, 1, 1, 0.06 if st == "hover" else 0.12)
-		hv.set_corner_radius_all(5)
-		b.add_theme_stylebox_override(st, hv)
-	slip.add_child(b)
-	var pad := MarginContainer.new()
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pad.add_theme_constant_override("margin_left", 10)
-	pad.add_theme_constant_override("margin_right", 8)
-	pad.add_theme_constant_override("margin_top", 4)
-	pad.add_theme_constant_override("margin_bottom", 5)
-	var inner: VBoxContainer = host._vbox(0)
-	var head: HBoxContainer = host._hbox(8)
-	var name_label: Label = host._label(String(s.get("name", KIND_WORD.get(String(s.get("kind", "")), "Place"))), Fonts.cond(700), 16, host.INK)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.clip_text = true
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	head.add_child(name_label)
-	var chip: Label = host._label(String(STATE_WORD.get(state, state)).to_upper(), Fonts.cond(700, 1), 14, state_color(state))
-	head.add_child(chip)
-	inner.add_child(head)
-	var line: Label = _para(14, host.WARN if state == "locked" else host.INK2, 400)
-	line.text = line_of(s)
-	inner.add_child(line)
-	pad.add_child(inner)
-	slip.add_child(pad)
-	b.pressed.connect(select.bind(id))
-	b.mouse_entered.connect(_on_hover.bind(id))
-	b.mouse_exited.connect(_on_hover.bind(""))
-	rows[id] = {"id": id, "slot": s, "slip": slip, "state": chip, "line": line, "button": b}
-	return slip
-
-
-# ----------------------------------------------------------------------- the detail --
-
-func _rebuild_detail(s: Dictionary, per) -> void:
-	for c in detail_col.get_children():
-		detail_col.remove_child(c)
-		c.queue_free()
-	order_button = null
-	cancel_button = null
-	demolish_button = null
-	if s.is_empty():
-		var hint := _para(14, host.INK2, 400)
-		hint.text = "Pick a place on the plan, or in the list. A gold square is free; a grey one waits for more people."
-		detail_col.add_child(hint)
-		return
-	var id := String(s.get("id", ""))
-	var state := String(s.get("state", "open"))
-	var head: HBoxContainer = host._hbox(8)
-	var name_label: Label = host._label(String(s.get("name", "Place")), Fonts.cond(700), 18, host.INK)
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(name_label)
-	head.add_child(host._label(String(STATE_WORD.get(state, state)).to_upper(), Fonts.cond(700, 1), 14, state_color(state)))
-	detail_col.add_child(head)
-	match state:
-		"locked":
-			var why := _para(14, host.WARN, 600)
-			why.text = locked_reason(s)
-			detail_col.add_child(why)
-		"open", "broken":
-			_build_kits(id, per, state == "broken")
-		"ordered", "building":
-			var note := _para(14, host.INK2, 400)
-			note.text = "The Builders raise it when they can reach it." if state == "ordered" else "The Builders are at it."
-			detail_col.add_child(note)
-			cancel_button = _button("Cancel")
-			cancel_button.tooltip_text = "Take the order back: the scrap comes back (half of it once the work has begun)"
-			cancel_button.pressed.connect(_on_cancel.bind(id))
-			detail_col.add_child(cancel_button)
-		"built":
-			var hp := float(s.get("hp", 0.0))
-			var mx := float(s.get("max_hp", 0.0))
-			var kit_name := String(s.get("kit_name", s.get("kit", "")))
-			var words := _para(14, host.INK, 400)
-			words.text = "%s: %s of %s hit points" % [kit_name.capitalize(), _num(hp), _num(mx)] if mx > 0.0 else kit_name.capitalize()
-			detail_col.add_child(words)
-			if mx > 0.0:
-				var meter = BuildScreen.Meter.new()
-				meter.custom_minimum_size = Vector2(40, 6)
-				meter.track = Color(host.INK, 0.16)
-				meter.fill = host.OK if hp / mx > 0.5 else host.WARN
-				meter.value = clampf(hp / mx, 0.0, 1.0)
-				detail_col.add_child(meter)
-			demolish_button = _button("Demolish")
-			demolish_button.tooltip_text = "Take it down: half the scrap comes back"
-			demolish_button.pressed.connect(_on_demolish.bind(id))
-			if armed:
-				demolish_button.text = "Press again to take it down"
-			detail_col.add_child(demolish_button)
-	if not answer.is_empty() and String(answer.get("slot", "")) == id:
-		var a := _para(14, answer.get("color", host.INK), 600)
-		a.text = String(answer.get("text", ""))
-		detail_col.add_child(a)
-
-
-func _build_kits(slot_id: String, per, fallen: bool) -> void:
-	var kits: Array = []
-	if per != null and per.has_method("kits_for"):
-		var got = per.kits_for(slot_id)
-		if got is Array:
-			kits = got
-	if kits.is_empty():
-		var none := _para(14, host.INK2, 400)
-		none.text = "There is nothing to build here yet."
-		detail_col.add_child(none)
-		return
-	if fallen:
-		var fell := _para(14, host.WARN, 600)
-		fell.text = "It has fallen. Raise it again, or leave the gap."
-		detail_col.add_child(fell)
-	var known := false
-	for k in kits:
-		if String(k.get("id", "")) == kit_id:
-			known = true
-	if not known:
-		kit_id = ""
-		for k in kits:
-			if bool(k.get("ok", true)):
-				kit_id = String(k.id)
-				break
-		if kit_id == "":
-			kit_id = String(kits[0].get("id", ""))
-	detail_col.add_child(_caps("What to build here"))
-	var chosen_kit := {}
-	for k in kits:
-		detail_col.add_child(_kit_row(k))
-		if String(k.get("id", "")) == kit_id:
-			chosen_kit = k
-	order_button = _button("Order", true)
-	var ok := not chosen_kit.is_empty() and bool(chosen_kit.get("ok", true))
-	order_button.disabled = not ok
-	order_button.tooltip_text = "" if ok else String(chosen_kit.get("why", "It cannot be ordered now"))
-	order_button.pressed.connect(_on_order.bind(slot_id))
-	detail_col.add_child(order_button)
-	if not ok and not chosen_kit.is_empty():
-		var why := _para(14, host.WARN, 600)
-		why.text = String(chosen_kit.get("why", ""))
-		detail_col.add_child(why)
-
-
-func _kit_row(k: Dictionary) -> Control:
-	var id := String(k.get("id", ""))
-	var chosen := id == kit_id
-	var ok := bool(k.get("ok", true))
-	var slip := PanelContainer.new()
-	slip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var sb: StyleBoxFlat = host._flat(Color(host.PANEL, 1.0), 5, Color(host.ACCENT, 0.9) if chosen else host.LINE, false)
-	sb.set_border_width_all(2 if chosen else 1)
-	sb.content_margin_left = 0
-	sb.content_margin_right = 0
-	sb.content_margin_top = 0
-	sb.content_margin_bottom = 0
-	slip.add_theme_stylebox_override("panel", sb)
-	var b := Button.new()
-	b.focus_mode = Control.FOCUS_NONE
-	b.mouse_filter = Control.MOUSE_FILTER_PASS
-	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	for st in ["normal", "focus", "disabled"]:
-		b.add_theme_stylebox_override(st, StyleBoxEmpty.new())
-	for st in ["hover", "pressed"]:
-		var hv := StyleBoxFlat.new()
-		hv.bg_color = Color(1, 1, 1, 0.06 if st == "hover" else 0.12)
-		hv.set_corner_radius_all(5)
-		b.add_theme_stylebox_override(st, hv)
-	slip.add_child(b)
-	var pad := MarginContainer.new()
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pad.add_theme_constant_override("margin_left", 10)
-	pad.add_theme_constant_override("margin_right", 8)
-	pad.add_theme_constant_override("margin_top", 4)
-	pad.add_theme_constant_override("margin_bottom", 5)
-	var inner: VBoxContainer = host._vbox(0)
-	inner.add_child(host._label(String(k.get("name", id)), Fonts.cond(700), 16, host.INK if ok else host.INK2))
-	var cost := _para(14, host.INK2, 400)
-	cost.text = cost_text(k)
-	inner.add_child(cost)
-	var blurb := String(k.get("blurb", ""))
-	if blurb != "":
-		var bl := _para(14, host.INK3, 400)
-		bl.text = blurb
-		inner.add_child(bl)
-	if not ok and String(k.get("why", "")) != "":
-		var why := _para(14, host.WARN, 600)
-		why.text = String(k.why)
-		inner.add_child(why)
-	pad.add_child(inner)
-	slip.add_child(pad)
-	b.pressed.connect(choose_kit.bind(id))
-	return slip
 
 
 # ---------------------------------------------------------------------------- doing --
 
-## Picks a slot (from the plan, a row or `focus_on`); picking the one that is picked puts it away.
+func _on_build_pressed(c: Dictionary) -> void:
+	var id := String(c.id)
+	if id != "":
+		order_project(id)
+
+
+## Orders a project (`perimeter.order_project`); the words are the answer, green when something went through, amber when not.
+func order_project(id: String) -> Dictionary:
+	var per = _per()
+	if per == null or not per.has_method("order_project"):
+		return {}
+	var r: Dictionary = per.order_project(id)
+	_say(String(r.get("line", "")), host.OK if bool(r.get("ok", false)) else host.WARN)
+	return r
+
+
+func _on_cancel_pressed(c: Dictionary) -> void:
+	var id := String(c.id)
+	var per = _per()
+	if id == "" or per == null or not per.has_method("cancel_project"):
+		return
+	var r: Dictionary = per.cancel_project(id)
+	_say(String(r.get("line", "")), host.OK if bool(r.get("ok", false)) else host.WARN)
+
+
+func _on_all() -> void:
+	order_everything()
+
+
+func order_everything() -> Dictionary:
+	var per = _per()
+	if per == null or not per.has_method("order_affordable"):
+		return {}
+	var r: Dictionary = per.order_affordable()
+	_say(String(r.get("line", "")), host.OK if bool(r.get("ok", false)) else host.WARN)
+	return r
+
+
+## A click on a card (not on its buttons) picks the project (it stays marked in the yard); on the one that is picked, puts it away.
+func _on_card_input(ev: InputEvent, c: Dictionary) -> void:
+	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		select(String(c.id))
+
+
+func _on_pick(project_id: String) -> void:
+	select(project_id)
+
+
+func _on_plan_hover(_project_id: String) -> void:
+	_sync_mark()
+
+
+## Picks a project (from a card, the plan or `focus_on`); picking the one that is picked puts it away.
 func select(id: String) -> void:
-	if id == selected:
-		id = ""
-	selected = id
-	kit_id = ""
-	armed = false
-	if String(answer.get("slot", "")) != id:
-		answer = {}
+	selected = "" if id == selected else id
 	refresh(true)
-	_mark_selected()
+	_sync_mark()
 
 
-func choose_kit(id: String) -> void:
-	kit_id = id
-	refresh(true)
-
-
-## Orders the chosen kit on the picked slot: `perimeter.order(slot, kit)`; the words are the answer, green when it went through, amber when not.
-func order_selected() -> bool:
-	var per = _per()
-	if per == null or selected == "" or kit_id == "":
-		return false
-	return _on_order(selected)
-
-
-func _on_order(slot_id: String) -> bool:
-	var per = _per()
-	if per == null or not per.has_method("order") or kit_id == "":
-		return false
-	var ok: bool = bool(per.order(slot_id, kit_id))
-	if ok:
-		_say(slot_id, "Ordered. The Builders will raise it.", host.OK)
-	else:
-		var why := "It cannot be ordered now."
-		for k in per.kits_for(slot_id) if per.has_method("kits_for") else []:
-			if String(k.get("id", "")) == kit_id and String(k.get("why", "")) != "":
-				why = String(k.why)
-		_say(slot_id, why, host.WARN)
-	return ok
-
-
-func _on_cancel(slot_id: String) -> void:
-	var per = _per()
-	if per == null or not per.has_method("cancel"):
-		return
-	var ok: bool = bool(per.cancel(slot_id))
-	_say(slot_id, "Order taken back." if ok else "It cannot be cancelled now.", host.OK if ok else host.WARN)
-
-
-func _on_demolish(slot_id: String) -> void:
-	var per = _per()
-	if per == null or not per.has_method("demolish"):
-		return
-	if not armed:
-		armed = true
-		armed_left = CONFIRM_S
-		set_process(true)
-		refresh(true)
-		return
-	armed = false
-	var ok: bool = bool(per.demolish(slot_id))
-	_say(slot_id, "Taken down. Half the scrap is back." if ok else "It cannot be taken down now.", host.OK if ok else host.WARN)
-
-
-func _say(slot_id: String, text: String, color: Color) -> void:
-	answer = {"slot": slot_id, "text": text, "color": color, "left": ANSWER_S}
+func _say(text: String, color: Color) -> void:
+	answer = {"text": text, "color": color, "left": ANSWER_S}
+	answer_label.text = text
+	answer_label.add_theme_color_override("font_color", color)
+	answer_label.visible = text != ""
 	set_process(true)
 	refresh(true)
 
 
 func _process(dt: float) -> void:
-	var keep := false
-	if armed:
-		armed_left -= dt
-		if armed_left <= 0.0:
-			armed = false
-			refresh(true)
-		else:
-			keep = true
 	if not answer.is_empty():
 		answer["left"] = float(answer.left) - dt
 		if float(answer.left) <= 0.0:
 			answer = {}
-			refresh(true)
-		else:
-			keep = true
-	if not keep:
-		set_process(false)
+			answer_label.visible = false
+	if armed_slot != "":
+		armed_left -= dt
+		if armed_left <= 0.0:
+			armed_slot = ""
+			_adv_sig = ""
+			_sync_adv()
+	_poll_hover()
 
 
-## A slot's id or its plot's: picks it.
-func focus_on(id: String) -> void:
-	var s := slot_of(id)
-	if s.is_empty():
+## Which card the pointer is on (a card the scroll has hidden is not): its project is lit on the plan and marked in the yard.
+func _poll_hover() -> void:
+	if not is_visible_in_tree():
 		return
-	if String(s.get("id", "")) != selected:
-		select(String(s.get("id", "")))
+	var m := get_global_mouse_position()
+	var found := ""
+	var view := get_parent() as Control
+	if view == null or view.get_global_rect().has_point(m):
+		if next_card.panel.visible and next_id != "" and (next_card.panel as Control).get_global_rect().has_point(m):
+			found = next_id
+		else:
+			for id in cards:
+				var node: Control = cards[id].panel
+				if node.visible and node.get_global_rect().has_point(m):
+					found = String(id)
+					break
+	if found != card_hover:
+		card_hover = found
+		if plan != null:
+			plan.card_hover = found
+			plan.queue_redraw()
+		_sync_mark()
+
+
+## A project's id, or a slot's or its plot's: picks it.
+func focus_on(id: String) -> void:
+	var want := ""
+	if not project_of(id).is_empty():
+		want = id
+	else:
+		for s in slots():
+			if String(s.get("id", "")) == id or (String(s.get("plot", "")) == id and id != ""):
+				want = String(s.get("project", ""))
+	if want != "" and want != selected:
+		select(want)
 
 
 ## (The town has no modal Build page: the panel is the page.)
@@ -666,28 +802,29 @@ func set_compact(_on: bool) -> void:
 
 # --------------------------------------------------------------------- the yard's mark --
 
-func _on_hover(id: String) -> void:
-	if plan != null and plan.hover_id != id:
-		plan.hover_id = id
-		plan.queue_redraw()
-	_mark(id if id != "" else selected)
+## The project the yard marks: the one under the pointer (the plan's, else a card's), else the one that is picked, else (softly) the NEXT one.
+func marked_project() -> Array:
+	var id := ""
+	if plan != null and plan.hover_project != "":
+		id = plan.hover_project
+	elif card_hover != "":
+		id = card_hover
+	elif selected != "":
+		id = selected
+	if id != "":
+		return [id, false]
+	return [next_id, true] if next_id != "" else ["", false]
 
 
-func _mark_selected() -> void:
-	_mark(selected)
-
-
-## Marks the slot's plot in the yard (the plot's sign) while the pointer is on it or it is picked; `host.set_build_hover`.
-func _mark(slot_id: String) -> void:
+func _sync_mark() -> void:
 	if host == null or not host.has_method("set_build_hover"):
 		return
-	var plot := ""
-	if slot_id != "":
-		plot = String(slot_of(slot_id).get("plot", ""))
-	if plot == _marked:
+	var m := marked_project()
+	var key := "%s|%s" % [m[0], str(m[1])]
+	if key == _marked:
 		return
-	_marked = plot
-	host.set_build_hover({"plot": plot} if plot != "" else {})
+	_marked = key
+	host.set_build_hover({"project": String(m[0]), "soft": bool(m[1])} if String(m[0]) != "" else {})
 
 
 func _clear_mark() -> void:
@@ -698,7 +835,137 @@ func _clear_mark() -> void:
 
 func _on_visibility_changed() -> void:
 	if is_visible_in_tree():
+		set_process(true)
 		refresh(true)
-		_mark_selected()
 	else:
+		set_process(not answer.is_empty() or armed_slot != "")
+		card_hover = ""
+		if plan != null:
+			plan.card_hover = ""
 		_clear_mark()
+
+
+# ----------------------------------------------------------------------- Advanced --
+
+## Opens the Advanced fold (a screenshot's `--radio=build,advanced`).
+func open_advanced() -> void:
+	if not adv_box.visible:
+		_on_adv_toggle()
+
+
+func _on_adv_toggle() -> void:
+	adv_box.visible = not adv_box.visible
+	adv_toggle.text = "Advanced: hide the sections" if adv_box.visible else "Advanced: every section on its own"
+	_adv_sig = ""
+	if adv_box.visible:
+		_sync_adv()
+
+
+func _sync_adv() -> void:
+	var list := slots()
+	var sig := armed_slot
+	for s in list:
+		sig += "|%s,%s,%s,%s" % [String(s.get("id", "")), String(s.get("state", "")), String(s.get("kit", "")), String(s.get("up", ""))]
+	if sig == _adv_sig:
+		return
+	_adv_sig = sig
+	for c in adv_box.get_children():
+		adv_box.remove_child(c)
+		c.queue_free()
+	adv_rows.clear()
+	adv_box.add_child(_para_note("Each section on its own, with the plainest kit. A project orders them all at once."))
+	for s in list:
+		adv_box.add_child(_adv_row(s))
+
+
+func _para_note(text: String) -> Label:
+	var l := _para(14, host.INK3, 400)
+	l.text = text
+	return l
+
+
+func _adv_row(s: Dictionary) -> Control:
+	var id := String(s.get("id", ""))
+	var state := String(s.get("state", "open"))
+	var row: HBoxContainer = host._hbox(8)
+	var name_l: Label = host._label(String(s.get("name", "Place")), Fonts.cond(600), 15, host.INK)
+	name_l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_l.clip_text = true
+	name_l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(name_l)
+	var word := String(STATE_WORD.get(state, state))
+	if state == "built" and String(s.get("kit_name", "")) != "":
+		word = String(s.kit_name)
+	if String(s.get("up", "")) != "":
+		word = "Reinforcing"
+	var chip: Label = host._label(word, Fonts.cond(700, 1), 14, SlotPlan.STATE_COLOR.get(state, host.INK3))
+	row.add_child(chip)
+	var b: Button = null
+	match state:
+		"open", "broken":
+			b = _button("Rebuild" if state == "broken" else "Build")
+			b.pressed.connect(_on_adv_build.bind(id))
+		"ordered", "building":
+			b = _button("Cancel")
+			b.pressed.connect(_on_adv_cancel.bind(id))
+		"built":
+			if String(s.get("up", "")) != "":
+				b = _button("Cancel")
+				b.pressed.connect(_on_adv_cancel.bind(id))
+			else:
+				b = _button("Press again" if armed_slot == id else "Take down")
+				b.tooltip_text = "Takes it down: half the scrap comes back"
+				b.pressed.connect(_on_adv_demolish.bind(id))
+		_:
+			chip.tooltip_text = String(s.get("why_not", ""))
+	if b != null:
+		b.custom_minimum_size.x = 92
+		row.add_child(b)
+	else:
+		var gap := Control.new()
+		gap.custom_minimum_size = Vector2(92, 0)
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(gap)
+	adv_rows[id] = {"slot": s, "row": row}
+	return row
+
+
+func _on_adv_build(id: String) -> void:
+	var per = _per()
+	if per == null:
+		return
+	var pick := ""
+	var why := "It cannot be ordered now."
+	for k in per.kits_for(id):
+		if bool(k.get("ok", false)):
+			pick = String(k.id)
+			break
+		why = String(k.get("why", why))
+	if pick != "" and bool(per.order(id, pick)):
+		_say("Ordered. The builders will raise it.", host.OK)
+	else:
+		_say(why, host.WARN)
+
+
+func _on_adv_cancel(id: String) -> void:
+	var per = _per()
+	if per == null:
+		return
+	var ok: bool = bool(per.cancel(id))
+	_say("Order taken back." if ok else "It cannot be cancelled now.", host.OK if ok else host.WARN)
+
+
+func _on_adv_demolish(id: String) -> void:
+	var per = _per()
+	if per == null:
+		return
+	if armed_slot != id:
+		armed_slot = id
+		armed_left = CONFIRM_S
+		set_process(true)
+		_adv_sig = ""
+		_sync_adv()
+		return
+	armed_slot = ""
+	var ok: bool = bool(per.demolish(id))
+	_say("Taken down. Half the scrap is back." if ok else "It cannot be taken down now.", host.OK if ok else host.WARN)

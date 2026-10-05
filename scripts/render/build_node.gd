@@ -612,6 +612,8 @@ func _paint_ground(ci) -> void:
 	_near_now = near_plot()
 	_painting = true
 	for pl in sim.build.plots():
+		if String(pl.get("kind", "")) == "slot":
+			continue    # (One House: the sections of the base are marked by their project, scripts/render/perimeter_view.gd, not by a sign each)
 		var a := outline_alpha(pl)
 		var strong := marked(pl)
 		if a > 0.01:

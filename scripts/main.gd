@@ -3762,7 +3762,19 @@ func _parse_args() -> void:
 				{"id": "reinforce", "label": "Send reinforcements"}, {"id": "fall_back", "label": "Fall back to the school"}], "hold", 90.0, {"seg": 1}, Vector2(40, 10))
 		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
 		hud.last_speed = speed
-		hud.open_radio(String(radio_parts[0]))
+		var radio_opts := {}
+		for part in radio_parts:
+			if String(part).begins_with("focus:"):
+				radio_opts["focus"] = String(part).trim_prefix("focus:")    # (`--radio=build,focus:front`: the Build page with that project picked)
+		hud.open_radio(String(radio_parts[0]), radio_opts)
+		if radio_parts.has("advanced") and hud.radio_panel != null:
+			var build_page = hud.radio_panel.page_node("build")    # (`--radio=build,advanced`: the Build page's Advanced fold open)
+			if build_page != null and build_page.has_method("open_advanced"):
+				build_page.open_advanced()
+		for part in radio_parts:
+			if String(part).begins_with("scroll:") and hud.radio_panel != null:
+				var down := int(String(part).trim_prefix("scroll:"))    # (`--radio=build,scroll:400`: the page scrolled that many pixels, a moment after it is laid out)
+				get_tree().create_timer(1.2).timeout.connect(func(): hud.radio_panel.scroll.scroll_vertical = down)
 	if show_town:
 		hud.update_hud(sim, speed, sound_on, 0)    # (the HUD has to have seen the game first)
 		hud.last_speed = speed

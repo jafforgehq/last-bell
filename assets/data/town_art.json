@@ -1820,7 +1820,1941 @@
      "facing": "e",
      "state": "broken",
      "variant": 1
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 2
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 3
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 4
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 5
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1300,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1430,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 6
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1560,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 7
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1690,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1820,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 8
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      1950,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      2080,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 9
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      2210,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 10
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      2340,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      520,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      650,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      780,
+      2470,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      0,
+      2600,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "broken",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      130,
+      2600,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "w",
+     "state": "broken",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      260,
+      2600,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "n",
+     "state": "broken",
+     "variant": 11
+    },
+    {
+     "file": "house/door_front.png",
+     "rect": [
+      390,
+      2600,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "broken",
+     "variant": 11
     }
+   ],
+   "variant_names": [
+    "oxblood, hinged left",
+    "oxblood, hinged right",
+    "blue grey, hinged left",
+    "blue grey, hinged right",
+    "dark green, hinged left",
+    "dark green, hinged right",
+    "sage green, hinged left",
+    "sage green, hinged right",
+    "natural wood, hinged left",
+    "natural wood, hinged right",
+    "walnut, hinged left",
+    "walnut, hinged right"
    ],
    "facings": [
     "s",
@@ -1833,8 +3767,8 @@
     "open",
     "broken"
    ],
-   "variants": 2,
-   "note": "A front door in a wall cell (replaces the wall cell: a full 128 px picture with its threshold floor and its frame). facing = the side the OUTSIDE is on (s: the wall runs along x with the street to the south; e: the wall runs along y with the street to the east). Variants are door styles (a: oxblood, hinged on the left of the frame as seen facing out; b: green, hinged on the right) and are the same in every state, so a door keeps its look when it is opened or broken. A closed door blocks; open and broken do not. Not a wall for wall_edges (the wall ends beside it get their outline)."
+   "variants": 12,
+   "note": "A front door in a wall cell (replaces the wall cell: a full 128 px picture with its doorway floor, its frame and its leaf: opaque, so the open picture can be faded in over the shut one). facing = the side the OUTSIDE is on (s: the wall runs along x with the street to the south; e: the wall runs along y with the street to the east). 12 variants: 6 door colours (0-1 oxblood with three lights, 2-3 blue grey, 4-5 dark green with panels, 6-7 sage green ledged boards on strap hinges, 8-9 natural wood, 10-11 walnut) x the side of the hinge (even variants hinged on the left of the picture as seen from outside, odd on the right). The game gives the two cells of a doorway the variants n and n + 1: one colour hinged at the outer jambs when n is even; when n is odd the pair is the right hand leaf of one colour and the left hand leaf of the next in the ring of colours, mostly a near neighbour (green and sage, wood and walnut, walnut and oxblood, blue grey and green; oxblood and blue grey, sage and wood are the odd pairs). Open: the leaf swung inward about 60 degrees with its swing drawn on the floor; broken: the leaf hangs splintered, a piece on the sill, the frame torn. The look is the same in every state, so a door keeps its colour when it is opened or broken. A closed door blocks; open and broken do not. Not a wall for wall_edges (the wall ends beside it get their outline). Every facing is lit from the north west like the rest."
   },
   {
    "id": "door_interior",
@@ -1887,7 +3821,7 @@
       1,
       1
      ],
-     "facing": "w",
+     "facing": "e",
      "state": "closed",
      "variant": 0
     },
@@ -1903,8 +3837,8 @@
       1,
       1
      ],
-     "facing": "n",
-     "state": "closed",
+     "facing": "s",
+     "state": "open",
      "variant": 0
     },
     {
@@ -1920,7 +3854,7 @@
       1
      ],
      "facing": "e",
-     "state": "closed",
+     "state": "open",
      "variant": 0
     },
     {
@@ -1936,8 +3870,8 @@
       1
      ],
      "facing": "s",
-     "state": "open",
-     "variant": 0
+     "state": "closed",
+     "variant": 1
     },
     {
      "file": "house/door_interior.png",
@@ -1951,9 +3885,9 @@
       1,
       1
      ],
-     "facing": "w",
-     "state": "open",
-     "variant": 0
+     "facing": "e",
+     "state": "closed",
+     "variant": 1
     },
     {
      "file": "house/door_interior.png",
@@ -1967,9 +3901,9 @@
       1,
       1
      ],
-     "facing": "n",
+     "facing": "s",
      "state": "open",
-     "variant": 0
+     "variant": 1
     },
     {
      "file": "house/door_interior.png",
@@ -1985,7 +3919,7 @@
      ],
      "facing": "e",
      "state": "open",
-     "variant": 0
+     "variant": 1
     },
     {
      "file": "house/door_interior.png",
@@ -2001,7 +3935,7 @@
      ],
      "facing": "s",
      "state": "closed",
-     "variant": 1
+     "variant": 2
     },
     {
      "file": "house/door_interior.png",
@@ -2015,9 +3949,9 @@
       1,
       1
      ],
-     "facing": "w",
+     "facing": "e",
      "state": "closed",
-     "variant": 1
+     "variant": 2
     },
     {
      "file": "house/door_interior.png",
@@ -2031,9 +3965,9 @@
       1,
       1
      ],
-     "facing": "n",
-     "state": "closed",
-     "variant": 1
+     "facing": "s",
+     "state": "open",
+     "variant": 2
     },
     {
      "file": "house/door_interior.png",
@@ -2048,8 +3982,8 @@
       1
      ],
      "facing": "e",
-     "state": "closed",
-     "variant": 1
+     "state": "open",
+     "variant": 2
     },
     {
      "file": "house/door_interior.png",
@@ -2064,8 +3998,8 @@
       1
      ],
      "facing": "s",
-     "state": "open",
-     "variant": 1
+     "state": "closed",
+     "variant": 3
     },
     {
      "file": "house/door_interior.png",
@@ -2079,9 +4013,9 @@
       1,
       1
      ],
-     "facing": "w",
-     "state": "open",
-     "variant": 1
+     "facing": "e",
+     "state": "closed",
+     "variant": 3
     },
     {
      "file": "house/door_interior.png",
@@ -2095,9 +4029,9 @@
       1,
       1
      ],
-     "facing": "n",
+     "facing": "s",
      "state": "open",
-     "variant": 1
+     "variant": 3
     },
     {
      "file": "house/door_interior.png",
@@ -2113,21 +4047,805 @@
      ],
      "facing": "e",
      "state": "open",
-     "variant": 1
+     "variant": 3
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      260,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      260,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 4
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      260,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      260,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 4
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      260,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 5
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 5
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 6
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      390,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 6
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 7
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 7
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 8
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      520,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 8
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 9
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 9
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      650,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 10
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 10
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 11
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 11
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      780,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 12
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 12
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 12
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 12
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 13
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 13
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 13
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      910,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 13
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 14
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      130,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 14
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      260,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 14
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      390,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 14
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      520,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "closed",
+     "variant": 15
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      650,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "closed",
+     "variant": 15
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      780,
+      1040,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "s",
+     "state": "open",
+     "variant": 15
+    },
+    {
+     "file": "house/door_interior.png",
+     "rect": [
+      0,
+      1170,
+      128,
+      128
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "facing": "e",
+     "state": "open",
+     "variant": 15
     }
+   ],
+   "variant_names": [
+    "white, hinged left",
+    "white, hinged right",
+    "white, hinged left",
+    "white, hinged right",
+    "cream, hinged left",
+    "cream, hinged right",
+    "cream, hinged left",
+    "cream, hinged right",
+    "light oak, hinged left",
+    "light oak, hinged right",
+    "light oak, hinged left",
+    "light oak, hinged right",
+    "powder blue, hinged left",
+    "powder blue, hinged right",
+    "powder blue, hinged left",
+    "powder blue, hinged right"
    ],
    "facings": [
     "s",
-    "w",
-    "n",
     "e"
    ],
    "states": [
     "closed",
     "open"
    ],
-   "variants": 2,
-   "note": "An inside door in a partition wall cell, same rules as door_front (facing: the side the door's front is on; a: white painted, hinged left; b: stained wood, hinged right). A doorway with no door needs no picture: leave a floor cell in the wall."
+   "variants": 16,
+   "note": "An inside door in a partition wall cell, same rules as door_front: a thinner, lighter leaf in a plain frame, on a threshold board. facing: s for a partition that runs along x, e for one that runs along y (the only two the game asks for: a door in a partition has no outside, so there is no n or w). 16 variants: 4 leaves in runs of four (0-3 white, 4-7 cream, 8-11 light oak, 12-15 powder blue) x the side of the hinge (even: left, odd: right). A doorway with no door needs no picture: leave a floor cell in the wall."
   },
   {
    "id": "door_garage",

@@ -841,12 +841,32 @@ func objective() -> Dictionary:
 			out.id = key
 			out.text = String(_cfg("objective.%s.text" % key, ""))
 			out.sub = String(_cfg("objective.%s.sub" % key, ""))
+			if key == "fortify":
+				out.sub = _fortify_sub(String(out.sub))
 			out.at = _base_center()
 		"held":
 			out.id = "held"
 			out.text = String(_cfg("objective.held.text", "The night is held"))
 			out.sub = String(_cfg("objective.held.sub", ""))
 	return out
+
+
+## What the line under "Fortify the house before dark" says: the project to order next ("Order the front fence on the Build page (N)"), that what can be ordered is going up, or that
+## everything is built; `fallback` (the file's plain line) when there are no projects to speak of.
+func _fortify_sub(fallback: String) -> String:
+	var per = sim.get("perimeter")
+	if per == null or not per.has_method("projects"):
+		return fallback
+	var infos: Array = per.projects()
+	if infos.is_empty():
+		return fallback
+	var going := false
+	for p in infos:
+		if bool(p.get("recommended", false)):
+			return _fmt(String(_cfg("objective.fortify.sub_next", fallback)), [String(p.noun)])
+		if String(p.get("state", "")) == "building":
+			going = true
+	return String(_cfg("objective.fortify.sub_going", fallback)) if going else String(_cfg("objective.fortify.sub_done", fallback))
 
 
 ## The outside of the start house's front door, in tiles (the middle of the house when it has none), null with no town.

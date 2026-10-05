@@ -3,7 +3,8 @@
 ##   built     every slot that is open is ordered, paid for and finished at once (the wooden fence on the front and the sides, the reinforced one at the back, the gate, the towers, the
 ##             floodlights, the plank kit on the front door), every section whole
 ##   damaged   as built, then the sections are worn down: 100%, 80%, 50%, 20% in turn and one fallen (a breach), the gate and a door among them
-##   sites     a few slots ordered and part built (a fence, the gate, a tower), the rest open: the ghosts and rings of a base going up
+##   sites     a few projects ordered and part built (the front fence, the gate, a tower), the rest open: the ghosts and rings of a base going up
+##   ring      the front fence, the side fences and the gate built, the back fence and a tower going up (a ring half built), the rest not ordered
 ##   stress    as built, and forty made-up sections of four tiles drawn round the base by the view as well (all four states, both kits, gates): not in the rules, only to count draw calls
 ##   open      opens the gate (after built)
 ##   mend      1.75 seconds in, every section is mended to full (after damaged): the view flashes the repairs
@@ -43,14 +44,18 @@ static func apply(sim, what: String, main = null) -> bool:
 			"open":
 				per.toggle_gate()    # (the gate must be built: `built` first)
 			"sites":
-				_sites(sim, per, [["slot_front_2", 0.5], ["slot_gate", 0.3], ["slot_tower_1", 0.7], ["slot_front_3", 0.0]])
+				_project_sites(sim, per, [["front", [0.8, 0.35]], ["gate", [0.3]], ["tower", [0.7]]])
+			"ring":
+				for id in ["front", "sides", "gate"]:
+					_project_built(sim, per, id)
+				_project_sites(sim, per, [["back", [0.7, 0.3]], ["tower", [0.5]]])
 			"all":
 				_build_all(sim, per, "back,side", "")
 				_build_all(sim, per, "front", "")
 				_wear(sim, per, [1.0, 0.8, 0.5, 0.2], false)
-				_sites(sim, per, [["slot_light_1", 0.4], ["slot_light_2", 0.0]])
+				_project_sites(sim, per, [["lights", [0.4, 0.0]]])
 			_:
-				print("--slots=%s: built, damaged, sites, stress, open or all" % word)
+				print("--slots=%s: built, damaged, sites, ring, stress, open, mend, claw or all" % word)
 				ok = false
 	sim.events.clear()
 	return ok
@@ -118,17 +123,29 @@ static func _finish(sim, plot_id: String) -> void:
 	sim.build._finish(pl)
 
 
-## Orders [slot id, share of the work done] and leaves them as sites.
-static func _sites(sim, per, list: Array) -> void:
+## Orders each project [id, [share of the work done, for each of its sections in turn]] and leaves them as sites.
+static func _project_sites(sim, per, list: Array) -> void:
 	for e in list:
-		var sl := _slot(per, String(e[0]))
-		if sl.is_empty() or String(sl.state) != "open":
+		var r: Dictionary = per.order_project(String(e[0]))
+		if not bool(r.get("ok", false)):
 			continue
-		var kit := _kit_for(sl)
-		if kit == "" or not per.order(String(sl.id), kit):
-			continue
-		var pl: Dictionary = sim.build.plot(String(sl.plot))
-		pl.site.progress = float(pl.site.work) * float(e[1]) * 0.999
+		var ids: Array = per.project_slot_ids(String(e[0]))
+		for i in ids.size():
+			var sl := _slot(per, String(ids[i]))
+			var pl: Dictionary = sim.build.plot(String(sl.plot)) if not sl.is_empty() else {}
+			if pl.is_empty() or pl.site.is_empty():
+				continue
+			var shares: Array = e[1]
+			pl.site.progress = float(pl.site.work) * float(shares[mini(i, shares.size() - 1)] if i < shares.size() else 0.0) * 0.999
+
+
+## Orders a project and finishes every one of its sections at once.
+static func _project_built(sim, per, id: String) -> void:
+	per.order_project(id)
+	for sid in per.project_slot_ids(id):
+		var sl := _slot(per, String(sid))
+		if not sl.is_empty():
+			_finish(sim, String(sl.plot))
 
 
 static func _slot(per, id: String) -> Dictionary:

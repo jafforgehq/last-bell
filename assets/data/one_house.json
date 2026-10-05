@@ -47,7 +47,7 @@
     "clear": {"text": "Clear the house", "sub": "%d of %d rooms clear", "sub_unknown": "Open the doors. Mind what is behind them"},
     "claim": {"text": "Claim the house", "sub": "Stand just inside the front door and press E", "sub_search": "Search the shelves (E), then claim it at the front door"},
     "rescue": {"text": "Find survivors: %d of %d", "sub": "Clear a house, then talk to who is hiding in it"},
-    "fortify": {"text": "Fortify the house before dark", "sub": "Fence, gate, tower: order them on the Build page"},
+    "fortify": {"text": "Fortify the house before dark", "sub": "Open the Build page (N) and order the front fence", "sub_next": "Order %s on the Build page (N)", "sub_going": "The builders are on it. Be home before dusk", "sub_done": "Everything is built. Wait for dusk, and keep your gun loaded"},
     "hold": {"text": "Hold the night", "sub": "Until dawn. Shoot, and mend what breaks"},
     "held": {"text": "The night is held", "sub": ""}
   },

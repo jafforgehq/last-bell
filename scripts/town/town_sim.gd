@@ -170,7 +170,8 @@ func _anchors() -> Array:
 
 
 ## The "they see you" rule of a place (raid_run.gd `_wake_the_dead`): a dead one that stands or wanders within seven tiles of a living person with a clear line goes after
-## them. Only the awake ones are asked.
+## them. Only the awake ones are asked. The line is the eye's, not a walker's (`clear_shot`): a bed, a sofa or a table does not hide anybody (the dead see over it and then
+## walk round it: `_chase` keeps the walking line for the straight walk), a wall or a wardrobe does.
 func _notice() -> void:
 	if quiet:
 		return
@@ -182,7 +183,7 @@ func _notice() -> void:
 				continue
 			var dx: float = p.x - z.x
 			var dy: float = p.y - z.y
-			if dx * dx + dy * dy < 49.0 and path_z.sight(world.solid_z, Vector2(z.x, z.y), Vector2(p.x, p.y), 0.15):
+			if dx * dx + dy * dy < 49.0 and clear_shot(Vector2(z.x, z.y), Vector2(p.x, p.y), 0.15):
 				start_chase(z, p)
 				break
 

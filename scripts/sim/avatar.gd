@@ -95,6 +95,9 @@ var _low := {}
 ## every frame and a spread of pellets once each, and the walls only change when something is built or taken down.
 var _low_cache := {}
 var _low_key := ""
+## The town's low props (`World.shot_low`: a bed, a sofa, a table, a counter...: a shot, a blow and the aim line go over them), kept with `_low` while a shot or a blow is worked out;
+## empty in every game that has no such grid (the school, the raid sites), where a solid tile stops a shot as it always did.
+var _over := PackedByteArray()
 ## When the dry click was last told (`Sim.t`).
 var _click_at := -10.0
 
@@ -459,6 +462,7 @@ func fire_blocked(p) -> bool:
 	var from := shoulder(p)
 	var dir := Vector2.from_angle(p.aim)
 	_low = _low_tiles()
+	_over = _over_tiles()
 	var stop := _first_obstacle(from, dir, FACE_NEAR)
 	if stop.is_empty() or not (faces as Dictionary).has(int(stop.tile)):
 		return false
@@ -518,6 +522,7 @@ func _shoot(p, gun: Dictionary) -> void:
 ## point's ring is full exactly when this says "weak".)
 func trace(from: Vector2, ang: float, reach: float) -> Dictionary:
 	_low = _low_tiles()
+	_over = _over_tiles()
 	var dir := Vector2.from_angle(ang)
 	var stop := _wall_distance(from, dir, reach)
 	var best = null
@@ -566,7 +571,18 @@ func _stops(pt: Vector2) -> bool:
 	if tx < 0 or ty < 0 or tx >= sim.W or ty >= sim.H:
 		return true
 	var i: int = ty * sim.W + tx
-	return sim.world.solid_p[i] != 0 and not _low.has(i)
+	if sim.world.solid_p[i] == 0 or _low.has(i):
+		return false
+	# (a bed, a sofa, a table, a counter shuts the tile to walking and not to a shot; a wall, a tall thing and a barricade built later are shut in `solid_p` and not in `_over`)
+	return _over.is_empty() or _over[i] == 0
+
+
+## The town's grid of low props, or an empty one: what `_stops` lets a shot over besides the wall sections of the yard (`_low_tiles`).
+func _over_tiles() -> PackedByteArray:
+	var low = sim.world.get("shot_low")
+	if low is PackedByteArray and (low as PackedByteArray).size() == sim.W * sim.H:
+		return low
+	return PackedByteArray()
 
 
 ## The tiles of the wall sections that a shot goes over: the yard's walls are barricades, shot over from the walkway
@@ -621,6 +637,7 @@ func _swing(p) -> void:
 ## each, with no wall between. Returns how many were struck.
 func _strike(p, reach: float, half_arc: float, dmg: float) -> int:
 	_low = _low_tiles()
+	_over = _over_tiles()
 	p.thrust = 1.0
 	sim.events.append({"type": "stab", "x": p.x, "y": p.y})
 	if sim.feel != null:
