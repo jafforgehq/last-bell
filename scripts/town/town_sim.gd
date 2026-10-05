@@ -25,6 +25,7 @@ const TownPerf := preload("res://scripts/town/town_perf.gd")
 const ACTIVE_CAP := TownPerf.ACTIVE_CAP
 const ACTIVE_CAP_WEB := TownPerf.ACTIVE_CAP_WEB
 const TownMedical := preload("res://scripts/town/town_medical.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 ## The share of its radius a shot is heard at from inside a house (nine tiles: the dead of the houses round it, 10 to 16 tiles off, are left asleep).
 const INDOOR_NOISE := 0.3
 
@@ -139,7 +140,7 @@ func start_run(difficulty_index: int, seed_value: int) -> void:
 	gate.enabled = false
 	levels.enabled = false
 	if not town_data.is_empty():
-		var at: Vector2 = town_data.start.pos
+		var at: Vector2 = Arrival.spawn(town_data).pos    # (the town's entry: the avatar arrives from the forest edge, scripts/town/arrival.gd)
 		for p in people:
 			p.x = at.x
 			p.y = at.y
@@ -218,8 +219,10 @@ func _town_events(first_new: int) -> void:
 			continue
 		var text := String(e.get("text", ""))
 		if text == "The bell rings":
-			e["text"] = "The bell"
-			e["sub"] = "Dusk: be indoors before dark"
+			# (the bell before there is a base: "Night falls. Get indoors." the scenario's words; the streets are as dangerous as for any night outdoors)
+			var words: Array = scenario.dusk_words() if scenario.has_method("dusk_words") else []
+			e["text"] = String(words[0]) if words.size() >= 2 else "The bell"
+			e["sub"] = String(words[1]) if words.size() >= 2 else "Dusk: be indoors before dark"
 		elif text.begins_with("Night ") and String(e.get("sub", "")).begins_with("Hold the wall"):
 			e["sub"] = "The streets are not safe in the dark"
 		elif text == "Dawn":

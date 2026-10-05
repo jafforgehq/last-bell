@@ -123,6 +123,44 @@ func load_records(dead: Array) -> void:
 		cells[_cell(p.x, p.y)].append(i)
 
 
+## One more record at the end of the list (the scenario's: the lone dead one on the road in, which the generator does not place), dormant, a fresh one (`stand`: it stands still until it
+## notices somebody, else it wanders). Returns its id. Its look is a function of its id, so a run makes the same one every time; the save holds it with the others.
+func add_record(at: Vector2, kind_name: String = "walker", stand: bool = true) -> int:
+	var i := n
+	n += 1
+	xs.resize(n)
+	ys.resize(n)
+	kind.resize(n)
+	look.resize(n)
+	hp.resize(n)
+	stands.resize(n)
+	status.resize(n)
+	xs[i] = at.x
+	ys[i] = at.y
+	kind[i] = maxi(0, KIND_NAMES.find(kind_name))
+	look[i] = (i * 7 + 3) % maxi(sim.looks.size(), 1)
+	hp[i] = 0.0
+	stands[i] = 1 if stand else 0
+	status[i] = DORMANT
+	cells[_cell(at.x, at.y)].append(i)
+	return i
+
+
+## Takes a dormant record out of the town for good (it is never woken, never counted; the same as one that was shot, without the count of the kills). False for one that is not dormant.
+func remove_record(i: int) -> bool:
+	if i < 0 or i >= n or status[i] != DORMANT:
+		return false
+	var cell_id := _cell(xs[i], ys[i])
+	var cell: PackedInt32Array = cells[cell_id]
+	var at := cell.find(i)
+	if at >= 0:
+		cell[at] = cell[cell.size() - 1]
+		cell.resize(cell.size() - 1)
+		cells[cell_id] = cell
+	status[i] = KILLED
+	return true
+
+
 func _cell(x: float, y: float) -> int:
 	return clampi(floori(y / float(CELL)), 0, rows - 1) * cols + clampi(floori(x / float(CELL)), 0, cols - 1)
 

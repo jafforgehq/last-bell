@@ -7,10 +7,14 @@ extends VBoxContainer
 ## blue diamonds, the objective's place (`scenario.objective().at`) as a gold ring, and the player as an arrow. Under it a few lines: how many houses are looked
 ## in, the base's address, and the people known of with the house they are in. The pointer over a house says its address.
 ##
+## BEFORE A CLAIM (the arrival, scripts/town/arrival.gd) the houses the player may choose (the candidates) are pinned with a flag and their kind, the way in (the entry) has a small arrow, and above
+## the map each candidate has its line ("Family home. 8 rooms, big yard.") with how far it is. Once there is a base they are gone.
+##
 ## It reads only (`sim.houses.town`, `sim.clearing`, `sim.base`, `sim.rescue`, `sim.scenario`, the avatar), all through `sim.get(...)`, so a module that is not there
 ## just means less on the map. One of the radio panel's pages: `setup(host, sim_getter, options)`, `refresh()`, `focus_on(id)`, `full_page()`, `set_compact(on)`.
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 const GROUND := Color(0.105, 0.17, 0.14, 1.0)
 const ROAD := Color(0.07, 0.1, 0.09, 1.0)
@@ -28,6 +32,7 @@ var options := {}
 var view
 var count_label: Label
 var base_label: Label
+var cand_box: VBoxContainer
 var people_box: VBoxContainer
 var _sig := ""
 var _built := false
@@ -58,6 +63,9 @@ func _build() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(host._label("THE TOWN", Fonts.cond(600, 1), 14, host.INK3))
+	# (before a claim the houses to choose from are listed first: what each is, and how far, is what the player needs before the map)
+	cand_box = host._vbox(2)
+	add_child(cand_box)
 	view = MapView.new()
 	view.page = self
 	view.custom_minimum_size = Vector2(0, MAP_H)
@@ -80,7 +88,7 @@ func _legend() -> void:
 	row.add_theme_constant_override("h_separation", 14)
 	row.add_theme_constant_override("v_separation", 2)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for item in [[HOUSE_SEEN, "Looked in"], [BASE_FILL, "Your base"], [KNOWN, "Someone waits"], [host.ACCENT, "You"]]:
+	for item in [[HOUSE_SEEN, "Looked in"], [BASE_FILL, "Your base"], [host.OK, "House to claim"], [KNOWN, "Someone waits"], [host.ACCENT, "You"]]:
 		var one: HBoxContainer = host._hbox(5)
 		var dot := ColorRect.new()
 		dot.color = item[0]
@@ -117,6 +125,31 @@ func base_house() -> int:
 	if b != null and b.get("claimed") == true and b.get("house") != null:
 		return int(b.house)
 	return -1
+
+
+## The houses the player may still choose, before a claim: [{"house", "label", "dist", "tier", "pos": the middle of the house}] (nothing once there is a base, or in a town with no arrival).
+func candidates() -> Array:
+	var out: Array = []
+	var t := town()
+	if base_house() >= 0 or t.is_empty() or not t.has("start"):
+		return out
+	var me = player_at()
+	for c in Arrival.candidates(t):
+		var h := int(c.house)
+		var mid := Vector2(Rect2i(t.houses[h].rect).get_center())
+		out.append({"house": h, "label": String(c.get("label", "")), "tier": String(c.get("tier", "")), "pos": mid, "dist": (mid.distance_to(me) if me is Vector2 else float(c.get("dist", 0.0)))})
+	return out
+
+
+## Where the run began (a Vector2 and the way in), or null with no arrival: the small arrow on the map.
+func entry_mark():
+	var t := town()
+	if t.is_empty() or not t.has("start") or base_house() >= 0:
+		return null
+	var road: Rect2i = Arrival.entry(t).get("road", Rect2i())
+	if road.size == Vector2i.ZERO:
+		return null    # (a town with no road in: the run began in a house)
+	return Arrival.spawn(t)
 
 
 ## The survivors the player has seen and not brought home: [{"id", "house", "pos": Vector2, "name", "state"}].
@@ -170,14 +203,23 @@ func refresh() -> void:
 	var ex := explored()
 	var base_h := base_house()
 	var people := known()
-	var sig := "%d|%d|%d|%d|%s" % [t.get("houses", []).size(), ex.size(), base_h, people.size(), str(player_at())]
+	var cands := candidates()
+	var sig := "%d|%d|%d|%d|%d|%s" % [t.get("houses", []).size(), ex.size(), base_h, people.size(), cands.size(), str(player_at())]
 	view.queue_redraw()
 	if sig == _sig:
 		return
 	_sig = sig
 	var total: int = t.get("houses", []).size()
 	count_label.text = "%d of %d houses looked in" % [ex.size(), total] if total > 0 else "No map yet"
-	base_label.text = ("Your base: %s" % address_of(base_h)) if base_h >= 0 else "You have no base yet. Clear a house and claim it."
+	base_label.text = ("Your base: %s" % address_of(base_h)) if base_h >= 0 else ("Houses to choose from. Clear one and claim it." if not cands.is_empty() else "You have no base yet. Clear a house and claim it.")
+	for c in cand_box.get_children():
+		cand_box.remove_child(c)
+		c.queue_free()
+	for c in cands:
+		var line: Label = host._label("%s  %d m" % [String(c.label), roundi(float(c.dist))], Fonts.sans(600), 14, host.OK)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size.x = 80
+		cand_box.add_child(line)
 	for c in people_box.get_children():
 		people_box.remove_child(c)
 		c.queue_free()
@@ -282,6 +324,7 @@ class MapView:
 			var c := _px(target)
 			draw_arc(c, 8.0, 0.0, TAU, 24, Color(host.ACCENT, 0.9), 2.0, true)
 			draw_arc(c, 12.0, 0.0, TAU, 24, Color(host.ACCENT, 0.4), 1.5, true)
+		_draw_arrival(host)
 		for p in page.known():
 			var c2 := _px(p.pos)
 			var d := PackedVector2Array([c2 + Vector2(0, -7), c2 + Vector2(6, 0), c2 + Vector2(0, 7), c2 + Vector2(-6, 0)])
@@ -296,6 +339,48 @@ class MapView:
 			draw_colored_polygon(PackedVector2Array([c3 + Vector2(0, -6), c3 + Vector2(5, 5), c3 + Vector2(0, 2), c3 + Vector2(-5, 5)]), host.ACCENT)
 		draw_rect(_rect, Color(host.INK, 0.25), false, 1.0)
 		draw_string(Fonts.cond(700), _rect.position + Vector2(_rect.size.x - 20.0, 18.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(host.INK3, 0.9))
+
+	## Before a claim: the way in (a small arrow where the run began) and a flag on each house that may be chosen, with its kind beside it.
+	func _draw_arrival(host) -> void:
+		var entry = page.entry_mark()
+		if entry is Dictionary:
+			var at := _px(entry.pos)
+			var f := Vector2.from_angle(float(entry.angle))
+			var s := Vector2(-f.y, f.x)
+			var tri := PackedVector2Array([at + f * 7.0, at - f * 4.0 + s * 5.0, at - f * 4.0 - s * 5.0])
+			draw_colored_polygon(tri, Color(host.INK, 0.85))
+			var rim := PackedVector2Array(tri)
+			rim.append(tri[0])
+			draw_polyline(rim, Color(0, 0, 0, 0.7), 1.5, true)
+		var font := Fonts.cond(700)
+		var placed: Array = []    # (the rectangles of the names drawn: the houses of a row are near each other, and a name goes where it covers no other)
+		for c in page.candidates():
+			var foot := _px(c.pos)
+			var top := foot + Vector2(0, -13)
+			draw_line(foot, top, Color(0, 0, 0, 0.7), 3.5, true)
+			draw_line(foot, top, host.OK, 1.5, true)
+			var flag := PackedVector2Array([top, top + Vector2(9, 3.5), top + Vector2(0, 7)])
+			draw_colored_polygon(flag, host.OK)
+			var rim2 := PackedVector2Array(flag)
+			rim2.append(flag[0])
+			draw_polyline(rim2, Color(0, 0, 0, 0.8), 1.2, true)
+			var name := String(c.label).get_slice(". ", 0)
+			var w := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			var spots := [Vector2(foot.x - w * 0.5, top.y - 4.0), Vector2(foot.x - w * 0.5, foot.y + 14.0), Vector2(foot.x + 12.0, top.y + 8.0), Vector2(foot.x - w - 6.0, top.y + 8.0), Vector2(foot.x - w * 0.5, top.y - 18.0), Vector2(foot.x - w * 0.5, foot.y + 28.0)]
+			var at2: Vector2 = spots[0]
+			for s in spots:
+				var p := Vector2(clampf(s.x, _rect.position.x + 2.0, _rect.end.x - w - 2.0), s.y)
+				var box := Rect2(p.x - 1.0, p.y - 11.0, w + 2.0, 14.0)
+				var free := true
+				for other in placed:
+					if box.intersects(other):
+						free = false
+				if free:
+					at2 = p
+					break
+			placed.append(Rect2(at2.x - 1.0, at2.y - 11.0, w + 2.0, 14.0))
+			draw_string_outline(font, at2, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
+			draw_string(font, at2, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, host.INK)
 
 	## The house whose footprint (a little grown) holds the control's point, or -1.
 	func house_at_point(p: Vector2) -> int:
@@ -319,6 +404,9 @@ class MapView:
 					tip += ": your base"
 				elif page.explored().has(h):
 					tip += ": looked in"
+				for c in page.candidates():
+					if int(c.house) == h:
+						tip += ": " + String(c.label)
 			if tip != tooltip_text:
 				tooltip_text = tip
 

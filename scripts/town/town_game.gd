@@ -25,6 +25,7 @@ extends RefCounted
 const VIEW_PARTS := {
 	"house_view": "res://scripts/render/house_view.gd",
 	"base_props_view": "res://scripts/render/base_props_view.gd",
+	"candidate_marks": "res://scripts/render/candidate_marks.gd",
 	"perimeter_view": "res://scripts/render/perimeter_view.gd",
 	"bystander_view": "res://scripts/render/bystander_view.gd",
 	"rescue_card": "res://scripts/ui/rescue_card.gd",
@@ -113,10 +114,13 @@ func _start_hold() -> void:
 		# (fresh: the first morning, still at the start of it: the loading card runs a few steps of the sim, so a count of steps is no test)
 		var fresh: bool = float(main.sim.hour) < 8.5 and main.shot_path == ""
 		var scn = main.sim.get("scenario")
-		if fresh and scn != null and scn.has_method("stage") and String(scn.stage()) == "alone":
+		var at_start: bool = scn != null and scn.has_method("stage") and ["arrive", "alone"].has(String(scn.stage()))
+		if fresh and at_start:
 			main.speed = 0
 			main.hud.toast("Press W A S D to begin", "info")
 			_hold_state = 1
+		else:
+			_intro()    # (a screenshot's run, or a staged one: no first key to wait for)
 		return
 	# held: the loading card puts the speed back to 1 when it goes, so the hold keeps it at 0 until the first key that moves her or a click; Space is the
 	# player's own unpause (main's key handler does the toggle: the hold only lets go)
@@ -132,8 +136,19 @@ func _start_hold() -> void:
 	if moved:
 		_hold_state = 2
 		main.speed = 1
+		_intro()
 	elif main.speed != 0:
 		main.speed = 0
+
+
+## The opening words of a run that begins on the road in, as a banner: "The bell is ringing somewhere. Find shelter before dark." (the scenario says them once: `take_intro`).
+func _intro() -> void:
+	var scn = main.sim.get("scenario")
+	if scn == null or not scn.has_method("take_intro") or main.hud == null:
+		return
+	var words: Array = scn.take_intro()
+	if words.size() >= 2:
+		main.hud.show_banner(String(words[0]), String(words[1]))
 
 
 func on_frame(dt: float) -> void:

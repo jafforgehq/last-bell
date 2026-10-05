@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_doc": "The One House run (scripts/town/one_house.gd, the scenario `OneHouse`): one survivor in one house of a big town, the same rules as the colony with the community modules switched on as people arrive. min_per_sec: game minutes per real second (2.0: a game hour is 30 s). difficulty: the run's difficulty (1 Standard). total_days: the run's nominal length for the clock and the briefing (the run really ends at the first held night, and `total_days()` is never less than the day after it). ideas_from_day: when the community starts to propose things. start: the hour of the first morning and the stores a run begins with (every stock named; the colony's full ones are not used). modules_from_crew: for each community module the number of living people (the avatar counted) from which it is on (99: never in this run). attack: from_rescue is how many rescued survivors make the dead come every night; cutoff_hour is the hour of day after which a fourth rescue puts the first attack on the next night instead of tonight (0: always the next night, a whole day to fortify: the pace of the demo). night: the size of the attack nights as a share of the colony's ordinary night (`first` is the first attack night, each one after is `growth` more); `surges` [{at: hours after the dusk begins, share: of the night's dead}] are the groups the dead are let in in, with lulls between (scripts/town/town_rules.gd), `surge_gap` the seconds between the groups of a surge, `tight` how alike the pace of a surge's dead is (0 the colony's wide spread, 1 all alike: they arrive together). big_night: the first attack night's theme (as demo.json: theme, name, blurb, factor, runners, brutes, min_brutes, brute_at, plated; `headings` how many sides the dead come from, 1 or 2; main_share; cap). held_rule: what a night needs to count as held, judged ONCE at the first moment of the day after it (a night that is not held goes on to the next): the avatar or whoever leads is alive, no dead are in the house, a section of the base still stands, and (`base_whole`) none of the base's sections (fence, gate, barred doors) is down: the dawn hour is the last chance to mend a breach. guide: the lessons, in order; each is done when its cond is true (walked: tiles the avatar has walked; kills: the dead put down; rooms_seen: rooms of the house opened, or another house entered; house_clear; searched: containers searched; claimed; asked: a verb picked on someone on the command wheel) and none blocks anything. The first six are the lone survivor's, shown until the first voice is on the radio; a lesson marked crew (the seventh, how to ask the crew) is shown from then until the dead come. objective, words and end: what the player reads (%d and %s are filled in by the module). The enemy is 'the dead'.",
+  "_doc": "The One House run (scripts/town/one_house.gd, the scenario `OneHouse`): one survivor in one house of a big town, the same rules as the colony with the community modules switched on as people arrive. min_per_sec: game minutes per real second (2.0: a game hour is 30 s). difficulty: the run's difficulty (1 Standard). total_days: the run's nominal length for the clock and the briefing (the run really ends at the first held night, and `total_days()` is never less than the day after it). ideas_from_day: when the community starts to propose things. start: the hour of the first morning (7: the run begins on the road at the forest edge, scripts/town/arrival.gd) and the stores a run begins with (every stock named; the colony's full ones are not used). arrival: mark_r is how near (tiles) the avatar must be to a candidate house for its marker and for the lesson 'find a house'; lone_dead is how far from the entry (tiles, from and to) the scenario puts its one dead one on the road to the first house; quiet_r is how far round the entry the street's dead are taken away when the generator has not kept it clear itself. modules_from_crew: for each community module the number of living people (the avatar counted) from which it is on (99: never in this run). attack: from_rescue is how many rescued survivors make the dead come every night; cutoff_hour is the hour of day after which a fourth rescue puts the first attack on the next night instead of tonight (0: always the next night, a whole day to fortify: the pace of the demo). night: the size of the attack nights as a share of the colony's ordinary night (`first` is the first attack night, each one after is `growth` more); `surges` [{at: hours after the dusk begins, share: of the night's dead}] are the groups the dead are let in in, with lulls between (scripts/town/town_rules.gd), `surge_gap` the seconds between the groups of a surge, `tight` how alike the pace of a surge's dead is (0 the colony's wide spread, 1 all alike: they arrive together). big_night: the first attack night's theme (as demo.json: theme, name, blurb, factor, runners, brutes, min_brutes, brute_at, plated; `headings` how many sides the dead come from, 1 or 2; main_share; cap). held_rule: what a night needs to count as held, judged ONCE at the first moment of the day after it (a night that is not held goes on to the next): the avatar or whoever leads is alive, no dead are in the house, a section of the base still stands, and (`base_whole`) none of the base's sections (fence, gate, barred doors) is down: the dawn hour is the last chance to mend a breach. guide: the lessons, in order; each is done when its cond is true (walked: tiles the avatar has walked; kills: the dead put down; near_candidate: within n tiles of a house that can be claimed; rooms_seen: rooms of the house in hand opened, or a house that is no candidate entered; house_clear; searched: containers searched; claimed; asked: a verb picked on someone on the command wheel) and none blocks anything. The first seven are the lone survivor's, shown until the first voice is on the radio; a lesson marked crew (the eighth, how to ask the crew) is shown from then until the dead come. objective, words and end: what the player reads (%d and %s are filled in by the module). The enemy is 'the dead'.",
   "min_per_sec": 2.0,
   "difficulty": 1,
   "total_days": 5,
@@ -8,9 +8,10 @@
   "low_ammo": 10,
   "calm_start_r": 32,
   "start": {
-    "hour": 8.0,
+    "hour": 7.0,
     "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}
   },
+  "arrival": {"mark_r": 14.0, "lone_dead": {"from": 12.0, "to": 15.0}, "quiet_r": 24.0},
   "modules_from_crew": {
     "briefing": 3,
     "priorities": 3,
@@ -26,8 +27,9 @@
   "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and runners from two streets, and two plated brutes: only their heads are soft.", "factor": 1.0, "runners": 0.15, "brutes": 0.1, "min_brutes": 2, "brute_at": [0.4, 0.95], "headings": 2, "main_share": 0.85, "cap": 40, "plated": true},
   "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true, "base_whole": true},
   "guide": [
-    {"id": "walk", "title": "Walk", "text": "W A S D to move. The house is quiet. For now.", "goal": "Walk about", "cond": {"type": "walked", "n": 6}},
-    {"id": "shoot", "title": "Aim and shoot", "text": "Hold the right mouse button to aim, click to fire. There are dead in this house, and a shot carries.", "goal": "Put one of the dead down", "cond": {"type": "kills", "n": 1}},
+    {"id": "walk", "title": "Walk", "text": "W A S D to walk. The town is up the road. It is quiet, which is not the same as empty.", "goal": "Walk up the road", "cond": {"type": "walked", "n": 6}},
+    {"id": "shoot", "title": "Aim and shoot", "text": "Hold the right mouse button to aim, click to fire. One of the dead is standing on the road ahead. A shot carries, so make it count.", "goal": "Put one of the dead down", "cond": {"type": "kills", "n": 1}},
+    {"id": "find", "title": "Find a house", "text": "Houses ahead. Get close and each one tells you what it is. A big house takes longer to clear and holds more. A small one is quick, and cramped.", "goal": "Get close to a house", "cond": {"type": "near_candidate", "n": 14}},
     {"id": "door", "title": "Doors", "text": "Rooms you have not seen stay dark. Walk through a door, or stand at one and press E to look in.", "goal": "Go into another room", "cond": {"type": "rooms_seen", "n": 2}},
     {"id": "clear", "title": "Clear it", "text": "Every room has to be empty of the dead. They do not always stay where they were.", "goal": "Clear the house", "cond": {"type": "house_clear"}},
     {"id": "search", "title": "Search", "text": "Stand at a shelf or a cabinet and press E. Hold still while you look.", "goal": "Search something", "cond": {"type": "searched", "n": 1}},
@@ -44,16 +46,24 @@
     "brute": {"id": "oh_brute", "title": "A brute", "text": "A brute. Slow, huge and hard to put down. Keep your distance and keep firing."}
   },
   "objective": {
+    "arrive": {"text": "Find shelter before dark", "sub": "Houses ahead: pick one to claim"},
     "clear": {"text": "Clear the house", "sub": "%d of %d rooms clear", "sub_unknown": "Open the doors. Mind what is behind them"},
     "claim": {"text": "Claim the house", "sub": "Stand just inside the front door and press E", "sub_search": "Search the shelves (E), then claim it at the front door"},
-    "rescue": {"text": "Find survivors: %d of %d", "sub": "Clear a house, then talk to who is hiding in it"},
+    "rescue": {"text": "Find survivors: %d of %d", "sub": "Clear a house, then talk to who is hiding in it", "sub_cramped": "The yard is awkward: the fence will fit what it can. Find survivors"},
     "fortify": {"text": "Fortify the house before dark", "sub": "Open the Build page (N) and order the front fence", "sub_next": "Order %s on the Build page (N)", "sub_going": "The builders are on it. Be home before dusk", "sub_done": "Everything is built. Wait for dusk, and keep your gun loaded"},
     "hold": {"text": "Hold the night", "sub": "Until dawn. Shoot, and mend what breaks"},
     "held": {"text": "The night is held", "sub": ""}
   },
   "words": {
     "tagline": "One house. One survivor. A town full of the dead.",
-    "new_game": "One house and one survivor. Clear it, claim it, find people. When four voices are on the radio, the dead come every night.",
+    "new_game": "You arrive alone at the edge of a dead town. Choose a house, clear it, claim it, find people. When four voices are on the radio, the dead come every night.",
+    "intro": ["The bell is ringing somewhere", "Find shelter before dark"],
+    "dusk_no_base": ["Night falls", "Get indoors"],
+    "claimed": {
+      "best": ["This house is yours", "A roomy home: a bed, a stash, a radio. Keep it clear"],
+      "ok": ["It will do", "A bed, a stash, a radio. Keep it clear"],
+      "poor": ["It is small, but it is yours", "A bed, a stash, a radio. Keep it clear"]
+    },
     "new_game_caption": "How hard the nights are, and the seed",
     "fourth_tonight": ["Four voices on the radio", "The dead will come tonight"],
     "fourth_tomorrow": ["Four voices on the radio", "The dead will come tomorrow night"],

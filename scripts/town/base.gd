@@ -4,12 +4,15 @@
 ## THE CLAIM (the order is the contract, plan 2.3). `claim(h)`: refused unless the house is claimable now (`clearing.claimable`: every room looked into, none
 ## of the dead in it), the avatar is inside it within CLAIM_NEAR of the claim spot and nothing is claimed yet. Then the layout is made (BaseLayout.make of WP5, or
 ## `maker` when a test or another package sets one, or the interior-only fallback below), `build.install_layout`, `jobs.install_layout` (each only when the hook
-## exists and the layout has something for it), `perimeter.activate(layout)`, `sim.spawns` = the layout's, `claimed`, `scenario.on_claimed(h)`, the events `claimed`
-## and the banner "This house is yours". It costs nothing. E at the front door of the start house begins it as a 2 s session (uses.gd): the demo offers the claim only
-## where `houses.start_house() == h` (any house works in `claim`).
+## exists and the layout has something for it), `perimeter.activate(layout)`, `sim.spawns` = the layout's, `claimed`, the survivors of that house (`rescue.on_claimed`),
+## `scenario.on_claimed(h)`, the events `claimed` and the banner (`scenario.claim_words(h)`: "This house is yours", by how good a base it is). It costs nothing. E at the front door of
+## any CANDIDATE house (scripts/town/arrival.gd: the houses the player is offered on arriving; the start house in a town with none) begins it as a 2 s session (uses.gd); any house works in `claim`.
+## A layout that fails `BaseLayout.validate` at the claim (the generator checks the candidates, so it should not) still stands: `problems` lists what is wrong and the objective says so.
 ## SAVED: {claimed, house} only. The layout is made again on a load (`prepare_load` before the rest is read, so that `perimeter.prepare_load` can read `layout`).
 ## Candidates: kind "claim", and kind "stash" (E at the stash reads the stores).
 extends RefCounted
+
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 const CLAIM_REACH := 2.2
 const CLAIM_NEAR := 6.0
@@ -24,6 +27,8 @@ var enabled := true
 var claimed := false
 var house := -1
 var layout: Dictionary = {}
+## What `BaseLayout.validate` found wrong with the layout made at the claim (empty: nothing, which is what every candidate house of the generator gives).
+var problems: Array = []
 ## Set to a Callable(town, house_id) -> Dictionary to use it in place of BaseLayout.make (tests; a package that has its own).
 var maker := Callable()
 
@@ -36,6 +41,7 @@ func start() -> void:
 	claimed = false
 	house = -1
 	layout = {}
+	problems = []
 	_put_bench_away()
 
 
@@ -71,10 +77,15 @@ func _rect_mid(h: int) -> Vector2:
 	return Vector2(rect.position) + Vector2(rect.size) * 0.5
 
 
-## The house the base is, or would be: the claimed one, else the start house.
+## The house the base is, or would be: the claimed one, else the house the scenario says the player has in hand (the candidate she went into, the one found clear), else the start house.
 func _subject() -> int:
 	if not layout.is_empty():
 		return house
+	var sc = sim.scenario
+	if sc != null and sc.has_method("work_house"):
+		var w := int(sc.work_house())
+		if w >= 0:
+			return w
 	var hs = _hs()
 	return int(hs.start_house()) if hs != null else -1
 
@@ -184,12 +195,28 @@ func claim(h: int) -> Dictionary:
 		return {"ok": false, "why": "Stand just inside the front door"}
 	install(h)
 	claimed = true
+	problems = _check_layout()
+	var rs = sim.get("rescue")
+	if rs != null and rs.has_method("on_claimed"):
+		rs.on_claimed(h)    # (the survivors are the ones round THIS house: before a claim nobody is offered)
 	var sc = sim.scenario
 	if sc != null and sc.has_method("on_claimed"):
 		sc.on_claimed(h)
+	var words: Array = sc.claim_words(h) if sc != null and sc.has_method("claim_words") else []
 	sim.events.append({"type": "claimed", "house": h})
-	sim.events.append({"type": "banner", "text": "This house is yours", "sub": "A bed, a stash, a radio. Keep it clear"})
+	sim.events.append({"type": "banner", "text": String(words[0]) if words.size() >= 2 else "This house is yours", "sub": String(words[1]) if words.size() >= 2 else "A bed, a stash, a radio. Keep it clear"})
 	return {"ok": true, "why": ""}
+
+
+## What is wrong with the layout just made ([] when nothing is, and for a layout of the fallback's or a test's own maker, which has no kits to check).
+func _check_layout() -> Array:
+	if maker.is_valid() or not layout.has("kits") or not ResourceLoader.exists(BASE_LAYOUT):
+		return []
+	var script = load(BASE_LAYOUT)
+	var hs = _hs()
+	if script == null or not script.has_method("validate") or hs == null or typeof(hs.get("town")) != TYPE_DICTIONARY:
+		return []
+	return script.validate(layout, hs.town)
 
 
 ## Makes the layout of house `h` and puts it where it goes (no events, no checks: `claim` and the load do those). `with_perimeter` is false on a load: the
@@ -317,7 +344,8 @@ func _fallback_spawns(mid: Vector2) -> Array:
 
 # --------------------------------------------------------------------------- E uses --
 
-## "Claim this house" at the claim spot of the start house, "Check the stores" at the stash once claimed.
+## "Claim this house" at the claim spot of the house the avatar is in when it is one the player was offered (a candidate: scripts/town/arrival.gd; the start house of a town with none),
+## "Check the stores" at the stash once claimed.
 func candidates(p) -> Array:
 	var out: Array = []
 	var hs = _hs()
@@ -325,10 +353,11 @@ func candidates(p) -> Array:
 		return out
 	var me := Vector2(p.x, p.y)
 	if not claimed:
-		var h := int(hs.start_house())
+		var h := int(hs.house_at(p.x, p.y))
+		var offered: bool = h >= 0 and (h == int(hs.start_house()) or Arrival.is_candidate(hs.town, h))
 		var spot := spot_of(h)
 		var cl = sim.get("clearing")
-		if h >= 0 and spot != Vector2.ZERO and cl != null and int(hs.house_at(p.x, p.y)) == h and me.distance_to(spot) <= CLAIM_REACH:
+		if offered and spot != Vector2.ZERO and cl != null and me.distance_to(spot) <= CLAIM_REACH:
 			var u = sim.get("uses")
 			var stop: bool = u != null and u.in_session("claim", "h%d" % h)
 			var can: Dictionary = cl.claimable(h)
