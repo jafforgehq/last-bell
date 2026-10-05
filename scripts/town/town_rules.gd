@@ -410,8 +410,18 @@ func _hunted(p: Person) -> bool:
 	return false
 
 
+## Whether `from` has a clear line to `to` for a SHOT or a look (the crew's gun, the dead's eye): a wall, a tall thing (a wardrobe, a fridge, a bookshelf, a locker...) and a barricade
+## stop it, a LOW prop (a bed, a sofa, a table, a counter...) does not (`World.shot_low`, assets/data/prop_heights.json). It is not the line a body walks: nobody walks through a bed, and
+## the dead's straight walk at their prey and the pathfinder keep asking `path_z.sight(solid_z)`. A world with no such grid answers as that does.
+func clear_shot(from: Vector2, to: Vector2, r: float = 0.12) -> bool:
+	var low = world.get("shot_low") if world != null else null
+	if low is PackedByteArray and (low as PackedByteArray).size() == W * H:
+		return path_z.sight_over(world.solid_z, low, from, to, r)
+	return path_z.sight(world.solid_z, from, to, r)
+
+
 ## What a shooter picks: the dead at the fence (clawing it, or in through it) whatever stands between, and the rest only on a clear line
-## (a house's wall hides what is behind it). No yard bonus: a base has the fence line, not the school's yard.
+## (a house's wall hides what is behind it; a bed does not: `clear_shot`). No yard bonus: a base has the fence line, not the school's yard.
 func _find_target(p: Person):
 	var reach: float = reach_of(gun_of(p), p)
 	var best = null
@@ -423,7 +433,7 @@ func _find_target(p: Person):
 		var dist := Vector2(z.x - p.x, z.y - p.y).length()
 		if dist > reach:
 			continue
-		if z.state != "attack" and z.state != "breach" and not path_z.sight(world.solid_z, from, Vector2(z.x, z.y), 0.12):
+		if z.state != "attack" and z.state != "breach" and not clear_shot(from, Vector2(z.x, z.y), 0.12):
 			continue
 		var score := dist - (3.0 if z.state == "attack" else 0.0) + float(Kinds.PRIORITY.get(z.kind, 0.0))
 		if score < best_score:

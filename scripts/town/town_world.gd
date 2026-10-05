@@ -208,6 +208,9 @@ func _copy_arrays() -> void:
 	terrain = PackedByteArray(d.terrain)
 	solid_z = PackedByteArray(d.solidZ)
 	solid_p = PackedByteArray(d.solidP)
+	# (the tiles under low props: a shot goes over them; a town's data without the key shoots as it did)
+	var low = d.get("shot_low")
+	shot_low = low if low is PackedByteArray and (low as PackedByteArray).size() == W * H else PackedByteArray()
 	_tick("arrays", t1)
 
 
