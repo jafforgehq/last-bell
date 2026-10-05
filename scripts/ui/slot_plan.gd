@@ -1,18 +1,20 @@
-## The plan of the base (One House, WP7): a top-down drawing of the claimed house's lot with the house in it and a marker for every perimeter slot,
-## coloured by what it is now (locked, open, ordered, going up, built, broken). Click a marker to pick the slot (`picked(id)`); the page under it
-## (slot_page.gd) lists the slots too and shows the one that is picked. Everything is in tiles of the lot; the drawing is scaled to fit its box.
+## The plan of the base (One House, WP7): a top-down drawing of the claimed house's lot with the house in it and every section the Build page's projects are made of,
+## coloured by what it is now (locked, open, ordered, going up, built, broken). The sections are drawn small and plain: what the plan is for is to show WHERE a project
+## goes. The project that is under the pointer (on the plan or on the page: `hover_project`), or else the one that is picked (`selected_project`), is lit: its sections
+## are drawn in full, with a gold ring and its name; the rest of the plan is dimmed. A click on a section picks its project (`picked(project_id)`), a pointer over one
+## says which it is (`hovered(project_id)`; "" when it leaves). Everything is in tiles of the lot; the drawing is scaled to fit its box.
 ##
 ##   var plan := SlotPlan.new(); plan.setup(hud)
-##   plan.set_data({"lot": Rect2i, "house": Rect2i, "front": "N" or "S", "slots": [{"id", "kind", "rect", "state", "name"}...], "posts": [Vector2...]})
-##   plan.selected = "slot_n1"       # the gold ring
+##   plan.set_data({"lot": Rect2i, "house": Rect2i, "front": "N" or "S", "slots": [{"id", "kind", "rect", "state", "project", "project_name"}...], "posts": [Vector2...]})
+##   plan.selected_project = "front"   # the gold rings
 ##
 ## A slot's "rect" is a Rect2i (or a Rect2, or {"position", "size"}) in map tiles. Read only: the plan changes nothing in the rules.
 extends Control
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 
-signal picked(id: String)
-signal hovered(id: String)
+signal picked(project_id: String)
+signal hovered(project_id: String)
 
 const STATE_COLOR := {
 	"locked": Color("#a8ae9d"),
@@ -29,9 +31,11 @@ const HOUSE_FILL := Color("#56391f")
 const HOUSE_EDGE := Color("#8a6238")
 const ROOF_LINE := Color(0.0, 0.0, 0.0, 0.22)
 ## The least a marker is drawn, and picked, in pixels: a fence of one tile is a thin bar, not a hair.
-const MIN_MARK := 9.0
-const PICK_PAD := 7.0
+const MIN_MARK := 7.0
+const PICK_PAD := 6.0
 const MARGIN := 1.5
+## How much of a section's colour is left when another project is the lit one.
+const DIM := 0.3
 
 var host
 var lot := Rect2()
@@ -39,8 +43,10 @@ var house := Rect2()
 var front := "S"
 var slots: Array = []
 var posts: Array = []
-var selected := ""
-var hover_id := ""
+## The project that is picked, the one under the pointer on the plan (the plan sets it) and the one under the pointer on the page (the page does).
+var selected_project := ""
+var hover_project := ""
+var card_hover := ""
 ## id -> the Rect2 of the marker on the screen at the last draw (what a click is tested against; the tests read it).
 var marks := {}
 
@@ -48,7 +54,7 @@ var marks := {}
 func setup(host_hud) -> void:
 	host = host_hud
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	custom_minimum_size = Vector2(0, 176)
+	custom_minimum_size = Vector2(0, 168)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mouse_default_cursor_shape = Control.CURSOR_ARROW
 
@@ -60,8 +66,6 @@ func set_data(d: Dictionary) -> void:
 	front = String(d.get("front", "S"))
 	slots = d.get("slots", [])
 	posts = d.get("posts", [])
-	if selected != "" and not _has(selected):
-		selected = ""
 	queue_redraw()
 
 
@@ -77,11 +81,11 @@ static func to_rect(v) -> Rect2:
 	return Rect2()
 
 
-func _has(id: String) -> bool:
-	for s in slots:
-		if String(s.get("id", "")) == id:
-			return true
-	return false
+## The project that is lit now ("" for none: every section is drawn in full).
+func lit() -> String:
+	if hover_project != "":
+		return hover_project
+	return card_hover if card_hover != "" else selected_project
 
 
 ## What the drawing covers: the lot with a margin, or the slots' own extent when there is no lot.
@@ -141,25 +145,37 @@ func _draw() -> void:
 	for p in posts:
 		if p is Vector2:
 			var pp: Vector2 = _px(f, Rect2(p, Vector2.ZERO)).position
-			draw_circle(pp, 2.5, Color(host.INK3, 0.8))
+			draw_circle(pp, 2.0, Color(host.INK3, 0.5))
+	var on := lit()
+	var name_at := Vector2.ZERO
+	var lit_name := ""
 	for s in slots:
-		_mark(f, s)
+		_mark(f, s, on)
+		if on != "" and String(s.get("project", "")) == on and lit_name == "":
+			lit_name = String(s.get("project_name", ""))
+	# the lit project's name, in a corner
+	if lit_name != "":
+		name_at = Vector2(8.0, size.y - 8.0)
+		draw_string(Fonts.cond(700), name_at, lit_name.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40.0, 14, Color(host.ACCENT, 1.0))
 	# north is up
 	draw_string(Fonts.cond(700), Vector2(size.x - 18.0, 16.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(host.INK3, 0.9))
 
 
-func _mark(f: Dictionary, s: Dictionary) -> void:
+func _mark(f: Dictionary, s: Dictionary, on: String) -> void:
 	var id := String(s.get("id", ""))
 	var kind := String(s.get("kind", "fence"))
 	var state := String(s.get("state", "open"))
+	var project := String(s.get("project", ""))
 	var col: Color = STATE_COLOR.get(state, host.INK3)
 	var r := _px(f, to_rect(s.get("rect")))
 	# a thin fence is drawn at least MIN_MARK across, round its middle
 	var mid := r.get_center()
 	var shown := Rect2(mid - Vector2(maxf(r.size.x, MIN_MARK), maxf(r.size.y, MIN_MARK)) * 0.5, Vector2(maxf(r.size.x, MIN_MARK), maxf(r.size.y, MIN_MARK)))
 	marks[id] = shown
-	var fill := Color(col, 0.28 if state != "built" else 0.55)
-	var edge := Color(col, 1.0 if state != "locked" else 0.7)
+	var is_lit := on != "" and project == on
+	var fade := 1.0 if (on == "" or is_lit) else DIM
+	var fill := Color(col, (0.28 if state != "built" else 0.55) * fade)
+	var edge := Color(col, (1.0 if state != "locked" else 0.7) * fade)
 	match kind:
 		"floodlight":
 			var c := shown.get_center()
@@ -173,8 +189,8 @@ func _mark(f: Dictionary, s: Dictionary) -> void:
 			var t := shown.grow(2.0)
 			draw_rect(t, fill)
 			draw_rect(t, edge, false, 2.0)
-			draw_line(t.position, t.end, Color(edge, 0.8), 1.5)
-			draw_line(Vector2(t.end.x, t.position.y), Vector2(t.position.x, t.end.y), Color(edge, 0.8), 1.5)
+			draw_line(t.position, t.end, Color(edge, 0.8 * fade), 1.5)
+			draw_line(Vector2(t.end.x, t.position.y), Vector2(t.position.x, t.end.y), Color(edge, 0.8 * fade), 1.5)
 		"gate":
 			draw_rect(shown, fill)
 			draw_rect(shown, edge, false, 2.0)
@@ -188,10 +204,9 @@ func _mark(f: Dictionary, s: Dictionary) -> void:
 			draw_rect(shown, edge, false, 2.0)
 	if state == "locked":
 		# a locked slot is struck through
-		draw_line(shown.position + Vector2(2, 2), shown.end - Vector2(2, 2), Color(col, 0.55), 1.5)
-	if id == selected or id == hover_id:
-		var ring := shown.grow(5.0)
-		draw_rect(ring, Color(host.ACCENT, 1.0 if id == selected else 0.55), false, 2.5 if id == selected else 1.5)
+		draw_line(shown.position + Vector2(2, 2), shown.end - Vector2(2, 2), Color(col, 0.55 * fade), 1.5)
+	if is_lit:
+		draw_rect(shown.grow(4.0), Color(host.ACCENT, 1.0 if (project == hover_project or project == card_hover or project == selected_project) else 0.7), false, 2.0)
 
 
 func _dashed_rect(r: Rect2, color: Color) -> void:
@@ -205,7 +220,7 @@ func _dashed_rect(r: Rect2, color: Color) -> void:
 				draw_line(a.lerp(b, float(j) / n), a.lerp(b, float(j + 1) / n), color, 1.5)
 
 
-## The slot whose marker is nearest the point (within PICK_PAD of it), or "".
+## The id of the slot whose marker is nearest the point (within PICK_PAD of it), or "".
 func slot_at(p: Vector2) -> String:
 	var best := ""
 	var best_d := INF
@@ -220,24 +235,35 @@ func slot_at(p: Vector2) -> String:
 	return best
 
 
+## The project of the section under the point ("" when there is none).
+func project_at(p: Vector2) -> String:
+	var id := slot_at(p)
+	if id == "":
+		return ""
+	for s in slots:
+		if String(s.get("id", "")) == id:
+			return String(s.get("project", ""))
+	return ""
+
+
 func _gui_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseMotion:
-		var id := slot_at((ev as InputEventMouseMotion).position)
-		if id != hover_id:
-			hover_id = id
-			mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if id != "" else Control.CURSOR_ARROW
-			hovered.emit(id)
+		var pid := project_at((ev as InputEventMouseMotion).position)
+		if pid != hover_project:
+			hover_project = pid
+			mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if pid != "" else Control.CURSOR_ARROW
+			hovered.emit(pid)
 			queue_redraw()
 	elif ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		var id2 := slot_at((ev as InputEventMouseButton).position)
-		if id2 != "":
-			picked.emit(id2)
+		var pid2 := project_at((ev as InputEventMouseButton).position)
+		if pid2 != "":
+			picked.emit(pid2)
 			accept_event()
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_MOUSE_EXIT and hover_id != "":
-		hover_id = ""
+	if what == NOTIFICATION_MOUSE_EXIT and hover_project != "":
+		hover_project = ""
 		hovered.emit("")
 		queue_redraw()
 	elif what == NOTIFICATION_RESIZED:

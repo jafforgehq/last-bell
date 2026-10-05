@@ -51,13 +51,13 @@ const PAGE_PATHS := {
 	"build": "res://scripts/ui/build_page.gd",
 	"map": "res://scripts/ui/map_page.gd",
 }
-## One House (WP7): in the town the Build page is the perimeter's slots and the Map page is the district's map (built when `sim.is_one_house()`).
+## One House (WP7): in the town the Build page is the base's projects (the front fence, the gate, a tower...) and the Map page is the district's map (built when `sim.is_one_house()`).
 const TOWN_PAGE_PATHS := {
 	"build": "res://scripts/ui/slot_page.gd",
 	"map": "res://scripts/ui/district_map.gd",
 }
 const TOWN_PAGE_TIPS := {
-	"build": "Build: the places round the house where a fence, a gate, a tower or a floodlight can go. Pick one, pick what to build, and the Builders raise it\nKey: N",
+	"build": "Build: fortify the house. The page says what to do next (the front fence first); one button orders a whole project, and the Builders raise it\nKey: N",
 	"map": "Map: the town, the houses you have been in, the base and the people you know of\nKey: M",
 }
 ## How wide a tab is at least in the whole form (five tabs, the close button and the gaps are under 340 px: a window that leaves the panel less is narrow).

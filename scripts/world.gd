@@ -18,6 +18,9 @@ var H: int
 var terrain := PackedByteArray()
 var solid_z := PackedByteArray()
 var solid_p := PackedByteArray()
+## The town only (the generator's `data.shot_low`, scripts/town/prop_heights.gd): 1 on the tiles under a LOW prop (a bed, a sofa, a table, a counter...), shut to walking in `solid_p` and
+## `solid_z` but not to a shot, a blow or a look. Empty in every other game (the school, the raid sites): there a solid tile stops a shot as it always did.
+var shot_low := PackedByteArray()
 var layers := {}
 ## The tiles of the raised decks (walkways and towers): index to true.
 var deck_tiles := {}
