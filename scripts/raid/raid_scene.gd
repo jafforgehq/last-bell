@@ -198,6 +198,9 @@ func setup_world(game, game_hud, base_data: Dictionary, the_site: Dictionary, me
 ## The rules' run on the world, the squad and its pawns, the vehicle and the radio's stand-ins.
 func setup_run(members_people: Array, ammo: float, vehicle_kind: String = "", loot_mult: float = 1.0, survivor: bool = false) -> void:
 	run = RaidRun.new(site, world, fx, RaidRun.squad_of(members_people), ammo, vehicle_kind, loot_mult, survivor)
+	# the feel of a fight (render and audio only, scripts/render/combat_fx.gd): hits, kills and its sounds here too
+	run.sim.feel = fx.combat
+	fx.combat.sound = main.get("sound") if main != null else null
 	# the run's own Sim gives each person the colony job their def names (a seat in the yard); nobody here works one
 	run.sim.jobs.clear()
 	run.sim.tactics.chores = false
@@ -1512,6 +1515,9 @@ func _tick_road(dt: float) -> void:
 
 func _tick_place(dt: float) -> void:
 	legend_t = maxf(0.0, legend_t - dt)
+	if fx != null:
+		fx.combat.listener = cam_center
+		fx.combat.tick_real(dt)
 	_hands()
 	if not _held_still():
 		for i in step_clock.advance(dt, 1.0):

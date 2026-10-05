@@ -4,16 +4,20 @@
 extends RefCounted
 
 const GD := preload("res://scripts/game_data.gd")
+const Combat := preload("res://scripts/render/combat_fx.gd")
 const TILE := GD.TILE
 const G := 9.8
-const MAX_DECALS := 260
+## Casings on the ground and in the air at most (the oldest is gone first).
+const MAX_CASINGS := 28
 
 var parts: Array = []
-var decals: Array = [] # {node, size, grow, age}
 var tracers: Array = []
-var flashes: Array = []
 var decal_parent: Node2D
 var blood_tex: Array = []
+## The feel of a fight (scripts/render/combat_fx.gd): the muzzle flash and its light, blood, hits and kills, the splats, the camera's push, the
+## sounds of a hit and a reload. This object's `muzzle`, `blood`, `decal` and the "bullet" `hit_material` are its.
+var combat = Combat.new()
+var _casings: Array = []
 var puff_light: Texture2D
 var puff_dark: Texture2D
 var radial: Texture2D
@@ -26,39 +30,25 @@ func setup(data: Dictionary, parent: Node2D, radial_tex: Texture2D) -> void:
 	puff_light = GD.tex(data.fx.puffLight)
 	puff_dark = GD.tex(data.fx.puffDark)
 	radial = radial_tex
+	combat.setup(blood_tex, parent, radial_tex, puff_light, puff_dark)
 
 
+## Blood from a wound (the rules' bites, wounds and blows): drops that fly and fall, a puff of it (combat_fx.gd).
 func blood(x: float, y: float, dx: float, dy: float, n: int = 10) -> void:
-	var base := atan2(dy, dx)
-	for i in n:
-		var sp := 1.0 + randf() * 3.0
-		var a := base + (randf() - 0.5) * 1.4
-		parts.append({"kind": "blood", "x": x, "y": y, "z": 0.55 + randf() * 0.3, "vx": cos(a) * sp, "vy": sin(a) * sp, "vz": randf() * 2.0, "life": 2.0, "size": 0.03 + randf() * 0.04})
+	combat.blood(x, y, dx, dy, n)
 
 
+## A splat on the ground (a kill's, a drop's): it grows a little, holds, fades away in about twenty seconds and is pooled (combat_fx.gd).
 func decal(x: float, y: float, size: float, grow: float = 0.0) -> void:
-	var s := Sprite2D.new()
-	s.texture = blood_tex[randi() % blood_tex.size()]
-	s.position = Vector2(x, y) * TILE
-	s.rotation = randf() * TAU
-	s.modulate = Color(1, 1, 1, 0.85)
-	decal_parent.add_child(s)
-	var dd := {"node": s, "size": size, "grow": grow, "age": 0.0}
-	_scale_decal(dd)
-	decals.append(dd)
-	if decals.size() > MAX_DECALS:
-		var old: Dictionary = decals.pop_front()
-		old.node.queue_free()
+	combat.decal(x, y, size, grow)
 
 
-func _scale_decal(dd: Dictionary) -> void:
-	# the splat sprite spans three decal sizes
-	var s: Sprite2D = dd.node
-	var px: float = dd.size * 3.0 * TILE
-	s.scale = Vector2.ONE * (px / s.texture.get_width())
-
-
+## What a blow or a bullet does to a wall: `kind` "metal", "wood" or "stone" (the builders' hammer, a claw: sparks or chips, below) or "bullet"
+## (a shot stopped by a wall: sparks, chips, dust and a zing, combat_fx.gd).
 func hit_material(x: float, y: float, kind: String) -> void:
+	if kind == "bullet":
+		combat.hit_wall(x, y)
+		return
 	if kind == "metal":
 		for i in 6:
 			var a := randf() * TAU
@@ -72,17 +62,24 @@ func hit_material(x: float, y: float, kind: String) -> void:
 			parts.append({"kind": "chip", "x": x, "y": y, "z": 0.6, "vx": cos(a) * sp, "vy": sin(a) * sp, "vz": 1.0 + randf() * 2.0, "life": 1.5, "size": 0.05 + randf() * 0.05, "color": cols[i % 3], "rot": randf() * 3.0, "vr": (randf() - 0.5) * 20.0})
 
 
+## The flash of a shot at the muzzle (combat_fx.gd: by weapon, with its light).
 func muzzle(x: float, y: float, ang: float, big: bool) -> void:
-	flashes.append({"x": x, "y": y, "ang": ang, "t": 0.0, "dur": 0.08 if big else 0.06, "big": big})
+	combat.muzzle(x, y, ang, big)
 
 
 func tracer(x0: float, y0: float, x1: float, y1: float) -> void:
 	tracers.append({"a": Vector2(x0, y0), "b": Vector2(x1, y1), "t": 0.0, "dur": maxf(0.05, Vector2(x1 - x0, y1 - y0).length() / 70.0)})
 
 
+## A casing pops out to the right of the gun, falls, bounces and lies there a few seconds (at most MAX_CASINGS at once).
 func casing(x: float, y: float, ang: float, shell: bool) -> void:
 	var a := ang + PI / 2.0 + (randf() - 0.5) * 0.6
-	parts.append({"kind": "casing", "x": x, "y": y, "z": 0.5, "vx": cos(a) * 1.8, "vy": sin(a) * 1.8, "vz": 2.2, "life": 6.0, "size": 0.07 if shell else 0.045, "shell": shell, "rot": randf() * 3.0, "vr": 18.0})
+	var p := {"kind": "casing", "x": x, "y": y, "z": 0.5, "vx": cos(a) * 1.8, "vy": sin(a) * 1.8, "vz": 2.2, "life": 6.0, "size": 0.07 if shell else 0.05, "shell": shell, "rot": randf() * 3.0, "vr": 18.0}
+	parts.append(p)
+	_casings.append(p)
+	if _casings.size() > MAX_CASINGS:
+		var old: Dictionary = _casings.pop_front()
+		old.life = 0.0
 
 
 func smoke(x: float, y: float, size: float, dark: bool) -> void:
@@ -127,6 +124,8 @@ func update(dt: float) -> void:
 					p.vx *= 0.5
 					p.vy *= 0.5
 					p.vr *= 0.5
+					if p.kind == "casing":
+						combat.casing_tink(p.x, p.y)
 				else:
 					p.resting = true
 	var kept: Array = []
@@ -134,24 +133,17 @@ func update(dt: float) -> void:
 		if p.life > 0.0:
 			kept.append(p)
 	parts = kept
-	for dd in decals:
-		dd.age += dt
-		if dd.grow > 0.0 and dd.age < 3.0:
-			dd.size += dd.grow * dt / 3.0
-			_scale_decal(dd)
+	if not _casings.is_empty() and _casings[0].life <= 0.0:
+		_casings = _casings.filter(func(c): return c.life > 0.0)
 	for tr in tracers:
 		tr.t += dt
 	tracers = tracers.filter(func(tr): return tr.t < tr.dur + 0.04)
-	for f in flashes:
-		f.t += dt
-	flashes = flashes.filter(func(f): return f.t < f.dur)
+	combat.update(dt)
 
 
+## The lights of the muzzle flashes now, for the light rig: [{x, y, r}].
 func flash_lights() -> Array:
-	var out: Array = []
-	for f in flashes:
-		out.append({"x": f.x, "y": f.y, "r": 4.5 if f.big else 3.4})
-	return out
+	return combat.flash_lights()
 
 
 # ---------------------------------------------------------------- drawing --
@@ -195,9 +187,10 @@ func draw_air(ci: CanvasItem) -> void:
 		elif (p.kind == "casing" or p.kind == "chip") and not p.get("resting", false):
 			_draw_bit(ci, p)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+	combat.draw_air(ci)
 
 
-## Additive layer: sparks, embers, tracers, muzzle flashes.
+## Additive layer: sparks, embers, tracers, muzzle flashes (combat_fx.gd draws the flashes and the sparks of a hit).
 func draw_add(ci: CanvasItem) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
 	for p in parts:
@@ -214,11 +207,5 @@ func draw_add(ci: CanvasItem) -> void:
 		if a.distance_to(b) < 0.001:
 			continue
 		ci.draw_polyline_colors(PackedVector2Array([a, b]), PackedColorArray([Color(1.0, 0.86, 0.59, 0.0), Color(1.0, 0.94, 0.78, 0.95)]), 0.045, true)
-	for f in flashes:
-		var k: float = 1.0 - f.t / f.dur
-		var r: float = (0.55 if f.big else 0.4) * (0.7 + 0.3 * k)
-		ci.draw_texture_rect(radial, Rect2(f.x - r, f.y - r, r * 2.0, r * 2.0), false, Color(1.0, 0.85, 0.55, k))
-		ci.draw_set_transform(Vector2(f.x, f.y) * TILE, f.ang, Vector2(TILE, TILE))
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(0, -0.06), Vector2(r * 1.4, 0), Vector2(0, 0.06)]), Color(1.0, 0.93, 0.71, k))
-		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+	combat.draw_add(ci)

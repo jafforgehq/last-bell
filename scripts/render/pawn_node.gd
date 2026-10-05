@@ -11,6 +11,8 @@ const Art := preload("res://scripts/render/pawn_art.gd")
 const S := preload("res://scripts/render/shapes.gd")
 const WorkAnim := preload("res://scripts/render/work_anim.gd")
 const PawnMesh := preload("res://scripts/render/pawn_mesh.gd")
+const Combat := preload("res://scripts/render/combat_fx.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -61,6 +63,10 @@ var _fast := false
 ## The colours of this figure for the meshes: one texel for each of the palette's colours.
 var _pal_tex: Texture2D
 
+## The material this figure wears when it is not flashing (the tint of its kind, or none), and when a hit's flash ends (real milliseconds).
+var _base_material: Material = null
+var _flash_end_ms := 0
+
 ## Round 16, people at work (scripts/render/work_anim.gd): the pose is kept in one object and the work clock is shown between the
 ## rules' steps. `_wk` is how far into the pose the person is (0 the ordinary figure, 1 the pose), moved over WorkAnim.EASE seconds
 ## of the screen's clock (`anim_t`) toward where `Person.work` says it should be, so a person who stops working is back to normal
@@ -100,6 +106,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		var tinted := Art.material(kind)
 		if tinted != null:
 			material = tinted
+			_base_material = tinted
 	if not zombie:
 		_work_phase = WorkAnim.phase_of(String(e.id))
 		var wb: Array = data.weaponArt.box
@@ -110,6 +117,22 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 			if o.kind == "cot" or o.kind == "mattress":
 				beds.append(o)
 	sync()
+
+
+## A hit lands on this one: it is washed with `mat` (the white of a hit, steel blue for a plate) for `secs` real seconds, then its own material is back
+## (sync does that). With `soft` (Settings, reduce motion) nothing flashes.
+func flash(mat: Material, secs: float, soft: bool = false) -> void:
+	if soft:
+		return
+	material = mat
+	_flash_end_ms = Time.get_ticks_msec() + int(secs * 1000.0)
+
+
+## The weapon in this person's hands changed (a screenshot's `--weapon=`): its picture and where the hands go on it.
+func set_weapon(data: Dictionary, id: String) -> void:
+	weapon_tex = GD.tex(data.weaponArt.files[id])
+	gun_front = data.guns[id].front
+	queue_redraw()
 
 
 ## `steps` is how many steps the rules have taken, `alpha` how far the time has
@@ -129,6 +152,9 @@ func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 		_cur = now
 	_steps_seen = steps
 	_frame_seen = frame
+	if _flash_end_ms > 0 and Time.get_ticks_msec() >= _flash_end_ms:
+		_flash_end_ms = 0
+		material = _base_material
 	if not zombie:
 		_work_sync(steps, alpha)
 	position = _prev.lerp(_cur, alpha) * TILE
@@ -298,6 +324,10 @@ func _draw_person() -> void:
 	_legs(view, p.walk_phase, p.moving, false, 1.0, true)
 	_tr(0, -bob)
 	var aim: float = PI - p.aim if mirror else p.aim
+	# (the kick of a shot: the body is pushed back from the way the gun points for the few frames the recoil lasts; none with "reduce motion")
+	if p.recoil > 0.0 and not Prefs.on("ui", "reduce_motion"):
+		var kick: float = p.recoil * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge)
+		_tr(-cos(aim) * kick, -sin(aim) * kick * 0.6)
 	# (round 23, Q: a weapon that is put away hangs low and a little faded, the hands off it, whatever way the survivor faces)
 	var away: bool = p.get("holstered") == true
 	if view == "N":

@@ -656,6 +656,10 @@ func _ready() -> void:
 	add_child(sound)
 	sound.setup(data.sounds)
 	sound.attach(self)    # (the soundscape: the bells, the dead's groans, the steps, the gate... scripts/audio/soundscape.gd)
+	# the feel of a fight (render and audio only: scripts/render/combat_fx.gd): it hears of shots, hits and kills from the rules and plays its own sounds
+	fx.combat.sound = sound
+	fx.combat.seen_cb = _combat_sees    # (what is under a roof or in a room that is not shown has no flash and no blood)
+	sim.feel = fx.combat
 	if town_card != null:
 		sound.set_process(false)
 	if parking_view != null:
@@ -914,6 +918,8 @@ func _clamp_camera() -> void:
 func _apply_camera() -> void:
 	camera.position = cam_center * TILE
 	camera.zoom = Vector2.ONE * (zoom_px / TILE)
+	# the push of a shot (screen pixels; nothing with "reduce motion"), as an offset in the world's own units
+	camera.offset = fx.combat.camera_push() / camera.zoom.x
 
 
 func _screen_to_tile(p: Vector2) -> Vector2:
@@ -1912,13 +1918,20 @@ func _process(delta: float) -> void:
 		aim_held = true
 	# the avatar's hands for the steps of this frame (the keys, the pointer's tile, the trigger)
 	_feed_avatar()
+	fx.combat.tick_real(dt)
+	fx.combat.listener = cam_center
+	fx.combat.zoom_k = clampf(52.0 / maxf(zoom_px, 1.0), 0.85, 1.5)
+	if avatar_mode and not title_mode:
+		fx.combat.reload_tick(sim.avatar.player(), sim, dt)
 	# The rules only ever take whole steps of 1/30 s, however long the frame was,
 	# so a seed plays the same game at any frame rate. Everything that is only
 	# drawn (effects, flames, light, camera) runs on the frame's own time.
 	for i in step_clock.advance(dt, speed):
 		_sim_step()
 	var rem := dt * speed
-	while rem > 1e-6:
+	# (a kill at arm's length holds the picture still for a few frames, the effects with it: the rules' clock above does not stop)
+	var hit_stop: bool = fx.combat.frozen()
+	while rem > 1e-6 and not hit_stop:
 		var h := minf(rem, StepClock.STEP)
 		_visual_step(h)
 		rem -= h
@@ -1948,7 +1961,8 @@ func _process(delta: float) -> void:
 	_clamp_camera()
 	_apply_camera()
 	_handle_events()
-	_sync_views()
+	if not hit_stop:
+		_sync_views()
 	if town != null: town.on_frame(dt)
 	var look: Dictionary = sim.storyteller.look()
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
@@ -2011,6 +2025,9 @@ func _shot_frame() -> void:
 			_stage_wheel(shot_wheel)    # (a window that was not in front has lost and found its focus since: that shuts the wheel)
 		if shot_swing > 0.0 and avatar_mode:
 			sim.avatar.player().thrust = shot_swing
+			if frame_count == 2:
+				# (the trail of the swing's own: made once, at the same point of the swing)
+				fx.combat.blow(sim.avatar.player(), sim.avatar.MELEE_REACH, deg_to_rad(sim.avatar.MELEE_ARC) / 2.0, (1.0 - shot_swing) * fx.combat.BLOW_S)
 		if frame_count == 50:
 			RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 		if frame_count == 60:
@@ -2185,9 +2202,41 @@ func _avatar_left(mb: InputEventMouseButton) -> void:
 	if AimMode.mouse_aims() or aiming():
 		firing = true
 		_rtap = {}    # (a shot taken with the right button down: that was the aim, however short, and not an order)
+		_dry_pull()
 		return
 	firing = false
 	_click_world(mb.position)
+
+
+## How many "shot" events there are in `events` (a screenshot's `--until-shot`).
+func _shots_in(events: Array) -> int:
+	var n := 0
+	for e in events:
+		if String(e.get("type", "")) == "shot":
+			n += 1
+	return n
+
+
+## Whether a person or one of the dead is on the screen now: its node is shown, or (it has none yet) it stands in the view and not out of sight (a town run:
+## under a roof, in a room that is not shown). The feel of a fight asks it (combat_fx.gd `seen_cb`) before it draws a flash or a wound.
+func _combat_sees(e) -> bool:
+	var n = pawn_nodes.get(e)
+	if n != null:
+		return n.visible
+	return view_rect().has_point(Vector2(e.x, e.y)) and (town == null or town.pawn_visible(e))
+
+
+## The trigger pulled on a gun that is empty or being reloaded: a dry click, the word at the avatar for a moment and a flash of the ammunition
+## readout (nothing else: the rules ignore it).
+func _dry_pull() -> void:
+	var me = sim.avatar.player() if sim.avatar != null else null
+	if me == null or me.dead or me.downed or avatar_hands_off() or bool(me.get("holstered")):
+		return
+	if bool(sim.gun_of(me).get("melee", false)):
+		return
+	if me.mag <= 0 or float(me.reloading) > 0.0:
+		if fx.combat.dry_fire(me) and hud != null:
+			hud.pulse_ammo(true)
 
 
 ## What a click on the world means in avatar mode (the free pointer): a person is selected (their dock opens with the radio's verbs) and, within
@@ -2844,6 +2893,7 @@ func _sync_views() -> void:
 		elif lod:
 			redraw = (frame + i) % 2 == 0
 		n.sync(redraw, sim_steps, alpha)
+		fx.combat.apply(z, n)    # (knock-back, the slide of a fall, the white flash of a hit)
 	for e in pawn_nodes.keys():
 		if pawn_nodes[e].zombie and not alive.has(e):
 			pawn_nodes[e].queue_free()
@@ -2932,7 +2982,7 @@ func _handle_events() -> void:
 		sound.on_event(e)    # (the soundscape's: the bells, the groans, the gate, the radio's tones, the news; the guns and blows are below)
 		match e.type:
 			"shot":
-				sound.play("shot_%s" % e.weapon, _vol_at(e.x, e.y) * 0.8)
+				fx.combat.shot_sound(e)    # (by weapon: the pistol, the carbine, the pump gun, the hunting rifle, the M1; combat_fx.gd)
 			"bell":
 				pass    # (the dusk bell is the soundscape's: four tolls, and the music's dusk stinger follows the phase)
 			"groan":
@@ -2947,7 +2997,9 @@ func _handle_events() -> void:
 			"bite":
 				sound.play("bite")
 			"reload":
-				sound.play("reload", 0.8)
+				# (the avatar's own reload has its sounds, a click for each shell or the magazine's out and in: combat_fx.gd `reload_tick`)
+				if not fx.combat.reload_event(e, sim.avatar.player() if avatar_mode else null):
+					sound.play("reload", 0.8)
 			"hammer":
 				sound.play("hammer", 0.8, 0.1)
 				build_view.hammer(e, fx)
@@ -2959,12 +3011,13 @@ func _handle_events() -> void:
 				sound.play("crash", 0.45)
 				build_view.celebrate(String(e.plot), fx)
 			"stab":
-				sound.play("stab")
+				# a blow in the air (the pike's thrust, the butt, the swing): the whoosh; what it hits has its own sound (combat_fx.gd `hit`)
+				sound.play("melee_swing", _vol_at(e.x, e.y), 0.08)
 			"thud":
-				sound.play("thud", _vol_at(e.x, e.y))
+				fx.combat.thud_sound(e)
 			"blocked_shot":
-				# the trigger was pulled against the face of a walkway: a dry click (the menus' own click, quietly)
-				sound.ui("ui_click", 0.45)
+				# the trigger was pulled against the face of a walkway: the dry click of a gun that does not fire
+				sound.play("dry_click", 0.7, 0.04)
 			"banner":
 				if not (season_turned and String(e.text).begins_with("Day ")):
 					hud.show_banner(e.text, e.sub)
@@ -3232,6 +3285,7 @@ func _build_coach() -> void:
 
 func _parse_args() -> void:
 	var advance := 0.0
+	var until_shots := 0
 	var lure_seg := -1
 	var show_build := false
 	var build_plot := ""
@@ -3249,6 +3303,8 @@ func _parse_args() -> void:
 	var post_id := ""
 	var bench_asked := false
 	var gate_asked := ""
+	var fight_spec := ""
+	var weapon_spec := ""
 	var problem_spec := ""
 	var briefing_asked := false
 	var priorities_spec := ""
@@ -3274,6 +3330,9 @@ func _parse_args() -> void:
 				_set_hour(float(v))
 			"advance":
 				advance = float(v)
+			"until-shot":
+				# --until-shot[=n] ends the --advance on the step of the avatar's (or anyone's) n-th shot (the first): a picture of a shot's flash, light and hits
+				until_shots = int(v) if v.is_valid_int() else 1
 			"cam":
 				var c := v.split(",")
 				cam_center = Vector2(float(c[0]), float(c[1]))
@@ -3335,6 +3394,14 @@ func _parse_args() -> void:
 			"hold-fire":
 				# --hold-fire holds the avatar's trigger down (the left button, in a screenshot of a fight)
 				firing = true
+			"fight":
+				# --fight=<n>[,<kind>[,<x>,<y>[,<radius>[,still]]]] puts n of the dead (walker, runner, brute, plated for a plated brute, or mix) in a disc of
+				# `radius` tiles (2.5) round the tile x,y (five tiles east of the avatar), coming for the avatar (`still`: standing where they are until
+				# they are hurt), and has the pointer on the middle of them unless --aim says otherwise
+				fight_spec = v
+			"weapon":
+				# --weapon=<pistol|rifle|shotgun|hunting|service|pike> puts that weapon in the avatar's hands, loaded
+				weapon_spec = v
 			"talk":
 				# --talk=<person id> stands the avatar beside them and opens the talk card (--bleed=<id> first for a need)
 				talk_id = v
@@ -3659,6 +3726,10 @@ func _parse_args() -> void:
 		_stage_order(order_spec)
 	if shot_wheel != "":
 		_stage_wheel(shot_wheel)
+	if weapon_spec != "":
+		stage_weapon(weapon_spec)
+	if fight_spec != "":
+		stage_fight(fight_spec)
 	if endcard_asked:
 		if sim.is_demo():
 			sim.scenario.stage_end()
@@ -3680,6 +3751,8 @@ func _parse_args() -> void:
 		for i in steps:
 			_sim_step()
 			_visual_step(StepClock.STEP)
+			if until_shots > 0 and _shots_in(sim.events) >= until_shots:
+				break    # (`--until-shot`: stopped on the step of the shot, so that its flash is a frame old in the picture)
 		for e in sim.events:
 			if e.type == "banner":
 				hud.show_banner(e.text, e.sub)
@@ -4015,6 +4088,59 @@ func stage_plated() -> bool:
 			me.aim = (Vector2(z.x, z.y - NightData.num("plated.head", 0.62) * float(z.size)) - sim.avatar.shoulder(me)).angle()
 		return true
 	return false
+
+
+## A screenshot's way of putting a fight in front of the gun (--fight=<n>[,<kind>[,<x>,<y>[,<radius>[,still]]]]): n of the dead (a walker, runner, brute,
+## a plated brute (`plated`) or a mix of them) in a disc round a tile, coming for the avatar. The tile is five tiles east of the avatar unless the arguments
+## give one; the pointer goes over it unless --aim says otherwise. Positions come from a source of their own, so the picture is the same each time.
+## Returns how many were put.
+func stage_fight(spec: String) -> int:
+	var me = sim.avatar.player() if sim.avatar != null else null
+	if me == null:
+		return 0
+	var a := spec.split(",")
+	var n := int(a[0]) if a.size() > 0 and a[0].is_valid_int() else 8
+	var kind := String(a[1]) if a.size() > 1 and String(a[1]) != "" else "walker"
+	var centre := Vector2(me.x + 5.0, me.y)
+	if a.size() > 3 and a[2].is_valid_float() and a[3].is_valid_float():
+		centre = Vector2(float(a[2]), float(a[3]))
+	var radius := float(a[4]) if a.size() > 4 and a[4].is_valid_float() else 2.5
+	var still: bool = a.size() > 5 and String(a[5]) == "still"
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 7
+	var made := 0
+	var tries := 0
+	while made < n and tries < n * 40:
+		tries += 1
+		var at := centre + Vector2.from_angle(dice.randf() * TAU) * sqrt(dice.randf()) * radius
+		if world.is_solid(world.solid_z, at.x, at.y):
+			continue
+		var k := kind if kind != "mix" else String(["walker", "walker", "runner", "brute"][made % 4])
+		var z = sim.spawn(at.x, at.y, "approach", "brute" if k == "plated" else k)
+		if k == "plated":
+			z.plated = true
+		z.facing = "W" if at.x > me.x else "E"
+		if still:
+			z.stagger = 1.0e6    # (it stands where it is until it is hurt)
+		made += 1
+	if shot_aim == Vector2.INF:
+		shot_aim = centre
+	_stage_focus = (centre + Vector2(me.x, me.y)) / 2.0
+	return made
+
+
+## A screenshot's way of choosing the gun in the avatar's hands (--weapon=<id>): loaded, and drawn on the figure. False for an unknown weapon.
+func stage_weapon(id: String) -> bool:
+	var me = sim.avatar.player() if sim.avatar != null else null
+	if me == null or not sim.weapons.has(id):
+		return false
+	me.weapon = id
+	me.gun = sim.weapons[id]
+	me.mag = int(me.gun.get("mag", 0))
+	var n = pawn_nodes.get(me)
+	if n != null:
+		n.set_weapon(data, id)
+	return true
 
 
 ## A screenshot's way of showing a hot breach (--breach): three of the dead inside the fallen section, the avatar at the post that covers it.

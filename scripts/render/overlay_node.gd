@@ -1344,6 +1344,8 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 		var r := maxf(18.0, 0.66 * z)
 		draw_arc(c, r, 0, TAU, 40, RING_TRACK, 4.0, true)
 		draw_arc(c, r, -PI / 2.0, -PI / 2.0 + reload_progress * TAU, 40, ACCENT, 3.0, true)
+		_draw_shells(c, r, me, sim)
+	_draw_dry(me, pp, z)
 	# the YOU tag over the head (not while they are speaking: the bubble has that place)
 	var speaking := false
 	for bubble in bubbles:
@@ -1389,6 +1391,49 @@ func _draw_avatar(sim, z: float, vp: Vector2) -> void:
 		_pill(hbox, Color(0.04, 0.07, 0.06, 0.82))
 		draw_string(hint_font, Vector2(hbox.position.x, hbox.position.y + FIELD_PX + 1.0), BLOCKED_HINT, HORIZONTAL_ALIGNMENT_CENTER, hw, FIELD_PX, Color(0.9, 0.9, 0.84, 0.95))
 		drew_blocked_hint = true
+
+
+## A gun that loads a shell at a time (the pump shotgun, the hunting rifle, the M1: a few rounds in the magazine) shows each shell on the reload ring:
+## a mark between two and a pip on each stretch of the ring, brass when its shell is in (combat_fx.gd `reload_view` says how many are in; the
+## rules fill the magazine at the end of the time, the pips and the click of each shell are the picture and the sound of it).
+func _draw_shells(c: Vector2, r: float, me, sim) -> void:
+	var fx = main.get("fx")
+	if fx == null or fx.get("combat") == null:
+		return
+	var rv: Dictionary = fx.combat.reload_view(me, sim)
+	var n := int(rv.get("notches", 0))
+	if n <= 0:
+		return
+	var filled := int(rv.get("filled", 0))
+	for k in n:
+		var a0 := -PI / 2.0 + TAU * float(k) / float(n)
+		var am := -PI / 2.0 + TAU * (float(k) + 0.5) / float(n)
+		draw_line(c + Vector2.from_angle(a0) * (r - 5.0), c + Vector2.from_angle(a0) * (r + 5.0), RING_TRACK, 2.5, true)
+		var at := c + Vector2.from_angle(am) * r
+		var loaded := k < filled
+		draw_circle(at, 5.5, Color(0.04, 0.07, 0.06, 0.85))
+		draw_circle(at, 4.0, Color("#c9a54a") if loaded else Color(0.30, 0.30, 0.26, 0.9))
+		if loaded:
+			draw_rect(Rect2(at.x - 1.5, at.y - 4.0, 3.0, 2.2), Color("#b8352c"))
+
+
+## The trigger pulled on an empty gun, or one being filled: a ring that flashes red round the survivor and a word that says why nothing happened
+## ("empty", "reloading"), for under half a second (combat_fx.gd `dry_fire`). Under "reduce motion" it does not grow.
+func _draw_dry(me, pp: Vector2, z: float) -> void:
+	var fx = main.get("fx")
+	if fx == null or fx.get("combat") == null or me.downed:
+		return
+	var age: float = fx.combat.dry_age()
+	if age < 0.0 or age > 0.5:
+		return
+	var k := 1.0 - age / 0.5
+	var calm := Prefs.on("ui", "reduce_motion")
+	var c := _screen(pp.x, pp.y - 0.45)
+	var r := maxf(18.0, 0.66 * z) * (1.0 if calm else 1.0 + (1.0 - k) * 0.3)
+	draw_arc(c, r, 0.0, TAU, 40, Color(CROSS_HIT, 0.85 * k), 3.0, true)
+	var word := String(fx.combat.dry_word).to_upper()
+	if word != "":
+		_tag(c + Vector2(r + 44.0, 0.0), word, Fonts.cond(700), INK, Color(0.18, 0.05, 0.04, 0.9 * k), Color(CROSS_HIT, 0.9 * k))
 
 
 # --------------------------------------------------------- what E would do --
