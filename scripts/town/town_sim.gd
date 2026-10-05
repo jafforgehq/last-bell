@@ -58,6 +58,8 @@ var parts_made: Array = []
 
 var grid_separate := true
 var chase_on := true
+## The title screen's town (scripts/town/title_scene.gd): the dead notice nobody (`_notice` asks no one), so that the few that walk the street behind the menu never go for Ruth.
+var quiet := false
 var chase_give_up := 45.0
 var _grid := {}
 ## Microseconds spent in `_separate` and in `_chase`, and how many chases were stepped (for the measurements: whoever reads them resets them).
@@ -170,6 +172,8 @@ func _anchors() -> Array:
 ## The "they see you" rule of a place (raid_run.gd `_wake_the_dead`): a dead one that stands or wanders within seven tiles of a living person with a clear line goes after
 ## them. Only the awake ones are asked.
 func _notice() -> void:
+	if quiet:
+		return
 	for z in zombies:
 		if z.state != "still" and z.state != "wander":
 			continue

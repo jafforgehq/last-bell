@@ -32,6 +32,8 @@ const VIEW_PARTS := {
 	"sleep_fade": "res://scripts/ui/sleep_fade.gd",
 	"town_audio": "res://scripts/audio/town_audio.gd",
 }
+## The parts of the title screen's town (scripts/town/title_scene.gd): the roofs and nothing else (no card, no HUD, no sleep, no town sounds: the title has its own).
+const TITLE_PARTS := ["house_view"]
 ## The foundation's own roofs, drawn while no `house_view` part exists (it is the working fallback: one roof for each house, fading when the avatar is inside).
 const FALLBACK_ROOFS := "res://scripts/town/town_roofs.gd"
 const TownPerf := preload("res://scripts/town/town_perf.gd")
@@ -43,6 +45,8 @@ const NODES_PER_FRAME := TownPerf.NODES_PER_FRAME
 const CHUNKS_PER_FRAME := 1
 
 var main
+## The town is the title screen's (`Main.title_mode`): only the `TITLE_PARTS` are made, and the fresh run is not held for a first key.
+var title := false
 var parts: Array = []
 ## The parts by name, for the ones that want to find each other (`town.part("house_view")`).
 var by_name := {}
@@ -61,6 +65,7 @@ static func make(main_node):
 		return null
 	var t = (load("res://scripts/town/town_game.gd") as GDScript).new()
 	t.main = main_node
+	t.title = bool(main_node.get("title_mode"))
 	return t
 
 
@@ -70,7 +75,7 @@ func on_ready(main_node) -> void:
 	by_name.clear()
 	for name in VIEW_PARTS:
 		var path: String = VIEW_PARTS[name]
-		if not ResourceLoader.exists(path):
+		if not ResourceLoader.exists(path) or (title and not TITLE_PARTS.has(name)):
 			continue
 		var part = (load(path) as GDScript).new()
 		parts.append(part)
@@ -101,7 +106,7 @@ func part(name: String):
 ## A fresh town run waits for the player: the game stays paused (with a line saying so) until the first move, click or key, so that nothing bites Ruth while the
 ## town loads and the first card is being read. A load, a staged run (`--stage=`) and a screenshot run are never held.
 func _start_hold() -> void:
-	if _hold_state == 2:
+	if _hold_state == 2 or title:
 		return
 	if _hold_state == 0:
 		_hold_state = 2

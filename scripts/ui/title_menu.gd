@@ -1,8 +1,8 @@
-## The title screen: the real schoolyard at dusk behind it (main.gd holds the clock, lights the
-## lamps and drifts the camera; the HUD is hidden), the logo, and a menu on the left:
-## Continue (the newest save, with its day), New game, Orientation Day (gold until it has
+## The title screen: the town at dusk behind it (scripts/town/title_scene.gd holds the clock, the lamps, the dead and the camera; the HUD is hidden; with `--school`, the demo or a
+## test's stand-in scene it is the old schoolyard), the logo, and a menu on the left:
+## Continue (the newest save, with its day), New game, Orientation Day (the school's: gold until it has
 ## been done), Load, Settings, Credits and Quit (not on the web). The edges are darkened so
-## the yard stays readable and the words stay clear.
+## the picture stays readable and the words stay clear, and they darken a little more at each stroke of the dusk bell (`on_toll`).
 extends Control
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
@@ -36,6 +36,9 @@ var tagline: Label
 var demo_tag: Label
 var hint: Label
 var vignette: TextureRect
+## The edges again, darker, that come up at each stroke of the dusk bell and go down over a second or two (the screen's breath), and how far up they are now (0 to 1).
+var pulse: TextureRect
+var _pulse_k := 0.0
 var shade: TextureRect
 var scroll: ScrollContainer
 var column: VBoxContainer
@@ -50,6 +53,8 @@ func setup(shell_node) -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vignette = _backdrop(Kit.vignette_texture())
+	pulse = _backdrop(Kit.vignette_texture(0.95))
+	pulse.modulate.a = 0.0
 	shade = _backdrop(Kit.shade_texture())
 	_build_column()
 	hint = hud._label("Arrow keys and Enter, or the mouse", Fonts.sans(400), 12, hud.INK3)
@@ -60,7 +65,8 @@ func setup(shell_node) -> void:
 	_layout()
 	refresh()
 	_layout.call_deferred()
-	if not _tolled:
+	# (the town's title rings its own bell, every twenty to thirty seconds: scripts/town/title_scene.gd; the school's rings once)
+	if not _tolled and (shell.main == null or shell.main.get("title_scene") == null):
 		_tolled = true
 		get_tree().create_timer(0.8).timeout.connect(_toll)
 
@@ -164,6 +170,22 @@ func refresh() -> void:
 		sub.text = Kit.save_line(best.info)
 		c.tooltip_text = "%s: %s" % [String(best.slot.name), Kit.ago_text(int(best.info.modified), int(Time.get_unix_time_from_system()))]
 		shell.set_item_enabled(c, true)
+
+
+func _process(dt: float) -> void:
+	if _pulse_k > 0.0:
+		_pulse_k = maxf(0.0, _pulse_k - dt * 0.55)
+		pulse.modulate.a = _pulse_k
+
+
+## A stroke of the dusk bell (the town's title calls it, `strength` 0 to 1, the first of four is 1): the bell on the menu swings at the first, and the edges of the picture close in
+## a little at each. Nothing moves under "reduce motion".
+func on_toll(strength: float) -> void:
+	if shell.reduce_motion():
+		return
+	if strength >= 0.99:
+		bell.toll()
+	_pulse_k = maxf(_pulse_k, 0.5 * strength)
 
 
 ## The bell on the title is struck: it swings, and the game's bell sounds once, softly.
