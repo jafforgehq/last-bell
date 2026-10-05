@@ -18,7 +18,7 @@ const SCALE_STEP := 0.1
 const SWITCHES := [
 	["hints", "Hints", "Tips and reminders while you play"],
 	["reduce_motion", "Reduce motion", "Keeps the screen still: no camera drift, no fades"],
-	["fullscreen", "Fullscreen", "Fills the whole screen"],
+	["fullscreen", "Fullscreen", "Fills the whole screen (F11 does it from anywhere)"],
 ]
 
 ## In a window shorter than this the rows sit closer together and their buttons are a little slimmer, so that the whole screen fits the
@@ -50,18 +50,50 @@ func _init() -> void:
 	max_w = 580.0
 
 
+## What the setting was when the window was last put in or out of fullscreen (null: not yet, this process). The setting is applied when it CHANGES (and at the start), so
+## that a window the player took in or out of fullscreen with the system's own button is not put back by an unrelated setting (a volume).
+static var _fullscreen_applied = null
+
+
+## Whether the window fills the screen now.
+static func is_fullscreen() -> bool:
+	var mode := DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+
 ## Fullscreen on or off, as the setting says (not on the web, where the page decides, and not
 ## in a headless run).
 static func apply_fullscreen() -> void:
 	if OS.has_feature("web") or DisplayServer.get_name() == "headless":
 		return
-	var mode := DisplayServer.window_get_mode()
-	var is_full := mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
 	var want := Prefs.on("ui", "fullscreen")
+	if _fullscreen_applied != null and bool(_fullscreen_applied) == want:
+		return
+	_fullscreen_applied = want
+	var is_full := is_fullscreen()
 	if want and not is_full:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	elif not want and is_full:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+
+
+## F11: the window goes in or out of fullscreen whatever the setting says now, and the setting follows (it is kept for the next start). False when this
+## cannot be done (a browser has its own F11; a headless run has no window).
+static func toggle_fullscreen() -> bool:
+	if OS.has_feature("web") or DisplayServer.get_name() == "headless":
+		return false
+	Prefs.set_value("ui", "fullscreen", not is_fullscreen())
+	_fullscreen_applied = null
+	apply_fullscreen()
+	return true
+
+
+## The switches show the settings as they are now (F11 changed one while this screen was up).
+func sync_switches() -> void:
+	for key in toggles:
+		var b: Button = toggles[key]
+		b.set_pressed_no_signal(Prefs.on("ui", String(key)))
+		_paint_switch(b)
 
 
 func _build_body() -> void:
@@ -252,7 +284,10 @@ func _refresh_scale() -> void:
 	scale_minus.disabled = v <= SCALE_MIN + 0.001
 	scale_plus.disabled = v >= SCALE_MAX - 0.001
 	# the window may be too small to give the size that was asked for
+	# (100% is the size that fits this screen: a big window has made it bigger already, `Main.auto_ui_scale`; the setting is on top of that)
 	var shown: float = shell.main.ui_scale_in_use() if shell.main != null and shell.main.has_method("ui_scale_in_use") else v
+	if shell.main != null and shell.main.has_method("ui_auto_scale"):
+		shown /= maxf(0.01, float(shell.main.ui_auto_scale()))
 	scale_note.visible = shown < v - 0.01
 
 

@@ -85,6 +85,18 @@ const TITLE_DEAD := [Vector2(35.5, 14.2), Vector2(41.0, 13.0), Vector2(46.5, 15.
 const UI_SCALE_MIN := 0.8
 const UI_SCALE_MAX := 1.5
 const MIN_LOGICAL := Vector2(700.0, 560.0)
+## The interface is laid out for about this many points (a 1440 by 900 window is 100%); a window with more room than that (a 1080p or a 1440p monitor, a
+## browser tab on one) gets the interface made bigger by the same share, so that a 2560 by 1440 screen shows the same 1600 by 900 layout as a 1920 by 1080 one
+## and the text is as big to the eye as it is on a laptop. The player's own size (80% to 150%) is on top of that. Never above AUTO_SCALE_MAX (a 4K screen).
+const AUTO_REF := Vector2(1440.0, 900.0)
+const AUTO_SCALE_MAX := 2.5
+## The size a window opens at on a desktop (in points), kept inside the screen (`_fit_window`); a screenshot run opens at 1280 by 800 as ever.
+const DEFAULT_WINDOW := Vector2i(1920, 1080)
+## `--os-scale=N` (a screenshot run): pretend the display's scale factor is N (1 for an ordinary monitor, 2 for a Retina one), so that a window of any number
+## of pixels can be looked at as that display would show it.
+static var os_scale_override := 0.0
+## The window is put at its size and place once for the process (a new run reloads the scene: the window the player has made is left alone then).
+static var _window_fitted := false
 ## A left or middle press that moves more than this many pixels before it is let go is a drag (a pan, or nothing), not a click.
 const DRAG_PX := 6.0
 ## The avatar's camera (round 17): it follows the avatar, eased (this many "e-folds" a second), leans toward the mouse by this
@@ -317,6 +329,14 @@ func _ready() -> void:
 	# the world and the rules; the old `--town[=place]` of the school's Town Board is still that with `--crew`)
 	var run_meta: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else Scenario.run_from_args(OS.get_cmdline_user_args())
 	var town_run: bool = TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
+	# the settings file and the window come first (its size, fullscreen, the interface size): the loading card is drawn in the window the player will play in
+	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
+	if prefs_path != "":
+		Prefs.path = prefs_path
+		Prefs.forget()
+		if prefs_path == SHOT_PREFS:
+			Prefs.reset()
+	_start_window()
 	# the town takes a moment to make (a second or so on the desktop, several in a browser): a card says so, drawn for two frames before the work begins, and the work is done a few
 	# milliseconds a frame (`_card_gap`, the loader and the world's stepped build) so that the card's bar moves and a browser does not freeze. The game's own `_process` and input are
 	# off until the end of `_ready`; a headless run, the tests', has no card, no wait and does it all in one go.
@@ -331,12 +351,6 @@ func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
 	_load_t = Time.get_ticks_usec()
 	AimMode.set_holstered(false)    # (every run begins with the weapon drawn; `--holster` puts it away)
-	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
-	if prefs_path != "":
-		Prefs.path = prefs_path
-		Prefs.forget()
-		if prefs_path == SHOT_PREFS:
-			Prefs.reset()
 	if town_card != null:
 		var loader = TownLoader.new()
 		loader.begin(run_meta)
@@ -347,16 +361,6 @@ func _ready() -> void:
 	else:
 		data = TownBoot.data(run_meta) if town_run else GD.load_all()
 	_lmark("data")
-	var logical := Vector2i(1280, 800)
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--size="):
-			var wh := arg.trim_prefix("--size=").split("x")
-			logical = Vector2i(int(wh[0]), int(wh[1]))
-	SettingsMenu.apply_fullscreen()
-	_fit_window(logical)
-	get_window().size_changed.connect(_update_scale)
-	_update_scale()
-
 	_lmark("window")
 	world = TownBoot.world() if town_run else World.new()
 	world.name = "World"
@@ -774,29 +778,60 @@ func _radial_texture() -> Texture2D:
 	return t
 
 
-## On a Retina screen the project's 1280x800 window opens at that many pixels,
-## i.e. at half size. Grow it to 1280x800 points (within the screen) and centre it.
-func _fit_window(logical: Vector2i) -> void:
+## The window at the start of `_ready`: fullscreen if the settings say so, else its size and place, then the interface size, kept up as the window is sized. The window's size in
+## points is `--size=WxH` (a screenshot's), 1280 by 800 for a screenshot run that names none, else the desktop's own default (`DEFAULT_WINDOW`); `--winpx=WxH` is the same in
+## pixels, however big the screen is (`--os-scale=N` then says what the display's scale factor is).
+func _start_window() -> void:
+	var logical := Vector2i(1280, 800) if _shell_arg("shot") != "" else DEFAULT_WINDOW
+	var window_px := Vector2i.ZERO
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--size="):
+			var wh := arg.trim_prefix("--size=").split("x")
+			logical = Vector2i(int(wh[0]), int(wh[1]))
+		elif arg.begins_with("--winpx="):
+			var wp := arg.trim_prefix("--winpx=").split("x")
+			window_px = Vector2i(int(wp[0]), int(wp[1]))
+		elif arg.begins_with("--os-scale="):
+			os_scale_override = float(arg.trim_prefix("--os-scale="))
+	_fit_window(logical, window_px)    # (first: a window that starts in fullscreen comes back to this size when the player leaves it)
+	SettingsMenu.apply_fullscreen()
+	get_window().size_changed.connect(_update_scale)
+	_update_scale()
+
+
+## The display's scale factor (2 on a Retina screen, 1 on an ordinary monitor), or the one `--os-scale=` pretends.
+func _os_scale() -> float:
+	if os_scale_override > 0.0:
+		return os_scale_override
+	var s := DisplayServer.screen_get_scale(get_window().current_screen)
+	return s if s > 0.0 else 1.0
+
+
+## On a Retina screen the project's 1280x800 window opens at that many pixels, i.e. at half size: the window is made `logical` points big (so many pixels on a
+## Retina screen), kept inside the screen and centred. Once for the process (a new run reloads the scene; the window the player has sized is not put back), and not
+## in a browser (the page sizes the canvas) or in fullscreen. `window_px` (a screenshot's `--winpx=`) is an exact size in pixels, the screen's room or not.
+func _fit_window(logical: Vector2i, window_px: Vector2i = Vector2i.ZERO) -> void:
 	var win := get_window()
-	# in a browser the page sizes the canvas
 	if win.mode != Window.MODE_WINDOWED or OS.has_feature("web"):
 		return
-	var s := DisplayServer.screen_get_scale(win.current_screen)
+	if _window_fitted and window_px == Vector2i.ZERO:
+		return
+	_window_fitted = true
 	var usable := DisplayServer.screen_get_usable_rect(win.current_screen)
-	var want := Vector2i(Vector2(logical) * s)
+	var want := Vector2i(Vector2(logical) * _os_scale())
 	want.x = mini(want.x, int(usable.size.x * 0.94))
 	want.y = mini(want.y, int(usable.size.y * 0.94))
+	if window_px != Vector2i.ZERO:
+		want = window_px
 	win.size = want
-	win.position = usable.position + (usable.size - want) / 2
+	win.position = usable.position + Vector2i(maxi(0, (usable.size.x - want.x) / 2), maxi(0, (usable.size.y - want.y) / 2))
 
 
-## Keep the UI at a constant size in points on any display and window size, times the size
-## the player chose in the settings (80% to 150%).
+## Keep the UI at a constant size in points on any display and window size, made bigger for a window with room to spare (`auto_ui_scale`), times the size the
+## player chose in the settings (80% to 150%).
 func _update_scale() -> void:
 	var win := get_window()
-	var s := DisplayServer.screen_get_scale()
-	if s <= 0.0:
-		s = 1.0
+	var s := _os_scale()
 	var k := ui_scale_in_use()
 	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
@@ -816,11 +851,24 @@ static func effective_ui_scale(window_px: Vector2, os_scale: float, pref: float)
 	return clampf(minf(want, room), 1.0, UI_SCALE_MAX)
 
 
-## The interface size in use now (the setting, held back if the window is too small for it).
+## How much bigger than the 1440 by 900 layout (`AUTO_REF`) the interface is made for a window `window_px` pixels big on a display of scale factor `os_scale`: 1 for a
+## window of that size or smaller, then as much as the window has room for (a 1920 by 1080 window 1.2, a 2560 by 1440 one 1.6: both lay the interface out in 1600 by
+## 900 points), up to AUTO_SCALE_MAX. The shorter side counts, so a very wide window does not make it huge and a narrow one is not made too narrow.
+static func auto_ui_scale(window_px: Vector2, os_scale: float) -> float:
+	var pts := window_px / maxf(os_scale, 0.01)
+	return clampf(minf(pts.x / AUTO_REF.x, pts.y / AUTO_REF.y), 1.0, AUTO_SCALE_MAX)
+
+
+## The automatic part of the interface size for this window (see `auto_ui_scale`).
+func ui_auto_scale() -> float:
+	return auto_ui_scale(Vector2(get_window().size), _os_scale())
+
+
+## The interface size in use now: the automatic size of this window times the setting (held back if the window is too small for it).
 func ui_scale_in_use() -> float:
 	var win := get_window()
-	var s := DisplayServer.screen_get_scale()
-	return effective_ui_scale(Vector2(win.size), s if s > 0.0 else 1.0, Prefs.number("ui", "scale"))
+	var auto := auto_ui_scale(Vector2(win.size), _os_scale())
+	return auto * effective_ui_scale(Vector2(win.size) / auto, _os_scale(), Prefs.number("ui", "scale"))
 
 
 func _vp() -> Vector2:
@@ -1556,6 +1604,14 @@ func _track_pointer(ev: InputEvent, early: bool) -> void:
 ## Every event, before the HUD: the trigger is let go whenever the button is, wherever the pointer was (a release over a
 ## HUD control goes to the control and never reaches `_unhandled_input`).
 func _input(ev: InputEvent) -> void:
+	# F11 puts the window in or out of fullscreen anywhere (the title, a menu, the game); the choice is kept in the settings (a browser has its own F11)
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F11:
+		if SettingsMenu.toggle_fullscreen():
+			var open_screen = shell.top() if shell != null else null
+			if open_screen != null and open_screen.has_method("sync_switches"):
+				open_screen.sync_switches()
+			get_viewport().set_input_as_handled()
+		return
 	_track_pointer(ev, true)
 	if wheel_ctl != null and avatar_mode:
 		# (round 24: the command wheel has the pointer while it is up, and the key or the button that opened it is let go wherever it was)
@@ -3579,6 +3635,8 @@ func _parse_args() -> void:
 		if sim.is_demo():
 			sim.scenario.stage_end()
 			sim.events.clear()
+		elif town != null and sim.scenario != null and sim.scenario.has_method("end_card"):
+			sim.over = "victory"    # (a One House run: the held night's end card, for a shot of it)
 		else:
 			print("--endcard: this is not the demo run (give --demo)")
 	if advance > 0.0:

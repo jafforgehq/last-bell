@@ -34,6 +34,7 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`; a cold 
 | Scroll, pinch or two-finger scroll | Zoom |
 | Space, **Shift + 1 / 2 / 3** | Pause, speed (a call that cannot wait drops 2x or 3x to 1x once: "Slowing down: a call is waiting"); plain 1 to 5 pick the crew, above |
 | F5, F9 | Save, load (not while a trip is out) |
+| F11 | Fullscreen on or off, anywhere (kept in the settings; not in a browser, which has its own F11) |
 | Esc | Closes, in this order: the wheel, the talk card, the radio panel, the selection; then it opens the pause menu |
 
 **What an order looks like in the world** (round 24). A person who carries an order of the radio wears a small glyph pill over their head, for the person picked and everyone within twelve tiles of you: an arrow for *following* (Come with me), **H** *holding*, **C** *covering*, **S** *searching*, **W** *walking to the post* (a thin dotted line runs from them to the spot of a hold, a search or a post). A person who is not asked anything wears nothing.
@@ -315,7 +316,8 @@ given moment without touching the game:
 | `--noevents` | Leave the road's events out (an empty road to drive) |
 | `--lure=N` | Set the alarm on wall section N (gives scrap if needed) |
 | `--speed=N` | Start at speed N (0 paused, 1, 2, 3) |
-| `--size=WxH` | The window's logical size (`1280x800` by default; screenshots are read at `1600x1000` and `1280x800`, and the layouts are tested at 1280x800, 980x700, 700x700, 960x600 and 700x560) |
+| `--size=WxH` | The window's logical size in points (a screenshot run opens at `1280x800` unless told; a normal start opens at 1920x1080 points, kept inside the screen; screenshots are read at `1600x1000` and `1280x800`, and the layouts are tested at 1280x800, 980x700, 700x700, 960x600 and 700x560). The interface is made bigger for a window with room to spare (a 1920x1080 window 120%, 2560x1440 160%: both are laid out in 1600x900 points; `Main.auto_ui_scale`), the Settings size is on top of that |
+| `--winpx=WxH` | The window's size in PIXELS, exactly, whatever the screen can hold (a shot at 2560x1440 or 3440x1440 on a laptop); with `--os-scale=1` (an ordinary monitor; 2 is a Retina screen) so that the interface is sized as that display would |
 | `--nohud`, `--nolights`, `--msaa=N` | Hide the HUD, hide the lighting, set the 2D anti-aliasing (screenshot helpers) |
 | `--calm` | Leave out the base's little life (flags, mast, bell, washing, dog, birds, leaves, ripples, chat bubbles: see Base life); `tools/life_bench.gd` measures what it costs |
 | `--trip-phase=out,0.5` | Put the first party that has a vehicle in that state of its trip at the gate (`out`, `driving_out`, `away`, `driving_in`, `unloading`, and the share of it; `--vehicle` and `--town-send` first, `--speed=0` so that it stays) |
@@ -329,7 +331,7 @@ given moment without touching the game:
 | `--seed=N` | The seed of the new run (the same seed plays the same game) |
 | `--load=path` | Load a save (a file path, or `user://quicksave.json`) |
 | `--demo` | Play the demo (round 26, see Demo): the title says so, New game begins the three nights (a fixed seed, a crew of five) and a `--shot` run is that run. Without it the full game |
-| `--endcard` | With `--demo`: play the demo's three days quickly, the colony alone, to the end of the run, so that the end card is up (a screenshot of it) |
+| `--endcard` | With `--demo`: play the demo's three days quickly, the colony alone, to the end of the run, so that the end card is up (a screenshot of it). With `--town`: the One House end card at once ("held") |
 | `--frames` | Frames to wait before the shot |
 
 The run prints average fps.
