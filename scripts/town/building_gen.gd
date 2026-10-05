@@ -6,6 +6,10 @@
 ## BIGGER HOUSES: the homes (`BuildingPlans.ROOMY`) are laid out by `_layout_part`: a hall down the middle of a big part with the day rooms on one side and the night rooms on the other, every
 ## room 3 x 3 floor tiles at least, and the doors planned between neighbours (`_plan_doors`: every room opens onto the hall or onto a neighbour that does, so none is more than two rooms from it);
 ## the shops, flats, works and terraces still use the older partition below.
+## ROOMY HOUSES (the owner: "houses are too small, I can barely move inside"): the rooms of a home want what `BuildingPlans.WANT` says (a living room 5 tiles across and 30 in all, a kitchen 4 and 24, a
+## bedroom 4 and 16, a bathroom 3 x 3; the homes that are not the family home the smaller `WANT_TIGHT`) and `_pack` cuts a part so that each gets it (the last rooms of a program are dropped when the floor
+## holds no more); every way between rooms is a door two tiles wide but a bathroom's, nobody goes through a bathroom to another room (a bathroom is a leaf of the door tree and never the room a wing is
+## entered by), and the kit furnishes a home along its walls with a lane two tiles wide from each door to the others and a third of the floor at the most in furniture (`TownKit.strict`).
 ## Each part is partitioned into ROOMS (rectangles) by a BSP that follows a program of room names with shares of the floor (the entry room, the one the front door opens into,
 ## always touches the front wall of its part). Doors are cut in the partition walls where both sides are floor, between touching parts, and in the outer walls (a front door into the
 ## entry room, a back door); a repair pass opens a door to any room that cannot be reached. Then the rooms are furnished and the yard is dressed with the ART KIT's things
@@ -144,17 +148,82 @@ static func _partition(r: Rect2i, items: Array, front: String, rooms: Array, wal
 
 # ================================================ the layout of the homes (BIGGER HOUSES) ==
 
-## The rooms of a home are at least MIN_ROOM floor tiles each way (the hall is HALL_W wide).
+## The rooms of a home are at least MIN_ROOM floor tiles each way and want what `Plans.WANT` says (the hall is HALL_W wide).
 const MIN_ROOM := 3
 const HALL_W := 2
+## The room names as small numbers (the signature of a group of rooms in `_hold_memo`); a name that is not here is 15, as every one of those wants the same (3 x 3).
+const ROOM_ID := {"living room": 1, "kitchen": 2, "dining room": 3, "study": 4, "bedroom": 5, "bathroom": 6, "utility": 7, "nursery": 8, "garage": 9, "pantry": 10, "front room": 11}
+## Whether a floor of w x h holds a group of rooms, kept from house to house: key = ((signature * 64 + w) * 64 + h).
+static var _hold_memo := {}
 
 
-## How many rooms of at least MIN_ROOM x MIN_ROOM a floor of w x h holds (a room and the wall after it take MIN_ROOM + 1 each way).
-static func _cap(w: int, h: int) -> int:
+## The items of a program in the order the cuts take them: the entry room first, then the rooms that want the front, the rest, those that want the back last (the program's own order between
+## equals). Each is {"it": the item, "name", "id", "ms": its shortest side, "ma": its area, "share"}.
+static func _canon(items: Array) -> Array:
+	var keyed: Array = []
+	for k in items.size():
+		var o: Dictionary = items[k]
+		var tier := int(o.get("t", 0))
+		var w: Vector2i = Plans.want(String(o.name), tier)
+		keyed.append([(-10.0 if bool(o.entry) else 0.0) + float(o.pref), k, {"it": o, "name": String(o.name), "id": int(ROOM_ID.get(String(o.name), 15)) + 16 * tier, "ms": w.x, "ma": w.y, "share": float(o.share)}])
+	keyed.sort_custom(func(a, b): return float(a[0]) < float(b[0]) or (float(a[0]) == float(b[0]) and int(a[1]) < int(b[1])))
+	var out: Array = []
+	for kk in keyed:
+		out.append(kk[2])
+	return out
+
+
+## Whether one room of the canon fits a floor of w x h.
+static func _fits(c: Dictionary, w: int, h: int) -> bool:
+	return mini(w, h) >= int(c.ms) and w * h >= int(c.ma)
+
+
+## Whether a floor of w x h can be cut (rows and columns, a wall of one tile between the pieces) so that every room of the canon's items i to j - 1 has what it wants.
+static func _feasible(w: int, h: int, canon: Array, i: int, j: int) -> bool:
+	var n := j - i
+	if n <= 0:
+		return true
 	if w < MIN_ROOM or h < MIN_ROOM:
-		return 0
-	@warning_ignore("integer_division")
-	return ((w + 1) / (MIN_ROOM + 1)) * ((h + 1) / (MIN_ROOM + 1))
+		return false
+	if n == 1:
+		return _fits(canon[i], w, h)
+	var sig := 0
+	var area := 0
+	for k in range(i, j):
+		sig = sig * 32 + int(canon[k].id)
+		area += int(canon[k].ma)
+	var key := (sig * 64 + w) * 64 + h
+	if _hold_memo.has(key):
+		return _hold_memo[key]
+	var ok := false
+	if area + (n - 1) * MIN_ROOM <= w * h:
+		ok = _try_cuts(w, h, canon, i, j)
+	_hold_memo[key] = ok
+	return ok
+
+
+static func _try_cuts(w: int, h: int, canon: Array, i: int, j: int) -> bool:
+	for rows in [true, false]:
+		var across := w if rows else h
+		var length := h if rows else w
+		for k in range(i + 1, j):
+			for sa in range(MIN_ROOM, length - MIN_ROOM):
+				var sb := length - 1 - sa
+				if rows:
+					if _feasible(across, sa, canon, i, k) and _feasible(across, sb, canon, k, j):
+						return true
+				elif _feasible(sa, across, canon, i, k) and _feasible(sb, across, canon, k, j):
+					return true
+	return false
+
+
+## How many of the first rooms of a program (in its order) a floor of w x h holds.
+static func _kept(w: int, h: int, items: Array) -> int:
+	for m in range(items.size(), 0, -1):
+		var canon := _canon(items.slice(0, m))
+		if _feasible(w, h, canon, 0, m):
+			return m
+	return 0
 
 
 ## One part of a home cut into rooms. When its program starts with a "hall" and the part is big enough, the hall runs down the middle from the front wall to the back wall, the day rooms
@@ -177,32 +246,96 @@ static func _layout_part(r: Rect2i, prog: Array, front: String, rooms: Array, wa
 	for o in prog:
 		has_entry = has_entry or bool(o.entry)
 	var root := -1
-	if not has_entry and not others.is_empty():
-		root = _contact_root(rooms, r.grow(1), others)
+	if not others.is_empty():
+		_bath_off_the_door(rooms, r.grow(1), others)
+		if not has_entry:
+			root = _contact_root(rooms, r.grow(1), others)
 	return _plan_doors(rooms, hall_i, walls, rng, root)
 
 
-## The room of a part that has the longest shared wall with the other parts of the building (-1 when none touches).
+## How many tiles of the walls it shares with the other parts of the building each room of a part has where a door could be cut (a tile of the shared wall with this part's room on one side and
+## the floor of the other part on the other, not a corner): one count for every room of `rooms`. `part` is the part's rectangle of outer walls.
+static func _contact_rows(rooms: Array, part: Rect2i, others: Array) -> Array:
+	var counts: Array = []
+	for i in rooms.size():
+		counts.append(0)
+	for o in others:
+		var inter: Rect2i = part.intersection(o)
+		if inter.size.x <= 0 or inter.size.y <= 0:
+			continue
+		var floor_o: Rect2i = Rect2i(o).grow(-1)
+		if inter.size.y == 1:
+			# (a wall that runs along x: this part is below it when its walls start at that row, above it else)
+			var below := part.position.y == inter.position.y
+			for x in range(inter.position.x, inter.end.x):
+				var mine := Vector2i(x, inter.position.y + (1 if below else -1))
+				var theirs := Vector2i(x, inter.position.y + (-1 if below else 1))
+				if floor_o.has_point(theirs):
+					for i in rooms.size():
+						if Rect2i(rooms[i].rect).has_point(mine):
+							counts[i] += 1
+		elif inter.size.x == 1:
+			var right := part.position.x == inter.position.x
+			for y in range(inter.position.y, inter.end.y):
+				var mine2 := Vector2i(inter.position.x + (1 if right else -1), y)
+				var theirs2 := Vector2i(inter.position.x + (-1 if right else 1), y)
+				if floor_o.has_point(theirs2):
+					for i in rooms.size():
+						if Rect2i(rooms[i].rect).has_point(mine2):
+							counts[i] += 1
+	return counts
+
+
+## The room of a part that has the longest shared wall with the other parts of the building (-1 when none touches): not a bathroom, which is a room nobody goes through.
 static func _contact_root(rooms: Array, part: Rect2i, others: Array) -> int:
+	var counts := _contact_rows(rooms, part, others)
 	var best := -1
 	var best_len := 0
 	for i in rooms.size():
-		var rr: Rect2i = rooms[i].rect
-		var total := 0
-		for o in others:
-			var inter: Rect2i = part.intersection(o)
-			if inter.size.x <= 0 or inter.size.y <= 0:
-				continue
-			if inter.size.y == 1:
-				if rr.position.y - 1 == inter.position.y or rr.end.y == inter.position.y:
-					total += maxi(0, mini(rr.end.x, inter.end.x) - maxi(rr.position.x, inter.position.x))
-			elif inter.size.x == 1:
-				if rr.position.x - 1 == inter.position.x or rr.end.x == inter.position.x:
-					total += maxi(0, mini(rr.end.y, inter.end.y) - maxi(rr.position.y, inter.position.y))
-		if total > best_len:
-			best_len = total
+		if String(rooms[i].name) == "bathroom" and rooms.size() > 1:
+			continue
+		if int(counts[i]) > best_len:
+			best_len = int(counts[i])
 			best = i
 	return best
+
+
+## ROOMY HOUSES: when the only rooms of a part that touch the rest of the house (where a door can be) are bathrooms, the bathroom swaps its name and its floor with the room of the part that is
+## the biggest of those that do not (and is no entry room), so that the way from one part to the other never goes through a bathroom.
+static func _bath_off_the_door(rooms: Array, part: Rect2i, others: Array) -> void:
+	var counts := _contact_rows(rooms, part, others)
+	var touching := 0
+	var through_baths := true
+	for i in rooms.size():
+		if int(counts[i]) > 0:
+			touching += 1
+			if String(rooms[i].name) != "bathroom":
+				through_baths = false
+	if touching == 0 or not through_baths:
+		return
+	var bath := -1
+	for i in rooms.size():
+		if int(counts[i]) > 0 and bath < 0:
+			bath = i
+	var best := -1
+	var best_area := 1000
+	for i in rooms.size():
+		var nm := String(rooms[i].name)
+		if i == bath or nm == "bathroom" or nm == "hall" or bool(rooms[i].entry):
+			continue
+		var a: int = Rect2i(rooms[i].rect).get_area()
+		# (the smallest of the rooms that are big enough for a bathroom)
+		if a >= 9 and a < best_area:
+			best_area = a
+			best = i
+	if best < 0:
+		return
+	var tn = rooms[bath].name
+	var tf = rooms[bath].floor
+	rooms[bath].name = rooms[best].name
+	rooms[bath].floor = rooms[best].floor
+	rooms[best].name = tn
+	rooms[best].floor = tf
 
 
 ## The hall and the two sides of a part. Returns the hall's index in `rooms`.
@@ -222,8 +355,8 @@ static func _spine(r: Rect2i, prog: Array, front: String, rooms: Array, walls: A
 	var best_kept := -1
 	var best_err := 1.0e9
 	for ld in range(MIN_ROOM, side_total - MIN_ROOM + 1):
-		var nd := mini(day.size(), _cap(ld, h))
-		var nn := mini(night.size(), _cap(side_total - ld, h))
+		var nd := _kept(ld, h, day)
+		var nn := _kept(side_total - ld, h, night)
 		var sd := 0.0
 		var sn := 0.0
 		for k in nd:
@@ -249,73 +382,96 @@ static func _spine(r: Rect2i, prog: Array, front: String, rooms: Array, walls: A
 	return hall_i
 
 
-## The rooms of `items` in a rectangle, by a partition by shares that gives every room 3 x 3 floor tiles at least: the last of the items are dropped until the rest fit.
+## The rooms of `items` in a rectangle, by a partition by shares that gives every room what it wants (`Plans.WANT`: a living room 5 tiles across and 30 in all, a bedroom 4 and 16...): the
+## last of the items are dropped until the rest fit.
 static func _cap_bsp(r: Rect2i, items_in: Array, front: String, rooms: Array, walls: Array, rng: RandomNumberGenerator) -> void:
 	var items: Array = items_in.duplicate()
-	while not items.is_empty() and items.size() > _cap(r.size.x, r.size.y):
+	var canon := _canon(items)
+	while items.size() > 1 and not _feasible(r.size.x, r.size.y, canon, 0, canon.size()):
 		items.pop_back()
-	while items.size() > 1:
-		var cut := _find_cut(r, items, front, rng)
-		if not cut.is_empty():
-			var sorted: Array = cut.sorted
-			var k: int = cut.k
-			var sa: int = cut.size_a
-			if bool(cut.rows):
-				walls.append({"horiz": true, "pos": r.position.y + sa, "from": r.position.x, "to": r.end.x - 1, "door": false})
-				_cap_bsp(Rect2i(r.position.x, r.position.y, r.size.x, sa), sorted.slice(0, k), front, rooms, walls, rng)
-				_cap_bsp(Rect2i(r.position.x, r.position.y + sa + 1, r.size.x, r.size.y - sa - 1), sorted.slice(k), front, rooms, walls, rng)
-			else:
-				walls.append({"horiz": false, "pos": r.position.x + sa, "from": r.position.y, "to": r.end.y - 1, "door": false})
-				_cap_bsp(Rect2i(r.position.x, r.position.y, sa, r.size.y), sorted.slice(0, k), front, rooms, walls, rng)
-				_cap_bsp(Rect2i(r.position.x + sa + 1, r.position.y, r.size.x - sa - 1, r.size.y), sorted.slice(k), front, rooms, walls, rng)
-			return
-		items.pop_back()
+		canon = _canon(items)
 	if items.is_empty():
 		return
-	var o: Dictionary = items[0]
-	rooms.append({"name": o.name, "rect": r, "floor": o.floor, "entry": bool(o.entry)})
+	_pack(r, canon, 0, canon.size(), front, rooms, walls, rng)
 
 
-## The best cut of a rectangle for `items`: across its longer side when it can be, else the other; the rooms that want the front first (at the front side: the top of a part whose street is
-## north); the size of the first piece the nearest to its rooms' share of the floor among those that hold each group (`_cap`). {} when no cut holds them.
-static func _find_cut(r: Rect2i, items: Array, front: String, rng: RandomNumberGenerator) -> Dictionary:
+## The rooms i to j - 1 of the canon in the rectangle r: one alone has all of it, else the best cut (`_best_cut`) and each piece packed in turn; the group that wants the front is at the front
+## side (the top of a part whose street is north), the cut across a part's width puts it on a side at random.
+static func _pack(r: Rect2i, canon: Array, i: int, j: int, front: String, rooms: Array, walls: Array, rng: RandomNumberGenerator) -> void:
+	var n := j - i
+	if n <= 0:
+		return
+	if n == 1:
+		var o: Dictionary = canon[i].it
+		rooms.append({"name": o.name, "rect": r, "floor": o.floor, "entry": bool(o.entry)})
+		return
+	var cut := _best_cut(r, canon, i, j, rng)
+	if cut.is_empty():
+		# (the group does not hold in any cut: the first room has the floor and the rest are dropped)
+		_pack(r, canon, i, i + 1, front, rooms, walls, rng)
+		return
+	var k: int = cut.k
+	var sa: int = cut.size_a
+	var rows: bool = cut.rows
+	var sb := (r.size.y if rows else r.size.x) - 1 - sa
+	var a_first: bool = (front != "S") if rows else (rng.randf() < 0.5)
+	var ra: Rect2i
+	var rb: Rect2i
+	var at: int
+	if rows:
+		if a_first:
+			ra = Rect2i(r.position.x, r.position.y, r.size.x, sa)
+			rb = Rect2i(r.position.x, r.position.y + sa + 1, r.size.x, sb)
+			at = r.position.y + sa
+		else:
+			rb = Rect2i(r.position.x, r.position.y, r.size.x, sb)
+			ra = Rect2i(r.position.x, r.position.y + sb + 1, r.size.x, sa)
+			at = r.position.y + sb
+		walls.append({"horiz": true, "pos": at, "from": r.position.x, "to": r.end.x - 1, "door": false})
+	else:
+		if a_first:
+			ra = Rect2i(r.position.x, r.position.y, sa, r.size.y)
+			rb = Rect2i(r.position.x + sa + 1, r.position.y, sb, r.size.y)
+			at = r.position.x + sa
+		else:
+			rb = Rect2i(r.position.x, r.position.y, sb, r.size.y)
+			ra = Rect2i(r.position.x + sb + 1, r.position.y, sa, r.size.y)
+			at = r.position.x + sb
+		walls.append({"horiz": false, "pos": at, "from": r.position.y, "to": r.end.y - 1, "door": false})
+	_pack(ra, canon, i, k, front, rooms, walls, rng)
+	_pack(rb, canon, k, j, front, rooms, walls, rng)
+
+
+## The best cut of a rectangle for the canon's rooms i to j - 1: across its longer side when it can be, else the other; the first group (the rooms that want the front) and the rest; the size
+## of the first piece the nearest to its rooms' share of the floor among those where both groups get what they want (`_feasible`). {"rows", "k", "size_a"}, or {} when no cut holds them.
+static func _best_cut(r: Rect2i, canon: Array, i: int, j: int, rng: RandomNumberGenerator) -> Dictionary:
 	var w := r.size.x
 	var h := r.size.y
-	var n := items.size()
 	var rows_first: bool = float(h) >= float(w) * 1.1 or (absf(float(w) - float(h)) < 0.9 and rng.randf() < 0.5)
-	var keyed: Array = []
-	for k in n:
-		keyed.append([(-10.0 if bool(items[k].entry) else 0.0) + float(items[k].pref), k])
-	keyed.sort_custom(func(a, b): return float(a[0]) < float(b[0]) or (float(a[0]) == float(b[0]) and int(a[1]) < int(b[1])))
-	var base: Array = []
-	for kk in keyed:
-		base.append(items[int(kk[1])])
+	var total := 0.0
+	for k in range(i, j):
+		total += float(canon[k].share)
 	for pass_n in 2:
 		var rows: bool = rows_first if pass_n == 0 else not rows_first
-		var sorted: Array = base.duplicate()
-		if rows:
-			if front == "S":
-				sorted.reverse()
-		elif rng.randf() < 0.5:
-			sorted.reverse()
 		var length := h if rows else w
 		var across := w if rows else h
-		var total := 0.0
-		for o in sorted:
-			total += float(o.share)
 		var best := {}
 		var best_score := 1.0e9
 		var acc := 0.0
-		for k in range(1, n):
-			acc += float(sorted[k - 1].share)
-			for sa in range(MIN_ROOM, length - 1 - MIN_ROOM + 1):
+		for k in range(i + 1, j):
+			acc += float(canon[k - 1].share)
+			for sa in range(MIN_ROOM, length - MIN_ROOM):
 				var sb := length - 1 - sa
-				if _cap(across, sa) < k or _cap(across, sb) < n - k:
-					continue
 				var score := absf(float(sa) / float(length - 1) - acc / total)
-				if score < best_score:
-					best_score = score
-					best = {"rows": rows, "k": k, "size_a": sa, "sorted": sorted}
+				if score >= best_score:
+					continue
+				if rows:
+					if not (_feasible(across, sa, canon, i, k) and _feasible(across, sb, canon, k, j)):
+						continue
+				elif not (_feasible(sa, across, canon, i, k) and _feasible(sb, across, canon, k, j)):
+					continue
+				best_score = score
+				best = {"rows": rows, "k": k, "size_a": sa}
 		if not best.is_empty():
 			return best
 	return {}
@@ -373,32 +529,41 @@ static func _plan_doors(rooms: Array, hall_i: int, walls: Array, rng: RandomNumb
 				wgt = 0.8 + rng.randf() * 0.1
 			edges.append({"a": i, "b": j, "seg": seg, "w": wgt})
 	# the tree of the shortest ways (an edge costs its weight: about one door, a hall's a tenth of one)
-	var cost := {root: 0.0}
+	# (ROOMY HOUSES: nobody goes through a bathroom to another room, so a bathroom is a leaf of the tree; only a room that no other way reaches is let be reached through one)
+	var cost := {}
 	var via := {}
 	var done := {}
-	while done.size() < n:
-		var u := -1
-		var u_cost := 1.0e9
-		for k in cost:
-			if not done.has(k) and float(cost[k]) < u_cost:
-				u_cost = float(cost[k])
-				u = int(k)
-		if u < 0:
-			break
-		done[u] = true
-		for ei in edges.size():
-			var e: Dictionary = edges[ei]
-			var v := -1
-			if int(e.a) == u:
-				v = int(e.b)
-			elif int(e.b) == u:
-				v = int(e.a)
-			if v < 0 or done.has(v):
+	for pass_n in 2:
+		cost = {root: 0.0}
+		via = {}
+		done = {}
+		while done.size() < n:
+			var u := -1
+			var u_cost := 1.0e9
+			for k in cost:
+				if not done.has(k) and float(cost[k]) < u_cost:
+					u_cost = float(cost[k])
+					u = int(k)
+			if u < 0:
+				break
+			done[u] = true
+			if pass_n == 0 and u != root and String(rooms[u].name) == "bathroom":
 				continue
-			var nc := u_cost + float(e.w)
-			if not cost.has(v) or nc < float(cost[v]):
-				cost[v] = nc
-				via[v] = ei
+			for ei in edges.size():
+				var e: Dictionary = edges[ei]
+				var v := -1
+				if int(e.a) == u:
+					v = int(e.b)
+				elif int(e.b) == u:
+					v = int(e.a)
+				if v < 0 or done.has(v):
+					continue
+				var nc := u_cost + float(e.w)
+				if not cost.has(v) or nc < float(cost[v]):
+					cost[v] = nc
+					via[v] = ei
+		if done.size() >= n:
+			break
 	var used := {}
 	for v in via:
 		used[int(via[v])] = true
@@ -428,9 +593,9 @@ static func _plan_doors(rooms: Array, hall_i: int, walls: Array, rng: RandomNumb
 		var e: Dictionary = edges[ei]
 		var seg: Dictionary = e.seg
 		var pair := [String(rooms[int(e.a)].name), String(rooms[int(e.b)].name)]
-		var open_pair: bool = pair.has("hall") or pair.has("living room") or pair.has("dining room")
 		var span := int(seg.to) - int(seg.from) + 1
-		walls.append({"horiz": seg.horiz, "pos": seg.pos, "from": seg.from, "to": seg.to, "door": true, "paint": false, "wide": open_pair and not pair.has("bathroom") and span >= 4 and rng.randf() < 0.6, "end": true})
+		# (ROOMY HOUSES: every way between rooms is two wide, a bathroom's door alone is one: a body goes through a door of one tile, but two bodies, or one that turns in it, do not)
+		walls.append({"horiz": seg.horiz, "pos": seg.pos, "from": seg.from, "to": seg.to, "door": true, "paint": false, "wide": not pair.has("bathroom") and span >= 3, "end": true})
 	# the hops of the door graph from the first room
 	var seen := {root: 0}
 	var queue: Array = [root]
@@ -669,7 +834,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	for i in parts.size():
 		for j in range(i + 1, parts.size()):
 			if i != ruin_part and j != ruin_part:
-				_door_between(cv, parts[i], parts[j], rng, room_at, hop_of)
+				_door_between(cv, parts[i], parts[j], rng, room_at, hop_of, rooms)
 	var doors := _outer_doors(cv, parts, rooms, room_at, front, kind, rng, clear)
 	var front_pair: Array = doors.front
 	var fd: Vector2i = front_pair[0] if not front_pair.is_empty() else Vector2i(lw / 2, by)
@@ -687,11 +852,15 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	for rm in rooms:
 		if String(rm.name) == "kitchen":
 			has_kitchen = true
+	# (ROOMY HOUSES: a home is furnished along its walls with a lane kept from door to door, scripts/town/town_kit.gd `strict`)
+	var roomy := Plans.is_homely(kind)
+	kit.strict = roomy
 	for rm in rooms:
 		var rn := String(rm.name)
 		kit.furnish_room(cv, rng, rn, rm.rect, front, kind, start, rn == "living room" and not has_kitchen and kind in ["small", "cottage"])
 	if start:
 		kit.start_extras(cv, rng)
+	kit.strict = false
 	if bool(spec.get("burnt", false)):
 		# a burnt house: soot and cracks over every room
 		var burn: Array = []
@@ -734,7 +903,8 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	out.dressing.gates.append_array(fence_gates)
 	out.buildings[0].drive = dressing.drive
 	_dress_extra(cv, rng, spec, bb, front, front_pair)
-	_unblock(cv)
+	_unblock(cv, roomy)
+	kit.strict = false
 
 
 ## The clearance check, run on every building after its furnishing (the safety net: the kit's `put` keeps each room clear as it sets a thing, but the site canvas's own rows and lines of
@@ -743,7 +913,7 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 ## and a small room has a share of it free (`TownKit.room_is_clear`): from the room's things the one whose going mends the most is taken away (the least needed first, the last put
 ## first of those), until it is. The avatar's box (0.6 wide) goes wherever a tile does, four ways: so a floor of one piece of tiles is one it can walk all over; there is no need
 ## to erode the grid by its radius, which is under half a tile.
-func _unblock(cv) -> void:
+func _unblock(cv, roomy: bool = false) -> void:
 	var lw: int = cv.W
 	for round in 14:
 		var reach: PackedByteArray = cv.flood()
@@ -779,6 +949,8 @@ func _unblock(cv) -> void:
 		if not bool(a.indoor):
 			continue
 		var rr2: Rect2i = a.rect
+		# (the rooms of the house itself are asked for their lanes and their share of free floor, the shed's two rooms are not)
+		kit.strict = roomy and int(a.get("b", 0)) == 0
 		for round in 24:
 			if kit.room_is_clear(cv, rr2):
 				break
@@ -814,7 +986,7 @@ const KEEP_RANK := {
 
 ## Takes away from a room the one thing whose going mends its floor the most (a piece joined, tiles freed); false when nothing in it can be.
 func _mend_room(cv, rr: Rect2i) -> bool:
-	var need: int = kit.free_needed(rr.size.x * rr.size.y)
+	var need: int = kit.need_for(rr.size.x * rr.size.y)
 	var f: Dictionary = kit.room_floor(cv, rr)
 	var best := -1
 	var best_score := -1.0e9
@@ -1046,7 +1218,7 @@ func _cut(cv, horiz: bool, pos: int, t0: int, width: int) -> void:
 
 
 ## A door between two parts that share a wall.
-func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator, room_at: PackedInt32Array = PackedInt32Array(), hop_of: Array = []) -> void:
+func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator, room_at: PackedInt32Array = PackedInt32Array(), hop_of: Array = [], rooms: Array = []) -> void:
 	var inter := a.intersection(b)
 	if inter.size.x <= 0 or inter.size.y <= 0:
 		return
@@ -1070,6 +1242,10 @@ func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator, room_at
 				var rp: int = room_at[p.y * cv.W + p.x]
 				var rq: int = room_at[q.y * cv.W + q.x]
 				sc = (int(hop_of[rp]) if rp >= 0 else 0) + (int(hop_of[rq]) if rq >= 0 else 0)
+				# (ROOMY HOUSES: the way between two parts does not go through a bathroom if any other will do)
+				for rb in [rp, rq]:
+					if rb >= 0 and rb < rooms.size() and String(rooms[rb].name) == "bathroom":
+						sc += 50
 			scores.append(sc)
 	if cands.is_empty():
 		return
@@ -1085,7 +1261,7 @@ func _door_between(cv, a: Rect2i, b: Rect2i, rng: RandomNumberGenerator, room_at
 		if int(cands[i + 1]) == int(cands[i]) + 1:
 			pair.append(i)
 	var pos := inter.position.y if horiz else inter.position.x
-	if not pair.is_empty() and rng.randf() < 0.8:
+	if not pair.is_empty() and rng.randf() < 0.97:
 		_cut(cv, horiz, pos, int(cands[pair[rng.randi() % pair.size()]]), 2)
 	else:
 		_cut(cv, horiz, pos, int(cands[rng.randi() % cands.size()]), 1)

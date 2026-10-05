@@ -56,6 +56,10 @@ const RADIUS := 0.3
 ## No walking sub-step is longer than this many tiles (a tile is one; nothing is jumped).
 const MAX_SUBSTEP := 0.2
 const EPS := 1.0e-4
+## ROOMY HOUSES (the town only: `sim.is_one_house()`; the school and the raid sites walk as they always did): walking straight at a doorway or round a piece of furniture with the box's edge
+## a hair past the corner of the tile no longer stops the avatar dead against it: when a step along one axis is shut by a corner that overlaps the box by no more than this many tiles, the avatar
+## is slipped that little way sideways, round the corner, as the step goes on (a body 0.6 wide in a doorway one tile wide has 0.2 either side; with this it is as forgiving as the doors are two wide).
+const CORNER_SLIP := 0.25
 
 ## How far from a pellet's line the middle of a body can be and still be hit, times the creature's size. (The middle
 ## of a body is BODY tiles above its feet, where the NPCs aim.)
@@ -326,17 +330,24 @@ func _move(p, dt: float) -> void:
 	var n := maxi(1, ceili(total / MAX_SUBSTEP))
 	var step := total / float(n)
 	var moved := 0.0
+	var round_corners: bool = free_standing and sim.is_one_house()
 	for i in n:
 		var before := Vector2(p.x, p.y)
 		if dir.x != 0.0:
 			var nx: float = p.x + dir.x * step
 			if free_standing and (_blocked(nx, p.y) or sim.levels.blocks(p, nx, p.y)):
+				var shut := nx
 				nx = _slide_x(p, nx)
+				if round_corners and dir.y == 0.0 and absf(nx - shut) > EPS:
+					p.y += _slip(nx, p.y, signf(dir.x), true, step)
 			p.x = nx
 		if dir.y != 0.0:
 			var ny: float = p.y + dir.y * step
 			if free_standing and (_blocked(p.x, ny) or sim.levels.blocks(p, p.x, ny)):
+				var shut2 := ny
 				ny = _slide_y(p, ny)
+				if round_corners and dir.x == 0.0 and absf(ny - shut2) > EPS:
+					p.x += _slip(p.x, ny, signf(dir.y), false, step)
 			p.y = ny
 		moved += before.distance_to(Vector2(p.x, p.y))
 	if not free_standing:
@@ -346,6 +357,23 @@ func _move(p, dt: float) -> void:
 	if moved > 0.001:
 		p.moving = true
 		p.walk_phase += moved * 3.4
+
+
+## The little way sideways that takes the box, as it stands at (x, y) against a wall it was walking into (`sgn`: the direction of the walk, along x when `along_x`, else along y), round
+## the corner of it so that the step can go on: the smallest of up to `CORNER_SLIP` tiles that leaves the box free both there and one step further on, 0.0 when none does (a wall that
+## covers the box's face, which stops the avatar as it always did). At most one step is slipped at a time.
+func _slip(x: float, y: float, sgn: float, along_x: bool, step: float) -> float:
+	for k in range(1, int(CORNER_SLIP / 0.05) + 1):
+		var off := 0.05 * float(k)
+		for side_v in [-1.0, 1.0]:
+			var side: float = side_v
+			var ax: float = x + (0.0 if along_x else side * off)
+			var ay: float = y + (side * off if along_x else 0.0)
+			var bx: float = ax + (sgn * step if along_x else 0.0)
+			var by: float = ay + (0.0 if along_x else sgn * step)
+			if not _blocked(ax, ay) and not _blocked(bx, by):
+				return side * minf(off, step)
+	return 0.0
 
 
 ## Where a step along x that would end in a wall ends instead: against it (the box's edge on the tile's).

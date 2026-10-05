@@ -8,7 +8,8 @@
 ## the gate, two towers (inner corners) and two floodlights (inner side tiles). Each slot is also a Build plot (`plots`, id == the slot's id, kind
 ## "slot"); the kits are the catalogue entries of `buildings` (id "kit_<kit>", `slot_kit` = the kit id; a fence slot has its own, "kit_<kit>@<slot id>", priced by its length, and an
 ## upgrade entry "kit_<strong kit>_up@<slot id>" that makes the plain fence that stands on it strong). The tiles of the ring that are not free (a neighbour's wall, a tree) are not
-## slots: the runs of free tiles are split into sections of at most `section_max` tiles (12: about nine sections round a lot of 24 by 22). What the player orders is a PROJECT
+## slots: the runs of free tiles are split into sections of at most `section_max` tiles (12: about ten sections round a lot of 28 by 22; ROOMY HOUSES made the start lot four tiles wider, and
+## the sections were tried at 14 tiles to keep their number: the lab lost a night in one run of three with them, as against one in twelve with sections of 12). What the player orders is a PROJECT
 ## (base_kits.json: the slots of a `role`, scripts/town/perimeter.gd), not a slot.
 ##
 ## Added to the plan's shape (nothing changed): `doors[i]` has "side", "name", "dead_places", "slot" (the door's plank slot id); `slots[i]` has
