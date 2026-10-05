@@ -111,24 +111,29 @@ func _start_hold() -> void:
 	if _hold_state == 0:
 		_hold_state = 2
 		# (fresh: the first morning, still at the start of it: the loading card runs a few steps of the sim, so a count of steps is no test)
-		var fresh: bool = float(main.sim.hour) < 8.5 and main.shot_path == "" and main.speed != 0
+		var fresh: bool = float(main.sim.hour) < 8.5 and main.shot_path == ""
 		var scn = main.sim.get("scenario")
 		if fresh and scn != null and scn.has_method("stage") and String(scn.stage()) == "alone":
 			main.speed = 0
 			main.hud.toast("Press W A S D to begin", "info")
 			_hold_state = 1
 		return
-	# held: the first key of the keyboard that moves her, the mouse, or the player's own unpause
+	# held: the loading card puts the speed back to 1 when it goes, so the hold keeps it at 0 until the first key that moves her or a click; Space is the
+	# player's own unpause (main's key handler does the toggle: the hold only lets go)
 	var moved := false
 	for k in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_E, KEY_R]:
 		if Input.is_key_pressed(k):
 			moved = true
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		moved = true
-	if moved or main.speed != 0:
+	if Input.is_key_pressed(KEY_SPACE):
 		_hold_state = 2
-		if main.speed == 0:
-			main.speed = 1
+		return
+	if moved:
+		_hold_state = 2
+		main.speed = 1
+	elif main.speed != 0:
+		main.speed = 0
 
 
 func on_frame(dt: float) -> void:
