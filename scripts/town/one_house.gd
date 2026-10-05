@@ -2,18 +2,21 @@
 ## a town game (scripts/town/town_sim.gd makes it by name), the rules' side of the whole game flow; the numbers and the words are the data,
 ## `assets/data/one_house.json` (over which `one_house_tuning.json`, the lab's, is merged key by key). It works on its own, with no screen.
 ##
-## THE STAGES. `alone` (the start) -> `cleared` (the start house has no dead left) -> `claimed` (the house is the base) -> `growing` (the first survivors have come) ->
+## THE STAGES. `arrive` (the start: the avatar walks in from the forest edge to the houses she may choose from, scripts/town/arrival.gd) -> `alone` (she has gone into one of them: it is
+## the house in hand, `work_house()`) -> `cleared` (a candidate house has no dead left) -> `claimed` (that house is the base) -> `growing` (the first survivors have come) ->
 ## `fortify` (the FOURTH one has: the dead come every night from the first dusk) -> `held` (the first attack night is over and the base stands: the run is won,
-## `sim.over = "victory"`, the end card). Stages only go forward. Other packages tell this module what happened (`on_house_clear`, `on_claimed`, `on_survivor_joined`).
+## `sim.over = "victory"`, the end card). Stages only go forward. Other packages tell this module what happened (`on_house_clear`, `on_claimed`, `on_survivor_joined`). A town that gives the
+## avatar no road to arrive on (the start is inside a candidate house) begins at `alone`.
 ##
-## THE SOLO START. `begin` makes the run: Ruth alone (the player), the data's stores, 08:00 of day 1, `min_per_sec` 2.0, `recruits.small` with no caller on the radio, the
-## school's town board, lots, streets, storyteller, gate and levels off, the waves off until the fourth rescue, and the community modules (`briefing`, `priorities`, `initiative`,
-## `relations`...) switched on by how many people there are (`apply_stage`, from the data's `modules_from_crew`, again at every change of the crew).
+## THE SOLO START. `begin` makes the run: Ruth alone (the player) at the town's entry facing the way in, the data's stores, 07:00 of day 1, `min_per_sec` 2.0, `recruits.small` with no caller on
+## the radio, the school's town board, lots, streets, storyteller, gate and levels off, the waves off until the fourth rescue, and the community modules (`briefing`, `priorities`, `initiative`,
+## `relations`...) switched on by how many people there are (`apply_stage`, from the data's `modules_from_crew`, again at every change of the crew). The street's dead near the entry stand
+## still (`_calm_around`, again round the house when it is claimed), and ONE more dead one stands on the road to the nearest house (`_place_lone_dead`), for the lesson of the gun.
 ##
-## THE GUIDE. Seven lessons, none blocking (walk; aim and shoot; open a door and go in; clear the house; search; claim; and, once someone is on the radio, ask them for something:
+## THE GUIDE. Eight lessons, none blocking (walk; aim and shoot; find a house; open a door and go in; clear the house; search; claim; and, once someone is on the radio, ask them for something:
 ## click a person or a card, pick a verb on the wheel; `on_asked`, which main.gd calls). Each is DONE when its condition is true, read from the
 ## state of the rules (not from the event stream: a scenario's `update` runs before the step's events exist, and the screen clears them every frame). `guide()` is the first
-## one not done (the one just done is shown as done for three seconds), `{}` when there is none (the first six are the first day's, until the first survivor has come; the lesson
+## one not done (the one just done is shown as done for three seconds), `{}` when there is none (the first seven are the first day's, until the first survivor has come; the lesson
 ## marked `crew` has that stage). `objective()` is the line under the clock, with a bearing target.
 ##
 ## THE END. The first attack night is the night of `first_day` (the day of the fourth rescue, or the next one when it comes after the cutoff hour). From the dawn after it
@@ -28,13 +31,14 @@ extends "res://scripts/sim/scenario.gd"
 const GD := preload("res://scripts/game_data.gd")
 const Demo := preload("res://scripts/demo.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 const KIND := "one_house"
 const DATA_PATH := "res://assets/data/one_house.json"
 const TUNING_PATH := "res://assets/data/one_house_tuning.json"
-const STAGES := ["alone", "cleared", "claimed", "growing", "fortify", "held"]
-## The stages `go_to` (staging for screenshots, the lab and the tests) knows.
-const STAGE_NAMES := ["alone", "cleared", "claimed", "rescued2", "fourth", "night"]
+const STAGES := ["arrive", "alone", "cleared", "claimed", "growing", "fortify", "held"]
+## The stages `go_to` (staging for screenshots, the lab and the tests) knows: "arrive" is the start itself; "alone" puts the avatar inside the best house (the old start).
+const STAGE_NAMES := ["arrive", "alone", "cleared", "claimed", "rescued2", "fourth", "night"]
 ## Seconds of rules time between looks at the lessons and the clock of the run.
 const TICK := 0.25
 ## How long the lesson just done is shown as done.
@@ -51,7 +55,8 @@ const FALLBACK := {
 	"difficulty": 1,
 	"total_days": 5,
 	"ideas_from_day": 2,
-	"start": {"hour": 8.0, "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}},
+	"start": {"hour": 7.0, "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}},
+	"arrival": {"mark_r": 14.0, "lone_dead": {"from": 12.0, "to": 15.0}, "quiet_r": 24.0},
 	"modules_from_crew": {"briefing": 3, "priorities": 3, "initiative": 3, "relations": 4, "policies": 99, "problems": 99, "dilemmas": 99, "specialists": 99},
 	"attack": {"from_rescue": 4, "cutoff_hour": 17.0},
 	"night": {"first": 1.0, "growth": 0.15},
@@ -67,6 +72,13 @@ var _d := {}
 ## Whether this is the One House run (a `begin`, an `install` or a load): until then this module does nothing by itself, so that a town game that is only a test bed is as it was.
 var _begun := false
 var _stage := "alone"
+## The candidate house the avatar went into last while there was no base (-1: none yet), and the last candidate house found clear (the one the objective sends her to claim).
+var _focus := -1
+var _last_cleared := -1
+## Whether the opening words have been said (saved: a game that is loaded does not say them again), and whether the lone dead one has been put on the road (not saved: it is a record, the
+## field's own save holds it).
+var _intro_told := false
+var _lone_placed := false
 ## How many survivors the rescue module says have joined, and how many `go_to` made up for a screenshot.
 var _module_joined := 0
 var _staged_joins := 0
@@ -101,6 +113,10 @@ func start() -> void:
 	_d = {}
 	_begun = false
 	_stage = "alone"
+	_focus = -1
+	_last_cleared = -1
+	_intro_told = false
+	_lone_placed = false
 	_module_joined = 0
 	_staged_joins = 0
 	_attacks = false
@@ -256,8 +272,9 @@ static func town_seed_of(data: Dictionary) -> int:
 	return -1
 
 
-## Puts the run in a stage for a screenshot, the lab or a test: "cleared", "claimed", "rescued2", "fourth" or "night" (the clock just before the first attack's dusk), "alone"
-## does nothing. It does what the real thing does where the module is there (the dead of the house are put down, the base is claimed) and makes the rest up. False for a
+## Puts the run in a stage for a screenshot, the lab or a test: "alone" (the avatar just inside the best house), "cleared", "claimed", "rescued2", "fourth" or "night" (the clock just before the
+## first attack's dusk); "arrive" does nothing (it is the start). A stage may name the house it is staged on: "claimed@poor" (the candidate of that tier) or "claimed@57" (a house id); the
+## default is the best candidate. It does what the real thing does where the module is there (the dead of the house are put down, the base is claimed) and makes the rest up. False for a
 ## game that is not a One House game, or a name it does not know. Says nothing else: the caller looks at `stage()`.
 static func stage_to(game, stage_name: String) -> bool:
 	var module = game.scenario if game != null else null
@@ -294,27 +311,113 @@ func _begin_run(difficulty: int, seed_value: int) -> void:
 		_size = [int(sz.x), int(sz.y)] if typeof(sz) == TYPE_VECTOR2I else [0, 0]
 	else:
 		_town_seed = seed_value
-	_calm_the_start()
+	_arrive()
+	_quiet_the_entry()
+	_calm_around(_start_pos())
+	_place_lone_dead()
 	_apply_static()
 	_apply_flags()
 	apply_stage()
 	sim.events.clear()
 
 
-## The first minutes are quiet: the dead round the start house that would wander (the generator lets some of the street's walk) stand where they are, as the ones inside the houses do, until
-## somebody is near them. A shot is heard and brings those near; nobody is brought by a dead one that happened to walk by in the first minute. (Only the records: nothing is awake yet.)
-func _calm_the_start() -> void:
+## The avatar at the town's entry facing the way in, and the stage that follows: `arrive`, unless she begins inside a house that can be claimed (a town with no road to come in on) or the game
+## has no town (`alone`, as before the arrival).
+func _arrive() -> void:
+	_stage = "alone"
+	_focus = -1
+	var houses = sim.get("houses")
+	var town := _town()
+	if houses == null or town.is_empty() or not town.has("start"):
+		return
+	var spawn := Arrival.spawn(town)
+	var me = sim.avatar.player()
+	if me != null:
+		me.x = spawn.pos.x
+		me.y = spawn.pos.y
+		me.facing = String(spawn.face)
+		me.aim = float(spawn.angle)
+		me.path = []
+		me.moving = false
+	var inside: int = houses.house_at(spawn.pos.x, spawn.pos.y)
+	if inside >= 0 and Arrival.is_candidate(town, inside):
+		_focus = inside
+	elif Arrival.candidates(town).is_empty():
+		_focus = -1
+	else:
+		_stage = "arrive"
+
+
+## A town whose generator did not make the entry (the stand-in's, scripts/town/arrival.gd) has not kept its street clear of the dead either: the street's dead within `arrival.quiet_r` tiles of
+## the entry (not the ones in the houses) are taken away, so that the walk in is the calm one the arrival is. The generator's own entry has this done already (spec section 3).
+func _quiet_the_entry() -> void:
+	var field = sim.get("field")
+	var town := _town()
+	if field == null or town.is_empty() or not town.has("start") or Arrival.native(town) or not field.has_method("remove_record"):
+		return
+	var r := float(_cfg("arrival.quiet_r", 24.0))
+	var at := Vector2(Arrival.spawn(town).pos)
+	var houses = sim.get("houses")
+	for i in int(field.n):
+		var p := Vector2(field.xs[i], field.ys[i])
+		if p.distance_to(at) < r and int(houses.house_at(p.x, p.y)) < 0:
+			field.remove_record(i)
+
+
+## The first minutes are quiet: the dead round `at` (the entry; later the claimed house) that would wander (the generator lets some of the street's walk) stand where they are, as the ones inside
+## the houses do, until somebody is near them. A shot is heard and brings those near; nobody is brought by a dead one that happened to walk by in the first minute. (Only the dormant records.)
+func _calm_around(at: Vector2) -> void:
 	var field = sim.get("field")
 	if field == null or not ("stands" in field) or not ("xs" in field):
 		return
 	var r := float(_cfg("calm_start_r", 32.0))
 	if r <= 0.0:
 		return
-	var at := _start_pos()
 	var r2 := r * r
 	for i in int(field.n):
-		if int(field.stands[i]) == 0 and Vector2(field.xs[i], field.ys[i]).distance_squared_to(at) < r2:
+		if int(field.status[i]) == 0 and int(field.stands[i]) == 0 and Vector2(field.xs[i], field.ys[i]).distance_squared_to(at) < r2:
 			field.stands[i] = 1
+
+
+## ONE dead one on the road from the entry to the nearest house, `arrival.lone_dead` tiles along it, standing: the lesson of the gun is a real one, and the only one to meet in the first minute.
+## The generator does not place it, so it is a record added to the field here (the same one for the same town: the way is the walking grid's, nothing is drawn from a dice). Not saved by this
+## module: the field's own save holds it.
+func _place_lone_dead() -> void:
+	var field = sim.get("field")
+	var houses = sim.get("houses")
+	var town := _town()
+	if _lone_placed or field == null or houses == null or town.is_empty() or not field.has_method("add_record"):
+		return
+	_lone_placed = true
+	var spawn := Arrival.spawn(town)
+	var first := Arrival.nearest(town, spawn.pos)
+	if first < 0 or int(houses.house_at(spawn.pos.x, spawn.pos.y)) == first:
+		return
+	var goal := Arrival.door_of(town, first)
+	var way: Array = sim.path_p.find(sim.world.solid_p, spawn.pos.x, spawn.pos.y, goal.x, goal.y)
+	if way.is_empty():
+		return
+	var span: Dictionary = _cfg("arrival.lone_dead", {})
+	var want := (float(span.get("from", 12.0)) + float(span.get("to", 15.0))) * 0.5
+	var from: Vector2 = spawn.pos
+	var walked := 0.0
+	var spot = null
+	for wp in way:
+		var seg := from.distance_to(Vector2(wp))
+		if walked + seg >= want:
+			spot = from.lerp(Vector2(wp), (want - walked) / maxf(seg, 0.001))
+			break
+		walked += seg
+		from = Vector2(wp)
+	if spot == null or int(houses.house_at(spot.x, spot.y)) >= 0 or Vector2(spot).distance_to(spawn.pos) < float(span.get("from", 12.0)) * 0.7:
+		return
+	# (a free tile, and not on top of another of the dead)
+	if sim.world.is_solid(sim.world.solid_p, spot.x, spot.y):
+		return
+	for i in int(field.n):
+		if Vector2(field.xs[i], field.ys[i]).distance_to(spot) < 2.0:
+			return
+	field.add_record(spot, "walker", true)
 
 
 ## One person, Ruth, the player, and nobody on the radio: the recruits are a small start's with no caller (`recruits.small`, so that every module of the community sees a small
@@ -356,13 +459,21 @@ func _ruth_def() -> Dictionary:
 	return def
 
 
-## The free tile of the start house where a run begins (the town's own), or where Ruth stands when the game has no town.
-func _start_pos() -> Vector2:
+## The generated town the run is on ({} when the game has none).
+func _town() -> Dictionary:
 	var houses = sim.get("houses")
 	if houses != null:
 		var town = houses.get("town")
-		if typeof(town) == TYPE_DICTIONARY and town.has("start"):
-			return Vector2(town.start.pos)
+		if typeof(town) == TYPE_DICTIONARY:
+			return town
+	return {}
+
+
+## Where a run begins: the town's entry (scripts/town/arrival.gd), or where Ruth stands when the game has no town.
+func _start_pos() -> Vector2:
+	var town := _town()
+	if not town.is_empty() and town.has("start"):
+		return Vector2(Arrival.spawn(town).pos)
 	var p = sim.avatar.player()
 	return Vector2(p.x, p.y) if p != null else Vector2.ZERO
 
@@ -461,17 +572,76 @@ func forecast_on() -> bool:
 	return attacks_on()
 
 
-## The start house has no dead left (clearing calls it for every house it finds cleared).
+## A house has no dead left (clearing calls it for every house it finds cleared): the run is `cleared` when it is one that can be claimed, and that house is the one to claim.
 func on_house_clear(h: int) -> void:
 	_cleared[int(h)] = true
 	var houses = sim.get("houses")
-	if houses == null or int(h) == int(houses.start_house()):
+	if houses == null:
+		_advance("cleared")
+	elif Arrival.is_candidate(_town(), int(h)) or int(h) == int(houses.start_house()):
+		_last_cleared = int(h)
 		_advance("cleared")
 
 
-## The house is the base now (`base.claim` calls it).
-func on_claimed(_h: int) -> void:
+## The house is the base now (`base.claim` calls it): the street's dead round it stand quiet as they did round the entry.
+func on_claimed(h: int) -> void:
+	_focus = int(h)
 	_advance("claimed")
+	var base = sim.get("base")
+	if base != null and base.has_method("center"):
+		_calm_around(Vector2(base.center()))
+
+
+## The house the player has in hand: the base once there is one; the house last found clear while it waits to be claimed; the candidate she last went into; else the candidate nearest her
+## (the best one when she is nowhere); -1 in a game with no town. The lessons, the objective and the claim spot of a base that is not made yet are about it.
+func work_house() -> int:
+	var houses = sim.get("houses")
+	if houses == null:
+		return -1
+	var base = sim.get("base")
+	if base != null and bool(base.get("claimed")):
+		return int(base.house)
+	if _stage == "cleared" and _last_cleared >= 0:
+		return _last_cleared
+	if _focus >= 0:
+		return _focus
+	var town := _town()
+	var me = sim.avatar.player() if String(sim.player_id) != "" else null
+	if me != null and not town.is_empty():
+		var near := Arrival.nearest(town, Vector2(me.x, me.y))
+		if near >= 0:
+			return near
+	return int(houses.start_house())
+
+
+## The words of the banner of a claim ([title, sub]): by how good a base the house is (the candidate's tier).
+func claim_words(h: int) -> Array:
+	var tier := String(Arrival.candidate_of(_town(), int(h)).get("tier", "best"))
+	var words = _cfg("words.claimed.%s" % tier, null)
+	if words is Array and (words as Array).size() >= 2:
+		return [String(words[0]), String(words[1])]
+	return ["This house is yours", "A bed, a stash, a radio. Keep it clear"]
+
+
+## The words of the banner when the bell rings before there is a base ([title, sub]), [] when there is one (the town's own words stand: scripts/town/town_sim.gd).
+func dusk_words() -> Array:
+	if not _begun or _stage_idx() >= STAGES.find("claimed"):
+		return []
+	var words = _cfg("words.dusk_no_base", [])
+	if words is Array and (words as Array).size() >= 2:
+		return [String(words[0]), String(words[1])]
+	return []
+
+
+## The words said once as the run begins ([title, sub], then [] for good): the facade shows them as a banner when the player begins to move.
+func take_intro() -> Array:
+	if _intro_told or not _begun or _stage != "arrive":
+		return []
+	_intro_told = true
+	var words = _cfg("words.intro", [])
+	if words is Array and (words as Array).size() >= 2:
+		return [String(words[0]), String(words[1])]
+	return []
 
 
 ## A survivor has joined (the rescue module calls it with its own count of them): the crew changes, and the fourth makes the dead come.
@@ -517,8 +687,25 @@ func update(dt: float) -> void:
 	_apply_flags()
 	if crew_count() != _crew_seen:
 		apply_stage()
+	_watch_arrival()
 	_watch_the_dawn()
 	_watch_the_lessons()
+
+
+## While there is no base: the candidate house the avatar is inside is the one in hand, and her first step into one ends `arrive`.
+func _watch_arrival() -> void:
+	var houses = sim.get("houses")
+	var base = sim.get("base")
+	if houses == null or (base != null and bool(base.get("claimed"))) or String(sim.player_id) == "":
+		return
+	var me = sim.avatar.player()
+	if me == null:
+		return
+	var h: int = houses.house_at(me.x, me.y)
+	if h < 0 or not Arrival.is_candidate(_town(), h):
+		return
+	_focus = h
+	_advance("alone")
 
 
 func _track_walk() -> void:
@@ -617,13 +804,9 @@ func _sections_down() -> int:
 	return n
 
 
-## The base's house, or the start house before a claim; -1 when the game has no town.
+## The base's house, or the house in hand before a claim; -1 when the game has no town.
 func _base_house() -> int:
-	var base = sim.get("base")
-	if base != null and bool(base.get("claimed")):
-		return int(base.house)
-	var houses = sim.get("houses")
-	return int(houses.start_house()) if houses != null else -1
+	return work_house()
 
 
 ## The dead in the base's house now: the town's own (its records, awake or not) and the night's, which are not records.
@@ -674,38 +857,52 @@ func _cond(c: Dictionary) -> bool:
 			return _walked >= float(c.get("n", 6))
 		"kills":
 			return int(sim.kills) >= int(c.get("n", 1))
+		"near_candidate":
+			# (not before the first steps: a wall within reach of the entry would skip the walk and the gun)
+			return _walked >= 3.0 and _near_candidate() <= float(c.get("n", float(_cfg("arrival.mark_r", 14.0))))
 		"rooms_seen":
 			return _rooms_seen() >= int(c.get("n", 2))
 		"house_clear":
-			return _stage_idx() >= 1
+			return _stage_idx() >= STAGES.find("cleared")
 		"searched":
 			return _searched() >= int(c.get("n", 1))
 		"claimed":
-			return _stage_idx() >= 2
+			return _stage_idx() >= STAGES.find("claimed")
 		"asked":
 			return _asked >= int(c.get("n", 1))
 	return false
 
 
-## The rooms of the start house the avatar has opened; another house entered counts for all of them.
+## How far the avatar is from the nearest house that can be claimed (to its walls; INF with none).
+func _near_candidate() -> float:
+	var town := _town()
+	var me = sim.avatar.player() if String(sim.player_id) != "" else null
+	if town.is_empty() or me == null:
+		return INF
+	var near := Arrival.nearest(town, Vector2(me.x, me.y))
+	return Arrival.distance_to_house(town, near, Vector2(me.x, me.y)) if near >= 0 else INF
+
+
+## The rooms of the house in hand the avatar has opened; a house that is no candidate entered counts for all of them.
 func _rooms_seen() -> int:
 	var clearing = sim.get("clearing")
 	var houses = sim.get("houses")
 	if clearing == null or houses == null:
 		return 0
-	var h: int = houses.start_house()
+	var h := work_house()
 	var n := 0
 	for r in houses.rooms_of(h):
 		if clearing.is_revealed(int(r)):
 			n += 1
 	if clearing.has_method("explored"):
+		var town := _town()
 		for e in clearing.explored():
-			if int(e) != h:
+			if int(e) != h and not Arrival.is_candidate(town, int(e)):
 				return NEVER
 	return n
 
 
-## How many containers have been searched (the search module's own count, its table of looted ones, else the ones of the start house and of the base).
+## How many containers have been searched (the search module's own count, its table of looted ones, else the ones of the house in hand and of the base).
 func _searched() -> int:
 	var search = sim.get("search")
 	if search == null:
@@ -729,14 +926,14 @@ func _searched() -> int:
 	return n
 
 
-## How many containers of the start house nobody has searched yet.
+## How many containers of the house in hand nobody has searched yet.
 func _unsearched_here() -> int:
 	var search = sim.get("search")
 	var houses = sim.get("houses")
 	if search == null or houses == null:
 		return 0
 	var n := 0
-	for c in houses.containers_of(int(houses.start_house())):
+	for c in houses.containers_of(work_house()):
 		if not search.is_looted(String(c.id)):
 			n += 1
 	return n
@@ -745,11 +942,11 @@ func _unsearched_here() -> int:
 ## The lesson of now: {"id", "title", "text", "goal", "done", "n", "of", "progress"}: the first not done (the one just done, for a few seconds, with `done` true), {} when
 ## there is none to give. `progress` is a short count when the lesson has one ("2 of 3 rooms clear").
 func guide() -> Dictionary:
-	if not _begun or _stage_idx() >= 5:
+	if not _begun or _stage_idx() >= STAGES.find("held"):
 		return {}
 	# (the lessons are for the first day, the lone survivor's: with the first voice on the radio they are over, and the lessons of the crew (`"crew": true`: how to ask
 	# them for something) take their place until the fortify stage ends; the night itself teaches nothing)
-	var crew := _stage_idx() >= 3
+	var crew := _stage_idx() >= STAGES.find("growing")
 	var lessons: Array = []
 	for l in _cfg("guide", []):
 		if bool(l.get("crew", false)) == crew:
@@ -779,7 +976,7 @@ func _lesson_out(l: Dictionary, i: int, n: int, done: bool) -> Dictionary:
 	return {"id": String(l.get("id", "")), "title": String(l.get("title", "")), "text": String(l.get("text", "")), "goal": String(l.get("goal", "")), "done": done, "n": i + 1, "of": n, "progress": progress}
 
 
-## {"clear", "of", "at"}: how many rooms of the start house are clear, how many it has, and the middle of the nearest that is not (null when they all are or there is no town).
+## {"clear", "of", "at"}: how many rooms of the house in hand are clear, how many it has, and the middle of the nearest that is not (null when they all are or there is no town).
 func _rooms_progress() -> Dictionary:
 	var out := {"clear": 0, "of": 0, "at": null}
 	var houses = sim.get("houses")
@@ -789,7 +986,7 @@ func _rooms_progress() -> Dictionary:
 	var me = sim.avatar.player()
 	var here := Vector2(me.x, me.y) if me != null else Vector2.ZERO
 	var best := INF
-	for r in houses.rooms_of(houses.start_house()):
+	for r in houses.rooms_of(work_house()):
 		out.of = int(out.of) + 1
 		if clearing != null and clearing.is_clear(int(r)):
 			out.clear = int(out.clear) + 1
@@ -803,13 +1000,18 @@ func _rooms_progress() -> Dictionary:
 
 # ---------------------------------------------------------------- the objective --
 
-## The line the player reads under the clock: {"id", "text", "sub", "at": Vector2 or null (where to look), "step", "of"}. It follows `stage()`: clear the house, claim it, find the
-## survivors (n of four), fortify before dark, hold the night, the night is held.
+## The line the player reads under the clock: {"id", "text", "sub", "at": Vector2 or null (where to look), "step", "of"}. It follows `stage()`: find shelter (the arrow is at the nearest house
+## that can be claimed, by day and by night), clear the house, claim it, find the survivors (n of four), fortify before dark, hold the night, the night is held.
 func objective() -> Dictionary:
 	var out := {"id": "", "text": "", "sub": "", "at": null, "step": 0, "of": 0}
 	if not _begun:
 		return out
 	match _stage:
+		"arrive":
+			out.id = "arrive"
+			out.text = String(_cfg("objective.arrive.text", "Find shelter before dark"))
+			out.sub = String(_cfg("objective.arrive.sub", ""))
+			out.at = _nearest_door()
 		"alone":
 			var rooms := _rooms_progress()
 			out.id = "clear"
@@ -832,6 +1034,10 @@ func objective() -> Dictionary:
 			out.id = "rescue"
 			out.text = _fmt(String(_cfg("objective.rescue.text", "Find survivors: %d of %d")), [rescued(), want])
 			out.sub = String(_cfg("objective.rescue.sub", ""))
+			var base = sim.get("base")
+			var problems = base.get("problems") if base != null else null
+			if problems is Array and not (problems as Array).is_empty():
+				out.sub = String(_cfg("objective.rescue.sub_cramped", out.sub))    # (the layout of the house did not pass its check: the claim stands, and the fence is what the lot allows)
 			out.at = _survivor_bearing()
 			out.step = rescued()
 			out.of = want
@@ -869,12 +1075,22 @@ func _fortify_sub(fallback: String) -> String:
 	return String(_cfg("objective.fortify.sub_going", fallback)) if going else String(_cfg("objective.fortify.sub_done", fallback))
 
 
-## The outside of the start house's front door, in tiles (the middle of the house when it has none), null with no town.
+## The front door of the nearest house that can be claimed (the tile outside it), null with none or no town.
+func _nearest_door() -> Variant:
+	var town := _town()
+	var me = sim.avatar.player() if String(sim.player_id) != "" else null
+	if town.is_empty() or me == null:
+		return null
+	var near := Arrival.nearest(town, Vector2(me.x, me.y))
+	return Arrival.door_of(town, near) if near >= 0 else null
+
+
+## The outside of the front door of the house in hand, in tiles (the middle of the house when it has none), null with no town.
 func _front_door() -> Variant:
 	var houses = sim.get("houses")
 	if houses == null:
 		return null
-	var h: int = houses.start_house()
+	var h: int = work_house()
 	var door = _exterior_door(h)
 	if not door.is_empty():
 		return Vector2(door.out) + Vector2(0.5, 0.5)
@@ -1020,34 +1236,75 @@ func end_card() -> Dictionary:
 
 ## Puts the run in `stage_name` (see `stage_to`). A run that has not begun is begun first.
 func go_to(stage_name: String) -> bool:
-	if not STAGE_NAMES.has(stage_name):
+	# ("claimed@poor": the stage, on the candidate house of that tier, "ok" or "best"; or on the house with that id: "cleared@57")
+	var parts := stage_name.split("@")
+	if not STAGE_NAMES.has(String(parts[0])):
 		return false
 	if not _begun:
 		_begin_run(-1, int(sim.run_seed))
-	var upto := STAGE_NAMES.find(stage_name)
+	if parts.size() > 1:
+		var town := _town()
+		var picked: int = int(parts[1]) if String(parts[1]).is_valid_int() else (Arrival.house_of_tier(town, String(parts[1])) if not town.is_empty() and town.has("start") else -1)
+		if picked >= 0:
+			_focus = picked
+	var upto := STAGE_NAMES.find(String(parts[0]))
 	if upto >= 1:
-		_stage_clear()
+		_stage_enter()
 	if upto >= 2:
-		_stage_claim()
+		_stage_clear()
 	if upto >= 3:
+		_stage_claim()
+	if upto >= 4:
 		_set_clock(2, 10.0)
 		_stage_join(2 - rescued())
-	if upto >= 4:
+	if upto >= 5:
 		_set_clock(3, 10.0)
 		_stage_join(int(_cfg("attack.from_rescue", 4)) - rescued())
-	if upto >= 5:
+	if upto >= 6:
 		_set_clock(maxi(_first_day, sim.day), 18.75)
 		sim.waves.night_day = -1
 	_apply_flags()
 	return true
 
 
-## The dead of the start house put down, its rooms opened, and the clearing module given a moment to notice (`on_house_clear` is called here when it does not).
+## The house the staging works on: the one in hand if the player has gone into one, else the best candidate (the start house of the town before the arrival).
+func _stage_house() -> int:
+	var houses = sim.get("houses")
+	if houses == null:
+		return -1
+	if _focus >= 0:
+		return _focus
+	var town := _town()
+	return Arrival.best_house(town) if not town.is_empty() and town.has("start") else int(houses.start_house())
+
+
+## The avatar just inside the front door of the house (the old start: `alone`, with the dead of it to clear).
+func _stage_enter() -> void:
+	var houses = sim.get("houses")
+	var h := _stage_house()
+	if houses != null and h >= 0:
+		_put_inside(h)
+		_focus = h
+	_advance("alone")
+
+
+## The avatar on the tile just inside the front door of house `h`.
+func _put_inside(h: int) -> void:
+	var door := _exterior_door(h)
+	var me = sim.avatar.player()
+	if not door.is_empty() and me != null:
+		me.x = float(door["in"].x) + 0.5
+		me.y = float(door["in"].y) + 0.5
+		me.path = []
+		me.moving = false
+
+
+## The dead of the house in hand put down, its rooms opened, and the clearing module given a moment to notice (`on_house_clear` is called here when it does not).
 func _stage_clear() -> void:
 	var houses = sim.get("houses")
 	var field = sim.get("field")
 	var clearing = sim.get("clearing")
-	var h: int = houses.start_house() if houses != null else -1
+	var h: int = _stage_house()
 	var me = sim.avatar.player()
 	if houses != null and field != null and field.has_method("wake_house"):
 		field.wake_house(h)
@@ -1059,9 +1316,9 @@ func _stage_clear() -> void:
 			clearing.reveal(int(r), "stage")
 	for i in 20:
 		sim.update(1.0 / 30.0)
-	if _stage_idx() < 1 and h >= 0:
+	if _stage_idx() < STAGES.find("cleared") and h >= 0:
 		on_house_clear(h)
-	elif _stage_idx() < 1:
+	elif _stage_idx() < STAGES.find("cleared"):
 		_advance("cleared")
 
 
@@ -1069,16 +1326,12 @@ func _stage_clear() -> void:
 func _stage_claim() -> void:
 	var houses = sim.get("houses")
 	var base = sim.get("base")
-	var h: int = houses.start_house() if houses != null else -1
-	if houses != null:
-		var door = _exterior_door(h)
-		var me = sim.avatar.player()
-		if not door.is_empty() and me != null:
-			me.x = float(door["in"].x) + 0.5
-			me.y = float(door["in"].y) + 0.5
+	var h: int = _stage_house()
+	if houses != null and h >= 0:
+		_put_inside(h)
 	if base != null and base.has_method("claim") and h >= 0:
 		base.claim(h)
-	if _stage_idx() < 2:
+	if _stage_idx() < STAGES.find("claimed"):
 		on_claimed(h)
 
 
@@ -1105,7 +1358,7 @@ func save() -> Dictionary:
 	return {
 		"kind": KIND, "v": 1, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
 		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
-		"min_per_sec": float(sim.min_per_sec),
+		"min_per_sec": float(sim.min_per_sec), "focus": _focus, "last_cleared": _last_cleared, "intro": _intro_told,
 	}
 
 
@@ -1114,6 +1367,9 @@ func load_state(s: Dictionary) -> void:
 	_begun = true
 	var st := String(s.get("stage", "alone"))
 	_stage = st if STAGES.has(st) else "alone"
+	_focus = int(s.get("focus", -1))
+	_last_cleared = int(s.get("last_cleared", -1))
+	_intro_told = bool(s.get("intro", true))    # (a save of before the arrival, or one that has been played: the opening words are not said again)
 	_module_joined = int(s.get("joined", 0))
 	_staged_joins = int(s.get("staged", 0))
 	_attacks = bool(s.get("attacks", false))

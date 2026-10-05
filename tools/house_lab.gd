@@ -18,6 +18,8 @@
 ##   --jobs=4            play the runs in this many worker processes (each worker is this script, --worker)
 ##   --human=1.25        the factor of a person's pace over the bot's (reading a card, a menu, a look round): `real_min` is the awake game time over min_per_sec times this, plus 40 s a night
 ##                       slept in the bed; `bot_min` is the same without the factor
+##   --candidate=best    which house the bot walks to from the entry and makes its base: best, ok, poor (the tier the town's candidates give it) or nearest (the nearest to the entry); the
+##                       run begins at the entry as the game does (the arrival: scripts/town/arrival.gd), so a run is the walk in, the clear, the claim, the rescues and the night
 ##   --keepgoing         do not end a run when the avatar falls and the game goes on with somebody else (by default that is a lost run)
 ##   --orders=projects   how the bot orders the base: projects (the Build page's NEXT project, `perimeter.order_project`) or slots (a section at a time, `perimeter.order`)
 ##   --prep=N            the bot does not bring the FOURTH survivor home until N slots of the perimeter stand (0: it does not wait: the player who does not know that the fourth
@@ -40,7 +42,8 @@ const ONE_HOUSE := "res://scripts/town/one_house.gd"
 const CLAIM_BEFORE_HOUR := 14.0
 const RESCUES_BY_DAY := 3
 const REAL_MIN_FROM := 20.0
-const REAL_MIN_TO := 32.0
+## (the arrival's spec, section 5: 20 to 34 real minutes, with the walk in from the entry; it was 32 before the arrival)
+const REAL_MIN_TO := 34.0
 const HELD_BOT_SHARE := 0.75
 const HELD_IDLE_SHARE := 0.25
 const RESULT_TAG := "HOUSE_LAB_RESULT "
@@ -165,6 +168,7 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 	var bot = HouseLib.HouseBot.new(sim, mode)
 	bot.prep = int(o.get("prep", 0))
 	bot.orders = String(o.get("orders", "projects"))
+	bot.candidate = String(o.get("candidate", "best"))
 	bot.note_start()
 	var stats = BotLib.NightStats.new(sim, mode)
 	var dt := 1.0 / hz
@@ -370,8 +374,8 @@ static func verdict_lines(runs: Array) -> Array:
 	for m in sum:
 		var s: Dictionary = sum[m]
 		var n := int(s.runs)
-		lines.append("VERDICT %-4s: %d runs | claim before %02d:00 on day 1: %s | four rescues by day %d: %s | first attack held: %d/%d (lost %d) | real minutes 20-32: %s | errors %d" % [
-			m, n, int(CLAIM_BEFORE_HOUR), _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(s.held), n, int(s.lost), _ratio(s.real_min_ok), int(s.errors)])
+		lines.append("VERDICT %-4s: %d runs | claim before %02d:00 on day 1: %s | four rescues by day %d: %s | first attack held: %d/%d (lost %d) | real minutes %d-%d: %s | errors %d" % [
+			m, n, int(CLAIM_BEFORE_HOUR), _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(s.held), n, int(s.lost), int(REAL_MIN_FROM), int(REAL_MIN_TO), _ratio(s.real_min_ok), int(s.errors)])
 		var share := float(s.held) / float(maxi(n, 1))
 		if m == "bot":
 			lines.append("  target: held in at least %d%% of runs with the bot at the wall (6 of 8): %s" % [roundi(HELD_BOT_SHARE * 100.0), "met" if share >= HELD_BOT_SHARE and n > 0 else ("NOT met" if n >= 4 else "no verdict: fewer than 4 runs")])
@@ -407,6 +411,8 @@ static func run_lines(r: Dictionary) -> Array:
 				detail = "%s would not come: %s" % [String(e.id), String(e.why)]
 			"claim_refused":
 				detail = "claim refused: %s" % String(e.why)
+			"chose":
+				detail = "walks in to house %d: %s (%s, %.0f tiles)" % [int(e.house), String(e.label), String(e.tier), float(e.dist)]
 			"nap":
 				detail = "nap at %d hp until %.1f" % [roundi(float(e.hp)), float(e.until)]
 			"over":
@@ -445,7 +451,7 @@ func _initialize() -> void:
 
 
 func _main() -> void:
-	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": ""}
+	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": "", "candidate": "best"}
 	var quiet := false
 	var worker := false
 	var standin := false
@@ -471,7 +477,7 @@ func _main() -> void:
 		printerr("house lab: nothing to play (seeds %s, mode %s)" % [opts.seeds, opts.mode])
 		quit(2)
 		return
-	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going}
+	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going, "candidate": String(opts.candidate)}
 	opts["bandage"] = standin
 	opts["keepgoing"] = keep_going
 	var jobs := clampi(int(opts.jobs), 1, 16)
@@ -546,7 +552,7 @@ func _in_workers(seeds: Array, modes: Array, opts: Dictionary, jobs: int) -> Arr
 	var rows: Array = []
 	var args_of := func(pair: Array) -> Array:
 		var a := ["--headless", "--path", project, "--script", "res://tools/house_lab.gd", "--", "--worker", "--seeds=%d" % int(pair[0]), "--mode=%s" % String(pair[1])]
-		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human"]:
+		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human", "candidate"]:
 			if String(opts[k]) != "" and String(opts[k]) != "0":
 				a.append("--%s=%s" % [k, String(opts[k])])
 		if bool(opts.get("bandage", false)):

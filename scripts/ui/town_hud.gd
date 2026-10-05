@@ -17,6 +17,7 @@ extends RefCounted
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 ## The setting (a flag in the player's own file) that puts the lessons of the first house away for good.
 const LESSONS_OFF_FLAG := "oh_lessons_off"
@@ -30,8 +31,11 @@ const ARROW_FAR := 7.0
 const ARROW_RING_MIN := 58.0
 const RING_MIN_R := 18.0
 const TILE_WORD := "m"
-## How long (seconds) the first view of the start house is held before the camera comes to the avatar.
+## How long (seconds) the first view of the entry (or of the start house) is held before the camera comes to the avatar.
 const OPENING_HOLD_S := 5.0
+## The opening view of an arrival: tiles across the window, and how many tiles ahead of the avatar (the way in) the camera looks.
+const ENTRY_VIEW_TILES := 40.0
+const ENTRY_AHEAD := 7.0
 ## How long (rules seconds) the legend of the keys stays at the foot of the window.
 const LEGEND_S := 45.0
 
@@ -94,7 +98,11 @@ func on_opening_view(main_node) -> void:
 	var sim = main_node.get("sim")
 	if sim == null or sim.get("houses") == null or sim.scenario == null or not sim.scenario.has_method("stage"):
 		return
-	if float(sim.t) > 2.0 or String(sim.scenario.stage()) != "alone" or int(sim.day) != 1:
+	var stage := String(sim.scenario.stage())
+	if float(sim.t) > 2.0 or int(sim.day) != 1 or (stage != "alone" and stage != "arrive"):
+		return
+	if stage == "arrive":
+		_opening_at_entry(main_node, sim)
 		return
 	var h: Dictionary = sim.houses.house(sim.houses.start_house())
 	if h.is_empty():
@@ -107,6 +115,16 @@ func on_opening_view(main_node) -> void:
 	var vp: Vector2 = main_node._vp()
 	main_node.zoom_px = clampf(vp.y / maxf(bottom - top, 8.0), 30.0, 52.0)
 	main_node.cam_center = Vector2(rect.get_center().x, (top + bottom) * 0.5)
+	main_node.cam_hold = OPENING_HOLD_S
+
+
+## The first view of an arrival: the road in front of her, the trees behind and the first houses ahead, wide (about `ENTRY_VIEW_TILES` tiles across), the camera a little ahead of her
+## (she is in the lower part of the picture, facing in), held there a few seconds before it comes to the avatar and follows.
+func _opening_at_entry(main_node, sim) -> void:
+	var spawn: Dictionary = Arrival.spawn(sim.houses.town)
+	var vp: Vector2 = main_node._vp()
+	main_node.zoom_px = clampf(vp.x / ENTRY_VIEW_TILES, 24.0, 44.0)
+	main_node.cam_center = Vector2(spawn.pos) + Vector2.from_angle(float(spawn.angle)) * ENTRY_AHEAD
 	main_node.cam_hold = OPENING_HOLD_S
 
 

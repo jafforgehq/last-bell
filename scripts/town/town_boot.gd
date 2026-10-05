@@ -9,6 +9,7 @@
 extends RefCounted
 
 const TownGen := preload("res://scripts/town/town_gen.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 const TownWorld := preload("res://scripts/town/town_world.gd")
 const TownSim := preload("res://scripts/town/town_sim.gd")
 const GD := preload("res://scripts/game_data.gd")
@@ -120,7 +121,7 @@ static func from_town(town: Dictionary) -> Dictionary:
 	for p in base.people:
 		if String(p.id) == "ruth":
 			def = p.duplicate(true)
-	var at: Vector2 = town.start.pos
+	var at: Vector2 = Arrival.spawn(town).pos    # (the town's entry: a run begins at the forest edge, scripts/town/arrival.gd)
 	# (no seat, no post of the school's: the avatar is nobody's worker)
 	def["station"] = ""
 	def["post_id"] = ""

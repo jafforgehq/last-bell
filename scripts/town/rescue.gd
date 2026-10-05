@@ -1,6 +1,6 @@
 ## Rescue and the community (One House, WP4): the people found alive in the houses of the town, the talk with them, and how they come home.
 ##
-## The twelve candidates are the generator's `town.rescue` spots (near to far, `sim.houses.town`); each gets a record and a roster-shaped def (made once from the run's
+## The twelve candidates are the generator's `rescue_for` spots of the claimed house (near to far; before a claim there are none; scripts/town/arrival.gd); each gets a record and a roster-shaped def (made once from the run's
 ## seed by `recruits.make_def`, then given its name, role and lines from assets/data/rescue.json: the same run meets the same people). A record is
 ##   {"id": "r0".., "n", "house", "room", "pos": Vector2, "ring", "def", "state", "trust0", "asked", "gifted", "arrived"}
 ## and its state goes `hiding` (the room has not been opened) -> `wary` (it has: the survivor is drawn, weapon lowered, and E talks) -> `spoken` (the card has been
@@ -19,6 +19,7 @@ extends RefCounted
 
 const Recruits := preload("res://scripts/sim/recruits.gd")
 const Sim := preload("res://scripts/sim/sim.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 const DATA_PATH := "res://assets/data/rescue.json"
 const HIDING := "hiding"
@@ -88,8 +89,10 @@ func _town() -> Dictionary:
 	return t if t is Dictionary else {}
 
 
+## The survivors are the ones round the BASE: the town's `rescue_for` the claimed house (scripts/town/arrival.gd), twelve, near to far. Before a claim nobody is offered (a game with no base
+## module at all, a test's, has the town's own `rescue` list as it always had).
 func _build() -> void:
-	var spots = _town().get("rescue", [])
+	var spots = _spots()
 	if not spots is Array or spots.is_empty():
 		return
 	var stories: Array = data.get("survivors", [])
@@ -101,6 +104,24 @@ func _build() -> void:
 			continue
 		_add({"id": "r%d" % i, "n": i, "house": int(s.get("house", -1)), "room": int(s.get("room", -1)), "pos": Vector2(s.get("pos", Vector2.ZERO)),
 			"ring": int(s.get("ring", 1)), "def": def, "state": HIDING, "trust0": _num("join_trust", 5.0), "asked": false, "gifted": false, "arrived": false})
+
+
+## The places the survivors wait in: those of the claimed house; none before the claim; the town's `rescue` when there is no base module.
+func _spots() -> Array:
+	var town := _town()
+	var base = _mod("base")
+	if base == null:
+		var plain = town.get("rescue", [])
+		return plain if plain is Array else []
+	if not bool(base.get("claimed")) or town.is_empty():
+		return []
+	return Arrival.rescue_for(town, int(base.house))
+
+
+## The base was claimed (`base.claim` calls it): the survivors of that house are made, once.
+func on_claimed(_h: int = -1) -> void:
+	if _recs.is_empty():
+		_build()
 
 
 func _add(rec: Dictionary) -> void:

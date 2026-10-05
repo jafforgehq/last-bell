@@ -1,6 +1,7 @@
 ## The One House bot (WP8: docs/superpowers/plans/2026-10-04-one-house-plan.md, section 3 and 5): the player that plays the whole demo arc through the hands a person has,
-## so that tools/house_lab.gd can measure it headless. `HouseBot` plays by day (clear the start house, search, claim it, find and bring home survivors, order the perimeter, sleep
-## the quiet nights) and hands the first attack night to `Defender` (tools/avatar_bot.gd's `AvatarBot` on the base's wall sections instead of the school's).
+## so that tools/house_lab.gd can measure it headless. `HouseBot` plays by day (walk in from the town's entry to the candidate house its `candidate` policy picks, clear it, search, claim it,
+## find and bring home survivors, order the perimeter, sleep the quiet nights) and hands the first attack night to `Defender` (tools/avatar_bot.gd's `AvatarBot` on the base's wall sections
+## instead of the school's). Every "start house" below is the house it picked (`_start_house`).
 ##
 ## THE HANDS. Only what the player has: `sim.avatar.set_input` (walk, aim, trigger), `melee`, `reload`; E through `sim.interact.candidates()` / `use()` (the town's kinds are
 ## `sim.uses`: container, claim, bed, rescue...); the rescue card (`sim.rescue.talk` / `choose`); the Build page (`sim.perimeter.order`); the walking grid (`sim.path_p`). It draws no
@@ -15,6 +16,7 @@
 extends RefCounted
 
 const BotLib := preload("res://tools/avatar_bot.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 
 ## The wall sections of the base are the ids below this (the lots' are above: `Lots.FIRST_SEGMENT_ID`); the barred doors are among them.
 const SECTION_IDS := 100
@@ -213,6 +215,9 @@ class HouseBot:
 
 	var sim
 	var mode := "bot"
+	## Which candidate house it walks in to from the entry and makes its base (the arrival: scripts/town/arrival.gd): "best", "ok", "poor" (the tier of the town's candidates; the nearest to it when
+	## the town has none of that tier) or "nearest" (the nearest to where it stands at the start).
+	var candidate := "best"
 	## Slots that must stand before it brings the fourth survivor home (0: it does not wait: the player who does not know what the fourth brings).
 	var prep := 0
 	## How it orders the base: "projects" (the Build page's next project, as a player who does what the page recommends: `perimeter.order_project`) or "slots" (one section at a
@@ -261,6 +266,8 @@ class HouseBot:
 	var _sleep_from := -1.0
 	var _recovering := false
 	var _last_player_id := ""
+	## The house it picked (-1 until it is asked, `_start_house`).
+	var _pick := -1
 
 	func _init(s, mode_name := "bot") -> void:
 		sim = s
@@ -411,9 +418,28 @@ class HouseBot:
 	func _hs():
 		return sim.get("houses")
 
+	## The house the bot is making its base: the candidate its policy picks (`candidate`), chosen once, the first time it is asked, from where the run begins (the town's start house when it has
+	## no candidates). Every "start house" of the bot's below is this one.
 	func _start_house() -> int:
+		if _pick >= 0:
+			return _pick
 		var hs = _hs()
-		return int(hs.start_house()) if hs != null else -1
+		if hs == null:
+			return -1
+		var town: Dictionary = hs.town
+		var me = _me()
+		var from := Vector2(me.x, me.y) if me != null else Vector2.ZERO
+		var pick := -1
+		if ["best", "ok", "poor"].has(candidate):
+			pick = Arrival.house_of_tier(town, candidate)
+		if pick < 0 and not town.is_empty() and town.has("start"):
+			pick = Arrival.nearest(town, from)
+		if pick < 0:
+			pick = int(hs.start_house())
+		_pick = pick
+		var c: Dictionary = Arrival.candidate_of(town, pick) if not town.is_empty() and town.has("start") else {}
+		mark("chose", {"house": pick, "label": String(c.get("label", "the start house")), "tier": String(c.get("tier", "")), "dist": float(c.get("dist", 0.0))})
+		return pick
 
 	func _claimed() -> bool:
 		var b = sim.get("base")
@@ -622,6 +648,12 @@ class HouseBot:
 		var hs = _hs()
 		var h := _start_house()
 		var pos := Vector2(me.x, me.y)
+		# 0. the way in: from the entry (or from wherever it is) to the front door of the house it picked
+		if h >= 0 and not hs.town.is_empty() and hs.town.has("start") and int(hs.house_at(pos.x, pos.y)) != h:
+			var door := Arrival.door_of(hs.town, h)
+			if pos.distance_to(door) > 2.5 and not _blocked_now("travel_h%d" % h):
+				_set_task({"kind": "travel", "key": "travel_h%d" % h, "house": h, "at": door})
+				return
 		# 1. the dead of the house
 		var dead := _dead_in_house(h)
 		if not dead.is_empty():
@@ -911,6 +943,8 @@ class HouseBot:
 	func _run_task(me, dt: float) -> Vector2:
 		var pos := Vector2(me.x, me.y)
 		match String(task.get("kind", "")):
+			"travel":
+				return _goto(me, Vector2(task.at), 1.5, dt)
 			"clear":
 				var h := int(task.get("house", -1))
 				var room := int(task.get("room", -1))
