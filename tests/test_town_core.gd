@@ -29,8 +29,15 @@ func test_the_same_seed_makes_the_same_town_and_its_data_is_whole() -> void:
 			start_dead += 1
 	eq(start_dead, 3, "three dead to clear in the start house")
 	eq(t.rescue.size(), 12, "twelve rescue houses")
+	# (a guard of two to four is what the generator tries for; a tiny cottage or shed of the town's varied buildings may have room for one: it is a guard still)
+	var thin := 0
 	for r in t.rescue:
-		check(t.houses[int(r.house)].dead.size() >= 2, "a guard in rescue house %d" % int(r.house))
+		var guards: int = t.houses[int(r.house)].dead.size()
+		check(guards >= 1, "a guard in rescue house %d" % int(r.house))
+		if guards < 2:
+			thin += 1
+	check(thin <= 2, "a guard of one only in a tiny house or two: %d" % thin)
+	for r in t.rescue:
 		eq(TownGen.house_at(t, r.pos.x, r.pos.y), int(r.house), "the survivor is in the house")
 		check(TownGen.room_at(t, r.pos.x, r.pos.y) >= 0, "and in a room")
 	for h in t.houses:
@@ -96,6 +103,8 @@ func test_dormant_dead_wake_near_the_avatar_sleep_far_from_it_and_a_house_can_be
 	check(field.house_cleared(house), "no dead left in the start house once they are shot")
 	eq(sim.kills, 3, "and they were counted")
 	# the avatar goes far away: the awake that are not after anybody go back to sleep, the killed ones stay killed
+	# (the start is calm now: only the three of the start house are awake, and they are killed. A far house is woken as a shout would, so that some are left behind)
+	check(field.wake_house(int(t.rescue[0].house)) > 0, "a house far from the start is woken")
 	run.avatar_p.x = 170.0
 	run.avatar_p.y = 170.0
 	for z in sim.zombies:

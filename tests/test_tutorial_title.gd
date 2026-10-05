@@ -8,13 +8,23 @@ const HudKit := preload("res://tests/hud_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const TitleMenu := preload("res://scripts/ui/title_menu.gd")
 const OrientationCard := preload("res://scripts/ui/orientation_card.gd")
+const Demo := preload("res://scripts/demo.gd")
 
 ## What a card or a line of the title may not say of the lesson: the old yard's controls.
 const OLD_YARD := ["right-click", "select", "draft", "pan with", "drag", "box"]
 
 
-func test_the_menu_line_says_what_the_lesson_teaches_now() -> void:
+## The school's title, the one that has Orientation Day: the real game's own title is the town's now (its lessons are in its first house: no Orientation Day line, no first-launch
+## card), so the title is made as `--school` or `--demo` make it (the demo's switch is what a test can set; it is put back as soon as the title is built).
+func _school_title() -> Node:
+	Demo.force(true)
 	var main = Tut.start({"title": true})
+	Demo.force(null)
+	return main
+
+
+func test_the_menu_line_says_what_the_lesson_teaches_now() -> void:
+	var main = _school_title()
 	await Tut.frames(main, 3)
 	var line: Button = main.shell.title.items["orientation"]
 	var words := HudKit.texts(line)
@@ -28,7 +38,7 @@ func test_the_menu_line_says_what_the_lesson_teaches_now() -> void:
 
 
 func test_the_first_launch_card_says_what_the_lesson_teaches_and_its_buttons_are_the_same() -> void:
-	var main = Tut.start({"title": true})
+	var main = _school_title()
 	await Tut.frames(main, 3)
 	var picked: Array = []
 	main.restart = func(meta): picked.append(meta)

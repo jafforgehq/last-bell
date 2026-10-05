@@ -260,12 +260,15 @@ func test_claim_is_refused_with_a_reason_then_installs_the_base_in_two_seconds()
 	cands = _of_kind(sim, "claim")
 	check(cands.size() == 1 and bool(cands[0].ok) and String(cands[0].label) == "Claim this house", "once clear, 'Claim this house'")
 	# a stub layout with one plot and one station, to see the hooks are called
+	# (laid round the claim spot: the town makes its houses anywhere, the stub's lot goes where the avatar stands)
 	var made := {"n": 0}
 	var before_spawns: Array = sim.spawns.duplicate()
+	var cs: Vector2 = sim.base.claim_spot()
+	var plot := Rect2i(Vector2i(cs) - Vector2i(10, 8), Vector2i(20, 16))
 	sim.base.maker = func(_town, house_id):
 		made.n += 1
-		return {"version": 1, "house": house_id, "kind": "small", "front": "S", "plot": Rect2i(30, 44, 20, 16), "center": Vector2(40, 52), "yard_middle": Vector2(40, 56),
-			"compound": Rect2(27, 41, 26, 22), "claim_spot": sim.base.claim_spot(), "interior": [{"id": "bed", "kind": "bed", "pos": Vector2(37.5, 49.5), "room": 0, "face": "S"}],
+		return {"version": 1, "house": house_id, "kind": "small", "front": "S", "plot": plot, "center": cs, "yard_middle": cs + Vector2(0, 4),
+			"compound": Rect2(Vector2(plot.position) - Vector2(3, 3), Vector2(plot.size) + Vector2(6, 6)), "claim_spot": sim.base.claim_spot(), "interior": [{"id": "bed", "kind": "bed", "pos": cs + Vector2(-2.5, -2.5), "room": 0, "face": "S"}],
 			"stations": [], "rest": {}, "posts": [], "doors": [], "slots": [], "plots": [], "buildings": [], "spawns": [Vector2(40.5, 12.5), Vector2(8.5, 50.5)], "ring": {"free": 1, "blocked": 0}}
 	var started: Dictionary = sim.interact.use(cands[0])
 	check(bool(started.ok) and bool(started.get("session", false)), "E begins the claim as a session")
@@ -347,9 +350,9 @@ func test_sleep_runs_to_dawn_and_is_refused_or_broken_by_the_dead() -> void:
 	_look(sim)
 	var bd := _of_kind(sim, "bed")
 	check(bd.size() == 1 and String(bd[0].label) == "Sleep until dawn" and bool(bd[0].ok), "the bed is offered at 21:00")
-	# a dead one awake 15 tiles off refuses
+	# a dead one awake and after somebody 15 tiles off refuses (one that only stands 15 tiles off does not: it is put back to sleep as the avatar lies down)
 	var hs_mid: Vector2 = sim.base.center()
-	var z = sim.spawn(hs_mid.x + 15.0, hs_mid.y, "still")
+	var z = sim.spawn(hs_mid.x + 15.0, hs_mid.y, "chase")
 	var no: Dictionary = sim.sleep.begin()
 	check(not bool(no.ok) and String(no.why).contains("dead"), "refused with a dead one 15 tiles away: %s" % String(no.why))
 	check(not sim.sleep.active(), "and not asleep")

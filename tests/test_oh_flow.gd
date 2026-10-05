@@ -201,7 +201,10 @@ func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules
 	eq(told[0], [false, false], "two people: no briefing")
 	eq(told[1], [true, false], "three: the briefing, not relations")
 	eq(told[2], [true, true], "four: relations too")
-	check(s.attacks_on() and s.forecast_on() and sim.waves.enabled, "the fourth: attacks, forecast, waves")
+	# (the fourth voice came at 10:00 of day 2: the first night is that day's when the hour is before the data's `attack.cutoff_hour`, else the next day's. The data's 0 is always
+	# the next night, a whole day to fortify, so the dead do not come tonight, and they do from the morning of the day after)
+	var first_day: int = 3 if 10.0 >= float(OneHouse.data().attack.cutoff_hour) else 2
+	eq(s.attacks_on(), first_day == 2, "the fourth: the dead come from the first night's day, not before")
 	eq(s.stage(), "fortify", "fortify")
 	var types: Array = []
 	var banner := ""
@@ -210,12 +213,15 @@ func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules
 		if e.type == "banner" and String(e.text) == "Four voices on the radio":
 			banner = String(e.sub)
 	check(types.has("attacks_on"), "the event says so")
-	eq(banner, "The dead will come tonight", "and the banner")
+	eq(banner, String(OneHouse.data().words["fourth_tonight" if first_day == 2 else "fourth_tomorrow"][1]), "and the banner")
 	eq(s.objective().id, "fortify", "fortify before dark")
-	near(s.night_mult(2), float(OneHouse.data().night.first), 0.001, "the first night is the data's size")
-	check(s.night_mult(3) > s.night_mult(2), "and the next a little more")
-	eq(s.big_night_for(2), {}, "an ordinary night")
-	check(s.total_days() > 2, "the run is longer than the night")
+	Helpers.at(sim, first_day, 8.0)
+	_step(sim, 10)
+	check(s.attacks_on() and s.forecast_on() and sim.waves.enabled, "the first night's day: attacks, forecast, waves")
+	near(s.night_mult(first_day), float(OneHouse.data().night.first), 0.001, "the first night is the data's size")
+	check(s.night_mult(first_day + 1) > s.night_mult(first_day), "and the next a little more")
+	eq(s.big_night_for(first_day).get("id", ""), "siege", "the first night is the siege")
+	check(s.total_days() > first_day, "the run is longer than the night")
 	# people lost: the crew falls below three and the community modules go off again
 	for i in range(1, sim.people.size() - 1):
 		sim.people[i].dead = true
@@ -251,8 +257,13 @@ func test_the_first_attack_night_ends_the_run() -> void:
 	check(s.attacks_on() and sim.waves.enabled, "the dead come")
 	var first_day: int = sim.day
 	var guard := 0
-	while sim.over == "" and guard < 40:
-		sim.fast_forward(60.0 * 14.0)
+	# (the night is a siege and is judged ONCE at the first moment of the day after: the held rule wants every section of the base up then, and the dawn hour is the player's last chance
+	# to mend a breach. Nobody here has hands for the wall, so the sections the siege brought down are mended as the dawn comes)
+	while sim.over == "" and guard < 400:
+		sim.fast_forward(15.0)
+		if sim.phase == "dawn":
+			for seg in sim.segments:
+				sim._repair_segment(seg, seg.max_hp)
 		guard += 1
 	eq(sim.over, "victory", "the night is held at the dawn")
 	eq(s.stage(), "held", "held")
@@ -291,6 +302,10 @@ func test_a_save_keeps_the_stage_the_counters_and_the_switches() -> void:
 	var t = f.sim.scenario
 	eq(t.stage(), "fortify", "the stage is kept")
 	eq(t.rescued(), 4, "the rescued")
+	eq(t.attacks_on(), s.attacks_on(), "the dead come as they did (not before the first night's day: the data's cutoff hour makes it the next day's)")
+	eq(t._first_day, s._first_day, "the first night's day")
+	Helpers.at(f.sim, int(t._first_day), 8.0)
+	_step(f.sim, 10)
 	check(t.attacks_on() and f.sim.waves.enabled, "the dead still come")
 	eq(f.sim.people.size(), 5, "the people")
 	near(float(f.sim.min_per_sec), 2.0, 0.001, "the clock")
