@@ -23,7 +23,8 @@ const SLOT_KINDS := ["fence", "gate", "tower", "floodlight", "door"]
 const STATIONS := ["bench", "builders", "radio", "watch", "infirmary"]
 const PROPS := ["bed", "stash", "radio", "bench"]
 ## The rooms each prop likes (the first name that is in the house, else the largest free room).
-const PROP_ROOMS := {"bed": ["bedroom", "side"], "stash": ["kitchen", "storeroom"], "radio": ["living room", "front room", "shop floor"], "bench": ["living room", "front room", "shop floor", "kitchen"]}
+const PROP_ROOMS := {"bed": ["bedroom", "side"], "stash": ["kitchen", "pantry", "storeroom"], "radio": ["study", "living room", "front room", "shop floor"],
+	"bench": ["utility", "garage", "workshop", "living room", "front room", "shop floor", "kitchen"]}
 const COMPASS := {"N": "North", "E": "East", "S": "South", "W": "West"}
 ## What the stations say in a town of one house (the school's words are about its noon call and its tower).
 const TOWN_BLURBS := {
@@ -312,7 +313,8 @@ static func make(town: Dictionary, house_id: int, opts: Dictionary = {}) -> Dict
 			post_tiles[t] = true
 			posts.append(_post(t, "On the tower", tower_ids[i], lx, ly, lw, lh))
 	var ring: Array = _ring(xl, xr, yt, yb)
-	var spacing := 4
+	# (a bigger lot has a longer ring: a post every four tiles, or farther apart where that would be more than about ten of them)
+	var spacing := maxi(4, ceili(float(ring.size()) / 10.0))
 	var min_posts := int(_num(knobs, "posts_min", 8.0))
 	while true:
 		var picked: Array = []
@@ -736,11 +738,14 @@ static func _stations(grid: Grid, town: Dictionary, h: Dictionary, interior: Arr
 				yard_spot = _tile_center(c)
 				found = true
 	spots["builders"] = [yard_spot, "the yard"]
-	# the infirmary: a free pair of tiles in the bedroom (not the bed's), else the roomiest free floor
+	# the infirmary: a free pair of tiles in a bedroom that is not the bed's if the house has another, else in the bed's room, else the roomiest free floor
 	var inf_at := yard_middle
 	var bed_room: int = int(prop_at.bed.room) if prop_at.has("bed") else (int(h.rooms[0]) if not h.rooms.is_empty() else -1)
 	var pair := Vector2i(-1, -1)
-	if bed_room >= 0:
+	for ri in h.rooms:
+		if pair.x < 0 and int(ri) != bed_room and String(town.rooms[ri].name) == "bedroom":
+			pair = _spare(grid, town.rooms[ri].rect, avoid, used, 2)
+	if pair.x < 0 and bed_room >= 0:
 		pair = _spare(grid, town.rooms[bed_room].rect, avoid, used, 2)
 	if pair.x < 0:
 		for ri in h.rooms:
@@ -794,11 +799,11 @@ static func _rest(grid: Grid, yard_middle: Vector2, front_door: Dictionary, xl: 
 				continue
 			out["spots"].append({"pos": _pt(_tile_center(c)), "face": "S" if step > 0 else "N"})
 	if not h.is_empty() and town.has("rooms"):
-		# (nobody turns in in the bathroom: it is used only when the rest of the house has fewer than three places)
-		var order := ["bedroom", "living room", "front room", "shop floor", "kitchen", "storeroom"]
+		# (nobody turns in in the bathroom or the hall: they are used only when the rest of the house has fewer than three places)
+		var order := ["bedroom", "living room", "front room", "shop floor", "study", "dining room", "kitchen", "storeroom", "utility", "nursery"]
 		var rooms: Array = []
 		for ri in h.rooms:
-			if String(town.rooms[ri].name) != "bathroom":
+			if not ["bathroom", "hall"].has(String(town.rooms[ri].name)):
 				rooms.append(ri)
 		rooms.sort_custom(func(a, b): return (order.find(String(town.rooms[a].name)) if order.has(String(town.rooms[a].name)) else 9) < (order.find(String(town.rooms[b].name)) if order.has(String(town.rooms[b].name)) else 9))
 		var taken := {}
@@ -807,7 +812,7 @@ static func _rest(grid: Grid, yard_middle: Vector2, front_door: Dictionary, xl: 
 				if out["night"].size() >= 3:
 					break
 				for ri in h.rooms:
-					if String(town.rooms[ri].name) == "bathroom":
+					if ["bathroom", "hall"].has(String(town.rooms[ri].name)):
 						rooms.append(ri)
 			for ri in rooms:
 				var r: Rect2i = town.rooms[ri].rect

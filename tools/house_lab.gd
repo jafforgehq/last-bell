@@ -35,7 +35,8 @@ const HouseLib := preload("res://tools/house_bot.gd")
 
 const ONE_HOUSE := "res://scripts/town/one_house.gd"
 ## The plan's numbers (section 5).
-const CLAIM_BEFORE_HOUR := 12.0
+## (BIGGER HOUSES: the start house is a family home of eight rooms with a dozen containers, and the bot searches every one of them before it claims: 14:00, it was 12:00)
+const CLAIM_BEFORE_HOUR := 14.0
 const RESCUES_BY_DAY := 3
 const REAL_MIN_FROM := 20.0
 const REAL_MIN_TO := 32.0
@@ -367,8 +368,8 @@ static func verdict_lines(runs: Array) -> Array:
 	for m in sum:
 		var s: Dictionary = sum[m]
 		var n := int(s.runs)
-		lines.append("VERDICT %-4s: %d runs | claim before 12:00 on day 1: %s | four rescues by day %d: %s | first attack held: %d/%d (lost %d) | real minutes 20-32: %s | errors %d" % [
-			m, n, _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(s.held), n, int(s.lost), _ratio(s.real_min_ok), int(s.errors)])
+		lines.append("VERDICT %-4s: %d runs | claim before %02d:00 on day 1: %s | four rescues by day %d: %s | first attack held: %d/%d (lost %d) | real minutes 20-32: %s | errors %d" % [
+			m, n, int(CLAIM_BEFORE_HOUR), _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(s.held), n, int(s.lost), _ratio(s.real_min_ok), int(s.errors)])
 		var share := float(s.held) / float(maxi(n, 1))
 		if m == "bot":
 			lines.append("  target: held in at least %d%% of runs with the bot at the wall (6 of 8): %s" % [roundi(HELD_BOT_SHARE * 100.0), "met" if share >= HELD_BOT_SHARE and n > 0 else ("NOT met" if n >= 4 else "no verdict: fewer than 4 runs")])

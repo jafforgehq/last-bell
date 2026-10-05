@@ -38,7 +38,8 @@
 ##   "streets"     {"pitch": 32, "block": 28, "road": 4 (the old grid's numbers, kept), "names_x": [names of the north-south streets], "names_y": [names of the east-west ones], "roads", "avenue"}
 ##   "stats"       counts and the milliseconds each phase took
 ##
-##   House      {"id", "kind": "small"|"medium"|"terrace"|"shop"|... (the building program, see scripts/town/building_plans.gd), "address": "14 Elm Street", "block": Vector2i (x: the block's
+##   House      {"id", "kind": "start"|"family"|"medium"|"small"|"terrace"|"shop"|... (the building program, see scripts/town/building_plans.gd; BIGGER HOUSES: the start house is a family home of
+##               18 x 14 with eight rooms round a hall, the family homes and the detached houses 11 to 19 wide with four to eight rooms, a town of about 105 houses), "address": "14 Elm Street", "block": Vector2i (x: the block's
 ##               index), "rect": Rect2i (the bounding box of the outer walls), "parts": [Rect2i] (the rectangles of outer walls that make the footprint: one roof each),
 ##               "lot": Rect2i, "front": "N"|"S" (the side its front door is on), "fenced": bool, "door": Vector2i (the tile outside the front door),
 ##               "doors": [Door], "rooms": [room indexes], "containers": [container ids], "dead": [record indexes] (the ones that stand in it at the start)}
@@ -60,6 +61,7 @@ const TownLayout := preload("res://scripts/town/town_layout.gd")
 const BuildingGen := preload("res://scripts/town/building_gen.gd")
 const Districts := preload("res://scripts/town/town_districts.gd")
 const Streetscape := preload("res://scripts/town/town_streetscape.gd")
+const Plans := preload("res://scripts/town/building_plans.gd")
 
 ## The size of the full town (6 blocks a side); `make(seed, {"blocks": n})` makes a smaller one (2: 64 x 64, for tests).
 const DEFAULT_SIZE := 192
@@ -75,7 +77,7 @@ const DEAD_TOTAL := 700
 const DEAD_NEAR_HOUSES := 0.6
 ## How many dead stand in a building at the start, [least, most], by its kind (the houses one to four; the shops, the flats, the works and the civic buildings more).
 const DEAD_BY_KIND := {
-	"small": [1, 3], "cottage": [1, 2], "medium": [1, 3], "bungalow": [1, 3], "lhouse": [1, 4], "thouse": [1, 4], "uhouse": [2, 4], "twowing": [1, 4], "terrace": [1, 2], "terrace_ext": [1, 3],
+	"small": [1, 3], "cottage": [1, 2], "medium": [1, 3], "family": [2, 4], "bungalow": [1, 4], "lhouse": [2, 4], "thouse": [2, 4], "uhouse": [2, 5], "twowing": [2, 4], "terrace": [1, 2], "terrace_ext": [1, 3],
 	"rowshop": [1, 3], "kiosk": [0, 1], "cornershop": [2, 3], "shop": [2, 4], "pharmacy": [2, 4], "bakery": [2, 4], "hardware": [2, 4], "diner": [3, 5], "bank": [2, 4], "office": [2, 4],
 	"apartments": [4, 8], "supermarket": [6, 10], "library": [2, 4], "clinic": [4, 7], "fire_station": [3, 5], "police": [3, 5], "church": [3, 6], "school": [4, 8],
 	"warehouse": [5, 9], "garage": [2, 4], "workshop": [2, 4], "scrapyard": [1, 2], "containers": [1, 2], "farmhouse": [1, 3], "barn": [1, 3], "shed": [0, 1],
@@ -252,7 +254,7 @@ func _blocks_until(t0: int, budget_ms: float) -> void:
 			return
 
 
-## Builds lot `i` of the layout (a house, a shop, a yard...) and stamps it into the map. The start lot: a medium house with two tiles to spare all round, no fence, no tree, no prop, no
+## Builds lot `i` of the layout (a house, a shop, a yard...) and stamps it into the map. The start lot: a family home of 18 x 14 (eight rooms) in a lot of 22 to 24 x 20 to 24 with two or three tiles to spare to the sides, no fence, no tree, no prop, no
 ## mark on its border and the tile inside it (a ring of free ground: the perimeter of the base goes there).
 func _one_lot(i: int) -> void:
 	var t_lot := Time.get_ticks_usec()
@@ -393,7 +395,8 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 	for bi in buildings.size():
 		cont_ids.append([])
 	for c in cv.cands:
-		if rng.randf() > 0.85:
+		# (the start house keeps every container it has: it is where the run's first finds are)
+		if rng.randf() > 0.85 and not bool(spec.get("start", false)):
 			continue
 		var tile: Vector2i = SiteGen._stand_tile(cv, reach, c, rng)
 		if tile.x < 0:
@@ -537,6 +540,52 @@ func _kit_house(house_id: int, parts: Array, room_ids: Array, doors: Array, mat:
 						state = "boarded"
 					_windows.append({"x": x, "y": y, "orient": "h" if horiz else "v", "state": state, "variant": wrng.randi_range(0, 1), "bar": false, "house": house_id})
 				pos += 3 + wrng.randi_range(0, 1)
+	# every room that has an outside wall has a window in it (the rows above go by the spacing along the wall and pass over a short room): the one tile of its wall nearest the middle
+	# that is no door, no corner and no junction with a wall inside
+	var lit := {}
+	for k in range(first_window, _windows.size()):
+		lit[Vector2i(int(_windows[k].x), int(_windows[k].y))] = true
+	for ri in room_ids:
+		var rr: Rect2i = _rooms[ri].rect
+		for pr in parts:
+			var part: Rect2i = pr
+			for side in 4:
+				var horiz := side < 2
+				var wall_at := part.position.y if side == 0 else (part.end.y - 1 if side == 1 else (part.position.x if side == 2 else part.end.x - 1))
+				var touches := rr.position.y == wall_at + 1 if side == 0 else (rr.end.y == wall_at if side == 1 else (rr.position.x == wall_at + 1 if side == 2 else rr.end.x == wall_at))
+				if not touches:
+					continue
+				var a0 := rr.position.x if horiz else rr.position.y
+				var a1 := rr.end.x if horiz else rr.end.y
+				var has := false
+				var best := -1
+				var best_d := 1.0e9
+				for t in range(a0, a1):
+					var q := Vector2i(t, wall_at) if horiz else Vector2i(wall_at, t)
+					if lit.has(q):
+						has = true
+						break
+					var ok := true
+					for kk in range(-1, 2):
+						var q2 := Vector2i(t + kk, wall_at) if horiz else Vector2i(wall_at, t + kk)
+						if door_set.has(q2) or _terrain[q2.y * _size + q2.x] != wall_t or lit.has(q2):
+							ok = false
+					var inward := Vector2i(t, wall_at + (1 if side == 0 else -1)) if horiz else Vector2i(wall_at + (1 if side == 2 else -1), t)
+					if _terrain[inward.y * _size + inward.x] == plaster_t:
+						ok = false
+					var outward := Vector2i(t, wall_at + (-1 if side == 0 else 1)) if horiz else Vector2i(wall_at + (-1 if side == 2 else 1), t)
+					if _in_parts(parts, outward):
+						ok = false
+					if ok:
+						var d := absf(float(t) + 0.5 - float(a0 + a1) * 0.5)
+						if d < best_d:
+							best_d = d
+							best = t
+				if not has and best >= 0:
+					var wx := best if horiz else wall_at
+					var wy := wall_at if horiz else best
+					lit[Vector2i(wx, wy)] = true
+					_windows.append({"x": wx, "y": wy, "orient": "h" if horiz else "v", "state": "intact" if wrng.randf() < 0.8 else "broken", "variant": wrng.randi_range(0, 1), "bar": false, "house": house_id})
 	# the start house: somebody has boarded up the windows on the west wall and put planks over one of them
 	if start_house:
 		var west: Array = []
@@ -724,7 +773,7 @@ func _people() -> void:
 	var H := _size
 	var rng := _rng
 	var d: Dictionary = _result.data
-	# the start house: the medium one of the clear lot the block loop made (the middle block's south row)
+	# the start house: the family home of the clear lot the block loop made (the middle block's start row)
 	var start_house := _start_house
 	if start_house < 0:
 		# (TOWNGEN: the layout always makes a start lot; if a seed ever fails to, the residential house nearest the middle of the town stands in)
@@ -737,7 +786,7 @@ func _people() -> void:
 					best_d = dd
 					start_house = int(h.id)
 		push_warning("town: no start lot, house %d stands in" % start_house)
-	var start_room := _roomiest(start_house)
+	var start_room := _start_room(start_house)
 	var start_pos := _free_spot(start_room)
 	d["workshop"] = {"x": start_pos.x, "y": start_pos.y - 1.0, "what": "At home"}
 	var start_c := Vector2(Rect2i(_houses[start_house].rect).get_center())
@@ -748,36 +797,40 @@ func _people() -> void:
 	var want := int(opts.get("rescue", RESCUE_COUNT if _blocks >= 6 else 2))
 	var apart_min := 18.0 if _blocks >= 6 else 8.0
 	# (WP8: the first ring is 14 to 28 tiles out, not 22 to 48: the first rescue is the demo's first goal, to be reached with a pump shotgun and 40 rounds)
-	var rings := [[14.0 * scale, 28.0 * scale], [28.0 * scale, 58.0 * scale], [58.0 * scale, 400.0]]
+	# (BIGGER HOUSES: the first ring is 14 to 34 tiles out, not 14 to 28: there are fewer houses to find a survivor in)
+	var rings := [[14.0 * scale, 34.0 * scale], [34.0 * scale, 62.0 * scale], [62.0 * scale, 400.0]]
 	var per_ring := int(ceil(float(want) / 3.0))
 	for ri in rings.size():
-		var pool: Array = []
-		for h in _houses:
-			if int(h.id) == start_house or h.rooms.size() < 2:
-				continue
-			var dist := Vector2(Rect2i(h.rect).get_center()).distance_to(start_c)
-			if dist >= rings[ri][0] and dist < rings[ri][1]:
-				pool.append(int(h.id))
+		# (BIGGER HOUSES: the survivors are found in family homes and the bigger detached ones, `_rescue_rank` 0; the next best where a ring has not enough of them, so that every ring still
+		# has its share of them, near to far; a block of flats or a shop only in `_top_up_rescue`, when nothing else is left)
 		var picked := 0
-		var guard := 0
-		while picked < per_ring and rescue.size() < want and not pool.is_empty() and guard < 200:
-			guard += 1
-			var hid: int = pool[rng.randi() % pool.size()]
-			var c := Vector2(Rect2i(_houses[hid].rect).get_center())
-			var apart := true
-			for r in rescue:
-				if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < apart_min:
-					apart = false
-			if not apart:
+		for rank in 4:
+			var pool: Array = []
+			for h in _houses:
+				if int(h.id) == start_house or _rescue_rank(h) != rank:
+					continue
+				var dist := Vector2(Rect2i(h.rect).get_center()).distance_to(start_c)
+				if dist >= rings[ri][0] and dist < rings[ri][1]:
+					pool.append(int(h.id))
+			var guard := 0
+			while picked < per_ring and rescue.size() < want and not pool.is_empty() and guard < 200:
+				guard += 1
+				var hid: int = pool[rng.randi() % pool.size()]
+				var c := Vector2(Rect2i(_houses[hid].rect).get_center())
+				var apart := true
+				for r in rescue:
+					if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < apart_min:
+						apart = false
+				if not apart:
+					pool.erase(hid)
+					continue
+				var room := _rescue_room(hid)
+				rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": ri + 1, "dist": c.distance_to(start_c)})
 				pool.erase(hid)
-				continue
-			var room := _roomiest(hid)
-			rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": ri + 1, "dist": c.distance_to(start_c)})
-			pool.erase(hid)
-			picked += 1
+				picked += 1
 	_top_up_rescue(rescue, want, start_house, start_c, apart_min)
 	rescue.sort_custom(func(a, b): return float(a.dist) < float(b.dist))
-	var dead := _dead(start_house, rescue)
+	var dead := _dead(start_house, rescue, start_room)
 	for i in dead.size():
 		var hid := int(dead[i].house)
 		if hid >= 0:
@@ -874,6 +927,44 @@ func _ring_report(house_id: int) -> Dictionary:
 	return {"rect": lot, "total": total, "free": free}
 
 
+## How good a house is to find a survivor in (BIGGER HOUSES): 0 a family home or one of the bigger detached houses with five rooms or more, 1 one of those kinds with three, 2 any other
+## home but a cottage with three rooms or more (a small house, a terrace), 3 a cottage, 4 a block of flats, a shop, a works or a public building with two rooms or more, -1 never (a shed,
+## the buildings of a lot that are not its main one).
+func _rescue_rank(h: Dictionary) -> int:
+	var kind := String(h.kind)
+	var n: int = h.rooms.size()
+	if not bool(h.main) or kind == "shed" or n < 2:
+		return -1
+	if Plans.RESCUE_KINDS.has(kind) and n >= 5:
+		return 0
+	if Plans.RESCUE_KINDS.has(kind) and n >= 3:
+		return 1
+	if String(h.type) == "residential" and kind != "cottage" and kind != "apartments" and n >= 3:
+		return 2
+	return 3 if (String(h.type) == "residential" and kind != "apartments") else 4
+
+
+## The room a survivor hides in: a bedroom (one of them), else the study, the dining room, the utility room, the living room, else the roomiest that is no hall.
+func _rescue_room(house_id: int) -> int:
+	var rooms: Array = _houses[house_id].rooms
+	for nm in ["bedroom", "study", "dining room", "utility", "nursery", "living room", "kitchen", "garage"]:
+		var cands: Array = []
+		for ri in rooms:
+			if String(_rooms[ri].name) == nm:
+				cands.append(int(ri))
+		if not cands.is_empty():
+			return int(cands[_rng.randi() % cands.size()])
+	return _roomiest(house_id)
+
+
+## The room the avatar wakes in: the living room of the start house (the roomiest room when it has none).
+func _start_room(house_id: int) -> int:
+	for ri in _houses[house_id].rooms:
+		if String(_rooms[ri].name) == "living room":
+			return int(ri)
+	return _roomiest(house_id)
+
+
 ## The index of the roomiest room of a house.
 func _roomiest(house_id: int) -> int:
 	var best := -1
@@ -908,13 +999,14 @@ func _free_spot(room: int) -> Vector2:
 func _top_up_rescue(rescue: Array, want: int, start_house: int, start_c: Vector2, apart_min: float) -> void:
 	var spare: Array = []
 	for h in _houses:
-		if int(h.id) == start_house or h.rooms.size() < 2:
+		if int(h.id) == start_house or _rescue_rank(h) < 0:
 			continue
 		var taken := false
 		for r in rescue:
 			taken = taken or int(r.house) == int(h.id)
 		if not taken:
-			spare.append([Vector2(Rect2i(h.rect).get_center()).distance_to(start_c), int(h.id)])
+			# (the better houses first, the nearest first among them)
+			spare.append([float(_rescue_rank(h)) * 1000.0 + Vector2(Rect2i(h.rect).get_center()).distance_to(start_c), int(h.id)])
 	spare.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
 	for e in spare:
 		if rescue.size() >= want:
@@ -926,7 +1018,7 @@ func _top_up_rescue(rescue: Array, want: int, start_house: int, start_c: Vector2
 			if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < apart_min * 0.5:
 				apart = false
 		if apart:
-			var room := _roomiest(hid)
+			var room := _rescue_room(hid)
 			rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": 3, "dist": c.distance_to(start_c)})
 
 
@@ -961,7 +1053,7 @@ func _hide_spot(room: int, house_id: int) -> Vector2:
 
 ## The dead as data records: about 60% in or beside the houses, 40% in the streets in loose groups; three in the start house, a guard of two to
 ## four in every house of the rescue list.
-func _dead(start_house: int, rescue: Array) -> Array:
+func _dead(start_house: int, rescue: Array, start_room: int = -1) -> Array:
 	var rng := _rng
 	var W := _size
 	var H := _size
@@ -1018,13 +1110,28 @@ func _dead(start_house: int, rescue: Array) -> Array:
 		return false
 	# the three of the start house, then the guards of the rescue houses: two to four, the first in the room of the survivor (who stands where it is
 	# not taken: the survivor's tile is kept clear of them)
-	for k in 3:
-		if put_inside.call(start_house, "walker", "still", -1, -1):
+	# BIGGER HOUSES: four or five of the start house (clearing it is the first quarter of an hour), each in a room of its own and none in the room the avatar wakes in
+	var start_rooms: Array = []
+	for ri in _houses[start_house].rooms:
+		if int(ri) != start_room:
+			start_rooms.append(int(ri))
+	for i in range(start_rooms.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = start_rooms[i]
+		start_rooms[i] = start_rooms[j]
+		start_rooms[j] = tmp
+	var start_want := 4 + (1 if rng.randf() < 0.45 else 0)
+	var start_got := 0
+	for ri in start_rooms:
+		if start_got >= start_want:
+			break
+		if put_inside.call(start_house, "walker", "still", int(ri), -1):
+			start_got += 1
 			made_in += 1
 	for r in rescue:
 		_take(taken, Vector2(r.pos))
 	for r in rescue:
-		for k in 2 + rng.randi() % 3:
+		for k in 2 + rng.randi() % 4:
 			var in_room: int = int(r.room) if k == 0 else -1
 			if put_inside.call(int(r.house), "walker" if rng.randf() < 0.85 else "runner", "still", in_room, int(r.room)):
 				made_in += 1

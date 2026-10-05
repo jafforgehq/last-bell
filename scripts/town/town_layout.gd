@@ -29,11 +29,14 @@ const MAX_BLOCK_Y := 30
 const ROAD_W := 4
 const AVENUE_W := 6
 ## The least depth of a row of lots in each district (a block deeper than twice this has two rows).
-const DMIN := {"suburb": 10, "oldtown": 9, "main": 10, "industrial": 12, "civic": 12}
+const DMIN := {"suburb": 13, "oldtown": 10, "main": 10, "industrial": 12, "civic": 12}
 ## The depth a required building needs for its lot (its depth, the front yard and a back yard).
 const NEED_DEPTH := {"church": 22, "school": 22, "supermarket": 19}
-## The buildings (lots with one) a full town is topped up to; with the sheds of some lots that is 150 to 160 houses.
-const WANT_BUILDINGS := 150
+## The buildings (lots with one) a full town is topped up to (BIGGER HOUSES: houses are twice the size, so a town has about 115 of them, sheds of some lots counted as houses by the town).
+const WANT_BUILDINGS := 115
+## The start lot: the family home of 18 x 14 with three tiles of ground to each side, four in front and three behind. Its block must be this big inside its sidewalk.
+const START_W := 22
+const START_DEPTH := 20
 const TREES := ["Elm", "Oak", "Birch", "Cedar", "Maple", "Pine", "Ash", "Willow", "Alder", "Hazel", "Linden", "Rowan", "Poplar", "Holly"]
 const ROADS_NS := ["Mill Road", "Station Road", "Chapel Lane", "Orchard Road", "School Lane", "Park Road", "Bridge Street", "Garden Way", "Quarry Road", "Field Lane", "Kiln Road", "Hill Road", "Market Lane", "Ferry Road", "Bell Lane", "Tannery Road", "Church Street"]
 
@@ -243,6 +246,9 @@ func _districts() -> void:
 		# near the middle of the town (within 45 tiles) and at least 28 tiles from the shops and the works, if there is such a block
 		var to_mid := c.distance_to(Vector2(float(size) * 0.5, float(size) * 0.5))
 		var score := to_mid * 0.3 + maxf(0.0, to_mid - 45.0) * 1.5 + maxf(0.0, 28.0 - near_busy) * 1.5 + (0.0 if b.district == D.SUBURB else 30.0)
+		# (the family home of the start with its yard wants START_W x START_DEPTH inside the sidewalk: a block too small for it is the last choice)
+		if r.size.y - 2 < START_DEPTH or r.size.x - 2 < START_W:
+			score += 400.0
 		# (the base wants roads 35 to 60 tiles out on all four sides of it: a start near the world's edge has none on that side)
 		var edge_room := minf(minf(c.x, float(size) - c.x), minf(c.y, float(size) - c.y))
 		if edge_room < float(ring) + 36.0 and size >= 160:
@@ -540,10 +546,10 @@ func _ring_segment(sr: Rect2i, horiz: bool, a0: int, a1: int, front_h: String, d
 		if kind == "farm" or kind == "cottage":
 			farms += 1
 			# the farmhouse, the barn and the field of a farm, side by side (a cottage: a small house and its plot)
-			var house_len := mini(len, 16 if kind == "farm" else 13)
+			var house_len := mini(len, 18 if kind == "farm" else 14)
 			var barn_len := mini(len - house_len, 16) if kind == "farm" else 0
 			var pos := at
-			var house_kind := "farmhouse" if kind == "farm" else ("small" if rng.randf() < 0.6 else "medium")
+			var house_kind := "farmhouse" if kind == "farm" else ("farmhouse" if rng.randf() < 0.92 else "cottage")
 			var tail := "field" if kind == "farm" else ("meadow" if rng.randf() < 0.5 else "field")
 			for part in [[house_kind, house_len], ["barn", barn_len], [tail, len - house_len - barn_len]]:
 				var l: int = int(part[1])
@@ -615,7 +621,7 @@ func _block_lots() -> void:
 					req.clear()
 				else:
 					rows_req.append(req.pop_front())
-			var as_start := not start_done and Rect2i(rrow.rect).size.y >= 12 and Rect2i(rrow.rect).size.x >= 14
+			var as_start := not start_done and Rect2i(rrow.rect).size.y >= START_DEPTH and Rect2i(rrow.rect).size.x >= START_W
 			var placed := _fill_row(b, rrow, rows_req, as_start, split_rest and not rows_req.is_empty())
 			if as_start and placed:
 				start_done = true
@@ -629,6 +635,22 @@ func _rows_for(b: Dictionary, area: Rect2i, single: bool) -> Array:
 	var hi := area.size.y
 	var dmin := int(DMIN.get(d, 12))
 	var rows: Array = []
+	if bool(b.start) and not single and hi >= START_DEPTH:
+		# the start block: a row of the start lot's depth (a strip of what is left behind it, if that is deep enough to be worth a row, else the start lot has it all)
+		var front0 := String(b.front_pref)
+		if front0 == "":
+			front0 = "S" if rng.randf() < 0.5 else "N"
+		var rest := hi - (START_DEPTH + 1)
+		var sd := START_DEPTH + 1 if rest >= 4 else hi
+		if front0 == "N":
+			rows.append({"rect": Rect2i(area.position.x, area.position.y, area.size.x, sd), "front": "N"})
+			if rest >= 4:
+				rows.append({"rect": Rect2i(area.position.x, area.position.y + sd, area.size.x, hi - sd), "front": "S"})
+		else:
+			if rest >= 4:
+				rows.append({"rect": Rect2i(area.position.x, area.position.y, area.size.x, hi - sd), "front": "N"})
+			rows.append({"rect": Rect2i(area.position.x, area.position.y + hi - sd, area.size.x, sd), "front": "S"})
+		return rows
 	if not single and hi >= 2 * dmin and not (bool(b.start) and hi < 24):
 		var alley := 2 if ((d == D.OLDTOWN or d == D.MAIN) and hi >= 2 * dmin + 2) else 0
 		var dn := (hi - alley) / 2
@@ -681,9 +703,9 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 			else:
 				plan = Plans.plan(want, rem, depth, rng)
 				kind = want if not plan.is_empty() else ""
-		if kind == "" and d == D.SUBURB and rem >= 14 and rng.randf() < 0.3:
-			# the roomy houses of the suburb (an L, a T, a U, two wings, a bungalow with its garage) need a wide lot: when the row has the room they are tried first
-			var wide := ["lhouse", "twowing", "bungalow", "thouse", "uhouse", "lhouse", "twowing", "bungalow"]
+		if kind == "" and d == D.SUBURB and rem >= 16 and depth >= 16 and rng.randf() < 0.7:
+			# the roomy houses of the suburb (the family home, an L, a T, a U, two wings, a bungalow with its garage) need a wide, deep lot: when the row has the room they are tried first
+			var wide := ["family", "family", "family", "family", "family", "lhouse", "twowing", "bungalow", "thouse", "uhouse", "bungalow"]
 			for attempt in 3:
 				var k2 := String(wide[rng.randi() % wide.size()])
 				plan = Plans.plan(k2, rem, depth, rng)
@@ -691,8 +713,11 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 					kind = k2
 					break
 		if kind == "":
-			for attempt in 10:
+			for attempt in 16:
 				var k := String(D.pick(D.MIX.get(d, D.MIX.suburb), rng))
+				# (the tiny cottage is the last thing a row is filled with: a few of them in a town)
+				if k == "cottage" and attempt < 13:
+					continue
 				if k == "pocket":
 					kind = "pocket"
 					break
@@ -702,7 +727,7 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 					break
 			if kind == "":
 				kind = "pocket"
-		if kind == "pocket" and rem >= 5 and depth >= 7 and rng.randf() < 0.75:
+		if kind == "pocket" and rem >= 5 and depth >= 7 and rng.randf() < 0.55:
 			# a gap in the row is filled in with a shed (a kiosk in the town)
 			var conv := "kiosk" if (d == D.MAIN or d == D.OLDTOWN) else ("shed_lot" if d != D.INDUSTRIAL else "")
 			if conv != "":
@@ -720,8 +745,8 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 				var box: Vector2i = plan.box
 				lot_w = mini(rem, box.x + int(plan.margin))
 				if kind == "start":
-					lot_w = mini(rem, box.x + 4)
-		if rem - lot_w < 5 and rem - lot_w >= 0:
+					lot_w = mini(rem, box.x + 2 * int(plan.margin))
+		if rem - lot_w < 5 and rem - lot_w >= 0 and kind != "start":
 			if rem - lot_w <= 6 or kind == "pocket":
 				lot_w = rem
 		var rect := Rect2i(x, r.position.y, lot_w, depth)
@@ -735,15 +760,18 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 	return start_placed
 
 
-## A town is meant to have about 150 buildings (a share of that in a smaller one): when the dice gave fewer, gaps of the suburbs, the old town and the edge (a pocket, a field, a
+## A town is meant to have about 115 buildings (BIGGER HOUSES: it had 150 of half the size; a share of that in a smaller town): when the dice gave fewer, gaps of the suburbs, the old town and the edge (a pocket, a field, a
 ## meadow) are filled in with small houses until it has.
 func _top_up() -> void:
 	var target := roundi(float(WANT_BUILDINGS) * float(size * size) / float(192 * 192))
 	var have := 0
+	var cottages := 0
 	var gaps: Array = []
 	for lot in lots:
 		if not (lot.plan as Dictionary).is_empty():
 			have += 1
+			if String(lot.kind) == "cottage":
+				cottages += 1
 		elif String(lot.kind) in ["pocket", "meadow", "field"] and not bool(lot.start):
 			gaps.append(int(lot.id))
 	for i in range(gaps.size() - 1, 0, -1):
@@ -759,11 +787,19 @@ func _top_up() -> void:
 		if r.size.x < 8 or r.size.y < 9:
 			continue
 		var depth := r.size.y
-		var kind := "small" if rng.randf() < 0.6 else ("cottage" if rng.randf() < 0.6 else "medium")
-		var plan := Plans.plan(kind, r.size.x, depth, rng)
-		if plan.is_empty():
+		# (BIGGER HOUSES: the gaps are filled with houses that fit them, the farm lots of the edge with a farmhouse; the tiny cottage only now and then, a few of them in a town)
+		var order: Array = ["farmhouse"] if String(lot.district) == D.EDGE else (["small", "medium", "terrace"] if rng.randf() < 0.5 else ["medium", "small", "terrace"])
+		var kind := ""
+		var plan := {}
+		for k in order:
+			plan = Plans.plan(String(k), r.size.x, depth, rng)
+			if not plan.is_empty():
+				kind = String(k)
+				break
+		if plan.is_empty() and cottages < 5:
 			plan = Plans.plan("cottage", r.size.x, depth, rng)
 			kind = "cottage"
+			cottages += 1
 		if plan.is_empty():
 			continue
 		lot.kind = kind

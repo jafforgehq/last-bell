@@ -51,7 +51,7 @@ const FLOOR_OF := {
 	"living room": "floor_wood", "front room": "floor_wood", "study": "floor_wood", "dining room": "floor_wood", "nave": "floor_wood", "reading room": "floor_wood", "stacks": "floor_wood",
 	"office": "floor_wood", "flat": "floor_wood", "nursery": "floor_carpet", "dormitory": "floor_carpet", "bedroom": "floor_carpet", "side": "floor_wood",
 	"kitchen": "floor_kitchen", "pantry": "floor_kitchen", "shop floor": "floor_kitchen", "dining hall": "floor_kitchen", "classroom": "floor_kitchen", "bathroom": "floor_bath",
-	"hall": "floor_hall", "lobby": "floor_hall", "narthex": "floor_hall", "storeroom": "floor_hall", "store": "floor_hall", "garage": "floor_hall", "workshop": "floor_hall",
+	"hall": "floor_hall", "lobby": "floor_hall", "narthex": "floor_hall", "storeroom": "floor_hall", "store": "floor_hall", "garage": "floor_hall", "workshop": "floor_hall", "utility": "floor_hall",
 	"engine bay": "floor_hall", "gym": "floor_hall", "banking hall": "floor_hall", "reception": "floor_hall", "waiting room": "floor_hall", "ward": "floor_hall", "pharmacy": "floor_hall",
 	"cell": "floor_hall", "armoury": "floor_hall", "vault": "floor_hall", "front desk": "floor_hall", "chancel": "floor_hall", "shed": "floor_wood", "room": "floor_wood",
 	"barn": "dirt_path", "stable": "dirt_path",
@@ -174,7 +174,8 @@ func put(cv, kind: String, tx: int, ty: int, container: bool = false, keep: bool
 ## a bed or a loveseat across a narrow room from wall to wall, left one door on each side of a barrier, and whoever came in by one of them was shut in the half it opened on.
 ## Small rooms (up to 12 tiles) also keep a share of their floor free (`free_needed`).
 const FREE_SHARE := 0.35
-const SMALL_ROOM := 12
+## (a room of up to 5 x 5 keeps its share of the floor free: the homes' rooms are 3 x 3 to 5 x 5)
+const SMALL_ROOM := 25
 
 
 ## The floor rectangle of the indoor room that holds the tile (tx, ty), or an empty rectangle (a yard, a street, a wall).
@@ -438,6 +439,29 @@ func furnish_room(cv, rng: RandomNumberGenerator, name: String, r: Rect2i, front
 			try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, y), Vector2i(x, y + h - 1)])
 			if w >= 3 and h >= 3:
 				put(cv, "rug_round", x + (w - 2) / 2, y + (h - 2) / 2 + 1)
+		"utility":
+			# the washing and the tools: a bench, shelves of tins and a cupboard along the far wall (the floor before them is left free: the base's worktable is set up here), the basket and a crate
+			# in the corners of the near one
+			far_row(cv, r, front, [["workbench", true], ["shelf_tins", true], ["cupboard", true]], rng.randf() < 0.5)
+			try_spots(cv, "laundry_basket", [Vector2i(x + w - 1, y + h - 1), Vector2i(x, y + h - 1), Vector2i(x + w - 1, y), Vector2i(x, y)])
+			try_spots(cv, "crate" if rng.randf() < 0.5 else "box", [Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1), Vector2i(x, y), Vector2i(x + w - 1, y)], true)
+		"hall" when w <= 3 and h >= 6:
+			# a hall down the middle of a house: a lamp at the front, a cupboard and a chest against the long walls (never in front of a door: `put` leaves those tiles free), a bin at the far end
+			try_spots(cv, "lamp_floor", [Vector2i(x, y), Vector2i(x + w - 1, y)])
+			var sides: Array = []
+			for yy in range(y + 1, y + h):
+				sides.append(Vector2i(x, yy))
+				sides.append(Vector2i(x + w - 1, yy))
+			for si in range(sides.size() - 1, 0, -1):
+				var sj := rng.randi_range(0, si)
+				var tmp = sides[si]
+				sides[si] = sides[sj]
+				sides[sj] = tmp
+			try_spots(cv, "cupboard", sides, true)
+			if rng.randf() < 0.7:
+				try_spots(cv, "bookshelf" if w >= 3 else "box", sides, true)
+			if rng.randf() < 0.5:
+				try_spots(cv, "bin", [Vector2i(x + w - 1, y + h - 1), Vector2i(x, y + h - 1)])
 		"hall", "lobby", "narthex":
 			if kind == "warehouse":
 				var ty := y + 1
@@ -468,12 +492,20 @@ func furnish_room(cv, rng: RandomNumberGenerator, name: String, r: Rect2i, front
 			if kind == "office" and w >= 5 and h >= 4:
 				desk_with_chair(cv, x, x + w, y + h - 2, rng.randf() < 0.5)
 		"dining room":
-			if w >= 4 and h >= 3:
+			if w >= 3 and h >= 3:
 				var ty := y + h / 2
-				if put(cv, "dining_table", x + 1, ty):
-					put(cv, "chair", x, ty)
-					put(cv, "chair", x + 3, ty)
+				var tx := x + (w - 2) / 2
+				if put(cv, "dining_table", tx, ty):
+					put(cv, "chair", tx - 1, ty)
+					put(cv, "chair", tx + 2, ty)
+					if h >= 5:
+						put(cv, "chair", tx, ty - 1)
+						put(cv, "chair", tx + 1, ty + 1)
 			try_spots(cv, "cupboard", _along(x, w, y), true)
+			if w >= 4 and rng.randf() < 0.6:
+				try_spots(cv, "cupboard", _along(x, w, y + h - 1), true)
+			if rng.randf() < 0.5:
+				try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, y + h - 1), Vector2i(x, y + h - 1), Vector2i(x, y)])
 		"pantry":
 			rows_of(cv, r, [["cupboard", true], ["shelf_tins", true], ["crate", true], ["cupboard", true]], rng.randf() < 0.5)
 		"garage":
@@ -767,8 +799,6 @@ func living(cv, rng: RandomNumberGenerator, r: Rect2i, kitchenette: bool, start:
 			if row >= top and try_spots(cv, "loveseat", [Vector2i(x, row), Vector2i(x + w - 2, row), Vector2i(x + 1, row)]):
 				seat_row = row
 				break
-	if start:
-		return
 	var other := top if seat_row != top else r.end.y - 1
 	if seat_row >= 0 and other != seat_row and not kitchenette:
 		var spots: Array = []
@@ -784,6 +814,22 @@ func living(cv, rng: RandomNumberGenerator, r: Rect2i, kitchenette: bool, start:
 		put(cv, "coffee_table", x + (w - 2) / 2, top + rh / 2)
 	if rng.randf() < 0.55:
 		try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, top), Vector2i(x, top), Vector2i(x + w - 1, r.end.y - 1)])
+	# something to search in a living room too (a cupboard along a wall, where nothing in it can be)
+	if not kitchenette and w >= 3 and not _has_container(cv, r):
+		var cs: Array = []
+		for sx in range(x, x + w):
+			cs.append(Vector2i(sx, top))
+			cs.append(Vector2i(sx, r.end.y - 1))
+		try_spots(cv, "cupboard", cs, true)
+
+
+## Whether a container (a thing that may be searched) stands in the rectangle.
+func _has_container(cv, r: Rect2i) -> bool:
+	for c in cv.cands:
+		var o: Dictionary = c.obj
+		if r.has_point(Vector2i(floori(float(o.cx)), floori(float(o.cy)))):
+			return true
+	return false
 
 
 func shop(cv, _rng: RandomNumberGenerator, r: Rect2i) -> void:
@@ -817,6 +863,9 @@ func start_extras(cv, _rng: RandomNumberGenerator) -> void:
 			"bedroom":
 				try_spots(cv, "box", [Vector2i(r.end.x - 1, r.end.y - 1), Vector2i(r.position.x, r.end.y - 1)], true)
 				put(cv, "broken_glass", r.position.x + 1, r.end.y - 1)
+			"utility":
+				try_spots(cv, "crate", [Vector2i(r.end.x - 1, r.end.y - 1), Vector2i(r.position.x, r.end.y - 1), Vector2i(r.end.x - 1, r.position.y)], true)
+				put(cv, "papers", r.position.x + 1, r.end.y - 1)
 
 
 # --------------------------------------------------------------------- the yard --
