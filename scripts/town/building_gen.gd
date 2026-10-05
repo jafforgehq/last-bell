@@ -10,6 +10,10 @@
 ##
 ## The outside walls are the terrain WALL_BRICK and the walls inside WALL_PLASTER (what the world draws as walls); the MATERIAL of the outside wall (brick, white or blue siding, stucco...)
 ## is the generator's `data.kit.wall` code of the house, chosen by district (scripts/town/town_districts.gd).
+##
+## CLEARANCE. Every room of every house can be walked all over by the avatar, the survivors and the dead from any of its doors: the free floor of a room is ONE piece (4-connected: a body 0.6
+## wide goes wherever a tile does, and never across a corner) and a small room keeps a share of it free. The kit's `put` keeps it so as it furnishes (scripts/town/town_kit.gd), and `_unblock`
+## checks every room again at the end and takes away what the canvas's own rows and lines laid across one.
 extends RefCounted
 
 const Canvas := preload("res://scripts/raid/site_canvas.gd")
@@ -401,8 +405,12 @@ func _building_lot(cv, rng: RandomNumberGenerator, spec: Dictionary, out: Dictio
 	_unblock(cv)
 
 
-## A room that the furniture has cut off from the way in (the kit's tests keep to a window round each thing, and a sofa and a bookshelf in a room of 4 x 2 can still shut the one way
-## through) gets its way back: the furniture of the rooms is taken away, the last put first, until every room can be reached.
+## The clearance check, run on every building after its furnishing (the safety net: the kit's `put` keeps each room clear as it sets a thing, but the site canvas's own rows and lines of
+## shelves and the scatter of crates do not ask). A body must be able to walk from any free tile of a room to any other WITHOUT leaving it, and from the tile behind every door, so
+## (1) every room can be reached from the way in at all, else the furniture of the rooms is taken away, the last put first, until it can; and (2) the free floor of every room is one piece
+## and a small room has a share of it free (`TownKit.room_is_clear`): from the room's things the one whose going mends the most is taken away (the least needed first, the last put
+## first of those), until it is. The avatar's box (0.6 wide) goes wherever a tile does, four ways: so a floor of one piece of tiles is one it can walk all over; there is no need
+## to erode the grid by its radius, which is under half a tile.
 func _unblock(cv) -> void:
 	var lw: int = cv.W
 	for round in 14:
@@ -420,7 +428,7 @@ func _unblock(cv) -> void:
 			if not seen:
 				lost = true
 		if not lost:
-			return
+			break
 		for k in range(cv.objects.size() - 1, -1, -1):
 			var o: Dictionary = cv.objects[k]
 			if not bool(o.get("solid", false)):
@@ -433,17 +441,89 @@ func _unblock(cv) -> void:
 					inside = true
 			if not inside:
 				continue
-			for yy in int(o.h):
-				for xx in int(o.w):
-					cv.solid[(ty + yy) * lw + tx + xx] = 0
-					cv.pmask[(ty + yy) * lw + tx + xx] = 0
-			cv.objects.remove_at(k)
-			var keep: Array = []
-			for c in cv.cands:
-				if c.obj != o:
-					keep.append(c)
-			cv.cands = keep
+			_take_away(cv, k)
 			break
+	for a in cv.areas:
+		if not bool(a.indoor):
+			continue
+		var rr2: Rect2i = a.rect
+		for round in 24:
+			if kit.room_is_clear(cv, rr2):
+				break
+			if not _mend_room(cv, rr2):
+				break
+
+
+## Takes the thing `k` of the canvas away: its tiles are open again and it is no container.
+func _take_away(cv, k: int) -> void:
+	var lw: int = cv.W
+	var o: Dictionary = cv.objects[k]
+	var tx := roundi(float(o.cx) - float(o.w) / 2.0)
+	var ty := roundi(float(o.cy) - float(o.h) / 2.0)
+	for yy in int(o.h):
+		for xx in int(o.w):
+			cv.solid[(ty + yy) * lw + tx + xx] = 0
+			cv.pmask[(ty + yy) * lw + tx + xx] = 0
+	cv.objects.remove_at(k)
+	var keep: Array = []
+	for c in cv.cands:
+		if c.obj != o:
+			keep.append(c)
+	cv.cands = keep
+
+
+## How little a kind of furniture is missed (0 first to go).
+const KEEP_RANK := {
+	"crate": 0, "box": 0, "bin": 0, "bench": 0, "armchair": 0, "coffee_table": 0, "nightstand": 0, "kitchen_counter": 0, "cupboard": 0, "shelf_tins": 0, "bookshelf": 0,
+	"wardrobe": 1, "dresser": 1, "tv_stand": 1, "desk": 1, "workbench": 1, "dining_table": 1, "kitchen_sink": 1, "loveseat": 1,
+	"toilet": 2, "washbasin": 2, "bathtub": 2, "fridge": 2, "stove": 2, "sofa": 2, "bed_single": 2, "bed_double": 2,
+}
+
+
+## Takes away from a room the one thing whose going mends its floor the most (a piece joined, tiles freed); false when nothing in it can be.
+func _mend_room(cv, rr: Rect2i) -> bool:
+	var need: int = kit.free_needed(rr.size.x * rr.size.y)
+	var f: Dictionary = kit.room_floor(cv, rr)
+	var best := -1
+	var best_score := -1.0e9
+	for k in range(cv.objects.size() - 1, -1, -1):
+		var o: Dictionary = cv.objects[k]
+		if not bool(o.get("solid", false)):
+			continue
+		var tx := roundi(float(o.cx) - float(o.w) / 2.0)
+		var ty := roundi(float(o.cy) - float(o.h) / 2.0)
+		if not rr.has_point(Vector2i(tx, ty)):
+			continue
+		var fp := Rect2i(tx, ty, int(o.w), int(o.h))
+		# the floor as it would lie with this thing gone: the tiles of the thing, which are shut now, count as free
+		var after := _floor_without(cv, rr, fp)
+		var clear: bool = int(after.free) >= need and int(after.reached) == int(after.free)
+		var gain := float(after.reached) - float(f.reached) + float(after.free) - float(f.free) * 0.5
+		var score := (1000.0 if clear else 0.0) + gain - float(int(KEEP_RANK.get(String(o.kind), 1))) * 20.0 - float(fp.size.x * fp.size.y) * 0.5 + float(k) * 0.001
+		if score > best_score:
+			best_score = score
+			best = k
+	if best < 0:
+		return false
+	_take_away(cv, best)
+	return true
+
+
+## `TownKit.room_floor` with the tiles of `fp` made free for a moment.
+func _floor_without(cv, rr: Rect2i, fp: Rect2i) -> Dictionary:
+	var lw: int = cv.W
+	var saved: Array = []
+	for yy in range(fp.position.y, fp.end.y):
+		for xx in range(fp.position.x, fp.end.x):
+			saved.append(cv.solid[yy * lw + xx])
+			cv.solid[yy * lw + xx] = 0
+	var out: Dictionary = kit.room_floor(cv, rr)
+	var i := 0
+	for yy in range(fp.position.y, fp.end.y):
+		for xx in range(fp.position.x, fp.end.x):
+			cv.solid[yy * lw + xx] = saved[i]
+			i += 1
+	return out
 
 
 ## The fence round a lot (a band of WALL_METAL cells the world draws as the kit's fence), gates for the front and for every side or back door that opens on it. Returns the gates for
