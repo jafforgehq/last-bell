@@ -290,6 +290,18 @@ const HELP_AVATAR_ALWAYS := [
 	["Radio: card or wheel (C)", 2, [["C Middle", "Wheel (hold)"], ["Shift", "Wheel: all near"], ["1-5", "Pick crew"], ["Z", "Last order"], ["Click", "Crew card: pick"], ["Esc", "Wheel: cancel"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["Shift 1-3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
 ]
+## The One House's controls (the same form): ONE way to command the crew, and nothing about picking, Tab, 1 to 5 or right-click orders. The digits are the speeds.
+const HELP_TOWN := [
+	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["E", "Use, search"], ["R F", "Reload, melee"], ["Q", "Weapon away"]]],
+	["Crew: ask, do not order", 2, [["Click", "A person, or a card"], ["C", "Wheel (hold)"], ["Shift C", "Wheel: all near"], ["Z", "Last order again"], ["Esc", "Close the wheel"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Map"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
+]
+## (With "Always aim at the mouse": the mouse aims by itself and the left button fires.)
+const HELP_TOWN_ALWAYS := [
+	["You", 2, [["W A S D", "Move"], ["Mouse", "Aim and fire"], ["E", "Use, search"], ["R F", "Reload, melee"], ["Q", "Weapon away"]]],
+	["Crew: ask, do not order", 2, [["Click", "A card (not a person)"], ["C", "Wheel (hold)"], ["Shift C", "Wheel: all near"], ["Z", "Last order again"], ["Esc", "Close the wheel"]]],
+	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Map"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
+]
 ## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
 const STANCE_SHORT := {"follow": "Follow", "hold": "Hold", "cover": "Cover", "search": "Search", "back": "Back"}
@@ -723,6 +735,11 @@ func set_profile(name: String) -> void:
 		help_g.text = "Map"
 	if not school:
 		_layout_dock.call_deferred()
+		if help != null:
+			_fill_help()    # (the town's controls: one way to command the crew)
+			if help_g != null:
+				help_g.text = "Map"
+		_speed_tips()
 		if hint != null:
 			_fill_hint()    # (the town's words)
 
@@ -1450,7 +1467,8 @@ func _layout_bar() -> void:
 
 func _on_card_input(ev: InputEvent, p) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		if ev.double_click:
+		# (One House: a click on a card opens the order wheel, and that is all it does: no second click that takes the camera away)
+		if ev.double_click and profile == "":
 			on_focus.call(p)
 		else:
 			on_select.call({"kind": "person", "ref": p})
@@ -3032,6 +3050,8 @@ func _build_help() -> void:
 func help_groups() -> Array:
 	if not avatar_ui:
 		return HELP
+	if profile != "":
+		return HELP_TOWN_ALWAYS if AimMode.always() else HELP_TOWN
 	return HELP_AVATAR_ALWAYS if AimMode.always() else HELP_AVATAR
 
 
@@ -3342,8 +3362,8 @@ func modal_open() -> bool:
 	if scavenge_dialog != null or game_over != null or jobs_screen != null or build_screen != null:
 		return true
 	for c in get_children():
-		if not (c is Control) or not c.visible:
-			continue
+		if not (c is Control) or not c.visible or c == wheel:
+			continue    # (the order wheel is no page: it takes the mouse while it is up, so that no card's tooltip comes up through the ring, and that is all)
 		if c.has_meta("modal") or (c.mouse_filter == Control.MOUSE_FILTER_STOP and _covers_window(c)):
 			return true
 	return false
@@ -3781,6 +3801,8 @@ func _card_tip(p, word: String, epitaph: String) -> String:
 			tip += "\nThe green ring round you: the crew inside it shoots better"
 	if avatar_ui and word == "" and not p.player and STANCE_TIPS.has(String(p.stance)):
 		tip += "\n" + String(STANCE_TIPS[String(p.stance)])
+	if profile != "" and word == "" and not p.player:
+		tip += "\nClick to ask them for something"
 	# round 20: the title they are known by and who they are close to or at odds with (the card itself shows nothing more)
 	if not p.dead and not p.turned:
 		for line in CommunityKit.person_lines(sim_ref, p):
@@ -3922,7 +3944,7 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		dl.text = _days_text(days)
 		dl.add_theme_color_override("font_color", DANGER_TEXT if days < 1.0 else (WARN if days < 3.0 else INK3))
 	crew_keys = {}
-	if avatar_ui:
+	if avatar_ui and profile == "":    # (the One House has no 1 to 5: a click on a card is the way)
 		var n := 0
 		for q in WheelCtl.crew_of(sim.people):
 			n += 1
@@ -4233,6 +4255,11 @@ func _doing_zombie(z) -> String:
 
 
 ## What a person is doing, or why they are not.
+## What a person is doing, in words (the order wheel says it under the ring).
+func doing_of(p) -> String:
+	return _doing_person(p)
+
+
 func _doing_person(p) -> String:
 	if p.dead:
 		if p.turned:
@@ -4751,9 +4778,8 @@ func _apply_radio_mode(on: bool) -> void:
 		return
 	news_button.visible = on
 	alarm_button.visible = on
-	# (round 24: with an avatar the digits pick the crew, so the speeds are Shift and 1 2 3)
-	for i in speed_buttons.size():
-		speed_buttons[i].tooltip_text = "%s\nKey: %s" % [SPEED_TIPS[i][0], ("Shift+" + String(SPEED_TIPS[i][1])) if on and i > 0 else SPEED_TIPS[i][1]]
+	# (round 24: with an avatar the digits pick the crew, so the speeds are Shift and 1 2 3; the One House picks nobody)
+	_speed_tips(on)
 	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on and not tutorial_ui else JOBS_TIP
 	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
 	if not on:
@@ -4767,6 +4793,13 @@ func _apply_radio_mode(on: bool) -> void:
 	_layout_dock()
 	_layout_toast()
 	_layout_news()
+
+
+## The speed buttons' tooltips: "Key: Shift+2" in the school's avatar game (the digits pick the crew there), "Key: 2" in the One House.
+func _speed_tips(avatar: bool = avatar_ui) -> void:
+	for i in speed_buttons.size():
+		var key := String(SPEED_TIPS[i][1])
+		speed_buttons[i].tooltip_text = "%s\nKey: %s" % [SPEED_TIPS[i][0], ("Shift+" + key) if avatar and i > 0 and profile == "" else key]
 
 
 ## A toolbar key lit or dark.
