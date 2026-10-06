@@ -17,7 +17,8 @@ const SCALE_STEP := 0.1
 ## The switches: [pref key, what the player reads, and what it does].
 const SWITCHES := [
 	["hints", "Hints", "Tips and reminders while you play"],
-	["reduce_motion", "Reduce motion", "Keeps the screen still: no camera drift, no fades"],
+	["reduce_motion", "Reduce motion", "Keeps the screen still: no camera drift, no fades, no pulsing"],
+	["minimap", "Minimap", "A small map of the streets round you, in a corner"],
 	["fullscreen", "Fullscreen", "Fills the whole screen (F11 does it from anywhere)"],
 ]
 

@@ -674,6 +674,9 @@ var radio_verbs
 var call_card
 ## Round 24: the key that picks each person of the crew (1 to 5, by card order: `WheelCtl.crew_of`), person to number; empty without an avatar.
 var crew_keys := {}
+## HUDB: a part of the town (scripts/ui/crew_marks.gd) that puts one status chip in a corner of each crew card sets this: `(person, marks) -> marks`, the foot row's marks
+## without the ones the chip already shows. Not valid in any other game, and the foot row is then as it always was.
+var mark_filter: Callable
 ## Round 24: the command wheel (scripts/ui/command_wheel.gd), a view on top of everything in the HUD that main.gd's controller (wheel_ctl.gd) opens and moves.
 var wheel
 ## Round 18: the radio panel (scripts/ui/radio_panel.gd), the colony's interface in avatar mode, with the pages Jobs, Build, Map and News;
@@ -3941,7 +3944,7 @@ func _update_card(c: Dictionary, sim) -> void:
 	c.fight.visible = p.target != null and not p.downed and present
 	if c.fight.visible:
 		c.fight.modulate.a = 1.0 if _calm() else 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
-	var marks: Array = [] if p.dead else _fit_marks(sim.status_of(p))
+	var marks: Array = [] if p.dead else _fit_marks(mark_filter.call(p, sim.status_of(p)) if mark_filter.is_valid() else sim.status_of(p))
 	var sig := ""
 	for m in marks:
 		sig += "%s|%s|%s;" % [m.get("icon", ""), Color(m.get("color", INK2)).to_html(), m.get("tip", "")]
