@@ -763,6 +763,12 @@ func project_name(project_id: String) -> String:
 	return String(_def_of(project_id).get("name", ""))
 
 
+## How the project is named in a sentence ("the front fence", "a watchtower": the data's `noun`; "" for no such project).
+func project_noun(project_id: String) -> String:
+	var def := _def_of(project_id)
+	return String(def.get("noun", String(def.get("name", "")).to_lower())) if not def.is_empty() else ""
+
+
 ## The ids of a project's slots, front to back ([] for no such project).
 func project_slot_ids(project_id: String) -> Array:
 	return (_proj_slots.get(project_id, []) as Array).duplicate()
@@ -965,12 +971,17 @@ func _project_info(def: Dictionary) -> Dictionary:
 		spills = minutes / 60.0 > left
 	if state == "ready" and can_n == 0:
 		why = "Needs %d scrap" % first_scrap
+	# (EARLY: her own hands build too, scripts/town/build_hands.gd: the minutes of holding E that this takes, whoever else is on the job)
+	var hands = sim.get("build_hands")
+	var hands_min := 0.0
+	if hands != null and hours > 0.0 and float(hands.hours_per_second()) > 0.0:
+		hands_min = hours / (float(hands.hours_per_second()) * 60.0)
 	return {
 		"id": pid, "name": String(def.name), "noun": String(def.get("noun", String(def.name).to_lower())), "icon": String(def.get("icon", "fence")),
 		"button": String(def.get("button", "Build %s" % String(def.get("noun", String(def.name).to_lower())))), "gives": String(def.get("gives", "")),
 		"done_line": String(def.get("done", "")), "unit": _unit(unit_kit), "state": state, "slots": (_proj_slots.get(pid, []) as Array).duplicate(), "n": n, "built": built,
 		"going": going, "open": todo.size(), "fallen": fallen, "locked": locked, "need_crew": need, "scrap": scrap_all, "work": hours, "first_scrap": first_scrap,
-		"can_n": can_n, "pay": pay, "minutes": minutes, "builders": builders, "time": time, "builders_text": builders_text(builders), "spills": spills, "why": why, "recommended": false,
+		"can_n": can_n, "pay": pay, "minutes": minutes, "hands_minutes": hands_min, "builders": builders, "time": time, "builders_text": builders_text(builders), "spills": spills, "why": why, "recommended": false,
 		"progress": clampf((float(built) + share_going) / float(maxi(n, 1)), 0.0, 1.0), "todo": todo,
 	}
 

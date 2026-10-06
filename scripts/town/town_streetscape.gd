@@ -6,6 +6,10 @@ extends RefCounted
 
 const EDGE := 2
 const AVENUE_W := 6
+## How far round the entry no parked car or wreck of the streets stands (tiles): the stretch of the walk in that is left clear.
+const ENTRY_CLEAR := 14.0
+## Where the entry's wreck, car and painted chevrons were put when the avatar began 4.5 tiles in from the edge: they are put as far ahead of her now (`_entry` shifts them by how far she is in).
+const ENTRY_WAS_IN := 4
 
 
 ## The pieces of `run`, for the stepped build (`TownGen.step` does one a step).
@@ -130,15 +134,19 @@ static func _entry(g, arrival: Dictionary) -> void:
 	var ay: int = int(arrival.ay)
 	var wreck_fp: Vector2i = g._street_cv.tiles_of("car_wreck")
 	var car_fp: Vector2i = g._street_cv.tiles_of("car_h")
-	var wx := EDGE + 8 + rng.randi_range(0, 2)
-	var cx := EDGE + 16 + rng.randi_range(0, 3)
+	# (EARLY: she begins `inward` tiles in from the edge, on the forest lane's end: the wreck, the car and the chevrons are as far ahead of her as they always were)
+	var inward: int = (W - 1 - int(Vector2(arrival.pos).x)) if east else int(Vector2(arrival.pos).x)
+	var shift: int = inward - ENTRY_WAS_IN
+	var wx := EDGE + 8 + shift + rng.randi_range(0, 2)
+	var cx := EDGE + 16 + shift + rng.randi_range(0, 3)
 	for wy in [ay, ay + 1]:
 		if _put_wreck(g, true, W - wx - wreck_fp.x if east else wx, wy):
 			break
 	_put_car(g, "car_h", W - cx - car_fp.x if east else cx, ay + 4)
 	# the sign: three double chevrons painted on the avatar's lane, pointing into the town (the kit's `marker_enter`)
 	g._entry_arrows = []
-	for ax in [8, 12, 16]:
+	for ax0 in [8, 12, 16]:
+		var ax: int = ax0 + shift
 		var tx: int = W - 1 - ax if east else ax
 		var o = g._street_cv._decor("marker_enter", tx, ay + 3, 0.0, 0.0)
 		if o == null:
@@ -238,7 +246,8 @@ static func _cars(g) -> void:
 	var tries := (total + wrecks) * 40
 	# (the houses whose spawn roads are kept clear: the start house, and in a town with an arrival every candidate)
 	var base_centers: Array = g._base_centers()
-	# (ARRIVAL: the way in from the entry is left clear of parked cars and wrecks for 26 tiles: the walk in is not a hunt for a gap; the entry's own wreck and car are `_entry`'s)
+	# (ARRIVAL: the way in from the entry is left clear of parked cars and wrecks for ENTRY_CLEAR tiles: the walk in is not a hunt for a gap; the entry's own wreck and car are `_entry`'s. EARLY: the walk in is
+	# shorter, so is the clear stretch: the first parked car is one the scripted opening's walker can step out from, 14 to 24 tiles along the way)
 	var entry_pos := Vector2(-1000.0, -1000.0)
 	if not g._layout.arrival.is_empty():
 		entry_pos = Vector2(g._layout.arrival.pos)
@@ -288,7 +297,7 @@ static func _cars(g) -> void:
 		if clash:
 			continue
 		# no cars on the streets 34 to 62 tiles from the start house: the base's spawns want clear stretches of road there (scripts/town/base_layout.gd `_spawns`)
-		if Vector2(tx, ty).distance_to(entry_pos) < 26.0:
+		if Vector2(tx, ty).distance_to(entry_pos) < ENTRY_CLEAR:
 			continue
 		var on_spawn_road := false
 		for bc in base_centers:

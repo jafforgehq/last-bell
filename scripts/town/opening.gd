@@ -4,8 +4,8 @@
 ## THE BEAT SHEET (the numbers are the data's, `opening` in assets/data/one_house.json; the way is the walking grid's from the entry to the nearest house's door):
 ##   at the start   the magazine holds `mag` (3) rounds of the six (the spare stock is untouched: the first stores line reads 3 / 40), so that a reload is natural after a shot or two. (With two the
 ##                  second shot empties it and the gun reloads itself, so the key would never be taught; with three one round or two are left when the walker is down.)
-##   `trigger`      about `trigger_tiles` (25) tiles along the way (less when the first house is near: the walker is never put within `margin` tiles of its door) she passes the point
-##                  `walker_ahead` (14) tiles short of a parked car (the car nearest that place that stands near the way; none: a point of the road): ONE walker steps out from behind it
+##   `trigger`      about `trigger_tiles` (12: the walk in is short, EARLY) tiles along the way (less when the first house is near: the walker is never put within `margin` tiles of its door) she passes the point
+##                  `walker_ahead` (10) tiles short of a parked car (the car nearest that place that stands near the way; none: a point of the road): ONE walker steps out from behind it
 ##                  and walks at her, state `chase`, at `walker_speed` (a walker's pace, never a runner's). It is a real one of the field's records (added at the start, woken here), so the
 ##                  kill is counted as any. It does not bite: for `grace_s` seconds or until she has put one down it holds `hold_r` tiles off her and its claw is kept back.
 ##   the box        an AMMO BOX lies `box_ahead` (6) tiles past the trigger point on the pavement to her right (`box_side` tiles off the way): E takes the shells (`box_loot`) in `take_s`
@@ -128,7 +128,7 @@ func begin() -> bool:
 				continue
 			var p := Vector2(float(o.cx), float(o.cy))
 			var near := _nearest_on_route(p)
-			if float(near.lat) > (CAR_SIDE_MAX if cars_only else 4.5) or float(near.s) < ahead + 6.0 or float(near.s) > route_len - margin:
+			if float(near.lat) > (CAR_SIDE_MAX if cars_only else 4.5) or float(near.s) < ahead + 3.0 or float(near.s) > route_len - margin:
 				continue
 			if absf(float(near.s) - want_s) < best:
 				best = absf(float(near.s) - want_s)

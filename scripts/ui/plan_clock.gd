@@ -174,18 +174,18 @@ static func assess(infos: Array, ctx: Dictionary) -> Dictionary:
 	var head := ("%d scrap" % int(out.scrap)) if int(out.scrap) > 0 else "paid for"
 	head += ", about %d builder-hours" % maxi(1, roundi(hours_sum))
 	if builders <= 0:
-		out.summary = head + ". Nobody is on the Builders job."
+		out.summary = head + ". Nobody is on the Builders job: you build it with E."
 		out.line = "Whole plan: " + String(out.summary)
 		if float(ctx.bell) < 0.0:
 			out.verdict = "quiet"
 			out.chip = "QUIET NIGHTS: NO RUSH"
 			out.tone = "calm"
-			out.reason = "Nothing goes up until somebody is on the Builders job."
+			out.reason = "Nothing goes up by itself yet. Stand at a section and hold E to build it."
 		else:
 			out.verdict = "not_yet"
 			out.chip = "NOT YET"
 			out.tone = "bad"
-			out.reason = "Put somebody on the Builders job: nobody builds the plan."
+			out.reason = "Nobody builds the plan but you: hold E at a section, or put somebody on the Builders job."
 		return out
 	# the queue laid out on the working hours
 	var cum_m := {}

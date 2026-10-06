@@ -248,6 +248,8 @@ static func _face_of(at: Vector2) -> String:
 ## Someone joined the crew: the job their def names, if it has a free seat (a recruit's def names none).
 func person_added(p) -> void:
 	var id := String(p.def.get("station", ""))
+	if sim.is_one_house() and _builders_wanted():
+		id = "builders"    # (One House, EARLY: the first to come take the Builders job, whatever their trade: a section of the base has been ordered and nobody builds it)
 	if id != "" and unlocked(id) and seats_left(id) > 0:
 		assignments[String(p.id)] = id
 	post_of(p)    # a night post from the start (it is kept in the save), not at the first dusk
@@ -745,6 +747,8 @@ func _fill_one(id: String, away := false) -> bool:
 ## many seats were filled.
 func fill_empty(skip: Array = []) -> int:
 	var n := 0
+	if sim.is_one_house() and _builders_wanted() and _fill_open("builders", skip):
+		n += 1    # (One House, EARLY: a section waits for hands and the Builders job is empty: it is filled before the bench and the rest)
 	for id in AUTO_ORDER:
 		if crew_of(String(id)).is_empty() and _fill_open(String(id), skip):
 			n += 1
@@ -752,6 +756,11 @@ func fill_empty(skip: Array = []) -> int:
 		while _fill_open(String(id), skip):
 			n += 1
 	return n
+
+
+## One House: whether a section of the base waits for builders (a site is up) and nobody is on the Builders job.
+func _builders_wanted() -> bool:
+	return sim.get("build") != null and not sim.build.active_site().is_empty() and crew_of("builders").is_empty()
 
 
 ## One open seat of a station, given to the best of those with no job who are up (`_best_free`, not in `skip`).
