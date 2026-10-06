@@ -42,7 +42,7 @@ const WALKER := {
 	"sx": 1.0, "sy": 1.0,
 	"tint": Color(0.0, 0.0, 0.0), "tint_amount": 0.0, "tint_floor": 0.0, "tint_gain": 1.0,
 	"lean": 0.0, "dip_s": 1.0, "dip_n": 1.0, "head": 1.0, "sink": 0.0, "thrust": 0.0,
-	"leg_amp": 1.0, "leg_lift": 1.0, "leg_kick": 1.0, "leg_w": 1.0, "stance": 1.0,
+	"leg_amp": 1.0, "leg_lift": 1.0, "leg_kick": 1.0, "leg_w": 1.0, "stance": 1.0, "leg_depth": 0.03,
 	"pose": "reach", "arm_reach": 0.5, "arm_drop": 0.0, "arm_sag": 0.0, "arm_w": 1.0, "hand_k": 1.0, "arm_n": 0.0,
 	"bob": 1.0, "claw_rate": 1.0, "claw_thump": 1.0,
 	"shadow_wide": 1.0, "shadow_deep": 1.0, "shadow_dark": 1.0,
@@ -51,7 +51,7 @@ const RUNNER := {
 	"sx": 0.88, "sy": 1.0,
 	"tint": Color(0.75, 0.77, 0.76), "tint_amount": 0.5, "tint_floor": 0.12, "tint_gain": 1.0,
 	"lean": 0.26, "dip_s": 0.93, "dip_n": 1.0, "head": 1.0, "sink": 0.0, "thrust": 0.0,
-	"leg_amp": 2.0, "leg_lift": 2.0, "leg_kick": 3.0, "leg_w": 0.85, "stance": 1.0,
+	"leg_amp": 2.0, "leg_lift": 2.0, "leg_kick": 3.0, "leg_w": 0.85, "stance": 1.0, "leg_depth": 0.05,
 	"pose": "sprint", "arm_reach": 0.5, "arm_drop": 0.0, "arm_sag": 0.0, "arm_w": 0.8, "hand_k": 0.85, "arm_n": 0.0,
 	"bob": 1.4, "claw_rate": 1.0, "claw_thump": 1.0,
 	"shadow_wide": 1.0, "shadow_deep": 1.0, "shadow_dark": 1.0,
@@ -60,12 +60,23 @@ const BRUTE := {
 	"sx": 1.25, "sy": 1.15,
 	"tint": Color(0.27, 0.31, 0.25), "tint_amount": 0.7, "tint_floor": 0.12, "tint_gain": 0.86,
 	"lean": 0.12, "dip_s": 1.0, "dip_n": 1.0, "head": 0.78, "sink": 0.07, "thrust": 0.07,
-	"leg_amp": 0.55, "leg_lift": 0.5, "leg_kick": 0.5, "leg_w": 1.2, "stance": 2.0,
+	"leg_amp": 0.55, "leg_lift": 0.5, "leg_kick": 0.5, "leg_w": 1.2, "stance": 2.0, "leg_depth": 0.02,
 	"pose": "reach", "arm_reach": 0.44, "arm_drop": 0.05, "arm_sag": 0.05, "arm_w": 1.4, "hand_k": 1.4, "arm_n": 0.12,
 	"bob": 1.3, "claw_rate": 0.55, "claw_thump": 1.8,
 	"shadow_wide": 1.2, "shadow_deep": 1.2, "shadow_dark": 1.6,
 }
-const STYLES := {"walker": WALKER, "runner": RUNNER, "brute": BRUTE}
+## ANIM: the legs of a living person (not one of the dead): a longer, livelier stride than a walker's (they walk at 3.2 tiles a second, a walker at 0.7), so the feet read at the usual
+## zoom. Only the legs differ: the body is the same sprite. `person_style` is what PawnNode draws a survivor's legs with (nothing in the rules is told of it).
+const PERSON := {
+	"sx": 1.0, "sy": 1.0,
+	"tint": Color(0.0, 0.0, 0.0), "tint_amount": 0.0, "tint_floor": 0.0, "tint_gain": 1.0,
+	"lean": 0.0, "dip_s": 1.0, "dip_n": 1.0, "head": 1.0, "sink": 0.0, "thrust": 0.0,
+	"leg_amp": 1.5, "leg_lift": 1.7, "leg_kick": 2.0, "leg_w": 1.0, "stance": 1.0, "leg_depth": 0.05,
+	"pose": "reach", "arm_reach": 0.5, "arm_drop": 0.0, "arm_sag": 0.0, "arm_w": 1.0, "hand_k": 1.0, "arm_n": 0.0,
+	"bob": 1.0, "claw_rate": 1.0, "claw_thump": 1.0,
+	"shadow_wide": 1.0, "shadow_deep": 1.0, "shadow_dark": 1.0,
+}
+const STYLES := {"walker": WALKER, "runner": RUNNER, "brute": BRUTE, "person": PERSON}
 
 ## The warped sprite of a hunched figure (see sprite_mesh), in tiles from where the
 ## character stands: where the neck is and how wide a stretch blends the head's
@@ -293,6 +304,13 @@ static func _fill(ci, at: Vector2, poly: PackedVector2Array, line: PackedVector2
 	ci.draw_polyline(xf * line, ink, LW, true)
 
 
+## ANIM: a leg or a shoe drawn turned by `rot` about its own origin (the hip, for a leg), so that a stride swings from the hip and does not slide.
+static func _fill_rot(ci, at: Vector2, rot: float, poly: PackedVector2Array, line: PackedVector2Array, col: Color, ink: Color, wide: float = 1.0) -> void:
+	var xf := Transform2D(rot, Vector2(wide, 1.0), 0.0, at)
+	ci.draw_colored_polygon(xf * poly, col)
+	ci.draw_polyline(xf * line, ink, LW, true)
+
+
 static func shadow(ci, st: Dictionary = WALKER) -> void:
 	_init_shapes()
 	var wide: float = st.shadow_wide
@@ -315,6 +333,7 @@ static func legs(ci, pal: Dictionary, view: String, phase: float, moving: bool, 
 	var kick: float = st.leg_kick
 	var wide: float = st.leg_w
 	var stance: float = st.stance
+	var depth: float = st.leg_depth
 	var s := sin(phase) if moving else 0.0
 	if view == "E":
 		for k: float in [-1.0, 1.0]:
@@ -325,19 +344,29 @@ static func legs(ci, pal: Dictionary, view: String, phase: float, moving: bool, 
 			var shoe: Color = pal.shoe_back if k < 0.0 else pal.shoe
 			leg.a *= alpha
 			shoe.a *= alpha
-			_fill(ci, Vector2(sw, HEM - 0.06 - lift), LEG_E, LEG_E_LINE, leg, ink, wide)
-			_fill(ci, Vector2(sw + 0.035, FOOT_Y - lift), SHOE_E, SHOE_E_LINE, shoe, ink)
+			if moving:
+				# (ANIM: the leg swings from the hip and the shoe follows its end, toe down as it goes back and up as it comes forward)
+				var a := -clampf(sw / 0.23, -0.6, 0.6)
+				var hip := Vector2(0.0, HEM - 0.06 - lift)
+				_fill_rot(ci, hip, a, LEG_E, LEG_E_LINE, leg, ink, wide)
+				_fill_rot(ci, hip + Vector2(0.035, 0.23).rotated(a), -a * 0.5, SHOE_E, SHOE_E_LINE, shoe, ink)
+			else:
+				_fill(ci, Vector2(sw, HEM - 0.06 - lift), LEG_E, LEG_E_LINE, leg, ink, wide)
+				_fill(ci, Vector2(sw + 0.035, FOOT_Y - lift), SHOE_E, SHOE_E_LINE, shoe, ink)
 		return
 	var pants: Color = pal.pants
 	var shoe: Color = pal.shoe
 	pants.a *= alpha
 	shoe.a *= alpha
+	# (ANIM: from the front the foot that comes forward comes toward the player as it lifts, and the one that is planted goes back: from behind, the other way)
+	var fwd := -1.0 if view == "N" else 1.0
 	for side: float in [-1.0, 1.0]:
 		var amp := 0.35 if (limp and side > 0.0) else 1.0
 		var lift := (maxf(0.0, side * s) * 0.055 * amp * raise) if moving else 0.0
+		var dy := (side * s * depth * amp * fwd) if moving else 0.0
 		var x := side * 0.105 * stance
-		_fill(ci, Vector2(x, HEM - 0.06 - lift), LEG_S, LEG_S_LINE, pants, ink, wide)
-		_fill(ci, Vector2(x + side * 0.012, FOOT_Y - lift), SHOE_S, SHOE_S_LINE, shoe, ink)
+		_fill(ci, Vector2(x, HEM - 0.06 - lift + dy), LEG_S, LEG_S_LINE, pants, ink, wide)
+		_fill(ci, Vector2(x + side * 0.012, FOOT_Y - lift + dy), SHOE_S, SHOE_S_LINE, shoe, ink)
 
 
 static func _arm(ci, col: Color, p0: Vector2, ctrl: Vector2, p1: Vector2, w: float = 1.0) -> void:

@@ -16,6 +16,7 @@ const GD := preload("res://scripts/game_data.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Access := preload("res://scripts/access.gd")
+const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const TILE := GD.TILE
 const G := 9.8
 
@@ -177,6 +178,7 @@ func setup(blood_textures: Array, parent: Node2D, radial_tex: Texture2D, light_p
 	radial = radial_tex
 	puff_light = light_puff
 	puff_dark = dark_puff
+	PawnMotion.thump_cb = thump    # (ANIM: a brute's heavy step or blow shakes the camera a hair: scripts/render/pawn_node.gd)
 
 
 ## Forgets everything that is in the air and on the ground (a new run in the same scene, a test).
@@ -593,6 +595,18 @@ func hit_wall(x: float, y: float) -> void:
 
 # -------------------------------------------------------- the struck dead --
 
+## A heavy blow or step of one of the dead at `at` (tiles) with strength `k` (1 a blow, less a footfall): the camera is pushed a hair, less the farther it is, nothing under "reduce motion".
+func thump(at: Vector2, k: float) -> void:
+	if not enabled or calm:
+		return
+	var near := 1.0 - at.distance_to(listener) / 12.0
+	if near <= 0.0:
+		return
+	_push += Vector2.from_angle(rng.randf() * TAU) * (1.6 * k * near)
+	if _push.length() > KICK_MAX:
+		_push = _push.normalized() * KICK_MAX
+
+
 ## Moves and lights the picture of one of the dead for the effects on it: knock-back, the slide of a fall, the white flash. `node` is its pawn
 ## (scripts/render/pawn_node.gd), already placed this frame. Most of the dead have nothing on them: a lookup in two dictionaries.
 func apply(z, node) -> void:
@@ -628,6 +642,8 @@ func apply(z, node) -> void:
 		node.position += hrec.dir * float(hrec.kick) * exp(-age * 16.0) * TILE
 	if bool(hrec.flash):
 		hrec.flash = false
+		if node.has_method("flinch"):
+			node.flinch(hrec.dir)    # (ANIM: it jerks away from the blow for a couple of frames)
 		_wash(node, bool(hrec.plate))
 
 

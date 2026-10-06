@@ -614,7 +614,7 @@ static func _hand_at(view: String, p: Vector2, l: float, face: bool) -> Vector2:
 static func _stance_style(stance: float) -> Dictionary:
 	var key := int(round(stance * 10.0))
 	if not _styles.has(key):
-		var st: Dictionary = Art.WALKER.duplicate()
+		var st: Dictionary = Art.PERSON.duplicate()
 		st["stance"] = stance
 		_styles[key] = st
 	return _styles[key]
@@ -749,8 +749,11 @@ static func draw_person(n, o: Pose, w: float, facing_in: String, aim: float) -> 
 	if o.prop == "planks":
 		_planks(pen, base, view, col)
 	# (a person who has just got up from their work and is walking off keeps walking while the pose fades)
-	Art.legs(pen, pal, view, p.walk_phase, p.moving, false, 1.0, _stance_style(lerpf(1.0, o.stance, w)))
+	# (ANIM: the legs' drawn stride, which starts and ends on a neutral pose, and the body narrowed across the seam of a turn: pawn_node.gd)
+	Art.legs(pen, pal, view, n._rph, n._moving_draw, false, 1.0, _stance_style(lerpf(1.0, o.stance, w)))
 	var bx := body_xf(view, o, w)
+	if n._wid != 1.0:
+		bx = bx.scaled_local(Vector2(n._wid, 1.0))
 	# the shoulders as the body has them now, and where the hands go
 	var sh_main := bx * proj(view, 0.0, SH_Y, SH_L)
 	var sh_off := bx * proj(view, 0.0, SH_Y, -SH_L)
