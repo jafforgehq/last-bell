@@ -297,6 +297,9 @@ given moment without touching the game:
 | `--school` | The old schoolyard where the real game would show the town: behind the title, and the New game screen's old crew and length choices (a crew of three or five); the demo is that too |
 | `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
 | `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours) |
+| `--hurt=F[,bite]` | A town run: the avatar at that fraction (0 to 1) of the health, for the red edge of the screen (scripts/ui/hurt_pulse.gd: steady and faint at 30 percent or less, a heartbeat on it unless Reduce motion is on); `,bite` lands a bite 5 frames before the shot (the health drops 12, the thump plays) |
+| `--cardstate=who:what,...` | A town run, after `--stage=fourth`: put crew cards in a state to see their status chip (scripts/ui/crew_marks.gd). `who`: an id, a first name, `me`, or `#1`.. (the crew after the avatar: the rescued have other names in every run); `what`: `bleed`, `infect`, `hurt`, `down`, `stable`, `hungry`, `starving`, `thirsty`, `parched`, `refuse`, `job`, `last` (the ring of the last order), `hold`, `follow`. (Not `--crewstate`: `--crew...` is the school's crew size) |
+| `--hudb-cost` | With `--shot`: print the CPU time per frame, in microseconds, of the red edge, the card chips and the minimap (frames 60 on) |
 | `--tutorial[=N]` | Start Orientation Day (at step N: the world is put as that step expects, the avatar included: 0 This is you, 1 Walk, 2 Aim and shoot, 3 Reload and put away, 4 Ask, do not order, 5 The radio wheel, 6 The gate and the bell, 7 the last card) |
 | `--card=id` | Show a radio card (see `assets/data/events.json`) |
 | `--weather=fog` | Start with fog (or `rain`, `clear`, and `snow` in a campaign: flakes and a white ground) |
