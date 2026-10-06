@@ -1,7 +1,7 @@
 // The streets round the avatar, in a small round window (scripts/ui/minimap.gd). The town is read from three small textures made ONCE (one pixel for each tile of the town):
 //   terrain_tex  L8: the terrain id of the tile (1 asphalt, 2 sidewalk, 3 yard, 4 grass, 5 soil, 12 concrete, 13 dirt, 20 and up walls)
 //   house_tex    RGBA8, the town's own `tile_house` array read as bytes: alpha 0 on a tile of a house (red = the house's id), alpha 1 on the rest
-//   flag_tex     256 x 1 L8, by house id: 0 plain, 1 looked in, 2 the base, 3 a house that may be claimed
+//   flag_tex     256 x 1 L8, by house id: 0 plain, 1 looked in, 2 the base, 3 a fair house that may be claimed, 4 the best, 5 a poor one (scripts/ui/tier_marks.gd)
 // and the quad is drawn with `center` (the tile in the middle) and `span` (tiles across): that is all the CPU does each frame. Four taps for each pixel (the tiles are 1.7 pixels
 // across at the usual size) keep the edges of the blocks smooth as the window scrolls.
 shader_type canvas_item;
@@ -25,8 +25,14 @@ vec3 tile_color(vec2 tile) {
 	if (hs.a < 0.5) {
 		float id = floor(hs.r * 255.0 + 0.5);
 		float flag = floor(texture(flag_tex, vec2((id + 0.5) / 256.0, 0.5)).r * 255.0 + 0.5);
+		if (flag > 4.5) {
+			return vec3(0.68, 0.72, 0.70);      // a poor house to claim: grey
+		}
+		if (flag > 3.5) {
+			return vec3(0.94, 0.76, 0.29);      // the best house to claim: gold
+		}
 		if (flag > 2.5) {
-			return vec3(0.36, 0.66, 0.38);
+			return vec3(0.36, 0.66, 0.38);      // a fair house to claim: green
 		}
 		if (flag > 1.5) {
 			return vec3(0.94, 0.76, 0.29);

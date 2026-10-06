@@ -3652,6 +3652,20 @@ func _parse_args() -> void:
 				# --build-nobody takes everyone off the Builders job (to show what the page says of a site nobody builds)
 				for p in sim.jobs.crew_of("builders"):
 					sim.jobs.unassign(p)
+			"builders":
+				# --builders=N puts exactly N people (the avatar aside) on the Builders job, as far as there are seats and people: the others are taken off it, more are put on (a town run's
+				# screenshot of what the Build page's plan says with fewer or more hands)
+				var keep_n := int(v)
+				for p in sim.jobs.crew_of("builders"):
+					if not p.player:
+						if keep_n > 0:
+							keep_n -= 1
+						else:
+							sim.jobs.unassign(p)
+				for p in sim.people:
+					if keep_n > 0 and not p.player and not p.dead and not p.turned and sim.jobs.job_of(p) != "builders":
+						if sim.jobs.assign(p, "builders"):
+							keep_n -= 1
 			"build-site":
 				# --build-site=<plot>:<building>[:<share done, 0 to 1>],... puts sites up (no scrap is paid for them)
 				_stage_build(v, false)

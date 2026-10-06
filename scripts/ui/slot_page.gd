@@ -1,6 +1,9 @@
 extends VBoxContainer
 ## The Build page of the radio panel in the town (One House, WP7): PROJECTS, not places. Fortifying the house is a few clear jobs (the front fence, the gate, a watchtower,
 ## the side fences, the back fence, the floodlights, planks on the doors, a second tower, reinforcing the fences), each ordered with ONE click. From the top:
+##   - THE WHOLE PLAN (scripts/ui/plan_clock.gd): one box over the NEXT card: what everything left costs and how many builder-hours it is, when the builders would be done with it ("Done by
+##     15:40 with three builders": they work by day only, so a night between shows as "tomorrow 11:20"), and a chip for the next bell: READY BY DUSK (a check), TIGHT (a clock: only the front and
+##     the gate make it), NOT YET (a cross), QUIET NIGHTS: NO RUSH (a moon) before the dead come, with a line saying why ("Add a builder: about 3 hours short."). A card says when it finishes too.
 ##   - the NEXT card: the project to do now (the first that can be ordered, a fallen section first), with its one button, and under it **Build everything I can afford**
 ##   - the list of the projects, in the recommended order, finished ones last: each has a name and a picture, what it gives in one line, its price in scrap and builder-hours,
 ##     about how long it takes with the builders there are, its state (locked and why / ready / building n of m / done) and one button (Build, Cancel)
@@ -23,6 +26,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const BuildScreen := preload("res://scripts/ui/build_screen.gd")
 const SlotPlan := preload("res://scripts/ui/slot_plan.gd")
+const PlanClock := preload("res://scripts/ui/plan_clock.gd")
 
 ## The answer to an order stays this many seconds (real time); the second press on Take down must come within CONFIRM_S.
 const ANSWER_S := 8.0
@@ -88,10 +92,55 @@ class ProjectIcon:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+## The little mark in the chip of the plan's verdict: a check (ready), a clock (tight), a cross (not yet), a moon (quiet nights): a shape for each, so that the colour is not the only word.
+class ChipMark:
+	extends Control
+	var kind := "calm"
+	var tint := Color.WHITE
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(16, 16)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := size * 0.5
+		match kind:
+			"ok":
+				draw_polyline(PackedVector2Array([c + Vector2(-5.5, 0.5), c + Vector2(-1.8, 4.5), c + Vector2(5.5, -4.5)]), tint, 2.4, true)
+			"warn":
+				draw_arc(c, 6.2, 0.0, TAU, 24, tint, 1.8, true)
+				draw_line(c, c + Vector2(0, -4.0), tint, 1.8, true)
+				draw_line(c, c + Vector2(3.0, 1.5), tint, 1.8, true)
+			"bad":
+				draw_line(c + Vector2(-4.5, -4.5), c + Vector2(4.5, 4.5), tint, 2.4, true)
+				draw_line(c + Vector2(4.5, -4.5), c + Vector2(-4.5, 4.5), tint, 2.4, true)
+			_:
+				# a crescent moon: the arc of a circle of 6 from one point where it meets a circle of 5 (a little to the right) to the other, and back along the inside of the smaller one
+				var pts := PackedVector2Array()
+				for i in 13:
+					var a := deg_to_rad(55.3 + (304.7 - 55.3) * float(i) / 12.0)
+					pts.append(c + Vector2(cos(a), sin(a)) * 6.0)
+				for i in range(1, 12):
+					var b := deg_to_rad(279.4 - (279.4 - 80.6) * float(i) / 12.0)
+					pts.append(c + Vector2(2.6, 0.0) + Vector2(cos(b), sin(b)) * 5.0)
+				draw_colored_polygon(pts, tint)
+
+
 var host
 var sim_getter: Callable
 var options := {}
 var plan
+## The whole plan's summary at the top (scripts/ui/plan_clock.gd): the box, its line, its chip (a mark and words), the reason under it; what it said last, and each project's "finishes 12:10".
+var plan_box: PanelContainer
+var plan_line: Label
+var plan_chip: PanelContainer
+var plan_mark
+var plan_chip_label: Label
+var plan_reason: Label
+var plan_info := {}
+var plan_per := {}
+var _plan_words_sig := ""
 var next_card := {}
 var all_button: Button
 var answer_label: Label
@@ -186,6 +235,8 @@ func _build() -> void:
 	empty_label.text = EMPTY_UNCLAIMED
 	empty_label.visible = false
 	add_child(empty_label)
+	# the whole plan: what it costs, when the builders would be done, and whether that is before the bell
+	_build_plan_box()
 	# the NEXT card and the one-click buttons
 	next_card = _make_card(true)
 	add_child(next_card.panel)
@@ -216,6 +267,54 @@ func _build() -> void:
 	adv_box.visible = false
 	add_child(adv_box)
 	_build_foot()
+
+
+## The summary of the whole plan, above the NEXT card: one line (the price, the builder-hours, when the builders are done), the verdict chip and the reason. It is made once and filled by
+## `_apply_plan`; it is hidden when there is nothing to say.
+func _build_plan_box() -> void:
+	plan_box = PanelContainer.new()
+	plan_box.mouse_filter = Control.MOUSE_FILTER_PASS
+	plan_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var sb: StyleBoxFlat = host._flat(Color(host.PANEL, 1.0), 6, host.LINE2, false)
+	sb.set_border_width_all(1)
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 9
+	plan_box.add_theme_stylebox_override("panel", sb)
+	var col: VBoxContainer = host._vbox(4)
+	var head: HBoxContainer = host._hbox(8)
+	head.add_child(_caps("The whole plan"))
+	var gap := Control.new()
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	head.add_child(gap)
+	plan_chip = PanelContainer.new()
+	plan_chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	plan_chip.size_flags_horizontal = Control.SIZE_SHRINK_END
+	var cs := StyleBoxFlat.new()
+	cs.set_corner_radius_all(4)
+	cs.set_border_width_all(1)
+	cs.content_margin_left = 8
+	cs.content_margin_right = 9
+	cs.content_margin_top = 3
+	cs.content_margin_bottom = 3
+	plan_chip.add_theme_stylebox_override("panel", cs)
+	var chip_row: HBoxContainer = host._hbox(6)
+	plan_mark = ChipMark.new()
+	chip_row.add_child(plan_mark)
+	plan_chip_label = host._label("", Fonts.cond(700, 1), 15, host.INK)
+	chip_row.add_child(plan_chip_label)
+	plan_chip.add_child(chip_row)
+	head.add_child(plan_chip)
+	col.add_child(head)
+	plan_line = _para(15, host.INK, 600)
+	col.add_child(plan_line)
+	plan_reason = _para(14, host.INK2, 400)
+	col.add_child(plan_reason)
+	plan_box.add_child(col)
+	plan_box.visible = false
+	add_child(plan_box)
 
 
 func _caps(text: String) -> Label:
@@ -412,7 +511,40 @@ func time_of(p: Dictionary) -> String:
 	if t == "":
 		return ""
 	var line := ("Takes %s with %s" if state == "ready" else "Done in %s with %s") % [t, String(p.builders_text)]
+	# (the clock time: ordered now, behind what is already going up, and the night between when the work spills over it: scripts/ui/plan_clock.gd)
+	var fin := String(plan_per.get(String(p.get("id", "")), ""))
+	if fin != "":
+		return "%s. %s." % [line, fin.substr(0, 1).to_upper() + fin.substr(1)]
 	return line + (", so into tomorrow" if bool(p.get("spills", false)) else "")
+
+
+## Brings the whole plan's summary up to date: the line, the verdict chip and its reason; and `plan_per`, each project's "finishes 12:10" for the cards.
+func _apply_plan(infos: Array) -> void:
+	plan_info = PlanClock.assess(infos, PlanClock.context(_sim()))
+	plan_per = plan_info.per
+	var line := String(plan_info.line)
+	var chip := String(plan_info.chip)
+	var reason := String(plan_info.reason)
+	var tone := String(plan_info.tone)
+	plan_box.visible = line != ""
+	var sig := "%s|%s|%s|%s" % [line, chip, reason, tone]
+	if sig == _plan_words_sig:
+		return
+	_plan_words_sig = sig
+	plan_line.text = String(plan_info.summary)
+	var tint: Color = {"ok": host.OK, "warn": host.WARN, "bad": host.DANGER_TEXT}.get(tone, host.INK2)
+	plan_chip.visible = chip != ""
+	plan_chip_label.text = chip
+	plan_chip_label.add_theme_color_override("font_color", tint)
+	plan_mark.kind = tone
+	plan_mark.tint = tint
+	plan_mark.queue_redraw()
+	var cs: StyleBoxFlat = plan_chip.get_theme_stylebox("panel")
+	cs.bg_color = Color(tint, 0.16)
+	cs.border_color = Color(tint, 0.75)
+	plan_reason.text = reason
+	plan_reason.visible = reason != ""
+	plan_chip.tooltip_text = "READY BY DUSK: the house is up before the bell, and the scrap is there. TIGHT: only the front and the gate. NOT YET: not even those."
 
 
 ## What the button of a project says (`big`: the NEXT card's, with the whole of the job in it): "Build", "Build the front fence", "Rebuild", "Reinforce the fences", "Start with 2 of 5".
@@ -466,8 +598,10 @@ func refresh(force: bool = false) -> void:
 			(n as Control).visible = any
 	if not any:
 		adv_box.visible = false
+		plan_box.visible = false
 		return
 	_sync_cards(infos)
+	_apply_plan(infos)
 	next_id = ""
 	for p in infos:
 		if bool(p.get("recommended", false)):
@@ -527,8 +661,8 @@ func _sync_cards(infos: Array) -> void:
 ## Fills a card from a project (only when something it shows changed, or `force`).
 func _apply_card(c: Dictionary, p: Dictionary, force: bool = false) -> void:
 	var big: bool = bool(c.big)
-	var sig := "%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%s|%d|%d|%s" % [String(p.id), String(p.state), int(p.built), int(p.going), int(p.open), int(p.can_n), int(p.scrap), int(p.fallen), String(p.time),
-		roundi(float(p.progress) * 50.0), String(p.why), int(p.builders), crew_now(), str(p.get("spills", false))]
+	var sig := "%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%s|%d|%d|%s|%s" % [String(p.id), String(p.state), int(p.built), int(p.going), int(p.open), int(p.can_n), int(p.scrap), int(p.fallen), String(p.time),
+		roundi(float(p.progress) * 50.0), String(p.why), int(p.builders), crew_now(), str(p.get("spills", false)), String(plan_per.get(String(p.id), ""))]
 	if not force and sig == String(c.sig):
 		return
 	c.sig = sig
