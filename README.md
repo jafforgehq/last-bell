@@ -15,6 +15,7 @@ Every key and mouse button of the town run, in the groups the **Controls** page 
 | Group | Input | Action |
 | --- | --- | --- |
 | Move and fight | W A S D, or the arrow keys | Walk |
+| | X (held) | Run: 45 percent faster for about four seconds (a thin arc under your feet is the breath; six seconds to get it all back, and a run that ran it dry waits until you let go of the key and have a little back). The dead hear your feet within eight tiles (a third of that indoors). Not while aiming (Shift aims, so the run has its own key), reloading or at a task; with *Always aim at the mouse* a run lowers the gun and the trigger waits |
 | | Right button (held), or Shift (held) | Aim at the pointer (with *Always aim at the mouse* in Settings the mouse aims by itself) |
 | | Left click, while aiming | Fire |
 | | R | Reload |
@@ -34,6 +35,7 @@ Every key and mouse button of the town run, in the groups the **Controls** page 
 | | L | The call to arms, and standing down again |
 | | V | Fields of fire |
 | | Space | Pause |
+| | . (period) | Wait until the bell (the sun-setting button after the speed keys does the same; a claimed house only): the day runs ahead in about four seconds to 18:55, the bell rings as ever. It stops, and a toast says why, when one of the dead is awake within 25 tiles of you or the house, a shot was fired in the last 20 seconds, somebody bleeds or is infected, you are hurt, you are 25 tiles out in the town, or a card or page comes up (a walk key, a click that fires or any key stops it too); a finished build holds it for two seconds. With the dead coming tonight and the Build plan short of READY BY DUSK it asks "The plan is not ready. Wait anyway?" |
 | | 1 2 3 | Normal speed, twice as fast, three times |
 | The game | Esc | Close what is open; with nothing open, the menu |
 | | F5, F9 | Save, load the last save |
@@ -309,6 +311,8 @@ given moment without touching the game:
 | `--gate=open\|shut\|held` | Stage the gate (avatar mode): its leaves all the way open, or shut, or held open by the avatar's hand (give it after `--hour` and before `--advance`; `--hour=20` shows the pulsing ring of a gate open in the dark, `--hour=18.4` the gold outline of one held open). Without the rules in charge it puts the leaves, as `--gate-open=` (0 to 1) does |
 | `--beside=gate` | Stand the avatar a step from the gate's lever, so that its prompt shows (`--beside=<person>`, `post:<id>` and `bench` are the others) |
 | `--hold-fire` | Hold the avatar's trigger down |
+| `--sprint[=dx,dy]` | A town run: hold the run key and walk the avatar that way (east without a direction), for a shot of the breath's arc under her feet (scripts/ui/pace_keys.gd; `--stage=claimed --hour=9 --frames=40` shows the arc a second into the run) |
+| `--wait[=dead]` | A town run after `--stage=claimed`: press "Wait until the bell" a moment into the run (`--hour=9`; the HUD's clock races and the button is lit). `--wait=dead` puts one of the dead 18 tiles from her a second later: the wait stops on it and the toast says so (scripts/ui/wait_button.gd; `--tooltip=WaitButton` shows the button's tooltip) |
 | `--swing[=0..1]` | Hold the avatar in the middle of a melee swing (a screenshot of it) |
 | `--fight=n[,kind[,x,y[,radius[,still]]]]` | Put `n` of the dead (`walker`, `runner`, `brute`, `plated` for a plated brute, or `mix`) in a disc of `radius` tiles (2.5) round the tile `x,y` (five tiles east of the avatar), coming for the avatar (`still`: standing where they are until hurt), with the pointer on them unless `--aim` says otherwise. A picture of a fight in the street: `--town --stage=night --avatar-at=114.5,55.5 --weapon=shotgun --fight=6,walker,114.5,61.5,1.4 --hold-fire --aiming --speed=0 --advance=0.07` stops a frame after the avatar's first shot (the flash, the light, the tracers and the hits are fresh), a longer `--advance` shows the field afterwards |
 | `--until-shot[=n]` | End the `--advance` on the step of the n-th shot (the first): with `--speed=0 --hold-fire --aiming --fight=...` a picture a frame after a shot, whatever the gun's cooldown was (`--advance=3` is the most it waits) |

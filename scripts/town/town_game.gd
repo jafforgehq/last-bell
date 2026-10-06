@@ -45,6 +45,8 @@ const VIEW_PARTS := {
 	"edge_arrows": "res://scripts/ui/edge_arrows.gd",
 	"loot_shimmer": "res://scripts/render/loot_shimmer.gd",
 	"room_search_ui": "res://scripts/ui/room_search_ui.gd",
+	"wait_button": "res://scripts/ui/wait_button.gd",
+	"sprint_view": "res://scripts/ui/sprint_view.gd",
 }
 ## The parts of the title screen's town (scripts/town/title_scene.gd): the roofs and nothing else (no card, no HUD, no sleep, no town sounds: the title has its own).
 const TITLE_PARTS := ["house_view"]

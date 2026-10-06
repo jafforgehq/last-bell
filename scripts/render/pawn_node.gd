@@ -304,6 +304,10 @@ func _arms(view: String, t: float, attacking: bool, layer: String, phase: float)
 
 ## Where a weapon that is put away points (radians in the figure's own frame: down and a little forward), and the strength it is drawn at.
 const LOW_AIM := 1.25
+## The lean of a run (radians at full run), how much shorter she is drawn facing the screen or away, and the person's meta that carries the eased run (scripts/sim/sprint.gd `META`).
+const RUN_LEAN := 0.11
+const RUN_DIP := 0.03
+const RUN_META := "sprint_lean"
 
 
 func _draw_person() -> void:
@@ -314,6 +318,10 @@ func _draw_person() -> void:
 	var view := _view()
 	var mirror: bool = p.facing == "W"
 	var bob: float = absf(sin(p.walk_phase)) * 0.045 if p.moving else sin(anim_t * 2.2 + p.x * 3.0) * 0.008
+	# (PACE: the run, scripts/sim/sprint.gd `lean`, 0 to 1 and set on the avatar only: the legs go faster by themselves (the stride is longer for each tile), the body bobs a little more, leans into it and the gun is carried low)
+	var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
+	if run > 0.0 and not Prefs.on("ui", "reduce_motion"):
+		bob *= 1.0 + 0.6 * run
 	_reset()
 	_apply()
 	if not _fast:
@@ -323,6 +331,8 @@ func _draw_person() -> void:
 	_apply()
 	_legs(view, p.walk_phase, p.moving, false, 1.0, true)
 	_tr(0, -bob)
+	if run > 0.0 and not Prefs.on("ui", "reduce_motion"):
+		_lean_run(view, run)
 	var aim: float = PI - p.aim if mirror else p.aim
 	# (the kick of a shot: the body is pushed back from the way the gun points for the few frames the recoil lasts; none with "reduce motion")
 	if p.recoil > 0.0 and not Prefs.on("ui", "reduce_motion"):
@@ -330,20 +340,33 @@ func _draw_person() -> void:
 		_tr(-cos(aim) * kick, -sin(aim) * kick * 0.6)
 	# (round 23, Q: a weapon that is put away hangs low and a little faded, the hands off it, whatever way the survivor faces)
 	var away: bool = p.get("holstered") == true
+	var fade := 0.75 if away else 0.94
+	away = away or run > 0.5
 	if view == "N":
-		_carry(view, aim, away)
+		_carry(view, aim, away, fade)
 	_apply()
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if view != "N":
-		_carry(view, aim, away)
+		_carry(view, aim, away, fade)
 	if p.thrust > 0.0:
 		_swing(view, aim)
 
 
-## The weapon as it is carried: in the hand at the aim, or put away (low, a little faded, the hands off it).
-func _carry(view: String, aim: float, away: bool) -> void:
+## How the body leans into a run: from the hips toward where she faces in side view (a shear, as `_lean` does for the dead), a little shorter on her feet facing the player or away; `k` is the run (0 to 1).
+func _lean_run(view: String, k: float) -> void:
+	if view == "E":
+		var t := tan(RUN_LEAN * k)
+		_m = _m * Transform2D(Vector2(1.0, 0.0), Vector2(-t, 1.0), Vector2(t * 0.12, 0.0))
+	else:
+		_tr(0, Art.FOOT_Y)
+		_sc(1.0, 1.0 - RUN_DIP * k)
+		_tr(0, -Art.FOOT_Y)
+
+
+## The weapon as it is carried: in the hand at the aim, or put away or lowered for a run (low, the hands off it, a little faded when it is put away).
+func _carry(view: String, aim: float, away: bool, fade: float = 0.75) -> void:
 	if away:
-		_weapon_faded(view, LOW_AIM, 0.75, false)
+		_weapon_faded(view, LOW_AIM, fade, false)
 	else:
 		_weapon(view, aim)
 
