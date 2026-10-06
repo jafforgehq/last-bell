@@ -352,6 +352,13 @@ func _unstick(p) -> bool:
 	return false
 
 
+## TEMPO (the town only): the walking pace as a factor of WALK_SPEED, from one_house.json `tempo.walk_mult`; exactly 1.0 in the school and for the no-player sim (and the run, `sprint`, is a share of it).
+func _town_walk() -> float:
+	if sim.is_one_house() and sim.scenario != null and sim.scenario.has_method("tempo"):
+		return float(sim.scenario.tempo("walk_mult", 1.0))
+	return 1.0
+
+
 func _move(p, dt: float) -> void:
 	p.moving = false
 	var free_standing := _unstick(p)
@@ -361,7 +368,7 @@ func _move(p, dt: float) -> void:
 	if dir.length() < 0.01:
 		return
 	dir = dir.normalized()
-	var total := WALK_SPEED * pace * dt
+	var total := WALK_SPEED * _town_walk() * pace * dt
 	var n := maxi(1, ceili(total / MAX_SUBSTEP))
 	var step := total / float(n)
 	var moved := 0.0

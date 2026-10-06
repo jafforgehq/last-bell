@@ -681,6 +681,13 @@ func _cover_goal(p, lead) -> Dictionary:
 ## How fast this person walks now (`Sim._update_person` asks): the usual 3.0 tiles a second, a little faster for someone who
 ## is following or covering the player and has been left behind, so that a leader who walks on does not leave them.
 func speed_of(p) -> float:
+	if sim.is_one_house() and sim.scenario != null and sim.scenario.has_method("tempo"):
+		# (TEMPO: the town's crew walks as much faster as the avatar does, `tempo.crew_walk_mult`: the school's people are as they were)
+		return _speed_of(p) * float(sim.scenario.tempo("crew_walk_mult", 1.0))
+	return _speed_of(p)
+
+
+func _speed_of(p) -> float:
 	var stance := String(p.stance)
 	if stance != "follow" and stance != "cover":
 		return WALK_SPEED

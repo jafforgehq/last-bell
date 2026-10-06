@@ -34,7 +34,8 @@ const ARROW_RING_MIN := 58.0
 const RING_MIN_R := 18.0
 const TILE_WORD := "m"
 ## How long (seconds) the first view of the entry (or of the start house) is held before the camera comes to the avatar.
-const OPENING_HOLD_S := 5.0
+## (TEMPO, 2026-10-07: it was 5.0)
+const OPENING_HOLD_S := 3.0
 ## The opening view of an arrival: tiles across the window, and how many tiles ahead of the avatar (the way in) the camera looks.
 const ENTRY_VIEW_TILES := 40.0
 const ENTRY_AHEAD := 7.0

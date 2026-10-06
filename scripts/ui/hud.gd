@@ -221,8 +221,9 @@ const ALERTS_MAX_COMPACT := 3
 ## The gap between two alert slips (the feed's separation).
 const ALERT_GAP := 6.0
 ## The banner fades in and out over BANNER_FADE seconds and stays up BANNER_HOLD between.
-const BANNER_FADE := 0.7
-const BANNER_HOLD := 3.0
+## (TEMPO, 2026-10-07: 0.7 and 3.0, a 4.4 s sign: 0.45 and 1.8, 2.7 s)
+const BANNER_FADE := 0.45
+const BANNER_HOLD := 1.8
 ## A toast is up this many real seconds, fading over the last TOAST_FADE of them.
 ## The card of the offer to leave the base (round 23).
 const LEAVE_TEXT := "Leave the base?  E / click: open the Map"
