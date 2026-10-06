@@ -140,6 +140,8 @@ func _build() -> void:
 		var at: Vector2 = c.at
 		conts["%.3f,%.3f" % [at.x, at.y]] = String(c.id)
 	var hs = _hs()
+	# (TEMPO: every piece's seconds times salvage.json `seconds_mult`: the hands' time, and the crew's timer reads the same number)
+	var seconds_mult := maxf(_num("seconds_mult", 1.0), 0.1)
 	for i in objs.size():
 		var o: Dictionary = objs[i]
 		var k := String(o.get("kind", ""))
@@ -156,7 +158,7 @@ func _build() -> void:
 		var cont: String = String(conts.get("%.3f,%.3f" % [cx, cy], ""))
 		var pc := {
 			"id": id, "idx": i, "kind": k, "name": String(def.get("name", k.replace("_", " "))), "stuff": String(def.get("stuff", "wood")),
-			"scrap": int(def.get("scrap", 0)), "seconds": float(def.get("seconds", 5.0)), "house": house,
+			"scrap": int(def.get("scrap", 0)), "seconds": float(def.get("seconds", 5.0)) * seconds_mult, "house": house,
 			"room": int(hs.room_at(cx, cy)) if hs != null and house >= 0 else -1,
 			"cx": cx, "cy": cy, "rect": rect, "cell": floori(cy / float(cell)) * 1000 + floori(cx / float(cell)), "container": cont,
 		}

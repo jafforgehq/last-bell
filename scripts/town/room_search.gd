@@ -23,6 +23,7 @@
 extends RefCounted
 
 const Avatar := preload("res://scripts/sim/avatar.gd")
+const SearchRules := preload("res://scripts/town/search.gd")
 
 ## Seconds a container takes when the container does not say (scripts/town/search.gd).
 const SEARCH_S := 4.0
@@ -39,7 +40,7 @@ const HURT_DROP := 0.4
 ## The least of containers for an offer.
 const MIN_CONTAINERS := 2
 ## The hold of the key, seconds: the view's number, kept here so that the words and the key agree.
-const HOLD_S := 0.6
+const HOLD_S := 0.45
 ## A way that does not get nearer by this much in STUCK_S seconds is asked again; after REPATHS of them the container is skipped.
 const STUCK_GAIN := 0.08
 const STUCK_S := 1.0
@@ -142,8 +143,8 @@ static func eta(sim, ids: Array, from_pos: Vector2 = Vector2.INF) -> float:
 		var pos := Vector2(c.pos)
 		if not at.is_finite():
 			at = pos
-		t += maxf(at.distance_to(pos) - ARRIVE, 0.0) * DETOUR / Avatar.WALK_SPEED
-		t += float(c.get("search_s", SEARCH_S))
+		t += maxf(at.distance_to(pos) - ARRIVE, 0.0) * DETOUR / (Avatar.WALK_SPEED * (float(sim.scenario.tempo("walk_mult", 1.0)) if sim.get("scenario") != null and sim.scenario.has_method("tempo") else 1.0))
+		t += SearchRules.search_secs(sim, c)
 		at = pos
 	return t
 
@@ -282,7 +283,7 @@ func progress() -> Dictionary:
 	var p = _lead()
 	var left := eta(sim, rest, Vector2(p.x, p.y) if p != null else Vector2.INF)
 	if String(_s.state) == "search":
-		left = maxf(left - frac * float(c.get("search_s", SEARCH_S)), 0.0)
+		left = maxf(left - frac * SearchRules.search_secs(sim, c), 0.0)
 	return {"active": true, "n": idx + 1, "of": of, "t": clampf((float(idx) + frac) / float(of), 0.0, 1.0), "left": left, "label": "Searching: %d of %d" % [idx + 1, of],
 			"state": String(_s.state), "target": Vector2(c.get("pos", Vector2.ZERO)), "at": Vector2(c.get("at", c.get("pos", Vector2.ZERO))), "id": String(ids[idx]), "found": int(_s.found),
 			"loot": (_s.loot as Dictionary).duplicate()}

@@ -391,10 +391,19 @@ func _use_claim(id: String) -> Dictionary:
 	var can: Dictionary = sim.clearing.claimable(h)
 	if not bool(can.ok):
 		return {"ok": false, "line": "", "why": String(can.why), "session": true}
-	var r: Dictionary = u.begin_session("claim", id, "Claiming", CLAIM_S, Vector2(p.x, p.y), 0.6, Callable(self, "_claim_done").bind(h))
+	var secs := _claim_secs()
+	var r: Dictionary = u.begin_session("claim", id, "Claiming", secs, Vector2(p.x, p.y), 0.6, Callable(self, "_claim_done").bind(h))
 	if not bool(r.get("ok", false)):
 		return {"ok": false, "line": "", "why": String(r.get("why", "")), "session": true}
-	return {"ok": true, "line": "Claiming the house", "why": "", "session": true, "seconds": CLAIM_S}
+	return {"ok": true, "line": "Claiming the house", "why": "", "session": true, "seconds": secs}
+
+
+## The seconds the hold of the claim takes (TEMPO: one_house.json `tempo.claim_s`, CLAIM_S when the run has none).
+func _claim_secs() -> float:
+	var sc = sim.scenario
+	if sc != null and sc.has_method("tempo"):
+		return maxf(float(sc.tempo("claim_s", CLAIM_S)), 0.3)
+	return CLAIM_S
 
 
 func _claim_done(h: int) -> void:

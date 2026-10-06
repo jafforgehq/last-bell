@@ -31,6 +31,7 @@
 extends RefCounted
 
 const ROOM_SEARCH := "res://scripts/town/room_search.gd"
+const SearchRules := preload("res://scripts/town/search.gd")
 const FAR_TILES := 35.0
 const DARK_MIN := 90.0
 const HOME_MIN := 60.0
@@ -320,7 +321,7 @@ func eta(the_plan: Array, from_pos: Vector2) -> float:
 		var c: Dictionary = e if typeof(e) == TYPE_DICTIONARY else (hs.container(String(e)) if hs != null else {})
 		if c.is_empty():
 			continue
-		secs += at.distance_to(Vector2(c.pos)) / WALK + float(c.get("search_s", SEARCH_S))
+		secs += at.distance_to(Vector2(c.pos)) / WALK + SearchRules.search_secs(sim, c)
 		at = Vector2(c.pos)
 	return secs
 
@@ -640,7 +641,7 @@ func _step(id: String, dt: float, slow: bool) -> void:
 	if Vector2(p.x, p.y).distance_to(spot) <= ARRIVE and not bool(p.moving):
 		run.stuck = 0.0
 		run.t = float(run.t) + dt
-		if float(run.t) >= float(c.get("search_s", SEARCH_S)):
+		if float(run.t) >= SearchRules.search_secs(sim, c):
 			_search_done(p, run, cur)
 	elif _stuck(p, run, dt):
 		_blocked[h] = _age + BLOCKED_S

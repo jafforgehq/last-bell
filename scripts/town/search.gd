@@ -35,6 +35,16 @@ func state(id: String) -> Dictionary:
 	return {"looted": looted.has(id), "progress": progress}
 
 
+## The seconds a container takes to search: its own `search_s` (the generator's 4) times the run's `tempo.search_mult` (TEMPO, one_house.json: 0.625, 2.5 s a container). The avatar's session,
+## the room search's walk and the crew's timer all ask this, so that they agree. 1.0 when the run has no scenario (a test's bare town).
+static func search_secs(sim, cont: Dictionary) -> float:
+	var base := float(cont.get("search_s", SEARCH_S))
+	var sc = sim.get("scenario") if sim != null else null
+	if sc != null and sc.has_method("tempo"):
+		return maxf(base * float(sc.tempo("search_mult", 1.0)), 0.3)
+	return base
+
+
 ## A container as a Dictionary ({} when `id` is none of the house's): `containers_of` may give the containers or their ids.
 func _find(h: int, id: String) -> Dictionary:
 	for c in _list(h):
@@ -108,12 +118,12 @@ func use(c: Dictionary) -> Dictionary:
 		return {"ok": false, "line": "", "why": "Nothing to search here", "session": true}
 	if Vector2(p.x, p.y).distance_to(Vector2(cont.pos)) > REACH:
 		return {"ok": false, "line": "", "why": "Too far from it", "session": true}
-	var secs := float(cont.get("search_s", SEARCH_S))
+	var seconds := search_secs(sim, cont)
 	var kind := String(cont.get("kind", "container")).replace("_", " ")
-	var r: Dictionary = u.begin_session("container", id, "Searching", secs, Vector2(cont.pos), REACH + 0.3, Callable(self, "_finish").bind(h, id))
+	var r: Dictionary = u.begin_session("container", id, "Searching", seconds, Vector2(cont.pos), REACH + 0.3, Callable(self, "_finish").bind(h, id))
 	if not bool(r.get("ok", false)):
 		return {"ok": false, "line": "", "why": String(r.get("why", "")), "session": true}
-	return {"ok": true, "line": "Searching the %s" % kind, "why": "", "session": true, "seconds": secs}
+	return {"ok": true, "line": "Searching the %s" % kind, "why": "", "session": true, "seconds": seconds}
 
 
 ## The session ran its course: the loot to the stores, the container looted.

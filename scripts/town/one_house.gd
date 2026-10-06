@@ -218,6 +218,13 @@ func _cfg(path: String, fallback = null):
 	return _dig(d(), path, fallback)
 
 
+## TEMPO (2026-10-07): one number of the `tempo` block (how fast the small things go: walking, claiming, building, the dead's pace), `fallback` (1.0: as it was) when the file has none. Read where it is
+## used, every time, so that the lab's `--set=tempo.walk_mult=1.2` over the run in memory is felt at once. Only the town asks (`sim.is_one_house()`): the school and the no-player sim never do.
+func tempo(key: String, fallback: float = 1.0) -> float:
+	var v = _dig(d(), "tempo." + key, fallback)
+	return float(v) if typeof(v) == TYPE_INT or typeof(v) == TYPE_FLOAT else fallback
+
+
 ## "Find survivors: %d of %d" filled in, or the template as it stands when its holes and the values do not match (a damaged data file shows its words, never an error).
 static func _fmt(template: String, args: Array) -> String:
 	if template.count("%d") + template.count("%s") != args.size():

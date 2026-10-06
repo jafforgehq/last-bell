@@ -145,20 +145,30 @@ func _use_selfcare(id: String) -> Dictionary:
 			return {"ok": false, "line": "", "why": "You are not bleeding", "session": true}
 		if _meds() + EPS < float(sim.medical.BANDAGE_MEDS):
 			return {"ok": false, "line": "", "why": "You have no medicine", "session": true}
-		r = begin_session("selfcare", id, "Bandaging", BANDAGE_S, here, 0.6, Callable(self, "_bandaged"))
+		var bandage_s := _tempo_s("bandage_s", BANDAGE_S)
+		r = begin_session("selfcare", id, "Bandaging", bandage_s, here, 0.6, Callable(self, "_bandaged"))
 		if bool(r.get("ok", false)):
-			return {"ok": true, "line": "Bandaging the wound", "why": "", "session": true, "seconds": BANDAGE_S}
+			return {"ok": true, "line": "Bandaging the wound", "why": "", "session": true, "seconds": bandage_s}
 	elif id == "cure":
 		if float(p.infected_at) < 0.0:
 			return {"ok": false, "line": "", "why": "You are not infected", "session": true}
 		if _meds() + EPS < float(sim.medical.CURE_MEDS):
 			return {"ok": false, "line": "", "why": "It takes 2 medicine", "session": true}
-		r = begin_session("selfcare", id, "Treating", CURE_S, here, 0.6, Callable(self, "_cured"))
+		var cure_s := _tempo_s("cure_s", CURE_S)
+		r = begin_session("selfcare", id, "Treating", cure_s, here, 0.6, Callable(self, "_cured"))
 		if bool(r.get("ok", false)):
-			return {"ok": true, "line": "Treating the infection", "why": "", "session": true, "seconds": CURE_S}
+			return {"ok": true, "line": "Treating the infection", "why": "", "session": true, "seconds": cure_s}
 	else:
 		return {"ok": false, "line": "", "why": "Nothing here to use", "session": true}
 	return {"ok": false, "line": "", "why": String(r.get("why", "")), "session": true}
+
+
+## TEMPO: the seconds of a session of the town's own, from one_house.json `tempo` (`fallback` when the run has none).
+func _tempo_s(key: String, fallback: float) -> float:
+	var sc = sim.scenario
+	if sc != null and sc.has_method("tempo"):
+		return maxf(float(sc.tempo(key, fallback)), 0.3)
+	return fallback
 
 
 func _bandaged() -> void:

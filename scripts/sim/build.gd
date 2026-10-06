@@ -650,7 +650,11 @@ func crew() -> Array:
 
 ## Builder-hours one person does in a game hour.
 func rate(p) -> float:
-	return (RATE_BASE + RATE_PER_SKILL * float(p.skills.Building)) * sim.perf(p) * sim.traits.mult(p, "repair")
+	var r: float = (RATE_BASE + RATE_PER_SKILL * float(p.skills.Building)) * sim.perf(p) * sim.traits.mult(p, "repair")
+	if sim.is_one_house() and sim.scenario != null and sim.scenario.has_method("tempo"):
+		# (TEMPO: the town's builders work this much faster, `tempo.crew_build_mult`; the school's are as they were)
+		r *= float(sim.scenario.tempo("crew_build_mult", 1.0))
+	return r
 
 
 func update(dt: float) -> void:

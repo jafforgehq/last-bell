@@ -2,8 +2,8 @@
 	"version": 1,
 	"_note": "One House, WP4: the twelve people found in the town (sim.rescue, scripts/town/rescue.gd). They are met in the order of the generator's rescue spots, near to far. A role must be one of assets/data/recruits.json's roles (their skills and weapon come from it); a station is one of the base layout's (bench, builders, radio, watch, infirmary); a pack is what they bring (stock keys).",
 
-	"arrive_min": 3.0,
-	"arrive_per_tile": 0.4,
+	"arrive_min": 2.0,
+	"arrive_per_tile": 0.3,
 	"reach": 1.9,
 	"join_trust": 5.0,
 	"gift_trust": 6.0,

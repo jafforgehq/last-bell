@@ -284,6 +284,11 @@ func spawn(x: float, y: float, state: String, kind: String = "walker") -> Zombie
 		z.speed = lerpf(z.speed, (float(k.speed[0]) + float(k.speed[1])) * 0.5, tight)
 		if tight > 0.0:
 			z.limp = false
+	# TEMPO: the town's dead walk this much faster (one_house.json `tempo.dead_speed_mult`: 1.0 as it was), whatever state they are made in
+	if scenario != null and scenario.has_method("tempo"):
+		var pace := float(scenario.tempo("dead_speed_mult", 1.0))
+		if pace != 1.0:
+			z.speed *= pace
 	return z
 
 
