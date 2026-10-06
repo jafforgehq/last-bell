@@ -236,13 +236,13 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 	lamp_level = clampf((dark - 0.08) * 4.0, 0.0, 1.0) * power * flicker
 	_set_veil(sky)
 	if dark <= 0.02:
-		modulate_node.color = (Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)) * tint
+		modulate_node.color = _dimmed((Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)) * tint)
 		for l in lights:
 			l.node.visible = false
 		for f in flash_nodes:
 			f.visible = false
 		return
-	modulate_node.color = _tinted(sky) * tint
+	modulate_node.color = _dimmed(_tinted(sky) * tint)
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
 	if t - _calm_looked >= 0.5 or t < _calm_looked:
 		_calm_looked = t
@@ -279,6 +279,23 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 			node.visible = true
 		else:
 			node.visible = false
+
+
+## A darker light on top of the sky's, 0 (none: every game as it was) to 1: the rain's grey in the town (0.15 a drizzle, 0.3 a steady rain, 0.45 a storm: scripts/render/rain_view.gd) and any
+## other look that asks for it. The caller eases it; here it is a straight multiplier of the sky colour, a little cooler than it is darker.
+var extra_dim := 0.0
+
+
+func set_extra_dim(v: float) -> void:
+	extra_dim = clampf(v, 0.0, 1.0)
+
+
+func _dimmed(c: Color) -> Color:
+	if extra_dim <= 0.0:
+		return c
+	# (the night is dark already: the same cloud takes less of it, or a storm at midnight would be black)
+	var k := extra_dim * (1.0 - 0.55 * clampf(dark, 0.0, 1.0))
+	return Color(c.r * (1.0 - 0.58 * k), c.g * (1.0 - 0.52 * k), c.b * (1.0 - 0.40 * k), c.a)
 
 
 ## The fog and the power come and go over a second or two (at once under reduce motion).

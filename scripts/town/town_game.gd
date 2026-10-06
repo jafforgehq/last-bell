@@ -48,6 +48,7 @@ const VIEW_PARTS := {
 	"wait_button": "res://scripts/ui/wait_button.gd",
 	"sprint_view": "res://scripts/ui/sprint_view.gd",
 	"tutor_cues": "res://scripts/ui/tutor_cues.gd",
+	"rain_view": "res://scripts/render/rain_view.gd",
 }
 ## The parts of the title screen's town (scripts/town/title_scene.gd): the roofs and nothing else (no card, no HUD, no sleep, no town sounds: the title has its own).
 const TITLE_PARTS := ["house_view"]

@@ -22,6 +22,12 @@ const NAMES := ["SFX", "UI", "Ambience", "Music"]
 ## The far-away bus: its name, where it is sent, and the filter on it.
 const DISTANT := "Distant"
 const DISTANT_CUTOFF_HZ := 3200.0
+## The rain's bus (RAIN): the rain bed plays on it, sent to Ambience, with a low-pass that is open outdoors (OPEN_HZ) and closes to MUFFLED_HZ, and a few decibels quieter, with a roof
+## overhead (`set_rain_muffle`, from scripts/render/rain_view.gd). In the layout, like the others.
+const RAIN := "Rain"
+const RAIN_OPEN_HZ := 20500.0
+const RAIN_MUFFLED_HZ := 780.0
+const RAIN_MUFFLED_DB := -4.5
 ## The pref key of each bus (section `audio`).
 const PREF_KEY := {"Master": "master", "SFX": "sfx", "UI": "ui", "Ambience": "ambience", "Music": "music"}
 ## What a volume of 0 is, in decibels, for the volume knob (the mute switch does the rest).
@@ -53,6 +59,33 @@ static func ensure() -> void:
 		room.dry = 0.75
 		room.wet = 0.3
 		AudioServer.add_bus_effect(d, room)
+	if AudioServer.get_bus_index(RAIN) < 0:
+		AudioServer.add_bus(AudioServer.bus_count)
+		var r := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(r, RAIN)
+		AudioServer.set_bus_send(r, "Ambience")
+		var open := AudioEffectLowPassFilter.new()
+		open.cutoff_hz = RAIN_OPEN_HZ
+		AudioServer.add_bus_effect(r, open)
+
+
+## The bus the rain bed plays on: Rain, or Ambience when the layout has no such bus.
+static func rain_bus() -> String:
+	return RAIN if AudioServer.get_bus_index(RAIN) >= 0 else "Ambience"
+
+
+## How shut in the rain is, 0 (outdoors: open) to 1 (under a roof: a low-pass at RAIN_MUFFLED_HZ and RAIN_MUFFLED_DB). A bus that is not there is left alone.
+static func set_rain_muffle(k: float) -> void:
+	var i := AudioServer.get_bus_index(RAIN)
+	if i < 0:
+		return
+	k = clampf(k, 0.0, 1.0)
+	AudioServer.set_bus_volume_db(i, RAIN_MUFFLED_DB * k)
+	if AudioServer.get_bus_effect_count(i) > 0:
+		var fx = AudioServer.get_bus_effect(i, 0)
+		if fx is AudioEffectLowPassFilter:
+			# (the cutoff falls by the octave, so the closing sounds even: a straight line in hertz would do nothing until the last quarter)
+			fx.cutoff_hz = exp(lerpf(log(RAIN_OPEN_HZ), log(RAIN_MUFFLED_HZ), k))
 
 
 ## The bus the far-away sounds play on: Distant, or Ambience when the layout has no such bus.
