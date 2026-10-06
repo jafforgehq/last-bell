@@ -42,8 +42,10 @@ const PARTS := {
 	"uses": "res://scripts/town/uses.gd",
 	"room_search": "res://scripts/town/room_search.gd",
 	"salvage": "res://scripts/town/salvage.gd",
+	"build_hands": "res://scripts/town/build_hands.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
+	"skies": "res://scripts/town/skies.gd",
 	"scenario": "res://scripts/town/one_house.gd",
 }
 
@@ -61,8 +63,12 @@ var waiter
 var uses
 var room_search
 var salvage
+## EARLY: the avatar's own hands at an ordered section of the base (scripts/town/build_hands.gd).
+var build_hands
 var rescue
 var perimeter
+## The town's weather (RAIN: scripts/town/skies.gd): a rain period about one day in two, seeded by the run.
+var skies
 ## The names of the parts that exist (made from PARTS).
 var parts_made: Array = []
 

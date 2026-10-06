@@ -13,6 +13,8 @@ const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const FireNode := preload("res://scripts/render/fire_node.gd")
 const Lighting := preload("res://scripts/render/lighting.gd")
+const DarkLook := preload("res://scripts/render/dark_look.gd")
+const DarkLights := preload("res://scripts/render/dark_lights.gd")
 const GlowNode := preload("res://scripts/render/glow_node.gd")
 const OverlayNode := preload("res://scripts/render/overlay_node.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
@@ -118,6 +120,10 @@ var world
 var sim
 var fx
 var lighting
+## The dark look (scripts/render/dark_look.gd: the full-screen grade, the ambient light, Brightness) and its lights (scripts/render/dark_lights.gd: the avatar's own light, lamps, windows, the rim of the dead).
+## `lighting.set_extra_dim(v)` darkens the picture further (the rain).
+var dark_look
+var dark_lights
 var hud
 var sound
 ## The music (scripts/audio/music.gd): the loops that cross-fade with the hour, the dead and the title screen.
@@ -318,6 +324,9 @@ var bench_cpu := 0.0
 var bench_gpu := 0.0
 var bench_proc := 0.0
 var bench_calls := 0.0
+## The real time of each frame after the warm-up (ms), for the best-tenth and median numbers a busy machine does not spoil as it does the average.
+var bench_ft := PackedFloat32Array()
+var bench_last := 0
 ## How long each part of `_ready` took (milliseconds, by name: a town run records them; `tools/town_bench.gd --what=game` and the ready line print them).
 var load_ms := {}
 var _load_t := 0
@@ -560,6 +569,14 @@ func _ready() -> void:
 	world.add_child(cm)
 	lighting.setup(data, cm)
 	lighting.seasons = sim.seasons
+	# the dark look: its grade pass is a layer made here, before the glow layer (the same layer number, so it is drawn under the glow, the marks and the HUD)
+	dark_look = DarkLook.new()
+	dark_look.name = "DarkLook"
+	add_child(dark_look)
+	dark_look.setup(self, title_mode)
+	lighting.grade = dark_look
+	dark_lights = DarkLights.new()
+	dark_lights.setup(self, lighting)
 	# (a town run has none of the school's: no dressing, no parked vehicles, no gate leaves and lever)
 	if not town_run:
 		# the dressing of the streets (a settlement game only): decals under the people, light props sorted among them
@@ -605,6 +622,7 @@ func _ready() -> void:
 	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	glow.setup(data, fx, lighting, radial)
 	glow.extras.append(life_view.glow_paint)    # (the radio mast's red lamp at night)
+	glow.extras.append(dark_lights.glow_paint)    # (the street lamps, the windows, the rim of the dead)
 	glow_layer.add_child(glow)
 	# the flakes of a snow day: on the screen, over the world and the glow and under the HUD
 	var snow_layer := CanvasLayer.new()
@@ -1999,6 +2017,7 @@ func _process(delta: float) -> void:
 		_sync_views()
 	if town != null: town.on_frame(dt)
 	var look: Dictionary = sim.storyteller.look()
+	dark_lights.update(dt, clock)
 	lighting.update(sim.hour, sim.bell_rung, clock, fx.flash_lights(), look)
 	if title_scene != null:
 		title_scene.after_lighting(lighting)    # (the title's own evening)
@@ -2074,6 +2093,10 @@ func _shot_frame() -> void:
 			bench_gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
 			bench_proc += Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
 			bench_calls += Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)
+			var now_us := Time.get_ticks_usec()
+			if bench_last > 0:
+				bench_ft.append((now_us - bench_last) / 1000.0)
+			bench_last = now_us
 		if frame_count == shot_frames:
 			_take_shot()
 
@@ -3782,6 +3805,31 @@ func _parse_args() -> void:
 				get_viewport().msaa_2d = int(v) as Viewport.MSAA
 			"nolights":
 				lighting.visible = false
+				dark_look.layer.visible = false
+			"nodarklook":
+				# --nodarklook: the sky and the lights as they were before the dark look (no grade pass, the old ambient table, no avatar light, lamps, windows or rim): a picture and a cost to compare with
+				lighting.grade = null
+				dark_look.layer.visible = false
+				dark_lights.enabled = false
+			"darkoff":
+				# --darkoff=grade,light,glow,rim: leaves parts of the dark look out (the grade pass; the avatar's PointLight2D; the lamps' and windows' halos; the rim of the dead), to measure what each costs
+				for part in v.split(","):
+					match part:
+						"grade":
+							dark_look.layer.visible = false
+						"light":
+							dark_lights.off_light = true
+						"glow":
+							dark_lights.off_glow = true
+						"rim":
+							dark_lights.off_rim = true
+			"bright":
+				# --bright=F: the Brightness setting for this run (0.7 to 1.3 as the Settings screen has it; a shot may ask for more), over the saved one
+				dark_look.bright_flag = float(v)
+			"dim":
+				# --dim=F (0 to 1): the weather's extra dark, as `lighting.set_extra_dim(F)` has it (a shot of the rain's grade), at once
+				dark_look.set_extra_dim(float(v))
+				dark_look.extra_dim = dark_look.extra_dim_to
 			"build-plots":
 				# --build-plots keeps the plots' outlines lit, as when the Build screen is open (for a screenshot of the yard)
 				build_view.show_plots = true
@@ -3796,10 +3844,18 @@ func _parse_args() -> void:
 				sim.storyteller.force(v)
 			"weather":
 				# --weather=fog (or rain, or snow in a campaign) for the coming night, as a card would set it
-				sim.weather = v
-				sim.supplies.sources_day = sim.day    # (today's dawn has been rolled: the weather asked for stays for the day)
-				if v == "snow":
-					snow.follow({"snow": sim.seasons.campaign}, true, 0.0, 10.0)    # (it is already falling in the shot)
+				# (a town run: --weather=clear|drizzle|rain|storm holds the town's sky for the run, scripts/town/skies.gd `force`; --lightning adds a flash held for the shot)
+				if sim.get("skies") != null and sim.skies.force(v):
+					sim.supplies.sources_day = sim.day
+				else:
+					sim.weather = v
+					sim.supplies.sources_day = sim.day    # (today's dawn has been rolled: the weather asked for stays for the day)
+					if v == "snow":
+						snow.follow({"snow": sim.seasons.campaign}, true, 0.0, 10.0)    # (it is already falling in the shot)
+			"weather-first-night":
+				# --weather-first-night=clear|drizzle|rain|storm (a town run): that weather through the first attack night only (dusk to dawn of the day the attacks begin); the lab has the same flag
+				if sim.get("skies") != null:
+					sim.skies.force_first_night(v)
 			"blackout":
 				# --blackout: the generator is dead (see the storyteller)
 				sim.storyteller.blackout = {"state": "dark", "at": sim.clock_min, "send": false, "fixer": "", "work": 0.0}
@@ -4594,4 +4650,8 @@ func _take_shot() -> void:
 	print("shot saved: %s (%dx%d), walkers %d, avg fps after warm-up %.1f" % [shot_path, img.get_width(), img.get_height(), walkers, avg])
 	if frames > 0:
 		print("  per frame: process %.2f ms, render cpu %.2f ms, gpu %.2f ms, draw calls %.1f" % [bench_proc / frames, bench_cpu / frames, bench_gpu / frames, bench_calls / frames])
+		if bench_ft.size() > 10:
+			var sorted := bench_ft.duplicate()
+			sorted.sort()
+			print("  frame time: best tenth %.2f ms, median %.2f ms, worst tenth %.2f ms" % [sorted[sorted.size() / 10], sorted[sorted.size() / 2], sorted[sorted.size() * 9 / 10]])
 	get_tree().quit()

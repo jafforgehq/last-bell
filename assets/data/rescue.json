@@ -10,7 +10,7 @@
 	"gift_items": ["food", "ammo"],
 	"gift_amount": 1.0,
 	"gift_nouns": {"food": "food", "ammo": "round"},
-	"fourth_at": 4,
+	"fourth_at": 2,
 	"lost_after_days": 0,
 
 	"choices": {

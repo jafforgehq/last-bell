@@ -101,22 +101,38 @@ static func _bucket(phase: float, steps: int) -> int:
 # ----------------------------------------------------------------- legs --
 
 ## The shadow (when `shadow`) and the legs of a figure of a kind, in the stride's pose nearest `phase`
-## (a figure that is not `moving` stands: one pose). `view` is the figure's view: E, or S and N alike.
+## (a figure that is not `moving` stands: one pose). `view` is the figure's view: E, S or N (S and N differ in which way the feet come forward).
 ## The mesh is in tiles from where the figure stands, in the colours of `palette_texture`.
 static func legs(kind: String, view: String, phase: float, moving: bool, limp: bool, shadow: bool) -> ArrayMesh:
 	var east := view == "E"
+	var north := view == "N"
 	var b := _bucket(phase, LEG_STEPS) if moving else 0
 	var key := ((_kid(kind) * 2 + int(east)) * 2 + int(moving)) * 2 + int(limp)
-	key = (key * 2 + int(shadow)) * 64 + b
+	key = ((key * 2 + int(shadow)) * 2 + int(north)) * 64 + b
 	if _legs.has(key):
 		return _legs[key]
 	var st := Art.style(kind)
 	var bk := Baker.new()
 	if shadow:
 		Art.shadow(bk, st)
-	Art.legs(bk, bake_palette(), "E" if east else "S", float(b) * TAU / float(LEG_STEPS), moving, limp, 1.0, st)
+	Art.legs(bk, bake_palette(), "E" if east else ("N" if north else "S"), float(b) * TAU / float(LEG_STEPS), moving, limp, 1.0, st)
 	var mesh := bk.mesh()
 	_legs[key] = mesh
+	return mesh
+
+
+static var _shadows := {}
+
+
+## ANIM: the ground shadow of a kind alone (one mesh a kind), for a figure whose body is not on its feet (one that is falling): drawn by itself so that it can stay put and fade
+## while the body goes over.
+static func shadow(kind: String) -> ArrayMesh:
+	if _shadows.has(kind):
+		return _shadows[kind]
+	var bk := Baker.new()
+	Art.shadow(bk, Art.style(kind))
+	var mesh := bk.mesh()
+	_shadows[kind] = mesh
 	return mesh
 
 

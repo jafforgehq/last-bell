@@ -220,6 +220,8 @@ class HouseBot:
 	var candidate := "best"
 	## Slots that must stand before it brings the fourth survivor home (0: it does not wait: the player who does not know what the fourth brings).
 	var prep := 0
+	## The factor of a person's pace over the bot's (the lab's --human): the milestones' `real` minutes use it.
+	var human := 1.25
 	## How it orders the base: "projects" (the Build page's next project, as a player who does what the page recommends: `perimeter.order_project`) or "slots" (one section at a
 	## time through `perimeter.order`, the first plan's way).
 	var orders := "projects"
@@ -289,6 +291,8 @@ class HouseBot:
 	func mark(what: String, extra: Dictionary = {}) -> void:
 		var e := _stamp()
 		e["what"] = what
+		# (EARLY: real minutes at a player's pace so far, for the milestones the lab reports: `human` is the lab's --human)
+		e["real"] = snappedf(real_seconds(float(sim.clock_min), human) / 60.0, 0.01)
 		for k in extra:
 			e[k] = extra[k]
 		timeline.append(e)
@@ -378,6 +382,9 @@ class HouseBot:
 					mark("slot_built", {"slot": String(e.get("slot", "")), "kit": String(e.get("kit", ""))})
 				"slot_lost":
 					mark("slot_lost", {"slot": String(e.get("slot", ""))})
+				"project_done":
+					# (EARLY: the lab's 'first fence finished': the front project's last section is up)
+					mark("project_done", {"project": String(e.get("project", ""))})
 				"bell":
 					if _attacks_on() and not _bell_marked:
 						_bell_marked = true
@@ -606,6 +613,11 @@ class HouseBot:
 			return
 		if _keep_task():
 			return
+		# (EARLY: the first thing after the claim is the front fence, built with her own hands: E at a section that waits; and in the fortify days whatever is ordered)
+		var bt := _build_task(me)
+		if not bt.is_empty():
+			_set_task(bt)
+			return
 		var r := _rescue_task(me) if _wants_rescue() else {}
 		if not r.is_empty():
 			_set_task(r)
@@ -615,6 +627,65 @@ class HouseBot:
 			_set_task(l)
 			return
 		_set_task({"kind": "home", "key": "home"})
+
+	## EARLY: the section to build with her own hands, as a task ({} when there is none to build now): the sections that wait for hands (`sim.build_hands.sites()`), the nearest first, from the claim until the front fence is
+	## up, and through the fortify day. A human player builds the first fence with E (the objective says so); the bot does too.
+	func _build_task(me) -> Dictionary:
+		var bh = sim.get("build_hands")
+		var sc = sim.scenario
+		if bh == null or sc == null or not sc.has_method("stage"):
+			return {}
+		var stage := String(sc.stage())
+		var wanted: bool = stage == "fortify" or ((stage == "claimed" or stage == "growing") and not bool(sc._project_done("front")))
+		if not wanted or _blocked_now("build"):
+			return {}
+		var pos := Vector2(me.x, me.y)
+		var best := {}
+		var best_d := INF
+		for e in bh.sites():
+			var d: float = bh.rect_dist(pos, e.rect)
+			if d < best_d:
+				best_d = d
+				best = e
+		if best.is_empty():
+			return {}
+		return {"kind": "build", "key": "build", "slot": String(best.slot), "rect": best.rect}
+
+	## The tile in front of a section to stand at (a step inside it, toward the house), where E builds it.
+	func _stand_at(rect: Rect2i) -> Vector2:
+		var b = sim.get("base")
+		var mid := Vector2(rect.position) + Vector2(rect.size) * 0.5
+		var to_house: Vector2 = (b.center() - mid) if b != null and bool(b.claimed) else Vector2(0.0, -1.0)
+		var dir := to_house.normalized() if to_house.length() > 0.1 else Vector2(0.0, -1.0)
+		var pos := Vector2(_me().x, _me().y)
+		var pt := Vector2(clampf(pos.x, float(rect.position.x) + 0.5, float(rect.end.x) - 0.5), clampf(pos.y, float(rect.position.y) + 0.5, float(rect.end.y) - 0.5))
+		# (along a fence the point nearest her; across it one tile toward the house)
+		return (pt + dir * 1.3).floor() + Vector2(0.5, 0.5)
+
+	func _task_build(me, dt: float) -> Vector2:
+		var bh = sim.get("build_hands")
+		var uses = sim.get("uses")
+		if bh == null or uses == null:
+			_done("build")
+			return Vector2.ZERO
+		if uses.busy():
+			return Vector2.ZERO
+		var id := String(task.get("slot", ""))
+		var site := {}
+		for e in bh.sites():
+			if String(e.slot) == id:
+				site = e
+		if site.is_empty():
+			_done("build")
+			return Vector2.ZERO
+		var pos := Vector2(me.x, me.y)
+		var at := _stand_at(site.rect)
+		if bh.rect_dist(pos, site.rect) > 1.8:
+			return _goto(me, at, 0.5, dt)
+		var r := _press("build", id)
+		if _waited(r) > GIVE_UP_S:
+			_give_up("build", String(r.get("why", "no candidate")))
+		return Vector2.ZERO
 
 	## Whether it goes for another survivor: not once the attacks are on (the days are for scrap and the wall), and not the fourth until `prep` slots stand (a player who knows
 	## that the fourth brings the dead; 0, the default, is the player who does not).
@@ -627,7 +698,7 @@ class HouseBot:
 			return false
 		var rs = sim.get("rescue")
 		var per = sim.get("perimeter")
-		if prep > 0 and rs != null and per != null and int(rs.joined_count()) >= 3 and int(per.built_count()) < prep:
+		if prep > 0 and rs != null and per != null and int(rs.joined_count()) >= int(sc.d().get("attack", {}).get("from_rescue", 2)) - 1 and int(per.built_count()) < prep:
 			return false
 		return true
 
@@ -637,7 +708,8 @@ class HouseBot:
 			"rescue":
 				var rs = sim.get("rescue")
 				var rec: Dictionary = rs.get_record(String(task.get("id", ""))) if rs != null else {}
-				return not rec.is_empty() and String(rec.state) != "joined" and String(rec.state) != "lost" and not _blocked_now(String(task.key))
+				# (EARLY: the second voice brings the dead: a rescue on the way when it comes is dropped, the bot walks home and fortifies)
+				return not rec.is_empty() and String(rec.state) != "joined" and String(rec.state) != "lost" and not _blocked_now(String(task.key)) and _wants_rescue()
 			"search":
 				var sr = sim.get("search")
 				return sr != null and bool(task.get("far", false)) and not sr.is_looted(String(task.get("id", ""))) and not _blocked_now(String(task.key))
@@ -669,7 +741,10 @@ class HouseBot:
 				if not cl.is_revealed(int(r)) and not _blocked_now("reveal%d" % int(r)):
 					_set_task({"kind": "reveal", "key": "reveal%d" % int(r), "room": int(r)})
 					return
-		# 3. the containers
+		# 3. the containers (EARLY: the one in hand is kept until it is searched or given up: a bot that chose the nearest again at every look went back and forth between two shelves for a day in seed 11)
+		var in_hand := String(task.get("id", ""))
+		if String(task.get("kind", "")) == "search" and int(task.get("house", -1)) == h and sim.get("search") != null and not sim.search.is_looted(in_hand) and not _blocked_now(String(task.get("key", ""))):
+			return
 		var c := _next_container(h, pos)
 		if not c.is_empty():
 			_set_task({"kind": "search", "key": "search_%s" % String(c.id), "id": String(c.id), "at": Vector2(c.pos), "house": h})
@@ -968,6 +1043,8 @@ class HouseBot:
 				return _task_claim(me, dt)
 			"rescue":
 				return _task_rescue(me, dt)
+			"build":
+				return _task_build(me, dt)
 			"heal":
 				return _task_heal(me)
 			"nap":

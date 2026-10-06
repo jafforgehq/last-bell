@@ -4,7 +4,7 @@
 ##
 ## THE STAGES. `arrive` (the start: the avatar walks in from the forest edge to the houses she may choose from, scripts/town/arrival.gd) -> `alone` (she has gone into one of them: it is
 ## the house in hand, `work_house()`) -> `cleared` (a candidate house has no dead left) -> `claimed` (that house is the base) -> `growing` (the first survivors have come) ->
-## `fortify` (the FOURTH one has: the dead come every night from the first dusk) -> `held` (the first attack night is over and the base stands: the run is won,
+## `fortify` (the LAST one the data asks for has, `attack.from_rescue`: TWO since EARLY: the dead come every night from the first dusk) -> `held` (the first attack night is over and the base stands: the run is won,
 ## `sim.over = "victory"`, the end card). Stages only go forward. Other packages tell this module what happened (`on_house_clear`, `on_claimed`, `on_survivor_joined`). A town that gives the
 ## avatar no road to arrive on (the start is inside a candidate house) begins at `alone`.
 ##
@@ -15,7 +15,8 @@
 ## three rounds in the magazine; `_place_lone_dead`, ONE dead one standing on the road to the nearest house, is only the fallback when the town has no road in to script it on), for the lessons of the gun. TUTOR: the lessons are taught by cues in the world
 ## (scripts/ui/tutor_cues.gd); each has a `verb` (the card's one line), may wait for its `when`, and the gun's two are `keep` (the houses wait for them on the road in).
 ##
-## THE GUIDE. Eight lessons, none blocking (walk; aim and shoot; find a house; open a door and go in; clear the house; search; claim; and, once someone is on the radio, ask them for something:
+## THE GUIDE. EARLY: five lessons, none blocking (walk; aim, shoot and reload; claim a house (find it, clear it, claim it: the phases; the doors, the clearing and the searching are HINTS for a player stuck for
+## 20 seconds); build the front fence (her own hands: scripts/town/build_hands.gd); and, once someone is on the radio, ask them for something:
 ## click a person or a card, pick a verb on the wheel; `on_asked`, which main.gd calls). Each is DONE when its condition is true, read from the
 ## state of the rules (not from the event stream: a scenario's `update` runs before the step's events exist, and the screen clears them every frame). `guide()` is the first
 ## one not done (the one just done is shown as done for three seconds), `{}` when there is none (the first seven are the first day's, until the first survivor has come; the lesson
@@ -41,7 +42,9 @@ const DATA_PATH := "res://assets/data/one_house.json"
 const TUNING_PATH := "res://assets/data/one_house_tuning.json"
 const STAGES := ["arrive", "alone", "cleared", "claimed", "growing", "fortify", "held"]
 ## The stages `go_to` (staging for screenshots, the lab and the tests) knows: "arrive" is the start itself; "alone" puts the avatar inside the best house (the old start).
-const STAGE_NAMES := ["arrive", "alone", "cleared", "claimed", "rescued2", "fourth", "night"]
+## (EARLY: the dead come after TWO rescues now, `attack.from_rescue`: "rescued1" is one voice on the radio and nothing yet to fear; "rescued2" is the second, which begins the attacks (the first night is the next day's);
+## "fourth" is the same a day later, the night BEFORE the first attack's day, a quiet one, as it always was: the name stays for the stagings that use it; "night" is the clock just before the first attack's dusk.)
+const STAGE_NAMES := ["arrive", "alone", "cleared", "claimed", "rescued1", "rescued2", "fourth", "night"]
 ## Seconds of rules time between looks at the lessons and the clock of the run.
 const TICK := 0.25
 ## How long the lesson just done is shown as done.
@@ -61,7 +64,7 @@ const FALLBACK := {
 	"start": {"hour": 7.0, "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}},
 	"arrival": {"mark_r": 14.0, "lone_dead": {"from": 12.0, "to": 15.0}, "quiet_r": 24.0},
 	"modules_from_crew": {"briefing": 3, "priorities": 3, "initiative": 3, "relations": 4, "policies": 99, "problems": 99, "dilemmas": 99, "specialists": 99},
-	"attack": {"from_rescue": 4, "cutoff_hour": 17.0},
+	"attack": {"from_rescue": 2, "cutoff_hour": 17.0},
 	"night": {"first": 1.0, "growth": 0.15},
 	"big_night": {},
 	"held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true},
@@ -92,6 +95,11 @@ var _done := {}
 var _walked := 0.0
 ## How many times the player has picked a verb on the command wheel (the lesson of asking the crew).
 var _asked := 0
+## EARLY: whether the claim's stash has been given (saved), the signature of what the player has done in the house in hand and when it last changed (the stuck hints), and a hint a staging forces.
+var _bonus_given := false
+var _progress_sig := ""
+var _progress_t := 0.0
+var _stuck_force := ""
 ## TUTOR: the scripted opening (scripts/town/opening.gd), the reloads begun (the lesson of the gun), and a replay of the lessons (the Esc menu's Lessons): the counts at its start, which
 ## the lessons that count read from.
 var opening := Opening.new()
@@ -136,6 +144,10 @@ func start() -> void:
 	_done = {}
 	_walked = 0.0
 	_asked = 0
+	_bonus_given = false
+	_progress_sig = ""
+	_progress_t = 0.0
+	_stuck_force = ""
 	_reloads = 0
 	_was_reloading = false
 	_replay = false
@@ -609,6 +621,31 @@ func on_claimed(h: int) -> void:
 	var base = sim.get("base")
 	if base != null and base.has_method("center"):
 		_calm_around(Vector2(base.center()))
+	_give_claim_bonus()
+
+
+## EARLY: the stash that was in the house when it was claimed (the data's `claim_bonus`: the stores it adds, and the words): the front fence is paid for the moment the Build page opens. Once.
+func _give_claim_bonus() -> void:
+	var b = _cfg("claim_bonus", {})
+	if _bonus_given or not (b is Dictionary) or (b as Dictionary).is_empty():
+		return
+	_bonus_given = true
+	var loot := {}
+	for k in b:
+		var key := String(k)
+		if (typeof(b[k]) == TYPE_INT or typeof(b[k]) == TYPE_FLOAT) and sim.stock.has(key) and float(b[k]) > 0.0:
+			sim.stock[key] = float(sim.stock[key]) + float(b[k])
+			loot[key] = int(float(b[k]))
+	if loot.is_empty():
+		return
+	var base = sim.get("base")
+	var at := Vector2.ZERO
+	if base != null:
+		var stash: Dictionary = base.prop("stash") if base.has_method("prop") else {}
+		at = Vector2(stash.pos) if not stash.is_empty() else Vector2(base.center())
+	sim.events.append({"type": "supply_taken", "id": "claim_stash", "loot": loot, "at": at})
+	if String(b.get("title", "")) != "":
+		sim.alert("claim-stash", "info", String(b.get("title", "")), String(b.get("sub", "")), at, 14.0)
 
 
 ## The house the player has in hand: the base once there is one; the house last found clear while it waits to be claimed; the candidate she last went into; else the candidate nearest her
@@ -663,13 +700,25 @@ func take_intro() -> Array:
 	return []
 
 
-## A survivor has joined (the rescue module calls it with its own count of them): the crew changes, and the fourth makes the dead come.
+## A survivor has joined (the rescue module calls it with its own count of them): the crew changes, and the last one the data asks for (`attack.from_rescue`: two) makes the dead come.
 func on_survivor_joined(_p, count: int) -> void:
 	_module_joined = maxi(_module_joined, int(count))
 	_advance("growing")
 	apply_stage()
-	if not _attacks and rescued() >= int(_cfg("attack.from_rescue", 4)):
+	_dirty = true
+	if not _attacks and rescued() >= int(_cfg("attack.from_rescue", 2)):
 		_fourth()
+
+
+## The words for a number of voices on the radio ("Two voices"): the data's list.
+func _voices_word(n: int) -> String:
+	var list = _cfg("words.voices", [])
+	return String(list[n]) if list is Array and n >= 0 and n < (list as Array).size() else "%d voices" % n
+
+
+## A line of the data's words with the number of voices in it ("%s on the radio").
+func _with_voices(template: String) -> String:
+	return _fmt(template, [_voices_word(int(_cfg("attack.from_rescue", 2)))])
 
 
 func _fourth() -> void:
@@ -677,13 +726,13 @@ func _fourth() -> void:
 	var late: bool = float(sim.hour) >= float(_cfg("attack.cutoff_hour", 17.0))
 	_first_day = sim.day + 1 if late else sim.day
 	_advance("fortify")
-	var words = _cfg("words.fourth_tomorrow" if late else "words.fourth_tonight", ["Four voices on the radio", ""])
-	# (the rescue module says {"type": "fourth"} itself when the fourth arrives: this module adds only what is its own)
+	var words = _cfg("words.fourth_tomorrow" if late else "words.fourth_tonight", ["%s on the radio", ""])
+	# (the rescue module says {"type": "fourth"} itself when the last voice arrives: this module adds only what is its own)
 	sim.events.append({"type": "attacks_on", "from_day": _first_day})
-	sim.events.append({"type": "banner", "text": String(words[0]), "sub": String(words[1])})
+	sim.events.append({"type": "banner", "text": _with_voices(String(words[0])), "sub": String(words[1])})
 	var news = _cfg("words.news_fourth", words)
 	if sim.get("radio") != null:
-		sim.radio.log_news("story", String(news[0]), String(news[1]))
+		sim.radio.log_news("story", _with_voices(String(news[0])), String(news[1]))
 	_apply_flags()
 
 
@@ -853,7 +902,16 @@ func _base_standing() -> bool:
 
 # -------------------------------------------------------------------- the guide --
 
+## EARLY: what the player has done in the house in hand (a room looked into or cleared, a search, a kill, the stage): the stuck hints wait for this to stand still.
+func _track_progress() -> void:
+	var sig := "%s|%d|%d|%d|%d" % [_stage, _rooms_seen(), int(_rooms_progress().clear), _searched(), int(sim.kills)]
+	if sig != _progress_sig:
+		_progress_sig = sig
+		_progress_t = float(sim.t)
+
+
 func _watch_the_lessons() -> void:
+	_track_progress()
 	var lessons = _cfg("guide", [])
 	if _done.size() >= lessons.size():
 		return
@@ -863,7 +921,7 @@ func _watch_the_lessons() -> void:
 			var rid := String(l.get("id", ""))
 			if rid == "" or _done.has(rid):
 				continue
-			if bool(l.get("crew", false)) != (_stage_idx() >= STAGES.find("growing")):
+			if not _shown_in_stage(l):
 				continue
 			if _cond(l.get("cond", {})):
 				_done[rid] = true
@@ -904,6 +962,11 @@ func _cond(c: Dictionary) -> bool:
 		"reloaded":
 			# (a reload begun; or nothing to reload: the magazine is full again after the kill)
 			return _reloads - int(_base.get("reloads", 0)) >= 1 or (int(sim.kills) - int(_base.get("kills", 0)) >= 1 and _mag_low() == 0)
+		"shot_reloaded":
+			# (EARLY: the lesson of the gun is one: a dead one put down and the gun loaded again, a reload begun or nothing to reload)
+			return int(sim.kills) - int(_base.get("kills", 0)) >= 1 and (_reloads - int(_base.get("reloads", 0)) >= 1 or _mag_low() == 0)
+		"built":
+			return _project_done(String(c.get("project", "front")))
 		"near_candidate":
 			# (not before the first steps: a wall within reach of the entry would skip the walk and the gun)
 			# (and not before the opening's walker has come and gone: the gun is taught before the houses)
@@ -1061,29 +1124,42 @@ func _unsearched_here() -> int:
 	return n
 
 
-## The lesson of now: {"id", "title", "text", "goal", "done", "n", "of", "progress"}: the first not done (the one just done, for a few seconds, with `done` true), {} when
-## there is none to give. `progress` is a short count when the lesson has one ("2 of 3 rooms clear").
+## The lesson of now: {"id", "title", "text", "goal", "verb", "done", "n", "of", "progress", "phase", "hint"}: the first not done that is shown in this stage (the one just done, for a few seconds, with `done` true), {} when
+## there is none to give. `n` and `of` count over ALL the lessons (STEP 3 OF 5). `progress` is a short count when the lesson has one ("2 of 3 rooms clear"); `phase` is what the lesson is about
+## now (the data's `phases`: the gun's reload, the claim's find / clear / claim, the build's page / site). A player stuck in the house in hand gets a HINT (`hint` true, no step) in the claim's place.
 func guide() -> Dictionary:
 	if not _begun or _stage_idx() >= STAGES.find("held"):
 		return {}
-	# (the lessons are for the first day, the lone survivor's: with the first voice on the radio they are over, and the lessons of the crew (`"crew": true`: how to ask
-	# them for something) take their place until the fortify stage ends; the night itself teaches nothing)
-	var crew := _stage_idx() >= STAGES.find("growing")
-	var lessons: Array = []
-	for l in _cfg("guide", []):
-		if bool(l.get("crew", false)) == crew:
-			lessons.append(l)
+	# (EARLY: the lessons are five; each is shown in the stages its `stages` names: the road and the house are the lone survivor's, the fence is the first day's after the claim, asking is for when somebody is on the
+	# radio, until the dead come; the night itself teaches nothing)
+	var lessons: Array = _cfg("guide", [])
 	if _flash_id != "" and float(sim.t) < _flash_until:
 		for i in lessons.size():
 			if String(lessons[i].get("id", "")) == _flash_id:
 				return _lesson_out(lessons[i], i, lessons.size(), true)
 	for i in lessons.size():
-		if not _done.has(String(lessons[i].get("id", ""))):
-			# (TUTOR: a lesson that waits for its moment is not shown yet, and the ones after it wait with it: the walker steps out before the gun is taught)
-			if not _when(lessons[i].get("when", {})):
-				return {}
-			return _lesson_out(lessons[i], i, lessons.size(), false)
+		var l: Dictionary = lessons[i]
+		if _done.has(String(l.get("id", ""))) or not _shown_in_stage(l):
+			continue
+		# (TUTOR: a lesson that waits for its moment is not shown yet, and the ones after it wait with it: the walker steps out before the gun is taught)
+		if not _when(l.get("when", {})):
+			return {}
+		if String(l.get("id", "")) == "claim":
+			var hint := _stuck_hint()
+			if not hint.is_empty():
+				return hint
+		return _lesson_out(l, i, lessons.size(), false)
 	return {}
+
+
+## Whether a lesson is shown in the stage the run is in (its `stages`; none listed: always). In a replay of the lessons (the Esc menu) the road, the house and the fence are the lone survivor's, asking is the crew's.
+func _shown_in_stage(l: Dictionary) -> bool:
+	var st = l.get("stages")
+	if not (st is Array) or (st as Array).is_empty():
+		return true
+	if _replay:
+		return (st as Array).has("growing") == (_stage_idx() >= STAGES.find("growing"))
+	return (st as Array).has(_stage)
 
 
 ## The player gave an order from the command wheel (main.gd: a verb was picked on someone, and they said yes or no): the lesson of asking the crew counts it.
@@ -1092,13 +1168,95 @@ func on_asked() -> void:
 	_dirty = true
 
 
+## What a lesson is about now (its `phases` key; "" for the lesson as a whole): the gun's reload once a dead one is down, the claim's find (on the road), clear (in the house) and claim (the house is clear),
+## the build's page (nothing ordered yet) and site (a section is waiting for hands).
+func phase_of(id: String) -> String:
+	match id:
+		"shoot":
+			return "reload" if int(sim.kills) - int(_base.get("kills", 0)) >= 1 else ""
+		"claim":
+			if _stage == "arrive":
+				return "find"
+			return "clear" if _stage == "alone" else "claim"
+		"build":
+			return "site" if _site_waiting() else "page"
+	return ""
+
+
 func _lesson_out(l: Dictionary, i: int, n: int, done: bool) -> Dictionary:
+	var id := String(l.get("id", ""))
+	var phase := phase_of(id)
+	var say: Dictionary = l.duplicate()
+	var phases = l.get("phases", {})
+	if phase != "" and phases is Dictionary and (phases as Dictionary).get(phase) is Dictionary:
+		for k in phases[phase]:
+			say[k] = phases[phase][k]
 	var progress := ""
-	if String(l.get("id", "")) == "clear" and not done:
+	if id == "claim" and phase == "clear" and not done:
 		var rooms := _rooms_progress()
 		if int(rooms.of) > 0:
 			progress = _fmt(String(_cfg("objective.clear.sub", "%d of %d rooms clear")), [rooms.clear, rooms.of])
-	return {"id": String(l.get("id", "")), "title": String(l.get("title", "")), "verb": String(l.get("verb", l.get("goal", ""))), "text": String(l.get("text", "")), "goal": String(l.get("goal", "")), "done": done, "n": i + 1, "of": n, "progress": progress}
+	return {"id": id, "title": String(say.get("title", "")), "verb": String(say.get("verb", say.get("goal", ""))), "text": String(say.get("text", "")), "goal": String(say.get("goal", "")), "done": done, "n": i + 1, "of": n,
+		"progress": progress, "phase": phase, "hint": false}
+
+
+## EARLY: the hint of a player who has been stuck in the house in hand for `stuck.after_s` seconds (nothing looked into, cleared, searched or shot in that time): a room not looked into (door), dead left in the
+## house (clear), or the house clear and nothing searched yet (search). {} when there is none to give. A staging can force one (`_stuck_force`).
+func _stuck_hint() -> Dictionary:
+	if _stage != "alone" and _stage != "cleared":
+		return {}
+	var pick := _stuck_force
+	if pick == "":
+		if float(sim.t) - _progress_t < float(_cfg("stuck.after_s", 20.0)):
+			return {}
+		pick = _which_hint()
+	if pick == "":
+		return {}
+	for h in _cfg("stuck.hints", []):
+		if String(h.get("id", "")) == pick:
+			return {"id": pick, "title": String(h.get("title", "")), "verb": String(h.get("verb", "")), "text": String(h.get("text", "")), "goal": String(h.get("verb", "")), "done": false, "n": 0, "of": 0,
+				"progress": "", "phase": "", "hint": true, "line": String(h.get("line", ""))}
+	return {}
+
+
+## Which hint fits what is left undone in the house in hand ("" for none).
+func _which_hint() -> String:
+	var houses = sim.get("houses")
+	var clearing = sim.get("clearing")
+	if houses == null or clearing == null:
+		return ""
+	var h := work_house()
+	for r in houses.rooms_of(h):
+		if not clearing.is_revealed(int(r)):
+			return "door"
+	if _stage == "alone":
+		return "clear"
+	if _stage == "cleared" and _searched() - int(_base.get("searched", 0)) == 0 and _unsearched_here() > 0:
+		return "search"
+	return ""
+
+
+## Whether a section of the base has been ordered and is waiting for hands (the Build module's site, nobody has finished it).
+func _site_waiting() -> bool:
+	var build = sim.get("build")
+	return build != null and not build.active_site().is_empty()
+
+
+## Whether the project is up (every section built); true for a project the base does not have (there is nothing to build then, so nothing waits for it).
+func _project_done(id: String) -> bool:
+	var base = sim.get("base")
+	if base != null and not bool(base.get("claimed")):
+		return false    # (nothing is built before there is a base)
+	var per = sim.get("perimeter")
+	if per == null or not per.has_method("projects"):
+		return true
+	var infos: Array = per.projects()
+	if infos.is_empty():
+		return true
+	for p in infos:
+		if String(p.get("id", "")) == id:
+			return String(p.get("state", "")) == "done"
+	return true
 
 
 ## {"clear", "of", "at"}: how many rooms of the house in hand are clear, how many it has, and the middle of the nearest that is not (null when they all are or there is no town).
@@ -1155,7 +1313,14 @@ func objective() -> Dictionary:
 			out.sub = search_first if search_first != "" and _unsearched_here() > 0 else String(_cfg("objective.claim.sub", ""))
 			out.at = _front_door()
 		"claimed", "growing":
-			var want := int(_cfg("attack.from_rescue", 4))
+			var want := int(_cfg("attack.from_rescue", 2))
+			if not _project_done("front"):
+				# (EARLY: management right after the claim: the first thing is the front fence, paid for by the stash, built with her own hands; then the survivors)
+				out.id = "build"
+				out.text = String(_cfg("objective.build.text", "Build the front fence (N)"))
+				out.sub = _build_sub()
+				out.at = _fence_bearing()
+				return out
 			out.id = "rescue"
 			out.text = _fmt(String(_cfg("objective.rescue.text", "Find survivors: %d of %d")), [rescued(), want])
 			out.sub = String(_cfg("objective.rescue.sub", ""))
@@ -1180,6 +1345,39 @@ func objective() -> Dictionary:
 			out.text = String(_cfg("objective.held.text", "The night is held"))
 			out.sub = String(_cfg("objective.held.sub", ""))
 	return out
+
+
+## What the line under "Build the front fence (N)" says: the page to open, then the fence to stand at (hold E), then, with somebody on the Builders job, that they are on it.
+func _build_sub() -> String:
+	if not _site_waiting():
+		return String(_cfg("objective.build.sub", ""))
+	var jobs = sim.get("jobs")
+	if jobs != null:
+		for p in jobs.crew_of("builders"):
+			if not p.player:
+				return String(_cfg("objective.build.sub_going", ""))
+	return String(_cfg("objective.build.sub_ordered", ""))
+
+
+## Where the front fence is (tiles): the section waiting for hands that is nearest her, else the middle of the front project.
+func _fence_bearing() -> Variant:
+	var per = sim.get("perimeter")
+	var me = sim.avatar.player() if String(sim.player_id) != "" else null
+	if per == null or not per.has_method("slots"):
+		return null
+	var here := Vector2(me.x, me.y) if me != null else Vector2.ZERO
+	var best = null
+	var best_d := INF
+	for s in per.slots():
+		if String(s.state) != "ordered" and String(s.state) != "building":
+			continue
+		var c := Vector2(Rect2i(s.rect).get_center())
+		if here.distance_to(c) < best_d:
+			best_d = here.distance_to(c)
+			best = c
+	if best != null:
+		return best
+	return per.project_center("front") if per.has_method("project_center") else null
 
 
 ## What the line under "Fortify the house before dark" says: the project to order next ("Order the front fence on the Build page (N)"), that what can be ordered is going up, or that
@@ -1379,13 +1577,22 @@ func go_to(stage_name: String) -> bool:
 		_stage_clear()
 	if upto >= 3:
 		_stage_claim()
-	if upto >= 4:
+	var last := int(_cfg("attack.from_rescue", 2))
+	if upto == 4:
+		# (rescued1: one voice on the radio, nothing to fear yet)
 		_set_clock(2, 10.0)
-		_stage_join(2 - rescued())
-	if upto >= 5:
+		_stage_join(1 - rescued())
+	elif upto == 5:
+		# (rescued2: the last voice the data asks for: the attacks are on, the first night is the next day's)
+		_set_clock(2, 10.0)
+		_stage_join(last - rescued())
+	elif upto >= 6:
+		# (fourth and night: the last voice a day later, so that tonight is the quiet night before the first attack's day)
+		_set_clock(2, 10.0)
+		_stage_join(maxi(last - 1, 1) - rescued())
 		_set_clock(3, 10.0)
-		_stage_join(int(_cfg("attack.from_rescue", 4)) - rescued())
-	if upto >= 6:
+		_stage_join(last - rescued())
+	if upto >= 7:
 		_set_clock(maxi(_first_day, sim.day), 18.75)
 		sim.waves.night_day = -1
 	_apply_flags()
@@ -1393,14 +1600,16 @@ func go_to(stage_name: String) -> bool:
 
 
 ## TUTOR (a screenshot's `--lesson=<id>[:variant]`, README): the run put where that lesson is the one of now, the ones before it done, so that its cue is on the screen. walk (the start), shoot
-## (the walker has stepped out, nine tiles ahead), reload (the walker is down, one round in the magazine), find (eight tiles in), door (outside the first house; `door:in` inside it), clear,
-## search (in a room with something to search), claim (a few steps from the claim spot), ask (two survivors on the radio) and refusal (at the claim spot of a house with rooms not looked into).
-## False for a name it does not know. The clock is the caller's to stop.
+## (the walker has stepped out, nine tiles ahead), reload (the walker is down, one round in the magazine: the shoot lesson's second half), find (eight tiles in: the claim lesson on the road), door
+## (outside the first house; `door:in` inside it: the HINT for a room not looked into), clear (the hint for the dead left in the house), search (the hint, in a room with something to search), claim (a few steps
+## from the claim spot), build (the front fence: `build` the Build page, `build:site` a section ordered and waiting for her hands), ask (one voice on the radio) and refusal (at the claim spot of a house with
+## rooms not looked into). False for a name it does not know. The clock is the caller's to stop.
 func stage_lesson(spec: String) -> bool:
 	var parts := spec.split(":")
 	var id := String(parts[0])
 	var lessons: Array = _cfg("guide", [])
-	var want := "claim" if id == "refusal" else id
+	var alias := {"reload": "shoot", "find": "claim", "door": "claim", "clear": "claim", "search": "claim", "refusal": "claim"}
+	var want := String(alias.get(id, id))
 	var idx := -1
 	for i in lessons.size():
 		if String(lessons[i].get("id", "")) == want:
@@ -1411,6 +1620,7 @@ func stage_lesson(spec: String) -> bool:
 		_begin_run(-1, int(sim.run_seed))
 	var me = sim.avatar.player()
 	_done = {}
+	_stuck_force = ""
 	for i in idx:
 		_done[String(lessons[i].get("id", ""))] = true
 	_flash_id = ""
@@ -1445,18 +1655,28 @@ func stage_lesson(spec: String) -> bool:
 				if cl != null and me != null:
 					cl.revealed.clear()
 					cl.reveal(int(sim.houses.room_at(me.x, me.y)), "stage")
+				_stuck_force = "door"
 			else:
 				opening.put_avatar(maxf(opening.route_len - 7.0, 0.0))
 		"clear":
 			go_to("alone")
+			_stuck_force = "clear"
 		"search":
 			go_to("cleared")
 			_stage_into_room_with_container()
+			_stuck_force = "search"
 		"claim":
 			go_to("cleared")
 			_stage_back_from_claim_spot()
+		"build":
+			go_to("claimed")
+			if variant == "site":
+				var per = sim.get("perimeter")
+				if per != null and per.has_method("order_project"):
+					per.order_project("front")
+					_stage_beside_front_fence()
 		"ask":
-			go_to("rescued2")
+			go_to("rescued1")
 		"refusal":
 			# (the house clear and the avatar at the claim spot, the hall the only room she has looked into: the claim says "You have not looked in the ... yet")
 			go_to("cleared")
@@ -1500,6 +1720,27 @@ func _stage_back_from_claim_spot() -> void:
 	me.y = spot.y + to.y * 3.5
 	me.path = []
 	me.moving = false
+
+
+## The avatar a step from the first section of the front fence that is waiting for hands (a staging: she stands where E would build it).
+func _stage_beside_front_fence() -> void:
+	var per = sim.get("perimeter")
+	var me = sim.avatar.player()
+	if per == null or me == null:
+		return
+	for s in per.slots():
+		if String(s.state) != "ordered" and String(s.state) != "building":
+			continue
+		var r := Rect2i(s.rect)
+		var inside := Vector2(me.x, me.y)
+		var spot := Vector2(float(r.get_center().x) + 0.5, float(r.end.y) + 1.5)
+		if inside.distance_to(spot) > 40.0:
+			continue
+		me.x = spot.x
+		me.y = spot.y
+		me.path = []
+		me.moving = false
+		return
 
 
 ## The house the staging works on: the one in hand if the player has gone into one, else the best candidate (the start house of the town before the arrival).
@@ -1594,7 +1835,7 @@ func save() -> Dictionary:
 		"kind": KIND, "v": 1, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
 		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
 		"min_per_sec": float(sim.min_per_sec), "focus": _focus, "last_cleared": _last_cleared, "intro": _intro_told,
-		"opening": opening.save(), "reloads": _reloads, "replay": _replay, "base": _base.duplicate(),
+		"opening": opening.save(), "reloads": _reloads, "replay": _replay, "base": _base.duplicate(), "bonus": _bonus_given,
 	}
 
 
@@ -1621,6 +1862,7 @@ func load_state(s: Dictionary) -> void:
 	_first_why = String(s.get("first_why", ""))
 	_town_seed = int(s.get("town_seed", 0))
 	_reloads = int(s.get("reloads", 0))
+	_bonus_given = bool(s.get("bonus", true))    # (a save of before the stash has had its days: it does not give it again)
 	_replay = bool(s.get("replay", false))
 	var base = s.get("base", {})
 	_base = (base as Dictionary).duplicate() if base is Dictionary else {}

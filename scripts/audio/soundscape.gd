@@ -159,7 +159,9 @@ func setup(sound_node) -> void:
 			p = p2
 		else:
 			var p1 := AudioStreamPlayer.new()
-			p1.bus = "Ambience"
+			p1.bus = Buses.rain_bus() if key == "rain" else "Ambience"    # (RAIN: the rain's own bus, a low-pass that closes under a roof: scripts/render/rain_view.gd)
+			if key == "rain":
+				Buses.set_rain_muffle(0.0)    # (a new game starts with it open: the last one may have left it shut)
 			p = p1
 		p.stream = s
 		add_child(p)
@@ -709,6 +711,10 @@ func beds_set(night: float, horde: float, dt: float) -> void:
 	if sim != null:
 		var w := String(sim.get("weather")) if sim.get("weather") != null else "clear"
 		rain_goal = 1.0 if (w == "rain" or w == "storm") else 0.0
+		# (RAIN: in the town the bed follows how hard it rains, a murmur in a drizzle and a roar in a storm: scripts/town/skies.gd `sound_level`)
+		var skies = sim.get("skies")
+		if skies != null:
+			rain_goal = float(skies.sound_level())
 	bed_level["rain"] = lerpf(bed_level["rain"], rain_goal, minf(1.0, dt * 0.35))
 	bed_level["night_bed"] = lerpf(bed_level["night_bed"], night * (1.0 - 0.45 * horde), k)
 	_bed("night_bed", bed_level["night_bed"] * 0.85)
