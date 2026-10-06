@@ -66,6 +66,8 @@ const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 const CommunityKit := preload("res://scripts/ui/community_kit.gd")
 const NightKit := preload("res://scripts/ui/night_kit.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
+const AlertFeed := preload("res://scripts/ui/alert_feed.gd")
+const StoresCalm := preload("res://scripts/ui/stores_calm.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -580,6 +582,10 @@ var alert_items := {}
 ## How long a panel stays after the rules drop its alert (a test shortens it).
 var alert_hold_ms := ALERT_HOLD_MS
 var alert_seq := 0
+## HUDA, the town's calm HUD (made by `set_profile("one_house")`, null in the school's): the alert feed (fading info cards, merged siblings, three cards and a
+## "+N more" pill: scripts/ui/alert_feed.gd) and the slim stores (icon and number, scrap shown when it matters: scripts/ui/stores_calm.gd).
+var _alert_feed = null
+var _stores_calm = null
 ## The "PAUSED" pill in the clock, shown while the game is paused.
 var paused_pill: PanelContainer
 var paused_label: Label
@@ -643,6 +649,8 @@ var _hint_row: Control = null
 ## the radio, or the run has ended): it does not come back. Whether it shows now also depends on the player's
 ## settings (hints on: Prefs ui/hints) and, in avatar mode, on the dock, the help and the News being shut, see _refresh_hint.
 var hint_spent := false
+## The town's keys legend (key_legend.gd) is wanted now: what `_refresh_hint` works out for the bar in the school's game.
+var legend_wanted := false
 ## The hint was spent only because the window was too narrow for the old yard's (avatar mode, which may be told a moment later, has one that fits).
 var _hint_spent_by_width := false
 ## The one-line message near the bottom centre (see toast()).
@@ -742,6 +750,12 @@ func set_profile(name: String) -> void:
 		_speed_tips()
 		if hint != null:
 			_fill_hint()    # (the town's words)
+		# (HUDA: the town's calmer alert feed and slim stores; the keys' legend is the town part's, scripts/ui/key_legend.gd)
+		if _alert_feed == null and alerts_box != null and right_col != null:
+			_alert_feed = AlertFeed.new(self)
+			_alert_feed.make_pill(right_col, alerts_box)
+		if _stores_calm == null and res_panel != null:
+			_stores_calm = StoresCalm.new(self)
 
 
 # ----------------------------------------------------------------- frames --
@@ -1855,6 +1869,10 @@ func _slip_style(level: String, hover: bool = false) -> StyleBox:
 		# the pin is in the top right corner and the page is folded at the bottom right: keep the words clear
 		f.content_margin_right = maxf(f.content_margin_right, 15.0)
 		f.content_margin_left = maxf(f.content_margin_left, 13.0)
+		if _alert_feed != null and size.x >= StoresCalm.LEAN_MIN_W:
+			# (the town's slips in a big window: tighter padding, a lighter weight)
+			f.content_margin_top = 5.0
+			f.content_margin_bottom = 5.0
 		return f
 	var s := _flat(c.lightened(0.07) if hover else c, 3, Color(SLIP_MARK.get(level, SLIP_MARK.warn), 0.45), true)
 	s.content_margin_left = 13
@@ -1920,7 +1938,7 @@ func _update_alert_panel(it: Dictionary) -> void:
 	# (a panel that has not been laid out yet, or is hidden for want of room, knows no width to wrap at: its height is worked out from the
 	# fonts, `_alert_height`, not read from it)
 	var inner := _alert_inner_w(slip)
-	var sub := _alert_sub(String(it.sub), inner, ALERT_SUB_LINES_COMPACT if compact else ALERT_SUB_LINES)
+	var sub := _alert_sub(String(it.sub), inner, ALERT_SUB_LINES_TOWN if _alert_feed != null else (ALERT_SUB_LINES_COMPACT if compact else ALERT_SUB_LINES))
 	if subl.text != sub:
 		subl.text = sub
 	# (the whole of a line that was cut is the slip's tooltip)
@@ -1938,6 +1956,8 @@ func _update_alert_panel(it: Dictionary) -> void:
 		p.add_theme_stylebox_override("panel", _slip_style(String(it.level)))
 		p.set_meta("level", String(it.level))
 		p.queue_redraw()
+	if _alert_feed != null:
+		_fade_alert_panel(it)
 
 
 ## The width an alert's words wrap at: the feed's, less the slip's margins, the icon and the gap after it.
@@ -1950,6 +1970,8 @@ func _alert_inner_w(p: Control) -> float:
 ## How many lines an alert's second line may take (the whole of it is the slip's tooltip, and the News has it).
 const ALERT_SUB_LINES := 4
 const ALERT_SUB_LINES_COMPACT := 3
+## (the town's cards keep to two, see alert_feed.gd)
+const ALERT_SUB_LINES_TOWN := 2
 
 
 ## An alert's second line kept to `lines` lines at `width`: the whole of it when it fits; else its first sentence and its last (the day-ahead
@@ -1970,6 +1992,11 @@ func _alert_sub(sub: String, width: float, lines: int) -> String:
 	var cut := sub
 	while cut.length() > 8 and _wrapped_lines(cut + "...", width) > lines:
 		cut = cut.substr(0, cut.length() - 4)
+	if _alert_feed != null and cut.length() < sub.length():
+		# (the town's cards end a cut line on a whole word: "floodlights, second watchtower, ..." and not "watch...")
+		var space := cut.rfind(" ")
+		if space > 8:
+			cut = cut.substr(0, space).trim_suffix(",")
 	return cut.strip_edges() + "..."
 
 
@@ -2030,8 +2057,10 @@ func _drop_alert(id: String) -> void:
 ## its panel first appeared. At most ALERTS_MAX are shown (fewer in a narrow window).
 func _sync_alerts(sim) -> void:
 	var now := Time.get_ticks_msec()
-	for id in sim.alerts:
-		var a: Dictionary = sim.alerts[id]
+	# (the town's feed is calmer than the rules': info cards fade, siblings merge, see alert_feed.gd)
+	var feed: Dictionary = sim.alerts if _alert_feed == null else _alert_feed.feed(sim.alerts, now)
+	for id in feed:
+		var a: Dictionary = feed[id]
 		var it: Dictionary = alert_items.get(id, {})
 		if it.is_empty():
 			alert_seq += 1
@@ -2042,17 +2071,22 @@ func _sync_alerts(sim) -> void:
 		it.text = String(a.text)
 		it.sub = String(a.sub)
 		it.born = float(a.born)
+		it.fade = float(a.get("fade", 1.0))
 	for id in alert_items.keys():
-		if sim.alerts.has(id):
+		if feed.has(id):
 			continue
 		var gone: Dictionary = alert_items[id]
 		gone.live = false
+		gone.fade = _gone_alert_fade(gone, now)
 		# a panel that was up stays until it has had its time; an alert never shown goes at once
-		if not gone.seen or now - int(gone.first_ms) >= alert_hold_ms:
+		if not gone.seen or now - int(gone.first_ms) >= alert_hold_ms or (_alert_feed != null and _alert_feed.is_spent(id)):
 			_drop_alert(id)
 	var list: Array = alert_items.values()
 	list.sort_custom(_alert_before)
+	var total_alerts := list.size()
 	list = list.slice(0, _alert_cap())
+	if _alert_feed != null:
+		_alert_feed.sync_pill(total_alerts - list.size(), total_alerts)
 	var shown := {}
 	for it in list:
 		shown[it.id] = true
@@ -2077,8 +2111,41 @@ func _sync_alerts(sim) -> void:
 
 func _on_alert_input(ev: InputEvent, id: String) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		on_alert.call(id)
+		on_alert.call(id if _alert_feed == null else _alert_feed.target(id))    # (a merged card means its latest alert)
 		accept_event()
+
+
+## The town's feed (HUDA): the stack made again at once (the "+N more" pill's click unfolds or folds it).
+func refresh_alerts() -> void:
+	if sim_ref != null:
+		_sync_alerts(sim_ref)
+		_layout_news()
+
+
+## How far an info card whose alert the rules have dropped is into its fade (1.0 until the last part of the hold, then falling to 0).
+func _gone_alert_fade(it: Dictionary, now: int) -> float:
+	if _alert_feed == null or String(it.level) != "info" or not it.seen:
+		return 1.0
+	return clampf(float(alert_hold_ms - (now - int(it.first_ms))) / float(AlertFeed.FADE_MS), 0.0, 1.0)
+
+
+## A card's fade in its panel: a tween over what is left of it, started once; back to whole when a merged card gets a new member.
+func _fade_alert_panel(it: Dictionary) -> void:
+	var p: Control = it.panel
+	var f := float(it.get("fade", 1.0))
+	var tw = it.get("fade_tween")
+	if f >= 1.0:
+		if tw != null and tw.is_valid():
+			tw.kill()
+		it.erase("fade_tween")
+		p.modulate.a = 1.0
+	elif tw == null or not tw.is_valid():
+		if _calm():
+			p.modulate.a = f
+		else:
+			var t := p.create_tween()
+			t.tween_property(p, "modulate:a", 0.0, f * AlertFeed.FADE_MS / 1000.0)
+			it["fade_tween"] = t
 
 
 # ----------------------------------------------------------------- banner --
@@ -3193,6 +3260,10 @@ func _refresh_hint() -> void:
 	# (and so is a call that waits: the legend sat over the card's last option in a narrow window; it comes back when the call is settled)
 	if avatar_ui and call_card != null and call_card.shown_id != 0 and not call_card.suppressed:
 		show = false
+	# (the town's keys are a compact legend in the corner, above the lesson card: scripts/ui/key_legend.gd, placed by town_hud.gd; the bar never shows there)
+	if profile == "one_house":
+		legend_wanted = show
+		show = false
 	if hint.visible != show:
 		hint.visible = show
 		_layout_toast()
@@ -3753,6 +3824,8 @@ func _on_resized() -> void:
 	_layout_dock()
 	_layout_toast()
 	_layout_news()
+	if _stores_calm != null:
+		_stores_calm.on_resized()    # (the town's panels are lighter in a big window)
 
 
 func _center_h(c: Control) -> void:
@@ -3943,6 +4016,8 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		var dl: Label = res_days[kind]
 		dl.text = _days_text(days)
 		dl.add_theme_color_override("font_color", DANGER_TEXT if days < 1.0 else (WARN if days < 3.0 else INK3))
+	if _stores_calm != null:
+		_stores_calm.update(sim)    # (the town's slim stores: which pairs and days are shown, the tooltips)
 	crew_keys = {}
 	if avatar_ui and profile == "":    # (the One House has no 1 to 5: a click on a card is the way)
 		var n := 0
@@ -5094,6 +5169,8 @@ func _sync_alarm(radio) -> void:
 ## How many alerts the feed makes a panel for: as many as it ever does (what the column has room for is `_layout_news`'s say, and it only
 ## hides the panels it has no room for: it never makes the feed shorter for good).
 func _alert_cap() -> int:
+	if _alert_feed != null:
+		return _alert_feed.cap()    # (the town: three cards, the rest folded under "+N more")
 	return ALERTS_MAX_COMPACT if compact else ALERTS_MAX
 
 

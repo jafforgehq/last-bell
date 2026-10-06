@@ -1199,7 +1199,8 @@ func update(dt: float) -> void:
 				if need > was and need <= n:
 					fresh.append(String(def.name).to_lower())
 			if not fresh.is_empty():
-				sim.alert("slots-open", "info", "The base can grow", "On the Build page: %s" % ", ".join(fresh), null, 12.0)
+				# (one short line: the Build page says which projects are new)
+				sim.alert("slots-open", "info", "The base can grow", "Open the Build page (N)", null, 12.0)
 	for id in _built:
 		var s: Dictionary = _slots.get(id, {})
 		var seg = _seg_of(s) if not s.is_empty() else null
