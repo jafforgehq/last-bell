@@ -38,6 +38,7 @@ const PARTS := {
 	"base": "res://scripts/town/base.gd",
 	"sleep": "res://scripts/town/sleep.gd",
 	"uses": "res://scripts/town/uses.gd",
+	"salvage": "res://scripts/town/salvage.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
 	"scenario": "res://scripts/town/one_house.gd",
@@ -52,6 +53,7 @@ var search
 var base
 var sleep
 var uses
+var salvage
 var rescue
 var perimeter
 ## The names of the parts that exist (made from PARTS).

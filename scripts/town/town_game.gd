@@ -38,6 +38,7 @@ const VIEW_PARTS := {
 	"crew_marks": "res://scripts/ui/crew_marks.gd",
 	"minimap": "res://scripts/ui/minimap.gd",
 	"search_marks": "res://scripts/ui/search_marks.gd",
+	"salvage_marks": "res://scripts/render/salvage_marks.gd",
 	"room_flash": "res://scripts/ui/room_flash.gd",
 	"help_tips": "res://scripts/ui/help_tips.gd",
 	"access_marks": "res://scripts/ui/access_marks.gd",

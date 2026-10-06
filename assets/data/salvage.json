@@ -1,0 +1,53 @@
+{
+  "_doc": "SALVAGE (scripts/town/salvage.gd, the sim part `salvage` of the town; scripts/render/salvage_marks.gd draws it): furniture and wrecks of CLEARED places can be stripped for scrap, for good, once each. EVERY NUMBER OF IT IS HERE. kinds: the town's object kinds (the `kind` of data.objects: scripts/town/town_kit.gd KIT_PROPS and the streetscape's cars) that can be stripped, each {scrap: what it gives, seconds: how long the avatar's hands are at it (the crew's own timer reads the same number), name: the words of the prompt, stuff: what the rubble is (wood, metal, cloth: the pile the piece leaves)}. A kind that is not listed gives nothing and has no prompt (rugs, decals, chairs, lamps, boxes and crates, which are searched). THE PACE: about eleven seconds of the avatar's hands for a scrap, so that a house that gives its 10 or 11 scrap takes 2 to 2.5 minutes with the walking between its pieces (tools: the balance report of scripts/town/salvage.gd `potential` / `house_sum`); the first draft's three seconds a scrap made a house a minute's work, too fast a source against the fortifying. caps: house: the most scrap that all the furniture of ONE house can give (a house is 'picked clean' when it is reached; a piece that would go past it gives what is left); by_type: other caps by the house's `type` (residential, commercial, industrial, civic, farm, outbuilding); street_cell: the most scrap from the things standing in the street (cars, wrecks, sheds, benches) in one cell of cell_size tiles; cell_size. reach: how many tiles from the piece's edge the avatar stands (it must be inside the house for a piece in a house, and outside every house for one in the street). danger_r: a street piece cannot be stripped while one of the awake dead is within this many tiles of it. A house can be stripped only when it is CLEAR (`clearing.house_clear`, and none of the dead in it now), is not the base's (nor anything of the base's lot or compound), is not one of the houses the player is offered to claim until a base is claimed elsewhere, and the survivor who hides in a room has not joined yet (the pieces of that room are left). A searchable piece (a cupboard, a fridge...) can be stripped only after it has been searched. rubble: the colours of the pile a piece leaves (fill: the pieces', edge: their outline). sound: work_every the seconds between the sounds of the work, work_level and done_level the volumes. pop: seconds the '+3 scrap' is up.",
+  "caps": {
+    "house": 14,
+    "by_type": {},
+    "street_cell": 12,
+    "cell_size": 32
+  },
+  "reach": 1.0,
+  "danger_r": 15.0,
+  "kinds": {
+    "bed_single":      {"name": "bed",             "scrap": 2, "seconds": 22, "stuff": "cloth"},
+    "bed_double":      {"name": "double bed",      "scrap": 3, "seconds": 32, "stuff": "cloth"},
+    "sofa":            {"name": "sofa",            "scrap": 3, "seconds": 32, "stuff": "cloth"},
+    "loveseat":        {"name": "loveseat",        "scrap": 2, "seconds": 22, "stuff": "cloth"},
+    "armchair":        {"name": "armchair",        "scrap": 1, "seconds": 12, "stuff": "cloth"},
+    "dining_table":    {"name": "dining table",    "scrap": 2, "seconds": 20, "stuff": "wood"},
+    "coffee_table":    {"name": "coffee table",    "scrap": 1, "seconds": 11, "stuff": "wood"},
+    "desk":            {"name": "desk",            "scrap": 2, "seconds": 20, "stuff": "wood"},
+    "dresser":         {"name": "dresser",         "scrap": 2, "seconds": 20, "stuff": "wood"},
+    "tv_stand":        {"name": "TV stand",        "scrap": 1, "seconds": 11, "stuff": "wood"},
+    "nightstand":      {"name": "nightstand",      "scrap": 1, "seconds": 9,  "stuff": "wood"},
+    "kitchen_counter": {"name": "kitchen counter", "scrap": 3, "seconds": 30, "stuff": "wood"},
+    "kitchen_sink":    {"name": "sink",            "scrap": 2, "seconds": 22, "stuff": "metal"},
+    "cupboard":        {"name": "cupboard",        "scrap": 1, "seconds": 12, "stuff": "wood"},
+    "bookshelf":       {"name": "bookshelf",       "scrap": 1, "seconds": 12, "stuff": "wood"},
+    "shelf_tins":      {"name": "shelf",           "scrap": 1, "seconds": 12, "stuff": "metal"},
+    "wardrobe":        {"name": "wardrobe",        "scrap": 2, "seconds": 22, "stuff": "wood"},
+    "fridge":          {"name": "fridge",          "scrap": 3, "seconds": 33, "stuff": "metal"},
+    "stove":           {"name": "stove",           "scrap": 3, "seconds": 33, "stuff": "metal"},
+    "bathtub":         {"name": "bathtub",         "scrap": 3, "seconds": 33, "stuff": "metal"},
+    "toilet":          {"name": "toilet",          "scrap": 1, "seconds": 12, "stuff": "metal"},
+    "washbasin":       {"name": "washbasin",       "scrap": 1, "seconds": 10, "stuff": "metal"},
+    "workbench":       {"name": "workbench",       "scrap": 2, "seconds": 20, "stuff": "wood"},
+    "bench":           {"name": "bench",           "scrap": 2, "seconds": 18, "stuff": "wood"},
+    "car_h":           {"name": "car",             "scrap": 4, "seconds": 44, "stuff": "metal"},
+    "car_v":           {"name": "car",             "scrap": 4, "seconds": 44, "stuff": "metal"},
+    "car_wreck":       {"name": "wreck",           "scrap": 4, "seconds": 40, "stuff": "metal"},
+    "shed":            {"name": "shed",            "scrap": 2, "seconds": 22, "stuff": "wood"},
+    "market_stall":    {"name": "stall",           "scrap": 2, "seconds": 20, "stuff": "wood"}
+  },
+  "rubble": {
+    "wood":  {"fill": ["8a6a45", "6f5236", "a07d52"], "edge": "221a13"},
+    "metal": {"fill": ["8d9298", "6a6f75", "a8967a"], "edge": "221a13"},
+    "cloth": {"fill": ["8a8260", "b5a98a", "dcd5c3", "6d6a48"], "edge": "221a13"}
+  },
+  "sound": {
+    "work_every": 1.3,
+    "work_level": 0.32,
+    "done_level": 0.6
+  },
+  "pop": {"seconds": 1.4}
+}
