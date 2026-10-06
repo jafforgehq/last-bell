@@ -37,7 +37,9 @@ const PARTS := {
 	"search": "res://scripts/town/search.gd",
 	"base": "res://scripts/town/base.gd",
 	"sleep": "res://scripts/town/sleep.gd",
+	"waiter": "res://scripts/town/wait_dusk.gd",
 	"uses": "res://scripts/town/uses.gd",
+	"salvage": "res://scripts/town/salvage.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
 	"scenario": "res://scripts/town/one_house.gd",
@@ -51,7 +53,10 @@ var clearing
 var search
 var base
 var sleep
+## Wait until the bell (PACE: scripts/town/wait_dusk.gd).
+var waiter
 var uses
+var salvage
 var rescue
 var perimeter
 ## The names of the parts that exist (made from PARTS).

@@ -33,6 +33,7 @@ const StreetAir := preload("res://scripts/audio/street_air.gd")
 const Music := preload("res://scripts/audio/music.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const PaceKeys := preload("res://scripts/ui/pace_keys.gd")
 const WorldClick := preload("res://scripts/ui/world_click.gd")
 const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
@@ -2147,6 +2148,8 @@ func aim_tile() -> Vector2:
 
 ## The keys that walk the avatar, as a direction (W A S D and the arrows; a command's Ctrl or Cmd is not a step).
 func _walk_keys() -> Vector2:
+	if PaceKeys.staged != Vector2.ZERO:
+		return PaceKeys.staged    # (`--sprint`: a screenshot's held walk)
 	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
 		return Vector2.ZERO
 	var x := int(_key_down(KEY_D) or _key_down(KEY_RIGHT)) - int(_key_down(KEY_A) or _key_down(KEY_LEFT))
@@ -2171,6 +2174,7 @@ func _feed_avatar() -> void:
 	var me = sim.avatar.player()
 	if me == null:
 		return
+	sim.avatar.set_sprint(PaceKeys.sprint_wanted(self))    # (PACE: X held; the town's rules decide whether she runs)
 	if me.holstered != AimMode.holstered or _holster_pawn != me:
 		_mark_holster()    # (what the pawn's drawing reads: the gun carried low, the hands off it)
 	if wheel_ctl != null and wheel_ctl.busy() and not wheel_ok():
@@ -3462,6 +3466,9 @@ func _parse_args() -> void:
 			"aiming":
 				# --aiming holds the right button down (with "Right button aims" the survivor aims at --aim's tile, the crosshair and the line show)
 				shot_aiming = true
+			"sprint":
+				# --sprint[=dx,dy] holds the run key and walks the avatar that way (east without one): the breath's arc under her feet (scripts/ui/pace_keys.gd)
+				PaceKeys.stage(v)
 			"aim-mode":
 				# --aim-mode=right|always is the setting for this screenshot (its own settings file)
 				AimMode.set_mode(v)
