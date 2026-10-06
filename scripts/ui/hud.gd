@@ -68,6 +68,8 @@ const NightKit := preload("res://scripts/ui/night_kit.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const AlertFeed := preload("res://scripts/ui/alert_feed.gd")
 const StoresCalm := preload("res://scripts/ui/stores_calm.gd")
+const ControlsTable := preload("res://scripts/ui/controls_table.gd")
+const Access := preload("res://scripts/access.gd")
 
 ## The schoolyard noticeboard: slate-green chalkboards in oak trim, chalk ink, bus yellow
 ## for the accent, brass for the clock, paper for slips and modal pages. The text colours
@@ -257,6 +259,11 @@ const JOBS_TIP_AVATAR := "Jobs: who works where by day and holds which post at n
 const BUILD_TIP_AVATAR := "Build: pick a building, and the Builders raise it where it belongs\nKey: N (Shift+N: the full page, with the streets)"
 const BUILD_LOTS_TIP_AVATAR := "Build: order a building for the Builders to raise; the full page claims the streets round the school and walls them in\nKey: N (Shift+N: the full page)"
 const TOWN_TIP_AVATAR := "Map: the places on the road and the parties out. Take control of a trip, or ask someone to go\nKey: G (Shift+G: the Town Board, the full page)"
+## The One House's toolbar words (its radio panel has Jobs, Build, Map and News; Shift+J, N and G are not the school's full pages there).
+const JOBS_TIP_TOWN := "Jobs: who works where by day and holds which post at night. You ask, and they answer\nKey: J"
+const BUILD_TIP_TOWN := "Build: fortify the house. The page says what comes next, and one button orders a whole project\nKey: N"
+const NEWS_TIP_TOWN := "The radio: what was heard, the calls that wait for an answer, and Jobs, Build and the Map a tab away. Click a card to ask someone something\nKey: T"
+const FORECAST_TIP := "What the lookout saw on the road: how many are coming tonight, and from where"
 const ALARM_TIP := "Call to arms: everyone to their posts now, by day too, until you stand down or the dawn comes"
 const ALARM_OFF_TIP := "Stand down: end the call to arms and send everyone back to work"
 ## How the trust a person has in the player reads, by the radio's word (radio.tone_of): the bar and the word.
@@ -292,18 +299,7 @@ const HELP_AVATAR_ALWAYS := [
 	["Radio: card or wheel (C)", 2, [["C Middle", "Wheel (hold)"], ["Shift", "Wheel: all near"], ["1-5", "Pick crew"], ["Z", "Last order"], ["Click", "Crew card: pick"], ["Esc", "Wheel: cancel"]]],
 	["Keyboard", 2, [["Space", "Pause"], ["Shift 1-3", "Speed"], ["Scroll", "Zoom"], ["Tab", "Next person"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Scavenge"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
 ]
-## The One House's controls (the same form): ONE way to command the crew, and nothing about picking, Tab, 1 to 5 or right-click orders. The digits are the speeds.
-const HELP_TOWN := [
-	["You", 2, [["W A S D", "Move"], ["Right-click", "Hold to aim"], ["Click", "Fire (aiming)"], ["Shift", "Aim, one hand"], ["E", "Use, search"], ["R F", "Reload, melee"], ["Q", "Weapon away"]]],
-	["Crew: ask, do not order", 2, [["Click", "A person, or a card"], ["C", "Wheel (hold)"], ["Shift C", "Wheel: all near"], ["Z", "Last order again"], ["Esc", "Close the wheel"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Map"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
-]
-## (With "Always aim at the mouse": the mouse aims by itself and the left button fires.)
-const HELP_TOWN_ALWAYS := [
-	["You", 2, [["W A S D", "Move"], ["Mouse", "Aim and fire"], ["E", "Use, search"], ["R F", "Reload, melee"], ["Q", "Weapon away"]]],
-	["Crew: ask, do not order", 2, [["Click", "A card (not a person)"], ["C", "Wheel (hold)"], ["Shift C", "Wheel: all near"], ["Z", "Last order again"], ["Esc", "Close the wheel"]]],
-	["Keyboard", 2, [["Space", "Pause"], ["1 2 3", "Speed"], ["Scroll", "Zoom"], ["J", "Jobs"], ["N", "Build"], ["B", "Base"], ["G", "Map"], ["L", "Alarm"], ["T", "Radio"], ["V", "Fields of fire"], ["F5 F9", "Save, load"], ["Esc", "Close, or the menu", 76], ["Shift", "J N G: full"]]],
-]
+## (The One House's controls are not here: they are the one table, scripts/ui/controls_table.gd, which the Controls page and the legend are made from too.)
 ## What a crew card says of the stance its person has been put in (avatar mode), in whole words and, on a narrow card, short ones.
 const STANCE_WORDS := {"follow": "Following", "hold": "Holding", "cover": "Covering", "search": "Searching", "back": "Back"}
 const STANCE_SHORT := {"follow": "Follow", "hold": "Hold", "cover": "Cover", "search": "Search", "back": "Back"}
@@ -751,6 +747,7 @@ func set_profile(name: String) -> void:
 			if help_g != null:
 				help_g.text = "Map"
 		_speed_tips()
+		_town_tips()
 		if hint != null:
 			_fill_hint()    # (the town's words)
 		# (HUDA: the town's calmer alert feed and slim stores; the keys' legend is the town part's, scripts/ui/key_legend.gd)
@@ -1363,7 +1360,7 @@ func flash_card(p) -> void:
 		if c.p != p:
 			continue
 		var card: Panel = c.card
-		card.modulate = Color(1.75, 1.6, 1.15)
+		card.modulate = Color(1.25, 1.2, 1.08) if Access.reduce_flashes() else Color(1.75, 1.6, 1.15)    # (Reduce flashes: a faint glow, not a bright one)
 		if not is_inside_tree():
 			card.modulate = Color.WHITE
 			return
@@ -1725,7 +1722,9 @@ func update_holster() -> void:
 	var words: String = AimMode.BUTTON_AWAY if away else AimMode.BUTTON_DRAWN
 	if holster_button.text != words:
 		holster_button.text = words
-		holster_button.tooltip_text = AimMode.BUTTON_TIP_AWAY if away else AimMode.BUTTON_TIP_DRAWN
+	var holster_tip := AimMode.button_tip(away, profile != "")    # (kept in line each time: the town's words come when the profile does, and the aim setting changes them)
+	if holster_button.tooltip_text != holster_tip:
+		holster_button.tooltip_text = holster_tip
 	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
 		holster_button.add_theme_color_override(state, WARN if away else INK2)
 	var dim := 0.5 if away else 1.0
@@ -1772,6 +1771,8 @@ func _update_ammo(sim) -> void:
 	elif low or short:
 		col = WARN
 	ammo_label.add_theme_color_override("font_color", col)
+	if Access.markers() and not melee and (dry or low or short):
+		ammo_label.text = ("!! " if dry else "! ") + ammo_label.text    # (Colour-blind markers: the amber and the red of the rounds are marks too)
 	if me.reloading > 0.0:
 		var total: float = maxf(0.01, float(gun.get("reload", 1.0)) * float(sim.traits.mult(me, "reload")))
 		ammo_bar.value = clampf(1.0 - me.reloading / total, 0.0, 1.0)
@@ -1791,8 +1792,8 @@ var _ammo_tween: Tween = null
 ## The readout's flash: it swells a little and goes bright and back in under a fifth of a second, longer and brighter for the last round (and
 ## for a trigger pulled on an empty gun, main.gd). Under "reduce motion" nothing moves: the amber and the red of the number already say it.
 func pulse_ammo(last: bool) -> void:
-	if _calm() or ammo_label == null or not ammo_label.is_inside_tree():
-		return
+	if Access.calm_flashes() or ammo_label == null or not ammo_label.is_inside_tree():
+		return    # (Reduce motion or Reduce flashes: nothing swells or brightens; the amber and the red of the number say it)
 	if _ammo_tween != null and _ammo_tween.is_valid():
 		_ammo_tween.kill()
 	ammo_label.pivot_offset = Vector2(ammo_label.size.x, ammo_label.size.y * 0.5)
@@ -1945,7 +1946,7 @@ func _update_alert_panel(it: Dictionary) -> void:
 	if subl.text != sub:
 		subl.text = sub
 	# (the whole of a line that was cut is the slip's tooltip)
-	var tip := String(it.sub) if sub != String(it.sub) else ""
+	var tip := String(it.sub) if sub != String(it.sub) else _alert_tip(it)
 	if slip.tooltip_text != tip:
 		slip.tooltip_text = tip
 	subl.visible = it.sub != ""
@@ -1961,6 +1962,18 @@ func _update_alert_panel(it: Dictionary) -> void:
 		p.queue_redraw()
 	if _alert_feed != null:
 		_fade_alert_panel(it)
+
+
+## What a click on a slip does, for its tooltip when it has nothing longer to say: the camera goes to where it is (when the alert has a place), and the radio's News keeps every alert.
+func _alert_tip(it: Dictionary) -> String:
+	if not avatar_ui:
+		return ""
+	var id := String(it.id)
+	if _alert_feed != null:
+		id = String(_alert_feed.target(id))
+	var a = sim_ref.alerts.get(id) if sim_ref != null and sim_ref.get("alerts") is Dictionary else null
+	var where: bool = a != null and a.get("at") != null
+	return ("Click: the camera goes to it. " if where else "") + "The radio's News (T) keeps every alert"
 
 
 ## The width an alert's words wrap at: the feed's, less the slip's margins, the icon and the gap after it.
@@ -3121,7 +3134,7 @@ func help_groups() -> Array:
 	if not avatar_ui:
 		return HELP
 	if profile != "":
-		return HELP_TOWN_ALWAYS if AimMode.always() else HELP_TOWN
+		return ControlsTable.hud_groups(AimMode.always())    # (the One House's: the one table)
 	return HELP_AVATAR_ALWAYS if AimMode.always() else HELP_AVATAR
 
 
@@ -3304,6 +3317,8 @@ func _draw_toast_bar() -> void:
 func toast(text: String, level: String = "info") -> void:
 	if toast_panel == null or text.strip_edges() == "":
 		return
+	if Access.markers() and level != "info":
+		text = ("!! " if level == "danger" else "! ") + text    # (Colour-blind markers: the red and the amber of a toast are marks too)
 	var st := _style(PANEL, 6, LEVEL_COLOR.get(level, INFO), true, "toast")
 	toast_col = LEVEL_COLOR.get(level, INFO)
 	if st is StyleBoxFlat:
@@ -4158,6 +4173,8 @@ func _sync_lots(sim) -> void:
 	var on: bool = sim.get("lots") != null and sim.lots.on
 	if build_button != null:
 		var tip := (BUILD_LOTS_TIP_AVATAR if panel_ui() else BUILD_LOTS_TIP) if on else (BUILD_TIP_AVATAR if panel_ui() else BUILD_TIP)
+		if profile != "":
+			tip = BUILD_TIP_TOWN    # (the One House: the page of the base's projects)
 		if build_button.tooltip_text != tip:
 			build_button.tooltip_text = tip
 	if help_n != null:
@@ -4189,11 +4206,13 @@ func _update_forecast(sim) -> void:
 	if forecast_label.text != text:
 		forecast_label.text = text
 	forecast_label.visible = text != "" and not _forecast_squeezed
-	var forecast_tip := whole if whole != text else ""
+	var forecast_tip := whole if whole != text else (FORECAST_TIP if text != "" else "")
 	if forecast_label.tooltip_text != forecast_tip:
 		forecast_label.tooltip_text = forecast_tip
 		forecast_label.mouse_filter = Control.MOUSE_FILTER_PASS if forecast_tip != "" else Control.MOUSE_FILTER_IGNORE
 	var ready_text := String(ready.get("text", ""))
+	if ready_text != "" and Access.markers():
+		ready_text = ("+ " if bool(ready.get("holds", false)) else "- ") + ready_text    # (Colour-blind markers: the green and the amber of the reading are a plus and a minus too)
 	if ready_label.text != ready_text:
 		ready_label.text = ready_text
 	ready_label.visible = ready_text != "" and not _forecast_squeezed
@@ -4860,6 +4879,7 @@ func _apply_radio_mode(on: bool) -> void:
 	_speed_tips(on)
 	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on and not tutorial_ui else JOBS_TIP
 	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
+	_town_tips()
 	if not on:
 		radio_panel.close()
 		news_dot.visible = false
@@ -4871,6 +4891,15 @@ func _apply_radio_mode(on: bool) -> void:
 	_layout_dock()
 	_layout_toast()
 	_layout_news()
+
+
+## The One House's own words on the toolbar's Jobs, Build and radio keys (the school's say "Shift+N: the full page", which is not the town's).
+func _town_tips() -> void:
+	if profile == "" or news_button == null:
+		return
+	jobs_button.tooltip_text = JOBS_TIP_TOWN
+	build_button.tooltip_text = BUILD_TIP_TOWN
+	news_button.tooltip_text = NEWS_TIP_TOWN
 
 
 ## The speed buttons' tooltips: "Key: Shift+2" in the school's avatar game (the digits pick the crew there), "Key: 2" in the One House.

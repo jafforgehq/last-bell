@@ -14,9 +14,10 @@ extends PanelContainer
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
 
-## [id, key, words]: the first line is what the hands do, the second what the player reaches for.
-const LINE_A := [["move", "WASD", "move"], ["aim", "Right-click", "aim"], ["fire", "Click", "fire"], ["reload", "R", "reload"], ["swing", "F", "swing"]]
-const LINE_B := [["use", "E", "use"], ["away", "Q", "weapon away"], ["map", "M", "map"], ["radio", "T", "radio"], ["menu", "Esc", "menu"]]
+const ControlsTable := preload("res://scripts/ui/controls_table.gd")
+
+## [id, key, words]: the first line is what the hands do, the second what the player reaches for. Both are read from the one table of the controls
+## (scripts/ui/controls_table.gd, the rows that carry a "legend"), so the legend can never name a key the Controls page does not.
 const FADE_S := 0.5
 ## With "Always aim at the mouse" there is no right button to press: the aim is done when the mouse has been moved this far (pixels).
 const MOUSE_MOVED_PX := 300.0
@@ -50,7 +51,7 @@ func setup(hud_node) -> void:
 	col.add_theme_constant_override("separation", 3)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(col)
-	for line in [LINE_A, LINE_B]:
+	for line in [ControlsTable.legend_line("a"), ControlsTable.legend_line("b")]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE

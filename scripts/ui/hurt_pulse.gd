@@ -8,9 +8,9 @@
 ##   - LOW HEALTH: at LOW_AT (30 percent) of the health or under, a steady faint red edge that grows as the health goes, with a slow heartbeat on it (a double beat, never faster than about two
 ##     beats of the pair a second: nothing flashes more than three times a second, at a low strength).
 ##   - BLEEDING or DOWN: bleeding at any health keeps a very faint edge and a slow breath (the heartbeat's slowest); down, a steady heavier one.
-## REDUCE MOTION (Settings, `ui/reduce_motion`, which also means no fades): no heartbeat, no breath, no falling away: the edge is a still, faint one while the health is low, the
-## avatar is bleeding or down, and for HURT_HOLD_CALM_S after a blow, then it is gone. (There is no "Reduce flashes" setting in this game; the peak is also limited by the 0.88 alpha
-## cap in the shader, and the rate by the above.)
+## REDUCE FLASHES (Settings, `ui/reduce_flashes`) and REDUCE MOTION (`ui/reduce_motion`, which also means no fades): no heartbeat, no breath, no falling away: the edge is a still, faint
+## one while the health is low, the avatar is bleeding or down, and for HURT_HOLD_CALM_S after a blow, then it is gone (`Access.calm_flashes()`, scripts/access.gd). (Otherwise the peak is
+## limited by the 0.88 alpha cap in the shader, and the rate by the above.)
 ##
 ## IT NEVER WRITES THE RULES: it reads `sim.avatar.player()` (health, bleeding, down) each frame and keeps the last health it saw.
 ## STAGING (a screenshot has no fight): `--hurt=0.3` puts the avatar at that fraction of the health from the start; `--hurt=0.3,bite` also has a bite land a few frames before the
@@ -18,6 +18,7 @@
 extends RefCounted
 
 const Prefs := preload("res://scripts/prefs.gd")
+const Access := preload("res://scripts/access.gd")
 const SHADER := preload("res://scripts/ui/hurt_pulse.gdshader")
 
 ## The fraction of the health under which the edge stays up.
@@ -137,7 +138,7 @@ func _frame(dt: float) -> void:
 	last_hp = f
 	if drop > BLOW_MIN:
 		_blow(drop)
-	var calm := Prefs.on("ui", "reduce_motion")
+	var calm := Access.calm_flashes()    # (Reduce flashes, or the older Reduce motion)
 	_thump_cd = maxf(0.0, _thump_cd - dt)
 	hit = maxf(0.0, hit - dt / HIT_FALL_S)
 	_calm_hold = maxf(0.0, _calm_hold - dt)

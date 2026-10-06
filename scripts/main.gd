@@ -39,6 +39,7 @@ const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Shell := preload("res://scripts/ui/shell.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
+const TextScale := preload("res://scripts/ui/text_scale.gd")
 const Orientation := preload("res://scripts/sim/orientation.gd")
 const Demo := preload("res://scripts/demo.gd")
 const DemoRun := preload("res://scripts/sim/demo_run.gd")
@@ -238,6 +239,8 @@ var fields := false
 var load_failed := false
 ## The shell: the title screen, the pause menu and the screens they open (scripts/ui/shell.gd).
 var shell
+## "Text size": scales the HUD's and the menus' words (scripts/ui/text_scale.gd).
+var text_scale = null
 ## The title screen is up instead of a run: the clock is held, the HUD is hidden and the
 ## input is the menu's. (A cold start with no run chosen; see wants_title.)
 var title_mode := false
@@ -700,6 +703,9 @@ func _ready() -> void:
 	if town_card != null:
 		shell.set_process_input(false)
 	_lmark("shell")
+	text_scale = TextScale.new()    # ("Text size" in Settings: the HUD's and the menus' words 1.0, 1.15 or 1.3 times as big; scripts/ui/text_scale.gd)
+	add_child(text_scale)
+	text_scale.setup(self)
 	apply_settings()
 	# the town's facade (scripts/town/town_game.gd): the view parts of a town run (roofs, the card of a survivor...), asked at the nine hooks below; null in every other game
 	if town_run:
@@ -1232,6 +1238,7 @@ func _quick_load() -> void:
 func _toggle_sound() -> void:
 	sound_on = not sound_on
 	sound.set_muted(not sound_on)
+	Prefs.set_value("audio", "muted", not sound_on)    # (remembered with the volumes)
 
 
 ## The fields-of-fire view on or off (key V, or the button by the speed controls).
@@ -1574,8 +1581,14 @@ func resume(keep_paused: bool = false) -> void:
 ## interface and the hints. Called at start and each time the settings screen changes one.
 func apply_settings() -> void:
 	Buses.apply_all()
+	# the toolbar's sound switch is remembered with the volumes (it is set the moment it is pressed, so this only restores it at a start)
+	if sound != null and sound_on == Prefs.on("audio", "muted"):
+		sound_on = not sound_on
+		sound.set_muted(not sound_on)
 	SettingsMenu.apply_fullscreen()
 	_update_scale()
+	if text_scale != null:
+		text_scale.refresh()
 	if hud != null and hud.has_method("controls_changed"):
 		hud.controls_changed()    # (the help and the hint say how the mouse aims now)
 	if hud != null and not Prefs.on("ui", "hints") and hud.hint != null:
@@ -2335,7 +2348,7 @@ func toggle_holster(want = null) -> bool:
 			firing = false
 			aim_held = false
 			_was_aiming = false
-		hud.toast(AimMode.NOW_AWAY if on else AimMode.NOW_DRAWN)
+		hud.toast(AimMode.toggle_toast(on, wheel_simple()))    # (the One House's words say nothing of right-click orders)
 		_did("holster", on)    # (Orientation Day's lesson of Q)
 	_mark_holster()
 	return AimMode.holstered

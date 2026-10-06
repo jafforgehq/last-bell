@@ -9,6 +9,8 @@
 ##   hungry      the fork and knife, or the glass for thirst (amber, red when it is costing health: starving, parched); the worse of the two
 ##   refusing    an amber hand: they would not do what you asked last (the radio's `radio_line` said no, or `radio.willingness` of the last order says no now), in their words
 ##   at work     the icon of the station they are working at (the Duty roster's own): quiet, light grey
+## COLOUR-BLIND MARKERS (Settings, `Access.markers()`): the chip's colour is also a shape at its top right corner, by how bad it is (a diamond for danger, a triangle for a warning, a ring for
+## "stable"; none for a quiet state), and the card's thin health bar gets quarter notches and, under HURT_AT, a dashed fill, so that the state of a person never rests on red against green.
 ## The chip has a tooltip of one line in the game's voice. Under the chip's glyph the card's foot row (`hud.cards[i].marks`) no longer repeats it: `hud.mark_filter` (a Callable:
 ## `(person, marks) -> marks`) drops the marks the chip stands for and leaves the rest.
 ## THE RING is a thin gold line round the person's name on the card: the people of `wheel_ctl.last_order.who` (Z asks them again).
@@ -19,6 +21,8 @@
 extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Access := preload("res://scripts/access.gd")
+const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 
 const CHIP_PX := 17.0
 ## How many marks the foot row keeps beside a chip (the chip is in the same corner row, on the right).
@@ -275,7 +279,13 @@ func _make_nodes(c: Dictionary) -> Dictionary:
 	ring.tooltip_text = "You asked them last. Z asks again."
 	ring.draw.connect(_draw_ring.bind(ring))
 	c.card.add_child(ring)
-	return {"chip": chip, "ring": ring, "sig": ""}
+	# the health bar's pattern (Colour-blind markers): over the bar, nothing drawn unless it is on
+	var pattern := Control.new()
+	pattern.name = "HpPattern"
+	pattern.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pattern.draw.connect(_draw_pattern.bind(pattern, c))
+	c.card.add_child(pattern)
+	return {"chip": chip, "ring": ring, "pattern": pattern, "sig": ""}
 
 
 ## Puts the chip in the picture's bottom right corner and the ring round the name, again when the card was laid out anew. (The top of the picture is the stance's word, "Following",
@@ -290,6 +300,9 @@ func _place(c: Dictionary, n: Dictionary) -> void:
 	var pw: float = card.size.x - inset.x - inset.z
 	var chip: Control = n.chip
 	chip.position = Vector2(inset.x + pw - CHIP_PX - 1.0, inset.y + pw - CHIP_PX - 1.0)
+	var pattern: Control = n.pattern
+	pattern.position = c.hp_bg.position
+	pattern.size = c.hp_bg.size
 	var ring: Control = n.ring
 	var font: Font = Fonts.cond(600)
 	var fs: int = int(c.name.get_theme_font_size("font_size"))
@@ -307,9 +320,16 @@ func _apply(c: Dictionary, n: Dictionary, k: Dictionary) -> void:
 	var show := not k.is_empty()
 	if chip.visible != show:
 		chip.visible = show
-	if show and (was.get("id", "") != k.id or was.get("color", Color.BLACK) != k.color):
+	var cb := Access.markers()
+	if show and (was.get("id", "") != k.id or was.get("color", Color.BLACK) != k.color or bool(chip.get_meta("cb", false)) != cb):
 		chip.set_meta("kind", k)
+		chip.set_meta("cb", cb)
 		chip.queue_redraw()
+	# (the health bar's pattern: redrawn while the setting is on, and once when it goes off)
+	var pattern: Control = n.pattern
+	if cb or bool(pattern.get_meta("cb", false)):
+		pattern.set_meta("cb", cb)
+		pattern.queue_redraw()
 	if show and chip.tooltip_text != String(k.tip):
 		chip.tooltip_text = String(k.tip)
 	var ring: Control = n.ring
@@ -330,10 +350,53 @@ func _draw_chip(chip: Control) -> void:
 	chip.draw_arc(c, r - 0.8, 0.0, TAU, 24, Color(col, 0.95), 1.6, true)
 	if String(k.glyph) == "hand":
 		_draw_hand(chip, c, col)
+		if Access.markers():
+			_draw_badge(chip, k)
 		return
 	var tex: Texture2D = hud.icons.get(String(k.icon))
 	if tex != null:
 		chip.draw_texture_rect(tex, Rect2(c - Vector2(GLYPH_PX, GLYPH_PX) * 0.5, Vector2(GLYPH_PX, GLYPH_PX)), false, col)
+	if Access.markers():
+		_draw_badge(chip, k)
+
+
+## The shape of how bad a chip is, at its top right corner (Colour-blind markers): a diamond for danger, a triangle for a warning, a ring for fine-but-resting; none when quiet.
+func _draw_badge(ci: CanvasItem, k: Dictionary) -> void:
+	var shape := badge_of(k)
+	if shape != "":
+		CbShapes.mark(ci, shape, Vector2(CHIP_PX - 1.0, 2.5), 4.2, k.color)
+
+
+## "diamond", "triangle", "circle" or "" for a chip kind: by its colour (the red, the amber, the blue, or the greys of down and at work).
+func badge_of(k: Dictionary) -> String:
+	if k.is_empty():
+		return ""
+	var col: Color = k.color
+	if col == hud.DANGER or String(k.id) == "down":
+		return "diamond"
+	if col == hud.WARN:
+		return "triangle"
+	if col == hud.INFO:
+		return "circle"
+	return ""
+
+
+## The health bar's pattern (Colour-blind markers): quarter notches, and the fill cut into dashes while the health is under HURT_AT.
+func _draw_pattern(pattern: Control, c: Dictionary) -> void:
+	if not Access.markers() or c.is_empty():
+		return
+	var w := pattern.size.x
+	var h := pattern.size.y
+	var dark := Color(0.02, 0.04, 0.035, 0.85)
+	var fill_w: float = (c.hp as Control).size.x
+	if fill_w > 0.0 and fill_w < w * HURT_AT + 0.5:
+		var x := 2.0
+		while x < fill_w:
+			pattern.draw_rect(Rect2(x, 0.0, 1.5, h), dark)
+			x += 3.5
+	for i in 3:
+		var nx := w * 0.25 * float(i + 1)
+		pattern.draw_rect(Rect2(nx - 0.5, 0.0, 1.0, h), Color(0.97, 0.96, 0.9, 0.9) if nx > fill_w else dark)
 
 
 ## An open hand, flat, fingers up (the game's icon set has none): a palm, four fingers and a thumb, in 11 px.

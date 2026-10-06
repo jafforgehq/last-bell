@@ -15,6 +15,7 @@ extends RefCounted
 const GD := preload("res://scripts/game_data.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Access := preload("res://scripts/access.gd")
 const TILE := GD.TILE
 const G := 9.8
 
@@ -113,6 +114,9 @@ var enabled := true
 var sound = null
 var listener := Vector2.ZERO
 var calm := false
+## "Reduce flashes" (Settings): the white wash of a hit is a pale tint over a tenth of a second, the muzzle's flash and light are dim and short, the burst at a wound is faint
+## (the camera's kick and the hit-stop are Reduce motion's: `calm`). Read with `calm`, twice a second.
+var soft := false
 ## How much bigger the flashes, stars and glows are drawn than their size in tiles (main.gd: more when the camera is far, so that a flash is as big
 ## on the screen as it is up close: 1 at about 52 pixels a tile).
 var zoom_k := 1.0
@@ -164,6 +168,7 @@ func _init() -> void:
 	_grow.resize(MAX_PARTS)
 	_col.resize(MAX_PARTS)
 	calm = Prefs.on("ui", "reduce_motion")
+	soft = Access.reduce_flashes()
 
 
 func setup(blood_textures: Array, parent: Node2D, radial_tex: Texture2D, light_puff: Texture2D, dark_puff: Texture2D) -> void:
@@ -254,6 +259,7 @@ func tick_real(dt: float) -> void:
 	if real_t - _calm_at >= 0.5 or real_t < _calm_at:
 		_calm_at = real_t
 		calm = Prefs.on("ui", "reduce_motion")
+		soft = Access.reduce_flashes()
 	if calm:
 		_push = Vector2.ZERO
 		hitstop = 0.0
@@ -387,7 +393,7 @@ func muzzle(x: float, y: float, ang: float, big: bool) -> void:
 	if not enabled or not seen:
 		return
 	var g: Dictionary = GUNS.get(weapon, GUNS.rifle)
-	_flashes.append({"x": x, "y": y, "ang": ang, "t": 0.0, "dur": float(g.dur) * (0.7 if calm else 1.0), "gun": weapon, "mine": mine, "rot": rng.randf() * 0.5})
+	_flashes.append({"x": x, "y": y, "ang": ang, "t": 0.0, "dur": float(g.dur) * (0.55 if soft else (0.7 if calm else 1.0)), "gun": weapon, "mine": mine, "rot": rng.randf() * 0.5})
 	if _flashes.size() > MAX_FLASHES:
 		_flashes.pop_front()
 	var dir := Vector2.from_angle(ang)
@@ -405,7 +411,7 @@ func flash_lights() -> Array:
 	for f in _flashes:
 		var g: Dictionary = GUNS.get(f.gun, GUNS.rifle)
 		var k: float = 1.0 - float(f.t) / float(f.dur)
-		out.append({"x": f.x, "y": f.y, "r": float(g.light) * (0.55 + 0.45 * k) * (0.7 if calm else 1.0)})
+		out.append({"x": f.x, "y": f.y, "r": float(g.light) * (0.55 + 0.45 * k) * (0.4 if soft else (0.7 if calm else 1.0))})
 	return out
 
 
@@ -498,7 +504,10 @@ func _flesh_hit(ground: Vector2, height: float, wound: Vector2, dir: Vector2, me
 	_mist(wound + dir * 0.15, dir, 3)
 	_add(K_GLOW, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.10, 0.42 if head else 0.32, Color(1.0, 0.50, 0.44))
 	# the burst of light at the wound (a white-pink flash, short)
-	_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.09, 0.26 if not head else 0.38, Color(1.0, 0.82, 0.78) if not melee else PALE)
+	var burst: Color = Color(1.0, 0.82, 0.78) if not melee else PALE
+	if soft:
+		burst.a *= 0.35    # ("Reduce flashes": the burst at a wound is faint)
+	_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.09, 0.26 if not head else 0.38, burst)
 	if melee:
 		# the thud of a blow: dust and a bigger sparkle
 		_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.14, 0.42, PALE)
@@ -596,7 +605,7 @@ func apply(z, node) -> void:
 			return
 		if bool(rec.flash):
 			rec.flash = false
-			node.flash(flash_material(bool(rec.plate)), FLASH_S, calm)
+			_wash(node, bool(rec.plate))
 		if rec.has("off"):
 			node.position += rec.off    # (settled: where it lies is worked out once)
 			return
@@ -619,11 +628,33 @@ func apply(z, node) -> void:
 		node.position += hrec.dir * float(hrec.kick) * exp(-age * 16.0) * TILE
 	if bool(hrec.flash):
 		hrec.flash = false
-		node.flash(flash_material(bool(hrec.plate)), FLASH_S, calm)
+		_wash(node, bool(hrec.plate))
 
 
 static var _flash_flesh: ShaderMaterial
 static var _flash_plate: ShaderMaterial
+static var _flash_soft: ShaderMaterial
+## How long the gentle wash of "Reduce flashes" is worn (real seconds): a tenth, not a blink.
+const FLASH_SOFT_S := 0.11
+
+
+## The white wash of a hit on `node`: nothing under Reduce motion, a pale tint over a tenth of a second under Reduce flashes, else the blink.
+func _wash(node, plate: bool) -> void:
+	if soft and not calm:
+		node.flash(flash_material_soft(), FLASH_SOFT_S, false)
+		return
+	node.flash(flash_material(plate), FLASH_S, calm)
+
+
+## The pale tint a hit leaves under "Reduce flashes" (a fifth of the way to white, steel or flesh alike).
+static func flash_material_soft() -> ShaderMaterial:
+	if _flash_soft == null:
+		var sh := Shader.new()
+		sh.code = "shader_type canvas_item;\nuniform vec3 tint = vec3(1.0);\nuniform float amount = 0.2;\nvoid fragment() {\n\tCOLOR.rgb = mix(COLOR.rgb, tint, amount * step(0.02, COLOR.a));\n}\n"
+		_flash_soft = ShaderMaterial.new()
+		_flash_soft.shader = sh
+		_flash_soft.set_shader_parameter("tint", Vector3(1.0, 0.97, 0.94))
+	return _flash_soft
 
 
 ## The material of the white flash of a hit (cold and blue for steel): the pawn wears it for a few frames.
@@ -942,7 +973,7 @@ func _draw_blow(ci: CanvasItem, b: Dictionary) -> void:
 func _draw_flash(ci: CanvasItem, f: Dictionary) -> void:
 	var g: Dictionary = GUNS.get(f.gun, GUNS.rifle)
 	var k: float = clampf(1.0 - float(f.t) / float(f.dur), 0.0, 1.0)
-	var dim := 0.6 if calm else 1.0
+	var dim := 0.3 if soft else (0.6 if calm else 1.0)
 	var at := Vector2(f.x, f.y)
 	var ang: float = f.ang
 	var reach_len: float = float(g.len) * (0.65 + 0.35 * k) * zoom_k
