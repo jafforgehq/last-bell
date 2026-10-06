@@ -4,6 +4,12 @@
 ## dead come in kinds (walker, runner, brute): the same figure scaled, leaned and
 ## tinted by pawn_art.gd's STYLES, so a kind reads at a glance; a walker is drawn
 ## exactly as ever.
+##
+## ANIM (render side only: the rules are read, never written): every figure keeps a drawn facing that eases to the rules' in about 100 ms (the body is a little narrower
+## across the seam between two views, the weapon's shoulder slides), a person's legs run from a neutral pose to a neutral pose, the body bobs, sways and leans into its speed, a shot kicks
+## the body and the muzzle, a reload is a hand to the gun, a swing coils, strikes and recovers on assets/data/melee.json's timings; the dead have a gait of their own, rear back and lunge on the
+## rules' own beat of claw and bite (`attack_t`), flinch from a hit, and fall in a quarter of a second. All of it is in `_anim*` (state) and the `_draw_*` (transforms) here, with the pure
+## maths in scripts/render/pawn_motion.gd; "Reduce motion" keeps 30 percent of every bob, sway, lean and swing.
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
@@ -13,6 +19,7 @@ const WorkAnim := preload("res://scripts/render/work_anim.gd")
 const PawnMesh := preload("res://scripts/render/pawn_mesh.gd")
 const Combat := preload("res://scripts/render/combat_fx.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -20,6 +27,9 @@ const PIVOT := {"S": Vector2(-0.04, -0.08), "E": Vector2(0.08, -0.14), "N": Vect
 ## A jump of more than this many tiles between two steps (back from a trip, a
 ## walker risen where a survivor fell) is a jump, not a walk: no sliding.
 const SNAP_TILES := 3.0
+## ANIM: how much of the way to where the rules put them the crew and the dead are drawn at each step (the rest is kept for the next).
+const STEP_FOLLOW_CREW := 0.65
+const STEP_FOLLOW_DEAD := 0.55
 ## `_strike_seen` before any blow has been counted.
 const NO_STRIKE := -1000000000
 
@@ -90,6 +100,60 @@ var work_stage_t := -1.0
 ## Whether `Person.work` is drawn at all: false in a trip played by hand (scripts/raid), where the base's rules do not run.
 var work_poses := true
 
+## ANIM (scripts/render/pawn_motion.gd says what each is for). The figure's own render-side state, moved every frame by `_anim` (called from `sync`, with the screen's clock): the drawn
+## facing, the stride, the speed, the kick of a shot, the swing, the reload, and for the dead the attack, the flinch and the fall. None of it is read by the rules and none is saved.
+var _a_prev := -1.0
+var _ori := PI / 2.0
+var _ori_ok := false
+## The view drawn ("E", "S", "N"; the west is "E" mirrored: `_mir`) and how wide the body is drawn across it (1, less across a turn).
+var _vw := "S"
+var _mir := false
+var _wid := 1.0
+## Walking: 0 standing to 1 striding (eased), the stride's phase as drawn (it starts and ends on a neutral pose), the rules' phase a step ago and now, whether the legs are drawn striding.
+var _gait := 0.0
+var _rph := 0.0
+var _ph_prev := 0.0
+var _ph_cur := 0.0
+var _ph_off := 0.0
+var _stepping := false
+var _moving_draw := false
+## How fast the figure is drawn going (tiles a second, smoothed) and where its node was a frame ago.
+var _vel := Vector2.ZERO
+var _pos_last := Vector2.ZERO
+var _pos_ok := false
+## The kick of the last shot as drawn (1 at the shot, falling over about 150 ms), seconds since it, the weapon lowered (a run, the holster) and the holster alone (both eased).
+var _rk := 0.0
+var _shot_age := 9.0
+var _lowk := 0.0
+var _holk := 0.0
+## The swing's clock as drawn (seconds from the key, -1 none) and its pose, and the reload's (the seconds it was started with, the rounds in the gun then) and its pose.
+var _sw := -1.0
+var _sw_pose: PawnMotion.Swing = null
+var _thrust_seen := 0.0
+var _rl_total := 0.0
+var _rl_m0 := 0
+var _rl: PawnMotion.Reload = null## A figure's own place in things (0 to 1, from the entity): its breath, the dead's gait.
+var _seed := 0.0
+## The dead: how far into an attack (eased), the zombie's `attack_t` at the last look, seconds since it struck, the flinch (seconds since the hit and the way it was thrown), the stagger seen,
+## the thump a heavy step or blow asks the camera for, and the step of the stride it is in.
+var _atk := 0.0
+var _at_seen := 0.0
+var _strike_age := 9.0
+var _fl_t := 9.0
+var _fl_dir := Vector2.ZERO
+var _stag_seen := 0.0
+var _thump := 0.0
+var _step_i := 0
+## Whether the figure is changing fast (a strike, a flinch, a turn): one of the dead is then drawn every frame, not once a step.
+var _hot := false
+## The dead's facing: the rules' last, the angle it is, and whether the drawn facing is still on its way.
+var _acc_dt := 0.0
+var _face_seen := ""
+var _tgt_ori := PI / 2.0
+var _turning := true
+## The kind of build the legs have: a person's livelier stride, or the dead's own kind.
+var _leg_kind := "person"
+
 
 func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	entity = e
@@ -100,14 +164,19 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		tex[v] = GD.tex(data.pawn.files[key][v])
 	pal = Art.palette(e.look)
 	_pal_tex = PawnMesh.palette_texture(pal)
+	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)
 	if zombie:
 		kind = Art.kind_of(e)
+		_leg_kind = kind
 		_style = Art.style(kind)
 		var tinted := Art.material(kind)
 		if tinted != null:
 			material = tinted
 			_base_material = tinted
 	if not zombie:
+		_style = Art.PERSON
+		_sw_pose = PawnMotion.Swing.new()
+		_rl = PawnMotion.Reload.new()
 		_work_phase = WorkAnim.phase_of(String(e.id))
 		var wb: Array = data.weaponArt.box
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
@@ -144,12 +213,20 @@ func set_weapon(data: Dictionary, id: String) -> void:
 func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 	var now := Vector2(entity.x, entity.y)
 	var frame := Engine.get_process_frames()
+	var jumped := false
+	var stepped := steps != _steps_seen
 	if _steps_seen < 0 or frame - _frame_seen > 1 or now.distance_to(_cur) > SNAP_TILES:
 		_prev = now
 		_cur = now
+		_ph_prev = entity.walk_phase
+		_ph_cur = entity.walk_phase
+		jumped = true
 	elif steps != _steps_seen:
 		_prev = _cur
-		_cur = now
+		# (ANIM: the crew and the dead are drawn a little behind where the rules put them, by a share of a step: a corner, a stop and a shove in a crowd are rounded off; the avatar is exact)
+		_cur = now if (not zombie and entity.player) else _cur.lerp(now, STEP_FOLLOW_DEAD if zombie else STEP_FOLLOW_CREW)
+		_ph_prev = _ph_cur
+		_ph_cur = entity.walk_phase
 	_steps_seen = steps
 	_frame_seen = frame
 	if _flash_end_ms > 0 and Time.get_ticks_msec() >= _flash_end_ms:
@@ -157,11 +234,18 @@ func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 		material = _base_material
 	if not zombie:
 		_work_sync(steps, alpha)
+	var dt := 0.0
+	if _a_prev >= 0.0 and not jumped:
+		dt = clampf(anim_t - _a_prev, 0.0, 0.1)
 	position = _prev.lerp(_cur, alpha) * TILE
+	if zombie:
+		_anim_dead(dt, jumped, stepped or steps < 0)
+	else:
+		_anim(jumped, alpha, dt)
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
 	if modulate != tint:
 		modulate = tint
-	if redraw and (not zombie or steps < 0 or steps != _drawn_steps):
+	if redraw and (not zombie or steps < 0 or steps != _drawn_steps or _hot):
 		_drawn_steps = steps
 		queue_redraw()
 
@@ -174,6 +258,172 @@ static func draw_count() -> int:
 ## Where the node is drawn, in tiles: the overlay's brackets and names go here.
 func tile_pos() -> Vector2:
 	return position / TILE
+
+
+# ----------------------------------------------------------------- the motion --
+
+## A hit lands on one of the dead (combat_fx.gd `apply`, with the way the blow went): it flinches away from it for a moment.
+func flinch(dir: Vector2) -> void:
+	if dir.length_squared() > 0.0001:
+		_fl_dir = dir.normalized()
+	_fl_t = 0.0
+	_hot = true
+
+
+## One frame of this figure's own motion (called by `sync`, after the node is placed, on the screen's clock): the drawn facing, the speed, and for a person the stride, the kick, the swing and
+## the reload, for the dead the attack, the flinch and the thump. `jumped`: the figure was just put somewhere (a first look, a long jump): nothing eases from where it was.
+## `alpha` is how far the time has run into the rules' next step.
+func _anim(jumped: bool, alpha: float, dt: float) -> void:
+	var e = entity
+	_a_prev = anim_t
+	var rm := PawnMotion.motion()
+	var tgt: float = PawnMotion.FACE_ANG.get(String(e.facing), PI / 2.0)
+	if jumped or dt <= 0.0 or not _ori_ok:
+		_ori = tgt
+		_ori_ok = true
+	else:
+		_ori = PawnMotion.turn(_ori, tgt, dt)
+	var v := PawnMotion.view_of(_ori)
+	_mir = v == "W"
+	_vw = "E" if _mir else v
+	_wid = PawnMotion.width(_ori, rm)
+	if _pos_ok and dt > 0.0:
+		var inst := (position - _pos_last) / (TILE * dt)
+		if inst.length_squared() > 81.0:
+			inst = inst.limit_length(9.0)
+		_vel = _vel.lerp(inst, PawnMotion.ease_k(16.0, dt))
+	elif jumped:
+		_vel = Vector2.ZERO
+	_pos_last = position
+	_pos_ok = true
+	_anim_person(dt, jumped, alpha, rm)
+
+
+func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
+	var p = entity
+	# the stride: it starts from a neutral pose and runs on to one when the person stops, so the feet never snap from mid-stride to standing
+	var ph := lerpf(_ph_prev, _ph_cur, alpha)
+	if jumped:
+		_stepping = false
+	if p.moving:
+		if not _stepping:
+			_stepping = true
+			_rph = roundf(_rph / PI) * PI
+			_ph_off = ph - _rph
+		_rph = ph - _ph_off
+	else:
+		_stepping = false
+		if not PawnMotion.neutral(_rph):
+			_rph = PawnMotion.settle(_rph, dt)
+	_moving_draw = _stepping or not PawnMotion.neutral(_rph)
+	_gait = move_toward(_gait, 1.0 if p.moving else 0.0, dt / (PawnMotion.GAIT_IN if p.moving else PawnMotion.GAIT_OUT))
+	# the kick of a shot: it jumps to 1 with the rules' recoil and falls on its own clock (about 150 ms)
+	var rc: float = p.recoil
+	if rc > _rk + 0.3:
+		_shot_age = 0.0
+	_shot_age += dt
+	_rk = maxf(rc, _rk - dt * 6.5)
+	# the weapon carried low (a run, the holster), eased
+	var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
+	var hol: bool = p.get("holstered") == true
+	_lowk = move_toward(_lowk, 1.0 if (run > 0.3 or hol) else 0.0, dt / 0.09)
+	_holk = move_toward(_holk, 1.0 if hol else 0.0, dt / 0.12)
+	# the swing (the town's: the rules' `swing_t`; the old game's: the blow's own `thrust` as it begins), on the screen's clock from the moment it is seen
+	var st: float = float(p.get_meta("swing_t", -1.0)) if p.player else -1.0
+	var thr: float = p.thrust
+	if _sw < 0.0:
+		if st >= 0.0:
+			_sw = st
+		elif p.player and thr > _thrust_seen + 0.4 and p.weapon != "pike":
+			_sw = maxf(0.0, float(PawnMotion.melee().hit) - 0.04)
+	else:
+		_sw += dt
+		if st >= 0.0 and st + 0.06 < _sw:
+			_sw = st    # (a swing begun the moment the last one ended)
+		elif st < 0.0 and _sw >= float(PawnMotion.melee().cycle):
+			_sw = -1.0
+	_thrust_seen = thr
+	if _sw >= 0.0:
+		PawnMotion.swing_pose(_sw_pose, _sw, rm)
+	# the reload: how far it has gone, as a pose
+	if float(p.reloading) > 0.0:
+		if _rl_total <= 0.0:
+			_rl_total = maxf(float(p.reloading), 0.01)
+			_rl_m0 = int(p.mag)
+		var cap := int(p.gun.get("mag", 0))
+		var shell: bool = cap > 0 and cap <= 8 and p.weapon != "pistol"
+		PawnMotion.reload_pose(_rl, clampf(1.0 - float(p.reloading) / _rl_total, 0.0, 1.0), maxi(1, cap - _rl_m0) if shell else 1, shell)
+	else:
+		_rl_total = 0.0
+
+
+## The motion of one of the dead for a frame: the drawn facing (worked out only while it turns), the attack's beat, the flinch and the thump. The dead are many, so this reads as little of the
+## rules as it can.
+func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
+	var z = entity
+	_a_prev = anim_t
+	_fl_t += dt
+	_strike_age += dt
+	_acc_dt += dt
+	if not (stepped or jumped or _turning):
+		# (a frame between two steps of the rules: what the rules say has not changed, only the clocks of the flinch and the strike run on)
+		_hot = _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25)
+		return
+	var st: String = z.state
+	var down: bool = st == "dying" or st == "dead"
+	var f: String = z.facing
+	if jumped or f != _face_seen:
+		_face_seen = f
+		_tgt_ori = PawnMotion.FACE_ANG.get(f, PI / 2.0)
+		_turning = true
+	if _turning:
+		if jumped or dt <= 0.0 or down:
+			_ori = _tgt_ori
+		else:
+			_ori = PawnMotion.turn(_ori, _tgt_ori, dt)
+		_turning = _ori != _tgt_ori
+		var v := PawnMotion.view_of(_ori)
+		_mir = v == "W"
+		_vw = "E" if _mir else v
+		_wid = PawnMotion.width(_ori, PawnMotion.motion())
+	if down:
+		_hot = false
+		_acc_dt = 0.0
+		return
+	if not (stepped or jumped):
+		_hot = true    # (a turn, drawn each frame)
+		return
+	var sg: float = z.stagger
+	if jumped:
+		_at_seen = z.attack_t
+		_stag_seen = sg
+	# a hit that staggers it: a flinch away from the blow (combat_fx.gd tells the way; with none told it is back from where it looks)
+	if sg > _stag_seen + 0.1 and _fl_t - dt > 0.12:
+		_fl_t = 0.0
+		_fl_dir = -(PawnMotion.FACE_DIR.get(f, Vector2(0.0, 1.0)) as Vector2)
+	_stag_seen = sg
+	var fighting: bool = st == "attack" or st == "chase" or st == "hunt" or st == "breach"
+	if fighting or _atk > 0.0:
+		# a strike is the rules' `attack_t` being set back after a claw or a bite: the figure rears back as it runs down and lunges when it is reset
+		var at: float = z.attack_t
+		if at > _at_seen + 0.25:
+			_strike_age = 0.0
+			if kind == "brute":
+				_thump = 1.0
+		_at_seen = at
+		_atk = move_toward(_atk, 1.0 if (st == "attack" or (fighting and not z.moving)) else 0.0, _acc_dt / 0.1)
+	if kind == "brute":
+		if z.moving:
+			var si := int(floorf(float(z.walk_phase) / PI))
+			if si != _step_i:
+				_step_i = si
+				_thump = maxf(_thump, 0.3)
+		if _thump > 0.0:
+			if PawnMotion.thump_cb.is_valid():
+				PawnMotion.thump_cb.call(position / TILE, _thump)
+			_thump = 0.0
+	_acc_dt = 0.0
+	_hot = _turning or _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25)
 
 
 # a tiny canvas-context emulation: translate / rotate / scale in local units
@@ -263,6 +513,7 @@ func _draw() -> void:
 	if entity == null:
 		return
 	_draws += 1
+	var t0 := Time.get_ticks_usec()
 	_fast = cached and (_pen == self or meshes_on_tape)
 	if zombie:
 		if entity.state == "dying" or entity.state == "dead":
@@ -277,6 +528,15 @@ func _draw() -> void:
 		_draw_downed()
 	else:
 		_draw_person()
+	_draw_us += Time.get_ticks_usec() - t0
+
+
+## The microseconds all nodes have spent in their `_draw` so far (a measurement's: a frame's share is the difference between two looks).
+static var _draw_us := 0
+
+
+static func draw_usec() -> int:
+	return _draw_us
 
 
 func _view() -> String:
@@ -287,7 +547,7 @@ func _view() -> String:
 ## or, for a stand-in that wants the commands, the commands themselves (whose shadow is drawn by the caller, before the mirror).
 func _legs(view: String, phase: float, moving: bool, limp: bool, alpha: float, shadow: bool) -> void:
 	if _fast:
-		_pen.draw_mesh(PawnMesh.legs(kind, view, phase, moving, limp, shadow), _pal_tex, Transform2D.IDENTITY, Color(1.0, 1.0, 1.0, alpha))
+		_pen.draw_mesh(PawnMesh.legs(_leg_kind, view, phase, moving, limp, shadow), _pal_tex, Transform2D.IDENTITY, Color(1.0, 1.0, 1.0, alpha))
 	else:
 		Art.legs(_pen, pal, view, phase, moving, limp, alpha, _style)
 
@@ -315,60 +575,134 @@ func _draw_person() -> void:
 	if _work_update(p):
 		_draw_working()
 		return
-	var view := _view()
-	var mirror: bool = p.facing == "W"
-	var bob: float = absf(sin(p.walk_phase)) * 0.045 if p.moving else sin(anim_t * 2.2 + p.x * 3.0) * 0.008
+	var rm := PawnMotion.motion()
+	var view := _vw
+	var mirror := _mir
+	var g := _gait
 	# (PACE: the run, scripts/sim/sprint.gd `lean`, 0 to 1 and set on the avatar only: the legs go faster by themselves (the stride is longer for each tile), the body bobs a little more, leans into it and the gun is carried low)
 	var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
-	if run > 0.0 and not Prefs.on("ui", "reduce_motion"):
-		bob *= 1.0 + 0.6 * run
+	# ANIM. The body: a bounce at each step, a sway with the stride, a lean into the way it is going (the drawn speed), a breath and a slow shift of weight when it stands.
+	var breath := 0.5 + 0.5 * sin(anim_t * 2.5 + _seed * TAU)
+	var stepk := absf(sin(_rph))
+	var off := Vector2((sin(_rph) * 0.014 * g + sin(anim_t * 0.7 + _seed * 9.0) * 0.006 * (1.0 - g)) * rm, -(stepk * 0.06 * (1.0 + 0.5 * run) * g + breath * 0.02 * (1.0 - g)) * rm)
+	var roll := sin(_rph) * 0.04 * g * rm
+	var sy := 1.0 - (1.0 - stepk) * 0.035 * g * rm    # (a little squashed as a foot lands, stretched in mid-stride)
+	var lean := Vector2.ZERO
+	var spd := _vel.length()
+	if spd > 0.05:
+		lean = (_vel / spd) * ((0.045 + 0.08 * run) * minf(spd / PawnMotion.WALK_V, 1.6) * rm)
+	var aim: float = p.aim
+	var aim_v := Vector2.from_angle(aim)
+	var kick := _rk * _rk
+	if kick > 0.0:
+		# (the kick of a shot: the body is pushed back from the way the gun points and settles over about 150 ms)
+		off -= Vector2(aim_v.x, aim_v.y * 0.6) * (kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 1.5 * rm)
+	if _sw >= 0.0:
+		# (the swing: the body coils back, lunges along the blow and comes back, with the weapon: pawn_motion.gd)
+		off += aim_v * _sw_pose.step
+		lean += Vector2(aim_v.x, aim_v.y * 0.7) * (_sw_pose.lean * 0.3)
+		roll += _sw_pose.roll
+		sy += _sw_pose.stretch
+	var xf := Transform2D(0.0, Vector2.ONE, 0.0, off) * PawnMotion.lean_xf(lean)
+	if roll != 0.0 or sy != 1.0:
+		xf = xf.translated_local(Vector2(0.0, PawnMotion.HIPS)).rotated_local(roll).scaled_local(Vector2(1.0, sy)).translated_local(Vector2(0.0, -PawnMotion.HIPS))
 	_reset()
+	var base := _m
 	_apply()
 	if not _fast:
 		Art.shadow(_pen)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_legs(view, p.walk_phase, p.moving, false, 1.0, true)
-	_tr(0, -bob)
-	if run > 0.0 and not Prefs.on("ui", "reduce_motion"):
-		_lean_run(view, run)
-	var aim: float = PI - p.aim if mirror else p.aim
-	# (the kick of a shot: the body is pushed back from the way the gun points for the few frames the recoil lasts; none with "reduce motion")
-	if p.recoil > 0.0 and not Prefs.on("ui", "reduce_motion"):
-		var kick: float = p.recoil * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge)
-		_tr(-cos(aim) * kick, -sin(aim) * kick * 0.6)
-	# (round 23, Q: a weapon that is put away hangs low and a little faded, the hands off it, whatever way the survivor faces)
-	var away: bool = p.get("holstered") == true
-	var fade := 0.75 if away else 0.94
-	away = away or run > 0.5
+	_legs(view, _rph, _moving_draw, false, 1.0, true)
+	var body := base * xf
 	if view == "N":
-		_carry(view, aim, away, fade)
+		_gun(body, aim, view)
+	_m = body
+	if _wid != 1.0:
+		_m = _m * Transform2D(Vector2(_wid, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)    # (a turn: narrower across the seam between two views)
+	if mirror:
+		_sc(-1, 1)
 	_apply()
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if view != "N":
-		_carry(view, aim, away, fade)
+		_gun(body, aim, view)
 	if p.thrust > 0.0:
+		_m = body
 		_swing(view, aim)
 
 
-## How the body leans into a run: from the hips toward where she faces in side view (a shear, as `_lean` does for the dead), a little shorter on her feet facing the player or away; `k` is the run (0 to 1).
-func _lean_run(view: String, k: float) -> void:
-	if view == "E":
-		var t := tan(RUN_LEAN * k)
-		_m = _m * Transform2D(Vector2(1.0, 0.0), Vector2(-t, 1.0), Vector2(t * 0.12, 0.0))
-	else:
-		_tr(0, Art.FOOT_Y)
-		_sc(1.0, 1.0 - RUN_DIP * k)
-		_tr(0, -Art.FOOT_Y)
+## Where a weapon that is carried low points (radians, screen space: down and forward of a side view, down across the body from the front or the back).
+const CARRY_E := 0.95
+const CARRY_SN := 1.35
 
 
-## The weapon as it is carried: in the hand at the aim, or put away or lowered for a run (low, the hands off it, a little faded when it is put away).
-func _carry(view: String, aim: float, away: bool, fade: float = 0.75) -> void:
-	if away:
-		_weapon_faded(view, LOW_AIM, fade, false)
+## The weapon in the hands, drawn in the frame `m` (the body's, without the turn's narrowing): at the aim, kicked up by a shot, swung through its arc, lowered for a reload or a run (the carry,
+## eased), or put away (low, the hands off it, a little faded; round 23, Q).
+func _gun(m: Transform2D, aim: float, view: String) -> void:
+	var p = entity
+	var rm := PawnMotion.motion()
+	var a := aim
+	var reload := float(p.reloading) > 0.0
+	var kick := _rk * _rk
+	if kick > 0.0:
+		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm
+	if _sw >= 0.0:
+		a += _sw_pose.off
+	var lw := _lowk
+	if reload:
+		lw = maxf(lw, _rl.low * 0.85)
+	if lw > 0.0:
+		var carry := CARRY_SN
+		if view == "E":
+			carry = (PI - CARRY_E) if _mir else CARRY_E
+		a += angle_difference(a, carry) * lw
+		a += sin(_rph) * 0.06 * _lowk * _gait * rm
+	var pv := PawnMotion.shoulder(_ori)
+	var pump := 0.0
+	if reload:
+		pump = _rl.pump
+	elif p.weapon == "shotgun" and _shot_age > 0.3 and _shot_age < 0.55:
+		pump = sin((_shot_age - 0.3) / 0.25 * PI) * rm
+	_m = m
+	_tr(pv.x, pv.y)
+	_rot(a)
+	if cos(a) < 0.0:
+		_sc(1, -1)
+	var push: float = sin(p.thrust * PI) * 0.6 if p.weapon == "pike" else -kick * 0.10 * rm
+	_tr(push, 0)
+	_apply()
+	_pen.draw_texture_rect(weapon_tex, weapon_rect, false, Color(1.0, 1.0, 1.0, lerpf(0.94, 0.75, _holk)))
+	if _holk < 0.5:
+		if pump == 0.0 and not reload:
+			_hands_on(null)
+		else:
+			_hands_on(Vector2(0.0, 0.05), true)
+			if gun_front != null:
+				_hands_on(Vector2(float(gun_front) - pump * 0.12, 0.02), true)
+			if reload and _rl.hand_on:
+				_hands_on(_rl.hand, true)
+	_m = m
+	_apply()
+
+
+## The hands on a weapon: both (the baked pair), or with `at` one hand there in the weapon's frame.
+func _hands_on(at, single: bool = false) -> void:
+	if not single:
+		if _fast:
+			_pen.draw_mesh(PawnMesh.hands(gun_front), _pal_tex)
+		else:
+			Art.hands(_pen, gun_front, pal.skin)
+		return
+	var saved := _m
+	_tr(at.x, at.y - 0.05)
+	_apply()
+	if _fast:
+		_pen.draw_mesh(PawnMesh.hands(null), _pal_tex)
 	else:
-		_weapon(view, aim)
+		Art.hands(_pen, null, pal.skin)
+	_m = saved
+	_apply()
 
 
 ## A blow in the air (round 17: the avatar's F, and the pike's thrust and the butt of a gun for everyone): a pale crescent that
@@ -381,7 +715,7 @@ func _swing(view: String, aim: float) -> void:
 	var lead := lerpf(-half, half, done)
 	var tail := maxf(-half, lead - 1.2)
 	var saved := _m
-	var pv: Vector2 = PIVOT[view]
+	var pv := PawnMotion.shoulder(_ori)
 	_tr(pv.x, pv.y)
 	_apply()
 	var steps := 8
@@ -460,7 +794,7 @@ func _draw_working() -> void:
 		if _strike_seen != NO_STRIKE and o.strike == _strike_seen + 1:
 			on_work_strike.call(_w_word, p.x, p.y)
 		_strike_seen = o.strike
-	WorkAnim.draw_person(self, o, WorkAnim.eased(_wk), p.facing, p.aim)
+	WorkAnim.draw_person(self, o, WorkAnim.eased(_wk), "W" if _mir else _vw, p.aim)
 
 
 ## The weapon drawn at the strength `fade` (1 in hand, less as it is put away for work); `aim` is the rules' angle.
@@ -480,40 +814,49 @@ func _weapon_faded(view: String, aim: float, fade: float, mirror: bool) -> void:
 	_apply()
 
 
-func _weapon(view: String, aim: float) -> void:
-	var p = entity
-	var saved := _m
-	var pv: Vector2 = PIVOT[view]
-	_tr(pv.x, pv.y)
-	var a := aim
-	if p.reloading > 0.0:
-		a = aim + sin(p.reloading * 5.0) * 0.15
-	_rot(a)
-	if cos(a) < 0.0:
-		_sc(1, -1)
-	var push: float = sin(p.thrust * PI) * 0.6 if p.weapon == "pike" else -p.recoil * 0.08
-	_tr(push, 0)
-	_apply()
-	_pen.draw_texture_rect(weapon_tex, weapon_rect, false)
-	if _fast:
-		_pen.draw_mesh(PawnMesh.hands(gun_front), _pal_tex)
-	else:
-		Art.hands(_pen, gun_front, pal.skin)
-	_m = saved
-
-
 func _draw_zombie() -> void:
 	var z = entity
 	var st := _style
-	var view := _view()
-	var mirror: bool = z.facing == "W"
-	var attacking: bool = z.state == "attack" or (z.state == "breach" and not z.moving)
-	var rate: float = st.claw_rate
+	var view := _vw
+	var mirror := _mir
+	var rm := PawnMotion.motion()
 	var thump: float = st.claw_thump
-	var bounce: float = st.bob
-	var sway: float = sin(z.t * 1.7 + z.x) * 0.06 + (sin(z.t * 7.3 * rate) * 0.035 if attacking else 0.0)
-	var lunge: float = maxf(0.0, sin(z.t * 7.3 * rate)) * 0.06 * thump if attacking else 0.0
-	var bob: float = absf(sin(z.walk_phase)) * 0.035 * bounce if z.moving else 0.0
+	var phase: float = z.walk_phase
+	var walking: bool = z.moving
+	# ANIM. Each of the dead has its own gait (its `_seed`: how much it rocks and bounces); one that limps drags a leg (it bobs on one step only); standing it rocks a little and breathes.
+	var vary := 0.8 + 0.4 * _seed
+	var stride := sin(phase)
+	var bob := 0.0
+	var roll: float = sin(z.t * 1.7 + z.x) * 0.06
+	if walking:
+		bob = (maxf(0.0, stride) * 0.06 if z.limp else absf(stride) * 0.035) * float(st.bob) * vary
+		roll += stride * 0.075 * vary * (0.5 if view == "E" else 1.0)
+	else:
+		bob = (0.5 + 0.5 * sin(anim_t * 2.2 + _seed * TAU)) * 0.008
+	bob *= rm
+	roll *= rm
+	# the attack follows the rules' own beat (`attack_t`, set back at each claw or bite): rear back as it runs down, lunge when it is reset, settle (the heavier kinds rear longer and hit harder)
+	var windup := 0.0
+	var hump := 0.0
+	if _atk > 0.0:
+		var rear := 0.5 if kind == "brute" else 0.3
+		if _strike_age < 0.25:
+			hump = sin(pow(clampf(_strike_age / 0.22, 0.0, 1.0), 0.6) * PI) * _atk
+		elif _at_seen < rear:
+			windup = PawnMotion.smooth(1.0 - _at_seen / rear) * _atk
+	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4)
+	var lean := Vector2(lf, 0.0)
+	if view == "S":
+		lean = Vector2(0.0, lf * 0.8)
+	elif view == "N":
+		lean = Vector2(0.0, -lf * 0.5)
+	var sy := 1.0 - 0.06 * hump * minf(thump, 1.4)
+	if _fl_t < 0.3:
+		# a flinch: it jerks away from the blow and comes back (a couple of frames)
+		var fk := exp(-_fl_t * 14.0) * rm
+		lean += Vector2(-_fl_dir.x if mirror else _fl_dir.x, _fl_dir.y * 0.5) * (0.34 * fk)
+		sy -= 0.06 * fk
+		bob -= 0.02 * fk
 	_reset()
 	var fs := figure_scale_xy()
 	if fs != Vector2.ONE:
@@ -524,36 +867,96 @@ func _draw_zombie() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_legs(view, z.walk_phase, z.moving, z.limp, 1.0, true)
+	_legs(view, phase, walking, z.limp, 1.0, true)
 	_tr(0, 0.3)
-	_rot(sway)
+	_rot(roll)
 	_tr(0, -0.3 - bob)
 	_lean(view)
+	_m = _m * PawnMotion.lean_xf(lean)
+	if sy != 1.0:
+		_tr(0, Art.FOOT_Y)
+		_sc(1.0, sy)
+		_tr(0, -Art.FOOT_Y)
+	var step := hump * 0.10 * minf(thump, 1.4) * rm
 	if view == "E":
-		_tr(lunge, 0)
+		_tr(step, 0)
 	else:
-		_tr(0, lunge * 0.5 if view == "S" else -lunge * 0.5)
+		_tr(0, step * 0.5 if view == "S" else -step * 0.5)
+	if _wid != 1.0:
+		_sc(_wid, 1.0)
 	_apply()
-	_arms(view, z.t, attacking, "back", z.walk_phase)
+	var reach: bool = _atk > 0.5 and st.pose == "sprint"
+	_arms_layer(view, "back", reach, phase, windup, hump, walking)
 	_draw_body(view)
-	_arms(view, z.t, attacking, "front", z.walk_phase)
+	_arms_layer(view, "front", reach, phase, windup, hump, walking)
+
+
+## One layer of the arms of one of the dead, raised as it rears back and slammed down as it strikes (the pose of the arms is moved about the shoulders, the picture of them is the one at rest),
+## and lagging a little behind the body's bounce as it walks.
+func _arms_layer(view: String, layer: String, reach: bool, phase: float, windup: float, hump: float, walking: bool) -> void:
+	var raise := windup - 0.8 * hump
+	if raise == 0.0:
+		_arms(view, 0.0, reach, layer, phase)
+		return
+	var saved := _m
+	if view == "E":
+		_tr(0, -0.2)
+		_rot(-raise * 0.9)
+		_tr(0, 0.2)
+	elif view == "S":
+		# (from the front the hands go up past the shoulders and come down in front of the belly: the arms are lifted and a little folded, never turned through flat)
+		_tr(0, -0.26 * raise)
+		_tr(0, -0.2)
+		_sc(1.0, 1.0 - 0.3 * raise)
+		_tr(0, 0.2)
+	else:
+		_tr(0, -0.2)
+		_sc(1.0, 1.0 + 0.6 * raise)
+		_tr(0, 0.2)
+	_apply()
+	_arms(view, 0.0, reach, layer, phase)
+	_m = saved
+	_apply()
 
 
 func _draw_dead() -> void:
 	var z = entity
-	var view := _view()
-	var e: float = z.fall * z.fall
+	var view := _vw
+	var rm := PawnMotion.motion()
+	# ANIM. The rules' fall runs 0.45 s; the collapse is drawn in the first 0.26 s of it: the knees buckle (a rock back and a drop), it topples with the weight of a body (slow, then fast) and
+	# lands with a small bounce; the shadow stays where it stood and fades as the body goes over it.
+	var f: float = clampf(float(z.fall) / 0.58, 0.0, 1.0)
+	var rot := 0.0
+	var sy := 1.0
+	if f < 0.25:
+		var b := PawnMotion.smooth(f / 0.25)
+		rot = -0.10 * b * rm
+		sy = 1.0 - 0.10 * b * rm
+	elif f < 0.85:
+		var u := (f - 0.25) / 0.6
+		rot = lerpf(-0.10 * rm, PI / 2.0, u * u)
+		sy = lerpf(1.0 - 0.10 * rm, 1.0, u)
+	else:
+		rot = PI / 2.0 * (1.0 + 0.05 * sin((f - 0.85) / 0.15 * PI) * rm)
 	var alpha := 1.0
 	if z.state == "dead" and z.dead_t > 55.0:
 		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
 	_reset()
-	_tr(0, 0.3)
-	_rot(z.fall_dir * (PI / 2.0) * e)
-	if z.facing == "W":
-		_sc(-1, 1)
 	var fs := figure_scale_xy()
+	if z.state == "dying" and _fast and f < 1.0:
+		if fs != Vector2.ONE:
+			_fit_figure(fs)
+		_apply()
+		_pen.draw_mesh(PawnMesh.shadow(kind), _pal_tex, Transform2D.IDENTITY, Color(1.0, 1.0, 1.0, (1.0 - f) * alpha))
+		_reset()
+	_tr(0, 0.3)
+	_rot(z.fall_dir * rot)
+	if _mir:
+		_sc(-1, 1)
 	if fs != Vector2.ONE:
 		_sc(fs.x, fs.y)
+	if sy != 1.0:
+		_sc(1.0, sy)
 	_tr(0, -0.3)
 	_apply()
 	_legs(view, 0.0, false, false, alpha, false)
