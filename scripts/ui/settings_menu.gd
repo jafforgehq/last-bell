@@ -16,6 +16,9 @@ const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["a
 const SCALE_MIN := 0.8
 const SCALE_MAX := 1.5
 const SCALE_STEP := 0.1
+## The Brightness slider's reach (scripts/render/dark_look.gd has the same).
+const BRIGHT_MIN := 0.7
+const BRIGHT_MAX := 1.3
 ## The switches: [pref key, what the player reads, and what it does].
 const SWITCHES := [
 	["hints", "Hints", "Tips and reminders while you play"],
@@ -31,7 +34,8 @@ const SPACIOUS_H := 1000.0
 const ROW_H_MID := 34.0
 ## How tall the buttons of the rows are (the size, the switches, the aiming), and in a short window.
 const ROW_H := 38.0
-const ROW_H_COMPACT := 32.0
+## (the dark look's Brightness row took 25 px of the smallest window: its buttons are 4 px slimmer, nine of them)
+const ROW_H_COMPACT := 28.0
 
 ## The sliders and their percent labels, by pref key.
 var sliders := {}
@@ -113,6 +117,7 @@ func _build_body() -> void:
 	scale_note = note("This window is too small for a bigger interface.", hud.WARN, 13)
 	scale_note.visible = false
 	body.add_child(scale_note)
+	body.add_child(_brightness_row())
 	for sw in SWITCHES:
 		if String(sw[0]) == "fullscreen" and shell.on_web():
 			continue
@@ -254,6 +259,54 @@ func _preview(key: String) -> void:
 				s.play("thud", 0.8, 0.0)
 		"master", "ui":
 			shell.play("ui_click")
+
+
+# -------------------------------------------------------------- brightness --
+
+## "Brightness": the game is dark on purpose (an overcast day, a night that is really dark); this lifts or lowers the whole picture, 70% to 130%, 100% as it is made
+## (scripts/render/dark_look.gd reads `ui.brightness` and puts it in the last pass of the grade; the interface is not touched by it).
+func _brightness_row() -> Control:
+	var ring := PanelContainer.new()
+	ring.add_theme_stylebox_override("panel", _ring_box(false))
+	var row: HBoxContainer = hud._hbox(12)
+	ring.add_child(row)
+	var l: Label = hud._label("Brightness", Fonts.sans(500), 15, ink())
+	l.custom_minimum_size.x = 112
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	var s := HSlider.new()
+	s.min_value = BRIGHT_MIN
+	s.max_value = BRIGHT_MAX
+	s.step = 0.05
+	s.value = clampf(Prefs.number("ui", "brightness"), BRIGHT_MIN, BRIGHT_MAX)
+	s.scrollable = false
+	s.focus_mode = Control.FOCUS_ALL
+	s.custom_minimum_size = Vector2(140, 20)
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_style_slider(s)
+	s.tooltip_text = "The game is dark on purpose. Raise this if your screen is dim, or lower it for a grimmer look. The interface does not change."
+	ring.tooltip_text = s.tooltip_text
+	ring.mouse_filter = Control.MOUSE_FILTER_PASS
+	s.value_changed.connect(_on_brightness)
+	row.add_child(s)
+	var p: Label = hud._label(Kit.percent_text(s.value), Fonts.cond(600), 15, ink2())
+	p.custom_minimum_size.x = 48
+	p.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	p.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(p)
+	sliders["brightness"] = s
+	percents["brightness"] = p
+	s.focus_entered.connect(func(): ring.add_theme_stylebox_override("panel", _ring_box(true)))
+	s.focus_exited.connect(func(): ring.add_theme_stylebox_override("panel", _ring_box(false)))
+	return ring
+
+
+func _on_brightness(v: float) -> void:
+	var value := snappedf(clampf(v, BRIGHT_MIN, BRIGHT_MAX), 0.05)
+	Prefs.set_value("ui", "brightness", value)
+	percents["brightness"].text = Kit.percent_text(value)
+	_changed()
 
 
 # ---------------------------------------------------------- interface size --

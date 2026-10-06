@@ -131,7 +131,12 @@ func _style(dt: float) -> void:
 		mat.set_shader_parameter("cb", float(cb))
 	var lighting = main.get("lighting")
 	var dark := float(lighting.dark) if lighting != null and lighting.get("dark") != null else 0.0
-	var gain := clampf(1.0 / maxf(1.0 - dark, 0.2), 1.0, 2.6)
+	# (the shimmer is in the world, which the sky multiplies: with the dark look the day multiplies it too, so the gain follows the light the world really has)
+	var amb := 1.0 - dark
+	if lighting != null and lighting.get("grade") != null and lighting.modulate_node != null:
+		var cm: Color = lighting.modulate_node.color
+		amb = (cm.r + cm.g + cm.b) / 3.0
+	var gain := clampf(1.0 / maxf(amb, 0.2), 1.0, 2.6)
 	if absf(gain - _last_gain) > 0.02:
 		_last_gain = gain
 		mat.set_shader_parameter("gain", gain)

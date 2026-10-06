@@ -5,14 +5,14 @@
 ##
 ## Sections: `audio` (master, sfx, ambience, ui, music: 0 to 1; muted: the toolbar's sound switch), `ui` (scale,
 ## hints, reduce_motion, fullscreen, aim_mode: "right" or "always", see scripts/aim_mode.gd; and the accessibility
-## settings, scripts/access.gd: text_size "normal", "large" or "larger", colour_blind, reduce_flashes) and
+## settings, scripts/access.gd: text_size "normal", "large" or "larger", colour_blind, reduce_flashes; and brightness, 0.7 to 1.3, scripts/render/dark_look.gd) and
 ## `flags` (tutorial_done, tutorial_offered).
 extends RefCounted
 
 const DEFAULT_PATH := "user://prefs.cfg"
 const DEFAULTS := {
 	"audio": {"master": 1.0, "sfx": 1.0, "ambience": 1.0, "ui": 1.0, "music": 1.0, "muted": false},
-	"ui": {"scale": 1.0, "hints": true, "reduce_motion": false, "fullscreen": false, "aim_mode": "right", "minimap": true, "text_size": "normal", "colour_blind": false, "reduce_flashes": false},
+	"ui": {"scale": 1.0, "hints": true, "reduce_motion": false, "fullscreen": false, "aim_mode": "right", "minimap": true, "text_size": "normal", "colour_blind": false, "reduce_flashes": false, "brightness": 1.0},
 	"flags": {"tutorial_done": false, "tutorial_offered": false},
 }
 

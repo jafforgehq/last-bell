@@ -84,6 +84,9 @@ void fragment() {
 "
 
 var modulate_node: CanvasModulate
+## The dark look (scripts/render/dark_look.gd; made by main.gd): the ambient light of the day and of the night, the full-screen grade, a house's dimmer air and the weather's extra dark.
+## null (a test's rig, the school's yard under `--noavatar` has it too): the sky is the old one, as it was.
+var grade = null
 ## The rules' seasons (sim.seasons); null, or not a campaign: no mapping and no tint.
 var seasons = null
 var lights: Array = [] # {def, node, scale}
@@ -112,6 +115,18 @@ var _calm_looked := -10.0
 static func lamp_flicker(t: float, x: float, warm: float) -> float:
 	var k := 0.06 + 0.34 * (1.0 - clampf(warm, 0.0, 1.0))
 	return 1.0 - k * (0.5 + 0.5 * sin(t * 9.1 + x * 2.9)) - k * 0.5 * (0.5 + 0.5 * sin(t * 23.7 + x * 5.3))
+
+
+## How much darker the weather has made the picture, 0 to 1 (the rain: `set_extra_dim`). It is smoothed (about a second and a half from 0 to 1; at once under Reduce motion), darkens
+## and cools the scene a notch (down to about 58 percent of the light at 1), takes a little off the lamps' reach and drains a little colour. 0 (the default) is the dry day.
+func set_extra_dim(v: float) -> void:
+	if grade != null:
+		grade.set_extra_dim(v)
+
+
+## The extra dark as it is now (the smoothed one; 0 with no dark look).
+func get_extra_dim() -> float:
+	return float(grade.extra_dim) if grade != null else 0.0
 
 
 static func sky_at(hour: float) -> Color:
@@ -229,6 +244,11 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 		tint = seasons.tint()
 	var sky := sky_at(hour)
 	dark = 1.0 - (sky.r + sky.g + sky.b) / 3.0
+	# (the dark look: what the world is multiplied by is its own table, `dark` above still says when the lamps burn; the grade's pass is told how night it is)
+	var world_sky := sky
+	if grade != null:
+		grade.follow(dt, grade.night_of(dark), t)
+		world_sky = grade.world_color(hour, grade.night_of(dark))
 	var flicker := 1.0
 	if power > 0.0 and power < 1.0 and not Prefs.on("ui", "reduce_motion"):
 		# the lamps stutter as the power goes
@@ -236,19 +256,22 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 	lamp_level = clampf((dark - 0.08) * 4.0, 0.0, 1.0) * power * flicker
 	_set_veil(sky)
 	if dark <= 0.02:
-		modulate_node.color = _dimmed((Color.WHITE if fog < 0.01 else _grey(Color.WHITE, fog * 0.12)) * tint)
+		var day := Color.WHITE if grade == null else world_sky
+		modulate_node.color = (day if fog < 0.01 else _grey(day, fog * 0.12)) * tint
 		for l in lights:
 			l.node.visible = false
 		for f in flash_nodes:
 			f.visible = false
 		return
-	modulate_node.color = _dimmed(_tinted(sky) * tint)
+	modulate_node.color = _tinted(world_sky) * tint
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
 	if t - _calm_looked >= 0.5 or t < _calm_looked:
 		_calm_looked = t
 		calm = Prefs.on("ui", "reduce_motion")
 	var energy_k := lerpf(1.0, FOG_LIGHT_ENERGY, fog)
 	var reach_k := lerpf(1.0, FOG_LIGHT_REACH, fog)
+	if grade != null:
+		reach_k *= grade.reach_k()    # (the rain mutes the lamps' reach a little)
 	for l in lights:
 		var def: Dictionary = l.def
 		var level := 1.0
@@ -279,23 +302,6 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 			node.visible = true
 		else:
 			node.visible = false
-
-
-## A darker light on top of the sky's, 0 (none: every game as it was) to 1: the rain's grey in the town (0.15 a drizzle, 0.3 a steady rain, 0.45 a storm: scripts/render/rain_view.gd) and any
-## other look that asks for it. The caller eases it; here it is a straight multiplier of the sky colour, a little cooler than it is darker.
-var extra_dim := 0.0
-
-
-func set_extra_dim(v: float) -> void:
-	extra_dim = clampf(v, 0.0, 1.0)
-
-
-func _dimmed(c: Color) -> Color:
-	if extra_dim <= 0.0:
-		return c
-	# (the night is dark already: the same cloud takes less of it, or a storm at midnight would be black)
-	var k := extra_dim * (1.0 - 0.55 * clampf(dark, 0.0, 1.0))
-	return Color(c.r * (1.0 - 0.58 * k), c.g * (1.0 - 0.52 * k), c.b * (1.0 - 0.40 * k), c.a)
 
 
 ## The fog and the power come and go over a second or two (at once under reduce motion).
