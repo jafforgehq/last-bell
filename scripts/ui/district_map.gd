@@ -15,6 +15,21 @@ extends VBoxContainer
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
+const TierMarks := preload("res://scripts/ui/tier_marks.gd")
+
+## The key's mark for a tier of house: its icon (a star, a circle or a square) in its colour.
+class TierDot:
+	extends Control
+	const Marks := preload("res://scripts/ui/tier_marks.gd")
+	var tier := "ok"
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(14, 14)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		Marks.draw_icon(self, tier, size * 0.5, 6.0)
 
 const GROUND := Color(0.105, 0.17, 0.14, 1.0)
 const ROAD := Color(0.07, 0.1, 0.09, 1.0)
@@ -88,14 +103,20 @@ func _legend() -> void:
 	row.add_theme_constant_override("h_separation", 14)
 	row.add_theme_constant_override("v_separation", 2)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for item in [[HOUSE_SEEN, "Looked in"], [BASE_FILL, "Your base"], [host.OK, "House to claim"], [KNOWN, "Someone waits"], [host.ACCENT, "You"]]:
+	# (the houses to claim, by tier: a star, a circle, a square, as the pennants and the arrows at the screen's edge show them: scripts/ui/tier_marks.gd)
+	for item in [[HOUSE_SEEN, "Looked in"], [BASE_FILL, "Your base"], ["best", "Best house to claim"], ["ok", "Fair house"], ["poor", "Poor house"], [KNOWN, "Someone waits"], [host.ACCENT, "You"]]:
 		var one: HBoxContainer = host._hbox(5)
-		var dot := ColorRect.new()
-		dot.color = item[0]
-		dot.custom_minimum_size = Vector2(10, 10)
-		dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		one.add_child(dot)
+		if item[0] is String:
+			var mark := TierDot.new()
+			mark.tier = String(item[0])
+			one.add_child(mark)
+		else:
+			var dot := ColorRect.new()
+			dot.color = item[0]
+			dot.custom_minimum_size = Vector2(10, 10)
+			dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			one.add_child(dot)
 		one.add_child(host._label(String(item[1]), Fonts.sans(400), 14, host.INK2))
 		row.add_child(one)
 	add_child(row)
@@ -216,7 +237,7 @@ func refresh() -> void:
 		cand_box.remove_child(c)
 		c.queue_free()
 	for c in cands:
-		var line: Label = host._label("%s  %d m" % [String(c.label), roundi(float(c.dist))], Fonts.sans(600), 14, host.OK)
+		var line: Label = host._label("%s  %d m" % [String(c.label), roundi(float(c.dist))], Fonts.sans(600), 14, TierMarks.color(String(c.tier)))
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		line.custom_minimum_size.x = 80
 		cand_box.add_child(line)
@@ -357,15 +378,18 @@ class MapView:
 		for c in page.candidates():
 			var foot := _px(c.pos)
 			var top := foot + Vector2(0, -13)
+			var tier_col := TierMarks.color(String(c.tier))
 			draw_line(foot, top, Color(0, 0, 0, 0.7), 3.5, true)
-			draw_line(foot, top, host.OK, 1.5, true)
+			draw_line(foot, top, tier_col, 1.5, true)
 			var flag := PackedVector2Array([top, top + Vector2(9, 3.5), top + Vector2(0, 7)])
-			draw_colored_polygon(flag, host.OK)
+			draw_colored_polygon(flag, tier_col)
 			var rim2 := PackedVector2Array(flag)
 			rim2.append(flag[0])
 			draw_polyline(rim2, Color(0, 0, 0, 0.8), 1.2, true)
 			var name := String(c.label).get_slice(". ", 0)
-			var w := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+			# (the tier's icon before the name, and under the colour-blind setting its letter too)
+			var lead := 12.0 + (10.0 if TierMarks.letters_on() else 0.0)
+			var w := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + lead
 			var spots := [Vector2(foot.x - w * 0.5, top.y - 4.0), Vector2(foot.x - w * 0.5, foot.y + 14.0), Vector2(foot.x + 12.0, top.y + 8.0), Vector2(foot.x - w - 6.0, top.y + 8.0), Vector2(foot.x - w * 0.5, top.y - 18.0), Vector2(foot.x - w * 0.5, foot.y + 28.0)]
 			var at2: Vector2 = spots[0]
 			for s in spots:
@@ -379,8 +403,13 @@ class MapView:
 					at2 = p
 					break
 			placed.append(Rect2(at2.x - 1.0, at2.y - 11.0, w + 2.0, 14.0))
-			draw_string_outline(font, at2, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
-			draw_string(font, at2, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, host.INK)
+			var name_at := at2 + Vector2(lead, 0.0)
+			TierMarks.draw_icon(self, String(c.tier), at2 + Vector2(5.5, -4.0), 4.6)
+			if TierMarks.letters_on():
+				draw_string_outline(font, at2 + Vector2(12.0, 0.0), TierMarks.letter(String(c.tier)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
+				draw_string(font, at2 + Vector2(12.0, 0.0), TierMarks.letter(String(c.tier)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, tier_col)
+			draw_string_outline(font, name_at, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.9))
+			draw_string(font, name_at, name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, host.INK)
 
 	## The house whose footprint (a little grown) holds the control's point, or -1.
 	func house_at_point(p: Vector2) -> int:

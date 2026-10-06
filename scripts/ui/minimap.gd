@@ -3,7 +3,7 @@
 ## `on_frame(dt)`); one of the Settings' switches ("Minimap", `ui/minimap`, on) puts it away. A click on it opens the Map page (the same as M).
 ##
 ## WHAT IT SHOWS (about 40 tiles each way): the roads dark, the sidewalks and yards, the houses as lighter blocks (the ones looked in warm, the BASE in gold, and while there is no base
-## the houses that may be claimed in green); the base's house as a gold mark, and its direction on the rim when it is out of the window; the survivors known of and not yet home
+## the houses that may be claimed in the colour of their tier: gold the best, green a fair one, grey a poor one); the base's house as a gold mark, and its direction on the rim when it is out of the window; the survivors known of and not yet home
 ## (blue diamonds, as the Map page's); and, within DEAD_R tiles, the dead that are awake (small red squares).
 ##
 ## WHAT IT COSTS. The ground is drawn by ONE quad with a shader (scripts/ui/minimap.gdshader) from three textures made once when the town begins (a pixel for each tile: the
@@ -17,6 +17,7 @@ const Access := preload("res://scripts/access.gd")
 const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const SHADER := preload("res://scripts/ui/minimap.gdshader")
+const TierMarks := preload("res://scripts/ui/tier_marks.gd")
 
 ## Tiles across the window (so 40 each way), and the radius in tiles inside which an awake dead one is shown.
 const SPAN_TILES := 80.0
@@ -53,6 +54,11 @@ var aim := 0.0
 var dead := PackedVector2Array()
 var known := PackedVector2Array()
 var cands := PackedVector2Array()
+## The colour of each of them by its tier (scripts/ui/tier_marks.gd: gold the best, green a fair one, grey a poor one), as the pennants and the edge arrows have it.
+var cand_cols := PackedColorArray()
+var cand_tiers := PackedStringArray()
+## The colour-blind setting: each pin of a house to claim carries its tier's letter (B, F, P).
+var _letters := false
 var base_at := Vector2(-1.0, -1.0)
 ## The CPU time of this part, microseconds, for `--hudb-cost` (see crew_marks.gd).
 var cost_us := 0.0
@@ -277,6 +283,9 @@ func _refresh_flags() -> void:
 		base_h = int(base.house)
 	base_at = Vector2(-1.0, -1.0)
 	cands.resize(0)
+	cand_cols.resize(0)
+	cand_tiers.resize(0)
+	_letters = TierMarks.letters_on()
 	if base_h >= 0 and base_h < houses.size():
 		base_at = Vector2(Rect2i(houses[base_h].rect).get_center())
 		if base_h < 256:
@@ -285,9 +294,12 @@ func _refresh_flags() -> void:
 		for c in Arrival.candidates(town):
 			var h := int(c.house)
 			if h >= 0 and h < houses.size():
+				var tier := String(c.get("tier", "ok"))
 				if h < 256:
-					next[h] = 3
+					next[h] = TierMarks.flag_of(tier)
 				cands.append(Vector2(Rect2i(houses[h].rect).get_center()))
+				cand_cols.append(TierMarks.color(tier))
+				cand_tiers.append(tier)
 	known.resize(0)
 	var rescue = sim.get("rescue")
 	if rescue != null and rescue.has_method("list"):
@@ -334,8 +346,11 @@ func _draw_marks() -> void:
 			marks.draw_colored_polygon(_dia, KNOWN_COLOR)
 			marks.draw_polyline(_dia_line, Color(0, 0, 0, 0.75), 1.2)
 	# the houses that may be claimed (before a base): a green pennant on the house, or its direction on the rim
-	for cand in cands:
-		_pin_or_arrow(c, (cand - me) * ppt, reach, CAND_COLOR, false)
+	for i in cands.size():
+		var pin_d := (cands[i] - me) * ppt
+		_pin_or_arrow(c, pin_d, reach, cand_cols[i] if i < cand_cols.size() else CAND_COLOR, false)
+		if _letters and i < cand_tiers.size() and pin_d.length() <= reach:
+			marks.draw_string(Fonts.cond(700), c + pin_d + Vector2(5.0, -1.0), TierMarks.letter(cand_tiers[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, cand_cols[i])
 	# the base: a gold house, or its direction on the rim
 	if base_at.x >= 0.0:
 		_pin_or_arrow(c, (base_at - me) * ppt, reach, BASE_COLOR, true)
