@@ -26,6 +26,7 @@ const GROUPS := [
 			{"keys": "R", "what": "Reload", "hud": ["R", "Reload"], "legend": ["a", "reload", "R", "reload"]},
 			{"keys": "F", "what": "Swing, whatever you hold", "hud": ["F", "Swing"], "legend": ["a", "swing", "F", "swing"]},
 			{"keys": "E", "what": "Use: search, talk, sleep, treat", "hud": ["E", "Use, search"], "legend": ["b", "use", "E", "use"]},
+			{"keys": "E", "what": "Hold: search the whole room, when it is clear and has two containers or more", "hud": ["E", "Hold: whole room"]},
 			{"keys": "Q", "what": "Put the weapon away, or draw it again", "hud": ["Q", "Weapon away"], "legend": ["b", "away", "Q", "weapon away"]},
 			{"keys": "Scroll", "what": "Zoom, with the wheel or a pinch", "hud": ["Scroll", "Zoom"]},
 		],

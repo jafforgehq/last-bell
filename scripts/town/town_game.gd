@@ -43,6 +43,8 @@ const VIEW_PARTS := {
 	"help_tips": "res://scripts/ui/help_tips.gd",
 	"access_marks": "res://scripts/ui/access_marks.gd",
 	"edge_arrows": "res://scripts/ui/edge_arrows.gd",
+	"loot_shimmer": "res://scripts/render/loot_shimmer.gd",
+	"room_search_ui": "res://scripts/ui/room_search_ui.gd",
 	"wait_button": "res://scripts/ui/wait_button.gd",
 	"sprint_view": "res://scripts/ui/sprint_view.gd",
 }
