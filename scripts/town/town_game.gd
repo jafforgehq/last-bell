@@ -31,6 +31,8 @@ const VIEW_PARTS := {
 	"rescue_card": "res://scripts/ui/rescue_card.gd",
 	"town_hud": "res://scripts/ui/town_hud.gd",
 	"sleep_fade": "res://scripts/ui/sleep_fade.gd",
+	"night_event": "res://scripts/ui/night_event.gd",
+	"dawn_tally": "res://scripts/ui/dawn_tally.gd",
 	"town_audio": "res://scripts/audio/town_audio.gd",
 	"hurt_pulse": "res://scripts/ui/hurt_pulse.gd",
 	"crew_marks": "res://scripts/ui/crew_marks.gd",
