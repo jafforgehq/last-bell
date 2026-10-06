@@ -34,7 +34,7 @@ const K_GLOW := 8     # a soft patch of light that fades (additive)
 const MAX_PARTS := 224
 const MAX_FLASHES := 12
 const MAX_BLOWS := 6
-## How long the trail of a swing lasts (seconds of the game's time).
+## How long the trail of a swing lasts (seconds of the game's time); the town's own is `blow_s`, from assets/data/melee.json (`set_melee`).
 const BLOW_S := 0.16
 const MAX_DECALS := 150
 const MAX_FALLEN := 200
@@ -135,6 +135,9 @@ var _splat_budget := SPLATS_PER_FRAME
 var _push := Vector2.ZERO
 var hitstop := 0.0
 var _hitstop_gap := 0.0
+## The town's melee numbers (assets/data/melee.json, `Melee.read()`: main.gd gives them in the town and nowhere else): {} everywhere else, and then the blow feels as it always did. `blow_s` is the trail's life.
+var melee_cfg: Dictionary = {}
+var blow_s := BLOW_S
 ## The last dry pull of the trigger (real time; -1000: none) and what it said ("empty" or "reloading").
 var dry_t := -1000.0
 var dry_word := ""
@@ -231,7 +234,7 @@ func update(dt: float) -> void:
 	if not _blows.is_empty():
 		for b in _blows:
 			b.t += dt
-		_blows = _blows.filter(func(b): return b.t < BLOW_S)
+		_blows = _blows.filter(func(b): return b.t < blow_s)
 	if not _later.is_empty():
 		var keep: Array = []
 		for w in _later:
@@ -417,6 +420,29 @@ func flash_lights() -> Array:
 	return out
 
 
+## The town's melee numbers (`Melee.read()`), or {} for a game with the old blow: the trail lives `trail_s`, and a hit and a kill of the player's own blow freeze the picture and push the camera (`_melee_impact`).
+func set_melee(cfg: Dictionary) -> void:
+	melee_cfg = cfg
+	blow_s = maxf(0.05, float(cfg.get("trail_s", BLOW_S))) if not cfg.is_empty() else BLOW_S
+
+
+## The weight of the player's blow landing (the town): the picture holds for a moment and the camera is pushed along the blow, more at a kill. Nothing under "reduce motion" (`calm`: the freeze and the push are
+## that setting's); the least time between two freezes is `hitstop_gap_s`, so that a run of blows is not a stutter.
+func _melee_impact(dir: Vector2, lethal: bool) -> void:
+	if melee_cfg.is_empty() or calm or not enabled:
+		return
+	var s := float(melee_cfg.get("hitstop_kill_s" if lethal else "hitstop_hit_s", 0.0))
+	if s > 0.0 and (lethal or _hitstop_gap <= 0.0):
+		hitstop = maxf(hitstop, s)
+		_hitstop_gap = float(melee_cfg.get("hitstop_gap_s", 0.12))
+		hitstops_asked += 1
+	var kick := float(melee_cfg.get("camera_kick_px", 0.0)) * (1.5 if lethal else 1.0)
+	if kick > 0.0:
+		_push += dir * kick
+		if _push.length() > KICK_MAX:
+			_push = _push.normalized() * KICK_MAX
+
+
 ## The avatar swings (the rules' blow: the butt, the pike's thrust, F): a bright trail sweeps across the arc for a moment. `age` is how far into
 ## the swing to begin (a screenshot's).
 func blow(p, reach: float, half_arc: float, age: float = 0.0) -> void:
@@ -489,6 +515,8 @@ func hit(z, ang: float, dmg: float, melee: bool, shooter) -> void:
 			_say("melee_hit", wound, 0.95, 0.06, 1.0, 0.05)
 		else:
 			_say("hit_flesh", wound, 0.95 if not head else 1.1, 0.06, 0.92 if size > 1.1 else 1.0, 0.05)
+	if melee and not armoured and shooter != null and bool(shooter.player):
+		_melee_impact(dir, false)    # (the town: the weight of the player's blow, none on steel; a kill adds to it in `kill`)
 	_hurt[z] = {"t0": t, "dir": dir, "kick": kick, "plate": armoured, "flash": true}
 
 
@@ -511,8 +539,11 @@ func _flesh_hit(ground: Vector2, height: float, wound: Vector2, dir: Vector2, me
 		burst.a *= 0.35    # ("Reduce flashes": the burst at a wound is faint)
 	_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.09, 0.26 if not head else 0.38, burst)
 	if melee:
-		# the thud of a blow: dust and a bigger sparkle
-		_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.14, 0.42, PALE)
+		# the thud of a blow: dust and a bigger sparkle ("Reduce flashes": a faint one)
+		var thud_star: Color = PALE
+		if soft:
+			thud_star.a *= 0.35
+		_add(K_STAR, wound.x, wound.y, 0.0, 0.0, 0.0, 0.0, 0.14, 0.42, thud_star)
 		_add(K_DUST, wound.x, wound.y, 0.0, dir.x * 0.3, dir.y * 0.3, 0.0, 0.5, 0.09, Color(0.80, 0.76, 0.68, 0.30), 0.5)
 
 
@@ -552,7 +583,9 @@ func kill(z, ang: float, melee: bool, shooter) -> void:
 	# where it comes down, a moment later: the dust of the body and its thud
 	if _later.size() < MAX_LATER:
 		_later.append({"at": t + 0.30, "what": "land", "x": float(z.x) + dir.x * mag * 0.8, "y": float(z.y) + 0.12})
-	if shooter != null and bool(shooter.player) and not calm and _hitstop_gap <= 0.0:
+	if melee and shooter != null and bool(shooter.player) and not melee_cfg.is_empty():
+		_melee_impact(dir, true)    # (the town's blow: its own, longer, freeze and its push, whatever the gap since the last)
+	elif shooter != null and bool(shooter.player) and not calm and _hitstop_gap <= 0.0:
 		if Vector2(float(shooter.x) - float(z.x), float(shooter.y) - float(z.y)).length() <= HITSTOP_RANGE:
 			hitstop = HITSTOP_S
 			_hitstop_gap = HITSTOP_GAP
@@ -952,10 +985,11 @@ func draw_add(ci: CanvasItem) -> void:
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
-## The trail of a swing: a crescent band whose bright head runs across the arc in the first half of BLOW_S and whose tail fades behind it, then the whole
-## of it fades. (Under "reduce motion" the head does not sweep: the band is there, whole, and fades.)
+## The trail of a swing: a crescent band whose bright head runs across the arc in the first half of `blow_s` and whose tail fades behind it, then the whole
+## of it fades. (Under "reduce motion" the head does not sweep: the band is there, whole, and fades; under "reduce flashes" it is about half as bright.)
 func _draw_blow(ci: CanvasItem, b: Dictionary) -> void:
-	var k: float = clampf(float(b.t) / BLOW_S, 0.0, 1.0)
+	var k: float = clampf(float(b.t) / blow_s, 0.0, 1.0)
+	var amp := 0.55 if soft else 1.0
 	var half: float = b.half
 	var reach: float = b.reach
 	var head := 1.0 if calm else clampf(k * 2.2, 0.0, 1.0)
@@ -973,7 +1007,7 @@ func _draw_blow(ci: CanvasItem, b: Dictionary) -> void:
 		var u := float(i) / float(steps)    # 0 at the tail, 1 at the head
 		outer_pts.append(o + Vector2.from_angle(a) * reach)
 		inner_pts.append(o + Vector2.from_angle(a) * inner)
-		cols.append(Color(1.0, 0.96, 0.84, 0.8 * u * fade))
+		cols.append(Color(1.0, 0.96, 0.84, 0.8 * u * fade * amp))
 	var pts := PackedVector2Array()
 	var colors := PackedColorArray()
 	for i in steps + 1:
@@ -983,7 +1017,7 @@ func _draw_blow(ci: CanvasItem, b: Dictionary) -> void:
 		pts.append(inner_pts[i])
 		colors.append(Color(cols[i].r, cols[i].g, cols[i].b, cols[i].a * 0.25))
 	ci.draw_polygon(pts, colors)
-	ci.draw_polyline(outer_pts, Color(1.0, 0.98, 0.9, 0.9 * fade), 0.04, true)
+	ci.draw_polyline(outer_pts, Color(1.0, 0.98, 0.9, 0.9 * fade * amp), 0.04, true)
 
 
 func _draw_flash(ci: CanvasItem, f: Dictionary) -> void:

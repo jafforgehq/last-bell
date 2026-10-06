@@ -32,6 +32,8 @@
 ## starts one by itself, and an empty magazine starts one when the trigger is let go.
 ## MELEE. `melee()` (F): an arc of MELEE_REACH tiles and MELEE_ARC degrees toward the aim hits every one of the dead in
 ## it once, with the pike's damage or the butt's, whatever the gun and with no ammunition; MELEE_COOLDOWN seconds between.
+## In the town (`sim.is_one_house()`) the swing is scripts/sim/melee.gd's (`melee_rules`, assets/data/melee.json: a quick wind-up, a hit moment, a short recovery, a stagger and a knock-back, a quiet kill);
+## the school, the demo and the no-player sim swing as above.
 ## SUCCESSION. When the player dies, turns or leaves (`on_player_lost`, called by medical.gd), the next in line (alive, at the base
 ## before away on a trip, up before down; the most trusted, then the best Leading, then the id) is the player; everyone's trust falls, a mourning
 ## shock goes through the morale, and a "succession" event is raised. The lost one's carried gear is lost with them:
@@ -47,6 +49,7 @@
 extends RefCounted
 
 const Sprint := preload("res://scripts/sim/sprint.gd")
+const MeleeRules := preload("res://scripts/sim/melee.gd")
 const WALK_SPEED := 3.2
 ## With the pointer free (no aim given) the gun turns to the way the person walks at this many radians a second: about a fifth of a second
 ## for half a turn.
@@ -108,12 +111,16 @@ var _over := PackedByteArray()
 var _click_at := -10.0
 ## The run (scripts/sim/sprint.gd): the breath, and whether she runs this step.
 var sprint
+## The town's swing (scripts/sim/melee.gd): the wind-up, the hit, the stagger and the knock-back.
+var melee_rules
 
 
 func setup(s) -> void:
 	sim = s
 	sprint = Sprint.new()
 	sprint.setup(s)
+	melee_rules = MeleeRules.new()
+	melee_rules.setup(self, s)
 
 
 ## A new run: nobody is the player (the caller names them with `set_player` after `start_run`).
@@ -121,6 +128,7 @@ func start() -> void:
 	sim.player_id = ""
 	_click_at = -10.0
 	sprint.start()
+	melee_rules.start()
 	for p in sim.people:
 		p.player = false
 		_clear_input(p)
@@ -133,6 +141,7 @@ func save() -> Dictionary:
 ## The flags of the people are loaded with them: the module's own word on who the player is wins over them.
 func load_state(d: Dictionary) -> void:
 	var id = d.get("player_id", "")
+	melee_rules.reset()
 	sim.player_id = ""
 	for p in sim.people:
 		p.player = false
@@ -226,6 +235,7 @@ func clear_hands(p) -> void:
 	p.input_reload = false
 	p.input_melee = false
 	sprint.wanted = false
+	melee_rules.cancel(p)    # (no blow lands from a person on the ground)
 
 
 # ---------------------------------------------------------------- the hands --
@@ -285,9 +295,15 @@ func update(p, dt: float) -> void:
 	if p.input_reload:
 		p.input_reload = false
 		_start_reload(p)
+	var town_swing: bool = melee_rules.active()
 	if p.input_melee:
 		p.input_melee = false
-		_swing(p)
+		if town_swing:
+			melee_rules.press(p)
+		else:
+			_swing(p)
+	if town_swing:
+		melee_rules.step(p, dt)
 	var ranged: bool = not p.gun.get("melee", false)
 	# (running lowers the gun: with "Always aim at the mouse" the trigger is ignored while she runs; the right-button aim never asks for a run)
 	var firing: bool = p.input_fire and not sprint.lowered()
@@ -670,6 +686,27 @@ func _start_reload(p) -> bool:
 
 
 # -------------------------------------------------------------------- melee --
+
+## The reach (tiles) and the whole arc (degrees) of a blow of F now: the town's (assets/data/melee.json) or the old game's (the views draw them).
+func melee_reach() -> float:
+	return melee_rules.reach_tiles() if melee_rules.active() else MELEE_REACH
+
+
+func melee_arc() -> float:
+	return melee_rules.arc_degrees() if melee_rules.active() else MELEE_ARC
+
+
+## Whether a wall is between two points for a blow (the swing's, `melee_rules`: the same line and walls as a blow's own).
+func blocked_line(a: Vector2, b: Vector2) -> bool:
+	_low = _low_tiles()
+	_over = _over_tiles()
+	return _wall_between(a, b)
+
+
+## Whether the avatar's box at (x, y) is in a wall (the lunge asks).
+func walls_at(x: float, y: float) -> bool:
+	return _blocked(x, y)
+
 
 ## The melee key: a swing of the arc, at most once in MELEE_COOLDOWN seconds, with the pike's damage or the butt's.
 func _swing(p) -> void:
