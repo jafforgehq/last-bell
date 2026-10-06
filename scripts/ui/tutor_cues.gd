@@ -14,6 +14,9 @@
 ##   search            a "?" badge over the first container nobody has searched in the room she is in (the nearest of the house when there is none in this room)
 ##   claim             a ring at the spot where E claims
 ##   ask               a ring round the first card of the crew at the top of the window
+## EARLY (five lessons): the cues are the lesson's `phase`: shoot is the shot and then the reload ("Reload: R"); claim is the ring on the front door on the road in (phase find), nothing in the house (the room chip is the
+## cue), the ring where E claims (phase claim); build is the outline on the way to the Build page (the radio's button, the Build tab, the NEXT card's button) and then the ring on the section waiting for her hands ("Hold E
+## here"); door, clear and search are HINTS (the card says HINT), each the old cue with one line on the thing.
 ## Each cue is gone the moment its lesson is done, with a small confirm sound (`ui_confirm`); the next begins after a short beat (BEAT_S). A lesson skipped, or "No lessons" (the flag of the
 ## town HUD's card, and the Esc menu's Lessons), puts its cue away too. The ammo box of the opening is drawn whatever the lessons say: it is in the world.
 ## THE REFUSAL MARKER (not a lesson): while a claim is refused because a room has not been looked into (the words "You have not looked in the utility yet"), a ring on that room's doorway.
@@ -30,6 +33,7 @@ const AimMode := preload("res://scripts/aim_mode.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const TownHud := preload("res://scripts/ui/town_hud.gd")
+const BuildStage := preload("res://scripts/ui/build_stage.gd")
 
 const GOLD := Color(0.941, 0.761, 0.29)
 const DARK := Color(0.04, 0.08, 0.07)
@@ -54,8 +58,15 @@ var main
 var hud
 var sim
 var layer: Control
+## EARLY: a layer over the HUD's boards for the one cue that points at a control of the HUD (the Build button), and what it draws.
+var top: Control
+var _top_rect := Rect2()
+var _top_a := 1.0
 ## The lesson whose cue is up ("" none), seconds since it came up, and the pause still to go before it does.
 var cue := ""
+## EARLY: what the lesson is about now (the guide's `phase`) and the one line of a hint's cue.
+var cue_phase := ""
+var _hint_line := ""
 var cue_age := 0.0
 var beat := 0.0
 ## The rehearsal card (made once) and how long it has left.
@@ -103,6 +114,12 @@ func on_ready(main_node) -> void:
 	hud.add_child(layer)
 	# (under the HUD's own boards, as the candidates' marks and the objective's arrow are: a cue in the world is never over a panel)
 	hud.move_child(layer, 0)
+	top = Control.new()
+	top.name = "TutorCuesTop"
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	top.draw.connect(_draw_top)
+	hud.add_child(top)
 	if ResourceLoader.exists(CRATE_PATH):
 		_crate = load(CRATE_PATH)
 	_build_card()
@@ -138,12 +155,15 @@ func on_frame(dt: float) -> void:
 	_now += dt
 	_calm = Access.calm_flashes()
 	_stage()
+	BuildStage.on_frame(main)    # (a screenshot's `--build=...`: the front fence ordered and her hands at it; nothing without the flag)
 	if _staged and _freeze:
 		main.speed = 0    # (a staged picture stays where it was staged)
 	_read_lesson(dt)
 	_step_pops(dt)
 	_step_card(dt)
 	layer.queue_redraw()
+	if top != null:
+		top.queue_redraw()
 	if _cost:
 		_cost_us += float(Time.get_ticks_usec() - t0)
 		_cost_n += 1
@@ -174,11 +194,18 @@ func _read_lesson(dt: float) -> void:
 	if off:
 		cue = ""
 		return
+	# (EARLY: a lesson has phases, and the card may be a hint: the cue follows what the player is at, and comes up afresh when that changes)
+	var phase := String(g.get("phase", ""))
+	_hint_line = String(g.get("line", ""))
 	if id != cue:
 		cue = id
+		cue_phase = phase
 		cue_age = 0.0
 		var me = _me()
 		_shots0 = int(me.stats.shots) if me != null else 0
+	elif phase != cue_phase:
+		cue_phase = phase
+		cue_age = 0.0
 	if beat > 0.0:
 		beat -= dt
 	else:
@@ -296,6 +323,7 @@ func _px(n: int) -> int:
 
 func _draw_layer() -> void:
 	drawn = ""
+	_top_rect = Rect2()
 	if hud == null or sim == null or _me() == null:
 		return
 	_draw_box()
@@ -307,17 +335,21 @@ func _draw_layer() -> void:
 			"walk":
 				_cue_walk()
 			"shoot":
-				_cue_shoot()
-			"reload":
-				_cue_reload()
-			"find":
-				_cue_find()
-			"door":
-				_cue_door()
-			"search":
-				_cue_search()
+				# (the one lesson of the gun: the shot, then the reload)
+				if cue_phase == "reload":
+					_cue_reload()
+				else:
+					_cue_shoot()
 			"claim":
-				_cue_claim()
+				# (the claim lesson: the front door on the road in, nothing in the house itself (the room chip is the cue), the spot where E claims once it is clear)
+				if cue_phase == "find":
+					_cue_find()
+				elif cue_phase == "claim":
+					_cue_claim()
+			"build":
+				_cue_build()
+			"door", "clear", "search":
+				_cue_hint()
 			"ask":
 				_cue_ask()
 	_draw_refusal()
@@ -340,13 +372,20 @@ func _ring(c: Vector2, r: float, a: float = 1.0, bold: bool = false) -> void:
 
 
 ## A pulsing outline of a rectangle (pixels).
-func _outline(rc: Rect2, a: float = 1.0) -> void:
+func _outline(rc: Rect2, a: float = 1.0, ci: CanvasItem = null) -> void:
+	var c: CanvasItem = ci if ci != null else layer
 	var p := _pulse()
 	var grow := 3.0 + (3.0 * p if not _calm else 2.0)
 	var r2 := rc.grow(grow)
-	layer.draw_rect(r2, Color(GOLD, 0.10 * a), true)
-	layer.draw_rect(r2.grow(1.5), Color(DARK, 0.8 * a), false, 5.0)
-	layer.draw_rect(r2, Color(GOLD, (0.65 + 0.35 * p) * a), false, 3.0)
+	c.draw_rect(r2, Color(GOLD, 0.10 * a), true)
+	c.draw_rect(r2.grow(1.5), Color(DARK, 0.8 * a), false, 5.0)
+	c.draw_rect(r2, Color(GOLD, (0.65 + 0.35 * p) * a), false, 3.0)
+
+
+## EARLY: what is drawn over the HUD's own boards (the toolbar's button, the radio's tab: a control of the HUD cannot be pointed at from under it).
+func _draw_top() -> void:
+	if _top_rect.has_area() and cue == "build" and beat <= 0.0:
+		_outline(_top_rect, _top_a, top)
 
 
 ## A key cap with its letter, lit when `lit`.
@@ -584,6 +623,8 @@ func _cue_door() -> void:
 		rc = Rect2(rc.get_center() - Vector2(rc.size.x * 0.5, 7.0), Vector2(rc.size.x, 14.0))
 	if Rect2(Vector2.ZERO, _view()).grow(40.0).intersects(rc):
 		_outline(rc, a)
+		if _refused_room() < 0:    # (the refusal marker has its own words on the same door)
+			_hint_plate(Vector2(rc.get_center().x, rc.end.y + 12.0), a)
 		drawn = "door"
 
 
@@ -668,6 +709,7 @@ func _cue_search() -> void:
 	var w := f.get_string_size("?", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	layer.draw_string(f, at + Vector2(-w * 0.5, float(size) * 0.34), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(DARK, a))
 	layer.draw_colored_polygon(PackedVector2Array([at + Vector2(-5, r - 1), at + Vector2(5, r - 1), at + Vector2(0, r + 6)]), Color(GOLD, a))
+	_hint_plate(at + Vector2(0.0, r + 10.0), a)
 	drawn = "search"
 
 
@@ -710,6 +752,113 @@ func _cue_claim() -> void:
 	if Rect2(Vector2.ZERO, _view()).grow(-20.0).has_point(c):
 		_ring(c, maxf(0.7 * _zoom(), 20.0), _fade())
 		drawn = "claim"
+
+
+## EARLY: the build lesson's cue. Phase "page": the way to the Build page, step by step (the radio's button while the panel is shut, the Build tab while it is on another page, the NEXT card's button once it is on the Build
+## page). Phase "site": a ring on the section waiting for her hands (the nearest to her), with "Hold E here" (the E prompt takes over when she is in reach).
+func _cue_build() -> void:
+	var a := _fade()
+	if cue_phase == "site":
+		var bh = sim.get("build_hands")
+		var me = _me()
+		if bh == null or me == null:
+			return
+		var here := Vector2(me.x, me.y)
+		var best := Vector2.INF
+		var best_d := INF
+		for e in bh.sites():
+			var r: Rect2i = e.rect
+			var p := Vector2(clampf(here.x, float(r.position.x), float(r.end.x)), clampf(here.y, float(r.position.y), float(r.end.y)))
+			if p.distance_to(here) < best_d:
+				best_d = p.distance_to(here)
+				best = p
+		if best == Vector2.INF:
+			return
+		var c := _s(best)
+		var z := _zoom()
+		if Rect2(Vector2.ZERO, _view()).grow(-24.0).has_point(c):
+			_ring(c, maxf(0.9 * z, 22.0), a, best_d <= 2.6)
+			if best_d > 2.6:
+				_hint_text_plate(c + Vector2(0.0, maxf(0.9 * z, 22.0) + 10.0), "Hold E here to build", a)
+			drawn = "build"
+		else:
+			_edge_chevron(c, a)
+			drawn = "build"
+		return
+	var node := _build_page_node()
+	if node == null:
+		return
+	var rc := Rect2(node.get_global_rect().position - layer.get_global_rect().position, node.size)
+	if not rc.has_area():
+		return
+	_top_rect = rc    # (drawn over the HUD's boards: `_draw_top`)
+	_top_a = a
+	drawn = "build"
+
+
+## The control the build lesson points at (null when there is none to point at).
+func _build_page_node() -> Control:
+	var panel = hud.get("radio_panel")
+	var node = null
+	if hud.has_method("radio_open") and bool(hud.radio_open()) and panel != null:
+		if String(hud.radio_page()) == "build":
+			var page = panel.page_node("build")
+			var nc = page.get("next_card") if page != null else null
+			if nc is Dictionary and (nc as Dictionary).get("action") is Control:
+				node = nc.action
+		elif panel.get("tabs") is Dictionary:
+			node = (panel.tabs as Dictionary).get("build")
+	else:
+		node = hud.get("build_button")    # (the hammer in the toolbar: N)
+	if node is Control and is_instance_valid(node) and (node as Control).is_visible_in_tree():
+		return node
+	return null
+
+
+## EARLY: the cue of a hint (the card says "HINT"): the thing, and one line on it.
+func _cue_hint() -> void:
+	match cue:
+		"door":
+			_cue_door()
+		"search":
+			_cue_search()
+		"clear":
+			_cue_clear()
+
+
+## A ring on the middle of the nearest room of the house in hand that is not clear.
+func _cue_clear() -> void:
+	var sc = _scenario()
+	var rooms: Dictionary = sc._rooms_progress() if sc != null and sc.has_method("_rooms_progress") else {}
+	var at = rooms.get("at")
+	if not (at is Vector2):
+		return
+	var a := _fade()
+	var c := _s(at)
+	var z := _zoom()
+	if Rect2(Vector2.ZERO, _view()).grow(-24.0).has_point(c):
+		_ring(c, maxf(1.1 * z, 24.0), a)
+		_hint_plate(c + Vector2(0.0, maxf(1.1 * z, 24.0) + 8.0), a)
+	else:
+		_edge_chevron(c, a)
+	drawn = "clear"
+
+
+## The one line of a hint, on a plate whose top middle is at `px`.
+func _hint_plate(px: Vector2, a: float) -> void:
+	_hint_text_plate(px, _hint_line, a)
+
+
+func _hint_text_plate(px: Vector2, line: String, a: float) -> void:
+	if line == "":
+		return
+	var f := Fonts.cond(700)
+	var size := _px(15)
+	var w := f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var vp := _view()
+	var rc := Rect2(Vector2(clampf(px.x - w * 0.5 - 8.0, PAD, maxf(vp.x - w - 16.0 - PAD, PAD)), clampf(px.y, 70.0, maxf(vp.y - 100.0, 70.0))), Vector2(w + 16.0, float(size) + 10.0))
+	_plate(rc, a)
+	layer.draw_string(f, rc.position + Vector2(8.0, float(size) + 1.0), line, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(INK, a))
 
 
 ## A ring round the first card of the crew (the avatar's own is the first card: the next one is the crew's).

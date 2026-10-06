@@ -212,6 +212,14 @@ func busy() -> bool:
 	return not _s.is_empty()
 
 
+## EARLY: the length of the session in hand, put again (a session whose end is not fixed: the avatar's own hands at a section, scripts/town/build_hands.gd, tell the ring what is left of the work every step).
+## It stays a little ahead of what has run, so that it ends only when the one who holds it says so.
+func retime(of_seconds: float) -> void:
+	if _s.is_empty():
+		return
+	_s.of = maxf(float(_s.t) + maxf(of_seconds, 0.0), float(_s.t) + 0.25)
+
+
 ## Ends the session undone (E again, or the hands, the wound, the reach).
 func cancel(_why: String = "") -> void:
 	if _s.is_empty():

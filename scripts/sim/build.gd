@@ -678,6 +678,19 @@ func update(dt: float) -> void:
 		_finish(pl)
 
 
+## One House (EARLY, scripts/town/build_hands.gd): the avatar's own hands at a site, `hours` of builder-hours of work added to it, and the site finished when they are all done (as `update` does it).
+## False when the work finished the site (or there was no site to work), true while it goes on. The school and the colony never call it.
+func hand_work(plot_id: String, hours: float) -> bool:
+	var pl := plot(plot_id)
+	if pl.is_empty() or pl.site.is_empty() or hours <= 0.0:
+		return false
+	pl.site.progress = float(pl.site.progress) + hours
+	if float(pl.site.progress) >= float(pl.site.work):
+		_finish(pl)
+		return false
+	return true
+
+
 ## A building is lost to the dead (a raid on a lot): gone with nothing back.
 func ruin(plot_id: String) -> bool:
 	var pl := plot(plot_id)

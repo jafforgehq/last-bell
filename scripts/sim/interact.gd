@@ -71,7 +71,7 @@ const AMMO_LOW := 20.0
 ## The walking input this long is a hand on the keys.
 const HANDS_ON := 0.25
 const EPS := 1.0e-6
-const RANK := {"person": 0, "post": 1, "bench": 2, "gate": 3, "vehicle": 4, "wall": 5, "problem": 1, "rescue": 0, "claim": 1, "bed": 2, "stash": 2, "gate_base": 3, "container": 4, "door": 5, "slot": 6, "strip": 6, "selfcare": 7}
+const RANK := {"person": 0, "post": 1, "bench": 2, "gate": 3, "vehicle": 4, "wall": 5, "problem": 1, "rescue": 0, "claim": 1, "bed": 2, "stash": 2, "gate_base": 3, "container": 4, "door": 5, "slot": 6, "strip": 6, "build": 6, "selfcare": 7}
 
 var sim
 ## The post the avatar is on ("" none), what it is doing with its hands ("bench" or ""), the rules seconds of the session left, and

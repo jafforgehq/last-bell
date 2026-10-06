@@ -60,6 +60,10 @@ const ARR_OK_W := 22
 const ARR_POOR_W := 14
 const ARR_COTTAGE := Vector2i(10, 8)
 const ARR_COTTAGE_GROUND := 5
+## EARLY (the walk in is short): the avatar begins this many tiles inside the map's edge, not at it. The avenue's end from the edge to here is the FOREST LANE: the lots on both sides of it (the ring's) are woods for
+## ARR_WOODS tiles along it, so that she comes out of the trees. The spawns of a base are still the avenue's asphalt at the edge (35 tiles from a candidate's middle: the candidates have not moved), the lane is that road.
+const ARR_ENTRY_IN := 14
+const ARR_WOODS := 26
 const TREES := ["Elm", "Oak", "Birch", "Cedar", "Maple", "Pine", "Ash", "Willow", "Alder", "Hazel", "Linden", "Rowan", "Poplar", "Holly"]
 const ROADS_NS := ["Mill Road", "Station Road", "Chapel Lane", "Orchard Road", "School Lane", "Park Road", "Bridge Street", "Garden Way", "Quarry Road", "Field Lane", "Kiln Road", "Hill Road", "Market Lane", "Ferry Road", "Bell Lane", "Tannery Road", "Church Street"]
 
@@ -136,9 +140,10 @@ func _arrival_blocks(ay: int) -> void:
 	var best_north := rng.randf() < 0.5
 	var d_best := rng.randi_range(24, 26)
 	var d_other := rng.randi_range(17, 19)
+	# (EARLY: she begins at the end of the forest lane, ARR_ENTRY_IN tiles in from the edge: the lane is the avenue's end between the border and her)
 	arrival = {"east": east, "ay": ay, "best": "N" if best_north else "S",
-		"road": Rect2i(size - EDGE - 14 if east else EDGE, ay, 14, AVENUE_W),
-		"pos": Vector2(float(size) - 4.5 if east else 4.5, float(ay) + 3.5), "face": "W" if east else "E"}
+		"road": Rect2i(size - ARR_ENTRY_IN if east else EDGE, ay, ARR_ENTRY_IN - EDGE, AVENUE_W),
+		"pos": Vector2(float(size - ARR_ENTRY_IN) - 0.5 if east else float(ARR_ENTRY_IN) + 0.5, float(ay) + 3.5), "face": "W" if east else "E"}
 	_arrival_side("N", Rect2i(_area.position.x, _area.position.y, _area.size.x, ay - _area.position.y), d_best if best_north else d_other, east, best_north)
 	_arrival_side("S", Rect2i(_area.position.x, ay + AVENUE_W, _area.size.x, _area.end.y - ay - AVENUE_W), d_other if best_north else d_best, east, not best_north)
 
@@ -577,7 +582,11 @@ func _ring_lots() -> void:
 	for rd in roads:
 		if bool(rd.through):
 			cutters.append(Rect2i(rd.rect).grow(1))
-	for s in strips:
+	# EARLY: the strip the forest lane runs through (the west one, or the east): its lots beside the avenue are woods
+	var lane_strip := (3 if bool(arrival.get("east", false)) else 2) if not arrival.is_empty() else -1
+	var lane_y := int(arrival.get("ay", -100)) if not arrival.is_empty() else -100
+	for si in strips.size():
+		var s = strips[si]
 		var sr: Rect2i = s[0]
 		var horiz: bool = String(s[1]) == "h"
 		var a0 := sr.position.x if horiz else sr.position.y
@@ -598,7 +607,20 @@ func _ring_lots() -> void:
 		if a1 > at:
 			segs.append([at, a1])
 		for sg in segs:
-			_ring_segment(sr, horiz, int(sg[0]), int(sg[1]), String(s[2]), depth)
+			var lo := int(sg[0])
+			var hi := int(sg[1])
+			if si == lane_strip and hi - lo >= 8 and (hi == lane_y - 1 or lo == lane_y + AVENUE_W + 1):
+				# (the forest lane: the woods run ARR_WOODS tiles along the avenue from where it is, and what is left of the segment is as any other)
+				var wl := mini(ARR_WOODS, hi - lo)
+				if hi - lo - wl < 8:
+					wl = hi - lo
+				var woods := Rect2i(sr.position.x, hi - wl if hi == lane_y - 1 else lo, sr.size.x, wl)
+				_add_lot(woods, "S", D.EDGE, "woods", -1, woods.size.y)
+				if hi == lane_y - 1:
+					hi -= wl
+				else:
+					lo += wl
+			_ring_segment(sr, horiz, lo, hi, String(s[2]), depth)
 
 
 func _ring_segment(sr: Rect2i, horiz: bool, a0: int, a1: int, front_h: String, depth: int) -> void:

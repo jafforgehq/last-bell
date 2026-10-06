@@ -381,6 +381,8 @@ func _refresh_lesson() -> void:
 	if progress != "" and not bool(g.get("done", false)):
 		verb = "%s: %s" % [verb, progress]
 	var step := ("STEP %d OF %d" % [int(g.get("n", 0)), int(g.get("of", 0))]) if int(g.get("of", 0)) > 0 else "STEP"
+	if bool(g.get("hint", false)):
+		step = "HINT"    # (EARLY: the hint of a player who is stuck in the house: no step, one line)
 	var sig := "%s|%s|%s|%s|%s" % [id, String(g.get("text", "")), verb, step, str(bool(g.get("done", false)))]
 	lesson_card.visible = shown
 	if sig == _last_lesson_sig:

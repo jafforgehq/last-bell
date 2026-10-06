@@ -500,13 +500,28 @@ func stats_of(p: Dictionary) -> String:
 	return ", ".join(parts)
 
 
+## "about a minute and a half", for minutes of holding E.
+static func hands_text(minutes: float) -> String:
+	if minutes < 0.75:
+		return "under a minute"
+	if minutes < 1.25:
+		return "about a minute"
+	if minutes < 1.75:
+		return "about a minute and a half"
+	return "about %d minutes" % roundi(minutes)
+
+
 ## The line under a project's price: how long it takes (with how many builders), or that there is nobody to build it.
 func time_of(p: Dictionary) -> String:
 	var state := String(p.get("state", "ready"))
 	if state != "ready" and state != "building":
 		return ""
 	if int(p.get("builders", 0)) <= 0:
-		return "Nobody here to build it yet" if state == "ready" else "Waiting for somebody to build it"
+		# (EARLY: her own hands build: stand at the fence and hold E)
+		var mins := float(p.get("hands_minutes", 0.0))
+		if state == "ready":
+			return "Nobody else is here to build it: hold E at the fence yourself, %s" % hands_text(mins) if mins > 0.0 else "Nobody else is here to build it: hold E at the fence yourself"
+		return "Waiting for hands: stand at the fence and hold E"
 	var t := String(p.get("time", ""))
 	if t == "":
 		return ""

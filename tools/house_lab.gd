@@ -22,8 +22,8 @@
 ##                       run begins at the entry as the game does (the arrival: scripts/town/arrival.gd), so a run is the walk in, the clear, the claim, the rescues and the night
 ##   --keepgoing         do not end a run when the avatar falls and the game goes on with somebody else (by default that is a lost run)
 ##   --orders=projects   how the bot orders the base: projects (the Build page's NEXT project, `perimeter.order_project`) or slots (a section at a time, `perimeter.order`)
-##   --prep=N            the bot does not bring the FOURTH survivor home until N slots of the perimeter stand (0: it does not wait: the player who does not know that the fourth
-##                       brings the dead every night; 3: the player who does)
+##   --prep=N            the bot does not bring the LAST survivor the data asks for (the second, `attack.from_rescue`) home until N slots of the perimeter stand (0: it does not wait: the player who does not
+##                       know that the second brings the dead every night; 3: the player who does)
 ##   --standin           a stand-in for the medic the lone avatar does not have (for a build in which the player cannot bandage themselves): a bleeding avatar with meds is bandaged
 ##                       by the lab, which says how often. Off by default: the avatar bandages herself with E ("Bandage yourself", medical.gd) and the bot does.
 ##   --scavengers=N      from the claim on, N of the crew are on the Scavenger job (scripts/town/crew_search.gd `stage_job`: the ones with no job first, then the radio desk, the lookout, the infirmary, the
@@ -43,13 +43,17 @@ const HouseLib := preload("res://tools/house_bot.gd")
 const ONE_HOUSE := "res://scripts/town/one_house.gd"
 ## The plan's numbers (section 5).
 ## (BIGGER HOUSES: the start house is a family home of eight rooms with a dozen containers, and the bot searches every one of them before it claims: 14:00, it was 12:00)
-const CLAIM_BEFORE_HOUR := 14.0
-const RESCUES_BY_DAY := 3
-const REAL_MIN_FROM := 20.0
-## (the arrival's spec, section 5: 20 to 34 real minutes, with the walk in from the entry; it was 32 before the arrival)
-const REAL_MIN_TO := 34.0
-const HELD_BOT_SHARE := 0.75
-const HELD_IDLE_SHARE := 0.25
+## (EARLY, the start was too slow: the claim before 13:00 (was 14:00), TWO rescues by day 2 (was four by day 3), the first build ordered within two real minutes of the claim, and the whole loop 12 to 28 real minutes:
+## only the early part is shortened, the owner does not want the rest to be)
+const CLAIM_BEFORE_HOUR := 13.0
+const RESCUES_BY_DAY := 2
+const BUILD_WITHIN_MIN := 2.0
+const REAL_MIN_FROM := 12.0
+const REAL_MIN_TO := 28.0
+## (EARLY, the first night is three people's: the bot at the wall holds at least 14 of 16 (7 of 8), an idle avatar at most 5 of 16 and ideally at least 2)
+const HELD_BOT_SHARE := 0.875
+const HELD_IDLE_MAX := 0.3125
+const HELD_IDLE_MIN := 0.125
 const RESULT_TAG := "HOUSE_LAB_RESULT "
 ## The modules the arc needs, by the variable of the sim: what is not there is listed.
 const MODULES := ["houses", "field", "clearing", "search", "base", "sleep", "uses", "rescue", "perimeter", "scenario"]
@@ -174,6 +178,7 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 			sim.field.set(String(k).trim_prefix("field."), float(sets_all[k]) if not ["field.active_cap", "field.noise_cap"].has(String(k)) else int(sets_all[k]))
 	var bot = HouseLib.HouseBot.new(sim, mode)
 	bot.prep = int(o.get("prep", 0))
+	bot.human = human
 	bot.orders = String(o.get("orders", "projects"))
 	bot.candidate = String(o.get("candidate", "best"))
 	bot.note_start()
@@ -314,10 +319,19 @@ static func verdict_of(run: Dictionary) -> Dictionary:
 	var v := {}
 	var claim := _entry(run, "claim")
 	v["claim_by_noon"] = (int(claim.day) == 1 and float(claim.hour) < CLAIM_BEFORE_HOUR) if not claim.is_empty() else null
-	var fourth := _entry(run, "rescue", 4)
+	var fourth := _entry(run, "rescue", 2)    # (the second voice: the attacks begin with it. The key keeps its old name: `four_by_day3` is now "two rescues by day 2")
 	v["rescues"] = _count(run, "rescue")
 	v["four_by_day3"] = (int(fourth.day) <= RESCUES_BY_DAY) if not fourth.is_empty() else (false if bool(run.modules.get("rescue", false)) and bool(run.modules.get("base", false)) else null)
 	v["slots_built"] = _count(run, "slot_built")
+	# EARLY: the first build ordered within BUILD_WITHIN_MIN real minutes of the claim, and how long to the first fence (the front project's last section) after it
+	var ordered := _entry(run, "slot_ordered")
+	v["build_ordered_ok"] = (float(ordered.real) - float(claim.real) <= BUILD_WITHIN_MIN) if not claim.is_empty() and not ordered.is_empty() else (false if not claim.is_empty() else null)
+	var fence := {}
+	for e in run.timeline:
+		if String(e.what) == "project_done" and String(e.get("project", "")) == "front":
+			fence = e
+			break
+	v["fence_min"] = (float(fence.real) - float(claim.real)) if not claim.is_empty() and not fence.is_empty() else null
 	var result := "unfinished"
 	if _entry(run, "held").size() > 0 or String(run.over) == "victory":
 		result = "held"
@@ -357,10 +371,23 @@ static func summarise(runs: Array) -> Dictionary:
 		var four_known := 0
 		var min_ok := 0
 		var min_known := 0
+		var build_ok := 0
+		var build_known := 0
 		var errs := 0
 		var minutes: Array = []
+		var marks := {"claim": [], "first_build": [], "first_fence": [], "two_rescues": [], "first_attack": [], "held": []}
 		for r in list:
 			var v: Dictionary = r.verdict
+			if v.get("build_ordered_ok") != null:
+				build_known += 1
+				build_ok += 1 if bool(v.build_ordered_ok) else 0
+			for pair in [["claim", _entry(r, "claim")], ["first_build", _entry(r, "slot_ordered")], ["two_rescues", _entry(r, "rescue", 2)], ["first_attack", _entry(r, "bell")], ["held", _entry(r, "held")]]:
+				if not (pair[1] as Dictionary).is_empty() and (pair[1] as Dictionary).has("real"):
+					(marks[pair[0]] as Array).append(float(pair[1].real))
+			for e in r.timeline:
+				if String(e.what) == "project_done" and String(e.get("project", "")) == "front" and e.has("real"):
+					(marks["first_fence"] as Array).append(float(e.real))
+					break
 			held += 1 if String(v.result) == "held" else 0
 			lost += 1 if String(v.result) == "lost" else 0
 			if v.claim_by_noon != null:
@@ -374,7 +401,8 @@ static func summarise(runs: Array) -> Dictionary:
 				min_ok += 1 if bool(v.real_min_ok) else 0
 			errs += int(r.errors)
 			minutes.append(float(r.real_min))
-		out[m] = {"runs": list.size(), "held": held, "lost": lost, "claim_by_noon": [claim_ok, claim_known], "four_by_day3": [four_ok, four_known], "real_min_ok": [min_ok, min_known], "errors": errs, "real_min": minutes}
+		out[m] = {"runs": list.size(), "held": held, "lost": lost, "claim_by_noon": [claim_ok, claim_known], "four_by_day3": [four_ok, four_known], "build_ordered": [build_ok, build_known], "real_min_ok": [min_ok, min_known], "errors": errs, "real_min": minutes,
+			"marks": marks}
 	return out
 
 
@@ -389,13 +417,22 @@ static func verdict_lines(runs: Array) -> Array:
 	for m in sum:
 		var s: Dictionary = sum[m]
 		var n := int(s.runs)
-		lines.append("VERDICT %-4s: %d runs | claim before %02d:00 on day 1: %s | four rescues by day %d: %s | first attack held: %d/%d (lost %d) | real minutes %d-%d: %s | errors %d" % [
-			m, n, int(CLAIM_BEFORE_HOUR), _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(s.held), n, int(s.lost), int(REAL_MIN_FROM), int(REAL_MIN_TO), _ratio(s.real_min_ok), int(s.errors)])
+		lines.append("VERDICT %-4s: %d runs | claim before %02d:00 on day 1: %s | two rescues by day %d: %s | first build ordered within %d real minutes of the claim: %s | first attack held: %d/%d (lost %d) | real minutes %d-%d: %s | errors %d" % [
+			m, n, int(CLAIM_BEFORE_HOUR), _ratio(s.claim_by_noon), RESCUES_BY_DAY, _ratio(s.four_by_day3), int(BUILD_WITHIN_MIN), _ratio(s.build_ordered), int(s.held), n, int(s.lost), int(REAL_MIN_FROM), int(REAL_MIN_TO), _ratio(s.real_min_ok), int(s.errors)])
+		var med := []
+		for k in ["claim", "first_build", "first_fence", "two_rescues", "first_attack", "held"]:
+			var arr: Array = (s.marks[k] as Array).duplicate()
+			arr.sort()
+			med.append("%s %s" % [k.replace("_", " "), ("%.1f" % float(arr[arr.size() / 2])) if not arr.is_empty() else "-"])
+		lines.append("  MILESTONES, median real minutes at a player's pace (the lab's --human): %s" % ", ".join(med))
 		var share := float(s.held) / float(maxi(n, 1))
 		if m == "bot":
-			lines.append("  target: held in at least %d%% of runs with the bot at the wall (6 of 8): %s" % [roundi(HELD_BOT_SHARE * 100.0), "met" if share >= HELD_BOT_SHARE and n > 0 else ("NOT met" if n >= 4 else "no verdict: fewer than 4 runs")])
+			lines.append("  target: held in at least %d%% of runs with the bot at the wall (14 of 16): %s" % [roundi(HELD_BOT_SHARE * 100.0), "met" if share >= HELD_BOT_SHARE and n > 0 else ("NOT met" if n >= 4 else "no verdict: fewer than 4 runs")])
 		elif m == "idle":
-			lines.append("  target: held in at least %d%% of runs with an idle avatar (2 of 8): %s" % [roundi(HELD_IDLE_SHARE * 100.0), "met" if share >= HELD_IDLE_SHARE and n > 0 else ("NOT met" if n >= 4 else "no verdict: fewer than 4 runs")])
+			var idle_word := "no verdict: fewer than 4 runs"
+			if n >= 4:
+				idle_word = "met" if share <= HELD_IDLE_MAX + 1.0e-6 and share >= HELD_IDLE_MIN - 1.0e-6 else ("NOT met: too many hold" if share > HELD_IDLE_MAX else "NOT met: none or almost none hold")
+			lines.append("  target: an idle avatar holds in at most %d%% of runs (5 of 16) and ideally at least %d%% (2 of 16): %s" % [roundi(HELD_IDLE_MAX * 100.0), roundi(HELD_IDLE_MIN * 100.0), idle_word])
 	return lines
 
 
@@ -415,7 +452,7 @@ static func run_lines(r: Dictionary) -> Array:
 			"missing":
 				detail = "%s: missing: %s" % [String(e.step), String(e.module)]
 			"rescue":
-				detail = "rescue %d of 4 (%s)" % [int(e.count), String(e.id)]
+				detail = "rescue %d of 2 (%s)" % [int(e.count), String(e.id)]
 			"slot_built", "slot_ordered":
 				detail = "%s %s %s" % [what.replace("_", " "), String(e.slot), String(e.kit)]
 			"gave_up":
@@ -453,7 +490,7 @@ static func run_lines(r: Dictionary) -> Array:
 		lines.append("  scavengers %d: %d containers in %d houses, found %s | bitten %d | runs ended: %s" % [int(r.scavengers), int(cw.containers), int(cw.houses), ", ".join(loot_parts) if not loot_parts.is_empty() else "nothing", int(cw.bitten), ", ".join(ended_parts) if not ended_parts.is_empty() else "none"])
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))
-	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])
+	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | first fence %s real min after the claim | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), ("%.1f" % float(v.fence_min)) if v.get("fence_min") != null else "-", int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])
 	var row: Dictionary = r.night
 	if not row.is_empty():
 		var av: Dictionary = row.get("avatar", {})

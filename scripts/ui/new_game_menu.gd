@@ -254,7 +254,7 @@ func _choose(i: int) -> void:
 	facts_label.text = _town_facts(difficulty) if town_mode else Kit.difficulty_facts(difficulty, crew)
 
 
-## What a difficulty changes in the town run, from the rules' own numbers: the size of the nights (they begin with the fourth survivor) and the bite.
+## What a difficulty changes in the town run, from the rules' own numbers: the size of the nights (they begin with the second survivor) and the bite.
 func _town_facts(i: int) -> String:
 	var dead := float(Waves.DIFFICULTY[clampi(i, 0, 2)])
 	var infect := float(Medical.INFECT_CHANCE[clampi(i, 0, 2)])
