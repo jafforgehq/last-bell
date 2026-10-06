@@ -42,9 +42,11 @@
 ##   {"type": "blocked_shot", "id": the player's id}: the trigger was pulled against the face of a walkway (a dry click)
 ## A DOWNED, DEAD OR TURNED player has no hands: `set_input` takes nothing from the views and `clear_hands` (the sim calls it every
 ## step for them) empties what is held, so no firing flag outlives the fall.
+## SPRINT (One House, PACE: scripts/sim/sprint.gd, `avatar.sprint`): the town only; the run key held gives 1.45 times the walk while the breath lasts, and nothing of it runs in the school or for the no-player sim.
 ## Saved: only the id of the player (the Person's own variables, the flag and the input among them, are saved with them).
 extends RefCounted
 
+const Sprint := preload("res://scripts/sim/sprint.gd")
 const WALK_SPEED := 3.2
 ## With the pointer free (no aim given) the gun turns to the way the person walks at this many radians a second: about a fifth of a second
 ## for half a turn.
@@ -104,16 +106,21 @@ var _low_key := ""
 var _over := PackedByteArray()
 ## When the dry click was last told (`Sim.t`).
 var _click_at := -10.0
+## The run (scripts/sim/sprint.gd): the breath, and whether she runs this step.
+var sprint
 
 
 func setup(s) -> void:
 	sim = s
+	sprint = Sprint.new()
+	sprint.setup(s)
 
 
 ## A new run: nobody is the player (the caller names them with `set_player` after `start_run`).
 func start() -> void:
 	sim.player_id = ""
 	_click_at = -10.0
+	sprint.start()
 	for p in sim.people:
 		p.player = false
 		_clear_input(p)
@@ -218,6 +225,7 @@ func clear_hands(p) -> void:
 	p.input_fire = false
 	p.input_reload = false
 	p.input_melee = false
+	sprint.wanted = false
 
 
 # ---------------------------------------------------------------- the hands --
@@ -234,6 +242,11 @@ func set_input(move: Vector2, aim: Vector2, fire: bool) -> void:
 		return
 	p.input_move = move
 	p.input_fire = fire
+
+
+## The run key (PACE): held or not, every frame, from the view. Taken at the next step; the town only (`sprint.step`).
+func set_sprint(on: bool) -> void:
+	sprint.set_wanted(on)
 
 
 ## The reload key: taken at the next step. False when there is no player or they cannot.
@@ -276,15 +289,19 @@ func update(p, dt: float) -> void:
 		p.input_melee = false
 		_swing(p)
 	var ranged: bool = not p.gun.get("melee", false)
-	if p.input_fire:
+	# (running lowers the gun: with "Always aim at the mouse" the trigger is ignored while she runs; the right-button aim never asks for a run)
+	var firing: bool = p.input_fire and not sprint.lowered()
+	if firing:
 		if p.cooldown <= 0.0 and p.reloading <= 0.0:
 			_trigger(p)
-	elif ranged and p.mag <= 0 and p.reloading <= 0.0:
+	elif ranged and p.mag <= 0 and p.reloading <= 0.0 and not p.input_fire:
 		_start_reload(p)
 	if p.reloading > 0.0:
 		p.activity = "Reloading"
-	elif p.input_fire:
+	elif firing:
 		p.activity = "Firing"
+	elif sprint.lowered():
+		p.activity = "Running"
 	elif p.moving:
 		p.activity = "On the move"
 	else:
@@ -323,10 +340,12 @@ func _move(p, dt: float) -> void:
 	p.moving = false
 	var free_standing := _unstick(p)
 	var dir: Vector2 = p.input_move
+	# (PACE: the pace of this step, 1.0 or the run's; always 1.0 outside the town, and the breath comes back while she stands: `sprint.step` runs for every step of the player)
+	var pace: float = sprint.step(p, dt, dir.length() >= 0.01)
 	if dir.length() < 0.01:
 		return
 	dir = dir.normalized()
-	var total := WALK_SPEED * dt
+	var total := WALK_SPEED * pace * dt
 	var n := maxi(1, ceili(total / MAX_SUBSTEP))
 	var step := total / float(n)
 	var moved := 0.0
@@ -356,7 +375,8 @@ func _move(p, dt: float) -> void:
 		p.y = clampf(p.y, RADIUS, float(sim.H) - RADIUS)
 	if moved > 0.001:
 		p.moving = true
-		p.walk_phase += moved * 3.4
+		p.walk_phase += moved * 3.4 * (Sprint.STRIDE_K if pace > 1.0 else 1.0)
+		sprint.after_move(p, dt, moved)
 
 
 ## The little way sideways that takes the box, as it stands at (x, y) against a wall it was walking into (`sgn`: the direction of the walk, along x when `along_x`, else along y), round

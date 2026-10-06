@@ -26,6 +26,10 @@
 ##                       brings the dead every night; 3: the player who does)
 ##   --standin           a stand-in for the medic the lone avatar does not have (for a build in which the player cannot bandage themselves): a bleeding avatar with meds is bandaged
 ##                       by the lab, which says how often. Off by default: the avatar bandages herself with E ("Bandage yourself", medical.gd) and the bot does.
+##   --scavengers=N      from the claim on, N of the crew are on the Scavenger job (scripts/town/crew_search.gd `stage_job`: the ones with no job first, then the radio desk, the lookout, the infirmary, the
+##                       bench and the builders last): they search the cleared houses by day and the loot goes to the stores. The bot never asks the crew to search. 0 (the default): none, as it was
+##   --scavhouses=K      with --scavengers: at the claim the K houses nearest the base (within 35 tiles) are cleared for nothing, as if the player had cleared the street: the scavengers' work. 0: only the houses the bot
+##                       clears itself (the start house, which it has searched already, and the rescue houses)
 ##   --trace=60          print a line of what the bot is doing every N game minutes (debugging the bot)
 ##   --out=path.json     write the runs, the verdicts and the notes there: the ONLY file a lab run writes
 ##   --quiet             only the verdict lines
@@ -127,6 +131,9 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 	var bandage: bool = bool(o.get("bandage", false))
 	var bandaged := 0
 	var human := float(o.get("human", 1.25))
+	var scav_houses := int(o.get("scavhouses", 0))
+	var scav_cleared := false
+	var scavengers := int(o.get("scavengers", 0))    # (CREW: this many of the crew are put on the Scavenger job from the claim on, `crew_search.stage_job`; the bot itself never asks the crew to search)
 	var errors := ErrorLog.new()
 	OS.add_logger(errors)
 	var t0 := Time.get_ticks_msec()
@@ -192,6 +199,11 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 			cut = "not held at dawn"
 			break
 		bot.step(dt)
+		if scavengers > 0 and (steps & 15) == 0 and sim.get("crew_search") != null and sim.base.claimed:
+			if scav_houses > 0 and not scav_cleared:
+				scav_cleared = true
+				sim.crew_search.stage_cleared(scav_houses)    # (a player who has cleared the houses round the base: their dead are put down for nothing)
+			sim.crew_search.stage_job(scavengers)
 		sim.update(dt)
 		bot.observe(dt)
 		_observe_night(sim, stats, dt)
@@ -228,7 +240,10 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 		"errors": errors.count, "error_list": errors.list,
 		"people": _alive(sim), "task": String(bot.task.get("kind", "")), "bandaged": bandaged,
 		"why": String(sim.scenario.first_night_why()) if has_scenario and sim.scenario.has_method("first_night_why") else "",
+		"scavengers": scavengers,
 	}
+	if scavengers > 0 and sim.get("crew_search") != null:
+		out["crew"] = (sim.crew_search.stats as Dictionary).duplicate(true)
 	var shots := 0
 	var kills := 0
 	for pe in sim.people:
@@ -426,6 +441,16 @@ static func run_lines(r: Dictionary) -> Array:
 		lines.append("  %s  (+%5.0f min)  %s" % [at, float(e.min), detail])
 	lines.append("  ends %s after %.0f game minutes (%s%s), %d people, %d steps, %.0f CPU s" % [clock_text(int(r.end.day), float(r.end.hour)), float(r.end.min), String(r.over) if String(r.over) != "" else (String(r.cut) if String(r.cut) != "" else "no end"), (": " + String(r.get("why", ""))) if String(r.get("why", "")) != "" else "", int(r.people), int(r.steps), float(r.cpu_s)])
 	var v: Dictionary = r.verdict
+	if r.has("crew"):
+		var cw: Dictionary = r.crew
+		var loot_parts: Array = []
+		for k in ["food", "water", "ammo", "scrap", "meds"]:
+			if int(cw.loot.get(k, 0)) > 0:
+				loot_parts.append("%d %s" % [int(cw.loot[k]), k])
+		var ended_parts: Array = []
+		for k in cw.ended:
+			ended_parts.append("%s %d" % [String(k), int(cw.ended[k])])
+		lines.append("  scavengers %d: %d containers in %d houses, found %s | bitten %d | runs ended: %s" % [int(r.scavengers), int(cw.containers), int(cw.houses), ", ".join(loot_parts) if not loot_parts.is_empty() else "nothing", int(cw.bitten), ", ".join(ended_parts) if not ended_parts.is_empty() else "none"])
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))
 	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])
@@ -451,7 +476,7 @@ func _initialize() -> void:
 
 
 func _main() -> void:
-	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": "", "candidate": "best"}
+	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": "", "candidate": "best", "scavengers": "0", "scavhouses": "0"}
 	var quiet := false
 	var worker := false
 	var standin := false
@@ -477,7 +502,7 @@ func _main() -> void:
 		printerr("house lab: nothing to play (seeds %s, mode %s)" % [opts.seeds, opts.mode])
 		quit(2)
 		return
-	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going, "candidate": String(opts.candidate)}
+	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going, "candidate": String(opts.candidate), "scavengers": int(opts.scavengers), "scavhouses": int(opts.scavhouses)}
 	opts["bandage"] = standin
 	opts["keepgoing"] = keep_going
 	var jobs := clampi(int(opts.jobs), 1, 16)
@@ -552,7 +577,7 @@ func _in_workers(seeds: Array, modes: Array, opts: Dictionary, jobs: int) -> Arr
 	var rows: Array = []
 	var args_of := func(pair: Array) -> Array:
 		var a := ["--headless", "--path", project, "--script", "res://tools/house_lab.gd", "--", "--worker", "--seeds=%d" % int(pair[0]), "--mode=%s" % String(pair[1])]
-		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human", "candidate"]:
+		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human", "candidate", "scavengers", "scavhouses"]:
 			if String(opts[k]) != "" and String(opts[k]) != "0":
 				a.append("--%s=%s" % [k, String(opts[k])])
 		if bool(opts.get("bandage", false)):

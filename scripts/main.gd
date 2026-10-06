@@ -33,6 +33,7 @@ const StreetAir := preload("res://scripts/audio/street_air.gd")
 const Music := preload("res://scripts/audio/music.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const PaceKeys := preload("res://scripts/ui/pace_keys.gd")
 const WorldClick := preload("res://scripts/ui/world_click.gd")
 const WheelCtl := preload("res://scripts/ui/wheel_ctl.gd")
 const CommandWheel := preload("res://scripts/ui/command_wheel.gd")
@@ -2147,6 +2148,8 @@ func aim_tile() -> Vector2:
 
 ## The keys that walk the avatar, as a direction (W A S D and the arrows; a command's Ctrl or Cmd is not a step).
 func _walk_keys() -> Vector2:
+	if PaceKeys.staged != Vector2.ZERO:
+		return PaceKeys.staged    # (`--sprint`: a screenshot's held walk)
 	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
 		return Vector2.ZERO
 	var x := int(_key_down(KEY_D) or _key_down(KEY_RIGHT)) - int(_key_down(KEY_A) or _key_down(KEY_LEFT))
@@ -2171,6 +2174,7 @@ func _feed_avatar() -> void:
 	var me = sim.avatar.player()
 	if me == null:
 		return
+	sim.avatar.set_sprint(PaceKeys.sprint_wanted(self))    # (PACE: X held; the town's rules decide whether she runs)
 	if me.holstered != AimMode.holstered or _holster_pawn != me:
 		_mark_holster()    # (what the pawn's drawing reads: the gun carried low, the hands off it)
 	if wheel_ctl != null and wheel_ctl.busy() and not wheel_ok():
@@ -2505,6 +2509,13 @@ func wheel_status(p) -> Dictionary:
 	if p.downed:
 		short = "down"
 	var line := "%s: %s%s" % [String(p.first), mood, (", " + doing.to_lower()) if doing != "" else ""]
+	var cs = sim.get("crew_search")
+	if cs != null and cs.is_out(p):
+		# (One House: on a search, the middle of the ring names the house and the line says how far they have got and what they have found)
+		var run: Dictionary = cs.runs[String(p.id)]
+		short = cs.address(int(run.house))
+		var found: String = cs.found_text(run.found)
+		line = "%s: %s, %s%s" % [String(p.first), mood, String(cs.run_text(p)).replace("Going to", "going to").replace("Searching", "searching"), (" (found " + found + ")") if found != "" else ""]
 	return {"short": short, "line": line}
 
 
@@ -2524,6 +2535,8 @@ func wheel_talk(p) -> Dictionary:
 
 ## Where "click where" puts a verb: Hold here, the tile that was clicked (`{"at"}`), or why not (`{"error"}`: the note stays up for another try).
 func wheel_spot(verb: String, tile: Vector2, who) -> Dictionary:
+	if verb == "search" and sim.get("crew_search") != null:
+		return sim.crew_search.spot_for(tile, who)    # (One House: a point of the house that was clicked, or "Click a house"; the house's own reasons are the radio's)
 	var spot := Vector2(floorf(tile.x) + 0.5, floorf(tile.y) + 0.5)
 	if world.is_solid(world.solid_p, spot.x, spot.y):
 		return {"error": _why_not_there(who, spot) if who != null else "Nobody can stand there"}
@@ -2574,8 +2587,9 @@ func wheel_radio(_p):
 	return sim.radio
 
 
+## Whether Search is on in the wheel's rules: in a place, and in the One House (where it is "Search a house": the crew search a cleared house, scripts/town/crew_search.gd).
 func wheel_place() -> bool:
-	return false
+	return wheel_simple() and sim.get("crew_search") != null
 
 
 func wheel_verbs():
@@ -3462,6 +3476,9 @@ func _parse_args() -> void:
 			"aiming":
 				# --aiming holds the right button down (with "Right button aims" the survivor aims at --aim's tile, the crosshair and the line show)
 				shot_aiming = true
+			"sprint":
+				# --sprint[=dx,dy] holds the run key and walks the avatar that way (east without one): the breath's arc under her feet (scripts/ui/pace_keys.gd)
+				PaceKeys.stage(v)
 			"aim-mode":
 				# --aim-mode=right|always is the setting for this screenshot (its own settings file)
 				AimMode.set_mode(v)
@@ -3666,6 +3683,24 @@ func _parse_args() -> void:
 					if keep_n > 0 and not p.player and not p.dead and not p.turned and sim.jobs.job_of(p) != "builders":
 						if sim.jobs.assign(p, "builders"):
 							keep_n -= 1
+			"scavengers":
+				# --scavengers=N puts exactly N people (the avatar aside) on the Scavenger job, as far as there are hands (a town run, after --stage=; scripts/town/crew_search.gd)
+				if sim.get("crew_search") == null or sim.crew_search.stage_job(int(v)) < int(v):
+					print("--scavengers=%s: not a town run (give --town), or not enough people at the base" % v)
+			"searchhouse":
+				# (Not `--crewsearch`: anything that begins `--crew` is the school's crew size and puts the town away, scripts/town/town_boot.gd.)
+				# --searchhouse=<person>@<house>[:inside][:clear][:cam[=zoom]] sends that person (an id, a first name, or #1 the first of the crew) to search that house (an id, `near` or `base`), the order given
+				# with no delay; `:clear` puts the house's dead down and counts it cleared, `:inside` puts them at the first container. A town run, after --stage=claimed (or later)
+				if sim.get("crew_search") == null or not sim.crew_search.stage(v):
+					print("--searchhouse=%s: not a town run (give --town, and --stage=rescued2 or later first), no such person or house, or they cannot go" % v)
+				else:
+					# (`:cam` puts the camera on them and keeps it there for a shot; `:cam=44` at 44 pixels to the tile)
+					var staged = sim.crew_search.staged
+					for part in v.split(":"):
+						if String(part).begins_with("cam") and staged != null:
+							_stage_focus = Vector2(staged.x, staged.y)
+							if String(part).contains("="):
+								zoom_px = float(String(part).get_slice("=", 1))
 			"build-site":
 				# --build-site=<plot>:<building>[:<share done, 0 to 1>],... puts sites up (no scrap is paid for them)
 				_stage_build(v, false)
@@ -4002,6 +4037,8 @@ func _stage_order(spec: String) -> bool:
 ## dock shows their answers too), at the pointer when `--aim` put one there and else a little right of the middle; `:verb` lights that slice and `+all` is the
 ## second ring. False when there is no such person or no avatar.
 func _stage_wheel(spec: String) -> bool:
+	var place_note := spec.ends_with("+place")    # (`--wheel=1:search+place`: the verb is chosen and its note, "Search a house: click a cleared house", follows the pointer)
+	spec = spec.trim_suffix("+place")
 	var all := spec.ends_with("+all")
 	var word := spec.trim_suffix("+all")
 	var verb := ""
@@ -4036,6 +4073,11 @@ func _stage_wheel(spec: String) -> bool:
 	if i >= 0:
 		wheel.move_pointer(wheel.centre + CommandWheel.slice_mid(i))
 		wheel.move_pointer(wheel.centre + CommandWheel.slice_mid(i) * 1.02)
+	if place_note and i >= 0 and wheel_simple():
+		var centre: Vector2 = wheel.centre
+		wheel.close()
+		wheel_ctl.info = {}
+		wheel_ctl.begin_place(verb, {"who": who, "group": false, "members": []}, centre)
 	return true
 
 

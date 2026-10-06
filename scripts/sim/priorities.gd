@@ -315,6 +315,8 @@ func _hand(p) -> bool:
 		return false
 	if CrewLoad.on_trip(sim, p) or sim.morale.breakdown(p) or sim.medical.is_apart(p) or sim.medical.sendouts.has(p.id):
 		return false
+	if sim.jobs.MANUAL.has(_job(p)):
+		return false    # (One House: a Scavenger is the player's own request: the staffing leaves them be)
 	return not _is_pinned(p)
 
 
@@ -369,7 +371,8 @@ func _rested(hands: Array) -> Array:
 func _stations() -> Array:
 	var have: Array = []
 	for st in sim.jobs.stations():
-		have.append(String(st.id))
+		if not sim.jobs.MANUAL.has(String(st.id)):    # (One House: the Scavenger is given by request only)
+			have.append(String(st.id))
 	var out: Array = []
 	for id in sim.jobs.AUTO_ORDER:
 		if have.has(String(id)):

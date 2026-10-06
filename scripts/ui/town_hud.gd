@@ -54,6 +54,7 @@ var obj_sub: Label
 var obj_arrow: Control
 var obj_dist: Label
 var lesson_card: PanelContainer
+var lesson_step: Label
 var lesson_text: Label
 var lesson_goal: Label
 var lesson_done: Label
@@ -225,10 +226,12 @@ func _build_lesson() -> void:
 	lesson_card = hud._panel(_style())
 	lesson_card.visible = false
 	lesson_card.custom_minimum_size.x = CARD_W
-	var col: VBoxContainer = hud._vbox(4)
+	var col: VBoxContainer = hud._vbox(2)
 	lesson_card.add_child(col)
 	var head: HBoxContainer = hud._hbox(8)
-	head.add_child(hud._label("HOW TO", Fonts.cond(700, 1), 14, hud.INFO))
+	# (TUTOR: the card is a small chip, "STEP 2 OF 8" and the verb in one line; the lesson is taught by a cue in the world, scripts/ui/tutor_cues.gd, and its words are the chip's tooltip)
+	lesson_step = hud._label("STEP", Fonts.cond(700, 1), 14, hud.INFO)
+	head.add_child(lesson_step)
 	lesson_done = hud._label("Done", Fonts.cond(700), 14, hud.OK)
 	lesson_done.visible = false
 	head.add_child(lesson_done)
@@ -242,10 +245,12 @@ func _build_lesson() -> void:
 	lesson_skip.pressed.connect(skip_lesson)
 	head.add_child(lesson_skip)
 	col.add_child(head)
-	lesson_text = _label("", Fonts.sans(400), 14, hud.INK)
+	lesson_text = _label("", Fonts.sans(400), 14, hud.INK)    # (the lesson's words: kept for whoever reads them, shown as the card's tooltip, not on the card)
+	lesson_text.visible = false
 	col.add_child(lesson_text)
-	lesson_goal = _label("", Fonts.sans(600), 14, hud.ACCENT)
+	lesson_goal = _label("", Fonts.sans(600), 15, hud.ACCENT)
 	col.add_child(lesson_goal)
+	lesson_card.mouse_filter = Control.MOUSE_FILTER_PASS
 	layer.add_child(lesson_card)
 
 
@@ -370,13 +375,21 @@ func _refresh_lesson() -> void:
 	lesson = g
 	var id := String(g.get("id", ""))
 	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id) and not Prefs.flag(LESSONS_OFF_FLAG)
-	var sig := "%s|%s|%s|%s" % [id, String(g.get("text", "")), String(g.get("goal", "")), str(bool(g.get("done", false)))]
+	# (TUTOR: one short line: the verb, and for a lesson that counts the count: "Clear the house: 2 of 5 rooms clear")
+	var verb := String(g.get("verb", g.get("goal", "")))
+	var progress := String(g.get("progress", ""))
+	if progress != "" and not bool(g.get("done", false)):
+		verb = "%s: %s" % [verb, progress]
+	var step := ("STEP %d OF %d" % [int(g.get("n", 0)), int(g.get("of", 0))]) if int(g.get("of", 0)) > 0 else "STEP"
+	var sig := "%s|%s|%s|%s|%s" % [id, String(g.get("text", "")), verb, step, str(bool(g.get("done", false)))]
 	lesson_card.visible = shown
 	if sig == _last_lesson_sig:
 		return
 	_last_lesson_sig = sig
 	lesson_text.text = String(g.get("text", ""))
-	lesson_goal.text = String(g.get("goal", ""))
+	lesson_card.tooltip_text = lesson_text.text
+	lesson_step.text = step
+	lesson_goal.text = verb
 	lesson_goal.visible = lesson_goal.text != ""
 	lesson_done.visible = bool(g.get("done", false))
 
@@ -457,6 +470,28 @@ func skip_lesson() -> void:
 	lesson_card.visible = false
 
 
+## TUTOR (the Esc menu's Lessons): whether the lessons are on (their card and their cues in the world), and the switch. Putting them on again brings back the ones skipped in this game.
+func lessons_are_on() -> bool:
+	return not Prefs.flag(LESSONS_OFF_FLAG)
+
+
+func set_lessons(on: bool) -> void:
+	Prefs.set_flag(LESSONS_OFF_FLAG, not on)
+	if on:
+		skipped.clear()
+	_last_lesson_sig = ""
+	_dirty = true
+
+
+## Every lesson again from the first (the lessons go on if they were off): the rules begin their list over (`replay_lessons`), the skipped ones come back.
+func replay_lessons() -> void:
+	set_lessons(true)
+	var sc = _scenario()
+	if sc != null and sc.has_method("replay_lessons"):
+		sc.replay_lessons()
+	_dirty = true
+
+
 ## The cards' widths (their words wrap at them, so that the cards are as tall as the words need) and the lesson card's place: the bottom left, clear of the
 ## selection panel and the verbs of the dock.
 func _place_lesson() -> void:
@@ -514,9 +549,14 @@ func on_event(e: Dictionary) -> void:
 		"searched":
 			_dirty = true
 			var loot := loot_text(e.get("loot", {}))
-			# (WORLD: the pops over the container say what was found, and fly to the stores: scripts/ui/search_marks.gd)
+			# (WORLD: the pops over the container say what was found, and fly to the stores: scripts/ui/search_marks.gd. A crew member's search names them: scripts/town/crew_search.gd)
+			var by := String(e.get("name", ""))
 			if loot == "" or not _has_part("search_marks"):
-				hud.toast(("Found: %s" % loot) if loot != "" else "Nothing here", "info")
+				hud.toast(("%s: %s" % [(by + " found") if by != "" else "Found", loot]) if loot != "" else "Nothing here", "info")
+		"crew_search":
+			# (One House, CREW: a crew member's search ended, or did not begin: in the town's words, in the colour of how it went)
+			_dirty = true
+			hud.toast(String(e.get("text", "")), String(e.get("level", "info")))
 		"claimed", "fourth", "attacks_on", "held", "rescue_joined", "rescue_talk", "entered", "left", "sleep":
 			_dirty = true
 		"slot_built":
