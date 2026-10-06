@@ -34,7 +34,7 @@ const WEATHER_TIP := "The weather outside"
 const DEAD_TIP := "The dead awake near you. The rest are asleep where they stand"
 const PAUSED_TIP := "Paused. Space, or the play key, goes on"
 const STORES_TIP := "Your stores: ammo, food, water and medicine. Point at a number to read it"
-const TOOLBAR_TIP := "Time, fields of fire, sound, the radio, the call to arms, help, jobs, build and the menu: point at a key"
+const TOOLBAR_TIP := "Time and waiting for the bell, fields of fire, sound, the radio, the call to arms, help, jobs, build and the menu: point at a key"
 const OBJECTIVE_TIP := "What to do next. The arrow round your feet points the way"
 const LESSON_TIP := "The guide's lesson. Do what it says and the next one comes"
 const LEGEND_TIP := "The keys for the first minute. Esc, then Controls, has every one"
@@ -302,4 +302,5 @@ func _named(key: String):
 	var m = hud.get(key)
 	if m is Control:
 		return m
-	return hud.get_node_or_null(key)
+	var n = hud.get_node_or_null(key)
+	return n if n != null else hud.find_child(key, true, false)    # (a node by its name anywhere under the HUD: `--tooltip=WaitButton`)
