@@ -36,6 +36,7 @@ const PARTS := {
 	"clearing": "res://scripts/town/clearing.gd",
 	"search": "res://scripts/town/search.gd",
 	"base": "res://scripts/town/base.gd",
+	"crew_search": "res://scripts/town/crew_search.gd",
 	"sleep": "res://scripts/town/sleep.gd",
 	"waiter": "res://scripts/town/wait_dusk.gd",
 	"uses": "res://scripts/town/uses.gd",
@@ -53,6 +54,7 @@ var field
 var clearing
 var search
 var base
+var crew_search
 var sleep
 ## Wait until the bell (PACE: scripts/town/wait_dusk.gd).
 var waiter

@@ -225,6 +225,14 @@ func _make_row(p) -> Dictionary:
 	you.custom_minimum_size.x = 60
 	you.visible = false
 	col.add_child(you)
+	# (One House, CREW: a Scavenger's third line: what they have found today)
+	var loot: Label = host._label("", Fonts.sans(600), 12, host.INK2)
+	loot.visible = false
+	loot.clip_text = true
+	loot.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	loot.custom_minimum_size.x = 30
+	loot.mouse_filter = Control.MOUSE_FILTER_PASS
+	col.add_child(loot)
 
 	# under them: what they said to the last request, and Insist after a refusal that can be pushed
 	var answer_row: HBoxContainer = host._hbox(6)
@@ -251,6 +259,7 @@ func _make_row(p) -> Dictionary:
 	r["job"] = job
 	r["post"] = post
 	r["you"] = you
+	r["loot"] = loot
 	r["answer"] = answer
 	r["answer_row"] = answer_row
 	r["insist"] = insist_button
@@ -463,8 +472,16 @@ func _sync_rows(s) -> void:
 func _row_sig(s, p, r: Dictionary) -> String:
 	var block := _block(p)
 	var answer: Dictionary = _answers.get(String(p.id), {})
-	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [p.dead, p.turned, p.away != null, p.downed, _is_you(p), s.jobs.job_of(p), s.jobs.post_of(p).get("id", ""),
-		host._doing_person(p), _mood_of(s, p)[0], block.off, block.why, String(answer.get("text", "")), bool(answer.get("insist", false)), _lit(p, r)]
+	return "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s" % [p.dead, p.turned, p.away != null, p.downed, _is_you(p), s.jobs.job_of(p), s.jobs.post_of(p).get("id", ""),
+		host._doing_person(p), _mood_of(s, p)[0], block.off, block.why, String(answer.get("text", "")), bool(answer.get("insist", false)), _lit(p, r), _loot_of(s, p)]
+
+
+## One House, CREW: what a Scavenger has found today ("Found today: 4 food, 2 scrap"); "" for everybody else.
+func _loot_of(s, p) -> String:
+	var cs = s.get("crew_search")
+	if cs == null or String(s.jobs.job_of(p)) != "scavenger":
+		return ""
+	return String(cs.today_text(p))
 
 
 ## [the word for how they are, its colour]: what has become of them, else their mood.
@@ -519,6 +536,10 @@ func _refresh_row(s, p, r: Dictionary) -> void:
 	var block := _block(p)
 	r.line2.visible = not gone and not you
 	r.you.visible = you
+	var loot_text := _loot_of(s, p)
+	r.loot.visible = loot_text != "" and not gone and not you
+	_set_text(r.loot, loot_text, host.INK2)
+	r.loot.tooltip_text = loot_text
 	if you:
 		# (the sim's own words for it: "You: no seat, you are the player")
 		var said := String(_job_w(p, "").get("why", ""))

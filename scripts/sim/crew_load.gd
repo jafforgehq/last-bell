@@ -61,7 +61,8 @@ static func away_in(sim, id: String) -> Array:
 static func _ids(sim) -> Array:
 	var have: Array = []
 	for st in sim.jobs.stations():
-		have.append(String(st.id))
+		if not sim.jobs.MANUAL.has(String(st.id)):    # (One House: the Scavenger is not a seat that is missed)
+			have.append(String(st.id))
 	var out: Array = []
 	for id in ORDER:
 		if have.has(id):

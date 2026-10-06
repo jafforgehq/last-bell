@@ -30,6 +30,7 @@ const SIZE_MAX := 150.0
 const MARGIN := 12.0
 const DEAD_COLOR := Color(0.93, 0.25, 0.2, 1.0)
 const KNOWN_COLOR := Color("#7fa6c9")
+const SEARCH_COLOR := Color("#d9a0e0")    # (the radio's search colour, scripts/render/stance_marks.gd)
 const BASE_COLOR := Color("#f0c24a")
 const CAND_COLOR := Color("#8fb85a")
 ## The avatar is pale, not the gold of the Map page's arrow: the base's block is gold and she is often on it.
@@ -53,6 +54,8 @@ var me := Vector2.ZERO
 var aim := 0.0
 var dead := PackedVector2Array()
 var known := PackedVector2Array()
+## The crew on a search of a house (at most four): purple dots.
+var searchers := PackedVector2Array()
 var cands := PackedVector2Array()
 ## The colour of each of them by its tier (scripts/ui/tier_marks.gd: gold the best, green a fair one, grey a poor one), as the pennants and the edge arrows have it.
 var cand_cols := PackedColorArray()
@@ -262,6 +265,18 @@ func _refresh(p) -> void:
 			n += 1
 	if dead.size() != n:
 		dead.resize(n)
+	# the crew out searching a house (CREW: scripts/town/crew_search.gd): where they are, as a purple dot
+	var cs = sim.get("crew_search")
+	var m := 0
+	if cs != null:
+		for q in sim.people:
+			if m < 4 and not q.dead and q.away == null and cs.is_out(q):
+				if searchers.size() <= m:
+					searchers.resize(m + 1)
+				searchers[m] = Vector2(q.x, q.y)
+				m += 1
+	if searchers.size() != m:
+		searchers.resize(m)
 
 
 ## The slow things: the houses looked in, the base, the houses that may be claimed, the survivors known of (twice a second).
@@ -345,6 +360,14 @@ func _draw_marks() -> void:
 			_dia_line[4] = _dia[0]
 			marks.draw_colored_polygon(_dia, KNOWN_COLOR)
 			marks.draw_polyline(_dia_line, Color(0, 0, 0, 0.75), 1.2)
+	# the crew out searching: a purple dot (a ring too with Colour-blind markers) while they are inside the window
+	for i in searchers.size():
+		var d3 := (searchers[i] - me) * ppt
+		if d3.length() <= reach:
+			marks.draw_circle(c + d3, 3.4, Color(0.04, 0.08, 0.07, 0.9))
+			marks.draw_circle(c + d3, 2.4, SEARCH_COLOR)
+			if _cb:
+				CbShapes.mark(marks, "circle", c + d3, 4.4, SEARCH_COLOR)
 	# the houses that may be claimed (before a base): a green pennant on the house, or its direction on the rim
 	for i in cands.size():
 		var pin_d := (cands[i] - me) * ppt

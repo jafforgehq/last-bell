@@ -133,6 +133,50 @@ func _finish(h: int, id: String) -> void:
 	sim.events.append({"type": "searched", "container": id, "house": h, "loot": loot})
 
 
+# --------------------------------------------------------------- whoever searches --
+
+## The loot a container holds that is not taken yet, as the stock would get it ({stock key: int}; {} when it is looted, unknown or has nothing). For anyone who searches that is
+## not the avatar's session: a crew member (scripts/town/crew_search.gd) asks what is there before they go.
+func loot_of(id: String) -> Dictionary:
+	var out := {}
+	if looted.has(id):
+		return out
+	var hs = sim.get("houses")
+	var cont: Dictionary = hs.container(id) if hs != null else {}
+	var loot_in = cont.get("loot", {})
+	if typeof(loot_in) != TYPE_DICTIONARY:
+		return out
+	for k in loot_in:
+		var n := float(loot_in[k])
+		if n > 0.0 and sim.stock.has(k):
+			out[String(k)] = int(n)
+	return out
+
+
+## A container searched by somebody who is not in a session (a crew member, scripts/town/crew_search.gd): looted for good, its loot straight into the stock and `searched` told,
+## with the searcher's id and first name (`who`, `name`; the avatar's own `_finish` tells neither). Returns the loot ({stock key: int}); {} when it was looted already or is none.
+func mark_looted(id: String, who = null) -> Dictionary:
+	var hs = sim.get("houses")
+	var cont: Dictionary = hs.container(id) if hs != null else {}
+	if cont.is_empty() or looted.has(id):
+		return {}
+	var loot := {}
+	var loot_in = cont.get("loot", {})
+	looted[id] = true
+	if typeof(loot_in) == TYPE_DICTIONARY:
+		for k in loot_in:
+			var n := float(loot_in[k])
+			if n > 0.0 and sim.stock.has(k):
+				sim.stock[k] = float(sim.stock[k]) + n    # (as `_finish` does)
+				loot[String(k)] = int(n)
+	var e := {"type": "searched", "container": id, "house": int(cont.get("house", -1)), "loot": loot}
+	if who != null:
+		e["who"] = String(who.id)
+		e["name"] = String(who.first)
+	sim.events.append(e)
+	return loot
+
+
 # -------------------------------------------------------------------------- save --
 
 func save() -> Dictionary:

@@ -321,6 +321,12 @@ func willingness(contact, verb: String) -> Dictionary:
 	if verb == "back" or verb == "post":
 		out["line"] = String(LINES[verb][out.tone])
 		return out
+	if verb == "search" and _town_search():
+		# (One House, CREW: a search order is "Search a house": the person's own reasons, scripts/town/crew_search.gd `person_reason`: nearly dark, on the watch, hurt, two already out)
+		var tn: Dictionary = sim.crew_search.person_reason(contact)
+		if not tn.is_empty():
+			var said := String(tn.reason)
+			return _refused(out, "%s: %s, can't search" % [first, said], said.substr(0, 1).to_upper() + said.substr(1) + ", can't search.", bool(tn.hard))
 	var reason := _busy_soft(contact)
 	if reason == "" and verb != "hold":
 		reason = _health_reason(contact)
@@ -437,6 +443,8 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 	var w := willingness(contact, verb)
 	if w.ok and lead.away != null and (verb == "come" or verb == "cover" or (verb == "hold" and not args.has("at"))):
 		w = _refused(w, "%s: you are not at the base, can't %s" % [String(contact.first), String(CANT[verb])], "", true)
+	if verb == "search" and _town_search():
+		w = _town_search_answer(contact, w, args, lead)
 	var insisted := false
 	if not w.ok:
 		if bool(args.get("insist", false)) and not bool(w.hard):
@@ -460,6 +468,20 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 	pending.append({"who": String(contact.id), "verb": verb, "at": at, "left": float(w.delay_s), "insist": insisted})
 	_say(contact, verb, true, String(w.line), String(w.tone))
 	return {"ok": true, "line": String(w.line), "why": "", "delay_s": float(w.delay_s), "tone": String(w.tone), "insisted": insisted, "hard": false}
+
+
+## One House: a search order is for a house (`args.at`, a point of it) and the crew search module judges the house with the person: not cleared, already searched, nobody is let into a house with
+## dead (hard), too far from home (soft: insisting sends them). The house's reasons come before the person's soft ones.
+func _town_search() -> bool:
+	return sim.is_one_house() and sim.get("crew_search") != null
+
+
+func _town_search_answer(contact, w: Dictionary, args: Dictionary, lead) -> Dictionary:
+	var cs = sim.crew_search
+	var hr: Dictionary = cs.house_refusal(contact, cs.house_of_point(_point(args.get("at"), _aim_point(lead))))
+	if hr.is_empty() or not (bool(w.ok) or bool(hr.hard)):
+		return w
+	return _refused(w, String(hr.why), String(hr.line), bool(hr.hard))
 
 
 func _say(p, verb: String, ok: bool, line: String, tone: String) -> void:
@@ -527,7 +549,11 @@ func _take_effect(p, verb: String, at: Vector2) -> void:
 			var stance := String(STANCE_OF.get(verb, ""))
 			if stance == "":
 				return
-			set_stance(p, stance, at)
+			if verb == "search" and _town_search():
+				if not sim.crew_search.begin_order(p, at):
+					return    # (the world changed while they thought about it: the crew search module says so)
+			else:
+				set_stance(p, stance, at)
 	sim.events.append({"type": "stance", "who": String(p.id), "verb": verb, "stance": String(p.stance)})
 	if on_applied.is_valid():
 		on_applied.call(p, verb, at)
@@ -582,6 +608,8 @@ func stance_goal(p):
 	var stance := String(p.stance)
 	if stance == "" or p.downed or p.dead or p.turned or p.away != null:
 		return null
+	if stance == "search" and _town_search():
+		return sim.crew_search.goal_for(p)    # (the house, then each container of it; null while there is no run)
 	if stance == "hold" or stance == "search":
 		var at: Vector2 = p.stance_at if p.stance_at != Vector2.ZERO else Vector2(p.x, p.y)
 		return {"x": at.x, "y": at.y, "face": "", "what": "Holding here" if stance == "hold" else "Searching"}
@@ -1168,7 +1196,7 @@ func fill_willingness() -> Dictionary:
 	var seats: Array = []
 	for st in sim.jobs.stations():
 		var open: int = sim.jobs.seats_of(String(st.id)) - sim.jobs.crew_of(String(st.id)).size()
-		if open > 0:
+		if open > 0 and not sim.jobs.MANUAL.has(String(st.id)):
 			seats.append({"station": String(st.id), "left": open})
 	var free: Array = []
 	var stuck: Array = []
