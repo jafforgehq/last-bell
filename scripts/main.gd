@@ -675,6 +675,7 @@ func _ready() -> void:
 	fx.combat.sound = sound
 	fx.combat.seen_cb = _combat_sees    # (what is under a roof or in a room that is not shown has no flash and no blood)
 	sim.feel = fx.combat
+	fx.combat.set_melee(sim.avatar.melee_rules.cfg if sim.is_one_house() else {})    # (the town's swing: its trail, its freeze and its push; the school's blow feels as it did)
 	if town_card != null:
 		sound.set_process(false)
 	if parking_view != null:
@@ -2058,9 +2059,11 @@ func _shot_frame() -> void:
 			_stage_wheel(shot_wheel)    # (a window that was not in front has lost and found its focus since: that shuts the wheel)
 		if shot_swing > 0.0 and avatar_mode:
 			sim.avatar.player().thrust = shot_swing
+			if sim.is_one_house():
+				sim.avatar.player().set_meta("swing_t", shot_swing * float(sim.avatar.melee_rules.cfg.cycle_s))    # (the swing's own clock, for the pose: scripts/sim/melee.gd)
 			if frame_count == 2:
 				# (the trail of the swing's own: made once, at the same point of the swing)
-				fx.combat.blow(sim.avatar.player(), sim.avatar.MELEE_REACH, deg_to_rad(sim.avatar.MELEE_ARC) / 2.0, (1.0 - shot_swing) * fx.combat.BLOW_S)
+				fx.combat.blow(sim.avatar.player(), sim.avatar.melee_reach(), deg_to_rad(sim.avatar.melee_arc()) / 2.0, (1.0 - shot_swing) * fx.combat.blow_s)
 		if frame_count == 50:
 			RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 		if frame_count == 60:
@@ -3392,6 +3395,7 @@ func _build_coach() -> void:
 func _parse_args() -> void:
 	var advance := 0.0
 	var until_shots := 0
+	var melee_at := -1.0
 	var lure_seg := -1
 	var show_build := false
 	var build_plot := ""
@@ -3500,6 +3504,9 @@ func _parse_args() -> void:
 					cam_center = Vector2(me.x, me.y)
 			"swing":
 				shot_swing = float(v) if v.is_valid_float() else 0.55
+			"melee-at":
+				# --melee-at[=SECONDS] presses F that many seconds into the --advance (0: on the first step): a real swing, its hit, stagger and kill in the picture (--advance=0.3 stops in its recovery)
+				melee_at = float(v) if v.is_valid_float() else 0.0
 			"hold-fire":
 				# --hold-fire holds the avatar's trigger down (the left button, in a screenshot of a fight)
 				firing = true
@@ -3906,6 +3913,8 @@ func _parse_args() -> void:
 		_feed_avatar()
 		var steps := int(advance * 30.0)
 		for i in steps:
+			if melee_at >= 0.0 and i == int(melee_at * 30.0) and avatar_mode:
+				sim.avatar.melee()    # (`--melee-at`)
 			_sim_step()
 			_visual_step(StepClock.STEP)
 			if until_shots > 0 and _shots_in(sim.events) >= until_shots:
