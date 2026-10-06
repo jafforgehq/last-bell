@@ -1,5 +1,6 @@
 // The veil of a room that has not been opened yet (scripts/render/room_veil.gd): a dark room you cannot see well, not a hole.
-//  - a deep desaturated blue black at 85 to 92 percent by day (a little more at night) over the room's floor, so the floor and the furniture show as faint shapes;
+//  - a dim desaturated blue grey at 70 to 80 percent by day (a little more at night) over the room's floor, so the floor and the furniture show as faint shapes
+//    (re-tuned with the dark look: it was a blue black at 85 to 92 percent, which the dimmer world made a black hole);
 //    a bit lighter in the middle of the room and darker along the walls (the inner shadow);
 //  - feathered edges (about half a tile) that run a little into the walls and the doorways: no outline;
 //  - a very slow drift of dust (low contrast fog and a few motes);
@@ -43,8 +44,10 @@ void fragment() {
 	float reach = 1.0 - smoothstep(0.3, 1.0, d);
 	float depth = clamp(-d / 1.6, 0.0, 1.0);
 
-	vec3 veil_col = mix(vec3(0.050, 0.060, 0.092), vec3(0.020, 0.026, 0.050), night);
-	float a = mix(mix(0.94, 0.88, depth), mix(0.97, 0.94, depth), night);
+	// (the dark look: the whole world is dimmer now, by day the revealed rooms are 40 percent of what they were, and the veil is multiplied by the same dimming; so the veil is lighter and
+	//  thinner than it was (a dim room you cannot see well, its floor and furniture faint under it), not a black hole beside the dim rooms that are seen)
+	vec3 veil_col = mix(vec3(0.160, 0.190, 0.260), vec3(0.120, 0.150, 0.265), night);
+	float a = mix(mix(0.80, 0.70, depth), mix(0.86, 0.80, depth), night);
 
 	// dust: a slow low contrast fog, and a few motes that drift and twinkle
 	float n = vnoise(lp * 1.1 + vec2(TIME * 0.035, -TIME * 0.02) + seed * 7.1) * 0.65 + vnoise(lp * 2.7 + vec2(-TIME * 0.03, TIME * 0.025) + seed * 3.3) * 0.35;
