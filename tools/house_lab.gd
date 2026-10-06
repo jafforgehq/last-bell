@@ -30,6 +30,8 @@
 ##                       bench and the builders last): they search the cleared houses by day and the loot goes to the stores. The bot never asks the crew to search. 0 (the default): none, as it was
 ##   --scavhouses=K      with --scavengers: at the claim the K houses nearest the base (within 35 tiles) are cleared for nothing, as if the player had cleared the street: the scavengers' work. 0: only the houses the bot
 ##                       clears itself (the start house, which it has searched already, and the rescue houses)
+##   --weather-first-night=storm   (RAIN) that weather through the first attack night only, dusk to dawn: storm, steady (rain), drizzle or clear (scripts/town/skies.gd `force_first_night`). Without
+##                       it the town's own weather plays (about one day in two has a rain period): the lab shows what rain does to the night's balance
 ##   --trace=60          print a line of what the bot is doing every N game minutes (debugging the bot)
 ##   --out=path.json     write the runs, the verdicts and the notes there: the ONLY file a lab run writes
 ##   --quiet             only the verdict lines
@@ -172,6 +174,9 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 			sim.field.noise_by_gun[String(k).trim_prefix("field.noise_by_gun.")] = float(sets_all[k])
 		elif String(k).begins_with("field.") and sim.get("field") != null:
 			sim.field.set(String(k).trim_prefix("field."), float(sets_all[k]) if not ["field.active_cap", "field.noise_cap"].has(String(k)) else int(sets_all[k]))
+	# (RAIN) the first attack night's weather held (a storm, a steady rain, a drizzle, or none) whatever the town's own schedule says
+	if String(o.get("weather_first_night", "")) != "" and sim.get("skies") != null:
+		sim.skies.force_first_night(String(o.weather_first_night))
 	var bot = HouseLib.HouseBot.new(sim, mode)
 	bot.prep = int(o.get("prep", 0))
 	bot.orders = String(o.get("orders", "projects"))
@@ -476,7 +481,7 @@ func _initialize() -> void:
 
 
 func _main() -> void:
-	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": "", "candidate": "best", "scavengers": "0", "scavhouses": "0"}
+	var opts := {"seeds": "1..4", "mode": "bot", "hz": "15", "blocks": "6", "days": "7", "stage": "", "budget": "0", "set": "", "prep": "0", "orders": "projects", "human": "1.25", "jobs": "1", "trace": "0", "out": "", "candidate": "best", "scavengers": "0", "scavhouses": "0", "weather-first-night": ""}
 	var quiet := false
 	var worker := false
 	var standin := false
@@ -502,7 +507,7 @@ func _main() -> void:
 		printerr("house lab: nothing to play (seeds %s, mode %s)" % [opts.seeds, opts.mode])
 		quit(2)
 		return
-	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going, "candidate": String(opts.candidate), "scavengers": int(opts.scavengers), "scavhouses": int(opts.scavhouses)}
+	var play_opts := {"hz": float(opts.hz), "blocks": int(opts.blocks), "days": int(opts.days), "stage": String(opts.stage), "budget": float(opts.budget), "set": parse_set(String(opts.set)), "trace": float(opts.trace), "bandage": standin, "prep": int(opts.prep), "orders": String(opts.orders), "human": float(opts.human), "stop_on_death": not keep_going, "candidate": String(opts.candidate), "scavengers": int(opts.scavengers), "scavhouses": int(opts.scavhouses), "weather_first_night": String(opts["weather-first-night"])}
 	opts["bandage"] = standin
 	opts["keepgoing"] = keep_going
 	var jobs := clampi(int(opts.jobs), 1, 16)
@@ -577,7 +582,7 @@ func _in_workers(seeds: Array, modes: Array, opts: Dictionary, jobs: int) -> Arr
 	var rows: Array = []
 	var args_of := func(pair: Array) -> Array:
 		var a := ["--headless", "--path", project, "--script", "res://tools/house_lab.gd", "--", "--worker", "--seeds=%d" % int(pair[0]), "--mode=%s" % String(pair[1])]
-		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human", "candidate", "scavengers", "scavhouses"]:
+		for k in ["hz", "blocks", "days", "stage", "budget", "set", "trace", "prep", "orders", "human", "candidate", "scavengers", "scavhouses", "weather-first-night"]:
 			if String(opts[k]) != "" and String(opts[k]) != "0":
 				a.append("--%s=%s" % [k, String(opts[k])])
 		if bool(opts.get("bandage", false)):

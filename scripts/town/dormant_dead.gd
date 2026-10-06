@@ -59,6 +59,8 @@ var night_wake := NIGHT_WAKE
 var pause_wake := false
 ## The wake radius is multiplied by this (1.0 by day; the dark carries sound and the streets are not safe: 1.4 at night, set by whoever knows the hour).
 var night_mult := 1.0
+## What a noise's radius is multiplied by: 1.0, and 0.8 while it rains (RAIN: scripts/town/skies.gd sets it every step; the rain covers a shot).
+var noise_mult := 1.0
 ## The records (index = id).
 var n := 0
 var xs := PackedFloat32Array()
@@ -405,7 +407,7 @@ func noise_radius_for(p) -> float:
 ## first (a dead one in a house the shot was not fired in is heard as if it were MUFFLE times farther), and go to `at` to look, at a wanderer's pace. They are not told who fired:
 ## whoever they see on the way, they go after (TownSim `_notice`). `prey` is only the shooter, kept for the old callers.
 func noise(at: Vector2, prey, radius: float = -1.0) -> void:
-	var r := noise_r if radius < 0.0 else radius
+	var r := (noise_r if radius < 0.0 else radius) * noise_mult
 	var t_in := Time.get_ticks_usec()
 	var in_house := _house_at(at.x, at.y) if not tile_house.is_empty() else -1
 	var cand: Array = []    # [distance as heard, Zombie or null, record or -1]

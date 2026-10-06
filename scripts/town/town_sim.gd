@@ -44,6 +44,7 @@ const PARTS := {
 	"salvage": "res://scripts/town/salvage.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
+	"skies": "res://scripts/town/skies.gd",
 	"scenario": "res://scripts/town/one_house.gd",
 }
 
@@ -63,6 +64,8 @@ var room_search
 var salvage
 var rescue
 var perimeter
+## The town's weather (RAIN: scripts/town/skies.gd): a rain period about one day in two, seeded by the run.
+var skies
 ## The names of the parts that exist (made from PARTS).
 var parts_made: Array = []
 
