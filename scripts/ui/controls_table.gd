@@ -4,7 +4,7 @@
 ##
 ## Every key here was read off the town run's own handlers (2026-10-06): scripts/main.gd `_unhandled_input` (Space, 1 2 3 the speeds, Esc, R, Q, F, E, T, G, L, J, N, V, F5, F9),
 ## `_input` (F11), scripts/ui/town_hud.gd `on_key` (M, Shift+N, Shift+G), scripts/ui/wheel_ctl.gd `key_down` (C, Shift+C, Z, Esc), scripts/ui/rescue_card.gd (1 2 3, E, Esc) and
-## scripts/ui/dawn_tally.gd (Enter, Space). What is NOT here is not in the town: Tab and 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
+## scripts/ui/dawn_tally.gd (Enter, Space), and PACE's two: X, held, polled by scripts/ui/pace_keys.gd (Shift is the aim's twin, so the run has a key of its own) and `.`, scripts/ui/wait_button.gd `on_key`. What is NOT here is not in the town: Tab and 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
 ## wheel, a right-click order, Y (the school's gate is off in the town) and B (the town has no Base page; its radio panel has Jobs, Build, Map and News).
 ##
 ## A row is {"keys": chips split at spaces ("|" between two chips reads "or"), "what": the words of the Controls page, "hud": [keys, words] for the narrow help panel, "aim": "" (always),
@@ -18,6 +18,7 @@ const GROUPS := [
 		"title": "Move and fight",
 		"rows": [
 			{"keys": "W A S D", "what": "Walk. The arrow keys do too", "hud": ["W A S D", "Walk"], "legend": ["a", "move", "WASD", "move"]},
+			{"keys": "X", "what": "Hold to run: faster for a few seconds, and the dead hear your feet", "hud": ["X", "Hold to run"]},
 			{"keys": "Right-click", "what": "Hold to aim at the pointer. Shift aims too", "hud": ["Right-click", "Hold to aim"], "aim": "right", "legend": ["a", "aim", "Right-click", "aim"]},
 			{"keys": "Click", "what": "Fire, while you aim", "hud": ["Click", "Fire, aiming"], "aim": "right", "legend": ["a", "fire", "Click", "fire"]},
 			{"keys": "Mouse", "what": "Aim at the pointer; the left button fires", "hud": ["Mouse", "Aim and fire"], "aim": "always", "legend": ["a", "aim", "Mouse", "aim"]},
@@ -25,6 +26,7 @@ const GROUPS := [
 			{"keys": "R", "what": "Reload", "hud": ["R", "Reload"], "legend": ["a", "reload", "R", "reload"]},
 			{"keys": "F", "what": "Swing, whatever you hold", "hud": ["F", "Swing"], "legend": ["a", "swing", "F", "swing"]},
 			{"keys": "E", "what": "Use: search, talk, sleep, treat", "hud": ["E", "Use, search"], "legend": ["b", "use", "E", "use"]},
+			{"keys": "E", "what": "Hold: search the whole room, when it is clear and has two containers or more", "hud": ["E", "Hold: whole room"]},
 			{"keys": "Q", "what": "Put the weapon away, or draw it again", "hud": ["Q", "Weapon away"], "legend": ["b", "away", "Q", "weapon away"]},
 			{"keys": "Scroll", "what": "Zoom, with the wheel or a pinch", "hud": ["Scroll", "Zoom"]},
 		],
@@ -50,6 +52,7 @@ const GROUPS := [
 			{"keys": "L", "what": "The call to arms, and standing down again", "hud": ["L", "Call to arms"]},
 			{"keys": "V", "what": "Fields of fire: what the guns cover", "hud": ["V", "Fields of fire"]},
 			{"keys": "Space", "what": "Pause, and go on", "hud": ["Space", "Pause"]},
+			{"keys": ".", "what": "Wait until the bell: the day runs ahead, and stops if the dead come", "hud": [".", "Wait for the bell"]},
 			{"keys": "1 2 3", "what": "Normal speed, twice as fast, three times", "hud": ["1 2 3", "Speed"]},
 		],
 	},

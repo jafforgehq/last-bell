@@ -246,6 +246,13 @@ func _town_words(out: Array) -> Array:
 				c["sub"] = "Treatment needs it: a house may have some"
 				c["priority"] = ""
 		kept.append(c)
+	# (CREW: what the people who searched the houses for you found yesterday: scripts/town/crew_search.gd)
+	var cs = sim.get("crew_search")
+	var said: String = cs.yesterday_text() if cs != null else ""
+	if said != "":
+		var line := _mk("scavengers", "ok", said, "On the Jobs page: the Scavenger", "jobs", "scavenger", "")
+		line["show_ok"] = true
+		kept.append(line)
 	return kept
 
 

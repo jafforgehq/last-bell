@@ -86,7 +86,7 @@ func refresh() -> int:
 			if not region.intersects(Rect2(hd.rect)):
 				continue
 			for c in houses.containers_of(int(hd.id)):
-				if search.is_looted(String(c.id)):
+				if search.is_looted(String(c.id)) and not _salvaged(String(c.id)):
 					items.append({"kind": String(c.kind), "at": Vector2(c.at), "face": "S", "state": "open", "open": true})
 	var sig := hash(items)
 	if sig != _sig or items.size() != _items.size():
@@ -95,6 +95,12 @@ func refresh() -> int:
 		_painter.items = items
 		_painter.queue_redraw()
 	return _items.size()
+
+
+## A searched container that was stripped for scrap is gone (scripts/town/salvage.gd): no open look over it.
+func _salvaged(container_id: String) -> bool:
+	var sv = sim.get("salvage") if sim != null else null
+	return sv != null and sv.container_stripped(container_id)
 
 
 func _region() -> Rect2:

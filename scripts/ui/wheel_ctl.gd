@@ -57,10 +57,12 @@ const TIPS_SIMPLE := {
 	"come": "Come with me: %s follows you",
 	"hold": "Hold here: %s holds the spot you click next",
 	"cover": "Cover me: %s stands behind you, watching your back",
-	"search": "Search that: %s searches what you click next",
+	"search": "Search a house: %s searches every container of the cleared house you click next",
 	"back": "Go back: %s goes back to what they were doing",
 	"post": "To the walls: %s goes to their post on the wall",
 }
+## (The One House's name for the Search slice: the crew search a house, not "that".)
+const SEARCH_HOUSE := "Search a house"
 const HINT_ONE := "Release on a slice. Shift: everyone near you. Esc: cancel"
 const HINT_GROUP := "Everyone within 8 tiles. Shift again: just one. Esc: cancel"
 ## ONE HOUSE (the host says `wheel_simple()`): the one way to give an order. The wheel opens round a person (a click on them or their card; hold C for the
@@ -73,6 +75,8 @@ const TIP_CENTRE := "Have a word with %s: how they are, what they need. The firs
 ## The verbs that need a spot: the next click puts it down.
 const PLACE_VERBS := ["hold", "search"]
 const PLACE_NOTES := {"hold": "Hold here: click where. Esc: cancel", "search": "Search that: click what. Esc: cancel"}
+## (The One House's: the crew search a house, which has to be one that is cleared.)
+const PLACE_NOTES_SIMPLE := {"hold": "Hold here: click where. Esc: cancel", "search": "Search a house: click a cleared house. Esc: cancel"}
 ## A click this soon after the wheel opened is the one that opened it (a double click on a card): it picks nothing.
 const OPEN_GUARD_MS := 220
 
@@ -305,6 +309,8 @@ func _words_simple(title: String, slices: Array, group: bool, who, members: Arra
 ## One slice: {"verb", "name", "enabled", "soft", "tip"} for the verb, asked of one person or of the group.
 func _slice(verb: String, group: bool, who, members: Array) -> Dictionary:
 	var radio_name := String(Radio.VERB_NAMES.get(verb, verb))
+	if simple() and verb == "search":
+		radio_name = SEARCH_HOUSE
 	var s := {"verb": verb, "name": radio_name, "enabled": true, "soft": false, "tip": ""}
 	var place: bool = host.wheel_place()
 	var extra: Dictionary = info.extras.get(verb, {})
@@ -514,7 +520,7 @@ func _after_one(was: Dictionary, verb: String, r: Dictionary, centre: Vector2) -
 ## Hold here, Search that: the wheel is put away and a note follows the pointer until the next click on the world puts the spot down.
 func begin_place(verb: String, was: Dictionary, centre: Vector2) -> Dictionary:
 	pending = {"verb": verb, "who": was.who, "group": bool(was.group), "members": was.members, "centre": centre}
-	wheel.show_place(String(PLACE_NOTES.get(verb, "Click where. Esc: cancel")))
+	wheel.show_place(String((PLACE_NOTES_SIMPLE if simple() else PLACE_NOTES).get(verb, "Click where. Esc: cancel")))
 	wheel.move_pointer(host.wheel_pointer())
 	return {"placing": verb}
 

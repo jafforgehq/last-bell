@@ -27,6 +27,8 @@
 ## worked at that building's plot), and `seats_<id>` effects add seats; `stations()` and
 ## `station(id)` give the stations as they are now.
 ##
+## ONE HOUSE (CREW): the Scavenger is a station that only the town has (`install_layout` adds it with the base: two seats, `MANUAL`: given by request only); its work is scripts/town/crew_search.gd
+## (`goal_for` asks it for the goal), which sends the person to the cleared houses by day.
 ## Events: {"type": "assigned", "who": id, "station": id}. Alerts: `job-radio`, `job-watch`
 ## when the desk or the post is empty late in the morning or the afternoon.
 extends RefCounted
@@ -54,6 +56,11 @@ const AUTO_ORDER := ["bench", "builders", "garden", "watch", "infirmary", "radio
 const AUTO_SECOND_PASS := ["builders", "garden", "bench", "infirmary", "salvage"]
 ## Traits that make a person a better fit for a station.
 const AUTO_TRAITS := {"bench": "tinkerer", "builders": "tinkerer", "infirmary": "triage", "watch": "sharp_eyed"}
+## One House: the stations that are only ever given by a request (the Jobs page, the radio): Auto-assign, Fill empty seats and the priorities' staffing never fill or empty them, and they are not
+## counted among the empty seats. The Scavenger (scripts/town/crew_search.gd): two seats, installed with the base's layout.
+const MANUAL := ["scavenger"]
+const SCAVENGER := {"id": "scavenger", "name": "Scavenger", "where": "the front yard", "seats": 2, "skill": "", "icon": "scavenge", "what": "Ready to go out", "work": "", "settings": {},
+	"blurb": "By day they search the cleared houses for you, nearest first, and are back before the bell. Nothing to search: clear another house."}
 ## The stations that give up a worker, first to last, when a seat that was left (the avatar's) is filled from a crew at work
 ## (`refill`): what can wait goes first, the bench (the ammunition) last. The desks are not here.
 const GIVE_UP_ORDER := ["salvage", "garden", "builders", "watch", "bench"]
@@ -148,6 +155,8 @@ func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
 		st["settings"] = r.get("settings", {})
 		_stations.append(st)
 		_station_by_id[String(st.id)] = st
+	if sim.is_one_house() and not _station_by_id.has("scavenger"):
+		_add_scavenger(rest)
 	_posts = []
 	for r in posts:
 		var po: Dictionary = r.duplicate(true)
@@ -191,6 +200,22 @@ func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
 	_layout_on = true
 	if sim.get("build") != null:
 		sim.build.version += 1
+
+
+## One House: the Scavenger's station, with the base. Its two seats are the last two resting spots of the layout (the people with no job take them from the first), and when they have no
+## house to go to they stand there.
+func _add_scavenger(rest: Dictionary) -> void:
+	var st: Dictionary = SCAVENGER.duplicate(true)
+	var spots: Array = rest.get("spots", [])
+	var yard: Vector2 = sim.base.yard_middle() if sim.get("base") != null else sim.yard_middle()
+	var a: Vector2 = _vec(spots[spots.size() - 1].pos) if not spots.is_empty() else yard
+	var b: Vector2 = _vec(spots[maxi(0, spots.size() - 2)].pos) if spots.size() > 1 else a
+	st["pos"] = a
+	st["seat_offsets"] = [Vector2.ZERO, b - a]
+	if a == b:
+		st["seat_offsets"] = [Vector2.ZERO, Vector2.ZERO]
+	_stations.append(st)
+	_station_by_id["scavenger"] = st
 
 
 ## The file's stations, posts and resting spots again (a new run, or a base is let go).
@@ -611,6 +636,8 @@ func goal_for(p) -> Dictionary:
 	var id := job_of(p)
 	if id == "":
 		return rest_goal(p)
+	if id == "scavenger" and sim.get("crew_search") != null:
+		return sim.crew_search.job_goal(p)    # (One House: the cleared houses by day; at their seat with nothing to search)
 	var st := station(id)
 	var at := seat_pos(p)
 	var what := String(st.get("what", st.name))

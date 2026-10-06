@@ -514,9 +514,14 @@ func on_event(e: Dictionary) -> void:
 		"searched":
 			_dirty = true
 			var loot := loot_text(e.get("loot", {}))
-			# (WORLD: the pops over the container say what was found, and fly to the stores: scripts/ui/search_marks.gd)
+			# (WORLD: the pops over the container say what was found, and fly to the stores: scripts/ui/search_marks.gd. A crew member's search names them: scripts/town/crew_search.gd)
+			var by := String(e.get("name", ""))
 			if loot == "" or not _has_part("search_marks"):
-				hud.toast(("Found: %s" % loot) if loot != "" else "Nothing here", "info")
+				hud.toast(("%s: %s" % [(by + " found") if by != "" else "Found", loot]) if loot != "" else "Nothing here", "info")
+		"crew_search":
+			# (One House, CREW: a crew member's search ended, or did not begin: in the town's words, in the colour of how it went)
+			_dirty = true
+			hud.toast(String(e.get("text", "")), String(e.get("level", "info")))
 		"claimed", "fourth", "attacks_on", "held", "rescue_joined", "rescue_talk", "entered", "left", "sleep":
 			_dirty = true
 		"slot_built":

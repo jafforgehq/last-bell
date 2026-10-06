@@ -614,7 +614,12 @@ func _foot_tick(dt: float) -> void:
 		if stream == null:
 			continue
 		var vol := (-1.0 if mine else -8.0) + _rng.randf_range(-1.5, 1.0)
-		if play_at("step", stream, here, cam, vol, _rng.randf_range(0.93, 1.07), (10.0 if mine else 0.0) - here.distance_to(cam), STEP_REACH):
+		var pitch := _rng.randf_range(0.93, 1.07)
+		if mine and float(p.get_meta("sprint_lean", 0.0)) > 0.5:
+			# (PACE: a run is a harder, quicker footfall: the same steps, a little louder and higher; the rate is the stride's, which the pace makes faster by itself)
+			vol += 2.5
+			pitch *= 1.12
+		if play_at("step", stream, here, cam, vol, pitch, (10.0 if mine else 0.0) - here.distance_to(cam), STEP_REACH):
 			made += 1
 
 

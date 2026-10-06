@@ -360,7 +360,8 @@ class HouseBot:
 				"claimed":
 					_mark_once("claimed", "claim", {"house": int(e.get("house", -1))})
 				"searched":
-					stats.searched = int(stats.searched) + 1
+					if not e.has("who"):    # (the avatar's own: a crew member's search names them, scripts/town/crew_search.gd)
+						stats.searched = int(stats.searched) + 1
 				"rescue_seen":
 					mark("rescue_seen", {"id": String(e.get("id", ""))})
 				"rescue_talk":
