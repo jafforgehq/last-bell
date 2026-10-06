@@ -508,11 +508,15 @@ func on_event(e: Dictionary) -> void:
 		"room_clear":
 			_dirty = true
 			var name := String(e.get("name", "")).strip_edges()
-			hud.toast(("The %s is clear" % name) if name != "" else "This room is clear", "info")
+			# (WORLD: the chip under the objective says it, with the count: scripts/ui/room_flash.gd)
+			if not _has_part("room_flash"):
+				hud.toast(("The %s is clear" % name) if name != "" else "This room is clear", "info")
 		"searched":
 			_dirty = true
 			var loot := loot_text(e.get("loot", {}))
-			hud.toast(("Found: %s" % loot) if loot != "" else "Nothing here", "info")
+			# (WORLD: the pops over the container say what was found, and fly to the stores: scripts/ui/search_marks.gd)
+			if loot == "" or not _has_part("search_marks"):
+				hud.toast(("Found: %s" % loot) if loot != "" else "Nothing here", "info")
 		"claimed", "fourth", "attacks_on", "held", "rescue_joined", "rescue_talk", "entered", "left", "sleep":
 			_dirty = true
 		"slot_built":
@@ -522,6 +526,13 @@ func on_event(e: Dictionary) -> void:
 		"slot_lost":
 			_dirty = true
 			hud.toast("%s has fallen" % _slot_name(String(e.get("slot", ""))), "danger")
+
+
+## Whether the town's facade has the view part `name` (WORLD: a news that a part says better is not said twice).
+func _has_part(part_name: String) -> bool:
+	var town = main.get("town") if main != null else null
+	var p = town.part(part_name) if town != null and town.has_method("part") else null
+	return p != null and (p.get("layer") != null or p.get("pop_layer") != null)    # (a part that has made its drawing: `--noworldfx` leaves it out)
 
 
 func _house_clear(h: int) -> void:

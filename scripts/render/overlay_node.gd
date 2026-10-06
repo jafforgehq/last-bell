@@ -33,6 +33,7 @@ const NightKit := preload("res://scripts/ui/night_kit.gd")
 const StanceMarks := preload("res://scripts/render/stance_marks.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const BaseMarks := preload("res://scripts/render/base_marks.gd")
+const PromptKit := preload("res://scripts/render/prompt_kit.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
@@ -206,6 +207,9 @@ var prompt_text := ""
 var prompt_ok := true
 var prompt_rect := Rect2()
 var prompt_key := ""
+## WORLD: how far round the ring of the pill's key was at the last draw (0 to 1; -1 when the pill had none), and whether the greyed "Searched" stand-in was drawn.
+var prompt_ring := -1.0
+var drew_searched := false
 var drew_brace := false
 var drew_bench_ring := false
 var bench_progress := 0.0
@@ -1565,9 +1569,16 @@ func prompt_for(c: Dictionary, it) -> Dictionary:
 		if open_for != null and String(open_for.id) == id:
 			label = PROMPT_END_TALK % String(open_for.first)
 			ok = true
+	# WORLD: the claim takes two seconds of standing still at the door: the pill says so ("hold"), and a thing that takes time carries the ring of its session
+	if kind == "claim" and label == "Claim this house":
+		label = "Hold to claim"
+	elif kind == "claim" and label == "Stop":
+		label = "Stop claiming"
+	var timed := bool(c.get("session", false))
+	var ring: Dictionary = PromptKit.session_ring(main.get("sim") if main != null else null, c) if timed else {}
 	if ok:
 		why = ""
-	return {"label": label, "why": why, "ok": ok, "text": "E  %s" % label if why == "" else "E  %s: %s" % [label, why]}
+	return {"label": label, "why": why, "ok": ok, "timed": timed, "ring": ring, "text": "E  %s" % label if why == "" else "E  %s: %s" % [label, why]}
 
 
 ## Where the thing a candidate is on is on the screen (pixels): a person at their feet as drawn, anything else where the rules say.
@@ -1676,6 +1687,7 @@ func _draw_interact(sim, z: float, vp: Vector2) -> void:
 	# the prompt
 	var c := prompt_candidate()
 	if c.is_empty():
+		_draw_searched_stand_in(z, vp)
 		return
 	var words := prompt_for(c, it)
 	prompt_text = String(words.text)
@@ -1706,12 +1718,19 @@ func _draw_prompt_pill(words: Dictionary, spot: Vector2, rx: float, vp: Vector2)
 	var fs := maxi(FIELD_PX, Fonts.MIN_PX)
 	var label := String(words.label)
 	var why := String(words.why)
-	var inner := PROMPT_MAX_W - PROMPT_KEY - 24.0
+	# WORLD: the key is a cap (scripts/render/prompt_kit.gd); a thing that takes time has the ring round it, and the seconds left are said after the words
+	var stub: bool = bool(words.get("stub", false))
+	var ring: Dictionary = words.get("ring", {})
+	var timed: bool = bool(words.get("timed", false)) and bool(words.get("ok", true)) and not stub
+	var area := PromptKit.AREA_RING if timed else PromptKit.AREA
+	var left_txt := ("%ds" % ceili(float(ring.left))) if not ring.is_empty() and float(ring.get("left", 0.0)) > 0.0 else ""
+	var left_w := (font.get_string_size(left_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0) if left_txt != "" else 0.0
+	var inner := PROMPT_MAX_W - area - 24.0
 	var label_w := minf(font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, inner)
 	var why_w := minf(font.get_string_size(why, HORIZONTAL_ALIGNMENT_LEFT, inner, fs).x, inner) if why != "" else 0.0
 	var lines := 2 if why != "" else 1
-	var h := 24.0 if lines == 1 else 42.0
-	var w := 8.0 + PROMPT_KEY + 8.0 + maxf(label_w, why_w) + 10.0
+	var h := (44.0 if timed else 32.0) if lines == 1 else 48.0
+	var w := 6.0 + area + 6.0 + maxf(label_w + left_w, why_w) + 12.0
 	var sides := [
 		Vector2(spot.x + rx + PROMPT_GAP, spot.y - 0.4 * h - 6.0),
 		Vector2(spot.x - rx - PROMPT_GAP - w, spot.y - 0.4 * h - 6.0),
@@ -1730,20 +1749,41 @@ func _draw_prompt_pill(words: Dictionary, spot: Vector2, rx: float, vp: Vector2)
 			break
 	if not found:
 		return
-	var ok: bool = prompt_ok
-	var round_r := minf(12.0, rect.size.y * 0.5)
+	var ok: bool = bool(words.get("ok", prompt_ok)) if stub else prompt_ok
+	var round_r := minf(14.0, rect.size.y * 0.5)
 	draw_colored_polygon(S.rrect(rect.position.x, rect.position.y, rect.size.x, rect.size.y, round_r, 5), PROMPT_BACK)
-	draw_polyline(S.closed(S.rrect(rect.position.x, rect.position.y, rect.size.x, rect.size.y, round_r, 5)), Color(ACCENT if ok else Hud.INK3, 0.8), 1.5, true)
-	var key := Rect2(rect.position.x + 6.0, rect.position.y + 3.0, PROMPT_KEY, 18.0)
-	draw_colored_polygon(S.rrect(key.position.x, key.position.y, key.size.x, key.size.y, 4.0, 4), ACCENT if ok else Hud.INK3)
-	var kfont := Fonts.cond(700, 1)
-	draw_string(kfont, Vector2(key.position.x, key.position.y + 14.0), "E", HORIZONTAL_ALIGNMENT_CENTER, key.size.x, fs, Color("#1a1508"))
-	var tx := key.end.x + 8.0
-	draw_string(font, Vector2(tx, rect.position.y + 3.0 + fs), label, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.INK if ok else Hud.INK2)
+	draw_polyline(S.closed(S.rrect(rect.position.x, rect.position.y, rect.size.x, rect.size.y, round_r, 5)), Color(ACCENT if ok else Hud.INK3, 0.8 if not stub else 0.45), 1.5, true)
+	var cap_at := Vector2(rect.position.x + 6.0 + area * 0.5, rect.position.y + rect.size.y * 0.5)
+	PromptKit.draw_cap(self, cap_at, ok, "check" if stub else "E", fs, timed, ring)
+	var tx := rect.position.x + 6.0 + area + 6.0
+	var base_y := rect.position.y + rect.size.y * 0.5 + fs * 0.36 if lines == 1 else rect.position.y + 7.0 + fs
+	draw_string(font, Vector2(tx, base_y), label, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.INK if ok else Hud.INK2)
+	if left_txt != "":
+		draw_string(font, Vector2(tx + label_w + 8.0, base_y), left_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Hud.INK3)
 	if why != "":
-		draw_string(font, Vector2(tx, rect.position.y + 21.0 + fs), why, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.WARN)
+		draw_string(font, Vector2(tx, rect.position.y + 26.0 + fs), why, HORIZONTAL_ALIGNMENT_LEFT, inner, fs, Hud.WARN)
+	if stub:
+		drew_searched = true
+		return
+	prompt_ring = float(ring.t) if not ring.is_empty() else -1.0
 	prompt_rect = rect
 	drew_prompt = true
+
+
+## WORLD: a container the avatar has already searched has nothing to press: its pill is the grey "Searched" with a check mark where the key would be, drawn only when there is
+## no real prompt (the rules offer no candidate for a looted container). The place comes from the search marks part (scripts/ui/search_marks.gd).
+func _draw_searched_stand_in(z: float, vp: Vector2) -> void:
+	if not _prompt_allowed():
+		return
+	var town = main.get("town")
+	var marks = town.part("search_marks") if town != null and town.has_method("part") else null
+	if marks == null or not marks.has_method("searched_near"):
+		return
+	var near: Dictionary = marks.searched_near()
+	if near.is_empty():
+		return
+	var spot := _screen(float(near.at.x), float(near.at.y))
+	_draw_prompt_pill({"label": "Searched", "why": "", "ok": false, "stub": true, "timed": false, "ring": {}}, spot, clampf(z * 0.5, 14.0, 70.0), vp)
 
 
 func _draw() -> void:
@@ -1770,6 +1810,8 @@ func _draw() -> void:
 	drew_reload_ring = false
 	drew_you = false
 	drew_prompt = false
+	prompt_ring = -1.0
+	drew_searched = false
 	drew_hover_ring = false
 	hover_key = ""
 	drew_far_tag = false
