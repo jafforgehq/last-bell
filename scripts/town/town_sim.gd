@@ -38,6 +38,7 @@ const PARTS := {
 	"base": "res://scripts/town/base.gd",
 	"sleep": "res://scripts/town/sleep.gd",
 	"uses": "res://scripts/town/uses.gd",
+	"room_search": "res://scripts/town/room_search.gd",
 	"salvage": "res://scripts/town/salvage.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
@@ -53,6 +54,7 @@ var search
 var base
 var sleep
 var uses
+var room_search
 var salvage
 var rescue
 var perimeter
@@ -200,7 +202,11 @@ func update(dt: float) -> void:
 		field.update(dt, _anchors())
 		_notice()
 	var first_new := events.size()
+	if room_search != null:
+		room_search.pre_step()    # (LOOT: while a whole-room search walks the avatar, the way is put where the keys are for this step: scripts/town/room_search.gd)
 	super(dt)
+	if room_search != null:
+		room_search.post_step()
 	for m in _stepped_parts():
 		if m.has_method("update") and bool(m.get("enabled") if "enabled" in m else true):
 			m.update(dt)
