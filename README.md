@@ -348,6 +348,7 @@ given moment without touching the game:
 | `--load=path` | Load a save (a file path, or `user://quicksave.json`) |
 | `--demo` | Play the demo (round 26, see Demo): the title says so, New game begins the three nights (a fixed seed, a crew of five) and a `--shot` run is that run. Without it the full game |
 | `--endcard` | With `--demo`: play the demo's three days quickly, the colony alone, to the end of the run, so that the end card is up (a screenshot of it). With `--town`: the One House end card at once ("held") |
+| `--moment=bell[:s]\|dawn\|sleep` | With `--town`, for a shot of the night's two moments (scripts/ui/night_event.gd, dawn_tally.gd). `bell` plays the dusk bell of an attack night at once (the banner in the town's words, the vignette held at second `s` of its 4: 2.5 by default; give `--stage=night`, and `--slots=built --hour=15 --advance=62` for the lookout's forecast to be known); `dawn` plays the rules idle from now to the first morning, every event told to the tally (`--stage=night --slots=damaged` for a night that is not held: a held first night has the end card and no tally); `sleep` puts the avatar to bed (`--stage=claimed --hour=21`) and the tally comes after the sleep fade. A shot is taken about a second after the moment is up, whatever `--frames` says |
 | `--frames` | Frames to wait before the shot |
 
 The run prints average fps.
