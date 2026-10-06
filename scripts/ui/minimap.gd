@@ -13,6 +13,8 @@ extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Access := preload("res://scripts/access.gd")
+const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const SHADER := preload("res://scripts/ui/minimap.gdshader")
 
@@ -33,6 +35,8 @@ const CAND_COLOR := Color("#8fb85a")
 const ME_COLOR := Color(0.98, 0.97, 0.91, 1.0)
 const HOUSE_DARK := Color(0.14, 0.09, 0.04, 1.0)
 const TIP := "The streets round you, north at the top. The dead that are awake show red. Click for the map (M)"
+## With "Colour-blind markers": the same marks, told by their shapes (see `_draw_marks`).
+const TIP_CB := "The streets round you, north at the top. Triangles are the dead that are awake, circles are survivors you know of, a flag with a plus is a house you could claim. Click for the map (M)"
 
 var main
 var hud
@@ -64,6 +68,8 @@ var _dirty := true
 var _world_w := 192
 var _world_h := 192
 var _enabled := true
+## "Colour-blind markers" was on at the last look.
+var _cb := false
 ## Shapes drawn over the ground, kept so that a frame makes no array (a `_line` is its shape closed, for the outline).
 var _tri := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
 var _tri_line := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
@@ -167,6 +173,11 @@ func on_frame(dt: float) -> void:
 func _frame(dt: float) -> void:
 	if _t + dt >= REFRESH_S:
 		_enabled = Prefs.on("ui", "minimap") and hud.size.x >= 640.0
+		var markers := Access.markers()
+		if markers != _cb:
+			_cb = markers    # (Colour-blind markers went on or off: the marks are drawn again, and the tooltip says what the shapes are)
+			root.tooltip_text = TIP_CB if markers else TIP
+			_dirty = true
 	var on := _enabled
 	if root.visible != on:
 		root.visible = on
@@ -302,11 +313,16 @@ func _draw_marks() -> void:
 	for i in dead.size():
 		var d := (dead[i] - me) * ppt
 		if d.length_squared() <= reach * reach:
-			marks.draw_rect(Rect2(c + d - Vector2(1.8, 1.8), Vector2(3.6, 3.6)), DEAD_COLOR)
+			if _cb:
+				CbShapes.mark(marks, "triangle", c + d, 3.3, DEAD_COLOR)    # (Colour-blind markers: the dead are triangles)
+			else:
+				marks.draw_rect(Rect2(c + d - Vector2(1.8, 1.8), Vector2(3.6, 3.6)), DEAD_COLOR)
 	# the survivors known of: blue diamonds
 	for i in known.size():
 		var d2 := (known[i] - me) * ppt
-		if d2.length() <= reach:
+		if d2.length() <= reach and _cb:
+			CbShapes.mark(marks, "circle", c + d2, 3.6, KNOWN_COLOR)    # (Colour-blind markers: survivors are circles)
+		elif d2.length() <= reach:
 			var q := c + d2
 			_dia[0] = q + Vector2(0, -4.5)
 			_dia[1] = q + Vector2(3.8, 0)
@@ -350,6 +366,9 @@ func _pin_or_arrow(c: Vector2, d: Vector2, reach: float, color: Color, house: bo
 			# (a dark house on the base's gold block: the avatar, when she is home, is the pale arrow over it)
 			marks.draw_rect(Rect2(q + Vector2(-3.8, -0.5), Vector2(7.6, 5.5)), HOUSE_DARK)
 			marks.draw_colored_polygon(_roof, HOUSE_DARK)
+			if _cb:
+				# (Colour-blind markers: the base's house has a pale rim, a square body under a point, whatever it stands on)
+				marks.draw_rect(Rect2(q + Vector2(-4.6, -0.9), Vector2(9.2, 6.4)), CbShapes.RIM, false, 1.2)
 		else:
 			_flag[0] = q + Vector2(0, -8.0)
 			_flag[1] = q + Vector2(6.0, -5.6)
@@ -357,6 +376,8 @@ func _pin_or_arrow(c: Vector2, d: Vector2, reach: float, color: Color, house: bo
 			marks.draw_line(q, q + Vector2(0, -8.0), Color(0, 0, 0, 0.75), 3.0)
 			marks.draw_line(q, q + Vector2(0, -8.0), color, 1.4)
 			marks.draw_colored_polygon(_flag, color)
+			if _cb:
+				CbShapes.mark(marks, "plus", q + Vector2(9.5, -3.0), 2.6, color)    # (Colour-blind markers: a house to claim has a plus)
 		return
 	var dir := d.normalized()
 	var tip := c + dir * (reach + 3.0)

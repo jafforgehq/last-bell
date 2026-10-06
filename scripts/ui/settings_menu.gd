@@ -8,6 +8,8 @@ extends "res://scripts/ui/menu_screen.gd"
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const SettingsExtras := preload("res://scripts/ui/settings_extras.gd")
+const OneHouse := preload("res://scripts/town/one_house.gd")
 
 ## The volume rows: [pref key, what the player reads, the audio bus].
 const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["ambience", "Ambience", "Ambience"], ["music", "Music", "Music"], ["ui", "Interface", "UI"]]
@@ -25,6 +27,8 @@ const SWITCHES := [
 ## In a window shorter than this the rows sit closer together and their buttons are a little slimmer, so that the whole screen fits the
 ## smallest window (700 by 560) without scrolling.
 const COMPACT_H := 640.0
+const SPACIOUS_H := 1000.0
+const ROW_H_MID := 34.0
 ## How tall the buttons of the rows are (the size, the switches, the aiming), and in a short window.
 const ROW_H := 38.0
 const ROW_H_COMPACT := 32.0
@@ -40,6 +44,8 @@ var scale_note: Label
 var toggles := {}
 ## The two ways to aim (AimMode.RIGHT, AimMode.ALWAYS) as buttons, and the line that says what the one chosen does.
 var aim_buttons := {}
+## The three "Text size" buttons by size ("normal", "large", "larger"; scripts/ui/settings_extras.gd).
+var text_buttons := {}
 var aim_note: Label
 var back_button: Button
 var _dragging := false
@@ -115,6 +121,7 @@ func _build_body() -> void:
 	body.add_child(_aim_row())
 	aim_note = note("", ink3(), 13)
 	body.add_child(aim_note)
+	SettingsExtras.add_rows(self)    # (Accessibility: text size, colour-blind markers, reduce flashes)
 	_refresh_aim()
 	_refresh_scale()
 
@@ -130,8 +137,10 @@ func default_focus() -> Control:
 
 
 func _layout() -> void:
-	body.add_theme_constant_override("separation", 10 if size.y >= COMPACT_H else 1)
-	_fit_rows(ROW_H if size.y >= COMPACT_H else ROW_H_COMPACT)
+	# (three sizes: roomy from SPACIOUS_H up; between that and COMPACT_H a little closer, so that the Accessibility rows fit a 1280 by 800 window without scrolling; the smallest as before)
+	var gap := 10 if size.y >= SPACIOUS_H else (4 if size.y >= COMPACT_H else 1)
+	body.add_theme_constant_override("separation", gap)
+	_fit_rows(ROW_H if size.y >= SPACIOUS_H else (ROW_H_MID if size.y >= COMPACT_H else ROW_H_COMPACT))
 	super._layout()
 
 
@@ -140,6 +149,7 @@ func _fit_rows(h: float) -> void:
 	var buttons: Array = [scale_minus, scale_plus]
 	buttons.append_array(toggles.values())
 	buttons.append_array(aim_buttons.values())
+	buttons.append_array(text_buttons.values())
 	for b in buttons:
 		if b != null and not is_equal_approx(b.custom_minimum_size.y, h):
 			b.custom_minimum_size.y = h
@@ -169,6 +179,9 @@ func _volume_row(key: String, label_text: String, bus: String) -> Control:
 	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	s.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_style_slider(s)
+	s.tooltip_text = String(SettingsExtras.VOLUME_TIPS.get(key, ""))
+	ring.tooltip_text = s.tooltip_text
+	ring.mouse_filter = Control.MOUSE_FILTER_PASS    # (the label and the number have a tooltip too: the row's)
 	s.value_changed.connect(_on_volume.bind(key, bus))
 	s.drag_started.connect(func(): _dragging = true)
 	s.drag_ended.connect(func(_moved): _dragging = false; _preview(key))
@@ -254,6 +267,7 @@ func _scale_row() -> Control:
 	row.add_child(l)
 	scale_minus = button("−", false)
 	scale_minus.custom_minimum_size = Vector2(44, 38)
+	scale_minus.tooltip_text = String(SettingsExtras.SCALE_TIPS.minus)
 	scale_minus.pressed.connect(_step_scale.bind(-1))
 	row.add_child(scale_minus)
 	scale_value = hud._label("100%", Fonts.cond(700), 17, ink())
@@ -263,6 +277,7 @@ func _scale_row() -> Control:
 	row.add_child(scale_value)
 	scale_plus = button("+", false)
 	scale_plus.custom_minimum_size = Vector2(44, 38)
+	scale_plus.tooltip_text = String(SettingsExtras.SCALE_TIPS.plus)
 	scale_plus.pressed.connect(_step_scale.bind(1))
 	row.add_child(scale_plus)
 	return row
@@ -343,11 +358,18 @@ func _aim_row() -> Control:
 		b.custom_minimum_size = Vector2(120, 38)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		b.tooltip_text = String(AimMode.NOTES[mode])
+		b.tooltip_text = _aim_words(String(mode))
 		b.pressed.connect(_on_aim.bind(String(mode)))
 		row.add_child(b)
 		aim_buttons[String(mode)] = b
 	return row
+
+
+## What a way of aiming says of itself: the One House's words (nothing about orders by a right click) in the real game, the school's under `--school`.
+func _aim_words(mode: String) -> String:
+	if OneHouse.town_start(shell.main):
+		return String(AimMode.NOTES_TOWN[mode])
+	return String(AimMode.NOTES[mode])
 
 
 func _on_aim(mode: String) -> void:
@@ -364,7 +386,7 @@ func _refresh_aim() -> void:
 		b.set_pressed_no_signal(mode == now)
 		shell.restyle(b, mode == now)
 	if aim_note != null:
-		aim_note.text = String(AimMode.NOTES[now])
+		aim_note.text = _aim_words(now)
 
 
 ## Tells the game to read the settings again (the size, the hints, fullscreen, the volumes).

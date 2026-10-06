@@ -51,6 +51,32 @@ const BUTTON_TIP_DRAWN := "The weapon is drawn: the right button aims and the le
 const BUTTON_TIP_AWAY := "The weapon is put away: nothing aims or fires, F still shoves. Click to draw it (Q). With someone picked, a right click orders them: on the ground Hold here, on a night post To the walls, on a person Come with me"
 
 
+## The One House's words (a right click is never an order there: the order wheel is the one way, so these say nothing of picking someone or of a right click that orders).
+const NOW_AWAY_TOWN := "Weapon put away. Q draws it again"
+const NOTES_TOWN := {
+	RIGHT: "Right button or Shift aims, left click shoots; the pointer stays free. Q puts the weapon away. Hold C for the order wheel.",
+	ALWAYS: "The survivor aims at the mouse all the time; the left button fires. Q puts the weapon away. Hold C for the order wheel.",
+}
+
+
+## The words of the weapon button's tooltip: whether the weapon is put away, and the way the mouse aims (the One House's, `town`, say nothing of orders by a right click).
+static func button_tip(away: bool, town: bool) -> String:
+	if not town:
+		return BUTTON_TIP_AWAY if away else BUTTON_TIP_DRAWN
+	if away:
+		return "The weapon is put away: nothing aims or fires, F still shoves. Click to draw it (Q)"
+	if current() == ALWAYS:
+		return "The weapon is drawn: the mouse aims and the left button fires. Click here to put it away (Q)"
+	return "The weapon is drawn: hold the right button to aim, click to fire. Click here to put it away (Q)"
+
+
+## What the toast says when the weapon is put away or drawn.
+static func toggle_toast(away: bool, town: bool) -> String:
+	if town:
+		return NOW_AWAY_TOWN if away else (NOW_DRAWN if current() == RIGHT else "Weapon drawn: the mouse aims")
+	return NOW_AWAY if away else NOW_DRAWN
+
+
 ## The mode now: `ui.aim_mode`, "right" for anything the file holds that is not one of the two.
 static func current() -> String:
 	var v = Prefs.get_value("ui", "aim_mode")

@@ -18,6 +18,7 @@
 extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Access := preload("res://scripts/access.gd")
 
 const TITLE := "The bell"
 const UNKNOWN_SUB := "Tonight the dead come. Nobody saw how many."
@@ -211,8 +212,9 @@ func _build_vignette() -> void:
 	main.add_child(_layer)
 
 
+## The vignette does not move: Reduce motion, or Reduce flashes (which also makes it fainter and slower, `params_at`'s `gentle`).
 func _calm() -> bool:
-	return hud != null and hud.has_method("_calm") and bool(hud._calm())
+	return Access.reduce_flashes() or (hud != null and hud.has_method("_calm") and bool(hud._calm()))
 
 
 ## Starts the vignette from its beginning; `hold` keeps it at its peak (the debug moment).
@@ -240,8 +242,12 @@ func _step_vignette(dt: float) -> void:
 
 
 ## {"amount", "closing", "warmth"} at `t` seconds: warm to cold and closing in while `VIG_CLOSE_S` runs, then relaxing; Reduce motion: a fade in and out of a still one.
-static func params_at(t: float, calm: bool) -> Dictionary:
+static func params_at(t: float, calm: bool, gentle: bool = false) -> Dictionary:
 	if calm:
+		if gentle:
+			# (Reduce flashes: fainter, and it comes and goes over most of a second each way, not in a blink)
+			var g := clampf(t / 0.8, 0.0, 1.0) * clampf((VIG_CALM_S - t) / 0.8, 0.0, 1.0)
+			return {"amount": 0.38 * g, "closing": 0.5, "warmth": 0.5}
 		var a := minf(t / 0.15, 1.0) * clampf((VIG_CALM_S - t) / 0.5, 0.0, 1.0)
 		return {"amount": 0.7 * a, "closing": 0.5, "warmth": 0.5}
 	var k := clampf(t / VIG_CLOSE_S, 0.0, 1.0)
@@ -257,7 +263,7 @@ static func params_at(t: float, calm: bool) -> Dictionary:
 
 
 func _apply_vignette() -> void:
-	var p := params_at(vignette_t, _calm())
+	var p := params_at(vignette_t, _calm(), Access.reduce_flashes())
 	_mat.set_shader_parameter("amount", float(p.amount))
 	_mat.set_shader_parameter("closing", float(p.closing))
 	_mat.set_shader_parameter("warmth", float(p.warmth))

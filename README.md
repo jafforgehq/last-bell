@@ -8,6 +8,42 @@ Open the project and press **F5**. The main scene is `scenes/main.tscn`; a cold 
 
 ## Controls
 
+### The One House (the game on `main`)
+
+Every key and mouse button of the town run, in the groups the **Controls** page of the Esc menu shows them (it, the "?" panel in the toolbar and the first minute's legend are all made from ONE table, `scripts/ui/controls_table.gd`, and each key was read off the town's own handlers: `scripts/main.gd` `_unhandled_input`, `scripts/ui/town_hud.gd` `on_key`, `scripts/ui/wheel_ctl.gd`). Tab, 1 to 5, the middle button, a right-click order, Y (the school's gate) and B (there is no Base page in the town) are NOT in the town run.
+
+| Group | Input | Action |
+| --- | --- | --- |
+| Move and fight | W A S D, or the arrow keys | Walk |
+| | Right button (held), or Shift (held) | Aim at the pointer (with *Always aim at the mouse* in Settings the mouse aims by itself) |
+| | Left click, while aiming | Fire |
+| | R | Reload |
+| | F | Swing, whatever you hold |
+| | E | Use what the prompt says: search, talk, sleep, treat |
+| | Q | Put the weapon away, or draw it again (the *Weapon* button under the gun's readout does the same) |
+| | Scroll, or a pinch | Zoom |
+| The crew: ask, do not order | Click a person, or a crew card | The order wheel opens round them (with *Always aim at the mouse* only a card: the click fires in the world) |
+| | C (held) | The wheel for whoever is nearest |
+| | Shift + C (held) | The wheel for everyone within eight tiles |
+| | Z | The last order again, to the same people |
+| | Esc | Close the wheel (a click outside it does too) |
+| Panels and time | T | The radio panel (the News; Jobs, Build and Map are its other tabs) |
+| | J, N | Jobs, Build |
+| | M or G | The map of the town |
+| | L | The call to arms, and standing down again |
+| | V | Fields of fire |
+| | Space | Pause |
+| | 1 2 3 | Normal speed, twice as fast, three times |
+| The game | Esc | Close what is open; with nothing open, the menu |
+| | F5, F9 | Save, load the last save |
+| | F11 | Fullscreen on and off (kept in Settings; a browser has its own F11) |
+
+While a person at the door is talking (the rescue card), 1 2 3 answer them and E or Esc puts the card away; Enter or Space puts the dawn card away. **Settings** (Esc, Settings) also has: *Text size* (Normal, Large, Larger), *Colour-blind markers* (a shape or a sign beside every colour), *Reduce flashes* (the hit's red edge, the bell's vignette, the white wash of a hit and the guns' light go gentle), and the volumes and the toolbar's sound switch are remembered. Every icon, chip and button has a tooltip after 0.4 s (`gui/timers/tooltip_delay_sec`) in the HUD's own style.
+
+### The school yard (`--school`, `--demo`) and the notes of the avatar game
+
+The rows below describe the school-yard game and its systems, which the town reuses. Where they talk of picking someone, the dock, a tapped right click, the middle button, 1 to 5, Tab, Y or B, that is the school's: the town has none of them (see the table above).
+
 **Commanding the crew in the One House: one way.** You never "pick" anyone while you walk, aim and shoot: there is no selected person, no dock, no selection ring, no Tab, no 1 to 5 and no right-click order. To ask somebody for something, **click them** (their picture in the world, or their **card** in the crew bar) and **the order wheel opens round them**; it works by radio, from any distance, and the person is named in the middle with how they are (*steady*, *following*, *down*). Pick a slice with a click: *Come with me*, *Hold here*, *Cover me*, *Search that* (greyed in the town: "Nobody searches for you yet"), *Go back*, *To the walls*. *Hold here* (and *Search that*) need a spot: the wheel goes away, a note at the pointer says **"Hold here: click where. Esc: cancel"**, and the next click on the ground puts it down (a flag marks it for a few seconds); every other slice asks at once. They answer in a toast ("Mei: on my way"); when they say no, the wheel stays up with the reason in amber and that slice now reads **Insist**: click it to push them (it costs trust), or ask for something else. A slice greyed with its reason is a refusal nobody can argue with (down, in a breakdown, leaving). The **middle** of the ring is a word with them (what they need; the first word of each day earns trust). **Esc** or a click outside the ring closes it. One accelerator: hold **C** for the wheel of the *nearest* crew member (release over a slice to pick it; a tap leaves it up for a click), **Shift + C** for everyone within eight tiles (one ask each, one line of answers); **Z** asks the last order again of the same people, to the same spot. **E** at a person is a click on them. Clicking a dead one, or the bare ground, does nothing special; a person who is hiding in a house (not yet yours) still has the rescue card. The crew bar is status only (health, what they do: *Following*, *Holding*...) and a click on a card opens the wheel. The digits are the speeds again (**1 2 3**). Jobs, the Map and the News stay on the radio panel (**T**). *The rows below that talk of picking someone, the dock, a tapped right click, the middle button, 1 to 5 or Tab are the school yard's (`--school`, `--demo`).*
 
 **How to play the avatar game.** A new game is played by **one survivor** (Ruth to begin with), seen from above: the camera follows them, and the mouse is a free arrow that clicks: the survivor faces the way they walk (and keeps their last facing when they stand still), and only while you **hold the right button** (or Shift) does the arrow become a small crosshair, the survivor turn to it and a thin line from the gun show where a shot would go (it fades with the distance and goes while the gun is reloading). A left click never fires and never turns the survivor unless the right button is down: it picks a person, or uses what the prompt is on. If you would rather have the old way (the survivor aims at the mouse all the time and the left button fires), choose **Always aim at the mouse** under *Controls* in Settings. **Q puts the weapon away** (and draws it again; so does the small *Weapon: drawn (Q)* button under the gun's readout): nothing aims or fires, the pointer is the free arrow whatever the setting says, and the survivor carries the gun low. Then, with someone picked (click them, or their crew card), **a right click on the world is an order by radio** for them: on the ground *Hold here* at that spot (a small flag marks it for a few seconds), on a night post *To the walls* at that post, on a person *Come with me*; the answer, a refusal's reason and *Insist* are the dock's own. **Commands are even easier with the command wheel** (round 24): hold **C** (or the middle button) and a ring of the radio's six verbs opens round the pointer; release over a slice and the person it is for is asked, exactly as the dock's buttons ask (see the table). The other survivors have their own minds and fight from their posts. There is no box select and no panning; the clock's column has a readout of the gun (the weapon, the rounds you can fire over the rounds in the stores (shots come from the stores, so a magazine over one round in the stores reads 1 / 1), amber when the magazine is low or the stores cannot fill it, red when they are dry, and a bar that is the reload). A saved game keeps its survivor; a save made before the avatar (or a Full crew save, which had none) loads as an avatar game with Ruth, or the first of the living if she is gone, as the survivor, and a toast says "Old save: you are now Ruth" (an old Full crew save has no town, so its Map page says "This old save has no town: start a new game to take trips"). There is only this game: Orientation Day is taught with the avatar, in the controls above (eight steps, from the YOU tag to the gate and the bell; Skip is on every card).
@@ -296,7 +332,10 @@ given moment without touching the game:
 | `--title-bench=SECONDS` | A windowed title measures its frames for that long (frame times, draw calls), prints them and quits; give `--winpx=1920x1080 --os-scale=1`, and `--disable-vsync` before the `--` to see the headroom under 60 Hz |
 | `--school` | The old schoolyard where the real game would show the town: behind the title, and the New game screen's old crew and length choices (a crew of three or five); the demo is that too |
 | `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
-| `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours) |
+| `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours; a file with `[ui]` `text_size="larger"`, `colour_blind=true` or `reduce_flashes=true` stages the Accessibility settings) |
+| `--tooltip=<key>` | A town run, with `--shot`: the pointer goes onto that control and the shot waits for its tooltip (a key of `scripts/ui/help_tips.gd` `targets()` such as `dead`, `clock`, `strip`, `objective`; or a HUD member such as `alarm_button`, or a node path under the HUD) |
+| `--tooltips-audit` | A town run (give `--frames=60`): print every visible word, picture and button of the HUD that would show no tooltip under the pointer |
+| `--menu=controls` | The Controls page of the Esc menu (`--menu=settings`, `pause`... as before) |
 | `--hurt=F[,bite]` | A town run: the avatar at that fraction (0 to 1) of the health, for the red edge of the screen (scripts/ui/hurt_pulse.gd: steady and faint at 30 percent or less, a heartbeat on it unless Reduce motion is on); `,bite` lands a bite 5 frames before the shot (the health drops 12, the thump plays) |
 | `--cardstate=who:what,...` | A town run, after `--stage=fourth`: put crew cards in a state to see their status chip (scripts/ui/crew_marks.gd). `who`: an id, a first name, `me`, or `#1`.. (the crew after the avatar: the rescued have other names in every run); `what`: `bleed`, `infect`, `hurt`, `down`, `stable`, `hungry`, `starving`, `thirsty`, `parched`, `refuse`, `job`, `last` (the ring of the last order), `hold`, `follow`. (Not `--crewstate`: `--crew...` is the school's crew size) |
 | `--hudb-cost` | With `--shot`: print the CPU time per frame, in microseconds, of the red edge, the card chips and the minimap (frames 60 on) |

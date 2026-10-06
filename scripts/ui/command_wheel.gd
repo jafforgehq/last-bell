@@ -17,6 +17,7 @@ extends Control
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const StanceMarks := preload("res://scripts/render/stance_marks.gd")
+const Access := preload("res://scripts/access.gd")
 
 const N := 6
 const R_IN := 42.0
@@ -270,13 +271,14 @@ func _draw_place() -> void:
 	draw_arc(pointer, 11.0, 0.0, TAU, 24, ACCENT, 2.0, true)
 	draw_circle(pointer, 2.0, ACCENT)
 	var font := Fonts.sans(600, 0)
-	var size := font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
+	var pf := Access.scaled(13)    # (Text size)
+	var size := font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, pf)
 	var rect := Rect2(pointer + Vector2(18.0, 14.0), size + Vector2(14.0, 10.0))
 	rect.position.x = clampf(rect.position.x, MARGIN, maxf(MARGIN, view.x - rect.size.x - MARGIN))
 	if rect.end.y > view.y - MARGIN:
 		rect.position.y = pointer.y - 14.0 - rect.size.y
 	draw_style_box(_line_box, rect)
-	draw_string(font, rect.position + Vector2(7.0, 5.0 + font.get_ascent(13)), place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, INK)
+	draw_string(font, rect.position + Vector2(7.0, 5.0 + font.get_ascent(pf)), place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, pf, INK)
 
 
 func _draw() -> void:
@@ -317,7 +319,7 @@ func _draw() -> void:
 		draw_arc(gc, 13.0, 0.0, TAU, 20, Color(StanceMarks.color_of(verb), 0.8 * alpha), 1.5, true)
 		StanceMarks.draw_glyph(self, verb, gc, 7.5, Color(StanceMarks.color_of(verb), alpha))
 		var label := String(s.get("name", verb))
-		var fs := 14
+		var fs := roundi(14.0 * minf(Access.text_k(), 1.15))    # (Text size: the names of the slices grow a little, they have to fit their slice)
 		var tw := name_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		var ink := Color(ACCENT if lit else INK, alpha)
 		draw_string(name_font, mid + Vector2(-tw * 0.5, 17.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ink)
@@ -346,9 +348,10 @@ func _draw() -> void:
 		var w := minf(340.0, maxf(160.0, view.x - 2.0 * MARGIN - 12.0))
 		var font := Fonts.sans(600, 0)
 		var inner := w - 12.0
-		var box := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, inner, 13, 3)
+		var lf := Access.scaled(13)    # (Text size: the line under the ring is as big as the rest of the words)
+		var box := font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, inner, lf, 3)
 		var rect := Rect2(clampf(centre.x - w * 0.5, MARGIN, maxf(MARGIN, view.x - w - MARGIN)), centre.y + (R_GROUP if group else R_OUT) + 12.0, w, box.y + 12.0)
 		draw_style_box(_line_box, rect)
 		var warn_line := hover >= 0 and hover < slices.size() and (bool(slices[hover].get("soft", false)) or not bool(slices[hover].get("enabled", true)))
 		warn_line = warn_line or (hint_warn and hover < 0 and not over_centre)
-		draw_multiline_string(font, rect.position + Vector2(6.0, 6.0 + font.get_ascent(13)), text, HORIZONTAL_ALIGNMENT_LEFT, inner, 13, 3, Color(WARN if warn_line else INK))
+		draw_multiline_string(font, rect.position + Vector2(6.0, 6.0 + font.get_ascent(lf)), text, HORIZONTAL_ALIGNMENT_LEFT, inner, lf, 3, Color(WARN if warn_line else INK))

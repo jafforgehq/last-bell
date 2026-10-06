@@ -18,6 +18,7 @@ const SaveGame := preload("res://scripts/sim/save_game.gd")
 const TitleMenu := preload("res://scripts/ui/title_menu.gd")
 const PauseMenu := preload("res://scripts/ui/pause_menu.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
+const ControlsMenu := preload("res://scripts/ui/controls_menu.gd")
 const NewGameMenu := preload("res://scripts/ui/new_game_menu.gd")
 const LoadMenu := preload("res://scripts/ui/load_menu.gd")
 const CreditsScreen := preload("res://scripts/ui/credits.gd")
@@ -326,6 +327,11 @@ func open_settings() -> Control:
 	return _open_screen(SettingsMenu.new(), "Settings", "Changes apply at once")
 
 
+## The Controls page: every key and mouse button of the town run, on one page (scripts/ui/controls_menu.gd).
+func open_controls() -> Control:
+	return _open_screen(ControlsMenu.new(), "Controls", "The keys and the mouse")
+
+
 func open_new_game() -> Control:
 	# (round 26: the demo has one game, its three nights: New game begins it, with no choice to make)
 	if Demo.on():
@@ -373,6 +379,8 @@ func open_named(screen_name: String) -> Control:
 			return open_pause()
 		"settings":
 			return open_settings()
+		"controls":
+			return open_controls()
 		"new":
 			return open_new_game()
 		"load":

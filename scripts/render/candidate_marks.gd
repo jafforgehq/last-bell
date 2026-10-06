@@ -9,6 +9,8 @@ extends RefCounted
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
+const Access := preload("res://scripts/access.gd")
+const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 
 ## Tiles over which a mark fades in as the avatar comes within `arrival.mark_r`.
 const FADE_TILES := 3.0
@@ -122,6 +124,10 @@ func _draw_mark(bounds: Rect2, foot: Vector2, label: String, alpha: float) -> vo
 	rim.append(flag[0])
 	layer.draw_polyline(rim, Color(dark, 0.85 * alpha), 1.5, true)
 	layer.draw_circle(foot, 3.0, Color(accent, alpha))
+	if Access.markers():
+		# (Colour-blind markers: a pale rim on the pole and a plus beside the flag, "a house to claim", so that the green is not all that says it)
+		layer.draw_circle(foot, 5.0, Color(CbShapes.RIM, 0.9 * alpha), false, 1.4)
+		CbShapes.mark(layer, "plus", top + Vector2(FLAG_PX.x + 9.0, FLAG_PX.y * 0.5), 3.8, Color(accent, alpha), Color(CbShapes.RIM, alpha))
 	# the plate
 	var title := label
 	var sub := ""

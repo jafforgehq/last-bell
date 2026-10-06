@@ -1,5 +1,5 @@
-## The pause menu (Esc with nothing selected): Resume, Save, Load, Settings, How to
-## play, Skip tutorial (only while Orientation Day's coach is teaching, round 26), Main menu and Quit (not on the web). The game's rules stand still while it is
+## The pause menu (Esc with nothing selected): Resume, Save, Load, Settings, Controls
+## (the one page of keys), Skip tutorial (only while Orientation Day's coach is teaching, round 26), Main menu and Quit (not on the web). The game's rules stand still while it is
 ## open and go on at the speed they had when it closes (main.gd does that: it calls
 ## resume() when the shell tells it this screen is gone).
 extends "res://scripts/ui/menu_screen.gd"
@@ -7,7 +7,7 @@ extends "res://scripts/ui/menu_screen.gd"
 ## The menu closed to show the controls: the game stays paused (the player reads the
 ## keys, then presses Space).
 var keep_paused := false
-## The menu lines by name: resume, save, load, settings, help, skip (in the lesson), menu, quit.
+## The menu lines by name: resume, save, load, settings, controls (also `help`), skip (in the lesson), menu, quit.
 var items := {}
 
 
@@ -26,7 +26,9 @@ func _build_body() -> void:
 		items["save"].tooltip_text = no_save
 	_add("load", shell.menu_item("Load", "Pick a save"), shell.open_load.bind(true))
 	_add("settings", shell.menu_item("Settings"), shell.open_settings)
-	_add("help", shell.menu_item("How to play", "Every key and mouse button"), _help)
+	# (Controls: the one page of every key and mouse button, scripts/ui/controls_menu.gd; it was "How to play", which opened the HUD's own panel)
+	_add("controls", shell.menu_item("Controls", "Every key and mouse button"), shell.open_controls)
+	items["help"] = items["controls"]
 	if _skippable():
 		_add("skip", shell.menu_item("Skip tutorial", "Orientation Day ends and the game goes on"), _skip_tutorial)
 	_add("menu", shell.menu_item("Main menu"), _main_menu)
@@ -42,13 +44,6 @@ func _add(key: String, b: Button, action: Callable) -> void:
 
 func default_focus() -> Control:
 	return items["resume"]
-
-
-func _help() -> void:
-	keep_paused = true
-	close_sound = ""
-	shell.show_help()
-	close()
 
 
 ## Whether Orientation Day's coach is up and has a lesson left to skip (not on its last card).
