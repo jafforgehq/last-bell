@@ -3837,10 +3837,18 @@ func _parse_args() -> void:
 				sim.storyteller.force(v)
 			"weather":
 				# --weather=fog (or rain, or snow in a campaign) for the coming night, as a card would set it
-				sim.weather = v
-				sim.supplies.sources_day = sim.day    # (today's dawn has been rolled: the weather asked for stays for the day)
-				if v == "snow":
-					snow.follow({"snow": sim.seasons.campaign}, true, 0.0, 10.0)    # (it is already falling in the shot)
+				# (a town run: --weather=clear|drizzle|rain|storm holds the town's sky for the run, scripts/town/skies.gd `force`; --lightning adds a flash held for the shot)
+				if sim.get("skies") != null and sim.skies.force(v):
+					sim.supplies.sources_day = sim.day
+				else:
+					sim.weather = v
+					sim.supplies.sources_day = sim.day    # (today's dawn has been rolled: the weather asked for stays for the day)
+					if v == "snow":
+						snow.follow({"snow": sim.seasons.campaign}, true, 0.0, 10.0)    # (it is already falling in the shot)
+			"weather-first-night":
+				# --weather-first-night=clear|drizzle|rain|storm (a town run): that weather through the first attack night only (dusk to dawn of the day the attacks begin); the lab has the same flag
+				if sim.get("skies") != null:
+					sim.skies.force_first_night(v)
 			"blackout":
 				# --blackout: the generator is dead (see the storyteller)
 				sim.storyteller.blackout = {"state": "dark", "at": sim.clock_min, "send": false, "fixer": "", "work": 0.0}

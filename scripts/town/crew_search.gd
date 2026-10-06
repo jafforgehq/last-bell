@@ -59,6 +59,8 @@ const NOWORK_S := 300.0
 const STOCKS := ["food", "water", "ammo", "scrap", "meds"]
 ## What the radio says (the person's reasons carry their name in the radio's words: "Femi: hurt and needs rest, can't search").
 const R_DARK := "it is nearly dark"
+## (RAIN) in a storm nobody goes out: `sim.weather` is "storm" (scripts/town/skies.gd).
+const R_STORM := "it is pouring"
 const R_WATCH := "busy on the watch"
 const R_HURT := "hurt and needs rest"
 const R_OUT := "two are already out searching"
@@ -351,6 +353,8 @@ func _no(why: String, hard: bool, line: String = "") -> Dictionary:
 func person_reason(p) -> Dictionary:
 	if nearly_dark():
 		return {"reason": R_DARK, "hard": true}
+	if String(sim.weather) == "storm":
+		return {"reason": R_STORM, "hard": true}
 	if sim.posts_manned():
 		return {"reason": R_WATCH, "hard": true}
 	if hurt(p):
@@ -938,6 +942,9 @@ func _job_try(p) -> bool:
 		return false
 	if mtb < JOB_START_MIN:
 		job_note[id] = "Back at the base: too late to go out"
+		return false
+	if String(sim.weather) == "storm":
+		job_note[id] = "It is pouring: not now"
 		return false
 	if hurt(p):
 		job_note[id] = "Resting: hurt"

@@ -153,6 +153,9 @@ func _garden(hours: float) -> void:
 func roll_dawn() -> void:
 	sources_day = sim.day
 	var rain: bool = sim.rng.randf() < sim.seasons.rain_chance()
+	# (One House: the town's sky has a schedule of its own, scripts/town/skies.gd; the die above is still thrown, so the run's other dice fall as they did. The school has no `skies`.)
+	if sim.get("skies") != null:
+		rain = sim.skies.rained_in_the_night()
 	# a season with snow throws one more die, so that every other season's run is as it was
 	sim.weather = sim.seasons.weather_for(rain, sim.rng.randf()) if sim.seasons.snow_share() > 0.0 else ("rain" if rain else "clear")
 	if not sources_on or not _someone_home():
