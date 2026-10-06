@@ -19,6 +19,7 @@ const TitleMenu := preload("res://scripts/ui/title_menu.gd")
 const PauseMenu := preload("res://scripts/ui/pause_menu.gd")
 const SettingsMenu := preload("res://scripts/ui/settings_menu.gd")
 const ControlsMenu := preload("res://scripts/ui/controls_menu.gd")
+const LessonsMenu := preload("res://scripts/ui/lessons_menu.gd")
 const NewGameMenu := preload("res://scripts/ui/new_game_menu.gd")
 const LoadMenu := preload("res://scripts/ui/load_menu.gd")
 const CreditsScreen := preload("res://scripts/ui/credits.gd")
@@ -332,6 +333,11 @@ func open_controls() -> Control:
 	return _open_screen(ControlsMenu.new(), "Controls", "The keys and the mouse")
 
 
+## The Lessons page (TUTOR, scripts/ui/lessons_menu.gd): the lessons of the first house on or off, or all of them again.
+func open_lessons() -> Control:
+	return _open_screen(LessonsMenu.new(), "Lessons", "The guide of the first house")
+
+
 func open_new_game() -> Control:
 	# (round 26: the demo has one game, its three nights: New game begins it, with no choice to make)
 	if Demo.on():
@@ -381,6 +387,8 @@ func open_named(screen_name: String) -> Control:
 			return open_settings()
 		"controls":
 			return open_controls()
+		"lessons":
+			return open_lessons()
 		"new":
 			return open_new_game()
 		"load":

@@ -11,7 +11,9 @@
 ## THE SOLO START. `begin` makes the run: Ruth alone (the player) at the town's entry facing the way in, the data's stores, 07:00 of day 1, `min_per_sec` 2.0, `recruits.small` with no caller on
 ## the radio, the school's town board, lots, streets, storyteller, gate and levels off, the waves off until the fourth rescue, and the community modules (`briefing`, `priorities`, `initiative`,
 ## `relations`...) switched on by how many people there are (`apply_stage`, from the data's `modules_from_crew`, again at every change of the crew). The street's dead near the entry stand
-## still (`_calm_around`, again round the house when it is claimed), and ONE more dead one stands on the road to the nearest house (`_place_lone_dead`), for the lesson of the gun.
+## still (`_calm_around`, again round the house when it is claimed), and the first minute is SCRIPTED (`opening`, scripts/town/opening.gd: a walker steps out from behind a parked car and walks at her, an ammo box on the pavement,
+## three rounds in the magazine; `_place_lone_dead`, ONE dead one standing on the road to the nearest house, is only the fallback when the town has no road in to script it on), for the lessons of the gun. TUTOR: the lessons are taught by cues in the world
+## (scripts/ui/tutor_cues.gd); each has a `verb` (the card's one line), may wait for its `when`, and the gun's two are `keep` (the houses wait for them on the road in).
 ##
 ## THE GUIDE. Eight lessons, none blocking (walk; aim and shoot; find a house; open a door and go in; clear the house; search; claim; and, once someone is on the radio, ask them for something:
 ## click a person or a card, pick a verb on the wheel; `on_asked`, which main.gd calls). Each is DONE when its condition is true, read from the
@@ -32,6 +34,7 @@ const GD := preload("res://scripts/game_data.gd")
 const Demo := preload("res://scripts/demo.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
+const Opening := preload("res://scripts/town/opening.gd")
 
 const KIND := "one_house"
 const DATA_PATH := "res://assets/data/one_house.json"
@@ -42,7 +45,7 @@ const STAGE_NAMES := ["arrive", "alone", "cleared", "claimed", "rescued2", "four
 ## Seconds of rules time between looks at the lessons and the clock of the run.
 const TICK := 0.25
 ## How long the lesson just done is shown as done.
-const FLASH_S := 3.0
+const FLASH_S := 1.4
 ## A move of more than this many tiles in one step is a jump (a placing), not a walk.
 const JUMP_TILES := 1.5
 const NEVER := 99999
@@ -89,6 +92,13 @@ var _done := {}
 var _walked := 0.0
 ## How many times the player has picked a verb on the command wheel (the lesson of asking the crew).
 var _asked := 0
+## TUTOR: the scripted opening (scripts/town/opening.gd), the reloads begun (the lesson of the gun), and a replay of the lessons (the Esc menu's Lessons): the counts at its start, which
+## the lessons that count read from.
+var opening := Opening.new()
+var _reloads := 0
+var _was_reloading := false
+var _replay := false
+var _base := {}
 var _last_pos := Vector2.INF
 var _held_nights := 0
 ## The day whose dawn has been judged (-1: none), and how the first attack night ended ("", "held" or "not_held").
@@ -106,6 +116,7 @@ var _size := [0, 0]
 
 func setup(s) -> void:
 	sim = s
+	opening.setup(s, self)
 
 
 ## A new run (`start_run` calls it): everything of this module is as at the start. It is not the One House run until `begin` says so.
@@ -125,6 +136,11 @@ func start() -> void:
 	_done = {}
 	_walked = 0.0
 	_asked = 0
+	_reloads = 0
+	_was_reloading = false
+	_replay = false
+	_base = {}
+	opening.start()
 	_last_pos = Vector2.INF
 	_held_nights = 0
 	_dawn_day = -1
@@ -314,7 +330,9 @@ func _begin_run(difficulty: int, seed_value: int) -> void:
 	_arrive()
 	_quiet_the_entry()
 	_calm_around(_start_pos())
-	_place_lone_dead()
+	# (TUTOR: the scripted opening: the walker behind a car, the ammo box, the low magazine; the old lone dead one on the road when the town has no way to build it on)
+	if not opening.begin():
+		_place_lone_dead()
 	_apply_static()
 	_apply_flags()
 	apply_stage()
@@ -511,6 +529,7 @@ func _apply_flags() -> void:
 	var field = sim.get("field")
 	if field != null and "pause_wake" in field:
 		var hold: bool = on and (sim.phase == "dusk" or sim.phase == "night" or sim.phase == "dawn")
+		hold = hold or opening.holds_the_street()    # (TUTOR: the shots of the first lesson wake nobody from the houses)
 		var sleeper = sim.get("sleep")
 		if sleeper != null and sleeper.has_method("active") and bool(sleeper.active()):
 			hold = true    # (the avatar asleep keeps the street asleep: the sleep sets it, and this would put it back every tick)
@@ -675,6 +694,8 @@ func update(dt: float) -> void:
 	if not _begun or sim.over != "":
 		return
 	_track_walk()
+	_track_reload()
+	opening.update(dt)
 	_t += dt
 	if _t < TICK and not _dirty:
 		return
@@ -836,41 +857,142 @@ func _watch_the_lessons() -> void:
 	var lessons = _cfg("guide", [])
 	if _done.size() >= lessons.size():
 		return
+	if _replay:
+		# (TUTOR, a replay from the Esc menu: the lessons come one at a time in their order, each done when its own thing is done again; none is skipped for a later one)
+		for l in lessons:
+			var rid := String(l.get("id", ""))
+			if rid == "" or _done.has(rid):
+				continue
+			if bool(l.get("crew", false)) != (_stage_idx() >= STAGES.find("growing")):
+				continue
+			if _cond(l.get("cond", {})):
+				_done[rid] = true
+				_flash_id = rid
+				_flash_until = float(sim.t) + FLASH_S
+			break
+		return
 	var newest := -1
+	var held_up := false
 	for i in lessons.size():
 		var id := String(lessons[i].get("id", ""))
 		if id == "" or _done.has(id):
+			continue
+		# (a `keep` lesson not yet done holds the ones after it up on the road in: the gun is taught, shot and reloaded, before the houses)
+		if held_up:
 			continue
 		if _cond(lessons[i].get("cond", {})):
 			_done[id] = true
 			_flash_id = id
 			_flash_until = float(sim.t) + FLASH_S
 			newest = i
-	# (a player who has done a later lesson has the idea of the earlier ones: they are not asked again)
+		elif bool(lessons[i].get("keep", false)) and _stage == "arrive":
+			held_up = true
+	# (a player who has done a later lesson has the idea of the earlier ones: they are not asked again. The gun's lessons are kept on the road in, `keep`: the walker is there to be shot
+	# before the houses; once she is inside a house they are put away like the rest)
 	for i in newest:
+		if bool(lessons[i].get("keep", false)) and _stage == "arrive":
+			continue
 		_done[String(lessons[i].get("id", ""))] = true
 
 
 func _cond(c: Dictionary) -> bool:
 	match String(c.get("type", "")):
 		"walked":
-			return _walked >= float(c.get("n", 6))
+			return _walked - float(_base.get("walked", 0.0)) >= float(c.get("n", 6))
 		"kills":
-			return int(sim.kills) >= int(c.get("n", 1))
+			return int(sim.kills) - int(_base.get("kills", 0)) >= int(c.get("n", 1))
+		"reloaded":
+			# (a reload begun; or nothing to reload: the magazine is full again after the kill)
+			return _reloads - int(_base.get("reloads", 0)) >= 1 or (int(sim.kills) - int(_base.get("kills", 0)) >= 1 and _mag_low() == 0)
 		"near_candidate":
 			# (not before the first steps: a wall within reach of the entry would skip the walk and the gun)
-			return _walked >= 3.0 and _near_candidate() <= float(c.get("n", float(_cfg("arrival.mark_r", 14.0))))
+			# (and not before the opening's walker has come and gone: the gun is taught before the houses)
+			return _walked >= 3.0 and _near_candidate() <= float(c.get("n", float(_cfg("arrival.mark_r", 14.0)))) and opening.settled()
 		"rooms_seen":
 			return _rooms_seen() >= int(c.get("n", 2))
 		"house_clear":
 			return _stage_idx() >= STAGES.find("cleared")
 		"searched":
-			return _searched() >= int(c.get("n", 1))
+			return _searched() - int(_base.get("searched", 0)) >= int(c.get("n", 1))
 		"claimed":
 			return _stage_idx() >= STAGES.find("claimed")
 		"asked":
-			return _asked >= int(c.get("n", 1))
+			return _asked - int(_base.get("asked", 0)) >= int(c.get("n", 1))
 	return false
+
+
+## TUTOR: whether a lesson's moment has come (its `when`; no `when`: it has). "dead_near": one of the dead awake and on its feet within `r` tiles of her (a replay does not wait for one).
+func _when(w: Dictionary) -> bool:
+	if _replay or w.is_empty():
+		return true
+	match String(w.get("type", "")):
+		"dead_near":
+			return dead_near(float(w.get("r", 12.0)))
+	return true
+
+
+## Whether one of the dead is awake, on its feet, in the open and within `r` tiles of her: with the scripted opening, its walker (the lesson of the gun is about that one); else the nearest (`nearest_dead`).
+func dead_near(r: float) -> bool:
+	if opening.built:
+		return opening.walker_alive() and Vector2(opening.zombie.x - sim.avatar.player().x, opening.zombie.y - sim.avatar.player().y).length() <= r
+	return not nearest_dead(r).is_empty()
+
+
+## {"x", "y", "dist"} of the nearest of the dead that is awake, not falling and not behind the walls of another house within `r` tiles of her, {} when there is none.
+func nearest_dead(r: float) -> Dictionary:
+	var me = sim.avatar.player() if sim != null and String(sim.player_id) != "" else null
+	if me == null:
+		return {}
+	var best := {}
+	var best_d := r
+	var houses = sim.get("houses")
+	var mine: int = int(houses.house_at(me.x, me.y)) if houses != null else -1
+	for z in sim.zombies:
+		if String(z.state) == "dying" or String(z.state) == "dead" or bool(z.remove) or String(z.state) == "retreat":
+			continue
+		if houses != null:
+			var zh: int = int(houses.house_at(z.x, z.y))
+			if zh >= 0 and zh != mine:
+				continue    # (one standing in a house she is not in is not a target on the road)
+		var d := Vector2(z.x - me.x, z.y - me.y).length()
+		if d <= best_d:
+			best_d = d
+			best = {"x": float(z.x), "y": float(z.y), "dist": d}
+	return best
+
+
+## 0 when the magazine is full (or the gun is a blade), else how many rounds it lacks.
+func _mag_low() -> int:
+	var me = sim.avatar.player() if sim != null and String(sim.player_id) != "" else null
+	if me == null or bool(me.gun.get("melee", false)):
+		return 0
+	return maxi(0, int(me.gun.get("mag", 0)) - int(me.mag))
+
+
+## The reloads she has begun (the lesson of the gun): counted on the rising edge of the person's `reloading`.
+func _track_reload() -> void:
+	var me = sim.avatar.player() if String(sim.player_id) != "" else null
+	if me == null:
+		return
+	var now: bool = float(me.reloading) > 0.0
+	if now and not _was_reloading:
+		_reloads += 1
+	_was_reloading = now
+
+
+## Tiles walked so far (the walk's count; the opening reads it for its trigger).
+func walked() -> float:
+	return _walked
+
+
+## TUTOR (the Esc menu's Lessons): every lesson again from the first, in order, each done when its own thing is done again (counts from now).
+func replay_lessons() -> void:
+	_done = {}
+	_flash_id = ""
+	_flash_until = -1.0
+	_replay = true
+	_base = {"walked": _walked, "kills": int(sim.kills), "reloads": _reloads, "searched": _searched(), "asked": _asked}
+	_dirty = true
 
 
 ## How far the avatar is from the nearest house that can be claimed (to its walls; INF with none).
@@ -957,6 +1079,9 @@ func guide() -> Dictionary:
 				return _lesson_out(lessons[i], i, lessons.size(), true)
 	for i in lessons.size():
 		if not _done.has(String(lessons[i].get("id", ""))):
+			# (TUTOR: a lesson that waits for its moment is not shown yet, and the ones after it wait with it: the walker steps out before the gun is taught)
+			if not _when(lessons[i].get("when", {})):
+				return {}
 			return _lesson_out(lessons[i], i, lessons.size(), false)
 	return {}
 
@@ -973,7 +1098,7 @@ func _lesson_out(l: Dictionary, i: int, n: int, done: bool) -> Dictionary:
 		var rooms := _rooms_progress()
 		if int(rooms.of) > 0:
 			progress = _fmt(String(_cfg("objective.clear.sub", "%d of %d rooms clear")), [rooms.clear, rooms.of])
-	return {"id": String(l.get("id", "")), "title": String(l.get("title", "")), "text": String(l.get("text", "")), "goal": String(l.get("goal", "")), "done": done, "n": i + 1, "of": n, "progress": progress}
+	return {"id": String(l.get("id", "")), "title": String(l.get("title", "")), "verb": String(l.get("verb", l.get("goal", ""))), "text": String(l.get("text", "")), "goal": String(l.get("goal", "")), "done": done, "n": i + 1, "of": n, "progress": progress}
 
 
 ## {"clear", "of", "at"}: how many rooms of the house in hand are clear, how many it has, and the middle of the nearest that is not (null when they all are or there is no town).
@@ -1267,6 +1392,116 @@ func go_to(stage_name: String) -> bool:
 	return true
 
 
+## TUTOR (a screenshot's `--lesson=<id>[:variant]`, README): the run put where that lesson is the one of now, the ones before it done, so that its cue is on the screen. walk (the start), shoot
+## (the walker has stepped out, nine tiles ahead), reload (the walker is down, one round in the magazine), find (eight tiles in), door (outside the first house; `door:in` inside it), clear,
+## search (in a room with something to search), claim (a few steps from the claim spot), ask (two survivors on the radio) and refusal (at the claim spot of a house with rooms not looked into).
+## False for a name it does not know. The clock is the caller's to stop.
+func stage_lesson(spec: String) -> bool:
+	var parts := spec.split(":")
+	var id := String(parts[0])
+	var lessons: Array = _cfg("guide", [])
+	var want := "claim" if id == "refusal" else id
+	var idx := -1
+	for i in lessons.size():
+		if String(lessons[i].get("id", "")) == want:
+			idx = i
+	if idx < 0:
+		return false
+	if not _begun:
+		_begin_run(-1, int(sim.run_seed))
+	var me = sim.avatar.player()
+	_done = {}
+	for i in idx:
+		_done[String(lessons[i].get("id", ""))] = true
+	_flash_id = ""
+	_flash_until = -1.0
+	if idx >= 1:
+		_walked = 10.0
+	var variant := String(parts[1]) if parts.size() > 1 else ""
+	match id:
+		"shoot":
+			opening.put_avatar(opening.trigger_s)
+			if variant == "out":
+				opening.release()    # (the moment it steps out from behind the car, 14 tiles ahead)
+			else:
+				opening.stage_walker(9.0)
+		"reload":
+			opening.put_avatar(opening.trigger_s + 6.0)
+			opening.release()
+			if opening.zombie != null:
+				opening.zombie.state = "dead"
+				opening.zombie.fall = 1.0
+				opening.zombie.hp = 0
+			sim.kills = maxi(int(sim.kills), 1)
+			if me != null:
+				me.mag = 1
+		"find":
+			opening.put_avatar(maxf(opening.route_len - 13.0, 0.0) if variant == "near" else 8.0)    # (`find:near`: the first house's front door on the screen, with its ring)
+		"door":
+			if variant == "in":
+				go_to("alone")
+				# (inside the front door she has seen the hall alone: the other rooms are dark)
+				var cl = sim.get("clearing")
+				if cl != null and me != null:
+					cl.revealed.clear()
+					cl.reveal(int(sim.houses.room_at(me.x, me.y)), "stage")
+			else:
+				opening.put_avatar(maxf(opening.route_len - 7.0, 0.0))
+		"clear":
+			go_to("alone")
+		"search":
+			go_to("cleared")
+			_stage_into_room_with_container()
+		"claim":
+			go_to("cleared")
+			_stage_back_from_claim_spot()
+		"ask":
+			go_to("rescued2")
+		"refusal":
+			# (the house clear and the avatar at the claim spot, the hall the only room she has looked into: the claim says "You have not looked in the ... yet")
+			go_to("cleared")
+			var cl2 = sim.get("clearing")
+			if cl2 != null and me != null:
+				cl2.revealed.clear()
+				cl2.reveal(int(sim.houses.room_at(me.x, me.y)), "stage")
+	_dirty = true
+	return true
+
+
+## The avatar in the middle of a room of the house in hand that has a container nobody has searched (a staging).
+func _stage_into_room_with_container() -> void:
+	var houses = sim.get("houses")
+	var me = sim.avatar.player()
+	if houses == null or me == null:
+		return
+	for c in houses.containers_of(_stage_house()):
+		if sim.search.is_looted(String(c.id)):
+			continue
+		var room := int(c.get("room", -1))
+		var rect := Rect2(Rect2i(houses.room(room).get("rect", Rect2i()))) if room >= 0 else Rect2()
+		me.x = rect.get_center().x if rect.has_area() else float(c.pos.x)
+		me.y = rect.get_center().y if rect.has_area() else float(c.pos.y)
+		me.path = []
+		me.moving = false
+		return
+
+
+## The avatar a few steps from the spot where E claims, inside the house (a staging: the ring is at the spot).
+func _stage_back_from_claim_spot() -> void:
+	var houses = sim.get("houses")
+	var base = sim.get("base")
+	var me = sim.avatar.player()
+	if houses == null or base == null or me == null:
+		return
+	var spot: Vector2 = base.claim_spot()
+	var mid := Vector2(Rect2i(houses.house(_stage_house()).get("rect", Rect2i())).get_center())
+	var to := (mid - spot).normalized()
+	me.x = spot.x + to.x * 3.5
+	me.y = spot.y + to.y * 3.5
+	me.path = []
+	me.moving = false
+
+
 ## The house the staging works on: the one in hand if the player has gone into one, else the best candidate (the start house of the town before the arrival).
 func _stage_house() -> int:
 	var houses = sim.get("houses")
@@ -1359,6 +1594,7 @@ func save() -> Dictionary:
 		"kind": KIND, "v": 1, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
 		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
 		"min_per_sec": float(sim.min_per_sec), "focus": _focus, "last_cleared": _last_cleared, "intro": _intro_told,
+		"opening": opening.save(), "reloads": _reloads, "replay": _replay, "base": _base.duplicate(),
 	}
 
 
@@ -1384,6 +1620,13 @@ func load_state(s: Dictionary) -> void:
 	_first_result = String(s.get("first_result", ""))
 	_first_why = String(s.get("first_why", ""))
 	_town_seed = int(s.get("town_seed", 0))
+	_reloads = int(s.get("reloads", 0))
+	_replay = bool(s.get("replay", false))
+	var base = s.get("base", {})
+	_base = (base as Dictionary).duplicate() if base is Dictionary else {}
+	var opened = s.get("opening", {})
+	if opened is Dictionary:
+		opening.load_state(opened)
 	var sz = s.get("size", [0, 0])
 	_size = [int(sz[0]), int(sz[1])] if typeof(sz) == TYPE_ARRAY and sz.size() == 2 else [0, 0]
 	# (the clock's speed is the data's, `_apply_static`; the modules that load after this one may touch what the run keeps in them: the next tick puts it all again)
