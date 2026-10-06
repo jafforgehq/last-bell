@@ -18,6 +18,8 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
+const KeyLegend := preload("res://scripts/ui/key_legend.gd")
+const AlertFeed := preload("res://scripts/ui/alert_feed.gd")
 
 ## The setting (a flag in the player's own file) that puts the lessons of the first house away for good.
 const LESSONS_OFF_FLAG := "oh_lessons_off"
@@ -36,8 +38,10 @@ const OPENING_HOLD_S := 5.0
 ## The opening view of an arrival: tiles across the window, and how many tiles ahead of the avatar (the way in) the camera looks.
 const ENTRY_VIEW_TILES := 40.0
 const ENTRY_AHEAD := 7.0
-## How long (rules seconds) the legend of the keys stays at the foot of the window.
+## How long (rules seconds) the legend of the keys stays at the foot of the window, and how long it takes to fade at the end.
 const LEGEND_S := 45.0
+const LEGEND_FADE_S := 1.0
+const NOBODY_TEXT := "Nobody is on the radio yet"
 
 var main
 var hud
@@ -56,6 +60,11 @@ var lesson_done: Label
 var lesson_skip: Button
 var lesson_off: Button
 var radio_card: PanelContainer
+var radio_label: Label
+## HUDA: the legend of the keys (scripts/ui/key_legend.gd) and whether the player has opened the radio (the pill under the objective waits for a reason).
+var legend: PanelContainer
+var _radio_opened := false
+var _alerts_staged := false
 
 ## What the cards say now (the tests read them).
 var objective := {}
@@ -156,6 +165,7 @@ func _build() -> void:
 	_build_objective()
 	_build_lesson()
 	_build_radio_line()
+	_build_legend()
 
 
 func _style(slim: bool = true) -> StyleBox:
@@ -247,11 +257,18 @@ func _build_radio_line() -> void:
 	radio_card.visible = false
 	var row: HBoxContainer = hud._hbox(8)
 	row.add_child(hud._icon("radio", 16, hud.INK3))
-	var l: Label = hud._label("Nobody is on the radio yet", Fonts.sans(400), 14, hud.INK2)
-	row.add_child(l)
+	radio_label = hud._label(NOBODY_TEXT, Fonts.sans(400), 14, hud.INK2)
+	row.add_child(radio_label)
 	radio_card.add_child(row)
 	hud.left_col.add_child(radio_card)
 	hud.left_col.move_child(radio_card, mini(2, hud.left_col.get_child_count() - 1))
+
+
+## The legend of the keys: bottom left, above the lesson card (`_place_lesson` puts it). The HUD's old bar at the bottom centre never shows in the town.
+func _build_legend() -> void:
+	legend = KeyLegend.new()
+	layer.add_child(legend)
+	legend.setup(hud)
 
 
 # -------------------------------------------------------------------------- frames --
@@ -260,6 +277,17 @@ func on_frame(dt: float) -> void:
 	if hud == null or main == null:
 		return
 	_t += dt
+	if not _alerts_staged and Engine.get_frames_drawn() > 30:
+		_alerts_staged = true    # (a screenshot's `--alerts=3|many`: sample alerts for the stack, see AlertFeed.stage)
+		for arg in OS.get_cmdline_user_args():
+			if String(arg).begins_with("--legend-did=") and legend != null:
+				for id in String(arg).trim_prefix("--legend-did=").split(","):
+					legend.mark(String(id))    # (a screenshot's `--legend-did=move,fire`: those hints as if done)
+			if String(arg).begins_with("--alerts="):
+				var spec := String(arg).trim_prefix("--alerts=")
+				AlertFeed.stage(_sim(), spec.trim_suffix("-open"))
+				if spec.ends_with("-open") and hud._alert_feed != null:
+					hud._alert_feed.expanded = true    # (the stack as the pill's click unfolds it)
 	if _t >= REFRESH_S or _dirty:
 		_t = 0.0
 		_dirty = false
@@ -353,8 +381,31 @@ func _refresh_lesson() -> void:
 	lesson_done.visible = bool(g.get("done", false))
 
 
+## The line under the objective is there once it has something to say (HUDA): a survivor has been rescued ("3 on the radio"), or the player has opened the radio
+## and should be told that nobody is on it yet. Before that the radio is a button in the toolbar and the line would only be one more thing to read.
 func _refresh_radio() -> void:
-	radio_card.visible = nobody_on_radio()
+	if hud.radio_open():
+		_radio_opened = true
+	var n := on_the_radio()
+	radio_card.visible = n > 0 or (_radio_opened and nobody_on_radio())
+	var words := ("%d on the radio" % n) if n > 0 else NOBODY_TEXT
+	if radio_label.text != words:
+		radio_label.text = words
+
+
+## How many people other than the avatar are alive: the ones the radio reaches.
+func on_the_radio() -> int:
+	var sim = _sim()
+	if sim == null or sim.get("people") == null:
+		return 0
+	var pid := String(sim.get("player_id")) if sim.get("player_id") != null else ""
+	if pid == "":
+		return 0
+	var n := 0
+	for p in sim.people:
+		if String(p.id) != pid and not p.dead and not p.turned:
+			n += 1
+	return n
 
 
 ## True while the avatar is the only person alive: the radio has nobody on it.
@@ -365,10 +416,7 @@ func nobody_on_radio() -> bool:
 	var pid := String(sim.get("player_id")) if sim.get("player_id") != null else ""
 	if pid == "":
 		return false
-	for p in sim.people:
-		if String(p.id) != pid and not p.dead and not p.turned:
-			return false
-	return true
+	return on_the_radio() == 0
 
 
 ## Whether the avatar is asleep (the screen is black: no ring or arrow over it).
@@ -419,14 +467,33 @@ func _place_lesson() -> void:
 	lesson_card.custom_minimum_size.x = w
 	RadioKit.wrap_at(lesson_text, w - 24.0)
 	RadioKit.wrap_at(lesson_goal, w - 24.0)
-	if not lesson_card.visible:
-		return
 	var lift := 12.0
 	var dock = hud.get("dock")
 	if dock != null and dock is Control and ((hud.inspect != null and hud.inspect.visible) or (hud.radio_box != null and hud.radio_box.visible)):
 		lift = hud.size.y - dock.position.y + 8.0
-	lesson_card.size = lesson_card.get_combined_minimum_size()
-	lesson_card.position = Vector2(12.0, hud.size.y - lift - lesson_card.size.y)
+	var top: float = hud.size.y - lift    # (what the legend stands on: the lesson card's top, or the foot of the window)
+	if lesson_card.visible:
+		lesson_card.size = lesson_card.get_combined_minimum_size()
+		lesson_card.position = Vector2(12.0, hud.size.y - lift - lesson_card.size.y)
+		top = lesson_card.position.y - 6.0
+	_place_legend(top)
+
+
+## The legend of the keys stands in the bottom left on the lesson card (or on the foot of the window), for the first LEGEND_S seconds of the run, fading in the
+## last second; it gives way (is hidden) while the HUD says the first screen is over (a call, the radio, the help, a selection) and while it would touch any part
+## of the HUD (the stores and the objective above it, the crew's cards, the clock and the alerts, the toolbar and the dock).
+func _place_legend(top: float) -> void:
+	if legend == null:
+		return
+	var sim = _sim()
+	var t := float(sim.t) if sim != null else 0.0
+	var wanted: bool = bool(hud.legend_wanted) and not legend.finished and t <= LEGEND_S
+	if not wanted:
+		legend.visible = false
+		return
+	legend.controls_changed()
+	var obstacles: Array = [hud.left_col, hud.right_col, hud.bar, hud.speed_panel, hud.dock, hud.inspect, hud.radio_box, hud.help, hud.radio_panel]
+	legend.place(Vector2(12.0, top), obstacles, clampf((LEGEND_S - t) / LEGEND_FADE_S, 0.0, 1.0))
 
 
 # -------------------------------------------------------------------------- events --
