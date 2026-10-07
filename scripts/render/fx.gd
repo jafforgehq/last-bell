@@ -8,7 +8,9 @@ const Combat := preload("res://scripts/render/combat_fx.gd")
 const TILE := GD.TILE
 const G := 9.8
 ## Casings on the ground and in the air at most (the oldest is gone first).
-const MAX_CASINGS := 28
+const MAX_CASINGS := 24
+## FEEL: how long after the shot a pump gun's shell is thrown (the rack).
+const RACK_DELAY := 0.34
 
 var parts: Array = []
 var tracers: Array = []
@@ -18,6 +20,7 @@ var blood_tex: Array = []
 ## sounds of a hit and a reload. This object's `muzzle`, `blood`, `decal` and the "bullet" `hit_material` are its.
 var combat = Combat.new()
 var _casings: Array = []
+var _racks: Array = []    # {in, x, y, ang}: a pump gun's shells waiting for the rack
 var puff_light: Texture2D
 var puff_dark: Texture2D
 var radial: Texture2D
@@ -71,10 +74,20 @@ func tracer(x0: float, y0: float, x1: float, y1: float) -> void:
 	tracers.append({"a": Vector2(x0, y0), "b": Vector2(x1, y1), "t": 0.0, "dur": maxf(0.05, Vector2(x1 - x0, y1 - y0).length() / 70.0)})
 
 
-## A casing pops out to the right of the gun, falls, bounces and lies there a few seconds (at most MAX_CASINGS at once).
+## A casing pops out to the right of the gun, falls, bounces and lies there a few seconds (at most MAX_CASINGS at once). FEEL: a pump gun keeps its shell until the rack (about a third of a
+## second after the shot, as the fore-end comes back: pawn_node.gd's pump), then throws it.
 func casing(x: float, y: float, ang: float, shell: bool) -> void:
-	var a := ang + PI / 2.0 + (randf() - 0.5) * 0.6
-	var p := {"kind": "casing", "x": x, "y": y, "z": 0.5, "vx": cos(a) * 1.8, "vy": sin(a) * 1.8, "vz": 2.2, "life": 6.0, "size": 0.07 if shell else 0.05, "shell": shell, "rot": randf() * 3.0, "vr": 18.0}
+	if shell:
+		if _racks.size() < 6:
+			_racks.append({"in": RACK_DELAY, "x": x, "y": y, "ang": ang})
+		return
+	_throw_casing(x, y, ang, false)
+
+
+func _throw_casing(x: float, y: float, ang: float, shell: bool) -> void:
+	var a := ang + PI / 2.0 + (randf() - 0.5) * 0.7
+	var sp := 1.5 + randf() * 0.8
+	var p := {"kind": "casing", "x": x, "y": y, "z": 0.5, "vx": cos(a) * sp, "vy": sin(a) * sp, "vz": 2.0 + randf() * 0.5, "life": 6.0, "size": 0.085 if shell else 0.055, "shell": shell, "rot": randf() * 3.0, "vr": (14.0 + randf() * 8.0) * (1.0 if randf() < 0.5 else -1.0), "bounced": false}
 	parts.append(p)
 	_casings.append(p)
 	if _casings.size() > MAX_CASINGS:
@@ -91,6 +104,15 @@ func ember(x: float, y: float) -> void:
 
 
 func update(dt: float) -> void:
+	if not _racks.is_empty():
+		var waiting: Array = []
+		for r in _racks:
+			r.in -= dt
+			if r.in <= 0.0:
+				_throw_casing(r.x, r.y, r.ang, true)
+			else:
+				waiting.append(r)
+		_racks = waiting
 	for p in parts:
 		p.life -= dt
 		if p.kind == "smoke":
@@ -119,12 +141,14 @@ func update(dt: float) -> void:
 			elif p.kind == "spark":
 				p.life = minf(p.life, 0.05)
 			elif p.kind == "casing" or p.kind == "chip":
-				if absf(p.vz) > 1.2:
-					p.vz = -p.vz * 0.35
+				# (FEEL: a casing bounces once and then lies; a chip as it did)
+				if (p.kind == "casing" and not p.bounced) or (p.kind == "chip" and absf(p.vz) > 1.2):
+					p.vz = -p.vz * 0.32
 					p.vx *= 0.5
 					p.vy *= 0.5
 					p.vr *= 0.5
 					if p.kind == "casing":
+						p.bounced = true
 						combat.casing_tink(p.x, p.y)
 				else:
 					p.resting = true
@@ -150,6 +174,7 @@ func flash_lights() -> Array:
 # Painters are called by nodes; they draw in tile units.
 
 func draw_ground_bits(ci: CanvasItem) -> void:
+	combat.draw_ground(ci)    # (FEEL: footstep dust, the town's, under the people)
 	for p in parts:
 		if (p.kind == "casing" or p.kind == "chip") and p.get("resting", false):
 			_draw_bit(ci, p)

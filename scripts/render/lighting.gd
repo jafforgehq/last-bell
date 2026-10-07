@@ -36,6 +36,9 @@ const FLASH_POOL := 10
 const FLASH_ENERGY := 0.85
 const FLASH_FIRST := 0.45
 const FLASH_RAMP := 2.0
+## FEEL: the colour of a flash's light when its entry has none, and how much of it a shot gives by day.
+const FLASH_COLOR := Color8(255, 214, 150)
+const DAY_FLASH := 0.6
 ## A blackout multiplies the sky by this, a cooler and darker blue, as the power goes.
 const BLACKOUT_TINT := Color(0.70, 0.79, 0.97)
 ## The colour of the fog by day, and how fast it comes and goes (a share a second); the lights in a
@@ -266,8 +269,7 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 		modulate_node.color = (day if fog < 0.01 else _grey(day, fog * 0.12)) * tint
 		for l in lights:
 			l.node.visible = false
-		for f in flash_nodes:
-			f.visible = false
+		_set_flashes(flashes, DAY_FLASH)    # (FEEL: a shot lights the ground a little by day too, the day being dim now)
 		return
 	modulate_node.color = _tinted(world_sky) * tint
 	floods_on = bell_rung or hour >= 20.0 or hour < 6.0
@@ -298,15 +300,22 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 		l.node.energy = energy
 		l.node.texture_scale = float(l.scale) * reach_k
 		l.node.visible = energy > 0.01
+	_set_flashes(flashes, 1.0)
+
+
+## The muzzle flashes' lights (combat_fx.gd `flash_lights`: {x, y, r, e, c}: where the pool is, how far it reaches, how bright and what colour; `e` and `c` may be missing): `k` scales them.
+func _set_flashes(flashes: Array, k: float) -> void:
 	for i in flash_nodes.size():
 		var node: PointLight2D = flash_nodes[i]
 		if i < flashes.size():
 			var fl: Dictionary = flashes[i]
 			node.position = Vector2(fl.x, fl.y) * TILE
 			node.texture_scale = float(fl.r) * 2.0 * TILE / 64.0
-			node.energy = FLASH_ENERGY * minf(1.0, FLASH_FIRST + (1.0 - FLASH_FIRST) * _flash_age[i] / FLASH_RAMP)    # (the first frames climb: a white-out of the shooter is not a flash)
+			# (the first frames climb: a white-out of the shooter is not a flash; `e` is the gun's share of the peak, `k` the day's)
+			node.energy = FLASH_ENERGY * minf(1.0, FLASH_FIRST + (1.0 - FLASH_FIRST) * _flash_age[i] / FLASH_RAMP) * float(fl.get("e", 1.0)) * k
+			node.color = fl.get("c", FLASH_COLOR)
 			_flash_age[i] += 1
-			node.visible = true
+			node.visible = node.energy > 0.01
 		else:
 			node.visible = false
 			_flash_age[i] = 0

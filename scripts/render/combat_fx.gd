@@ -17,6 +17,8 @@ const Art := preload("res://scripts/render/pawn_art.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Access := preload("res://scripts/access.gd")
 const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
+const BloodStore := preload("res://scripts/render/blood_store.gd")
+const StepFx := preload("res://scripts/render/step_fx.gd")
 const TILE := GD.TILE
 const G := 9.8
 
@@ -50,6 +52,10 @@ const ARMOUR_BELOW := 0.9
 const HITSTOP_S := 0.05
 const HITSTOP_RANGE := 3.0
 const HITSTOP_GAP := 0.4
+## FEEL: a kill by a shotgun (or the hunting rifle) freezes the picture for this long (real seconds) from as far as this (tiles), and pushes the camera this much (pixels) along the blast.
+const HITSTOP_SHOTGUN_S := 0.026
+const HITSTOP_SHOTGUN_RANGE := 6.0
+const KILL_PUSH_PX := 1.6
 ## How long the struck one is white (real seconds: two frames at 60 Hz and a little over).
 const FLASH_S := 0.045
 ## The shake's decay (per second) and the farthest it can pull the picture (screen pixels at the 1280 x 800 window).
@@ -68,6 +74,14 @@ const GUNS := {
 	"hunting": {"len": 1.40, "glow": 1.10, "dur": 0.100, "light": 5.2, "kick": 4.6, "shake": 1.0, "nudge": 0.075, "cone": 0.0, "smoke": 0.22},
 	"shotgun": {"len": 1.45, "glow": 1.25, "dur": 0.110, "light": 6.0, "kick": 5.6, "shake": 1.6, "nudge": 0.085, "cone": 0.27, "smoke": 0.26},
 }
+## FEEL: the light of a muzzle flash. Its strength by gun (a share of the light rig's flash energy: the pump gun is the whole of it), how far ahead of the muzzle (a share of its reach) its
+## middle is, and its colour.
+const FLASH_E := {"pistol": 0.62, "rifle": 0.74, "service": 0.78, "hunting": 0.9, "shotgun": 1.0}
+## The drawn flash (glow, cone, star, heart): the share of its strength it has on its first frame, and how long it takes to be full (seconds of the game's time: three frames at 60 Hz).
+const FLASH_GLOW_FIRST := 0.45
+const FLASH_GLOW_RAMP_S := 0.034
+const FLASH_AHEAD := 0.30
+const FLASH_LIGHT := Color(1.0, 0.72, 0.40)
 const WARM := Color(1.0, 0.78, 0.42)
 const PALE := Color(1.0, 0.94, 0.74)
 
@@ -96,6 +110,9 @@ var _fallen_order: Array = []
 
 # ---------------------------------------------------------------- decals --
 var decal_parent: Node2D
+## FEEL (the town only, `set_town`): the blood that stays, one MultiMesh (scripts/render/blood_store.gd), and the footstep dust (scripts/render/step_fx.gd). null elsewhere.
+var store = null
+var steps = null
 var _blood_tex: Array = []
 var _decals: Array = []     # {node, size, grow, age, alpha}
 var _spare: Array = []
@@ -184,8 +201,40 @@ func setup(blood_textures: Array, parent: Node2D, radial_tex: Texture2D, light_p
 	PawnMotion.thump_cb = thump    # (ANIM: a brute's heavy step or blow shakes the camera a hair: scripts/render/pawn_node.gd)
 
 
+## FEEL, the town only (main.gd, when the run is the One House): the blood that stays (blood_store.gd), footstep dust (step_fx.gd: `wet` says how wet the ground is) and the dead's and the
+## crew's pawns telling where a foot landed. A run that is not the town keeps the old splats and has no dust.
+func set_town(world, data: Dictionary, wet: Callable = Callable()) -> void:
+	if store == null and decal_parent != null:
+		var s = BloodStore.new()
+		if s.setup(decal_parent, _blood_tex):
+			store = s
+	if steps == null:
+		var st = StepFx.new()
+		st.setup(world, data, puff_light)
+		st.wet_cb = wet
+		steps = st
+	PawnMotion.step_cb = step_event
+
+
+## A foot landed (pawn_node.gd, through `PawnMotion.step_cb`): where (tiles, the figure's origin), which way it goes, and how hard (0.4 a slow walker to 1.0 a run, 1.4 a brute).
+func step_event(at: Vector2, dir: Vector2, power: float) -> void:
+	if steps != null and enabled:
+		steps.calm = calm
+		steps.step(at.x, at.y, dir, power)
+
+
+## Painted over the ground, under the people (fx.gd `draw_ground_bits`): the footstep dust.
+func draw_ground(ci: CanvasItem) -> void:
+	if steps != null and enabled:
+		steps.draw(ci)
+
+
 ## Forgets everything that is in the air and on the ground (a new run in the same scene, a test).
 func clear() -> void:
+	if store != null:
+		store.clear()
+	if steps != null:
+		steps.clear()
 	for i in MAX_PARTS:
 		_life[i] = 0.0
 	_live = 0
@@ -208,7 +257,7 @@ func live_count() -> int:
 
 
 func decal_count() -> int:
-	return _decals.size()
+	return _decals.size() + (store.count() if store != null else 0)
 
 
 func flash_count() -> int:
@@ -225,6 +274,10 @@ func fallen_count() -> int:
 func update(dt: float) -> void:
 	t += dt
 	_splat_budget = SPLATS_PER_FRAME
+	if store != null:
+		store.update(dt)
+	if steps != null:
+		steps.update(dt)
 	if _live > 0:
 		_step_parts(dt)
 	if not _flashes.is_empty():
@@ -376,6 +429,8 @@ func shot(p, weapon: String, ang: float) -> void:
 	_ctx_weapon = weapon
 	_ctx_mine = bool(p.player)
 	_ctx_seen = _seen(p)
+	if enabled and _ctx_seen:
+		PawnMotion.note_shot(Vector2(float(p.x), float(p.y)), p)    # (FEEL: the crew near it turn to look: pawn_node.gd)
 	if not enabled or not _ctx_mine or calm:
 		return
 	var g: Dictionary = GUNS.get(weapon, GUNS.rifle)
@@ -413,10 +468,16 @@ func flash_lights() -> Array:
 	var out: Array = []
 	if not enabled:
 		return out
+	var dim := 0.4 if soft else (0.7 if calm else 1.0)
 	for f in _flashes:
 		var g: Dictionary = GUNS.get(f.gun, GUNS.rifle)
-		var k: float = 1.0 - float(f.t) / float(f.dur)
-		out.append({"x": f.x, "y": f.y, "r": float(g.light) * (0.55 + 0.45 * k) * (0.4 if soft else (0.7 if calm else 1.0))})
+		var u: float = clampf(float(f.t) / float(f.dur), 0.0, 1.0)
+		# (FEEL: the pool holds its strength through the first third of the flash and dies away after it (the first frames' climb is the light rig's: lighting.gd); its middle is a little
+		# AHEAD of the muzzle, so the shooter stands on the soft edge of it and the ground and the walls in front of her take the light; `e` is the gun's share of the rig's strength)
+		var env := 1.0 if u < 0.3 else pow(1.0 - (u - 0.3) / 0.7, 1.3)
+		var r := float(g.light) * (0.62 + 0.38 * (1.0 - u)) * dim
+		var ahead := Vector2.from_angle(float(f.ang)) * r * FLASH_AHEAD
+		out.append({"x": float(f.x) + ahead.x, "y": float(f.y) + ahead.y, "r": r, "e": float(FLASH_E.get(f.gun, 0.5)) * env * dim, "c": FLASH_LIGHT})
 	return out
 
 
@@ -586,10 +647,16 @@ func kill(z, ang: float, melee: bool, shooter) -> void:
 	if melee and shooter != null and bool(shooter.player) and not melee_cfg.is_empty():
 		_melee_impact(dir, true)    # (the town's blow: its own, longer, freeze and its push, whatever the gap since the last)
 	elif shooter != null and bool(shooter.player) and not calm and _hitstop_gap <= 0.0:
-		if Vector2(float(shooter.x) - float(z.x), float(shooter.y) - float(z.y)).length() <= HITSTOP_RANGE:
-			hitstop = HITSTOP_S
+		var shotgun := String(shooter.weapon) == "shotgun" or String(shooter.weapon) == "hunting"
+		if Vector2(float(shooter.x) - float(z.x), float(shooter.y) - float(z.y)).length() <= (HITSTOP_SHOTGUN_RANGE if shotgun else HITSTOP_RANGE):
+			hitstop = HITSTOP_SHOTGUN_S if shotgun else HITSTOP_S
 			_hitstop_gap = HITSTOP_GAP
 			hitstops_asked += 1
+			if shotgun:
+				# (FEEL: a pump gun's kill is a beat, not a stutter: 26 ms, and the camera takes a tiny push along the blast, on top of the gun's own kick back)
+				_push += dir * KILL_PUSH_PX
+				if _push.length() > KICK_MAX:
+					_push = _push.normalized() * KICK_MAX
 
 
 func _happen(w: Dictionary) -> void:
@@ -856,6 +923,10 @@ func reload_view(me, sim) -> Dictionary:
 func decal(x: float, y: float, size: float, grow: float = 0.0, alpha: float = 0.85) -> void:
 	if decal_parent == null or _blood_tex.is_empty() or not enabled:
 		return
+	if store != null:
+		# (FEEL, the town: a kill's splat (it grows) is a pool that stays for about 80 s, a drop's a speck for about 50; both in one draw: blood_store.gd)
+		store.add(x, y, size * 3.0, alpha, grow > 0.0, grow)
+		return
 	var s: Sprite2D
 	if not _spare.is_empty():
 		s = _spare.pop_back()
@@ -1024,6 +1095,9 @@ func _draw_flash(ci: CanvasItem, f: Dictionary) -> void:
 	var g: Dictionary = GUNS.get(f.gun, GUNS.rifle)
 	var k: float = clampf(1.0 - float(f.t) / float(f.dur), 0.0, 1.0)
 	var dim := 0.3 if soft else (0.6 if calm else 1.0)
+	# (FEEL, from LIGHT: the first frame of a flash is a little under half the strength, and it is full by the third (about 34 ms), so that the additive glow does not wash the shooter out)
+	var ramp := lerpf(FLASH_GLOW_FIRST, 1.0, clampf(float(f.t) / FLASH_GLOW_RAMP_S, 0.0, 1.0))
+	dim *= ramp
 	var at := Vector2(f.x, f.y)
 	var ang: float = f.ang
 	var reach_len: float = float(g.len) * (0.65 + 0.35 * k) * zoom_k

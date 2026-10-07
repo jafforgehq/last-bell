@@ -144,6 +144,15 @@ var _fl_dir := Vector2.ZERO
 var _stag_seen := 0.0
 var _thump := 0.0
 var _step_i := 0
+## FEEL: the figure's integer seed (its entity's instance id), what a dead one has of its own (pawn_motion.gd `dead_variant`), the legs' phase as drawn (the rules' times its gait plus its own
+## start), whether the last frame of a person's stride was a stride (a step is told only when the foot changes), and how startled a person is by a shot near them (1 at the shot, to 0).
+var _seed_i := 0
+var _dv: PawnMotion.Dead = null
+var _vphase := 0.0
+var _step_ok := false
+var _alert := 0.0
+var _alert_t := 0.0
+var _land := 0.0
 ## Whether the figure is changing fast (a strike, a flinch, a turn): one of the dead is then drawn every frame, not once a step.
 var _hot := false
 ## The dead's facing: the rules' last, the angle it is, and whether the drawn facing is still on its way.
@@ -164,11 +173,13 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		tex[v] = GD.tex(data.pawn.files[key][v])
 	pal = Art.palette(e.look)
 	_pal_tex = PawnMesh.palette_texture(pal)
-	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)
+	_seed_i = int(e.get_instance_id())
+	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)    # (as it was: a person's breath and a walker's idle sway read it)
 	if zombie:
 		kind = Art.kind_of(e)
 		_leg_kind = kind
 		_style = Art.style(kind)
+		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
 		var tinted := Art.material(kind)
 		if tinted != null:
 			material = tinted
@@ -211,6 +222,20 @@ func set_weapon(data: Dictionary, id: String) -> void:
 ## drawn where the character is, as it is on a first look, when the node was out
 ## of sight a frame ago, and after a jump of more than SNAP_TILES.
 func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
+	var t_sync := Time.get_ticks_usec()
+	_sync_inner(redraw, steps, alpha)
+	_sync_us += Time.get_ticks_usec() - t_sync
+
+
+## The microseconds all nodes have spent in `sync` so far (a measurement's, like `draw_usec`).
+static var _sync_us := 0
+
+
+static func sync_usec() -> int:
+	return _sync_us
+
+
+func _sync_inner(redraw: bool, steps: int, alpha: float) -> void:
 	var now := Vector2(entity.x, entity.y)
 	var frame := Engine.get_process_frames()
 	var jumped := false
@@ -243,6 +268,8 @@ func sync(redraw: bool = true, steps: int = -1, alpha: float = 1.0) -> void:
 	else:
 		_anim(jumped, alpha, dt)
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
+	if _dv != null:
+		tint = _dv.tint
 	if modulate != tint:
 		modulate = tint
 	if redraw and (not zombie or steps < 0 or steps != _drawn_steps or _hot):
@@ -278,6 +305,18 @@ func _anim(jumped: bool, alpha: float, dt: float) -> void:
 	_a_prev = anim_t
 	var rm := PawnMotion.motion()
 	var tgt: float = PawnMotion.FACE_ANG.get(String(e.facing), PI / 2.0)
+	# FEEL: a crew member standing about, who did not fire it, turns to look at a shot fired near them for about 0.4 s (and starts a little); not the avatar, not one who is at work or walking
+	if not e.player and float(e.recoil) <= 0.1 and not e.downed and not e.dead and rm >= 1.0:    # (none under Reduce motion)
+		var at := PawnMotion.shot_near(Vector2(e.x, e.y), e, 16.0, 0.4)
+		if at != Vector2.INF:
+			if _alert_t <= 0.0:
+				_alert = 1.0    # (the start: a hitch of the body as the head comes round; a walker on their way is startled too, and goes on)
+			_alert_t = 0.4
+			if not e.moving and _wk <= 0.0 and e.target == null and float(e.reloading) <= 0.0:
+				tgt = PawnMotion.FACE_ANG.get(PawnMotion.facing_toward(Vector2(e.x, e.y), at), tgt)
+	if _alert_t > 0.0:
+		_alert_t = maxf(0.0, _alert_t - dt)
+	_alert = maxf(0.0, _alert - dt * 6.0)
 	if jumped or dt <= 0.0 or not _ori_ok:
 		_ori = tgt
 		_ori_ok = true
@@ -316,6 +355,14 @@ func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
 		if not PawnMotion.neutral(_rph):
 			_rph = PawnMotion.settle(_rph, dt)
 	_moving_draw = _stepping or not PawnMotion.neutral(_rph)
+	# FEEL: a foot lands each time the stride passes a neutral pose: told to the footstep dust (a run is harder; the dead's own go the same way in `_anim_dead`)
+	var si := int(floorf(_rph / PI + 0.001))
+	if _stepping and _step_ok and si > _step_i and not jumped and PawnMotion.step_cb.is_valid():
+		var spd := _vel.length()
+		var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
+		PawnMotion.step_cb.call(position / TILE, _vel / spd if spd > 0.05 else Vector2.ZERO, 1.0 if run > 0.3 else 0.5)
+	_step_i = si
+	_step_ok = _stepping
 	_gait = move_toward(_gait, 1.0 if p.moving else 0.0, dt / (PawnMotion.GAIT_IN if p.moving else PawnMotion.GAIT_OUT))
 	# the kick of a shot: it jumps to 1 with the rules' recoil and falls on its own clock (about 150 ms)
 	var rc: float = p.recoil
@@ -365,9 +412,10 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 	_fl_t += dt
 	_strike_age += dt
 	_acc_dt += dt
+	_land = maxf(0.0, _land - dt * 7.0)
 	if not (stepped or jumped or _turning):
 		# (a frame between two steps of the rules: what the rules say has not changed, only the clocks of the flinch and the strike run on)
-		_hot = _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25)
+		_hot = _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25) or _land > 0.0
 		return
 	var st: String = z.state
 	var down: bool = st == "dying" or st == "dead"
@@ -412,18 +460,25 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 				_thump = 1.0
 		_at_seen = at
 		_atk = move_toward(_atk, 1.0 if (st == "attack" or (fighting and not z.moving)) else 0.0, _acc_dt / 0.1)
-	if kind == "brute":
-		if z.moving:
-			var si := int(floorf(float(z.walk_phase) / PI))
-			if si != _step_i:
-				_step_i = si
-				_thump = maxf(_thump, 0.3)
-		if _thump > 0.0:
-			if PawnMotion.thump_cb.is_valid():
-				PawnMotion.thump_cb.call(position / TILE, _thump)
-			_thump = 0.0
+	# FEEL: the legs' phase as this one draws it (its own gait and its own start in the cycle: no two in step), and a foot landing as it passes a neutral pose: dust under it, and a
+	# brute's weight: the body sinks as the foot lands (and the camera is shaken a hair, as before)
+	_vphase = float(z.walk_phase) * _dv.gait + _dv.ph
+	if z.moving:
+		var si := int(floorf(_vphase / PI))
+		if si != _step_i:
+			if not jumped:
+				if kind == "brute":
+					_thump = maxf(_thump, 0.3)
+					_land = 1.0
+				if PawnMotion.step_cb.is_valid() and (kind != "walker" or PawnMotion.rnd(_seed_i, si) < 0.6):
+					PawnMotion.step_cb.call(position / TILE, PawnMotion.FACE_DIR.get(f, Vector2.DOWN), 0.42 if kind == "walker" else (0.85 if kind == "runner" else 1.4))
+			_step_i = si
+	if kind == "brute" and _thump > 0.0:
+		if PawnMotion.thump_cb.is_valid():
+			PawnMotion.thump_cb.call(position / TILE, _thump)
+		_thump = 0.0
 	_acc_dt = 0.0
-	_hot = _turning or _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25)
+	_hot = _turning or _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25) or _land > 0.0
 
 
 # a tiny canvas-context emulation: translate / rotate / scale in local units
@@ -587,6 +642,9 @@ func _draw_person() -> void:
 	var off := Vector2((sin(_rph) * 0.014 * g + sin(anim_t * 0.7 + _seed * 9.0) * 0.006 * (1.0 - g)) * rm, -(stepk * 0.06 * (1.0 + 0.5 * run) * g + breath * 0.02 * (1.0 - g)) * rm)
 	var roll := sin(_rph) * 0.04 * g * rm
 	var sy := 1.0 - (1.0 - stepk) * 0.035 * g * rm    # (a little squashed as a foot lands, stretched in mid-stride)
+	if _alert > 0.0:
+		sy += 0.035 * _alert * rm    # (FEEL: a shot near them: the body starts up as the head comes round)
+		off.y -= 0.02 * _alert * rm
 	var lean := Vector2.ZERO
 	var spd := _vel.length()
 	if spd > 0.05:
@@ -821,18 +879,21 @@ func _draw_zombie() -> void:
 	var mirror := _mir
 	var rm := PawnMotion.motion()
 	var thump: float = st.claw_thump
-	var phase: float = z.walk_phase
+	var dv := _dv
+	var phase: float = _vphase
 	var walking: bool = z.moving
-	# ANIM. Each of the dead has its own gait (its `_seed`: how much it rocks and bounces); one that limps drags a leg (it bobs on one step only); standing it rocks a little and breathes.
-	var vary := 0.8 + 0.4 * _seed
+	# ANIM. Each of the dead has its own gait: how much it rocks and bounces; one that limps drags a leg (it bobs on one step only); standing it rocks a little and breathes.
+	# FEEL: and its own (pawn_motion.gd `dead_variant`, from its seed): how fast its limbs cycle and where in the cycle it is (`_vphase`), how much it bobs and sways, which leg it drags
+	# (the rules' limp, or a limp of its own for about one in five), a lean and a tilt of the head, how it carries its arms, a few percent of size and of dirt.
+	var limp: bool = z.limp or dv.gimp
 	var stride := sin(phase)
 	var bob := 0.0
-	var roll: float = sin(z.t * 1.7 + z.x) * 0.06
+	var roll: float = sin(z.t * 1.7 * dv.gait + dv.breath) * 0.06 * dv.sway
 	if walking:
-		bob = (maxf(0.0, stride) * 0.06 if z.limp else absf(stride) * 0.035) * float(st.bob) * vary
-		roll += stride * 0.075 * vary * (0.5 if view == "E" else 1.0)
+		bob = (maxf(0.0, stride) * 0.06 if limp else absf(stride) * 0.035) * float(st.bob) * dv.bob
+		roll += stride * 0.075 * dv.sway * (0.5 if view == "E" else 1.0)
 	else:
-		bob = (0.5 + 0.5 * sin(anim_t * 2.2 + _seed * TAU)) * 0.008
+		bob = (0.5 + 0.5 * sin(anim_t * 2.2 + dv.breath)) * 0.008
 	bob *= rm
 	roll *= rm
 	# the attack follows the rules' own beat (`attack_t`, set back at each claw or bite): rear back as it runs down, lunge when it is reset, settle (the heavier kinds rear longer and hit harder)
@@ -844,13 +905,14 @@ func _draw_zombie() -> void:
 			hump = sin(pow(clampf(_strike_age / 0.22, 0.0, 1.0), 0.6) * PI) * _atk
 		elif _at_seen < rear:
 			windup = PawnMotion.smooth(1.0 - _at_seen / rear) * _atk
-	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4)
-	var lean := Vector2(lf, 0.0)
+	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4) + dv.lean
+	var lean := Vector2(lf + dv.tilt * 0.4, 0.0)
 	if view == "S":
-		lean = Vector2(0.0, lf * 0.8)
+		lean = Vector2(dv.tilt, lf * 0.8)
 	elif view == "N":
-		lean = Vector2(0.0, -lf * 0.5)
-	var sy := 1.0 - 0.06 * hump * minf(thump, 1.4)
+		lean = Vector2(dv.tilt, -lf * 0.5)
+	var sy := 1.0 - 0.06 * hump * minf(thump, 1.4) - 0.035 * _land * dv.weight * rm
+	bob -= 0.012 * _land * dv.weight * rm
 	if _fl_t < 0.3:
 		# a flinch: it jerks away from the blow and comes back (a couple of frames)
 		var fk := exp(-_fl_t * 14.0) * rm
@@ -858,7 +920,7 @@ func _draw_zombie() -> void:
 		sy -= 0.06 * fk
 		bob -= 0.02 * fk
 	_reset()
-	var fs := figure_scale_xy()
+	var fs := figure_scale_xy() * dv.size
 	if fs != Vector2.ONE:
 		_fit_figure(fs)
 	_apply()
@@ -867,7 +929,16 @@ func _draw_zombie() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_legs(view, phase, walking, z.limp, 1.0, true)
+	if dv.side < 0.0 and limp and view != "E":
+		# (FEEL: which leg drags: from the front and the back the legs are a pair, so the other leg is the same mesh turned over; in side view the near one drags, as the rules' limp has it)
+		var kept := _m
+		_sc(-1, 1)
+		_apply()
+		_legs(view, phase, walking, limp, 1.0, true)
+		_m = kept
+		_apply()
+	else:
+		_legs(view, phase, walking, limp, 1.0, true)
 	_tr(0, 0.3)
 	_rot(roll)
 	_tr(0, -0.3 - bob)
@@ -894,7 +965,7 @@ func _draw_zombie() -> void:
 ## One layer of the arms of one of the dead, raised as it rears back and slammed down as it strikes (the pose of the arms is moved about the shoulders, the picture of them is the one at rest),
 ## and lagging a little behind the body's bounce as it walks.
 func _arms_layer(view: String, layer: String, reach: bool, phase: float, windup: float, hump: float, walking: bool) -> void:
-	var raise := windup - 0.8 * hump
+	var raise := windup - 0.8 * hump + _dv.arm    # (FEEL: how this one carries its arms: lower or higher than the rest)
 	if raise == 0.0:
 		_arms(view, 0.0, reach, layer, phase)
 		return
@@ -942,7 +1013,7 @@ func _draw_dead() -> void:
 	if z.state == "dead" and z.dead_t > 55.0:
 		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
 	_reset()
-	var fs := figure_scale_xy()
+	var fs := figure_scale_xy() * _dv.size
 	if z.state == "dying" and _fast and f < 1.0:
 		if fs != Vector2.ONE:
 			_fit_figure(fs)

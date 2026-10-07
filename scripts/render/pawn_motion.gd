@@ -42,6 +42,11 @@ static var thump_cb := Callable()
 static var _k := 1.0
 static var _k_calls := 0
 static var _melee := {}
+## FEEL: who is told where a foot landed: Callable(at: Vector2 in tiles, dir: Vector2 (the way it goes), power: float) (combat_fx.gd `step_event`: footstep dust); nobody when not set.
+static var step_cb := Callable()
+## FEEL: the last few shots heard on the screen ({at, ms, who}: a ring), for the crew to turn to (`shot_near`).
+const SHOT_MEMORY := 6
+static var _shots: Array = []
 ## The smoothing of the drawn place of the crew and of the dead, worked out once for a frame's time (every figure of a frame has the same).
 static var _pk_dt := -1.0
 static var _pk_crew := 1.0
@@ -207,6 +212,118 @@ static func swing_pose(s: Swing, t: float, k: float) -> void:
 		s.roll = 0.12 * back * back * k
 		s.stretch = 0.05 * back * k
 		s.sweep = 1.0
+
+
+# ----------------------------------------------------------------- FEEL: shots --
+
+## A shot was fired at `at` (tiles) by `who` (combat_fx.gd `shot`): the crew near it turn to look for a moment (`shot_near`).
+static func note_shot(at: Vector2, who) -> void:
+	_shots.append({"at": at, "ms": Time.get_ticks_msec(), "who": who})
+	if _shots.size() > SHOT_MEMORY:
+		_shots.pop_front()
+
+
+## Where a shot was fired that `me` (standing at `pos`) is to turn to: the nearest of the last `max_age` seconds' within `reach` tiles that `me` did not fire; Vector2.INF when none.
+static func shot_near(pos: Vector2, me, reach: float, max_age: float) -> Vector2:
+	if _shots.is_empty():
+		return Vector2.INF
+	var now := Time.get_ticks_msec()
+	var best := Vector2.INF
+	var best_d := reach * reach
+	for s in _shots:
+		if s.who == me or float(now - int(s.ms)) > max_age * 1000.0:
+			continue
+		var d: float = pos.distance_squared_to(s.at)
+		if d < best_d and d > 0.25:
+			best_d = d
+			best = s.at
+	return best
+
+
+## The facing (E, S, W, N) that looks toward `to` from `from`.
+static func facing_toward(from: Vector2, to: Vector2) -> String:
+	var d := to - from
+	if absf(d.x) > absf(d.y):
+		return "E" if d.x > 0.0 else "W"
+	return "S" if d.y > 0.0 else "N"
+
+
+# ------------------------------------------------------- FEEL: a dead one's own --
+
+## A number in [0, 1) from a seed and a salt: an integer hash, so the same figure always gets the same ones and its neighbours others.
+static func rnd(seed_i: int, salt: int) -> float:
+	var h: int = (seed_i * 2654435761 + salt * 40503 + 12345) & 0xFFFFFFFF
+	h = ((h ^ (h >> 15)) * 2246822519) & 0xFFFFFFFF
+	h = ((h ^ (h >> 13)) * 3266489917) & 0xFFFFFFFF
+	h = h ^ (h >> 16)
+	return float(h & 0xFFFFFF) / 16777216.0
+
+
+## The skin and dirt of a walker: the picture times one of these (a few percent either way), so a crowd is not a copy.
+const DEAD_TINTS := [Color(1.0, 1.0, 1.0), Color(0.88, 0.85, 0.78), Color(0.92, 0.98, 0.86), Color(0.88, 0.92, 0.97), Color(1.0, 0.88, 0.85), Color(0.82, 0.80, 0.76)]
+
+
+## What one of the dead has of its own (made once from its seed; nothing in it is read by the rules or saved): its gait (how fast its limbs cycle, where in the cycle it starts), how it
+## stands (a lean and a tilt of the head), how it moves its arms and legs (the arms' carry, a leg it drags, which), how big it is and the dirt on it, how hard its steps land.
+class Dead:
+	extends RefCounted
+	var gait := 1.0
+	var ph := 0.0
+	var bob := 1.0
+	var sway := 1.0
+	var lean := 0.0
+	var tilt := 0.0
+	var gimp := false
+	var side := 1.0
+	var arm := 0.0
+	var size := 1.0
+	var tint := Color.WHITE
+	var weight := 0.0
+	var breath := 0.0
+
+
+## `kind` walker, runner or brute. A runner cycles its limbs a good deal faster, leans harder into it and is drawn grey and gaunt; a brute is slower, heavier (its steps land) and darker.
+static func dead_variant(seed_i: int, kind: String) -> Dead:
+	var d := Dead.new()
+	var r := func(k: int) -> float: return rnd(seed_i, k)
+	d.ph = float(r.call(1)) * TAU
+	d.breath = float(r.call(2)) * TAU
+	d.side = 1.0 if float(r.call(3)) < 0.5 else -1.0
+	var jit := 0.96 + 0.08 * float(r.call(4))
+	match kind:
+		"runner":
+			d.gait = lerpf(1.2, 1.5, float(r.call(5)))
+			d.bob = lerpf(0.85, 1.2, float(r.call(6)))
+			d.sway = lerpf(0.6, 1.0, float(r.call(7)))
+			d.lean = lerpf(0.05, 0.13, float(r.call(8)))
+			d.tilt = (float(r.call(9)) - 0.5) * 0.06
+			d.arm = lerpf(-0.1, 0.1, float(r.call(10)))
+			d.size = lerpf(0.95, 1.04, float(r.call(11)))
+			d.tint = Color(0.90, 0.94, 0.97) * jit
+			d.weight = 0.0
+		"brute":
+			d.gait = lerpf(0.72, 0.88, float(r.call(5)))
+			d.bob = lerpf(0.9, 1.2, float(r.call(6)))
+			d.sway = lerpf(1.1, 1.5, float(r.call(7)))
+			d.lean = lerpf(0.0, 0.05, float(r.call(8)))
+			d.tilt = (float(r.call(9)) - 0.5) * 0.04
+			d.arm = lerpf(-0.05, 0.2, float(r.call(10)))
+			d.size = lerpf(0.97, 1.05, float(r.call(11)))
+			d.tint = Color(0.93, 0.92, 0.89) * jit
+			d.weight = 1.0
+		_:
+			d.gait = lerpf(0.8, 1.2, float(r.call(5)))
+			d.bob = lerpf(0.7, 1.3, float(r.call(6)))
+			d.sway = lerpf(0.7, 1.3, float(r.call(7)))
+			d.lean = lerpf(-0.03, 0.09, float(r.call(8)))
+			d.tilt = (float(r.call(9)) - 0.5) * 0.18
+			d.arm = lerpf(-0.30, 0.40, float(r.call(10)))
+			d.size = lerpf(0.94, 1.06, float(r.call(11)))
+			d.gimp = float(r.call(12)) < 0.22
+			d.tint = (DEAD_TINTS[int(float(r.call(13)) * float(DEAD_TINTS.size())) % DEAD_TINTS.size()] as Color) * jit
+			d.weight = 0.25
+	d.tint.a = 1.0
+	return d
 
 
 # -------------------------------------------------------------------- reload --
