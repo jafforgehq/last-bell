@@ -4,7 +4,7 @@
 ##  - THE LAMPS AND THE WINDOWS, as additive halos in the glow layer (a PointLight2D is a pass over what it touches, a halo is a texture in a batch): the street lamps in view burn with the
 ##    dusk (and go out in a blackout with the other lamps), the windows of the claimed house are lit warm, the standing lamps of the house she is in glow (by day a little: a warm pool in a
 ##    dim room) and a lit window is a warm pane;
-##  - THE DEAD STAY READABLE: within `RIM_NEAR` to `RIM_FAR` tiles of the avatar or of a light, each of the dead gets a faint cold rim (a cold halo behind the body and a pair of pale eye
+##  - THE DEAD STAY READABLE: within the screen's reach of the avatar or of a light (full to `RIM_NEAR` tiles, `RIM_LEFT` of it beyond), each of the dead gets a cold rim (a cold halo behind the body and a pair of pale eye
 ##    glints); beyond that they are dark shapes, as they should be, and never invisible;
 ##  - and it tells the grade whether the avatar is indoors (the house view's `avatar_house`), for the dimmer air of a room by day.
 ## Made by main.gd after the lighting (`setup`), `update` each frame before `lighting.update`; `glow_paint` is one of the glow layer's `extras`. Cost: one PointLight2D, a few dozen halos, one
@@ -19,9 +19,16 @@ const TILE := 64.0
 const AVATAR_R := 5.6
 const AVATAR_ENERGY := 1.0
 const AVATAR_COLOR := Color8(255, 196, 128)
-## The dead are readable from the avatar and from any light within this reach (full to RIM_NEAR, nothing at RIM_FAR), tiles.
-const RIM_NEAR := 5.0
-const RIM_FAR := 9.0
+## How much of its strength the lantern's pool has right on her (it climbs to full by 0.3 of its radius).
+const POOL_CENTER := 0.72
+## A muzzle flash within FLASH_NEAR tiles of her takes this much off her lantern while it lasts.
+const FLASH_NEAR := 3.0
+const FLASH_DIP := 0.6
+## The dead are readable from the avatar and from any light, out to the edge of the screen: full to RIM_NEAR, RIM_LEFT of it from there on, nothing past the screen's corner (the reach is the larger of RIM_END and
+## the view's half diagonal plus a tile; the last two tiles fade out; tiles; a 1280 x 800 window has its corner about 12 from the avatar).
+const RIM_NEAR := 6.0
+const RIM_END := 13.0
+const RIM_LEFT := 0.62
 const RIM_COLOR := Color(0.50, 0.70, 1.0)
 const GLINT_COLOR := Color(0.80, 0.92, 1.0)
 const LAMP_REACH := 14.0
@@ -53,6 +60,7 @@ var _lit := 0.0
 var _indoor_house := -1
 var _calm := false
 var _calm_t := -10.0
+var _rim_end := RIM_END
 
 
 ## `main_node` is main.gd (the sim, the data, the town's parts, the camera) and `light_rig` the lighting node (this is put in it, so that --nolights hides it).
@@ -92,7 +100,7 @@ static func _pool_texture(size: int) -> Texture2D:
 			var dx := (u + 0.5) / size * 2.0 - 1.0
 			var dy := (v + 0.5) / size * 2.0 - 1.0
 			var k := sqrt(dx * dx + dy * dy)
-			var a := pow(1.0 - smoothstep(0.04, 1.0, k), 0.85)
+			var a := pow(1.0 - smoothstep(0.04, 1.0, k), 0.85) * (POOL_CENTER + (1.0 - POOL_CENTER) * smoothstep(0.0, 0.3, k))    # (a little under full right on her: a lantern at full on her own sprite washes it out)
 			bytes[i] = 255
 			bytes[i + 1] = 255
 			bytes[i + 2] = 255
@@ -148,8 +156,19 @@ func _avatar_light() -> void:
 		f = 0.965 + 0.035 * sin(_t * 7.3) * sin(_t * 2.1 + 1.0)
 	avatar_light.position = Vector2(_me.x, _me.y - 0.25) * TILE
 	avatar_light.texture_scale = AVATAR_R * 2.0 * TILE / 128.0 * reach
-	avatar_light.energy = AVATAR_ENERGY * _own * f * lerpf(1.0, Lighting.FOG_LIGHT_ENERGY, fog)
+	avatar_light.energy = AVATAR_ENERGY * _own * f * lerpf(1.0, Lighting.FOG_LIGHT_ENERGY, fog) * (1.0 - FLASH_DIP * _flash_near())
 	avatar_light.visible = avatar_light.energy > 0.01
+
+
+## How close a muzzle flash is to her now, 0 (none within FLASH_NEAR tiles) to 1 (on her): her lantern dips with it, so that the flash and the lantern do not add up to a white-out of her own sprite.
+func _flash_near() -> float:
+	var fx = main.get("fx")
+	if fx == null:
+		return 0.0
+	var k := 0.0
+	for fl in fx.flash_lights():
+		k = maxf(k, 1.0 - Vector2(float(fl.x) - _me.x, float(fl.y) - _me.y).length() / FLASH_NEAR)
+	return clampf(k, 0.0, 1.0)
 
 
 ## The places the dead are read from: the avatar, the lit lamps and windows near the view, the floodlights of the base.
@@ -158,7 +177,9 @@ func _sources() -> void:
 	if _me == null or _own < 0.2:
 		return
 	_src.append(Vector2(_me.x, _me.y))
-	var view: Rect2 = main.view_rect().grow(RIM_FAR + 2.0)
+	var shown: Rect2 = main.view_rect()
+	_rim_end = maxf(RIM_END, shown.size.length() * 0.5 + 1.0)
+	var view: Rect2 = shown.grow(_rim_end + 2.0)
 	if _lit > 0.05:
 		for p in _lamps:
 			if view.has_point(p):
@@ -214,14 +235,14 @@ func glow_paint(ci: CanvasItem, radial_tex: Texture2D, dark: float) -> void:
 	radial = radial_tex
 	if not enabled or lighting == null or not lighting.visible:
 		return
-	var view: Rect2 = main.view_rect().grow(RIM_FAR + 2.0)
+	var view: Rect2 = main.view_rect().grow(_rim_end + 2.0)
 	var calm := _calm
 	_halo_on = not off_glow
 	# her own lantern: the light on the ground is the PointLight2D's (it shows what is under it, the dark asphalt hardly), and this soft warm halo is what makes it a pool on any floor
 	if _me != null and avatar_light.visible:
 		var f0 := avatar_light.energy / AVATAR_ENERGY
 		_halo(ci, Vector2(_me.x, _me.y - 0.25), AVATAR_R * 0.8, AVATAR_COLOR, 0.12 * f0)
-		_halo(ci, Vector2(_me.x, _me.y - 0.25), 1.5, Color8(255, 214, 160), 0.10 * f0)
+		_halo(ci, Vector2(_me.x, _me.y - 0.25), 1.5, Color8(255, 214, 160), 0.05 * f0)
 	# the street lamps
 	if _lit > 0.02:
 		for p in _lamps:
@@ -272,8 +293,8 @@ func _dead_rim(ci: CanvasItem, view: Rect2) -> void:
 	var night := clampf((DarkLook.night_of(float(lighting.dark)) - 0.2) / 0.5, 0.0, 1.0)
 	if night <= 0.01:
 		return
-	var near2 := RIM_NEAR * RIM_NEAR
-	var far2 := RIM_FAR * RIM_FAR
+	var far2 := _rim_end * _rim_end
+	var far := _rim_end - 2.0
 	for z in sim.zombies:
 		if z.state == "dead" or z.state == "dying":
 			continue
@@ -290,7 +311,8 @@ func _dead_rim(ci: CanvasItem, view: Rect2) -> void:
 				best = d2
 		if best >= far2:
 			continue
-		var w := 1.0 if best <= near2 else 1.0 - smoothstep(RIM_NEAR, RIM_FAR, sqrt(best))
+		var d := sqrt(best)
+		var w := (1.0 - (1.0 - RIM_LEFT) * smoothstep(RIM_NEAR, far, d)) * (1.0 - smoothstep(far, _rim_end, d))
 		var a := night * w
 		_halo(ci, p + Vector2(0.0, -0.4), 0.72, RIM_COLOR, 0.17 * a)
 		_halo(ci, p + Vector2(-0.085, -0.6), 0.055, GLINT_COLOR, 0.62 * a)
