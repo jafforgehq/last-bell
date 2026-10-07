@@ -168,7 +168,7 @@ func test_oh_rescue_states_and_the_refusals_of_the_card() -> void:
 	check(int(sim.field.dead_in_room(rec.room).left) > 0, "the generator leaves a dead one in the survivor's room")
 	var blocked: Dictionary = r.talk(id)
 	check(bool(blocked.blocked), "they say it")
-	check(String(blocked.line).contains("Get them out first"), "in their own words")
+	check(String(blocked.line).contains("Put down the dead in this room first"), "in their own words")
 	eq(blocked.choices.size(), 0, "and offer nothing")
 	eq(rec.state, "wary", "no word was had")
 	check(not bool(r.choose(id, "come").ok), "no answer is taken")

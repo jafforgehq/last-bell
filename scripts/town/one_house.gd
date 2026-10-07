@@ -737,7 +737,7 @@ func _fourth() -> void:
 	# (the rescue module says {"type": "fourth"} itself when the last voice arrives: this module adds only what is its own)
 	sim.events.append({"type": "attacks_on", "from_day": _first_day})
 	sim.events.append({"type": "banner", "text": _with_voices(String(words[0])), "sub": String(words[1])})
-	var news = _cfg("words.news_fourth", words)
+	var news = _cfg("words.news_fourth_tomorrow", _cfg("words.news_fourth", words)) if late else _cfg("words.news_fourth", words)
 	if sim.get("radio") != null:
 		sim.radio.log_news("story", _with_voices(String(news[0])), String(news[1]))
 	_apply_flags()
@@ -805,10 +805,30 @@ func _nobody_left() -> bool:
 		if not p.dead and not p.turned:
 			return false
 	sim.over = "defeat"
-	var words = _cfg("words.defeat", ["The house is empty", ""])
+	var words := defeat_words()
 	sim.events.append({"type": "over", "result": "defeat"})
 	sim.events.append({"type": "banner", "text": String(words[0]), "sub": String(words[1])})
 	return true
+
+
+## Whether a house has been claimed (there is a base to speak of).
+func has_base() -> bool:
+	var base = sim.get("base")
+	return base != null and bool(base.get("claimed"))
+
+
+## The words of a lost run, [headline, line]: the house's (`words.defeat`: "The house is empty") once there is one, and before the claim (`words.defeat_no_base`, "%s did not make it": the
+## person she played) the person's, since there is no house to be empty. The end screen (scripts/ui/game_over.gd) reads it too.
+func defeat_words() -> Array:
+	if not has_base():
+		var w = _cfg("words.defeat_no_base", ["%s did not make it", "The dead are still out there"])
+		var who := "She"
+		for p in sim.people:
+			if String(p.id) == String(sim.player_id):
+				who = String(p.first)
+		return [_fmt(String(w[0]), [who]), String(w[1])]
+	var words = _cfg("words.defeat", ["The house is empty", ""])
+	return [String(words[0]), String(words[1])]
 
 
 ## The reckoning of a night, ONCE, at the first moment of the day after it (the dawn has been the dead's hour to retreat and the crew's to mend: the dawn hour is the player's last
@@ -1001,6 +1021,11 @@ func _when(w: Dictionary) -> bool:
 	return true
 
 
+## Whether a lesson that waits for its moment (its `when`) has begun: a dead one put down in this run (the count of the lesson's `kills` base, which a save keeps), so the gate is not looked at again.
+func _lesson_begun() -> bool:
+	return int(sim.kills) - int(_base.get("kills", 0)) >= 1
+
+
 ## Whether one of the dead is awake, on its feet, in the open and within `r` tiles of her: with the scripted opening, its walker (the lesson of the gun is about that one); else the nearest (`nearest_dead`).
 func dead_near(r: float) -> bool:
 	if opening.built:
@@ -1149,7 +1174,8 @@ func guide() -> Dictionary:
 		if _done.has(String(l.get("id", ""))) or not _shown_in_stage(l):
 			continue
 		# (TUTOR: a lesson that waits for its moment is not shown yet, and the ones after it wait with it: the walker steps out before the gun is taught)
-		if not _when(l.get("when", {})):
+		# (the gate only keeps a lesson back until it has begun: once a dead one is down the moment is over for good, so the gun's reload still shows when the walker is dead and the magazine low)
+		if not _when(l.get("when", {})) and not _lesson_begun():
 			return {}
 		if String(l.get("id", "")) == "claim":
 			var hint := _stuck_hint()
@@ -1346,6 +1372,9 @@ func objective() -> Dictionary:
 			out.sub = String(_cfg("objective.%s.sub" % key, ""))
 			if key == "fortify":
 				out.sub = _fortify_sub(String(out.sub))
+				# (the first attack is the next day's dusk when the fourth voice came after the cutoff hour (always, with 0): until that day it is "before tomorrow's dusk", on it "before dark")
+				if _first_day >= 0 and sim.day < _first_day:
+					out.text = String(_cfg("objective.fortify.text_tomorrow", out.text))
 			out.at = _base_center()
 		"held":
 			out.id = "held"
@@ -1354,7 +1383,7 @@ func objective() -> Dictionary:
 	return out
 
 
-## What the line under "Build the front fence (N)" says: the page to open, then the fence to stand at (hold E), then, with somebody on the Builders job, that they are on it.
+## What the line under "Build the front fence (N)" says: the page to open, then the fence to stand at (press E and stay by it), then, with somebody on the Builders job, that they are on it.
 func _build_sub() -> String:
 	if not _site_waiting():
 		return String(_cfg("objective.build.sub", ""))

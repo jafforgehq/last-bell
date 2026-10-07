@@ -1,4 +1,4 @@
-## TEACH BY DOING (One House, TUTOR): the lessons of the first house are taught by a cue IN THE WORLD, at the thing to do, and the lesson card is only a small chip ("STEP 2 OF 8", and the
+## TEACH BY DOING (One House, TUTOR): the lessons of the first house are taught by a cue IN THE WORLD, at the thing to do, and the lesson card is only a small chip ("STEP 2 OF 5", and the
 ## verb: "Shoot it"). A VIEW PART of the town's facade (scripts/town/town_game.gd `VIEW_PARTS`: `on_ready(main)`, `on_frame(dt)`, `on_event(e)`). It reads the guide (`sim.scenario.guide()`: the
 ## lesson of now) and the rules' state and writes nothing in them; the scripted first minute it draws the ammo box of is scripts/town/opening.gd's.
 ##
@@ -15,8 +15,8 @@
 ##   claim             a ring at the spot where E claims
 ##   ask               a ring round the first card of the crew at the top of the window
 ## EARLY (five lessons): the cues are the lesson's `phase`: shoot is the shot and then the reload ("Reload: R"); claim is the ring on the front door on the road in (phase find), nothing in the house (the room chip is the
-## cue), the ring where E claims (phase claim); build is the outline on the way to the Build page (the radio's button, the Build tab, the NEXT card's button) and then the ring on the section waiting for her hands ("Hold E
-## here"); door, clear and search are HINTS (the card says HINT), each the old cue with one line on the thing.
+## cue), the ring where E claims (phase claim); build is the outline on the way to the Build page (the radio's button, the Build tab, the NEXT card's button) and then the ring on the section waiting for her hands ("Press E
+## here to build"); door, clear and search are HINTS (the card says HINT), each the old cue with one line on the thing.
 ## Each cue is gone the moment its lesson is done, with a small confirm sound (`ui_confirm`); the next begins after a short beat (BEAT_S). A lesson skipped, or "No lessons" (the flag of the
 ## town HUD's card, and the Esc menu's Lessons), puts its cue away too. The ammo box of the opening is drawn whatever the lessons say: it is in the world.
 ## THE REFUSAL MARKER (not a lesson): while a claim is refused because a room has not been looked into (the words "You have not looked in the utility yet"), a ring on that room's doorway.
@@ -755,7 +755,7 @@ func _cue_claim() -> void:
 
 
 ## EARLY: the build lesson's cue. Phase "page": the way to the Build page, step by step (the radio's button while the panel is shut, the Build tab while it is on another page, the NEXT card's button once it is on the Build
-## page). Phase "site": a ring on the section waiting for her hands (the nearest to her), with "Hold E here" (the E prompt takes over when she is in reach).
+## page). Phase "site": a ring on the section waiting for her hands (the nearest to her), with "Press E here to build" (the E prompt takes over when she is in reach).
 func _cue_build() -> void:
 	var a := _fade()
 	if cue_phase == "site":
@@ -779,7 +779,7 @@ func _cue_build() -> void:
 		if Rect2(Vector2.ZERO, _view()).grow(-24.0).has_point(c):
 			_ring(c, maxf(0.9 * z, 22.0), a, best_d <= 2.6)
 			if best_d > 2.6:
-				_hint_text_plate(c + Vector2(0.0, maxf(0.9 * z, 22.0) + 10.0), "Hold E here to build", a)
+				_hint_text_plate(c + Vector2(0.0, maxf(0.9 * z, 22.0) + 10.0), "Press E here to build", a)
 			drawn = "build"
 		else:
 			_edge_chevron(c, a)

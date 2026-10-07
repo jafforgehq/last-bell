@@ -219,6 +219,11 @@ const FLAG_S := 4.0
 var _holster_pawn = null
 ## Shift was down when the window lost the focus: it does not count as the aim until it has been let go (the engine may keep it pressed).
 var _shift_lock := false
+## The keys that were held when the window lost the focus (key code -> true): a browser tab or Cmd+Tab says nothing of their release, and the engine keeps them pressed, so the
+## avatar would walk on. They count as up (`_key_down`, `_cmd_down`) until that key is pressed or let go again.
+var _stale_keys := {}
+## The keys the hands poll (walking, the run, the aim's Shift, and the command keys that stop a walk).
+const POLLED_KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SHIFT, KEY_X, KEY_CTRL, KEY_META]
 var _was_aiming := false
 ## The shape the system pointer was last given over the yard (the hand over a person or a thing to use, else the arrow).
 var cursor_shape := Input.CURSOR_ARROW
@@ -1692,6 +1697,9 @@ func _input(ev: InputEvent) -> void:
 				open_screen.sync_switches()
 			get_viewport().set_input_as_handled()
 		return
+	if ev is InputEventKey and not ev.echo and not _stale_keys.is_empty():
+		_stale_keys.erase(ev.keycode)    # (a key pressed or let go again is the player's own: it counts)
+		_stale_keys.erase(ev.physical_keycode)
 	_track_pointer(ev, true)
 	if wheel_ctl != null and avatar_mode:
 		# (round 24: the command wheel has the pointer while it is up, and the key or the button that opened it is let go wherever it was)
@@ -1721,6 +1729,10 @@ func _notification(what: int) -> void:
 		aim_held = false
 		_rtap = {}
 		_shift_lock = true
+		_stale_keys.clear()
+		for code in POLLED_KEYS:
+			if Input.is_physical_key_pressed(code) or Input.is_key_pressed(code):
+				_stale_keys[code] = true    # (held as the focus went: the walk stops, and does not go on when the window comes back)
 		if wheel_ctl != null:
 			wheel_ctl.cancel()    # (round 24: the key that held the wheel up is let go where we cannot see it)
 	elif what == NOTIFICATION_WM_MOUSE_EXIT:
@@ -2182,7 +2194,7 @@ func aim_tile() -> Vector2:
 func _walk_keys() -> Vector2:
 	if PaceKeys.staged != Vector2.ZERO:
 		return PaceKeys.staged    # (`--sprint`: a screenshot's held walk)
-	if Input.is_key_pressed(KEY_CTRL) or Input.is_key_pressed(KEY_META):
+	if _cmd_down():
 		return Vector2.ZERO
 	var x := int(_key_down(KEY_D) or _key_down(KEY_RIGHT)) - int(_key_down(KEY_A) or _key_down(KEY_LEFT))
 	var y := int(_key_down(KEY_S) or _key_down(KEY_DOWN)) - int(_key_down(KEY_W) or _key_down(KEY_UP))
@@ -2191,7 +2203,14 @@ func _walk_keys() -> Vector2:
 
 ## A key is down by what it says or by where it is (W A S D are the keys at the W A S D places on any layout).
 func _key_down(code: Key) -> bool:
+	if _stale_keys.has(code):
+		return false    # (it was held when the window lost the focus: the engine may still think so; see `_stale_keys`)
 	return Input.is_physical_key_pressed(code) or Input.is_key_pressed(code)
+
+
+## A command's Ctrl or Cmd is down (a walk key is a command then, not a step).
+func _cmd_down() -> bool:
+	return _key_down(KEY_CTRL) or _key_down(KEY_META)
 
 
 ## Every frame in avatar mode: what the player's hands ask of the avatar (the sim keeps the last values): the keys' direction,

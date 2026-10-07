@@ -336,6 +336,12 @@ func _step_walker(me) -> void:
 	if zombie == null:
 		if field != null and rec >= 0 and field.active_of.has(rec):
 			zombie = field.active_of[rec]    # (a loaded run: the real one is found again by its record)
+		elif field != null and rec >= 0 and rec < int(field.n) and int(field.status[rec]) == 0:
+			# (a loaded run: a save puts every real one back to sleep, the walker too, and the lesson of the gun is about it: it steps out again where it stood, after her, with the hit points it had)
+			zombie = field._wake(rec, null)
+			zombie.limp = false
+			zombie.speed = _base_speed
+			sim.start_chase(zombie, me)
 		else:
 			return
 	var z = zombie

@@ -207,6 +207,9 @@ func _town() -> bool:
 
 ## The town's defeat, [headline, line] from the data (`words.defeat`: "The house is empty", "Nobody is left to hold it").
 func _town_defeat() -> Array:
+	# (before the claim there is no house to be empty: the scenario says "Ruth did not make it", `words.defeat_no_base`)
+	if sim.scenario != null and sim.scenario.has_method("defeat_words"):
+		return sim.scenario.defeat_words()
 	var words = OneHouse.data().get("words", {}).get("defeat", [])
 	if words is Array and words.size() >= 2:
 		return [String(words[0]), String(words[1])]
@@ -224,6 +227,8 @@ func _campaign() -> bool:
 func _subtitle(result: String) -> String:
 	var line := String(SUBTITLES.get(result, ""))
 	if _town() and result == "defeat":
+		if sim.scenario != null and sim.scenario.has_method("has_base") and not sim.scenario.has_base():
+			return "%s." % _town_defeat()[1]    # (no house yet: the line already says it)
 		return "%s. The dead are still out there." % _town_defeat()[1]    # (One House: there is no bell to ring)
 	if not _campaign():
 		return line

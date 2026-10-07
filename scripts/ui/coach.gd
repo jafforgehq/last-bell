@@ -54,6 +54,9 @@ const STEPS_PATH := "res://assets/data/tutorial.json"
 const CLASSIC_PATH := "res://assets/data/tutorial_classic.json"
 ## The card's width, the space kept round the window's edge and round the target.
 const CARD_W := 360.0
+## In a window shorter than SHORT_H (700 x 560) the card is wider, up to CARD_W_SHORT: the same words take fewer lines, so it is low enough (at the foot of the window) to leave the person in the middle uncovered.
+const SHORT_H := 640.0
+const CARD_W_SHORT := 520.0
 const EDGE := 12.0
 const GAP := 16.0
 ## Real seconds of nothing before the ring pulses (and Show me appears), and before the arrow comes.
@@ -311,6 +314,8 @@ var _card_key := ""
 var _fade := 0.0
 ## Where the card is (going) to be, so the arrow keeps out from under it.
 var _card_rect := Rect2()
+## The width the card's words were wrapped at (`_set_card_w`).
+var _wrap_w := CARD_W
 ## How many things the player did that the soft lock refused (for the tests).
 var refused := 0
 
@@ -470,7 +475,7 @@ func _build() -> void:
 
 	card = hud._panel()
 	card.name = "Card"
-	card.custom_minimum_size.x = CARD_W
+	card.custom_minimum_size.x = CARD_W    # (`_set_card_w` makes it wider in a short window when the first step begins)
 	card.visible = false
 	var col: VBoxContainer = hud._vbox(8)
 	var top: HBoxContainer = hud._hbox(8)
@@ -1214,12 +1219,25 @@ func _fill_card() -> void:
 	speed_button.visible = phase == "wait" or (phase == "active" and bool(_goal_entry().get("speed", false)))
 	wrap_box.visible = is_wrap
 	# the wrapped words need a width to know how tall they are: give them the card's, at once
-	var inner := CARD_W - card.get_theme_stylebox("panel").get_minimum_size().x
+	_set_card_w(_card_w())
+	_fade = 0.0
+	card.reset_size()
+
+
+## The card's width now: CARD_W, and in a short window wider (see CARD_W_SHORT).
+func _card_w() -> float:
+	var vp: Vector2 = main._vp() if main != null and main.has_method("_vp") else Vector2(1280.0, 800.0)
+	return CARD_W if vp.y >= SHORT_H else clampf(vp.x - 2.0 * EDGE, CARD_W, CARD_W_SHORT)
+
+
+## The card and its wrapped words `w` wide.
+func _set_card_w(w: float) -> void:
+	_wrap_w = w
+	card.custom_minimum_size.x = w
+	var inner := w - card.get_theme_stylebox("panel").get_minimum_size().x
 	for l in [title_label, text_label, goal_label]:
 		l.custom_minimum_size.x = inner
 		l.size.x = inner
-	_fade = 0.0
-	card.reset_size()
 
 
 ## Whether a page of the HUD is open over the game: the scavenging dialog or the Duty roster. Each has its
@@ -1282,8 +1300,11 @@ func _place_card(delta: float, vp: Vector2) -> void:
 	var calm := Prefs.on("ui", "reduce_motion")
 	_fade = 1.0 if calm else minf(1.0, _fade + delta * 5.0)
 	card.modulate.a = _fade
+	if not is_equal_approx(_wrap_w, _card_w()):
+		_set_card_w(_card_w())    # (the window was resized under the card)
+		card.reset_size()
 	var sz := card.get_combined_minimum_size()
-	sz.x = maxf(sz.x, CARD_W)
+	sz.x = maxf(sz.x, _card_w())
 	card.size = sz
 	var want := _best_rect(sz, vp, target_rect, _over_page())
 	var at := want.position

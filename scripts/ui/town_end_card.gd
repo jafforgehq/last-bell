@@ -6,6 +6,7 @@
 ##   line       one sentence under it (`end_card().line`)
 ##   stats row  a number and its name for each of `end_card().stats` = [[label, value], ...]: nights held, people, houses cleared, the dead put down, places built
 ##   thanks     `end_card().thanks` when there is one
+##   full       `end_card().full` when there is one: a quiet line under the thanks (what the full game has; no button, no link)
 ##   buttons    Play again (a new town run), Back to title; Esc is Back to title
 ##
 ## Built once by the HUD when it first sees the run is over (`hud.game_over` holds it, so every "a modal is up" check of the HUD treats it as the report card). The scenario
@@ -106,6 +107,14 @@ func _build() -> void:
 	thanks_label.custom_minimum_size.x = 200
 	thanks_label.visible = thanks != ""
 	col.add_child(thanks_label)
+	# (a quiet line under the thanks, `end_card().full`: what the full game has; no button and no link, the page and the name are not decided)
+	var full := String(content.get("full", ""))
+	full_label = hud._label(full, Fonts.sans(400), 13, hud.PAPER_INK3)
+	full_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	full_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	full_label.custom_minimum_size.x = 200
+	full_label.visible = full != ""
+	col.add_child(full_label)
 
 	var buttons: HFlowContainer = HFlowContainer.new()
 	buttons.alignment = FlowContainer.ALIGNMENT_CENTER
