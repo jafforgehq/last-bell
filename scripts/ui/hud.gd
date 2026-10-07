@@ -2196,9 +2196,53 @@ func _build_banner() -> void:
 	_center_top(banner, 118)
 
 
+## How wide the columns of boards on each side of the banner's space are (the objective and the stores on the left; the clock and the weapon panel on the right), and the sign's own margins.
+const BANNER_SIDE_PX := 312.0
+const BANNER_MARGIN_PX := 56.0
+
+
+## A banner hangs between the two columns of boards. In a window too narrow for its words at full size, the title is set smaller (down to 18 px) and then in two lines, and the line under it
+## wraps, so that the sign never covers the clock, the weapon panel or the objective.
+func _fit_banner() -> void:
+	var room := maxf(size.x - 2.0 * BANNER_SIDE_PX - BANNER_MARGIN_PX, size.x * 0.4)    # (a window too narrow for the two columns has the sign over the middle of it, 40 percent wide)
+	var fs := 34
+	var title_font: Font = banner_title.get_theme_font("font")
+	var sub_font: Font = banner_sub.get_theme_font("font")
+	var sub_px := Access.scaled(14)
+	if room > 120.0 and title_font != null:
+		while fs > 18 and title_font.get_string_size(banner_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, Access.scaled(fs)).x > room:
+			fs -= 2
+		banner_title.text = _lines_to_fit(banner_title.text, title_font, Access.scaled(fs), room)
+		banner_sub.text = _lines_to_fit(banner_sub.text, sub_font, sub_px, room)
+	banner_title.add_theme_font_size_override("font_size", Access.scaled(fs))
+	# (the sign is as wide as these words, not as the widest it has been, and hangs from the middle)
+	var want := banner.get_combined_minimum_size()
+	banner.offset_left = -want.x * 0.5
+	banner.offset_right = want.x * 0.5
+	banner.offset_bottom = banner.offset_top + want.y
+
+
+## `text` broken at spaces into lines no wider than `room` at `px` (as it is when it already fits).
+func _lines_to_fit(text: String, font: Font, px: int, room: float) -> String:
+	if font == null or font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x <= room:
+		return text
+	var lines: Array = []
+	var cur := ""
+	for word in text.split(" "):
+		var joined: String = word if cur == "" else cur + " " + word
+		if cur != "" and font.get_string_size(joined, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x > room:
+			lines.append(cur)
+			cur = word
+		else:
+			cur = joined
+	lines.append(cur)
+	return "\n".join(lines)
+
+
 func show_banner(text: String, sub: String) -> void:
 	banner_title.text = text.to_upper()
 	banner_sub.text = sub
+	_fit_banner()
 	if banner_tween != null:
 		banner_tween.kill()
 	banner_tween = create_tween()

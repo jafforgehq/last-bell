@@ -133,6 +133,9 @@ var options := {}
 var plan
 ## The whole plan's summary at the top (scripts/ui/plan_clock.gd): the box, its line, its chip (a mark and words), the reason under it; what it said last, and each project's "finishes 12:10".
 var plan_box: PanelContainer
+## Shorter than this many pixels (the HUD's height) the NEXT card comes before the summary of the whole plan (`_order_for_height`).
+const SHORT_H := 760.0
+var _short := false
 var plan_line: Label
 var plan_chip: PanelContainer
 var plan_mark
@@ -600,12 +603,26 @@ func _scrap_now() -> int:
 # ----------------------------------------------------------------------- the sim -> the page --
 
 ## Brings the page up to date; without `force` only what changed is touched.
+## In a window shorter than SHORT_H the panel has room for little more than one card: the NEXT card and its button come first, and the summary of the whole plan under them, so that the first
+## thing to do (Build the front fence) is on the page without a scroll. In a taller one the summary stays over the NEXT card, as the page was drawn.
+func _order_for_height() -> void:
+	var short: bool = host != null and float(host.size.y) > 0.0 and float(host.size.y) < SHORT_H
+	if short == _short:
+		return
+	_short = short
+	if short:
+		move_child(plan_box, answer_label.get_index())    # (after the answer's line, which is under the one-click button)
+	else:
+		move_child(plan_box, empty_label.get_index() + 1)
+
+
 func refresh(force: bool = false) -> void:
 	if host == null or not _built:
 		return
 	var infos: Array = projects()
 	var any := not infos.is_empty()
 	_tick_labels()
+	_order_for_height()
 	empty_label.text = EMPTY_CLAIMED if _claimed() else EMPTY_UNCLAIMED
 	empty_label.visible = not any
 	for n in [next_card.panel, all_button, plan_caption, plan, list_caption, adv_toggle, foot_box]:

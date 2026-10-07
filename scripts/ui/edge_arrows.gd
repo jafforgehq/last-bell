@@ -20,6 +20,7 @@ const Arrival := preload("res://scripts/town/arrival.gd")
 const TierMarks := preload("res://scripts/ui/tier_marks.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 const Access := preload("res://scripts/access.gd")
+const HudFree := preload("res://scripts/ui/hud_free.gd")
 
 const REFRESH_S := 0.2
 const OBSTACLES_S := 0.25
@@ -277,21 +278,7 @@ func _collect_obstacles() -> void:
 	if hud == null or layer == null:
 		return
 	var origin := layer.get_global_rect().position
-	var watch: Array = [hud.get("left_col"), hud.get("right_col"), hud.get("speed_panel"), hud.get("dock"), hud.get("inspect"), hud.get("radio_box"), hud.get("radio_panel"),
-		hud.get("banner"), hud.get("help")]
-	var hud_part = main.town.part("town_hud") if main.get("town") != null else null
-	if hud_part != null:
-		watch.append(hud_part.get("lesson_card"))
-		watch.append(hud_part.get("legend"))
-		watch.append(hud_part.get("radio_card"))
-	var mini_part = main.town.part("minimap") if main.get("town") != null else null
-	if mini_part != null:
-		watch.append(mini_part.get("root"))
-	var bar = hud.get("bar")
-	if bar is Control:
-		for card in (bar as Control).get_children():
-			watch.append(card)
-	for ctl in watch:
+	for ctl in HudFree.controls(main, hud):    # (the HUD's boards: scripts/ui/hud_free.gd, the same list the pennants and the objective's arrow keep clear of)
 		if ctl is Control and (ctl as Control).is_visible_in_tree() and _obst_n < MAX_OBSTACLES:
 			var r := (ctl as Control).get_global_rect()
 			var k := _obst_n * 4
@@ -384,7 +371,23 @@ func _place(it: Item, index: int, p: Vector2, vp: Vector2) -> void:
 		_fit(it, q, vp)
 		if _free(it, index):
 			return
+	# (no free place along the edge, as in a small window with the boards close together: the chevron stays on the rim where it points, and the plate goes to the nearest free place on
+	# the screen, scripts/ui/hud_free.gd; with no such place either, where the arrow is, as it always was)
 	_fit(it, p, vp)
+	var blocked: Array = []
+	for k in _obst_n:
+		var j := k * 4
+		blocked.append(Rect2(_obst[j], _obst[j + 1], _obst[j + 2], _obst[j + 3]))
+	var others: Array = []
+	for i in index:
+		var other: Item = items[i]
+		if other.live:
+			others.append(other.box)
+	var spot := HudFree.nearest_free(it.plate, Rect2(Vector2(6.0, 6.0), vp - Vector2(12.0, 12.0)), blocked, others)
+	if spot != it.plate:
+		var r := (CHEV_SMALL if it.kind == KIND_SURVIVOR else CHEV) + 3.0
+		it.plate = spot
+		it.box = spot.merge(Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0)).grow(3.0)
 
 
 ## Where the chevron, the plate and the whole box of the item are with its chevron at `q`.

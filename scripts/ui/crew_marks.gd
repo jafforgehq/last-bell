@@ -10,8 +10,9 @@
 ##   refusing    an amber hand: they would not do what you asked last (the radio's `radio_line` said no, or `radio.willingness` of the last order says no now), in their words
 ##   searching   the scavenger's bag (CREW): they are on a search of a house, an order of the wheel's "Search a house" or the Scavenger job: "Searching 22 Elm St: 3 of 6. Back before the bell." (quiet, light grey)
 ##   at work     the icon of the station they are working at (the Duty roster's own): quiet, light grey
-## COLOUR-BLIND MARKERS (Settings, `Access.markers()`): the chip's colour is also a shape at its top right corner, by how bad it is (a diamond for danger, a triangle for a warning, a ring for
-## "stable"; none for a quiet state), and the card's thin health bar gets quarter notches and, under HURT_AT, a dashed fill, so that the state of a person never rests on red against green.
+## THE CHIP'S COLOUR IS ALSO A SHAPE, always (UI polish): at its top right corner, by how bad it is (a diamond for danger, a triangle for a warning, a ring for "stable"; none for a quiet state), next to
+## the glyph that says what it is. COLOUR-BLIND MARKERS (Settings, `Access.markers()`) add to the card's thin health bar quarter notches and, under HURT_AT, a dashed fill, so that the state of a person
+## never rests on red against green.
 ## The chip has a tooltip of one line in the game's voice. Under the chip's glyph the card's foot row (`hud.cards[i].marks`) no longer repeats it: `hud.mark_filter` (a Callable:
 ## `(person, marks) -> marks`) drops the marks the chip stands for and leaves the rest.
 ## THE RING is a thin gold line round the person's name on the card: the people of `wheel_ctl.last_order.who` (Z asks them again).
@@ -357,17 +358,15 @@ func _draw_chip(chip: Control) -> void:
 	chip.draw_arc(c, r - 0.8, 0.0, TAU, 24, Color(col, 0.95), 1.6, true)
 	if String(k.glyph) == "hand":
 		_draw_hand(chip, c, col)
-		if Access.markers():
-			_draw_badge(chip, k)
+		_draw_badge(chip, k)
 		return
 	var tex: Texture2D = hud.icons.get(String(k.icon))
 	if tex != null:
 		chip.draw_texture_rect(tex, Rect2(c - Vector2(GLYPH_PX, GLYPH_PX) * 0.5, Vector2(GLYPH_PX, GLYPH_PX)), false, col)
-	if Access.markers():
-		_draw_badge(chip, k)
+	_draw_badge(chip, k)    # (a shape for how bad it is, whatever the setting)
 
 
-## The shape of how bad a chip is, at its top right corner (Colour-blind markers): a diamond for danger, a triangle for a warning, a ring for fine-but-resting; none when quiet.
+## The shape of how bad a chip is, at its top right corner (always: the colour-blind setting only adds the health bar's pattern): a diamond for danger, a triangle for a warning, a ring for fine-but-resting; none when quiet.
 func _draw_badge(ci: CanvasItem, k: Dictionary) -> void:
 	var shape := badge_of(k)
 	if shape != "":

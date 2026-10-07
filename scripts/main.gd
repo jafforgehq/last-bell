@@ -450,7 +450,7 @@ func _ready() -> void:
 	world.add_child(air)
 
 	_lmark("fx_layers")
-	if town_card != null: await _card_gap(town_card, 0.72, "Waking the town")
+	if town_card != null: await TownBoot.warm(get_tree(), town_card, TownBoot.sim_scripts(), 0.7, 0.82, "Waking the town")    # (the rules' modules compile a few at a frame, not all in the one that makes the sim)
 	sim = TownBoot.sim(data, world, fx) if town_run else Sim.new(data, world, fx)
 	_lmark("sim")
 	sim.on_segment_change = func(s): world.set_segment_state(s.id, s.state)
@@ -551,6 +551,7 @@ func _ready() -> void:
 	for p in sim.people:
 		_add_person_pawn(p)
 	_lmark("trees")
+	if town_card != null: await _card_gap(town_card, 0.84, "Lighting the lamps")
 
 	for l in data.lights:
 		if l.get("fire", false):
@@ -642,7 +643,7 @@ func _ready() -> void:
 	hud_layer.layer = 3
 	add_child(hud_layer)
 	_lmark("glow_overlay")
-	if town_card != null: await _card_gap(town_card, 0.86, "Lighting the lamps")
+	if town_card != null: await TownBoot.warm(get_tree(), town_card, TownBoot.hud_work(data) + TownBoot.sound_work() + TownBoot.shader_work(town_card), 0.86, 0.9, "Lighting the lamps")    # (the HUD's pictures and frames, the sound files and the views' shaders, a few at a frame: `hud.setup` and `sound.setup` find them made and the first frames of play do not build shaders)
 	hud = Hud.new()
 	hud.on_select = func(sel): _try_select(sel)
 	hud.on_focus = func(p): _focus(Vector2(p.x, p.y))
@@ -696,6 +697,7 @@ func _ready() -> void:
 	fx.combat.set_melee(sim.avatar.melee_rules.cfg if sim.is_one_house() else {})    # (the town's swing: its trail, its freeze and its push; the school's blow feels as it did)
 	if town_card != null:
 		sound.set_process(false)
+		await _card_gap(town_card, 0.91, "Tuning the radio")    # (the sounds are loaded in the frame above, the music and the menus in the one below)
 	if parking_view != null:
 		parking_view.wire(fx, sound, _vol_at)    # the cars' dust and sounds (doors, engine, the gate's motor), by distance to the camera
 	# the real game keeps one music across the scene reloads of a new run, a load and the title; a test's or a
@@ -730,8 +732,8 @@ func _ready() -> void:
 	# the town's facade (scripts/town/town_game.gd): the view parts of a town run (roofs, the card of a survivor...), asked at the nine hooks below; null in every other game
 	if town_run:
 		town = TownGame.make(self)
-		if town_card != null: await _card_gap(town_card, 0.97, "Putting on the roofs")
-		town.on_ready(self)
+		if town_card != null: await _card_gap(town_card, 0.92, "Putting on the roofs")
+		await town.on_ready(self, town_card)    # (with a card: the view parts are made one or two a frame, each one's `on_ready` intact; without, all at once)
 	_lmark("town_parts")
 	# the coach of Orientation Day, over the HUD and under the menus (none once the lesson is over)
 	if tutorial and not bool(sim.scenario.get("finished")):
@@ -1903,7 +1905,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 				# the alarm: on a wall section that is picked, as ever; with an avatar it is the call to arms
 				if avatar and (selection == null or selection.kind != "segment"):
 					if _allows("alarm"):
-						sim.radio.alarm(not sim.radio.alarm_on)
+						var was_on: bool = bool(sim.radio.alarm_on)
+						sim.radio.alarm(not was_on)
+						if was_on and hud != null:
+							hud.toast("Stood down: back to work")    # (the toolbar's button says it too: hud.gd `_press_alarm`)
 				else:
 					_gizmo("lure")
 			KEY_B:
@@ -2056,7 +2061,8 @@ func _process(delta: float) -> void:
 func _warm_a_trip_script() -> void:
 	if _warm_done or clock < 3.0 or Engine.get_process_frames() % 45 != 0:
 		return
-	if shot_path != "" or DisplayServer.get_name() == "headless":
+	if shot_path != "" or DisplayServer.get_name() == "headless" or town != null or OS.has_feature("web"):
+		# (the town has no trips, and a browser build has no thread: "in the background" there is the frame itself, 340 to 400 ms of it, three seconds into the run)
 		_warm_done = true
 		return
 	if _warm_left.is_empty() and not _warm_started:

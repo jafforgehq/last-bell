@@ -8,7 +8,8 @@
 ## wheel, a right-click order, Y (the school's gate is off in the town) and B (the town has no Base page; its radio panel has Jobs, Build, Map and News).
 ##
 ## A row is {"keys": chips split at spaces ("|" between two chips reads "or"), "what": the words of the Controls page, "hud": [keys, words] for the narrow help panel, "aim": "" (always),
-## "right" (only with "Right button aims") or "always" (only with "Always aim at the mouse"), "legend": [line, id, key, words] for the first minute's legend (omitted: not in it)}.
+## "right" (only with "Right button aims") or "always" (only with "Always aim at the mouse"), "legend": [line, id, key, words] for the first minute's legend (omitted: not in it; the lines are "a",
+## "b" and "c": what the hands do, what the player reaches for, and the three keys of the day's own pace, build, run and wait)}.
 extends RefCounted
 
 const AimMode := preload("res://scripts/aim_mode.gd")
@@ -18,7 +19,7 @@ const GROUPS := [
 		"title": "Move and fight",
 		"rows": [
 			{"keys": "W A S D", "what": "Walk. The arrow keys do too", "hud": ["W A S D", "Walk"], "legend": ["a", "move", "WASD", "move"]},
-			{"keys": "X", "what": "Hold to run: faster for a few seconds, and the dead hear your feet", "hud": ["X", "Hold to run"]},
+			{"keys": "X", "what": "Hold to run: faster for a few seconds, and the dead hear your feet", "hud": ["X", "Hold to run"], "legend": ["c", "run", "X", "run"]},
 			{"keys": "Right-click", "what": "Hold to aim at the pointer. Shift aims too", "hud": ["Right-click", "Hold to aim"], "aim": "right", "legend": ["a", "aim", "Right-click", "aim"]},
 			{"keys": "Click", "what": "Fire, while you aim", "hud": ["Click", "Fire, aiming"], "aim": "right", "legend": ["a", "fire", "Click", "fire"]},
 			{"keys": "Mouse", "what": "Aim at the pointer; the left button fires", "hud": ["Mouse", "Aim and fire"], "aim": "always", "legend": ["a", "aim", "Mouse", "aim"]},
@@ -47,12 +48,12 @@ const GROUPS := [
 		"rows": [
 			{"keys": "T", "what": "The radio panel: the news, and the calls that wait", "hud": ["T", "Radio"], "legend": ["b", "radio", "T", "radio"]},
 			{"keys": "J", "what": "Jobs: who works where, by day and at night", "hud": ["J", "Jobs"]},
-			{"keys": "N", "what": "Build: what to fortify next", "hud": ["N", "Build"]},
+			{"keys": "N", "what": "Build: what to fortify next", "hud": ["N", "Build"], "legend": ["c", "build", "N", "build"]},
 			{"keys": "M | G", "what": "The map of the town", "hud": ["M", "Map"], "legend": ["b", "map", "M", "map"]},
 			{"keys": "L", "what": "The call to arms, and standing down again", "hud": ["L", "Call to arms"]},
 			{"keys": "V", "what": "Fields of fire: what the guns cover", "hud": ["V", "Fields of fire"]},
 			{"keys": "Space", "what": "Pause, and go on", "hud": ["Space", "Pause"]},
-			{"keys": ".", "what": "Wait until the bell: the day runs ahead, and stops if the dead come", "hud": [".", "Wait for the bell"]},
+			{"keys": ".", "what": "Wait until the bell: the day runs ahead, and stops if the dead come", "hud": [".", "Wait for the bell"], "legend": ["c", "wait", ".", "wait for the bell"]},
 			{"keys": "1 2 3", "what": "Normal speed, twice as fast, three times", "hud": ["1 2 3", "Speed"]},
 		],
 	},
