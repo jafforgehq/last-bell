@@ -3,7 +3,7 @@
 ##
 ## HOW. Two cheap things, and no per-sprite shader anywhere:
 ##  - the sky's CanvasModulate (scripts/render/lighting.gd) carries the AMBIENT table below instead of the old sky: about half of today's brightness at noon, cold grey-green-blue; dusk
-##    a dim amber murk; the night 15 to 20 percent of the light, blue (the lit pools are what is seen: scripts/render/dark_lights.gd). `lighting.dark`, which says when the lamps burn,
+##    a dim amber murk; the night about 23 percent of the light, a cold moonlight blue (the lit pools are what is seen, and the open street, the walls and the doors read as faint shapes: scripts/render/dark_lights.gd). `lighting.dark`, which says when the lamps burn,
 ##    still comes from the old table (`Lighting.SKY`), so that nothing that waits for the dusk waits for a different one;
 ##  - ONE full-screen pass (scripts/render/dark_grade.gdshader) on a CanvasLayer above the world and under the glow layer: the colour drained (35 percent by day), a cold tint, deeper
 ##    shadows, a vignette and a very light still film grain (off with Reduce motion), and the player's Brightness. It is the only extra pass of the whole look.
@@ -19,18 +19,18 @@ const SHADER := preload("res://scripts/render/dark_grade.gdshader")
 
 ## The ambient light by hour (what the sky's CanvasModulate says; keyframes as the old sky's, the same dawn and dusk).
 const AMBIENT := [
-	[0.0, Color(0.122, 0.140, 0.232)],
-	[4.8, Color(0.122, 0.140, 0.232)],
-	[5.6, Color(0.235, 0.215, 0.275)],
+	[0.0, Color(0.172, 0.198, 0.320)],
+	[4.8, Color(0.172, 0.198, 0.320)],
+	[5.6, Color(0.245, 0.228, 0.300)],
 	[6.4, Color(0.400, 0.400, 0.430)],
 	[7.2, Color(0.560, 0.610, 0.630)],
 	[17.6, Color(0.560, 0.600, 0.620)],
 	[18.4, Color(0.470, 0.400, 0.360)],
 	[19.0, Color(0.330, 0.260, 0.260)],
-	[19.6, Color(0.195, 0.170, 0.225)],
-	[20.3, Color(0.145, 0.150, 0.225)],
-	[21.0, Color(0.124, 0.142, 0.230)],
-	[24.0, Color(0.122, 0.140, 0.232)],
+	[19.6, Color(0.200, 0.180, 0.240)],
+	[20.3, Color(0.170, 0.178, 0.275)],
+	[21.0, Color(0.172, 0.198, 0.320)],
+	[24.0, Color(0.172, 0.198, 0.320)],
 ]
 ## What the grade does by day and by night (the shader's uniforms; the day's are the overcast).
 const DAY_DESAT := 0.36
@@ -43,14 +43,20 @@ const VIGNETTE := 0.55
 const VIGNETTE_FROM := 0.48
 const GRAIN := 0.022
 ## The ambient light of a room: this much of the street's by day, this much at night (the avatar's light, the lamps and the windows light it from there).
-const INDOOR_DAY := 0.76
+const INDOOR_DAY := 1.05
 const INDOOR_NIGHT := 0.9
 const INDOOR_FADE := 0.5
+## In a room the grade's deep-shadow gamma goes (to this): the floors and furniture are dark pictures and must read; the street keeps its deep shadows.
+const INDOOR_SHADOW := 1.0
 ## `extra_dim` at 1 leaves this much of the light, takes this much of the red and green off the sky, and takes this much of the lamps' reach.
 const DIM_LEFT := 0.58
+## At night the dark is dark enough already: a storm's `extra_dim` of 1 leaves this much of the moonlight (a night's rain must still be played in).
+const DIM_LEFT_NIGHT := 0.78
 const DIM_COLD := Color(0.88, 0.95, 1.04)
 const DIM_REACH := 0.14
 const DIM_RATE := 0.6
+## Below 100 percent the Brightness setting is this much softer in the dark of the night (0: as by day, 1: none): 70 percent at night is the grade of 85, so that the street still reads.
+const NIGHT_BRIGHT_SOFT := 0.5
 const BRIGHT_MIN := 0.7
 const BRIGHT_MAX := 1.3
 
@@ -115,7 +121,7 @@ func world_color(hour: float, night: float) -> Color:
 	if indoor > 0.001:
 		c = c * lerpf(1.0, lerpf(INDOOR_DAY, INDOOR_NIGHT, night), indoor)
 	if extra_dim > 0.001:
-		c = c * lerpf(1.0, DIM_LEFT, extra_dim) * Color(1, 1, 1).lerp(DIM_COLD, extra_dim)
+		c = c * lerpf(1.0, lerpf(DIM_LEFT, DIM_LEFT_NIGHT, night), extra_dim) * Color(1, 1, 1).lerp(DIM_COLD, extra_dim)
 	return Color(c.r, c.g, c.b, 1.0)
 
 
@@ -164,7 +170,7 @@ func _push(night: float, _t: float) -> void:
 	var tint := DAY_TINT.lerp(NIGHT_TINT, night)
 	if extra_dim > 0.001:
 		tint = tint * Color(1, 1, 1).lerp(Color(0.95, 0.99, 1.04), extra_dim)
-	var shadow := lerpf(DAY_SHADOW, NIGHT_SHADOW, night) + 0.05 * extra_dim
+	var shadow := lerpf(lerpf(DAY_SHADOW, NIGHT_SHADOW, night), INDOOR_SHADOW, indoor) + 0.05 * extra_dim
 	var vig := VIGNETTE + 0.08 * extra_dim
 	var grain := 0.0 if calm else GRAIN
 	if title:
@@ -174,6 +180,8 @@ func _push(night: float, _t: float) -> void:
 		vig = 0.38
 		grain = 0.0 if calm else GRAIN * 0.7
 	var b := current_brightness()
+	if b < 1.0:
+		b = lerpf(b, lerpf(b, 1.0, NIGHT_BRIGHT_SOFT), night)    # (a dim screen at night would take the moonlit ground with it: the low end of the slider is half as strong in the dark)
 	var now := {"desat": desat, "tint": Vector3(tint.r, tint.g, tint.b), "shadow": shadow, "vig": vig, "vig_from": VIGNETTE_FROM, "grain": grain, "bright": b}
 	for k in now:
 		if _last.get(k) != now[k]:

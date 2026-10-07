@@ -33,6 +33,8 @@ const SPLASH_LIFE := 0.55
 ## The ground meshes by group (TownArt.GROUNDS: lawn 0, asphalt 1, sidewalk 2, dirt path 3, gravel 4) and how much each shines.
 const PAVED := {0: 0.0, 1: 1.0, 2: 1.0, 3: 0.2, 4: 0.5}
 const INDOOR_FADE_S := 0.5
+## Indoors the rain keeps this share of its streaks (the yard is still in view through the open house: a storm seen from inside is still a storm; the splashes and the sound go as they did).
+const INDOOR_RAIN_LEFT := 0.35
 ## How fast the ground soaks and dries (a share a second) and how fast the light follows the rain.
 const WET_UP := 0.11
 const WET_DOWN := 0.018
@@ -257,7 +259,7 @@ func _frame(dt: float) -> void:
 
 ## The rain quad's numbers.
 func _update_rain(level: float, calm: bool, me) -> void:
-	intensity = pow(level, 0.8) * (1.0 - indoor)
+	intensity = pow(level, 0.8) * (1.0 - (1.0 - INDOOR_RAIN_LEFT) * indoor)
 	var on := intensity > 0.01 or _warming
 	if rain.visible != on:
 		rain.visible = on

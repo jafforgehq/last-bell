@@ -32,6 +32,10 @@ const SKY := [
 	[24.0, Color8(68, 76, 116)],
 ]
 const FLASH_POOL := 10
+## A muzzle flash's light: its peak energy, the share of it the first frame has and the frames it takes to climb to the peak (the avatar's own lantern dips with it: dark_lights.gd).
+const FLASH_ENERGY := 0.85
+const FLASH_FIRST := 0.45
+const FLASH_RAMP := 2.0
 ## A blackout multiplies the sky by this, a cooler and darker blue, as the power goes.
 const BLACKOUT_TINT := Color(0.70, 0.79, 0.97)
 ## The colour of the fog by day, and how fast it comes and goes (a share a second); the lights in a
@@ -91,6 +95,7 @@ var grade = null
 var seasons = null
 var lights: Array = [] # {def, node, scale}
 var flash_nodes: Array = []
+var _flash_age := PackedInt32Array()    # frames each flash light has been lit
 var flash_tex: Texture2D
 var dark := 0.0
 var lamp_level := 0.0
@@ -162,6 +167,7 @@ func setup(data: Dictionary, canvas_modulate: CanvasModulate) -> void:
 		f.visible = false
 		add_child(f)
 		flash_nodes.append(f)
+	_flash_age.resize(FLASH_POOL)
 	_build_veil()
 
 
@@ -298,10 +304,12 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 			var fl: Dictionary = flashes[i]
 			node.position = Vector2(fl.x, fl.y) * TILE
 			node.texture_scale = float(fl.r) * 2.0 * TILE / 64.0
-			node.energy = 1.0
+			node.energy = FLASH_ENERGY * minf(1.0, FLASH_FIRST + (1.0 - FLASH_FIRST) * _flash_age[i] / FLASH_RAMP)    # (the first frames climb: a white-out of the shooter is not a flash)
+			_flash_age[i] += 1
 			node.visible = true
 		else:
 			node.visible = false
+			_flash_age[i] = 0
 
 
 ## The fog and the power come and go over a second or two (at once under reduce motion).
