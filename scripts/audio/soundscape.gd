@@ -19,18 +19,24 @@
 ##                by day, a dog at dusk, a creak, the moan of the dead at night, a far gunshot with its echo. They come on timers drawn from
 ##                this node's own random generator, only when the game is running (not paused, not in a menu, not on the title).
 ##
+##   THE SOUND PASS (scripts/audio/foley.gd, life_sounds.gd, docs/audio-mix.md): footsteps by the ground under them (grass, dirt, gravel, pavement, a wood floor, tile, carpet; a run is a
+##                heavier foot) on the Steps bus, the dead's steps and growls and the idle groans, Ruth's grunt and breath, and the groans in more voices (a far one is a darker file): the
+##                voices on the Voices bus. The files are loaded the first time they are asked for.
+##
 ## It uses a random generator of its own and reads the rules (never writes them): the golden tests' promise is that sound changes nothing.
 extends Node
 
 const Buses := preload("res://scripts/audio/buses.gd")
 const Music := preload("res://scripts/audio/music.gd")
 const GD := preload("res://scripts/game_data.gd")
+const Foley := preload("res://scripts/audio/foley.gd")
+const LifeSounds := preload("res://scripts/audio/life_sounds.gd")
 
 const TILE := GD.TILE
 const DIR := "res://assets/audio/"
 ## The most positional voices at once (groans, the roar, steps, the gate, doors, the far sounds), and of those the most of one kind.
-const MAX_VOICES := 8
-const KIND_CAP := {"groan": 5, "roar": 1, "step": 3, "gate": 2, "door": 1, "far": 2}
+const MAX_VOICES := 12
+const KIND_CAP := {"groan": 5, "roar": 1, "step": 3, "zstep": 2, "growl": 2, "ruth": 2, "gate": 2, "door": 1, "far": 2}
 const BELL_VOICES := 4
 ## How often (seconds) the world is looked at (steps, doors, the beds that stand in a place, the timers).
 const TICK := 0.1
@@ -73,6 +79,8 @@ const INDOOR_WORDS := ["LINO", "TERRAZZO", "KITCHEN", "CARPET", "TILE", "PARQUET
 const GROAN_PITCH := {"walker": 1.0, "runner": 1.22, "brute": 0.8}
 ## How far (tiles) a groan, a step, the roar, a place's hum carry.
 const GROAN_REACH := 38.0
+## A groan from farther than this (tiles) is one of the dark "far" files.
+const FAR_GROAN_FROM := 16.0
 const STEP_REACH := 14.0
 const ROAR_REACH := 52.0
 const HUM_REACH := 11.0
@@ -100,6 +108,9 @@ var _rng := RandomNumberGenerator.new()
 var _t := 0.0
 var _acc := 0.0
 var _later: Array = []
+## The sounds of the living and the dead (scripts/audio/life_sounds.gd), and when a groan was last played (the idle groans keep out of the way of the rules' own).
+var life
+var last_groan_t := -100.0
 var _last_roar := -100.0
 var _last_groan := -1
 var _last_bell := -1
@@ -184,6 +195,7 @@ func setup(sound_node) -> void:
 			road_player = p
 	for key in ["crow", "dog", "creak", "moan", "shot"]:
 		_far_timer[key] = _rng.randf_range(10.0, 40.0)
+	life = LifeSounds.new(self)
 
 
 ## Gives it the game (main.gd, or a stand-in with sim, speed, menu_open, title_mode, cam_center and data).
@@ -194,6 +206,8 @@ func attach(g) -> void:
 	_radios.clear()
 	_surface_of.clear()
 	_indoor_ids.clear()
+	if life != null:
+		life.reset()
 	var data = g.get("data") if g != null else null
 	if data is Dictionary:
 		for o in data.get("objects", []):
@@ -264,6 +278,7 @@ func _pick(key: String, avoid := -1):
 ## Called every frame by Sound with the frame's real seconds: the scheduled sounds, and, ten times a second, the world.
 func update(dt: float) -> void:
 	_t += dt
+	_duck_tick(dt)
 	_engine_idle += dt
 	if _engine_idle > 0.4 and engine_player != null and engine_player.playing:
 		engine_stop()
@@ -297,6 +312,8 @@ func _tick(dt: float) -> void:
 		return
 	_step_clock += dt
 	_foot_tick(dt)
+	if life != null:
+		life.tick(dt)
 	_door_tick(dt)
 	_hum_tick()
 	if _running():
@@ -488,18 +505,48 @@ func groan(e: Dictionary, listener: Vector2) -> void:
 		return
 	if d > GROAN_REACH:
 		return
-	var list: Array = streams.get("groan", [])
+	groan_play(at, kind, stray, listener)
+
+
+## A groan from `at` (tiles) heard from `listener`, the voice the rules asked for or an idle one (life_sounds.gd): one of the old eight and the new eight when it is near, one of three
+## dark ones (lower, dull, in a room: baked) when it is farther than FAR_GROAN_FROM. A stray of the streets is quiet and low. True if a voice took it.
+func groan_play(at: Vector2, kind: String, stray: bool, listener: Vector2) -> bool:
+	var d := at.distance_to(listener)
+	if d > GROAN_REACH:
+		return false
+	var far := d > FAR_GROAN_FROM
+	var list: Array = pick_pool(far)
 	if list.is_empty():
-		return
+		return false
 	var i := _rng.randi() % list.size()
 	if i == _last_groan:
 		i = (i + 1) % list.size()
 	_last_groan = i
 	var pitch := float(GROAN_PITCH.get(kind, 1.0)) * _rng.randf_range(0.9, 1.12)
-	var vol := -3.0 + _rng.randf_range(-2.0, 0.0) - (7.0 if stray else 0.0)
+	var vol: float = float(Foley.LEVEL_DB["groan_far" if far else "groan_near"]) + _rng.randf_range(-2.0, 0.0) - (10.0 if stray else 0.0)    # (the Voices bus lifts all of it by 9 dB: a straggler is still 10 dB under the groan of one that is near)
 	if stray:
 		pitch *= 0.85
-	play_at("groan", list[i], at, listener, vol, pitch, -d, GROAN_REACH)
+	vol += float(Foley.OLD_GROAN_TRIM_DB.get(String(list[i].resource_path).get_file().get_basename(), 0.0))
+	if stray:
+		vol = minf(vol, -9.0)    # (whichever groan it is, a straggler's is never louder than -9 dB on its player)
+	if play_at("groan", list[i], at, listener, vol, pitch, -d, GROAN_REACH, Buses.category_bus(Buses.VOICES)):
+		last_groan_t = _t
+		return true
+	return false
+
+
+var _near_pool: Array = []
+
+
+## The streams a groan is made from: the far ones, or the old eight and the new eight.
+func pick_pool(far: bool) -> Array:
+	if far:
+		var f: Array = group("voice:zgroan_far")
+		if not f.is_empty():
+			return f
+	if _near_pool.is_empty():
+		_near_pool = (streams.get("groan", []) as Array) + group("voice:zgroan")
+	return _near_pool
 
 
 ## The plated brute's bellow, with its distance; the music dips under it. Not more than one every 2.5 s.
@@ -513,7 +560,7 @@ func roar(at: Vector2, listener: Vector2) -> void:
 	if d > ROAR_REACH:
 		return
 	_last_roar = _t
-	if play_at("roar", list[_rng.randi() % list.size()], at, listener, -1.0, _rng.randf_range(0.94, 1.06), 100.0 - d, ROAR_REACH, "SFX", 1.5):
+	if play_at("roar", list[_rng.randi() % list.size()], at, listener, float(Foley.LEVEL_DB["roar"]), _rng.randf_range(0.94, 1.06), 100.0 - d, ROAR_REACH, "SFX", 1.5):    # (SFX, not Voices: its file is -11.7 LUFS and it needs no lift)
 		_music_notify("brute")
 
 
@@ -549,11 +596,73 @@ func _gate_spot(which: String) -> Vector2:
 
 ## The surface under a place (tiles): "dirt", "concrete" or "wood" (a person on a raised deck is on wood). `person` may be null.
 func surface_at(x: float, y: float, person = null) -> String:
-	var sim = game.get("sim") if game != null else null
-	if person != null and sim != null and sim.get("levels") != null and sim.levels.has_method("on_deck") and sim.levels.on_deck(person):
+	if _on_deck(person):
 		return "wood"
 	var id := _terrain_id(x, y)
 	return String(_surface_of.get(id, "dirt")) if id >= 0 else "dirt"
+
+
+func _on_deck(person) -> bool:
+	var sim = game.get("sim") if game != null else null
+	return person != null and sim != null and sim.get("levels") != null and sim.levels.has_method("on_deck") and sim.levels.on_deck(person)
+
+
+## The ground under a place (tiles), one of Foley.GROUNDS: the town's own (the kit's ground group of the tile, one array look-up), or, in a game with no kit, what `surface_at` says in the new names.
+func ground_at(x: float, y: float, person = null) -> String:
+	if _on_deck(person):
+		return "wood"
+	var g := Foley.ground_at(game.get("world") if game != null else null, x, y)
+	return g if g != "" else Foley.ground_of_surface(surface_at(x, y, person))
+
+
+## Whether a shot fired at a place (tiles) is fired in a room: the town's rules know which house a place is in; a game without them goes by the floor (the kit's, or the terrain's names).
+func indoors_shot(at: Vector2) -> bool:
+	var sim = game.get("sim") if game != null else null
+	var houses = sim.get("houses") if sim != null else null
+	if houses != null and houses.has_method("house_at"):
+		return int(houses.house_at(at.x, at.y)) >= 0
+	var g := Foley.ground_at(game.get("world") if game != null else null, at.x, at.y)
+	return Foley.is_indoor(g) if g != "" else indoors_at(at.x, at.y)
+
+
+## The streams of a lazily loaded group (scripts/audio/foley.gd): loaded the first time they are asked for (nothing of the new sounds is loaded at start-up), [] when the files are not there.
+func group(key: String) -> Array:
+	if not streams.has(key):
+		streams[key] = Foley.load_group(key)
+	return streams[key]
+
+
+## One stream of a group (not the one before it, when there is more than one), or null.
+func pick_group(key: String):
+	var list: Array = group(key)
+	if list.is_empty():
+		return null
+	if list.size() == 1:
+		return list[0]
+	var last: int = int(_last_of.get(key, -1))
+	var i := _rng.randi() % list.size()
+	if i == last:
+		i = (i + 1) % list.size()
+	_last_of[key] = i
+	return list[i]
+
+
+var _last_of := {}
+var _amb_duck := 0.0
+
+
+## The ambience gives way a little to the loud things (the guns): the SFX bus's peak, a dip taken at once and let go over about half a second (Buses.ambience_duck_for). Every frame.
+func _duck_tick(dt: float) -> void:
+	var i := AudioServer.get_bus_index("SFX")
+	if i < 0:
+		return
+	var peak := maxf(AudioServer.get_bus_peak_volume_left_db(i, 0), AudioServer.get_bus_peak_volume_right_db(i, 0))
+	var want := Buses.ambience_duck_for(peak)
+	var k := 1.0 - exp(-dt / (0.04 if want < _amb_duck else 0.6))
+	_amb_duck = lerpf(_amb_duck, want, k)
+	if absf(_amb_duck) < 0.02 and want == 0.0:
+		_amb_duck = 0.0
+	Buses.set_duck("Ambience", _amb_duck)
 
 
 ## The terrain id under a place (tiles), or -1 where the game has no ground to ask.
@@ -611,17 +720,17 @@ func _foot_tick(dt: float) -> void:
 		_stride[id] = float(_stride[id]) - STRIDE
 		if made >= 2:
 			continue
-		var surface := surface_at(here.x, here.y, p)
-		var stream = _pick("step:%s" % surface)
+		# (the SOUND pass: seven grounds, and a run is a heavier foot of its own files, louder; the crew is quieter and, as every voice, put where it is, so that it fades with the distance;
+		# the rate is the stride's, which the pace makes faster by itself)
+		var running: bool = mine and float(p.get_meta("sprint_lean", 0.0)) > 0.5
+		var stream = pick_group(Foley.step_key(ground_at(here.x, here.y, p), running))
+		if stream == null:
+			stream = _pick("step:%s" % surface_at(here.x, here.y, p))    # (the school's: a checkout whose new files are not imported)
 		if stream == null:
 			continue
-		var vol := (-1.0 if mine else -8.0) + _rng.randf_range(-1.5, 1.0)
-		var pitch := _rng.randf_range(0.93, 1.07)
-		if mine and float(p.get_meta("sprint_lean", 0.0)) > 0.5:
-			# (PACE: a run is a harder, quicker footfall: the same steps, a little louder and higher; the rate is the stride's, which the pace makes faster by itself)
-			vol += 2.5
-			pitch *= 1.12
-		if play_at("step", stream, here, cam, vol, pitch, (10.0 if mine else 0.0) - here.distance_to(cam), STEP_REACH):
+		var vol: float = float(Foley.LEVEL_DB["step_run" if running else ("step_ruth" if mine else "step_crew")]) + _rng.randf_range(-1.5, 1.0)
+		var pitch := _rng.randf_range(0.94, 1.06)
+		if play_at("step", stream, here, cam, vol, pitch, (10.0 if mine else 0.0) - here.distance_to(cam), STEP_REACH, Buses.category_bus(Buses.STEPS)):
 			made += 1
 
 

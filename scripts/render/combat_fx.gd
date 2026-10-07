@@ -644,6 +644,8 @@ func kill(z, ang: float, melee: bool, shooter) -> void:
 	# where it comes down, a moment later: the dust of the body and its thud
 	if _later.size() < MAX_LATER:
 		_later.append({"at": t + 0.30, "what": "land", "x": float(z.x) + dir.x * mag * 0.8, "y": float(z.y) + 0.12})
+	if melee:
+		_say("melee_kill", Vector2(float(z.x), float(z.y)), 0.8, 0.05, 1.0, 0.05)    # (the SOUND pass: a wetter blow laid on the thud of the hit)
 	if melee and shooter != null and bool(shooter.player) and not melee_cfg.is_empty():
 		_melee_impact(dir, true)    # (the town's blow: its own, longer, freeze and its push, whatever the gap since the last)
 	elif shooter != null and bool(shooter.player) and not calm and _hitstop_gap <= 0.0:
@@ -819,6 +821,8 @@ func shot_sound(e: Dictionary) -> void:
 	var name := "shot_%s" % (gun if gun != "" else String(e.weapon))
 	if not sound.streams.has(name) or sound.streams[name].is_empty():
 		name = "shot_%s" % String(e.weapon)
+	if sound.get("gunfight") != null and sound.gunfight.shot(e, listener):
+		return    # (the SOUND pass: the pump gun's blast, in a room or in the open: scripts/audio/fight_sounds.gd)
 	var at := Vector2(float(e.x), float(e.y))
 	var vol := clampf(1.0 - at.distance_to(listener) / 50.0, 0.12, 1.0) * 0.8 * _rand_range(0.9, 1.0)
 	sound.play(name, vol, 0.045)

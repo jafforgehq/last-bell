@@ -15,6 +15,8 @@ extends Node
 const Buses := preload("res://scripts/audio/buses.gd")
 const Soundscape := preload("res://scripts/audio/soundscape.gd")
 const CombatSounds := preload("res://scripts/audio/combat_sounds.gd")
+const Foley := preload("res://scripts/audio/foley.gd")
+const FightSounds := preload("res://scripts/audio/fight_sounds.gd")
 
 const POOL := 24
 ## The menu sounds have a small pool of their own, so a burst of clicks never takes a
@@ -67,6 +69,8 @@ var moan_level := 0.0
 var wind_level := 0.8
 ## The soundscape (scripts/audio/soundscape.gd).
 var scape: Node
+## The pump gun's blast and the blow's weight (scripts/audio/fight_sounds.gd; combat_fx.gd asks it).
+var gunfight
 var _hover_ms := 0
 
 
@@ -92,6 +96,17 @@ func setup(sounds: Dictionary) -> void:
 	for name in fight:
 		if not streams.has(name):
 			streams[name] = _load_list(fight[name])
+	# the SOUND pass (scripts/audio/foley.gd): the pump gun's blast in the open and in a room, the wet blow of a kill, and a better take of five sounds the game already
+	# names (the empty gun's click, a shell into the tube, the pump's rack, a blow in the air, a blow that lands): the old files stay for the school and the tests
+	for pair in [["blast_out", "gun:out"], ["blast_in", "gun:in"], ["melee_kill", "melee:kill"]]:
+		var made: Array = Foley.load_group(String(pair[1]))
+		if not made.is_empty():
+			streams[String(pair[0])] = made
+	for old in Foley.OVERRIDES:
+		var better: Array = Foley.load_group(String(Foley.OVERRIDES[old]))
+		if not better.is_empty():
+			streams[String(old)] = better
+	gunfight = FightSounds.new(self)
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"
@@ -195,7 +210,7 @@ func set_ambience(night: float, horde: float, dt: float) -> void:
 		crickets.volume_db = linear_to_db(maxf(cricket_level, 0.0001))
 		_keep_playing(crickets, cricket_level)
 	if moan != null:
-		moan.volume_db = linear_to_db(maxf(moan_level, 0.0001))
+		moan.volume_db = linear_to_db(maxf(moan_level, 0.0001)) + float(Foley.LEVEL_DB["moan"])    # (the SOUND pass: the horde at full was as loud as a groan three tiles away)
 		_keep_playing(moan, moan_level)
 	if scape != null:
 		scape.beds_set(night, horde, dt)

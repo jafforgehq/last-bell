@@ -22,6 +22,7 @@ extends RefCounted
 const Access := preload("res://scripts/access.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
+const Foley := preload("res://scripts/audio/foley.gd")
 const WeatherGlyph := preload("res://scripts/ui/weather_glyph.gd")
 const RAIN_SHADER := preload("res://scripts/render/rain.gdshader")
 const WET_SHADER := preload("res://scripts/render/wet_ground.gdshader")
@@ -90,6 +91,8 @@ var _flash_frame := -1
 var _flash_age := 0.0
 var _thunder: Array = []
 var _th_shot: AudioStreamPlayer
+## The thunders loaded so far (scripts/audio/foley.gd: key -> streams), on the first strike of each kind.
+var _thunders := {}
 var _th_thud: AudioStreamPlayer
 var _glyph_t := 0.0
 var _last_muffle := -1.0
@@ -467,6 +470,20 @@ func strike() -> void:
 
 
 func _boom(far: float) -> void:
+	# (the SOUND pass: a thunder of its own, near, mid or far by the strike's distance, on the Rain bus, so that a roof muffles it as it does the rain; the far gunshot and the thud below are the fallback when the files are not there)
+	var key := Foley.thunder_key(far)
+	if not _thunders.has(key):
+		_thunders[key] = Foley.load_group(key)
+	var list: Array = _thunders[key]
+	if not list.is_empty() and _th_shot != null:
+		_th_shot.bus = Buses.rain_bus()
+		_th_shot.stream = list[_rng.randi() % list.size()]
+		_th_shot.pitch_scale = _rng.randf_range(0.96, 1.04)
+		_th_shot.volume_db = Foley.thunder_db(far, indoor)
+		_th_shot.play()
+		if _cost:
+			print("RAIN thunder: far %.2f, %s, volume %.1f dB, bus %s" % [far, key, _th_shot.volume_db, _th_shot.bus])
+		return
 	var vol := -1.0 - 9.0 * far - 5.0 * indoor
 	if _cost:
 		print("RAIN thunder: far %.2f, volume %.1f dB, shot %s, thud %s, bus %s" % [far, vol, _th_shot.stream != null, _th_thud.stream != null, _th_shot.bus])
