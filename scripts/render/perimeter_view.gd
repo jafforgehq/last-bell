@@ -22,6 +22,7 @@
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 const TownArt := preload("res://scripts/town/town_art.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
 const Lighting := preload("res://scripts/render/lighting.gd")
@@ -34,6 +35,9 @@ const PX := 0.5
 const EVERY := 0.25
 ## How many of the cells of a section that is under 66% show damage.
 const WEAR_PCT := 45
+## FEEL: how long a new section, tower or floodlight takes to come up, and how far (a share of its height) a thing that is going up is shown while the work is half done.
+const RISE_S := 0.42
+const SCAFFOLD_MIN := 0.32
 const SHAKE_S := 0.26
 const SHAKE_PX := 3.4
 const FLASH_S := 0.55
@@ -94,6 +98,12 @@ var _sec_ops := {}
 var _fx := {}
 var _last_hit := {}
 var _seen := {}
+## FEEL: what each slot was at the last look (to see one become built), the floodlights that are coming up (id -> seconds), and the calm flag.
+var _slot_seen := {}
+var _rise_flood := {}
+var _scan_n := 0
+var _calm_at := -10.0
+var _calm_now := false
 var _atlas_cache := {}
 var _tex_cache := {}
 var _puffs: Array = []
@@ -225,6 +235,9 @@ func _forget() -> void:
 	_slots = []
 	_fx = {}
 	_seen = {}
+	_slot_seen = {}
+	_rise_flood = {}
+	_scan_n = 0
 	_puffs = []
 	for id in _flood.keys():
 		_drop_flood(id)
@@ -263,10 +276,12 @@ func _scan() -> void:
 		if sl.state == "building" or sl.state == "ordered" or String(sl.up) != "":
 			share = sim.build.progress_of(String(sl.plot))
 		sig.append([String(sl.id), String(sl.state), String(sl.kit), int(share * 24.0), String(sl.up)])
+		_note_slot(sl)
 	var h := hash(sig)
 	if h != _sig or hash(_fx.keys()) != _fx_sig:
 		_sig = h
 		_rebuild()
+	_scan_n += 1
 	_marks.queue_redraw()
 
 
@@ -308,7 +323,8 @@ func _stress_sections(n: int) -> Array:
 	return out
 
 
-## A section whose state got better was mended, a new one was finished: it flashes. (Sections seen for the first time at a load do not.)
+## A section whose state got better was mended, a new one was finished: it flashes. (Sections seen for the first time at a load do not.) FEEL: a new one is not a flash but a rise, over
+## RISE_S: it comes up from the ground a piece at a time, along the section, with a little dust.
 func _note_state(s: Dictionary) -> void:
 	var id := int(s.id)
 	var now := int(s.state)
@@ -317,9 +333,39 @@ func _note_state(s: Dictionary) -> void:
 		if now < was and not _fx.has(id):
 			_fx[id] = {"kind": "flash", "t": 0.0, "dur": FLASH_S}
 			_puff(_center_of(s.rect), 3, String(s.kit) != "fence_strong")
-	elif not _seen.is_empty() and now == 0 and _clock > 1.0:
-		_fx[id] = {"kind": "flash", "t": 0.0, "dur": FLASH_S}
+	elif _scan_n > 0 and now == 0 and _clock > 1.0:
+		if _calm():
+			_fx[id] = {"kind": "flash", "t": 0.0, "dur": FLASH_S}
+		else:
+			_fx[id] = {"kind": "rise", "t": 0.0, "dur": RISE_S, "at": _center_of(s.rect), "wood": String(s.kit) != "fence_strong", "dust": 0, "n": maxi(1, int(Rect2i(s.rect).size.x * Rect2i(s.rect).size.y))}
+			_puff(_center_of(s.rect), 2, String(s.kit) != "fence_strong", 0.2)
 	_seen[id] = now
+
+
+## FEEL: a slot (a tower, a floodlight) that has just become built rises as a section does. (A slot seen at a load does not.)
+func _note_slot(sl: Dictionary) -> void:
+	var id := String(sl.id)
+	var now := String(sl.state)
+	var was: String = _slot_seen.get(id, "")
+	if _scan_n > 0 and was != "" and was != "built" and now == "built" and _clock > 1.0:
+		var kind := String(sl.kind)
+		if kind == "tower" or kind == "floodlight":
+			var at := _center_of(Rect2i(sl.rect))
+			if not _calm():
+				if kind == "tower":
+					_fx["slot:" + id] = {"kind": "rise", "t": 0.0, "dur": RISE_S + 0.1, "at": at, "wood": true, "dust": 0, "n": 3}
+				else:
+					_rise_flood[id] = 0.0
+				_puff(at, 2, true, 0.25)
+	_slot_seen[id] = now
+
+
+## Whether the player asked for less motion (looked up now and then).
+func _calm() -> bool:
+	if _clock - _calm_at > 0.5 or _clock < _calm_at:
+		_calm_at = _clock
+		_calm_now = Prefs.on("ui", "reduce_motion")
+	return _calm_now
 
 
 # --------------------------------------------------------------------- the ops --
@@ -406,7 +452,11 @@ func _rebuild() -> void:
 		match String(sl.state):
 			"built":
 				if String(sl.kind) == "tower":
-					_ops.append_array(_tower_ops(sl, 1.0, 0))
+					var tops := _tower_ops(sl, 1.0, 0)
+					var tid := "slot:" + String(sl.id)
+					_sec_ops[tid] = tops
+					if not _fx.has(tid):
+						_ops.append_array(tops)
 			"ordered", "building":
 				_ops.append_array(_ghost_ops(sl, occ))
 	_ops.sort_custom(func(a, b): return a[0] < b[0] or (a[0] == b[0] and String(a[5]) < String(b[5])))
@@ -612,19 +662,20 @@ func _ghost_ops(sl: Dictionary, occ: Dictionary) -> Array:
 					tint = ghost.lerp(Color(1, 1, 1, 0.96), done - float(i))
 				out.append(_fence_cell(t, FENCE_ITEMS[kit] + "_built", _mask(t, own), tint, O_GHOST, kit, along_x))
 		"gate":
-			out.append(_gate_piece(rect, _side_of(sl), false, 0, ghost.lerp(Color(1, 1, 1, 0.9), share), O_GHOST))
+			# (FEEL: a gate, a tower and a floodlight going up are shown built from the ground to the height the work has reached, as well as more solid as it goes)
+			out.append(_rise_op(_gate_piece(rect, _side_of(sl), false, 0, ghost.lerp(Color(1, 1, 1, 0.9), share), O_GHOST), lerpf(SCAFFOLD_MIN, 1.0, share)))
 		"tower":
 			var tw := _tower_ops(sl, 0.0, 0)
 			for o in tw:
 				o[4] = ghost.lerp(Color(1, 1, 1, 0.9), share)
 				o[0] = O_GHOST
-			out.append_array(tw)
+				out.append(_rise_op(o, lerpf(SCAFFOLD_MIN, 1.0, share)))
 		"floodlight":
 			var d := TownArt.piece("floodlight", "", "", 0)
 			var tex := _tex(d)
 			if tex != null:
 				var tint := ghost.lerp(Color(1, 1, 1, 0.9), share)
-				out.append(_op(O_GHOST, tex, Rect2((Vector2(rect.position) - Vector2(d.anchor)) * TILE, Rect2(d.rect).size * PX), d.rect, tint, String(d.file)))
+				out.append(_rise_op(_op(O_GHOST, tex, Rect2((Vector2(rect.position) - Vector2(d.anchor)) * TILE, Rect2(d.rect).size * PX), d.rect, tint, String(d.file)), lerpf(SCAFFOLD_MIN, 1.0, share)))
 		"door":
 			var orient := _orient(_side_of(sl))
 			var kit_item := "door_reinforce" if TownArt.has_item("door_reinforce") else "barricade_window"
@@ -632,6 +683,21 @@ func _ghost_ops(sl: Dictionary, occ: Dictionary) -> Array:
 			for d in _door_tiles(sl):
 				out.append(_plank_cell(d, orient, 0, kit_item, tint, O_GHOST))
 	return out
+
+
+## FEEL: a draw command shown from its foot up to the share `k` of its height (the picture is cut, not squashed): a thing that is going up. A picture drawn upside down (a gate in a north
+## side) or flat is left as it is.
+static func _rise_op(op: Array, k: float) -> Array:
+	var dst: Rect2 = op[2]
+	if k >= 0.999 or dst.size.y <= 0.0:
+		return op
+	var kk := maxf(k, 0.02)
+	var o := op.duplicate()
+	o[2] = Rect2(dst.position.x, dst.end.y - dst.size.y * kk, dst.size.x, dst.size.y * kk)
+	if op[1] != null:
+		var src: Rect2 = op[3]
+		o[3] = Rect2(src.position.x, src.end.y - src.size.y * kk, src.size.x, src.size.y * kk)
+	return o
 
 
 ## The tiles of the door a door slot is on (the section the module made for it).
@@ -674,6 +740,8 @@ func _make_flood(sl: Dictionary) -> void:
 		s.scale = Vector2(PX, PX)
 		s.position = (foot + Vector2(0.5, 0.82)) * TILE
 		s.offset = ((foot - Vector2(d.anchor)) * TILE - s.position) / PX
+		if _rise_flood.has(String(sl.id)):
+			s.scale = Vector2(PX, PX * 0.02)    # (FEEL: a new pole comes up from its foot: `_tick_rise`)
 		stand_in.add_child(s)
 		entry.sprite = s
 	var light := PointLight2D.new()
@@ -778,18 +846,38 @@ static func _gap(r: Rect2, p: Vector2) -> float:
 
 
 ## A little dust (a few soft puffs of this node's own, over the people) and, for the wooden kits, wood chips through the fx module.
-func _puff(at: Vector2, n: int, wood: bool) -> void:
+func _puff(at: Vector2, n: int, wood: bool, chips: float = 0.6) -> void:
 	for i in n:
 		if _puffs.size() >= MAX_PUFFS:
 			_puffs.pop_front()
 		_puffs.append([at + Vector2(randf() - 0.5, randf() - 0.5) * 0.45, 0.0, 0.45 + randf() * 0.3, 0.10 + randf() * 0.07])
 	_dust.queue_redraw()
 	var f = sim.get("fx") if sim != null else null
-	if f != null and wood and randf() < 0.6:
+	if f != null and wood and randf() < chips:
 		f.hit_material(at.x, at.y, "wood")
 
 
+## FEEL: a floodlight pole that has just been built comes up from its foot over RISE_S + 0.1.
+func _tick_rise(dt: float) -> void:
+	if _rise_flood.is_empty():
+		return
+	var done: Array = []
+	for id in _rise_flood:
+		_rise_flood[id] += dt
+		var u := clampf(float(_rise_flood[id]) / (RISE_S + 0.1), 0.0, 1.0)
+		var entry: Dictionary = _flood.get(id, {})
+		var s = entry.get("sprite")
+		if s != null and is_instance_valid(s):
+			var e := 1.0 - pow(1.0 - u, 3.0)
+			s.scale = Vector2(PX, PX * maxf(e, 0.02))
+		if u >= 1.0:
+			done.append(id)
+	for id in done:
+		_rise_flood.erase(id)
+
+
 func _tick_fx(dt: float) -> void:
+	_tick_rise(dt)
 	if not _puffs.is_empty():
 		var kept: Array = []
 		for p in _puffs:
@@ -837,6 +925,9 @@ func _paint_dyn(ci) -> void:
 		var k: float = 1.0 - float(f.t) / float(f.dur)
 		var off := Vector2.ZERO
 		var flash := 0.0
+		if f.kind == "rise":
+			_paint_rise(ci, id, f)
+			continue
 		if f.kind == "shake":
 			off = Vector2(sin(_clock * 83.0), sin(_clock * 61.0 + 1.3) * 0.55) * SHAKE_PX * k
 		else:
@@ -852,6 +943,44 @@ func _paint_dyn(ci) -> void:
 			for op in _sec_ops.get(id, []):
 				if op[1] != null:
 					ci.draw_texture_rect_region(op[1], op[2], op[3], Color(1, 1, 1, flash))
+
+
+## FEEL: a new section coming up: each piece of it (the commands of the section, in the order they were made, which runs along it) is cut from its foot up to the height it has reached;
+## the pieces start one after the other, the last at 40 percent of the time, and come up on an ease-out with a tiny overshoot, so that a fence assembles along its length. A flat colour
+## (a picture the kit does not have) is cut the same. A white wash flickers over the whole at the end, as it did for any new section.
+func _paint_rise(ci, id, f: Dictionary) -> void:
+	var u: float = clampf(float(f.t) / float(f.dur), 0.0, 1.0)
+	var ops: Array = _sec_ops.get(id, [])
+	var n := ops.size()
+	for i in n:
+		var op: Array = ops[i]
+		var start := 0.4 * float(i) / float(maxi(1, n - 1)) if n > 1 else 0.0
+		var v := clampf((u - start) / (1.0 - 0.4), 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - v, 3.0)
+		e *= 1.0 + 0.05 * sin(v * PI)    # (a hair of overshoot)
+		var o := _rise_op(op, minf(e, 1.0)) if e < 0.999 else op
+		var dst: Rect2 = o[2]
+		if e > 1.0:
+			dst = dst.grow_individual(0.0, dst.size.y * (e - 1.0) * 0.6, 0.0, 0.0)
+		if v <= 0.0:
+			continue
+		var tint: Color = o[4]
+		tint.a *= minf(1.0, v * 8.0)
+		if o[1] == null:
+			ci.draw_rect(dst, tint)
+		else:
+			ci.draw_texture_rect_region(o[1], dst, o[3], tint)
+	# (the dust of the last pieces landing)
+	if not bool(f.get("landed", false)) and u > 0.62:
+		f["landed"] = true
+		_puff(f.at, 2, bool(f.wood), 0.2)
+	var wash := 0.0
+	if u > 0.7:
+		wash = 0.35 * (1.0 - (u - 0.7) / 0.3)
+	if wash > 0.01:
+		for op in ops:
+			if op[1] != null:
+				ci.draw_texture_rect_region(op[1], op[2], op[3], Color(1, 1, 1, wash))
 
 
 ## The dust of the hits: soft warm puffs that swell and thin out as they rise a little.

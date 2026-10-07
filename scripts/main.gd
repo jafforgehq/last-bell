@@ -700,6 +700,11 @@ func _ready() -> void:
 	fx.combat.seen_cb = _combat_sees    # (what is under a roof or in a room that is not shown has no flash and no blood)
 	sim.feel = fx.combat
 	fx.combat.set_melee(sim.avatar.melee_rules.cfg if sim.is_one_house() else {})    # (the town's swing: its trail, its freeze and its push; the school's blow feels as it did)
+	if sim.is_one_house() and not title_mode:
+		# (FEEL: the town's footstep dust, its splashes in rain and the blood that stays; the rain's `wet` is looked up when a foot lands)
+		fx.combat.set_town(world, data, func() -> float:
+			var rv = town.part("rain_view") if town != null else null
+			return float(rv.wet) if rv != null else 0.0)
 	if town_card != null:
 		sound.set_process(false)
 		await _card_gap(town_card, 0.91, "Tuning the radio")    # (the sounds are loaded in the frame above, the music and the menus in the one below)

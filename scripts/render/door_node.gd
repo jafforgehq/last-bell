@@ -10,6 +10,7 @@ extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
 const TownArt := preload("res://scripts/town/town_art.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 
 const TILE := GD.TILE
 const SWING_S := 0.18
@@ -128,8 +129,79 @@ func _draw_art() -> void:
 	for i in _tiles.size():
 		var origin := (Vector2(_tiles[i]) - rect_t.position) * TILE
 		var rect := Rect2(origin, Vector2(TILE, TILE))
-		# the kit's pictures are whole cells (floor and frame included): the open one fades in over the shut one
-		if open_t < 1.0:
+		# the kit's pictures are whole cells (floor and frame included). FEEL: while it swings, the leaf is cut out of the shut picture and turned about its hinge (see `_draw_swing`), and the open
+		# picture takes over in the last fifth of the swing; a picture whose leaf this file has no measure for fades from the shut one to the open one, as it did.
+		if open_t >= 1.0:
+			TownArt.draw(self, _art_open[i], rect)
+		elif open_t <= 0.0:
 			TownArt.draw(self, _art_closed[i], rect)
-		if open_t > 0.0:
+		elif not _draw_swing(i, rect):
+			TownArt.draw(self, _art_closed[i], rect)
 			TownArt.draw(self, _art_open[i], rect, Color(1, 1, 1, open_t))
+
+
+## FEEL: where the leaf is in the kit's door pictures (128 px cells): the ink-bounded slab, as pixels x0, y0, x1, y1 (inclusive) for each side the outside is on. Measured on the pictures
+## (the same in every variant of a kit door).
+const LEAF_PX := {
+	"front": {"s": [16, 46, 111, 102], "n": [16, 25, 111, 81], "w": [25, 16, 81, 111], "e": [46, 16, 102, 111]},
+	"interior": {"s": [14, 42, 113, 85], "n": [14, 42, 113, 85], "w": [42, 14, 85, 113], "e": [42, 14, 85, 113]},
+}
+## Which end of the leaf is hinged (true: the high one, the right or bottom), for a variant of even and of odd number, and how far a leaf swings in the pictures (about 72 degrees).
+const HINGE_HI := {
+	"front": {"s": [false, true], "n": [true, false], "w": [false, true], "e": [true, false]},
+	"interior": {"s": [false, true], "n": [true, false], "w": [true, false], "e": [true, false]},
+}
+## The way the leaf swings (into the house, which is where the pictures have it), by the side the outside is on.
+const SWING_DIR := {"s": Vector2(0.0, -1.0), "n": Vector2(0.0, 1.0), "w": Vector2(1.0, 0.0), "e": Vector2(-1.0, 0.0)}
+const OPEN_DEG := 72.0
+const LEAF_PAD := Vector2i(-2, -2)
+
+
+## One cell of the door mid-swing: the shut picture without its leaf, the leaf turned about its hinge by how far the swing has gone, and the open picture fading in over the last fifth. False when
+## this kit door has no measure (the caller then fades).
+func _draw_swing(i: int, rect: Rect2) -> bool:
+	var closed: Dictionary = _art_closed[i]
+	var kind := "front" if exterior else "interior"
+	if Prefs.on("ui", "reduce_motion"):
+		return false    # (Reduce motion: the two pictures fade, as they did)
+	if not LEAF_PX.has(kind) or not LEAF_PX[kind].has(_facing) or String(closed.get("file", "")) == "":
+		return false
+	var tex := TownArt.texture(closed)
+	if tex == null or closed.get("rect") == null:
+		return false
+	var src: Rect2 = closed.rect
+	var lp: Array = LEAF_PX[kind][_facing]
+	# (the leaf's box with its outline: a pixel and a half either side)
+	var leaf := Rect2(Vector2(lp[0] + LEAF_PAD.x, lp[1] + LEAF_PAD.y), Vector2(lp[2] - lp[0] + 1 - 2 * LEAF_PAD.x, lp[3] - lp[1] + 1 - 2 * LEAF_PAD.y))
+	var k := rect.size.x / src.size.x
+	var odd := (_variant + i) % 2
+	var hinge_hi: bool = (HINGE_HI[kind][_facing] as Array)[odd]
+	var horizontal := _facing == "s" or _facing == "n"
+	var sw: Vector2 = SWING_DIR[_facing]
+	# the pivot: the corner of the leaf at its hinged end, on the side the leaf swings away from
+	var px := leaf.end.x if (horizontal and hinge_hi) else leaf.position.x
+	var py := leaf.position.y
+	if horizontal:
+		py = leaf.end.y if sw.y < 0.0 else leaf.position.y
+	else:
+		px = leaf.end.x if sw.x < 0.0 else leaf.position.x
+		py = leaf.end.y if hinge_hi else leaf.position.y
+	var axis := Vector2(-1.0 if hinge_hi else 1.0, 0.0) if horizontal else Vector2(0.0, -1.0 if hinge_hi else 1.0)
+	var turn := signf(axis.x * sw.y - axis.y * sw.x)
+	var e := 1.0 - pow(1.0 - clampf(open_t, 0.0, 1.0), 2.0)    # (it starts fast and eases on to the stop, whichever way it goes)
+	var angle := deg_to_rad(OPEN_DEG) * turn * e
+	var open_a := clampf((open_t - 0.72) / 0.24, 0.0, 1.0)
+	# the shut picture with a hole where the leaf was
+	var cell := Rect2(Vector2.ZERO, src.size)
+	for part in [Rect2(0, 0, cell.size.x, leaf.position.y), Rect2(0, leaf.end.y, cell.size.x, cell.size.y - leaf.end.y), Rect2(0, leaf.position.y, leaf.position.x, leaf.size.y), Rect2(leaf.end.x, leaf.position.y, cell.size.x - leaf.end.x, leaf.size.y)]:
+		var pr: Rect2 = part
+		if pr.size.x > 0.0 and pr.size.y > 0.0:
+			draw_texture_rect_region(tex, Rect2(rect.position + pr.position * k, pr.size * k), Rect2(src.position + pr.position, pr.size))
+	# the leaf, turned about the pivot (and grown thinner as it goes: the open pictures draw it as a bar, about six tenths as thick as the shut slab)
+	var thin := lerpf(1.0, 0.62, e)
+	draw_set_transform(rect.position + Vector2(px, py) * k, angle, Vector2(1.0, thin) if horizontal else Vector2(thin, 1.0))
+	draw_texture_rect_region(tex, Rect2((leaf.position - Vector2(px, py)) * k, leaf.size * k), Rect2(src.position + leaf.position, leaf.size), Color(1, 1, 1, 1.0 - open_a))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if open_a > 0.0:
+		TownArt.draw(self, _art_open[i], rect, Color(1, 1, 1, open_a))
+	return true
