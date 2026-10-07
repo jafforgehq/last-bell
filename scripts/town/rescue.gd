@@ -6,7 +6,7 @@
 ## and its state goes `hiding` (the room has not been opened) -> `wary` (it has: the survivor is drawn, weapon lowered, and E talks) -> `spoken` (the card has been
 ## shown) -> `joined` (they said yes). `lost` exists for later (`lost_after_days` in the data, 0 = never). Nobody is lost before the fourth in the demo.
 ##
-## The card (`talk`, `choose`): while a dead one is still in the survivor's room they say so and offer nothing ("Get them out first"). Otherwise: Come with me
+## The card (`talk`, `choose`): while a dead one is still in the survivor's room they say so and offer nothing ("Put down the dead in this room first"). Otherwise: Come with me
 ## (needs the claimed base and a free bed: `recruits.housing_free()`), Stay here, I will come back, and Take this (a food or a round: a little trust, once).
 ## "Come" sends them ahead on their own: they appear at the base's front spot after `distance x 0.4` game minutes (at least 3), and only then are they a Person of
 ## the crew (`sim.add_person`, saved through `recruits.arrived`, a pack from the data, a seat by `jobs.fill_empty`, a first radio line, the News, the events

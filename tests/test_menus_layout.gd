@@ -158,7 +158,7 @@ func test_settings_fits_the_smallest_window_without_scrolling() -> void:
 	await HudKit.settle()
 	check(screen.body.get_combined_minimum_size().y <= screen.scroll.size.y + 0.5, "nothing to scroll in 700x560 (%.0f of %.0f)" % [screen.body.get_combined_minimum_size().y, screen.scroll.size.y])
 	Fakes.free_all(small)
-	var tall := Fakes.build(1280, 800)
+	var tall := Fakes.build(1920, 1080)    # (SPACIOUS_H: from 1000 px up; the 800 px window has its rows a little closer so the Accessibility rows fit)
 	screen = tall.shell.open_settings()
 	await HudKit.settle()
 	await HudKit.settle()

@@ -139,5 +139,7 @@ func _reveal(sim) -> void:
 	if _start_scrap < 0:
 		var start: Dictionary = OneHouse.data().get("start", {}).get("stock", {})
 		_start_scrap = roundi(float(start.get("scrap", 0.0)))    # (read once: the data is two files)
-	if roundi(float(sim.stock.get("scrap", 0.0))) > _start_scrap or hud.radio_page() == "build":
+	# (and once the house is claimed: the reveal is not saved, so a run that is loaded after the fence spent the stash would hide it until the Build page was opened again)
+	var has_base: bool = sim.scenario != null and sim.scenario.has_method("has_base") and sim.scenario.has_base()
+	if roundi(float(sim.stock.get("scrap", 0.0))) > _start_scrap or hud.radio_page() == "build" or has_base:
 		revealed["scrap"] = true

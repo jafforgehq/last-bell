@@ -23,10 +23,10 @@
 		"no_bed": "There is no bed for them",
 		"no_stock": "You have nothing to spare",
 		"gifted": "You have already given them something",
-		"blocked": "Get them out first"
+		"blocked": "Put down the dead in this room first"
 	},
 	"lines": {
-		"blocked": "Get them out first.",
+		"blocked": "Put down the dead in this room first.",
 		"back": "You came back.",
 		"on_way": "I am on my way.",
 		"come": "All right. I will find the house."
@@ -46,7 +46,7 @@
 			"come": "Give me a minute for my tools. I will find you.",
 			"stay": "I am not going anywhere. I have a bolt and a lot of practice.",
 			"gift": "That is more than I would have offered you.",
-			"blocked": "Not with them in here. Get them out first.",
+			"blocked": "Not with them in here. Put down the dead in this room first.",
 			"pack": {"scrap": 6, "food": 1}
 		},
 		{
@@ -56,7 +56,7 @@
 			"come": "Let me take the labels with me. People will ask what is what.",
 			"stay": "Go and finish what you were doing. I will be here, counting.",
 			"gift": "Thank you. I will write it down.",
-			"blocked": "I can hear them in the next room. Get them out first.",
+			"blocked": "I can hear them in the next room. Put down the dead in this room first.",
 			"pack": {"meds": 2, "food": 1, "scrap": 1}
 		},
 		{
@@ -66,7 +66,7 @@
 			"come": "Fine. I will bring the rifle and my own boxes.",
 			"stay": "I will keep watch from here. Do not take long.",
 			"gift": "Shells? You should not have. Thanks.",
-			"blocked": "Two of them are still down there. Get them out first.",
+			"blocked": "Two of them are still down there. Put down the dead in this room first.",
 			"pack": {"ammo": 12, "food": 1}
 		},
 		{
@@ -76,7 +76,7 @@
 			"come": "Give me a torch and a roof and I will do the rest.",
 			"stay": "I will be in the cupboard. It is quite comfortable.",
 			"gift": "Batteries would have been better. This will do.",
-			"blocked": "Something is breathing outside the door. Get them out first.",
+			"blocked": "Something is breathing outside the door. Put down the dead in this room first.",
 			"pack": {"scrap": 5, "ammo": 4, "food": 1}
 		},
 		{
@@ -86,7 +86,7 @@
 			"come": "Get me to a stove and I will make it worth your while.",
 			"stay": "Come back with a pan. A proper one.",
 			"gift": "Real food. Give me a second.",
-			"blocked": "Do not make me walk past that. Get them out first.",
+			"blocked": "Do not make me walk past that. Put down the dead in this room first.",
 			"pack": {"food": 6, "scrap": 1}
 		},
 		{
@@ -96,7 +96,7 @@
 			"come": "I will bring my notes. I have written down everyone I saw.",
 			"stay": "I will keep counting. Come back when you can.",
 			"gift": "Thank you. That is one less thing to count.",
-			"blocked": "Not past them. Get them out first.",
+			"blocked": "Not past them. Put down the dead in this room first.",
 			"pack": {"scrap": 1, "ammo": 2, "food": 2}
 		},
 		{
@@ -106,7 +106,7 @@
 			"come": "I will carry my own tools. Do not offer to help.",
 			"stay": "I am fixing the van. Come back when it is done.",
 			"gift": "That goes in the toolbox. Thanks.",
-			"blocked": "Not with those in the garage. Get them out first.",
+			"blocked": "Not with those in the garage. Put down the dead in this room first.",
 			"pack": {"scrap": 8, "ammo": 2, "food": 1}
 		},
 		{
@@ -116,7 +116,7 @@
 			"come": "Let me finish this. Then I am yours.",
 			"stay": "I will be here. Somebody is bound to need me.",
 			"gift": "Thank you. It goes with the dressings.",
-			"blocked": "I cannot go that way. Get them out first.",
+			"blocked": "I cannot go that way. Put down the dead in this room first.",
 			"pack": {"meds": 3, "food": 1}
 		},
 		{
@@ -126,7 +126,7 @@
 			"come": "Somewhere with a wall is a start. Let me lock up.",
 			"stay": "I will be in the bus. Honk if you need me. Actually, do not.",
 			"gift": "That will get me through the evening.",
-			"blocked": "They are by the door. Get them out first.",
+			"blocked": "They are by the door. Put down the dead in this room first.",
 			"pack": {"food": 2, "scrap": 2, "ammo": 3}
 		},
 		{
@@ -136,7 +136,7 @@
 			"come": "I will take the till. Never mind why.",
 			"stay": "I have stock to count. Come back when you can.",
 			"gift": "I would call that a fair trade.",
-			"blocked": "Not with them in the shop. Get them out first.",
+			"blocked": "Not with them in the shop. Put down the dead in this room first.",
 			"pack": {"scrap": 3, "food": 3, "water": 4, "ammo": 2}
 		},
 		{
@@ -146,7 +146,7 @@
 			"come": "Yes. Yes, please. Do I bring my bag? I will bring my bag.",
 			"stay": "Okay. I will be here. Quietly.",
 			"gift": "Oh. Thanks. Are you sure?",
-			"blocked": "Please do not open that door. Get them out first.",
+			"blocked": "Please do not open that door. Put down the dead in this room first.",
 			"pack": {"scrap": 1, "food": 1, "ammo": 2}
 		},
 		{
@@ -156,7 +156,7 @@
 			"come": "Good. I will take the next shift.",
 			"stay": "I will hold here until you are ready. I am good at that.",
 			"gift": "It is not much. I will take it.",
-			"blocked": "I have one eye on the door. Get them out first.",
+			"blocked": "I have one eye on the door. Put down the dead in this room first.",
 			"pack": {"ammo": 10, "scrap": 1, "food": 1}
 		}
 	]

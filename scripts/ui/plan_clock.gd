@@ -180,12 +180,12 @@ static func assess(infos: Array, ctx: Dictionary) -> Dictionary:
 			out.verdict = "quiet"
 			out.chip = "QUIET NIGHTS: NO RUSH"
 			out.tone = "calm"
-			out.reason = "Nothing goes up by itself yet. Stand at a section and hold E to build it."
+			out.reason = "Nothing goes up by itself yet. Stand at a section, press E and stay by it to build it."
 		else:
 			out.verdict = "not_yet"
 			out.chip = "NOT YET"
 			out.tone = "bad"
-			out.reason = "Nobody builds the plan but you: hold E at a section, or put somebody on the Builders job."
+			out.reason = "Nobody builds the plan but you: press E at a section and stay by it, or put somebody on the Builders job."
 		return out
 	# the queue laid out on the working hours
 	var cum_m := {}

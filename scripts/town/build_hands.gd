@@ -2,9 +2,9 @@
 ## of assets/data/one_house.json (`per_min`: builder-hours of work her hands do in a minute, `reach`: how near a section she stands, tiles from its edge).
 ##
 ## WHY. The first survivor is a long way off, and a base of one has nobody to build: the first fence would wait for a stranger. Now the Build page's order has a pair of hands from the first minute: hers. A section that has been
-## ordered (a site of the Build module: a Build plot of a slot of the perimeter that has one) is a thing to use: E at it, "Build the front fence (hold)", is a timed session as a search or a strip is (scripts/town/uses.gd: the ring,
+## ordered (a site of the Build module: a Build plot of a slot of the perimeter that has one) is a thing to use: E at it, "Build the front fence" (one press begins it, a second stops it, and walking off ends it), is a timed session as a search or a strip is (scripts/town/uses.gd: the ring,
 ## the sounds, the same reasons to end undone: she walks, fires, is hurt, goes out of reach). While it runs the site's builder-hours go up at `per_min` a minute (about ten: the front fence, 14 or so builder-hours, is a minute and a
-## half of holding E), alongside any builders on the job (their work is Build's own, `Build.update`). The session's length is told to the ring every step from what is left, so the ring is the site's, whoever else works it.
+## half of standing at it after E), alongside any builders on the job (their work is Build's own, `Build.update`). The session's length is told to the ring every step from what is left, so the ring is the site's, whoever else works it.
 ## The session ends done when the site is finished (the Build module makes the section as it always does: the alert "The front fence is up" is the perimeter's, when the last section of a project is). When a section is done and
 ## another waits within reach, her hands go on at that one without a second press.
 ##
@@ -120,7 +120,7 @@ func _nearest_site(here: Vector2, reach: float, skip: String = "") -> Dictionary
 	return best
 
 
-## E's candidate of this part: the section within reach that waits for hands ("Build the front fence (hold)", "Stop building" while she is at it).
+## E's candidate of this part: the section within reach that waits for hands ("Build the front fence", "Stop building" while she is at it).
 func avatar_candidates(p) -> Array:
 	var out: Array = []
 	if not enabled or p == null:
@@ -142,7 +142,7 @@ func avatar_candidates(p) -> Array:
 	var rect: Rect2i = best.rect
 	# (the prompt stands at the point of the section nearest her: a section is up to twelve tiles long)
 	var at := Vector2(clampf(here.x, float(rect.position.x), float(rect.end.x)), clampf(here.y, float(rect.position.y), float(rect.end.y)))
-	out.append({"kind": KIND, "id": String(best.slot), "label": "Stop building" if stop else "Build %s (hold)" % String(best.noun), "pos": at, "dist": float(best.dist), "ok": true, "why": "", "session": true})
+	out.append({"kind": KIND, "id": String(best.slot), "label": "Stop building" if stop else "Build %s" % String(best.noun), "pos": at, "dist": float(best.dist), "ok": true, "why": "", "session": true})
 	return out
 
 

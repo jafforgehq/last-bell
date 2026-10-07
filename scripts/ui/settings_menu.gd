@@ -36,9 +36,15 @@ const ROW_H_MID := 34.0
 const ROW_H := 38.0
 ## (the dark look's Brightness row took 25 px of the smallest window: its buttons are 4 px slimmer, nine of them)
 const ROW_H_COMPACT := 28.0
+## In a window shorter than this the switches sit two to a row and lose their second line (it is their tooltip too), and the aiming's note goes, so that the page fits the small
+## windows (700 by 560, 1024 by 640) without a scroll: the Accessibility and Brightness rows made it 540 px tall.
+const GRID_H := 720.0
 
 ## The sliders and their percent labels, by pref key.
 var sliders := {}
+## The grids the switches are in (one column, or two in a short window) and the second lines of the switches.
+var _grids: Array = []
+var _notes: Array = []
 var percents := {}
 var scale_minus: Button
 var scale_plus: Button
@@ -118,10 +124,12 @@ func _build_body() -> void:
 	scale_note.visible = false
 	body.add_child(scale_note)
 	body.add_child(_brightness_row())
+	var grid := new_switch_grid()
 	for sw in SWITCHES:
 		if String(sw[0]) == "fullscreen" and shell.on_web():
 			continue
-		body.add_child(_switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
+		grid.add_child(_switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
+	body.add_child(grid)
 	body.add_child(section("Controls"))
 	body.add_child(_aim_row())
 	aim_note = note("", ink3(), 13)
@@ -145,7 +153,15 @@ func _layout() -> void:
 	# (three sizes: roomy from SPACIOUS_H up; between that and COMPACT_H a little closer, so that the Accessibility rows fit a 1280 by 800 window without scrolling; the smallest as before)
 	var gap := 10 if size.y >= SPACIOUS_H else (4 if size.y >= COMPACT_H else 1)
 	body.add_theme_constant_override("separation", gap)
-	_fit_rows(ROW_H if size.y >= SPACIOUS_H else (ROW_H_MID if size.y >= COMPACT_H else ROW_H_COMPACT))
+	var tight := size.y < GRID_H
+	for g in _grids:
+		g.columns = 2 if tight else 1
+		g.add_theme_constant_override("v_separation", gap)
+	for n in _notes:
+		n.visible = not tight
+	if aim_note != null:
+		aim_note.visible = not tight
+	_fit_rows(ROW_H if size.y >= SPACIOUS_H else (ROW_H_MID if size.y >= COMPACT_H and not tight else ROW_H_COMPACT))
 	super._layout()
 
 
@@ -362,14 +378,26 @@ func _refresh_scale() -> void:
 
 # ------------------------------------------------------------- switches --
 
+## The grid the switches go in: one column (a row to a switch, with its second line) or, in a short window, two.
+func new_switch_grid() -> GridContainer:
+	var g := GridContainer.new()
+	g.columns = 1
+	g.add_theme_constant_override("h_separation", 18)
+	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_grids.append(g)
+	return g
+
+
 func _switch_row(key: String, label_text: String, detail: String) -> Control:
 	var row: HBoxContainer = hud._hbox(12)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var col: VBoxContainer = hud._vbox(1)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	col.add_child(hud._label(label_text, Fonts.sans(500), 15, ink()))
 	var d := note(detail, ink3(), 13)
 	d.custom_minimum_size.x = 120
+	_notes.append(d)
 	col.add_child(d)
 	row.add_child(col)
 	var b := button("", false)

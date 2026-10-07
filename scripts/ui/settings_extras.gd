@@ -27,8 +27,10 @@ const TEXT_TIP :="How big the words are in the HUD and the menus, on top of the 
 static func add_rows(s) -> void:
 	s.body.add_child(s.section("Accessibility"))
 	s.body.add_child(_text_row(s))
+	var grid: GridContainer = s.new_switch_grid()
 	for sw in SWITCHES:
-		s.body.add_child(s._switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
+		grid.add_child(s._switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
+	s.body.add_child(grid)
 	refresh_text(s)
 
 
