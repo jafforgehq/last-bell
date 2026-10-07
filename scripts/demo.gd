@@ -45,7 +45,7 @@ const FALLBACK := {
 	"wishlist_url": "",
 	"copy": {
 		"caps": "Three Bells: the demo",
-		"title": "Thanks for playing the Thirty Bells demo",
+		"title": "Thanks for playing the Last Bell demo",
 		"line": "Three nights held. That was the first of thirty.",
 		"full": "The full game is thirty nights, with a convoy at the last bell.",
 	},

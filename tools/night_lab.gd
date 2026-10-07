@@ -503,7 +503,7 @@ func _run_lab() -> void:
 		return
 	var started := Time.get_ticks_msec()
 	if not quiet:
-		print("Thirty Bells night lab: seeds %s, days %s, %d reps, modes %s, crew %d, %d Hz%s" % [opts.seeds, opts.days, reps, ",".join(modes), crew, roundi(hz), (", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
+		print("Last Bell night lab: seeds %s, days %s, %d reps, modes %s, crew %d, %d Hz%s" % [opts.seeds, opts.days, reps, ",".join(modes), crew, roundi(hz), (", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else ""])
 		print("")
 	var rows: Array = []
 	if jobs > 1 and seeds.size() > 1 and not quiet:

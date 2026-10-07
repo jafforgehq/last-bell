@@ -1,9 +1,9 @@
 # itch.io page draft (NOT published; the live page still has the old prototype's text)
 
-Status: draft written 2026-10-07 for the owner to approve. Two things are undecided and block publishing: the game's NAME (Thirty Bells vs Last Bell vs a numberless name; the draft says THE GAME below) and the screenshots (the staged ones in the scratchpad still show staging artifacts such as the 9741-scrap counter and "Step 5 of 5"; clean ones are taken from a real run once the name is chosen). The page is Restricted with a password: nothing here changes that.
+Status: draft written 2026-10-07 (the owner chose the name Last Bell the same day) for the owner to approve. The name is decided (Last Bell). What still blocks publishing is the owner's approval of the text and the screenshots (the staged ones in the scratchpad still show staging artifacts such as the 9741-scrap counter and "Step 5 of 5"; clean ones are taken from a real run). The page is Restricted with a password: nothing here changes that.
 
 ## Title
-THE GAME (working title: Thirty Bells)
+Last Bell
 
 ## Short description (one line, under 100 characters)
 Hold one house against the dead. A dark, top-down survival and defence game.

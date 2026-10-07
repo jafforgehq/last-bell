@@ -1,7 +1,7 @@
-# Thirty Bells: status
+# Last Bell: status
 
 > **Read this first in a new session.** Written 2026-10-02 (end of a very long session); the top of it (section 1) and the known issues (5b) were rewritten on 2026-10-04, when rounds 17 to 21 were integrated, so that nothing lives only in a chat.
-> The game is a 2D zombie colony-defence game in Godot 4.7.2 / GDScript. Working title **Thirty Bells** (the repo and the itch page still say *Last Bell*). Repo: `/Users/jaf_lab/last-bell` (the only git repo; extra worktrees live in `.worktrees/`, section 1c). Private GitHub: `jafforgehq/last-bell`. Restricted itch page: https://jafforge.itch.io/last-bell (project id 5076058, account `jafforge`).
+> The game is a 2D zombie colony-defence game in Godot 4.7.2 / GDScript. Name **Last Bell** (chosen by the owner on 2026-10-07 after a stretch as Thirty Bells; the repo, the itch page and the zip already said Last Bell. A Steam game called The Last Bell exists (found 2026-10-01): check the name before any public release. The desktop save folder is still named ThirtyBells (`config/custom_user_dir_name`) on purpose, so saves and settings survive the rename). Repo: `/Users/jaf_lab/last-bell` (the only git repo; extra worktrees live in `.worktrees/`, section 1c). Private GitHub: `jafforgehq/last-bell`. Restricted itch page: https://jafforge.itch.io/last-bell (project id 5076058, account `jafforge`).
 
 ## 0. One House (2026-10-05): read this first
 

@@ -119,7 +119,7 @@ func _add(list: Control, key: String, b: Button, action: Callable) -> void:
 	items[key] = b
 
 
-## The mark: a brass bell, and THIRTY BELLS in big condensed capitals (BELLS in gold) with the
+## The mark: a brass bell, and LAST BELL in big condensed capitals (BELL in gold) with the
 ## tagline under it. In a short window the words and the bell are smaller (see _layout).
 func _build_logo() -> Control:
 	var box: VBoxContainer = hud._vbox(6)
@@ -130,7 +130,7 @@ func _build_logo() -> Control:
 	top.add_child(bell)
 	var words: VBoxContainer = hud._vbox(-16)
 	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	for pair in [["THIRTY", hud.INK], ["BELLS", hud.ACCENT]]:
+	for pair in [["LAST", hud.INK], ["BELL", hud.ACCENT]]:
 		var l: Label = hud._label(String(pair[0]), Fonts.cond(700, 3), 72, pair[1])
 		l.add_theme_constant_override("outline_size", 9)
 		l.add_theme_color_override("font_outline_color", Color(0.04, 0.032, 0.025, 0.92))

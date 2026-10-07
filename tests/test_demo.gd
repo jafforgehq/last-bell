@@ -64,7 +64,7 @@ func test_the_demo_is_on_by_the_flag_or_the_feature_and_its_data_is_what_the_own
 	eq(Demo.places(), ["houses", "pharmacy"], "two places")
 	eq(Demo.road_events(), ["ambush", "roadblock", "survivor", "wreck_supplies", "breakdown"], "five kinds of road event")
 	eq(Demo.wishlist_url(), "", "no store page yet: the Wishlist button is hidden")
-	check(String(d.copy.title).contains("Thirty Bells demo"), "the end card's thanks")
+	check(String(d.copy.title).contains("Last Bell demo"), "the end card's thanks")
 	# a damaged data file is the fallbacks
 	var f := FileAccess.open(FIXTURE, FileAccess.WRITE)
 	f.store_string("{ not json")
@@ -176,7 +176,7 @@ func test_the_run_ends_at_the_dawn_of_day_four_on_the_end_card_and_a_defeat_is_t
 	await Kit.settle()
 	var words := Kit.texts(card)
 	var said := " | ".join(words)
-	check(said.contains("Thanks for playing the Thirty Bells demo"), "the thanks: %s" % said)
+	check(said.contains("Thanks for playing the Last Bell demo"), "the thanks: %s" % said)
 	check(said.contains("thirty nights, with a convoy at the last bell"), "the line about the full game: %s" % said)
 	eq(String(card.stat_values.nights.text), "3 of 3", "nights held")
 	eq(String(card.stat_values.people.text), "5 alive", "people")

@@ -23,7 +23,7 @@ func _init() -> void:
 
 
 func _build_body() -> void:
-	var name_label: Label = hud._label("THIRTY BELLS", Fonts.cond(700, 3), 34, hud.ACCENT)
+	var name_label: Label = hud._label("LAST BELL", Fonts.cond(700, 3), 34, hud.ACCENT)
 	body.add_child(name_label)
 	body.add_child(note(OneHouse.text("words.tagline", TAGLINE) if OneHouse.town_start(shell.main) else TAGLINE, ink2(), 15))
 	body.add_child(line())

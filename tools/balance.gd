@@ -1354,7 +1354,7 @@ func _run() -> void:
 			seeds.append(int(opts.seed) + i)
 	if not quiet:
 		var names := ["Story", "Standard", "Brutal"]
-		print("Thirty Bells balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
+		print("Last Bell balance: %d games of %d days, %s, seeds from %d, %d Hz, %s%s" % [
 			seeds.size(), days, names[difficulty], seeds[0], roundi(hz), ("hide-in-the-school policy" if hide else ("informed policy" if informed else "default policy")) if orders else "no orders",
 			((", %d at a time" % jobs) if jobs > 1 and seeds.size() > 1 else "") + ("" if story_on else ", storyteller off") + ("" if avatar_mode == "none" else ", avatar: %s" % avatar_mode)])
 		print("")

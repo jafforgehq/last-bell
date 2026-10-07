@@ -550,7 +550,7 @@ func _main() -> void:
 	var jobs := clampi(int(opts.jobs), 1, 16)
 	var started := Time.get_ticks_msec()
 	if not quiet and not worker:
-		print("Thirty Bells One House lab: seeds %s, mode %s, %d Hz, %d-block town, up to day %d%s%s" % [opts.seeds, ",".join(modes), roundi(float(opts.hz)), int(opts.blocks), int(opts.days), (", from stage " + String(opts.stage)) if String(opts.stage) != "" else "", (", %d workers" % jobs) if jobs > 1 else ""])
+		print("Last Bell One House lab: seeds %s, mode %s, %d Hz, %d-block town, up to day %d%s%s" % [opts.seeds, ",".join(modes), roundi(float(opts.hz)), int(opts.blocks), int(opts.days), (", from stage " + String(opts.stage)) if String(opts.stage) != "" else "", (", %d workers" % jobs) if jobs > 1 else ""])
 		print("")
 	var runs: Array = []
 	if jobs > 1 and not worker and seeds.size() * modes.size() > 1:

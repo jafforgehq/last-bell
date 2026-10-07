@@ -1,4 +1,4 @@
-## Thirty Bells: one survivor alone in a town full of the dead (the old schoolyard game is kept for `--school`, the demo and the tests).
+## Last Bell: one survivor alone in a town full of the dead (the old schoolyard game is kept for `--school`, the demo and the tests).
 ## Builds the world from the baked data, runs the simulation, the camera,
 ## input, sound and HUD. The title screen is a small town at dusk (scripts/town/title_scene.gd).
 extends Node2D
@@ -374,7 +374,7 @@ func _ready() -> void:
 	# off until the end of `_ready`; a headless run, the tests', has no card, no wait and does it all in one go.
 	var town_card = null
 	if town_run and DisplayServer.get_name() != "headless":
-		town_card = TownBoot.loading_card(self, "Thirty Bells" if _title_town else "Making the town...")
+		town_card = TownBoot.loading_card(self, "Last Bell" if _title_town else "Making the town...")
 		set_process(false)
 		set_process_input(false)
 		set_process_unhandled_input(false)
@@ -787,7 +787,7 @@ func _ready() -> void:
 			await get_tree().process_frame
 		speed = speed_was
 		town_card.queue_free()
-	print("Thirty Bells ready in %d ms" % (Time.get_ticks_msec() - t0), "  " + JSON.stringify(load_ms) if town_run else "")
+	print("Last Bell ready in %d ms" % (Time.get_ticks_msec() - t0), "  " + JSON.stringify(load_ms) if town_run else "")
 
 
 ## A frame for the loading card (a windowed town run): the bar goes to `share`, the card is drawn, and the next piece of the work comes after it. No card (a headless run, a test): nothing.
