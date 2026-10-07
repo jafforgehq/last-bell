@@ -222,8 +222,12 @@ var _shift_lock := false
 ## The keys that were held when the window lost the focus (key code -> true): a browser tab or Cmd+Tab says nothing of their release, and the engine keeps them pressed, so the
 ## avatar would walk on. They count as up (`_key_down`, `_cmd_down`) until that key is pressed or let go again.
 var _stale_keys := {}
+## A frame this many seconds after the last one is the page coming back from a hidden tab (the busiest machine's worst hitch seen was 0.9 s): the held input is let go (`_let_go_of_held_input`).
+const HIDDEN_GAP_S := 1.5
+## The clock (microseconds) at the last `_process`, for the gap above (0: none yet).
+var _last_tick_us := 0
 ## The keys the hands poll (walking, the run, the aim's Shift, and the command keys that stop a walk).
-const POLLED_KEYS := [KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SHIFT, KEY_X, KEY_CTRL, KEY_META]
+const POLLED_KEYS :=[KEY_W, KEY_A, KEY_S, KEY_D, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SHIFT, KEY_X, KEY_CTRL, KEY_META]
 var _was_aiming := false
 ## The shape the system pointer was last given over the yard (the hand over a person or a thing to use, else the arrow).
 var cursor_shape := Input.CURSOR_ARROW
@@ -1727,19 +1731,24 @@ func _input(ev: InputEvent) -> void:
 				_tap_order(tap, ev.position)
 
 
+## Everything that is held (the buttons, the polled keys, the wheel's key) is let go where we cannot see it: the window lost the focus, or the page was hidden (a browser tab that was left sends no key-up).
+func _let_go_of_held_input() -> void:
+	firing = false
+	aim_held = false
+	_rtap = {}
+	_shift_lock = true
+	_stale_keys.clear()
+	for code in POLLED_KEYS:
+		if Input.is_physical_key_pressed(code) or Input.is_key_pressed(code):
+			_stale_keys[code] = true    # (held as the focus went: the walk stops, and does not go on when the window comes back)
+	if wheel_ctl != null:
+		wheel_ctl.cancel()    # (round 24: the key that held the wheel up is let go where we cannot see it)
+
+
 func _notification(what: int) -> void:
 	# (a window that lost the focus under a held button never sees the release)
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
-		firing = false
-		aim_held = false
-		_rtap = {}
-		_shift_lock = true
-		_stale_keys.clear()
-		for code in POLLED_KEYS:
-			if Input.is_physical_key_pressed(code) or Input.is_key_pressed(code):
-				_stale_keys[code] = true    # (held as the focus went: the walk stops, and does not go on when the window comes back)
-		if wheel_ctl != null:
-			wheel_ctl.cancel()    # (round 24: the key that held the wheel up is let go where we cannot see it)
+		_let_go_of_held_input()
 	elif what == NOTIFICATION_WM_MOUSE_EXIT:
 		# the pointer has left the window: nowhere (no crosshair, no lean; the aim stays where it was), as the place does
 		mouse_screen = Vector2(-1.0, -1.0)
@@ -1970,6 +1979,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 # ------------------------------------------------------------------- loop --
 
 func _process(delta: float) -> void:
+	# (a hidden browser tab stops the frames and may send no blur: a gap this long in real time is the page coming back, and no real stall is this long. `delta` cannot say: the engine's
+	# frame timer clamps and smooths it, so the clock is read direct)
+	var tick_us := Time.get_ticks_usec()
+	if _last_tick_us > 0 and float(tick_us - _last_tick_us) > HIDDEN_GAP_S * 1000000.0:
+		_let_go_of_held_input()
+	_last_tick_us = tick_us
 	var dt := clampf(delta, 0.0, StepClock.MAX_FRAME)
 	clock += dt
 	if raid_open():
