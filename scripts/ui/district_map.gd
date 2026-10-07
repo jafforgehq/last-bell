@@ -16,6 +16,7 @@ extends VBoxContainer
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const TierMarks := preload("res://scripts/ui/tier_marks.gd")
+const MapMarks := preload("res://scripts/ui/map_marks.gd")
 
 ## The key's mark for a tier of house: its icon (a star, a circle or a square) in its colour.
 class TierDot:
@@ -30,6 +31,39 @@ class TierDot:
 
 	func _draw() -> void:
 		Marks.draw_icon(self, tier, size * 0.5, 6.0)
+
+
+## The key's mark for everything else on the map, drawn with the same shapes the map draws them with (scripts/ui/map_marks.gd): so that the key shows the shape of each mark, not only its colour.
+class KeyMark:
+	extends Control
+	const Marks := preload("res://scripts/ui/map_marks.gd")
+	var kind := "seen"
+	var accent := Color.WHITE
+
+	func _init(p_kind: String = "seen", p_accent: Color = Color.WHITE) -> void:
+		kind = p_kind
+		accent = p_accent
+		custom_minimum_size = Vector2(20, 16)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		var c := size * 0.5
+		match kind:
+			"seen":
+				Marks.seen(self, c)
+			"base":
+				Marks.base(self, c)
+			"known":
+				Marks.known(self, c, 0.85)
+			"me":
+				Marks.me(self, c, accent, 1.1)
+			"goal":
+				Marks.goal(self, c, accent, 0.7)
+			"entry":
+				Marks.entry(self, c, -PI / 2.0, Color(0.93, 0.95, 0.88, 0.85), 1.1)
+			"dead":
+				Marks.dead(self, c, 5.0)
 
 const GROUND := Color(0.105, 0.17, 0.14, 1.0)
 const ROAD := Color(0.07, 0.1, 0.09, 1.0)
@@ -103,20 +137,18 @@ func _legend() -> void:
 	row.add_theme_constant_override("h_separation", 14)
 	row.add_theme_constant_override("v_separation", 2)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# (the houses to claim, by tier: a star, a circle, a square, as the pennants and the arrows at the screen's edge show them: scripts/ui/tier_marks.gd)
-	for item in [[HOUSE_SEEN, "Looked in"], [BASE_FILL, "Your base"], ["best", "Best house to claim"], ["ok", "Fair house"], ["poor", "Poor house"], [KNOWN, "Someone waits"], [host.ACCENT, "You"]]:
+	# (every mark is drawn in the shape the map has for it, so the key tells shapes and not only colours. The houses to claim, by tier: a star, a circle, a square, as the pennants, the minimap and the
+	# arrows at the screen's edge show them: scripts/ui/tier_marks.gd. The strings are the tiers; the rest are `KeyMark` kinds)
+	for item in [["best", "Best house to claim"], ["ok", "Fair house"], ["poor", "Poor house"], ["seen", "Looked in"], ["base", "Your base"], ["known", "Someone waits"],
+			["me", "You"], ["goal", "Goal"], ["entry", "Way in"], ["dead", "Dead awake (minimap)"]]:
 		var one: HBoxContainer = host._hbox(5)
-		if item[0] is String:
+		var kind := String(item[0])
+		if kind == "best" or kind == "ok" or kind == "poor":
 			var mark := TierDot.new()
-			mark.tier = String(item[0])
+			mark.tier = kind
 			one.add_child(mark)
 		else:
-			var dot := ColorRect.new()
-			dot.color = item[0]
-			dot.custom_minimum_size = Vector2(10, 10)
-			dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			one.add_child(dot)
+			one.add_child(KeyMark.new(kind, host.ACCENT))
 		one.add_child(host._label(String(item[1]), Fonts.sans(400), 14, host.INK2))
 		row.add_child(one)
 	add_child(row)
@@ -335,6 +367,7 @@ class MapView:
 			if id == base_h:
 				draw_rect(r.grow(1.5), BASE_FILL)
 				draw_rect(r.grow(1.5), Color(0, 0, 0, 0.6), false, 1.0)
+				MapMarks.house(self, r.get_center(), clampf(minf(r.size.x, r.size.y) * 0.4, 3.0, 7.0))    # (a house on the gold block: the base is a shape too)
 			elif seen.has(id):
 				draw_rect(r, HOUSE_SEEN)
 				draw_rect(r, HOUSE_EDGE, false, 1.0)
@@ -342,22 +375,13 @@ class MapView:
 				draw_rect(r, HOUSE_DIM)
 		var target = page.objective_at()
 		if target is Vector2:
-			var c := _px(target)
-			draw_arc(c, 8.0, 0.0, TAU, 24, Color(host.ACCENT, 0.9), 2.0, true)
-			draw_arc(c, 12.0, 0.0, TAU, 24, Color(host.ACCENT, 0.4), 1.5, true)
+			MapMarks.goal(self, _px(target), host.ACCENT)
 		_draw_arrival(host)
 		for p in page.known():
-			var c2 := _px(p.pos)
-			var d := PackedVector2Array([c2 + Vector2(0, -7), c2 + Vector2(6, 0), c2 + Vector2(0, 7), c2 + Vector2(-6, 0)])
-			draw_colored_polygon(d, KNOWN)
-			var closed := PackedVector2Array(d)
-			closed.append(d[0])
-			draw_polyline(closed, Color(0, 0, 0, 0.7), 1.5, true)
+			MapMarks.known(self, _px(p.pos))
 		var me = page.player_at()
 		if me is Vector2:
-			var c3 := _px(me)
-			draw_circle(c3, 6.0, Color(0, 0, 0, 0.55))
-			draw_colored_polygon(PackedVector2Array([c3 + Vector2(0, -6), c3 + Vector2(5, 5), c3 + Vector2(0, 2), c3 + Vector2(-5, 5)]), host.ACCENT)
+			MapMarks.me(self, _px(me), host.ACCENT)
 		draw_rect(_rect, Color(host.INK, 0.25), false, 1.0)
 		draw_string(Fonts.cond(700), _rect.position + Vector2(_rect.size.x - 20.0, 18.0), "N", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(host.INK3, 0.9))
 
@@ -365,14 +389,7 @@ class MapView:
 	func _draw_arrival(host) -> void:
 		var entry = page.entry_mark()
 		if entry is Dictionary:
-			var at := _px(entry.pos)
-			var f := Vector2.from_angle(float(entry.angle))
-			var s := Vector2(-f.y, f.x)
-			var tri := PackedVector2Array([at + f * 7.0, at - f * 4.0 + s * 5.0, at - f * 4.0 - s * 5.0])
-			draw_colored_polygon(tri, Color(host.INK, 0.85))
-			var rim := PackedVector2Array(tri)
-			rim.append(tri[0])
-			draw_polyline(rim, Color(0, 0, 0, 0.7), 1.5, true)
+			MapMarks.entry(self, _px(entry.pos), float(entry.angle), Color(host.INK, 0.85))
 		var font := Fonts.cond(700)
 		var placed: Array = []    # (the rectangles of the names drawn: the houses of a row are near each other, and a name goes where it covers no other)
 		for c in page.candidates():

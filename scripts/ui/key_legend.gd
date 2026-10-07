@@ -51,7 +51,7 @@ func setup(hud_node) -> void:
 	col.add_theme_constant_override("separation", 3)
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(col)
-	for line in [ControlsTable.legend_line("a"), ControlsTable.legend_line("b")]:
+	for line in [ControlsTable.legend_line("a"), ControlsTable.legend_line("b"), ControlsTable.legend_line("c")]:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -166,6 +166,12 @@ func _input(ev: InputEvent) -> void:
 				mark("radio")
 			KEY_ESCAPE:
 				mark("menu")
+			KEY_N:
+				mark("build")
+			KEY_X:
+				mark("run")
+			KEY_PERIOD:
+				mark("wait")
 			KEY_SHIFT:
 				mark("aim")    # (Shift aims too)
 	elif ev is InputEventMouseButton:

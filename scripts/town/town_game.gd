@@ -55,6 +55,9 @@ const TITLE_PARTS := ["house_view"]
 ## The foundation's own roofs, drawn while no `house_view` part exists (it is the working fallback: one roof for each house, fading when the avatar is inside).
 const FALLBACK_ROOFS := "res://scripts/town/town_roofs.gd"
 const TownPerf := preload("res://scripts/town/town_perf.gd")
+const TownBoot := preload("res://scripts/town/town_boot.gd")
+## How many view parts are made (or have their `on_ready` called) in one frame of the loading card (`on_ready`): one or two, fewer when the first ones take the frame's slice.
+const PARTS_PER_FRAME := 2
 ## The furthest zoom out in pixels to the tile whatever the window (the area bound of `TownPerf.min_zoom` is what normally holds).
 const MIN_ZOOM := 5.0
 ## How many pawn nodes a frame may make (`Main._sync_views`).
@@ -87,27 +90,50 @@ static func make(main_node):
 	return t
 
 
-func on_ready(main_node) -> void:
+## Makes the view parts (all of them first, so that a part's `on_ready` finds the others by name, then each one's `on_ready`, in the order of `VIEW_PARTS`). With a loading `card` it is a
+## coroutine that gives the card a frame after every `PARTS_PER_FRAME` pieces of work or `TownBoot.SLICE_MS` milliseconds, whichever comes first (a part's first `load` is its compile, 3 to 50 ms, and
+## a part's `on_ready` up to 60: together they were 650 ms in one frame); with none (a headless run, a test) nothing waits and it is all done before it returns.
+func on_ready(main_node, card = null) -> void:
 	main = main_node
 	parts.clear()
 	by_name.clear()
+	var names: Array = []
 	for name in VIEW_PARTS:
-		var path: String = VIEW_PARTS[name]
-		if not ResourceLoader.exists(path) or (title and not TITLE_PARTS.has(name)):
-			continue
-		var part = (load(path) as GDScript).new()
+		if ResourceLoader.exists(VIEW_PARTS[name]) and not (title and not TITLE_PARTS.has(name)):
+			names.append(name)
+	var tree: SceneTree = main_node.get_tree()
+	var work := 0
+	var slice_t := Time.get_ticks_usec()
+	for i in names.size():
+		if card != null and work > 0 and (work >= PARTS_PER_FRAME or Time.get_ticks_usec() - slice_t >= TownBoot.slice_us()):
+			TownBoot.card_progress(card, 0.92 + 0.04 * float(i) / float(names.size()), "Putting on the roofs")
+			await tree.process_frame
+			work = 0
+			slice_t = Time.get_ticks_usec()
+		var part = (load(VIEW_PARTS[names[i]]) as GDScript).new()
 		parts.append(part)
-		by_name[name] = part
+		by_name[names[i]] = part
+		work += 1
 	if not by_name.has("house_view") and ResourceLoader.exists(FALLBACK_ROOFS):
 		_roofs = (load(FALLBACK_ROOFS) as GDScript).new()
 		_roofs.name = "Roofs"
 		main.world.add_child(_roofs)
 		_roofs.setup(main.sim.town_data, main.data, "house")
+	var made := 0
 	for part in parts:
+		if card != null and work > 0 and (work >= PARTS_PER_FRAME or Time.get_ticks_usec() - slice_t >= TownBoot.slice_us()):
+			TownBoot.card_progress(card, 0.96 + 0.03 * float(made) / float(parts.size()), "Putting on the roofs")
+			await tree.process_frame
+			work = 0
+			slice_t = Time.get_ticks_usec()
 		if part.has_method("on_ready"):
 			part.on_ready(main)
+		work += 1
+		made += 1
 	perf = TownPerf.new()
 	perf.setup(main.sim)
+
+
 
 
 ## Once, as the camera is first put (main.gd `_ready`, after the HUD): the parts that care say where it looks and how far it sees (`on_opening_view(main)`: the town's HUD part).

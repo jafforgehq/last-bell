@@ -36,9 +36,11 @@ const CAND_COLOR := Color("#8fb85a")
 ## The avatar is pale, not the gold of the Map page's arrow: the base's block is gold and she is often on it.
 const ME_COLOR := Color(0.98, 0.97, 0.91, 1.0)
 const HOUSE_DARK := Color(0.14, 0.09, 0.04, 1.0)
-const TIP := "The streets round you, north at the top. The dead that are awake show red. Click for the map (M)"
-## With "Colour-blind markers": the same marks, told by their shapes (see `_draw_marks`).
-const TIP_CB := "The streets round you, north at the top. Triangles are the dead that are awake, circles are survivors you know of, a flag with a plus is a house you could claim. Click for the map (M)"
+## The marks are told by their shapes as well as their colours (the key under the Map page, M, draws them): a red triangle is a dead one that is awake, a blue diamond is a survivor you know of, a pole with a
+## star, a circle or a square is a house you could claim (best, fair, poor), a gold house is your base, a purple ring is one of the crew out searching, and the pale arrow is you.
+const TIP := "The streets round you, north at the top. Red triangles are the dead that are awake, blue diamonds are survivors you know of, a pole with a star, circle or square is a house you could claim. Click for the map (M)"
+## With "Colour-blind markers": the same marks, with the tier's letter (B, F, P) and a plus beside each house to claim.
+const TIP_CB := "The streets round you, north at the top. Red triangles are the dead that are awake, blue diamonds are survivors you know of, a pole with a star (B), circle (F) or square (P) and a plus is a house you could claim. Click for the map (M)"
 
 var main
 var hud
@@ -336,20 +338,15 @@ func _draw_marks() -> void:
 	var c := Vector2(s, s) * 0.5
 	var ppt := s / SPAN_TILES
 	var reach := s * 0.5 - 6.0
-	# the dead awake: small squares
+	# the dead awake: small red triangles (a warning; the squares are the poor houses' pins)
 	for i in dead.size():
 		var d := (dead[i] - me) * ppt
 		if d.length_squared() <= reach * reach:
-			if _cb:
-				CbShapes.mark(marks, "triangle", c + d, 3.3, DEAD_COLOR)    # (Colour-blind markers: the dead are triangles)
-			else:
-				marks.draw_rect(Rect2(c + d - Vector2(1.8, 1.8), Vector2(3.6, 3.6)), DEAD_COLOR)
+			CbShapes.mark(marks, "triangle", c + d, 3.3, DEAD_COLOR)
 	# the survivors known of: blue diamonds
 	for i in known.size():
 		var d2 := (known[i] - me) * ppt
-		if d2.length() <= reach and _cb:
-			CbShapes.mark(marks, "circle", c + d2, 3.6, KNOWN_COLOR)    # (Colour-blind markers: survivors are circles)
-		elif d2.length() <= reach:
+		if d2.length() <= reach:
 			var q := c + d2
 			_dia[0] = q + Vector2(0, -4.5)
 			_dia[1] = q + Vector2(3.8, 0)
@@ -360,18 +357,17 @@ func _draw_marks() -> void:
 			_dia_line[4] = _dia[0]
 			marks.draw_colored_polygon(_dia, KNOWN_COLOR)
 			marks.draw_polyline(_dia_line, Color(0, 0, 0, 0.75), 1.2)
-	# the crew out searching: a purple dot (a ring too with Colour-blind markers) while they are inside the window
+	# the crew out searching: a purple dot with a ring round it while they are inside the window
 	for i in searchers.size():
 		var d3 := (searchers[i] - me) * ppt
 		if d3.length() <= reach:
 			marks.draw_circle(c + d3, 3.4, Color(0.04, 0.08, 0.07, 0.9))
 			marks.draw_circle(c + d3, 2.4, SEARCH_COLOR)
-			if _cb:
-				CbShapes.mark(marks, "circle", c + d3, 4.4, SEARCH_COLOR)
-	# the houses that may be claimed (before a base): a green pennant on the house, or its direction on the rim
+			marks.draw_arc(c + d3, 4.4, 0.0, TAU, 16, SEARCH_COLOR, 1.2, true)
+	# the houses that may be claimed (before a base): a pole with the tier's own shape on the house (a star, a circle or a square), or its direction on the rim
 	for i in cands.size():
 		var pin_d := (cands[i] - me) * ppt
-		_pin_or_arrow(c, pin_d, reach, cand_cols[i] if i < cand_cols.size() else CAND_COLOR, false)
+		_pin_or_arrow(c, pin_d, reach, cand_cols[i] if i < cand_cols.size() else CAND_COLOR, false, cand_tiers[i] if i < cand_tiers.size() else "ok")
 		if _letters and i < cand_tiers.size() and pin_d.length() <= reach:
 			marks.draw_string(Fonts.cond(700), c + pin_d + Vector2(5.0, -1.0), TierMarks.letter(cand_tiers[i]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, cand_cols[i])
 	# the base: a gold house, or its direction on the rim
@@ -394,7 +390,7 @@ func _draw_marks() -> void:
 
 
 ## A mark at `d` pixels from the middle when it is inside the window; else a small arrow on the rim, pointing at it.
-func _pin_or_arrow(c: Vector2, d: Vector2, reach: float, color: Color, house: bool) -> void:
+func _pin_or_arrow(c: Vector2, d: Vector2, reach: float, color: Color, house: bool, tier: String = "ok") -> void:
 	if d.length() <= reach:
 		var q := c + d
 		if house:
@@ -408,12 +404,10 @@ func _pin_or_arrow(c: Vector2, d: Vector2, reach: float, color: Color, house: bo
 				# (Colour-blind markers: the base's house has a pale rim, a square body under a point, whatever it stands on)
 				marks.draw_rect(Rect2(q + Vector2(-4.6, -0.9), Vector2(9.2, 6.4)), CbShapes.RIM, false, 1.2)
 		else:
-			_flag[0] = q + Vector2(0, -8.0)
-			_flag[1] = q + Vector2(6.0, -5.6)
-			_flag[2] = q + Vector2(0, -3.2)
-			marks.draw_line(q, q + Vector2(0, -8.0), Color(0, 0, 0, 0.75), 3.0)
-			marks.draw_line(q, q + Vector2(0, -8.0), color, 1.4)
-			marks.draw_colored_polygon(_flag, color)
+			# (a pole with the tier's shape at its head: the best a star, a fair one a circle, a poor one a square, as the pennants, the arrows at the edge and the Map page have them)
+			marks.draw_line(q, q + Vector2(0, -7.0), Color(0, 0, 0, 0.75), 3.0)
+			marks.draw_line(q, q + Vector2(0, -7.0), color, 1.4)
+			TierMarks.draw_icon(marks, tier, q + Vector2(0, -10.0), 3.9)
 			if _cb:
 				CbShapes.mark(marks, "plus", q + Vector2(9.5, -3.0), 2.6, color)    # (Colour-blind markers: a house to claim has a plus)
 		return

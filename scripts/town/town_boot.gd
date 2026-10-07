@@ -13,6 +13,8 @@ const Arrival := preload("res://scripts/town/arrival.gd")
 const TownWorld := preload("res://scripts/town/town_world.gd")
 const TownSim := preload("res://scripts/town/town_sim.gd")
 const GD := preload("res://scripts/game_data.gd")
+const Hud := preload("res://scripts/ui/hud.gd")
+const Frames := preload("res://scripts/ui/frames.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 
@@ -203,6 +205,112 @@ static func paced(base_ms: float, frame_ms: float) -> float:
 	if frame_ms <= SLOW_FRAME_MS:
 		return base_ms
 	return clampf(frame_ms * 0.25, base_ms, SLOW_STEP_MS)
+
+
+## How many milliseconds of compiling or making a frame of the loading card may hold before it lets the card be drawn (one piece of work is never cut: a script's first `load` is its
+## whole compile, 5 to 60 ms on the desktop, so a frame is at most this and one piece more).
+const SLICE_MS := 25.0
+const SLICE_MS_WEB := 18.0
+
+
+static func slice_us() -> int:
+	return int((SLICE_MS_WEB if OS.has_feature("web") else SLICE_MS) * 1000.0)
+
+
+## The files of the rules' modules (`TownSim.PARTS`): the sim's `_init` loads each of them, and the first `load` of a script is its compile (the whole `TownSim.new` was 210 to 290 ms of it).
+static func sim_scripts() -> Array:
+	return TownSim.PARTS.values()
+
+
+## What the HUD makes its panels and its toolbar of, as work for `warm`: the pictures of the icons, and each frame of the noticeboard theme (`Frames.has` reads the picture and makes the
+## texture the first time: about half of the 100 ms `Hud.setup` was).
+static func hud_work(data: Dictionary) -> Array:
+	var out: Array = []
+	for key in data.icons:
+		out.append(GD.tex.bind(String(data.icons[key])))
+	for key in Hud.EXTRA_ICONS:
+		out.append(GD.tex.bind(String(Hud.EXTRA_ICONS[key])))
+	for name in Frames.names():
+		out.append(Frames.has.bind(name))
+	return out
+
+
+## The shaders the town's views wear (the minimap, the roofs, the rain, the wet ground, the room veils, the loot's shimmer, the dark grade, the hurt pulse). A renderer that builds a shader the first time
+## something wearing it is drawn (a browser's: the first frames of the game were 240 ms each, three in a row) makes it here instead, under the card, one or two a frame.
+const SHADERS := [
+	"res://scripts/ui/minimap.gdshader", "res://scripts/town/town_roofs.gdshader", "res://scripts/render/room_veil.gdshader", "res://scripts/render/loot_shimmer.gdshader",
+	"res://scripts/render/rain.gdshader", "res://scripts/render/rain_splash.gdshader", "res://scripts/render/wet_ground.gdshader", "res://scripts/render/dark_grade.gdshader",
+	"res://scripts/ui/hurt_pulse.gdshader",
+]
+static var _probes: Array = []
+
+
+## Work for `warm`: each shader of `SHADERS` drawn once, by a small square under the card's dark back (kept for the frame and freed after it).
+static func shader_work(card: Node) -> Array:
+	var out: Array = []
+	for path in SHADERS:
+		out.append(_draw_shader.bind(card, String(path)))
+	return out
+
+
+static func _draw_shader(card: Node, path: String) -> Variant:
+	if card == null or not is_instance_valid(card) or not ResourceLoader.exists(path):
+		return null
+	var shader = load(path)
+	if not (shader is Shader):
+		return null
+	var rect := ColorRect.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	rect.material = mat
+	rect.size = Vector2(6.0, 6.0)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(rect)
+	card.move_child(rect, 0)    # (under the card's back: drawn, not seen)
+	_probes.append(rect)
+	_held.append(shader)
+	return "frame"
+
+
+static func _free_probes() -> void:
+	for p in _probes:
+		if is_instance_valid(p):
+			(p as Node).queue_free()
+	_probes.clear()
+
+
+## The sound files the sound module loads when it is set up (all of assets/audio: 130 or so, 24 MB; loaded one by one that took 70 ms on the desktop and about 300 in a browser), as work for `warm`.
+static func sound_work() -> Array:
+	var out: Array = []
+	for f in ResourceLoader.list_directory("res://assets/audio"):
+		var name := String(f)
+		if name.get_extension() == "wav" or name.get_extension() == "ogg":
+			out.append("res://assets/audio/" + name)
+	return out
+
+
+## Does the work in `items` now, under the card, a few milliseconds a frame (`slice_us`), the bar going from `from` to `to`: a path is a script or a picture, loaded and held (so that
+## the `load` of it later, in the frame that needs it, finds it made: a script's first `load` is its compile), a Callable is called. A coroutine: the caller awaits it.
+static func warm(tree: SceneTree, card: Node, items: Array, from: float, to: float, text: String) -> void:
+	var i := 0
+	var t := Time.get_ticks_usec()
+	while i < items.size():
+		var item = items[i]
+		var own_frame := false
+		if item is Callable:
+			own_frame = item.call() is String    # (a Callable that answers with a word, "frame", has put something to be drawn: it gets the frame to itself)
+		elif ResourceLoader.exists(String(item)):
+			_held.append(load(String(item)))
+		i += 1
+		if own_frame or i >= items.size() or Time.get_ticks_usec() - t >= slice_us():
+			card_progress(card, lerpf(from, to, float(i) / float(items.size())), text)
+			await tree.process_frame
+			_free_probes()
+			t = Time.get_ticks_usec()
+
+
+## What `warm` loaded, kept for the run (a resource nobody holds is freed, and the next `load` of it would read it again).
+static var _held: Array = []
 
 
 ## Moves the card's bar to `share` (0 to 1) and puts a few words under it.

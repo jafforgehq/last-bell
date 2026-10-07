@@ -20,6 +20,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const KeyLegend := preload("res://scripts/ui/key_legend.gd")
 const AlertFeed := preload("res://scripts/ui/alert_feed.gd")
+const HudFree := preload("res://scripts/ui/hud_free.gd")
 
 ## The setting (a flag in the player's own file) that puts the lessons of the first house away for good.
 const LESSONS_OFF_FLAG := "oh_lessons_off"
@@ -86,6 +87,10 @@ var skipped := {}
 var _t := 0.0
 var _dirty := true
 var _arrow_on := false
+## The rectangles of the HUD's boards that are showing (read with the cards): the arrow's distance and the ring's words stay out of them.
+var _blocked: Array = []
+## How far (pixels) the ring's words ("ring") and the arrow's distance ("arrow") are slid from where they would stand, to be clear of those boards.
+var _slide := {}
 var _last_obj_sig := ""
 var _last_lesson_sig := ""
 
@@ -319,6 +324,9 @@ func refresh() -> void:
 	_refresh_lesson()
 	_refresh_radio()
 	_refresh_ring()
+	# (the boards of the HUD that the arrow's distance and the ring's words keep clear of: scripts/ui/hud_free.gd)
+	_blocked = HudFree.rects(main, hud, layer) if (_arrow_on or ring_label != "") and layer != null else []
+	_free_slide()
 
 
 func _player():
@@ -669,27 +677,65 @@ func _draw_layer() -> void:
 		return
 	var z: float = float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
 	var body := _avatar_body()
+	var boxes := _label_boxes(body, z)
 	if ring_label != "":
 		var r := maxf(RING_MIN_R, 0.55 * z)
 		layer.draw_arc(body, r, 0.0, TAU, 48, Color(0.04, 0.08, 0.07, 0.8), 6.0, true)
 		layer.draw_arc(body, r, -PI / 2.0, -PI / 2.0 + ring_t * TAU, 48, hud.ACCENT, 4.0, true)
 		var font := Fonts.cond(700)
-		var w := font.get_string_size(ring_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		var rect := Rect2(body + Vector2(-w * 0.5 - 8.0, r + 8.0), Vector2(w + 16.0, 22.0))
+		var rect := _kept_clear(boxes.ring, "ring")
 		layer.draw_rect(rect, Color(0.04, 0.08, 0.07, 0.82))
 		layer.draw_rect(rect, Color(hud.ACCENT, 0.7), false, 1.5)
 		layer.draw_string(font, rect.position + Vector2(8.0, 16.0), ring_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hud.INK)
 	if _arrow_on:
-		var dir := Vector2.from_angle(bearing)
-		var ring_r := maxf(ARROW_RING_MIN, 1.7 * z)
-		var tip := body + dir * ring_r
+		var tip: Vector2 = boxes.tip
 		_draw_chevron(layer, tip, bearing, 11.0, hud.ACCENT, Color(0.04, 0.08, 0.07, 0.85))
 		var font2 := Fonts.cond(700)
 		var label := "%d %s" % [roundi(distance), TILE_WORD]
-		var w2 := font2.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
-		var at := tip + dir * 20.0 - Vector2(w2 * 0.5, -5.0)
+		var at: Vector2 = _kept_clear(boxes.arrow, "arrow").position + Vector2(3.0, 14.0)
 		layer.draw_string_outline(font2, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, 4, Color(0, 0, 0, 0.9))
 		layer.draw_string(font2, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, hud.ACCENT)
+
+
+## Where the ring's words, the arrow's tip and the arrow's distance go as the geometry has them, before they are kept clear of the HUD's boards: {"ring": Rect2, "tip": Vector2, "arrow": Rect2}.
+func _label_boxes(body: Vector2, z: float) -> Dictionary:
+	var out := {"ring": Rect2(), "tip": body, "arrow": Rect2()}
+	if ring_label != "":
+		var r := maxf(RING_MIN_R, 0.55 * z)
+		var w := Fonts.cond(700).get_string_size(ring_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		out["ring"] = Rect2(body + Vector2(-w * 0.5 - 8.0, r + 8.0), Vector2(w + 16.0, 22.0))
+	if _arrow_on:
+		var dir := Vector2.from_angle(bearing)
+		var tip := body + dir * maxf(ARROW_RING_MIN, 1.7 * z)
+		var w2 := Fonts.cond(700).get_string_size("%d %s" % [roundi(distance), TILE_WORD], HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var at := tip + dir * 20.0 - Vector2(w2 * 0.5, -5.0)
+		out["tip"] = tip
+		out["arrow"] = Rect2(at + Vector2(-3.0, -14.0), Vector2(w2 + 6.0, 20.0))
+	return out
+
+
+## A box of the ring's words or of the arrow's distance moved by its slide from the place the geometry wants it at (found with the cards: `_free_slide`), kept inside the window.
+func _kept_clear(box: Rect2, which: String) -> Rect2:
+	var moved := Rect2(box.position + Vector2(_slide.get(which, Vector2.ZERO)), box.size)
+	return HudFree.fit_inside(moved, Rect2(Vector2.ZERO, layer.size).grow(-6.0))
+
+
+## With the cards (ten times a second): how far the ring's words and the arrow's distance must slide from where the geometry puts them to be in the free part of the screen.
+func _free_slide() -> void:
+	_slide = {}
+	if layer == null or (not _arrow_on and ring_label == ""):
+		return
+	var z: float = float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
+	var boxes := _label_boxes(_avatar_body(), z)
+	var bounds := Rect2(Vector2.ZERO, layer.size).grow(-6.0)
+	var placed: Array = []
+	for which in ["ring", "arrow"]:
+		var box: Rect2 = boxes[which]
+		if box.size == Vector2.ZERO:
+			continue
+		var spot := HudFree.nearest_free(box, bounds, _blocked, placed)
+		placed.append(spot.grow(2.0))
+		_slide[which] = spot.position - box.position
 
 
 func _draw_pill_arrow() -> void:
