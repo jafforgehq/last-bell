@@ -634,6 +634,10 @@ func post_goal(p) -> Dictionary:
 ## there); with no job, rest at a rest spot in the settlement game and stand at ease in the classic one.
 func goal_for(p) -> Dictionary:
 	if _quiet_night():
+		# (RULES2: a scavenger on a run is not called in to bed: the run goes on until the house is done, in the dark too)
+		var cs = sim.get("crew_search")
+		if cs != null and cs.is_out(p):
+			return cs.job_goal(p)
 		return night_goal(p)
 	var id := job_of(p)
 	if id == "":

@@ -635,19 +635,26 @@ func potential() -> Dictionary:
 		scrap += mini(sum, cap_of(int(h)))
 	var cells := {}
 	var s_n := 0
+	var s_secs := 0.0
 	for cell in _street:
 		var sum2 := 0
 		for id in _street[cell]:
 			sum2 += int(_pieces[id].scrap)
+			s_secs += float(_pieces[id].seconds)
 			s_n += 1
 		cells[cell] = mini(sum2, int(_num("caps.street_cell", 12.0)))
 	var s_scrap := 0
 	for cell in cells:
 		s_scrap += int(cells[cell])
-	return {"houses": houses, "scrap": scrap, "raw": raw, "street": s_n, "street_scrap": s_scrap}
+	# (RULES2: the longest any piece takes the avatar's hands, which must stay about 15 s or less, and what the street's pieces take in all)
+	var longest := 0.0
+	for id in _pieces:
+		longest = maxf(longest, float(_pieces[id].seconds))
+	return {"houses": houses, "scrap": scrap, "raw": raw, "street": s_n, "street_scrap": s_scrap, "street_secs": s_secs, "longest_s": longest}
 
 
-## The raw scrap and the seconds of the pieces of house `h` (all of them, no rules): {"scrap", "seconds", "pieces"}.
+## The raw scrap and the seconds of the pieces of house `h` (all of them, no rules): {"scrap", "seconds" (the avatar's hands, `seconds` x `seconds_mult` of each), "pieces", "capped" (the scrap
+## under the house's cap), "s_per_scrap" (seconds for a capped scrap: 8.9 in a town of seed 1, RULES2)}.
 func house_sum(h: int) -> Dictionary:
 	_ensure()
 	var scrap := 0
@@ -657,7 +664,8 @@ func house_sum(h: int) -> Dictionary:
 		scrap += int(_pieces[id].scrap)
 		secs += float(_pieces[id].seconds)
 		n += 1
-	return {"scrap": scrap, "seconds": secs, "pieces": n}
+	var capped := mini(scrap, cap_of(h))
+	return {"scrap": scrap, "seconds": secs, "pieces": n, "capped": capped, "s_per_scrap": secs / maxf(float(capped), 1.0)}
 
 
 # ------------------------------------------------------------------------------------ save --

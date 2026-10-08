@@ -69,7 +69,7 @@ const GROUPS := [
 ]
 
 ## Said under the table on the Controls page: the keys that belong to a card while it is up.
-const FOOTNOTE := "While a person at the door is talking, 1 2 3 answer them and E puts the card away. Enter or Space puts the dawn card away."
+const FOOTNOTE := "While a person at the door is talking, 1 2 3 answer them and E puts the card away. The morning card is only a summary: any key, or a click, puts it away (it goes by itself after ten seconds)."
 
 
 ## The groups for the way the mouse aims now (`always`: "Always aim at the mouse"): {"title", "rows"}, a row that is for the other way left out.

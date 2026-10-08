@@ -13,7 +13,7 @@
 ## puts a drizzle, a steady rain, a storm or none on that night on purpose to show the balance holds.
 ##
 ## WHAT THE RULES SEE. `sim.weather` is "clear", "rain" (a drizzle or a steady rain) or "storm" (the words the school's systems already read: base_life, the soundscape, the storyteller's
-## look); the dead's noise is multiplied by NOISE_RAIN while it rains (`field.noise_mult`: a shot carries a fifth less far); the crew's scavengers stay in during a storm (crew_search.gd). The
+## look); the dead's noise is multiplied by NOISE_RAIN while it rains (`field.noise_mult`: a shot carries a fifth less far); the crew's scavengers go out in any weather (crew_search.gd, RULES2). The
 ## clock's word (`word()`: clear, overcast, drizzle, rain, storm), the intensity (`level()`, 0 to 1: 0.30 a drizzle, 0.62 a steady rain, 1 a storm, each eased in and out) and the clouds
 ## (`cloud`) are what the view reads.
 ##
@@ -61,7 +61,7 @@ const TIPS := {
 	"overcast": "Clouds are gathering: rain is coming.",
 	"drizzle": "Drizzle. The rain is light: a shot carries a fifth less far, and the light is a little poorer.",
 	"rain": "Rain. A shot carries a fifth less far, the light is poor, and the ground is wet.",
-	"storm": "Storm. A shot carries a fifth less far, it is dark, and nobody goes out scavenging until it passes.",
+	"storm": "Storm. A shot carries a fifth less far, and it is dark.",
 }
 
 var sim

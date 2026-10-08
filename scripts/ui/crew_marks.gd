@@ -8,7 +8,7 @@
 ##   hurt        the cross: under HURT_AT of the health (amber, red under a quarter)
 ##   hungry      the fork and knife, or the glass for thirst (amber, red when it is costing health: starving, parched); the worse of the two
 ##   refusing    an amber hand: they would not do what you asked last (the radio's `radio_line` said no, or `radio.willingness` of the last order says no now), in their words
-##   searching   the scavenger's bag (CREW): they are on a search of a house, an order of the wheel's "Search a house" or the Scavenger job: "Searching 22 Elm St: 3 of 6. Back before the bell." (quiet, light grey)
+##   searching   the scavenger's bag (CREW): they are on a search of a house, an order of the wheel's "Search a house" or the Scavenger job: "Searching 22 Elm St: 3 of 6. Back when the house is done." (quiet, light grey)
 ##   at work     the icon of the station they are working at (the Duty roster's own): quiet, light grey
 ## THE CHIP'S COLOUR IS ALSO A SHAPE, always (UI polish): at its top right corner, by how bad it is (a diamond for danger, a triangle for a warning, a ring for "stable"; none for a quiet state), next to
 ## the glyph that says what it is. COLOUR-BLIND MARKERS (Settings, `Access.markers()`) add to the card's thin health bar quarter notches and, under HURT_AT, a dashed fill, so that the state of a person
@@ -167,10 +167,10 @@ func kind_of(p, sim) -> Dictionary:
 		return _k("refuse", "", hud.WARN, String(no.tip), [], "hand")
 	var cs = sim.get("crew_search")
 	if cs != null and not p.player and hud.icons.has("scavenge"):
-		# (CREW: on a search of a house, an order or the Scavenger's job: where, how far they are, and that they are back before the bell)
+		# (CREW: on a search of a house, an order or the Scavenger's job: where, how far they are, and that they come back when the house is done)
 		var said: String = cs.run_text(p)
 		if said != "":
-			return _k("search", "scavenge", hud.INK2, "%s. Back before the bell." % said, ["scavenge"])
+			return _k("search", "scavenge", hud.INK2, "%s. Back when the house is done." % said, ["scavenge"])
 	var jobs = sim.get("jobs")
 	if jobs != null and not p.player and String(p.work) != "":
 		var st: Dictionary = jobs.station(jobs.job_of(p))

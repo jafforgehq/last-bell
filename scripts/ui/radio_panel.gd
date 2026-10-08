@@ -270,6 +270,9 @@ func page_available(page: String) -> bool:
 		# (round 26: an avatar game with no town, an old Full crew save, has the tab too: the page says there is no town to go out to)
 		return (town != null and bool(town.on)) or (sim != null and String(sim.get("player_id")) != "")
 	if page == "base":
+		# (RULES2: the town has no Base page: its priorities and the briefing's card are gone, the morning is one summary card)
+		if _is_town():
+			return false
 		# (round 25: the small start with an avatar, where the priorities and the dials are in play)
 		var sim2 = _sim()
 		var town2 = sim2.get("town") if sim2 != null else null
