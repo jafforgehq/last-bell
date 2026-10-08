@@ -63,7 +63,7 @@ const FALLBACK := {
 	"ideas_from_day": 2,
 	"start": {"hour": 7.0, "stock": {"ammo": 40, "scrap": 10, "food": 12, "water": 18, "meds": 2}},
 	"arrival": {"mark_r": 14.0, "lone_dead": {"from": 12.0, "to": 15.0}, "quiet_r": 24.0},
-	"modules_from_crew": {"briefing": 3, "priorities": 3, "initiative": 3, "relations": 4, "policies": 99, "problems": 99, "dilemmas": 99, "specialists": 99},
+	"modules_from_crew": {"briefing": 99, "priorities": 99, "initiative": 3, "relations": 4, "policies": 99, "problems": 99, "dilemmas": 99, "specialists": 99},
 	"attack": {"from_rescue": 2, "cutoff_hour": 17.0},
 	"night": {"first": 1.0, "growth": 0.15},
 	"big_night": {},
@@ -566,6 +566,10 @@ func apply_stage() -> void:
 		var m = sim.get(String(name))
 		if m != null and "enabled" in m:
 			m.enabled = crew >= int(table[name])
+	# (RULES2: the priorities have no UI in the town: whatever an old save had ranked falls back to the module's default, none set, and its levers read zero)
+	var pr = sim.get("priorities")
+	if pr != null and "enabled" in pr and not bool(pr.enabled) and "order" in pr and not (pr.order as Array).is_empty():
+		pr.order = []
 
 
 # ----------------------------------------------------------------- the stages --

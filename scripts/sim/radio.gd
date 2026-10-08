@@ -322,11 +322,12 @@ func willingness(contact, verb: String) -> Dictionary:
 		out["line"] = String(LINES[verb][out.tone])
 		return out
 	if verb == "search" and _town_search():
-		# (One House, CREW: a search order is "Search a house": the person's own reasons, scripts/town/crew_search.gd `person_reason`: nearly dark, on the watch, hurt, two already out)
-		var tn: Dictionary = sim.crew_search.person_reason(contact)
-		if not tn.is_empty():
-			var said := String(tn.reason)
-			return _refused(out, "%s: %s, can't search" % [first, said], said.substr(0, 1).to_upper() + said.substr(1) + ", can't search.", bool(tn.hard))
+		# (One House, RULES2: "when I say someone to scavenge a house he must do that, it is not optional". Past the physical reasons above (down, gone, away, in a breakdown, leaving, out with a party)
+		# a search order has NO reason to refuse: not the weather, the hour, the watch, a wound, a fever, hunger, a shaken mind, a friend, their trust (it only colours their words) or the distance.
+		# The house's own reasons (not cleared, nothing left, no way in) are asked after: scripts/town/crew_search.gd `house_refusal`.)
+		out["delay_s"] = DELAY_FAST
+		out["line"] = String(LINES[verb][out.tone])
+		return out
 	var reason := _busy_soft(contact)
 	if reason == "" and verb != "hold":
 		reason = _health_reason(contact)
@@ -470,8 +471,8 @@ func request(contact, verb: String, args: Dictionary = {}) -> Dictionary:
 	return {"ok": true, "line": String(w.line), "why": "", "delay_s": float(w.delay_s), "tone": String(w.tone), "insisted": insisted, "hard": false}
 
 
-## One House: a search order is for a house (`args.at`, a point of it) and the crew search module judges the house with the person: not cleared, already searched, nobody is let into a house with
-## dead (hard), too far from home (soft: insisting sends them). The house's reasons come before the person's soft ones.
+## One House: a search order is for a house (`args.at`, a point of it) and the crew search module judges the house with the person: not cleared (dead in it), nothing left to search, no way in (all
+## hard: they cannot be done). RULES2: no distance, no dead about the door, no state of the person is a reason.
 func _town_search() -> bool:
 	return sim.is_one_house() and sim.get("crew_search") != null
 
@@ -479,8 +480,8 @@ func _town_search() -> bool:
 func _town_search_answer(contact, w: Dictionary, args: Dictionary, lead) -> Dictionary:
 	var cs = sim.crew_search
 	var hr: Dictionary = cs.house_refusal(contact, cs.house_of_point(_point(args.get("at"), _aim_point(lead))))
-	if hr.is_empty() or not (bool(w.ok) or bool(hr.hard)):
-		return w
+	if hr.is_empty() or (not bool(w.ok) and bool(w.hard)):
+		return w    # (a person who cannot go at all says so first: "Kofi is down", not what is wrong with the house)
 	return _refused(w, String(hr.why), String(hr.line), bool(hr.hard))
 
 

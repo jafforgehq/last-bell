@@ -1,15 +1,20 @@
-## The dawn tally (One House, NIGHTEV): a card on the first frames of each morning that tells the night in four lines and the day's first thing to do. A VIEW PART of the
-## town's facade (scripts/town/town_game.gd). (The classic game's morning assembly is scripts/ui/dawn_card.gd, the storyteller's, which is off in the town: this is the town's.)
+## The morning summary (One House, NIGHTEV, RULES2): ONE card on the first frames of each morning that tells what happened in the night, the stores now and what changed, who does what,
+## the weather with the clock to dusk, and the one thing that matters next. A SUMMARY AND NOTHING ELSE: nothing to choose, no button that does anything but put it away, nothing that waits for
+## it. A VIEW PART of the town's facade (scripts/town/town_game.gd). (The classic game's morning assembly is scripts/ui/dawn_card.gd, the storyteller's, which is off in the town; the school's
+## briefing card with its priority chips, scripts/ui/briefing_card.gd, is off in the town too: `briefing` and `priorities` are 99 in `modules_from_crew`, so the priorities stay at their default.)
 ##
 ##   title    "Morning" (a quiet night), or "The night is over" after one when the dead came (`scenario.attacks_on()` at any time of it)
 ##   rows     after an attack: Walls held (3 of 4 sections), Dead put down, Hurt, Lost; after a quiet night only what happened (kills, the hurt, the lost), or "A quiet night."
-##            then "Fence needs mending: 2 sections" when a section is down or worn (the avatar's mend rule: under 95% of its hit points) and "Low: food (1 day)" when stores run short
+##            then "Fence needs mending: 2 sections" when a section is down or worn (the avatar's mend rule: under 95% of its hit points) and "Low: food (1 day)" when stores run short;
+##            STORES (food, water, ammo, scrap, meds now, and what changed since the last morning), what the scavengers found yesterday, CREW (who does what), OUTSIDE (the weather, rain to come
+##            today, the clock to dusk)
 ##   today    the objective's words (`scenario.objective()`), the new day's first suggestion
-##   button   "Good morning" (a click, Enter or Space; the key goes to the card and not to the game while it is up), and it goes by itself after `SHOW_S` seconds: a bar runs down
+##   dismiss  a click on the card, any key (the key goes on to the game, but Enter, Space and Esc are the card's) or a click in the world, the "Good morning" button, or by itself after
+##            `SHOW_S` seconds: a bar runs down. Nobody has to.
 ##
 ## It is NON-MODAL: the game does not pause, WASD still walks (a player in a fight at dawn is never held), the card sits clear of the avatar (below her, or above when there is no
 ## room: she is where the camera is), and it is put away while a menu or a page is over the game. It waits for the sleep fade ("You slept until dawn") to end, so the two never
-## stack, and the morning briefing's card (the HUD's) waits for it as it waits for the classic dawn card (`hud.briefing_gate`). After the FIRST held attack the run is over and
+## stack. After the FIRST held attack the run is over and
 ## the end card has the screen: no tally then (the card waits `DELAY_S` of rules time after the day begins, for the rules to judge the night, and is dropped on `held`, `over`).
 ##
 ## THE NIGHT'S NUMBERS are the card's own record, kept by looking each frame (the storyteller that would keep them is off in the town, and nothing in the rules is written): from the
@@ -28,8 +33,13 @@ const SHOW_S := 10.0
 const FADE_S := 0.3
 const DELAY_S := 0.6
 ## The card's width (less in a narrow window), the gap from the screen's edge, and the room kept clear round the avatar: above her head and below her feet (her name).
-const CARD_W := 420.0
+const CARD_W := 500.0
 const CARD_W_MIN := 300.0
+## A key or a click in the world puts the card away only after this many real seconds (a key pressed as the card comes up is not a wish to be rid of it).
+const KEY_GRACE_S := 0.6
+## The stores the summary names, in the order it names them, and the words of a person's stance for the crew row.
+const STORES := [["food", "Food"], ["water", "Water"], ["ammo", "Ammo"], ["scrap", "Scrap"], ["meds", "Meds"]]
+const STANCE_DOES := {"follow": "with you", "hold": "holding", "cover": "covering you", "search": "searching", "back": "going back to work"}
 const EDGE := 12.0
 const TOP_MIN := 78.0
 const HEAD_TILES := 1.25
@@ -71,6 +81,8 @@ var _hp_low := {}
 var _fell := {}
 var _hurt := {}
 var _attack := false
+## The stores at the last morning (whole numbers), for "what changed"; {} before the first look.
+var _stores0 := {}
 ## The morning that waits for its card.
 var _pending := false
 var _pending_t0 := 0.0
@@ -207,10 +219,27 @@ func _make_tally(day: int, had_night: bool) -> Dictionary:
 	for id in _hurt:
 		if not lost.has(String(_hurt[id])):
 			hurt.append(String(_hurt[id]))
+	var stores := _stores_now()
+	var delta := {}
+	if not _stores0.is_empty():
+		for k in stores:
+			delta[k] = int(stores[k]) - int(_stores0.get(k, stores[k]))
+	_stores0 = stores.duplicate()    # (the next morning's change is counted from this one)
 	return {
 		"day": day, "night": had_night, "attack": _attack and had_night, "kills": maxi(0, int(sim.kills) - _kills0) if had_night else 0,
-		"walls_total": secs.size(), "walls_held": maxi(secs.size() - fell, 0), "hurt": hurt, "lost": lost,
+		"walls_total": secs.size(), "walls_held": maxi(secs.size() - fell, 0), "hurt": hurt, "lost": lost, "stores": stores, "delta": delta,
 	}
+
+
+## The stores as whole numbers: {"food": 11, "water": 17, ...}.
+func _stores_now() -> Dictionary:
+	var sim = _sim()
+	var out := {}
+	var stock = sim.get("stock") if sim != null else null
+	if stock is Dictionary:
+		for pair in STORES:
+			out[String(pair[0])] = roundi(float((stock as Dictionary).get(String(pair[0]), 0.0)))
+	return out
 
 
 # --------------------------------------------------------------------------- events --
@@ -233,17 +262,27 @@ func modal() -> bool:
 	return false
 
 
-## Enter or Space puts the card away (the key is the card's while it is up).
+## Any key puts the card away, and goes on to the game (a walking key still walks; nothing waits for the card). Enter, Space and Esc are the card's: they put it away and go no further
+## (Space is not a pause and Esc is not the menu while the card is up). A click in the world puts it away too, and still shoots, asks or uses.
 func on_key(ev: InputEvent) -> bool:
-	if not open or card == null or not card.visible or not (ev is InputEventKey):
+	if not open or card == null or not card.visible:
 		return false    # (a card hidden under a menu or a page does not take the keys)
+	if ev is InputEventMouseButton:
+		var mb := ev as InputEventMouseButton
+		if mb.pressed and _opened_s >= KEY_GRACE_S:
+			_close(false)
+		return false
+	if not (ev is InputEventKey):
+		return false
 	var k := ev as InputEventKey
 	if not k.pressed or k.echo:
 		return false
 	var code: Key = k.keycode if k.keycode != KEY_NONE else k.physical_keycode
-	if code == KEY_ENTER or code == KEY_KP_ENTER or code == KEY_SPACE:
+	if code == KEY_ENTER or code == KEY_KP_ENTER or code == KEY_SPACE or code == KEY_ESCAPE:
 		_close(false)
 		return true
+	if _opened_s >= KEY_GRACE_S:
+		_close(false)
 	return false
 
 
@@ -258,6 +297,7 @@ func on_frame(dt: float) -> void:
 	if not _started:
 		_started = true
 		_last_day = int(sim.day)
+		_stores0 = _stores_now()
 	if _debug != "" and not _debug_done:
 		_debug_done = true
 		_debug_start()
@@ -350,8 +390,11 @@ func rows_for(t: Dictionary) -> Array:
 			var held := int(t.get("walls_held", 0))
 			rows.append(["Walls held", "%d of %s" % [held, _plural(total, "section", "sections")], "ok" if held == total else "warn"])
 		rows.append(["Dead put down", str(kills), ""])
-		rows.append(["Hurt", _names(hurt, "nobody"), "warn" if not hurt.is_empty() else ""])
-		rows.append(["Lost", _names(lost, "nobody"), "bad" if not lost.is_empty() else ""])
+		if hurt.is_empty() and lost.is_empty():
+			rows.append(["Hurt or lost", "nobody", ""])
+		else:
+			rows.append(["Hurt", _names(hurt, "nobody"), "warn" if not hurt.is_empty() else ""])
+			rows.append(["Lost", _names(lost, "nobody"), "bad" if not lost.is_empty() else ""])
 	else:
 		if kills > 0:
 			rows.append(["Dead put down", str(kills), ""])
@@ -367,7 +410,120 @@ func rows_for(t: Dictionary) -> Array:
 	var low := _stores_low()
 	if low != "":
 		rows.append(["", low + ".", "warn"])
+	# (RULES2: the rest of the summary: the stores and what changed, what the scavengers brought, who does what, the weather and the clock)
+	var stores_text := _stores_text(t)
+	if stores_text != "":
+		rows.append(["Stores", stores_text, ""])
+	var scav := _scavengers_text()
+	if scav != "":
+		rows.append(["", scav + ".", "ok"])
+	var crew := _crew_text()
+	if crew != "":
+		rows.append(["Crew", crew, ""])
+	var outside := _outside_text()
+	if outside != "":
+		rows.append(["Outside", outside, ""])
 	return rows
+
+
+## "Food 11 (-2)   Water 17   Ammo 272 (-5)   Scrap 11 (+30)   Meds 6": the stores now, and what changed since the last morning in brackets.
+func _stores_text(t: Dictionary) -> String:
+	var stores = t.get("stores", {})
+	if not (stores is Dictionary) or (stores as Dictionary).is_empty():
+		return ""
+	var delta = t.get("delta", {})
+	var bits: Array = []
+	for pair in STORES:
+		var k := String(pair[0])
+		if not (stores as Dictionary).has(k):
+			continue
+		var bit := "%s\u00a0%d" % [String(pair[1]), int((stores as Dictionary)[k])]
+		var d := int((delta as Dictionary).get(k, 0)) if delta is Dictionary else 0
+		if d != 0:
+			bit += "\u00a0(%s%d)" % ["+" if d > 0 else "-", absi(d)]
+		bits.append(bit)
+	return "   ".join(bits)
+
+
+## What the Scavengers brought in yesterday ("Scavengers found: 12 food, 6 scrap yesterday"), or "".
+func _scavengers_text() -> String:
+	var sim = _sim()
+	var cs = sim.get("crew_search") if sim != null else null
+	if cs != null and cs.has_method("yesterday_text"):
+		return String(cs.yesterday_text())
+	return ""
+
+
+## Who does what: "Beth: Builders; Kofi: Scavenger" (the others, not the avatar), or "".
+func _crew_text() -> String:
+	var sim = _sim()
+	if sim == null:
+		return ""
+	var bits: Array = []
+	for p in sim.people:
+		if p.dead or p.turned or p.player:
+			continue
+		bits.append("%s: %s" % [String(p.first), _does(p)])
+	return "; ".join(bits)
+
+
+## One person's day in a few words: down or hurt, their job's name, else what they were asked to do, else nothing in particular.
+func _does(p) -> String:
+	var sim = _sim()
+	var what := ""
+	var jobs = sim.get("jobs")
+	if jobs != null and jobs.has_method("job_of"):
+		var sid := String(jobs.job_of(p))
+		if sid != "":
+			var st: Dictionary = jobs.station(sid) if jobs.has_method("station") else {}
+			what = String(st.get("name", sid.capitalize()))
+	if what == "":
+		what = String(STANCE_DOES.get(String(p.stance), "no job"))
+	if p.downed:
+		return "down (%s)" % what
+	if float(p.hp) < 50.0 or float(p.bleeding) > 0.0:
+		return "%s, hurt" % what
+	return what
+
+
+## "9°C, clear. Rain expected about 14:00. Dusk in 12h 25m.": the weather as it is, rain that today's sky will bring, and the clock to dusk.
+func _outside_text() -> String:
+	var sim = _sim()
+	if sim == null:
+		return ""
+	var h := float(sim.hour)
+	var seasons = sim.get("seasons")
+	var temp := roundi(seasons.temperature(h)) if seasons != null and seasons.campaign else roundi(9.0 + 8.0 * maxf(0.0, sin((h - 8.0) / 24.0 * TAU)))
+	var skies = sim.get("skies")
+	var word := String(skies.word()) if skies != null and skies.has_method("word") else String(sim.weather)
+	var out := "%d°C, %s." % [temp, word]
+	var ahead := _rain_ahead(skies, h)
+	if ahead != "":
+		out += " " + ahead + "."
+	var to_dusk := fposmod((seasons.dusk_hour() if seasons != null else 19.0) - h, 24.0)
+	if String(sim.phase) == "day":
+		out += " Dusk\u00a0in\u00a0%dh\u00a0%02dm." % [int(to_dusk), int(fmod(to_dusk, 1.0) * 60.0)]
+	return out
+
+
+## "Rain expected about 14:00" when the day's schedule has a wet spell still to come (the schedule is the seed's: nothing held by a staging), else "".
+func _rain_ahead(skies, h: float) -> String:
+	if skies == null or not skies.has_method("period") or not skies.has_method("raining") or bool(skies.raining()):
+		return ""
+	if String(skies.get("_force")) != "" or String(skies.get("_first_night")) != "":
+		return ""
+	var sim = _sim()
+	var k := int(sim.day) - 1
+	if k < 0:
+		return ""
+	var p: Dictionary = skies.period(k)
+	if not bool(p.get("wet", false)):
+		return ""
+	var from_h := 7.0 + float(p.s) - 24.0 * float(k)
+	if from_h >= 24.0 or from_h <= h:
+		return ""
+	var kind: String = {"drizzle": "drizzle", "steady": "rain", "storm": "storm"}.get(String(p.kind), "rain")
+	return "%s\u00a0expected\u00a0about\u00a0%02d:%02d" % [kind.capitalize(), int(from_h), floori(fmod(from_h, 1.0) * 6.0) * 10]
 
 
 # ------------------------------------------------------------------------------ card --
@@ -405,11 +561,20 @@ func _open() -> void:
 		st.content_margin_right = 20
 		st.content_margin_top = 14
 		st.content_margin_bottom = 14
-	var col: VBoxContainer = hud._vbox(7)
+	# (a click on the card puts it away: the card takes the click, so it is not a shot)
+	card.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT and open:
+			_close(false))
+	var col: VBoxContainer = hud._vbox(5)
 	card.add_child(col)
-	col.add_child(hud._label("DAY %d" % int(t.get("day", sim.day)), Fonts.cond(600, 2), 14, hud.ACCENT))
-	_title = hud._label(title_text, Fonts.cond(700), 32, hud.INK)
-	col.add_child(_title)
+	var head: HBoxContainer = hud._hbox(10)
+	_title = hud._label(title_text, Fonts.cond(700), 28, hud.INK)
+	head.add_child(_title)
+	head.add_child(hud._spacer())
+	var day_l: Label = hud._label("DAY %d" % int(t.get("day", sim.day)), Fonts.cond(600, 2), 14, hud.ACCENT)
+	day_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(day_l)
+	col.add_child(head)
 	col.add_child(_rule())
 	_wrap_inner = []
 	_wrap_value = []
@@ -442,7 +607,7 @@ func _open() -> void:
 	_bar.draw.connect(_draw_bar)
 	col.add_child(_bar)
 	var foot: HBoxContainer = hud._hbox(10)
-	var hint: Label = hud._label("Enter or Space", Fonts.sans(400), 13, hud.INK3)
+	var hint: Label = hud._label("Any key, or a click", Fonts.sans(400), 13, hud.INK3)
 	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	foot.add_child(hint)
 	foot.add_child(hud._spacer())
@@ -464,7 +629,7 @@ func _open() -> void:
 func _add_row(col: VBoxContainer, label: String, value: String, tone: String) -> void:
 	var color := _tone_color(tone)
 	if label == "":
-		var line: Label = hud._label(value, Fonts.sans(600), 15, color)
+		var line: Label = hud._label(value, Fonts.sans(600), 14, color)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(line)
 		_wrap_inner.append(line)
@@ -474,7 +639,7 @@ func _add_row(col: VBoxContainer, label: String, value: String, tone: String) ->
 	l.custom_minimum_size.x = LABEL_W
 	l.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(l)
-	var v: Label = hud._label(value, Fonts.sans(600), 16, color)
+	var v: Label = hud._label(value, Fonts.sans(600), 15, color)
 	v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(v)

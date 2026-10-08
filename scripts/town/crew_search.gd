@@ -5,21 +5,20 @@
 ## every container that is not searched yet, nearest first, 4 s each (the container's own `search_s`), standing at the container's spot. The loot goes straight into `sim.stock` and the
 ## container is looted for good (`search.mark_looted`: the same as the avatar's session, so the pops over the container and the ticks work for them too). When the last one is done the
 ## order is over: they are back to their job or their rest spot, and the radio hears what they found. One house to an order.
-## THE JOB, "Scavenger" (a station of two seats that the claim installs: jobs.gd `install_layout`; never filled by Auto-assign, Fill empty seats or the priorities): by day they take the nearest
-## cleared house (to the base's middle, within FAR_TILES) that still has something to search, search it, and then the next. At the bell less HOME_MIN minutes they are back at the base. With
+## THE JOB, "Scavenger" (a station of two seats that the claim installs: jobs.gd `install_layout`; never filled by Auto-assign, Fill empty seats or the priorities): they take the nearest
+## cleared house (to the base's middle, within FAR_TILES) that still has something to search, search it, and then the next, at any hour and in any weather. With
 ## nothing left they stand at their seat and the Jobs row says so ("Nothing left to search: clear another house"); then, if the town has a salvage module (`sim.salvage`, SALVAGE), they ask it for
 ## strip work: the furniture of the cleared houses (`salvage.candidates(house)`), then the wrecks of the street near the base (`salvage.street_candidates`), each piece with its own seconds, the scrap
 ## into the stores by `salvage.strip(id, person)`. Without that module this part does nothing of the kind.
 ##
-## THE RULES (the order's refusals are the radio's own, `radio.willingness` and `radio.request`, in the radio's words and with Insist for a soft one; the job asks the same list):
-##   the person: it is nearly dark (the bell is within DARK_MIN minutes, or it is not day: nobody goes out; hard) - busy on the watch (the posts are manned; hard) - hurt, needs rest (under half
-##     their health, or bleeding; soft) - two are already out searching (MAX_OUT at once; hard).
-##   the house: not cleared yet, there are dead in it (`clearing.house_clear` and none in it now; hard) - already searched (hard) - too far from home (more than FAR_TILES from the base's middle;
-##     soft) - too dangerous, dead about (an awake one within DANGER_DOOR tiles of the front door, or within DANGER_ME of the person, or one that is after them; hard: the order is refused, the
-##     job tries the next house and waits when there is none).
-## SAFETY. A person outside is a person: the dead near them wake (`field._wake_near`, a smaller circle than the avatar's), notice them and bite them. A run ends, and they go home, when they are
-## bitten or hurt, when one of the dead is after them or within DANGER_R tiles, when it is nearly dark (the order's too: HOME_MIN), and when they cannot get there. Deaths are real.
-## Never into a house with dead: the order is refused, the job skips it.
+## THE RULES (RULES2, the owner: "when I say someone to scavenge a house he must do that, it is not optional"): AN ORDER IS OBEYED. The radio asks `person_reason` (nothing, ever: no storm, no
+##   rain, no dark, no curfew, no watch, no tiredness, no wound, no distrust, no fear, no distance, no dead about, no cap of two out at once) and `house_refusal`, which says no only to what cannot be
+##   done: no house under the click, a house that is not cleared (there are dead in it: not a house to search), a house with nothing left to search (or whose last containers somebody else is on) and a
+##   house with no way in. A person who cannot go at all (dead, down, away, in a breakdown, the one you play) is the radio's own hard reason. Each of those "no"s is said, with its reason, in the toast.
+## A RUN ENDS only when the house is done, when the person is down or dead, when they cannot get there (stuck), or when the PLAYER takes it back (a new order, "Go back", the call to arms). Not by the
+##   weather, the dark, a wound, a bite, or the dead near them: a person outside is a person (the dead near them wake, `field._wake_near`, a smaller circle than the avatar's, notice them and bite
+##   them; they shoot what they see, as everyone does) and deaths are real. One exception, for the JOB's runs only and not for the order's: the base's own night posts (the call to arms, or an attack night:
+##   `sim.posts_manned()`) take the scavengers to the wall, as they take everyone, and no job run starts then. An order keeps its person out through the posts too.
 ## NOISE. They make none: nothing here calls the field's `noise`. (They shoot what they see, as every person does: that is the rules' own.)
 ## FOR OTHERS. `plan(house_id, room_idx, from_pos)` and `eta(plan, from_pos)` are LOOT's `RoomSearch.plan` and `eta` in name and shape: when scripts/town/room_search.gd exists they are its own order
 ## (a room finished before the next), else the nearest-first chain here.
@@ -27,21 +26,14 @@
 ## State: `runs` (person id to the run), saved with the day's tally. Each run: {"kind": "order"|"job", "mode": "search"|"strip"|"street", "house" (-1 in the street), "stage": "door"|"search"|"strip",
 ## "cur" (the container's or piece's id, or ""), "t" (seconds into it), "found" (stock key to n), "n" (done), "total", "hp", "wounds", "stuck", and for a strip "spot", "at", "secs", "name", "skip"}.
 ## Events: {"type": "searched", ..., "who", "name"} for each container (search.gd `mark_looted`), {"type": "crew_search", "who", "name", "what", "text", "level", "house"} when a run ends
-## ("done", "dark", "bitten", "hurt", "danger", "stuck") or an order does not begin ("stopped"): the town's HUD toasts the text.
+## ("done", "posts", "stuck") or an order does not begin ("stopped", with its reason): the town's HUD toasts the text.
 extends RefCounted
 
 const ROOM_SEARCH := "res://scripts/town/room_search.gd"
 const SearchRules := preload("res://scripts/town/search.gd")
+## How far from the base's middle the JOB looks for a house (the job's own range, not a refusal: an order may name any cleared house).
 const FAR_TILES := 35.0
-const DARK_MIN := 90.0
-const HOME_MIN := 60.0
-const JOB_START_MIN := 120.0
-const MAX_OUT := 2
-const DANGER_DOOR := 15.0
-const DANGER_R := 8.0
-const DANGER_ME := 10.0
-const HURT_AT := 50.0
-const HURT_END := 25.0
+## Hit points lost, or a new wound, that count as a bite in the run's record (nobody turns back for it).
 const BITE_HP := 4.0
 const STUCK_S := 4.0
 const SEARCH_S := 4.0
@@ -58,17 +50,9 @@ const IDLE_S := 2.0
 ## A house (or a wreck) that gave no strip work when they got there is not tried again for this long (seconds of this part's own age).
 const NOWORK_S := 300.0
 const STOCKS := ["food", "water", "ammo", "scrap", "meds"]
-## What the radio says (the person's reasons carry their name in the radio's words: "Femi: hurt and needs rest, can't search").
-const R_DARK := "it is nearly dark"
-## (RAIN) in a storm nobody goes out: `sim.weather` is "storm" (scripts/town/skies.gd).
-const R_STORM := "it is pouring"
-const R_WATCH := "busy on the watch"
-const R_HURT := "hurt and needs rest"
-const R_OUT := "two are already out searching"
+## What the radio says when an order cannot be done at all (RULES2: the only reasons left; there is no reason of the weather, the dark, the person's state or the distance).
 const R_NOT_CLEARED := "Not cleared yet: there are dead in it"
 const R_SEARCHED := "Already searched"
-const R_FAR := "Too far from home"
-const R_DANGER := "Too dangerous: dead about"
 const R_NO_HOUSE := "Click a house"
 const R_NO_WAY := "No way in"
 const NOTHING_LEFT := "Nothing left to search: clear another house"
@@ -175,25 +159,6 @@ func _person(id: String):
 ## Whether this person is in a state to be sent anywhere (not the player, not lost, down or away, not in a breakdown).
 func _able(p) -> bool:
 	return p != null and not (p.dead or p.turned or p.downed or p.player) and p.away == null and not sim.morale.breakdown(p)
-
-
-# --------------------------------------------------------------------------- the clock --
-
-## Game minutes to the bell (the dusk); negative or zero when it is not the day any more.
-func minutes_to_bell() -> float:
-	if String(sim.phase) != "day":
-		return -1.0
-	return (float(sim.seasons.dusk_hour()) - float(sim.hour)) * 60.0
-
-
-## Whether it is too late for anyone to be sent out (the order): the bell is within DARK_MIN minutes.
-func nearly_dark() -> bool:
-	return minutes_to_bell() < DARK_MIN
-
-
-## Whether a run in progress has to turn back now (a person is home at the bell less HOME_MIN; the posts are manned: the alarm, a day under attack).
-func _late() -> bool:
-	return minutes_to_bell() < HOME_MIN or sim.posts_manned()
 
 
 # ----------------------------------------------------------------------- the houses --
@@ -350,47 +315,33 @@ func _no(why: String, hard: bool, line: String = "") -> Dictionary:
 	return {"ok": false, "why": why, "line": line if line != "" else why + ".", "hard": hard}
 
 
-## Why this person would not go and search anything now ({} when they would): {"reason" (in the radio's words, after their name: "hurt and needs rest"), "hard"}.
-func person_reason(p) -> Dictionary:
-	if nearly_dark():
-		return {"reason": R_DARK, "hard": true}
-	if String(sim.weather) == "storm":
-		return {"reason": R_STORM, "hard": true}
-	if sim.posts_manned():
-		return {"reason": R_WATCH, "hard": true}
-	if hurt(p):
-		return {"reason": R_HURT, "hard": false}
-	if out_count(p) >= MAX_OUT:
-		return {"reason": R_OUT, "hard": true}
+## Why this person would not go and search anything now: never a reason ({}), whatever the weather, the hour, their health, their trust or the dead about (RULES2: an order is obeyed).
+## What cannot be done at all (they are down, gone, away, in a breakdown) is the radio's own hard reason, asked before this. Kept so that the radio's call and the tests' still have it.
+func person_reason(_p) -> Dictionary:
 	return {}
 
 
-## Under half their health, or bleeding.
-func hurt(p) -> bool:
-	return float(p.hp) < HURT_AT or float(p.bleeding) > 0.0
+## Why this person cannot be sent: "down", "has turned"... in words for the toast, "" when they can go (the same list as the radio's hard reasons).
+func unable_why(p) -> String:
+	if p == null:
+		return "nobody answers"
+	if p.turned:
+		return "has turned"
+	if p.dead:
+		return "is gone"
+	if p.downed:
+		return "is down"
+	if p.away != null:
+		return "is away"
+	if p.player:
+		return "that is you"
+	if sim.morale.breakdown(p):
+		return "is having a breakdown"
+	return ""
 
 
-## How many are out (on a run) or about to go (an order the radio has agreed to and is waiting on), not counting `except`.
-func out_count(except = null) -> int:
-	var n := 0
-	var skip := String(except.id) if except != null else ""
-	for id in runs:
-		if String(id) != skip:
-			n += 1
-	var radio = sim.get("radio")
-	if radio != null:
-		for e in radio.pending:
-			if String(e.verb) == "search" and String(e.who) != skip and not runs.has(String(e.who)):
-				n += 1
-	return n
-
-
-## Whether the dead are too near this person to send them anywhere: one within DANGER_ME tiles of them, or one that is after them.
-func _danger_to(p) -> bool:
-	return p != null and (dead_about(Vector2(p.x, p.y), DANGER_ME) > 0 or _hunted(p))
-
-
-## Why this house cannot be searched (`containers`: or stripped, when false) by this person now ({} when it can): {"ok": false, "why", "line", "hard"}. The person's own reasons are `person_reason`.
+## Why this house cannot be searched (`containers`: or stripped, when false) by this person now ({} when it can): {"ok": false, "why", "line", "hard"}. Only what cannot be done: no house, dead in it,
+## nothing left to search, no way in. Not the distance, not the dead near the door or the person (RULES2). The person's own reasons are `person_reason` (none).
 func house_refusal(p, h: int, containers: bool = true) -> Dictionary:
 	var hs = _houses()
 	var cl = _clearing()
@@ -406,14 +357,9 @@ func house_refusal(p, h: int, containers: bool = true) -> Dictionary:
 				if not _search().is_looted(String(c.id)):
 					anyone = true
 			return _no("Somebody is already searching it" if anyone else R_SEARCHED, true)
-	var base = _base()
-	if base != null and base.claimed and base.center().distance_to(house_point(h)) > FAR_TILES:
-		return _no(R_FAR, false)
 	var door := door_spot(h)
 	if door == Vector2.ZERO or float(_blocked.get(h, 0.0)) > _age:
 		return _no(R_NO_WAY, true)
-	if dead_about(door, DANGER_DOOR) > 0 or _danger_to(p):
-		return _no(R_DANGER, true)
 	return {}
 
 
@@ -423,17 +369,17 @@ func house_refusal(p, h: int, containers: bool = true) -> Dictionary:
 ## (the dead came, the bell is near): the order is dropped and the radio is told in a toast.
 func begin_order(p, at: Vector2) -> bool:
 	var h := house_of_point(at)
-	if not _able(p):
+	if p == null:
 		return false
-	# (a soft reason, hurt or too far, was asked about and answered, or pushed past: only the ones nobody can argue with stop it now)
+	if not _able(p):
+		# (RULES2: said, with its reason: a person who is down, gone, away or in a breakdown cannot go)
+		_say(p, "stopped", "%s did not go: %s" % [String(p.first), unable_why(p)], "warn", h)
+		return false
+	# (only what cannot be done stops it now: a house that is not a house to search any more, the dead came into it while they thought about it; no way in)
 	var why := ""
-	var pr := person_reason(p)
-	if not pr.is_empty() and bool(pr.hard):
-		why = String(pr.reason)
-	else:
-		var hr := house_refusal(p, h)
-		if not hr.is_empty() and bool(hr.hard):
-			why = String(hr.why).substr(0, 1).to_lower() + String(hr.why).substr(1)
+	var hr := house_refusal(p, h)
+	if not hr.is_empty():
+		why = String(hr.why).substr(0, 1).to_lower() + String(hr.why).substr(1)
 	if why != "":
 		_say(p, "stopped", "%s did not go: %s" % [String(p.first), why], "warn", h)
 		return false
@@ -591,21 +537,16 @@ func _step(id: String, dt: float, slow: bool) -> void:
 	if float(p.hp) > float(run.hp):
 		run.hp = float(p.hp)
 	if float(p.hp) <= float(run.hp) - BITE_HP or int(p.wounds) > int(run.wounds):
+		# (RULES2: a bite is counted, and nobody turns back for it: the run goes on until the house is done, or the medical rules take them down)
 		stats.bitten = int(stats.bitten) + 1
-		_end(p, id, "bitten")
-		return
-	if float(p.hp) < HURT_END:
-		_end(p, id, "hurt")
-		return
-	if _late():
-		_end(p, id, "dark")
+		run.hp = float(p.hp)
+		run.wounds = int(p.wounds)
+	if String(run.kind) == "job" and sim.posts_manned():
+		# (the one thing a job run yields to: the base's night posts, the call to arms or an attack night, which take every hand to the wall; an order does not)
+		_end(p, id, "posts")
 		return
 	if slow:
-		var here := Vector2(p.x, p.y)
-		if _hunted(p) or dead_about(here, DANGER_R) > 0:
-			_end(p, id, "danger")
-			return
-		_wake_round(here)
+		_wake_round(Vector2(p.x, p.y))
 	var h := int(run.house)
 	if String(run.stage) == "door":
 		var door := door_spot(h)
@@ -654,15 +595,6 @@ func _stuck(p, run: Dictionary, dt: float) -> bool:
 		return false
 	run.stuck = float(run.stuck) + dt
 	return float(run.stuck) >= STUCK_S
-
-
-## One of the dead is after them (a chase or a hunt with their id).
-func _hunted(p) -> bool:
-	var id := String(p.id)
-	for z in sim.zombies:
-		if (z.state == "chase" or z.state == "hunt") and String(z.hunt_id) == id:
-			return true
-	return false
 
 
 ## The dead near a person who is outside wake (a smaller circle than the avatar's, a few at a time), so that the street is not an empty one for them.
@@ -843,7 +775,7 @@ func _finish_house(p, run: Dictionary) -> void:
 		_job_try(p)
 
 
-## A run is over: `why` is "done", "dark", "bitten", "hurt", "danger", "stuck", "stopped" (their order was replaced or taken back: nothing is said) or "down" (the medical rules have them: nothing is said).
+## A run is over: `why` is "done", "posts" (a job run, the night posts are manned), "stuck", "empty", "stopped" (their order was replaced or taken back: nothing is said) or "down" (the medical rules have them: nothing is said).
 func _end(p, id: String, why: String, text: String = "") -> void:
 	var run = runs.get(id)
 	runs.erase(id)
@@ -857,14 +789,8 @@ func _end(p, id: String, why: String, text: String = "") -> void:
 	match why:
 		"done":
 			_say(p, why, text, "info", h, false)
-		"dark":
-			_say(p, why, "%s is heading home: it is getting dark" % String(p.first), "info", h)
-		"bitten":
-			_say(p, why, "%s was bitten at %s: heading home" % [String(p.first), address(h)], "danger", h)
-		"hurt":
-			_say(p, why, "%s is hurt: heading home" % String(p.first), "warn", h)
-		"danger":
-			_say(p, why, "%s: dead about, heading home from %s" % [String(p.first), address(h)], "warn", h)
+		"posts":
+			_say(p, why, "%s is back at the wall: the dead are coming" % String(p.first), "info", h)
 		"stuck":
 			_say(p, why, "%s cannot get to %s: heading home" % [String(p.first), address(h)], "warn", h)
 	if why != "done" and why != "stopped" and why != "down" and not run.found.is_empty():
@@ -934,50 +860,30 @@ func _job_try(p) -> bool:
 	var id := String(p.id)
 	if p.player or runs.has(id):
 		return false
-	var mtb := minutes_to_bell()
-	if String(sim.phase) != "day" or sim.posts_manned():
-		job_note[id] = "At the base for the night"
-		return false
-	if mtb < HOME_MIN:
-		job_note[id] = "Back at the base for the evening"
-		return false
-	if mtb < JOB_START_MIN:
-		job_note[id] = "Back at the base: too late to go out"
-		return false
-	if String(sim.weather) == "storm":
-		job_note[id] = "It is pouring: not now"
-		return false
-	if hurt(p):
-		job_note[id] = "Resting: hurt"
-		return false
-	if out_count(p) >= MAX_OUT:
-		job_note[id] = "Waiting for a turn: two are out already"
+	# (RULES2: any hour, any weather, whatever their health: the one thing it waits for is the base's night posts, which take every hand to the wall)
+	if sim.posts_manned():
+		job_note[id] = "At the wall: the dead are coming"
 		return false
 	if float(_idle_until.get(id, 0.0)) > _age:
 		return false    # (looked a moment ago and found nothing: the note stands)
 	_idle_until[id] = _age + IDLE_S
-	var danger := false
 	var asked := 0
 	for e in candidates():
 		asked += 1
 		if asked > MAX_HOUSE_ASK:
 			break
-		var hr := house_refusal(p, int(e.h))
-		if not hr.is_empty():
-			danger = danger or String(hr.why) == R_DANGER
+		if not house_refusal(p, int(e.h)).is_empty():
 			continue
 		if _start_run(p, "job", int(e.h)):
 			return true
-	var work := _salvage_try(p)
-	if work == 1:
+	if _salvage_try(p) == 1:
 		return true
-	danger = danger or work == 2
-	job_note[id] = "Waiting: dead about" if danger else NOTHING_LEFT
+	job_note[id] = NOTHING_LEFT
 	return false
 
 
 ## With nothing left to search, the town's salvage module (SALVAGE, when there is one) may have strip work: the furniture of the cleared houses near the base, nearest first, then the wrecks of the
-## street. 1 when they set off, 2 when there is work but the dead are about, else 0.
+## street. 1 when they set off, else 0 (RULES2: the dead about are no reason to wait).
 func _salvage_try(p) -> int:
 	var sv = _salvage()
 	var cl = _clearing()
@@ -991,7 +897,6 @@ func _salvage_try(p) -> int:
 		if d <= FAR_TILES and int(sv.available(int(h))) > 0:
 			list.append([d, int(h)])
 	list.sort_custom(func(a, b): return float(a[0]) < float(b[0]) or (is_equal_approx(float(a[0]), float(b[0])) and int(a[1]) < int(b[1])))
-	var danger := false
 	var asked := 0
 	for e in list:
 		if float(_nowork.get(int(e[1]), 0.0)) > _age:
@@ -999,9 +904,7 @@ func _salvage_try(p) -> int:
 		asked += 1
 		if asked > MAX_HOUSE_ASK:
 			break
-		var hr := house_refusal(p, int(e[1]), false)
-		if not hr.is_empty():
-			danger = danger or String(hr.why) == R_DANGER
+		if not house_refusal(p, int(e[1]), false).is_empty():
 			continue
 		if _start_run(p, "job", int(e[1]), "strip"):
 			return 1
@@ -1010,9 +913,6 @@ func _salvage_try(p) -> int:
 			var id := String(e.id)
 			if claims.has(id) or float(_nowork.get(id, 0.0)) > _age:
 				continue
-			if _danger_to(p):
-				danger = true
-				break
 			var pc: Dictionary = sv.piece(id)
 			if pc.is_empty():
 				continue
@@ -1024,7 +924,7 @@ func _salvage_try(p) -> int:
 			asked += 1
 			if asked > MAX_HOUSE_ASK:
 				break
-	return 2 if danger else 0
+	return 0
 
 
 # -------------------------------------------------------------------- the day's tally --
@@ -1049,7 +949,7 @@ func today_text(p) -> String:
 	return "Found today: nothing yet" if String(sim.jobs.job_of(p)) == "scavenger" else ""
 
 
-## The briefing's line for the morning ("Scavengers found: 12 food, 6 scrap yesterday"), "" when nothing was found yesterday.
+## The morning summary's line ("Scavengers found: 12 food, 6 scrap yesterday", scripts/ui/dawn_tally.gd), "" when nothing was found yesterday.
 func yesterday_text() -> String:
 	if int(yesterday.day) != int(sim.day) - 1:
 		return ""

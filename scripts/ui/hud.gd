@@ -5739,9 +5739,14 @@ var _briefing_msec := 0
 var _briefing_compact := false
 
 
+## RULES2: the town's morning is ONE summary card (scripts/ui/dawn_tally.gd) with nothing to choose; the briefing's card, with its priority chips, is the school's.
+func _town_run() -> bool:
+	return sim_ref != null and sim_ref.has_method("is_one_house") and bool(sim_ref.is_one_house())
+
+
 ## The `briefing` event: the card is shown once nothing is in the way (the dawn card has closed, no modal is up), or after BRIEFING_WAIT_S.
 func queue_briefing() -> void:
-	if not avatar_ui or tutorial_ui:
+	if not avatar_ui or tutorial_ui or _town_run():
 		return
 	briefing_wanted = true
 	briefing_wait_left = BRIEFING_WAIT_S
@@ -5751,7 +5756,7 @@ func queue_briefing() -> void:
 ## Shows the card now: `data` is the sim's `briefing.current` ({"day", "lines", "order", "suggested"}); without it the card is made from the sim's own
 ## `briefing.current` of today, else from the concerns as they are now. False when there is no avatar, the tutorial has the screen or there is no game.
 func show_briefing(data: Dictionary = {}) -> bool:
-	if sim_ref == null or not avatar_ui or tutorial_ui or game_over != null:
+	if sim_ref == null or not avatar_ui or tutorial_ui or game_over != null or _town_run():
 		return false
 	close_briefing("replaced")
 	briefing_wanted = false
