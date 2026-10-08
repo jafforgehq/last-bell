@@ -17,6 +17,10 @@ uniform float vig : hint_range(0.0, 1.0) = 0.5;
 uniform float vig_from : hint_range(0.0, 1.2) = 0.5;
 uniform float grain : hint_range(0.0, 0.1) = 0.022;
 uniform float bright : hint_range(0.5, 1.6) = 1.0;
+// lightning (rain_view.gd through dark_look.gd): the scene's own colours multiplied up by a cold white-blue (`flash` 0 off; a night's road is lifted about four times over at 1), so that the
+// world's shapes are lit by it and not veiled
+uniform float flash : hint_range(0.0, 6.0) = 0.0;
+uniform vec3 flash_col = vec3(0.70, 0.82, 1.0);
 // the cold the shadows are given (added where the picture is darkest, so that black is a dark blue and not a hole)
 uniform vec3 floor_col = vec3(0.006, 0.009, 0.016);
 
@@ -30,6 +34,7 @@ void fragment() {
 	float l = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(c, vec3(l), desat) * tint;
 	c = pow(max(c, vec3(0.0)), vec3(shadow));
+	c = c * (1.0 + flash_col * flash) + flash_col * (flash * 0.012);
 	// the vignette: 0 in the middle, 1 in the corners (the distance runs 0 to 1.41)
 	vec2 q = (SCREEN_UV - 0.5) * 2.0;
 	float v = smoothstep(vig_from, 1.45, length(q));

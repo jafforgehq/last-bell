@@ -256,6 +256,7 @@ func update(hour: float, bell_rung: bool, t: float, flashes: Array, look: Dictio
 	# (the dark look: what the world is multiplied by is its own table, `dark` above still says when the lamps burn; the grade's pass is told how night it is)
 	var world_sky := sky
 	if grade != null:
+		grade.hour_now = hour    # (the day's keyframes of the grade are by the hour: a pale dawn, a warm low sun)
 		grade.follow(dt, grade.night_of(dark), t)
 		world_sky = grade.world_color(hour, grade.night_of(dark))
 	var flicker := 1.0
