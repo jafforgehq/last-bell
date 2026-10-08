@@ -17,33 +17,55 @@ extends Node
 const Prefs := preload("res://scripts/prefs.gd")
 const SHADER := preload("res://scripts/render/dark_grade.gdshader")
 
-## The ambient light by hour (what the sky's CanvasModulate says; keyframes as the old sky's, the same dawn and dusk).
+## The ambient light by hour (what the sky's CanvasModulate says). LOOK2 (the owner: "right now it is always night"): the DAY keyframes are a pale, bright overcast daylight again (noon
+## about 0.92 where it was 0.59, so that a day reads as a day at a glance: the picture's mean luma is about 0.33 at noon, 0.26 at 07:00 and at 17:30, 0.15 at 05:30, 0.14 at dusk), with a
+## cold pink-blue dawn and a warm low sun at the golden hour; the NIGHT's keyframes (before 4.8, from 20.3) are what they were.
 const AMBIENT := [
 	[0.0, Color(0.172, 0.198, 0.320)],
 	[4.8, Color(0.172, 0.198, 0.320)],
-	[5.6, Color(0.245, 0.228, 0.300)],
-	[6.4, Color(0.400, 0.400, 0.430)],
-	[7.2, Color(0.560, 0.610, 0.630)],
-	[17.6, Color(0.560, 0.600, 0.620)],
-	[18.4, Color(0.470, 0.400, 0.360)],
-	[19.0, Color(0.330, 0.260, 0.260)],
+	[5.5, Color(0.290, 0.242, 0.322)],
+	[6.25, Color(0.500, 0.482, 0.530)],
+	[7.0, Color(0.725, 0.725, 0.735)],
+	[9.0, Color(0.845, 0.845, 0.850)],
+	[12.0, Color(0.945, 0.940, 0.935)],
+	[15.0, Color(0.845, 0.840, 0.835)],
+	[17.0, Color(0.800, 0.765, 0.715)],
+	[17.6, Color(0.790, 0.730, 0.640)],
+	[18.0, Color(0.680, 0.600, 0.500)],
+	[18.4, Color(0.520, 0.440, 0.370)],
+	[19.0, Color(0.360, 0.285, 0.250)],
 	[19.6, Color(0.200, 0.180, 0.240)],
 	[20.3, Color(0.170, 0.178, 0.275)],
 	[21.0, Color(0.172, 0.198, 0.320)],
 	[24.0, Color(0.172, 0.198, 0.320)],
 ]
-## What the grade does by day and by night (the shader's uniforms; the day's are the overcast).
-const DAY_DESAT := 0.36
+## What the grade does by day, by hour: [hour, desat, tint, shadow gamma, share of the vignette]. The day is a pale overcast, desaturated about 22 to 25 percent (it was 36), a touch warm-grey at
+## noon, cold and pink at dawn, warm and low-sun at the golden hour and amber at dusk, with a lighter vignette; the night's values (below) take over as the sky darkens (`night`, 0 to 1).
+const DAY_GRADE := [
+	[4.8, 0.34, Color(1.03, 0.96, 1.06), 1.10, 1.00],
+	[5.5, 0.30, Color(1.06, 0.95, 1.06), 1.08, 0.95],
+	[6.25, 0.27, Color(1.02, 0.99, 1.03), 1.05, 0.90],
+	[7.0, 0.25, Color(1.00, 1.00, 1.00), 1.04, 0.85],
+	[9.0, 0.23, Color(1.01, 1.00, 0.985), 1.04, 0.80],
+	[12.0, 0.22, Color(1.015, 1.00, 0.975), 1.04, 0.78],
+	[15.0, 0.23, Color(1.015, 1.00, 0.975), 1.04, 0.80],
+	[17.0, 0.25, Color(1.04, 1.00, 0.94), 1.05, 0.85],
+	[17.6, 0.26, Color(1.06, 1.00, 0.90), 1.06, 0.90],
+	[18.4, 0.30, Color(1.05, 0.99, 0.92), 1.08, 0.95],
+	[19.0, 0.32, Color(1.04, 0.98, 0.94), 1.10, 1.00],
+	[19.6, 0.34, Color(1.00, 0.99, 1.02), 1.12, 1.00],
+	[21.0, 0.36, Color(0.95, 1.00, 1.03), 1.14, 1.00],
+]
+## What the grade does by night (the shader's uniforms; unchanged by LOOK2).
 const NIGHT_DESAT := 0.20
-const DAY_TINT := Color(0.95, 1.0, 1.03)
 const NIGHT_TINT := Color(0.96, 0.99, 1.05)
-const DAY_SHADOW := 1.14
 const NIGHT_SHADOW := 1.0
 const VIGNETTE := 0.55
 const VIGNETTE_FROM := 0.48
 const GRAIN := 0.022
-## The ambient light of a room: this much of the street's by day, this much at night (the avatar's light, the lamps and the windows light it from there).
-const INDOOR_DAY := 1.05
+## The ambient light of a room: this much of the street's by day (the day is bright now, a room stays darker than the street: about 0.28 in luma at noon), this much at night (the avatar's
+## light, the lamps and the windows light it from there).
+const INDOOR_DAY := 0.75
 const INDOOR_NIGHT := 0.9
 const INDOOR_FADE := 0.5
 ## In a room the grade's deep-shadow gamma goes (to this): the floors and furniture are dark pictures and must read; the street keeps its deep shadows.
@@ -57,6 +79,9 @@ const DIM_REACH := 0.14
 const DIM_RATE := 0.6
 ## Below 100 percent the Brightness setting is this much softer in the dark of the night (0: as by day, 1: none): 70 percent at night is the grade of 85, so that the street still reads.
 const NIGHT_BRIGHT_SOFT := 0.5
+## Lightning's lift (`flash` 1 multiplies the scene by 1 plus this times a cold white-blue): a night's road is lit several times over, a day's street a little.
+const FLASH_GAIN_NIGHT := 3.2
+const FLASH_GAIN_DAY := 0.9
 const BRIGHT_MIN := 0.7
 const BRIGHT_MAX := 1.3
 
@@ -72,6 +97,11 @@ var indoor_to := 0.0
 ## How much the weather has darkened the picture (0 to 1), eased towards `extra_dim_to`.
 var extra_dim := 0.0
 var extra_dim_to := 0.0
+## The hour of the standard day the world is lit for now (lighting.gd tells it each frame: a season's hour is mapped before), for the day's keyframes of the grade.
+var hour_now := 12.0
+## Lightning's lift of the picture (0 to 1, set by rain_view.gd each frame: `set_flash`): the scene's own colours are multiplied up and cooled, so that the shapes of the night are lit by it.
+var flash := 0.0
+var _night_now := 0.0
 ## The title's backdrop is a milder picture (it has its own evening).
 var title := false
 ## Reduce motion: no grain.
@@ -108,6 +138,22 @@ static func ambient_at(hour: float) -> Color:
 			var c0: Color = AMBIENT[i - 1][1]
 			return c0.lerp(AMBIENT[i][1], (hour - h0) / (h1 - h0))
 	return AMBIENT[0][1]
+
+
+## The day side of the grade at the hour: [desat, tint, shadow gamma, vignette share] (the keyframes of DAY_GRADE, blended; the first before the first, the last after the last).
+static func day_grade_at(hr: float) -> Array:
+	var n := DAY_GRADE.size()
+	if hr <= float(DAY_GRADE[0][0]):
+		var f: Array = DAY_GRADE[0]
+		return [f[1], f[2], f[3], f[4]]
+	for i in range(1, n):
+		if hr <= float(DAY_GRADE[i][0]):
+			var a: Array = DAY_GRADE[i - 1]
+			var b: Array = DAY_GRADE[i]
+			var k := (hr - float(a[0])) / (float(b[0]) - float(a[0]))
+			return [lerpf(a[1], b[1], k), (a[2] as Color).lerp(b[2], k), lerpf(a[3], b[3], k), lerpf(a[4], b[4], k)]
+	var l: Array = DAY_GRADE[n - 1]
+	return [l[1], l[2], l[3], l[4]]
 
 
 ## 0 by day, 1 in the dark of the night, from `lighting.dark` (the old sky's darkness: 0 by day to 0.66 at night).
@@ -166,12 +212,14 @@ func current_brightness() -> float:
 func _push(night: float, _t: float) -> void:
 	if mat == null:
 		return
-	var desat := lerpf(DAY_DESAT, NIGHT_DESAT, night) + 0.14 * extra_dim
-	var tint := DAY_TINT.lerp(NIGHT_TINT, night)
+	_night_now = night
+	var day := day_grade_at(hour_now)
+	var desat := lerpf(float(day[0]), NIGHT_DESAT, night) + 0.14 * extra_dim
+	var tint: Color = (day[1] as Color).lerp(NIGHT_TINT, night)
 	if extra_dim > 0.001:
 		tint = tint * Color(1, 1, 1).lerp(Color(0.95, 0.99, 1.04), extra_dim)
-	var shadow := lerpf(lerpf(DAY_SHADOW, NIGHT_SHADOW, night), INDOOR_SHADOW, indoor) + 0.05 * extra_dim
-	var vig := VIGNETTE + 0.08 * extra_dim
+	var shadow := lerpf(lerpf(float(day[2]), NIGHT_SHADOW, night), INDOOR_SHADOW, indoor) + 0.05 * extra_dim
+	var vig := VIGNETTE * lerpf(float(day[3]), 1.0, night) + 0.08 * extra_dim
 	var grain := 0.0 if calm else GRAIN
 	if title:
 		desat = 0.12
@@ -182,8 +230,21 @@ func _push(night: float, _t: float) -> void:
 	var b := current_brightness()
 	if b < 1.0:
 		b = lerpf(b, lerpf(b, 1.0, NIGHT_BRIGHT_SOFT), night)    # (a dim screen at night would take the moonlit ground with it: the low end of the slider is half as strong in the dark)
-	var now := {"desat": desat, "tint": Vector3(tint.r, tint.g, tint.b), "shadow": shadow, "vig": vig, "vig_from": VIGNETTE_FROM, "grain": grain, "bright": b}
+	var now := {"desat": desat, "tint": Vector3(tint.r, tint.g, tint.b), "shadow": shadow, "vig": vig, "vig_from": VIGNETTE_FROM, "grain": grain, "bright": b, "flash": _flash_gain()}
 	for k in now:
 		if _last.get(k) != now[k]:
 			_last[k] = now[k]
 			mat.set_shader_parameter(k, now[k])
+
+
+## Lightning's lift of the scene (the shader's `flash`): the share `flash` (0 to 1) times how much the dark can take: a night's black road is lifted several times over, a noon's pale street a little.
+func _flash_gain() -> float:
+	return 0.0 if title else flash * lerpf(FLASH_GAIN_DAY, FLASH_GAIN_NIGHT, _night_now)
+
+
+## Rain_view.gd: the lightning's share now (0 to 1), put on the picture at once.
+func set_flash(v: float) -> void:
+	flash = clampf(v, 0.0, 1.0)
+	if mat != null and absf(float(_last.get("flash", 0.0)) - _flash_gain()) > 0.0005:
+		_last["flash"] = _flash_gain()
+		mat.set_shader_parameter("flash", _last["flash"])

@@ -10,12 +10,18 @@
 ## THE WET GROUND. While the ground is wet (it soaks over about nine seconds of rain and dries over about a minute) the meshes of the outdoor ground (lawn, road, sidewalk, dirt, gravel: a
 ## dozen draws that were there already) wear scripts/render/wet_ground.gdshader: darker, cooler, with puddles and a soft glint. Dry, they have no material at all.
 ## THE LIGHT. `lighting.set_extra_dim(v)` with 0.15 (a drizzle), 0.3 (steady) and 0.45 (a storm), eased, over whatever the day's grade is.
-## LIGHTNING in a storm, every 11 to 32 seconds: two frames of white-blue over the whole screen, a dip, a second weaker flicker and a fade; thunder 1 to 3 seconds later (a far shot and a
-## thud, pitched right down, on the Distant bus). "Reduce flashes" turns the flash into a slow gentle brightening.
+## LIGHTNING (LOOK2: the owner never noticed any). In a storm every 11 to 32 seconds, in a STEADY rain every 30 to 75 (weaker, farther, softer thunder), none in a drizzle; the schedule is the
+## rules' (scripts/town/skies.gd `strikes_between`: a pure function of the run's seed and the game clock, so a save reloads the same sky) and this part shows and sounds a strike as the clock
+## passes it: a VISIBLE FORKED BOLT (one mesh, one draw call: a bright jagged stroke from the top of the view to a ground point in it, never on the avatar, with one or two short branches and a
+## halo where it lands, alive 0.12 s and fading), the world LIT in two pulses (the grade lifts the scene's own colours by a cold white-blue, `lighting.grade.set_flash`, so that the shapes of
+## the night show; a veil adds the glare), and the thunder (1 to 3 s later in a storm by how far it is, 2.5 to 4.5 in steady rain; about one storm bolt in eight is NEAR: a heavy flash and the
+## crack within 0.3 s). Now and then a dim DISTANT SHEET flash, no bolt and no sound. "Reduce flashes": no bolt and no lift, only the slow gentle brightening there always was; "Reduce motion":
+## about half the strikes and no sheet flashes.
 ## THE ICONS. A weather icon (scripts/ui/weather_glyph.gd) takes the place of the sun in the clock's temperature row while the sky is overcast or wet, and one sits on the minimap's rim, each
 ## with a tooltip.
 ##
-## STAGING (a screenshot): `--weather=drizzle|rain|storm|clear` (main.gd: `sim.skies.force`), `--lightning` (a flash held at its brightest, no thunder), `--norain` (this part left out),
+## STAGING (a screenshot): `--weather=drizzle|rain|storm|clear` (main.gd: `sim.skies.force`), `--lightning` (a strike held at its brightest, bolt and all, no thunder; `--lightning=near|far|sheet`
+## says which, `--lightning-age=S` holds it S seconds into its life instead of at the peak, `--lightning=off` leaves the lightning out), `--norain` (this part left out),
 ## `--rain-cost` (its CPU time per frame and the frame's draw calls, printed at frame 120).
 extends RefCounted
 
@@ -40,10 +46,15 @@ const INDOOR_RAIN_LEFT := 0.35
 const WET_UP := 0.11
 const WET_DOWN := 0.018
 const DIM_RATE := 0.25
-const BOLT_GAP := Vector2(11.0, 32.0)
-## The flash by frame: the two bright ones, the dip, the second flicker; after them it fades by time.
-const FLASH_FRAMES := [0.46, 0.42, 0.04, 0.02, 0.32, 0.27, 0.06, 0.22]
 const FLASH_COLOR := Color(0.62, 0.74, 1.0)
+## The veil's alpha at a strike's brightest (power 1), and the share of it kept when the grade lights the scene itself (the veil is then only the glare).
+const VEIL_PEAK := 0.46
+const VEIL_WITH_GRADE := 0.5
+## How long each kind of strike lives (seconds): a bolt's flash, a sheet flash, the gentle brightening.
+const STRIKE_LIFE := 0.9
+const SHEET_LIFE := 0.6
+const GENTLE_LIFE := 1.4
+const BOLT_LIFE := 0.12
 const FAR_SHOT := "res://assets/audio/gunshot_far_1.wav"
 const THUD := "res://assets/audio/thud_0.wav"
 
@@ -55,6 +66,9 @@ var layer: CanvasLayer
 var rain: ColorRect
 var flash: ColorRect
 var rain_mat: ShaderMaterial
+## The bolt: one mesh (rebuilt for each strike) on the rain's layer, over the veil.
+var bolt: MeshInstance2D
+var bolt_mesh: ArrayMesh
 var splash_node: MultiMeshInstance2D
 var splash_mm: MultiMesh
 var hud_glyph
@@ -72,6 +86,10 @@ var _off := false
 var _no_glyph := false
 var _cost := false
 var _hold_flash := false
+var _hold_kind := ""
+var _hold_age := 0.0
+var _hold_built := false
+var _lightning_off := false
 var _rt := 3.7
 var _view := Rect2()
 var _rng := RandomNumberGenerator.new()
@@ -86,9 +104,11 @@ var _sage := PackedFloat32Array()
 var _ssize := PackedFloat32Array()
 var _sseed := PackedFloat32Array()
 var _sacc := 0.0
-var _bolt_t := 6.0
-var _flash_frame := -1
-var _flash_age := 0.0
+## The clock (game hours) the strike schedule was last looked at, the strike being shown (`skies.strikes_between`'s dictionary; empty: none) and its age in seconds, and how bright the scene is lit by it now.
+var _clock_prev := -1.0
+var _strike := {}
+var _strike_age := 99.0
+var flash_now := 0.0
 var _thunder: Array = []
 var _th_shot: AudioStreamPlayer
 ## The thunders loaded so far (scripts/audio/foley.gd: key -> streams), on the first strike of each kind.
@@ -114,6 +134,15 @@ func on_ready(main_node) -> void:
 			_cost = true
 		elif a == "--lightning":
 			_hold_flash = true
+		elif a.begins_with("--lightning="):
+			var lv := a.trim_prefix("--lightning=")
+			if lv == "off":
+				_lightning_off = true
+			else:
+				_hold_flash = true
+				_hold_kind = lv
+		elif a.begins_with("--lightning-age="):
+			_hold_age = maxf(0.0, float(a.trim_prefix("--lightning-age=")))
 		elif a == "--rain-noglyph":
 			_no_glyph = true
 	var world = main.get("world")
@@ -146,12 +175,17 @@ func on_ready(main_node) -> void:
 	flash.color = Color(0, 0, 0, 0)
 	flash.visible = false
 	layer.add_child(flash)
+	bolt_mesh = ArrayMesh.new()
+	bolt = MeshInstance2D.new()
+	bolt.name = "Bolt"
+	bolt.mesh = bolt_mesh
+	bolt.material = add
+	bolt.visible = false
+	layer.add_child(bolt)
 	_make_splashes(world)
 	_make_thunder()
 	if not _no_glyph:
 		_attach_hud_glyph()
-	if _hold_flash:
-		_flash_frame = 0
 	skies.snap = true
 
 
@@ -251,7 +285,7 @@ func _frame(dt: float) -> void:
 	_update_rain(level, calm, me)
 	_update_wet(dt, level)
 	_update_splashes(gdt, level, me)
-	_update_lightning(dt, gdt, level)
+	_update_lightning(dt, snapped)
 	_update_light(dt)
 	_update_sound()
 	_glyph_t -= dt
@@ -409,41 +443,94 @@ func _update_splashes(gdt: float, level: float, me) -> void:
 
 # ----------------------------------------------------------------------------- lightning --
 
-func _update_lightning(dt: float, gdt: float, level: float) -> void:
-	var storm: bool = skies.stormy() and level > 0.6
-	if storm and gdt > 0.0:
-		_bolt_t -= gdt
-		if _bolt_t <= 0.0:
-			_bolt_t = _rng.randf_range(BOLT_GAP.x, BOLT_GAP.y)
-			_strike()
-	elif not storm:
-		_bolt_t = _rng.randf_range(4.0, 12.0)
-	# the flash itself: by frame at first (two frames are two frames at any speed), then by time
-	var a := 0.0
+## The flash's brightness (0 to 1) `age` seconds into a bolt's strike: a bright first pulse, a dip, a weaker second pulse, a fade (it is over by 0.9 s). Two pulses are what the eye reads as lightning.
+static func flash_curve(age: float) -> float:
+	if age < 0.0:
+		return 0.0
+	if age < 0.07:
+		return lerpf(1.0, 0.85, age / 0.07)
+	if age < 0.11:
+		return lerpf(0.85, 0.08, (age - 0.07) / 0.04)
+	if age < 0.13:
+		return lerpf(0.08, 0.62, (age - 0.11) / 0.02)
+	if age < 0.18:
+		return lerpf(0.62, 0.50, (age - 0.13) / 0.05)
+	if age < 0.22:
+		return lerpf(0.50, 0.15, (age - 0.18) / 0.04)
+	return 0.15 * exp(-(age - 0.22) * 5.0)
+
+
+## A distant sheet flash: one soft swell and fall over about half a second, with a faint flicker.
+static func sheet_curve(age: float) -> float:
+	if age < 0.0 or age > SHEET_LIFE:
+		return 0.0
+	return pow(sin(PI * age / SHEET_LIFE), 2.0) * (0.86 + 0.14 * sin(age * 41.0))
+
+
+## The bolt's own brightness (0 to 1) at that age: full for 0.04 s, then it fades out by BOLT_LIFE (0.12 s).
+static func bolt_alpha(age: float) -> float:
+	if age < 0.04:
+		return 1.0
+	if age < BOLT_LIFE:
+		return lerpf(0.85, 0.2, (age - 0.04) / (BOLT_LIFE - 0.04))
+	return 0.0
+
+
+## One frame of the lightning: the strikes the game's clock passed over since the last frame start (the rules' schedule), the strike in hand is lit and drawn by its age, the thunder that follows.
+func _update_lightning(dt: float, snapped: bool) -> void:
 	var gentle := Access.reduce_flashes()
 	if _hold_flash:
-		a = 0.16 if gentle else FLASH_FRAMES[0]
-	elif _flash_frame >= 0:
-		if gentle:
-			_flash_age += dt
-			a = 0.12 * pow(sin(PI * clampf(_flash_age / 1.4, 0.0, 1.0)), 2.0)
-			if _flash_age >= 1.4:
-				_flash_frame = -1
-		elif _flash_frame < FLASH_FRAMES.size():
-			a = FLASH_FRAMES[_flash_frame]
-			_flash_frame += 1
-			_flash_age = 0.0
+		_hold_strike(gentle)
+	elif not _lightning_off:
+		var h := float(sim.clock_min) / 60.0
+		if snapped or _clock_prev < 0.0 or h < _clock_prev or h - _clock_prev > 0.4:
+			_clock_prev = h    # (a jump of the clock, a load, a new run: nothing that was passed over is struck now)
+		elif h > _clock_prev:
+			if not _warming and (skies.kind == "storm" or skies.kind == "steady"):
+				var calm := Prefs.on("ui", "reduce_motion")
+				for e in skies.strikes_between(_clock_prev, h):
+					_start_strike(e, gentle, calm)
+			_clock_prev = h
+		if not _strike.is_empty():
+			_strike_age += dt    # (real time: a flash is a flash at any game speed, and a pause does not freeze it lit)
+	# the strike's light, glare and bolt
+	var lift := 0.0
+	var veil := 0.0
+	var bolt_a := 0.0
+	if not _strike.is_empty():
+		var sheet: bool = _strike.sheet
+		var power: float = _strike.power
+		var life := GENTLE_LIFE if gentle else (SHEET_LIFE if sheet else STRIKE_LIFE)
+		if _strike_age >= life and not _hold_flash:
+			_strike = {}
+		elif gentle:
+			veil = 0.12 * clampf(power / 0.6, 0.45, 1.0) * pow(sin(PI * clampf(_strike_age / GENTLE_LIFE, 0.0, 1.0)), 2.0)
+			if _hold_flash:
+				veil = 0.16
 		else:
-			_flash_age += dt
-			a = 0.22 * exp(-_flash_age * 7.0)
-			if a < 0.01:
-				_flash_frame = -1
-		a *= 1.0 - 0.45 * indoor
-	var on := a > 0.004
+			var k := sheet_curve(_strike_age) if sheet else flash_curve(_strike_age)
+			lift = power * k
+			var graded: bool = lighting != null and lighting.get("grade") != null
+			veil = lift * VEIL_PEAK * (VEIL_WITH_GRADE if graded else 1.0)
+			if not sheet:
+				bolt_a = bolt_alpha(_strike_age)
+	var through := 1.0 - 0.45 * indoor    # (under a roof the flash comes through the windows: less of it)
+	lift *= through
+	veil *= through
+	bolt_a *= through
+	flash_now = lift
+	var on := veil > 0.004
 	if flash.visible != on:
 		flash.visible = on
 	if on:
-		flash.color = Color(FLASH_COLOR.r, FLASH_COLOR.g, FLASH_COLOR.b, a)
+		flash.color = Color(FLASH_COLOR.r, FLASH_COLOR.g, FLASH_COLOR.b, veil)
+	var bolt_on := bolt_a > 0.01
+	if bolt.visible != bolt_on:
+		bolt.visible = bolt_on
+	if bolt_on:
+		bolt.modulate = Color(1.0, 1.0, 1.0, bolt_a)
+	if lighting != null and lighting.get("grade") != null:
+		lighting.grade.set_flash(lift)
 	# the thunder that follows
 	var i := _thunder.size() - 1
 	while i >= 0:
@@ -454,19 +541,171 @@ func _update_lightning(dt: float, gdt: float, level: float) -> void:
 		i -= 1
 
 
-func _strike() -> void:
-	_flash_frame = 0
-	_flash_age = 0.0
-	var delay := _rng.randf_range(1.0, 3.0)
-	_thunder.append({"t": delay, "far": (delay - 1.0) / 2.0})
+## A strike of the schedule begins (or, `strike()`, now): the thunder is queued, the bolt built (a sheet flash has neither: it is too far to hear). Reduce motion leaves about half the bolts and all the
+## sheet flashes out; Reduce flashes has no bolt (the gentle brightening takes its place).
+func _start_strike(e: Dictionary, gentle: bool, calm: bool) -> void:
+	if calm and bool(e.calm):
+		return
+	_strike = e
+	_strike_age = 0.0
+	if not bool(e.sheet):
+		_thunder.append({"t": float(e.delay), "far": float(e.far)})
+		if not gentle:
+			_build_bolt(e)
 	if _cost:
-		print("RAIN lightning at game t %.1f, thunder in %.2f s" % [float(sim.t), delay])
+		print("RAIN lightning (%s%s, power %.2f) at game t %.1f, thunder in %.2f s" % [String(e.kind), " sheet" if bool(e.sheet) else (" NEAR" if bool(e.near) else ""), float(e.power), float(sim.t), float(e.delay)])
 
 
-## A flash held for a shot, or now (the tests): a strike with its thunder.
-func strike() -> void:
-	if skies != null:
-		_strike()
+## A strike held for a shot (`--lightning`): the same bolt every frame at the age asked for (`--lightning-age=`, the peak by default); no thunder.
+func _hold_strike(gentle: bool) -> void:
+	if _hold_built or _frames_seen < 40:    # (the view and the avatar are in place by the fortieth frame: the bolt lands where the picture will be)
+		return
+	var vp: Vector2 = main.get_viewport().get_visible_rect().size
+	if vp.x < 8.0:
+		return
+	_hold_built = true
+	var steady: bool = skies.kind == "steady"
+	var near := _hold_kind == "near" or (_hold_kind == "" and not steady)
+	var sheet := _hold_kind == "sheet"
+	var power := 1.0 if near else (0.7 if _hold_kind == "far" else (0.35 if steady else 0.7))
+	if sheet:
+		power = 0.22
+	_strike = {"h": 0.0, "sheet": sheet, "near": near, "kind": "steady" if steady else "storm", "power": power, "u": 0.62, "v": 0.5, "seed": 11, "delay": 0.0, "far": 0.0, "calm": false}
+	_strike_age = 0.28 if sheet and _hold_age <= 0.0 else _hold_age    # (a sheet flash swells from nothing: its peak is a quarter of a second in)
+	if not sheet and not gentle:
+		_build_bolt(_strike)
+
+
+## A strike now (the tests, a hand-made one): with its thunder, near or far.
+func strike(near: bool = false) -> void:
+	if skies == null:
+		return
+	var d := _rng.randf_range(0.05, 0.30) if near else _rng.randf_range(1.0, 3.0)
+	_start_strike({"h": 0.0, "sheet": false, "near": near, "kind": "storm", "power": 1.0 if near else 0.7, "u": _rng.randf(), "v": _rng.randf(), "seed": _rng.randi() & 0xFFFF,
+		"delay": d, "far": clampf((d - 1.0) / 2.0, 0.0, 1.0), "calm": false}, Access.reduce_flashes(), false)
+
+
+# ---------------------------------------------------------------------------- the bolt --
+
+## A ground point of the view that is not within `min_d` of the avatar (`at`, in the view's pixels): `g` if it is clear, else the nearest place round her that is.
+static func _clear_of(g: Vector2, at: Vector2, min_d: float, vp: Vector2) -> Vector2:
+	if g.distance_to(at) >= min_d:
+		return g
+	var lo := Vector2(vp.x * 0.06, vp.y * 0.30)
+	var hi := Vector2(vp.x * 0.94, vp.y * 0.88)
+	var dir := g - at
+	dir = Vector2.RIGHT if dir.length() < 1.0 else dir.normalized()
+	for k in 8:
+		var cand := at + dir.rotated(float(k) * PI * 0.25) * min_d * 1.15
+		cand = Vector2(clampf(cand.x, lo.x, hi.x), clampf(cand.y, lo.y, hi.y))
+		if cand.distance_to(at) >= min_d:
+			return cand
+	return Vector2(clampf(at.x + min_d * 1.2 if at.x < vp.x * 0.5 else at.x - min_d * 1.2, lo.x, hi.x), clampf(vp.y * 0.5, lo.y, hi.y))
+
+
+## A jagged line from `a` to `b`: the middle of each piece pushed sideways (midpoint displacement), `levels` times, the push growing smaller as the pieces do.
+static func _jag(a: Vector2, b: Vector2, rng: RandomNumberGenerator, levels: int, sway: float) -> PackedVector2Array:
+	var pts := PackedVector2Array([a, b])
+	var amp := a.distance_to(b) * sway
+	for l in levels:
+		var nxt := PackedVector2Array()
+		for i in pts.size() - 1:
+			var p := pts[i]
+			var q := pts[i + 1]
+			var d := q - p
+			var n := Vector2(-d.y, d.x).normalized()
+			nxt.append(p)
+			nxt.append((p + q) * 0.5 + n * rng.randf_range(-1.0, 1.0) * amp)
+		nxt.append(pts[pts.size() - 1])
+		pts = nxt
+		amp *= 0.55
+	return pts
+
+
+## A soft ribbon along `pts`: half-width `hw` (thinning to `tail` of it at the far end), `c0` at its middle and `c1` at its edges, as triangles on the arrays.
+static func _ribbon(verts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Array, pts: PackedVector2Array, hw: float, tail: float, c0: Color, c1: Color) -> void:
+	var n := pts.size()
+	var base := verts.size()
+	for i in n:
+		var dir := (pts[mini(i + 1, n - 1)] - pts[maxi(i - 1, 0)]).normalized()
+		var nrm := Vector2(-dir.y, dir.x)
+		var w := hw * lerpf(1.0, tail, float(i) / float(maxi(n - 1, 1)))
+		verts.append(pts[i] - nrm * w)
+		verts.append(pts[i])
+		verts.append(pts[i] + nrm * w)
+		cols.append(c1)
+		cols.append(c0)
+		cols.append(c1)
+	for i in n - 1:
+		var a := base + i * 3
+		var b := a + 3
+		idx.append_array(PackedInt32Array([a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1]))
+
+
+## A soft round (an ellipse, `ry` over `rx`) of light at `at`: a fan from a bright middle out to nothing.
+static func _spot(verts: PackedVector2Array, cols: PackedColorArray, idx: PackedInt32Array, at: Vector2, rx: float, ry: float, c0: Color) -> void:
+	var base := verts.size()
+	verts.append(at)
+	cols.append(c0)
+	var segs := 18
+	var c1 := Color(c0.r, c0.g, c0.b, 0.0)
+	for k in segs:
+		var an := TAU * float(k) / float(segs)
+		verts.append(at + Vector2(cos(an) * rx, sin(an) * ry))
+		cols.append(c1)
+	for k in segs:
+		idx.append_array(PackedInt32Array([base, base + 1 + k, base + 1 + (k + 1) % segs]))
+
+
+## The bolt of a strike, built once: a main stroke from above the top edge of the view to a ground point in it (never on the avatar), one or two short branches, a bright halo where it lands. Everything
+## is one mesh with vertex colours on one additive material (one draw call); `bolt.modulate` fades it. The shape is the strike's own seed's, so a reloaded sky has the same bolts.
+func _build_bolt(e: Dictionary) -> void:
+	if bolt_mesh == null or main == null:
+		return
+	var vp: Vector2 = main.get_viewport().get_visible_rect().size
+	if vp.x < 8.0 or vp.y < 8.0:
+		return
+	var near: bool = e.near
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(e.seed) * 7919 + 13
+	var sc := vp.y / 800.0
+	var ground := Vector2(vp.x * lerpf(0.08, 0.92, float(e.u)), vp.y * lerpf(0.34, 0.86, float(e.v)))
+	var me = sim.avatar.player()
+	if me != null:
+		ground = _clear_of(ground, main._tile_to_screen(Vector2(me.x, me.y)), 0.24 * vp.y, vp)
+	var top := Vector2(clampf(ground.x + (rng.randf() - 0.5) * 0.30 * vp.x, vp.x * 0.02, vp.x * 0.98), -8.0)
+	var stroke := _jag(top, ground, rng, 5, 0.12)
+	var verts := PackedVector2Array()
+	var cols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var glow := Color(0.60, 0.76, 1.0, 0.0)
+	var core_w := (2.5 if near else 1.7) * sc
+	var glow_w := (16.0 if near else 9.0) * sc
+	# the branches first (under the main stroke): from a point a third to two thirds of the way down, outwards and down
+	var branches := 2 if near else (1 + (1 if rng.randf() < 0.5 else 0))
+	var span := top.distance_to(ground)
+	for b in branches:
+		var k := int(lerpf(0.28, 0.72, rng.randf()) * float(stroke.size() - 1))
+		var from := stroke[k]
+		var dir := (ground - top).normalized().rotated((0.38 + 0.4 * rng.randf()) * (1.0 if rng.randf() < 0.5 else -1.0))
+		var to := from + dir * span * rng.randf_range(0.13, 0.24)
+		to.y = minf(to.y, vp.y * 0.96)
+		var br := _jag(from, to, rng, 3, 0.16)
+		_ribbon(verts, cols, idx, br, glow_w * 0.5, 0.4, Color(0.60, 0.76, 1.0, 0.30), glow)
+		_ribbon(verts, cols, idx, br, core_w * 0.55, 0.35, Color(1.0, 1.0, 1.0, 0.95), Color(0.85, 0.92, 1.0, 0.25))
+	_ribbon(verts, cols, idx, stroke, glow_w, 0.55, Color(0.60, 0.76, 1.0, 0.34), glow)
+	_ribbon(verts, cols, idx, stroke, core_w, 0.6, Color(1.0, 1.0, 1.0, 1.0), Color(0.85, 0.92, 1.0, 0.30))
+	# the halo where it lands: a wide soft one (a ground seen from above is an ellipse) and a hot small one
+	var rx := (170.0 if near else 95.0) * sc
+	_spot(verts, cols, idx, ground, rx, rx * 0.5, Color(0.62, 0.78, 1.0, 0.50))
+	_spot(verts, cols, idx, ground, rx * 0.28, rx * 0.15, Color(1.0, 1.0, 1.0, 0.95))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_COLOR] = cols
+	arrays[Mesh.ARRAY_INDEX] = idx
+	bolt_mesh.clear_surfaces()
+	bolt_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
 
 func _boom(far: float) -> void:

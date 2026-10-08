@@ -7,7 +7,7 @@
 ## and the school's streams (and so the golden files) are as they were. For each DAY of the schedule (the day begins at 07:00 of the day, not at midnight: day 0 is the first morning):
 ##   - the day is wet with a chance of WET_DAY (a half);
 ##   - a wet day has ONE rain period: it begins at a seeded hour between 07:00 and 23:00 (not before 09:00 on the first day: the first two game hours of a run are dry, so nothing falls
-##     in its first ten minutes), lasts DUR_MIN to DUR_MAX game hours (so it may run on past midnight into the night), and is a DRIZZLE (50 percent), STEADY rain (35) or a STORM (15);
+##     in its first ten minutes), lasts DUR_MIN to DUR_MAX game hours (so it may run on past midnight into the night), and is a DRIZZLE (40 percent), STEADY rain (35) or a STORM (25);
 ##   - the rain eases in over RAMP_IN game hours and out over RAMP_OUT, and the sky is OVERCAST for CLOUD hours before and after it.
 ## Nothing keeps the first attack night dry: the rain may fall on it, a storm included. The rain's effects on the rules are small and the lab (`tools/house_lab.gd --weather-first-night=`)
 ## puts a drizzle, a steady rain, a storm or none on that night on purpose to show the balance holds.
@@ -16,6 +16,9 @@
 ## look); the dead's noise is multiplied by NOISE_RAIN while it rains (`field.noise_mult`: a shot carries a fifth less far); the crew's scavengers stay in during a storm (crew_search.gd). The
 ## clock's word (`word()`: clear, overcast, drizzle, rain, storm), the intensity (`level()`, 0 to 1: 0.30 a drizzle, 0.62 a steady rain, 1 a storm, each eased in and out) and the clouds
 ## (`cloud`) are what the view reads.
+##
+## LIGHTNING (LOOK2) is part of the schedule too (`strikes_between`: the bolts of a storm and of a steady rain, and the dim sheet flashes, each a pure function of the seed and the clock); what is seen
+## and heard of it is rain_view.gd's, and nothing of it touches the rules.
 ##
 ## STAGING (a screenshot, the lab): `force(word)` holds the weather for the run ("clear", "drizzle", "rain" or "steady", "storm"; "" lets the schedule go on), `force_first_night(word)` holds it
 ## only through the first attack night (dusk to dawn of the day the attacks begin, scripts/town/one_house.gd). Neither is saved.
@@ -27,8 +30,17 @@ const KIND_LEVEL := {"drizzle": 0.30, "steady": 0.62, "storm": 1.0}
 ## The word on the clock for a kind, and the rules' own word for it (`sim.weather`).
 const KIND_WORD := {"drizzle": "drizzle", "steady": "rain", "storm": "storm"}
 const SIM_WORD := {"drizzle": "rain", "steady": "rain", "storm": "storm"}
-## The share of the wet days that are each kind.
-const KIND_SHARE := [0.50, 0.35, 0.15]
+## The share of the wet days that are each kind (LOOK2: it was 50, 35, 15; the owner never saw a lightning, storms were one wet day in seven).
+const KIND_SHARE := [0.40, 0.35, 0.25]
+## LIGHTNING (the strike schedule, `strikes_between`): the clock's hours are cut into CELLS, a storm's 0.7167 game hours long (21.5 s at x1) and a steady rain's 1.75 (52.5 s), and each cell has ONE
+## bolt, at a seeded point of its middle (`BOLT_AT`, hours into the cell): the gaps between bolts are 11 to 32 s in a storm and 30 to 75 s in a steady rain, none in a drizzle. About one storm
+## bolt in eight is NEAR (`NEAR_SHARE`: the crack comes within 0.3 s). A cell may also have a dim DISTANT SHEET flash on its edge (`SHEET_SHARE`), clear of the bolts.
+const BOLT_CELL := {"storm": 0.7167, "steady": 1.75}
+const BOLT_AT := {"storm": [0.1833, 0.5333], "steady": [0.5, 1.25]}
+const SHEET_SHARE := {"storm": 0.55, "steady": 0.30}
+const NEAR_SHARE := 0.125
+## Storm bolts happen from this level up (the rain's ease-in is not lightning weather), steady rain's from its.
+const BOLT_LEVEL := {"storm": 0.6, "steady": 0.5}
 ## The chance that a day has a rain period, and its length (game hours).
 const WET_DAY := 0.5
 const DUR_MIN := 2.0
@@ -177,6 +189,51 @@ func _refresh() -> void:
 		var m := NOISE_RAIN if w != "clear" else 1.0
 		if float(field.noise_mult) != m:
 			field.noise_mult = m
+
+
+# ---------------------------------------------------------------------------- lightning --
+
+## A number from 0 to 1 for the cell `c` of the schedule `s`, the `j`-th of that cell (its own hash: no die of the rules' is thrown, the seed and the clock say it all).
+static func _u(s: int, c: int, j: int) -> float:
+	return float(_mix(s, c * 8 + j) & 0xFFFFFF) / 16777215.0
+
+
+## The lightning the clock passed over between `h0` (not counted) and `h1` (counted), in game hours since the first 07:00 (`sim.clock_min / 60`): an Array of strikes, in time order, each
+## {"h": when, "sheet": a dim flash with no bolt, "near": the crack comes at once, "kind": "storm" or "steady", "power": how bright the flash (0 to 1), "u", "v": 0 to 1 where in the view the
+## bolt lands, "seed": for its shape, "delay": seconds from flash to thunder, "far": 0 near to 1 far (the thunder's file and level), "calm": a strike that Reduce motion leaves out}. Empty
+## unless it is a storm (level over 0.6) or a steady rain (over 0.5) NOW. A PURE function of the run's seed and the clock: a reloaded save has the same sky.
+func strikes_between(h0: float, h1: float) -> Array:
+	var out := []
+	if h1 <= h0 or h1 - h0 > 2.0:
+		return out
+	var kd := ""
+	if kind == "storm" and level > float(BOLT_LEVEL.storm):
+		kd = "storm"
+	elif kind == "steady" and level > float(BOLT_LEVEL.steady):
+		kd = "steady"
+	if kd == "":
+		return out
+	var w: float = BOLT_CELL[kd]
+	var at: Array = BOLT_AT[kd]
+	var s := (int(sim.run_seed) ^ (0x51ED7 if kd == "storm" else 0x2C3B9)) & 0xFFFFFFFF
+	for c in range(floori(h0 / w) - 1, floori(h1 / w) + 2):
+		if c < 0:
+			continue
+		var hb := float(c) * w + lerpf(float(at[0]), float(at[1]), _u(s, c, 0))
+		if hb > h0 and hb <= h1:
+			var near := kd == "storm" and _u(s, c, 1) < NEAR_SHARE
+			var delay := 0.05 + 0.25 * _u(s, c, 7) if near else (1.0 + 2.0 * _u(s, c, 7) if kd == "storm" else 2.5 + 2.0 * _u(s, c, 7))
+			var power := 1.0 if near else (0.55 + 0.20 * _u(s, c, 6) if kd == "storm" else 0.30 + 0.10 * _u(s, c, 6))
+			out.append({"h": hb, "sheet": false, "near": near, "kind": kd, "power": power, "u": _u(s, c, 2), "v": _u(s, c, 3), "seed": _mix(s, c * 8 + 4) & 0xFFFF,
+				"delay": delay, "far": clampf((delay - 1.0) / 2.0, 0.0, 1.0), "calm": (_mix(s, c * 8 + 4) >> 20) & 1 == 1})
+		if _u(s, c, 5) < float(SHEET_SHARE[kd]):
+			var hs := float(c) * w + (_u(s, c, 6) - 0.5) * 0.3 * w
+			if hs > h0 and hs <= h1:
+				out.append({"h": hs, "sheet": true, "near": false, "kind": kd, "power": (0.16 + 0.10 * _u(s, c, 3)) if kd == "storm" else 0.12, "u": _u(s, c, 2), "v": _u(s, c, 3), "seed": _mix(s, c * 8 + 4) & 0xFFFF,
+					"delay": 0.0, "far": 1.0, "calm": true})
+	if out.size() > 1:
+		out.sort_custom(func(a, b): return float(a.h) < float(b.h))
+	return out
 
 
 # ---------------------------------------------------------------------------- staging --
