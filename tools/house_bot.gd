@@ -223,6 +223,9 @@ class HouseBot:
 	var prep := 0
 	## The factor of a person's pace over the bot's (the lab's --human): the milestones' `real` minutes use it.
 	var human := 1.25
+	## PH5 (the lab's --daywork, off by default: the first attack night's numbers are as they were): on the days of the attacks the bot goes on as a player does who does not sit at home all day: it brings more
+	## survivors home (the rescue spots and the beds allow), and searches the houses within 45 tiles of the base, the ones with dead in them too (each dead one costs a shot), home by the usual hour.
+	var daywork := false
 	## How it orders the base: "projects" (the Build page's next project, as a player who does what the page recommends: `perimeter.order_project`) or "slots" (one section at a
 	## time through `perimeter.order`, the first plan's way).
 	var orders := "projects"
@@ -691,11 +694,11 @@ class HouseBot:
 	## Whether it goes for another survivor: not once the attacks are on (the days are for scrap and the wall), and not the fourth until `prep` slots stand (a player who knows
 	## that the fourth brings the dead; 0, the default, is the player who does not).
 	func _wants_rescue() -> bool:
-		if _attacks_on():
+		if _attacks_on() and not daywork:
 			return false
 		# the fourth voice has come ("fortify": the dead will come): the day after it is for the wall, not for more survivors
 		var sc = sim.scenario
-		if sc != null and sc.has_method("stage") and String(sc.stage()) == "fortify":
+		if sc != null and sc.has_method("stage") and String(sc.stage()) == "fortify" and not daywork:
 			return false
 		var rs = sim.get("rescue")
 		var per = sim.get("perimeter")
@@ -823,14 +826,15 @@ class HouseBot:
 		var best := {}
 		var best_d := INF
 		var home_by := HOME_BY_ATTACK if _attacks_on() else HOME_BY
+		var careful: bool = _attacks_on() and not daywork    # (PH5: --daywork searches the houses with dead in them on the days of the attacks too, and reaches as far as the days before them)
 		for h in hs.town.houses:
 			var hid := int(h.id)
 			var d0: float = Vector2(Rect2i(h.rect).get_center()).distance_to(pos)
-			if d0 > (30.0 if _attacks_on() else 45.0):
+			if d0 > (30.0 if careful else 45.0):
 				continue
 			# the dead in the house cost a shot each and every shot draws more: the cleared houses first, and on the day of an attack only those
 			var dead_n := int(hs.dead_in_house(hid))
-			if _attacks_on() and dead_n > 0:
+			if careful and dead_n > 0:
 				continue
 			for c in hs.containers_of(hid):
 				if sr.is_looted(String(c.id)) or _blocked_now("search_%s" % String(c.id)):
