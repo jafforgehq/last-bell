@@ -12,7 +12,7 @@
 ##
 ## THE VIEW PARTS. `VIEW_PARTS` maps a name to the file of a part (any object with any of the methods below, a Node or not); a file that does not exist is skipped. A part's methods are
 ## all optional:
-##   on_ready(main)                      once, when the facade is made (a part that draws adds its nodes to `main.world` here)
+##   on_ready(main)                      once, when the facade is made (a part that draws adds its nodes to `main.world` here); a part with `var heavy := true` gets a frame of the loading card to itself
 ##   on_frame(dt: float)                 every frame, after the views are synced
 ##   on_sync_views(view: Rect2)          every frame, once the pawns have been made, moved and shown or hidden; view in tiles
 ##   pawn_visible(entity) -> bool        false hides that pawn (a dead one in a room the avatar has not looked into); asked of every pawn, so keep it cheap
@@ -49,6 +49,9 @@ const VIEW_PARTS := {
 	"sprint_view": "res://scripts/ui/sprint_view.gd",
 	"tutor_cues": "res://scripts/ui/tutor_cues.gd",
 	"rain_view": "res://scripts/render/rain_view.gd",
+	"town_life": "res://scripts/render/town_life.gd",
+	"roof_warm": "res://scripts/render/roof_warm.gd",
+	"roof_warm2": "res://scripts/render/roof_warm.gd",
 }
 ## The parts of the title screen's town (scripts/town/title_scene.gd): the roofs and nothing else (no card, no HUD, no sleep, no town sounds: the title has its own).
 const TITLE_PARTS := ["house_view"]
@@ -66,6 +69,8 @@ const NODES_PER_FRAME := TownPerf.NODES_PER_FRAME
 const CHUNKS_PER_FRAME := 1
 
 var main
+## `--part-times` (a development flag): the milliseconds each part's `on_ready` took while the loading card was up (printed).
+var _part_times := "--part-times" in OS.get_cmdline_user_args()
 ## The town is the title screen's (`Main.title_mode`): only the `TITLE_PARTS` are made, and the fresh run is not held for a first key.
 var title := false
 var parts: Array = []
@@ -121,14 +126,19 @@ func on_ready(main_node, card = null) -> void:
 		_roofs.setup(main.sim.town_data, main.data, "house")
 	var made := 0
 	for part in parts:
-		if card != null and work > 0 and (work >= PARTS_PER_FRAME or Time.get_ticks_usec() - slice_t >= TownBoot.slice_us()):
+		# (WORLD3: a part with `var heavy := true` is a frame's worth of work on its own and has a frame to itself: the roofs' atlas, scripts/render/roof_warm.gd)
+		var heavy: bool = part.get("heavy") == true
+		if card != null and work > 0 and (heavy or work >= PARTS_PER_FRAME or Time.get_ticks_usec() - slice_t >= TownBoot.slice_us()):
 			TownBoot.card_progress(card, 0.96 + 0.03 * float(made) / float(parts.size()), "Putting on the roofs")
 			await tree.process_frame
 			work = 0
 			slice_t = Time.get_ticks_usec()
 		if part.has_method("on_ready"):
+			var t_part := Time.get_ticks_usec()
 			part.on_ready(main)
-		work += 1
+			if _part_times:
+				print("[part] %-26s on_ready %6.1f ms" % [String(part.get_script().resource_path).get_file(), float(Time.get_ticks_usec() - t_part) / 1000.0])
+		work += PARTS_PER_FRAME if heavy else 1
 		made += 1
 	perf = TownPerf.new()
 	perf.setup(main.sim)

@@ -1,0 +1,826 @@
+{
+ "_doc": "The rectangle of every piece of roof_extras.png (without its 8 px of padding) and its size in tiles. Written by tools/make_roof_extras.py.",
+ "pad": 8,
+ "tile_px": 128,
+ "pieces": {
+  "dome": {
+   "rect": [
+    8,
+    8,
+    208,
+    208
+   ],
+   "tiles": [
+    1.625,
+    1.625
+   ],
+   "fill": false
+  },
+  "awning_blue": {
+   "rect": [
+    232,
+    8,
+    128,
+    192
+   ],
+   "tiles": [
+    1.0,
+    1.5
+   ],
+   "fill": false
+  },
+  "awning_green": {
+   "rect": [
+    376,
+    8,
+    128,
+    192
+   ],
+   "tiles": [
+    1.0,
+    1.5
+   ],
+   "fill": false
+  },
+  "awning_red": {
+   "rect": [
+    520,
+    8,
+    128,
+    192
+   ],
+   "tiles": [
+    1.0,
+    1.5
+   ],
+   "fill": false
+  },
+  "awning_yellow": {
+   "rect": [
+    664,
+    8,
+    128,
+    192
+   ],
+   "tiles": [
+    1.0,
+    1.5
+   ],
+   "fill": false
+  },
+  "mast_dish": {
+   "rect": [
+    808,
+    8,
+    192,
+    192
+   ],
+   "tiles": [
+    1.5,
+    1.5
+   ],
+   "fill": false
+  },
+  "water_tank": {
+   "rect": [
+    8,
+    232,
+    176,
+    176
+   ],
+   "tiles": [
+    1.375,
+    1.375
+   ],
+   "fill": false
+  },
+  "burnt": {
+   "rect": [
+    200,
+    232,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "canopy_band_v": {
+   "rect": [
+    344,
+    232,
+    22,
+    128
+   ],
+   "tiles": [
+    0.171875,
+    1.0
+   ],
+   "fill": false
+  },
+  "canopy_white": {
+   "rect": [
+    382,
+    232,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_concrete": {
+   "rect": [
+    526,
+    232,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_gravel": {
+   "rect": [
+    670,
+    232,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_green": {
+   "rect": [
+    814,
+    232,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_metal": {
+   "rect": [
+    8,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_sand": {
+   "rect": [
+    152,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "flat_tar": {
+   "rect": [
+    296,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "glass": {
+   "rect": [
+    440,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "hole": {
+   "rect": [
+    584,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "metal_rib": {
+   "rect": [
+    728,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "metal_rib_h": {
+   "rect": [
+    872,
+    424,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "parapet_v": {
+   "rect": [
+    8,
+    568,
+    22,
+    128
+   ],
+   "tiles": [
+    0.171875,
+    1.0
+   ],
+   "fill": false
+  },
+  "pergola": {
+   "rect": [
+    46,
+    568,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": false
+  },
+  "porch_shingle": {
+   "rect": [
+    190,
+    568,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "rubble": {
+   "rect": [
+    334,
+    568,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "skylight": {
+   "rect": [
+    478,
+    568,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": false
+  },
+  "solar_big": {
+   "rect": [
+    622,
+    568,
+    256,
+    128
+   ],
+   "tiles": [
+    2.0,
+    1.0
+   ],
+   "fill": false
+  },
+  "tarp_blue": {
+   "rect": [
+    8,
+    712,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "tarp_green": {
+   "rect": [
+    152,
+    712,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "tarp_orange": {
+   "rect": [
+    296,
+    712,
+    128,
+    128
+   ],
+   "tiles": [
+    1.0,
+    1.0
+   ],
+   "fill": true
+  },
+  "tyres": {
+   "rect": [
+    440,
+    712,
+    112,
+    112
+   ],
+   "tiles": [
+    0.875,
+    0.875
+   ],
+   "fill": false
+  },
+  "ac_big": {
+   "rect": [
+    568,
+    712,
+    192,
+    96
+   ],
+   "tiles": [
+    1.5,
+    0.75
+   ],
+   "fill": false
+  },
+  "ac_small": {
+   "rect": [
+    776,
+    712,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "chimney_flue": {
+   "rect": [
+    888,
+    712,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "dish": {
+   "rect": [
+    8,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "hatch": {
+   "rect": [
+    120,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_bed": {
+   "rect": [
+    232,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_book": {
+   "rect": [
+    344,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_bread": {
+   "rect": [
+    456,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_car": {
+   "rect": [
+    568,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_cart": {
+   "rect": [
+    680,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_coin": {
+   "rect": [
+    792,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_cross": {
+   "rect": [
+    904,
+    856,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_cup": {
+   "rect": [
+    8,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_drop": {
+   "rect": [
+    120,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_film": {
+   "rect": [
+    232,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_flower": {
+   "rect": [
+    344,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_fuel": {
+   "rect": [
+    456,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_ham": {
+   "rect": [
+    568,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_hanger": {
+   "rect": [
+    680,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_mail": {
+   "rect": [
+    792,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_mug": {
+   "rect": [
+    904,
+    968,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_news": {
+   "rect": [
+    8,
+    1080,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_plug": {
+   "rect": [
+    120,
+    1080,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_scissors": {
+   "rect": [
+    232,
+    1080,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "sign_wrench": {
+   "rect": [
+    344,
+    1080,
+    96,
+    96
+   ],
+   "tiles": [
+    0.75,
+    0.75
+   ],
+   "fill": false
+  },
+  "solar": {
+   "rect": [
+    456,
+    1080,
+    192,
+    96
+   ],
+   "tiles": [
+    1.5,
+    0.75
+   ],
+   "fill": false
+  },
+  "roof_fan": {
+   "rect": [
+    664,
+    1080,
+    72,
+    72
+   ],
+   "tiles": [
+    0.5625,
+    0.5625
+   ],
+   "fill": false
+  },
+  "aerial": {
+   "rect": [
+    752,
+    1080,
+    64,
+    64
+   ],
+   "tiles": [
+    0.5,
+    0.5
+   ],
+   "fill": false
+  },
+  "vent_pipe": {
+   "rect": [
+    832,
+    1080,
+    48,
+    48
+   ],
+   "tiles": [
+    0.375,
+    0.375
+   ],
+   "fill": false
+  },
+  "post": {
+   "rect": [
+    896,
+    1080,
+    40,
+    40
+   ],
+   "tiles": [
+    0.3125,
+    0.3125
+   ],
+   "fill": false
+  },
+  "canopy_band_h": {
+   "rect": [
+    8,
+    1192,
+    128,
+    22
+   ],
+   "tiles": [
+    1.0,
+    0.171875
+   ],
+   "fill": false
+  },
+  "parapet_c": {
+   "rect": [
+    152,
+    1192,
+    22,
+    22
+   ],
+   "tiles": [
+    0.171875,
+    0.171875
+   ],
+   "fill": false
+  },
+  "parapet_h": {
+   "rect": [
+    190,
+    1192,
+    128,
+    22
+   ],
+   "tiles": [
+    1.0,
+    0.171875
+   ],
+   "fill": false
+  }
+ }
+}

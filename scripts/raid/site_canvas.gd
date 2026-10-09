@@ -674,6 +674,9 @@ func _add_tree(tx: int, ty: int) -> void:
 	if not _in(tx, ty):
 		return
 	var n := rng.randi_range(0, 12)
+	# (WORLD3: the town's lots have five more kinds of tree, tools/make_trees_extra.py: a dead one, a conifer, a birch, a poplar, an apple tree; the raid sites keep the old thirteen)
+	if size_by_table and n < 5:
+		n += 13
 	trees.append({"x": float(tx) + 0.5, "y": float(ty) + 0.55, "variant": n % 3, "file": "res://assets/trees/tree_%d.png" % n})
 	solid[ty * W + tx] = 1
 	pmask[ty * W + tx] = 1

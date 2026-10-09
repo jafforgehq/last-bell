@@ -344,15 +344,16 @@ func _lines() -> void:
 	if _wbuf.is_empty():
 		for k in 16:
 			_wbuf.append(PackedInt32Array())
-	for k in 6:
+	var n_lines: int = mini(cells.size(), 16)
+	for k in n_lines:
 		_wbuf[k].clear()
 	for y in range(y0, y1):
 		for x in range(x0, x1):
 			var i := y * W + x
 			var f := int(fence[i])
-			if f != 0:
+			if f != 0 and f < n_lines:
 				_wbuf[f].append(i)
-	for f in range(1, 6):
+	for f in range(1, n_lines):
 		for i in _wbuf[f]:
 			var mask := 0
 			if i >= W and fence[i - W] == f:
