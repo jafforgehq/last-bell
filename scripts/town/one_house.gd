@@ -23,7 +23,10 @@
 ## marked `crew` has that stage). `objective()` is the line under the clock, with a bearing target.
 ##
 ## THE END. The first attack night is the night of `first_day` (the day of the fourth rescue, or the next one when it comes after the cutoff hour). From the dawn after it
-## the night is HELD as soon as the data's `held_rule` is true (whoever leads is alive, no dead are in the house, a section of the base still stands): `sim.over = "victory"`.
+## the night is HELD as soon as the data's `held_rule` is true (whoever leads is alive, no dead are in the house, a section of the base still stands). The run is won, `sim.over = "victory"`, at the
+## dawn that makes `nights_to_hold()` held nights (the data's `end.nights_to_hold`, 1: today's game, the first attack night; the demo of seven nights is 7): every dawn after an attack night counts one
+## when the rule is true, a night that is not held does not count and the run goes on (the dead come every night, a little more each) while anyone is alive and a base stands. The run keeps its own
+## N in the save (`to_hold`; a save with none, an old one, takes the data's). The first attack night alone has the Big Night (`big_night`): the nights after it are the normal machinery's.
 ## When nobody is left the run is lost, as ever. Saved with the run (`kind: one_house`, which `is_save` reads so that a load installs it before the save is read).
 ##
 ## NOT DEFINED, on purpose: `is_demo()` (the school demo's views key off it) and `after_step()` (Orientation Day's marker).
@@ -72,7 +75,7 @@ const FALLBACK := {
 	"guide": [],
 	"objective": {},
 	"words": {},
-	"end": {},
+	"end": {"nights_to_hold": 1},
 }
 
 var _d := {}
@@ -110,10 +113,14 @@ var _replay := false
 var _base := {}
 var _last_pos := Vector2.INF
 var _held_nights := 0
+## How many attack nights the run must hold to be won (0: the data's `end.nights_to_hold`; the run's own once a save was read or `set_nights_to_hold` was called: saved).
+var _to_hold := 0
 ## The day whose dawn has been judged (-1: none), and how the first attack night ended ("", "held" or "not_held").
 var _dawn_day := -1
 var _first_result := ""
 var _first_why := ""
+## Every dawn judged, oldest first: [{"night": the day of the night, "held": bool, "why": "" or the rule that failed}]. For the lab and the end card; not saved.
+var _night_log: Array = []
 var _crew_seen := -1
 var _dirty := true
 var _t := 0.0
@@ -156,6 +163,8 @@ func start() -> void:
 	opening.start()
 	_last_pos = Vector2.INF
 	_held_nights = 0
+	_to_hold = 0
+	_night_log = []
 	_dawn_day = -1
 	_first_result = ""
 	_first_why = ""
@@ -844,13 +853,22 @@ func _watch_the_dawn() -> void:
 		return
 	_dawn_day = sim.day
 	var why := _not_held_because()
+	_night_log.append({"night": int(sim.day) - 1, "held": why == "", "why": why})
 	if why == "":
-		_stage = "held"
 		_held_nights += 1
 		if _first_result == "":
 			_first_result = "held"
+		if _held_nights < nights_to_hold():
+			# (a night held and more to hold: the run goes on. Not the "held" event, which is the run's end and puts the morning card away: the banner and the radio say it)
+			var more = _cfg("words.night_held", ["%d of %d nights held", "The dead will be back at dusk"])
+			var told := _fmt(String(more[0]), [_held_nights, nights_to_hold()])
+			sim.events.append({"type": "banner", "text": told, "sub": String(more[1])})
+			if sim.get("radio") != null:
+				sim.radio.log_news("story", told, String(more[1]))
+			return
+		_stage = "held"
 		sim.over = "victory"
-		sim.events.append({"type": "held", "night": _first_day})
+		sim.events.append({"type": "held", "night": int(sim.day) - 1})
 		sim.events.append({"type": "over", "result": "victory"})
 		var words := victory_banner()
 		sim.events.append({"type": "banner", "text": words[0], "sub": words[1]})
@@ -874,6 +892,28 @@ func first_night_result() -> String:
 ## Why the first attack night was not held ("wall", "house", "base" or "avatar"; "" when it was, or has not been judged).
 func first_night_why() -> String:
 	return _first_why
+
+
+## How many attack nights the run must hold to be won: the run's own (saved), else the data's `end.nights_to_hold` (1: the game as it was, the first attack night; the demo of seven nights: 7). At least 1.
+func nights_to_hold() -> int:
+	if _to_hold > 0:
+		return _to_hold
+	return maxi(1, int(_cfg("end.nights_to_hold", 1)))
+
+
+## Fixes the run's N (the lab's `--nights=N`; a test): the run keeps it in its save, whatever the data says. Below 1 is 1.
+func set_nights_to_hold(n: int) -> void:
+	_to_hold = maxi(1, n)
+
+
+## Every dawn judged so far, oldest first: [{"night": the day of the night, "held": bool, "why": "" or "avatar", "house", "base", "wall"}] (a copy). The lab reads it; it is not saved.
+func night_log() -> Array:
+	return _night_log.duplicate(true)
+
+
+## How many dawns have been judged (the size of `night_log()`, without the copy: the lab asks every step).
+func judged_count() -> int:
+	return _night_log.size()
 
 
 func _held_ok() -> bool:
@@ -1506,9 +1546,11 @@ func _survivor_bearing() -> Variant:
 
 # --------------------------------------------------------------- the nights --
 
-## The run's length for the clock and the briefing: the data's, and never less than the day after the first attack night.
+## The run's length for the clock and the briefing: the data's, and never less than the dawn that ends the run if every attack night is held (`_first_day` + N: the day after the first attack night when N is 1).
 func total_days() -> int:
-	return maxi(int(_cfg("total_days", 5)), _first_day + 1)
+	if _first_day < 0:
+		return maxi(int(_cfg("total_days", 5)), 0)    # (before the first attack night is known: the data's)
+	return maxi(int(_cfg("total_days", 5)), _first_day + nights_to_hold())
 
 
 ## The first day of the community's ideas (initiative.gd asks).
@@ -1551,7 +1593,10 @@ func _range(v) -> Array:
 
 
 func victory_banner() -> Array:
-	var words = _cfg("words.victory", ["The night is held", ""])
+	# (more than one night to hold: the words of the nights, `words.victory_nights`, when the data has them)
+	var words = _cfg("words.victory_nights", null) if nights_to_hold() > 1 else null
+	if not (words is Array and (words as Array).size() >= 2):
+		words = _cfg("words.victory", ["The night is held", ""])
 	return [String(words[0]), String(words[1])]
 
 
@@ -1572,7 +1617,7 @@ func report() -> Dictionary:
 	if perimeter != null and perimeter.has_method("built_count"):
 		built = int(perimeter.built_count())
 	return {
-		"nights": _held_nights, "of": 1, "alive": alive, "lost": lost, "kills": int(sim.kills), "rescued": rescued(), "houses": _cleared.size(), "built": built,
+		"nights": _held_nights, "of": nights_to_hold(), "alive": alive, "lost": lost, "kills": int(sim.kills), "rescued": rescued(), "houses": _cleared.size(), "built": built,
 		"days": int(sim.day), "stage": _stage,
 	}
 
@@ -1582,8 +1627,19 @@ func end_card() -> Dictionary:
 	var r := report()
 	var e: Dictionary = _cfg("end", {})
 	var labels: Dictionary = e.get("labels", {})
+	var title := String(e.get("title", "The night is held"))
+	var line := String(e.get("line", ""))
+	# (more than one night to hold: the card must not say one night and two survivors; the data's `end.nights` has its words, "%d" the nights held. Its look is the same card)
+	var many = e.get("nights", {})
+	if nights_to_hold() > 1:
+		if many is Dictionary and (many as Dictionary).has("title"):
+			title = String(many.get("title", title))
+			line = _fmt(String(many.get("line", line)), [int(r.nights)]) if (many as Dictionary).has("line") else line
+		else:
+			title = "The nights are held"
+			line = ""
 	return {
-		"title": String(e.get("title", "The night is held")), "line": String(e.get("line", "")), "full": String(e.get("full", "")), "thanks": String(e.get("thanks", "")),
+		"title": title, "line": line, "full": String(e.get("full", "")), "thanks": String(e.get("thanks", "")),
 		"caps": String(e.get("caps", "")),
 		"stats": [
 			[String(labels.get("nights", "Nights held")), str(r.nights)],
@@ -1875,7 +1931,7 @@ func save() -> Dictionary:
 	# (SAVE4: "town_version" is the version of the town the save was made in, `TownGen.VERSION`; SaveGame refuses a save of another one, `SaveGame.town_compat`)
 	return {
 		"kind": KIND, "v": 1, "town_version": TownGen.VERSION, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
-		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
+		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "to_hold": nights_to_hold(), "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
 		"min_per_sec": float(sim.min_per_sec), "focus": _focus, "last_cleared": _last_cleared, "intro": _intro_told,
 		"opening": opening.save(), "reloads": _reloads, "replay": _replay, "base": _base.duplicate(), "bonus": _bonus_given,
 	}
@@ -1899,6 +1955,7 @@ func load_state(s: Dictionary) -> void:
 		_done[String(id)] = true
 	_walked = float(s.get("walked", 0.0))
 	_held_nights = int(s.get("held", 0))
+	_to_hold = maxi(0, int(s.get("to_hold", 0)))    # (a save of before the nights to hold were the run's own: 0, the data's)
 	_dawn_day = int(s.get("dawn_day", -1))
 	_first_result = String(s.get("first_result", ""))
 	_first_why = String(s.get("first_why", ""))
