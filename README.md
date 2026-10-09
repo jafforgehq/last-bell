@@ -350,7 +350,7 @@ given moment without touching the game:
 | `--title-off=lights,shadows,leaves,glow,dead,sky,showcase` | Leave parts of the title's picture out (to measure what each costs) |
 | `--title-bench=SECONDS` | A windowed title measures its frames for that long (frame times, draw calls), prints them and quits; give `--winpx=1920x1080 --os-scale=1`, and `--disable-vsync` before the `--` to see the headroom under 60 Hz |
 | `--school` | The old schoolyard where the real game would show the town: behind the title, and the New game screen's old crew and length choices (a crew of three or five); the demo is that too |
-| `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`) |
+| `--menu=pause` | Open a menu (`pause`, `settings`, `new`, `load`, `credits`, `confirm`, `orientation`, `oldsave`: the card of a save from an older version) |
 | `--prefs=path` | Keep the settings in another file (so a screenshot run does not touch yours; a file with `[ui]` `text_size="larger"`, `colour_blind=true` or `reduce_flashes=true` stages the Accessibility settings) |
 | `--tooltip=<key>` | A town run, with `--shot`: the pointer goes onto that control and the shot waits for its tooltip (a key of `scripts/ui/help_tips.gd` `targets()` such as `dead`, `clock`, `strip`, `objective`; or a HUD member such as `alarm_button`, or a node path under the HUD) |
 | `--tooltips-audit` | A town run (give `--frames=60`): print every visible word, picture and button of the HUD that would show no tooltip under the pointer |
@@ -434,7 +434,14 @@ F5 saves to `user://quicksave.json` and F9 loads it. The game also saves to
 `user://autosave.json` at each dawn (not in screenshot runs). A save is JSON and
 holds the whole state of the rules, so a loaded game carries on the way the
 saved one would have. A save that cannot be loaded (damaged, or from another
-version) is refused and the game carries on.
+version) is refused and the game carries on. **Versions (SAVE4):** a One House save writes
+`TownGen.VERSION` (`modules.scenario.town_version`); the town is made again from the seed, so a
+save of an older town (no number, or a lower one: every save before this build) is
+**incompatible**: Continue skips it, the Load page lists it greyed ("older version: cannot be
+continued"), and loading it (a click, F9, `--load=path`) shows a card ("This save is from an older
+version of Last Bell and cannot be continued. Start a new game.") and starts nothing. Any change
+that alters the generated town or the saved state's meaning must bump `TownGen.VERSION`:
+`docs/save-compat.md`.
 
 ## Balance harness
 
