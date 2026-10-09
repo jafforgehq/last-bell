@@ -1,0 +1,83 @@
+{
+  "_doc": "THE CLUTTER BUDGET (docs/hud-audit.md, section 7). Every number is a share of the screen in percent at 1280 x 720 (the itch embed); at another window the shares `persistent`, `ui`, `centre` and `blind_near` are multiplied by (1280 x 720 / window area) x (the interface scale)^2, the interface scale being min(width / 1600, height / 900) but not below 1 (Main.auto_ui_scale), so that the same boards on a bigger window are held to the smaller share they cover there; `hidden` (awake dead one hidden over half) and `covered_dead` (the most a dead one in view is covered, percent) are not scaled. A snapshot is checked against the group its label begins with.",
+  "ref": [
+    1280,
+    720
+  ],
+  "groups": {
+    "early": {
+      "_doc": "the road, the first house, clearing it: the guide teaches here and the dead are few and near",
+      "match": [
+        "a_hold",
+        "a_arrive",
+        "b_opening",
+        "c_clearing",
+        "l_"
+      ],
+      "persistent": 6.0,
+      "ui": 10.0,
+      "centre": 13.0,
+      "blind_near": 5.5,
+      "hidden": 0,
+      "covered_dead": 40
+    },
+    "day": {
+      "_doc": "the claimed house by day, the first dusk: the crew, the stores and the clock matter",
+      "match": [
+        "d_day",
+        "d_dusk"
+      ],
+      "persistent": 12.0,
+      "ui": 15.0,
+      "centre": 5.5,
+      "blind_near": 7.5,
+      "hidden": 0,
+      "covered_dead": 40
+    },
+    "threat": {
+      "_doc": "a night at the fence, awake dead within 14 tiles: everything that is not the fight steps back; a board over a dead one is drawn at 0.4 opacity or less (the probe then does not count it as hiding)",
+      "match": [
+        "e_night",
+        "e_storm"
+      ],
+      "persistent": 6.0,
+      "ui": 10.0,
+      "centre": 5.0,
+      "blind_near": 5.0,
+      "hidden": 0,
+      "covered_dead": 40
+    },
+    "card": {
+      "_doc": "a card the game raises: the morning card",
+      "match": [
+        "f_dawn"
+      ],
+      "persistent": 8.0,
+      "ui": 20.0,
+      "centre": 9.0,
+      "blind_near": 12.0,
+      "hidden": 0,
+      "covered_dead": 40
+    },
+    "window": {
+      "_doc": "a window the player asked for: the Build page, the radio panel (and the inventory with its loot window, Tab)",
+      "match": [
+        "g_build",
+        "g_radio"
+      ],
+      "persistent": 8.0,
+      "ui": 30.0,
+      "centre": 23.0,
+      "blind_near": 9.0,
+      "hidden": 0,
+      "covered_dead": 40
+    }
+  },
+  "window_max_share": {
+    "_doc": "an on-demand window (Build, radio, inventory with its loot window, the stash): at most this share of the width, of the height and of the screen in all, at every window size (a window is laid out in the interface's own points, so the share is not scaled)",
+    "width": 0.45,
+    "height": 0.55,
+    "area": 0.17
+  },
+  "ghost_alpha": 0.4
+}
