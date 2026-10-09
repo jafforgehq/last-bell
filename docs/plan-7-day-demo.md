@@ -1,5 +1,7 @@
 # Plan: a seven-day demo
 
+> **UPDATE 2026-10-09 (owner): the demo is FIVE held attack nights, not seven.** The seven-night measurement (docs/seven-nights-findings.md) showed ammo and the unmended fence break the run before night 7 (the best bot wins 6 of 32), and a seven-night run takes about 90 to 113 minutes. Five nights are about 83 minutes at the bot's pace. `end.nights_to_hold` stays 1 in the data until the arc is designed (step 2) and the economy exists (the inventory, food and water needs, more zombies come first, in that order: the owner's order); then it becomes 5 for the demo and 7 stays the target for the full game. Read 'seven' below as 'five' for the demo.
+
 Written 2026-10-09 for the owner. Nothing here is started. I read the request "next step is to have a demo for 7 days" as: the demo should cover SEVEN IN-GAME DAYS (today it ends at the dawn after the first attack night, about 23 real minutes). If it meant a seven-day public TEST WINDOW instead, see the last section.
 
 ## Where we are
