@@ -17,6 +17,7 @@ extends RefCounted
 
 const BotLib := preload("res://tools/avatar_bot.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
+const Inventory := preload("res://scripts/sim/inventory.gd")
 
 ## The wall sections of the base are the ids below this (the lots' are above: `Lots.FIRST_SEGMENT_ID`); the barred doors are among them.
 const SECTION_IDS := 100
@@ -213,6 +214,14 @@ class HouseBot:
 	const MEND_RESERVE := 8.0
 	const BED_REACH := 1.5
 	const SLEEP_REAL_S := 40.0
+	## INV-CORE, the pack. It walks home to the stash when this few cells of its pack are free (or fewer), and goes back to a container it left items in when this many are free. Home, it puts
+	## everything in the stores but KEEP_AMMO rounds (the day's fighting) and KEEP_MEDS bandages; before the night of an attack it fills the pack to NIGHT_AMMO rounds (an idle avatar puts it all in the
+	## stores at dusk: its hands are off the gun).
+	const PACK_HOME_FREE := 5
+	const REVISIT_FREE := 6
+	const KEEP_AMMO := 15
+	const NIGHT_AMMO := 18
+	const KEEP_MEDS := 2
 
 	var sim
 	var mode := "bot"
@@ -242,6 +251,8 @@ class HouseBot:
 	var defender
 	## True once the avatar has fallen and the game went on with somebody else (the lab ends the run: a lost run).
 	var avatar_dead := false
+	## INV-CORE: what the pack held at the bell of the first attack night ({"units": carried totals, "cells": cells used, "stores": the stores}), {} before it.
+	var pack_dusk: Dictionary = {}
 
 	var _rng := RandomNumberGenerator.new()
 	var _t := 0.0
@@ -280,6 +291,64 @@ class HouseBot:
 		mode = mode_name
 		_rng.seed = int(sim.run_seed) * 11 + 5
 		defender = Defender.new(s, "bot")
+		# (INV-CORE: the hand that takes everything out of a container at once: the Take all key)
+		if sim.get("inv") != null:
+			sim.inv.auto_take = true
+
+	# ------------------------------------------------------------------------ the pack --
+
+	func _inv():
+		var inv = sim.get("inv")
+		return inv if inv != null and inv.active() else null
+
+	## Medicine she can use now (the pack's, and the stores' at the base); the stores' in a game with no pack.
+	func _meds(me) -> float:
+		var inv = _inv()
+		return float(inv.meds_available(me)) if inv != null else float(sim.stock.meds)
+
+	## All the medicine there is (the stores' and the pack's): for the choice of a shelf to search.
+	func _all_meds() -> float:
+		var inv = _inv()
+		return float(sim.stock.meds) + (float(inv.carried_totals().meds) if inv != null else 0.0)
+
+	## Whether a container is done with: searched and (in the pack game) nothing in it worth a trip back, or the pack has no room to take what is left.
+	func _gone(sr, id: String) -> bool:
+		if not sr.is_looted(id):
+			return false
+		var inv = _inv()
+		if inv == null or not sr.has_left(id):
+			return true
+		return Inventory.free_cells(inv.pack) < REVISIT_FREE
+
+	## Whether the pack is full enough (and has anything for the stores) for the trip home.
+	func _pack_wants_home() -> bool:
+		var inv = _inv()
+		var base = sim.get("base")
+		if inv == null or base == null or not bool(base.claimed):
+			return false
+		var c: Dictionary = inv.carried_totals()
+		return Inventory.free_cells(inv.pack) <= PACK_HOME_FREE and int(c.food) + int(c.water) + int(c.meds) + maxi(0, int(c.ammo) - KEEP_AMMO) > 0
+
+	## At the base: the stash. Everything to the stores but the day's ammo and bandages; the pack topped up to what the hour wants. Run every step; it does nothing when there is nothing to do.
+	func _pack_tick(me) -> void:
+		var inv = _inv()
+		var base = sim.get("base")
+		if inv == null or base == null or not bool(base.claimed) or not base.at_base(me):
+			return
+		var night: bool = _attacks_on() and _hour() >= HOME_BY_ATTACK - 0.5
+		var want_ammo := KEEP_AMMO
+		if night:
+			want_ammo = 0 if mode != "bot" else NIGHT_AMMO
+		var c: Dictionary = inv.carried_totals()
+		var spare := int(c.food) + int(c.water) + maxi(0, int(c.meds) - KEEP_MEDS) + maxi(0, int(c.ammo) - want_ammo)
+		if spare > 0:
+			inv.deposit_all()
+			inv.withdraw("ammo", want_ammo)
+			inv.withdraw("meds", KEEP_MEDS)
+		elif int(c.ammo) < want_ammo and float(sim.stock.ammo) >= 1.0:
+			inv.withdraw("ammo", want_ammo - int(c.ammo))
+		elif int(c.meds) < KEEP_MEDS and float(sim.stock.meds) >= 1.0:
+			inv.withdraw("meds", KEEP_MEDS - int(c.meds))
 
 	# -------------------------------------------------------------------- the clock --
 
@@ -393,6 +462,9 @@ class HouseBot:
 					if _attacks_on() and not _bell_marked:
 						_bell_marked = true
 						mark("bell")
+						var pinv = _inv()
+						if pinv != null:
+							pack_dusk = {"units": pinv.carried_totals(), "cells": Inventory.used_cells(pinv.pack), "stores": pinv.store_totals()}
 				"held":
 					_mark_once("held", "held", {"night": int(e.get("night", 0))})
 				"bite":
@@ -533,6 +605,7 @@ class HouseBot:
 		var sl = sim.get("sleep")
 		if sl != null and sl.active():
 			return    # (asleep: the sleep runs the colony; hands off)
+		_pack_tick(me)
 		# the night of the first attack: the wall's defender plays (or nobody: idle)
 		if _defending():
 			if mode == "bot":
@@ -590,10 +663,10 @@ class HouseBot:
 		# a bleeding bite or an infection: the avatar's own medicine (E on "Bandage the wound", uses.gd), as soon as no dead one is on the avatar's heels (a person walks four times as fast as
 		# a walker: a few seconds of walking away from the ones that follow is all a bandage asks for). Before everything else, the night too: a bite bleeds for good.
 		if sim.get("uses") != null and _nearest_chaser(pos) > HEAL_CLEAR_R:
-			if float(me.bleeding) > 0.0 and float(sim.stock.meds) >= float(sim.medical.BANDAGE_MEDS) and not _blocked_now("heal"):
+			if float(me.bleeding) > 0.0 and _meds(me) >= float(sim.medical.BANDAGE_MEDS) and not _blocked_now("heal"):
 				_set_task({"kind": "heal", "key": "heal", "id": "bandage"})
 				return
-			if float(me.infected_at) >= 0.0 and float(sim.stock.meds) >= float(sim.medical.CURE_MEDS) and not _blocked_now("treat"):
+			if float(me.infected_at) >= 0.0 and _meds(me) >= float(sim.medical.CURE_MEDS) and not _blocked_now("treat"):
 				_set_task({"kind": "heal", "key": "treat", "id": "cure"})
 				return
 		# the evening: home, to bed (a quiet night) or to wait for the dead (the attack's night is the defender's)
@@ -621,6 +694,10 @@ class HouseBot:
 		var bt := _build_task(me)
 		if not bt.is_empty():
 			_set_task(bt)
+			return
+		# (INV-CORE: a pack with no room goes to the stash, then out again)
+		if _pack_wants_home():
+			_set_task({"kind": "home", "key": "home"})
 			return
 		var r := _rescue_task(me) if _wants_rescue() else {}
 		if not r.is_empty():
@@ -716,7 +793,7 @@ class HouseBot:
 				return not rec.is_empty() and String(rec.state) != "joined" and String(rec.state) != "lost" and not _blocked_now(String(task.key)) and _wants_rescue()
 			"search":
 				var sr = sim.get("search")
-				return sr != null and bool(task.get("far", false)) and not sr.is_looted(String(task.get("id", ""))) and not _blocked_now(String(task.key))
+				return sr != null and bool(task.get("far", false)) and not _gone(sr, String(task.get("id", ""))) and not _blocked_now(String(task.key))
 		return false
 
 	# ---------------------------------------------------------------- the start house --
@@ -747,7 +824,7 @@ class HouseBot:
 					return
 		# 3. the containers (EARLY: the one in hand is kept until it is searched or given up: a bot that chose the nearest again at every look went back and forth between two shelves for a day in seed 11)
 		var in_hand := String(task.get("id", ""))
-		if String(task.get("kind", "")) == "search" and int(task.get("house", -1)) == h and sim.get("search") != null and not sim.search.is_looted(in_hand) and not _blocked_now(String(task.get("key", ""))):
+		if String(task.get("kind", "")) == "search" and int(task.get("house", -1)) == h and sim.get("search") != null and not _gone(sim.search, in_hand) and not _blocked_now(String(task.get("key", ""))):
 			return
 		var c := _next_container(h, pos)
 		if not c.is_empty():
@@ -777,7 +854,7 @@ class HouseBot:
 		var best := {}
 		var best_d := INF
 		for c in hs.containers_of(h):
-			if sr.is_looted(String(c.id)) or _blocked_now("search_%s" % String(c.id)):
+			if _gone(sr, String(c.id)) or _blocked_now("search_%s" % String(c.id)):
 				continue
 			var d := pos.distance_to(Vector2(c.pos))
 			if d < best_d:
@@ -837,11 +914,11 @@ class HouseBot:
 			if careful and dead_n > 0:
 				continue
 			for c in hs.containers_of(hid):
-				if sr.is_looted(String(c.id)) or _blocked_now("search_%s" % String(c.id)):
+				if _gone(sr, String(c.id)) or _blocked_now("search_%s" % String(c.id)):
 					continue
 				var d := pos.distance_to(Vector2(c.pos)) + 6.0 * float(dead_n)
 				# medicine first when there is little: a bite bleeds for good until it is bandaged (one medicine) and may turn (two to treat)
-				if float(sim.stock.meds) < 3.0 and float(c.get("loot", {}).get("meds", 0)) > 0.0:
+				if _all_meds() < 3.0 and float(c.get("loot", {}).get("meds", 0)) > 0.0:
 					d -= 30.0
 				if d < best_d:
 					best_d = d
@@ -1122,7 +1199,7 @@ class HouseBot:
 			_miss("search", "uses")
 			_done("search")
 			return Vector2.ZERO
-		if sr.is_looted(id):
+		if sr.is_looted(id) and not sr.has_left(id):
 			_done("search")
 			return Vector2.ZERO
 		var at: Vector2 = task.at
@@ -1132,6 +1209,14 @@ class HouseBot:
 		if uses.busy():
 			return Vector2.ZERO
 		var r := _press("container", id)
+		if sr.is_looted(id) and sr.has_left(id) and String(r.get("state", "")) == "ok":
+			# (INV-CORE: items she left in it: the window opens with no search; Take all, close; if they still do not fit, not again for a while)
+			sim.inv.take_all_open()
+			sim.inv.close_container()
+			if sr.has_left(id):
+				_block(String(task.key))
+			_done("search")
+			return Vector2.ZERO
 		if _waited(r) > GIVE_UP_S:
 			_give_up(String(task.key), String(r.get("why", "no candidate")))
 		return Vector2.ZERO
@@ -1199,9 +1284,10 @@ class HouseBot:
 
 	## The avatar's own medicine: E on the candidate, then stand still until the session is over (it ends when the hands move).
 	func _task_heal(me) -> Vector2:
+		# (INV-CORE: the medicine she can use is the pack's, and the stores' at the base)
 		var uses = sim.get("uses")
 		var id := String(task.get("id", ""))
-		var done: bool = float(me.bleeding) <= 0.0 if id == "bandage" else (float(me.infected_at) < 0.0 or float(sim.stock.meds) < float(sim.medical.CURE_MEDS))
+		var done: bool = float(me.bleeding) <= 0.0 if id == "bandage" else (float(me.infected_at) < 0.0 or _meds(me) < float(sim.medical.CURE_MEDS))
 		if done or uses == null:
 			if done:
 				stats.heals = int(stats.get("heals", 0)) + 1
@@ -1433,7 +1519,7 @@ class HouseBot:
 	func _reload_in_a_lull(me) -> void:
 		if float(me.reloading) > 0.0 or me.gun.get("melee", false) or int(me.mag) > MAG_LOW or int(me.mag) >= int(me.gun.get("mag", 0)):
 			return
-		if float(sim.stock.ammo) < float(sim.shot_cost(me)):
+		if float(sim.reserve_ammo(me)) < float(sim.shot_cost(me)):
 			return
 		var here := Vector2(me.x, me.y)
 		for z in sim.zombies:

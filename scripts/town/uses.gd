@@ -25,7 +25,7 @@ const CURE_S := 7.0
 const SELF_DIST := 1.9
 ## A drop of health in one step bigger than this is a blow (a bite), not the slow loss of a wound that bleeds.
 const HURT_DROP := 0.4
-const PROVIDERS := ["clearing", "search", "base", "sleep", "rescue", "perimeter"]
+const PROVIDERS := ["clearing", "search", "base", "sleep", "rescue", "perimeter", "inv"]
 
 var sim
 var enabled := true
@@ -109,7 +109,17 @@ func use(c: Dictionary) -> Dictionary:
 # ------------------------------------------------------------------------ self-care --
 
 func _meds() -> float:
+	var inv = sim.get("inv")
+	if inv != null and inv.active():
+		return float(inv.meds_available(_lead()))    # (INV-CORE: the pack's bandages, and the base's stores when she is at the base)
 	return float(sim.stock.get("meds", 0.0))
+
+
+## INV-CORE: her own bandage and cure draw from the pack first: what the pack gives goes into the stores, where medical.gd takes the medicine from.
+func _stage_meds(amount: float) -> void:
+	var inv = sim.get("inv")
+	if inv != null and inv.active():
+		inv.stage_meds(amount)
 
 
 ## "Bandage the wound" while the avatar bleeds, "Treat the infection" while it is infected (each refused, with its reason, when the stores are short).
@@ -175,6 +185,7 @@ func _bandaged() -> void:
 	var p = _lead()
 	if p == null or float(p.bleeding) <= 0.0 or _meds() + EPS < float(sim.medical.BANDAGE_MEDS):
 		return
+	_stage_meds(float(sim.medical.BANDAGE_MEDS))
 	sim.medical._use_meds(float(sim.medical.BANDAGE_MEDS))
 	p.bleeding = 0.0
 	p.wounds = 0
@@ -185,6 +196,7 @@ func _cured() -> void:
 	var p = _lead()
 	if p == null or float(p.infected_at) < 0.0 or _meds() + EPS < float(sim.medical.CURE_MEDS):
 		return
+	_stage_meds(float(sim.medical.CURE_MEDS))
 	if sim.medical.try_cure(p, p):
 		sim.alert("self-cure", "info", "The infection is gone", "The treatment worked", null, 10.0)
 	else:

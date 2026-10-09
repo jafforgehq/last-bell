@@ -47,6 +47,7 @@ const PARTS := {
 	"perimeter": "res://scripts/town/perimeter.gd",
 	"patrol": "res://scripts/town/patrol.gd",
 	"skies": "res://scripts/town/skies.gd",
+	"inv": "res://scripts/town/inv.gd",
 	"scenario": "res://scripts/town/one_house.gd",
 }
 
@@ -72,8 +73,33 @@ var perimeter
 var patrol
 ## The town's weather (RAIN: scripts/town/skies.gd): a rain period about one day in two, seeded by the run.
 var skies
+## INV-CORE (scripts/town/inv.gd): Ruth's backpack, the containers' grids, the stash. Inert until a One House run begins with a pack (`inv.on`).
+var inv
 ## The names of the parts that exist (made from PARTS).
 var parts_made: Array = []
+
+
+## INV-CORE: the player's rounds are the shells in the pack (Sim's hooks answer with the stores in a game that has none).
+func _packed(p) -> bool:
+	return inv != null and inv.active() and p != null and bool(p.player)
+
+
+func ammo_ready(p: Person) -> bool:
+	if _packed(p):
+		return int(p.mag) > 0 or inv.shots_available(p) > 0
+	return super(p)
+
+
+func reserve_ammo(p: Person) -> float:
+	if _packed(p):
+		return float(inv.reserve_rounds())
+	return super(p)
+
+
+func ammo_total() -> float:
+	if inv != null and inv.active():
+		return float(stock.ammo) + float(inv.reserve_rounds())
+	return super()
 
 var grid_separate := true
 var chase_on := true

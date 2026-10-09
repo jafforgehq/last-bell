@@ -401,10 +401,14 @@ func _taken() -> void:
 		return
 	box_taken = true
 	var loot := {}
+	var inv = sim.get("inv")
 	for k in box_loot:
 		var n := float(box_loot[k])
 		if n > 0.0 and sim.stock.has(k):
-			sim.stock[k] = float(sim.stock[k]) + n
+			if inv != null and inv.active() and ["ammo", "food", "water", "meds"].has(String(k)):
+				inv.give_units(String(k), int(n), BOX_ID)    # (INV-CORE: the box is the pack's: shells in her hands, not the stores)
+			else:
+				sim.stock[k] = float(sim.stock[k]) + n
 			loot[String(k)] = int(n)
 	sim.events.append({"type": "supply_taken", "id": BOX_ID, "loot": loot, "at": box_at})
 
