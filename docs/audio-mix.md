@@ -2,6 +2,8 @@
 
 **Nobody who made this could listen to it.** Every number below was measured, not heard: the loudness of each file with `tools/audio_measure.py`, and what really reaches the speakers with `tools/mix_probe.gd` (the game's own sound nodes play on the real buses, on a generated town, with Ruth and the dead as the rules have them; a capture effect after the Master's limiter is measured). "It sounds good" is **not** claimed anywhere in this document. What the owner should listen for first is at the end.
 
+**Update 2026-10-09 (PH4): the real mix was recorded** (`docs/audio-capture.md`: the game played for a minute at a time with the crew, the dead, the rain and a script for Ruth's hands, the Master's real audio and every bus's stem written by Godot's movie writer and measured). It agrees with this table within about 1.5 LU (pump gun -13.3, Ruth's walk -28.2 to -31.4, a groan from 3 / 8 / 14 tiles -14.4 to -16.0 / -18.3 / -22.4, the storm's rain -20.4, a near thunder -13.4), nothing clips (0 samples at full scale in 6.5 minutes), and it found two things: the radio call's ring was as loud as the gun (now 0.55, row UI below) and the limiter works harder in a fight than the worst case below (up to 3.5 dB when the crew and Ruth shoot together).
+
 ## How to read the numbers
 
 - **LUFS / LU.** The loudness of the *loudest 400 ms* (momentary loudness, K-weighted as in ITU-R BS.1770 / EBU R128), written **M-max**. 1 LU is 1 dB; "A is 6 LU under B" means A's M-max is 6 less than B's. A sound shorter than 400 ms is measured as heard in that window, so a click and a bed are on one scale.
@@ -63,6 +65,7 @@ All of them are in `default_bus_layout.tres` (the layout file, **not** `add_bus`
 | **Music** | the stems at full (outdoors / indoors / night / fortress) | | **-19.9 / -22.4 / -20.6 / -19.4** (one stem; the mood is the sum) | Music (0) | | -7 to -9 |
 | **UI** | click / confirm / notify (0.6) / chime | | **-27.3 / -15.1 / -20.5 / -15.5** | UI (0) | | |
 | | the dusk bell, first toll (not changed) | | **-12.6** (it was -10.9 on another toll: a random one of three) | SFX | | 0 |
+| | the radio call's ring (`ui_radio_call`, a call that waits for an answer; found by the movie capture, `docs/audio-capture.md`) | -16 | **-11.8 at 0.9** (as loud as the pump gun: too loud) -> **-16.0 at 0.55** | UI (0) | `soundscape.gd on_event "call_raised"`: 0.9 -> 0.55 | -3 |
 
 The moan row: the bed was -18.1 LUFS before the trim, about as loud as a groan three tiles away, which is the wrong way round for a bed; `Foley.LEVEL_DB["moan"]` takes 4 dB off (`sound.gd set_ambience`).
 
@@ -88,7 +91,7 @@ A steady rain is 12 LU under the gun, a drizzle 19 LU: lighter weather is quiete
 
 ### Clipping and the limiter (ceiling -0.5 dBFS)
 
-Every new file peaks at -3.2 dBFS or lower (`tests/test_audio_assets.gd` wants -3.0). In the engine, played at their game levels, no single category reaches the ceiling: the loudest are a killing blow (thud + wet kill, peak -3.4), an indoor shot (-2.6) and a tile run step (-3.4). **The worst case** (a storm, a music stem, Ruth running with an empty tank, a shot every 0.45 s, thirty of the dead at their bites for 8 s): the Master peaks at **-0.5 dBFS with the limiter on** (the ceiling: nothing goes through it) and **+0.4 dBFS with the limiter switched off** (5 samples over full scale in 6 s), so the limiter takes at most 0.9 dB for a few milliseconds; the loudest 400 ms of that is -10.1 LUFS. At most 3 of the 12 positional voices were in use, 30 growls were played (never more than 2 at once, 0.22 s apart) and 30 were dropped for the cap. (The worst case is random: an earlier take, before the new groans' peaks were held at -7.5 dBFS, measured +1.1 dBFS unlimited, so assume the limiter takes up to 1.6 dB in such a moment.)
+Every new file peaks at -3.2 dBFS or lower (`tests/test_audio_assets.gd` wants -3.0). In the engine, played at their game levels, no single category reaches the ceiling: the loudest are a killing blow (thud + wet kill, peak -3.4), an indoor shot (-2.6) and a tile run step (-3.4). **The worst case** (a storm, a music stem, Ruth running with an empty tank, a shot every 0.45 s, thirty of the dead at their bites for 8 s): the Master peaks at **-0.5 dBFS with the limiter on** (the ceiling: nothing goes through it) and **+0.4 dBFS with the limiter switched off** (5 samples over full scale in 6 s), so the limiter takes at most 0.9 dB for a few milliseconds; the loudest 400 ms of that is -10.1 LUFS. At most 3 of the 12 positional voices were in use, 30 growls were played (never more than 2 at once, 0.22 s apart) and 30 were dropped for the cap. (The worst case is random: an earlier take, before the new groans' peaks were held at -7.5 dBFS, measured +1.1 dBFS unlimited, so assume the limiter takes up to 1.6 dB in such a moment.) **Real fights (the movie capture, `docs/audio-capture.md`):** with the crew shooting at the same time as Ruth the Master reaches **+0.0 to +3.0 dBFS before the limiter** (up to 600 samples over full scale in a minute) and the limiter takes **2.7 to 3.5 dB at most** for a few milliseconds, in 7 to 49 short episodes (0.1 to 1.6 s) of 60 s; the 16-bit files never have a sample at full scale and never peak above -0.5 dBFS.
 
 ## The weather audio check (item 6)
 
@@ -149,5 +152,6 @@ Everything is arithmetic (`tools/make_foley_sounds.py`, `make_voice_sounds.py`, 
 4. **Zombie voices:** a street of the dead by day (the idle groans), then a few at your door at night (the wind-up growls before each bite). The runner's hiss and screech and the brute's growl are the least certain: they are formant synthesis, the likeliest to sound artificial.
 5. **A storm:** rain, then thunder after the flash (near, mid, far), then walk indoors: the roof's muffle is now 10 LU.
 6. Ruth's pain on a bite and her breath at the end of a sprint.
+7. (PH4) The seven recorded clips of `docs/audio-capture.md` (`lastbell_*.mp4` and `.wav`): the night attack and the storm attack first; the radio call's ring is 4 LU quieter than it was; the night music is the loudest sustained layer.
 
 Open: the first listening will probably want the Voices trim (+9) and the rain moved by a few decibels (one number each); the generated voices may be replaced by recordings later.
