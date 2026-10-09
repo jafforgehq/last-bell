@@ -37,7 +37,7 @@ const WORDS := {
 	"cover": "Cover me: %s stands behind you, watching your back",
 	"search": "Search that: %s goes and searches what you point at",
 	"back": "Go back: %s goes back to what they were doing",
-	"post": "To the walls: %s goes to their post on the wall",
+	"post": "To the walls: %s goes to their post on the fence, or walks the fence line if they hold none",
 }
 
 var host
