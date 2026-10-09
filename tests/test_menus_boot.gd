@@ -253,7 +253,7 @@ func test_the_pause_menu_does_not_open_over_a_dialog_or_the_end() -> void:
 	await Fakes.leave(g)
 
 
-func test_how_to_play_leaves_the_game_paused_and_shows_the_controls() -> void:
+func test_the_controls_page_is_read_with_the_game_paused_and_gives_back_the_pause_menu() -> void:
 	_fresh()
 	var g := Fakes.game({"difficulty": 1, "seed": 7})
 	var main = g.main
@@ -261,11 +261,16 @@ func test_how_to_play_leaves_the_game_paused_and_shows_the_controls() -> void:
 	main.open_pause()
 	check(not main.hud.help.visible, "the controls are not showing")
 	var pause = main.shell.top()
-	pause.items["help"].pressed.emit()
-	check(main.hud.help.visible, "the controls panel is up")
-	check(not main.shell.is_open(), "the menu is gone")
+	pause.items["controls"].pressed.emit()
+	eq(main.shell.kinds(), ["pause", "controls"], "the Controls page is up over the pause menu")
+	check(not main.hud.help.visible, "(not the HUD's small panel)")
 	eq(main.speed, 0, "the game stays paused so the keys can be read")
-	check(main.hud.toast_panel.visible and main.hud.toast_label.text.contains("Space"), "and a toast says how to go on: '%s'" % main.hud.toast_label.text)
+	main.shell.top().back_button.pressed.emit()
+	eq(main.shell.kinds(), ["pause"], "Back gives the pause menu back")
+	eq(main.speed, 0, "still paused")
+	Fakes.key(KEY_ESCAPE)
+	check(not main.shell.is_open(), "Esc closes the menu")
+	eq(main.speed, 2, "and the game goes on at the speed it had")
 	await Fakes.leave(g)
 
 
@@ -372,6 +377,22 @@ func test_the_interface_size_is_held_back_in_a_window_too_small_for_it() -> void
 	near(Main.effective_ui_scale(Vector2(1920, 1200), 0.0, 1.0), 1.0, 0.0001, "a display that reports no scale is not divided by")
 
 
+func test_the_automatic_interface_size_grows_with_a_window_that_has_room() -> void:
+	near(Main.auto_ui_scale(Vector2(1440, 900), 1.0), 1.0, 0.0001, "the 1440 by 900 layout is the normal size")
+	near(Main.auto_ui_scale(Vector2(1280, 800), 1.0), 1.0, 0.0001, "a smaller window is not made smaller")
+	near(Main.auto_ui_scale(Vector2(1920, 1080), 1.0), 1.2, 0.0001, "1920 by 1080 lays the interface out in 1600 by 900 points")
+	near(Main.auto_ui_scale(Vector2(2560, 1440), 1.0), 1.6, 0.0001, "2560 by 1440 in 1600 by 900")
+	near(Main.auto_ui_scale(Vector2(2880, 1800), 2.0), 1.0, 0.0001, "the display's own scale counts: 1440 by 900 points")
+	near(Main.auto_ui_scale(Vector2(5120, 1440), 1.0), 1.6, 0.0001, "the shorter side counts, so a very wide window is not huge")
+	near(Main.auto_ui_scale(Vector2(7680, 4320), 1.0), Main.AUTO_SCALE_MAX, 0.0001, "and it stops at the most")
+
+
+## The size in use for a window and a setting: the window's automatic size times the setting held back by what is left of the window (`Main.ui_scale_in_use`).
+func _size_in_use(window_px: Vector2, os_scale: float, pref: float) -> float:
+	var auto: float = Main.auto_ui_scale(window_px, os_scale)
+	return auto * Main.effective_ui_scale(window_px / auto, os_scale, pref)
+
+
 func test_the_settings_put_the_interface_size_to_work() -> void:
 	_fresh()
 	var g := Fakes.game({"difficulty": 1, "seed": 7})
@@ -383,8 +404,9 @@ func test_the_settings_put_the_interface_size_to_work() -> void:
 	for pref in [1.0, 1.25, 0.8, 1.5]:
 		Prefs.set_value("ui", "scale", pref)
 		main.apply_settings()
-		var k: float = Main.effective_ui_scale(Vector2(win.size), s, pref)
+		var k: float = _size_in_use(Vector2(win.size), s, pref)
 		near(main.ui_scale_in_use(), k, 0.0001, "the size in use for %.2f" % pref)
+		near(main.ui_scale_in_use() / main.ui_auto_scale(), Main.effective_ui_scale(Vector2(win.size) / main.ui_auto_scale(), s, pref), 0.0001, "the setting is on top of the window's own size for %.2f" % pref)
 		eq(win.content_scale_size, Vector2i(maxi(1, int(win.size.x / (s * k))), maxi(1, int(win.size.y / (s * k)))), "the window's logical size for %.2f" % pref)
 	await Fakes.leave(g)
 
@@ -397,7 +419,8 @@ func test_the_size_is_read_when_the_game_starts() -> void:
 	var s := DisplayServer.screen_get_scale()
 	if s <= 0.0:
 		s = 1.0
-	eq(win.content_scale_size, Vector2i(maxi(1, int(win.size.x / (s * 0.8))), maxi(1, int(win.size.y / (s * 0.8)))), "80% from the first frame")
+	var k: float = _size_in_use(Vector2(win.size), s, 0.8)
+	eq(win.content_scale_size, Vector2i(maxi(1, int(win.size.x / (s * k))), maxi(1, int(win.size.y / (s * k)))), "80% from the first frame")
 	await Fakes.leave(g)
 
 

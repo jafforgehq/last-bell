@@ -158,13 +158,16 @@ const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownBoot := preload("res://scripts/town/town_boot.gd")
 
 
-## {"sim", "world", "town"}: a TownSim (the colony on the generated town, scripts/town/town_sim.gd) at the start, day 1 07:00, Ruth the player in the start house, the
-## storyteller off. A MINI town by default (`opts.blocks` 2: 64 x 64 tiles, 4 blocks, about 18 houses, the start house, 2 rescue spots, about 80 dead; made in about 0.1 s);
-## `{"blocks": 6}` is the whole town. Other options are the generator's (`dead`, `rescue`, `cars`). The modules of the town that other packages bring (`clearing`, `base`...)
-## are in `sim` when their files exist. Free `world` when the test is done. `OneHouse` (the scenario) is whatever `scripts/town/one_house.gd` is, or the colony's own
-## while it does not exist.
+## {"sim", "world", "town"}: a TownSim (the colony on the generated town, scripts/town/town_sim.gd) at the start, day 1 07:00, Ruth the player at the town's entry (where a run begins
+## since the arrival, scripts/town/arrival.gd; `opts.home` true puts her in the middle of the start house's start room instead, as a run began before it: the tests of the house,
+## its rooms and its roof stand her there), the storyteller off. A MINI town by default (`opts.blocks` 2: 64 x 64 tiles, 4 blocks, about 18 houses, the start house, 2 rescue spots,
+## about 80 dead; made in about 0.1 s); `{"blocks": 6}` is the whole town. Other options are the generator's (`dead`, `rescue`, `cars`). The modules of the town that other packages
+## bring (`clearing`, `base`...) are in `sim` when their files exist. Free `world` when the test is done. `OneHouse` (the scenario) is whatever `scripts/town/one_house.gd` is, or the
+## colony's own while it does not exist.
 static func town_game(seed_value: int = 1, opts: Dictionary = {}) -> Dictionary:
 	var o := opts.duplicate()
+	var home := bool(o.get("home", false))
+	o.erase("home")
 	if not o.has("blocks"):
 		o["blocks"] = 2
 	var town: Dictionary = TownGen.make(seed_value, o)
@@ -177,5 +180,31 @@ static func town_game(seed_value: int = 1, opts: Dictionary = {}) -> Dictionary:
 	sim.storyteller.enabled = false
 	if not sim.avatar.set_player("ruth"):
 		push_error("town_game: Ruth cannot be the player")
+	if home:
+		put_home(sim, town)
 	sim.events.clear()
 	return {"sim": sim, "world": world, "town": town}
+
+
+## The player stands on the start house's start tile (the middle of its start room), still.
+static func put_home(sim, town: Dictionary) -> void:
+	var me = sim.avatar.player()
+	me.x = float(town.start.pos.x)
+	me.y = float(town.start.pos.y)
+	me.moving = false
+	me.path = []
+
+
+## The player stands in the middle of the dead of the start house (its rooms are far apart: from the start room only those within the wake radius, ten tiles, wake), still.
+static func put_among_the_dead_of_the_start_house(sim, town: Dictionary) -> void:
+	var sum := Vector2.ZERO
+	var n := 0
+	for r in town.dead:
+		if int(r.house) == int(town.start.house) and int(r.room) >= 0:
+			sum += Vector2(r.pos)
+			n += 1
+	var me = sim.avatar.player()
+	me.x = sum.x / float(maxi(n, 1))
+	me.y = sum.y / float(maxi(n, 1))
+	me.moving = false
+	me.path = []

@@ -18,7 +18,9 @@ func _mouse(pos: Vector2, pressed: bool) -> void:
 	ev.global_position = pos
 	ev.pressed = pressed
 	ev.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
-	Engine.get_main_loop().root.push_input(ev)
+	# (in the viewport's own coordinates, which a control's global rect is in: the game stretches its window by the interface size, so a position given as window
+	# pixels, the default of `push_input`, would land on another place)
+	Engine.get_main_loop().root.push_input(ev, true)
 
 
 ## A real click at `pos`: the pointer arrives, the button goes down, a few frames pass, the button comes up.
@@ -27,7 +29,7 @@ func _click(pos: Vector2) -> void:
 	var move := InputEventMouseMotion.new()
 	move.position = pos
 	move.global_position = pos
-	tree.root.push_input(move)
+	tree.root.push_input(move, true)
 	await tree.process_frame
 	_mouse(pos, true)
 	for i in HOLD_FRAMES:

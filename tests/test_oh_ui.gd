@@ -49,14 +49,47 @@ class FakeOH:
 class FakePerimeter:
 	extends RefCounted
 	var list := [
-		{"id": "s_front", "kind": "fence", "name": "Front fence", "rect": Rect2i(10, 14, 8, 1), "state": "open", "kit": "", "hp": 0, "max_hp": 0, "unlock": {"crew": 1}, "why_not": "", "plot": "slot_front"},
-		{"id": "s_gate", "kind": "gate", "name": "The gate", "rect": Rect2i(13, 14, 2, 1), "state": "locked", "kit": "", "hp": 0, "max_hp": 0, "unlock": {"crew": 3}, "why_not": "", "plot": "slot_gate"},
-		{"id": "s_tower", "kind": "tower", "name": "North tower", "rect": Rect2i(9, 4, 2, 2), "state": "built", "kit": "tower_small", "kit_name": "Small tower", "hp": 50, "max_hp": 100, "unlock": {"crew": 3}, "why_not": "", "plot": "slot_tower"},
-		{"id": "s_light", "kind": "floodlight", "name": "Floodlight", "rect": Rect2i(20, 6, 1, 1), "state": "ordered", "kit": "floodlights", "hp": 0, "max_hp": 0, "unlock": {"crew": 4}, "why_not": "", "plot": "slot_light"},
+		{"id": "s_front", "kind": "fence", "name": "Front fence", "rect": Rect2i(10, 14, 8, 1), "state": "open", "kit": "", "hp": 0, "max_hp": 0, "unlock": {"crew": 1}, "why_not": "", "plot": "slot_front", "project": "front"},
+		{"id": "s_gate", "kind": "gate", "name": "The gate", "rect": Rect2i(13, 14, 2, 1), "state": "locked", "kit": "", "hp": 0, "max_hp": 0, "unlock": {"crew": 3}, "why_not": "Opens when 3 people are here", "plot": "slot_gate", "project": "gate"},
+		{"id": "s_tower", "kind": "tower", "name": "North tower", "rect": Rect2i(9, 4, 2, 2), "state": "built", "kit": "tower_small", "kit_name": "Small tower", "hp": 50, "max_hp": 100, "unlock": {"crew": 3}, "why_not": "", "plot": "slot_tower", "project": "tower"},
+		{"id": "s_light", "kind": "floodlight", "name": "Floodlight", "rect": Rect2i(20, 6, 1, 1), "state": "ordered", "kit": "floodlights", "hp": 0, "max_hp": 0, "unlock": {"crew": 4}, "why_not": "", "plot": "slot_light", "project": "lights"},
 	]
 	var ordered: Array = []
 	var cancelled: Array = []
 	var demolished: Array = []
+	## The page is of PROJECTS (scripts/town/perimeter.gd `projects()`): the front fence, the gate, a tower, the lights; what the page asks of them is written down here.
+	var plist := [
+		_project("front", "Front fence", "the front fence", "fence", "ready", {"n": 4, "open": 4, "scrap": 21, "work": 13.0, "first_scrap": 5, "can_n": 4, "minutes": 130.0, "time": "2 hours", "recommended": true, "slots": ["s_front"], "gives": "Keeps the dead off the house"}),
+		_project("gate", "The gate", "the gate", "gate", "locked", {"n": 1, "open": 1, "scrap": 30, "work": 10.0, "need_crew": 3, "can_n": 0, "why": "Opens when 3 people are here", "slots": ["s_gate"]}),
+		_project("tower", "Watchtower", "a watchtower", "tower", "building", {"n": 2, "built": 1, "going": 1, "open": 1, "scrap": 12, "work": 6.0, "minutes": 40.0, "time": "40 minutes", "progress": 0.5, "slots": ["s_tower"]}),
+		_project("lights", "Floodlights", "the floodlights", "floodlight", "done", {"n": 1, "built": 1, "open": 0, "scrap": 0, "work": 0.0, "slots": ["s_light"]}),
+	]
+	var projects_ordered: Array = []
+	var projects_cancelled: Array = []
+	var affordable_calls := 0
+
+	static func _project(id: String, nm: String, noun: String, icon: String, state: String, over: Dictionary) -> Dictionary:
+		var p := {"id": id, "name": nm, "noun": noun, "button": "Build %s" % noun, "icon": icon, "gives": "A fence", "unit": "section", "state": state, "n": 1, "built": 0, "going": 0, "open": 1,
+			"fallen": 0, "scrap": 5, "work": 3.0, "first_scrap": 0, "can_n": 1, "pay": 5, "time": "", "minutes": 30.0, "builders": 2, "builders_text": "two builders", "why": "", "recommended": false,
+			"progress": 0.0, "slots": [], "need_crew": 1, "hands_minutes": 1.0, "spills": false}
+		for k in over:
+			p[k] = over[k]
+		return p
+
+	func projects() -> Array:
+		return plist
+
+	func order_project(id: String) -> Dictionary:
+		projects_ordered.append(id)
+		return {"ok": true, "line": "Ordered: %s." % id}
+
+	func cancel_project(id: String) -> Dictionary:
+		projects_cancelled.append(id)
+		return {"ok": true, "line": "Order taken back: %s." % id}
+
+	func order_affordable() -> Dictionary:
+		affordable_calls += 1
+		return {"ok": true, "line": "Ordered what the scrap pays for."}
 
 	func slots() -> Array:
 		return list
@@ -212,6 +245,14 @@ func _texts(n: Node, out: Array = []) -> Array:
 	return out
 
 
+## The first button in a row with this text (any button for ""), null when there is none.
+func _button_in(row: Node, text: String) -> Button:
+	for c in row.get_children():
+		if c is Button and (text == "" or (c as Button).text == text):
+			return c
+	return null
+
+
 func _has_text(n: Node, part: String) -> bool:
 	for t in _texts(n):
 		if String(t).contains(part):
@@ -284,8 +325,9 @@ func _key(code: Key, shift: bool = false) -> InputEventKey:
 	return ev
 
 
-## The slot page lists the slots with their state, a locked one says why, Order calls perimeter.order(slot, kit), a kit that cannot be had says so and cannot be
-## ordered; Cancel and Demolish (armed by a first press) call the perimeter; the district map counts the houses and knows who waits.
+## The Build page is of PROJECTS (the NEXT card, a card for each, the whole plan, the plan of the lot, Advanced: the sections on their own): a locked project says why, Build calls
+## perimeter.order_project, Cancel cancel_project, Build everything order_affordable; Advanced asks for the plainest kit, and takes a section down at the second press. The district map
+## counts the houses and knows who waits.
 func test_slot_page_and_district_map() -> void:
 	var ctx := _ctx()
 	var hud = ctx.hud
@@ -302,38 +344,73 @@ func test_slot_page_and_district_map() -> void:
 	var page := SlotPage.new()
 	ctx.holder.add_child(page)
 	page.setup(hud, func(): return fake)
-	eq(page.rows.size(), 4, "a row for every slot")
-	eq((page.rows["s_gate"].state as Label).text, "LOCKED", "a locked slot says so")
-	check(String((page.rows["s_gate"].line as Label).text).contains("Opens when 3 people are here (1 now)"), "and why: %s" % (page.rows["s_gate"].line as Label).text)
-	eq((page.rows["s_front"].state as Label).text, "OPEN", "an open slot says so")
-	eq((page.rows["s_tower"].state as Label).text, "BUILT", "a built one too")
-	eq(page.plan.slots.size(), 4, "the plan has every slot")
+	# a card for every project, the recommended one over them all as NEXT
+	eq(page.cards.keys(), ["front", "gate", "tower", "lights"], "a card for every project")
+	eq(page.next_id, "front", "the front fence is the one to do next")
+	eq(page.next_card.name.text, "Front fence", "the NEXT card names it")
+	eq(page.next_card.caption.text, "NEXT", "as the next thing")
+	check(page.next_card.action.visible and not page.next_card.action.disabled, "with its button")
+	eq(page.next_card.action.text, "Build the front fence", "which says the whole of the job")
+	eq(page.next_card.chip.text, "READY", "ready")
+	check(String(page.next_card.stats.text).contains("21 scrap") and String(page.next_card.stats.text).contains("13 builder-hours"), "and its price: %s" % page.next_card.stats.text)
+	check(String(page.next_card.time.text).begins_with("Takes 2 hours with two builders"), "and how long it takes: %s" % page.next_card.time.text)
+	# (the plan is the front fence, 21 scrap, and the tower going up, 12: 33 scrap)
+	check(page.plan_box.visible and String(page.plan_line.text).contains("33 scrap") and page.plan_chip_label.text != "", "the whole plan is summed over the card: %s / %s" % [page.plan_line.text, page.plan_chip_label.text])
+	# the list: a locked project says why and has no button, a going one a meter and Cancel, a done one goes last
+	var gate: Dictionary = page.cards["gate"]
+	eq(gate.chip.text, "LOCKED", "a locked project says so")
+	eq(gate.why.text, "Opens when 3 people are here", "and why")
+	check(not gate.action.visible and not gate.cancel.visible, "and has nothing to press")
+	var tower: Dictionary = page.cards["tower"]
+	eq(tower.chip.text, "BUILDING 1 OF 2", "a going one says how far")
+	check(tower.cancel.visible and tower.meter.visible and not tower.action.visible, "and has Cancel and a meter")
+	eq(page.cards["lights"].chip.text, "DONE", "a finished one says so")
+	eq(page.list_box.get_child(page.list_box.get_child_count() - 1), page.cards["lights"].panel, "and is listed last")
+	eq(page.plan.slots.size(), 4, "the plan has every section")
 	eq(page.plan.lot, Rect2(7, 3, 16, 14), "and the lot")
-	# an open slot: the kits and Order
-	page.select("s_front")
-	eq(page.selected, "s_front")
-	eq(page.kit_id, "fence", "the first kit that can be had is chosen")
-	check(page.order_button != null and not page.order_button.disabled, "Order can be pressed")
-	check(_has_text(page.detail, "5 scrap, 3 builder-hours, 120 hit points"), "the cost, the builder-hours and the hit points are said")
-	check(_has_text(page.detail, "It needs 12 scrap"), "a kit that cannot be had says why")
-	page.order_button.pressed.emit()
-	eq(per.ordered, [["s_front", "fence"]], "Order calls perimeter.order(slot, kit)")
-	page.choose_kit("fence_strong")
-	check(page.order_button.disabled, "a kit that cannot be had cannot be ordered")
-	# a locked slot: the reason and nothing to press
-	page.select("s_gate")
-	check(page.order_button == null, "a locked slot has no Order")
-	check(_has_text(page.detail, "Opens when 3 people are here"), "the detail says why it is locked")
-	# an ordered slot can be cancelled; a built one is demolished at the second press
-	page.select("s_light")
-	check(page.cancel_button != null, "an ordered slot has Cancel")
-	page.cancel_button.pressed.emit()
+	eq(page.people_label.text, "1 in the house", "the foot says who is in the house")
+	eq(page.stock_label.text, "40 scrap", "and the scrap")
+	# the buttons ask the perimeter
+	page.next_card.action.pressed.emit()
+	eq(per.projects_ordered, ["front"], "Build calls perimeter.order_project(project)")
+	eq(page.answer_label.text, "Ordered: front.", "and the page says what it answered")
+	page.all_button.pressed.emit()
+	eq(per.affordable_calls, 1, "Build everything I can afford calls order_affordable")
+	tower.cancel.pressed.emit()
+	eq(per.projects_cancelled, ["tower"], "Cancel calls perimeter.cancel_project")
+	# a click picks a project, which the yard marks; the same click puts it away
+	page.select("tower")
+	eq(page.selected, "tower", "a project is picked")
+	eq(page.marked_project(), ["tower", false], "and marked in the yard")
+	page.select("tower")
+	eq(page.marked_project(), ["front", true], "put away, the next one is marked, softly")
+	page.focus_on("s_gate")
+	eq(page.selected, "gate", "a section of the plan picks its project")
+	# the words
+	var p: Dictionary = per.plist[0]
+	eq(page.stats_of(p), "4 sections, 21 scrap, 13 builder-hours", "the price line")
+	eq(SlotPage.plural("section", 1), "section", "one")
+	eq(SlotPage.plural("section", 2), "sections", "and more")
+	var part: Dictionary = p.duplicate()
+	part["can_n"] = 2
+	eq(page.action_text(part, true), "Build 2 of 4 sections", "a part payment says how far it goes")
+	part["can_n"] = 0
+	check(page.action_text(part, false) == "Build", "(a small button just says Build)")
+	var fallen: Dictionary = p.duplicate()
+	fallen["fallen"] = 4
+	eq(page.action_text(fallen, true), "Rebuild the front fence", "a fallen project is rebuilt")
+	# Advanced: every section on its own, shut at first; Build asks for the first kit that can be had, a built one is taken down at the second press
+	check(not page.adv_box.visible, "Advanced is shut")
+	page.open_advanced()
+	eq(page.adv_rows.keys(), ["s_front", "s_gate", "s_tower", "s_light"], "a row for every section")
+	_button_in(page.adv_rows["s_front"].row, "Build").pressed.emit()
+	eq(per.ordered, [["s_front", "fence"]], "Build calls perimeter.order(section, the first kit that can be had)")
+	check(_button_in(page.adv_rows["s_gate"].row, "") == null, "a locked section has nothing to press")
+	_button_in(page.adv_rows["s_light"].row, "Cancel").pressed.emit()
 	eq(per.cancelled, ["s_light"], "Cancel calls perimeter.cancel")
-	page.select("s_tower")
-	check(_has_text(page.detail, "50 of 100 hit points"), "a built slot says its hit points")
-	page.demolish_button.pressed.emit()
-	eq(per.demolished.size(), 0, "the first press only arms Demolish")
-	page.demolish_button.pressed.emit()
+	_button_in(page.adv_rows["s_tower"].row, "Take down").pressed.emit()
+	eq(per.demolished.size(), 0, "the first press only arms Take down")
+	_button_in(page.adv_rows["s_tower"].row, "Press again").pressed.emit()
 	eq(per.demolished, ["s_tower"], "the second press takes it down")
 	# no perimeter: nothing to build yet
 	var bare := FakeSimView.new()
@@ -366,6 +443,9 @@ class FakeSimView:
 	var avatar
 	var stock := {"scrap": 40.0}
 	var people: Array = []
+	## (the whole plan's clock reads the hour and the day)
+	var hour := 9.0
+	var day := 1
 
 
 ## The ring follows uses.progress(); the radio line says nobody is on it while the avatar is alone; the sleep fade goes dark, holds its words and comes back.
@@ -397,7 +477,12 @@ func test_progress_ring_radio_line_and_sleep_fade() -> void:
 			p.dead = true
 	part.refresh()
 	check(part.nobody_on_radio(), "alone: nobody is on the radio")
-	check(part.radio_card.visible, "and the line says so")
+	check(not part.radio_card.visible, "(the line waits until the player has opened the radio: before that it is only a button in the toolbar)")
+	# (this HUD kit has no radio panel to open: the part remembers that the player has opened it, which is what the line waits for)
+	part._radio_opened = true
+	part.refresh()
+	check(part.radio_card.visible, "once the radio has been opened the line says so")
+	eq(part.radio_label.text, TownHud.NOBODY_TEXT, "in its words")
 	# the sleep fade
 	var fade := SleepFade.new()
 	fade.on_ready(ctx.main)

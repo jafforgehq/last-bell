@@ -8,6 +8,7 @@ const Sim := preload("res://scripts/sim/sim.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const Helpers := preload("res://tests/helpers.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
+const Arrival := preload("res://scripts/town/arrival.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
 
 
@@ -82,7 +83,9 @@ func test_begin_is_one_person_a_small_stock_and_a_quiet_start() -> void:
 	var s = sim.scenario
 	eq(sim.people.size(), 1, "one person")
 	eq(sim.player_id, "ruth", "Ruth, the player")
-	check(Vector2(sim.people[0].x, sim.people[0].y).distance_to(g.town.start.pos) < 2.0, "in the start house")
+	# (a run begins at the town's entry, on the road in, since the arrival: scripts/town/arrival.gd; the start house is a candidate to walk to)
+	check(Vector2(sim.people[0].x, sim.people[0].y).distance_to(Arrival.spawn(g.town).pos) < 0.5, "at the entry of the town")
+	eq(sim.houses.house_at(sim.people[0].x, sim.people[0].y), -1, "on the road, in no house")
 	for k in run.start.stock:
 		near(float(sim.stock[k]), float(run.start.stock[k]), 0.001, "the stock of %s is the data's" % k)
 	eq(sim.day, 1, "day 1")
@@ -94,10 +97,11 @@ func test_begin_is_one_person_a_small_stock_and_a_quiet_start() -> void:
 	for name in run.modules_from_crew:
 		eq(sim.get(name).enabled, 1 >= int(run.modules_from_crew[name]), "%s is as the table says for a crew of one" % name)
 	check(not sim.is_demo() and not s.has_method("is_demo") and not s.has_method("after_step"), "it is not the demo and not Orientation Day")
-	eq(s.stage(), "alone", "alone")
+	eq(s.stage(), "arrive", "arriving: the house is still to be found")
 	check(not s.attacks_on() and not s.forecast_on(), "no attacks, no forecast")
 	eq(s.guide().id, "walk", "the first lesson is to walk")
-	eq(s.objective().id, "clear", "the objective is to clear the house")
+	eq(s.guide().of, 5, "of five")
+	eq(s.objective().id, "arrive", "the objective is to find shelter")
 	eq(s.rescued(), 0, "nobody rescued")
 	g.world.free()
 
@@ -111,21 +115,40 @@ func test_the_guide_and_the_objective_follow_play() -> void:
 	var h: int = sim.houses.start_house()
 	var rooms: Array = sim.houses.rooms_of(h)
 	var me = sim.avatar.player()
+	var lessons: Array = OneHouse.data().guide
+	eq(lessons.size(), 5, "five lessons: walk, shoot, claim, build, ask")
 	_step(sim, 2)
-	# a few steps with the real hands: east, west, east, west (a room is not wide)
+	# a few steps with the real hands, up the road and back (the mini town's entry has the road running north and south; the way she faces is into the trees)
+	var way := Vector2.UP
+	var shown_done := false
 	for i in 120:
-		sim.avatar.set_input(Vector2(1.0 if floori(i / 30.0) % 2 == 0 else -1.0, 0.0), _at(me) + Vector2(5.0, 0.0), false)
+		sim.avatar.set_input(way * (1.0 if floori(i / 30.0) % 2 == 0 else -1.0), _at(me) + way * 5.0, false)
 		sim.update(1.0 / 30.0)
+		var seen: Dictionary = s.guide()
+		shown_done = shown_done or (seen.get("id") == "walk" and bool(seen.get("done", false)))
 	sim.avatar.set_input(Vector2.ZERO, Vector2.ZERO, false)
 	_step(sim, 10)
-	var gd: Dictionary = s.guide()
-	check(gd.id == "walk" and gd.done, "walking a few steps ends the first lesson, shown as done for a moment")
+	check(shown_done, "walking a few steps ends the first lesson, shown as done for a moment")
 	sim.t += 4.0
-	eq(s.guide().id, "shoot", "then the next")
+	var next_up: Dictionary = s.guide()
+	check(next_up.is_empty() or next_up.id == "shoot", "then the gun: it shows when its moment has come (one of the dead near, the walker of the opening) and not before")
 	sim.kills = 1
+	# (the opening begins with a magazine of three: the gun's lesson wants it loaded again, a reload begun or nothing to reload)
+	check(int(me.mag) < int(me.gun.mag), "the magazine begins short (the opening's)")
 	_step(sim, 10)
+	var gd: Dictionary = s.guide()
+	eq([gd.get("id"), gd.get("phase")], ["shoot", "reload"], "a dead one put down: the gun's lesson goes on to the reload")
+	me.mag = int(me.gun.mag)
+	_step(sim, 10)
+	gd = s.guide()
+	check(gd.id == "shoot" and gd.done, "the magazine full again: the lesson of the gun is done, shown as done for a moment")
 	sim.t += 4.0
-	eq(s.guide().id, "door", "a dead one put down: now the door")
+	gc_check(s, "claim", "find", "then the next: claim a house, which begins with finding one")
+	eq(s.objective().id, "arrive", "the objective is to find shelter")
+	# she goes into the house: the lesson is to clear it, and the stage is alone
+	Helpers.put_home(sim, g.town)
+	_step(sim, 10)
+	eq(s.stage(), "alone", "inside a house that can be claimed: alone")
 	# two rooms open, all but one of them clear: the lesson that follows and the objective say how far it is
 	sim.clearing.revealed[int(rooms[0])] = true
 	sim.clearing.revealed[int(rooms[1])] = true
@@ -133,11 +156,10 @@ func test_the_guide_and_the_objective_follow_play() -> void:
 		sim.clearing.clear[int(rooms[i])] = true
 	_step(sim, 10)
 	sim.t += 4.0
-	var gc: Dictionary = s.guide()
-	eq(gc.id, "clear", "the lesson is to clear the house")
+	var gc: Dictionary = gc_check(s, "claim", "clear", "the lesson is still to claim, now by clearing the house")
 	eq(gc.progress, "%d of %d rooms clear" % [rooms.size() - 1, rooms.size()], "with its count")
 	var ob: Dictionary = s.objective()
-	eq(ob.id, "clear", "the objective is the same")
+	eq(ob.id, "clear", "the objective is to clear the house")
 	eq(ob.sub, gc.progress, "and says the same")
 	eq(ob.step, rooms.size() - 1, "its step")
 	check(typeof(ob.at) == TYPE_VECTOR2, "it points at the room that is not clear")
@@ -150,35 +172,41 @@ func test_the_guide_and_the_objective_follow_play() -> void:
 	check(typeof(oc.at) == TYPE_VECTOR2, "at the front door")
 	_step(sim, 10)
 	sim.t += 4.0
-	eq(s.guide().id, "search", "a lesson done early is skipped when its turn comes: the search is next")
-	var first_container = sim.houses.containers_of(h)[0]
-	sim.search.looted[String(first_container.id)] = true
-	_step(sim, 10)
-	sim.t += 4.0
-	eq(s.guide().id, "claim", "then the claim")
+	gc_check(s, "claim", "claim", "the lesson is to claim it")
 	s.on_claimed(h)
 	eq(s.stage(), "claimed", "claimed")
 	_step(sim, 10)
+	check(s.guide().id == "claim" and s.guide().done, "the claim is done, shown as done for a moment")
 	sim.t += 4.0
-	check(s.guide().is_empty(), "the six lessons are done and the guide has nothing more")
+	gc_check(s, "build", "page", "then the fence: the Build page first")
 	var orr: Dictionary = s.objective()
-	eq(orr.text, "Find survivors: 0 of 4", "now the survivors")
-	eq([orr.step, orr.of], [0, 4], "counted")
+	eq(orr.id, "build", "the first thing after the claim is the front fence")
+	eq(orr.text, "Build the front fence (N)", "in the data's words")
 	g.world.free()
 
 
-func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules() -> void:
+## The lesson of now has this id and phase (`s.guide()`); returns it.
+func gc_check(s, id: String, phase: String, what: String) -> Dictionary:
+	var gc: Dictionary = s.guide()
+	eq([gc.get("id"), gc.get("phase")], [id, phase], what)
+	return gc
+
+
+func test_the_last_voice_the_data_asks_for_makes_the_dead_come_and_the_crew_switches_the_modules() -> void:
 	var g := _run()
 	var sim = g.sim
 	var s = sim.scenario
-	# the real modules: the house cleared and claimed through clearing and base, then four survivors found, talked to and sent ahead through rescue
+	# the real modules: the house cleared and claimed through clearing and base, then survivors found, talked to and sent ahead through rescue. The dead come once `attack.from_rescue` of
+	# them (two since EARLY) are home; the community modules switch on by how many people there are (`modules_from_crew`), three survivors in all here to see relations on too
+	var want := int(OneHouse.data().attack.from_rescue)
+	var crew_table: Dictionary = OneHouse.data().modules_from_crew
 	check(OneHouse.stage_to(sim, "claimed"), "staged to the claim")
 	eq(s.stage(), "claimed", "claimed")
 	check(sim.base.claimed, "by the base module")
 	Helpers.at(sim, 2, 10.0)
 	var recs: Array = sim.rescue.list()
 	var told := []
-	for i in 4:
+	for i in maxi(want, 3):
 		if i < recs.size():
 			# (the mini town has two of the twelve: the rescue module does these)
 			var rec: Dictionary = recs[i]
@@ -195,22 +223,24 @@ func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules
 		else:
 			_join(sim, i + 1)
 		eq(s.rescued(), i + 1, "the scenario counts %d" % (i + 1))
-		told.append([sim.briefing.enabled, sim.relations.enabled])
-		if i == 2:
-			check(not s.attacks_on() and not s.forecast_on() and not sim.waves.enabled, "three voices: the dead do not come")
-	eq(told[0], [false, false], "two people: no briefing")
-	eq(told[1], [true, false], "three: the briefing, not relations")
-	eq(told[2], [true, true], "four: relations too")
-	# (the fourth voice came at 10:00 of day 2: the first night is that day's when the hour is before the data's `attack.cutoff_hour`, else the next day's. The data's 0 is always
+		var flags := {}
+		for name in crew_table:
+			flags[name] = sim.get(name).enabled
+			eq(flags[name], i + 2 >= int(crew_table[name]), "%s with %d people is as the table says" % [name, i + 2])
+		told.append(flags)
+		if i + 1 < want:
+			check(not s.attacks_on() and not s.forecast_on() and not sim.waves.enabled, "%d of %d voices: the dead do not come" % [i + 1, want])
+	check(told.size() == maxi(want, 3) and told[told.size() - 1]["relations"], "four people at the end: relations are on too")
+	# (the last voice came at 10:00 of day 2: the first night is that day's when the hour is before the data's `attack.cutoff_hour`, else the next day's. The data's 0 is always
 	# the next night, a whole day to fortify, so the dead do not come tonight, and they do from the morning of the day after)
 	var first_day: int = 3 if 10.0 >= float(OneHouse.data().attack.cutoff_hour) else 2
-	eq(s.attacks_on(), first_day == 2, "the fourth: the dead come from the first night's day, not before")
+	eq(s.attacks_on(), first_day == 2, "the last voice: the dead come from the first night's day, not before")
 	eq(s.stage(), "fortify", "fortify")
 	var types: Array = []
 	var banner := ""
 	for e in sim.events:
 		types.append(String(e.type))
-		if e.type == "banner" and String(e.text) == "Four voices on the radio":
+		if e.type == "banner" and String(e.text) == String(OneHouse.data().words.voices[want]):
 			banner = String(e.sub)
 	check(types.has("attacks_on"), "the event says so")
 	eq(banner, String(OneHouse.data().words["fourth_tonight" if first_day == 2 else "fourth_tomorrow"][1]), "and the banner")
@@ -222,17 +252,18 @@ func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules
 	check(s.night_mult(first_day + 1) > s.night_mult(first_day), "and the next a little more")
 	eq(s.big_night_for(first_day).get("id", ""), "siege", "the first night is the siege")
 	check(s.total_days() > first_day, "the run is longer than the night")
-	# people lost: the crew falls below three and the community modules go off again
+	# people lost: the crew falls and the community modules go off again, by the same table
 	for i in range(1, sim.people.size() - 1):
 		sim.people[i].dead = true
 	_step(sim, 10)
-	check(not sim.briefing.enabled and not sim.relations.enabled, "two left: the community modules are off")
+	for name in crew_table:
+		eq(sim.get(name).enabled, 2 >= int(crew_table[name]), "two left: %s is as the table says" % name)
 	g.world.free()
-	# a fourth voice after the cutoff hour: the first night is tomorrow's
+	# the last voice after the cutoff hour: the first night is tomorrow's
 	var late := _run()
 	var ls = late.sim.scenario
 	Helpers.at(late.sim, 2, 18.0)
-	for n in 4:
+	for n in want:
 		_join(late.sim, n + 1)
 	check(not ls.attacks_on() and not late.sim.waves.enabled, "tonight is quiet")
 	Helpers.at(late.sim, 3, 8.0)
@@ -242,7 +273,7 @@ func test_the_fourth_voice_makes_the_dead_come_and_the_crew_switches_the_modules
 
 
 func test_the_first_attack_night_ends_the_run() -> void:
-	# a colony game with the school's wall as the stub base and four people made up as the survivors: the sim's own defenders
+	# a colony game with the school's wall as the stub base and the survivors the data asks for made up (`attack.from_rescue`): the sim's own defenders
 	var data := GD.load_all()
 	var world := World.new()
 	Engine.get_main_loop().root.add_child(world)
@@ -253,7 +284,7 @@ func test_the_first_attack_night_ends_the_run() -> void:
 	check(OneHouse.stage_to(sim, "night"), "staged to the night")
 	var s = sim.scenario
 	eq(s.stage(), "fortify", "fortify")
-	eq(s.rescued(), 4, "four rescued")
+	eq(s.rescued(), int(OneHouse.data().attack.from_rescue), "as many rescued as it takes to make the dead come")
 	check(s.attacks_on() and sim.waves.enabled, "the dead come")
 	var first_day: int = sim.day
 	var guard := 0
@@ -288,10 +319,12 @@ func test_the_first_attack_night_ends_the_run() -> void:
 func test_a_save_keeps_the_stage_the_counters_and_the_switches() -> void:
 	var g := _run()
 	var sim = g.sim
-	check(OneHouse.stage_to(sim, "fourth"), "staged to the fourth voice")
+	var want := int(OneHouse.data().attack.from_rescue)
+	var crew_table: Dictionary = OneHouse.data().modules_from_crew
+	check(OneHouse.stage_to(sim, "fourth"), "staged to the last voice, a day after it (the quiet night before the first attack's day)")
 	var s = sim.scenario
 	eq(s.stage(), "fortify", "fortify")
-	eq(sim.people.size(), 5, "Ruth and four")
+	eq(sim.people.size(), 1 + want, "Ruth and the survivors the data asks for")
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(SaveGame.to_dict(sim)))
 	check(OneHouse.is_save(saved), "the save says it is a One House save")
 	eq(OneHouse.town_seed_of(saved), 1, "and which town")
@@ -301,15 +334,16 @@ func test_a_save_keeps_the_stage_the_counters_and_the_switches() -> void:
 	check(SaveGame.apply(f.sim, saved), "the save is read")
 	var t = f.sim.scenario
 	eq(t.stage(), "fortify", "the stage is kept")
-	eq(t.rescued(), 4, "the rescued")
+	eq(t.rescued(), want, "the rescued")
 	eq(t.attacks_on(), s.attacks_on(), "the dead come as they did (not before the first night's day: the data's cutoff hour makes it the next day's)")
 	eq(t._first_day, s._first_day, "the first night's day")
 	Helpers.at(f.sim, int(t._first_day), 8.0)
 	_step(f.sim, 10)
 	check(t.attacks_on() and f.sim.waves.enabled, "the dead still come")
-	eq(f.sim.people.size(), 5, "the people")
+	eq(f.sim.people.size(), 1 + want, "the people")
 	near(float(f.sim.min_per_sec), 2.0, 0.001, "the clock")
-	check(f.sim.briefing.enabled and f.sim.relations.enabled and not f.sim.policies.enabled, "the modules are as the crew says")
+	for name in crew_table:
+		eq(f.sim.get(name).enabled, f.sim.people.size() >= int(crew_table[name]), "%s is as the table says for the crew" % name)
 	eq(t.night_mult(3), s.night_mult(3), "the nights are the same size")
 	eq(t.guide().is_empty(), s.guide().is_empty(), "the guide is where it was")
 	g.world.free()

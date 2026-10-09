@@ -13,22 +13,24 @@ const Kinds := preload("res://tests/test_pawn_kinds.gd")
 
 const FACINGS := ["S", "E", "N", "W"]
 const STATES := ["idle", "walk", "shoot", "reload", "downed", "turned", "dead", "bed"]
-## A short digest of everything a person draws, per person, facing and state, made from the node as it was before there was any
-## work pose (see `digests`). A person who is not at work must keep drawing exactly this; if the person's look is changed on
-## purpose, print `load("res://tests/test_work_anim.gd").new().digests()` from a script and paste the new table.
+## A short digest of everything a person draws, per person, facing and state (see `digests`). A person who is not at work must keep
+## drawing exactly this. It was made from the node as it was before there was any work pose, and made again on 2026-10-09 (the
+## animation rounds of 2026-10-07, ANIM and FEEL, "the animations are clunky and weird", changed what a person draws on purpose: the
+## eased turn, the stride, a shot near them, a breath); if the person's look is changed on purpose again, print
+## `load("res://tests/test_work_anim.gd").new().digests()` from a script and paste the new table.
 const PERSON_DIGESTS := {
-	"ana/E": "617db188b221",
-	"ana/N": "df09f318b291",
-	"ana/S": "31b101cda3c8",
-	"ana/W": "1a0c898514ce",
-	"dez/E": "b17e5b5879d7",
-	"dez/N": "e96e1f5a238b",
-	"dez/S": "91032d83e4b4",
-	"dez/W": "1069412fb0f6",
-	"ruth/E": "46519e7e6bae",
-	"ruth/N": "d24f3d67be23",
-	"ruth/S": "ea76867d4d05",
-	"ruth/W": "c756064f3997",
+	"ana/E": "f96cc363218c",
+	"ana/N": "2f5766a68c4b",
+	"ana/S": "d09d03ebf715",
+	"ana/W": "9a16ac08f0a6",
+	"dez/E": "78779940ba9d",
+	"dez/N": "f8a72e6a0c75",
+	"dez/S": "5fe72925931f",
+	"dez/W": "b7859d11ed1f",
+	"ruth/E": "c6811afe5b8e",
+	"ruth/N": "d7dc2cea345d",
+	"ruth/S": "a17539e6c146",
+	"ruth/W": "403e5f9a40e8",
 }
 
 var _data: Dictionary = {}

@@ -27,11 +27,16 @@ var errors := ErrorCounter.new()
 ## Dictionary (the shared data caches: a test that edits an entry in place changes the data of every game after it).
 var _plain: Array = []
 var _tables: Array = []
+## The static Callables (a `static var x := Callable()`: PawnMotion.step_cb and thump_cb, which the game's scene points at its own effects when it starts): {"script", "name"}. A test that starts the
+## game scene leaves them pointing at effects whose world is freed with it, and the next test to draw a dead one would call them: they are cleared after every case (the game sets them again
+## whenever it starts), so that no case depends on which one ran before it.
+var _callbacks: Array = []
 ## The classes of the nodes cases left in the tree (counted, and freed), and how many cases left some.
 var _stray := {}
 var _stray_cases := 0
 var _plain_re := RegEx.create_from_string("^static var ([A-Za-z][A-Za-z0-9_]*)\\s*(?::\\s*[A-Za-z0-9_]+)?\\s*:?=\\s*(true|false|-?[0-9][0-9.]*|[A-Z][A-Z0-9_]*|\".*\")\\s*(#.*)?$")
 var _table_re := RegEx.create_from_string("^static var ([A-Za-z_][A-Za-z0-9_]*)\\s*(?::\\s*Dictionary)?\\s*:?=\\s*\\{\\}")
+var _callback_re := RegEx.create_from_string("^static var ([A-Za-z_][A-Za-z0-9_]*)\\s*(?::\\s*Callable)?\\s*:?=\\s*Callable\\(\\)")
 
 
 func _initialize() -> void:
@@ -120,6 +125,7 @@ func _find_globals(dir: String) -> void:
 		var path := dir.path_join(f)
 		var plain: Array = []
 		var tables: Array = []
+		var callbacks: Array = []
 		for line in FileAccess.get_file_as_string(path).split("\n"):
 			if not line.begins_with("static var "):
 				continue
@@ -130,9 +136,15 @@ func _find_globals(dir: String) -> void:
 			m = _table_re.search(line)
 			if m != null:
 				tables.append(m.get_string(1))
-		if plain.is_empty() and tables.is_empty():
+				continue
+			m = _callback_re.search(line)
+			if m != null:
+				callbacks.append(m.get_string(1))
+		if plain.is_empty() and tables.is_empty() and callbacks.is_empty():
 			continue
 		var script = load(path)
+		for n in callbacks:
+			_callbacks.append({"script": script, "name": n})
 		for n in plain:
 			_plain.append({"script": script, "name": n, "label": "%s.%s" % [f.get_basename(), n], "start": script.get(n)})
 		for n in tables:
@@ -143,6 +155,8 @@ func _find_globals(dir: String) -> void:
 ## after it read what they should (the failure names the case that left it, not the files that come later).
 func _check_globals() -> Array:
 	var out: Array = []
+	for g in _callbacks:
+		g.script.set(g.name, Callable())    # (cleared, not failed: the game sets them itself each time it starts)
 	for g in _plain:
 		var now = g.script.get(g.name)
 		if now != g.start:

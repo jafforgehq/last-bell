@@ -232,6 +232,9 @@ func _node(g: Dictionary, x: float, y: float):
 
 func test_a_walker_is_drawn_smoothly_between_the_steps() -> void:
 	var g := Helpers.make(7, 1)
+	# (the dead are drawn a little behind the rules, by a share of a step: PawnNode.STEP_FOLLOW_DEAD. Walking 0.1 a step, the figure the picture follows trails the rules by 0.1 x
+	# (1 - f) / f, and the picture, one step behind that figure's last two, by 0.1 / f at the most; never ahead of the rules)
+	var follow: float = PawnNode.STEP_FOLLOW_DEAD
 	for ft in [1.0 / 60.0, 1.0 / 144.0, 1.0 / 240.0]:
 		var n = _node(g, 30.0, 30.0)
 		var z = n.entity
@@ -249,12 +252,12 @@ func test_a_walker_is_drawn_smoothly_between_the_steps() -> void:
 				failures.append("frame %d at %.4f s: drawn backwards, %.4f after %.4f" % [frame, ft, x, last])
 			worst = maxf(worst, x - last)
 			last = x
-			if x > z.x + 1e-4 or x < z.x - 0.1 - 1e-4:
+			if x > z.x + 1e-4 or x < z.x - 0.1 / follow - 1e-4:
 				failures.append("frame %d at %.4f s: drawn at %.4f, the rules have them at %.4f" % [frame, ft, x, z.x])
 		# drawn at the frame rate, not the step rate: a frame moves them its share of a
 		# step (a drawing that followed the rules would jump a whole 0.1 on a step frame)
 		check(worst <= 0.1 * ft / StepClock.STEP * 1.1 + 1e-4, "at %.4f s the biggest move in one frame was %.4f" % [ft, worst])
-		near(last, z.x - 0.1 * (1.0 - clock.alpha()), 1e-3, "at the end they are drawn between their last two steps")
+		near(last, z.x - 0.1 * (1.0 / follow - clock.alpha()), 1e-3, "at the end they are drawn between their last two steps, the trail behind the rules being steady")
 		n.free()
 	g.world.free()
 
@@ -305,7 +308,8 @@ func test_a_jump_is_drawn_where_they_land_and_a_walk_is_not() -> void:
 	n.sync(false, 2, 0.0)
 	near(n.tile_pos().x, 40.0, 1e-4, "a walk starts from where they were")
 	n.sync(false, 2, 0.5)
-	near(n.tile_pos().x, 41.45, 1e-4, "and gets there by degrees")
+	# (it is drawn at `STEP_FOLLOW_DEAD` of the way to where the rules have them, from where it was, and half way along that at the middle of the step)
+	near(n.tile_pos().x, 40.0 + 2.9 * PawnNode.STEP_FOLLOW_DEAD * 0.5, 1e-4, "and gets there by degrees")
 	z.x = 46.0 # 3.1 tiles from the last step: a jump
 	n.sync(false, 3, 0.0)
 	near(n.tile_pos().x, 46.0, 1e-4, "more than three tiles is a jump")

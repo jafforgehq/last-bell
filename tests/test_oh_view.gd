@@ -36,7 +36,7 @@ class Pawn extends RefCounted:
 
 ## {"g": the town_game dict, "hv": a house view bound to it, "clearing", "h": the start house, "av": the avatar}. The avatar stands in the middle of its start room.
 func _rig() -> Dictionary:
-	var g := Helpers.town_game(1, {"blocks": 2})
+	var g := Helpers.town_game(1, {"blocks": 2, "home": true})
 	var sim = g.sim
 	var clearing := Clearing.new()
 	var hv := HouseView.new()
