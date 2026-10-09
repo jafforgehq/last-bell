@@ -1,5 +1,6 @@
 extends "res://tests/case.gd"
 
+const Helpers := preload("res://tests/helpers.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownWorld := preload("res://scripts/town/town_world.gd")
 const TownRun := preload("res://scripts/town/town_run.gd")
@@ -16,18 +17,25 @@ func _make() -> Dictionary:
 	return _town
 
 
+## How many of the town's dead stand in the rooms of the start house.
+func _start_dead(t: Dictionary) -> int:
+	var n := 0
+	for r in t.dead:
+		if int(r.house) == int(t.start.house) and int(r.room) >= 0:
+			n += 1
+	return n
+
+
 func test_the_same_seed_makes_the_same_town_and_its_data_is_whole() -> void:
 	var t := _make()
 	var again := TownGen.make(1)
 	eq(TownGen.digest(again), TownGen.digest(t), "the same seed, the same town")
 	check(TownGen.digest(TownGen.make(2)) != TownGen.digest(t), "another seed, another town")
-	check(t.houses.size() >= 150 and t.houses.size() <= 250, "150 to 250 houses: %d" % t.houses.size())
+	# (a town has about 85 houses since the fields of fire were cleared round the candidates (CLEAR3: 74 to 100, none under 60: tools/town_probe.gd MIN_HOUSES))
+	check(t.houses.size() >= 60 and t.houses.size() <= 250, "60 to 250 houses: %d" % t.houses.size())
 	check(t.dead.size() >= 600 and t.dead.size() <= 800, "600 to 800 dead: %d" % t.dead.size())
-	var start_dead := 0
-	for r in t.dead:
-		if int(r.house) == int(t.start.house) and int(r.room) >= 0:
-			start_dead += 1
-	eq(start_dead, 3, "three dead to clear in the start house")
+	var start_dead := _start_dead(t)
+	check(start_dead >= 3 and start_dead <= 5, "three to five dead to clear in the (roomy) start house: %d" % start_dead)
 	eq(t.rescue.size(), 12, "twelve rescue houses")
 	# (a guard of two to four is what the generator tries for; a tiny cottage or shed of the town's varied buildings may have room for one: it is a guard still)
 	var thin := 0
@@ -80,6 +88,8 @@ func test_dormant_dead_wake_near_the_avatar_sleep_far_from_it_and_a_house_can_be
 	var run = TownRun.new(t, world, FxNull.new(), 30, true, true)
 	var field = run.field
 	var sim = run.sim
+	# (a run begins at the town's entry since the arrival; this is about the dead of the start house, so she is put among them: its rooms are far apart, and only those within ten tiles wake)
+	Helpers.put_among_the_dead_of_the_start_house(sim, t)
 	eq(field.counts().dormant, t.dead.size(), "every one dormant at the start")
 	eq(field.counts().active, 0, "and none awake")
 	for i in 40:
@@ -91,9 +101,11 @@ func test_dormant_dead_wake_near_the_avatar_sleep_far_from_it_and_a_house_can_be
 		if field.rec_of.has(z):
 			tracked += 1
 	eq(tracked, int(c.active), "each one awake is a Sim.Zombie the field knows")
-	# the three of the start house, shot dead: the house is cleared
+	# the dead of the start house, shot dead: the house is cleared
 	var house := int(t.start.house)
-	check(int(field.dead_in_house(house).left) == 3, "three left in the start house")
+	var in_house := _start_dead(t)
+	check(int(field.dead_in_house(house).left) == in_house, "%d left in the start house" % in_house)
+	field.wake_house(house)    # (the roomy house is wider than the wake radius: a shout wakes the rest of it, as a shot does)
 	for z in sim.zombies.duplicate():
 		if TownGen.house_at(t, z.x, z.y) == house:
 			sim._hurt_zombie(z, 1000.0, 0.0, run.avatar_p)
@@ -101,9 +113,9 @@ func test_dormant_dead_wake_near_the_avatar_sleep_far_from_it_and_a_house_can_be
 	for i in 10:
 		run.update(1.0 / 30.0)
 	check(field.house_cleared(house), "no dead left in the start house once they are shot")
-	eq(sim.kills, 3, "and they were counted")
+	eq(sim.kills, in_house, "and they were counted")
 	# the avatar goes far away: the awake that are not after anybody go back to sleep, the killed ones stay killed
-	# (the start is calm now: only the three of the start house are awake, and they are killed. A far house is woken as a shout would, so that some are left behind)
+	# (the start is calm now: only those of the start house are awake, and they are killed. A far house is woken as a shout would, so that some are left behind)
 	check(field.wake_house(int(t.rescue[0].house)) > 0, "a house far from the start is woken")
 	run.avatar_p.x = 170.0
 	run.avatar_p.y = 170.0
@@ -112,7 +124,7 @@ func test_dormant_dead_wake_near_the_avatar_sleep_far_from_it_and_a_house_can_be
 			z.state = "wander"
 	for i in 20:
 		run.update(1.0 / 30.0)
-	check(field.counts().killed == 3, "the killed stay killed")
+	check(field.counts().killed == in_house, "the killed stay killed")
 	check(field.slept_total > 0, "those left behind went to sleep")
 	# the save: the same records come back
 	var saved: Dictionary = field.save()

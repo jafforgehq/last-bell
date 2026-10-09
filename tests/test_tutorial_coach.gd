@@ -317,7 +317,9 @@ func _check_picture(main, label: String, w: int, h: int) -> void:
 	if coach.target_rect.size.x > 0.0:
 		check(not card.intersects(coach.target_rect.grow(1.0)), "%s: the card does not cover what it points at (%s over %s)" % [label, str(card), str(coach.target_rect)])
 	check(card.size.y < float(h) * 0.5, "%s: the card is not tall (%.0f in %d)" % [label, card.size.y, h])
-	check(card.size.x >= 340.0 and card.size.x <= 400.0, "%s: the card is its width (%.0f)" % [label, card.size.x])
+	# (CARD_W, and in a window shorter than SHORT_H, 700 x 560, wider up to CARD_W_SHORT: the same words take fewer lines, so the card is low enough to leave the person uncovered)
+	var widest: float = Coach.CARD_W_SHORT if h < int(Coach.SHORT_H) else 400.0
+	check(card.size.x >= 340.0 and card.size.x <= widest, "%s: the card is its width (%.0f, at most %.0f)" % [label, card.size.x, widest])
 
 
 func test_every_step_points_at_something_and_its_card_stays_clear_of_it() -> void:

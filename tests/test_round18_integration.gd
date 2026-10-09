@@ -70,6 +70,9 @@ func _stand(main: Node, p, at: Vector2) -> void:
 
 
 func _frames(main: Node, n: int) -> void:
+	# (the game lets go of what is held (the trigger, the aim, the keys) when a frame comes more than HIDDEN_GAP_S (1.5 s) of real time after the last: a hidden browser tab. The test's
+	# own awaits are not that, and on a machine that is busy two engine frames in `_draw_once` can take that long: the trigger was let go and nothing was fired. The clock starts again here.)
+	main._last_tick_us = 0
 	for i in n:
 		main._process(DT)
 		main.hud.update_hud(main.sim, main.speed, true, 0)
@@ -77,6 +80,7 @@ func _frames(main: Node, n: int) -> void:
 
 ## The frames until `done` is true (at most `limit` of them): how many it took, -1 when it never came true.
 func _until(main: Node, done: Callable, limit: int) -> int:
+	main._last_tick_us = 0    # (see `_frames`)
 	for i in limit:
 		if bool(done.call()):
 			return i
@@ -282,9 +286,10 @@ func test_take_the_gate_post_and_fire_from_it() -> void:
 	main.aim_held = true    # (round 22: the right button aims, and the left button's trigger counts while it is held)
 	main.firing = true
 	_frames(main, 20)
+	var held := [main.firing, main.aim_held]
 	main.firing = false
 	main.aim_held = false
-	check(me.mag < mag0, "she fired from the post: %d rounds left of %d" % [me.mag, mag0])
+	check(me.mag < mag0, "she fired from the post: %d rounds left of %d (the trigger and the aim still held after the 20 frames: %s)" % [me.mag, mag0, str(held)])
 	eq(sim.interact.posted, "gate", "and is still on it")
 	# the same hands, off the post, are less steady
 	var braced_again: float = sim.avatar.spread_of(me, me.gun)

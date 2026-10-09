@@ -5,6 +5,7 @@ extends "res://tests/case.gd"
 
 const Helpers := preload("res://tests/helpers.gd")
 const SaveGame := preload("res://scripts/sim/save_game.gd")
+const Search := preload("res://scripts/town/search.gd")
 
 
 # ----------------------------------------------------------------- helpers --
@@ -104,9 +105,18 @@ func _of_kind(sim, kind: String) -> Array:
 	return out
 
 
+## How many of the town's dead stand in the rooms of the start house (the generator keeps three to five there, by the program of the house).
+func _start_dead(town: Dictionary) -> int:
+	var n := 0
+	for r in town.dead:
+		if int(r.house) == int(town.start.house) and int(r.room) >= 0:
+			n += 1
+	return n
+
+
 ## A town game with the start house explored, cleared and claimed (the dead stay asleep: nobody wakes them).
 func _claimed_game() -> Dictionary:
-	var g := Helpers.town_game(1, {})
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	sim.field.pause_wake = true
 	var h: int = sim.houses.start_house()
@@ -124,7 +134,7 @@ func _claimed_game() -> Dictionary:
 # ------------------------------------------------------------------- tests --
 
 func test_rooms_clear_once_and_the_house_is_clear_after_the_last_dead_one() -> void:
-	var g := Helpers.town_game(1, {})
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var h: int = sim.houses.start_house()
 	sim.field.pause_wake = true
@@ -133,18 +143,22 @@ func test_rooms_clear_once_and_the_house_is_clear_after_the_last_dead_one() -> v
 	for r in rooms:
 		if sim.houses.dead_in_room(r) > 0:
 			with_dead.append(r)
-	eq(sim.houses.dead_in_house(h), 3, "three dead in the start house")
+	var in_house := _start_dead(g.town)
+	check(in_house >= 3 and in_house <= 5, "three to five dead stand in rooms of the (roomy) start house: %d" % in_house)
+	eq(sim.houses.dead_in_house(h), in_house, "all of them are the house's to clear")
 	_look(sim)
 	var ev := _take(sim)
 	eq(_count(ev, "entered", "house", h), 1, "entered the house")
 	eq(_count(ev, "room_revealed"), 1, "the room the avatar wakes in is open, no other")
+	# (the room she wakes in is clear on sight when no dead one stands in it: it is told with the first look)
+	var clear_at_first := _count(ev, "room_clear")
 	check(sim.clearing.visited(h) and sim.clearing.explored() == [h], "the house is explored")
 	_visit_all(sim, h)
 	ev = _take(sim)
 	for r in rooms:
 		check(sim.clearing.is_revealed(r), "room %d is opened by its doors" % r)
 		eq(sim.clearing.is_clear(r), not with_dead.has(r), "an opened room is clear when nobody is in it")
-	eq(_count(ev, "room_clear"), rooms.size() - with_dead.size(), "the empty rooms were clear on sight")
+	eq(clear_at_first + _count(ev, "room_clear"), rooms.size() - with_dead.size(), "the empty rooms were clear on sight")
 	check(not sim.clearing.house_clear(h), "not clear while a dead one is left")
 	var can: Dictionary = sim.clearing.claimable(h)
 	check(not bool(can.ok) and String(can.why).begins_with("There are still dead in the "), "claim refused with the room: %s" % String(can.why))
@@ -166,7 +180,7 @@ func test_rooms_clear_once_and_the_house_is_clear_after_the_last_dead_one() -> v
 
 
 func test_doors_reveal_rooms_look_in_is_an_e_use_and_entering_is_told() -> void:
-	var g := Helpers.town_game(1, {})
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var h: int = sim.houses.start_house()
 	sim.field.pause_wake = true
@@ -240,7 +254,7 @@ func test_doors_reveal_rooms_look_in_is_an_e_use_and_entering_is_told() -> void:
 
 
 func test_claim_is_refused_with_a_reason_then_installs_the_base_in_two_seconds() -> void:
-	var g := Helpers.town_game(1, {})
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var h: int = sim.houses.start_house()
 	sim.field.pause_wake = true
@@ -273,12 +287,15 @@ func test_claim_is_refused_with_a_reason_then_installs_the_base_in_two_seconds()
 	var started: Dictionary = sim.interact.use(cands[0])
 	check(bool(started.ok) and bool(started.get("session", false)), "E begins the claim as a session")
 	eq(String(sim.uses.progress().label), "Claiming", "the ring has its label")
-	_look(sim, 1.0)
-	check(not sim.base.claimed, "not yet after a second")
-	near(float(sim.uses.progress().t), 1.0, 0.1, "the ring runs")
-	near(float(sim.uses.progress().of), 2.0, 0.001, "of two seconds")
-	_look(sim, 1.2)
-	check(sim.base.claimed and sim.base.house == h, "claimed after two seconds")
+	# (the hold of the claim is the run's own: one_house.json `tempo.claim_s`, a second; it was two before the tempo round)
+	var claim_s: float = sim.base._claim_secs()
+	check(claim_s >= 0.3 and claim_s <= 3.0, "the claim takes a few seconds at most: %.2f" % claim_s)
+	_look(sim, claim_s * 0.5)
+	check(not sim.base.claimed, "not yet half way through")
+	near(float(sim.uses.progress().t), claim_s * 0.5, 0.1, "the ring runs")
+	near(float(sim.uses.progress().of), claim_s, 0.001, "for the seconds of the claim")
+	_look(sim, claim_s * 0.5 + 0.3)
+	check(sim.base.claimed and sim.base.house == h, "claimed after its seconds")
 	eq(made.n, 1, "the layout was made once (the maker's)")
 	eq(String(sim.uses.progress().label), "", "the session is over")
 	var ev := _take(sim)
@@ -309,11 +326,14 @@ func test_search_puts_the_loot_in_the_stores_and_the_looted_flag_survives_a_save
 	_at(sim, Vector2(cont.pos))
 	var r: Dictionary = sim.interact.use(cs[0])
 	check(bool(r.ok) and bool(r.get("session", false)), "E begins the search")
-	_look(sim, 2.0)
-	check(not sim.search.is_looted(id), "not done after two seconds")
+	# (a container takes its own seconds times the run's `tempo.search_mult`: 4 x 0.625 = 2.5 s in the data now; it was four)
+	var search_s: float = Search.search_secs(sim, cont)
+	check(search_s >= 0.3 and search_s <= 6.0, "a search takes a few seconds: %.2f" % search_s)
+	_look(sim, search_s * 0.5)
+	check(not sim.search.is_looted(id), "not done half way through")
 	near(float(sim.search.state(id).progress), 0.5, 0.1, "halfway")
-	_look(sim, 2.2)
-	check(sim.search.is_looted(id), "looted after four")
+	_look(sim, search_s * 0.5 + 0.4)
+	check(sim.search.is_looted(id), "looted after its seconds")
 	for k in cont.loot:
 		near(float(sim.stock[k]) - float(before[k]), float(cont.loot[k]), 0.001, "the loot of %s is in the stock" % String(k))
 	var ev := _take(sim)
@@ -325,7 +345,7 @@ func test_search_puts_the_loot_in_the_stores_and_the_looted_flag_survives_a_save
 	check(stash.size() == 1 and String(sim.interact.use(stash[0]).line).begins_with("Stores: "), "the stash tells the stores")
 	# a save, a new game, a load
 	var data: Dictionary = SaveGame.to_dict(sim)
-	var g2 := Helpers.town_game(1, {})
+	var g2 := Helpers.town_game(1, {"home": true})
 	var sim2 = g2.sim
 	check(SaveGame.apply(sim2, data), "the save is read")
 	check(sim2.search.is_looted(id), "the looted container is looted after a load")

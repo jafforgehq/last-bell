@@ -18,7 +18,7 @@ func test_the_town_is_the_same_for_a_seed_and_its_start_house_and_rescue_spots_a
 	for r in t.dead:
 		if int(r.house) == int(t.start.house) and int(r.room) >= 0:
 			inside += 1
-	eq(inside, 3, "three dead stand in the start house")
+	check(inside >= 3 and inside <= 5, "three to five dead stand in the rooms of the (roomy) start house: %d" % inside)
 	eq(t.rescue.size(), 2, "two rescue spots in the small town")
 	for r in t.rescue:
 		var h: Dictionary = t.houses[int(r.house)]
@@ -44,15 +44,26 @@ func test_the_town_is_the_same_for_a_seed_and_its_start_house_and_rescue_spots_a
 
 
 func test_the_dead_wake_near_the_avatar_never_above_the_cap_sleep_far_away_and_a_killed_one_stays_killed() -> void:
-	var g := Helpers.town_game(1)
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var field = sim.field
 	field.active_cap = 12
+	# (the rooms of the roomy house are far apart: from the start room's middle only those within the wake radius, ten tiles, wake; she stands among them)
+	Helpers.put_among_the_dead_of_the_start_house(sim, g.town)
 	eq(field.counts().dormant, g.town.dead.size(), "every one dormant at the start")
+	# those that wake are those within the wake radius (a dead one in a house she is not in, only within half of it): the others of the town sleep on
+	var near_her := 0
+	var her = sim.avatar.player()
+	for i in field.n:
+		var h: int = TownGen.house_at(g.town, field.xs[i], field.ys[i])
+		var reach: float = field.wake_r if (h < 0 or h == int(g.town.start.house)) else field.wake_r * field.INDOOR_SHARE
+		if Vector2(field.xs[i], field.ys[i]).distance_to(Vector2(her.x, her.y)) < reach:
+			near_her += 1
 	for i in 60:
 		sim.update(1.0 / 30.0)
 		check(sim.zombies.size() <= 12, "never above the cap: %d" % sim.zombies.size())
 	var awake: int = field.counts().active
+	check(near_her >= 3, "(three or more of them are close: %d)" % near_her)
 	check(awake >= 3 and awake <= 12, "those near wake: %d" % awake)
 	for z in sim.zombies:
 		check(field.rec_of.has(z), "each one awake is a Sim.Zombie the field knows")
@@ -85,11 +96,15 @@ func test_the_dead_wake_near_the_avatar_never_above_the_cap_sleep_far_away_and_a
 	g.world.free()
 
 
-func test_the_three_dead_of_the_start_house_are_cleared_through_the_real_loop() -> void:
-	var g := Helpers.town_game(1)
+func test_the_dead_of_the_start_house_are_cleared_through_the_real_loop() -> void:
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var house: int = sim.houses.start_house()
-	eq(sim.houses.dead_in_house(house), 3, "three to clear")
+	var count: int = sim.houses.dead_in_house(house)
+	check(count >= 3 and count <= 5, "three to five to clear: %d" % count)
+	Helpers.put_among_the_dead_of_the_start_house(sim, g.town)
+	# (the roomy house is wider than the wake radius: a shout wakes it all, as the lab's bot and a shot do)
+	sim.field.wake_house(house)
 	for i in 20:
 		sim.update(1.0 / 30.0)
 	var shot := 0
@@ -97,18 +112,18 @@ func test_the_three_dead_of_the_start_house_are_cleared_through_the_real_loop() 
 		if sim.houses.house_at(z.x, z.y) == house:
 			sim._hurt_zombie(z, 1000.0, 0.0, sim.avatar.player())
 			shot += 1
-	eq(shot, 3, "all three had woken and stood inside")
+	eq(shot, count, "all of them had woken and stood inside")
 	for i in 20:
 		sim.update(1.0 / 30.0)
 	eq(sim.houses.dead_in_house(house), 0, "no dead left in the start house")
 	for r in sim.houses.rooms_of(house):
 		eq(sim.houses.dead_in_room(r), 0, "nor in any of its rooms")
-	eq(sim.kills, 3, "and they were counted")
+	eq(sim.kills, count, "and they were counted")
 	g.world.free()
 
 
 func test_the_avatar_walks_out_of_the_door_and_down_the_street_in_the_colonys_loop_cheaply_and_without_an_error() -> void:
-	var g := Helpers.town_game(1)
+	var g := Helpers.town_game(1, {"home": true})
 	var sim = g.sim
 	var me = sim.avatar.player()
 	var door: Dictionary = {}
@@ -145,6 +160,9 @@ func test_the_avatar_walks_out_of_the_door_and_down_the_street_in_the_colonys_lo
 func test_main_boots_a_town_run_with_the_towns_rules_and_none_of_the_schools_views() -> void:
 	var win: Window = Engine.get_main_loop().root
 	var saved := {"size": win.size, "position": win.position, "mode": win.content_scale_mode, "aspect": win.content_scale_aspect, "scale_size": win.content_scale_size}
+	# (a window of a real size: the lesson cues find their place in it. A headless window that no test has sized is a few pixels wide, and the cue's room is a negative one there; it passed in the
+	# suite only because the files before it had left a big window)
+	win.size = Vector2i(1280, 800)
 	Engine.set_meta("run", {"difficulty": 1, "seed": 7, "town": true, "avatar": true, "town_opts": {"blocks": 2}})
 	var main = load("res://scenes/main.tscn").instantiate()
 	win.add_child(main)

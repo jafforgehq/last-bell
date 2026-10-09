@@ -22,6 +22,8 @@ class FakeClearing:
 class FakeBase:
 	extends RefCounted
 	var claimed := false
+	## The house that is the base: the survivors are the ones round it (`Arrival.rescue_for`), none before it is claimed.
+	var house := 0
 	var spot := Vector2(10.0, 10.0)
 
 	func claim_spot() -> Vector2:
@@ -67,15 +69,25 @@ func _twelve(sim, big: Dictionary, run_seed: int = 1) -> Object:
 	r.setup(sim)
 	var houses := FakeHouses.new()
 	houses.town = big
-	r.links = {"houses": houses, "field": FakeField.new(), "clearing": FakeClearing.new(), "base": FakeBase.new(), "scenario": FakeScenario.new()}
+	# (the survivors are the ones round the claimed base: the fake one is claimed, on the big town's start house, for the records to be made)
+	var base := FakeBase.new()
+	base.claimed = true
+	base.house = int(big.start.house)
+	r.links = {"houses": houses, "field": FakeField.new(), "clearing": FakeClearing.new(), "base": base, "scenario": FakeScenario.new()}
 	sim.run_seed = run_seed
 	r.start()
 	return r
 
 
+## The module wired to fakes of the others, with the records of the mini town's start house made (its base is claimed for that moment) and the base NOT claimed, as a test begins.
 func _wire(r) -> Dictionary:
 	var f := {"clearing": FakeClearing.new(), "base": FakeBase.new(), "scenario": FakeScenario.new()}
+	f.base.house = int(r.sim.houses.start_house())
+	f.base.claimed = true
 	r.links = f
+	if r.list().is_empty():    # (a module that was loaded from a save has its records already)
+		r.start()
+	f.base.claimed = false
 	return f
 
 
@@ -99,7 +111,9 @@ func _events(sim, type: String) -> Array:
 func test_oh_rescue_start_twelve_people_the_same_each_run() -> void:
 	var g := Helpers.town_game(1, {"blocks": 2})
 	var sim = g.sim
-	eq(sim.rescue.list().size(), g.town.rescue.size(), "a record for each spot of the town the game has")
+	eq(sim.rescue.list().size(), 0, "nobody is offered before a house is claimed: the survivors are the ones round the base")
+	_wire(sim.rescue)
+	eq(sim.rescue.list().size(), g.town.rescue.size(), "a record for each spot of the town the game has, once there is a base")
 	var big := TownGen.make(1)
 	var dice_before: int = sim.rng.state
 	var recruits_before: int = sim.recruits._rng.state
@@ -226,17 +240,22 @@ func test_oh_rescue_join_adds_one_person_after_the_walk_and_the_fourth_is_announ
 	var people0: int = sim.people.size()
 	var arrived0: int = sim.recruits.arrived.size()
 	var scrap0 := float(sim.stock.scrap)
-	# near: three game minutes at least
+	# the walk: `arrive_per_tile` game minutes a tile, at least `arrive_min` (assets/data/rescue.json), and the voice that makes the dead come is `fourth_at`
+	var per_tile: float = float(r.data.arrive_per_tile)
+	var at_least: float = float(r.data.arrive_min)
+	var fourth_at := int(r.data.fourth_at)
+	# near: the least, whatever the distance
+	var near_walk := maxf(at_least, 2.0 * per_tile)
 	base.spot = first.pos + Vector2(2.0, 0.0)
 	var out: Dictionary = r.choose(first.id, "come")
 	check(bool(out.ok) and bool(out.joined) and String(out.line) != "", "they say yes")
 	eq(first.state, "joined")
 	eq(sim.people.size(), people0, "they walk ahead: nobody is in the crew yet")
 	eq(r.on_the_way(), [first.id])
-	sim.clock_min += 2.5
+	sim.clock_min += near_walk * 0.8
 	r.update(0.3)
 	eq(sim.people.size(), people0, "not yet")
-	sim.clock_min += 0.6
+	sim.clock_min += near_walk * 0.4
 	r.update(0.3)
 	eq(sim.people.size(), people0 + 1, "exactly one person")
 	eq(sim.recruits.arrived.size(), arrived0 + 1, "one def for the save")
@@ -254,27 +273,28 @@ func test_oh_rescue_join_adds_one_person_after_the_walk_and_the_fourth_is_announ
 	check(float(sim.stock.scrap) != scrap0 or float(sim.stock.food) > 0.0, "and what they bring")
 	eq(r.joined_count(), 1)
 	eq(r.arrived_count(), 1)
-	# far: the walk takes distance x 0.4 minutes
+	eq(_events(sim, "fourth").size(), 1 if fourth_at <= 1 else 0, "the voice that makes the dead come is the %d-th" % fourth_at)
+	# far: the walk takes distance x `arrive_per_tile` minutes
 	var second: Dictionary = r.list()[1]
+	var far_walk := 50.0 * per_tile
 	base.spot = second.pos + Vector2(50.0, 0.0)
 	check(bool(r.choose(second.id, "come").ok))
-	sim.clock_min += 19.0
+	sim.clock_min += far_walk * 0.95
 	r.update(0.3)
-	eq(sim.people.size(), people0 + 1, "twenty minutes for fifty tiles")
-	sim.clock_min += 1.5
+	eq(sim.people.size(), people0 + 1, "%.0f minutes for fifty tiles" % far_walk)
+	sim.clock_min += far_walk * 0.1
 	r.update(0.3)
 	eq(sim.people.size(), people0 + 2)
 	eq(scn.calls[1][1], 2, "counting")
+	eq(_events(sim, "fourth").size(), 1 if fourth_at <= 2 else 0, "the voice that makes the dead come is announced when it arrives, once")
 	# the third and the fourth
 	for i in [2, 3]:
 		var rec: Dictionary = r.list()[i]
 		check(bool(r.choose(rec.id, "come").ok), "survivor %d joins" % i)
 		sim.clock_min += 400.0
 		r.update(0.3)
-		if i == 2:
-			eq(_events(sim, "fourth").size(), 0, "not yet the fourth")
+		eq(_events(sim, "fourth").size(), 1 if i + 1 >= fourth_at else 0, "the voice that makes the dead come is announced when it arrives, once (%d arrived)" % (i + 1))
 	eq(sim.people.size(), people0 + 4)
-	eq(_events(sim, "fourth").size(), 1, "the fourth, once")
 	eq(scn.calls.size(), 4)
 	eq(int(scn.calls[3][1]), 4)
 	var stations := {}

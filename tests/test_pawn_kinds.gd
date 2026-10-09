@@ -9,6 +9,7 @@ const Sim := preload("res://scripts/sim/sim.gd")
 const Kinds := preload("res://scripts/sim/kinds.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const Art := preload("res://scripts/render/pawn_art.gd")
+const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 
 const TILE := 64.0
 ## What a node is made from (the real files of one of the dead, under a key of its own).
@@ -26,24 +27,27 @@ const LOOKS := [
 const POSES := ["wander", "limp", "idle", "attack", "breach", "dying", "dead", "fade"]
 const FACINGS := ["S", "E", "N", "W"]
 
-## A short digest of everything a walker draws, per look and facing, over all POSES,
-## made from the drawing as it was before there were kinds (see `digests`). A walker
-## must keep drawing exactly this; if the walker's look is changed on purpose, print
-## `load("res://tests/test_pawn_kinds.gd").new().digests()` from a script and paste
-## the new table.
+## A short digest of everything a walker draws, per look and facing, over all POSES (see
+## `digests`; the walker has the neutral variety there, see `_node`). A walker must keep
+## drawing exactly this. It was made from the drawing as it was before there were kinds,
+## and made again on 2026-10-09 (the animation rounds of 2026-10-07, ANIM and FEEL, "the
+## animations are clunky and weird", changed the dead's drawing on purpose: the legs turned
+## about the hip, a breath, a landing foot); if the walker's look is changed on purpose
+## again, print `load("res://tests/test_pawn_kinds.gd").new().digests()` from a script
+## and paste the new table.
 const WALKER_DIGESTS := {
-	"look0/E": "cbc7e2bda177",
-	"look0/N": "72d4f954fb36",
-	"look0/S": "8cbaa850e811",
-	"look0/W": "d02a65eb9a1c",
-	"look1/E": "ebcdba79a4d9",
-	"look1/N": "e2fa60204264",
-	"look1/S": "199e0999d42b",
-	"look1/W": "b25e0067ade6",
-	"look2/E": "bcc0b71f93ab",
-	"look2/N": "690f71188387",
-	"look2/S": "9bdd2fcd7077",
-	"look2/W": "d53e59e7f5eb",
+	"look0/E": "f12c8b0781cf",
+	"look0/N": "92d89f2592e3",
+	"look0/S": "2a1305021972",
+	"look0/W": "72415d0d9068",
+	"look1/E": "8fbb912fd325",
+	"look1/N": "df1b8448f6b6",
+	"look1/S": "7ec8616d8dcf",
+	"look1/W": "2d6cfe33a78f",
+	"look2/E": "5f3d0093a049",
+	"look2/N": "1eb2f639decf",
+	"look2/S": "4c56b0948857",
+	"look2/W": "995d98a36c15",
 }
 
 
@@ -174,13 +178,26 @@ func _zombie(kind: String, pose: String, facing: String, look: int = 0):
 			z.x = 0.0
 			z.t = 0.0
 			z.walk_phase = PI / 2.0
+		"plant":
+			# (the neutral moment of the stride: both feet on the ground, side by side)
+			z.state = "approach"
+			z.moving = true
+			z.x = 0.0
+			z.t = 0.0
+			z.walk_phase = 0.0
 	return z
 
 
-## The node for a zombie, drawing into a Tape (`cls` is the node's script).
-func _node(z, cls = PawnNode):
+## The node for a zombie, drawing into a Tape (`cls` is the node's script). Each of the dead has a variety of its own, made from its seed (the entity's instance id: another in every
+## run; pawn_motion.gd `dead_variant`: its gait, lean, tilt, arms, size and dirt), which would make these pictures differ from one run to the next. These tests are about what the KIND
+## draws, so the node is given the neutral variety (everything at 1 or 0) in its place, as it draws in a crowd of average ones; the variety has its own test at the end.
+func _node(z, cls = PawnNode, own_variety := false):
 	var n = cls.new()
 	n.setup(z, true, DATA, "zt")
+	if not own_variety:
+		n._dv = PawnMotion.Dead.new()
+		n._vphase = float(z.walk_phase)
+		n.modulate = Color.WHITE
 	n._pen = Tape.new()
 	return n
 
@@ -309,7 +326,8 @@ func test_a_brute_is_drawn_larger_than_a_runner_and_than_a_walker() -> void:
 		# a bigger figure grows up from its feet, which stay where a walker's would be
 		var feet: Vector2 = _body(tape).xf * Vector2(0.0, Art.FOOT_Y)
 		near(feet.x, 0.0, 0.01, "%s: the feet stay in line" % kind)
-		near(feet.y, Art.FOOT_Y * TILE, 0.01, "%s: and on the ground" % kind)
+		# (a standing figure breathes: it rises by up to 0.008 of a tile, and a big one by a big share of that; under a pixel)
+		near(feet.y, Art.FOOT_Y * TILE, 1.0, "%s: and on the ground" % kind)
 		box[kind] = n.hit_box()
 		n.free()
 	check(scale.brute.x > scale.walker.x and scale.brute.y > scale.walker.y, "a brute is bigger than a walker: %s against %s" % [scale.brute, scale.walker])
@@ -404,10 +422,13 @@ func test_the_stride_is_longer_for_a_runner_and_shorter_for_a_brute() -> void:
 		var side := _drawn(kind, "stride", "E").of("poly")
 		check(side.size() >= 5, "%s: legs are drawn" % kind)
 		spread[kind] = _middle(side[3].args[0]).x - _middle(side[1].args[0]).x
-		# facing the player the feet come up in turn: one shoe is lifted, the other not
+		# facing the player the feet come up in turn: the second shoe is lifted (and comes toward the player as it goes), the first is planted. How far it comes up is
+		# how much higher it is than the same shoe at the neutral moment of the stride, when both are on the ground
 		var front := _drawn(kind, "stride", "S").of("poly")
-		lift[kind] = _middle(front[2].args[0]).y - _middle(front[4].args[0]).y
-	check(spread.runner > spread.walker * 1.5, "a runner's legs swing wider: %s against %s" % [spread.runner, spread.walker])
+		var plant := _drawn(kind, "plant", "S").of("poly")
+		lift[kind] = _middle(plant[4].args[0]).y - _middle(front[4].args[0]).y
+	# (the legs turn about the hip, by at most 0.6 of a radian: a runner's swing, twice a walker's, is cut short by that, so it is wider by a third, not by half)
+	check(spread.runner > spread.walker * 1.2, "a runner's legs swing wider: %s against %s" % [spread.runner, spread.walker])
 	check(spread.brute < spread.walker * 0.8, "a brute's swing less: %s against %s" % [spread.brute, spread.walker])
 	check(lift.runner > lift.walker * 1.5, "a runner's feet come up higher: %s against %s" % [lift.runner, lift.walker])
 	check(lift.brute < lift.walker * 0.8, "a brute's barely leave the ground: %s against %s" % [lift.brute, lift.walker])
@@ -539,7 +560,8 @@ func test_the_zoomed_out_path_still_draws_every_kind() -> void:
 		n.sync(false, 0, 1.0)
 		z.x += 0.1
 		n.sync(false, 1, 0.5)
-		near(n.tile_pos().x, here.x + 0.05, 0.001, "%s moves on a frame that does not redraw" % kind)
+		# (the dead are drawn a little behind the rules, by a share of a step: `STEP_FOLLOW_DEAD`; half a step on from that is half of the share of 0.1)
+		near(n.tile_pos().x, here.x + 0.05 * PawnNode.STEP_FOLLOW_DEAD, 0.001, "%s moves on a frame that does not redraw" % kind)
 		n.sync(true, 2, 1.0)
 		var tape := _tape(n)
 		check(tape.of("tex").size() + tape.of("mesh").size() == 1, "%s is drawn on the frame that redraws" % kind)
@@ -565,3 +587,35 @@ func test_every_kind_draws_through_the_engine() -> void:
 	for n in nodes:
 		n.queue_free()
 	await tree.process_frame
+
+
+# --------------------------------------------- the variety of each of the dead --
+
+func test_each_of_the_dead_has_a_variety_of_its_own_the_same_every_time_and_within_its_kind() -> void:
+	var sizes := {}
+	var gaits := {}
+	for kind in ["walker", "runner", "brute"]:
+		sizes[kind] = {}
+		gaits[kind] = {}
+		for seed_i in range(1000, 1040):
+			var a: PawnMotion.Dead = PawnMotion.dead_variant(seed_i, kind)
+			var b: PawnMotion.Dead = PawnMotion.dead_variant(seed_i, kind)
+			eq([a.gait, a.ph, a.bob, a.sway, a.lean, a.tilt, a.gimp, a.side, a.arm, a.size, a.tint, a.weight, a.breath], [b.gait, b.ph, b.bob, b.sway, b.lean, b.tilt, b.gimp, b.side, b.arm, b.size, b.tint, b.weight, b.breath], "%s %d: the same figure gets the same variety" % [kind, seed_i])
+			check(a.size > 0.9 and a.size < 1.1, "%s: a few percent of size, not more: %s" % [kind, a.size])
+			check(a.tint.a == 1.0 and a.tint.r > 0.6 and a.tint.g > 0.6 and a.tint.b > 0.6, "%s: a little dirt, not a colour: %s" % [kind, a.tint])
+			sizes[kind][snappedf(a.size, 0.001)] = true
+			gaits[kind][snappedf(a.gait, 0.001)] = true
+	for kind in sizes:
+		check(sizes[kind].size() >= 10 and gaits[kind].size() >= 10, "%s: forty of them are not a copy of one (%d sizes, %d gaits)" % [kind, sizes[kind].size(), gaits[kind].size()])
+	var walker: PawnMotion.Dead = PawnMotion.dead_variant(7, "walker")
+	var runner: PawnMotion.Dead = PawnMotion.dead_variant(7, "runner")
+	var brute: PawnMotion.Dead = PawnMotion.dead_variant(7, "brute")
+	check(runner.gait >= 1.2 and runner.gait <= 1.5 and brute.gait >= 0.72 and brute.gait <= 0.88 and walker.gait >= 0.8 and walker.gait <= 1.2, "a runner cycles faster than a walker, a brute slower")
+	check(brute.weight > walker.weight and walker.weight > runner.weight, "and a brute's steps land the heaviest")
+	var other: PawnMotion.Dead = PawnMotion.dead_variant(8, "walker")
+	check(other.ph != walker.ph or other.gait != walker.gait, "a neighbour is another")
+	# a node that is left its own variety draws it: the legs' phase starts from its own
+	var z = _zombie("walker", "wander", "E")
+	var mine = _node(z, PawnNode, true)
+	check(mine._dv != null and is_equal_approx(mine._vphase, float(z.walk_phase) * mine._dv.gait + mine._dv.ph), "its legs run on its own gait and from its own start in the cycle")
+	mine.free()

@@ -326,8 +326,14 @@ func test_the_bell_swings_by_default_and_not_with_reduced_motion() -> void:
 	ctx.sim.bell_rung = true
 	ctx.sim.phase = "night"
 	Kit.update(ctx)
-	await Engine.get_main_loop().create_timer(0.12).timeout
-	check(absf(ctx.hud.clock_bell.rotation) > 0.01, "by default it swings: %.3f rad" % ctx.hud.clock_bell.rotation)
+	# (the swing is a tween of 0.16 s a leg, advanced by the engine's frames: on a busy machine the first frames come late, so it is looked for over a second and a half, not at a fixed moment)
+	var swung := 0.0
+	for i in 30:
+		await Engine.get_main_loop().create_timer(0.05).timeout
+		swung = maxf(swung, absf(ctx.hud.clock_bell.rotation))
+		if swung > 0.01:
+			break
+	check(swung > 0.01, "by default it swings: %.3f rad" % swung)
 	Kit.free_all(ctx)
 	Prefs.set_value("ui", "reduce_motion", true)
 	ctx = Kit.build()

@@ -37,7 +37,7 @@ func test_the_title_offers_every_way_in() -> void:
 		eq(title.items[key].get_meta("title").text, words[key], "the line for %s" % key)
 		eq(title.items[key].focus_mode, Control.FOCUS_ALL, "%s can be reached by the keyboard" % key)
 	var texts := HudKit.texts(title)
-	check(texts.has("THIRTY") and texts.has("BELLS"), "the name of the game")
+	check(texts.has("LAST") and texts.has("BELL"), "the name of the game (it is Last Bell again since the rename)")
 	check(texts.has("Hold the schoolyard for thirty nights."), "and its line")
 	check(is_instance_valid(title.bell), "with a bell")
 	_done(ctx)
@@ -402,10 +402,12 @@ func test_the_pause_menu_has_its_lines_and_its_caption() -> void:
 	ctx.main.sim = ctx.sim
 	var pause = ctx.shell.open_pause()
 	await HudKit.settle()
-	eq(pause.items.keys(), ["resume", "save", "load", "settings", "help", "menu", "quit"], "the lines, in order")
-	var words := {"resume": "Resume", "save": "Save", "load": "Load", "settings": "Settings", "help": "How to play", "menu": "Main menu", "quit": "Quit"}
+	# (the page of every key is the Controls line, which was How to play; `help` still names it. Lessons and Skip tutorial come only in a town run and in Orientation Day's coach)
+	eq(pause.items.keys(), ["resume", "save", "load", "settings", "controls", "help", "menu", "quit"], "the lines, in order")
+	var words := {"resume": "Resume", "save": "Save", "load": "Load", "settings": "Settings", "controls": "Controls", "menu": "Main menu", "quit": "Quit"}
 	for key in words:
 		eq(pause.items[key].get_meta("title").text, words[key], "the line for %s" % key)
+	check(pause.items["help"] == pause.items["controls"], "and the old name for the Controls line is the same line")
 	eq(pause.title_label.text, "Paused", "the heading")
 	eq(pause.caption_label.text, "DAY 1, 07:00", "the caption (the caps style) says where the game is")
 	eq(Fakes.focused(), pause.items["resume"], "the keyboard starts on Resume")
@@ -493,15 +495,24 @@ func test_the_main_menu_and_quit_ask_first() -> void:
 	_done(ctx)
 
 
-func test_how_to_play_shows_the_controls_and_closes_the_pause_menu() -> void:
+func test_the_controls_line_opens_the_page_of_every_key_over_the_pause_menu_and_gives_it_back() -> void:
 	var ctx := Fakes.build()
 	var pause = ctx.shell.open_pause()
 	await HudKit.settle()
-	check(not ctx.hud.help.visible, "the controls are not showing")
-	pause.items["help"].pressed.emit()
-	check(ctx.hud.help.visible, "the HUD's controls panel is up")
-	eq(ctx.shell.kinds(), [], "and the menu is gone")
-	eq(ctx.main.last("resume"), ["resume", true], "the game is told to stay paused")
+	pause.items["controls"].pressed.emit()
+	await HudKit.settle()
+	eq(ctx.shell.kinds(), ["pause", "controls"], "the Controls page is up over the pause menu, which stays under it")
+	var page = ctx.shell.top()
+	check(page.rows.size() >= 20, "with the keys of the run, one row each (%d)" % page.rows.size())
+	var keys: Array = []
+	for r in page.rows:
+		keys.append(r[0])
+	check(keys.has("W A S D") and keys.has("Space") and keys.has("Esc"), "among them walking, the pause and Esc")
+	check(not ctx.hud.help.visible, "the HUD's own small panel is not what it opens")
+	check(ctx.main.last("resume").is_empty(), "and the game is not told to go on: the pause menu is still there")
+	page.back_button.pressed.emit()
+	await HudKit.settle()
+	eq(ctx.shell.kinds(), ["pause"], "Back gives the pause menu back")
 	_done(ctx)
 
 
@@ -654,16 +665,18 @@ func test_the_interface_size_goes_in_steps_from_80_to_150() -> void:
 	_done(ctx)
 
 
-func test_hints_reduce_motion_and_fullscreen_are_switches() -> void:
+func test_hints_reduce_motion_the_minimap_fullscreen_and_the_accessibility_two_are_switches() -> void:
 	var ctx := Fakes.build()
 	var screen = ctx.shell.open_settings()
 	await HudKit.settle()
-	eq(screen.toggles.keys(), ["hints", "reduce_motion", "fullscreen"], "three switches")
-	eq(screen.toggles["hints"].text, "On", "hints are on")
-	eq(screen.toggles["reduce_motion"].text, "Off", "reduce motion is off")
-	eq(screen.toggles["fullscreen"].text, "Off", "fullscreen is off")
-	check(screen.toggles["hints"].button_pressed, "hints: pressed")
-	for key in ["hints", "reduce_motion", "fullscreen"]:
+	var keys := ["hints", "reduce_motion", "minimap", "fullscreen", "colour_blind", "reduce_flashes"]
+	eq(screen.toggles.keys(), keys, "six switches")
+	for key in keys:
+		var on: bool = Prefs.DEFAULTS.ui[key]
+		eq(screen.toggles[key].text, "On" if on else "Off", "%s starts as the defaults have it" % key)
+		eq(screen.toggles[key].button_pressed, on, "%s: pressed or not as it says" % key)
+	check(screen.toggles["hints"].button_pressed and screen.toggles["minimap"].button_pressed, "hints and the minimap are on")
+	for key in keys:
 		var before: int = ctx.main.names().count("apply_settings")
 		var was: bool = Prefs.on("ui", key)
 		screen.toggles[key].button_pressed = not was
