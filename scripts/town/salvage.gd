@@ -8,7 +8,8 @@
 ## WHAT MAY BE STRIPPED (`why_not`, "" when it may). A piece in a house: the house is CLEAR (`clearing.house_clear` and none of the dead in it now), is not the base (the claimed house, the
 ## rest of its lot, nor its compound), is not one of the houses the player is offered to claim until a base is claimed elsewhere, the piece is not in the room of a survivor who has not joined,
 ## a searchable piece (a container) has been searched, and the house's cap is not reached. A piece in the street: none of the awake dead within `danger_r` tiles of it, not in the base's
-## compound, and the cap of its 32 x 32 cell is not reached. A piece that would go past a cap gives what is left of it.
+## compound, and the cap of its 32 x 32 cell is not reached. A piece that would go past a cap gives what is left of it. SCAV3: a car or a wreck of the street is a container too (scripts/town/car_loot.gd,
+## `piece.container` is its "car<n>"), so, like a fridge, it can be stripped only after it has been searched ("Search it first"): by the avatar's E, or by the crew on a trip (scripts/town/crew_search.gd).
 ##
 ## THE PLAYER (E, kind "strip": `uses.gd` asks the provider of this part): "Strip the sofa (+3 scrap, 8 s)" within `reach` tiles of the piece's edge, a timed session like a search (the ring);
 ## it ends undone when she walks, fires, is hurt, or when the piece may no longer be stripped. When it ends done: `strip(id, her)`.
@@ -140,6 +141,7 @@ func _build() -> void:
 		var at: Vector2 = c.at
 		conts["%.3f,%.3f" % [at.x, at.y]] = String(c.id)
 	var hs = _hs()
+	var car_ids: bool = hs != null and hs.has_method("car_id_of")
 	# (TEMPO: every piece's seconds times salvage.json `seconds_mult`: the hands' time, and the crew's timer reads the same number)
 	var seconds_mult := maxf(_num("seconds_mult", 1.0), 0.1)
 	for i in objs.size():
@@ -156,6 +158,8 @@ func _build() -> void:
 		var house := int(o.get("in", -1))
 		var id := "o%d" % i
 		var cont: String = String(conts.get("%.3f,%.3f" % [cx, cy], ""))
+		if cont == "" and car_ids:
+			cont = String(hs.car_id_of(i))    # (SCAV3: a car of the street is a container too: it is searched before it is stripped, like a fridge)
 		var pc := {
 			"id": id, "idx": i, "kind": k, "name": String(def.get("name", k.replace("_", " "))), "stuff": String(def.get("stuff", "wood")),
 			"scrap": int(def.get("scrap", 0)), "seconds": float(def.get("seconds", 5.0)) * seconds_mult, "house": house,
@@ -333,6 +337,10 @@ func why_not(pc: Dictionary) -> String:
 		return "That is your home"
 	if _cell_left(int(pc.cell)) <= 0:
 		return "Picked clean"
+	if String(pc.container) != "":
+		var search2 = sim.get("search")
+		if search2 != null and not search2.is_looted(String(pc.container)):
+			return "Search it first"    # (SCAV3: a car or a wreck of the street is searched before it is stripped)
 	if _awake_near(float(pc.cx), float(pc.cy), _num("danger_r", 15.0)):
 		return "The dead are near"
 	return ""

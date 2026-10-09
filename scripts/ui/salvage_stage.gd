@@ -148,6 +148,10 @@ static func _clear_house(sim, h: int) -> void:
 static func _begin(sim, _press: bool, frac: float) -> void:
 	var uses = sim.uses
 	var salv = sim.salvage
+	# (SCAV3: a car of the street is searched before it is stripped: the staging has it searched, so that the strip's pictures are still made)
+	var cid := String(salv.piece(_id).get("container", ""))
+	if cid.begins_with("car") and not sim.search.is_looted(cid):
+		sim.search.mark_looted(cid)
 	var picked := {}
 	for c in sim.interact.candidates():
 		if String(c.kind) == "strip" and String(c.id) == _id:

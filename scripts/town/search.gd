@@ -3,8 +3,11 @@
 ## (no bags: the stash is the stock), the container is looted for good, and `{"type": "searched", "container", "house", "loot": {stock: n}}` is told.
 ## It is the rules of raid_run.gd's `begin_search`, `_search_step` and `_open` against `sim.houses.containers_of(h)`, which RaidRun's own cannot serve
 ## in the colony's sim. A looted container is drawn open (WP2 reads `is_looted`). Candidates: kind "container". Saved: the ids that are looted.
+## SCAV3: the parked cars and wrecks of the streets are containers too (scripts/town/car_loot.gd, kept by `sim.houses.cars`): outside every house the avatar's E offers "Search the car" within
+## CarLoot.reach() tiles of the car's edge, the same 4 s session, the same `looted` flag (so a car the crew searched is not searched again and a saved game keeps it).
 extends RefCounted
 
+const CarLoot := preload("res://scripts/town/car_loot.gd")
 const REACH := 0.9
 const SEARCH_S := 4.0
 
@@ -47,6 +50,10 @@ static func search_secs(sim, cont: Dictionary) -> float:
 
 ## A container as a Dictionary ({} when `id` is none of the house's): `containers_of` may give the containers or their ids.
 func _find(h: int, id: String) -> Dictionary:
+	if h < 0:
+		var hs = sim.get("houses")
+		var car: Dictionary = hs.container(id) if hs != null else {}    # (outside every house: a car or a wreck of the street)
+		return car if bool(car.get("car", false)) else {}
 	for c in _list(h):
 		if String(c.get("id", "")) == id:
 			return c
@@ -84,7 +91,7 @@ func candidates(p) -> Array:
 		return out
 	var h: int = hs.house_at(p.x, p.y)
 	if h < 0:
-		return out
+		return _car_candidates(p)
 	var me := Vector2(p.x, p.y)
 	var u = sim.get("uses")
 	for c in _list(h):
@@ -97,6 +104,27 @@ func candidates(p) -> Array:
 		var stop: bool = u != null and u.in_session("container", id)
 		var kind := String(c.get("kind", "container")).replace("_", " ")
 		out.append({"kind": "container", "id": id, "label": ("Stop searching" if stop else "Search the %s" % kind), "pos": Vector2(c.pos), "dist": d, "ok": true, "why": "", "session": true})
+	return out
+
+
+## SCAV3: "Search the car" (or the wreck) for each unsearched car of the street within reach of the avatar, who is outside every house.
+func _car_candidates(p) -> Array:
+	var out: Array = []
+	var hs = sim.get("houses")
+	if hs == null or not hs.has_method("cars_near") or not enabled:
+		return out
+	var me := Vector2(p.x, p.y)
+	var u = sim.get("uses")
+	var reach := CarLoot.reach()
+	for c in hs.cars_near(me, reach):
+		var id := String(c.get("id", ""))
+		if looted.has(id):
+			continue
+		var d := CarLoot.rect_dist(me, c.rect)
+		if d > reach:
+			continue
+		var stop: bool = u != null and u.in_session("container", id)
+		out.append({"kind": "container", "id": id, "label": "Stop searching" if stop else "Search the %s" % String(c.get("name", "car")), "pos": Vector2(c.at), "dist": d, "ok": true, "why": "", "session": true})
 	return out
 
 
@@ -116,6 +144,15 @@ func use(c: Dictionary) -> Dictionary:
 	var cont := _find(h, id)
 	if cont.is_empty() or looted.has(id):
 		return {"ok": false, "line": "", "why": "Nothing to search here", "session": true}
+	if bool(cont.get("car", false)):
+		# (SCAV3: a car of the street: the reach is from its edge, the session is held where she stands)
+		if CarLoot.rect_dist(Vector2(p.x, p.y), cont.rect) > CarLoot.reach() + 0.3:
+			return {"ok": false, "line": "", "why": "Too far from it", "session": true}
+		var car_s := search_secs(sim, cont)
+		var cr: Dictionary = u.begin_session("container", id, "Searching", car_s, Vector2(p.x, p.y), 0.7, Callable(self, "_finish").bind(-1, id))
+		if not bool(cr.get("ok", false)):
+			return {"ok": false, "line": "", "why": String(cr.get("why", "")), "session": true}
+		return {"ok": true, "line": "Searching the %s" % String(cont.get("name", "car")), "why": "", "session": true, "seconds": car_s}
 	if Vector2(p.x, p.y).distance_to(Vector2(cont.pos)) > REACH:
 		return {"ok": false, "line": "", "why": "Too far from it", "session": true}
 	var seconds := search_secs(sim, cont)

@@ -19,18 +19,29 @@
 ##   weather, the dark, a wound, a bite, or the dead near them: a person outside is a person (the dead near them wake, `field._wake_near`, a smaller circle than the avatar's, notice them and bite
 ##   them; they shoot what they see, as everyone does) and deaths are real. One exception, for the JOB's runs only and not for the order's: the base's own night posts (the call to arms, or an attack night:
 ##   `sim.posts_manned()`) take the scavengers to the wall, as they take everyone, and no job run starts then. An order keeps its person out through the posts too.
+## THE CARS (PH3, SCAV3: "the scavenger should also check for cars automatically and loot them"). The parked cars and wrecks of the streets are containers (scripts/town/car_loot.gd, `sim.houses.cars`, the loot in
+##   the `cars` block of assets/data/salvage.json; the avatar searches them with E). On a house run (the order or the job) the last container of the house is followed by a TRIP to the cars: the unsearched cars and
+##   wrecks within `trip.radius` (14) tiles of the house, nearest first from where the person stands, each searched for its own `search_s` (the very number the avatar's session reads: `search.search_secs`) and then,
+##   when salvage allows it (the street cell cap is not reached, no awake dead within salvage `danger_r`, the car is not the base's), stripped for scrap for the piece's seconds, up to `trip.most` (6) cars a trip.
+##   A car that is already searched (the avatar, or an earlier trip) is not searched again (the same `looted` flag as a cupboard; a save keeps it), but is still stripped when it can be. The Scavenger job with no
+##   house left to search takes a trip of its own from the car nearest the base (mode "cars", within FAR_TILES of the base, the radius round that first car); loot comes before strip work all through (houses, cars,
+##   then the furniture and the street's other pieces). The report adds what the cars gave ("Femi searched 22 Elm St: 4 food; 2 cars: 6 ammo, 1 water"); the tally and the morning's line count it.
+##   Nothing here is a refusal: no weather, hour, health or dead near stops a car trip (RULES2); the only thing skipped is a strip that salvage says cannot be done now.
 ## NOISE. They make none: nothing here calls the field's `noise`. (They shoot what they see, as every person does: that is the rules' own.)
 ## FOR OTHERS. `plan(house_id, room_idx, from_pos)` and `eta(plan, from_pos)` are LOOT's `RoomSearch.plan` and `eta` in name and shape: when scripts/town/room_search.gd exists they are its own order
 ## (a room finished before the next), else the nearest-first chain here.
 ##
-## State: `runs` (person id to the run), saved with the day's tally. Each run: {"kind": "order"|"job", "mode": "search"|"strip"|"street", "house" (-1 in the street), "stage": "door"|"search"|"strip",
-## "cur" (the container's or piece's id, or ""), "t" (seconds into it), "found" (stock key to n), "n" (done), "total", "hp", "wounds", "stuck", and for a strip "spot", "at", "secs", "name", "skip"}.
+## State: `runs` (person id to the run), saved with the day's tally. Each run: {"kind": "order"|"job", "mode": "search"|"strip"|"street"|"cars", "house" (-1 in the street), "stage": "door"|"search"|"strip"|"car",
+## "cur" (the container's or piece's id, or ""), "t" (seconds into it), "found" (stock key to n), "n" (done), "total", "hp", "wounds", "stuck", and for a strip "spot", "at", "secs", "name", "skip";
+## SCAV3, for the car stage: "anchor" (where the trip's radius is measured from), "cars" (cars visited), "cfound" (what they gave), "cdone" (the cars done or given up, ids), "cmode" "search"|"strip" with
+## "spot", "at", "secs", "name" for the car in hand}.
 ## Events: {"type": "searched", ..., "who", "name"} for each container (search.gd `mark_looted`), {"type": "crew_search", "who", "name", "what", "text", "level", "house"} when a run ends
 ## ("done", "posts", "stuck") or an order does not begin ("stopped", with its reason): the town's HUD toasts the text.
 extends RefCounted
 
 const ROOM_SEARCH := "res://scripts/town/room_search.gd"
 const SearchRules := preload("res://scripts/town/search.gd")
+const CarLoot := preload("res://scripts/town/car_loot.gd")
 ## How far from the base's middle the JOB looks for a house (the job's own range, not a refusal: an order may name any cleared house).
 const FAR_TILES := 35.0
 ## Hit points lost, or a new wound, that count as a bite in the run's record (nobody turns back for it).
@@ -68,8 +79,9 @@ var tally := {"day": 0, "all": {}, "by": {}}
 var yesterday := {"day": 0, "all": {}}
 ## What the job's people say they are doing when they have no run (person id to a line); not saved.
 var job_note := {}
-## Counters for the lab and the report: containers, houses, the loot, the runs by how they ended, the pieces stripped.
-var stats := {"containers": 0, "houses": 0, "loot": {}, "ended": {}, "bitten": 0, "stripped": 0}
+## Counters for the lab and the report: containers, houses, the loot, the runs by how they ended, the pieces stripped; SCAV3: the cars searched (`cars`), the cars stripped (`car_strips`) and what
+## the cars gave (`car_loot`, searched and stripped together; it is part of `loot`).
+var stats := {"containers": 0, "houses": 0, "loot": {}, "ended": {}, "bitten": 0, "stripped": 0, "cars": 0, "car_strips": 0, "car_loot": {}}
 ## The person the last `stage` sent (for a screenshot's camera).
 var staged = null
 ## House id to the time (this part's own age) until which nobody is sent there: no way from where they stood.
@@ -97,7 +109,7 @@ func start() -> void:
 	tally = {"day": 0, "all": {}, "by": {}}
 	yesterday = {"day": 0, "all": {}}
 	job_note = {}
-	stats = {"containers": 0, "houses": 0, "loot": {}, "ended": {}, "bitten": 0, "stripped": 0}
+	stats = {"containers": 0, "houses": 0, "loot": {}, "ended": {}, "bitten": 0, "stripped": 0, "cars": 0, "car_strips": 0, "car_loot": {}}
 	_blocked = {}
 	_nowork = {}
 	_idle_until = {}
@@ -396,7 +408,8 @@ func begin_order(p, at: Vector2) -> bool:
 
 ## Sets a person off. `mode` "search": the house's containers; "strip": the furniture of the house (SALVAGE); "street": the one wreck `piece` of the street (`h` is -1). False when there is no way.
 func _start_run(p, kind: String, h: int, mode: String = "search", piece: Dictionary = {}) -> bool:
-	var run := {"kind": kind, "mode": mode, "house": h, "stage": "door", "cur": "", "t": 0.0, "found": {}, "n": 0, "total": 0, "hp": float(p.hp), "wounds": int(p.wounds), "stuck": 0.0}
+	var run := {"kind": kind, "mode": mode, "house": h, "stage": "door", "cur": "", "t": 0.0, "found": {}, "n": 0, "total": 0, "hp": float(p.hp), "wounds": int(p.wounds), "stuck": 0.0,
+		"anchor": house_point(h) if h >= 0 else Vector2.ZERO, "cars": 0, "csearched": 0, "cfound": {}, "cdone": [], "cmode": "search"}
 	var aim := Vector2.ZERO
 	if mode == "street":
 		var spot := _stand_spot(piece, Vector2(p.x, p.y))
@@ -445,6 +458,10 @@ func run_text(p) -> String:
 	var at := mini(int(run.n) + 1, of)
 	if String(run.mode) == "street":
 		return "Stripping %s in the street" % String(run.get("name", "a wreck"))
+	if String(run.stage) == "car":
+		# (SCAV3: "Searching a car near 22 Elm St", "Stripping a wreck in the street")
+		var where := " near %s" % address(h) if h >= 0 else " in the street"
+		return "%s %s %s%s" % ["Stripping" if String(run.get("cmode", "search")) == "strip" else "Searching", "a", String(run.get("name", "car")), where]
 	if String(run.stage) == "door":
 		return "Going to %s" % address(h)
 	if String(run.mode) == "strip":
@@ -462,6 +479,23 @@ func found_text(found: Dictionary) -> String:
 	return ", ".join(parts)
 
 
+## Two stock records added together.
+func _merge(a: Dictionary, b: Dictionary) -> Dictionary:
+	var out := a.duplicate()
+	for k in b:
+		out[k] = int(out.get(k, 0)) + int(b[k])
+	return out
+
+
+## What the cars of a run gave, in words: "2 cars: 6 ammo, 1 water", "1 car: nothing of use"; "" when the run visited none. A run with no house is "2 cars in the street: ...".
+func cars_text(run: Dictionary) -> String:
+	var n := int(run.get("cars", 0))
+	if n <= 0:
+		return ""
+	var found := found_text(run.get("cfound", {}))
+	return "%d car%s%s: %s" % [n, "" if n == 1 else "s", " in the street" if int(run.house) < 0 else "", found if found != "" else "nothing of use"]
+
+
 func _container(id: String) -> Dictionary:
 	var hs = _houses()
 	return hs.container(id) if hs != null else {}
@@ -477,6 +511,13 @@ func goal_for(p):
 
 func _run_goal(p, run: Dictionary) -> Dictionary:
 	var h := int(run.house)
+	if String(run.stage) == "car":
+		# (SCAV3: the tile beside the car in hand, facing it; between two cars, where they stand)
+		if String(run.cur) == "" or not run.has("spot"):
+			return {"x": p.x, "y": p.y, "face": "", "what": run_text(p), "work": ""}
+		var cspot: Vector2 = run.spot
+		var cto: Vector2 = Vector2(run.get("at", cspot)) - cspot
+		return {"x": cspot.x, "y": cspot.y, "face": sim.facing_of(cto.x, cto.y, String(p.facing)) if cto.length() > 0.2 else "", "what": run_text(p), "work": "hammer" if String(run.get("cmode", "search")) == "strip" else "sort"}
 	if String(run.stage) == "strip" and String(run.cur) != "":
 		var spot: Vector2 = run.spot
 		var to: Vector2 = Vector2(run.get("at", spot)) - spot
@@ -559,10 +600,13 @@ func _step(id: String, dt: float, slow: bool) -> void:
 			else:
 				run.stage = "search"
 				if not _pick(p, run):
-					_finish_house(p, run)
+					_house_done(p, run)
 		elif _stuck(p, run, dt):
 			_blocked[h] = _age + BLOCKED_S
 			_end(p, id, "stuck")
+		return
+	if String(run.stage) == "car":
+		_step_car(p, run, id, dt)
 		return
 	if String(run.stage) == "strip":
 		_step_strip(p, run, id, dt)
@@ -572,7 +616,7 @@ func _step(id: String, dt: float, slow: bool) -> void:
 	if cur == "" or _search().is_looted(cur):
 		_release(id)
 		if not _pick(p, run):
-			_finish_house(p, run)
+			_house_done(p, run)
 		return
 	var c := _container(cur)
 	if c.is_empty():
@@ -626,12 +670,14 @@ func _release(id: String) -> void:
 			claims.erase(cid)
 
 
-## What a run brings in is added to the run's, the day's and the person's tallies.
-func _credit(p, run: Dictionary, loot: Dictionary) -> void:
+## What a run brings in is added to the run's, the day's and the person's tallies. `into` is the run's record it goes in: "found" (the house) or "cfound" (the cars of the trip: SCAV3).
+func _credit(p, run: Dictionary, loot: Dictionary, into: String = "found") -> void:
 	var id := String(p.id)
 	for k in loot:
-		run.found[k] = int(run.found.get(k, 0)) + int(loot[k])
+		run[into][k] = int(run[into].get(k, 0)) + int(loot[k])
 		stats.loot[k] = int(stats.loot.get(k, 0)) + int(loot[k])
+		if into == "cfound":
+			stats.car_loot[k] = int(stats.car_loot.get(k, 0)) + int(loot[k])
 		tally.all[k] = int(tally.all.get(k, 0)) + int(loot[k])
 		var mine: Dictionary = tally.by.get(id, {})
 		mine[k] = int(mine.get(k, 0)) + int(loot[k])
@@ -647,7 +693,192 @@ func _search_done(p, run: Dictionary, cur: String) -> void:
 	stats.containers = int(stats.containers) + 1
 	_credit(p, run, loot)
 	if not _pick(p, run):
+		_house_done(p, run)
+
+
+# ---------------------------------------------------------------------------- the cars --
+
+## Whether the crew look at cars at all (the `cars` block of salvage.json is there, the town has cars, the trip allows one).
+func _cars_on() -> bool:
+	var hs = _houses()
+	return hs != null and hs.get("cars") is Array and not (hs.cars as Array).is_empty() and CarLoot.most() > 0
+
+
+## The last container of the house is done: the trip goes on to the cars round it (SCAV3) when there are any to do, else the run is over.
+func _house_done(p, run: Dictionary) -> void:
+	if String(run.mode) == "search" and _cars_on():
+		run.stage = "car"
+		if _car_pick(p, run):
+			return
+	_finish_house(p, run)
+
+
+## What the crew would do at a car now: "search" (not searched yet), "strip" (searched, and salvage lets it be stripped now) or "" (nothing).
+func _car_work(c: Dictionary) -> String:
+	if not _search().is_looted(String(c.id)):
+		return "search"
+	return "strip" if _car_strippable(c) else ""
+
+
+## Whether salvage would let this car be stripped now (the street cell cap, no awake dead near, not the base's; the car is searched already).
+func _car_strippable(c: Dictionary) -> bool:
+	var sv = _salvage()
+	if sv == null or float(_nowork.get(String(c.id), 0.0)) > _age:
+		return false
+	var pc: Dictionary = sv.piece(String(c.get("piece", "")))
+	return not pc.is_empty() and sv.why_not(pc) == ""
+
+
+## Takes the next car of the trip: the nearest unsearched one within the trip's radius of its anchor, from where the person stands (a car that only wants stripping comes after the unsearched ones), and
+## sets the run to walk to it. `only` (a car) is the one to take, whatever the radius (the first car of a trip from the base). False when the trip is over: the most cars were visited, or none is left.
+func _car_pick(p, run: Dictionary, only: Dictionary = {}) -> bool:
+	run.cur = ""
+	var hs = _houses()
+	if hs == null or int(run.cars) >= CarLoot.most():
+		return false
+	var anchor: Vector2 = run.anchor
+	var radius := CarLoot.radius()
+	var from := Vector2(p.x, p.y)
+	var done: Array = run.cdone
+	var best: Dictionary = {}
+	var best_score := INF
+	var best_spot := Vector2.ZERO
+	var best_work := ""
+	var list: Array = [only] if not only.is_empty() else hs.cars_near(anchor, radius)
+	for c in list:
+		var cid := String(c.id)
+		if done.has(cid) or float(_nowork.get(cid, 0.0)) > _age:
+			continue
+		var owner = claims.get(cid)
+		if owner != null and String(owner) != String(p.id):
+			continue
+		if only.is_empty() and Vector2(c.at).distance_to(anchor) > radius:
+			continue
+		var work := _car_work(c)
+		if work == "":
+			continue
+		var spot := _stand_spot(c, from)
+		if spot == Vector2.ZERO:
+			done.append(cid)
+			continue
+		var score := from.distance_to(spot) + (200.0 if work == "strip" else 0.0)
+		if score < best_score:
+			best_score = score
+			best = c
+			best_spot = spot
+			best_work = work
+	if best.is_empty():
+		return false
+	run.cur = String(best.id)
+	_car_begin(p, run, best, best_spot, best_work)
+	return true
+
+
+## Sets the run's car in hand: where to stand, how long, what to do there.
+func _car_begin(p, run: Dictionary, c: Dictionary, spot: Vector2, work: String) -> void:
+	run.cmode = work
+	run.spot = spot
+	run.at = Vector2(c.at)
+	run.name = String(c.get("name", "car"))
+	run.t = 0.0
+	run.stuck = 0.0
+	if work == "strip":
+		var pc: Dictionary = _salvage().piece(String(c.get("piece", "")))
+		run.secs = float(pc.get("seconds", 10.0))
+	else:
+		run.secs = SearchRules.search_secs(sim, c)
+	claims[String(c.id)] = String(p.id)
+
+
+## A car is done or given up: the trip's count goes up (when it was visited) and the next is picked, or the trip is over.
+func _car_next(p, run: Dictionary, visited: bool) -> void:
+	var cid := String(run.cur)
+	if cid != "":
+		(run.cdone as Array).append(cid)
+		if claims.get(cid) == String(p.id):
+			claims.erase(cid)
+	if visited:
+		run.cars = int(run.cars) + 1
+	run.cur = ""
+	run.t = 0.0
+	if not _car_pick(p, run):
 		_finish_house(p, run)
+
+
+func _step_car(p, run: Dictionary, id: String, dt: float) -> void:
+	var cur := String(run.cur)
+	if cur == "":
+		if not _car_pick(p, run):
+			_finish_house(p, run)
+		return
+	var c := _container(cur)
+	if c.is_empty():
+		(run.cdone as Array).append(cur)    # (a damaged save: a car that is none)
+		run.cur = ""
+		return
+	var search = _search()
+	var strip: bool = String(run.cmode) == "strip"
+	if not strip and search.is_looted(cur):
+		# (somebody else searched it first, the avatar: its loot is theirs; the strip, if it can be, is still ours)
+		if _car_strippable(c):
+			_car_begin(p, run, c, run.spot, "strip")
+		else:
+			_car_next(p, run, false)
+		return
+	if strip and not _car_strippable(c):
+		_car_next(p, run, true)    # (the cap was reached or the dead came near while they walked: no strip, the next car; the car was searched)
+		return
+	var spot: Vector2 = run.spot
+	if Vector2(p.x, p.y).distance_to(spot) <= ARRIVE and not bool(p.moving):
+		run.stuck = 0.0
+		run.t = float(run.t) + dt
+		if float(run.t) >= float(run.secs):
+			_car_done(p, run, c)
+	elif _stuck(p, run, dt):
+		_nowork[cur] = _age + NOWORK_S    # (no way to this one from here: the next car, not the end of the trip)
+		_car_next(p, run, false)
+
+
+## The seconds at the car are up: the search (its loot to the stores) and then, when it can, the strip (its scrap).
+func _car_done(p, run: Dictionary, c: Dictionary) -> void:
+	var cid := String(c.id)
+	if String(run.cmode) == "search":
+		var loot: Dictionary = _search().mark_looted(cid, p)
+		stats.cars = int(stats.cars) + 1
+		run.csearched = int(run.get("csearched", 0)) + 1
+		_credit(p, run, loot, "cfound")
+		if _car_strippable(c):
+			_car_begin(p, run, c, run.spot, "strip")
+		else:
+			_car_next(p, run, true)
+		return
+	var sv = _salvage()
+	var r: Dictionary = sv.strip(String(c.piece), p) if sv != null else {}
+	if bool(r.get("ok", false)):
+		stats.car_strips = int(stats.car_strips) + 1
+		_credit(p, run, {"scrap": int(r.get("scrap", 0))}, "cfound")
+	else:
+		_nowork[cid] = _age + NOWORK_S
+	_car_next(p, run, true)
+
+
+## A trip that begins at a car and not at a house (the Scavenger job with every house done): the first car is `car`. False when there is no way there.
+func _start_cars(p, kind: String, car: Dictionary) -> bool:
+	var run := {"kind": kind, "mode": "cars", "house": -1, "stage": "car", "cur": "", "t": 0.0, "found": {}, "n": 0, "total": 0, "hp": float(p.hp), "wounds": int(p.wounds), "stuck": 0.0,
+		"anchor": Vector2(car.at), "cars": 0, "csearched": 0, "cfound": {}, "cdone": [], "cmode": "search"}
+	var work := _car_work(car)
+	var spot := _stand_spot(car, Vector2(p.x, p.y))
+	if work == "" or spot == Vector2.ZERO:
+		_nowork[String(car.id)] = _age + NOWORK_S
+		return false
+	if sim.path_p.find(sim.world.solid_p, p.x, p.y, spot.x, spot.y).is_empty():
+		_nowork[String(car.id)] = _age + NOWORK_S
+		return false
+	run.cur = String(car.id)
+	_car_begin(p, run, car, spot, work)
+	runs[String(p.id)] = run
+	job_note.erase(String(p.id))
+	return true
 
 
 # ------------------------------------------------------------------------ stripping --
@@ -758,16 +989,29 @@ func _strip_done(p, run: Dictionary, sv, cur: String) -> void:
 func _finish_house(p, run: Dictionary) -> void:
 	var id := String(p.id)
 	var h := int(run.house)
-	var street := String(run.mode) == "street"
-	var stripping := String(run.mode) != "search"
-	stats.houses = int(stats.houses) + 1
+	var mode := String(run.mode)
+	var street := mode == "street"
+	var cars_only := mode == "cars"
+	var stripping := mode == "strip" or street
+	if not cars_only:
+		stats.houses = int(stats.houses) + 1
 	if stripping and int(run.n) == 0:
 		# (nothing could be stripped there after all: no word of it, and not that house or wreck again for a while)
 		_nowork[String(run.get("piece", "")) if street else h] = _age + NOWORK_S
 		_end(p, id, "empty")
 		return
+	if cars_only and int(run.cars) == 0:
+		_end(p, id, "empty")    # (SCAV3: a trip to cars that visited none: no word of it)
+		return
 	var found := found_text(run.found)
-	var text := "%s %s %s: %s" % [String(p.first), "stripped" if stripping else "searched", address(h) if not street else "a %s in the street" % String(run.get("name", "wreck")), found if found != "" else "nothing of use"]
+	var text := ""
+	if cars_only:
+		text = "%s %s %s" % [String(p.first), "searched" if int(run.get("csearched", 0)) > 0 else "stripped", cars_text(run)]    # (a trip that only stripped cars somebody had searched says so)
+	else:
+		text = "%s %s %s: %s" % [String(p.first), "stripped" if stripping else "searched", address(h) if not street else "a %s in the street" % String(run.get("name", "wreck")), found if found != "" else "nothing of use"]
+		var ct := cars_text(run)
+		if ct != "":
+			text += "; " + ct    # (SCAV3: "Femi searched 22 Elm St: 4 food, 2 scrap; 2 cars: 6 ammo, 1 water")
 	sim.radio.log_news("crew_search", text, "")
 	_end(p, id, "done", text)
 	if String(run.kind) == "job" and p != null:
@@ -793,8 +1037,9 @@ func _end(p, id: String, why: String, text: String = "") -> void:
 			_say(p, why, "%s is back at the wall: the dead are coming" % String(p.first), "info", h)
 		"stuck":
 			_say(p, why, "%s cannot get to %s: heading home" % [String(p.first), address(h)], "warn", h)
-	if why != "done" and why != "stopped" and why != "down" and not run.found.is_empty():
-		sim.radio.log_news("crew_search", "%s came back from %s with %s" % [String(p.first), address(h), found_text(run.found)], "")
+	var brought := found_text(_merge(run.found, run.get("cfound", {})))
+	if why != "done" and why != "stopped" and why != "down" and brought != "":
+		sim.radio.log_news("crew_search", "%s came back from %s with %s" % [String(p.first), address(h), brought], "")
 
 
 func _say(p, what: String, text: String, level: String, h: int, news: bool = false) -> void:
@@ -876,9 +1121,39 @@ func _job_try(p) -> bool:
 			continue
 		if _start_run(p, "job", int(e.h)):
 			return true
+	if _cars_try(p):
+		return true
 	if _salvage_try(p) == 1:
 		return true
 	job_note[id] = NOTHING_LEFT
+	return false
+
+
+## SCAV3: no house left to search (loot comes before strip work): a trip to the cars and wrecks of the street, from the one nearest the base within FAR_TILES of it (an unsearched one first). True when they set off.
+func _cars_try(p) -> bool:
+	var base = _base()
+	var hs = _houses()
+	if not _cars_on() or base == null or not base.claimed:
+		return false
+	var mid: Vector2 = base.center()
+	var from := Vector2(p.x, p.y)
+	var list: Array = []
+	for c in hs.cars_near(mid, FAR_TILES):
+		var cid := String(c.id)
+		if Vector2(c.at).distance_to(mid) > FAR_TILES or claims.has(cid) or float(_nowork.get(cid, 0.0)) > _age:
+			continue
+		var work := _car_work(c)
+		if work == "":
+			continue
+		list.append([from.distance_to(Vector2(c.at)) + (200.0 if work == "strip" else 0.0), c])
+	list.sort_custom(func(a, b): return float(a[0]) < float(b[0]) or (is_equal_approx(float(a[0]), float(b[0])) and String(a[1].id) < String(b[1].id)))
+	var asked := 0
+	for e in list:
+		asked += 1
+		if asked > MAX_HOUSE_ASK:
+			break
+		if _start_cars(p, "job", e[1]):
+			return true
 	return false
 
 
@@ -978,15 +1253,17 @@ func stage(spec: String) -> bool:
 	else:
 		var from := Vector2(who.x, who.y)
 		var best_d := INF
+		var want_cars := parts.has("car")    # (SCAV3: a picture of the cars: only a house that has some within the trip's radius)
 		for e in candidates():
 			var d := from.distance_to(house_point(int(e.h)))
-			if d < best_d:
+			if d < best_d and (not want_cars or not hs.cars_near(house_point(int(e.h)), CarLoot.radius() - 3.0).is_empty()):
 				best_d = d
 				h = int(e.h)
 		if h < 0 and parts.has("clear"):
 			for i in int(hs.count()):
 				var d := from.distance_to(house_point(i))
-				if i != int(hs.start_house()) and d < best_d and unsearched_count(i) > 0 and base != null and base.center().distance_to(house_point(i)) <= FAR_TILES:
+				if i != int(hs.start_house()) and d < best_d and unsearched_count(i) > 0 and base != null and base.center().distance_to(house_point(i)) <= FAR_TILES \
+						and (not want_cars or not hs.cars_near(house_point(i), CarLoot.radius() - 3.0).is_empty()):
 					best_d = d
 					h = i
 	if h < 0:
@@ -1006,6 +1283,18 @@ func stage(spec: String) -> bool:
 			who.y = float(c.pos.y)
 			who.path = []
 			who.moving = false
+	if parts.has("car"):
+		# (SCAV3, a picture of the trip to the cars: the house taken as done, the person at the nearest car with the search half run; `near` prefers a house with cars within the trip's radius)
+		var run2: Dictionary = runs[String(who.id)]
+		run2.stage = "car"
+		run2.cur = ""
+		if _car_pick(who, run2):
+			var spot2: Vector2 = run2.spot
+			who.x = spot2.x
+			who.y = spot2.y
+			who.path = []
+			who.moving = false
+			run2.t = float(run2.secs) * 0.45
 	return true
 
 
@@ -1119,13 +1408,31 @@ func load_state(d: Dictionary) -> void:
 			var mode := String(e.get("mode", "search"))
 			var h := int(e.get("house", -1))
 			var hs = _houses()
-			if (kind != "order" and kind != "job") or not ["search", "strip", "street"].has(mode) or hs == null or h >= int(hs.count()) or (h < 0 and mode != "street"):
+			if (kind != "order" and kind != "job") or not ["search", "strip", "street", "cars"].has(mode) or hs == null or h >= int(hs.count()) or (h < 0 and mode != "street" and mode != "cars"):
 				continue
 			var stage := String(e.get("stage", "door"))
-			var run := {"kind": kind, "mode": mode, "house": h, "stage": stage if ["door", "search", "strip"].has(stage) else "door", "cur": String(e.get("cur", "")), "t": clampf(float(e.get("t", 0.0)), 0.0, 600.0),
+			var run := {"kind": kind, "mode": mode, "house": h, "stage": stage if ["door", "search", "strip", "car"].has(stage) else "door", "cur": String(e.get("cur", "")), "t": clampf(float(e.get("t", 0.0)), 0.0, 600.0),
 				"found": _clean_stock(e.get("found", {})), "n": maxi(0, int(e.get("n", 0))), "total": maxi(0, int(e.get("total", 0))), "hp": clampf(float(e.get("hp", 100.0)), 0.0, 100.0),
 				"wounds": maxi(0, int(e.get("wounds", 0))), "stuck": 0.0}
-			if mode != "search":
+			# (SCAV3: the trip to the cars: the cars done so far and what they gave; the car in hand is picked again, nothing of it is resumed)
+			var anchor := _vec(e.get("anchor"))
+			var cdone: Array = []
+			if typeof(e.get("cdone")) == TYPE_ARRAY:
+				for s2 in e.cdone:
+					cdone.append(String(s2))
+			run["anchor"] = anchor if anchor != Vector2.ZERO else (house_point(h) if h >= 0 else Vector2.ZERO)
+			run["cars"] = clampi(int(e.get("cars", 0)), 0, 99)
+			run["csearched"] = clampi(int(e.get("csearched", 0)), 0, 99)
+			run["cfound"] = _clean_stock(e.get("cfound", {}))
+			run["cdone"] = cdone
+			run["cmode"] = "search"
+			if String(run.stage) == "car":
+				if mode == "strip" or mode == "street" or Vector2(run.anchor) == Vector2.ZERO:
+					continue    # (not a stage of theirs, or a trip with nowhere to measure from)
+				run.cur = ""
+			elif mode == "cars":
+				continue    # (a trip that begins at a car is always at the car stage)
+			if mode == "strip" or mode == "street":
 				var spot = _vec(e.get("spot"))
 				if spot == Vector2.ZERO or String(run.stage) == "search":
 					continue    # (a strip with no place to stand: not resumed)
@@ -1157,7 +1464,7 @@ func load_state(d: Dictionary) -> void:
 	var s = d.get("stats", {})
 	if typeof(s) == TYPE_DICTIONARY:
 		stats = {"containers": maxi(0, int(s.get("containers", 0))), "houses": maxi(0, int(s.get("houses", 0))), "loot": _clean_stock(s.get("loot", {})), "ended": {}, "bitten": maxi(0, int(s.get("bitten", 0))),
-			"stripped": maxi(0, int(s.get("stripped", 0)))}
+			"stripped": maxi(0, int(s.get("stripped", 0))), "cars": maxi(0, int(s.get("cars", 0))), "car_strips": maxi(0, int(s.get("car_strips", 0))), "car_loot": _clean_stock(s.get("car_loot", {}))}
 		var en = s.get("ended", {})
 		if typeof(en) == TYPE_DICTIONARY:
 			for k in en:
