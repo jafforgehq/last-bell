@@ -156,10 +156,14 @@ func _layout() -> void:
 	_relayout.call_deferred()
 
 
-## A new town run: the same town, from the start.
+## A new town run: the same town, from the start (CLEAR3: the town is named in the meta, so that a run played on `--town=N` comes back to that town and not to the town of its dice).
 func _play_again() -> void:
 	var seed_value := int(sim.get("run_seed")) if sim != null and sim.get("run_seed") != null else 1
-	hud.start_run({"difficulty": 1, "seed": seed_value, "town": true})
+	var meta := {"difficulty": 1, "seed": seed_value, "town": true}
+	var town_data = sim.get("town_data") if sim != null else null
+	if typeof(town_data) == TYPE_DICTIONARY and (town_data as Dictionary).has("seed"):
+		meta["town"] = int(town_data.seed)
+	hud.start_run(meta)
 
 
 ## Esc is the way back to the title (the pause menu is not there under the card).

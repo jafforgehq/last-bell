@@ -206,8 +206,9 @@ class HouseBot:
 	const HURT_HP := 40.0
 	## It rests (home, the bed) from HURT_HP down until the health is back to this.
 	const RECOVER_UNTIL := 60.0
-	## The farthest survivor it goes for, in tiles from the base (the first ring is within 28, the second to 58: past that the trip takes the day and the dead of the way).
-	const MAX_RESCUE_R := 62.0
+	## The farthest survivor it goes for, in tiles from the base (the first ring was within 28 and the second to 58: past that the trip takes the day and the dead of the way). CLEAR3: there is open ground
+	## round every candidate and the houses begin 30 tiles out, the rings are 16 tiles farther (30 to 56, 56 to 84) and so is the farthest survivor it goes for (62 + 16, and a little).
+	const MAX_RESCUE_R := 80.0
 	## Scrap kept back from the orders for mending once an attack is on.
 	const MEND_RESERVE := 8.0
 	const BED_REACH := 1.5
