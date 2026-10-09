@@ -253,6 +253,9 @@ var walkers := 0
 var fields := false
 ## A save was asked for at start-up but could not be loaded (a new run began instead).
 var load_failed := false
+## SAVE4: a save was asked for at start-up (`--load=`, the run's meta) and refused (an older version of the town, damaged, not there): SaveGame.peek's answer. No game of any kind is started
+## for it: the title stays up and a card says why (`_start_shell`), where it used to start the school's yard.
+var refused_load := {}
 ## The shell: the title screen, the pause menu and the screens they open (scripts/ui/shell.gd).
 var shell
 ## "Text size": scales the HUD's and the menus' words (scripts/ui/text_scale.gd).
@@ -354,6 +357,13 @@ func _ready() -> void:
 	# `--town[=seed]`, or a run whose meta says `town` (the title's New game), or a save of a town run: the REAL game on the generated town (scripts/town/town_boot.gd makes the data,
 	# the world and the rules; the old `--town[=place]` of the school's Town Board is still that with `--crew`)
 	var run_meta: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else Scenario.run_from_args(OS.get_cmdline_user_args())
+	# (SAVE4: a save that cannot be loaded starts no game, whatever kind: the title comes up instead with a card, and the file is left alone. A school-yard game used to start for it)
+	if String(run_meta.get("load", "")) != "":
+		var peeked := SaveGame.peek(String(run_meta.load))
+		if not bool(peeked.get("ok", false)):
+			refused_load = peeked
+			run_meta = {"title": true}
+			Engine.set_meta("run", run_meta)
 	# the title of the real game is a small town at dusk (scripts/town/title_scene.gd), made as a town run is, with a seed and a size of its own; the school's yard behind the title is
 	# for `--school`, the demo and a test's stand-in scene
 	var title_asked: bool = bool(run_meta.get("title", false)) or wants_title(OS.get_cmdline_user_args(), Engine.has_meta("run"))
@@ -1263,12 +1273,35 @@ func _quick_load() -> void:
 		hud.show_banner("No quick save yet", "Press F5 to save")
 		return
 	# check it before the current game is thrown away for it
+	var info := SaveGame.peek(path)
+	if not bool(info.get("ok", false)):
+		if shell != null and not title_mode and bool(info.get("incompatible", false)):
+			show_old_save_card(info)    # (SAVE4: a save of another version: a card, and the game stays where it is)
+		else:
+			hud.show_banner("Could not load", "The quick save is damaged or from another version")
+		return
 	if not SaveGame.is_loadable(path):
 		hud.show_banner("Could not load", "The quick save is damaged or from another version")
 		return
 	_did("load")
 	Engine.set_meta("run", {"load": path})
 	get_tree().reload_current_scene()
+
+
+## Which card a refused save gets (`OldSaveCard`): "older" or "newer" for a save of another version, "missing" for no file, else "damaged". `info` is SaveGame.peek's answer.
+static func refused_reason(info: Dictionary) -> String:
+	if bool(info.get("incompatible", false)):
+		return "newer" if bool(info.get("newer", false)) else "older"
+	return "missing" if not bool(info.get("exists", true)) else "damaged"
+
+
+## A save that cannot be continued was asked for in the game (F9): the game is held as the pause menu holds it and a card says why; Close goes back to it, New game opens the New game screen.
+func show_old_save_card(info: Dictionary) -> void:
+	if shell == null:
+		return
+	if not title_mode and not shell.is_open():
+		open_pause()
+	shell.open_old_save(refused_reason(info))
 
 
 func _toggle_sound() -> void:
@@ -1646,6 +1679,9 @@ func _start_shell() -> void:
 		open_pause()
 	elif named != "":
 		shell.open_named(named)
+	# (SAVE4: the save asked for at start-up was refused: the title is up and the card says why)
+	if not refused_load.is_empty():
+		shell.open_old_save(refused_reason(refused_load))
 
 
 ## The title's yard: the clock stands still at dusk (so the lamps and the fires are lit and the

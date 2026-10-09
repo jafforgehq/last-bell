@@ -99,7 +99,10 @@ const PITCH := 32
 const BLOCK := 28
 const ROAD := 4
 const EDGE := 2
-const VERSION := 1
+## The version of the TOWN: the generator, the building plans and what the saved state means (SAVE4). A One House save writes it (`SaveGame.TOWN_KEY`) and a save of another number is refused, because
+## the town is made again from the seed on a load and would not be the town the save was made in. BUMP IT with any change that alters the generated town or the saved state's meaning (docs/save-compat.md).
+## 1: up to main 236bb1e (saves of those builds carry no number at all). 2: the build of SAVE4 (CLEAR3's clear ground, a town for every seed, WORLD3's 164 plans).
+const VERSION := 2
 ## Dead: how many (the owner's 600 to 800), the share that is in or beside the houses, and how many guard each house of the rescue list.
 const DEAD_TOTAL := 700
 const DEAD_NEAR_HOUSES := 0.6

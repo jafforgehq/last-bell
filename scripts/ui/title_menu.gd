@@ -163,7 +163,9 @@ func refresh() -> void:
 	var c: Button = items["continue"]
 	var sub: Label = c.get_meta("sub")
 	if best.is_empty():
-		sub.text = "No saved game yet"
+		# (SAVE4: a save of an older version is never continued; the line says so rather than "no saved game")
+		var older: bool = shell.has_method("has_incompatible_save") and shell.has_incompatible_save()
+		sub.text = "Older saves cannot be continued" if older else "No saved game yet"
 		c.tooltip_text = ""
 		shell.set_item_enabled(c, false)
 	else:

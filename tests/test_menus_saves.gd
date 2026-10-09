@@ -97,12 +97,12 @@ func test_peek_of_a_save_from_another_version_says_so() -> void:
 	Fakes.write_text(tmp_a, SaveGame.to_text(data))
 	var info := SaveGame.peek(tmp_a)
 	check(not info.ok, "not one this version loads")
-	eq(info.reason, "Saved by another version", "says why")
+	eq(info.reason, "Newer version", "says why (SAVE4: a later format is a newer version)")
 	eq(info.version, SaveGame.VERSION + 1, "and which version it is")
 	check(not SaveGame.is_loadable(tmp_a), "and is_loadable agrees")
 	data["version"] = SaveGame.VERSION - 1
 	Fakes.write_text(tmp_a, SaveGame.to_text(data))
-	eq(SaveGame.peek(tmp_a).reason, "Saved by another version", "an older one too")
+	eq(SaveGame.peek(tmp_a).reason, "Older version", "an older one too")
 	_clean()
 
 

@@ -25,6 +25,7 @@ const LoadMenu := preload("res://scripts/ui/load_menu.gd")
 const CreditsScreen := preload("res://scripts/ui/credits.gd")
 const ConfirmMenu := preload("res://scripts/ui/confirm_menu.gd")
 const OrientationCard := preload("res://scripts/ui/orientation_card.gd")
+const OldSaveCard := preload("res://scripts/ui/old_save_card.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 
 ## How long a toast stays up, in real seconds.
@@ -360,6 +361,15 @@ func open_credits() -> Control:
 	return _open_screen(CreditsScreen.new(), "Credits", "")
 
 
+## The card of a save that cannot be continued (SAVE4; `why` is "older", "newer", "damaged" or "missing"): nothing is loaded, the title or the game under it stays, and New game is the way on.
+func open_old_save(why: String = "older") -> Control:
+	if not stack.is_empty() and stack.back().kind == "old_save":
+		return stack.back()    # (one card is enough: a second click or key does not pile them up)
+	var c := OldSaveCard.new()
+	c.reason = why
+	return _open_screen(c, OldSaveCard.heading(why), "")
+
+
 ## "Are you sure?": `on_ok` runs if the answer is yes; the safe answer is the first
 ## button and has the keyboard.
 func confirm(question: String, detail: String, ok_text: String, on_ok: Callable, stay_text: String = "Stay") -> Control:
@@ -395,6 +405,8 @@ func open_named(screen_name: String) -> Control:
 			return open_load(false)
 		"credits":
 			return open_credits()
+		"oldsave":
+			return open_old_save("older")
 		"confirm":
 			return confirm("Leave this game?", "Anything since your last save is lost.", "Main menu", func(): pass)
 		"orientation":
@@ -424,23 +436,38 @@ func newest_save() -> Dictionary:
 	return all[i] if i >= 0 else {}
 
 
-## Continue: loads the newest save, or says there is none.
+## Whether some slot holds a save of another version (SAVE4: Continue skips those; the title says why it has nothing to continue).
+func has_incompatible_save() -> bool:
+	for p in peeks():
+		if bool(p.info.get("incompatible", false)):
+			return true
+	return false
+
+
+## Continue: loads the newest save that can be continued (a save of an older version is skipped), or says there is none.
 func continue_game() -> bool:
 	var best := newest_save()
 	if best.is_empty():
 		play("ui_error")
-		toast("There is no saved game yet", "warn")
+		if has_incompatible_save():
+			open_old_save("older")
+		else:
+			toast("There is no saved game yet", "warn")
 		return false
 	return load_slot(String(best.slot.path))
 
 
 ## Loads the save at `path` if it can be; if not it says why (a damaged or foreign save is
-## never loaded, and the game that is running goes on).
+## never loaded, and the game that is running goes on). A save of another version gets the card
+## (`open_old_save`): "This save is from an older version of Last Bell and cannot be continued."
 func load_slot(path: String) -> bool:
 	var info := SaveGame.peek(path)
 	if not bool(info.get("ok", false)):
 		play("ui_error")
-		toast("That save cannot be loaded: %s" % String(info.get("reason", "damaged")).to_lower(), "danger")
+		if bool(info.get("incompatible", false)):
+			open_old_save("newer" if bool(info.get("newer", false)) else "older")
+		else:
+			toast("That save cannot be loaded: %s" % String(info.get("reason", "damaged")).to_lower(), "danger")
 		return false
 	if Demo.on() and not bool(info.get("demo", false)):
 		play("ui_error")

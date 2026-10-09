@@ -25,7 +25,10 @@ func _build_body() -> void:
 		var b: Button = shell.menu_item(String(slot.name), _words(info, slot, now))
 		var sub: Label = b.get_meta("sub")
 		if not bool(info.get("ok", false)):
-			sub.add_theme_color_override("font_color", hud.INK3 if not bool(info.get("exists", false)) else hud.DANGER_TEXT)
+			sub.add_theme_color_override("font_color", hud.INK3 if (not bool(info.get("exists", false)) or bool(info.get("incompatible", false))) else hud.DANGER_TEXT)
+			if bool(info.get("incompatible", false)):
+				# (SAVE4: a save of another version is listed greyed, not hidden: a click says why in a card)
+				b.modulate = Color(1, 1, 1, 0.55)
 		b.pressed.connect(_pick.bind(p))
 		body.add_child(b)
 		rows.append({"button": b, "slot": slot, "info": info})
@@ -46,6 +49,8 @@ func _words(info: Dictionary, slot: Dictionary, now: int) -> String:
 		return line_text + (" · " + ago if ago != "" else "")
 	if not bool(info.get("exists", false)):
 		return "Nothing saved here yet · %s" % String(slot.get("note", ""))
+	if bool(info.get("incompatible", false)):
+		return "%s: cannot be continued" % String(info.get("reason", "Older version")).to_lower()
 	return "%s: this save cannot be loaded" % String(info.get("reason", "Damaged"))
 
 
@@ -69,6 +74,9 @@ func _pick(p: Dictionary) -> void:
 	if bool(info.get("ok", false)):
 		# the game reloads with the save; if it cannot, the shell has said so
 		shell.load_slot(String(slot.path))
+		return
+	if bool(info.get("incompatible", false)):
+		shell.load_slot(String(slot.path))    # (the card: this save is from another version of the game)
 		return
 	shell.play("ui_error")
 	error_label.visible = true

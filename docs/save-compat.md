@@ -1,0 +1,44 @@
+# Save compatibility
+
+A save does not hold the town. A One House save holds the town's **seed** (and size) and the state of the run; on a load the town is made again from the seed
+(`TownBoot.plan_of` -> `TownGen.make`), and the saved base house, dead, survivors, cars and fence sections are put back into it **by id**. So a save only means
+something in the town it was made in. If the generator or the building plans change, the same seed makes a different town and an old save would load into the wrong
+houses (the base house, the dead in it and the survivors would not match).
+
+## The rule
+
+`TownGen.VERSION` (scripts/town/town_gen.gd) is the version of the **town**: the generator, the building plans, the props, the placement of the dead and the rescues,
+and the meaning of what a save holds. **Any change that alters the generated town for a seed, or the meaning of the saved state, must bump it.** Examples that need a
+bump: a building plan added, removed or edited; the layout, the fields, the districts or the streets changed; the rescue rings, the arrival or the loot data changed; a
+saved variable renamed or given another meaning. Changes that leave every seed's town and every saved value as they were (UI, sound, balance numbers that are read
+at run time and not saved as ids) do not.
+
+Do not bump it for a change made and shipped in the same unreleased build more than once: one bump per release is enough (the saves of the last release are the ones
+that exist). But when in doubt, bump: a refused save costs a player a game, a wrong load costs a broken one.
+
+## What is written and checked
+
+* `OneHouse.save()` writes `town_version` (= `TownGen.VERSION`) into the `scenario` module of every One House save (`modules.scenario.town_version`).
+* `SaveGame.town_compat(data)` says whether a save is of another town: `""` (fine, or not a One House save: the school's and the demo's saves hold no town), `"older"`
+  (no `town_version`, as in every save made by builds up to main 236bb1e, or a lower one) or `"newer"` (a higher one: a save from a later build).
+* `SaveGame.peek` answers `ok: false, incompatible: true, reason: "Older version" | "Newer version"` for those (and for a save of another `SaveGame.VERSION`, the
+  format). `SaveGame._top_ok`, which `apply` and `is_loadable` use, refuses them too, and `apply` checks it before it puts anything of the town in place, so a refused
+  save never leaves a half-loaded game.
+
+## What the player sees
+
+* **Continue** (and the game over card's **Load last save**) skip incompatible saves and use the newest one that can be continued; with none, Continue is greyed and says
+  "Older saves cannot be continued".
+* The **Load** page lists an incompatible save greyed: "older version: cannot be continued". Clicking it, F9 on an incompatible quick save, and `--load=path` show the card
+  (scripts/ui/old_save_card.gd): "This save is from an older version of Last Bell and cannot be continued. Start a new game." with **Close** and **New game**. The game
+  that is running stays where it is (F9 holds it as the pause menu does); at the start of the program the title stays up under the card.
+* A `--load=` file that is refused for any reason (older, newer, damaged, missing) never starts a game: the title comes up with the card. (Before SAVE4 a damaged file
+  started the school-yard game.)
+
+## When you bump it
+
+1. Raise `TownGen.VERSION` and add a line to the history above its constant.
+2. Nothing else: the saves of the older number are refused by the checks above.
+3. If the *format* of the state changes without the town changing, bump `SaveGame.VERSION` instead (it is refused the same way, with the same card).
+
+History: 1 = up to main 236bb1e (no number written). 2 = SAVE4 (the town of CLEAR3's clear ground and a town for every seed, WORLD3's 164 building plans).

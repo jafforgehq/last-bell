@@ -273,19 +273,32 @@ static func _night_of(hour: float) -> float:
 
 func _make_crows() -> void:
 	var b := Kit.Builder.new()
-	var ink := Kit.INK
-	var body := Color("#28282e")
-	var hi := Color("#454550")
+	# (SAVE4: a crow was near-black with a black outline: a dark blob on a dark roof. Its body is a shade lighter and the outline is a thin pale grey rim, so it reads on a dark roof by day and
+	# at dusk and in the dark look, and the dark body still reads on a light one; the same size and the same wings, head and tail)
+	var rim := Color("#b6b9c6")
+	var body := Color("#30313c")
+	var hi := Color("#5b5d6e")
 	b.add_ellipse(Vector2(0, 3), 6.5, 11.0, Color(0, 0, 0, 0.24), Vector2(9, 0), 10)
 	for side in [-1.0, 1.0]:
 		var uvx: float = 1.0 if side < 0.0 else 2.0
 		var pts := PackedVector2Array([Vector2(side * 3, -4), Vector2(side * 25, -7), Vector2(side * 23, 7), Vector2(side * 4, 8)])
-		b.add_fan(Vector2(side * 10, 0), hi, pts, PackedColorArray([body, body, body, body]), Vector2(uvx, 0))
-	b.add_ellipse(Vector2(0, 1), 7.4, 12.2, ink, Vector2(0, 0), 10)
+		# the wing's rim: the same wing a pixel bigger, under it
+		var wing_c := Vector2(side * 10, 0)
+		var big := PackedVector2Array()
+		for p in pts:
+			big.append(p + (p - wing_c).normalized() * 1.0)
+		b.add_fan(wing_c, rim, big, PackedColorArray([rim, rim, rim, rim]), Vector2(uvx, 0))
+		b.add_fan(wing_c, hi, pts, PackedColorArray([body, body, body, body]), Vector2(uvx, 0))
+	var tail := PackedVector2Array([Vector2(-4, 10), Vector2(-5, 21), Vector2(0, 19), Vector2(5, 21), Vector2(4, 10)])
+	var tail_big := PackedVector2Array()
+	for p in tail:
+		tail_big.append(p + (p - Vector2(0, 11)).normalized() * 1.0)
+	b.add_fan(Vector2(0, 11), rim, tail_big, PackedColorArray(), Vector2(0, 0))
+	b.add_ellipse(Vector2(0, 1), 7.4, 12.2, rim, Vector2(0, 0), 10)
 	b.add_ellipse(Vector2(0, 1), 6.0, 11.0, body, Vector2(0, 0), 10)
 	b.add_ellipse(Vector2(-1.5, -2), 2.8, 5.0, hi, Vector2(0, 0), 8)
-	b.add_fan(Vector2(0, 11), body, PackedVector2Array([Vector2(-4, 10), Vector2(-5, 21), Vector2(0, 19), Vector2(5, 21), Vector2(4, 10)]), PackedColorArray(), Vector2(0, 0))
-	b.add_ellipse(Vector2(0, -11), 4.6, 4.4, ink, Vector2(3, 0), 8)
+	b.add_fan(Vector2(0, 11), body, tail, PackedColorArray(), Vector2(0, 0))
+	b.add_ellipse(Vector2(0, -11), 4.6, 4.4, rim, Vector2(3, 0), 8)
 	b.add_ellipse(Vector2(0, -11), 3.6, 3.4, body, Vector2(3, 0), 8)
 	b.add_fan(Vector2(0, -16), Color("#6a5a38"), PackedVector2Array([Vector2(-1.8, -14), Vector2(0, -19), Vector2(1.8, -14)]), PackedColorArray(), Vector2(3, 0))
 	_crow_mm = MultiMesh.new()

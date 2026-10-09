@@ -12,8 +12,8 @@
 ##   dismiss  a click on the card, any key (the key goes on to the game, but Enter, Space and Esc are the card's) or a click in the world, the "Good morning" button, or by itself after
 ##            `SHOW_S` seconds: a bar runs down. Nobody has to.
 ##
-## It is NON-MODAL: the game does not pause, WASD still walks (a player in a fight at dawn is never held), the card sits clear of the avatar (below her, or above when there is no
-## room: she is where the camera is), and it is put away while a menu or a page is over the game. It waits for the sleep fade ("You slept until dawn") to end, so the two never
+## It is NON-MODAL: the game does not pause, WASD still walks (a player in a fight at dawn is never held), the card sits clear of the avatar and of what the day's line points at
+## (SAVE4: the coach card's placement, `Coach.best_rect` with `kept_clear()`: beside her when there is no room above or below, at every window size), and it is put away while a menu or a page is over the game. It waits for the sleep fade ("You slept until dawn") to end, so the two never
 ## stack. After the FIRST held attack the run is over and
 ## the end card has the screen: no tally then (the card waits `DELAY_S` of rules time after the day begins, for the rules to judge the night, and is dropped on `held`, `over`).
 ##
@@ -27,12 +27,13 @@ extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
+const Coach := preload("res://scripts/ui/coach.gd")
 
 ## Real seconds the card stays; its fade in and out; rules seconds after the day begins before it comes (the night is judged by then).
 const SHOW_S := 10.0
 const FADE_S := 0.3
 const DELAY_S := 0.6
-## The card's width (less in a narrow window), the gap from the screen's edge, and the room kept clear round the avatar: above her head and below her feet (her name).
+## The card's width (less in a narrow window) and the gap from the screen's edge.
 const CARD_W := 500.0
 const CARD_W_MIN := 300.0
 ## A key or a click in the world puts the card away only after this many real seconds (a key pressed as the card comes up is not a wish to be rid of it).
@@ -41,10 +42,6 @@ const KEY_GRACE_S := 0.6
 const STORES := [["food", "Food"], ["water", "Water"], ["ammo", "Ammo"], ["scrap", "Scrap"], ["meds", "Meds"]]
 const STANCE_DOES := {"follow": "with you", "hold": "holding", "cover": "covering you", "search": "searching", "back": "going back to work"}
 const EDGE := 12.0
-const TOP_MIN := 78.0
-const HEAD_TILES := 1.25
-const ABOVE_PX := 30.0
-const BELOW_PX := 30.0
 ## The width of the labels' column of a row.
 const LABEL_W := 118.0
 ## A section is worn under this share of its hit points (the avatar's own rule: scripts/sim/nights.gd SOUND); hit points lost to be named hurt; days of food or water that are "low".
@@ -64,6 +61,9 @@ var tally := {}
 var shown_rows: Array = []
 var title_text := ""
 var open := false
+## Whether the card has had a place (the next one keeps it unless another is clearly better).
+var _placed := false
+var _width := 0.0
 
 var _bar: Control
 var _title: Label
@@ -620,6 +620,7 @@ func _open() -> void:
 	open = true
 	_left = SHOW_S
 	_opened_s = 0.0
+	_placed = false
 	_place()
 	var snd = main.get("sound")
 	if snd != null and snd.has_method("ui"):
@@ -696,49 +697,95 @@ func _close(quiet: bool) -> void:
 
 # --------------------------------------------------------------------------- place --
 
-## The avatar in the HUD's pixels (her feet) and the pixels to the tile.
-func _avatar_screen() -> Array:
-	var sim = _sim()
-	var me = sim.avatar.player() if sim.get("avatar") != null else null
-	var z := float(main.get("zoom_px")) if main.get("zoom_px") != null else 32.0
-	if me == null:
-		return [hud.size * 0.5, z]
-	var at := Vector2(me.x, me.y)
-	if main.has_method("view_pos"):
-		at = main.view_pos(me)
-	var cam: Vector2 = main.get("cam_center") if main.get("cam_center") is Vector2 else Vector2.ZERO
-	return [(at - cam) * z + hud.size * 0.5, z]
-
-
-## The card's size and place: centred, below the avatar when there is room (her name is under her feet), above her when there is not.
+## The card's size and place (SAVE4): where it hides neither the avatar nor what the day's line points at, by the coach card's own rule (`Coach.best_rect`: the cheapest of the spots round the
+## window and round the figure that covers least of what is kept clear, then least of the HUD's boards, the place it had kept unless another is clearly better). It used to be centred
+## 30 px under the avatar's CENTRE, which at 1280 x 800 (a 390 px card) covered her feet.
 func _place() -> void:
 	if card == null:
 		return
 	var vp: Vector2 = hud.size
-	var w := clampf(minf(CARD_W, vp.x - 2.0 * EDGE), minf(CARD_W_MIN, vp.x - 2.0 * EDGE), CARD_W)
+	var wmax := clampf(minf(CARD_W, vp.x - 2.0 * EDGE), minf(CARD_W_MIN, vp.x - 2.0 * EDGE), CARD_W)
+	var kept := kept_clear()
+	# the widths to try: the width it had (it stays while it hides nothing), then the widest down to the narrowest (a small window has no room beside her for the full width)
+	var widths: Array = []
+	for k in [wmax, 440.0, 390.0, 345.0, CARD_W_MIN]:
+		if k <= wmax + 0.5 and k >= minf(CARD_W_MIN, wmax) - 0.5 and not widths.has(k):
+			widths.append(k)
+	if _placed and widths.has(_width):
+		widths.erase(_width)
+		widths.push_front(_width)
+	var best_w: float = widths[0]
+	var best_r := Rect2()
+	var best_cost := INF
+	for cand in widths:
+		var sz := _size_at(float(cand))
+		var prev := Rect2(card.position, sz) if _placed and is_equal_approx(float(cand), _width) else Rect2()
+		var r: Rect2 = Coach.best_rect(hud, sz, vp, Rect2(), "bottom", false, true, kept, prev)
+		var cost := 0.0
+		for k in kept:
+			var ov: Rect2 = r.intersection(k)
+			cost += ov.size.x * ov.size.y
+		if cost < best_cost - 0.5:
+			best_cost = cost
+			best_w = float(cand)
+			best_r = r
+		if cost <= 0.5:
+			break
+	var final := _size_at(best_w)
+	card.size = final
+	card.position = Vector2(roundf(best_r.position.x), roundf(best_r.position.y))
+	_width = best_w
+	_placed = true
+
+
+## The card at width `w`: its long lines wrapped to it, its size set; returns the size.
+func _size_at(w: float) -> Vector2:
 	var margin: float = card.get_theme_stylebox("panel").get_minimum_size().x
 	for c in _wrap_inner:
 		RadioKit.wrap_at(c, w - margin)
 	for c in _wrap_value:
 		RadioKit.wrap_at(c, w - margin - LABEL_W - 8.0)
 	card.custom_minimum_size.x = w
+	card.size = Vector2(w, 0.0)
 	var h := card.get_combined_minimum_size().y
-	card.size = Vector2(w, h)
-	var at := _avatar_screen()
-	var feet: Vector2 = at[0]
-	var z: float = at[1]
-	var below := feet.y + BELOW_PX
-	var above := feet.y - HEAD_TILES * z - ABOVE_PX
-	var y := below
-	if below + h > vp.y - EDGE:
-		# (above her: the bottom of the card clear of her head and the "YOU" over it)
-		if above - h >= TOP_MIN:
-			y = above - h
-		elif vp.y - EDGE - below >= above - TOP_MIN:
-			y = maxf(TOP_MIN, vp.y - EDGE - h)    # (neither fits: the side with more room, over her rather than off the screen)
-		else:
-			y = TOP_MIN
-	card.position = Vector2(roundf((vp.x - w) * 0.5), roundf(y))
+	return Vector2(w, h)
+
+
+## What the card keeps off, in the HUD's pixels (the coach's `_kept_clear`, and the bearing of the day's line): the avatar (the figure with its YOU tag, and the room round her for
+## the gun's muzzle), the gun's readout and the place the objective points at.
+func kept_clear() -> Array:
+	var out: Array = []
+	var sim = _sim()
+	var me = sim.avatar.player() if sim != null and sim.get("avatar") != null else null
+	if me == null or me.away != null:
+		return out
+	var at: Vector2 = main.view_pos(me)
+	var a: Vector2 = main._tile_to_screen(at + Vector2(-0.5, -1.9))
+	var b: Vector2 = main._tile_to_screen(at + Vector2(0.5, 0.5))
+	out.append(Rect2(a, b - a).abs())
+	var c: Vector2 = main._tile_to_screen(at + Vector2(0.0, -0.45))
+	var rad: float = Coach.AVATAR_CLEAR * float(main.zoom_px)
+	out.append(Rect2(c - Vector2(rad, rad), Vector2(rad, rad) * 2.0))
+	var gun = hud.get("ammo_panel")
+	if gun != null and is_instance_valid(gun) and gun.is_visible_in_tree():
+		out.append(gun.get_global_rect())
+	# (the town HUD's words that a morning card would hide: the objective, the lesson's card and the keys' legend: the player reads them as the card comes up)
+	var th = main.town.part("town_hud") if main.get("town") != null and main.town.has_method("part") else null
+	if th != null:
+		for n in ["obj_card", "lesson_card", "legend"]:
+			var board = th.get(n)
+			if board is Control and is_instance_valid(board) and board.is_visible_in_tree() and board.size.x > 0.0:
+				out.append(board.get_global_rect())
+	# (what she is pointed at: the objective's bearing, when it is on the screen)
+	var sc = _scenario()
+	if sc != null and sc.has_method("objective"):
+		var o = sc.objective()
+		if o is Dictionary and o.get("at") is Vector2:
+			var p: Vector2 = main._tile_to_screen(o.at)
+			if Rect2(Vector2.ZERO, hud.size).has_point(p):
+				var half := 0.9 * float(main.zoom_px)
+				out.append(Rect2(p - Vector2(half, half), Vector2(half, half) * 2.0))
+	return out
 
 
 # --------------------------------------------------------------------------- debug --

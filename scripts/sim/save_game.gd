@@ -36,6 +36,11 @@ const Kinds := preload("res://scripts/sim/kinds.gd")
 const VERSION := 3
 const QUICK_PATH := "user://quicksave.json"
 const AUTO_PATH := "user://autosave.json"
+## SAVE4: a One House save names the version of the TOWN it was made in (`TownGen.VERSION`: the generator, the building plans and the meaning of what is saved), in its scenario module
+## under this key. The town is made again from the seed on a load, so a save of another town version would get a different base house, other dead and other survivors: it is refused
+## ("incompatible": no key, or a lower number, is older; see docs/save-compat.md; anything that changes the generated town or the saved state's meaning must bump `TownGen.VERSION`).
+const TOWN_KEY := "town_version"
+const TOWN_GEN := "res://scripts/town/town_gen.gd"
 
 const PHASES := ["day", "dusk", "night", "dawn"]
 ## Variables that come from the map data, not from play.
@@ -287,18 +292,41 @@ static func is_loadable(path: String) -> bool:
 	return _top_ok(read(path))
 
 
+## The version of the town this build makes (`TownGen.VERSION`), read when needed so that a school game never compiles the generator for it.
+static func town_version() -> int:
+	return int(load(TOWN_GEN).VERSION)
+
+
+## Whether `data` (a save as `read` gives it, or the raw JSON) is of a town this build does not make: "" when it is fine or not a One House save at all (the school's and the demo's
+## saves hold no town), "older" when the save has no town version or a lower one, "newer" when it is higher (a save of a later build).
+static func town_compat(data: Dictionary) -> String:
+	var modules = data.get("modules")
+	var mine = modules.get("scenario") if typeof(modules) == TYPE_DICTIONARY else null
+	if typeof(mine) != TYPE_DICTIONARY or String(mine.get("kind", "")) != "one_house":
+		return ""
+	var v = mine.get(TOWN_KEY)
+	if typeof(v) != TYPE_INT and typeof(v) != TYPE_FLOAT:
+		return "older"
+	var now := town_version()
+	if int(v) < now:
+		return "older"
+	return "newer" if int(v) > now else ""
+
+
 ## What the save at `path` says about itself, for the menus (Continue, Load): read
 ## from the file alone and never applied to anything. For a save this version can
 ## load: {"ok": true, "day", "hour" (0 to 24), "difficulty" (0 to 2), "people" (how
 ## many are alive: not dead, not turned), "crew" (all of them), "over" ("" while the
 ## run goes on), "version", "modified" (the file's time, seconds), "exists": true}.
 ## For anything else {"ok": false, "exists", "reason" (a few words: "Empty", "Damaged",
-## "Saved by another version"), "modified", "version" (-1 when it cannot be read)}.
+## "Older version", "Newer version"), "modified", "version" (-1 when it cannot be read),
+## "incompatible" (true when it is a save of another version of the game or of its town: SAVE4, the menus
+## grey it out and loading it shows a card, `Shell.open_old_save`), "newer" (true when it is the later one)}.
 ## The checks are those of `is_loadable` and the clock and the run's own numbers; a
 ## save that passes can still be refused when it is applied (a wall section the map
 ## does not have, say), and then the game says so and carries on.
 static func peek(path: String) -> Dictionary:
-	var out := {"ok": false, "exists": FileAccess.file_exists(path), "reason": "Empty", "modified": 0, "version": -1}
+	var out := {"ok": false, "exists": FileAccess.file_exists(path), "reason": "Empty", "modified": 0, "version": -1, "incompatible": false}
 	if not out.exists:
 		return out
 	out["modified"] = int(FileAccess.get_modified_time(path))
@@ -311,7 +339,16 @@ static func peek(path: String) -> Dictionary:
 	if typeof(version) == TYPE_INT or typeof(version) == TYPE_FLOAT:
 		out["version"] = int(version)
 		if float(version) != float(VERSION):
-			out["reason"] = "Saved by another version"
+			out["incompatible"] = true
+			out["newer"] = float(version) > float(VERSION)
+			out["reason"] = "Newer version" if out.newer else "Older version"
+			return out
+		# (SAVE4: the right format, but made in a town this build does not generate: the same seed would give other houses and other dead)
+		var town := town_compat(raw) if typeof(raw.get("modules")) == TYPE_DICTIONARY else ""
+		if town != "":
+			out["incompatible"] = true
+			out["newer"] = town == "newer"
+			out["reason"] = "Newer version" if out.newer else "Older version"
 			return out
 	if not _top_ok(raw):
 		return out
@@ -351,6 +388,8 @@ static func _top_ok(data: Dictionary) -> bool:
 	if typeof(v) != TYPE_INT and typeof(v) != TYPE_FLOAT:
 		return false
 	if float(v) != float(VERSION):
+		return false
+	if town_compat(data) != "":
 		return false
 	for key in ["people", "zombies", "segments"]:
 		if typeof(data.get(key)) != TYPE_ARRAY:
@@ -455,6 +494,9 @@ class Reader:
 ## Applies saved data to a freshly built `sim`. Returns false (and leaves the
 ## sim alone) if the data is missing, from another version or damaged.
 static func apply(sim, data: Dictionary) -> bool:
+	# (nothing of a save made in another town is put in place, not even the town's layout: the first thing is the check; any other refusal goes the old way below, which gives back what it took)
+	if town_compat(data) != "":
+		return false
 	# the town's own modules put what the save needs in place first (the base's layout, the fence sections: found by id below)
 	var town_before = sim.prepare_load(data) if sim.has_method("prepare_load") else null
 	# a small start's people are not the roster's: the saved ones are made first (and given back if the save is no good)

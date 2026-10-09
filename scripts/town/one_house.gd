@@ -36,6 +36,7 @@ const Demo := preload("res://scripts/demo.gd")
 const NightData := preload("res://scripts/sim/night_data.gd")
 const Arrival := preload("res://scripts/town/arrival.gd")
 const Opening := preload("res://scripts/town/opening.gd")
+const TownGen := preload("res://scripts/town/town_gen.gd")
 
 const KIND := "one_house"
 const DATA_PATH := "res://assets/data/one_house.json"
@@ -1871,8 +1872,9 @@ func _stage_join(n: int) -> void:
 
 ## What the run keeps: the stage and the counters, the lessons done, the town's seed and size (the town is made again from them), the clock's speed.
 func save() -> Dictionary:
+	# (SAVE4: "town_version" is the version of the town the save was made in, `TownGen.VERSION`; SaveGame refuses a save of another one, `SaveGame.town_compat`)
 	return {
-		"kind": KIND, "v": 1, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
+		"kind": KIND, "v": 1, "town_version": TownGen.VERSION, "stage": _stage, "joined": _module_joined, "staged": _staged_joins, "attacks": _attacks, "first_day": _first_day,
 		"cleared": _cleared.keys(), "done": _done.keys(), "walked": _walked, "held": _held_nights, "dawn_day": _dawn_day, "first_result": _first_result, "first_why": _first_why, "town_seed": _town_seed, "size": _size,
 		"min_per_sec": float(sim.min_per_sec), "focus": _focus, "last_cleared": _last_cleared, "intro": _intro_told,
 		"opening": opening.save(), "reloads": _reloads, "replay": _replay, "base": _base.duplicate(), "bonus": _bonus_given,

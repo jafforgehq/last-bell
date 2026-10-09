@@ -3766,6 +3766,8 @@ func last_save() -> String:
 	var best_time := -1
 	for path in save_paths:
 		if FileAccess.file_exists(path):
+			if bool(SaveGame.peek(path).get("incompatible", false)):
+				continue    # (SAVE4: a save of an older version is not offered as the last one)
 			var t := FileAccess.get_modified_time(path)
 			if t > best_time:
 				best_time = t
