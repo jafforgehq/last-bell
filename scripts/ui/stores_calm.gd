@@ -13,6 +13,7 @@ extends RefCounted
 
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
+const InvTotals := preload("res://scripts/ui/inv_totals.gd")
 
 const DAYS_SHOWN_BELOW := 5.0
 ## The stores that are always there; the others (scrap) are shown when they matter.
@@ -122,6 +123,7 @@ func update(sim) -> void:
 		if String(_tips.get(kind, "")) != tip:
 			_tips[kind] = tip
 			pair.tooltip_text = tip
+	InvTotals.apply(hud, sim)    # (INV-UI: with an inventory the numbers are what she carries before the claim and the stores after it)
 
 
 ## "Food: 12. About 12 days at the crew's use." for the tooltip of a pair.

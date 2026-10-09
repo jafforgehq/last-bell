@@ -48,6 +48,7 @@ const VIEW_PARTS := {
 	"wait_button": "res://scripts/ui/wait_button.gd",
 	"sprint_view": "res://scripts/ui/sprint_view.gd",
 	"tutor_cues": "res://scripts/ui/tutor_cues.gd",
+	"inv_ui": "res://scripts/ui/inv_ui.gd",
 	"rain_view": "res://scripts/render/rain_view.gd",
 	"town_life": "res://scripts/render/town_life.gd",
 	"roof_warm": "res://scripts/render/roof_warm.gd",
