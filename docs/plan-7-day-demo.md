@@ -7,20 +7,20 @@ Written 2026-10-09 for the owner. Nothing here is started. I read the request "n
 - The run ends in `scripts/town/one_house.gd` ("THE END"): from the dawn after the first attack night, as soon as the data's `held_rule` is true (a leader alive, no dead in the house, a section of the base still standing), `sim.over = "victory"`. The end card is `scripts/ui/town_end_card.gd`.
 - The dead attack every night once two survivors are home (`attack.from_rescue` 2). Later nights already come from the night machinery (`assets/data/one_house.json`: `night.first` 1.85, `night.growth` 0.15, `surges`, `big_night` only for the first night).
 - The lab (`tools/house_lab.gd`) already plays "up to day 7" headless, with a bot and an idle avatar, and reports the first attack night. It does not report nights 2 to 7.
-- Time: a game hour is half a real minute, so a day is about 12 real minutes at 1x (6 by day, 6 by night); sleeping skips quiet nights but is refused on an attack night. Seven days with attack nights from day 2 would be about 70 to 90 real minutes at 1x and about 45 to 60 with the speed keys and "wait for the bell".
+- Time: a game hour is half a real minute, so a day is about 12 real minutes at 1x (6 by day, 6 by night); sleeping skips quiet nights but is refused on an attack night. Seven attack nights (days 2 to 8) would be about 70 to 100 real minutes at 1x and about 55 to 80 with the speed keys and "wait for the bell".
 - Never tested beyond night 1: fence damage and repair over several nights, the food, water and ammo economy over days, injuries, deaths of survivors, more rescues, what the player does with a full day after the base is built.
 
 ## Target
 
-- Days 1 to 7. Day 1: arrive, claim, build, two rescues. Nights 2 to 7: six attack nights, rising. The demo is won at the dawn after night 7 (configurable: `end.nights_to_hold`).
-- 50 to 75 real minutes for a normal player (45 to 90 acceptable).
+- DECIDED by the owner (2026-10-09): SEVEN IN-GAME NIGHTS, meaning seven attack nights. Day 1: arrive, claim, build, two rescues. Attack night 1 is the night of day 2 (today's first night), attack night 7 is the night of day 8; the demo is won at the dawn of day 9 (configurable: `end.nights_to_hold`, 7 for the demo, 1 keeps today's game).
+- About 70 to 100 real minutes at 1x for seven attack nights and the days between them (a day is about 12 real minutes: 6 by day, 6 by night), about 55 to 80 with the speed keys and "wait for the bell". That is long for a demo: at the arc gate (step 2) the owner can choose a shorter curve (for example 5 nights) or a faster day.
 - A bot that plays well wins at least 80 percent of runs through night 7; an idle avatar fails by night 3 or 4 almost always (the player matters); no night is a coin flip between "trivial" and "impossible" across seeds.
 
 ## Steps (each ends in a gate; nothing starts without the owner's go)
 
 ### 1. Measure what exists (about half a day of work)
-- Make the lab report every night (held or not, wall damage, ammo, food, water, crew alive and hurt, dead counts) for nights 2 to 7 with the end rule switched to "hold N nights" (`end.nights_to_hold`, default 1 so today's game does not change).
-- Run seeds 1..64 with bot and idle to day 8. Output: a table per night (held percent, median ammo, food, water, scrap, crew alive).
+- Make the lab report every night (held or not, wall damage, ammo, food, water, crew alive and hurt, dead counts) for attack nights 1 to 7 with the end rule switched to "hold N nights" (`end.nights_to_hold`, default 1 so today's game does not change).
+- Run seeds 1..64 with bot and idle to the dawn of day 9. Output: a table per night (held percent, median ammo, food, water, scrap, crew alive).
 - Gate: we know where the current game breaks (ammo runs out? food? the fence? boredom?).
 
 ### 2. Design the arc (data and a short spec, about half a day)
