@@ -4,7 +4,9 @@
 ##
 ## Every key here was read off the town run's own handlers (2026-10-06): scripts/main.gd `_unhandled_input` (Space, 1 2 3 the speeds, Esc, R, Q, F, E, T, G, L, J, N, V, F5, F9),
 ## `_input` (F11), scripts/ui/town_hud.gd `on_key` (M, Shift+N, Shift+G), scripts/ui/wheel_ctl.gd `key_down` (C, Shift+C, Z, Esc), scripts/ui/rescue_card.gd (1 2 3, E, Esc) and
-## scripts/ui/dawn_tally.gd (Enter, Space), and PACE's two: X, held, polled by scripts/ui/pace_keys.gd (Shift is the aim's twin, so the run has a key of its own) and `.`, scripts/ui/wait_button.gd `on_key`. What is NOT here is not in the town: Tab and 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
+## scripts/ui/dawn_tally.gd (Enter, Space), and PACE's two: X, held, polled by scripts/ui/pace_keys.gd (Shift is the aim's twin, so the run has a key of its own) and `.`, scripts/ui/wait_button.gd `on_key`.
+## INV-UI (the backpack, scripts/ui/inv_ui.gd `on_key`): Tab and I (the pack; Tab did nothing in the town before), Esc, R while an item is dragged, Space and Enter while a container is open;
+## the rows that carry an `id` are the backpack's, and the windows' own tooltips read their keys from here (`key_text`). What is NOT here is not in the town: 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
 ## wheel, a right-click order, Y (the school's gate is off in the town) and B (the town has no Base page; its radio panel has Jobs, Build, Map and News).
 ##
 ## A row is {"keys": chips split at spaces ("|" between two chips reads "or"), "what": the words of the Controls page, "hud": [keys, words] for the narrow help panel, "aim": "" (always),
@@ -33,6 +35,16 @@ const GROUPS := [
 		],
 	},
 	{
+		"title": "The backpack",
+		"rows": [
+			{"id": "inv_drag", "keys": "Drag", "what": "Move an item: to another place, into the pack, or onto the stores", "hud": ["Drag", "Move an item"]},
+			{"id": "inv_rot", "keys": "R", "what": "While you drag an item: turn it. (Otherwise R reloads)", "hud": ["R", "Turn a dragged item"]},
+			{"id": "inv_quick", "keys": "Double-click", "what": "Move an item at once. A right-click: use, split, drop"},
+			{"id": "inv_take", "keys": "Space | Enter", "what": "Take all from the container that is open", "hud": ["Space", "Take all (loot)"]},
+			{"id": "inv_stash", "keys": "E", "what": "At the base stash: deposit and withdraw", "hud": ["E", "At the stash"]},
+		],
+	},
+	{
 		"title": "The crew: ask, do not order",
 		"rows": [
 			{"keys": "Click", "what": "A person or a card: the order wheel opens", "hud": ["Click", "A person, a card"], "aim": "right"},
@@ -46,6 +58,7 @@ const GROUPS := [
 	{
 		"title": "Panels and time",
 		"rows": [
+			{"id": "inv", "keys": "Tab | I", "what": "The backpack. A container you search opens beside it", "hud": ["Tab", "Backpack"]},
 			{"keys": "T", "what": "The radio panel: the news, and the calls that wait", "hud": ["T", "Radio"], "legend": ["b", "radio", "T", "radio"]},
 			{"keys": "J", "what": "Jobs: who works where, by day and at night", "hud": ["J", "Jobs"]},
 			{"keys": "N", "what": "Build: what to fortify next", "hud": ["N", "Build"], "legend": ["c", "build", "N", "build"]},
@@ -107,6 +120,15 @@ static func legend_line(line: String, always: bool = false) -> Array:
 			if l is Array and String(l[0]) == line:
 				out.append([String(l[1]), String(l[2]), String(l[3])])
 	return out
+
+
+## The keys of the row with this `id` (the backpack's rows have one) as words for a tooltip: "Tab or I" for "Tab | I", "Space or Enter". An id that is none gives "".
+static func key_text(id: String) -> String:
+	for g in GROUPS:
+		for r in g.rows:
+			if String(r.get("id", "")) == id:
+				return String(r.keys).replace(" | ", " or ")
+	return ""
 
 
 ## Every key the table names, as chips of one word each ("Shift C" gives Shift and C), for a check against the handlers.
