@@ -59,7 +59,7 @@ const TIPS_SIMPLE := {
 	"cover": "Cover me: %s stands behind you, watching your back",
 	"search": "Search a house: %s searches every container of the cleared house you click next",
 	"back": "Go back: %s goes back to what they were doing",
-	"post": "To the walls: %s goes to their post on the wall",
+	"post": "To the walls: %s goes to their post on the fence, or walks the fence line if they hold none",
 }
 ## (The One House's name for the Search slice: the crew search a house, not "that".)
 const SEARCH_HOUSE := "Search a house"

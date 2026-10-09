@@ -789,7 +789,7 @@ func _refresh_row(p) -> void:
 	post_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if open_to_change else Control.CURSOR_FORBIDDEN
 	post_button.tooltip_text = "Night post for %s: %s\nWhere they hold the wall from the bell until dawn. Click to change it." % [p.first, String(post.get("name", "none"))] if open_to_change else "%s cannot be given a post" % p.first
 	if open_to_change and jobs.on_patrol(p):
-		post_button.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to give them a post instead (a tower, a stretch of fence)." % p.first
+		post_button.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to give them a post instead (a watchtower, a stretch of fence)." % p.first
 	# the skills, the one their station asks for marked
 	var asked := "" if gone else String(st.get("skill", ""))
 	for skill in SKILLS:
@@ -937,9 +937,10 @@ func open_post_list(p) -> void:
 	if jobs.patrol_on():
 		# (One House, PATROL: no post to keep: they walk the fence line and go where the dead press; the posts below are the ones the player gives)
 		var patrolling: bool = have == jobs.PATROL
+		var on_it := _on_patrol_count()
 		entries.append({"header": "On the fence line"})
-		entries.append({"id": jobs.PATROL, "icon": "moon", "text": "Patrol", "note": "current" if patrolling else "automatic", "disabled": false, "current": patrolling,
-			"tip": "Patrol: walks the fence line by themselves and goes where the dead press, from the bell (or the call to arms) until dawn.\nNo post to keep. A tower or a stretch of fence below holds them there instead."})
+		entries.append({"id": jobs.PATROL, "icon": "moon", "text": "Patrol", "note": ("current · %d" % on_it) if patrolling else ("%d on it" % on_it), "disabled": false, "current": patrolling,
+			"tip": "Patrol: walks the fence line by themselves and goes where the dead press, from the bell (or the call to arms) until dawn.\nNo post to keep. A watchtower or a stretch of fence below holds them there instead."})
 	for po in jobs.posts():
 		var id := String(po.id)
 		var g := _post_group(po)
@@ -954,22 +955,36 @@ func open_post_list(p) -> void:
 	_open_list("post", p, rows[p.id].post, "Night post for %s" % p.first, entries)
 
 
+## How many people are on patrol: the living crew whose post is the patrol (the avatar walks by her own hands and is never counted).
+func _on_patrol_count() -> int:
+	var n := 0
+	for q in sim.people:
+		if not (q.dead or q.turned or q.player) and jobs.on_patrol(q):
+			n += 1
+	return n
+
+
 ## Which part of the wall a post is on, for the headings of the list. The posts of the lots that are claimed (round 9: the id of
 ## a mouth's post is "post_<mouth id>") are grouped under the name of their lot, whatever side of the compound they look at.
 func _post_group(po: Dictionary) -> String:
 	if String(po.id).begins_with("tower"):
 		return "Towers"
+	if String(po.get("slot", "")).begins_with("slot_tower_"):
+		return "Watchtowers"    # (One House: the base's towers, see `Jobs._post_label`)
 	if String(po.id).begins_with("post_") and sim.get("lots") != null:
 		var m: Dictionary = sim.lots.mouth(String(po.id).trim_prefix("post_"))
 		var lot: Dictionary = sim.lots.lot(String(m.get("lot", "")))
 		if not lot.is_empty():
 			return String(lot.name)
+	var word := "fence" if jobs.patrol_on() else "wall"
 	match String(po.get("face", "N")):
 		"W":
-			return "West wall"
+			return "West " + word
 		"E":
-			return "East wall"
-	return "North wall"
+			return "East " + word
+		"S":
+			return "South " + word
+	return "North " + word
 
 
 ## post id -> the living person who holds it.

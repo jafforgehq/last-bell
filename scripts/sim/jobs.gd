@@ -166,6 +166,7 @@ func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
 		var po: Dictionary = r.duplicate(true)
 		po["pos"] = _vec(r.pos)
 		po["face"] = String(r.get("face", _face_of(po.pos)))
+		po["name"] = _post_label(po)
 		_posts.append(po)
 	_base_posts = _posts
 	_post_by_id.clear()
@@ -222,6 +223,17 @@ func _add_scavenger(rest: Dictionary) -> void:
 		st["seat_offsets"] = [Vector2.ZERO, Vector2.ZERO]
 	_stations.append(st)
 	_station_by_id["scavenger"] = st
+
+
+## The words for a post of a generated base (the roster, the lists, the marks in the world): the towers' are "Watchtower 1" and "Watchtower 2" (the layout's own "Post N" says nothing of
+## what and where a post is), the gate's "Gate"; a stretch of fence keeps the layout's name. Made when the layout is installed, so that an old save's posts read the same.
+func _post_label(po: Dictionary) -> String:
+	var slot := String(po.get("slot", ""))
+	if slot.begins_with("slot_tower_"):
+		return "Watchtower %s" % slot.trim_prefix("slot_tower_")
+	if slot == "slot_gate":
+		return "Gate"
+	return String(po.get("name", ""))
 
 
 ## The file's stations, posts and resting spots again (a new run, or a base is let go).

@@ -557,7 +557,7 @@ func _refresh_row(s, p, r: Dictionary) -> void:
 		r.job.tooltip_text = ("Day job for %s: %s (%s)\nClick to ask for another." % [p.first, String(st.name), String(st.get("where", ""))] if not st.is_empty() else "Day job for %s: none. They %s by day.\nClick to ask for one." % [p.first, no_job]) + soft
 		r.post.tooltip_text = "Night post for %s: %s\nWhere they hold the wall from the bell until dawn. Click to ask for another." % [p.first, String(post.get("name", "none"))] + soft
 		if jobs.on_patrol(p):
-			r.post.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to ask for a post instead (a tower, a stretch of fence)." % p.first + soft
+			r.post.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to ask for a post instead (a watchtower, a stretch of fence)." % p.first + soft
 	# the last answer
 	var answer: Dictionary = _answers.get(String(p.id), {})
 	r.answer_row.visible = not answer.is_empty()
@@ -732,8 +732,12 @@ func _post_entries(p) -> Array:
 		var pok := bool(pw.get("ok", false))
 		var phard := bool(pw.get("hard", true))
 		var pwhy := "" if patrolling or pok else String(pw.get("why", ""))
+		var on_it := 0
+		for q in s.people:
+			if not (q.dead or q.turned or q.player) and s.jobs.on_patrol(q):
+				on_it += 1
 		out.append({"header": "On the fence line"})
-		out.append({"id": s.jobs.PATROL, "text": "Patrol", "note": "current" if patrolling else "automatic", "why": pwhy, "off": patrolling or (not pok and phard), "current": patrolling,
+		out.append({"id": s.jobs.PATROL, "text": "Patrol", "note": ("current · %d" % on_it) if patrolling else ("%d on it" % on_it), "why": pwhy, "off": patrolling or (not pok and phard), "current": patrolling,
 			"tip": "%s already walks the fence" % p.first if patrolling else "Patrol: walks the fence line by themselves and goes where the dead press, from the bell (or the call to arms) until dawn. No post to keep."})
 	for po in s.jobs.posts():
 		var id := String(po.id)
@@ -763,17 +767,22 @@ func _post_group(s, po: Dictionary) -> String:
 	var id := String(po.id)
 	if id.begins_with("tower"):
 		return "Towers"
+	if String(po.get("slot", "")).begins_with("slot_tower_"):
+		return "Watchtowers"    # (One House: the base's towers, see `Jobs._post_label`)
 	if id.begins_with("post_") and s.get("lots") != null:
 		var m: Dictionary = s.lots.mouth(id.trim_prefix("post_"))
 		var lot: Dictionary = s.lots.lot(String(m.get("lot", "")))
 		if not lot.is_empty():
 			return String(lot.name)
+	var word := "fence" if s.jobs.patrol_on() else "wall"
 	match String(po.get("face", "N")):
 		"W":
-			return "West wall"
+			return "West " + word
 		"E":
-			return "East wall"
-	return "North wall"
+			return "East " + word
+		"S":
+			return "South " + word
+	return "North " + word
 
 
 func _list_style() -> StyleBoxFlat:
