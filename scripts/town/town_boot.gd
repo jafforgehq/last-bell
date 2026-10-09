@@ -23,7 +23,7 @@ const SaveGame := preload("res://scripts/sim/save_game.gd")
 static func wants(args: Array, meta: Dictionary = {}) -> bool:
 	if String(meta.get("load", "")) != "":
 		return not _saved_town(String(meta.load)).is_empty()
-	if meta.has("town") and meta.town:
+	if meta.has("town") and (meta.town or typeof(meta.town) == TYPE_INT or typeof(meta.town) == TYPE_FLOAT):    # (a town seed of 0 is a town)
 		return true
 	var town := false
 	var crew := false
@@ -69,7 +69,9 @@ static func wants_spike(args: Array) -> bool:
 	return false
 
 
-## The seed of the town: `--town=<n>`, the run's meta `town` when it is a number, else 1.
+## The seed of the town (CLEAR3: every seed is its own town; a new game's seed is the town's), in this order: a save's own town; the run's meta `town` when it is a number (the title's backdrop,
+## the end card's Play again); `--town=<n>` (an override of everything below); the run's meta `seed` (the New game screen's seed box: `hud.start_run({"seed": n, "town": true})`, and `--seed=<n>` of
+## a first run, which `Scenario.run_from_args` puts there); `--seed=<n>` itself (a run whose meta was not made from the arguments); else 1 (`--town` alone: the demo's town).
 static func seed_of(args: Array, meta: Dictionary = {}) -> int:
 	if String(meta.get("load", "")) != "":
 		var t := _saved_town(String(meta.load))
@@ -81,6 +83,12 @@ static func seed_of(args: Array, meta: Dictionary = {}) -> int:
 		var s := String(a)
 		if s.begins_with("--town=") and s.trim_prefix("--town=").is_valid_int():
 			return int(s.trim_prefix("--town="))
+	if meta.has("seed") and (typeof(meta.seed) == TYPE_INT or typeof(meta.seed) == TYPE_FLOAT):
+		return int(meta.seed)
+	for a in args:
+		var s := String(a)
+		if s.begins_with("--seed=") and s.trim_prefix("--seed=").is_valid_int():
+			return int(s.trim_prefix("--seed="))
 	return 1
 
 

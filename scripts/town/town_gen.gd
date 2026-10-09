@@ -44,6 +44,9 @@
 ##                 lot: 8 rooms, 28 x 22 or more of lot, a clear ring), a house of the middle sort (4 to 6 rooms, 22 x 15 to 17) and a cottage (3 rooms, 14 x 13: no yard), 29 to 54 tiles from the
 ##                 entry; the title's small town has the start house alone. Each has 3 to 5 dead standing in rooms of their own (2 or 3 in the cottage), its containers with loot, a lot ring free of
 ##                 trees, props, parked cars and marks; no dead in the streets or yards within 20 tiles of the entry or of any candidate
+##   "fields"      CLEAR3: [Rect2i], the field of fire of each candidate: its lot grown by 10 tiles (the fence ring is the lot's border). No other building stands in one (a lot whose building would is built as
+##                 a meadow or a pocket of grass: `lots[].vacated`) and nothing tall (a tree, a bush, a parked car, a wreck, a stall, a fence...: scripts/town/town_fields.gd takes it out) is on its ground outside
+##                 the candidate's own lot; a few low props stand in the vacant lots. `stats.fields` = {"count", "scrubbed": {"trees", "objects", "tiles", "dressed"}, "vacated"}. A town with no arrival has none.
 ##   "rescue"      [{"house", "pos": Vector2 (where the survivor waits), "room", "ring": 1..3, "dist": from the start house}] 12 candidates, near to far: the list of the start house
 ##   "rescue_for"  ARRIVAL: {String(house id of a candidate): the rescue list of that house (the shape of `rescue`, 12 near to far from it; none of the candidates is in any list)}; `rescue` is
 ##                 `rescue_for` of the start house. A house in two lists keeps its survivor's room and spot; its 2 to 5 dead (one in that room) are in `dead` once
@@ -86,6 +89,7 @@ const Streetscape := preload("res://scripts/town/town_streetscape.gd")
 const Plans := preload("res://scripts/town/building_plans.gd")
 const PropHeights := preload("res://scripts/town/prop_heights.gd")
 const BaseLayout := preload("res://scripts/town/base_layout.gd")
+const Fields := preload("res://scripts/town/town_fields.gd")
 
 ## The size of the full town (6 blocks a side); `make(seed, {"blocks": n})` makes a smaller one (2: 64 x 64, for tests).
 const DEFAULT_SIZE := 192
@@ -118,6 +122,9 @@ var _start_house := -1
 var _clear_rect := Rect2i()
 ## ARRIVAL: the lots of the candidates (and the start lot) that are kept clear, and the houses built on the lots that have a `tier`: [{"house", "tier", "lot"}].
 var _clear_rects: Array = []
+## CLEAR3: the fields of fire of the candidates (the layout's `fields`: scripts/town/town_fields.gd takes the tall things out of them), and what was taken out.
+var _fields: Array = []
+var _scrubbed: Dictionary = {}
 var _tiers: Array = []
 ## The room the survivor of a house is given (the first time it is asked): house id -> room index. The road sign of the entry: its middle (tiles), (-1, -1) for none.
 var _rescue_rooms := {}
@@ -196,6 +203,8 @@ func begin(seed_in: int, opts_in: Dictionary = {}) -> void:
 	_start_house = -1
 	_clear_rect = Rect2i()
 	_clear_rects = []
+	_fields = []
+	_scrubbed = {}
 	_tiers = []
 	_rescue_rooms = {}
 	_entry_sign = Vector2(-1.0, -1.0)
@@ -293,6 +302,7 @@ func _streets() -> void:
 	_layout = lg.make(seed_value, _size, _tids, opts)
 	_terrain = _layout.terrain
 	_marks = _layout.marks
+	_fields = _layout.get("fields", [])
 	_street_cv = Canvas.new()
 	_street_cv.setup(_size, _size, seed_value + 5, _lay.props, _tids, {})
 	_street_cv.size_by_table = true
@@ -356,8 +366,19 @@ func _one_lot(i: int) -> void:
 			spec["shed"] = true
 		elif district == Districts.EDGE and (kind == "farmhouse" or kind == "small" or kind == "medium") and rng.randf() < 0.6:
 			spec["shed"] = true
+	if bool(lot.get("in_field", false)):
+		spec.fenced = false    # (CLEAR3: no fence line in a field of fire)
 	_prev_fenced = bool(spec.fenced)
 	var built: Dictionary = _builder.build(spec)
+	if bool(lot.get("in_field", false)) and not clear and not (lot.plan as Dictionary).is_empty() and Fields.touches(built.buildings, _fields):
+		# (CLEAR3: a building of this lot stands in a field of fire: the lot is built again as a vacant one, a meadow or a pocket of grass)
+		lot.kind = "meadow" if rect.size.x >= 10 and rect.size.y >= 8 else "pocket"
+		lot.plan = {}
+		lot["vacated"] = true
+		spec = {"kind": lot.kind, "district": district, "rect": rect, "front": String(lot.front), "plan": {}, "seed": seed_value * 100003 + i, "start": false, "clear": false,
+			"mat": spec.mat, "fenced": false, "yard": "lawn", "ruin": false, "barricade": false, "boarded": false}
+		_prev_fenced = false
+		built = _builder.build(spec)
 	if start:
 		_clear_rect = rect
 	if clear:
@@ -498,6 +519,14 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 			"at": Vector2(float(c.obj.cx), float(c.obj.cy)),
 			"kind": String(c.kind), "loot": loot, "search_s": 4.0,
 		})
+	# (CLEAR3: a candidate is never a house with nothing to search: the cottage's three small rooms drew no container, or no loot for it, in about one town of thirty; a box of food stands in the corner
+	# of its roomiest room then)
+	if bool(spec.get("clear", false)) and not bool(spec.get("start", false)) and not buildings.is_empty():
+		var made := 0
+		for lst in cont_ids:
+			made += (lst as Array).size()
+		if made == 0:
+			_corner_box(first_id, room_ids[0], cont_ids[0], rng)
 	var roof := Districts.roof_for(String(lot.district), rng)
 	for bi in buildings.size():
 		var bd: Dictionary = buildings[bi]
@@ -529,6 +558,67 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 		elif bi == 0 and kind in ["supermarket", "school", "fire_station", "police", "clinic"]:
 			_landmarks.append({"kind": kind, "house": first_id + bi, "pos": Vector2(box.get_center())})
 		_houses.append(house)
+
+
+## CLEAR3: a box of food in a corner of the roomiest room of house `house_id` (`rooms`: its room indexes; `ids`: its container ids, which this adds to): a container with a place to stand, for a candidate
+## home whose furniture made none. The corner is a free tile with a wall (or another prop) on two sides and a free tile of the room beside it; nothing happens when the room has none.
+func _corner_box(house_id: int, rooms: Array, ids: Array, rng: RandomNumberGenerator) -> void:
+	var props: Dictionary = _street_cv.props
+	if rooms.is_empty() or not props.has("box") or not (props.box as Dictionary).has("kit"):
+		return
+	var room := -1
+	var area := -1
+	for ri in rooms:
+		var rect: Rect2i = _rooms[int(ri)].rect
+		if rect.get_area() > area:
+			area = rect.get_area()
+			room = int(ri)
+	var rr: Rect2i = _rooms[room].rect
+	var fp: Vector2i = _street_cv.tiles_of("box")
+	var best := Vector2i(-1, -1)
+	var stand := Vector2i(-1, -1)
+	var best_score := -1.0
+	for y in range(rr.position.y, rr.end.y - fp.y + 1):
+		for x in range(rr.position.x, rr.end.x - fp.x + 1):
+			var free := true
+			for yy in fp.y:
+				for xx in fp.x:
+					if _solid[(y + yy) * _size + x + xx] != 0:
+						free = false
+			if not free:
+				continue
+			var shut := 0
+			var spot := Vector2i(-1, -1)
+			for d in [Vector2i(-1, 0), Vector2i(fp.x, 0), Vector2i(0, -1), Vector2i(0, fp.y)]:
+				var p: Vector2i = Vector2i(x, y) + d
+				if not rr.has_point(p) or _solid[p.y * _size + p.x] != 0:
+					shut += 1
+				elif spot.x < 0:
+					spot = p
+			if spot.x < 0 or shut < 2:
+				continue
+			var score := float(shut) + rng.randf() * 0.5
+			if score > best_score:
+				best_score = score
+				best = Vector2i(x, y)
+				stand = spot
+	if best.x < 0:
+		return
+	var obj = _street_cv._decor("box", best.x, best.y, 0.0, 0.0)
+	if obj == null:
+		return
+	_kit.kit_set(obj, props.box, rng)
+	obj["solid"] = true
+	obj["facing"] = "s"
+	obj["in"] = house_id
+	_objects.append(obj)
+	for yy in fp.y:
+		for xx in fp.x:
+			_solid[(best.y + yy) * _size + best.x + xx] = 1
+	var cid := "h%dc%d" % [house_id, ids.size()]
+	ids.append(cid)
+	_containers.append({"id": cid, "house": house_id, "room": room, "pos": Vector2(float(stand.x) + 0.5, float(stand.y) + 0.5), "at": Vector2(float(best.x) + float(fp.x) * 0.5, float(best.y) + float(fp.y) * 0.5),
+		"kind": "box", "loot": {"food": rng.randi_range(1, 3)}, "search_s": 4.0})
 
 
 ## The line of a fenced lot (a code of TownArt.LINES): picket (white or brown), chain link or a low brick wall; chain link at the works.
@@ -767,6 +857,8 @@ func _finish_map(piece: int) -> void:
 	var t0 := Time.get_ticks_usec()
 	match piece:
 		0:
+			_scrubbed = Fields.scrub(self)
+			_scrubbed["dressed"] = Fields.dress(self)
 			_finish_objects()
 		1:
 			_finish_data()
@@ -1058,6 +1150,10 @@ func _rescue_set(start_house: int, exclude: Dictionary) -> Array:
 	# (WP8: the first ring is 14 to 28 tiles out, not 22 to 48: the first rescue is the demo's first goal, to be reached with a pump shotgun and 40 rounds)
 	# (BIGGER HOUSES: the first ring is 14 to 34 tiles out, not 14 to 28: there are fewer houses to find a survivor in)
 	var rings := [[14.0 * scale, 34.0 * scale], [34.0 * scale, 62.0 * scale], [62.0 * scale, 400.0]]
+	if not _fields.is_empty():
+		# (CLEAR3: a candidate has open ground 10 tiles wide round its fence, and every lot that touched it is vacant: the first house is 30 or more tiles from its middle, and 4 or 5 of them
+		# stand within 56; the rings begin where the houses do, 16 tiles later than they did)
+		rings = [[30.0 * scale, 56.0 * scale], [56.0 * scale, 84.0 * scale], [84.0 * scale, 400.0]]
 	var per_ring := int(ceil(float(want) / 3.0))
 	for ri in rings.size():
 		# (BIGGER HOUSES: the survivors are found in family homes and the bigger detached ones, `_rescue_rank` 0; the next best where a ring has not enough of them, so that every ring still
@@ -1129,6 +1225,8 @@ func _people_result() -> void:
 	_result["rescue"] = _pp.rescue_for[str(int(_pp.start_house))]
 	_result["tile_house"] = _tile_house
 	_result["tile_room"] = _tile_room
+	# (CLEAR3: the fields of fire of the candidates, each the candidate's lot grown by 10 tiles: no other building and nothing tall stands in them)
+	_result["fields"] = _fields
 	var names_x: Array = []
 	var names_y: Array = []
 	var roads_sorted: Array = _layout.roads.duplicate()
@@ -1272,7 +1370,8 @@ func _people_lists() -> void:
 	var lots_out: Array = []
 	for lot in _layout.lots:
 		lots_out.append({"id": int(lot.id), "rect": lot.rect, "front": String(lot.front), "district": String(lot.district), "kind": String(lot.kind), "block": int(lot.block),
-			"street": String(lot.street), "house": int(_lot_house[int(lot.id)]) if int(lot.id) < _lot_house.size() else -1, "start": bool(lot.start), "tier": String(lot.get("tier", ""))})
+			"street": String(lot.street), "house": int(_lot_house[int(lot.id)]) if int(lot.id) < _lot_house.size() else -1, "start": bool(lot.start), "tier": String(lot.get("tier", "")),
+			"vacated": bool(lot.get("vacated", false))})
 	_result["lots"] = lots_out
 	_result["landmarks"] = _landmarks + _layout.landmarks
 	var by_district := {}
@@ -1288,7 +1387,17 @@ func _people_lists() -> void:
 		room_max = maxi(room_max, h.rooms.size())
 	_result["stats"] = {"houses": _houses.size(), "by_kind": by_kind, "by_district": by_district, "by_type": by_type, "parts": part_count, "rooms_per_house": [room_min, room_max],
 		"rooms": _rooms.size(), "containers": _containers.size(), "dead": dead.size(), "objects": _objects.size(), "trees": _trees.size(), "street_objects": _street_objs, "ms": _ms,
-		"arrival": {"on": not bool(_pp.legacy), "dropped": dropped, "best_side": String(_layout.arrival.get("best", ""))}}
+		"arrival": {"on": not bool(_pp.legacy), "dropped": dropped, "best_side": String(_layout.arrival.get("best", ""))},
+		"fields": {"count": _fields.size(), "scrubbed": _scrubbed, "vacated": _vacated_count()}}
+
+
+## How many lots the fields of fire made vacant (CLEAR3).
+func _vacated_count() -> int:
+	var n := 0
+	for lot in _layout.lots:
+		if bool(lot.get("vacated", false)):
+			n += 1
+	return n
 
 
 ## The clear ring of the start lot, for the tests and the layout: the lot's rectangle, and how many tiles of its border and the row inside it are free (open ground,

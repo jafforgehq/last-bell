@@ -150,8 +150,8 @@ func _build_seed() -> void:
 	seed_error = note("", hud.DANGER_TEXT, 13)
 	seed_error.visible = false
 	body.add_child(seed_error)
-	# (the town is always the same one: the seed is the dice)
-	var seed_words := "The town is always the same. The seed is the dice: the same seed and the same orders play the same game." if town_mode else "Any whole number. The same seed and the same orders play the same game."
+	# (CLEAR3: the seed makes the town: the same number is the same streets, houses and dead, and Random is a new place; `TownBoot.seed_of`)
+	var seed_words := "The seed makes the town: the same number is the same streets, houses and dead, and Random is a new place." if town_mode else "Any whole number. The same seed and the same orders play the same game."
 	body.add_child(note(seed_words, ink3(), 13))
 
 
@@ -326,7 +326,7 @@ func _start() -> void:
 		return
 	Prefs.set_value("ui", "difficulty", difficulty)
 	if town_mode:
-		# (One House: the town is the demo's own, the same every time; the seed is the run's dice)
+		# (One House, CLEAR3: the seed is the town's and the run's dice: `TownBoot.seed_of` takes the town from the meta's seed)
 		close_sound = ""
 		shell.play("ui_confirm")
 		hud.start_run({"difficulty": difficulty, "seed": int(parsed.value), "town": true})

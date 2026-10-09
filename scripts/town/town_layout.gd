@@ -49,7 +49,9 @@ const START_DEPTH := Plans.START_MIN_DEPTH
 ## The arrival's blocks (see the header): a town of this size or more has them; the width of the block along the avenue (its sidewalk ring included), the ordinary lots before the
 ## candidates on the best side and on the other, and the width of the lot of each tier (the house stands in the middle of it).
 const ARRIVAL_MIN_SIZE := 160
-const ARR_BLOCK_W := 52
+## (CLEAR3: the block is 60 wide, not 52: the middle sort of house and the cottage of the other side stand ARR_POOR_GAP tiles of open ground apart, so that neither is a neighbour of the other's fence: see FIELD)
+const ARR_BLOCK_W := 60
+const ARR_POOR_GAP := 8
 const ARR_GATE_BEST := 14
 ## (ROOMY HOUSES: the house of the middle sort is 14 to 16 wide, so its lot is 22 wide: three tiles of ground to each side for the base's fence and the people who work at it; the gate before
 ## it is two tiles shorter, so that the three lots still fill the block's 50)
@@ -64,6 +66,12 @@ const ARR_COTTAGE_GROUND := 5
 ## ARR_WOODS tiles along it, so that she comes out of the trees. The spawns of a base are still the avenue's asphalt at the edge (35 tiles from a candidate's middle: the candidates have not moved), the lane is that road.
 const ARR_ENTRY_IN := 14
 const ARR_WOODS := 26
+## CLEAR3, THE FIELD OF FIRE. A base's fence ring is the border of its lot (scripts/town/base_layout.gd; the house stands 2 to 4 tiles inside it). Round every candidate's lot there is open ground FIELD tiles
+## wide on all sides (`fields`: the lot grown by FIELD, one Rect2i for each candidate): no other building, so that the dead come at the fence across roads, lawns and yards, where they can be seen and shot,
+## not through a neighbour's rooms. `_clear_fields` marks every other lot that touches a field (`in_field`); TownGen builds such a lot and, when a building of it would stand in a field, builds it again as a
+## vacant one (a meadow or a pocket of grass: no house, a lot of the same size with the same street and number), and then takes the trees, bushes, parked cars and every other tall thing out of the
+## fields (scripts/town/town_fields.gd).
+const FIELD := 10
 const TREES := ["Elm", "Oak", "Birch", "Cedar", "Maple", "Pine", "Ash", "Willow", "Alder", "Hazel", "Linden", "Rowan", "Poplar", "Holly"]
 const ROADS_NS := ["Mill Road", "Station Road", "Chapel Lane", "Orchard Road", "School Lane", "Park Road", "Bridge Street", "Garden Way", "Quarry Road", "Field Lane", "Kiln Road", "Hill Road", "Market Lane", "Ferry Road", "Bell Lane", "Tannery Road", "Church Street"]
 
@@ -79,6 +87,8 @@ var marks: Array = []
 var start_lot := -1
 var avenue := -1
 var landmarks: Array = []
+## CLEAR3: the fields of fire (see FIELD): the lot of every candidate grown by FIELD tiles; [] in a town with no arrival.
+var fields: Array = []
 ## The arrival (see the header): {} when the town has none.
 var arrival: Dictionary = {}
 var _tid := {}
@@ -102,11 +112,12 @@ func make(seed_in: int, size_in: int, tids: Dictionary, _opts: Dictionary = {}) 
 	_paint()
 	_ring_lots()
 	_block_lots()
+	_clear_fields()
 	_top_up()
 	_names()
 	_marks()
 	return {"size": size, "ring": ring, "roads": roads, "blocks": blocks, "lots": lots, "start_lot": start_lot, "terrain": terrain, "district_map": district_map,
-		"marks": marks, "avenue": avenue, "landmarks": landmarks, "arrival": arrival}
+		"marks": marks, "avenue": avenue, "landmarks": landmarks, "arrival": arrival, "fields": fields}
 
 
 # ----------------------------------------------------------------- streets, blocks --
@@ -139,7 +150,9 @@ func _arrival_blocks(ay: int) -> void:
 	var east := rng.randf() < 0.5
 	var best_north := rng.randf() < 0.5
 	var d_best := rng.randi_range(24, 26)
-	var d_other := rng.randi_range(17, 19)
+	# (CLEAR3: 19 to 21, not 17 to 19: a medium house is 11 deep with three tiles of ground in front, and the back fence's work spot wants two behind it; at a lot 15 deep the ring row was the
+	# house's back wall and the middle sort of house failed the base's check in one town of twelve)
+	var d_other := rng.randi_range(19, 21)
 	# (EARLY: she begins at the end of the forest lane, ARR_ENTRY_IN tiles in from the edge: the lane is the avenue's end between the border and her)
 	arrival = {"east": east, "ay": ay, "best": "N" if best_north else "S",
 		"road": Rect2i(size - ARR_ENTRY_IN if east else EDGE, ay, ARR_ENTRY_IN - EDGE, AVENUE_W),
@@ -739,13 +752,17 @@ func _arrival_lots(b: Dictionary, inner: Rect2i) -> void:
 	var east := bool(arrival.east)
 	var front := "S" if String(b.arrival) == "N" else "N"
 	var depth := inner.size.y
-	var list: Array = [["", ARR_GATE_BEST, ""], ["start", ARR_BEST_W, "best"]] if bool(b.get("has_best", false)) else [["", ARR_GATE_OTHER, ""], ["ok", ARR_OK_W, "ok"], ["cottage", ARR_POOR_W, "poor"]]
+	var list: Array = [["", ARR_GATE_BEST, ""], ["start", ARR_BEST_W, "best"]] if bool(b.get("has_best", false)) else [["", ARR_GATE_OTHER, ""], ["ok", ARR_OK_W, "ok"], ["gap", ARR_POOR_GAP, ""], ["cottage", ARR_POOR_W, "poor"]]
 	var t := 0
 	for e in list:
 		var w: int = e[1]
 		var rect := _arrival_span(inner, east, t, w)
 		t += w
 		var kind := String(e[0])
+		if kind == "gap":
+			# (CLEAR3: open ground between the two candidates of this side)
+			_add_lot(rect, front, b.district, "pocket", int(b.id), depth)
+			continue
 		if kind == "ok":
 			kind = "medium" if rng.randf() < 0.7 else "small"
 		# (the cottage's lot is no deeper than its house and a tile of ground in front and behind: no yard to speak of; the rest of the row's depth behind it is a pocket)
@@ -914,8 +931,35 @@ func _fill_row(b: Dictionary, row: Dictionary, required: Array, as_start: bool, 
 	return start_placed
 
 
+## CLEAR3: the fields of fire (see FIELD). Every lot with a tier (a candidate) has a field, its lot grown by FIELD tiles; every OTHER lot that touches one is marked `in_field` (it has no fence, and no
+## house is added to it by `_top_up`). What is built on it is TownGen's business: a lot whose buildings (the house, a shed, a garage: whatever stands on it) touch a field is built again as a vacant one
+## (`TownGen._one_lot`: a meadow, or a pocket in a lot narrower than 10 tiles: grass, a bench or two; `vacated`), and the trees, bushes, parked cars and every other tall thing of the fields are taken out
+## after the lots are built (scripts/town/town_fields.gd). A lot that merely touches a field with its yard keeps its house, which stands outside it. Candidates stay as they are, and none of them
+## is in another's field (ARR_POOR_GAP, and the avenue between the two sides).
+func _clear_fields() -> void:
+	fields = []
+	for lot in lots:
+		if String(lot.get("tier", "")) != "":
+			fields.append(Rect2i(lot.rect).grow(FIELD))
+	if fields.is_empty():
+		return
+	for lot in lots:
+		if String(lot.get("tier", "")) != "" or bool(lot.start):
+			continue
+		if in_field(lot.rect):
+			lot["in_field"] = true
+
+
+## Whether a rectangle touches a field of fire (see FIELD).
+func in_field(r: Rect2i) -> bool:
+	for f in fields:
+		if (f as Rect2i).intersects(r):
+			return true
+	return false
+
+
 ## A town is meant to have about 115 buildings (BIGGER HOUSES: it had 150 of half the size; a share of that in a smaller town): when the dice gave fewer, gaps of the suburbs, the old town and the edge (a pocket, a field, a
-## meadow) are filled in with small houses until it has.
+## meadow) are filled in with small houses until it has. (CLEAR3: not in a field of fire.)
 func _top_up() -> void:
 	var target := roundi(float(WANT_BUILDINGS) * float(size * size) / float(192 * 192))
 	var have := 0
@@ -926,7 +970,7 @@ func _top_up() -> void:
 			have += 1
 			if String(lot.kind) == "cottage":
 				cottages += 1
-		elif String(lot.kind) in ["pocket", "meadow", "field"] and not bool(lot.start):
+		elif String(lot.kind) in ["pocket", "meadow", "field"] and not bool(lot.start) and not bool(lot.get("in_field", false)):
 			gaps.append(int(lot.id))
 	for i in range(gaps.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)

@@ -31,7 +31,7 @@
     {"id": "clear", "verb": "Empty every room of the dead", "line": "Not clear yet", "text": "Every room has to be empty of the dead. They do not always stay where they were."},
     {"id": "search", "verb": "Search a shelf", "line": "Search it (E)", "text": "Stand at a shelf or a cabinet and press E. Hold still while you look."}
   ]},
-  "night": {"first": 0.9, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
+  "night": {"first": 1.1, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
   "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and a runner or two from two streets.", "factor": 1.0, "runners": 0.15, "brutes": 0.0, "min_brutes": 0, "brute_at": [0.4, 0.95], "headings": 2, "main_share": 0.85, "cap": 40, "plated": false},
   "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true, "base_whole": true},
   "guide": [
