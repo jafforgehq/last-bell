@@ -131,6 +131,18 @@ func posts_manned() -> bool:
 	return super()
 
 
+## While the posts are manned (the call to arms, an attack night, a day under attack) the crew who hold no fixed post patrol the fence line (scripts/town/patrol.gd, PH3); a person
+## assigned to a post (a tower, the gate, a stretch of fence) holds it as the colony's rules say. With no patrol module or no base to walk, the colony's answer.
+func _post_duty_goal(p: Person) -> Dictionary:
+	if jobs.on_patrol(p):
+		var pat = get("patrol")
+		if pat != null:
+			var g: Dictionary = pat.goal_for(p)
+			if not g.is_empty():
+				return g
+	return super(p)
+
+
 ## The bell turns the wanderers into attackers only once the attacks are on (the streets are dangerous, but the dead do not come for the base).
 func _wanderers_rally() -> bool:
 	return _attacks_on()

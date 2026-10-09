@@ -556,6 +556,8 @@ func _refresh_row(s, p, r: Dictionary) -> void:
 		var no_job := String(jobs.no_job_text())
 		r.job.tooltip_text = ("Day job for %s: %s (%s)\nClick to ask for another." % [p.first, String(st.name), String(st.get("where", ""))] if not st.is_empty() else "Day job for %s: none. They %s by day.\nClick to ask for one." % [p.first, no_job]) + soft
 		r.post.tooltip_text = "Night post for %s: %s\nWhere they hold the wall from the bell until dawn. Click to ask for another." % [p.first, String(post.get("name", "none"))] + soft
+		if jobs.on_patrol(p):
+			r.post.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to ask for a post instead (a tower, a stretch of fence)." % p.first + soft
 	# the last answer
 	var answer: Dictionary = _answers.get(String(p.id), {})
 	r.answer_row.visible = not answer.is_empty()
@@ -723,6 +725,16 @@ func _post_entries(p) -> Array:
 	var have := String(s.jobs.post_of(p).get("id", ""))
 	var out: Array = []
 	var group := ""
+	if s.jobs.patrol_on():
+		# (One House, PATROL: no post to keep: they walk the fence line and go where the dead press; the posts below are the ones the player gives)
+		var patrolling: bool = have == s.jobs.PATROL
+		var pw := _post_w(p, s.jobs.PATROL)
+		var pok := bool(pw.get("ok", false))
+		var phard := bool(pw.get("hard", true))
+		var pwhy := "" if patrolling or pok else String(pw.get("why", ""))
+		out.append({"header": "On the fence line"})
+		out.append({"id": s.jobs.PATROL, "text": "Patrol", "note": "current" if patrolling else "automatic", "why": pwhy, "off": patrolling or (not pok and phard), "current": patrolling,
+			"tip": "%s already walks the fence" % p.first if patrolling else "Patrol: walks the fence line by themselves and goes where the dead press, from the bell (or the call to arms) until dawn. No post to keep."})
 	for po in s.jobs.posts():
 		var id := String(po.id)
 		var g := _post_group(s, po)
