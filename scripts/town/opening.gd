@@ -5,7 +5,8 @@
 ##   at the start   the magazine holds `mag` (3) rounds of the six (the spare stock is untouched: the first stores line reads 3 / 40), so that a reload is natural after a shot or two. (With two the
 ##                  second shot empties it and the gun reloads itself, so the key would never be taught; with three one round or two are left when the walker is down.)
 ##   `trigger`      about `trigger_tiles` (12: the walk in is short, EARLY) tiles along the way (less when the first house is near: the walker is never put within `margin` tiles of its door) she passes the point
-##                  `walker_ahead` (10) tiles short of a parked car (the car nearest that place that stands near the way; none: a point of the road): ONE walker steps out from behind it
+##                  `walker_ahead` (10) tiles short of a parked car (the car nearest that place that stands near the way; none: another solid thing of the street, and since EARLY4 that is the length of SANDBAGS the generator puts along each kerb of the entry avenue,
+##                  `town_streetscape.gd` `_entry_cover`, which the fields of fire leave standing because they are low; none of those either: a point of the road): ONE walker steps out from behind it
 ##                  and walks at her, state `chase`, at `walker_speed` (a walker's pace, never a runner's). It is a real one of the field's records (added at the start, woken here), so the
 ##                  kill is counted as any. It does not bite: for `grace_s` seconds or until she has put one down it holds `hold_r` tiles off her and its claw is kept back.
 ##   the box        an AMMO BOX lies `box_ahead` (6) tiles past the trigger point on the pavement to her right (`box_side` tiles off the way): E takes the shells (`box_loot`) in `take_s`

@@ -48,8 +48,11 @@
 ##                 a meadow or a pocket of grass: `lots[].vacated`) and nothing tall (a tree, a bush, a parked car, a wreck, a stall, a fence...: scripts/town/town_fields.gd takes it out) is on its ground outside
 ##                 the candidate's own lot; a few low props stand in the vacant lots. `stats.fields` = {"count", "scrubbed": {"trees", "objects", "tiles", "dressed"}, "vacated"}. A town with no arrival has none.
 ##   "rescue"      [{"house", "pos": Vector2 (where the survivor waits), "room", "ring": 1..3, "dist": from the start house}] 12 candidates, near to far: the list of the start house
-##   "rescue_for"  ARRIVAL: {String(house id of a candidate): the rescue list of that house (the shape of `rescue`, 12 near to far from it; none of the candidates is in any list)}; `rescue` is
-##                 `rescue_for` of the start house. A house in two lists keeps its survivor's room and spot; its 2 to 5 dead (one in that room) are in `dead` once
+##   "rescue_for"  ARRIVAL: {String(house id of a candidate): the rescue list of that house (the shape of `rescue`, 12 near to far from it)}; `rescue` is
+##                 `rescue_for` of the start house. A house in two lists keeps its survivor's room and spot; its 2 to 5 dead (one in that room) are in `dead` once. EARLY4: the first two of a list are
+##                 the two nearest houses outside the fields (`_near_rescue`): in practice the OTHER TWO CANDIDATES, across the avenue, 25 to 35 tiles from the middle of the claimed one (the median
+##                 nearest survivor is 28 tiles and the second 32, the farthest second 43); the rest as before, rings from 30 tiles out. A candidate that hides a survivor keeps its own 2 to 5 dead (one in
+##                 the survivor's room) and its containers, which hold at least `AMMO_FLOOR` rounds of its tier together (the others' as the dice made them)
 ##   "data" also carries `shot_low` (PackedByteArray W*H: 1 on the tiles of the LOW solid props, a bed, a sofa, a table, a counter...: shut to walking as ever but a shot, a blow and the dead's eye go over them;
 ##                 the lists are assets/data/prop_heights.json, scripts/town/prop_heights.gd; the world keeps it as `world.shot_low`, the sim's `clear_shot` and the avatar's `trace` read it)
 ##   "data" also carries `kit`, what the art kit needs (scripts/town/town_world.gd reads it, all of it optional): "ground" (PackedByteArray W*H: the ground a tile has, an index into
@@ -101,7 +104,8 @@ const ROAD := 4
 const EDGE := 2
 ## The version of the TOWN: the generator, the building plans and what the saved state means (SAVE4). A One House save writes it (`SaveGame.TOWN_KEY`) and a save of another number is refused, because
 ## the town is made again from the seed on a load and would not be the town the save was made in. BUMP IT with any change that alters the generated town or the saved state's meaning (docs/save-compat.md).
-## 1: up to main 236bb1e (saves of those builds carry no number at all). 2: the build of SAVE4 (CLEAR3's clear ground, a town for every seed, WORLD3's 164 plans).
+## 1: up to main 236bb1e (saves of those builds carry no number at all). 2: the build of SAVE4 (CLEAR3's clear ground, a town for every seed, WORLD3's 164 plans). EARLY4 (the near survivors,
+## the candidates' ammo, the entry's sandbags) changed the town again in the same unreleased build, so it is still 2: bump it if SAVE4's build has been released before EARLY4 ships.
 const VERSION := 2
 ## Dead: how many (the owner's 600 to 800), the share that is in or beside the houses, and how many guard each house of the rescue list.
 const DEAD_TOTAL := 700
@@ -483,6 +487,7 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 	var cont_ids: Array = []
 	for bi in buildings.size():
 		cont_ids.append([])
+	var cont0 := _containers.size()
 	for c in cv.cands:
 		# (the start house and the other candidates keep every container they have: they are where the run's first finds are)
 		if rng.randf() > 0.85 and not bool(spec.get("clear", false)):
@@ -530,6 +535,9 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 			made += (lst as Array).size()
 		if made == 0:
 			_corner_box(first_id, room_ids[0], cont_ids[0], rng)
+	# (EARLY4: the candidates' own containers hold at least some rounds between them, so that a player who searches the start house and the one claimed has the ammo for the first night)
+	if bool(spec.get("clear", false)):
+		_guarantee_ammo(cont0, String(lot.get("tier", "")), rng)
 	var roof := Districts.roof_for(String(lot.district), rng)
 	for bi in buildings.size():
 		var bd: Dictionary = buildings[bi]
@@ -565,6 +573,50 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 
 ## CLEAR3: a box of food in a corner of the roomiest room of house `house_id` (`rooms`: its room indexes; `ids`: its container ids, which this adds to): a container with a place to stand, for a candidate
 ## home whose furniture made none. The corner is a free tile with a wall (or another prop) on two sides and a free tile of the room beside it; nothing happens when the room has none.
+## EARLY4, AMMO IN THE CANDIDATES. The rounds of a run are the start stock (40, 3 in the gun and the rest the stores'), the opening's box (8), the claim stash (one_house.json `claim_bonus`) and what the
+## containers hold; the dice gave a candidate's dozen containers 0 to 25 rounds between them and a run could reach its first attack with 17 rounds (seeds 3, 18, 29 of the lab). The containers of a
+## CANDIDATE lot (its own, the town's other houses are as the dice made them: scavenging still matters) hold at least `AMMO_FLOOR` of its tier together: what is missing is put in
+## `AMMO_SPREAD` of them, chosen by the lot's own dice (so that nothing else of the town moves), in lots of two to four rounds, a container that has none of them first.
+const AMMO_FLOOR := {"best": 16, "ok": 10, "poor": 6}
+const AMMO_SPREAD := 4
+
+
+func _guarantee_ammo(first_container: int, tier: String, rng: RandomNumberGenerator) -> void:
+	var floor_n: int = int(AMMO_FLOOR.get(tier, 0))
+	var mine: Array = []
+	var have := 0
+	for i in range(first_container, _containers.size()):
+		mine.append(i)
+		have += int((_containers[i].loot as Dictionary).get("ammo", 0))
+	if floor_n <= 0 or mine.is_empty() or have >= floor_n:
+		return
+	# the containers without ammo first, in the lot's own random order
+	var order: Array = []
+	var rest: Array = []
+	for i in mine:
+		if int((_containers[i].loot as Dictionary).get("ammo", 0)) == 0:
+			order.append(i)
+		else:
+			rest.append(i)
+	for list in [order, rest]:
+		for k in range((list as Array).size() - 1, 0, -1):
+			var j := rng.randi_range(0, k)
+			var tmp = list[k]
+			list[k] = list[j]
+			list[j] = tmp
+	order.append_array(rest)
+	var need := floor_n - have
+	var n := mini(AMMO_SPREAD, order.size())
+	for k in n:
+		var give := int(ceil(float(need) / float(n - k)))
+		give = clampi(give, 1, need)
+		var loot: Dictionary = _containers[int(order[k])].loot
+		loot["ammo"] = int(loot.get("ammo", 0)) + give
+		need -= give
+		if need <= 0:
+			break
+
+
 func _corner_box(house_id: int, rooms: Array, ids: Array, rng: RandomNumberGenerator) -> void:
 	var props: Dictionary = _street_cv.props
 	if rooms.is_empty() or not props.has("box") or not (props.box as Dictionary).has("kit"):
@@ -1152,7 +1204,8 @@ func _people_rescue() -> bool:
 	return int(_pp.rescue_i) >= cands.size()
 
 
-## The rescue list of a candidate: RESCUE_COUNT houses (two in a town of less than 6 blocks) near to far from it, none of them a candidate.
+## The rescue list of a candidate: RESCUE_COUNT houses (two in a town of less than 6 blocks) near to far from it; the first two are the nearest houses (the other candidates among them, `_near_rescue`),
+## the rest are not candidates.
 func _rescue_set(start_house: int, exclude: Dictionary) -> Array:
 	var rng := _rng
 	var start_c := Vector2(Rect2i(_houses[start_house].rect).get_center())
@@ -1170,6 +1223,9 @@ func _rescue_set(start_house: int, exclude: Dictionary) -> Array:
 		# stand within 56; the rings begin where the houses do, 16 tiles later than they did)
 		rings = [[30.0 * scale, 56.0 * scale], [56.0 * scale, 84.0 * scale], [84.0 * scale, 400.0]]
 	var per_ring := int(ceil(float(want) / 3.0))
+	# (EARLY4: the first two survivors, the two that start the attacks, are the NEAREST houses outside the fields: see `_near_rescue`)
+	if not _fields.is_empty() and _blocks >= 6:
+		_near_rescue(rescue, start_house, exclude, start_c, scale)
 	for ri in rings.size():
 		# (BIGGER HOUSES: the survivors are found in family homes and the bigger detached ones, `_rescue_rank` 0; the next best where a ring has not enough of them, so that every ring still
 		# has its share of them, near to far; a block of flats or a shop only in `_top_up_rescue`, when nothing else is left)
@@ -1201,6 +1257,48 @@ func _rescue_set(start_house: int, exclude: Dictionary) -> Array:
 	_top_up_rescue(rescue, want, start_house, exclude, start_c, apart_min)
 	rescue.sort_custom(func(a, b): return float(a.dist) < float(b.dist))
 	return rescue
+
+
+## EARLY4, THE NEAR SURVIVORS. CLEAR3's fields put the first house 30 or more tiles from a candidate's middle (the house stands in its lot, the field is 10 tiles of open ground round the lot) and the
+## rings that began there picked at random, so the nearest survivor was 31 to 61 tiles off and the walk to the first two (the second brings the dead every night) took most of the first day. The two
+## NEAREST houses outside the fields are the first two survivors (a better `_rescue_rank` costs `NEAR_RANK_COST` tiles less per rank: a shop is a little farther than a home, not a better find), at
+## least `NEAR_APART` tiles from each other (one trip is not two). THE OTHER CANDIDATES ARE THESE HOUSES, in practice: the three candidates stand across the avenue from one another, 25 to 35 tiles
+## apart (`ARR_POOR_GAP`), their fields do not reach each other, and they are the only houses that near; so whoever claims one finds a survivor in the house across the street (with its own dead, its
+## containers and its ring of open ground), and the next nearest houses are 35 to 60 tiles away. (Before this a candidate was in no list.) Every house left in `_houses` is outside every field already
+## (a lot with a building in one is built vacant), so the spots are outside the fields by construction. The count is `NEAR_COUNT`; the houses nearer than `NEAR_FROM` tiles are skipped.
+const NEAR_COUNT := 2
+const NEAR_FROM := 18.0
+const NEAR_APART := 10.0
+const NEAR_RANK_COST := 1.5
+
+
+func _near_rescue(rescue: Array, start_house: int, _exclude: Dictionary, start_c: Vector2, scale: float) -> void:
+	var pool: Array = []
+	for h in _houses:
+		var rank := _rescue_rank(h)
+		if int(h.id) == start_house or rank < 0:
+			continue
+		var c := Vector2(Rect2i(h.rect).get_center())
+		var dist := c.distance_to(start_c)
+		if dist < NEAR_FROM * scale:
+			continue
+		pool.append([dist + NEAR_RANK_COST * float(rank), int(h.id), dist])
+	pool.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+	var picked := 0
+	for e in pool:
+		if picked >= NEAR_COUNT:
+			break
+		var hid := int(e[1])
+		var c := Vector2(Rect2i(_houses[hid].rect).get_center())
+		var apart := true
+		for r in rescue:
+			if Vector2(Rect2i(_houses[int(r.house)].rect).get_center()).distance_to(c) < NEAR_APART:
+				apart = false
+		if not apart:
+			continue
+		var room := _rescue_room(hid)
+		rescue.append({"house": hid, "pos": _hide_spot(room, hid), "room": room, "ring": 1, "dist": float(e[2])})
+		picked += 1
 
 
 func _people_dead() -> void:
@@ -1660,11 +1758,17 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 	# not taken: the survivor's tile is kept clear of them)
 	# BIGGER HOUSES: four or five of the start house (clearing it is the first quarter of an hour), each in a room of its own and none in the room the avatar wakes in
 	# (ARRIVAL: the same for every candidate, by its tier: the avatar does not wake inside any of them, so no room is spared but the start room of a town without an arrival)
+	# (EARLY4: a candidate that is also the house of a survivor: the other candidates are the nearest houses to any base, see `_near_rescue`. Its own dead are the guard: one is put in the survivor's room
+	# first, the rest in rooms of their own as ever, and the survivor's tile is kept clear of them)
+	var hidden_in := {}
+	for r in rescue:
+		_take(taken, Vector2(r.pos))
+		hidden_in[int(r.house)] = int(r.room)
 	for c in cands:
 		var chid := int(c.house)
 		var c_rooms: Array = []
 		for ri in _houses[chid].rooms:
-			if int(ri) != start_room:
+			if int(ri) != start_room and int(ri) != int(hidden_in.get(chid, -2)):
 				c_rooms.append(int(ri))
 		for i in range(c_rooms.size() - 1, 0, -1):
 			var j := rng.randi_range(0, i)
@@ -1680,6 +1784,9 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 			_:
 				c_want = 4 + (1 if rng.randf() < 0.45 else 0)
 		var c_got := 0
+		if hidden_in.has(chid) and put_inside.call(chid, "walker", "still", int(hidden_in[chid]), -1):
+			c_got += 1
+			made_in += 1
 		for ri in c_rooms:
 			if c_got >= c_want:
 				break
@@ -1687,8 +1794,8 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 				c_got += 1
 				made_in += 1
 	for r in rescue:
-		_take(taken, Vector2(r.pos))
-	for r in rescue:
+		if is_cand.has(int(r.house)):
+			continue    # (EARLY4: a candidate that hides a survivor has its own dead above)
 		var got_g := 0
 		var in_room_ok := false
 		for k in 2 + rng.randi() % 4:

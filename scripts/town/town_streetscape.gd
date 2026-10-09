@@ -140,6 +140,7 @@ static func _entry(g, arrival: Dictionary) -> void:
 	# (EARLY: she begins `inward` tiles in from the edge, on the forest lane's end: the wreck, the car and the chevrons are as far ahead of her as they always were)
 	var inward: int = (W - 1 - int(Vector2(arrival.pos).x)) if east else int(Vector2(arrival.pos).x)
 	var shift: int = inward - ENTRY_WAS_IN
+	_entry_cover(g, arrival)
 	var wx := EDGE + 8 + shift + rng.randi_range(0, 2)
 	var cx := EDGE + 16 + shift + rng.randi_range(0, 3)
 	for wy in [ay, ay + 1]:
@@ -161,6 +162,49 @@ static func _entry(g, arrival: Dictionary) -> void:
 		g._street_objs += 1
 		g._entry_arrows.append(Vector2(float(tx) + 0.5, float(ay) + 3.5))
 	g._entry_sign = g._entry_arrows[g._entry_arrows.size() >> 1] if not g._entry_arrows.is_empty() else Vector2(-1.0, -1.0)
+
+
+## EARLY4, COVER FOR THE OPENING. CLEAR3 took every tall thing out of the entry's strip (the wreck, the car, the parked cars: they stand in the field of the candidate beside it), so the scripted opening's
+## walker (scripts/town/opening.gd) came out of nothing on a bare road. A LOW piece stands there instead, which the fields leave (`prop_heights.json`: sandbags are low, a shot goes over them): two
+## lengths of sandbags end to end along each KERB of the avenue (its first row and its last: the way in runs to the first house's door on one side or the other, the nearest candidate is the best one in
+## seven runs of eight and the other candidate in the eighth, so both kerbs have them and the opening takes the one near its way), the middle of them about `COVER_AHEAD` tiles ahead of the avatar
+## (the walker's `walker_ahead` is 10, the trigger 12: the place the car was; the opening's walker may not be put nearer than 6 tiles to the door, so the first length is the nearer one). The four
+## middle rows of the avenue stay free. The opening takes a length as the thing the walker steps out from (`cover_big` false). Returns how many lengths stand (0: the kerbs are taken).
+const COVER_AHEAD := 16
+const COVER_LENGTHS := 2
+
+
+static func _entry_cover(g, arrival: Dictionary) -> int:
+	var props: Dictionary = g._street_cv.props
+	if not props.has("sandbags"):
+		return 0
+	var W: int = g._size
+	var east: bool = bool(arrival.east)
+	var ay: int = int(arrival.ay)
+	var fp: Vector2i = g._street_cv.tiles_of("sandbags")
+	var start_x: int = floori(float(Vector2(arrival.pos).x))
+	var road := int(g._tids.ASPHALT)
+	var placed := 0
+	for ty in [ay, ay + 5]:
+		for k in COVER_LENGTHS:
+			var tx: int = (start_x - COVER_AHEAD - fp.x * (k + 1) + 1) if east else (start_x + COVER_AHEAD + fp.x * k)
+			var free := tx > EDGE and tx + fp.x < W - EDGE
+			for xx in fp.x:
+				var i: int = ty * W + tx + xx
+				if not free or g._solid[i] != 0 or g._terrain[i] != road:
+					free = false
+			if not free:
+				continue
+			var obj = g._street_cv._decor("sandbags", tx, ty, 0.0, 0.0)
+			if obj == null:
+				continue
+			obj["solid"] = true
+			g._objects.append(obj)
+			for xx in fp.x:
+				g._solid[ty * W + tx + xx] = 1
+			g._street_objs += 1
+			placed += 1
+	return placed
 
 
 ## Puts a car on the asphalt at a top left tile when its tiles are free road. True when it stands.
