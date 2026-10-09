@@ -23,6 +23,7 @@ const TownArt := preload("res://scripts/town/town_art.gd")
 const DoorNode := preload("res://scripts/render/door_node.gd")
 const RoomVeil := preload("res://scripts/render/room_veil.gd")
 const RoofAtlas := preload("res://scripts/render/roof_atlas.gd")
+const RoofPaint := preload("res://scripts/render/roof_paint.gd")
 
 const TILE := GD.TILE
 const FADE := 0.25
@@ -97,7 +98,10 @@ func on_ready(main) -> void:
 		world.add_child(self)
 	var s = main.get("sim")
 	bind(s, s.get("houses"), s.get("clearing"), s.get("search"))
-	_warm_atlas()
+	# (WORLD3: in a game the atlas is made by a part of its own, scripts/render/roof_warm.gd, in a frame of its own; the title and a test make it here)
+	var town = main.get("town")
+	if town == null or bool(town.title) or town.part("roof_warm") == null:
+		_warm_atlas()
 	_collect_interiors(world)
 
 
@@ -344,7 +348,16 @@ func _house_dict(id: int) -> Dictionary:
 	return {}
 
 
-## The atlases of the three roof kits, made now (under the loading card) and not at the first roof.
+## The atlas of the roofs, made now (under the loading card) and not at the first roof: `step` 0 the pictures of the kits, 1 the rest (two frames of the card, scripts/render/roof_warm.gd).
+func warm_roofs(step: int) -> void:
+	if step == 0:
+		if _atlas == null:
+			_atlas = RoofAtlas.new()
+		_atlas.prepare()
+	else:
+		_warm_atlas()
+
+
 func _warm_atlas() -> void:
 	if _atlas == null:
 		_atlas = RoofAtlas.new()
@@ -368,7 +381,7 @@ func _make_roof(hd: Dictionary) -> void:
 		_atlas = RoofAtlas.new()
 	# (TOWNGEN: a house says which of the kit's roofs it has (`roof` 0 terracotta, 1 slate, 2 shingle) and its `parts`: one roof for each)
 	var colour: Dictionary = TownArt.roof("", int(hd.roof)) if hd.has("roof") else TownArt.roof(String(hd.kind), id % 3)
-	roof.setup(id, Rect2i(hd.rect), colour, notches, _atlas, hd.parts if hd.has("parts") else [])
+	roof.setup(id, Rect2i(hd.rect), colour, notches, _atlas, hd.parts if hd.has("parts") else [], hd.get("facade", {}), int(hd.roof) if hd.has("roof") else id % 3)
 	roof.alpha_t = 0.0 if id == avatar_house else 1.0
 	roof.modulate.a = roof.alpha_t
 	roof.visible = roof.alpha_t > 0.01
@@ -530,12 +543,21 @@ class Roof extends Node2D:
 	var _batches: Array = []
 	## The kit's atlas (scripts/render/roof_atlas.gd) when there is one: every cell is then cut from the one texture and the roof is a single batch.
 	var _set = null
+	## The draw commands of a roof painted from its facade (scripts/render/roof_paint.gd); null for a roof drawn the old ways.
+	var _cmds = null
 
 	## `notches`: [[tiles (Vector2i), side], ...] of the outside doors. `atlas`: the part's RoofAtlas (null: the pictures are drawn from their files).
-	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array, atlas = null, parts: Array = []) -> void:
+	func setup(id: int, rect: Rect2i, desc: Dictionary, notches: Array, atlas = null, parts: Array = [], facade: Dictionary = {}, kit: int = 0) -> void:
 		house = id
 		if desc.has("tiles"):
 			_set = atlas.for_tiles(desc.tiles) if atlas != null else null
+		if desc.has("tiles") and _set != null:
+			# (WORLD3: the roof is painted from the building's facade, scripts/render/roof_paint.gd: styles, colours, what stands on it)
+			position = Vector2(rect.position) * TILE_PX
+			_cmds = RoofPaint.build(id, rect, desc.tiles, _set, notches, parts, facade, kit)
+			_poly = PackedVector2Array([Vector2.ZERO])
+			queue_redraw()
+			return
 		if desc.has("tiles") and _setup_tiles(id, rect, desc.tiles, notches, parts):
 			return
 		var er := Rect2(rect).grow(EAVE_T)
@@ -731,6 +753,13 @@ class Roof extends Node2D:
 		visible = modulate.a > 0.01
 
 	func _draw() -> void:
+		if _cmds != null:
+			var tex: Texture2D = _set.tex
+			var c: RoofPaint.Cmds = _cmds
+			for i in c.n:
+				var k := i * 4
+				draw_texture_rect_region(tex, Rect2(c.dst[k], c.dst[k + 1], c.dst[k + 2], c.dst[k + 3]), Rect2(c.src[k], c.src[k + 1], c.src[k + 2], c.src[k + 3]), c.col[i], c.tr[i] != 0)
+			return
 		if not _batches.is_empty():
 			for b in _batches:
 				for i in b.dst.size():

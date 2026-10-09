@@ -13,7 +13,8 @@ const ENTRY_WAS_IN := 4
 
 
 ## The pieces of `run`, for the stepped build (`TownGen.step` does one a step).
-const STEPS := 5
+const Dressing := preload("res://scripts/town/town_dressing.gd")
+const STEPS := 5 + Dressing.STEPS
 
 
 static func run(g) -> void:
@@ -21,7 +22,7 @@ static func run(g) -> void:
 		step(g, i)
 
 
-## The piece `i` (0 to STEPS - 1) of `run`: in this order the border, the road ends, the cars, the lamps, the litter.
+## The piece `i` (0 to STEPS - 1) of `run`: in this order the border, the road ends, the cars, the lamps, the litter, then WORLD3's dressing (the pavements, the roads, the camps and the fallen).
 static func step(g, i: int) -> void:
 	match i:
 		0:
@@ -32,8 +33,10 @@ static func step(g, i: int) -> void:
 			_cars(g)
 		3:
 			_lamps(g)
-		_:
+		4:
 			_litter(g)
+		_:
+			Dressing.step(g, i - 5)
 
 
 static func _border(g) -> void:

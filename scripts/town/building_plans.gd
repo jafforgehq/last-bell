@@ -5,6 +5,8 @@
 ## "margin": the yard to the sides of it, "fy": the front yard's depth, "landmark": ""|"bell_tower", "garage": 1 when a part is a garage}.
 extends RefCounted
 
+const Recipes := preload("res://scripts/town/building_recipes.gd")
+
 ## The start house (ROOMY HOUSES): the outer walls of a family home of eight rooms round a hall, and the least lot it will stand in (its box and two tiles of ground to each side, three in
 ## front and three behind). The layout's START_W and START_DEPTH are these.
 const START_BOX := Vector2i(22, 16)
@@ -33,12 +35,79 @@ static func _rect_plan(kind: String, avail_w: int, depth: int, rng: RandomNumber
 	return {"kind": kind, "box": Vector2i(w, h), "parts": [Rect2i(0, 0, w, h)], "margin": _r(rng, mr), "fy": fy}
 
 
-## The plan of a building of `kind` that fits `avail_w` tiles of a row and `depth` of its depth, or {} when it does not fit. BIGGER HOUSES: "start" is the start house, a FAMILY HOME of
+## The plan of a building of `kind` that fits `avail_w` tiles of a row and `depth` of its depth, or {} when it does not fit. WORLD3: a kind has several PLANS (the RECIPES of
+## scripts/town/building_recipes.gd: a shape, a program, the features of its front); one that fits is drawn by weight with the passed `rng` (a seed gives the same town), and the plan
+## says which in "var" (the recipe's id), its program in "prog", its features in "feat" and, for a building of several units side by side, "units". A kind with no recipe is the old code below.
+static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
+	var recs = Recipes.RECIPES.get(kind)
+	if recs == null:
+		return _legacy_plan(kind, avail_w, depth, rng)
+	var pool: Array = (recs as Array).duplicate()
+	while not pool.is_empty():
+		var total := 0.0
+		for r in pool:
+			total += float(r.get("wt", 1.0))
+		var at := rng.randf() * total
+		var pick: Dictionary = pool[pool.size() - 1]
+		for r in pool:
+			at -= float(r.get("wt", 1.0))
+			if at < 0.0:
+				pick = r
+				break
+		pool.erase(pick)
+		var p := plan_of(pick, kind, avail_w, depth, rng)
+		if not p.is_empty():
+			return p
+	return {}
+
+
+## The plan of one recipe (a recipe of `kind`), or {} when it does not fit the lot.
+static func plan_of(r: Dictionary, kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
+	var p: Dictionary
+	match String(r.s):
+		"legacy":
+			p = _legacy_plan(kind, avail_w, depth, rng)
+		"rect":
+			p = _rect_plan(kind, avail_w, depth, rng, r.w, r.h, r.m, r.fy)
+		"L":
+			p = _plan_l(kind, avail_w, depth, rng, r.w, r.h, r.w2, r.h2, r.m, r.fy)
+		"T":
+			p = _plan_t_r(kind, avail_w, depth, rng, r)
+		"legacy_U":
+			p = _plan_u(kind, avail_w, depth, rng)
+		"side":
+			p = _plan_side(kind, avail_w, depth, rng, r)
+		"back":
+			p = _plan_back(kind, avail_w, depth, rng, r)
+		"front":
+			p = _plan_front(kind, avail_w, depth, rng, r)
+		"H":
+			p = _plan_h(kind, avail_w, depth, rng, r)
+		"units":
+			p = _plan_units(kind, avail_w, depth, rng, r)
+		"manor":
+			p = _plan_manor(kind, avail_w, depth, rng, r)
+		"step":
+			p = _plan_step(kind, avail_w, depth, rng, r)
+		"church_T":
+			p = _plan_church_t(kind, avail_w, depth, rng)
+	if p.is_empty():
+		return {}
+	p["var"] = String(r.id) if String(p.get("kind", kind)) == kind else String(p.get("kind", kind))
+	if r.has("prog"):
+		p["prog"] = String(r.prog)
+	if bool(r.get("garage", 0)):
+		p["garage"] = 1
+	p["feat"] = r.get("f", {})
+	return p
+
+
+## The plan of a building of `kind` by the code that was there before WORLD3. BIGGER HOUSES: "start" is the start house, a FAMILY HOME of
 ## 22 x 16 (eight rooms round a central hall) in a lot of 28 x 23 with three tiles to spare on every side; "family" is the same kind of home at 20 to 22 x 15 to 16; the detached houses
 ## ("medium", "small", the bungalow with its garage, the L, T, U and two wing houses) are 12 to 16 wide and 10 to 11 deep and up; the "cottage" is the one tiny house left (a few percent of
 ## the town) and is never a rescue house or the start. ROOMY HOUSES (the owner: "I can barely move inside"): the rooms of a home are 4 x 4 and more (the living room 5 x 5, the kitchen
 ## 5 x 4: `WANT`), the halls and the doors between them two wide, and the furniture keeps a lane (scripts/town/town_kit.gd); the footprints above are what that takes.
-static func plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
+static func _legacy_plan(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
 	match kind:
 		"start":
 			if avail_w < START_MIN_W or depth < START_MIN_DEPTH:
@@ -271,13 +340,224 @@ static func _plan_school(kind: String, avail_w: int, depth: int, rng: RandomNumb
 	return {"kind": kind, "box": Vector2i(mw, mh + rh - 1), "parts": [Rect2i(0, 0, mw, mh), Rect2i(xr, mh - 1, rw, rh)], "margin": _r(rng, [2, 4]), "fy": fy}
 
 
+# ================================================================== WORLD3's shapes ==
+## The shapes of the recipes (scripts/town/building_recipes.gd). The front is at y = 0; parts touch along a one tile wall they share.
+
+## A main part and a part beside it (a garage, a wing, a tower, a lean-to): the second at the left or the right, `dy` rows down from the front.
+static func _plan_side(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w1 := _r(rng, r.w)
+	var h1 := _r(rng, r.h)
+	var gw: int = r.gw
+	var gh: int = r.gh
+	var fy := _r(rng, r.fy)
+	while w1 + gw - 1 > avail_w and w1 > int(r.w[0]):
+		w1 -= 1
+	if w1 + gw - 1 > avail_w:
+		return {}
+	while maxi(h1, gh) + fy + 1 > depth:
+		if h1 > int(r.h[0]):
+			h1 -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var dy := rng.randi_range(0, maxi(0, h1 - gh))
+	var parts: Array
+	if rng.randf() < 0.5:
+		parts = [Rect2i(0, 0, w1, h1), Rect2i(w1 - 1, dy, gw, gh)]
+	else:
+		parts = [Rect2i(gw - 1, 0, w1, h1), Rect2i(0, dy, gw, gh)]
+	return {"kind": kind, "box": Vector2i(w1 + gw - 1, maxi(h1, dy + gh)), "parts": parts, "margin": _r(rng, r.m), "fy": fy}
+
+
+## A main part and a part behind it (a back wing, an oven house, a barn's second hall): at the left, in the middle or at the right.
+static func _plan_back(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w := _r(rng, r.w)
+	var h1 := _r(rng, r.h)
+	var bw: int = r.bw
+	var bh: int = r.bh
+	var fy := _r(rng, r.fy)
+	if w > avail_w:
+		w = avail_w
+	if w < int(r.w[0]) or bw + 2 > w:
+		return {}
+	while h1 + bh - 1 + fy + 1 > depth:
+		if bh > 5:
+			bh -= 1
+		elif h1 > int(r.h[0]):
+			h1 -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var xb := 1
+	match String(r.get("bx", "c")):
+		"c":
+			xb = (w - bw) / 2
+		"r":
+			xb = w - bw - 1
+		_:
+			xb = 1
+	return {"kind": kind, "box": Vector2i(w, h1 + bh - 1), "parts": [Rect2i(0, 0, w, h1), Rect2i(xb, h1 - 1, bw, bh)], "margin": _r(rng, r.m), "fy": fy}
+
+
+## A main part with a part standing out at the front (a bay, a porch room): the front part first, in the middle of the front.
+static func _plan_front(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w := _r(rng, r.w)
+	var h := _r(rng, r.h)
+	var fw: int = r.fw
+	var fh: int = r.fh
+	var fy := _r(rng, r.fy)
+	if w > avail_w:
+		w = avail_w
+	if w < int(r.w[0]) or fw + 2 > w:
+		return {}
+	while fh - 1 + h + fy + 1 > depth:
+		if h > int(r.h[0]):
+			h -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var xf := clampi((w - fw) / 2 + rng.randi_range(-1, 1), 1, w - fw - 1)
+	return {"kind": kind, "box": Vector2i(w, fh - 1 + h), "parts": [Rect2i(xf, 0, fw, fh), Rect2i(0, fh - 1, w, h)], "margin": _r(rng, r.m), "fy": fy}
+
+
+## Two wings joined by a link: wings of `w2` wide, the link of `h2` rows between them.
+static func _plan_h(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w := _r(rng, r.w)
+	var h := _r(rng, r.h)
+	var ww := _r(rng, r.w2)
+	var lh := _r(rng, r.h2)
+	var fy := _r(rng, r.fy)
+	if w > avail_w:
+		w = avail_w
+	if w < int(r.w[0]) or h + fy + 1 > depth:
+		return {}
+	var ly := (h - lh) / 2
+	return {"kind": kind, "box": Vector2i(w, h), "parts": [Rect2i(0, 0, ww, h), Rect2i(w - ww, 0, ww, h), Rect2i(ww - 1, ly, w - 2 * ww + 2, lh)], "margin": _r(rng, r.m), "fy": fy}
+
+
+## `n` units of one kind side by side, each its own part with its own front door (a semi, a terrace row, a strip of shops, a motel).
+static func _plan_units(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var n: int = r.n
+	var wu := _r(rng, r.w)
+	var h := _r(rng, r.h)
+	var fy := _r(rng, r.fy)
+	while n * (wu - 1) + 1 > avail_w and wu > int(r.w[0]):
+		wu -= 1
+	if n * (wu - 1) + 1 > avail_w:
+		return {}
+	while h + fy + 1 > depth:
+		if h > int(r.h[0]):
+			h -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var parts: Array = []
+	for i in n:
+		parts.append(Rect2i(i * (wu - 1), 0, wu, h))
+	return {"kind": kind, "box": Vector2i(n * (wu - 1) + 1, h), "parts": parts, "margin": _r(rng, r.m), "fy": fy, "units": n}
+
+
+## A centre and a wing on each side, the wings flush with the front or with the back.
+static func _plan_manor(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var cw := _r(rng, r.w)
+	var ch := _r(rng, r.h)
+	var ww := _r(rng, r.w2)
+	var wh := _r(rng, r.h2)
+	var fy := _r(rng, r.fy)
+	while 2 * ww + cw - 2 > avail_w and ww > int(r.w2[0]):
+		ww -= 1
+	if 2 * ww + cw - 2 > avail_w:
+		return {}
+	while ch + fy + 1 > depth:
+		if ch > int(r.h[0]):
+			ch -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	wh = mini(wh, ch)
+	var dy := 0 if rng.randf() < 0.5 else ch - wh
+	return {"kind": kind, "box": Vector2i(2 * ww + cw - 2, ch), "parts": [Rect2i(ww - 1, 0, cw, ch), Rect2i(0, dy, ww, wh), Rect2i(ww + cw - 2, dy, ww, wh)], "margin": _r(rng, r.m), "fy": fy}
+
+
+## Two parts offset (a split level: the second stands back from the front and lower).
+static func _plan_step(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w1 := _r(rng, r.w)
+	var h1 := _r(rng, r.h)
+	var w2 := _r(rng, r.w2)
+	var h2 := _r(rng, r.h2)
+	var fy := _r(rng, r.fy)
+	if w1 + w2 - 1 > avail_w:
+		return {}
+	var dy := rng.randi_range(2, maxi(2, h1 - 5))
+	while maxi(h1, dy + h2) + fy + 1 > depth:
+		if dy > 0:
+			dy -= 1
+		elif h2 > int(r.h2[0]) - 1:
+			h2 -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var parts: Array = [Rect2i(0, 0, w1, h1), Rect2i(w1 - 1, dy, w2, h2)]
+	if rng.randf() < 0.5:
+		parts = [Rect2i(w2 - 1, 0, w1, h1), Rect2i(0, dy, w2, h2)]
+	return {"kind": kind, "box": Vector2i(w1 + w2 - 1, maxi(h1, dy + h2)), "parts": parts, "margin": _r(rng, r.m), "fy": fy}
+
+
+## A T with the sizes of a recipe (the old `_plan_t` had its own).
+static func _plan_t_r(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator, r: Dictionary) -> Dictionary:
+	var w1 := _r(rng, r.w)
+	var h1 := _r(rng, r.h)
+	var w2 := _r(rng, r.w2)
+	var h2 := _r(rng, r.h2)
+	var fy := _r(rng, r.fy)
+	if w1 > avail_w:
+		w1 = avail_w
+	if w1 < int(r.w[0]):
+		return {}
+	while h1 + h2 - 1 + fy + 1 > depth:
+		if h2 > int(r.h2[0]):
+			h2 -= 1
+		elif h1 > int(r.h[0]):
+			h1 -= 1
+		elif fy > int(r.fy[0]):
+			fy -= 1
+		else:
+			return {}
+	var xs := clampi((w1 - w2) / 2 + rng.randi_range(-1, 1), 1, w1 - w2 - 1)
+	return {"kind": kind, "box": Vector2i(w1, h1 + h2 - 1), "parts": [Rect2i(0, 0, w1, h1), Rect2i(xs, h1 - 1, w2, h2)], "margin": _r(rng, r.m), "fy": fy}
+
+
+## A church with a transept: the tower, the nave, the chancel and a small chapel on each side of the nave.
+static func _plan_church_t(kind: String, avail_w: int, depth: int, rng: RandomNumberGenerator) -> Dictionary:
+	var nw := _r(rng, [9, 10])
+	var tw := 5
+	var side := tw - 1
+	if nw + 2 * side + 2 > avail_w:
+		return {}
+	var fy := 2
+	var nl := mini(14, depth - 7 - fy - 1)
+	if nl < 10:
+		return {}
+	var x0 := side
+	var aw := nw - 2
+	var ty := 4 + (nl - 5) / 2
+	return {"kind": kind, "box": Vector2i(nw + 2 * side, nl + 7), "parts": [Rect2i(x0 + (nw - 5) / 2, 0, 5, 5), Rect2i(x0, 4, nw, nl), Rect2i(x0 + (nw - aw) / 2, 4 + nl - 1, aw, 4),
+		Rect2i(0, ty, tw, 5), Rect2i(x0 + nw - 1, ty, tw, 5)], "margin": _r(rng, [1, 3]), "fy": fy, "landmark": "bell_tower"}
+
+
 # ====================================================================== programs ==
 
 ## The kinds whose parts are laid out by `BuildingGen._layout_part` (rooms of at least 3 x 3 floor tiles, doors planned between neighbours, a hall down the middle where the part is big
 ## enough and its program starts with one): the homes. The rest (shops, flats, works, terraces) use the older partition by shares.
-const ROOMY := ["start", "family", "medium", "small", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "farmhouse"]
+const ROOMY := ["start", "family", "medium", "small", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "farmhouse", "ranch", "splitlevel", "duplex", "cabin", "manor", "townhouse", "hhouse"]
 ## The kinds a survivor may be found in (the rescue houses): family homes and the bigger detached ones, never a cottage, a terrace, a shed.
-const RESCUE_KINDS := ["family", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "medium", "farmhouse"]
+const RESCUE_KINDS := ["family", "bungalow", "lhouse", "thouse", "uhouse", "twowing", "medium", "farmhouse", "ranch", "splitlevel", "cabin", "manor", "hhouse"]
 ## Which wing of a house a room belongs in: the day rooms on one side of the hall, the night ones on the other.
 const NIGHT_ROOMS := ["bedroom", "bathroom", "nursery"]
 ## ROOMY HOUSES: what a room of a home wants of its floor before the furniture goes in, [the shortest side, the area in tiles] (a living room of 8 x 5 or 6 x 5, a kitchen of 6 x 4 or 5 x 5, a
@@ -307,7 +587,7 @@ static func is_roomy(kind: String) -> bool:
 
 ## The kinds whose rooms are furnished along the walls with a lane kept (`TownKit.strict`): the roomy homes and the small ones, the terrace, its extension and the cottage.
 static func is_homely(kind: String) -> bool:
-	return ROOMY.has(kind) or kind in ["terrace", "terrace_ext", "cottage"]
+	return ROOMY.has(kind) or kind in ["terrace", "terrace_ext", "terrace3", "cottage"]
 
 
 ## A room of a program: name, the share of the floor, the floor, flags ("e" the front door opens into it, "f" it wants the front of its part, "b" the back).
@@ -317,12 +597,41 @@ static func it(name: String, share: float, floor_name: String, flags: String = "
 
 ## The rooms of a kind, one list for each part (in the order of the plan's parts); the first of a list is the first to be kept when the part is too small for them all. The rooms of every home but
 ## the family home want the smaller floor (`WANT_TIGHT`, "t": 1).
-static func programs(kind: String, rng: RandomNumberGenerator) -> Array:
-	var out: Array = _programs(kind, rng)
+static func programs(kind: String, rng: RandomNumberGenerator, plan_in: Dictionary = {}) -> Array:
+	var id := String(plan_in.get("prog", ""))
+	var out: Array
+	if id != "" and Recipes.PROGS.has(id):
+		out = _parse_prog(String(Recipes.PROGS[id]))
+	else:
+		out = _programs(id if id != "" else kind, rng)
+	var units := int(plan_in.get("units", 0))
+	if units > 0 and not out.is_empty():
+		var one: Array = out[0]
+		out = []
+		for i in units:
+			var copy: Array = []
+			for o in one:
+				copy.append((o as Dictionary).duplicate())
+			out.append(copy)
 	if kind != "start" and kind != "family":
 		for part in out:
 			for o in part:
 				o["t"] = 1
+	return out
+
+
+## A program from its text (`Recipes.PROGS`): parts divided by " | ", rooms by ", ", each "name:share:FLOOR:flags".
+static func _parse_prog(text: String) -> Array:
+	var out: Array = []
+	for part_text in text.split("|"):
+		var part: Array = []
+		for room_text in part_text.split(","):
+			var s := room_text.strip_edges()
+			if s == "":
+				continue
+			var f := s.split(":")
+			part.append(it(String(f[0]), float(f[1]), String(f[2]), String(f[3]) if f.size() > 3 else ""))
+		out.append(part)
 	return out
 
 

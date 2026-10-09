@@ -39,14 +39,38 @@ const KIT_PROPS := [
 	["market_stall", "outdoors", 3, 2, 4, true, ""],
 	# (ARRIVAL: the arrows of the way in: double chevrons painted on the road at the entry, pointing into the town)
 	["marker_enter", "marker", 1, 1, 1, false, ""],
+	# WORLD3, the life of the town (tools/make_town_life.py: one sheet, assets/town/life/life_sheet.png). The furniture of the rooms: a solid one is a thing like the old ones (`prop_heights.json`
+	# says how high), a container is searched as the kit's are (`KIT_LIKE` says what it holds).
+	["shop_shelf", "life", 2, 1, 2, true, "shop_shelf"], ["checkout", "life", 2, 1, 2, true, "checkout"], ["display_case", "life", 2, 1, 2, true, "display_case"], ["cooler", "life", 1, 1, 2, true, "cooler"],
+	["tool_chest", "life", 2, 1, 2, true, "tool_chest"], ["toy_chest", "life", 1, 1, 2, true, "toy_chest"], ["vanity", "life", 1, 1, 2, true, "vanity"], ["piano", "life", 2, 1, 2, true, ""],
+	["fireplace", "life", 2, 1, 2, true, ""], ["aquarium", "life", 2, 1, 2, true, ""], ["crib", "life", 1, 2, 2, true, ""], ["bunk_bed", "life", 1, 2, 2, true, ""], ["shower", "life", 1, 1, 2, true, ""],
+	["washer", "life", 1, 1, 2, true, ""], ["dining_table_sq", "life", 2, 2, 2, true, ""], ["barber_chair", "life", 1, 1, 2, true, ""], ["cafe_table", "life", 1, 1, 2, true, ""],
+	["tire_stack", "life", 1, 1, 2, true, ""],
+	["bar_stool", "life", 1, 1, 2, false, ""], ["plant_floor", "life", 1, 1, 2, false, ""], ["rocking_chair", "life", 1, 1, 2, false, ""], ["jerrycan", "life", 1, 1, 2, false, ""],
+	["mannequin", "life", 1, 1, 2, false, ""],
+	# the street and the yards: nothing here blocks anyone (the dead and the people walk over it; a picture only), the bins, benches and bushes that do are the kit's old ones
+	["cone", "life", 1, 1, 2, false, ""], ["barrier_fallen", "life", 2, 1, 2, false, ""], ["debris", "life", 1, 1, 1, false, ""], ["tire", "life", 1, 1, 2, false, ""], ["pothole", "life", 1, 1, 1, false, ""],
+	["pave_crack", "life", 2, 1, 1, false, ""], ["puddle", "life", 2, 1, 1, false, ""], ["stop_sign", "life", 1, 1, 2, false, ""], ["bus_sign", "life", 1, 1, 2, false, ""],
+	["parking_meter", "life", 1, 1, 2, false, ""], ["postbox", "life", 1, 1, 2, false, ""], ["news_box", "life", 1, 1, 2, false, ""], ["flyers", "life", 1, 1, 1, false, ""],
+	["graffiti", "life", 2, 1, 1, false, ""], ["cart", "life", 1, 1, 2, false, ""], ["cart_fallen", "life", 2, 1, 2, false, ""], ["suitcase", "life", 1, 1, 2, false, ""],
+	["backpack", "life", 1, 1, 2, false, ""], ["bin_bag", "life", 1, 1, 2, false, ""], ["body", "life", 2, 1, 1, false, ""], ["blood_smear", "life", 2, 1, 1, false, ""],
+	["blood_pool", "life", 1, 1, 1, false, ""], ["blood_prints", "life", 2, 1, 1, false, ""], ["camp_tent", "life", 3, 2, 2, false, ""], ["campfire", "life", 1, 1, 1, false, ""],
+	["camp_chair", "life", 1, 1, 2, false, ""], ["tarp_lean", "life", 2, 2, 2, false, ""], ["pallet", "life", 2, 1, 2, false, ""], ["note", "life", 1, 1, 1, false, ""],
+	["flowers", "life", 1, 1, 1, false, ""], ["rubble", "life", 1, 1, 1, false, ""], ["pram", "life", 1, 1, 2, false, ""], ["laundry", "life", 3, 1, 4, false, ""],
+	["trampoline", "life", 2, 2, 2, false, ""], ["bbq", "life", 1, 1, 2, false, ""], ["gnome", "life", 1, 1, 2, false, ""], ["toys", "life", 1, 1, 1, false, ""],
+	["sandpit", "life", 2, 2, 1, false, ""], ["paddling_pool", "life", 2, 2, 1, false, ""], ["flower_bed", "life", 2, 1, 1, false, ""], ["veg_patch", "life", 3, 2, 1, false, ""],
+	["weeds", "life", 1, 1, 1, false, ""], ["woodpile", "life", 2, 1, 2, false, ""], ["rain_barrel", "life", 1, 1, 2, false, ""], ["barrow", "life", 1, 1, 2, false, ""],
+	["birdbath", "life", 1, 1, 2, false, ""], ["deck_chair", "life", 1, 1, 2, false, ""], ["picnic_table", "life", 3, 2, 2, false, ""], ["kennel", "life", 1, 1, 2, false, ""],
+	["doormat", "life", 1, 1, 1, false, ""], ["plant_pot", "life", 1, 1, 2, false, ""], ["compost_heap", "life", 1, 1, 2, false, ""], ["gas_pump", "life", 1, 2, 2, false, ""],
 ]
 ## Things drawn along an axis (the manifest has `orient`, not `facing`, for them) and their axis; and the cars (the kit's `car`).
-const KIT_ORIENT := {"bike": "h", "garden_bed": "h", "swing_set": "h"}
+const KIT_ORIENT := {"bike": "h", "garden_bed": "h", "swing_set": "h", "laundry": "h"}
 ## The containers' loot: each new kind is like an old one of the raid sites' table (`affinity`), times a factor.
 const KIT_LIKE := {
 	"kitchen_counter": ["counter", 1.0], "cupboard": ["cabinet", 1.0], "wardrobe": ["cabinet", 0.8], "dresser": ["cabinet", 0.9], "nightstand": ["cabinet", 0.6],
 	"bookshelf": ["shelf", 0.8], "shelf_tins": ["shelf", 1.3], "desk": ["cabinet", 0.7], "toolbox": ["locker", 1.0], "workbench": ["counter", 1.1],
 	"medicine_cabinet": ["cabinet", 0.5], "box": ["crate", 1.0],
+	"shop_shelf": ["shelf", 1.3], "checkout": ["counter", 1.0], "display_case": ["cabinet", 0.9], "cooler": ["fridge", 1.0], "tool_chest": ["locker", 1.1], "toy_chest": ["crate", 0.8], "vanity": ["cabinet", 0.6],
 }
 ## The floor of a room by its name (the kit's ground ids): the names of the building programs (scripts/town/building_plans.gd). A name that is not here keeps the floor the terrain has.
 const FLOOR_OF := {
@@ -57,12 +81,17 @@ const FLOOR_OF := {
 	"engine bay": "floor_hall", "gym": "floor_hall", "banking hall": "floor_hall", "reception": "floor_hall", "waiting room": "floor_hall", "ward": "floor_hall", "pharmacy": "floor_hall",
 	"cell": "floor_hall", "armoury": "floor_hall", "vault": "floor_hall", "front desk": "floor_hall", "chancel": "floor_hall", "shed": "floor_wood", "room": "floor_wood",
 	"barn": "dirt_path", "stable": "dirt_path",
+	"salon": "floor_kitchen", "laundromat": "floor_kitchen", "bar": "floor_wood", "cold room": "floor_hall", "showroom": "floor_hall", "gallery": "floor_hall", "theatre": "floor_carpet",
+	"studio": "floor_carpet", "chamber": "floor_wood", "courtroom": "floor_wood", "archive": "floor_wood", "silo": "floor_hall", "coop": "dirt_path", "greenhouse": "dirt_path", "summerhouse": "floor_wood",
 }
 
 var tids := {}
 var kit_info := {}
 ## ROOMY HOUSES: whether the building being furnished is a home (set by BuildingGen for each building): see `ROOMY_FREE`.
 var strict := false
+## WORLD3: whether the rooms of the building being furnished get the extra furniture (`_extras`: a piano, a fireplace, a crib, a tool chest, a till...), and the id of its plan (what its shop sells).
+var extras_ok := false
+var style := ""
 var _lane_cv = null
 var _lane_cache := {}
 var door_t := 23
@@ -752,9 +781,169 @@ func furnish_room(cv, rng: RandomNumberGenerator, name: String, r: Rect2i, front
 			if name == "barn":
 				for k in 2:
 					put(cv, "garden_bed", rng.randi_range(x, r.end.x - 3), rng.randi_range(y, r.end.y - 1))
+		# WORLD3's rooms
+		"salon":
+			far_row(cv, r, front, [["armchair", false], ["armchair", false], ["armchair", false], ["washbasin", false]])
+			try_spots(cv, "shelf_tins", _along(x, w - 1, y if front == "S" else y + h - 1), true)
+			if w >= 4 and h >= 4:
+				put(cv, "coffee_table", x + (w - 2) / 2, y + h / 2)
+			try_spots(cv, "lamp_floor", [Vector2i(x, y), Vector2i(x + w - 1, y)])
+		"laundromat":
+			far_row(cv, r, front, [["kitchen_counter", true], ["kitchen_counter", false], ["kitchen_counter", true]])
+			for k in 3:
+				try_spots(cv, "laundry_basket", [Vector2i(rng.randi_range(x, x + w - 1), rng.randi_range(y, y + h - 1))])
+			try_spots(cv, "bench", _along(x, w - 1, y if front == "S" else y + h - 1))
+		"bar":
+			far_row(cv, r, front, [["kitchen_counter", true], ["kitchen_counter", true], ["fridge", true], ["kitchen_counter", false]])
+			var by := y + (1 if front == "S" else 2)
+			var bx := x
+			while by + 1 < r.end.y - 1:
+				bx = x
+				while bx + 3 <= r.end.x - 1:
+					if rng.randf() < 0.8 and put(cv, "dining_table", bx, by):
+						put(cv, "chair", bx - 1, by)
+						put(cv, "chair", bx + 2, by)
+					bx += 5
+				by += 3
+			try_spots(cv, "bench", _along(x, w - 1, y + h - 1 if front == "S" else y))
+		"cold room":
+			rows_of(cv, r, [["fridge", true], ["fridge", true], ["crate", true], ["fridge", true], ["box", true]], rng.randf() < 0.5)
+		"showroom":
+			if w >= 5 and h >= 3:
+				put(cv, "car_h", x + 1, y + (h - 2) / 2, rng.randf() < 0.4)
+			if w >= 11 and h >= 6:
+				put(cv, "car_h", x + 6, y + h - 3 if front == "N" else y + 1, rng.randf() < 0.4)
+			desk_with_chair(cv, x, x + w, y + (h - 1 if front == "S" else 0), true)
+			try_spots(cv, "lamp_floor", [Vector2i(x, y), Vector2i(x + w - 1, y)])
+		"gallery":
+			var gy := y + 1
+			while gy + 1 < r.end.y:
+				var gx := x + 1
+				while gx + 2 <= r.end.x - 1:
+					if rng.randf() < 0.7:
+						put(cv, "bench" if rng.randf() < 0.5 else "coffee_table", gx, gy)
+					gx += 4
+				gy += 3
+			far_row(cv, r, front, [["bookshelf", true], ["bookshelf", true], ["cupboard", true]])
+			try_spots(cv, "lamp_floor", [Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1)])
+		"theatre":
+			var ty2 := y + 1
+			while ty2 + 1 < r.end.y - 1:
+				var tx2 := x + 1
+				while tx2 + 2 <= r.end.x - 1:
+					put(cv, "bench", tx2, ty2)
+					tx2 += 3
+				ty2 += 2
+		"studio":
+			desk_with_chair(cv, x, x + w, y, true)
+			desk_with_chair(cv, x, x + w, y + h - 2, rng.randf() < 0.5)
+			try_spots(cv, "bookshelf", _along(x, w - 1, y + h - 1), true)
+			try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, y), Vector2i(x, y)])
+		"chamber", "courtroom":
+			put(cv, "desk", x + (w - 2) / 2, y if front == "S" else y + h - 1, rng.randf() < 0.5)
+			var cy2 := y + (2 if front == "N" else 1)
+			while cy2 + 1 < r.end.y - 1:
+				var cx2 := x
+				while cx2 + 2 <= r.end.x:
+					put(cv, "bench", cx2, cy2)
+					cx2 += 3
+				cy2 += 2
+			try_spots(cv, "bookshelf", _along(x, w - 1, y), true)
+		"archive":
+			var ay := y
+			while ay < r.end.y:
+				var ax := x
+				while ax + 2 <= r.end.x:
+					put(cv, "bookshelf", ax, ay, rng.randf() < 0.5)
+					ax += 2
+				ay += 3
+		"silo", "coop":
+			for k in (4 if name == "silo" else 3):
+				put(cv, "crate" if rng.randf() < 0.5 else "box", rng.randi_range(x, r.end.x - 1), rng.randi_range(y, r.end.y - 1), rng.randf() < 0.5)
+		"greenhouse":
+			var gy2 := y
+			while gy2 < r.end.y:
+				put(cv, "garden_bed", x, gy2)
+				if w >= 7:
+					put(cv, "garden_bed", x + 4, gy2)
+				gy2 += 2
+		"summerhouse":
+			try_spots(cv, "bench", _along(x, w - 1, y))
+			try_spots(cv, "lamp_floor", [Vector2i(x + w - 1, y + h - 1), Vector2i(x, y + h - 1)])
+	if extras_ok and not start:
+		_extras(cv, rng, name, r, front, kind)
 	# the clutter of a place somebody left: papers, glass, a stain
 	if name != "bathroom" and rng.randf() < 0.55:
 		cv._run_ops([{"op": "decals", "rect": [x, y, w, h], "kinds": ["papers", "broken_glass", "blood_stain"], "n": {"r": [0, 1]}}])
+
+
+## WORLD3: the furniture a room has beyond what its name always gets (the dice of the building's own generator; only where `extras_ok`: the start house and the arrival's candidates keep their old rooms).
+func _extras(cv, rng: RandomNumberGenerator, name: String, r: Rect2i, front: String, kind: String) -> void:
+	var x := r.position.x
+	var y := r.position.y
+	var w := r.size.x
+	var h := r.size.y
+	var corners: Array = [Vector2i(x, y), Vector2i(x + w - 1, y), Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1)]
+	var far_y := y + h - 1 if front == "N" else y
+	match name:
+		"living room", "front room":
+			if rng.randf() < 0.14:
+				try_spots(cv, "piano", _along(x, w - 1, y))
+			if rng.randf() < 0.2:
+				try_spots(cv, "fireplace", _along(x, w - 1, far_y))
+			if rng.randf() < 0.05:
+				try_spots(cv, "aquarium", _along(x, w - 1, y))
+			if rng.randf() < 0.4:
+				try_spots(cv, "plant_floor", corners)
+			if rng.randf() < 0.14:
+				try_spots(cv, "rocking_chair", corners)
+		"bedroom":
+			if rng.randf() < 0.2:
+				try_spots(cv, "vanity", _along(x, w, y + h - 1), true)
+			if rng.randf() < 0.12:
+				try_spots(cv, "toy_chest", corners, true)
+			if w >= 3 and h >= 4 and rng.randf() < 0.07:
+				try_spots(cv, "bunk_bed", _along(x, w, y))
+		"nursery":
+			try_spots(cv, "crib", _along(x, w, y))
+			if rng.randf() < 0.6:
+				try_spots(cv, "toy_chest", corners, true)
+		"bathroom":
+			if w >= 3 and h >= 3 and rng.randf() < 0.35:
+				try_spots(cv, "shower", [Vector2i(x, y), Vector2i(x + w - 1, y), Vector2i(x, y + h - 1), Vector2i(x + w - 1, y + h - 1)])
+		"utility":
+			if rng.randf() < 0.6:
+				try_spots(cv, "washer", _along(x, w, y))
+		"garage", "workshop":
+			if rng.randf() < 0.6:
+				try_spots(cv, "tool_chest", _along(x, w - 1, y), true)
+			if rng.randf() < 0.4:
+				try_spots(cv, "tire_stack", corners)
+			for k in rng.randi_range(0, 2):
+				try_spots(cv, "jerrycan", corners)
+		"storeroom", "store":
+			if w >= 3 and rng.randf() < 0.3:
+				try_spots(cv, "shop_shelf", _along(x, w - 1, y), true)
+		"dining hall", "bar":
+			for k in rng.randi_range(2, 4):
+				var sp := Vector2i(rng.randi_range(x + 1, maxi(x + 1, x + w - 3)), rng.randi_range(y + 1, maxi(y + 1, y + h - 3)))
+				if put(cv, "cafe_table", sp.x, sp.y):
+					put(cv, "chair", sp.x - 1, sp.y)
+					put(cv, "chair", sp.x + 1, sp.y)
+			if name == "bar":
+				for k in 3:
+					try_spots(cv, "bar_stool", _along(x, w, far_y + (-1 if front == "N" else 1)))
+		"salon":
+			for k in rng.randi_range(2, 3):
+				try_spots(cv, "barber_chair", _along(x, w, y + h / 2))
+		"office", "reception", "waiting room", "hall", "lobby", "banking hall":
+			if rng.randf() < 0.3:
+				try_spots(cv, "plant_floor", corners)
+		"shop floor":
+			if rng.randf() < 0.18:
+				try_spots(cv, "mannequin", corners)
+			if rng.randf() < 0.2:
+				try_spots(cv, "cart", corners)
 
 
 ## The spots along a row `y` from `x` for `n` tiles (top left tiles).
@@ -975,9 +1164,35 @@ func _has_container(cv, r: Rect2i) -> bool:
 
 
 func shop(cv, _rng: RandomNumberGenerator, r: Rect2i) -> void:
+	var shelves: Array = ["shelf_tins"]
+	var counters: Array = ["kitchen_counter", "fridge"]
+	if extras_ok:
+		# WORLD3: what a shop has on its shelves and at its till by what it is (the plan's id)
+		match style:
+			"bookshop":
+				shelves = ["bookshelf", "bookshelf", "shop_shelf"]
+				counters = ["checkout", "desk"]
+			"electronics":
+				shelves = ["display_case", "shop_shelf"]
+				counters = ["checkout", "display_case"]
+			"thrift":
+				shelves = ["shop_shelf", "wardrobe", "crate", "dresser"]
+				counters = ["checkout", "kitchen_counter"]
+			"pharmacy", "pharmacy_corner":
+				shelves = ["medicine_cabinet", "shop_shelf", "shelf_tins"]
+				counters = ["checkout", "cupboard"]
+			"butcher", "bakery", "bakery_oven":
+				shelves = ["shop_shelf", "cooler"]
+				counters = ["checkout", "cooler", "kitchen_counter"]
+			"hardware", "hardware_yard":
+				shelves = ["shop_shelf", "tool_chest", "shelf_tins"]
+				counters = ["checkout", "workbench"]
+			_:
+				shelves = ["shop_shelf", "shop_shelf", "shelf_tins"]
+				counters = ["checkout", "kitchen_counter", "cooler"]
 	cv._run_ops([
-		{"op": "rows", "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "kinds": ["shelf_tins"], "pitch": 3, "y0": 1, "margin": 1, "container": 0.8},
-		{"op": "line", "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "side": "N", "kinds": ["kitchen_counter", "fridge"], "gap": [0, 0], "container": true, "n": 3},
+		{"op": "rows", "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "kinds": shelves, "pitch": 3, "y0": 1, "margin": 1, "container": 0.8},
+		{"op": "line", "rect": [r.position.x, r.position.y, r.size.x, r.size.y], "side": "N", "kinds": counters, "gap": [0, 0], "container": true, "n": 3},
 	])
 
 
@@ -1016,7 +1231,7 @@ func start_extras(cv, _rng: RandomNumberGenerator) -> void:
 ## hedge across the front. The start lot gets only the path and the front step. `home`: a house (a yard); else a shop, a works, a public building (the path, the steps, a bin or a bike).
 ## `door`: the tile outside the front door (lot coordinates), `back_door` the tile outside a back door on the far side (or (-1, -1)), `house` the bounding box of the building,
 ## `garage` the tile of a garage door's first cell (or (-1, -1)). Returns {"ground": [[x, y, code]], "lines": [[x, y, code]], "gates": [...], "drive": Rect2i} (lot coordinates).
-func dress_lot(cv, rng: RandomNumberGenerator, kind: String, lot: Rect2i, front: String, house: Rect2i, door: Vector2i, back_door: Vector2i, garage: Vector2i, start: bool, fenced: bool, home: bool, size_limit: int) -> Dictionary:
+func dress_lot(cv, rng: RandomNumberGenerator, kind: String, lot: Rect2i, front: String, house: Rect2i, door: Vector2i, back_door: Vector2i, garage: Vector2i, start: bool, fenced: bool, home: bool, size_limit: int, extra_doors: Array = []) -> Dictionary:
 	var lw := lot.size.x
 	var lh := lot.size.y
 	var out := {"ground": [], "lines": [], "gates": [], "drive": Rect2i()}
@@ -1036,6 +1251,23 @@ func dress_lot(cv, rng: RandomNumberGenerator, kind: String, lot: Rect2i, front:
 	if o != null:
 		o["facing"] = "s" if south else "n"
 		o["variant"] = step_variant
+	# (WORLD3: the other front doors of a building of units each have their path and step; the fence across the front leaves a gap at each)
+	var gap_xs: Array = [dx0 - 1]
+	for ed in extra_doors:
+		var edx: int = Vector2i(ed).x
+		var edy: int = Vector2i(ed).y
+		for k in rows:
+			var yy2 := edy + dir * k
+			if yy2 < 0 or yy2 >= lh:
+				break
+			for xx in [edx, edx + 1]:
+				out.ground.append([xx, yy2, path_code])
+		cv._keep_rect(Rect2i(edx - 1, (edy if south else 0), 4, (lh - edy) if south else (edy + 1)), true)
+		var eo = cv._decor("step", edx - 1, edy, 0.0, 0.0)
+		if eo != null:
+			eo["facing"] = "s" if south else "n"
+			eo["variant"] = step_variant
+		gap_xs.append(edx - 1)
 	if start:
 		return out
 	# the back door's step
@@ -1068,17 +1300,22 @@ func dress_lot(cv, rng: RandomNumberGenerator, kind: String, lot: Rect2i, front:
 		return out
 	# a fence or hedge across the front, with a gap for the path (a third of the open lots)
 	if not fenced and not closed_front and rng.randf() < 0.34:
-		var styles := [1, 1, 2, 2, 3, 4, 5]
+		var styles := [1, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 		var style: int = styles[rng.randi() % styles.size()]
 		var gx := dx0 - 1
 		for xx in lw:
-			if xx >= gx and xx < gx + 4:
+			var in_gap := false
+			for gg in gap_xs:
+				if xx >= int(gg) and xx < int(gg) + 4:
+					in_gap = true
+			if in_gap:
 				continue
 			if cv.is_open(xx, row_front) and cv.terrain[row_front * lw + xx] == int(tids.GRASS):
 				cv.solid[row_front * lw + xx] = 1
 				out.lines.append([xx, row_front, style])
 		if style <= 2:
-			out.gates.append({"x": gx, "y": row_front, "w": 4, "orient": "h"})
+			for gg in gap_xs:
+				out.gates.append({"x": int(gg), "y": row_front, "w": 4, "orient": "h"})
 	# beside the step
 	if not closed_front:
 		for bx in [dx0 - 2, dx0 + 3]:

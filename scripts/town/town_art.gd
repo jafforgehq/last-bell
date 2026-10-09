@@ -70,6 +70,21 @@ static func load_manifest(path: String = MANIFEST) -> void:
 	for it in parsed.items:
 		if it is Dictionary and it.has("id"):
 			_man[String(it.id)] = it
+	# WORLD3: the street, yard and room props of tools/make_town_life.py (assets/data/town_art_life.json: the schema of this manifest, 64 px to the tile, and `append` for an item the kit has)
+	var life_path := path.get_base_dir().path_join("town_art_life.json")
+	if FileAccess.file_exists(life_path):
+		var life = JSON.parse_string(FileAccess.get_file_as_string(life_path))
+		if life is Dictionary:
+			for it in life.get("items", []):
+				if it is Dictionary and it.has("id"):
+					_man[String(it.id)] = it
+			for ap in life.get("append", []):
+				if ap is Dictionary and _man.has(String(ap.get("id", ""))):
+					var base: Dictionary = _man[String(ap.id)]
+					var sps: Array = (base.get("sprites", []) as Array).duplicate()
+					sps.append_array(ap.get("append_sprites", []))
+					base["sprites"] = sps
+					base["variants"] = int(ap.get("variants", base.get("variants", 1)))
 
 
 ## True when the manifest has this item (a test, and the caller that wants to know whether art exists).
@@ -256,7 +271,7 @@ const CENTERED := ["car_wreck"]
 ## the materials of the wall tops (`data.kit.wall`, code = index; 0 none) and the lines of fence and hedge (`data.kit.line`).
 const GROUNDS := ["lawn", "asphalt", "sidewalk", "dirt_path", "gravel", "floor_wood", "floor_hall", "floor_kitchen", "floor_carpet", "floor_bath", "floor_runner_h", "floor_runner_v"]
 const WALL_MATS := ["", "wall_brick", "wall_white", "wall_blue", "wall_stucco", "wall_sage", "wall_timber", "wall_plaster"]
-const LINES := ["", "fence_picket_white", "fence_picket_brown", "fence_chainlink", "wall_low_brick", "hedge"]
+const LINES := ["", "fence_picket_white", "fence_picket_brown", "fence_chainlink", "wall_low_brick", "hedge", "fence_wire", "fence_privacy", "fence_rail", "hedge_wild", "wall_stone"]
 ## The floor of a room by its name (the kit's ground ids), and the floors of the shop and of the doorways.
 const FLOOR_OF_ROOM := {
 	"living room": "floor_wood", "front room": "floor_wood", "bedroom": "floor_carpet", "side": "floor_wood", "kitchen": "floor_kitchen", "bathroom": "floor_bath",
@@ -336,7 +351,8 @@ static func _look_of(item: Dictionary, sp: Dictionary) -> Dictionary:
 	var src := Rect2(float(r[0]), float(r[1]), float(r[2]), float(r[3]))
 	var fp: Array = sp.get("fp", item.get("footprint", [1, 1]))
 	var anchor: Array = item.get("anchor", [0, 0])
-	var k := float(GD.TILE) / _tile_px
+	# (WORLD3: the life items are drawn at 64 px to the tile, an item or a sprite says so)
+	var k := float(GD.TILE) / float(sp.get("tile_px", item.get("tile_px", _tile_px)))
 	var size := src.size * k
 	var off := -Vector2(float(anchor[0]), float(anchor[1])) * float(GD.TILE)
 	if String(item.id) in CENTERED:

@@ -22,7 +22,12 @@ func _initialize() -> void:
 	keys.sort()
 	var lines: Array = []
 	var missing := 0
+	# (WORLD3: the life items live in one sheet, tools/make_town_life.py: they have no picture of their own and keep the size that script wrote)
+	var old = JSON.parse_string(FileAccess.get_file_as_string(OUT)) if FileAccess.file_exists(OUT) else {}
 	for path in keys:
+		if String(path).contains("/town/life/") and old is Dictionary and old.has(path):
+			lines.append("\"%s\": [%d, %d]" % [path, int(old[path][0]), int(old[path][1])])
+			continue
 		var tex := load(String(path)) as Texture2D
 		if tex == null:
 			push_error("make_prop_sizes: no picture %s" % path)

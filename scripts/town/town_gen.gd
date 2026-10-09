@@ -335,7 +335,7 @@ func _one_lot(i: int) -> void:
 	var start: bool = bool(lot.start)
 	# ARRIVAL: a candidate's lot (`tier`) is a clear one like the start lot (a bare ring and yard, no fence, no flaw of the dice)
 	var clear: bool = start or bool(lot.get("clear", false))
-	var residential: bool = Districts.TYPE_OF.get(kind, "") == "residential"
+	var residential: bool = Districts.type_of(kind) == "residential"
 	var spec := {"kind": kind, "district": district, "rect": rect, "front": String(lot.front), "plan": lot.plan, "seed": seed_value * 100003 + i, "start": start, "clear": clear,
 		"mat": Districts.wall_code_for(district, rng, TownArt.WALL_MATS), "fenced": false, "yard": "lawn", "ruin": false, "barricade": false, "boarded": false}
 	if district == Districts.SUBURB or district == Districts.EDGE:
@@ -540,13 +540,13 @@ func _stamp_lot(built: Dictionary, lot: Dictionary, spec: Dictionary) -> void:
 		var mat := int(spec.mat)
 		_kit_house(first_id + bi, bd.parts, room_ids[bi], doors, mat, spec, bi == 0)
 		var house := {
-			"id": first_id + bi, "kind": kind,
+			"id": first_id + bi, "kind": kind, "var": String(bd.get("var", kind)), "facade": bd.get("facade", {}),
 			"address": "%d %s" % [int(lot.number) + bi * 2, String(lot.street)],
 			"block": Vector2i(int(lot.block), 0), "rect": box, "parts": bd.parts, "lot": rect, "front": front, "fenced": bool(spec.fenced),
 			"door": door,
 			"doors": doors,
 			"rooms": room_ids[bi], "containers": cont_ids[bi], "dead": [],
-			"district": String(lot.district), "type": String(Districts.TYPE_OF.get(kind, "residential")), "yard": rect, "front_yard": front_yard, "back_yard": back_yard,
+			"district": String(lot.district), "type": Districts.type_of(kind), "yard": rect, "front_yard": front_yard, "back_yard": back_yard,
 			"yard_type": String(spec.yard), "wall": String(TownArt.WALL_MATS[mat]), "roof": roof, "state": String(bd.state),
 			"boarded": bool(spec.get("boarded", false)), "barricaded": bool(spec.get("barricade", false)) and bi == 0, "drive": bd.drive, "landmark": String(bd.landmark),
 			"street": String(lot.street), "number": int(lot.number), "main": bi == 0,
@@ -623,17 +623,29 @@ func _corner_box(house_id: int, rooms: Array, ids: Array, rng: RandomNumberGener
 
 ## The line of a fenced lot (a code of TownArt.LINES): picket (white or brown), chain link or a low brick wall; chain link at the works.
 func _fence_style(lot_id: int, kind: String, district: String) -> int:
-	if district == Districts.INDUSTRIAL or kind in ["scrapyard", "containers", "warehouse", "garage"]:
-		return 3
 	var h := (lot_id * 2246822519 + seed_value * 3266489917) & 0xffff
 	var pick := h % 100
-	if pick < 30:
+	if district == Districts.INDUSTRIAL or kind in ["scrapyard", "containers", "warehouse", "garage"]:
+		# (WORLD3: chain link mostly, rusty wire now and then)
+		return 3 if pick < 72 else 6
+	if pick < 22:
 		return 1
-	if pick < 55:
+	if pick < 40:
 		return 2
-	if pick < 80:
+	if pick < 50:
 		return 3
-	return 4
+	if pick < 58:
+		return 4
+	# (WORLD3: a rusty wire fence, a tall board fence, a post and rail fence, an unkept hedge, a low stone wall)
+	if pick < 68:
+		return 6
+	if pick < 80:
+		return 7
+	if pick < 89:
+		return 8
+	if pick < 95:
+		return 9
+	return 10
 
 
 ## The kit's data of one building: the floor of each room by its name, the material of the outside walls (`mat`, a code of TownArt.WALL_MATS) and of the walls inside, the windows (on the
@@ -1708,7 +1720,7 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 		if is_cand.has(hi) or guarded.has(hi) or floor_tiles[hi].is_empty():
 			continue
 		var hd: Dictionary = _houses[hi]
-		var rg: Array = DEAD_BY_KIND.get(String(hd.kind), [1, 3])
+		var rg: Array = DEAD_BY_KIND.get(String(hd.kind), Plans.Recipes.dead_range(String(hd.kind)))
 		var n := rng.randi_range(int(rg[0]), int(rg[1]))
 		var calm_house: bool = near_calm.call(Vector2(Rect2i(hd.rect).get_center()), 20.0)
 		if calm_house:

@@ -1,0 +1,4793 @@
+{
+ "_doc": "The items of tools/make_town_life.py (WORLD3): the schema of town_art.json. An item whose id is in the kit gets `append_sprites` added to its sprites (and `variants` raised).",
+ "items": [
+  {
+   "id": "cone",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      380,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      464,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A traffic cone (a: standing, b: knocked over).",
+   "tile_px": 64
+  },
+  {
+   "id": "barrier_fallen",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1308,
+      360,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A striped road barrier lying on its side.",
+   "tile_px": 64
+  },
+  {
+   "id": "debris",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      884,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      968,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1052,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "Bits of the fall on the road: bricks, boards, a bag (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "tire",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A tyre on the road.",
+   "tile_px": 64
+  },
+  {
+   "id": "pothole",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      420,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      504,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A pothole in the road (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "pave_crack",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      800,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      948,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A crack running across the paving (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "puddle",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      672,
+      1012,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      820,
+      1012,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      968,
+      1012,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A puddle (a, b, c): blue-grey with a pale glint.",
+   "tile_px": 64
+  },
+  {
+   "id": "stop_sign",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1224,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A stop sign on a post, seen from above: the plate and the post's shadow.",
+   "tile_px": 64
+  },
+  {
+   "id": "bus_sign",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      592,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A bus stop sign: a blue disc on a post.",
+   "tile_px": 64
+  },
+  {
+   "id": "parking_meter",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      716,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A parking meter.",
+   "tile_px": 64
+  },
+  {
+   "id": "postbox",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      336,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A blue post box on the pavement.",
+   "tile_px": 64
+  },
+  {
+   "id": "news_box",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1436,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A newspaper box (a red, b blue, c yellow).",
+   "tile_px": 64
+  },
+  {
+   "id": "flyers",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1140,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1224,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1308,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "Flyers and posters torn down and trodden: pale sheets with a scrawl (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "graffiti",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      844,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      232,
+      844,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      380,
+      844,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      528,
+      844,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 3
+    }
+   ],
+   "variants": 4,
+   "note": "Spray paint on the paving (a: a tag, b: a cross, c: a face, d: HELP).",
+   "tile_px": 64
+  },
+  {
+   "id": "cart",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1096,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A shopping trolley, upright.",
+   "tile_px": 64
+  },
+  {
+   "id": "cart_fallen",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1180,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1328,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A shopping trolley on its side (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "suitcase",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1308,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1392,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A suitcase left in the road (a: brown, b: green, c: red).",
+   "tile_px": 64
+  },
+  {
+   "id": "backpack",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      720,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      804,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A dropped rucksack (a: blue, b: olive).",
+   "tile_px": 64
+  },
+  {
+   "id": "bin_bag",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      252,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      336,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A black bin bag, split (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "body",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1264,
+      508,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      148,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      296,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 3
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      444,
+      592,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 4
+    }
+   ],
+   "variants": 5,
+   "note": "One of the fallen (a to d: different clothes and poses). Dark blood round it.",
+   "tile_px": 64
+  },
+  {
+   "id": "blood_smear",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      820,
+      508,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      968,
+      508,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1116,
+      508,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A smear of blood dragged along the ground (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "blood_pool",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      504,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      588,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A pool of blood (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "blood_prints",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      672,
+      508,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "Bloody footprints going away.",
+   "tile_px": 64
+  },
+  {
+   "id": "camp_tent",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    3,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      720,
+      0,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      932,
+      0,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1144,
+      0,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A makeshift tent (a: olive, b: orange, c: blue). Walkable: it is only a picture.",
+   "tile_px": 64
+  },
+  {
+   "id": "campfire",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      928,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1012,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "The ashes of a camp fire in a ring of stones (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "camp_chair",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      844,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A folding chair.",
+   "tile_px": 64
+  },
+  {
+   "id": "tarp_lean",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1036,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1184,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A tarpaulin stretched from a wall to two poles: a lean-to (a blue, b green).",
+   "tile_px": 64
+  },
+  {
+   "id": "pallet",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      420,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      568,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "Wooden pallets (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "note",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      168,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      252,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      336,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A note nailed to a door or left on the step (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "flowers",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1056,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "Flowers and a burnt-down candle left for somebody.",
+   "tile_px": 64
+  },
+  {
+   "id": "rubble",
+   "category": "street",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1284,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1368,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1452,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "Rubble: broken brick and plaster (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "pram",
+   "category": "street",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      588,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A pram left behind.",
+   "tile_px": 64
+  },
+  {
+   "id": "laundry",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    3,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      928,
+      844,
+      208,
+      80
+     ],
+     "fp": [
+      3,
+      1
+     ],
+     "variant": 0,
+     "orient": "h"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1140,
+      844,
+      208,
+      80
+     ],
+     "fp": [
+      3,
+      1
+     ],
+     "variant": 1,
+     "orient": "h"
+    }
+   ],
+   "variants": 2,
+   "note": "A washing line between two poles, with washing on it (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "trampoline",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1332,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A trampoline: a mat in a ring of springs, a net.",
+   "tile_px": 64
+  },
+  {
+   "id": "bbq",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      168,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A barbecue grill (a: black, b: red).",
+   "tile_px": 64
+  },
+  {
+   "id": "gnome",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1392,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A garden gnome (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "toys",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      884,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      968,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1052,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "Toys left in the grass (a: a ball, b: a truck, c: a doll).",
+   "tile_px": 64
+  },
+  {
+   "id": "sandpit",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      888,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A child's sandpit with a bucket.",
+   "tile_px": 64
+  },
+  {
+   "id": "paddling_pool",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      380,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      528,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A paddling pool (a blue, b green).",
+   "tile_px": 64
+  },
+  {
+   "id": "flower_bed",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      612,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      760,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      908,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A bed of flowers (a red, b yellow, c purple).",
+   "tile_px": 64
+  },
+  {
+   "id": "veg_patch",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    3,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      360,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      212,
+      360,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "Rows of vegetables (a green, b gone to seed).",
+   "tile_px": 64
+  },
+  {
+   "id": "weeds",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      672,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      756,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      840,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "Weeds and tall grass gone wild (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "woodpile",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      924,
+      1264,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A stack of firewood.",
+   "tile_px": 64
+  },
+  {
+   "id": "rain_barrel",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1116,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A rain barrel.",
+   "tile_px": 64
+  },
+  {
+   "id": "barrow",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A wheelbarrow.",
+   "tile_px": 64
+  },
+  {
+   "id": "birdbath",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      420,
+      508,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A bird bath.",
+   "tile_px": 64
+  },
+  {
+   "id": "deck_chair",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1136,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1220,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A deck chair (a red, b blue).",
+   "tile_px": 64
+  },
+  {
+   "id": "picnic_table",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    3,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      676,
+      212,
+      208,
+      144
+     ],
+     "fp": [
+      3,
+      2
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A picnic table with benches.",
+   "tile_px": 64
+  },
+  {
+   "id": "kennel",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      844,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A dog kennel.",
+   "tile_px": 64
+  },
+  {
+   "id": "doormat",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "decal",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      148,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      232,
+      760,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A doormat (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "plant_pot",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      168,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      252,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 2
+    }
+   ],
+   "variants": 3,
+   "note": "A potted plant by the door (a, b, c).",
+   "tile_px": 64
+  },
+  {
+   "id": "compost_heap",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      296,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A compost heap.",
+   "tile_px": 64
+  },
+  {
+   "id": "gas_pump",
+   "category": "outdoors",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      296,
+      212,
+      80,
+      144
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A petrol pump on its island: two nozzles, a display.",
+   "tile_px": 64
+  },
+  {
+   "id": "shop_shelf",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      148,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      296,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      444,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 1,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      592,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      740,
+      1096,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 2,
+     "facing": "n"
+    }
+   ],
+   "variants": 3,
+   "note": "A shop shelf stacked with tins and boxes (a, b, c).",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "checkout",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      676,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      148,
+      676,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A check-out counter with a till.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "display_case",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1304,
+      676,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A glass display case.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "cooler",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      548,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      632,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      716,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      800,
+      676,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    }
+   ],
+   "variants": 1,
+   "note": "A drinks cooler.",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "tool_chest",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      252,
+      1180,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      400,
+      1180,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A red tool chest on wheels.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "toy_chest",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      548,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      632,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      716,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      800,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    }
+   ],
+   "variants": 1,
+   "note": "A toy chest.",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "vanity",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid",
+    "container"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1136,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1220,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1304,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1388,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    }
+   ],
+   "variants": 1,
+   "note": "A dressing table with a mirror.",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "piano",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1096,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1244,
+      928,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "An upright piano.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "fireplace",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      316,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      464,
+      760,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A brick fireplace.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "aquarium",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      424,
+      360,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      572,
+      360,
+      144,
+      80
+     ],
+     "fp": [
+      2,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A fish tank on a stand.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "crib",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1356,
+      0,
+      80,
+      144
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1440,
+      0,
+      80,
+      144
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "A cot with a mobile.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "bunk_bed",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      552,
+      0,
+      80,
+      144
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      636,
+      0,
+      80,
+      144
+     ],
+     "fp": [
+      1,
+      2
+     ],
+     "variant": 0,
+     "facing": "n"
+    }
+   ],
+   "variants": 1,
+   "note": "Bunk beds seen from above: the top bunk and its ladder.",
+   "tile_px": 64,
+   "facings": [
+    "n",
+    "s"
+   ]
+  },
+  {
+   "id": "shower",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      888,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      972,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1056,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1140,
+      1096,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    }
+   ],
+   "variants": 1,
+   "note": "A shower stall.",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "washer",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      84,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      168,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      252,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      336,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      420,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      504,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      588,
+      1264,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1,
+     "facing": "e"
+    }
+   ],
+   "variants": 2,
+   "note": "A washing machine (a white, b grey).",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "dining_table_sq",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    2,
+    2
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      148,
+      212,
+      144,
+      144
+     ],
+     "fp": [
+      2,
+      2
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A square table (a wood, b white).",
+   "tile_px": 64
+  },
+  {
+   "id": "barber_chair",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      972,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "s"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1056,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "n"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1140,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "w"
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1224,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0,
+     "facing": "e"
+    }
+   ],
+   "variants": 1,
+   "note": "A barber's chair.",
+   "tile_px": 64,
+   "facings": [
+    "e",
+    "n",
+    "s",
+    "w"
+   ]
+  },
+  {
+   "id": "cafe_table",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      676,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      760,
+      592,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A small round cafe table (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "bar_stool",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      888,
+      360,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A bar stool.",
+   "tile_px": 64
+  },
+  {
+   "id": "plant_floor",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1392,
+      928,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A big plant in a pot (a, b).",
+   "tile_px": 64
+  },
+  {
+   "id": "rocking_chair",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1200,
+      1012,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A rocking chair.",
+   "tile_px": 64
+  },
+  {
+   "id": "tire_stack",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life",
+    "solid"
+   ],
+   "solid": "all",
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      168,
+      1180,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A stack of tyres.",
+   "tile_px": 64
+  },
+  {
+   "id": "jerrycan",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      676,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      760,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 1
+    }
+   ],
+   "variants": 2,
+   "note": "A jerry can (a red, b green).",
+   "tile_px": 64
+  },
+  {
+   "id": "mannequin",
+   "category": "furniture",
+   "kind": "prop",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0.0625,
+    0.0625
+   ],
+   "tags": [
+    "life"
+   ],
+   "solid": [],
+   "sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      1352,
+      844,
+      80,
+      80
+     ],
+     "fp": [
+      1,
+      1
+     ],
+     "variant": 0
+    }
+   ],
+   "variants": 1,
+   "note": "A shop mannequin.",
+   "tile_px": 64
+  },
+  {
+   "id": "fence_wire",
+   "category": "outdoors",
+   "kind": "atlas",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "0": [
+     0,
+     0
+    ],
+    "1": [
+     1,
+     0
+    ],
+    "2": [
+     2,
+     0
+    ],
+    "3": [
+     3,
+     0
+    ],
+    "4": [
+     0,
+     1
+    ],
+    "5": [
+     1,
+     1
+    ],
+    "6": [
+     2,
+     1
+    ],
+    "7": [
+     3,
+     1
+    ],
+    "8": [
+     0,
+     2
+    ],
+    "9": [
+     1,
+     2
+    ],
+    "10": [
+     2,
+     2
+    ],
+    "11": [
+     3,
+     2
+    ],
+    "12": [
+     0,
+     3
+    ],
+    "13": [
+     1,
+     3
+    ],
+    "14": [
+     2,
+     3
+    ],
+    "15": [
+     3,
+     3
+    ]
+   },
+   "tags": [
+    "fence",
+    "solid",
+    "autotile",
+    "life"
+   ],
+   "sprites": [
+    {
+     "file": "life/fences.png",
+     "rect": [
+      0,
+      0,
+      512,
+      512
+     ]
+    }
+   ],
+   "note": "A rusty wire fence on posts, sagging. Cell index = mask of the CONNECTED sides: N 1 + E 2 + S 4 + W 8; col = index % 4, row = index // 4.",
+   "solid": "all",
+   "name": "fence_wire"
+  },
+  {
+   "id": "fence_privacy",
+   "category": "outdoors",
+   "kind": "atlas",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "0": [
+     0,
+     0
+    ],
+    "1": [
+     1,
+     0
+    ],
+    "2": [
+     2,
+     0
+    ],
+    "3": [
+     3,
+     0
+    ],
+    "4": [
+     0,
+     1
+    ],
+    "5": [
+     1,
+     1
+    ],
+    "6": [
+     2,
+     1
+    ],
+    "7": [
+     3,
+     1
+    ],
+    "8": [
+     0,
+     2
+    ],
+    "9": [
+     1,
+     2
+    ],
+    "10": [
+     2,
+     2
+    ],
+    "11": [
+     3,
+     2
+    ],
+    "12": [
+     0,
+     3
+    ],
+    "13": [
+     1,
+     3
+    ],
+    "14": [
+     2,
+     3
+    ],
+    "15": [
+     3,
+     3
+    ]
+   },
+   "tags": [
+    "fence",
+    "solid",
+    "autotile",
+    "life"
+   ],
+   "sprites": [
+    {
+     "file": "life/fences.png",
+     "rect": [
+      0,
+      512,
+      512,
+      512
+     ]
+    }
+   ],
+   "note": "A tall board fence, seen from above. Cell index = mask of the CONNECTED sides: N 1 + E 2 + S 4 + W 8; col = index % 4, row = index // 4.",
+   "solid": "all",
+   "name": "fence_privacy"
+  },
+  {
+   "id": "fence_rail",
+   "category": "outdoors",
+   "kind": "atlas",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "0": [
+     0,
+     0
+    ],
+    "1": [
+     1,
+     0
+    ],
+    "2": [
+     2,
+     0
+    ],
+    "3": [
+     3,
+     0
+    ],
+    "4": [
+     0,
+     1
+    ],
+    "5": [
+     1,
+     1
+    ],
+    "6": [
+     2,
+     1
+    ],
+    "7": [
+     3,
+     1
+    ],
+    "8": [
+     0,
+     2
+    ],
+    "9": [
+     1,
+     2
+    ],
+    "10": [
+     2,
+     2
+    ],
+    "11": [
+     3,
+     2
+    ],
+    "12": [
+     0,
+     3
+    ],
+    "13": [
+     1,
+     3
+    ],
+    "14": [
+     2,
+     3
+    ],
+    "15": [
+     3,
+     3
+    ]
+   },
+   "tags": [
+    "fence",
+    "solid",
+    "autotile",
+    "life"
+   ],
+   "sprites": [
+    {
+     "file": "life/fences.png",
+     "rect": [
+      0,
+      1024,
+      512,
+      512
+     ]
+    }
+   ],
+   "note": "A post and rail fence. Cell index = mask of the CONNECTED sides: N 1 + E 2 + S 4 + W 8; col = index % 4, row = index // 4.",
+   "solid": "all",
+   "name": "fence_rail"
+  },
+  {
+   "id": "hedge_wild",
+   "category": "outdoors",
+   "kind": "atlas",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "0": [
+     0,
+     0
+    ],
+    "1": [
+     1,
+     0
+    ],
+    "2": [
+     2,
+     0
+    ],
+    "3": [
+     3,
+     0
+    ],
+    "4": [
+     0,
+     1
+    ],
+    "5": [
+     1,
+     1
+    ],
+    "6": [
+     2,
+     1
+    ],
+    "7": [
+     3,
+     1
+    ],
+    "8": [
+     0,
+     2
+    ],
+    "9": [
+     1,
+     2
+    ],
+    "10": [
+     2,
+     2
+    ],
+    "11": [
+     3,
+     2
+    ],
+    "12": [
+     0,
+     3
+    ],
+    "13": [
+     1,
+     3
+    ],
+    "14": [
+     2,
+     3
+    ],
+    "15": [
+     3,
+     3
+    ]
+   },
+   "tags": [
+    "fence",
+    "solid",
+    "autotile",
+    "life"
+   ],
+   "sprites": [
+    {
+     "file": "life/fences.png",
+     "rect": [
+      0,
+      1536,
+      512,
+      512
+     ]
+    }
+   ],
+   "note": "An unkept hedge, ragged and overgrown. Cell index = mask of the CONNECTED sides: N 1 + E 2 + S 4 + W 8; col = index % 4, row = index // 4.",
+   "solid": "all",
+   "name": "hedge_wild"
+  },
+  {
+   "id": "wall_stone",
+   "category": "outdoors",
+   "kind": "atlas",
+   "layer": "object",
+   "footprint": [
+    1,
+    1
+   ],
+   "anchor": [
+    0,
+    0
+   ],
+   "grid": [
+    4,
+    4
+   ],
+   "cell_px": [
+    128,
+    128
+   ],
+   "cells": {
+    "0": [
+     0,
+     0
+    ],
+    "1": [
+     1,
+     0
+    ],
+    "2": [
+     2,
+     0
+    ],
+    "3": [
+     3,
+     0
+    ],
+    "4": [
+     0,
+     1
+    ],
+    "5": [
+     1,
+     1
+    ],
+    "6": [
+     2,
+     1
+    ],
+    "7": [
+     3,
+     1
+    ],
+    "8": [
+     0,
+     2
+    ],
+    "9": [
+     1,
+     2
+    ],
+    "10": [
+     2,
+     2
+    ],
+    "11": [
+     3,
+     2
+    ],
+    "12": [
+     0,
+     3
+    ],
+    "13": [
+     1,
+     3
+    ],
+    "14": [
+     2,
+     3
+    ],
+    "15": [
+     3,
+     3
+    ]
+   },
+   "tags": [
+    "fence",
+    "solid",
+    "autotile",
+    "life"
+   ],
+   "sprites": [
+    {
+     "file": "life/fences.png",
+     "rect": [
+      0,
+      2048,
+      512,
+      512
+     ]
+    }
+   ],
+   "note": "A low wall of rough stone with a flat coping. Cell index = mask of the CONNECTED sides: N 1 + E 2 + S 4 + W 8; col = index % 4, row = index // 4.",
+   "solid": "all",
+   "name": "wall_stone"
+  }
+ ],
+ "append": [
+  {
+   "id": "car_wreck",
+   "append_sprites": [
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      0,
+      0,
+      272,
+      208
+     ],
+     "variant": 2,
+     "look": "burnt",
+     "fp": [
+      4,
+      3
+     ],
+     "tile_px": 64
+    },
+    {
+     "file": "life/life_sheet.png",
+     "rect": [
+      276,
+      0,
+      272,
+      208
+     ],
+     "variant": 3,
+     "look": "burnt",
+     "fp": [
+      4,
+      3
+     ],
+     "tile_px": 64
+    }
+   ],
+   "variants": 4,
+   "tile_px_of_appended": 64
+  }
+ ]
+}

@@ -12,6 +12,8 @@
 ##   edge        farmhouses, barns, fields and woods round the border
 extends RefCounted
 
+const Recipes := preload("res://scripts/town/building_recipes.gd")
+
 const SUBURB := "suburb"
 const OLDTOWN := "oldtown"
 const MAIN := "main"
@@ -50,12 +52,19 @@ const ROOFS := {
 }
 
 ## What a lot of a district is built with: [building kind, weight]. A kind that does not fit the lot is skipped; "pocket" is a small lot left to trees and grass.
+## (WORLD3: a lot more kinds in every district, and a kind has several plans of its own: scripts/town/building_recipes.gd)
 const MIX := {
-	"suburb": [["family", 0.22], ["medium", 0.14], ["small", 0.05], ["bungalow", 0.10], ["lhouse", 0.09], ["twowing", 0.07], ["thouse", 0.04], ["uhouse", 0.03], ["terrace", 0.10], ["cottage", 0.03], ["pocket", 0.03]],
-	"oldtown": [["terrace", 0.42], ["terrace_ext", 0.16], ["cottage", 0.05], ["cornershop", 0.08], ["rowshop", 0.1], ["small", 0.14], ["pocket", 0.05]],
-	"main": [["rowshop", 0.44], ["shop", 0.1], ["apartments", 0.08], ["pharmacy", 0.06], ["bakery", 0.06], ["hardware", 0.05], ["diner", 0.05], ["bank", 0.03], ["office", 0.06], ["pocket", 0.02]],
-	"industrial": [["warehouse", 0.2], ["garage", 0.26], ["scrapyard", 0.12], ["containers", 0.1], ["workshop", 0.32]],
-	"civic": [["library", 0.2], ["clinic", 0.1], ["small", 0.12], ["medium", 0.2], ["family", 0.08], ["office", 0.1], ["terrace", 0.1], ["pocket", 0.1]],
+	"suburb": [["family", 0.12], ["medium", 0.10], ["small", 0.04], ["bungalow", 0.08], ["lhouse", 0.06], ["twowing", 0.05], ["thouse", 0.03], ["uhouse", 0.02], ["ranch", 0.12], ["splitlevel", 0.05],
+		["duplex", 0.07], ["cabin", 0.03], ["manor", 0.02], ["hhouse", 0.02], ["terrace", 0.04], ["cottage", 0.03], ["pocket", 0.03]],
+	"oldtown": [["terrace", 0.26], ["terrace3", 0.06], ["terrace_ext", 0.08], ["townhouse", 0.12], ["duplex", 0.04], ["cottage", 0.04], ["cornershop", 0.06], ["rowshop", 0.08], ["cafe", 0.04], ["barber", 0.015],
+		["laundromat", 0.015], ["pub", 0.03], ["butcher", 0.015], ["florist", 0.015], ["small", 0.08], ["pocket", 0.05]],
+	"main": [["rowshop", 0.24], ["shop", 0.10], ["apartments", 0.08], ["pharmacy", 0.05], ["bakery", 0.05], ["hardware", 0.04], ["diner", 0.04], ["bank", 0.03], ["office", 0.05], ["cafe", 0.05], ["barber", 0.03],
+		["laundromat", 0.03], ["pub", 0.04], ["butcher", 0.03], ["florist", 0.03], ["strip", 0.04], ["agency", 0.03], ["surgery", 0.02], ["officeblock", 0.02], ["gas_station", 0.03], ["dealer", 0.02],
+		["cornershop", 0.02], ["kiosk", 0.02], ["pocket", 0.02]],
+	"industrial": [["warehouse", 0.14], ["factory", 0.10], ["garage", 0.14], ["workshop", 0.14], ["scrapyard", 0.08], ["containers", 0.06], ["carwash", 0.03], ["storage", 0.06], ["depot", 0.04],
+		["substation", 0.04], ["lumber", 0.05], ["coldstore", 0.04], ["gas_station", 0.04], ["dealer", 0.02]],
+	"civic": [["library", 0.10], ["clinic", 0.06], ["small", 0.06], ["medium", 0.10], ["family", 0.05], ["office", 0.05], ["terrace", 0.04], ["townhall", 0.04], ["postoffice", 0.06], ["chapel", 0.04],
+		["hall", 0.06], ["museum", 0.04], ["cinema", 0.03], ["radio_station", 0.03], ["kindergarten", 0.05], ["courthouse", 0.03], ["surgery", 0.03], ["pocket", 0.06]],
 	"edge": [["farmhouse", 0.5], ["barn", 0.5]],
 }
 
@@ -71,6 +80,14 @@ const TYPE_OF := {
 	"church": "civic", "school": "civic", "fire_station": "civic", "police": "civic", "clinic": "civic", "library": "civic",
 	"farmhouse": "farm", "barn": "farm",
 }
+
+
+## The type of a building kind (the old kinds' table above, the new kinds' in scripts/town/building_recipes.gd), "residential" when it is in neither.
+static func type_of(kind: String) -> String:
+	if TYPE_OF.has(kind):
+		return String(TYPE_OF[kind])
+	var nk = Recipes.NEW_KINDS.get(kind)
+	return String(nk[0]) if nk != null else "residential"
 
 
 static func pick(list: Array, rng: RandomNumberGenerator):

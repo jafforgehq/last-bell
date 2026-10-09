@@ -52,6 +52,11 @@ func step(budget_ms: float) -> bool:
 				_data = TownBoot.from_town(_town)
 				_work = TownBoot.object_looks(_data)
 				_work.append_array(TownBoot.object_pictures(_data))
+				# (WORLD3: the town's trees are pictures too, seventeen kinds now: loaded here a step at a time, so that the stage that makes their sprites does not load them all in one frame)
+				var tree_files := {}
+				for tr in _data.trees:
+					tree_files[String(tr.file)] = true
+				_work.append_array(tree_files.keys())
 				_faces_from = _work.size()
 				if not _title:    # (the title's few dead take their pictures as they come)
 					_work.append_array(TownBoot.pawn_pictures(_data))
