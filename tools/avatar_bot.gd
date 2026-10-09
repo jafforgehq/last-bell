@@ -487,7 +487,7 @@ class AvatarBot:
 	func _reload_in_a_lull(me) -> void:
 		if float(me.reloading) > 0.0 or me.gun.get("melee", false) or int(me.mag) > MAG_LOW or int(me.mag) >= int(me.gun.get("mag", 0)):
 			return
-		if float(sim.stock.ammo) < float(sim.shot_cost(me)):
+		if float(sim.reserve_ammo(me)) < float(sim.shot_cost(me)):
 			return
 		var here := Vector2(me.x, me.y)
 		for z in sim.zombies:
@@ -712,7 +712,7 @@ class NightStats:
 			"sections_fell": 0, "fell": [], "walls_fell": 0, "down_at_dusk": _down_now(), "down_at_dawn": 0, "hp_lost": 0.0, "hp_by_seg": {}, "min_wall": 1.0,
 			"died": 0, "downed": 0, "bites": 0, "held": true, "over": false,
 			"ready": bool(ready.get("holds", false)), "ready_known": bool(ready.get("known", false)),
-			"people": alive, "stock_ammo0": snappedf(float(sim.stock.ammo), 0.1), "stock_ammo": 0.0,
+			"people": alive, "stock_ammo0": snappedf(float(sim.ammo_total()), 0.1), "stock_ammo": 0.0,
 			"first_at": float(outlook.get("first_at", -1.0)), "targets": _targets.duplicate(), "first_claw_at": -1.0,
 			"avatar": {"present": 0.0, "threat_steps": 0, "present_steps": 0, "shots": 0, "kills": 0, "hp_min": 100.0, "downed": 0, "died": 0, "ammo": 0.0, "hurt_s": 0.0},
 			"calls": {"raised": 0, "answered_by_player": 0, "by_default": 0, "mean_s": 0.0},
@@ -867,7 +867,7 @@ class NightStats:
 	func _snapshot(final: bool) -> Dictionary:
 		var out: Dictionary = _cur.duplicate(true)
 		out["down_at_dawn"] = _down_now()
-		out["stock_ammo"] = snappedf(float(sim.stock.ammo), 0.1)
+		out["stock_ammo"] = snappedf(float(sim.ammo_total()), 0.1)
 		out["over"] = final or sim.over != ""
 		out["held"] = int(out.sections_fell) == 0 and int(out.died) == 0
 		var av: Dictionary = out.avatar

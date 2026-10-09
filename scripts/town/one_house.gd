@@ -349,6 +349,10 @@ func _begin_run(difficulty: int, seed_value: int) -> void:
 	var stock = start.get("stock", {})
 	for k in stock:
 		sim.stock[String(k)] = float(stock[k])
+	# (INV-CORE: what she carries out of the van is her pack, not the stores: the data's `start.pack` {item: count}; the stores keep `start.stock`)
+	var inv = sim.get("inv")
+	if inv != null and typeof(start.get("pack")) == TYPE_DICTIONARY:
+		inv.begin(start.pack)
 	var town_data = sim.get("town_data")
 	if typeof(town_data) == TYPE_DICTIONARY and not town_data.is_empty():
 		_town_seed = int(town_data.get("seed", 0))

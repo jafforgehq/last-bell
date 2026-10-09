@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "_doc": "The items of Ruth's backpack and of the containers (INV-CORE, docs/superpowers/specs/2026-10-09-inventory-design.md; the logic is scripts/sim/inventory.gd, the sim part scripts/town/inv.gd). Every number of the inventory is here. items: for each id the name, size (w by h cells, before a turn), stack (the most items in ONE placement: a placement covers its w by h cells whatever its count, so shells with stack 24 are 24 rounds in one cell and a bottle, stack 1, is two cells for one bottle), res (the store resource it stands for: ammo, food, water or meds), units (store units ONE item stands for: a ration pack is 3 food), use (eat, drink, bandage or none), desc (the tooltip). One unit of ammo is what the stores call a round: a shotgun shot costs 0.34 of it (sim.gd SHELL_COST), so a loose shell is worth about three shots; the reload takes whole units from the pack and keeps the fraction as a credit (inv.gd), so the economy the lab was tuned on does not move. pack: the backpack's grid. containers: the grid of a container by its kind (the generator's kinds and the street's cars), `default` for a kind not named; a grid grows by rows if the loot placed in it does not fit (never in the generator's own towns: tests/test_inventory.gd checks seeds 1 to 16). convert: how a container's loot units (the generator's `loot` {res: n}, unchanged) become items, for each res a list of [item, chance] tried in order while the units left are at least the item's: the plain unit item (units 1) takes the rest. withdraw: the items a withdrawn unit of a res is made of, the biggest first (a stack of canned food is the smallest way to carry food). reveal_s: seconds between two items of a container showing in the loot window while it is searched. close_tiles: the window closes when she is farther from the container than this. drop_reach: how far from her feet a dropped pile lies.",
+  "pack": {"w": 8, "h": 4},
+  "items": {
+    "shells": {"name": "Shells", "w": 1, "h": 1, "stack": 24, "res": "ammo", "units": 1, "use": "none", "desc": "Shotgun shells. The reload takes them from the pack."},
+    "canned_food": {"name": "Canned food", "w": 1, "h": 1, "stack": 4, "res": "food", "units": 1, "use": "eat", "desc": "A tin of food: one ration."},
+    "ration_pack": {"name": "Ration pack", "w": 1, "h": 2, "stack": 1, "res": "food", "units": 3, "use": "eat", "desc": "A pack of dried rations: three meals."},
+    "water_bottle": {"name": "Water bottle", "w": 1, "h": 2, "stack": 1, "res": "water", "units": 1, "use": "drink", "desc": "A bottle of clean water."},
+    "water_jug": {"name": "Water jug", "w": 2, "h": 2, "stack": 1, "res": "water", "units": 4, "use": "drink", "desc": "A jug of clean water: four bottles' worth."},
+    "bandage": {"name": "Bandage", "w": 1, "h": 1, "stack": 4, "res": "meds", "units": 1, "use": "bandage", "desc": "Stops a bleeding wound."},
+    "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."}
+  },
+  "containers": {
+    "default": {"w": 4, "h": 3},
+    "cupboard": {"w": 4, "h": 3},
+    "kitchen_counter": {"w": 4, "h": 3},
+    "wardrobe": {"w": 4, "h": 3},
+    "fridge": {"w": 4, "h": 3},
+    "shelf_tins": {"w": 4, "h": 3},
+    "shop_shelf": {"w": 4, "h": 3},
+    "bookshelf": {"w": 4, "h": 3},
+    "medicine_cabinet": {"w": 3, "h": 3},
+    "dresser": {"w": 3, "h": 3},
+    "nightstand": {"w": 3, "h": 3},
+    "desk": {"w": 4, "h": 2},
+    "checkout": {"w": 4, "h": 2},
+    "workbench": {"w": 4, "h": 2},
+    "cooler": {"w": 3, "h": 3},
+    "crate": {"w": 3, "h": 3},
+    "box": {"w": 3, "h": 3},
+    "toolbox": {"w": 3, "h": 3},
+    "tool_chest": {"w": 3, "h": 3},
+    "toy_chest": {"w": 3, "h": 3},
+    "trunk": {"w": 4, "h": 2},
+    "car_h": {"w": 4, "h": 2},
+    "car_v": {"w": 4, "h": 2},
+    "car_wreck": {"w": 4, "h": 2}
+  },
+  "convert": {
+    "ammo": [],
+    "food": [["ration_pack", 0.45]],
+    "water": [["water_jug", 1.0]],
+    "meds": [["medkit", 0.5]]
+  },
+  "unit_items": {"ammo": "shells", "food": "canned_food", "water": "water_bottle", "meds": "bandage"},
+  "withdraw": {
+    "ammo": ["shells"],
+    "food": ["canned_food"],
+    "water": ["water_jug", "water_bottle"],
+    "meds": ["bandage"]
+  },
+  "reveal_s": 0.4,
+  "close_tiles": 3.0,
+  "drop_reach": 0.8
+}

@@ -289,7 +289,7 @@ func update(p, dt: float) -> void:
 		p.reloading -= dt
 		if p.reloading <= 0.0:
 			p.reloading = 0.0
-			p.mag = int(p.gun.get("mag", 0))
+			p.mag = _reloaded_mag(p)
 	_move(p, dt)
 	_aim(p, dt)
 	if p.input_reload:
@@ -561,7 +561,8 @@ func _shoot(p, gun: Dictionary) -> void:
 	sim.fx.muzzle(m.x, m.y, p.aim, p.weapon == "shotgun" or p.weapon == "hunting")
 	sim.fx.casing(p.x, p.y - 0.15, p.aim, p.weapon == "shotgun")
 	sim.events.append({"type": "shot", "weapon": gun.sound, "gun": p.weapon, "x": p.x, "y": p.y})
-	sim.stock.ammo = maxf(0.0, sim.stock.ammo - sim.shot_cost(p))
+	if not _packed(p):
+		sim.stock.ammo = maxf(0.0, sim.stock.ammo - sim.shot_cost(p))    # (the town's pack pays at the reload instead: scripts/town/inv.gd)
 	var from := shoulder(p)
 	var reach: float = sim.reach_of(gun, p)
 	var dmg := float(gun.dmg)
@@ -685,11 +686,32 @@ func _wall_between(a: Vector2, b: Vector2) -> bool:
 func _start_reload(p) -> bool:
 	if p.gun.get("melee", false) or p.reloading > 0.0:
 		return false
-	if p.mag >= int(p.gun.get("mag", 0)) or sim.stock.ammo < sim.shot_cost(p):
+	if p.mag >= int(p.gun.get("mag", 0)) or not _can_load(p):
 		return false
 	p.reloading = float(p.gun.reload) * sim.traits.mult(p, "reload")
 	sim.events.append({"type": "reload", "x": p.x, "y": p.y})
 	return true
+
+
+## INV-CORE: in the town the player's rounds are the pack's (scripts/town/inv.gd). Whether this person draws on it.
+func _packed(p) -> bool:
+	var inv = sim.get("inv")
+	return inv != null and inv.active() and bool(p.player)
+
+
+## Whether there is a round to load: a whole shot in the pack (and its credit), or in the stores.
+func _can_load(p) -> bool:
+	if _packed(p):
+		return sim.inv.shots_available(p) > 0
+	return sim.stock.ammo >= sim.shot_cost(p)
+
+
+## The magazine after a reload: full in the colony's game (the stores were paid per shot), what the pack could give in the town.
+func _reloaded_mag(p) -> int:
+	var cap := int(p.gun.get("mag", 0))
+	if _packed(p):
+		return mini(cap, int(p.mag) + sim.inv.load_shots(p, cap - int(p.mag)))
+	return cap
 
 
 # -------------------------------------------------------------------- melee --
