@@ -3758,6 +3758,22 @@ func _parse_args() -> void:
 					if keep_n > 0 and not p.player and not p.dead and not p.turned and sim.jobs.job_of(p) != "builders":
 						if sim.jobs.assign(p, "builders"):
 							keep_n -= 1
+			"setpost":
+				# --setpost=<person>:<post id> gives that person (an id, a first name, or #1 the first of the crew) that night post as the roster's list would; `patrol` (the town's default) takes them off
+				# any post (a town run, after --stage=rescued2 or later: the crew exist). `--setpost=#1:post_1,#2:patrol` (a comma between two)
+				for sp_one in String(v).split(","):
+					var sp_kv := String(sp_one).split(":")
+					var sp_who = null
+					var sp_n := 0
+					for p in sim.people:
+						if p.player or p.dead or p.turned:
+							continue
+						sp_n += 1
+						if sp_kv[0] == "#%d" % sp_n or sp_kv[0] == String(p.id) or sp_kv[0].to_lower() == String(p.first).to_lower():
+							sp_who = p
+							break
+					if sp_who == null or sp_kv.size() < 2 or not sim.jobs.set_post(sp_who, sp_kv[1]):
+						print("--setpost=%s: no such person, or that post cannot be given (a taken one, or no such post)" % sp_one)
 			"scavengers":
 				# --scavengers=N puts exactly N people (the avatar aside) on the Scavenger job, as far as there are hands (a town run, after --stage=; scripts/town/crew_search.gd)
 				if sim.get("crew_search") == null or sim.crew_search.stage_job(int(v)) < int(v):

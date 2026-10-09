@@ -45,6 +45,7 @@ const PARTS := {
 	"build_hands": "res://scripts/town/build_hands.gd",
 	"rescue": "res://scripts/town/rescue.gd",
 	"perimeter": "res://scripts/town/perimeter.gd",
+	"patrol": "res://scripts/town/patrol.gd",
 	"skies": "res://scripts/town/skies.gd",
 	"scenario": "res://scripts/town/one_house.gd",
 }
@@ -67,6 +68,8 @@ var salvage
 var build_hands
 var rescue
 var perimeter
+## PATROL (PH3: scripts/town/patrol.gd): the crew who hold no fixed post walk the fence line by themselves and go where the dead press.
+var patrol
 ## The town's weather (RAIN: scripts/town/skies.gd): a rain period about one day in two, seeded by the run.
 var skies
 ## The names of the parts that exist (made from PARTS).

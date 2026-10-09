@@ -779,12 +779,17 @@ func _refresh_row(p) -> void:
 	# the night post
 	var post: Dictionary = jobs.post_of(p)
 	var post_button: Button = r.post
-	_set_text(r.post_text, "–" if gone else String(post.get("name", "No post")), hud.PAPER_INK3 if gone else hud.PAPER_INK)
+	var post_name := String(post.get("name", "No post"))
+	if p.player and jobs.on_patrol(p):
+		post_name = "Where you are"    # (the avatar walks by her own hands: the patrol is the crew's)
+	_set_text(r.post_text, "–" if gone else post_name, hud.PAPER_INK3 if gone else hud.PAPER_INK)
 	r.post_icon.texture = hud.icons.get("moon") if not gone else null
 	r.post_icon.visible = r.post_icon.texture != null
 	post_button.disabled = not open_to_change
 	post_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if open_to_change else Control.CURSOR_FORBIDDEN
 	post_button.tooltip_text = "Night post for %s: %s\nWhere they hold the wall from the bell until dawn. Click to change it." % [p.first, String(post.get("name", "none"))] if open_to_change else "%s cannot be given a post" % p.first
+	if open_to_change and jobs.on_patrol(p):
+		post_button.tooltip_text = "%s is on patrol: from the bell (or the call to arms) until dawn they walk the fence line by themselves and go where the dead press.\nClick to give them a post instead (a tower, a stretch of fence)." % p.first
 	# the skills, the one their station asks for marked
 	var asked := "" if gone else String(st.get("skill", ""))
 	for skill in SKILLS:
@@ -929,6 +934,12 @@ func open_post_list(p) -> void:
 	var held := _holders()
 	var entries: Array = []
 	var group := ""
+	if jobs.patrol_on():
+		# (One House, PATROL: no post to keep: they walk the fence line and go where the dead press; the posts below are the ones the player gives)
+		var patrolling: bool = have == jobs.PATROL
+		entries.append({"header": "On the fence line"})
+		entries.append({"id": jobs.PATROL, "icon": "moon", "text": "Patrol", "note": "current" if patrolling else "automatic", "disabled": false, "current": patrolling,
+			"tip": "Patrol: walks the fence line by themselves and goes where the dead press, from the bell (or the call to arms) until dawn.\nNo post to keep. A tower or a stretch of fence below holds them there instead."})
 	for po in jobs.posts():
 		var id := String(po.id)
 		var g := _post_group(po)
@@ -965,7 +976,7 @@ func _post_group(po: Dictionary) -> String:
 func _holders() -> Dictionary:
 	var out := {}
 	for q in sim.people:
-		if not (q.dead or q.turned):
+		if not (q.dead or q.turned) and not jobs.on_patrol(q):    # (patrol is no post: any number of people are on it)
 			out[String(jobs.post_of(q).get("id", ""))] = q
 	return out
 

@@ -59,6 +59,10 @@ const AUTO_TRAITS := {"bench": "tinkerer", "builders": "tinkerer", "infirmary": 
 ## One House: the stations that are only ever given by a request (the Jobs page, the radio): Auto-assign, Fill empty seats and the priorities' staffing never fill or empty them, and they are not
 ## counted among the empty seats. The Scavenger (scripts/town/crew_search.gd): two seats, installed with the base's layout.
 const MANUAL := ["scavenger"]
+## ONE HOUSE (PATROL, scripts/town/patrol.gd): the "post" of someone who holds no fixed post. It is not one of `posts()`: nobody holds it (any number of people can be on it), the posts of the
+## wall are the ones a person is ASSIGNED to (a tower, the gate, a stretch of fence); on the call to arms and on an attack night the crew who hold none patrol the fence line themselves.
+## It is the default of every person in the town. In every other game `post_ids` holds real posts only, as it always did.
+const PATROL := "patrol"
 const SCAVENGER := {"id": "scavenger", "name": "Scavenger", "where": "the front yard", "seats": 2, "skill": "", "icon": "scavenge", "what": "Ready to go out", "work": "", "settings": {},
 	"blurb": "By day they search the cleared houses for you, nearest first, and are back before the bell. Nothing to search: clear another house."}
 ## The stations that give up a worker, first to last, when a seat that was left (the avatar's) is filled from a crew at work
@@ -187,9 +191,11 @@ func install_layout(stations: Array, posts: Array, rest: Dictionary) -> void:
 		if _post_by_id.has(po) and not taken.has(po):
 			post_ids[String(p.id)] = po
 			taken[po] = true
+		elif po == PATROL and patrol_on():
+			post_ids[String(p.id)] = PATROL
 	for p in sim.people:
 		if not post_ids.has(String(p.id)):
-			post_ids[String(p.id)] = _free_post(taken)
+			post_ids[String(p.id)] = _default_post(taken)
 			taken[post_ids[String(p.id)]] = true
 	for p in sim.people:
 		var job := String(assignments.get(String(p.id), ""))
@@ -277,12 +283,12 @@ func _defaults() -> void:
 		var id := String(p.def.get("station", ""))
 		assignments[String(p.id)] = id if _station_by_id.has(id) else ""
 		var po := String(p.def.get("post_id", ""))
-		if _post_by_id.has(po) and not taken.has(po):
+		if _post_by_id.has(po) and not taken.has(po) and not patrol_on():
 			post_ids[String(p.id)] = po
 			taken[po] = true
 	for p in sim.people:
 		if not post_ids.has(String(p.id)):
-			post_ids[String(p.id)] = _free_post(taken)
+			post_ids[String(p.id)] = _default_post(taken)
 			taken[post_ids[String(p.id)]] = true
 
 
@@ -292,6 +298,32 @@ func _free_post(taken: Dictionary) -> String:
 		if not taken.has(String(po.id)):
 			return String(po.id)
 	return String(_posts[0].id) if not _posts.is_empty() else ""
+
+
+## A person's post when nobody has chosen one: the town's crew patrol the fence (`PATROL`), every other game's take the first post nobody holds.
+func _default_post(taken: Dictionary) -> String:
+	return PATROL if patrol_on() else _free_post(taken)
+
+
+## Whether the patrol rules are in force: the town only (the school's posts are named, as they always were).
+func patrol_on() -> bool:
+	return sim != null and sim.is_one_house()
+
+
+## Whether this person is on automatic patrol: they hold no post (the town only).
+func on_patrol(p) -> bool:
+	return patrol_on() and String(post_ids.get(String(p.id), "")) == PATROL
+
+
+## The "post" of a person on patrol, shaped as a post (`pos` is where the yard's middle is: nobody stands there, `post_pos` answers the patrol's own).
+func patrol_post() -> Dictionary:
+	var at: Vector2 = sim.yard_middle() if sim != null else Vector2.ZERO
+	return {"id": PATROL, "name": "Patrol", "what": "On patrol", "face": "N", "slot": "", "auto": true, "pos": at}
+
+
+## Whether a post is a tower's (a lookout's seat on the wall).
+func is_tower_post(id: String) -> bool:
+	return _post_by_id.has(id) and String(_post_by_id[id].get("slot", "")).contains("tower")
 
 
 # ---------------------------------------------------------------- stations --
@@ -593,18 +625,28 @@ func post(id: String) -> Dictionary:
 ## This person's night post.
 func post_of(p) -> Dictionary:
 	var id := String(post_ids.get(String(p.id), ""))
+	if id == PATROL and patrol_on():
+		return patrol_post()
 	if not _post_by_id.has(id):
 		var taken := {}
 		for q in sim.people:
 			if q != p and post_ids.has(String(q.id)):
 				taken[String(post_ids[String(q.id)])] = true
-		id = _free_post(taken)
+		id = _default_post(taken)
 		post_ids[String(p.id)] = id
+		if id == PATROL:
+			return patrol_post()
 	return _post_by_id.get(id, {})
 
 
-## Gives someone a post. False if there is none such or another person holds it.
+## Gives someone a post. False if there is none such or another person holds it. `PATROL` (the town only) is every person's to take: it holds nobody.
 func set_post(p, id: String) -> bool:
+	if id == PATROL:
+		if not patrol_on():
+			return false
+		post_ids[String(p.id)] = PATROL
+		p.goal_key = ""
+		return true
 	if not _post_by_id.has(id):
 		return false
 	for q in sim.people:
@@ -615,7 +657,11 @@ func set_post(p, id: String) -> bool:
 	return true
 
 
+## Where this person's post is. Someone on patrol has no fixed one: where they patrol (the patrol module: the walk they are on at the call to arms, an even spread round the fence by day).
 func post_pos(p) -> Vector2:
+	if on_patrol(p):
+		var pat = sim.get("patrol")
+		return pat.post_pos(p) if pat != null else Vector2(p.x, p.y)
 	var po := post_of(p)
 	return Vector2(po.pos) if not po.is_empty() else Vector2(p.x, p.y)
 
@@ -900,7 +946,10 @@ func gizmo(id: String, sel) -> bool:
 # -------------------------------------------------------------------- save --
 
 func save() -> Dictionary:
-	return {"assignments": assignments.duplicate(), "post_ids": post_ids.duplicate(), "settings": settings.duplicate(true), "alert_day": _alert_day.duplicate()}
+	var out := {"assignments": assignments.duplicate(), "post_ids": post_ids.duplicate(), "settings": settings.duplicate(true), "alert_day": _alert_day.duplicate()}
+	if patrol_on():
+		out["patrol_v"] = 1    # (a town save from before the patrol keeps its posts as the people's own choice only for the towers: below)
+	return out
 
 
 func load_state(d: Dictionary) -> void:
@@ -914,9 +963,14 @@ func load_state(d: Dictionary) -> void:
 			assignments[String(k)] = id if _station_by_id.has(id) else ""
 	var pi = d.get("post_ids", {})
 	if pi is Dictionary:
+		# (a town save from before the patrol (no "patrol_v") gave everyone the first free post: only the towers are kept, the rest patrol)
+		var migrate: bool = patrol_on() and not d.has("patrol_v")
 		for k in pi:
-			if _post_by_id.has(String(pi[k])):
-				post_ids[String(k)] = String(pi[k])
+			var pid := String(pi[k])
+			if pid == PATROL and patrol_on():
+				post_ids[String(k)] = PATROL
+			elif _post_by_id.has(pid):
+				post_ids[String(k)] = PATROL if migrate and not is_tower_post(pid) else pid
 	var st = d.get("settings", {})
 	if st is Dictionary:
 		for sid in st:

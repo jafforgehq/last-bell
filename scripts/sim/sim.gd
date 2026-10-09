@@ -650,6 +650,13 @@ func order_move(p: Person, x: float, y: float) -> bool:
 func order_post(p: Person) -> void:
 	if morale.breakdown(p) or p.player:
 		return
+	if jobs.on_patrol(p) and posts_manned():
+		# (One House, PATROL: "to the walls" for someone who holds no post is back to the walk, there is no place to hold)
+		p.drafted = false
+		p.order = null
+		p.repair = null
+		p.goal_key = ""
+		return
 	p.drafted = true
 	p.repair = null
 	var at: Vector2 = jobs.post_pos(p)
@@ -906,8 +913,13 @@ func _goal_for(p: Person):
 		# (the lookout keeps the tower through a day under attack: the forecast, and the eyes on the road)
 		if phase == "day" and jobs.job_of(p) == "watch":
 			return jobs.goal_for(p)
-		return jobs.post_goal(p)
+		return _post_duty_goal(p)
 	return jobs.goal_for(p)
+
+
+## What someone does while the posts are manned: hold their post. (The town's crew who hold none walk the fence line instead: town_rules.gd.)
+func _post_duty_goal(p: Person) -> Dictionary:
+	return jobs.post_goal(p)
 
 
 ## Whether the crew holds its night posts right now: from the bell (or the dark) through the night and the dawn. In
@@ -1046,7 +1058,7 @@ func _update_person(p: Person, dt: float) -> void:
 					# in the grid, and nobody walks through the wall for it: they stay where they are until there is one)
 					p.path = [Vector2(p.x, p.y)] if levels.active() else [Vector2(goal.x, goal.y)]
 				p.path_i = 0
-			_follow(p, radio.speed_of(p), dt)    # (3.0: whoever follows the player a long way behind hurries)
+			_follow(p, radio.speed_of(p) * float(goal.get("pace", 1.0)), dt)    # (3.0: whoever follows the player a long way behind hurries; a goal may ask for a calmer pace: the patrol's walk)
 	if p.repair != null and not p.moving and (repair_spot(p.repair) - Vector2(p.x, p.y)).length() < 0.3:
 		var s: Segment = p.repair
 		p.activity = "Mending the %s" % s.name.to_lower()

@@ -1137,9 +1137,10 @@ func post_willingness(p, post_id: String) -> Dictionary:
 	var r := _reason_not(p, "work", post_id, CANT_POST)
 	if not r.ok and bool(r.hard):
 		return _work_no(out, String(r.why), String(r.line), true)
-	if sim.jobs.post(post_id).is_empty():
+	var patrol: bool = post_id == sim.jobs.PATROL and sim.jobs.patrol_on()    # (One House: "Patrol" is no post, nobody holds it: the crew walk the fence by themselves)
+	if sim.jobs.post(post_id).is_empty() and not patrol:
 		return _work_no(out, "There is no such post", "", true)
-	var holder = _post_holder(p, post_id)
+	var holder = _post_holder(p, post_id) if not patrol else null
 	if holder != null:
 		return _work_no(out, "You hold that post" if _is_leader(holder) else "%s holds that post" % String(holder.first), "", true)
 	if not r.ok:
