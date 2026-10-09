@@ -1132,9 +1132,23 @@ func shot_cost(p: Person) -> float:
 ## The weapon someone fights with right now: their own, or the butt of it when the
 ## stock is too low for another shot (a pike never runs dry).
 func gun_of(p: Person) -> Dictionary:
-	if p.gun.get("melee", false) or stock.ammo >= shot_cost(p):
+	if p.gun.get("melee", false) or ammo_ready(p):
 		return p.gun
 	return BUTT
+
+
+## INV-CORE hooks (the town's pack: scripts/town/inv.gd; every other game answers with the stores, as always). Whether this person has a round to fire; the rounds in reserve for this person (the
+## `40` of `3 / 40`); the rounds in all that the stores and the pack hold (the low-ammo alert and hint).
+func ammo_ready(p: Person) -> bool:
+	return stock.ammo >= shot_cost(p)
+
+
+func reserve_ammo(_p: Person) -> float:
+	return stock.ammo
+
+
+func ammo_total() -> float:
+	return stock.ammo
 
 
 ## Whether it is night for the guns: from the bell (or the dark) to the end of dawn.

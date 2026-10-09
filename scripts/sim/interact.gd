@@ -432,7 +432,7 @@ func needs_of(p) -> Array:
 		out.append({"id": "shaken", "text": "Breaking: needs a quiet hour", "line": "I can't take much more. I need a quiet hour.", "page": ""})
 	if not p.player and sim.recruits.small and sim.jobs.job_of(p) == "" and sim.phase == "day" and not sim.posts_manned():
 		out.append({"id": "no_job", "text": "No job: nothing to do. Give them one", "line": "I've nothing to do. Give me a job.", "page": "jobs"})
-	if not p.gun.get("melee", false) and p.mag <= 0 and float(sim.stock.ammo) < AMMO_LOW:
+	if not p.gun.get("melee", false) and p.mag <= 0 and float(sim.reserve_ammo(p)) < AMMO_LOW:
 		out.append({"id": "ammo", "text": "Out of ammo", "line": "I'm out of ammo.", "page": ""})
 	return out
 

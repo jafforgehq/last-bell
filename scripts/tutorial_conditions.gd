@@ -394,7 +394,7 @@ static func _low_stores(sim, p, _st) -> bool:
 
 ## {"below": n}: less ammo than that is left (and some, or the alarm for none says it).
 static func _low_ammo(sim, p, _st) -> bool:
-	return float(sim.stock.ammo) < float(p.get("below", 60.0))
+	return float(sim.ammo_total()) < float(p.get("below", 60.0))
 
 
 ## Somebody alive is bleeding.

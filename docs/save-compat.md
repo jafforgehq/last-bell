@@ -41,4 +41,8 @@ that exist). But when in doubt, bump: a refused save costs a player a game, a wr
 2. Nothing else: the saves of the older number are refused by the checks above.
 3. If the *format* of the state changes without the town changing, bump `SaveGame.VERSION` instead (it is refused the same way, with the same card).
 
-History: 1 = up to main 236bb1e (no number written). 2 = SAVE4 (the town of CLEAR3's clear ground and a town for every seed, WORLD3's 164 building plans).
+History: 1 = up to main 236bb1e (no number written). 2 = SAVE4 (the town of CLEAR3's clear ground and a town for every seed, WORLD3's 164 building plans). 3 = INV-CORE (2026-10-09, the
+backpack): the generated towns are the same, but the *meaning* of the saved state changed, which is what a bump is for. A One House save now carries an `inv` module (the backpack grid, the
+grids of the containers she opened with the items left in them, the piles on the ground, the credit of the fractions paid ahead); the avatar's reserve ammo, her bandages and her meals come from
+that pack and no longer from `stock`, so `stock` of a version 2 save holds food, rounds and medicine that are now in the pack; and a container's `looted` means *searched* (items she left in it
+stay and are saved in the module). A version 2 save loaded into this build would play with an empty pack and double-counted stores: it is refused with the usual card.

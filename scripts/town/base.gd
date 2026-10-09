@@ -365,7 +365,9 @@ func candidates(p) -> Array:
 	else:
 		var st := prop("stash")
 		if not st.is_empty() and me.distance_to(Vector2(st.pos)) <= STASH_REACH:
-			out.append({"kind": "stash", "id": "stash", "label": "Check the stores", "pos": Vector2(st.pos), "dist": me.distance_to(Vector2(st.pos)), "ok": true, "why": ""})
+			var inv = sim.get("inv")
+			var label := "Open the stash" if inv != null and inv.active() else "Check the stores"    # (INV-CORE: the stash panel: deposit and withdraw)
+			out.append({"kind": "stash", "id": "stash", "label": label, "pos": Vector2(st.pos), "dist": me.distance_to(Vector2(st.pos)), "ok": true, "why": ""})
 	return out
 
 
@@ -374,6 +376,9 @@ func use(c: Dictionary) -> Dictionary:
 		"claim":
 			return _use_claim(String(c.get("id", "")))
 		"stash":
+			var inv = sim.get("inv")
+			if inv != null and inv.active():
+				inv.open_stash()
 			return {"ok": true, "line": stores_line(), "why": ""}
 	return {}
 

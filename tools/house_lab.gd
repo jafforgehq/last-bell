@@ -49,6 +49,7 @@ extends SceneTree
 const Helpers := preload("res://tests/helpers.gd")
 const BotLib := preload("res://tools/avatar_bot.gd")
 const HouseLib := preload("res://tools/house_bot.gd")
+const Inventory := preload("res://scripts/sim/inventory.gd")
 
 const ONE_HOUSE := "res://scripts/town/one_house.gd"
 ## The plan's numbers (section 5).
@@ -515,6 +516,12 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 		kills += int(pe.stats.get("kills", 0))
 	out["stats"]["shots"] = shots
 	out["stats"]["kills"] = kills
+	# (INV-CORE: the pack's line: what she carried at the bell of the first attack night, the trips to the stash, the times the pack was full, what was left behind)
+	var pinv = sim.get("inv")
+	if pinv != null and pinv.on:
+		var ps: Dictionary = pinv.stats
+		out["pack"] = {"deposits": int(ps.deposits), "deposited": (ps.deposited as Dictionary).duplicate(), "full": int(ps.full), "dropped": int(ps.dropped), "left": int(pinv.left_behind()),
+				"dusk": bot.pack_dusk, "peak_cells": int(ps.peak_cells), "picked": (ps.picked as Dictionary).duplicate(), "cells": Inventory.used_cells(pinv.pack)}
 	out["verdict"] = verdict_of(out)
 	OS.remove_logger(errors)
 	g.world.free()
@@ -1066,6 +1073,17 @@ static func run_lines(r: Dictionary) -> Array:
 			if int((cw.get("car_loot", {}) as Dictionary).get(k, 0)) > 0:
 				car_parts.append("%d %s" % [int(cw.car_loot[k]), k])
 		lines.append("    cars: %d searched, %d stripped, gave %s" % [int(cw.get("cars", 0)), int(cw.get("car_strips", 0)), ", ".join(car_parts) if not car_parts.is_empty() else "nothing"])
+	if r.has("pack"):
+		var pk: Dictionary = r.pack
+		var du: Dictionary = pk.get("dusk", {})
+		var dusk_text := "no attack bell"
+		if not du.is_empty():
+			var cu: Dictionary = du.get("units", {})
+			dusk_text = "%d cells, %d ammo %d food %d water %d meds" % [int(du.get("cells", 0)), int(cu.get("ammo", 0)), int(cu.get("food", 0)), int(cu.get("water", 0)), int(cu.get("meds", 0))]
+		var picked_parts: Array = []
+		for k in ["food", "water", "ammo", "meds"]:
+			picked_parts.append("%d %s" % [int((pk.get("picked", {}) as Dictionary).get(k, 0)), k])
+		lines.append("  pack: at the first attack bell %s | trips to the stash %d | pack full %d times (%d items dropped) | peak %d of 32 cells | left behind %d units | took %s" % [dusk_text, int(pk.deposits), int(pk.full), int(pk.dropped), int(pk.get("peak_cells", 0)), int(pk.left), ", ".join(picked_parts)])
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))
 	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | first fence %s real min after the claim | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), ("%.1f" % float(v.fence_min)) if v.get("fence_min") != null else "-", int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])

@@ -106,7 +106,9 @@ const EDGE := 2
 ## the town is made again from the seed on a load and would not be the town the save was made in. BUMP IT with any change that alters the generated town or the saved state's meaning (docs/save-compat.md).
 ## 1: up to main 236bb1e (saves of those builds carry no number at all). 2: the build of SAVE4 (CLEAR3's clear ground, a town for every seed, WORLD3's 164 plans). EARLY4 (the near survivors,
 ## the candidates' ammo, the entry's sandbags) changed the town again in the same unreleased build, so it is still 2: bump it if SAVE4's build has been released before EARLY4 ships.
-const VERSION := 2
+## 3: INV-CORE (PH6, 2026-10-09): the same towns, but the SAVED STATE means something else: the stores no longer hold what the avatar carries, a `inv` module (the backpack, the containers she has
+## opened, the stash) is saved with the run, her reserve ammo is the shells in the pack, and a searched container's `looted` means searched while the items she left stay in it.
+const VERSION := 3
 ## Dead: how many (the owner's 600 to 800), the share that is in or beside the houses, and how many guard each house of the rescue list.
 const DEAD_TOTAL := 700
 const DEAD_NEAR_HOUSES := 0.6

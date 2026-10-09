@@ -297,11 +297,15 @@ func _serve_meal() -> void:
 		var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food") * sim.policies.ration_mult("food")
 		var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water") * sim.policies.ration_mult("water")
 		var food := _take("food", food_share)
+		if food < food_share - EPS and _eats_from_pack(p):
+			food += float(sim.inv.eat("food", food_share - food))    # (INV-CORE: the stores are short and she has food in her pack)
 		if food >= food_share * FED_PART:
 			p.hunger_h = 0.0
 		if food < food_share - EPS:
 			without.food += 1
 		var water := _take("water", water_share)
+		if water < water_share - EPS and _eats_from_pack(p):
+			water += float(sim.inv.eat("water", water_share - water))
 		if water >= water_share * FED_PART:
 			p.thirst_h = 0.0
 		if water < water_share - EPS:
@@ -314,6 +318,12 @@ func _serve_meal() -> void:
 		short_of[kind] = now
 	if not newly.is_empty():
 		sim.events.append({"type": "banner", "text": "Short rations", "sub": "Not enough %s for everyone" % " or ".join(newly)})
+
+
+## INV-CORE: whether this person is the one who carries a pack (the town's player), who eats and drinks from it when the stores cannot give a share.
+func _eats_from_pack(p) -> bool:
+	var inv = sim.get("inv")
+	return inv != null and inv.active() and bool(p.player)
 
 
 ## Takes up to `share` of `kind` from the stores; returns what it got.
@@ -348,7 +358,7 @@ func _needs(gh: float) -> void:
 
 
 func _low_stock_alerts() -> void:
-	var rounds := float(sim.stock.ammo)
+	var rounds := float(sim.ammo_total())    # (the town: the stores' rounds and the pack's)
 	if rounds >= low_ammo:
 		sim.alerts.erase("low-ammo")
 	elif rounds > 0.0 and sim.clock_min - float(low_alert_min["ammo"]) >= LOW_REPEAT_MIN * 6.0:

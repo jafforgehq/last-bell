@@ -24,6 +24,7 @@ extends RefCounted
 
 const Avatar := preload("res://scripts/sim/avatar.gd")
 const SearchRules := preload("res://scripts/town/search.gd")
+const Inventory := preload("res://scripts/sim/inventory.gd")
 
 ## Seconds a container takes when the container does not say (scripts/town/search.gd).
 const SEARCH_S := 4.0
@@ -289,6 +290,11 @@ func progress() -> Dictionary:
 			"loot": (_s.loot as Dictionary).duplicate()}
 
 
+## Whether a room search is under way (INV-CORE: its searches take everything into the pack at once).
+func running() -> bool:
+	return not _s.is_empty()
+
+
 ## Stops the session (it tells `room_searched`); the search in hand, if it is one of its own, is let go too.
 func cancel(why: String = "stopped") -> void:
 	_end(why)
@@ -472,6 +478,17 @@ func _tally(id: String) -> void:
 	var cont: Dictionary = sim.houses.container(id)
 	var loot_in = cont.get("loot", {})
 	_s.found = int(_s.found) + 1
+	var inv = sim.get("inv")
+	if inv != null and inv.active():
+		# (INV-CORE: what went into the pack, and the scrap to the stores: the search's own event has both)
+		var sum2: Dictionary = _s.loot
+		var taken: Dictionary = inv.last_taken.get(id, {})
+		for k in taken:
+			sum2[String(k)] = int(sum2.get(String(k), 0)) + int(taken[k])
+		var loose = Inventory.loose_units(loot_in if typeof(loot_in) == TYPE_DICTIONARY else {})
+		for k in loose:
+			sum2[String(k)] = int(sum2.get(String(k), 0)) + int(loose[k])
+		return
 	if typeof(loot_in) != TYPE_DICTIONARY:
 		return
 	var sum: Dictionary = _s.loot

@@ -146,6 +146,11 @@ func _style(dt: float) -> void:
 # ------------------------------------------------------------------------------- list --
 
 ## The footprint of a container's furniture, in tiles (the picture's size, as scripts/render/base_props_view.gd draws the open one).
+## INV-CORE: a container with nothing worth coming back for (searched, and no items left in it); items she left keep it shimmering.
+func _spent(search, id: String) -> bool:
+	return search.is_spent(id) if search.has_method("is_spent") else search.is_looted(id)
+
+
 func _size(kind: String) -> Vector2:
 	if not _size_of.has(kind):
 		var d: Dictionary = TownArt.prop(kind, "", "s")
@@ -191,7 +196,7 @@ func _collect(me, items: Array) -> void:
 	if h >= 0:
 		for c in hs.containers_of(h):
 			var id := String(c.id)
-			if search.is_looted(id):
+			if _spent(search, id):
 				continue
 			var room := int(c.get("room", -1))
 			if room >= 0:
@@ -219,7 +224,7 @@ func _collect(me, items: Array) -> void:
 	for c in _outdoor:
 		var id2 := String(c.id)
 		var is_car := bool(c.get("car", false))
-		if search.is_looted(id2) or (is_car and h >= 0) or Vector2(c.at).distance_to(here) > OUTDOOR_R:
+		if _spent(search, id2) or (is_car and h >= 0) or Vector2(c.at).distance_to(here) > OUTDOOR_R:
 			continue
 		if uses != null and uses.in_session("container", id2):
 			continue
