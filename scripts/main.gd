@@ -3895,6 +3895,36 @@ func _parse_args() -> void:
 				endcard_asked = true
 			"nohud":
 				hud.visible = false
+			"stock":
+				# --stock=scrap:30,ammo:24,food:12,water:18,meds:3 sets those stores (after --stage and --slots, which put their own): a still whose counters read as a real run's
+				for part in v.split(","):
+					var sv := part.split(":")
+					if sv.size() == 2 and sim.stock.has(sv[0]) and sv[1].is_valid_float():
+						sim.stock[sv[0]] = float(sv[1])
+			"hide-lesson":
+				# --hide-lesson puts the guide's card and its cues away (the lessons flag of the screenshot's own settings file, see prefs_file_for)
+				var lesson_hud = town.part("town_hud") if town != null else null
+				if lesson_hud != null:
+					lesson_hud.set_lessons(false)
+					lesson_hud.lesson_card.visible = false
+			"no-banner":
+				hud.banner.visible = false    # (the sign of "This house is yours", the bell and the dawn is never drawn)
+			"no-alerts":
+				# --no-alerts: the stack of alerts and the radio call that waits for an answer, down the right side, and the PAUSED pill are never drawn ("Seven things built" is what `--slots=built` leaves there)
+				if hud.get("alerts_box") != null:
+					hud.alerts_box.visible = false
+				if hud.get("call_card") != null:
+					hud.call_card.set_suppressed(true)    # (the radio call that waits for an answer: "A brute at the front gate")
+					hud.call_card.modulate.a = 0.0
+				if hud.get("paused_pill") != null:
+					hud.paused_pill.modulate.a = 0.0    # (a still of the instant of a shot is taken at `--speed=0`)
+			"capture":
+				# --capture=<name> hands a movie run (`--write-movie`, docs/audio-capture.md) to the scripted hands of tools/capture_<name>.gd (walk, fight...): keys and the trigger as a player's
+				var capture_script = load("res://tools/capture_%s.gd" % v) if v.is_valid_filename() else null
+				if capture_script != null:
+					var capture_node: Node = capture_script.new()
+					capture_node.set("main", self)
+					add_child(capture_node)
 			"help-panel":
 				# --help-panel shows the controls panel (the pause menu's How to play) for a screenshot of its words
 				hud.help.visible = true

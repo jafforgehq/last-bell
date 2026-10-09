@@ -420,7 +420,7 @@ func on_event(e: Dictionary) -> void:
 		"gate":
 			gate_event(String(e.get("state", "")), String(e.get("by", "")))
 		"call_raised":
-			ui("ui_radio_call", 0.9)
+			ui("ui_radio_call", 0.55)    # (was 0.9: the movie capture of docs/audio-capture.md measured the ring at -11.8 LUFS at the Master, as loud as the pump gun; 0.55 is -16.1)
 			_duck(-3.0, 1.2)
 		"radio_line":
 			ui("ui_radio_on", 0.5)
