@@ -40,6 +40,21 @@
     "shed":            {"name": "shed",            "scrap": 2, "seconds": 20, "stuff": "wood"},
     "market_stall":    {"name": "stall",           "scrap": 2, "seconds": 20, "stuff": "wood"}
   },
+  "cars": {
+    "_doc": "LOOT IN THE STREET'S CARS (PH3 SCAV3, scripts/town/car_loot.gd): the parked cars and wrecks of the streets are CONTAINERS (id 'car<n>', n the place in the generator's object list: the same for a seed) that the avatar searches with E and the crew search on a scavenging trip. A car is searched once for good (the same `looted` flag as a cupboard: scripts/town/search.gd, saved), and a car cannot be stripped for scrap before it is searched (like a fridge). THE ROLL is made once per car from the town's seed, so a town always has the same cars with the same things in them. chance: by kind, the share of cars of that kind that hold anything at all (the rest are empty: the search says 'Empty'); a car that holds something has ONE item, and a second of another kind with probability `second` (at most two items). table: the items, w their weight, n [least, most] of the stock when it is found. search_s: seconds of a search (the container's `search_s`, times the run's tempo.search_mult like every container: the crew's timer reads the same number as the avatar's). reach: tiles from the car's edge the avatar stands to search it. trip: what the crew do on a scavenging trip (the Search-a-house order and the Scavenger job): after the house, the cars and wrecks within `radius` tiles of the house (of the first car, on a trip with no house) are searched nearest first and, when salvage allows it (the street cell cap, no awake dead within salvage `danger_r`), stripped for scrap too; `most` is the most cars one trip visits. How much it adds to the economy: a 6-block town has about 90 cars and wrecks and 20 to 30 of them hold something (seed 1: 26 of 90, 31 items, 64 units: 28 ammo, 15 food, 11 water, 9 scrap, 1 meds), against 13 units for an average house, so all the cars of a town together are about five houses of loot; the scrap of STRIPPING them (4 each, 12 under the cell cap) is the bigger source, as it was before. Lowering `chance` is the way to make the cars matter less.",
+    "chance": {"car_h": 0.32, "car_v": 0.32, "car_wreck": 0.18},
+    "second": 0.2,
+    "table": {
+      "ammo":  {"w": 3.0, "n": [2, 4]},
+      "food":  {"w": 3.0, "n": [1, 3]},
+      "water": {"w": 3.0, "n": [1, 2]},
+      "meds":  {"w": 1.5, "n": [1, 1]},
+      "scrap": {"w": 3.0, "n": [1, 3]}
+    },
+    "search_s": 4.0,
+    "reach": 1.0,
+    "trip": {"radius": 14.0, "most": 6}
+  },
   "rubble": {
     "wood":  {"fill": ["8a6a45", "6f5236", "a07d52"], "edge": "221a13"},
     "metal": {"fill": ["8d9298", "6a6f75", "a8967a"], "edge": "221a13"},

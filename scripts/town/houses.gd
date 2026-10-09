@@ -7,11 +7,15 @@
 extends RefCounted
 
 const TownGen := preload("res://scripts/town/town_gen.gd")
+const CarLoot := preload("res://scripts/town/car_loot.gd")
 
 var sim
 var town: Dictionary = {}
-## Container ids to the container (made once).
+## Container ids to the container (made once). The street's cars (SCAV3) are in it too, beside the houses' containers; they are in no house.
 var _by_id := {}
+## SCAV3: the parked cars and wrecks of the streets as containers (scripts/town/car_loot.gd), made with the town: [] when it has none. `container(id)` finds one; `containers_of` never gives one.
+var cars: Array = []
+var _car_of_obj := {}
 var enabled := true
 
 
@@ -25,6 +29,26 @@ func use_town(t: Dictionary) -> void:
 	_by_id.clear()
 	for c in town.get("containers", []):
 		_by_id[String(c.id)] = c
+	cars = CarLoot.containers(town)
+	_car_of_obj.clear()
+	for c in cars:
+		_by_id[String(c.id)] = c
+		_car_of_obj[int(c.obj)] = String(c.id)
+
+
+## SCAV3: the id of the car container made from object `obj_idx` of the generator's object list ("" when that object is none).
+func car_id_of(obj_idx: int) -> String:
+	return String(_car_of_obj.get(obj_idx, ""))
+
+
+## SCAV3: the car containers within `radius` tiles of the middle of the car (the cars are up to five tiles long: a look from a point asks a little farther, `CarLoot.rect_dist` is the exact one).
+func cars_near(at: Vector2, radius: float) -> Array:
+	var out: Array = []
+	var r2 := (radius + 3.0) * (radius + 3.0)
+	for c in cars:
+		if Vector2(c.at).distance_squared_to(at) <= r2:
+			out.append(c)
+	return out
 
 
 func start() -> void:

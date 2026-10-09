@@ -493,6 +493,12 @@ static func run_lines(r: Dictionary) -> Array:
 		for k in cw.ended:
 			ended_parts.append("%s %d" % [String(k), int(cw.ended[k])])
 		lines.append("  scavengers %d: %d containers in %d houses, found %s | bitten %d | runs ended: %s" % [int(r.scavengers), int(cw.containers), int(cw.houses), ", ".join(loot_parts) if not loot_parts.is_empty() else "nothing", int(cw.bitten), ", ".join(ended_parts) if not ended_parts.is_empty() else "none"])
+		# (SCAV3: the cars the scavengers searched and stripped, and what they gave)
+		var car_parts: Array = []
+		for k in ["food", "water", "ammo", "scrap", "meds"]:
+			if int((cw.get("car_loot", {}) as Dictionary).get(k, 0)) > 0:
+				car_parts.append("%d %s" % [int(cw.car_loot[k]), k])
+		lines.append("    cars: %d searched, %d stripped, gave %s" % [int(cw.get("cars", 0)), int(cw.get("car_strips", 0)), ", ".join(car_parts) if not car_parts.is_empty() else "nothing"])
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))
 	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | first fence %s real min after the claim | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), ("%.1f" % float(v.fence_min)) if v.get("fence_min") != null else "-", int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])

@@ -3,6 +3,7 @@
 ##
 ##   - a small TICK (a check mark in a round badge) on each container of the avatar's house that is looted, drawn in the overlay's canvas layer under the overlay (an E prompt is never
 ##     under one). Only while the avatar is in that house; full within TICK_NEAR tiles of the avatar and gone from TICK_FAR on (so the far end of a big house is not covered in marks).
+##     SCAV3: outside every house the same tick sits on each searched car or wreck of the street (scripts/town/car_loot.gd), so that nobody searches it twice; the pop says "Empty" for one with nothing in it.
 ##   - the "Searched" stand-in of the E prompt: with no real prompt and the avatar at a looted container, `searched_near()` says where, and the overlay (scripts/render/
 ##     overlay_node.gd `_draw_searched_stand_in`) draws a grey pill with a check mark: the rules offer nothing to press there, and the player is told so.
 ##   - the LOOT POP: when a search finishes, a small "+3 food" for each kind found rises from the container for a moment and then flies toward that store in the stores panel (and fades
@@ -17,6 +18,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const WorldStage := preload("res://scripts/ui/world_stage.gd")
 const PromptKit := preload("res://scripts/render/prompt_kit.gd")
+const CarLoot := preload("res://scripts/town/car_loot.gd")
 
 ## Tiles from the avatar at which a tick is full strength, and gone.
 const TICK_NEAR := 4.0
@@ -139,7 +141,7 @@ func on_frame(dt: float) -> void:
 		var here := Vector2(me.x, me.y)
 		var best := STAND_REACH
 		for c in looted:
-			var d := here.distance_to(c.pos)
+			var d: float = CarLoot.rect_dist(here, c.rect) if c.has("rect") else here.distance_to(c.pos)
 			if d <= best:
 				best = d
 				_near = c
@@ -167,7 +169,15 @@ func _track_house() -> void:
 	_house = h
 	_looted_n = n
 	looted = []
-	if h < 0 or search == null or houses == null:
+	if search == null or houses == null:
+		return
+	if h < 0:
+		# (SCAV3: outside every house, the cars and wrecks of the street that are searched: the tick over a car says nobody needs to open it again; `rect` is the car's footprint)
+		var cars = houses.get("cars")
+		if cars is Array:
+			for c in cars:
+				if search.is_looted(String(c.id)):
+					looted.append({"id": String(c.id), "at": Vector2(c.at), "pos": Vector2(c.pos), "rect": c.rect})
 		return
 	for c in houses.containers_of(h):
 		if search.is_looted(String(c.id)):

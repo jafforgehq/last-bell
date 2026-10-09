@@ -4,7 +4,8 @@
 ## WHAT SHIMMERS. While the avatar is inside a house, every container of that house that is NOT searched and sits in a room she has looked into (the dark veil over the other rooms hides
 ## the rest): a faint rim of light round the furniture that breathes, and a thin glint that crosses it every few seconds. A container in a room that has dead in it shimmers in a grey red, with no
 ## glint (it cannot be searched as a room yet: the dead are in the way). A container that is looted does not shimmer (its tick is the mark: scripts/ui/search_marks.gd), nor the one she has her
-## hands on. A container that is not in a room at all (a car, a yard: none in the town yet, the generator puts them all inside walls) shimmers within OUTDOOR_R (10) tiles of her.
+## hands on. A container that is not in a room at all shimmers within OUTDOOR_R (10) tiles of her: SCAV3, the parked cars and wrecks of the street (scripts/town/car_loot.gd, `sim.houses.cars`;
+## every unsearched one, gold, the whole rim of its footprint: most are empty, and the colour never says), while she is outside every house.
 ## THE COLOUR IS ALWAYS GOLD (or the grey red). The loot is rolled when the town is made; to colour a container by what is in it would tell the player the contents before the search.
 ## REDUCE FLASHES / REDUCE MOTION (`Access.calm_flashes()`): a still rim, no glint, no breath. COLOUR-BLIND MARKERS (`Access.markers()`): corner brackets on the ones that can be searched, a
 ## dashed rim on the others, so that the colour is never the whole message.
@@ -203,7 +204,8 @@ func _collect(me, items: Array) -> void:
 			if room >= 0 and not dead.has(room):
 				dead[room] = hs.dead_in_room(room) > 0
 			items.append({"id": id, "at": Vector2(c.at), "size": _size(String(c.kind)), "blocked": room >= 0 and bool(dead[room])})
-	# containers that are in no room (a car, a yard: the generator puts none outside the walls yet) within OUTDOOR_R of her
+	# containers that are in no room (a yard: the generator puts none outside the walls) and the cars and wrecks of the street (SCAV3: scripts/town/car_loot.gd, only while she is outside every house)
+	# within OUTDOOR_R of her
 	if not _outdoor_read:
 		_outdoor_read = true
 		var town = hs.get("town")
@@ -211,11 +213,17 @@ func _collect(me, items: Array) -> void:
 			for c in town.get("containers", []):
 				if int(c.get("room", -1)) < 0:
 					_outdoor.append(c)
+		var cars = hs.get("cars")
+		if cars is Array:
+			_outdoor.append_array(cars)
 	for c in _outdoor:
 		var id2 := String(c.id)
-		if search.is_looted(id2) or Vector2(c.at).distance_to(here) > OUTDOOR_R:
+		var is_car := bool(c.get("car", false))
+		if search.is_looted(id2) or (is_car and h >= 0) or Vector2(c.at).distance_to(here) > OUTDOOR_R:
 			continue
-		items.append({"id": id2, "at": Vector2(c.at), "size": _size(String(c.kind)), "blocked": false})
+		if uses != null and uses.in_session("container", id2):
+			continue
+		items.append({"id": id2, "at": Vector2(c.at), "size": Vector2(Rect2i(c.rect).size) if is_car else _size(String(c.kind)), "blocked": false})
 
 
 ## `--shimmer-stress=N`: N quads in a ring round her (the pool full), for the cost.
