@@ -429,6 +429,8 @@ func _draw(town: Dictionary) -> void:
 		var ch: Dictionary = houses[int(c.house)]
 		var col2: Color = tier_colors.get(String(c.tier), Color.WHITE)
 		_frame(Rect2i(ch.lot), col2, 2)
+		# (CLEAR3: the field of fire, the lot grown by 10 tiles: no other building and nothing tall in it; a thin frame in the candidate's colour)
+		_frame(Rect2i(ch.lot).grow(10), col2, 1)
 		var lot_r: Rect2i = ch.lot
 		_text("%s %dR %s %d" % [String(c.tier), int(c.rooms), String(c.yard), roundi(float(c.dist))], lot_r.position.x * S, lot_r.end.y * S + 3, 2, col2)
 	if town.has("entry"):
