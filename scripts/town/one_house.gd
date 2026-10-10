@@ -1569,6 +1569,14 @@ func night_mult(day: int) -> float:
 	return maxf(float(_cfg("night.first", 1.0)) * (1.0 + float(_cfg("night.growth", 0.15)) * float(day - _first_day)), 0.05)
 
 
+## The most of the night's dead alive at once on a night with no theme of its own (waves.gd asks, with its own number: the colony's 30 at dusk and 50 at night): the data's `night.cap_dusk` and
+## `night.cap_night` (DEAD1, 2026-10-10: the dead alive at once went from 40 and 50 to 70; the first night's own is `big_night.cap`). A key that is not there is the colony's.
+func night_cap(at_night: bool, big: bool, default_cap: int) -> int:
+	if big:
+		return default_cap
+	return maxi(int(_cfg("night.cap_night" if at_night else "night.cap_dusk", default_cap)), 1)
+
+
 ## The Big Night after `day` as waves.gd's `big_night` answers it: {} (the first attack night is an ordinary one) unless the data asks for a theme's numbers (brutes).
 func big_night_for(day: int) -> Dictionary:
 	var mine = _cfg("big_night", {})

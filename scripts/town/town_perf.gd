@@ -9,7 +9,8 @@
 ##
 ## ADAPTATION (an instance, `TownGame` holds it and calls `frame()` once a frame): the real frame time (the wall clock, not the clamped step the game feeds its views) is smoothed;
 ## when it stays over SLOW_MS (28 ms, under 36 fps) for SLOW_S (2 s) the active cap is halved (down to MIN_CAP) and the awake dead above it that are not after anybody go back to
-## sleep; when it stays under FAST_MS (18 ms) for FAST_S (5 s) the cap grows back by half of the way to the platform's own. A frame that took more than HITCH_S is a stall (a hidden
+## sleep (DEAD1: and the night's cap of the dead alive at once, 70, is cut by the same share, `TownRules.wave_cap`); when it stays under FAST_MS (18 ms) for FAST_S (5 s) the cap grows back by
+## half of the way to the platform's own. A frame that took more than HITCH_S is a stall (a hidden
 ## browser tab, a save, a card), not a trend: it is not counted.
 extends RefCounted
 
@@ -123,6 +124,9 @@ func _set_cap(value: int) -> void:
 	if value == cap:
 		return
 	cap = value
+	# (DEAD1: the night's own dead are held to the same share: the rest wait outside, `TownRules.wave_cap`)
+	if sim != null and sim.get("wave_scale") != null:
+		sim.wave_scale = float(cap) / float(maxi(full, 1))
 	var field = sim.get("field") if sim != null else null
 	if field != null:
 		field.active_cap = cap

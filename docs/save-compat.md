@@ -48,3 +48,6 @@ backpack): the generated towns are the same, but the *meaning* of the saved stat
 grids of the containers she opened with the items left in them, the piles on the ground, the credit of the fractions paid ahead); the avatar's reserve ammo, her bandages and her meals come from
 that pack and no longer from `stock`, so `stock` of a version 2 save holds food, rounds and medicine that are now in the pack; and a container's `looted` means *searched* (items she left in it
 stay and are saved in the module). A version 2 save loaded into this build would play with an empty pack and double-counted stores: it is refused with the usual card.
+4 = DEAD1 (2026-10-10, PH10, the owner's "more zombies"): the streets, houses, containers and rescues of every seed are the same, but the list of the town's dead is longer: about 250 more records
+(`assets/data/town_dead.json` `street.extra`, the street's ambient dead, laid down from a stream of their own after the old ones). The field saves the dead as flat records by index, so a save made
+with 700 of them would be read against a list of 950: the dead of the street would be in the wrong places and the killed ones would be marked on the wrong records. Refused with the usual card.

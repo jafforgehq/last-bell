@@ -86,11 +86,15 @@ func dead_inside() -> int:
 		return 0
 	var per = get("perimeter")
 	var fenced: bool = per == null or not bool(per.no_outer_wall())
+	# (DEAD1: the yard and the house are asked once and not for each of 70 of the dead: the same count)
+	var yard := Rect2(_claimed_base().yard_rect())
+	var hs = get("houses")
+	var home := int(_claimed_base().house)
 	var n := 0
 	for z in zombies:
 		if z.state == "dying" or z.state == "dead" or z.state == "retreat":
 			continue
-		if (fenced and _in_yard(z.x, z.y)) or inside_school(z.x, z.y):
+		if (fenced and yard.has_point(Vector2(z.x, z.y))) or (hs != null and int(hs.house_at(z.x, z.y)) == home):
 			n += 1
 	return n
 
@@ -165,6 +169,16 @@ func _is_open_gate(s) -> bool:
 	return String(s.kind) == "gate"
 
 
+## DEAD1: the share of the night's cap of the dead alive at once that a slow machine may have (`TownPerf` sets it with the adaptive cap on the awake dead of the street: 1 on a machine that keeps up;
+## half of it after the first halving; never under WAVE_CAP_MIN, nor over what the night asked). waves.gd asks `wave_cap`.
+var wave_scale := 1.0
+const WAVE_CAP_MIN := 24
+
+
+func wave_cap(cap: int) -> int:
+	return clampi(roundi(float(cap) * wave_scale), mini(cap, WAVE_CAP_MIN), cap)
+
+
 ## The night's cap counts only the wave's dead: the street's own (they have a record in the field) do not eat its room.
 func alive_for_cap() -> int:
 	var f = get("field")
@@ -206,6 +220,8 @@ func _dawn_sweep() -> void:
 
 ## How many of the best places a dead one tries to find a way to before it gives up for a moment.
 const SIEGE_TRIES := 3
+## DEAD1 (the peak of 70 dead alive at once): the most tiles `_walled_off` floods from a place to learn that it lies in a small closed pocket (the fenced yard); a larger piece of the town is open ground.
+const POCKET_MAX := 6000
 ## Seconds between a mustering dead one's looks for a free place.
 const MUSTER_ASK_S := 1.0
 ## How far outside its place's approach point a mustering dead one stands, in tiles (a little each, so they do not stand in one tile).
@@ -343,14 +359,88 @@ func assign_slot(z: Zombie, only) -> bool:
 	picks.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
 	for i in mini(SIEGE_TRIES, picks.size()):
 		var sl = picks[i][1]
+		if _walled_off(sl, z):
+			continue    # (what the search below would say, without reading the whole of the town to say it: the barred doors lie inside a ring that is whole)
 		var path: Array = path_z.find(world.solid_z, z.x, z.y, sl.ax, sl.ay)
-		if not path.is_empty():
+		if path.is_empty():
+			_note_no_way(sl)
+		else:
 			sl.who = z
 			z.slot = sl
 			z.path = path
 			z.path_i = 0
 			return true
 	return false
+
+
+## The tiles of the closed pocket that the approach point of a place lies in, learned when a search for a way to it found none and kept for as long as no tile of the walking grid is shut or
+## opened (`Pathfinder.rev`): {slot: [rev, the pocket as a byte for each tile, or null when the place lies on open ground]}. A barred door's approach point is inside the yard: with the fence whole
+## there is no way to it from the street, and the search for one reads the whole of the town (4 ms; a step with 40 of the dead asking for a place was 14 ms).
+var _pockets := {}
+
+
+## Whether there is NO way on foot from where `z` stands to the approach point of `sl`, known from an earlier search without making another: the point lies in a small closed pocket of the walking
+## grid that `z` is not in. False when nothing is known (the search says).
+func _walled_off(sl, z) -> bool:
+	var rec = _pockets.get(sl)
+	if rec == null or int(rec[0]) != path_z.rev or rec[1] == null:
+		return false
+	var cells: PackedByteArray = rec[1]
+	var zx := floori(z.x)
+	var zy := floori(z.y)
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var tx := zx + dx
+			var ty := zy + dy
+			if tx >= 0 and ty >= 0 and tx < W and ty < H and cells[ty * W + tx] != 0:
+				return false
+	return true
+
+
+## A search for a way to `sl` found none: if its approach point lies in a small closed pocket, the pocket is kept (once for each state of the walking grid), so that the others who ask do not search.
+func _note_no_way(sl) -> void:
+	var rec = _pockets.get(sl)
+	if rec != null and int(rec[0]) == path_z.rev:
+		return
+	if _pockets.size() > 200:
+		_pockets.clear()    # (the sections of a fence that was made again leave their old places here)
+	_pockets[sl] = [path_z.rev, _pocket_at(floori(sl.ax), floori(sl.ay))]
+
+
+## The tiles that can be walked to from tile (x, y) (4 ways, `world.solid_z`) as a byte for each tile of the town, or null when more than POCKET_MAX of them can (open ground) or the tile is shut.
+func _pocket_at(x: int, y: int):
+	if x < 0 or y < 0 or x >= W or y >= H:
+		return null
+	var solid: PackedByteArray = world.solid_z
+	if solid[y * W + x] != 0:
+		return null
+	var seen := PackedByteArray()
+	seen.resize(W * H)
+	var queue := PackedInt32Array()
+	queue.append(y * W + x)
+	seen[y * W + x] = 1
+	var head := 0
+	while head < queue.size():
+		if queue.size() > POCKET_MAX:
+			return null
+		var i := queue[head]
+		head += 1
+		var cx := i % W
+		@warning_ignore("integer_division")
+		var cy := i / W
+		if cx > 0 and seen[i - 1] == 0 and solid[i - 1] == 0:
+			seen[i - 1] = 1
+			queue.append(i - 1)
+		if cx < W - 1 and seen[i + 1] == 0 and solid[i + 1] == 0:
+			seen[i + 1] = 1
+			queue.append(i + 1)
+		if cy > 0 and seen[i - W] == 0 and solid[i - W] == 0:
+			seen[i - W] = 1
+			queue.append(i - W)
+		if cy < H - 1 and seen[i + W] == 0 and solid[i + W] == 0:
+			seen[i + W] = 1
+			queue.append(i + W)
+	return seen
 
 
 ## One of the dead on its way to the wall with no place (the sections are crowded): it musters in the street, a few tiles off the wall, and asks again for a place now and then.

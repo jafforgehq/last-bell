@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "_doc": "The town's dead as the generator places them (scripts/town/town_gen.gd `_dead`, DEAD1 2026-10-10: the owner asked for about 60 percent more dead on the streets by day). Read when the first town is made, over the generator's own defaults key by key; keys that start with an underscore are notes. total: the dead of a 6 x 6 block town (192 x 192), scaled by blocks squared over 36 for a smaller one, `opts.dead` of a test or a tool replaces it (and then there is no `extra`); the houses (a few in each by its kind, DEAD_BY_KIND), the yards (yard_share of the total) and the street's first loose groups all come out of it, the street's are what is left, so 700 gives about 410 in the streets. street: the street's dead are loose groups on the paving (group: [least, most] in a group; still: the share that stands where it is until somebody comes near, the rest wanders; runner and brute: the share of runners and of brutes, a die roll under brute is one, under brute + runner a runner). extra: the street's AMBIENT dead, laid down after the first ones from a stream of their own (so nothing else in the town moves): that share more than the street had (0.6: 410 become about 650, 950 of the town's dead in all); where they stand follows `ramp` ([[tiles from the nearest calm point (the entry, every candidate home), the share of the tried places that is kept], ...], linear between the points, the first and last held): none ever inside the calm radius (25 tiles: the first houses and the walk in are as they were), and as it stands ONE point, [[25, 1.0]]: every place beyond it is kept, the street is 60 percent thicker all over (the lab on seeds 1..32 at 15 Hz: the bot held 29 of 32 as 30 of 32 before, an idle avatar 5 of 32 as 6, the claim before 13:00 in 31 of 32 as before, the second rescue at 14.2 as before). To spare the first ground: [[25, 0.4], [45, 1.0]] keeps 40 percent of the places at 25 tiles out, all of them from 45, and puts the rest of the extra farther out. The town's `VERSION` was bumped (docs/save-compat.md).",
+  "total": 700,
+  "yard_share": 0.12,
+  "street": {
+    "group": [1, 4],
+    "still": 0.6,
+    "runner": 0.12,
+    "brute": 0.03,
+    "extra": 0.6,
+    "ramp": [[25.0, 1.0]]
+  }
+}

@@ -427,6 +427,7 @@ func _bench_save() -> void:
 
 const TownPerfCap := preload("res://scripts/town/town_perf.gd")
 const GAME_ALL := "house,street,walk,dead60,dead100,roofs,mapzoom,night,save"
+## (DEAD1: the night scene's wave is `--wave=N` dead, 50 by default)
 ## Scenes that are not in the default list: `attr` (which node costs how many draw calls, at the roofs camera), `zoom` (the number of draws and houses in view at several zooms)
 var _gm
 var _g_scenes: Array = []
@@ -504,6 +505,13 @@ func _g_spawn_wave(delta: float) -> void:
 	var me = sim.avatar.player()
 	for i in mini(_g_pending, 2 + _g_rng.randi() % 2):
 		var at: Vector2 = spawns[_g_rng.randi() % spawns.size()] if not spawns.is_empty() else Vector2(me.x + 30.0, me.y)
+		if _arg("near", "") != "":
+			# (DEAD1 `--near`: the wave comes in at the fence, 7 to 14 tiles from the house, so that the whole of it is in the picture)
+			for k in 30:
+				var q: Vector2 = sim.base_center() + Vector2.from_angle(_g_rng.randf() * TAU) * _g_rng.randf_range(7.0, 14.0)
+				if not _gm.world.is_solid(_gm.world.solid_z, q.x, q.y):
+					at = q
+					break
 		var z = sim.spawn(at.x + _g_rng.randf_range(-1.0, 1.0), at.y + _g_rng.randf_range(-1.0, 1.0), "approach", "walker" if _g_rng.randf() < 0.9 else "runner")
 		_g_made.append(z)
 		_g_pending -= 1
@@ -515,6 +523,8 @@ func _g_walk_step(delta: float) -> void:
 	var me = sim.avatar.player()
 	me.hp = 100.0
 	me.downed = false
+	if _g_cur == "night":
+		_gm.speed = 1    # (a card that opened on the staged night would hold the rules still: this measures the dead, not the card)
 	_g_spawn_wave(delta)
 	if not _g_walk or _g_route.is_empty():
 		return
@@ -594,7 +604,7 @@ func _g_begin_scene(name: String) -> void:
 			sim.field.active_cap = TownPerfCap.desktop_cap() if not _g_web_caps else TownPerfCap.web_cap()
 			OneHouse.stage_to(sim, "night")
 			sim.minutes = 19.5 * 60.0
-			_g_pending = 50
+			_g_pending = int(_arg("wave", "50"))    # (DEAD1: `--wave=70` is the night at the cap of 70; `--cap=N` sets the field's cap, `--web` the web's caps)
 			_g_pending_t = 0.0
 			sim.field.night_mult = 1.4
 			_g_zoom(maxf(vp.x / 26.0, 28.0))

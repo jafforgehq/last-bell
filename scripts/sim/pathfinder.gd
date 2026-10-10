@@ -19,6 +19,8 @@ var sight_calls := 0
 ## SPIKE (bigmap): how many times `find` was called and how long they took (microseconds), for the cost measurements. Whoever reads them resets them.
 var find_calls := 0
 var find_usec := 0
+## DEAD1: how many times a tile was shut or opened (`set_solid`). Whoever remembers that there is no way to a place asks if this has moved since (scripts/town/town_rules.gd `_walled_off`).
+var rev := 0
 
 
 func _init(w: int, h: int, solid: PackedByteArray) -> void:
@@ -38,6 +40,7 @@ func _init(w: int, h: int, solid: PackedByteArray) -> void:
 
 
 func set_solid(i: int, value: bool) -> void:
+	rev += 1
 	@warning_ignore("integer_division")
 	grid.set_point_solid(Vector2i(i % W, i / W), value)
 

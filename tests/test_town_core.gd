@@ -33,7 +33,7 @@ func test_the_same_seed_makes_the_same_town_and_its_data_is_whole() -> void:
 	check(TownGen.digest(TownGen.make(2)) != TownGen.digest(t), "another seed, another town")
 	# (a town has about 85 houses since the fields of fire were cleared round the candidates (CLEAR3: 74 to 100, none under 60: tools/town_probe.gd MIN_HOUSES))
 	check(t.houses.size() >= 60 and t.houses.size() <= 250, "60 to 250 houses: %d" % t.houses.size())
-	check(t.dead.size() >= 600 and t.dead.size() <= 800, "600 to 800 dead: %d" % t.dead.size())
+	check(t.dead.size() >= 850 and t.dead.size() <= 1050, "850 to 1050 dead (700 and the street's 60 percent more, DEAD1): %d" % t.dead.size())
 	var start_dead := _start_dead(t)
 	check(start_dead >= 3 and start_dead <= 5, "three to five dead to clear in the (roomy) start house: %d" % start_dead)
 	eq(t.rescue.size(), 12, "twelve rescue houses")

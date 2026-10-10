@@ -568,6 +568,12 @@ func update(dt: float) -> void:
 	var cap := int(p.get("cap", 0))
 	if cap <= 0:
 		cap = CAP_BIG if p.big else (CAP_NIGHT if night else CAP_DUSK)
+		# (DEAD1: a scenario with its own caps for an ordinary night, the town's `night.cap_dusk` and `night.cap_night`: its data raises the colony's 30 and 50)
+		if sim.scenario != null and sim.scenario.has_method("night_cap"):
+			cap = maxi(int(sim.scenario.night_cap(night, bool(p.big), cap)), 1)
+	# (DEAD1: a slow machine: the town's adaptive cap, scripts/town/town_perf.gd, takes a share off the dead that may be alive at once: the rest wait outside the wave's gate, they are not lost)
+	if sim.has_method("wave_cap"):
+		cap = int(sim.wave_cap(cap))
 	var room: int = cap - alive
 	if room <= 0:
 		sim.spawn_t = 1.0
