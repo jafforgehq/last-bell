@@ -33,8 +33,8 @@
     {"id": "search", "verb": "Search a shelf", "line": "Search it (E)", "text": "Stand at a shelf or a cabinet and press E. Hold still while you look."}
   ]},
   "patrol": {"pace": 0.5, "pace_go": 1.0, "pace_back": 0.9, "spacing": 3.0, "replan_s": 0.4, "min_stay": 2.0, "start_min": 1.4, "keep_min": 0.6, "near_pen": 1.5, "switch_ratio": 1.7, "engage_s": 1.0, "dead_r": 13.0},
-  "night": {"first": 1.85, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
-  "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and a plated brute from two streets: aim for its head.", "factor": 1.0, "runners": 0.15, "brutes": 0.01, "min_brutes": 1, "brute_at": [0.2, 0.9], "headings": 2, "main_share": 0.85, "cap": 40, "plated": true},
+  "night": {"first": 1.85, "growth": 0.15, "tight": 0.85, "surge_gap": 0.8, "cap_dusk": 50, "cap_night": 70, "surges": [{"at": 0.3, "share": 0.3}, {"at": 2.6, "share": 0.4}, {"at": 4.6, "share": 0.3}]},
+  "big_night": {"theme": "siege", "name": "The first night", "blurb": "They have heard the radio. Walkers and a plated brute from two streets: aim for its head.", "factor": 1.0, "runners": 0.15, "brutes": 0.01, "min_brutes": 1, "brute_at": [0.2, 0.9], "headings": 2, "main_share": 0.85, "cap": 70, "plated": true},
   "held_rule": {"avatar_alive": true, "house_empty": true, "base_standing": true, "base_whole": true},
   "guide": [
     {"id": "walk", "stages": ["arrive"], "title": "Walk", "verb": "Walk up the road", "text": "W A S D to walk. The town is up the road. It is quiet, which is not the same as empty.", "goal": "Walk up the road", "cond": {"type": "walked", "n": 6}},

@@ -8,7 +8,7 @@
 ##   stress    as built, and forty made-up sections of four tiles drawn round the base by the view as well (all four states, both kits, gates): not in the rules, only to count draw calls
 ##   open      opens the gate (after built)
 ##   mend      1.75 seconds in, every section is mended to full (after damaged): the view flashes the repairs
-##   claw      six of the dead come up to the fence and claw at it (after built)
+##   claw      six of the dead come up to the fence and claw at it (after built); `claw:70` that many from all round it (a night at its cap of 70)
 ##   all       a mix: the back and the sides built, the front part built and worn, the gate ordered half way, a tower ordered, a section down
 ## Not used by the game or the tests: a debugging aid in the same spirit as `--stage=`. It reaches into `sim.build` (`_finish`) to finish an order without the builders.
 extends RefCounted
@@ -22,7 +22,9 @@ static func apply(sim, what: String, main = null) -> bool:
 		return false
 	sim.stock["scrap"] = 9999.0
 	var ok := true
-	for word in what.split(",", false):
+	for word_in in what.split(",", false):
+		var word: String = String(word_in).get_slice(":", 0)
+		var arg: String = String(word_in).get_slice(":", 1) if String(word_in).contains(":") else ""
 		match word:
 			"built":
 				_build_all(sim, per, "", "")
@@ -37,7 +39,7 @@ static func apply(sim, what: String, main = null) -> bool:
 				else:
 					view.stress = 40
 			"claw":
-				_dead_at_the_fence(sim, per)
+				_dead_at_the_fence(sim, per, int(arg) if arg.is_valid_int() else 6)
 			"mend":
 				if main != null:
 					main.get_tree().create_timer(1.75).timeout.connect(func(): _mend_all(sim, per))
@@ -62,9 +64,24 @@ static func apply(sim, what: String, main = null) -> bool:
 
 
 ## A few of the dead come up to the fence on the outer side of the front and the west side and claw at it (the view shakes the section and puffs dust: `--slots=built,claw`).
-static func _dead_at_the_fence(sim, per) -> void:
+static func _dead_at_the_fence(sim, per, count: int = 6) -> void:
 	var lot: Rect2i = per.layout.plot
 	var front_south: bool = String(per.layout.front) == "S"
+	if count != 6:
+		# (DEAD1: `claw:70`, a night at its cap: that many of the dead make for the base from all round it, 3 to 12 tiles outside the lot, and take a place at the fence or muster in the street)
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 70
+		var made := 0
+		var tries := 0
+		var middle := Vector2(lot.get_center())
+		while made < count and tries < count * 60:
+			tries += 1
+			var at := middle + Vector2.from_angle(rng.randf() * TAU) * (float(maxi(lot.size.x, lot.size.y)) * 0.5 + rng.randf_range(3.0, 12.0))
+			if sim.world.is_solid(sim.world.solid_z, at.x, at.y):
+				continue
+			sim.spawn(at.x, at.y, "approach", "walker" if rng.randf() < 0.9 else "runner")
+			made += 1
+		return
 	for i in 6:
 		var at := Vector2(float(lot.position.x) + 2.5 + float(i) * 1.8, float(lot.end.y) + 3.0) if i < 4 else Vector2(float(lot.position.x) - 3.0, float(lot.position.y) + 4.0 + float(i - 4) * 3.0)
 		if not front_south:

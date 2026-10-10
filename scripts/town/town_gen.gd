@@ -108,10 +108,19 @@ const EDGE := 2
 ## the candidates' ammo, the entry's sandbags) changed the town again in the same unreleased build, so it is still 2: bump it if SAVE4's build has been released before EARLY4 ships.
 ## 3: INV-CORE (PH6, 2026-10-09): the same towns, but the SAVED STATE means something else: the stores no longer hold what the avatar carries, a `inv` module (the backpack, the containers she has
 ## opened, the stash) is saved with the run, her reserve ammo is the shells in the pack, and a searched container's `looted` means searched while the items she left stay in it.
-const VERSION := 3
-## Dead: how many (the owner's 600 to 800), the share that is in or beside the houses, and how many guard each house of the rescue list.
+## 4: DEAD1 (2026-10-10, PH10): the same streets and houses, but about 250 more records in the dead's list (assets/data/town_dead.json `street.extra`: the street's ambient dead), so a save's records of the
+## dead are of another town.
+const VERSION := 4
+## Dead: how many (the owner's 600 to 800 before DEAD1; the street's ambient dead come on top of them), the share that is in or beside the houses, and how many guard each house of the rescue list.
+## The numbers of the streets are DATA (assets/data/town_dead.json, `dead_data()`); these are what a missing file or key falls back to.
 const DEAD_TOTAL := 700
 const DEAD_NEAR_HOUSES := 0.6
+const DEAD_DATA_PATH := "res://assets/data/town_dead.json"
+## The data's defaults: total (of a 6 x 6 block town), yard_share, and street {group [least, most], still, runner, brute, extra, ramp [[tiles from the nearest calm point, the share kept], ...]}.
+const DEAD_DEFAULTS := {
+	"total": 700, "yard_share": 0.12,
+	"street": {"group": [1, 4], "still": 0.6, "runner": 0.12, "brute": 0.03, "extra": 0.0, "ramp": [[25.0, 0.0], [70.0, 1.0]]},
+}
 ## How many dead stand in a building at the start, [least, most], by its kind (the houses one to four; the shops, the flats, the works and the civic buildings more).
 const DEAD_BY_KIND := {
 	"small": [1, 3], "cottage": [1, 2], "medium": [1, 3], "family": [2, 4], "bungalow": [1, 4], "lhouse": [2, 4], "thouse": [2, 4], "uhouse": [2, 5], "twowing": [2, 4], "terrace": [1, 2], "terrace_ext": [1, 3],
@@ -1689,6 +1698,43 @@ func _hide_spot(room: int, house_id: int) -> Vector2:
 	return best
 
 
+## The dead's numbers (assets/data/town_dead.json over `DEAD_DEFAULTS`, key by key, one level down for `street`): read once.
+static var _dead_cfg := {}
+
+
+static func dead_data() -> Dictionary:
+	if _dead_cfg.is_empty():
+		var out: Dictionary = DEAD_DEFAULTS.duplicate(true)
+		if FileAccess.file_exists(DEAD_DATA_PATH):
+			var parsed = JSON.parse_string(FileAccess.get_file_as_string(DEAD_DATA_PATH))
+			if typeof(parsed) == TYPE_DICTIONARY:
+				for k in parsed:
+					if String(k).begins_with("_") or k == "version":
+						continue
+					if typeof(parsed[k]) == TYPE_DICTIONARY and typeof(out.get(k)) == TYPE_DICTIONARY:
+						for k2 in parsed[k]:
+							(out[k] as Dictionary)[k2] = parsed[k][k2]
+					else:
+						out[k] = parsed[k]
+		_dead_cfg = out
+	return _dead_cfg
+
+
+## The share of the street's ambient places that is kept at `d` tiles from the nearest calm point (the data's `street.ramp`: linear between its points, the first and last held).
+static func dead_ramp(ramp: Array, d: float) -> float:
+	if ramp.is_empty():
+		return 1.0
+	if d <= float(ramp[0][0]):
+		return clampf(float(ramp[0][1]), 0.0, 1.0)
+	for i in range(1, ramp.size()):
+		var x0 := float(ramp[i - 1][0])
+		var x1 := float(ramp[i][0])
+		if d <= x1:
+			var t := (d - x0) / maxf(x1 - x0, 0.001)
+			return clampf(lerpf(float(ramp[i - 1][1]), float(ramp[i][1]), t), 0.0, 1.0)
+	return clampf(float(ramp[ramp.size() - 1][1]), 0.0, 1.0)
+
+
 ## The dead as data records: about 60% in or beside the houses, 40% in the streets in loose groups; a few in each candidate (the best four or five, the middle one three or four, the poor
 ## one two or three, each in a room of its own), a guard of two to four in every house of the rescue lists (`rescue`: the houses of every candidate's list, once each). `calm`: the points the
 ## yards, the streets and the houses round them are kept calm of (the entry and the candidates; a town without an arrival, `legacy`: the start house, as ever).
@@ -1696,7 +1742,9 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 	var rng := _rng
 	var W := _size
 	var H := _size
-	var total := int(opts.get("dead", maxi(40, roundi(float(DEAD_TOTAL) * float(_blocks * _blocks) / 36.0))))
+	var cfg := dead_data()
+	var scfg: Dictionary = cfg.street
+	var total := int(opts.get("dead", maxi(40, roundi(float(cfg.total) * float(_blocks * _blocks) / 36.0))))
 	var keep_clear := 22.0 * maxf(float(_size) / float(DEFAULT_SIZE), 0.4)    # (how near the start the yards and the streets hold none)
 	var yard_r := keep_clear if legacy else CALM_R + 2.0
 	var street_r := keep_clear * 1.2 if legacy else CALM_R + 5.0
@@ -1714,6 +1762,10 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 		return false
 	var kinds_for := func(r: float) -> String:
 		return "brute" if r < 0.03 else ("runner" if r < 0.15 else "walker")
+	var brute_at := float(scfg.brute)
+	var runner_at := brute_at + float(scfg.runner)
+	var street_kind := func(r: float) -> String:
+		return "brute" if r < brute_at else ("runner" if r < runner_at else "walker")
 	var road := int(_tids.ASPHALT)
 	var walk := int(_tids.SIDEWALK)
 	var floor_tiles: Array = []
@@ -1847,7 +1899,7 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 			if put_inside.call(hi, kd, "still" if (rng.randf() < 0.85 or (calm_house and not legacy)) else "wander", -1, -1):
 				made_in += 1
 	# beside the houses: grass of the lots, front and back
-	var yard_n := roundi(float(total) * 0.12)
+	var yard_n := roundi(float(total) * float(cfg.yard_share))
 	var made := 0
 	guard = 0
 	while made < yard_n and guard < yard_n * 80:
@@ -1881,7 +1933,7 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 		var centre := Vector2(float(cx) + 0.5, float(cy) + 0.5)
 		if near_calm.call(centre, street_r):
 			continue
-		var n := mini(rng.randi_range(1, 4), in_street - made)
+		var n := mini(rng.randi_range(int(scfg.group[0]), int(scfg.group[1])), in_street - made)
 		var got := 0
 		var t2 := 0
 		while got < n and t2 < 60:
@@ -1893,10 +1945,51 @@ func _dead(cands: Array, rescue: Array, start_room: int, calm: Array, legacy: bo
 			if not _spaced(taken, p, 1.2):
 				continue
 			_take(taken, p)
-			out.append({"pos": p, "kind": kinds_for.call(rng.randf()), "state": "still" if rng.randf() < 0.6 else "wander", "house": -1, "room": -1, "group": group})
+			out.append({"pos": p, "kind": street_kind.call(rng.randf()), "state": "still" if rng.randf() < float(scfg.still) else "wander", "house": -1, "room": -1, "group": group})
 			got += 1
 		made += got
 		group += 1
+	# DEAD1, the street's AMBIENT dead (`street.extra` of assets/data/town_dead.json): that share more than the street had, laid down after the first ones from a stream of their own (nothing else of
+	# the town moves), thin round the calm points (the entry and the candidates) and thick far from them (`street.ramp`): the first day's walk to a house, the search and the rescues keep what the
+	# lab tuned them for, and the town beyond is dangerous. An explicit `opts.dead` is exact: no extra.
+	var extra_n := 0 if opts.has("dead") else roundi(float(made) * float(scfg.extra))
+	if extra_n > 0:
+		var xr := RandomNumberGenerator.new()
+		xr.seed = seed_value * 2654435761 + 1013
+		var ramp: Array = scfg.ramp
+		var made_x := 0
+		var tries_x := 0
+		while made_x < extra_n and tries_x < extra_n * 150:
+			tries_x += 1
+			var cx := xr.randi_range(EDGE + 4, W - EDGE - 5)
+			var cy := xr.randi_range(EDGE + 4, H - EDGE - 5)
+			var ci := cy * W + cx
+			if (_terrain[ci] != road and _terrain[ci] != walk) or _solid[ci] != 0:
+				continue
+			var centre := Vector2(float(cx) + 0.5, float(cy) + 0.5)
+			if near_calm.call(centre, street_r):
+				continue
+			var far := INF
+			for cp in calm:
+				far = minf(far, Vector2(cp).distance_to(centre))
+			if xr.randf() >= dead_ramp(ramp, far):
+				continue
+			var n := mini(xr.randi_range(int(scfg.group[0]), int(scfg.group[1])), extra_n - made_x)
+			var got := 0
+			var t2 := 0
+			while got < n and t2 < 60:
+				t2 += 1
+				var p := centre + Vector2(xr.randf_range(-3.5, 3.5), xr.randf_range(-3.5, 3.5))
+				var pi := floori(p.y) * W + floori(p.x)
+				if pi < 0 or pi >= W * H or _solid[pi] != 0 or (_terrain[pi] != road and _terrain[pi] != walk):
+					continue
+				if not _spaced(taken, p, 1.2):
+					continue
+				_take(taken, p)
+				out.append({"pos": p, "kind": street_kind.call(xr.randf()), "state": "still" if xr.randf() < float(scfg.still) else "wander", "house": -1, "room": -1, "group": group})
+				got += 1
+			made_x += got
+			group += 1
 	return out
 
 
