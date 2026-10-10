@@ -21,6 +21,7 @@ const TierMarks := preload("res://scripts/ui/tier_marks.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 const Access := preload("res://scripts/access.gd")
 const HudFree := preload("res://scripts/ui/hud_free.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
 const REFRESH_S := 0.2
 const OBSTACLES_S := 0.25
@@ -44,11 +45,12 @@ const TRIES := 70
 const PENNANT_FADE := 3.0
 const PENNANT_REACH := 60.0
 const PENNANT_SHOWN := 40.0
-## The base's arrow shows only from this many tiles away.
+## The base's arrow shows only from this many tiles away (the minimal HUD's, HUD8: from the far one).
 const BASE_FAR := 25.0
+const BASE_FAR_MINIMAL := 50.0
 const MAX_ITEMS := 10
 const MAX_RESCUE := 3
-const MAX_OBSTACLES := 40
+const MAX_OBSTACLES := 80
 const TILE_WORD := "m"
 const BASE_COLOR := Color("#f0c24a")
 const KNOWN_COLOR := Color("#7fa6c9")
@@ -90,6 +92,8 @@ class Item:
 var main
 var hud
 var layer: Control
+## HUD8, the minimal HUD (scripts/ui/hud_stage.gd): "all" (as it was), "one" (the first minutes: ONE arrow, to the best house), "home" (the base's arrow from afar, no houses and no survivors), "off" (none).
+var stage_mode := "all"
 ## The pool, how many of it the rules ask for now (nearest first), and how many are on the screen at this frame.
 var items: Array = []
 var count := 0
@@ -224,7 +228,7 @@ func _refresh() -> void:
 		var sc = sim.get("scenario")
 		var stage := String(sc.stage()) if sc != null and sc.has_method("stage") else ""
 		var rescue = sim.get("rescue")
-		if (stage == "claimed" or stage == "growing") and rescue != null and rescue.has_method("list"):
+		if (stage == "claimed" or stage == "growing") and rescue != null and rescue.has_method("list") and (stage_mode == "all" or stage_mode == "one"):
 			var first := count
 			for rec in rescue.list():
 				var state := String(rec.get("state", ""))
@@ -243,6 +247,23 @@ func _refresh() -> void:
 			if it != null:
 				it.rect = Rect2(Rect2i(town.houses[h].rect))
 				it.foot = Vector2(it.rect.get_center().x, it.rect.position.y)    # (where its pennant stands: scripts/render/candidate_marks.gd)
+		if stage_mode == "one":
+			_keep_best()
+
+
+## HUD8: the first minutes show ONE arrow, to the best house (the nearest when none is called best): the others come with the first house, as their pennants.
+func _keep_best() -> void:
+	if count <= 1:
+		return
+	var pick := 0
+	for i in count:
+		if (items[i] as Item).tier == "best":
+			pick = i
+			break
+	var keep: Item = items[pick]
+	items[pick] = items[0]
+	items[0] = keep
+	count = 1
 
 
 ## A new item at the end of the pool's live part (null when the pool is full).
@@ -287,6 +308,16 @@ func _collect_obstacles() -> void:
 			_obst[k + 2] = r.size.x + 8.0
 			_obst[k + 3] = r.size.y + 8.0
 			_obst_n += 1
+	# (HUD8, the placement rule: a plate slides off the bearing of an awake dead one, as it slides off a board)
+	for r in HudStage.keep_clear(main):
+		if _obst_n >= MAX_OBSTACLES:
+			break
+		var k2 := _obst_n * 4
+		_obst[k2] = (r as Rect2).position.x - origin.x
+		_obst[k2 + 1] = (r as Rect2).position.y - origin.y
+		_obst[k2 + 2] = (r as Rect2).size.x
+		_obst[k2 + 3] = (r as Rect2).size.y
+		_obst_n += 1
 
 
 # ---------------------------------------------------------------------------- the layout --
@@ -315,7 +346,7 @@ func _layout() -> void:
 		var it: Item = items[i]
 		it.live = false
 		var d := here.distance_to(it.tile)
-		if it.kind == KIND_BASE and d <= BASE_FAR:
+		if it.kind == KIND_BASE and d <= (BASE_FAR_MINIMAL if stage_mode == "home" else BASE_FAR):
 			continue
 		var sp := screen_of(it.tile)
 		var out := maxf(maxf(maxf(-sp.x, sp.x - vp.x), maxf(-sp.y, sp.y - vp.y)), 0.0)

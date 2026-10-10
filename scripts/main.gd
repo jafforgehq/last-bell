@@ -3911,6 +3911,7 @@ func _parse_args() -> void:
 				hud.banner.visible = false    # (the sign of "This house is yours", the bell and the dawn is never drawn)
 			"no-alerts":
 				# --no-alerts: the stack of alerts and the radio call that waits for an answer, down the right side, and the PAUSED pill are never drawn ("Seven things built" is what `--slots=built` leaves there)
+				hud.set_meta("no_alerts", true)    # (HUD8: the minimal HUD's stage part leaves the call card alone, which this flag has made see-through)
 				if hud.get("alerts_box") != null:
 					hud.alerts_box.visible = false
 				if hud.get("call_card") != null:

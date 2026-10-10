@@ -107,6 +107,8 @@ const HURRY_COVER := 7.0
 
 ## The calls: how long they wait (game minutes), and what keeping a sick one apart costs.
 const ATTACK_TTL_MIN := 30.0
+## HUD8: the town's one-line alert "East fence under attack" stays this many seconds (the rules' own clock).
+const ATTACK_ALERT_TTL := 10.0
 ## The calls that cannot wait (a wall that is down or going, a brute on its way, the old attack call, the night's own): when one is raised the
 ## game drops to 1x once (main.gd: the `call_raised` event). Their times are game minutes, a few real seconds at 3x.
 const URGENT_KINDS := ["attack", "going", "brute", "breach", "night", "gate", "dilemma"]
@@ -1489,7 +1491,7 @@ func _carry_out(e: Dictionary, option_id: String) -> String:
 			if option_id == "reinforce":
 				return "Reinforcements sent (%d)" % _reinforce(seg)
 			if option_id == "fall_back":
-				return "Falling back to the school (%d)" % _fall_back(seg)
+				return "Falling back to %s (%d)" % ["the house" if sim.is_one_house() else "the school", _fall_back(seg)]
 			return "Holding"
 		"sick":
 			var p = _person(String(data.get("who", "")))
@@ -1612,6 +1614,10 @@ func _watch_the_walls() -> void:
 			continue
 		_attack_called[key] = true
 		var pct := roundi(float(s.hp) / float(s.max_hp) * 100.0)
+		if sim.is_one_house():
+			# (HUD8: in the town the crew patrol the fence by themselves: nothing to decide, no card; the fact is a one-line alert. "Fall back to the school" is the school's)
+			sim.alert("attack-%d" % int(s.id), "warn", "%s under attack" % String(s.name), "%d of the dead at it, %d%% intact" % [n, pct], s.center, ATTACK_ALERT_TTL)
+			continue
 		raise_call("attack", "%s under attack" % String(s.name), "%d of the dead at it, %d%% intact" % [n, pct], [
 			{"id": "hold", "label": "Hold"},
 			{"id": "reinforce", "label": "Send reinforcements"},

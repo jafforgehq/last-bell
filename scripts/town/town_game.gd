@@ -49,6 +49,8 @@ const VIEW_PARTS := {
 	"sprint_view": "res://scripts/ui/sprint_view.gd",
 	"tutor_cues": "res://scripts/ui/tutor_cues.gd",
 	"inv_ui": "res://scripts/ui/inv_ui.gd",
+	# (HUD8: the minimal HUD decides what the boards above show and keeps them off the dead: the last of the HUD's parts, so that it runs after the ones that make the boards)
+	"hud_stage": "res://scripts/ui/hud_stage.gd",
 	"rain_view": "res://scripts/render/rain_view.gd",
 	"town_life": "res://scripts/render/town_life.gd",
 	"roof_warm": "res://scripts/render/roof_warm.gd",

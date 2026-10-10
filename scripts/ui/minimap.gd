@@ -69,6 +69,14 @@ var base_at := Vector2(-1.0, -1.0)
 var cost_us := 0.0
 var cost_frames := 0
 
+## HUD8: the minimal HUD brings the window at the first house (scripts/ui/hud_stage.gd): false puts it away; the player's own switch (Settings, Minimap) is still the last word.
+var stage_on := true
+## HUD8: the smaller window of the minimal HUD, and its size (a share of the window's height, at least and at most, in points).
+var stage_small := false
+const SMALL_K := 0.135
+const SMALL_MIN := 92.0
+const SMALL_MAX := 126.0
+
 var _flag_tex: ImageTexture
 var _flags := PackedByteArray()
 var _t := REFRESH_S
@@ -189,7 +197,7 @@ func _frame(dt: float) -> void:
 			_cb = markers    # (Colour-blind markers went on or off: the marks are drawn again, and the tooltip says what the shapes are)
 			root.tooltip_text = TIP_CB if markers else TIP
 			_dirty = true
-	var on := _enabled
+	var on := _enabled and stage_on
 	if root.visible != on:
 		root.visible = on
 		_dirty = true
@@ -232,6 +240,8 @@ func _player():
 ## The window's size and corner: the bottom right, over the toolbar (kept clear of it as it grows with the window).
 func _place() -> void:
 	var s := clampf(hud.size.y * 0.17, SIZE_MIN, SIZE_MAX)
+	if stage_small:
+		s = clampf(hud.size.y * SMALL_K, SMALL_MIN, SMALL_MAX)    # (HUD8: the minimal HUD's window is a gauge of the dead round her: a little smaller)
 	var bottom: float = hud.size.y - MARGIN
 	var tools = hud.get("speed_panel")
 	if tools != null and tools is Control and tools.is_visible_in_tree():

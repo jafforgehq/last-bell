@@ -50,6 +50,8 @@ var hud
 var layer: Control
 var obj_card: PanelContainer
 var obj_caps: Label
+## HUD8: the row of the card's heading ("OBJECTIVE", the distance, the count): the minimal HUD's one-line card puts it away.
+var obj_head: HBoxContainer
 var obj_step: Label
 var obj_text: Label
 var obj_sub: Label
@@ -93,6 +95,8 @@ var _blocked: Array = []
 var _slide := {}
 var _last_obj_sig := ""
 var _last_lesson_sig := ""
+## HUD8: what the stage part (scripts/ui/hud_stage.gd) asks of this part: {"objective": "full"|"min"|"off", "arrow": bool, "legend": bool, "lesson": "on"|"ghost"|"off"}. Empty: all of it, as it was.
+var stage := {}
 
 
 func on_ready(main_node) -> void:
@@ -202,6 +206,7 @@ func _build_objective() -> void:
 	var col: VBoxContainer = hud._vbox(3)
 	obj_card.add_child(col)
 	var head: HBoxContainer = hud._hbox(8)
+	obj_head = head
 	obj_caps = hud._label("OBJECTIVE", Fonts.cond(700, 1), 14, hud.ACCENT)
 	head.add_child(obj_caps)
 	head.add_child(hud._spacer())
@@ -353,24 +358,28 @@ func _refresh_objective() -> void:
 		var d: Vector2 = (at as Vector2) - Vector2(me.x, me.y)
 		distance = d.length()
 		bearing = d.angle()
-		_arrow_on = distance > ARROW_FAR and not _sleeping()
+		_arrow_on = distance > ARROW_FAR and not _sleeping() and bool(stage.get("arrow", true))
 	var of := int(o.get("of", 0))
 	var step := int(o.get("step", 0))
 	var dist_text := ""
 	if distance >= 0.0 and distance > ARROW_FAR:
 		dist_text = "%d %s" % [roundi(distance), TILE_WORD]
-	var sig := "%s|%s|%d|%d|%s" % [text, String(o.get("sub", "")), step, of, dist_text]
+	# (HUD8: the minimal HUD's card is its words alone: "min" is one line, "off" is no card)
+	var form := String(stage.get("objective", "full"))
+	var sig := "%s|%s|%d|%d|%s|%s" % [text, String(o.get("sub", "")), step, of, dist_text, form]
 	obj_arrow.visible = _arrow_on
+	obj_card.visible = text != "" and form != "off"
 	if sig == _last_obj_sig:
 		return
 	_last_obj_sig = sig
-	obj_card.visible = text != ""
-	obj_text.text = text
+	# (HUD8: the one line keeps the count in it: "Clear the house  2 of 5")
+	obj_text.text = ("%s  %d of %d" % [text, step, of]) if form == "min" and of > 1 else text
 	obj_sub.text = String(o.get("sub", ""))
-	obj_sub.visible = obj_sub.text != ""
+	obj_sub.visible = obj_sub.text != "" and form != "min"
 	obj_step.text = ("%d of %d" % [step, of]) if of > 1 else ""
 	obj_dist.text = dist_text
 	obj_dist.visible = dist_text != ""
+	obj_head.visible = form != "min"
 	obj_card.tooltip_text = ""
 
 
@@ -383,7 +392,7 @@ func _refresh_lesson() -> void:
 			g = got
 	lesson = g
 	var id := String(g.get("id", ""))
-	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id) and not Prefs.flag(LESSONS_OFF_FLAG)
+	var shown := not g.is_empty() and String(g.get("text", "")) != "" and not skipped.has(id) and not Prefs.flag(LESSONS_OFF_FLAG) and String(stage.get("lesson", "on")) != "off"
 	# (TUTOR: one short line: the verb, and for a lesson that counts the count: "Clear the house: 2 of 5 rooms clear")
 	var verb := String(g.get("verb", g.get("goal", "")))
 	var progress := String(g.get("progress", ""))
@@ -411,7 +420,7 @@ func _refresh_radio() -> void:
 	if hud.radio_open():
 		_radio_opened = true
 	var n := on_the_radio()
-	radio_card.visible = n > 0 or (_radio_opened and nobody_on_radio())
+	radio_card.visible = (n > 0 or (_radio_opened and nobody_on_radio())) and bool(stage.get("radio", true))    # (HUD8: with the crew's cards on the screen the line is a repeat)
 	var words := ("%d on the radio" % n) if n > 0 else NOBODY_TEXT
 	if radio_label.text != words:
 		radio_label.text = words
@@ -465,6 +474,14 @@ func _refresh_ring() -> void:
 	ring_t = clampf(t / total if total > 0.0 else t, 0.0, 1.0)
 	var left := ceili(maxf(total - t, 0.0)) if total > 1.0 else 0
 	ring_label = String(pr.label) if left <= 0 else "%s %ds" % [String(pr.label), left]
+
+
+## HUD8: the stage part says what the minimal HUD wants of the objective card, the arrow at her feet, the legend of the keys and the lesson card (`stage`); the cards are read again at once.
+func set_stage(d: Dictionary) -> void:
+	stage = d
+	_last_obj_sig = ""
+	_last_lesson_sig = ""
+	_dirty = true
 
 
 ## Puts every lesson away, for this game and for the ones after it (a flag in the player's file).
@@ -533,7 +550,7 @@ func _place_legend(top: float) -> void:
 		return
 	var sim = _sim()
 	var t := float(sim.t) if sim != null else 0.0
-	var wanted: bool = bool(hud.legend_wanted) and not legend.finished and t <= LEGEND_S
+	var wanted: bool = bool(hud.legend_wanted) and not legend.finished and t <= LEGEND_S and bool(stage.get("legend", true))
 	if not wanted:
 		legend.visible = false
 		return

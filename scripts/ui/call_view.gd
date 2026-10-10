@@ -43,10 +43,13 @@ var level := 0
 var more := 0
 ## The slim form (see `setup`): the options are in a row that wraps, not one under the other.
 var slim := false
+## HUD8: the one-line form: the title and the word "Answer"; the line under it, the countdown and the buttons are away until the card is opened (a click on it: `CallCard.expanded_id`).
+var lined := false
 var _radio_getter: Callable
 var _buttons_box: Container
 var _built := false
 var wrap_w := 0.0
+var _title := ""
 
 
 func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
@@ -138,12 +141,24 @@ func set_level(l: int) -> void:
 	_apply_level()
 
 
+## HUD8: the card tells all of the call or only its line (and "Answer").
+func set_lined(on: bool) -> void:
+	if lined == on:
+		return
+	lined = on
+	if title_label != null:
+		title_label.max_lines_visible = 2 if on else -1    # (a line is two lines of words at most)
+	_apply_level()
+	if entry_id != 0:
+		refresh()
+
+
 func _apply_level() -> void:
 	if kind_label == null:
 		return
-	kind_label.visible = level < 2
-	sub_label.visible = level < 1 and sub_label.text != ""
-	opinion_label.visible = level < 1 and opinion_label.text != ""
+	kind_label.visible = level < 2 and not lined
+	sub_label.visible = level < 1 and sub_label.text != "" and not lined
+	opinion_label.visible = level < 1 and opinion_label.text != "" and not lined
 	for b in buttons.values():
 		b.custom_minimum_size.y = BUTTON_H if level < 3 else BUTTON_H_SLIM
 
@@ -155,7 +170,8 @@ func _rebuild(e: Dictionary) -> void:
 	buttons.clear()
 	kind_label.text = RadioKit.kind_name(String(e.kind)).to_upper()
 	kind_label.add_theme_color_override("font_color", RadioKit.kind_color(host, String(e.kind)))
-	title_label.text = String(e.text)
+	_title = String(e.text)
+	title_label.text = _title
 	sub_label.text = String(e.sub)
 	sub_label.visible = String(e.sub) != ""
 	opinion_label.text = ""
@@ -201,10 +217,13 @@ func refresh() -> void:
 		return
 	var open: bool = not e.options.is_empty() and String(e.answered) == ""
 	_show_opinion(radio, e, open)
-	_buttons_box.visible = open
-	bar.visible = open
-	count_label.visible = open
-	result_label.visible = not open
+	_buttons_box.visible = open and not lined
+	bar.visible = open and not lined
+	count_label.visible = open and not lined
+	result_label.visible = not open and not lined    # (a line has no second line: what was done, "Holding (by default)", is for the card opened whole)
+	var said_title := _title + ("  ·  Answer" if lined and open else "")
+	if title_label.text != said_title:
+		title_label.text = said_title
 	if open:
 		var left := RadioKit.left_seconds(radio, e, _speed())
 		var total := RadioKit.total_seconds(radio, e, _speed())
@@ -241,7 +260,7 @@ func _show_opinion(radio, e: Dictionary, open: bool) -> void:
 	var words := RadioKit.opinion_text(radio, e) if open else ""
 	if opinion_label.text != words:
 		opinion_label.text = words
-	opinion_label.visible = level < 1 and words != ""
+	opinion_label.visible = level < 1 and words != "" and not lined
 
 
 func _on_pressed(option_id: String) -> void:
