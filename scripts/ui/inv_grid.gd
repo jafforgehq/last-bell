@@ -26,7 +26,7 @@ const FLASH_S := 0.45
 var kind := "pack"
 var ctl
 var grid: Dictionary = {}
-var cell := 48.0
+var cell := 34.0
 ## How many of the first stacks are shown (-1: all of them); the others are "?".
 var revealed := -1
 ## The stack the pointer is over (-1: none), and the one that is being dragged (-1: none).
@@ -44,6 +44,7 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	focus_mode = Control.FOCUS_NONE
 	_size_fn = Callable(InvApi, "size_of")
+	InvIcons.prepare(self)
 
 
 ## Points the control at a grid and a cell size (its minimum size follows).
@@ -173,22 +174,22 @@ func _draw() -> void:
 		draw_line(Vector2(PAD, PAD + float(y) * cell), Vector2(PAD + float(cs) * cell, PAD + float(y) * cell), LINE, 1.0)
 	var cells: Array = grid.cells
 	var font := Fonts.cond(700, 0)
-	var fs := Access.scaled(15 if cell >= 46.0 else 13)
+	var fs := Access.scaled(13)
 	for i in cells.size():
 		var c: Dictionary = cells[i]
 		var foot := InvGeom.stack_rect(c, _size_fn, cell, PAD)
-		var plate := foot.grow(-2.0)
+		var plate := foot.grow(-1.0)
 		if revealed >= 0 and i >= revealed:
 			_draw_unfound(plate, font)
 			continue
 		var d: Dictionary = InvApi.item(String(c.item))
 		var wash: Color = InvIcons.res_color(String(d.get("res", "")))
-		draw_rect(plate, Color(wash, 0.20))
-		draw_rect(plate, Color(EDGE, 0.55), false, 1.5)
-		InvIcons.draw_item(self, String(c.item), foot, int(c.rot), cell)
+		draw_rect(plate, Color(wash, 0.16))
+		draw_rect(plate, Color(EDGE, 0.40), false, 1.0)
+		InvIcons.draw_item(self, String(c.item), foot, int(c.rot), cell, int(c.count))
 		if int(c.count) > 1:
 			var txt := str(int(c.count))
-			var at := Vector2(foot.end.x - 4.0, foot.end.y - 5.0)
+			var at := Vector2(foot.end.x - 3.0, foot.end.y - 4.0)
 			var w := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_RIGHT, -1, fs).x
 			at.x -= w
 			draw_string_outline(font, at, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 5, Color(0, 0, 0, 0.9))

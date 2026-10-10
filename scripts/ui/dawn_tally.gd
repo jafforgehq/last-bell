@@ -286,6 +286,8 @@ func on_key(ev: InputEvent) -> bool:
 		return true
 	if _opened_s >= KEY_GRACE_S:
 		_close(false)
+		if code >= KEY_1 and code <= KEY_4:
+			return true    # (INV2: the digit that puts the card away is not a quick slot used by mistake)
 	return false
 
 

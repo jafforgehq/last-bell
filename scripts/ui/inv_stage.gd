@@ -62,9 +62,21 @@ static func open_container(sim, grid: Dictionary, revealed: int) -> String:
 			break
 	inv.containers[id] = grid
 	inv.open_id = id
+	inv.searched[id] = true    # (so that the rules do not take a staged search for a stopped one and shut the window on the next step)
 	inv.set_meta("stage_revealed", revealed if revealed >= 0 else grid.cells.size())
+	_stand_at(sim, hs.container(id).get("at", hs.container(id).get("pos", null)) if hs != null else null)
 	inv.changed()
 	return id
+
+
+## Puts the avatar beside a point of the map (a staged window stays up only while she is near the container or the stash that it belongs to).
+static func _stand_at(sim, at) -> void:
+	var me = sim.avatar.player() if sim.get("avatar") != null else null
+	if me == null or at == null:
+		return
+	var p := Vector2(at)
+	me.x = p.x
+	me.y = p.y + 1.0
 
 
 ## One frame of a stage: `frame` counts the frames since the run began.
@@ -91,11 +103,18 @@ static func step(ui, stage: String, frame: int) -> void:
 				open_container(sim, container_grid(), rev)
 			"stash":
 				inv.stash_open = true
+				var sp: Vector2 = inv._stash_pos()
+				if sp != Vector2.INF:
+					_stand_at(sim, sp)
 			"full":
 				ui.pack_user = true
 				sim.alert("pack-home", "info", "Your pack is full", "Deposit it at the stash (E)", null, 30.0)    # (what the rules raise when she walks home with it)
 			"open", "drag-ok", "drag-bad", "menu", "probe":
 				ui.pack_user = true
+			"quick", "drag-quick":
+				ui.pack_user = true
+				for i in InvApi.QUICK_SLOTS:    # (the belt full: a bandage, a tin, a bottle and the medkit; the drag stage leaves the last one empty for the drop)
+					InvApi.set_quick(sim, i, ["bandage", "canned_food", "water_bottle", "" if stage == "drag-quick" else "medkit"][i])
 			"help":
 				ui.hud._press_help()    # (the "?" panel of the controls: the table's new rows must fit it)
 		inv.changed()
@@ -104,6 +123,8 @@ static func step(ui, stage: String, frame: int) -> void:
 		match stage:
 			"drag-ok", "drag-bad":
 				_stage_drag(ui, stage == "drag-ok")
+			"drag-quick":
+				_stage_drag_quick(ui)
 			"menu":
 				var g = ui.pack_win.grid_ctl
 				var idx := 2    # (the three cans)
@@ -154,15 +175,28 @@ static func _real(ui, frame: int) -> void:
 		40:
 			_report("I opens it again", ui.pack_win.visible)
 			ui.close_all()
+			ui.set_meta("toasts", ui.toast_count)
+			ui.set_meta("speed", int(ui.main.speed))
+			for i in InvApi.QUICK_SLOTS:
+				InvApi.set_quick(sim, i, ["bandage", "canned_food", "water_bottle", ""][i])
+			_key(KEY_2)    # (INV2: a plain digit is a quick slot in the town)
+		44:
+			_report("the key 2 goes the whole way to the belt (slot 2, a tin: %s)" % ui.last_toast, ui.toast_count == int(ui.get_meta("toasts")) + 1 and ui.last_toast.to_lower().contains("coming soon"))
+			_report("and does not change the speed", int(ui.main.speed) == int(ui.get_meta("speed")))
+			_key(KEY_2, true)
+		48:
+			_report("Shift and 2 is the speed (it was %d, it is %d)" % [int(ui.get_meta("speed")), int(ui.main.speed)], int(ui.main.speed) == 2)
+			ui.main._set_speed(int(ui.get_meta("speed")))
 			ui._stage_done = true
 
 
-static func _key(code: Key) -> void:
+static func _key(code: Key, shift: bool = false) -> void:
 	for pressed in [true, false]:
 		var ev := InputEventKey.new()
 		ev.keycode = code
 		ev.physical_keycode = code
 		ev.pressed = pressed
+		ev.shift_pressed = shift
 		Input.parse_input_event(ev)
 
 
@@ -194,6 +228,16 @@ static func _mouse_button(ui, g, cell: Vector2, pressed: bool) -> void:
 
 static func _report(what: String, ok: bool) -> void:
 	print("REAL %s: %s" % [what, "PASS" if ok else "FAIL"])
+
+
+## Holds the medkit over the empty fourth quick slot (the green frame and the tick).
+static func _stage_drag_quick(ui) -> void:
+	var g = ui.pack_win.grid_ctl
+	var idx := InvApi.first_stack(g.grid, "medkit")
+	if idx < 0:
+		return
+	ui.begin_drag(g, idx, g.get_global_rect().position + g.rect_of(idx).get_center() - Vector2(g.cell * 0.5, g.cell * 0.5))
+	ui.drag_move(ui.pack_win.doll.slot_global_rect(InvApi.QUICK_SLOTS - 1).get_center())
 
 
 ## Holds the water jug (2 by 2) at a place where it fits (`ok`) or over a stack (it does not).

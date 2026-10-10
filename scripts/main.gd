@@ -1899,11 +1899,14 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_SPACE:
 				_set_speed(1 if speed == 0 else 0)
 			KEY_1:
-				_set_speed(1)
+				if _speed_key(ev):
+					_set_speed(1)
 			KEY_2:
-				_set_speed(2)
+				if _speed_key(ev):
+					_set_speed(2)
 			KEY_3:
-				_set_speed(3)
+				if _speed_key(ev):
+					_set_speed(3)
 			KEY_ESCAPE:
 				# Esc closes, in this order: the talk card, the briefing card, the radio panel, the selection, else it opens the pause menu
 				if hud.talk_open():
@@ -2587,9 +2590,15 @@ func wheel_allowed() -> bool:
 	return _allows("wheel")
 
 
-## Whether 1 to 5 pick the crew here (they do in the school's yard; Shift and 1 2 3 are the speeds there; the One House has no picking: 1 2 3 are the speeds).
+## Whether 1 to 5 pick the crew here (they do in the school's yard; Shift and 1 2 3 are the speeds there; the One House has no picking).
 func wheel_crew_keys() -> bool:
 	return not wheel_simple()
+
+
+## Whether this key press is one of the speed keys 1 2 3 (INV2): in the One House the plain digits 1 to 4 are the quick slots on Ruth's belt (scripts/ui/inv_ui.gd), so there, as in the
+## school's avatar game (where the digits pick the crew), the speeds are Shift and 1 2 3. Everywhere else a plain digit is a speed.
+func _speed_key(ev) -> bool:
+	return ev.shift_pressed or not wheel_simple()
 
 
 ## ONE HOUSE: the crew are commanded in one way only (scripts/ui/wheel_ctl.gd `simple`): click a person or their card and the wheel opens round them, by radio, from

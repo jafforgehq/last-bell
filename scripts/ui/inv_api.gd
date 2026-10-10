@@ -215,6 +215,64 @@ static func equipment(sim) -> Dictionary:
 	return r if r is Dictionary else {}
 
 
+# ----------------------------------------------------------------------------- the quick slots --
+
+## How many quick slots the belt has.
+const QUICK_SLOTS := 4
+
+
+## The belt: the item id of each quick slot ("" for an empty one), always QUICK_SLOTS long (a run with no belt has four empty ones).
+static func quick(sim) -> Array:
+	var i = inv(sim)
+	var q = i.get("quick") if i != null else null
+	var out: Array = []
+	for k in QUICK_SLOTS:
+		out.append(String(q[k]) if q is Array and k < (q as Array).size() else "")
+	return out
+
+
+## Whether an item may go on the belt: anything that has a use (a bandage, a meal, a drink); shells and the like do not.
+static func quick_ok(id: String) -> bool:
+	return id != "" and defs().has(id) and String(item(id).use) != "none"
+
+
+## Puts an item kind on a quick slot ("" empties it). False for a slot that is none or an item that cannot go on the belt.
+static func set_quick(sim, slot: int, id: String) -> bool:
+	var i = inv(sim)
+	if i == null or slot < 0 or slot >= QUICK_SLOTS or (id != "" and not quick_ok(id)):
+		return false
+	var q = i.get("quick")
+	if not (q is Array) or (q as Array).size() < QUICK_SLOTS:
+		return false
+	for k in QUICK_SLOTS:
+		if id != "" and k != slot and String(q[k]) == id:
+			q[k] = ""    # (a kind sits on one slot only: moving it empties the slot it was on)
+	q[slot] = id
+	i.version = int(i.version) + 1
+	return true
+
+
+## The first stack of an item kind in the pack: its index in `cells`, -1 when she has none.
+static func first_stack(grid: Dictionary, id: String) -> int:
+	if grid.is_empty():
+		return -1
+	for k in (grid.cells as Array).size():
+		if String(grid.cells[k].item) == id:
+			return k
+	return -1
+
+
+## How many of an item kind the pack holds (the sum of its stacks).
+static func count_of(grid: Dictionary, id: String) -> int:
+	var n := 0
+	if grid.is_empty():
+		return 0
+	for c in grid.cells:
+		if String(c.item) == id:
+			n += int(c.count)
+	return n
+
+
 # ------------------------------------------------------------------------------- what is done --
 
 ## Something in the pack changed outside the sim's own calls (a move inside the pack): it tells the windows, and the rules settle what needs it.

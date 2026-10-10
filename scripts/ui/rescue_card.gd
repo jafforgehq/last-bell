@@ -98,6 +98,8 @@ func on_key(ev: InputEvent) -> bool:
 		if i < list.size() and bool(list[i].ok):
 			answer(String(list[i].id))
 		return true
+	if i >= 0 and i < 9:
+		return true    # (INV2: a digit is the card's while it is up, so the fourth is not a quick slot used by mistake)
 	return false
 
 

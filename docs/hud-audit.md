@@ -603,3 +603,25 @@ The audit and the probe needed **no change under `scripts/`**. To build the prop
 
 **What is still weak.** (1) The staged states are one town seed and one run seed each (the night's run seed is random: the same scene gives 0.1 to 0.7 points of UI between runs); a human playtest of the whole first night with the minimal HUD is the next test and nothing of this branch has had one. (2) The ghost rule fades a board (to a quarter) whenever an awake dead one is under it, also one 16 tiles away at the wall (the first night at 1280 x 720: the alert column and the crew's icons are ghosts while two walkers tear at the east fence behind them): the dead is seen, the alerts are hard to read, and the column flickers in a long fight. The placement rule moves cue cards, tips and prompts off the dead, not the HUD's own columns; a ghost that waits until the dead one is within the threat radius (14 tiles) is the cheap fix. (3) The keys of the boards that are away (the speeds, V, the map, the radio) are on the Controls page (the "?" of the toolbar, or Esc); a new player learns them from a cue card only if a lesson names them, and the legend of the keys is no longer on the screen. (4) The probe's `blind_near` lines at the arrival remain (above). (5) Hide (H) is a session toggle, not saved; the setting `ui/hud_mode` is. (6) The school's yard and the game with no avatar are untouched (no part), so they have no Minimal.
 
+## 13. After: the inventory windows, simplified (INV2, PH9, 2026-10-10)
+
+Section 7 measured the backpack window at 412 x 359 points (16.0 percent of the screen at 1280 x 720) and found the loot window and the stash panel too big to sit beside it. The owner asked for the windows to be simplified, with better pictures and Tarkov's layout (the grid at the left, Ruth's outline at the right). The windows are now (`scripts/ui/inv_pack_window.gd`, `inv_doll.gd`, `inv_loot_window.gd`, `inv_stash_window.gd`; the design is the last section of `docs/superpowers/specs/2026-10-09-inventory-design.md`):
+
+- the backpack: the grid (cells of 34 points, 32 under 1100 x 700), one line over it, Ruth's outline with the gun, the swing and four quick slots; **452 x 186 points**, no help paragraph, the slim board;
+- the loot window: the container's 4 x 3 grid with its name, how much is found and Take all beside it; the stash panel: five columns (the store, its number, the buttons 1, 5, All) and Deposit all in the head;
+- the windows that are up are **one block** (the pack on top, the container or the stash under it, left edges level), placed as one rectangle by `Coach`'s own cost (the avatar and the plate of her E prompt, the HUD's boards), so that the pair is never beside the pack.
+
+Measured by `--inv=probe` (the controller's own placement on the staged game, `tools/inv_probe.gd` `_budget`; points of the interface, shares of the window; the budget is 45 percent of the width and 55 of the height for the block, and 17 percent of the screen for a window):
+
+| Window (interface points) | Pack alone | Pack and loot window | Pack and stash panel |
+|---|---|---|---|
+| 1280 x 720 (1280 x 720) | 452 x 186: 35.3 x 25.8 percent, **9.1 percent of the screen** (was 412 x 359, 32.2 x 49.9, 16.0) | 452 x 316: 35.3 x 43.9, 13.4 percent | 452 x 300: 35.3 x 41.7, 13.8 percent |
+| 1280 x 800 (1280 x 800) | 35.3 x 23.2, 8.2 percent (was 14.4) | 35.3 x 39.5, 12.0 percent | 35.3 x 37.5, 12.4 percent |
+| 1920 x 1080 (1600 x 900) | 28.2 x 20.7, 5.8 percent (was 25.8 x 39.9, 10.3) | 28.2 x 35.1, 8.6 percent | 28.2 x 33.3, 8.8 percent |
+| 2560 x 1440 (1600 x 900) | the same as 1920 x 1080 (the interface scale makes the same points) | | |
+| 1024 x 640 (1024 x 640) | 436 x 186: 42.6 x 29.1, 12.4 percent (was 348 x 292, 34 x 46, 15.5) | 436 x 310: 42.6 x 48.4, **17.9 percent** | 436 x 300: 42.6 x 46.9, **19.0 percent** |
+
+Every line is inside 45 x 55 percent, and the pack alone is inside 17 percent everywhere (about a tenth at 1280 x 720). **Over, and why:** at 1024 x 640 the pair is 17.9 and 19.0 percent of the screen by area (the budget's 17 percent was read for the pack with its loot window as one window); the pack alone is 12.4 percent of that small screen with cells that cannot be smaller than 32 points (the pictures are drawn for 32 to 36), so the second window has only about 5 percent left and the stash panel (five stores with their buttons) is 6.6. With larger text and the colour-blind markers on (`--prefs`, text size Larger) every window is as before in its size and the words fit (the doll's words are cut down to fit their slot: `InvDoll._fit`).
+
+The pictures: one atlas of 1024 x 1024 (`assets/ui/inv/inv_icons.png`, 316 KB, 358 KB imported with mipmaps; `tools/make_item_icons.py`) replaces the code-drawn art; the web build grows by that and a 1 KB table. The threat rule is unchanged (the windows are on demand and keep off the avatar and the dead).
+

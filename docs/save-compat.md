@@ -41,6 +41,8 @@ that exist). But when in doubt, bump: a refused save costs a player a game, a wr
 2. Nothing else: the saves of the older number are refused by the checks above.
 3. If the *format* of the state changes without the town changing, bump `SaveGame.VERSION` instead (it is refused the same way, with the same card).
 
+Not a bump (INV2, 2026-10-10): the quick slots on Ruth's belt are saved as `modules.inv.quick` (four item ids). It is an optional key with a safe default: a save made before it loads with an empty belt, a bad entry is dropped, and nothing that an existing saved value means changed, so version 3 stays the version.
+
 History: 1 = up to main 236bb1e (no number written). 2 = SAVE4 (the town of CLEAR3's clear ground and a town for every seed, WORLD3's 164 building plans). 3 = INV-CORE (2026-10-09, the
 backpack): the generated towns are the same, but the *meaning* of the saved state changed, which is what a bump is for. A One House save now carries an `inv` module (the backpack grid, the
 grids of the containers she opened with the items left in them, the piles on the ground, the credit of the fractions paid ahead); the avatar's reserve ammo, her bandages and her meals come from
