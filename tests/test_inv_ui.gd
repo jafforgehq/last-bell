@@ -171,9 +171,10 @@ func test_every_item_has_a_picture_a_name_and_a_size() -> void:
 		check(pr.size.x >= float(d.w) * 128.0 - 0.5 and pr.size.y >= float(d.h) * 128.0 - 0.5, "%s is drawn at 128 px for each cell of its footprint (%s)" % [id, str(pr.size)])
 		check(String(d.name) != "" and int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) >= 1, "%s has a name, a size and a stack" % id)
 		check(String(d.desc) != "", "%s says what it is" % id)
-	eq(InvApi.size_of("water_bottle"), Vector2i(1, 2), "a bottle is one cell wide and two tall")
-	eq(InvApi.size_of("water_bottle", 1), Vector2i(2, 1), "turned it is two wide")
-	eq(InvApi.size_of("water_bottle", true), Vector2i(2, 1), "a bool turn does the same")
+	eq(InvApi.size_of("water_bottle"), Vector2i(1, 1), "a bottle is one cell (PH10: it was two tall)")
+	eq(InvApi.size_of("ration_pack"), Vector2i(1, 2), "a ration pack is one cell wide and two tall")
+	eq(InvApi.size_of("ration_pack", 1), Vector2i(2, 1), "turned it is two wide")
+	eq(InvApi.size_of("ration_pack", true), Vector2i(2, 1), "a bool turn does the same")
 	eq(InvApi.item("no_such_thing").name, "No Such Thing", "an unknown id is named after itself")
 
 
@@ -389,11 +390,11 @@ func test_a_grid_finds_the_stack_under_the_pointer_and_hides_what_is_not_found()
 	var g = InvGridScript.new()
 	var grid := InvApi.make_grid(4, 3)
 	InvApi.place(grid, "canned_food", 2, 0, 0)
-	InvApi.place(grid, "water_bottle", 1, 1, 0)
+	InvApi.place(grid, "ration_pack", 1, 1, 0)
 	g.setup(ctl, "loot", grid, 34.0)
 	g.revealed = 1
 	eq(g.index_at(Vector2(2.0 + 10.0, 2.0 + 10.0)), 0, "the can")
-	eq(g.index_at(Vector2(2.0 + 60.0, 2.0 + 60.0), true), -1, "the bottle is not found yet: nothing to pick up")
+	eq(g.index_at(Vector2(2.0 + 60.0, 2.0 + 60.0), true), -1, "the ration pack is not found yet: nothing to pick up")
 	eq(g.index_at(Vector2(2.0 + 60.0, 2.0 + 60.0), false), 1, "but it is there for the tooltip's own question")
 	eq(g._get_tooltip(Vector2(5, 5)), "tip", "a tooltip is asked of the controller")
 	g.set_hover(0)
@@ -469,14 +470,14 @@ func test_the_doll_lays_out_four_quick_slots_on_the_belt_and_names_what_each_hol
 	eq(d.quick_at(Vector2(2.0, 2.0)), -1, "a corner of the doll is no slot")
 	check(not InvDoll.WEAPON.intersects(InvDoll.MELEE), "the weapon's and the swing's slots are apart")
 	d.quick = [
-		{"id": "", "count": 0, "state": "empty", "name": ""},
-		{"id": "bandage", "count": 3, "state": "ready", "name": "Bandage"},
-		{"id": "canned_food", "count": 8, "state": "soon", "name": "Canned food"},
-		{"id": "water_bottle", "count": 0, "state": "off", "name": "Water bottle"},
+		{"id": "", "count": 0, "state": "empty", "name": "", "use": "none", "due": false},
+		{"id": "bandage", "count": 3, "state": "ready", "name": "Bandage", "use": "bandage", "due": false},
+		{"id": "canned_food", "count": 8, "state": "ready", "name": "Canned food", "use": "eat", "due": true},
+		{"id": "water_bottle", "count": 0, "state": "off", "name": "Water bottle", "use": "drink", "due": false},
 	]
 	check(d.quick_tip(0).contains("empty") and d.quick_tip(0).contains("Key: 1"), "an empty slot says so and names its key")
 	check(d.quick_tip(1).contains("Bandage x 3") and d.quick_tip(1).contains("press 2"), "a ready slot says what it holds and how to use it")
-	check(d.quick_tip(2).to_lower().contains("needs: coming soon"), "food and drink are greyed with 'needs: coming soon'")
+	check(d.quick_tip(2).contains("to eat one") and d.quick_tip(2).contains("You need it now") and not d.quick_tip(2).to_lower().contains("coming soon"), "food works now: it says to eat one, and that she needs it")
 	check(d.quick_tip(3).contains("None in the pack"), "a slot whose item has run out says so")
 	d.free()
 
@@ -624,12 +625,19 @@ func test_keys_1_to_4_use_the_quick_slots_and_shift_keeps_the_speeds() -> void:
 	me.bleeding = 0.0
 	ui.on_key(_key(KEY_1))
 	check(ui.last_toast.contains("not bleeding"), "no wound: the rules say so (%s)" % ui.last_toast)
-	# 2 and 3: a tin and a bottle are greyed until the needs step
+	# 2 and 3: a tin and a bottle (PH10: they work: she is fed, so the rules say she is not hungry yet and nothing is used; hungry, the tin is eaten)
 	var cans := InvApi.count_of(pk, "canned_food")
 	check(ui.on_key(_key(KEY_2)), "the key 2 is the belt's")
-	check(ui.last_toast.to_lower().contains("needs are coming soon"), "a tin: needs are coming soon (%s)" % ui.last_toast)
-	check(ui.on_key(_key(KEY_3)) and ui.last_toast.to_lower().contains("coming soon"), "a bottle too")
+	check(ui.last_toast.to_lower().contains("not hungry"), "a tin, fed: she is not hungry yet (%s)" % ui.last_toast)
+	check(ui.on_key(_key(KEY_3)) and ui.last_toast.to_lower().contains("not thirsty"), "a bottle too")
 	eq(InvApi.count_of(pk, "canned_food"), cans, "and nothing was eaten")
+	me.hunger_h = 20.0
+	me.thirst_h = 15.0
+	check(ui.on_key(_key(KEY_2)) and ui.last_toast.to_lower().contains("ate"), "hungry, the key 2 eats the tin (%s)" % ui.last_toast)
+	eq(InvApi.count_of(pk, "canned_food"), cans - 1, "one tin is gone")
+	near(me.hunger_h, 0.0, 0.001, "and she is fed again")
+	check(ui.on_key(_key(KEY_3)) and ui.last_toast.to_lower().contains("drank"), "thirsty, the key 3 drinks the bottle (%s)" % ui.last_toast)
+	near(me.thirst_h, 0.0, 0.001, "and she is not thirsty")
 	# 4: empty
 	check(ui.on_key(_key(KEY_4)), "the key 4 is the belt's")
 	check(ui.last_toast.contains("Quick slot 4 is empty"), "an empty slot says so (%s)" % ui.last_toast)

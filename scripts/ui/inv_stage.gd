@@ -26,7 +26,7 @@ static func ensure(sim) -> void:
 static func mixed_pack(pack: Dictionary) -> void:
 	pack.cells.clear()
 	for p in [["shells", 24, 0, 0, 0], ["shells", 17, 1, 0, 0], ["canned_food", 3, 2, 0, 0], ["canned_food", 4, 3, 0, 0], ["bandage", 3, 4, 0, 0], ["bandage", 2, 5, 0, 0],
-			["water_bottle", 1, 0, 1, 0], ["ration_pack", 1, 1, 1, 0], ["water_jug", 1, 2, 1, 0], ["medkit", 1, 4, 1, 0], ["water_bottle", 1, 4, 2, 1], ["canned_food", 2, 6, 0, 0]]:
+			["water_bottle", 1, 0, 1, 0], ["ration_pack", 1, 1, 1, 0], ["water_jug", 1, 2, 1, 0], ["medkit", 1, 4, 1, 0], ["ration_pack", 1, 4, 2, 1], ["water_bottle", 1, 6, 1, 0], ["canned_food", 2, 6, 0, 0]]:
 		InvApi.place(pack, String(p[0]), int(p[1]), int(p[2]), int(p[3]), int(p[4]))
 
 
@@ -181,7 +181,7 @@ static func _real(ui, frame: int) -> void:
 				InvApi.set_quick(sim, i, ["bandage", "canned_food", "water_bottle", ""][i])
 			_key(KEY_2)    # (INV2: a plain digit is a quick slot in the town)
 		44:
-			_report("the key 2 goes the whole way to the belt (slot 2, a tin: %s)" % ui.last_toast, ui.toast_count == int(ui.get_meta("toasts")) + 1 and ui.last_toast.to_lower().contains("coming soon"))
+			_report("the key 2 goes the whole way to the belt (slot 2, a tin; she is fed, so the rules say so: %s)" % ui.last_toast, ui.toast_count == int(ui.get_meta("toasts")) + 1 and ui.last_toast.to_lower().contains("not hungry"))
 			_report("and does not change the speed", int(ui.main.speed) == int(ui.get_meta("speed")))
 			_key(KEY_2, true)
 		48:

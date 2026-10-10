@@ -222,6 +222,12 @@ class HouseBot:
 	const KEEP_AMMO := 15
 	const NIGHT_AMMO := 18
 	const KEEP_MEDS := 2
+	## PH10, her needs: it keeps a tin and two bottles in the pack for the day out (the base serves its meals at the base, a meal that comes up out in the town is owed), and uses one
+	## when it is this many hours since the last meal (the line of "hungry" is 18) or drink ("thirsty" is 14).
+	const KEEP_FOOD := 1
+	const KEEP_WATER := 2
+	const EAT_AT_H := 12.0
+	const DRINK_AT_H := 10.0
 
 	var sim
 	var mode := "bot"
@@ -340,15 +346,31 @@ class HouseBot:
 		if night:
 			want_ammo = 0 if mode != "bot" else NIGHT_AMMO
 		var c: Dictionary = inv.carried_totals()
-		var spare := int(c.food) + int(c.water) + maxi(0, int(c.meds) - KEEP_MEDS) + maxi(0, int(c.ammo) - want_ammo)
+		var spare := maxi(0, int(c.food) - KEEP_FOOD) + maxi(0, int(c.water) - KEEP_WATER) + maxi(0, int(c.meds) - KEEP_MEDS) + maxi(0, int(c.ammo) - want_ammo)
 		if spare > 0:
 			inv.deposit_all()
 			inv.withdraw("ammo", want_ammo)
 			inv.withdraw("meds", KEEP_MEDS)
+			inv.withdraw("food", KEEP_FOOD)
+			inv.withdraw("water", KEEP_WATER)
 		elif int(c.ammo) < want_ammo and float(sim.stock.ammo) >= 1.0:
 			inv.withdraw("ammo", want_ammo - int(c.ammo))
 		elif int(c.meds) < KEEP_MEDS and float(sim.stock.meds) >= 1.0:
 			inv.withdraw("meds", KEEP_MEDS - int(c.meds))
+		elif int(c.food) < KEEP_FOOD and float(sim.stock.food) >= 1.0:
+			inv.withdraw("food", KEEP_FOOD - int(c.food))
+		elif int(c.water) < KEEP_WATER and float(sim.stock.water) >= 1.0:
+			inv.withdraw("water", KEEP_WATER - int(c.water))
+
+	## PH10: out in the town it eats and drinks from the pack the way a player does (a belt key): when the clock says so and the pack has something.
+	func _eat_tick(me) -> void:
+		var inv = _inv()
+		if inv == null:
+			return
+		if float(me.hunger_h) >= EAT_AT_H and inv.first_use("eat") >= 0:
+			inv.use_item(inv.first_use("eat"))
+		if float(me.thirst_h) >= DRINK_AT_H and inv.first_use("drink") >= 0:
+			inv.use_item(inv.first_use("drink"))
 
 	# -------------------------------------------------------------------- the clock --
 
@@ -606,6 +628,7 @@ class HouseBot:
 		if sl != null and sl.active():
 			return    # (asleep: the sleep runs the colony; hands off)
 		_pack_tick(me)
+		_eat_tick(me)
 		# the night of the first attack: the wall's defender plays (or nobody: idle)
 		if _defending():
 			if mode == "bot":

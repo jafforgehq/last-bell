@@ -128,11 +128,11 @@ func _drag_by_events() -> void:
 	_check("drag: a red drop changes nothing", pk.cells[j].x == mc.x and pk.cells[j].y == mc.y and int(pk.cells[_index_of(pk, "shells", 0)].x) == 7, "")
 
 
-## R on a held bottle (1 by 2) turns it to 2 by 1; the drop puts it down turned.
+## R on a held ration pack (1 by 2) turns it to 2 by 1; the drop puts it down turned.
 func _rotate() -> void:
 	var g = ui.pack_win.grid_ctl
 	var pk := _pack()
-	var i := _index_of(pk, "water_bottle", 0)
+	var i := _index_of(pk, "ration_pack", 0)
 	var from: Vector2 = g.get_global_rect().position + g.rect_of(i).get_center()
 	ui.begin_drag(g, i, from)
 	var rot_before := int(ui.drag.rot)
@@ -300,7 +300,7 @@ func _quick() -> void:
 	click.pressed = true
 	click.position = doll.slot_rect(1).get_center()
 	doll._gui_input(click)
-	_check("quick: a click on slot 2 uses it (a tin: needs are coming soon)", ui.toast_count == n2 + 1 and ui.last_toast.to_lower().contains("coming soon"), ui.last_toast)
+	_check("quick: a click on slot 2 uses it (a tin: she is fed, so the rules say she is not hungry yet)", ui.toast_count == n2 + 1 and ui.last_toast.to_lower().contains("not hungry"), ui.last_toast)
 	ui.quick_menu(3, Vector2(300, 300))
 	var ids: Array = []
 	for e in ui.menu.entries:
