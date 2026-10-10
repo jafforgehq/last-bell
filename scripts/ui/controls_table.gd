@@ -6,6 +6,8 @@
 ## `_input` (F11), scripts/ui/town_hud.gd `on_key` (M, Shift+N, Shift+G), scripts/ui/hud_stage.gd `on_key` (H: the HUD put away and back), scripts/ui/wheel_ctl.gd `key_down` (C, Shift+C, Z, Esc), scripts/ui/rescue_card.gd (1 2 3, E, Esc) and
 ## scripts/ui/dawn_tally.gd (Enter, Space), and PACE's two: X, held, polled by scripts/ui/pace_keys.gd (Shift is the aim's twin, so the run has a key of its own) and `.`, scripts/ui/wait_button.gd `on_key`.
 ## INV-UI (the backpack, scripts/ui/inv_ui.gd `on_key`): Tab and I (the pack; Tab did nothing in the town before), Esc, R while an item is dragged, Space and Enter while a container is open;
+## INV2: the plain digits 1 to 4 use the quick slots on Ruth's belt, so the speeds are Shift and 1 2 3 here (scripts/main.gd `_speed_key`; the rescue card, which answers with 1 2 3, and the morning
+## card, which any key puts away, take the digits first);
 ## the rows that carry an `id` are the backpack's, and the windows' own tooltips read their keys from here (`key_text`). What is NOT here is not in the town: 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
 ## wheel, a right-click order, Y (the school's gate is off in the town) and B (the town has no Base page; its radio panel has Jobs, Build, Map and News).
 ##
@@ -37,7 +39,8 @@ const GROUPS := [
 	{
 		"title": "The backpack",
 		"rows": [
-			{"id": "inv_drag", "keys": "Drag", "what": "Move an item: to another place, into the pack, or onto the stores", "hud": ["Drag", "Move an item"]},
+			{"id": "inv_drag", "keys": "Drag", "what": "Move an item: to another place, into the pack, onto a quick slot of her belt, or onto the stores", "hud": ["Drag", "Move an item"]},
+			{"id": "inv_slot", "keys": "1 2 3 4", "what": "Use what is on that quick slot of her belt: a bandage, and later a meal or a drink", "hud": ["1 2 3 4", "Quick slot"]},
 			{"id": "inv_rot", "keys": "R", "what": "While you drag an item: turn it. (Otherwise R reloads)", "hud": ["R", "Turn a dragged item"]},
 			{"id": "inv_quick", "keys": "Double-click", "what": "Move an item at once. A right-click: use, split, drop"},
 			{"id": "inv_take", "keys": "Space | Enter", "what": "Take all from the container that is open", "hud": ["Space", "Take all (loot)"]},
@@ -68,7 +71,7 @@ const GROUPS := [
 			{"id": "hud_hide", "keys": "H", "what": "Hide the HUD, and show it again. Settings has the HUD: Minimal (boards come when they matter) or Full", "hud": ["H", "Hide the HUD"]},
 			{"keys": "Space", "what": "Pause, and go on", "hud": ["Space", "Pause"]},
 			{"keys": ".", "what": "Wait until the bell: the day runs ahead, and stops if the dead come", "hud": [".", "Wait for the bell"], "legend": ["c", "wait", ".", "wait for the bell"]},
-			{"keys": "1 2 3", "what": "Normal speed, twice as fast, three times", "hud": ["1 2 3", "Speed"]},
+			{"keys": "Shift 1 2 3", "what": "Normal speed, twice as fast, three times. (The plain digits 1 to 4 are the quick slots on her belt)", "hud": ["Shift 1 2 3", "Speed"]},
 		],
 	},
 	{

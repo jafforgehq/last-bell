@@ -2,15 +2,17 @@
 ## sim's inventory (`sim.inv`, scripts/town/inv.gd, through scripts/ui/inv_api.gd, the only door) and changes it only by calling the rules' own functions (`take_item`, `move_item`, `put_back`,
 ## `deposit_item`, `deposit_all`, `withdraw`, `drop`, `use_item`, and the logic's `move`, `split`, `quick_move`: scripts/sim/inventory.gd), so everything it does is something the bot could do.
 ##
-##   - THE BACKPACK (Tab and I, Esc): her pack as a grid with the equipment (scripts/ui/inv_pack_window.gd). Drag and drop with the mouse, a green (a tick) or red (a cross) frame of where the held
-##     item fits, R turns it, a double-click moves a stack at once, a right-click opens its menu (use, split, turn, drop), a tooltip names it.
-##   - THE LOOT WINDOW: `sim.inv.open_id` puts that container (`grid_of(id)`, its stacks found one by one: `revealed(id)`) beside the pack; Take all is Space or Enter and a button. The rules shut it
-##     when she walks away or stops the search; Esc and Tab shut it too.
-##   - THE STASH PANEL: `sim.inv.stash_open` puts the stores (five rows, live numbers, withdraw 1, 5, all, Deposit all, and a drop target) beside the pack.
+##   - THE BACKPACK (Tab and I, Esc): her pack as a grid at the left, and at the right Ruth with her kit: the gun, the swing and four QUICK SLOTS on her belt (scripts/ui/inv_pack_window.gd,
+##     inv_doll.gd). Drag and drop with the mouse, a green (a tick) or red (a cross) frame of where the held item fits, R turns it, a double-click moves a stack at once, a right-click opens its
+##     menu (use, split, turn, drop, put on a quick slot), a tooltip names it. The keys 1 to 4 (a click on the slot) use what a quick slot names, with the pack shut too.
+##   - THE LOOT WINDOW: `sim.inv.open_id` puts that container (`grid_of(id)`, its stacks found one by one: `revealed(id)`) under or over the pack; Take all is Space or Enter and a button. The
+##     rules shut it when she walks away or stops the search; Esc and Tab shut it too.
+##   - THE STASH PANEL: `sim.inv.stash_open` puts the stores (five columns, live numbers, withdraw 1, 5, all, Deposit all, and a drop target) under or over the pack.
 ##   - THE HUD: a chip in the stores strip with the pack's fullness (9/32) and its tooltip; what the top bar's numbers mean (scripts/ui/inv_totals.gd).
 ## The windows are built once, on the first frame of a run that has an inventory, and then only brought up to date when the pack changed (ten looks a second); a drag redraws one overlay. They
-## never pause the game, never hold the avatar's hands and sit where they hide neither her nor the HUD's boards (the coach's placement rule, tried for each window in turn).
-## Staging for screenshots and probes: `--inv=open|loot|stash|full|drag-ok|drag-bad|menu|probe` (scripts/ui/inv_stage.gd, tools/inv_probe.gd).
+## never pause the game, never hold the avatar's hands and sit where they hide neither her nor the HUD's boards (the coach's placement rule), and the second window is put against the pack
+## (the pair stays inside the window budget of docs/hud-audit.md: 45 percent of the width, 55 of the height, 17 of the screen).
+## Staging for screenshots and probes: `--inv=open|loot|stash|full|quick|drag-ok|drag-bad|menu|probe|real` (scripts/ui/inv_stage.gd, tools/inv_probe.gd).
 extends RefCounted
 
 const InvApi := preload("res://scripts/ui/inv_api.gd")
@@ -55,7 +57,7 @@ var chip_label: Label
 var chip_icon: Control
 ## The player opened the pack (Tab, I, the chip): it stays up till they put it away. A container or the stash opens it too, and it goes with them.
 var pack_user := false
-var cell := 48.0
+var cell := 34.0
 ## The drag in hand: {"src": "pack" | "loot", "grid": the control, "index", "item", "count", "rot", "grab": Vector2i, "pos": Vector2, "target": {...}}, {} for none.
 var drag := {}
 ## A pressed stack that may become a drag: {"grid", "index", "from": Vector2}.
@@ -128,13 +130,13 @@ func _build() -> void:
 	menu = InvMenu.new()
 	menu.setup(self, hud)
 	pack_win.set_cell(cell)
-	stash_win.set_compact(cell < 44.0)
 	for w in [pack_win, loot_win, stash_win]:
 		w.visible = false
 		root.add_child(w)
 	overlay = Control.new()
 	overlay.name = "InvOverlay"
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	InvIcons.prepare(overlay)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.draw.connect(_draw_overlay)
 	root.add_child(overlay)
@@ -228,7 +230,7 @@ func _poll_now() -> void:
 			cell = c
 			pack_win.set_cell(cell)
 			loot_win.set_cell(cell)
-			stash_win.set_compact(cell < 44.0)
+			pass    # (the windows are the same at every size: the HUD scales them)
 		changed = true
 	if changed:
 		_last_visible = vis
@@ -305,25 +307,30 @@ func _cap_of(id: String) -> int:
 
 # ---------------------------------------------------------------------------------- places --
 
-## Where the windows go: one after the other (the pack first), each where it hides neither the avatar nor a board of the HUD nor a window placed before it, beside the pack for the second.
+## Where the windows go. The windows that are up are ONE block: the pack on top and, under it, the container or the stash (the left edges level, a gap of 6 points), so that the pair is as wide
+## as the pack and stays inside the window budget (`InvGeom.BUDGET_*`: 45 percent of the width, 55 of the height). The block goes where it hides neither the avatar and the plate of her E
+## prompt nor a board of the HUD (`_best`), and stays where it was while nothing needs it moved.
 func _place() -> void:
 	if not is_open():
 		return
 	var vp: Vector2 = hud.size
-	var kept := _kept_clear()
-	var obs := _obstacles()
-	var placed: Array = []
-	for w in _open_windows():
+	var wins := _open_windows()
+	var gap := 6.0
+	var block := Vector2.ZERO
+	for w in wins:
 		w.size = Vector2.ZERO
 		w.size = w.get_combined_minimum_size()
-		var prev := Rect2(w.position, w.size) if _placed.has(w.name) else Rect2()
-		var beside: Rect2 = placed[0] if not placed.is_empty() else Rect2()
-		var keep: Array = kept.duplicate()
-		keep.append_array(placed)
-		var r := _best(w.size, keep, obs, prev, beside, vp)
-		w.position = r.position
-		_placed[w.name] = r
-		placed.append(r)
+		block.x = maxf(block.x, w.size.x)
+		block.y += w.size.y + (gap if block.y > 0.0 else 0.0)
+	var old: Rect2 = _placed.get("block", Rect2())
+	var prev := Rect2(old.position, block) if old.size.x > 0.0 else Rect2()    # (a window came or went: the block keeps its top left while that does not hide anything)
+	var r := _best(block, _kept_clear(), _obstacles(), prev, Rect2(), vp)
+	_placed["block"] = r
+	var y := r.position.y
+	for w in wins:
+		w.position = Vector2(r.position.x, y)
+		_placed[w.name] = Rect2(w.position, w.size)
+		y += w.size.y + gap
 	if overlay != null:
 		overlay.queue_redraw()
 
@@ -366,6 +373,8 @@ func _kept_clear() -> Array:
 	var c: Vector2 = main._tile_to_screen(at + Vector2(0.0, -0.45))
 	var rad: float = Coach.AVATAR_CLEAR * float(main.zoom_px)
 	out.append(Rect2(c - Vector2(rad, rad), Vector2(rad, rad) * 2.0))
+	# the plate of the E prompt beside her ("Open the stash", "Close the cupboard"): a window opened by E is opened where it stands
+	out.append(Rect2(c + Vector2(rad * 0.5, -rad * 0.6), Vector2(rad * 0.5 + 250.0, rad * 1.2)))
 	out.append_array(HudStage.keep_clear(main))    # (HUD8, the placement rule: nor the awake dead in view and the line of fire; the threat rule does not close the windows)
 	return out
 
@@ -456,6 +465,12 @@ func on_key(ev: InputEvent) -> bool:
 		return true
 	if k.echo:
 		return false
+	var slot := _quick_key(code)
+	if slot >= 0:
+		if k.shift_pressed:
+			return false    # (Shift and 1 2 3 are the speeds: scripts/main.gd `_speed_key`)
+		use_quick(slot)
+		return true
 	match code:
 		KEY_TAB, KEY_I:
 			if k.shift_pressed:
@@ -477,6 +492,16 @@ func on_key(ev: InputEvent) -> bool:
 				take_all_pressed()
 				return true
 	return false
+
+
+## The quick slot a key stands for (the digits and the keypad's: 0 to 3), -1 for any other key.
+func _quick_key(code: Key) -> int:
+	var c := int(code)
+	if c >= int(KEY_1) and c < int(KEY_1) + InvApi.QUICK_SLOTS:
+		return c - int(KEY_1)
+	if c >= int(KEY_KP_1) and c < int(KEY_KP_1) + InvApi.QUICK_SLOTS:
+		return c - int(KEY_KP_1)
+	return -1
 
 
 ## Whether she is asleep (the screen is black: no key opens the pack then).
@@ -639,6 +664,11 @@ func _target_at(gp: Vector2) -> Dictionary:
 		if g.kind == "loot" and String(drag.src) != "loot" and int(g.revealed) >= 0:
 			t["state"] = InvGeom.BLOCKED    # (nothing is put into a container that is still being searched)
 		return t
+	if pack_win.visible:
+		var qi: int = pack_win.doll.quick_at_global(gp) if pack_win.doll.get_global_rect().has_point(gp) else -1
+		if qi >= 0:
+			var fits: bool = String(drag.src) == "pack" and InvApi.quick_ok(String(drag.item))
+			return {"over": "quick", "slot": qi, "state": InvGeom.FREE if fits else InvGeom.BLOCKED}
 	if stash_win.visible and stash_win.get_global_rect().has_point(gp):
 		var res := String(InvApi.item(String(drag.item)).res)
 		return {"over": "stash", "state": InvGeom.FREE if (res != "" and String(drag.src) == "pack") else InvGeom.BLOCKED}
@@ -674,6 +704,13 @@ func drop_at(gp: Vector2) -> void:
 				deposit_index(int(d.index))
 			else:
 				say("The stores take food, water, ammo and medicine", "warn")
+		"quick":
+			if String(t.state) == InvGeom.FREE:
+				assign_quick(int(t.slot), String(d.item))
+			elif String(d.src) == "loot":
+				say("Take it into the pack first", "warn")
+			else:
+				say("Only a bandage, a meal or a drink goes on a quick slot", "warn")
 		"world":
 			if String(t.state) == InvGeom.FREE:
 				if InvApi.drop(sim, int(d.index), -1):
@@ -742,13 +779,82 @@ func quick_move_index(g, index: int) -> void:
 
 
 ## Uses the stack (a bandage) through the rules; they say why when they cannot.
-func use_index(index: int) -> void:
+func use_index(index: int) -> bool:
 	var r := InvApi.use_item(sim, index)
-	if bool(r.get("ok", false)):
+	var ok := bool(r.get("ok", false))
+	if ok:
 		say("Bandaging", "info")
 	else:
 		say(String(r.get("why", "")) if String(r.get("why", "")) != "" else "Nothing to do with it now", "warn")
 	_after_change()
+	return ok
+
+
+# ---------------------------------------------------------------------------- the quick slots --
+
+## A key 1 to 4, or a click on a quick slot: uses one of what the slot names, through the rules' own `use_item` on the first stack of it in the pack. The slot says why when it cannot: it is
+## empty, the pack has none of it, it is food or drink (the needs come with the next step), or the rules refuse (she is not bleeding). True when the item was used.
+func use_quick(slot: int) -> bool:
+	if sim == null or slot < 0 or slot >= InvApi.QUICK_SLOTS:
+		return false
+	var id := String(InvApi.quick(sim)[slot])
+	if id == "":
+		say("Quick slot %d is empty: drag a bandage, a meal or a drink onto it" % (slot + 1), "info")
+		return false
+	var d: Dictionary = InvApi.item(id)
+	var idx := InvApi.first_stack(InvApi.pack(sim), id)
+	if idx < 0:
+		say("No %s in the pack" % String(d.name).to_lower(), "warn")
+		return false
+	if String(d.use) == "eat" or String(d.use) == "drink":
+		say("%s: needs are coming soon (hunger and thirst come with the next step)" % d.name, "warn")
+		return false
+	return use_index(idx)
+
+
+## Puts an item kind on a quick slot (a drop, or the menu).
+func assign_quick(slot: int, id: String) -> bool:
+	if not InvApi.set_quick(sim, slot, id):
+		say("Only a bandage, a meal or a drink goes on a quick slot", "warn")
+		return false
+	say("Quick slot %d: %s. Press %d to use it" % [slot + 1, String(InvApi.item(id).name).to_lower(), slot + 1], "info")
+	_after_change()
+	return true
+
+
+func clear_quick(slot: int) -> void:
+	if InvApi.set_quick(sim, slot, ""):
+		say("Quick slot %d is empty" % (slot + 1), "info")
+		_after_change()
+
+
+## A click on a slot of the doll.
+func quick_pressed(slot: int) -> void:
+	use_quick(slot)
+
+
+## The first empty quick slot (else -1).
+func _free_quick() -> int:
+	var q := InvApi.quick(sim)
+	for i in q.size():
+		if String(q[i]) == "":
+			return i
+	return -1
+
+
+## A right-click on a slot of the doll: its menu (use, clear).
+func quick_menu(slot: int, at: Vector2) -> void:
+	var id := String(InvApi.quick(sim)[slot])
+	var list: Array = []
+	if id != "":
+		var d: Dictionary = InvApi.item(id)
+		var can: bool = String(d.use) == "bandage" and InvApi.first_stack(InvApi.pack(sim), id) >= 0
+		list.append(["Use", "q_use", can, "None in the pack" if String(d.use) == "bandage" else "needs: coming soon"])
+		list.append(["Clear the slot", "q_clear", true, ""])
+	else:
+		list.append(["Empty: drag an item here", "q_none", false, "Drag a bandage, a meal or a drink from the pack onto this slot"])
+	menu_for = {"quick": slot}
+	menu.open_for(list, at, hud.size)
 
 
 ## One stack of the pack onto the stores, by the rules' own `deposit_item`.
@@ -860,6 +966,7 @@ func _open_menu(g, index: int, at: Vector2) -> void:
 			var verb: String = {"eat": "Eat", "drink": "Drink", "bandage": "Bandage a wound"}.get(use, "Use")
 			var can: bool = use == "bandage"
 			list.append([verb, "use", can, "Hunger and thirst come with the next step" if not can else ""])
+			list.append(["Put on a quick slot", "quick", true, ""])
 		if loot_win.visible and not lo.is_empty() and int(lo.revealed) >= lo.grid.cells.size():
 			list.append(["Put in the container", "put", true, ""])
 		if stash_win.visible and String(d.res) != "":
@@ -879,7 +986,15 @@ func _open_menu(g, index: int, at: Vector2) -> void:
 func menu_pick(id: String) -> void:
 	var g = menu_for.get("grid")
 	var index: int = int(menu_for.get("index", -1))
+	var qslot: int = int(menu_for.get("quick", -1))
 	menu.close()
+	if qslot >= 0:
+		match id:
+			"q_use":
+				use_quick(qslot)
+			"q_clear":
+				clear_quick(qslot)
+		return
 	if g == null or not is_instance_valid(g) or index < 0 or index >= g.grid.cells.size():
 		return
 	var c: Dictionary = g.grid.cells[index]
@@ -888,6 +1003,12 @@ func menu_pick(id: String) -> void:
 			quick_move_index(g, index)
 		"use":
 			use_index(index)
+		"quick":
+			var free := _free_quick()
+			if free < 0:
+				say("All four quick slots are in use: drag the item onto one to replace it", "warn")
+			else:
+				assign_quick(free, String(c.item))
 		"deposit":
 			deposit_index(index)
 		"split_half":
@@ -967,6 +1088,8 @@ func item_tip(c: Dictionary, kind: String = "pack") -> String:
 		lines.append(hud._wrap(String(d.desc), 40))
 	if String(d.use) == "bandage":
 		lines.append("Right-click: bandage a wound")
+	if kind == "pack" and InvApi.quick_ok(String(c.item)):
+		lines.append("Drag it onto a quick slot, then press its number" + (" (needs: coming soon)" if String(d.use) != "bandage" else ""))
 	lines.append("Drag it, or double-click it, to %s. Right-click: menu" % ("take it" if kind == "loot" else "move it"))
 	return "\n".join(lines)
 
@@ -1031,10 +1154,11 @@ class ChipIcon:
 		custom_minimum_size = Vector2(17, 17)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 
 	func _draw() -> void:
 		var ic := load("res://scripts/ui/inv_icons.gd")
-		ic.draw_pack(self, Rect2(Vector2.ZERO, size), Color("#e8953a") if warn else Color("#d2a94e"))
+		ic.draw_pack(self, Rect2(Vector2.ZERO, size), warn)
 
 
 # ------------------------------------------------------------------------------ the overlay --
@@ -1054,7 +1178,7 @@ func _draw_overlay() -> void:
 	var top: Vector2 = (drag.pos as Vector2) - (Vector2(float(grab.x), float(grab.y)) + Vector2(0.5, 0.5)) * k
 	var ghost := Rect2(top, Vector2(float(sz.x), float(sz.y)) * k)
 	overlay.draw_rect(ghost.grow(-2.0), Color(0.03, 0.06, 0.05, 0.9))
-	InvIcons.draw_item(overlay, String(drag.item), ghost, int(drag.rot), k)
+	InvIcons.draw_item(overlay, String(drag.item), ghost, int(drag.rot), k, int(drag.count))
 	if int(drag.count) > 1:
 		var txt := str(int(drag.count))
 		var fs := Access.scaled(15 if k >= 46.0 else 13)
@@ -1072,6 +1196,9 @@ func _draw_overlay() -> void:
 			_frame(vis, ok, "plus" if String(t.state) == InvGeom.MERGE else ("check" if ok else "cross"))
 	elif over == "stash":
 		_frame(stash_win.get_global_rect(), String(t.state) == InvGeom.FREE, "check" if String(t.state) == InvGeom.FREE else "cross")
+	elif over == "quick":
+		var qok: bool = String(t.state) == InvGeom.FREE
+		_frame(pack_win.doll.slot_global_rect(int(t.slot)), qok, "check" if qok else "cross", true)
 	elif over == "world":
 		var drop_ok: bool = String(t.state) == InvGeom.FREE
 		var words := "Drop it here" if drop_ok else "Put it back"
@@ -1084,11 +1211,13 @@ func _draw_overlay() -> void:
 
 
 ## A frame over `r`: green with a tick (a plus for a stack it joins) when it fits, red with a cross when it does not: the shape says it as well as the colour, always, in a round badge at the corner.
-func _frame(r: Rect2, ok: bool, shape: String) -> void:
+func _frame(r: Rect2, ok: bool, shape: String, small: bool = false) -> void:
 	var col := OK if ok else BAD
 	overlay.draw_rect(r, Color(col, 0.30))
 	overlay.draw_rect(r, col, false, 3.0)
-	var c := r.position + Vector2(14.0, 14.0)
-	overlay.draw_circle(c, 11.0, Color("#10201a"))
-	overlay.draw_circle(c, 9.5, col)
-	CbShapes.mark(overlay, shape, c, 5.5, Color("#10201a"))
+	# a small place (a quick slot) wears its badge at the corner, outside, so that the tick does not hide the slot
+	var c := (r.end + Vector2(1.0, 1.0)) if small else (r.position + Vector2(14.0, 14.0))
+	var rad := 8.0 if small else 11.0
+	overlay.draw_circle(c, rad, Color("#10201a"))
+	overlay.draw_circle(c, rad - 1.5, col)
+	CbShapes.mark(overlay, shape, c, rad * 0.5, Color("#10201a"))

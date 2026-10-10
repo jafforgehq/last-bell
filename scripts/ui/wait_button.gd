@@ -284,7 +284,7 @@ func on_key(ev: InputEvent) -> bool:
 			_answer(false)
 			return true
 		# (the game is paused for the question: the speed keys are not let to unpause it)
-		return code == KEY_SPACE or code == KEY_1 or code == KEY_2 or code == KEY_3
+		return code == KEY_SPACE or code == KEY_1 or code == KEY_2 or code == KEY_3 or code == KEY_4    # (4: INV2's fourth quick slot)
 	var w = _waiter()
 	if w == null:
 		return false

@@ -5161,7 +5161,7 @@ func _apply_radio_mode(on: bool) -> void:
 		return
 	news_button.visible = on
 	alarm_button.visible = on
-	# (round 24: with an avatar the digits pick the crew, so the speeds are Shift and 1 2 3; the One House picks nobody)
+	# (round 24: with an avatar the digits pick the crew, so the speeds are Shift and 1 2 3; the One House picks nobody, but INV2 gives the plain digits to the quick slots on Ruth's belt)
 	_speed_tips(on)
 	jobs_button.tooltip_text = JOBS_TIP_AVATAR if on and not tutorial_ui else JOBS_TIP
 	town_button.tooltip_text = TOWN_TIP_AVATAR if on and not tutorial_ui else TOWN_TIP
@@ -5188,11 +5188,11 @@ func _town_tips() -> void:
 	news_button.tooltip_text = NEWS_TIP_TOWN
 
 
-## The speed buttons' tooltips: "Key: Shift+2" in the school's avatar game (the digits pick the crew there), "Key: 2" in the One House.
+## The speed buttons' tooltips: "Key: Shift+2" in an avatar game (in the school's the digits pick the crew, in the One House (INV2) they are the quick slots on Ruth's belt), "Key: 2" without.
 func _speed_tips(avatar: bool = avatar_ui) -> void:
 	for i in speed_buttons.size():
 		var key := String(SPEED_TIPS[i][1])
-		speed_buttons[i].tooltip_text = "%s\nKey: %s" % [SPEED_TIPS[i][0], ("Shift+" + key) if avatar and i > 0 and profile == "" else key]
+		speed_buttons[i].tooltip_text = "%s\nKey: %s" % [SPEED_TIPS[i][0], ("Shift+" + key) if avatar and i > 0 else key]
 
 
 ## A toolbar key lit or dark.

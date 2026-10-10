@@ -118,6 +118,40 @@ static func rect_hit(rects: Array, p: Vector2) -> int:
 	return -1
 
 
-## The size of the cell for a window of `vp` pixels: 48 where there is room, 40 in a small window.
+## The window budget of docs/hud-audit.md (section 7): the windows that are up together take at most this share of the width and of the height (as one block), and of the screen (their areas).
+const BUDGET_W := 0.45
+const BUDGET_H := 0.55
+const BUDGET_AREA := 0.17
+
+
+## What a set of window rectangles takes of a window of `vp` points: {"w": the block's share of the width, "h": of the height, "area": the windows' own share of the screen}.
+static func budget_of(rects: Array, vp: Vector2) -> Dictionary:
+	if rects.is_empty() or vp.x <= 0.0 or vp.y <= 0.0:
+		return {"w": 0.0, "h": 0.0, "area": 0.0}
+	var u: Rect2 = rects[0]
+	var area := 0.0
+	for r in rects:
+		u = u.merge(r)
+		area += (r as Rect2).size.x * (r as Rect2).size.y
+	return {"w": u.size.x / vp.x, "h": u.size.y / vp.y, "area": area / (vp.x * vp.y)}
+
+
+## Whether the block the windows make is inside 45 percent of the width and 55 of the height (the budget of the windows that are up together).
+static func within_budget(rects: Array, vp: Vector2) -> bool:
+	var b := budget_of(rects, vp)
+	return float(b.w) <= BUDGET_W + 0.0005 and float(b.h) <= BUDGET_H + 0.0005
+
+
+## Whether the windows' own areas are inside 17 percent of the screen (a window of the audit's: the pack alone, or the pack with its loot window or stash where the window is big enough).
+static func within_area(rects: Array, vp: Vector2) -> bool:
+	return float(budget_of(rects, vp).area) <= BUDGET_AREA + 0.0005
+
+
+## The size of the cell for a window of `vp` interface points (the HUD scales them with the window, so a cell is the same share of the screen at every size): 34 where there is room, 32 in
+## a small window (1024 x 640). No smaller: the pictures are drawn for a cell of 32 to 36.
+const CELL := 34.0
+const CELL_SMALL := 32.0
+
+
 static func cell_for(vp: Vector2) -> float:
-	return 40.0 if (vp.y < 700.0 or vp.x < 1100.0) else 48.0
+	return CELL_SMALL if (vp.y < 700.0 or vp.x < 1100.0) else CELL

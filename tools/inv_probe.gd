@@ -5,6 +5,7 @@
 extends RefCounted
 
 const InvApi := preload("res://scripts/ui/inv_api.gd")
+const InvGeom := preload("res://scripts/ui/inv_geom.gd")
 const InvStage := preload("res://scripts/ui/inv_stage.gd")
 
 var ui
@@ -24,8 +25,10 @@ func run(controller) -> void:
 	_split()
 	_loot_quick_and_take_all()
 	_stash()
+	_quick()
 	_keys()
 	_closing()
+	_budget()
 	print("PROBE total: %d passed, %d failed" % [passed, failed])
 
 
@@ -254,6 +257,98 @@ func _stash() -> void:
 	_check("stash: Withdraw all ammo fills the pack as far as it fits", InvApi.units(pk, "ammo") > pack_ammo_before, "pack %d, stores %d" % [InvApi.units(pk, "ammo"), int(stock.ammo)])
 	ui.close_stash()
 	_check("stash: closing tells the rules", not InvApi.stash_open(sim) and not ui.stash_win.visible, "")
+
+
+## The belt (INV2): a medkit dragged by real mouse events onto the empty fourth quick slot, shells refused, the key and a click on a slot, the menu's Clear.
+func _quick() -> void:
+	var pk := _pack()
+	InvStage.mixed_pack(pk)
+	for i in InvApi.QUICK_SLOTS:
+		InvApi.set_quick(sim, i, ["bandage", "canned_food", "water_bottle", ""][i])
+	ui.close_all()
+	ui.open_pack()
+	ui._poll()
+	var g = ui.pack_win.grid_ctl
+	var doll = ui.pack_win.doll
+	var origin: Vector2 = g.get_global_rect().position
+	var mi := _index_of(pk, "medkit", 0)
+	var mc: Dictionary = pk.cells[mi]
+	var slot4: Vector2 = doll.slot_global_rect(3).get_center() - origin
+	_mouse(g, _local_center(g, int(mc.x), int(mc.y), 2, 1), true)
+	_motion(g, _local_center(g, 3, 3))
+	_motion(g, slot4)
+	var state := String(ui.drag.target.state) if not ui.drag.is_empty() else ""
+	var over := String(ui.drag.target.get("over", "")) if not ui.drag.is_empty() else ""
+	_mouse(g, slot4, false)
+	_check("quick: a medkit held over the empty fourth slot is green", over == "quick" and state == "free", "%s %s" % [over, state])
+	_check("quick: the drop puts it on the slot and leaves it in the pack", InvApi.quick(sim)[3] == "medkit" and _index_of(pk, "medkit", 0) >= 0, str(InvApi.quick(sim)))
+	var si := _index_of(pk, "shells", 0)
+	var sc: Dictionary = pk.cells[si]
+	var slot1: Vector2 = doll.slot_global_rect(0).get_center() - origin
+	_mouse(g, _local_center(g, int(sc.x), int(sc.y)), true)
+	_motion(g, _local_center(g, 4, 3))
+	_motion(g, slot1)
+	var red := String(ui.drag.target.state) if not ui.drag.is_empty() else ""
+	_mouse(g, slot1, false)
+	_check("quick: shells over a slot are red and the drop changes nothing", red == "blocked" and InvApi.quick(sim)[0] == "bandage", "%s %s" % [red, str(InvApi.quick(sim))])
+	var n: int = ui.toast_count
+	_check("quick: the key 4 is the belt's", _key(KEY_4) and ui.toast_count == n + 1, ui.last_toast)
+	_check("quick: Shift and 4 or 1 are left to the speeds", not _shift_key(KEY_1) and ui.toast_count == n + 1, "")
+	var n2: int = ui.toast_count
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = doll.slot_rect(1).get_center()
+	doll._gui_input(click)
+	_check("quick: a click on slot 2 uses it (a tin: needs are coming soon)", ui.toast_count == n2 + 1 and ui.last_toast.to_lower().contains("coming soon"), ui.last_toast)
+	ui.quick_menu(3, Vector2(300, 300))
+	var ids: Array = []
+	for e in ui.menu.entries:
+		ids.append(String(e[1]))
+	ui.menu_pick("q_clear")
+	_check("quick: the slot's menu clears it", ids.has("q_clear") and InvApi.quick(sim)[3] == "", str(ids))
+	ui.close_all()
+
+
+func _shift_key(code: Key) -> bool:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.pressed = true
+	ev.shift_pressed = true
+	return ui.on_key(ev)
+
+
+## The size of what is up, in the interface's points and as a share of the window (docs/hud-audit.md, section 7: 45 percent of the width, 55 of the height, 17 of the screen).
+func _budget() -> void:
+	ui.close_all()
+	InvStage.mixed_pack(_pack())
+	ui.open_pack()
+	ui._poll()
+	var vp: Vector2 = ui.hud.size
+	var a: Rect2 = ui.pack_win.get_global_rect()
+	_measure("pack", [a], vp)
+	ui.close_all()
+	_open_loot(3)
+	ui._place()
+	_measure("pack and loot window", [ui.pack_win.get_global_rect(), ui.loot_win.get_global_rect()], vp)
+	_check("budget: the loot window does not cover the pack", not ui.pack_win.get_global_rect().intersects(ui.loot_win.get_global_rect()), "")
+	ui.close_all()
+	inv.stash_open = true
+	ui._dirty = true
+	ui._poll()
+	ui._place()
+	_measure("pack and stash panel", [ui.pack_win.get_global_rect(), ui.stash_win.get_global_rect()], vp)
+	_check("budget: the stash panel does not cover the pack", not ui.pack_win.get_global_rect().intersects(ui.stash_win.get_global_rect()), "")
+	ui.close_all()
+
+
+func _measure(what: String, rects: Array, vp: Vector2) -> void:
+	var b := InvGeom.budget_of(rects, vp)
+	var u: Rect2 = rects[0]
+	for r in rects:
+		u = u.merge(r)
+	_check("budget: %s inside 45 x 55 x 17 percent" % what, InvGeom.within_budget(rects, vp), "block %.0f x %.0f points of %.0f x %.0f: %.1f percent of the width, %.1f of the height; the windows' own area %.1f percent of the screen" % [u.size.x, u.size.y, vp.x, vp.y, float(b.w) * 100.0, float(b.h) * 100.0, float(b.area) * 100.0])
 
 
 ## Tab and I open and shut the pack, Esc puts away what is up, Space takes all only with a container open.

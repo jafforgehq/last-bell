@@ -37,6 +37,9 @@ var containers := {}
 var searched := {}
 var open_id := ""
 var stash_open := false
+## The four quick slots on her belt (INV2): the id of the item each one uses ("" for an empty one). A slot names a KIND of item, not a stack: a key or a click uses the first stack of it in the pack
+## (`use_item`), the stack may move, split or merge, and the slot follows. Saved with the run; nothing in the rules reads it.
+var quick: Array = ["", "", "", ""]
 var auto_take := false
 ## What the last automatic take of each container moved: id -> {res: units} (scrap too): the room search's chip reads it.
 var last_taken := {}
@@ -62,6 +65,7 @@ func start() -> void:
 	searched = {}
 	open_id = ""
 	stash_open = false
+	quick = ["", "", "", ""]
 	last_taken = {}
 	credit = {"ammo": 0.0, "food": 0.0, "water": 0.0, "meds": 0.0}
 	stats = {"deposits": 0, "deposited": {}, "full": 0, "dropped": 0, "picked": {}, "peak_cells": 0}
@@ -75,6 +79,11 @@ func begin(start_pack: Dictionary) -> void:
 	on = true
 	for id in start_pack:
 		Inventory.auto_add(pack, String(id), int(start_pack[id]))
+	var slot := 0
+	for id in ["bandage", "canned_food", "water_bottle"]:    # (the belt starts with what she carries to heal and to live on)
+		if int(start_pack.get(id, 0)) > 0:
+			quick[slot] = id
+			slot += 1
 
 
 func active() -> bool:
@@ -742,7 +751,7 @@ func save() -> Dictionary:
 		piles.append({"item": String(pile.item), "count": int(pile.count), "x": float(pile.x), "y": float(pile.y)})
 	var ids: Array = searched.keys()
 	ids.sort()
-	return {"on": true, "pack": Inventory.to_dict(pack), "ground": piles, "containers": conts, "searched": ids, "credit": credit.duplicate(), "stats": stats.duplicate(true), "full": _full}
+	return {"on": true, "pack": Inventory.to_dict(pack), "ground": piles, "containers": conts, "searched": ids, "credit": credit.duplicate(), "stats": stats.duplicate(true), "full": _full, "quick": quick.duplicate()}
 
 
 ## The spec's names for the same two (`save` and `load_state` are the ones SaveGame calls).
@@ -785,3 +794,9 @@ func load_state(d: Dictionary) -> void:
 		for k in st:
 			stats[String(k)] = st[k]
 	_full = bool(d.get("full", false))
+	var q = d.get("quick", [])    # (a save from before the quick slots has none: the belt is empty)
+	if typeof(q) == TYPE_ARRAY:
+		for i in mini((q as Array).size(), quick.size()):
+			var qid := str(q[i])
+			if qid == "" or not Inventory.item(qid).is_empty():
+				quick[i] = qid
