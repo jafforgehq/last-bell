@@ -68,6 +68,7 @@ const NightKit := preload("res://scripts/ui/night_kit.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const AlertFeed := preload("res://scripts/ui/alert_feed.gd")
 const StoresCalm := preload("res://scripts/ui/stores_calm.gd")
+const NeedsBoard := preload("res://scripts/ui/needs_board.gd")
 const ControlsTable := preload("res://scripts/ui/controls_table.gd")
 const Access := preload("res://scripts/access.gd")
 
@@ -597,6 +598,9 @@ var alert_seq := 0
 ## "+N more" pill: scripts/ui/alert_feed.gd) and the slim stores (icon and number, scrap shown when it matters: scripts/ui/stores_calm.gd).
 var _alert_feed = null
 var _stores_calm = null
+## PH10: the small board that says she is hungry or thirsty (scripts/ui/needs_board.gd), under the gun's readout; the town's only. `needs_panel` is its node.
+var _needs_board = null
+var needs_panel: PanelContainer = null
 ## The "PAUSED" pill in the clock, shown while the game is paused.
 var paused_pill: PanelContainer
 var paused_label: Label
@@ -793,6 +797,9 @@ func set_profile(name: String) -> void:
 			_alert_feed.make_pill(right_col, alerts_box)
 		if _stores_calm == null and res_panel != null:
 			_stores_calm = StoresCalm.new(self)
+		if _needs_board == null and right_col != null:
+			_needs_board = NeedsBoard.new(self)
+			needs_panel = _needs_board.panel
 
 
 # ----------------------------------------------------------------- frames --
@@ -4317,6 +4324,8 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		dl.add_theme_color_override("font_color", DANGER_TEXT if days < 1.0 else (WARN if days < 3.0 else INK3))
 	if _stores_calm != null:
 		_stores_calm.update(sim)    # (the town's slim stores: which pairs and days are shown, the tooltips)
+	if _needs_board != null:
+		_needs_board.update(sim)    # (PH10: hungry and thirsty, only while she is)
 	crew_keys = {}
 	if avatar_ui and profile == "":    # (the One House has no 1 to 5: a click on a card is the way)
 		var n := 0

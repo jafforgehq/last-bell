@@ -5,7 +5,8 @@
 ##   THE SETTING   Settings, HUD: `minimal` (the default, also for settings made before it existed) or `full` (today's HUD: every board, always: this part then does nothing at all). The key H puts the HUD
 ##                 away and brings it back (this session only; the lessons' cues go too). The school's yard and the game with no avatar have no such part: they are as they were.
 ##   THE STAGE     `phase_of`: road, house, claimed, rescue, dusk, night, morning, from the scenario's stage, the people, the clock's phase and the morning card (`TABLE`: the form of each part in each).
-##                 A form is "off" (not there), "min" (one line, or cut down), "full", "low" (the store that is low), "thin" (cards as icons), "on", "one", "home"... as the part's own owner reads it.
+##                 A form is "off" (not there), "min" (one line, or cut down), "full", "low" (the store that is low), "when" (PH10, the needs board: there only while she is hungry or thirsty), "thin" (cards as
+##                 icons), "on", "one", "home"... as the part's own owner reads it.
 ##   THE THREAT    `Threat`: on when an awake dead one is within 14 tiles of her, she fired in the last 3 s or lost health in them; off when none is within 18 tiles and the three seconds are over
 ##                 (a hysteresis, nothing flickers at the edge of the circle). While it is on, everything that is not the fight collapses (`THREAT_FORMS`), the banners and the tips wait in a queue, and
 ##                 when it ends they come back after a beat, with a fade (`FADE_S`; none under Reduce motion).
@@ -27,13 +28,14 @@ const NOTES := {
 }
 
 ## The parts of the screen this decides, by name.
-const PARTS := ["weapon", "stores", "objective", "arrow", "crew", "clock", "toolbar", "minimap", "edge", "legend", "lesson", "cues", "alerts", "tips", "radio", "rehearsal"]
+const PARTS := ["weapon", "stores", "needs", "objective", "arrow", "crew", "clock", "toolbar", "minimap", "edge", "legend", "lesson", "cues", "alerts", "tips", "radio", "rehearsal"]
 ## The phases of the first twenty minutes (docs/hud-audit.md, 6): the road in, the first house (to the claim), the claimed house alone, with the crew, the first dusk, the first night, the morning.
 const PHASES := ["road", "house", "claimed", "rescue", "dusk", "night", "morning"]
 ## THE STAGE TABLE: for each part its form in each phase, in the order of PHASES.
 const TABLE := {
 	"weapon": ["min", "min", "min", "min", "min", "min", "min"],
 	"stores": ["off", "off", "full", "full", "full", "low", "full"],
+	"needs": ["when", "when", "when", "when", "when", "when", "when"],
 	"objective": ["min", "min", "full", "min", "min", "off", "off"],
 	"arrow": ["on", "on", "off", "on", "off", "off", "off"],
 	"crew": ["off", "off", "off", "full", "full", "thin", "thin"],
@@ -50,13 +52,13 @@ const TABLE := {
 	"rehearsal": ["off", "off", "on", "on", "off", "off", "off"],
 }
 ## What a part is in the full HUD (and in no stage at all).
-const FULL := {"weapon": "full", "stores": "full", "objective": "full", "arrow": "on", "crew": "full", "clock": "full", "toolbar": "full", "minimap": "on", "edge": "all", "legend": "on", "lesson": "on",
+const FULL := {"weapon": "full", "stores": "full", "needs": "full", "objective": "full", "arrow": "on", "crew": "full", "clock": "full", "toolbar": "full", "minimap": "on", "edge": "all", "legend": "on", "lesson": "on",
 	"cues": "on", "alerts": "full", "tips": "on", "radio": "on", "rehearsal": "on"}
 ## THE THREAT RULE: what a part is while a fight is on (a part that is off stays off).
-const THREAT_FORMS := {"stores": "low", "objective": "min", "crew": "thin", "clock": "min", "toolbar": "min", "edge": "off", "arrow": "off", "legend": "off", "lesson": "ghost", "cues": "fight", "alerts": "lines",
+const THREAT_FORMS := {"stores": "low", "needs": "off", "objective": "min", "crew": "thin", "clock": "min", "toolbar": "min", "edge": "off", "arrow": "off", "legend": "off", "lesson": "ghost", "cues": "fight", "alerts": "lines",
 	"tips": "off", "radio": "off", "rehearsal": "off"}
 ## THE RETURN: after a fight the parts leave their fight form in this order, `RETURN_GAP_S` apart (seconds after the fight ends), the ones that are not named at once.
-const RETURN := {"clock": 0.0, "objective": 0.0, "stores": 0.0, "crew": 0.5, "cues": 0.5, "toolbar": 1.0, "lesson": 1.0, "edge": 1.0, "alerts": 1.5, "tips": 2.0, "rehearsal": 1.5}
+const RETURN := {"clock": 0.0, "objective": 0.0, "stores": 0.0, "needs": 1.0, "crew": 0.5, "cues": 0.5, "toolbar": 1.0, "lesson": 1.0, "edge": 1.0, "alerts": 1.5, "tips": 2.0, "rehearsal": 1.5}
 
 ## The opacity of a form: what the part is drawn at (a form that is not named is whole).
 const FORM_ALPHA := {"off": 0.0, "ghost": 0.25}
@@ -92,7 +94,7 @@ const AVATAR_ROOM := 1.2
 const HIDE_KEY := KEY_H
 
 ## The names the nodes of a part are looked for under, kept in `_nodes`.
-const OWNED := ["weapon", "stores", "crew", "clock", "toolbar", "edge", "cues", "alerts"]
+const OWNED := ["weapon", "stores", "needs", "crew", "clock", "toolbar", "edge", "cues", "alerts"]
 
 
 # --------------------------------------------------------------------------- the pure rules --
@@ -403,6 +405,10 @@ func _targets(_dt: float) -> void:
 			var sc = hud.get("_stores_calm")
 			if sc != null and not bool(sc.any_low):
 				a = 0.0    # (a fight with no store low: no stores)
+		if part == "needs" and f == "when":
+			var nb = hud.get("_needs_board")
+			if nb == null or not bool(nb.active):
+				a = 0.0    # (PH10: nothing is there while she is fed: the board comes when a need begins)
 		_target[part] = a
 
 
@@ -458,6 +464,8 @@ func _nodes(part: String) -> Array:
 			out.append(hud.get("ammo_panel"))
 		"stores":
 			out.append(hud.get("res_panel"))
+		"needs":
+			out.append(hud.get("needs_panel"))
 		"objective":
 			out.append(th.get("obj_card") if th != null else null)
 		"crew":
@@ -524,6 +532,9 @@ func _apply(part: String, a: float, dt: float) -> void:
 func _owner_wants(part: String, item: CanvasItem) -> bool:
 	if part == "weapon":
 		return bool(hud.get("avatar_ui"))
+	if part == "needs":
+		var nb = hud.get("_needs_board")
+		return nb != null and bool(nb.wants())
 	if part == "crew":
 		return not (hud.get("cards") as Array).is_empty()
 	if part == "alerts":
@@ -652,6 +663,12 @@ func _apply_forms() -> void:
 		sc.minimal = not _full
 		if hud.sim_ref != null:
 			sc.update(hud.sim_ref)
+	var nb = hud.get("_needs_board")
+	if nb != null:
+		nb.managed = true    # (the stage shows and hides the board from here: it only says whether it has anything to say)
+		nb.form = "full" if _full else "when"
+		if hud.sim_ref != null:
+			nb.update(hud.sim_ref)
 	var mm = town.part("minimap") if town != null else null
 	if mm != null:
 		mm.stage_on = form("minimap") != "off"

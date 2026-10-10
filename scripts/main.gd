@@ -3910,6 +3910,21 @@ func _parse_args() -> void:
 					var sv := part.split(":")
 					if sv.size() == 2 and sim.stock.has(sv[0]) and sv[1].is_valid_float():
 						sim.stock[sv[0]] = float(sv[1])
+			"needs":
+				# --needs=fed|hungry|thirsty|both|starving|parched|worst (a town run with a pack): Ruth's hunger and thirst clocks put there at once, for a shot of the needs board, the belt's marked slot and the
+				# first toast (it comes with the first rules step: not with `--speed=0`); the clocks go on counting (scripts/town/inv.gd `needs`)
+				var me_n = sim.avatar.player() if sim.get("avatar") != null else null
+				var sup = sim.get("supplies")
+				if me_n == null or sup == null:
+					print("--needs=%s: a town run with an avatar is needed" % v)
+				else:
+					var hh := {"fed": [0.0, 0.0], "hungry": [sup.HUNGRY_H + 0.5, 0.0], "thirsty": [0.0, sup.THIRSTY_H + 0.5], "both": [sup.HUNGRY_H + 0.5, sup.THIRSTY_H + 0.5],
+							"starving": [sup.STARVING_H + 0.5, 0.0], "parched": [0.0, sup.PARCHED_H + 0.5], "worst": [sup.STARVING_H + 0.5, sup.PARCHED_H + 0.5]}
+					if hh.has(v):
+						me_n.hunger_h = float(hh[v][0])
+						me_n.thirst_h = float(hh[v][1])
+					else:
+						print("--needs=%s: no such state (fed, hungry, thirsty, both, starving, parched, worst)" % v)
 			"hide-lesson":
 				# --hide-lesson puts the guide's card and its cues away (the lessons flag of the screenshot's own settings file, see prefs_file_for)
 				var lesson_hud = town.part("town_hud") if town != null else null

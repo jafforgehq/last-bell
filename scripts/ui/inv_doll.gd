@@ -1,7 +1,8 @@
 ## RUTH AND HER KIT (INV2): the right-hand side of the backpack window, laid out like Tarkov's: Ruth's outline from the front (a picture of the atlas, 112 x 168 points), the pump shotgun in a slot
 ## at her hand (the rounds in the magazine over a Reload strip: a click on it is the R key), the swing in the slot at the other side (no item), and a row of FOUR QUICK SLOTS on her belt: each
-## names a kind of item from the pack (a bandage, a meal, a drink) and the keys 1 to 4 (or a click) use it. A slot is lit when its item is in the pack, dim when it is not, and greyed with
-## "needs: coming soon" for food and drink until the needs step. Items are put on a slot by dragging them from the pack (`inv_ui.gd` does the drop: `quick_at`) or by the item's menu.
+## names a kind of item from the pack (a bandage, a meal, a drink) and the keys 1 to 4 (or a click) use it. A slot is lit when its item is in the pack and dim when it is not. PH10: a meal or a
+## drink works (it is eaten when she is hungry enough: scripts/town/inv.gd `use_item`) and is MARKED while she needs it: an amber rim and a small triangle on its corner, so that the key to press
+## is the one that shows. Items are put on a slot by dragging them from the pack (`inv_ui.gd` does the drop: `quick_at`) or by the item's menu.
 ## There are no empty slots for a head or a body: there is nothing to put there in this version, so the outline alone carries the look, with a soft glow where the weapon and the belt are.
 ## Drawn, not laid out, and drawn again only when something changed (`refresh`), the pointer moved onto another slot, or a drag is over a slot. It never takes a key.
 extends Control
@@ -10,6 +11,7 @@ const InvApi := preload("res://scripts/ui/inv_api.gd")
 const InvIcons := preload("res://scripts/ui/inv_icons.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Access := preload("res://scripts/access.gd")
+const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 
 ## The size of the doll, in interface points.
 const W := 150.0
@@ -42,7 +44,7 @@ var melee_only := false
 var can_reload := false
 var can_reload_now := false
 var reloading := false
-## The belt, one entry for each slot: {"id", "count", "state": "empty" | "ready" | "off" | "soon", "name"}.
+## The belt, one entry for each slot: {"id", "count", "state": "empty" | "ready" | "off", "name", "use", "due": she needs it now (hungry for food, thirsty for drink)}.
 var quick: Array = []
 ## What the pointer is over: "" | "weapon" | "melee" | "q0" to "q3".
 var hover := ""
@@ -56,7 +58,7 @@ func setup(controller) -> void:
 	custom_minimum_size = Vector2(W, H)
 	InvIcons.prepare(self)
 	for i in SLOTS:
-		quick.append({"id": "", "count": 0, "state": "empty", "name": ""})
+		quick.append({"id": "", "count": 0, "state": "empty", "name": "", "use": "none", "due": false})
 
 
 # --------------------------------------------------------------------------------- geometry --
@@ -113,21 +115,19 @@ func refresh(sim, pack: Dictionary) -> void:
 	var rl: bool = float(w.get("reloading", 0.0)) > 0.0
 	var belt: Array = InvApi.quick(sim)
 	var entries: Array = []
+	var needs: Dictionary = InvApi.needs(sim)
 	var sig := "%s|%d|%d|%d|%s|%s|%s" % [nm, gm, gc, n, str(rl), str(Access.markers()), str(Access.text_k())]
 	for i in SLOTS:
 		var id := String(belt[i])
 		var count := InvApi.count_of(pack, id) if id != "" else 0
 		var d: Dictionary = InvApi.item(id) if id != "" else {}
+		var use := String(d.get("use", "none"))
 		var state := "empty"
 		if id != "":
-			if count <= 0:
-				state = "off"
-			elif String(d.get("use", "none")) in ["eat", "drink"]:
-				state = "soon"
-			else:
-				state = "ready"
-		entries.append({"id": id, "count": count, "state": state, "name": String(d.get("name", ""))})
-		sig += "|%s:%d:%s" % [id, count, state]
+			state = "off" if count <= 0 else "ready"
+		var due: bool = state == "ready" and ((use == "eat" and String(needs.get("hunger", {}).get("state", "fed")) != "fed") or (use == "drink" and String(needs.get("thirst", {}).get("state", "fed")) != "fed"))
+		entries.append({"id": id, "count": count, "state": state, "name": String(d.get("name", "")), "use": use, "due": due})
+		sig += "|%s:%d:%s:%s" % [id, count, state, str(due)]
 	if sig == _sig:
 		return
 	_sig = sig
@@ -195,9 +195,11 @@ func quick_tip(i: int) -> String:
 			return "Quick slot %d: empty\nDrag a bandage, a meal or a drink from the pack onto it.\n%s" % [i + 1, key]
 		"off":
 			return "Quick slot %d: %s\nNone in the pack.\nRight-click: clear the slot. %s" % [i + 1, e.name, key]
-		"soon":
-			return "Quick slot %d: %s x %d\nNeeds: coming soon. Hunger and thirst come with the next step.\nRight-click: clear the slot." % [i + 1, e.name, int(e.count)]
-	return "Quick slot %d: %s x %d\nClick, or press %d, to use one.\nRight-click: clear the slot." % [i + 1, e.name, int(e.count), i + 1]
+	var verb: String = {"eat": "eat", "drink": "drink"}.get(String(e.use), "use")
+	var note := ""
+	if String(e.use) == "eat" or String(e.use) == "drink":
+		note = ("\nYou need it now." if bool(e.due) else "\nNot needed yet: it is kept until you are %s." % ("hungry" if String(e.use) == "eat" else "thirsty"))
+	return "Quick slot %d: %s x %d\nClick, or press %d, to %s one.%s\nRight-click: clear the slot." % [i + 1, e.name, int(e.count), i + 1, verb, note]
 
 
 # ------------------------------------------------------------------------------------ drawing --
@@ -273,9 +275,9 @@ func _draw_quick(i: int, font: Font) -> void:
 	var r := slot_rect(i)
 	var e: Dictionary = quick[i]
 	var state := String(e.state)
-	InvIcons.draw_region(self, {"empty": "slot", "ready": "slot_on", "off": "slot_off", "soon": "slot_off"}[state], r)
+	InvIcons.draw_region(self, {"empty": "slot", "ready": "slot_on", "off": "slot_off"}[state], r)
 	if state != "empty":
-		var dim := state == "off" or state == "soon"
+		var dim := state == "off"
 		InvIcons.draw_fit(self, InvIcons.picture_of(String(e.id), int(e.count)), r.grow(-4.0), Color(0.62, 0.64, 0.62, 0.6) if dim else Color.WHITE)
 		if dim and Access.markers():
 			draw_line(r.position + Vector2(5.0, 5.0), r.end - Vector2(5.0, 5.0), Color(INK3, 0.9), 1.5)    # (a grey is not told by its grey alone)
@@ -290,5 +292,9 @@ func _draw_quick(i: int, font: Font) -> void:
 		var at := r.end - Vector2(cw + 2.5, 3.0)
 		draw_string_outline(font, at, cs, HORIZONTAL_ALIGNMENT_LEFT, -1, cfs, 4, Color(0, 0, 0, 0.9))
 		draw_string(font, at, cs, HORIZONTAL_ALIGNMENT_LEFT, -1, cfs, INK)
+	if bool(e.due):
+		# (she needs it now: an amber rim and a triangle, so that the mark is a shape as well as a colour)
+		draw_rect(r, Color(WARN, 0.95), false, 1.5)
+		CbShapes.mark(self, "triangle", r.position + Vector2(r.size.x - 6.5, 6.5), 4.0, WARN)
 	if hover == "q%d" % i:
 		draw_rect(r, Color(ACCENT, 0.95), false, 1.5)

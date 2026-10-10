@@ -773,17 +773,17 @@ func quick_move_index(g, index: int) -> void:
 			say("No room in the container", "warn")
 	elif stash_win.visible:
 		deposit_index(index)
-	elif String(d.use) == "bandage":
-		use_index(index)
+	elif String(d.use) != "none":
+		use_index(index)    # (a bandage, a meal or a drink: a double click in the pack uses it, the rules say when it is not the time)
 	_after_change()
 
 
-## Uses the stack (a bandage) through the rules; they say why when they cannot.
+## Uses the stack (a bandage, a meal, a drink) through the rules; they say why when they cannot (she is not hungry yet, not bleeding).
 func use_index(index: int) -> bool:
 	var r := InvApi.use_item(sim, index)
 	var ok := bool(r.get("ok", false))
 	if ok:
-		say("Bandaging", "info")
+		say(String(r.get("line", "")) if String(r.get("line", "")) != "" else "Done", "info")
 	else:
 		say(String(r.get("why", "")) if String(r.get("why", "")) != "" else "Nothing to do with it now", "warn")
 	_after_change()
@@ -793,7 +793,7 @@ func use_index(index: int) -> bool:
 # ---------------------------------------------------------------------------- the quick slots --
 
 ## A key 1 to 4, or a click on a quick slot: uses one of what the slot names, through the rules' own `use_item` on the first stack of it in the pack. The slot says why when it cannot: it is
-## empty, the pack has none of it, it is food or drink (the needs come with the next step), or the rules refuse (she is not bleeding). True when the item was used.
+## empty, the pack has none of it, or the rules refuse (she is not bleeding, not hungry yet). True when the item was used.
 func use_quick(slot: int) -> bool:
 	if sim == null or slot < 0 or slot >= InvApi.QUICK_SLOTS:
 		return false
@@ -805,9 +805,6 @@ func use_quick(slot: int) -> bool:
 	var idx := InvApi.first_stack(InvApi.pack(sim), id)
 	if idx < 0:
 		say("No %s in the pack" % String(d.name).to_lower(), "warn")
-		return false
-	if String(d.use) == "eat" or String(d.use) == "drink":
-		say("%s: needs are coming soon (hunger and thirst come with the next step)" % d.name, "warn")
 		return false
 	return use_index(idx)
 
@@ -848,8 +845,9 @@ func quick_menu(slot: int, at: Vector2) -> void:
 	var list: Array = []
 	if id != "":
 		var d: Dictionary = InvApi.item(id)
-		var can: bool = String(d.use) == "bandage" and InvApi.first_stack(InvApi.pack(sim), id) >= 0
-		list.append(["Use", "q_use", can, "None in the pack" if String(d.use) == "bandage" else "needs: coming soon"])
+		var can: bool = InvApi.first_stack(InvApi.pack(sim), id) >= 0
+		var qverb: String = {"eat": "Eat", "drink": "Drink"}.get(String(d.use), "Use")
+		list.append([qverb, "q_use", can, "None in the pack"])
 		list.append(["Clear the slot", "q_clear", true, ""])
 	else:
 		list.append(["Empty: drag an item here", "q_none", false, "Drag a bandage, a meal or a drink from the pack onto this slot"])
@@ -964,8 +962,7 @@ func _open_menu(g, index: int, at: Vector2) -> void:
 		var use := String(d.use)
 		if use != "none":
 			var verb: String = {"eat": "Eat", "drink": "Drink", "bandage": "Bandage a wound"}.get(use, "Use")
-			var can: bool = use == "bandage"
-			list.append([verb, "use", can, "Hunger and thirst come with the next step" if not can else ""])
+			list.append([verb, "use", true, ""])
 			list.append(["Put on a quick slot", "quick", true, ""])
 		if loot_win.visible and not lo.is_empty() and int(lo.revealed) >= lo.grid.cells.size():
 			list.append(["Put in the container", "put", true, ""])
@@ -1086,10 +1083,14 @@ func item_tip(c: Dictionary, kind: String = "pack") -> String:
 		lines.append("Worth %d %s at the stores" % [total, store])
 	if String(d.desc) != "":
 		lines.append(hud._wrap(String(d.desc), 40))
-	if String(d.use) == "bandage":
+	if kind == "pack" and String(d.use) == "bandage":
 		lines.append("Right-click: bandage a wound")
+	elif kind == "pack" and String(d.use) == "eat":
+		lines.append("Right-click: eat one. You are fed again for most of a day")
+	elif kind == "pack" and String(d.use) == "drink":
+		lines.append("Right-click: drink one. You are not thirsty again for half a day")
 	if kind == "pack" and InvApi.quick_ok(String(c.item)):
-		lines.append("Drag it onto a quick slot, then press its number" + (" (needs: coming soon)" if String(d.use) != "bandage" else ""))
+		lines.append("Drag it onto a quick slot, then press its number")
 	lines.append("Drag it, or double-click it, to %s. Right-click: menu" % ("take it" if kind == "loot" else "move it"))
 	return "\n".join(lines)
 

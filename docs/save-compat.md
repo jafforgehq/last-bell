@@ -43,6 +43,8 @@ that exist). But when in doubt, bump: a refused save costs a player a game, a wr
 
 Not a bump (INV2, 2026-10-10): the quick slots on Ruth's belt are saved as `modules.inv.quick` (four item ids). It is an optional key with a safe default: a save made before it loads with an empty belt, a bad entry is dropped, and nothing that an existing saved value means changed, so version 3 stays the version.
 
+Not a bump (PH10, 2026-10-10): Ruth's needs add the optional `modules.inv.needs` ({owed, told, went}); a save made before loads with nothing owed and nothing told (so the one toast of the first hunger may come once more), a bad entry is dropped, and her hunger and thirst clocks were always saved with the person. The stores serving her only at the base is a rule, not a saved meaning. The water bottle became one cell: a saved pack with bottles loads (a placement is x, y, rot, count, and the grid is read again by the data's sizes: `Inventory.from_dict` cleans what no longer fits), so version 3 stays the version.
+
 History: 1 = up to main 236bb1e (no number written). 2 = SAVE4 (the town of CLEAR3's clear ground and a town for every seed, WORLD3's 164 building plans). 3 = INV-CORE (2026-10-09, the
 backpack): the generated towns are the same, but the *meaning* of the saved state changed, which is what a bump is for. A One House save now carries an `inv` module (the backpack grid, the
 grids of the containers she opened with the items left in them, the piles on the ground, the credit of the fractions paid ahead); the avatar's reserve ammo, her bandages and her meals come from

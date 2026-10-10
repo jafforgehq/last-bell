@@ -328,6 +328,15 @@ static func take_all(from_grid: Dictionary, to_grid: Dictionary) -> int:
 
 # ------------------------------------------------------------------------------ stores --
 
+## How many of an item (not units: a jug is one) a grid holds, the sum of its placements.
+static func count_of(grid: Dictionary, item_id: String) -> int:
+	var n := 0
+	for p in grid.cells:
+		if String(p.item) == item_id:
+			n += int(p.count)
+	return n
+
+
 ## The store units of a resource that a grid holds.
 static func units(grid: Dictionary, res: String) -> int:
 	var n := 0

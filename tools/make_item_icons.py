@@ -8,7 +8,7 @@ then import them once: Godot --headless --path . --import
 
 THE STYLE (the game's own: flat, outlined, desaturated): a dark outline, one flat colour for each part with a little worn texture in it, a pale edge along the top of every part and a darker one
 along its foot, and a soft shadow under the whole picture. Every picture is drawn at four times its size and averaged down (clean edges), at 128 px for each cell of the item's footprint
-(a bottle is 128 x 256, a jug 256 x 256, a medkit 256 x 128): the game shows a cell at 32 to 36 points, 72 at most, so each is readable at 32 and told from the others by SHAPE as well as colour
+(a bottle is 128 x 128, a ration pack 128 x 256, a jug 256 x 256, a medkit 256 x 128): the game shows a cell at 32 to 36 points, 72 at most, so each is readable at 32 and told from the others by SHAPE as well as colour
 (a red tube on a brass base, a tin with a label, a green wrapped pack, a bottle with a cap, a round roll, a white case with a cross, a box). The windows draw them with mipmaps.
 """
 import argparse
@@ -351,19 +351,17 @@ def icon_ration_pack():
 
 
 def icon_water_bottle():
-    cv = Cv(U, 2 * U, 16)
-    cv.rrect(36, 50, 92, 238, (20, 20, 12, 12), BLUE)
-    cv.poly([(50, 36), (78, 36), (86, 58), (42, 58)], BLUE_PALE, ow=3.5)
-    cv.rrect(48, 12, 80, 40, 3, WHITE, ow=4.0)
-    for x in (54, 60, 66, 72):
-        cv.detail([(x, 18), (x, 34)], 2.4, (110, 120, 126), 0.55)
-    cv.rrect(36, 112, 92, 178, 0, WHITE, ow=3.5)
-    cv.poly([(64, 124), (76, 146), (64, 162), (52, 146)], BLUE, ow=3.0)
-    cv.detail([(40, 188), (88, 188)], 3.0, (30, 70, 100), 0.5)
-    cv.detail([(40, 200), (88, 200)], 3.0, (30, 70, 100), 0.5)
-    cv.detail([(40, 212), (88, 212)], 3.0, (30, 70, 100), 0.5)
-    cv.detail([(46, 66), (46, 106)], 6.0, (255, 255, 255), 0.35)
-    cv.detail([(46, 186), (46, 226)], 5.0, (255, 255, 255), 0.22)
+    # PH10: ONE cell (it was two): a squat bottle with a cap, a shoulder, a label with a drop on it and the same flat look
+    cv = Cv(U, U, 16)
+    cv.rrect(36, 42, 92, 120, (16, 16, 11, 11), BLUE)
+    cv.poly([(50, 28), (78, 28), (88, 48), (40, 48)], BLUE_PALE, ow=3.5)
+    cv.rrect(49, 7, 79, 33, 3, WHITE, ow=4.0)
+    for x in (55, 61, 67, 73):
+        cv.detail([(x, 12), (x, 28)], 2.4, (110, 120, 126), 0.55)
+    cv.rrect(36, 66, 92, 104, 0, WHITE, ow=3.5)
+    cv.poly([(64, 71), (74, 85), (64, 98), (54, 85)], BLUE, ow=3.0)
+    cv.detail([(43, 56), (43, 76)], 5.0, (255, 255, 255), 0.35)
+    cv.detail([(43, 108), (43, 116)], 4.0, (255, 255, 255), 0.22)
     return cv.finish()
 
 

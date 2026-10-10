@@ -208,6 +208,13 @@ static func bar_totals(sim) -> Dictionary:
 	return r if r is Dictionary else {}
 
 
+## Her hunger and thirst (PH10): {"hunger": {h, state: fed | hungry | starving, level}, "thirst": {h, state: fed | thirsty | parched, level}, "any"}; {} for a run with no pack.
+static func needs(sim) -> Dictionary:
+	var i = inv(sim)
+	var r = i.needs() if i != null and i.has_method("needs") else {}
+	return r if r is Dictionary else {}
+
+
 ## The gun and the swing: {"weapon": {id, name, mag, cap, reserve, reloading}, "melee": {name}}.
 static func equipment(sim) -> Dictionary:
 	var i = inv(sim)

@@ -13,10 +13,19 @@
 ##   grid_of(id), revealed(id), items_left(id), open_container(id), close_container(), take_item(id, index), take_all_open(), move_item(id, index, x, y, rot), put_back(id, index, x, y, rot) ,
 ##   drop(index, count), pick_up(pile), use_item(index), deposit_all(), withdraw(res, n), carried_totals(), store_totals(), bar_totals(), equipment(), changed().
 ## Events told: loot_open {container}, loot_close {container}, picked {item, count, res, units, from}, pack_full {item, count, at}, dropped {item, count, at}, stash_open, deposit {units},
-## withdraw {res, units}, and the search's own `searched` (scripts/town/search.gd).
+## withdraw {res, units}, ate {item, res, kind} (food or drink used from the pack), inv_toast {text, level} (the first hungry or thirsty), and the search's own `searched` (scripts/town/search.gd).
+##
+## HER NEEDS (PH10, the owner's step 2 after the pack: food and water). Ruth is a person of the colony and has her own hunger and thirst clocks (`p.hunger_h`, `p.thirst_h`: scripts/sim/supplies.gd has the
+## constants and what the clocks cost: weaker from 18 and 14 hours without a meal or a drink, health lost from 36 and 24). What this part adds, in the One House with a pack only:
+##   - the stores do not follow her out of the base: at the day's three meals (07:00, 13:00, 19:00) the table is served only to the people at the base (the crew: as always) and Ruth, when she is at the
+##     base, takes her share from the stores like them (a meal that comes up while she is out is OWED: `owed_meal`, and the base serves it the moment she walks back in);
+##   - out in the town she eats and drinks from her pack: `use_item` on an item whose use is eat or drink (the belt's keys 1 to 4, right-click Use, a double click) takes ONE store unit of it (a ration pack
+##     or a jug is broken: the rest goes back as tins and bottles) and starts the clock again, as a served meal does; not before she is hungry or thirsty enough (items.json `needs`);
+##   - the first time she is hungry and the first time she is thirsty a toast says which key (`told`), and what she went without since the last morning card is kept for it (`went`, `take_went`).
 extends RefCounted
 
 const Inventory := preload("res://scripts/sim/inventory.gd")
+const Supplies := preload("res://scripts/sim/supplies.gd")
 
 const PILE_REACH := 1.3
 const STASH_CLOSE := 3.0
@@ -41,6 +50,11 @@ var stash_open := false
 ## (`use_item`), the stack may move, split or merge, and the slot follows. Saved with the run; nothing in the rules reads it.
 var quick: Array = ["", "", "", ""]
 var auto_take := false
+## NEEDS: a meal hour came up while she was out of the base (the base serves it the moment she is home), the first hungry and thirsty toasts already told, and what she went without since the last
+## morning card (`take_went`).
+var owed_meal := false
+var told := {"hungry": false, "thirsty": false}
+var went := {"hungry": false, "thirsty": false, "starving": false, "parched": false}
 ## What the last automatic take of each container moved: id -> {res: units} (scrap too): the room search's chip reads it.
 var last_taken := {}
 var credit := {}
@@ -68,7 +82,10 @@ func start() -> void:
 	quick = ["", "", "", ""]
 	last_taken = {}
 	credit = {"ammo": 0.0, "food": 0.0, "water": 0.0, "meds": 0.0}
-	stats = {"deposits": 0, "deposited": {}, "full": 0, "dropped": 0, "picked": {}, "peak_cells": 0}
+	stats = {"deposits": 0, "deposited": {}, "full": 0, "dropped": 0, "picked": {}, "peak_cells": 0, "ate": 0, "drank": 0}
+	owed_meal = false
+	told = {"hungry": false, "thirsty": false}
+	went = {"hungry": false, "thirsty": false, "starving": false, "parched": false}
 	_full = false
 	_was_home = false
 
@@ -94,6 +111,11 @@ func _lead():
 	if sim == null or String(sim.player_id) == "":
 		return null
 	return sim.avatar.player()
+
+
+## The person who carries the pack (Ruth), or null.
+func lead():
+	return _lead()
 
 
 func _cfg(key: String, fallback):
@@ -570,20 +592,168 @@ func pick_up(pile_index: int) -> bool:
 	return left < before
 
 
-## Using an item: a bandage bandages the wound if it bleeds (the E at the wound's session); food and drink are not used yet (the needs come with the next step). {"ok", "why"}.
+## Using an item: a bandage bandages the wound if it bleeds (the E at the wound's session); food and drink are eaten and drunk (`_use_ration`). {"ok", "why", "line"}: `line` is what to say when it worked.
 func use_item(index: int) -> Dictionary:
 	if index < 0 or index >= (pack.cells as Array).size():
 		return {"ok": false, "why": "Nothing there"}
 	var kind := String(Inventory.item(String(pack.cells[index].item)).get("use", "none"))
 	var p = _lead()
+	if (kind == "eat" or kind == "drink") and p != null:
+		return _use_ration(index, kind)
 	if kind == "bandage" and p != null:
 		var u = sim.get("uses")
 		if float(p.bleeding) <= 0.0:
 			return {"ok": false, "why": "You are not bleeding"}
 		if u != null:
 			var r: Dictionary = u.use({"kind": "selfcare", "id": "bandage"})
-			return {"ok": bool(r.get("ok", false)), "why": String(r.get("why", ""))}
-	return {"ok": false, "why": "Not something to use yet"}
+			return {"ok": bool(r.get("ok", false)), "why": String(r.get("why", "")), "line": "Bandaging"}
+	return {"ok": false, "why": "Nothing to do with it"}
+
+
+# ----------------------------------------------------------------------------------- her needs --
+
+func _needs_cfg() -> Dictionary:
+	var n = _cfg("needs", {})
+	return n if typeof(n) == TYPE_DICTIONARY else {}
+
+
+## Whether she is at the base (the claimed house's compound): where the stores serve her.
+func at_home(p) -> bool:
+	var base = sim.get("base")
+	return base != null and bool(base.claimed) and p != null and base.at_base(p)
+
+
+## A meal hour came up and she was not at the base (supplies.gd calls it): the base serves it when she is home again.
+func on_meal_missed() -> void:
+	owed_meal = true
+
+
+## Her hunger and thirst, for the HUD and the tests: {"hunger": {"h": game hours, "state": "fed" | "hungry" | "starving", "level": 0 to 1}, "thirst": {"h", "state": "fed" | "thirsty" | "parched",
+## "level"}, "any": hungry or thirsty}. `level` is how far the clock is to where it costs health (1 from there on). All fed for a run with no pack.
+func needs() -> Dictionary:
+	var out := {"hunger": {"h": 0.0, "state": "fed", "level": 0.0}, "thirst": {"h": 0.0, "state": "fed", "level": 0.0}, "any": false}
+	var p = _lead()
+	if p == null or not active():
+		return out
+	var hh := float(p.hunger_h)
+	var th := float(p.thirst_h)
+	out.hunger = {"h": hh, "state": "starving" if hh >= Supplies.STARVING_H else ("hungry" if hh >= Supplies.HUNGRY_H else "fed"), "level": clampf(hh / Supplies.STARVING_H, 0.0, 1.0)}
+	out.thirst = {"h": th, "state": "parched" if th >= Supplies.PARCHED_H else ("thirsty" if th >= Supplies.THIRSTY_H else "fed"), "level": clampf(th / Supplies.PARCHED_H, 0.0, 1.0)}
+	out.any = out.hunger.state != "fed" or out.thirst.state != "fed"
+	return out
+
+
+## The belt slot (0 to 3) that uses food (`kind` "eat") or drink ("drink") she has in the pack, -1 for none.
+func slot_for(kind: String) -> int:
+	for i in quick.size():
+		var id := String(quick[i])
+		if id != "" and String(Inventory.item(id).get("use", "none")) == kind and Inventory.count_of(pack, id) > 0:
+			return i
+	return -1
+
+
+## Whether the pack holds anything of this use at all.
+func has_use(kind: String) -> bool:
+	for c in pack.cells:
+		if String(Inventory.item(String(c.item)).get("use", "none")) == kind:
+			return true
+	return false
+
+
+## The index of the first stack of the pack with this use (the smallest item first, so a tin goes before a ration pack and a bottle before a jug), -1 for none.
+func first_use(kind: String) -> int:
+	var best := -1
+	var best_units := 1 << 30
+	for i in (pack.cells as Array).size():
+		var id := String(pack.cells[i].item)
+		if String(Inventory.item(id).get("use", "none")) == kind and Inventory.units_of(id) < best_units:
+			best = i
+			best_units = Inventory.units_of(id)
+	return best
+
+
+## Food or drink out of the pack: ONE unit, the clock begun again. Not before she is hungry or thirsty enough (the item stays). {"ok", "why", "line"}.
+func _use_ration(index: int, kind: String) -> Dictionary:
+	var p = _lead()
+	var food := kind == "eat"
+	if p == null or p.dead or p.downed:
+		return {"ok": false, "why": "Not now"}
+	var cfg := _needs_cfg()
+	var hours := float(p.hunger_h if food else p.thirst_h)
+	var least := float(cfg.get("eat_min_h", 6.0) if food else cfg.get("drink_min_h", 5.0))
+	if hours < least:
+		return {"ok": false, "why": "You are not hungry yet" if food else "You are not thirsty yet"}
+	var cell: Dictionary = pack.cells[index]
+	var id := String(cell.item)
+	var res := Inventory.res_of(id)
+	var units := Inventory.units_of(id)
+	var broken := units > 1
+	cell.count = int(cell.count) - 1
+	if int(cell.count) <= 0:
+		(pack.cells as Array).remove_at(index)
+	if broken:
+		# (a ration pack is three tins and a jug four bottles: one is used and the rest goes back as the smaller items; the room it left is the room they need)
+		var rest := units - 1
+		var put := Inventory.add_units(pack, res, rest)
+		if put < rest:
+			var plain := String(_cfg("unit_items", {}).get(res, ""))
+			if plain != "":
+				_overflow(plain, rest - put)
+	if food:
+		p.hunger_h = 0.0
+		stats["ate"] = int(stats.get("ate", 0)) + 1
+	else:
+		p.thirst_h = 0.0
+		stats["drank"] = int(stats.get("drank", 0)) + 1
+	sim.events.append({"type": "ate", "item": id, "res": res, "kind": kind})
+	version += 1
+	var nm := Inventory.name_of(id).to_lower()
+	var line := ("Ate from the %s" % nm if broken else "Ate %s" % nm) if food else ("Drank from the %s" % nm if broken else "Drank %s" % nm)
+	return {"ok": true, "why": "", "line": line}
+
+
+## What she went without since the last time this was asked (the morning card asks): {"hungry", "thirsty", "starving", "parched"} as booleans, then forgotten.
+func take_went() -> Dictionary:
+	var out := went.duplicate()
+	went = {"hungry": false, "thirsty": false, "starving": false, "parched": false}
+	return out
+
+
+## Every step: her clocks against the lines, for the toasts and the morning card's record.
+func _needs_step(p) -> void:
+	if p.dead:
+		return
+	var hungry: bool = float(p.hunger_h) >= Supplies.HUNGRY_H
+	var thirsty: bool = float(p.thirst_h) >= Supplies.THIRSTY_H
+	if hungry:
+		went["hungry"] = true
+		if float(p.hunger_h) >= Supplies.STARVING_H:
+			went["starving"] = true
+	if thirsty:
+		went["thirsty"] = true
+		if float(p.thirst_h) >= Supplies.PARCHED_H:
+			went["parched"] = true
+	if hungry and not bool(told.get("hungry", false)):
+		told["hungry"] = true
+		_toast_need("eat")
+	if thirsty and not bool(told.get("thirsty", false)):
+		told["thirsty"] = true
+		_toast_need("drink")
+
+
+## The one toast of the first hunger or thirst: which key, or why there is nothing to use.
+func _toast_need(kind: String) -> void:
+	var food := kind == "eat"
+	var word := "Hungry" if food else "Thirsty"
+	var slot := slot_for(kind)
+	var text := ""
+	if slot >= 0:
+		text = "%s: press %d to %s (%s)" % [word, slot + 1, kind, Inventory.name_of(String(quick[slot])).to_lower()]
+	elif has_use(kind):
+		text = "%s: open the pack (Tab) and right-click %s" % [word, "food" if food else "a drink"]
+	else:
+		text = "%s, and nothing to %s in the pack: search the kitchens, or go home to the stores" % [word, kind]
+	sim.events.append({"type": "inv_toast", "text": text, "level": "warn"})
 
 
 # ----------------------------------------------------------------------------- the stash --
@@ -677,6 +847,7 @@ func update(_dt: float) -> void:
 	if p == null:
 		return
 	var here := Vector2(p.x, p.y)
+	_needs_step(p)
 	if open_id != "":
 		var hs = sim.get("houses")
 		var cont: Dictionary = hs.container(open_id) if hs != null else {}
@@ -751,7 +922,8 @@ func save() -> Dictionary:
 		piles.append({"item": String(pile.item), "count": int(pile.count), "x": float(pile.x), "y": float(pile.y)})
 	var ids: Array = searched.keys()
 	ids.sort()
-	return {"on": true, "pack": Inventory.to_dict(pack), "ground": piles, "containers": conts, "searched": ids, "credit": credit.duplicate(), "stats": stats.duplicate(true), "full": _full, "quick": quick.duplicate()}
+	return {"on": true, "pack": Inventory.to_dict(pack), "ground": piles, "containers": conts, "searched": ids, "credit": credit.duplicate(), "stats": stats.duplicate(true), "full": _full, "quick": quick.duplicate(),
+		"needs": {"owed": owed_meal, "told": told.duplicate(), "went": went.duplicate()}}
 
 
 ## The spec's names for the same two (`save` and `load_state` are the ones SaveGame calls).
@@ -794,6 +966,13 @@ func load_state(d: Dictionary) -> void:
 		for k in st:
 			stats[String(k)] = st[k]
 	_full = bool(d.get("full", false))
+	var nd = d.get("needs", {})    # (a save from before the needs has none: nothing owed, nothing told yet; the toasts then come once if she is already hungry)
+	if typeof(nd) == TYPE_DICTIONARY:
+		owed_meal = bool(nd.get("owed", false))
+		for k in ["hungry", "thirsty"]:
+			told[k] = bool(nd.get("told", {}).get(k, false)) if typeof(nd.get("told", {})) == TYPE_DICTIONARY else false
+		for k in went:
+			went[k] = bool(nd.get("went", {}).get(k, false)) if typeof(nd.get("went", {})) == TYPE_DICTIONARY else false
 	var q = d.get("quick", [])    # (a save from before the quick slots has none: the belt is empty)
 	if typeof(q) == TYPE_ARRAY:
 		for i in mini((q as Array).size(), quick.size()):

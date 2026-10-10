@@ -40,7 +40,7 @@ const GROUPS := [
 		"title": "The backpack",
 		"rows": [
 			{"id": "inv_drag", "keys": "Drag", "what": "Move an item: to another place, into the pack, onto a quick slot of her belt, or onto the stores", "hud": ["Drag", "Move an item"]},
-			{"id": "inv_slot", "keys": "1 2 3 4", "what": "Use what is on that quick slot of her belt: a bandage, and later a meal or a drink", "hud": ["1 2 3 4", "Quick slot"]},
+			{"id": "inv_slot", "keys": "1 2 3 4", "what": "Use what is on that quick slot of her belt: a bandage, a meal (eat) or a drink, when she is hungry or thirsty enough", "hud": ["1 2 3 4", "Quick slot"]},
 			{"id": "inv_rot", "keys": "R", "what": "While you drag an item: turn it. (Otherwise R reloads)", "hud": ["R", "Turn a dragged item"]},
 			{"id": "inv_quick", "keys": "Double-click", "what": "Move an item at once. A right-click: use, split, drop"},
 			{"id": "inv_take", "keys": "Space | Enter", "what": "Take all from the container that is open", "hud": ["Space", "Take all (loot)"]},

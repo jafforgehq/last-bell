@@ -5,6 +5,9 @@
 ## turns over at 06:30, so a "day" here runs from 06:30 to 06:30 and holds the
 ## day's three meals (07:00, 13:00, 19:00).
 ##
+## NEEDS (One House with a pack, PH10): the person who carries the pack is the one exception to "everyone on the map is served": the stores serve her only at the base (`_out_of_the_base`), a meal that comes
+## up while she is out is served the moment she is back (`_serve_owed`), and out in the town she eats and drinks from her pack (scripts/town/inv.gd `use_item`). The crew and every other game are served as ever.
+##
 ## Alerts raised: `low-food`, `low-water`, `low-ammo`, `no-scrap`, `rain`. The only event
 ## added is the ordinary {"type": "banner", "text", "sub"}, "Short rations".
 ##
@@ -113,6 +116,7 @@ func update(dt: float) -> void:
 		roll_dawn()
 	_garden(sim.game_hours(dt))
 	_serve_meals(dt)
+	_serve_owed()
 	_needs(sim.game_hours(dt))
 	_low_stock_alerts()
 	_ruin(dt)
@@ -294,22 +298,10 @@ func _serve_meal() -> void:
 	for p in sim.people:
 		if p.dead or p.away != null:
 			continue
-		var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food") * sim.policies.ration_mult("food")
-		var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water") * sim.policies.ration_mult("water")
-		var food := _take("food", food_share)
-		if food < food_share - EPS and _eats_from_pack(p):
-			food += float(sim.inv.eat("food", food_share - food))    # (INV-CORE: the stores are short and she has food in her pack)
-		if food >= food_share * FED_PART:
-			p.hunger_h = 0.0
-		if food < food_share - EPS:
-			without.food += 1
-		var water := _take("water", water_share)
-		if water < water_share - EPS and _eats_from_pack(p):
-			water += float(sim.inv.eat("water", water_share - water))
-		if water >= water_share * FED_PART:
-			p.thirst_h = 0.0
-		if water < water_share - EPS:
-			without.water += 1
+		if _out_of_the_base(p):
+			sim.inv.on_meal_missed()    # (NEEDS: the table is at the base: out in the town she eats from her pack, and the base serves what she missed when she is home)
+			continue
+		_feed(p, without)
 	var newly: Array = []
 	for kind in ["food", "water"]:
 		var now: bool = without[kind] > 0
@@ -318,6 +310,44 @@ func _serve_meal() -> void:
 		short_of[kind] = now
 	if not newly.is_empty():
 		sim.events.append({"type": "banner", "text": "Short rations", "sub": "Not enough %s for everyone" % " or ".join(newly)})
+
+
+## One person's share of a meal: from the stores, and for the one who carries a pack, from the pack when the stores are short. `without` counts the shares that could not be given.
+func _feed(p, without: Dictionary) -> void:
+	var food_share: float = FOOD_PER_MEAL * sim.seasons.mult("food") * sim.policies.ration_mult("food")
+	var water_share: float = WATER_PER_MEAL * sim.seasons.mult("water") * sim.policies.ration_mult("water")
+	var food := _take("food", food_share)
+	if food < food_share - EPS and _eats_from_pack(p):
+		food += float(sim.inv.eat("food", food_share - food))    # (INV-CORE: the stores are short and she has food in her pack)
+	if food >= food_share * FED_PART:
+		p.hunger_h = 0.0
+	if food < food_share - EPS:
+		without.food += 1
+	var water := _take("water", water_share)
+	if water < water_share - EPS and _eats_from_pack(p):
+		water += float(sim.inv.eat("water", water_share - water))
+	if water >= water_share * FED_PART:
+		p.thirst_h = 0.0
+	if water < water_share - EPS:
+		without.water += 1
+
+
+## NEEDS (One House with a pack): the one who carries it is fed by the stores only at the base. True for her when she is anywhere else.
+func _out_of_the_base(p) -> bool:
+	var inv = sim.get("inv")
+	return inv != null and inv.active() and bool(p.player) and not inv.at_home(p)
+
+
+## NEEDS: the meal that came up while she was out is served the moment she is at the base again (once: the meals she missed before it are not owed on top).
+func _serve_owed() -> void:
+	var inv = sim.get("inv")
+	if inv == null or not inv.owed_meal or not inv.active():
+		return
+	var p = inv.lead()
+	if p == null or p.dead or p.away != null or not inv.at_home(p):
+		return
+	inv.owed_meal = false
+	_feed(p, {"food": 0, "water": 0})
 
 
 ## INV-CORE: whether this person is the one who carries a pack (the town's player), who eats and drinks from it when the stores cannot give a share.
