@@ -1,6 +1,6 @@
 # Five nights: the arc (for the owner to approve)
 
-Written 2026-10-10 (step 2 of `docs/plan-7-day-demo.md`). A proposal: nothing is built and `end.nights_to_hold` stays 1 until you approve. It assumes the two running builders (Ruth's food and water, more dead) have landed; every number must be measured again after they do. "Measured" means the lab or a read-only probe of today's game (section 5). The rest is a candidate nobody has played.
+Written 2026-10-10 (step 2 of `docs/plan-7-day-demo.md`). **APPROVED by the owner on 2026-10-10 with all five defaults (section 4): a survivor a day from day 2, the finale at 110 points, an unheld night 5 goes on at +15 percent a night, the wall rules, no new content.** Building started the same day; `end.nights_to_hold` stays 1 until item 11 of the build list (the last step). It assumes the two running builders (Ruth's food and water, more dead) have landed; every number must be measured again after they do. "Measured" means the lab or a read-only probe of today's game (section 5). The rest is a candidate nobody has played.
 
 In short: a tide that grows from about 20 dead to about 75, a new voice on the radio each morning until the house is full, scrap as the one currency (it mends the wall and, at the bench, becomes shells), and a storm night to end on.
 
