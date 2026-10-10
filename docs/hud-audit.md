@@ -625,3 +625,19 @@ Every line is inside 45 x 55 percent, and the pack alone is inside 17 percent ev
 
 The pictures: one atlas of 1024 x 1024 (`assets/ui/inv/inv_icons.png`, 316 KB, 358 KB imported with mipmaps; `tools/make_item_icons.py`) replaces the code-drawn art; the web build grows by that and a 1 KB table. The threat rule is unchanged (the windows are on demand and keep off the avatar and the dead).
 
+
+## 14. After: her needs on the screen (PH10, 2026-10-10)
+
+Ruth now gets hungry and thirsty (docs/superpowers/specs/2026-10-09-inventory-design.md, "Her needs"). The Minimal HUD had to stay clear, so the indicator is a board that is **there only while a need has begun** and costs nothing while she is fed (which is nearly all of the first twenty minutes: the clocks reach their lines at 21:00 on day 1 for thirst and 01:00 on day 2 for hunger at the earliest, and the base serves her at its table).
+
+**The stage table's new row** (`hud_stage.gd`, `TABLE["needs"]`, in the order road, house, claimed, rescue, dusk, night, morning): `when, when, when, when, when, when, when`. "when" is a form of its own: the part is on only while `NeedsBoard.active` (a need has begun), so the row is the same in every phase and the board does not care about the stage (the road in, before the stores board exists, is where the first thirst lands); the Full HUD's form is `full` (both meters, always, fed or not); the threat rule's form is `off` (the fight keeps the gun, the objective and the crew; the board is back in the order of the return, after the toolbar, `RETURN.needs` 1.0 s); H puts it away with the rest. The board is in the right column under the gun's readout (`hud.needs_panel`, `scripts/ui/needs_board.gd`): a fork and knife or a glass, the word (Hungry, Starving, Thirsty, Parched), a short bar that is longer the worse it is, and the key to press ("2: eat", "Tab: pack" when the item is in the pack and not on the belt, "none" when there is nothing).
+
+| Window | Board, one need | Board, two needs | Share of the screen |
+|---|---|---|---|
+| 1280 x 720 | 248 x 25 points | 248 x 46 | 0.7 percent, 1.2 percent |
+
+(Measured on the staged shots of PH10, `--needs=hungry` and `--needs=both`; the column is the clock's own 248 points wide.) In the HUD8 budget terms it is a persistent board only while she is weaker for it: it adds nothing to the first night's UI share, which the lab's fed bot never sees it in (the bot eats from its pack at 12 and 10 hours).
+
+**Colour is never alone.** The word says what it is (Hungry or Starving), the bar is longer when it is worse, the icon is a fork and knife or a glass; with Colour-blind markers a triangle marks hungry and thirsty and a diamond starving and parched (the crew cards' own shapes, `cb_shapes.gd`); the belt slot of the food she needs has an amber rim and a triangle in its corner always (a shape, not only a colour). **Reduce motion**: the board comes and goes by the stage part's fade, which Reduce motion makes instant, and the small pulse it makes when a need begins or worsens is not made at all (nor under Reduce flashes). The one toast of the first hunger and of the first thirst ("Hungry: press 2 to eat (canned food)") is the HUD's own toast, which Reduce motion leaves standing for its seconds. The morning card has one line, "You went hungry yesterday." (and thirsty; and ", and it cost you health").
+
+Stills: `--needs=hungry|thirsty|both|starving|parched|worst|fed` (README) with `--stage=claimed` or `--stage=arrive`, the settings file's `hud_mode="full"` and `colour_blind=true`, 1280 x 720: in the scratchpad of the PH10 report.

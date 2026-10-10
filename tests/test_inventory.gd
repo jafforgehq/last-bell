@@ -23,7 +23,8 @@ func test_the_items_in_the_data_are_whole() -> void:
 		check(["ammo", "food", "water", "meds"].has(String(d.res)), "%s stands for a store: %s" % [String(id), String(d.res)])
 		check(["eat", "drink", "bandage", "none"].has(String(d.use)), "%s has a use: %s" % [String(id), String(d.use)])
 	eq(Inventory.size_of("water_jug"), Vector2i(2, 2), "a jug is two by two")
-	eq(Inventory.size_of("water_bottle", true), Vector2i(2, 1), "a bottle turned lies two by one")
+	eq(Inventory.size_of("water_bottle"), Vector2i(1, 1), "a bottle is one cell (PH10: it was two)")
+	eq(Inventory.size_of("ration_pack", true), Vector2i(2, 1), "a ration pack turned lies two by one")
 	var pack := Inventory.make_pack()
 	eq([int(pack.w), int(pack.h)], [8, 4], "the pack is eight by four")
 	check(Inventory.item("nothing").is_empty() and not Inventory.can_place(pack, "nothing", 1, 0, 0), "an unknown item is never placed")
@@ -40,11 +41,11 @@ func test_placement_bounds_overlap_and_rotation() -> void:
 	check(Inventory.can_place(g, "canned_food", 1, 2, 1), "a free cell takes a can")
 	check(not Inventory.can_place(g, "canned_food", 5, 2, 0), "a can's stack is four: not five in one place")
 	check(not Inventory.can_place(g, "canned_food", 0, 2, 0), "nothing is not a placement")
-	# rotation: a bottle (1 by 2) in a grid one row high fits only lying down
+	# rotation: a ration pack (1 by 2) in a grid one row high fits only lying down
 	var flat := Inventory.make_grid(2, 1)
-	check(not Inventory.can_place(flat, "water_bottle", 1, 0, 0, false), "upright it does not fit")
-	check(Inventory.can_place(flat, "water_bottle", 1, 0, 0, true), "lying it does")
-	eq(Inventory.auto_add(flat, "water_bottle", 1), 0, "auto_add turns it when that is the only way")
+	check(not Inventory.can_place(flat, "ration_pack", 1, 0, 0, false), "upright it does not fit")
+	check(Inventory.can_place(flat, "ration_pack", 1, 0, 0, true), "lying it does")
+	eq(Inventory.auto_add(flat, "ration_pack", 1), 0, "auto_add turns it when that is the only way")
 	check(bool(flat.cells[0].rot), "and says it is turned")
 	eq(Inventory.placement_at(g, 1, 1), 0, "the jug covers (1, 1)")
 	eq(Inventory.placement_at(g, 2, 0), -1, "and not (2, 0)")
@@ -71,20 +72,20 @@ func test_move_merge_and_split() -> void:
 	var b := Inventory.make_grid(2, 2)
 	Inventory.place(a, "shells", 10, 0, 0)
 	Inventory.place(a, "shells", 20, 1, 0)
-	Inventory.place(a, "water_bottle", 1, 3, 0)
+	Inventory.place(a, "ration_pack", 1, 3, 0)
 	# inside one grid
 	check(Inventory.move(a, 0, a, 0, 1), "to a free cell of the same grid")
 	eq([int(a.cells[0].x), int(a.cells[0].y)], [0, 1], "it is there now")
-	check(not Inventory.move(a, 0, a, 3, 0), "not onto a bottle of another kind")
+	check(not Inventory.move(a, 0, a, 3, 0), "not onto a ration pack, an item of another kind")
 	# onto a stack of the same kind: merges what fits (24 - 20 = 4)
 	check(Inventory.move(a, 0, a, 1, 0), "onto a stack of the same item")
 	eq([int(a.cells[0].count), int(a.cells[1].count)], [6, 24], "4 moved, 6 stay")
 	check(Inventory.merge(a, 0, 1) == 0, "a full stack takes no more")
 	# to another grid
-	check(Inventory.move(a, 2, b, 1, 0, false), "the bottle goes to the other grid")
+	check(Inventory.move(a, 2, b, 1, 0, false), "the ration pack goes to the other grid")
 	eq(a.cells.size(), 2, "and is gone from the first")
-	eq(String(b.cells[0].item), "water_bottle", "it is in the second")
-	check(not Inventory.move(a, 0, b, 1, 1), "a bottle sits at (1, 0)-(1, 1): the cell under it is taken")
+	eq(String(b.cells[0].item), "ration_pack", "it is in the second")
+	check(not Inventory.move(a, 0, b, 1, 1), "a ration pack sits at (1, 0)-(1, 1): the cell under it is taken")
 	# split: 24 in two
 	var s := Inventory.split(a, 1, 10)
 	check(s >= 0, "split makes a place for the 10")
@@ -156,9 +157,14 @@ func test_deposit_and_withdraw_move_the_same_units() -> void:
 	near(float(stores.meds), 0.0, 0.001, "meds are all out")
 	# a pack with no room moves nothing and the stores keep it
 	var tiny := Inventory.make_grid(1, 1)
-	eq(Inventory.withdraw(stores, tiny, "water", 4), 0, "a jug does not fit one cell, and 4 bottles neither")
+	Inventory.place(tiny, "bandage", 1, 0, 0)
+	eq(Inventory.withdraw(stores, tiny, "water", 4), 0, "a pack with no room takes no jug and no bottle")
 	near(float(stores.water), 11.0, 0.001, "the stores still hold it")
-	eq(Inventory.withdraw(stores, tiny, "ammo", 30), 24, "one cell takes one stack of 24 shells")
+	var one := Inventory.make_grid(1, 1)
+	eq(Inventory.withdraw(stores, one, "water", 4), 1, "one cell takes a single bottle (a bottle is one cell now) and no jug")
+	near(float(stores.water), 10.0, 0.001, "and the stores gave only that")
+	one = Inventory.make_grid(1, 1)
+	eq(Inventory.withdraw(stores, one, "ammo", 30), 24, "one cell takes one stack of 24 shells")
 	near(float(stores.ammo), 16.0, 0.001, "and the stores gave only those")
 
 
@@ -582,7 +588,8 @@ func test_her_bandage_uses_the_pack_first_and_the_stores_only_at_the_base() -> v
 
 
 func test_when_the_stores_are_short_she_eats_and_drinks_from_the_pack() -> void:
-	var g := _pack_game()
+	# (PH10: the stores serve her only at the base; out in the town nothing is served, and what she eats is her own pack's, by hand: tests/test_needs.gd)
+	var g := _claimed_pack_game()
 	var sim = g.sim
 	var me = _p(sim)
 	sim.stock.food = 0.0
@@ -591,6 +598,7 @@ func test_when_the_stores_are_short_she_eats_and_drinks_from_the_pack() -> void:
 	var water0: int = sim.inv.carried_totals().water
 	me.hunger_h = 12.0
 	me.thirst_h = 12.0
+	check(sim.base.at_base(me), "she is at home")
 	Helpers.run_to_hour(sim, 13.2)
 	check(me.hunger_h < 12.0 and me.thirst_h < 12.0, "the noon meal fed her (hunger %.1f, thirst %.1f)" % [me.hunger_h, me.thirst_h])
 	check(sim.inv.carried_totals().food < food0 and sim.inv.carried_totals().water < water0, "out of the pack")

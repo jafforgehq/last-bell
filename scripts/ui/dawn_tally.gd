@@ -5,7 +5,8 @@
 ##
 ##   title    "Morning" (a quiet night), or "The night is over" after one when the dead came (`scenario.attacks_on()` at any time of it)
 ##   rows     after an attack: Walls held (3 of 4 sections), Dead put down, Hurt, Lost; after a quiet night only what happened (kills, the hurt, the lost), or "A quiet night."
-##            then "Fence needs mending: 2 sections" when a section is down or worn (the avatar's mend rule: under 95% of its hit points) and "Low: food (1 day)" when stores run short;
+##            then "Fence needs mending: 2 sections" when a section is down or worn (the avatar's mend rule: under 95% of its hit points), "Low: food (1 day)" when stores run short and (PH10)
+##            "You went hungry yesterday." when she went without a meal or a drink long enough to be weaker for it;
 ##            STORES (food, water, ammo, scrap, meds now, and what changed since the last morning), what the scavengers found yesterday, CREW (who does what), OUTSIDE (the weather, rain to come
 ##            today, the clock to dusk)
 ##   today    the objective's words (`scenario.objective()`), the new day's first suggestion
@@ -223,6 +224,10 @@ func _make_tally(day: int, had_night: bool) -> Dictionary:
 		if not lost.has(String(_hurt[id])):
 			hurt.append(String(_hurt[id]))
 	var stores := _stores_now()
+	var went := {}
+	var inv = sim.get("inv")
+	if inv != null and inv.has_method("take_went") and inv.active():
+		went = inv.take_went()    # (PH10: what she went without since the last morning card)
 	var delta := {}
 	if not _stores0.is_empty():
 		for k in stores:
@@ -230,7 +235,7 @@ func _make_tally(day: int, had_night: bool) -> Dictionary:
 	_stores0 = stores.duplicate()    # (the next morning's change is counted from this one)
 	return {
 		"day": day, "night": had_night, "attack": _attack and had_night, "kills": maxi(0, int(sim.kills) - _kills0) if had_night else 0,
-		"walls_total": secs.size(), "walls_held": maxi(secs.size() - fell, 0), "hurt": hurt, "lost": lost, "stores": stores, "delta": delta,
+		"walls_total": secs.size(), "walls_held": maxi(secs.size() - fell, 0), "hurt": hurt, "lost": lost, "stores": stores, "delta": delta, "went": went,
 	}
 
 
@@ -382,6 +387,17 @@ static func _names(list: Array, none: String) -> String:
 	return "%s and %s" % [", ".join(list.slice(0, list.size() - 1)), String(list[list.size() - 1])]
 
 
+## PH10: "You went hungry and thirsty yesterday." from what she went without ({"hungry", "thirsty", "starving", "parched"}), or "" when she went without nothing.
+static func went_text(went: Dictionary) -> String:
+	var hungry := bool(went.get("hungry", false))
+	var thirsty := bool(went.get("thirsty", false))
+	if not hungry and not thirsty:
+		return ""
+	var what := "hungry and thirsty" if hungry and thirsty else ("hungry" if hungry else "thirsty")
+	var worse := bool(went.get("starving", false)) or bool(went.get("parched", false))
+	return "You went %s yesterday%s." % [what, ", and it cost you health" if worse else ""]
+
+
 ## The rows of the card from the night's numbers and the rules as they stand: [[label, value, tone]...], label "" for a line that stands alone. Tones: "", "ok", "warn", "bad".
 func rows_for(t: Dictionary, compact: bool = false) -> Array:
 	var rows: Array = []
@@ -415,6 +431,11 @@ func rows_for(t: Dictionary, compact: bool = false) -> Array:
 	var low := _stores_low()
 	if low != "":
 		rows.append(["", low + ".", "warn"])
+	var went = t.get("went", {})
+	if went is Dictionary:
+		var hunger_line := went_text(went)
+		if hunger_line != "":
+			rows.append(["", hunger_line, "bad" if (bool(went.get("starving", false)) or bool(went.get("parched", false))) else "warn"])
 	if compact:
 		return rows    # (HUD8: the minimal HUD's morning is the night and today's line: the stores, the crew and the clock are on the screen, in their boards)
 	# (RULES2: the rest of the summary: the stores and what changed, what the scavengers brought, who does what, the weather and the clock)

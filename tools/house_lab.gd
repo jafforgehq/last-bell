@@ -521,7 +521,8 @@ static func play(seed_value: int, o: Dictionary = {}) -> Dictionary:
 	if pinv != null and pinv.on:
 		var ps: Dictionary = pinv.stats
 		out["pack"] = {"deposits": int(ps.deposits), "deposited": (ps.deposited as Dictionary).duplicate(), "full": int(ps.full), "dropped": int(ps.dropped), "left": int(pinv.left_behind()),
-				"dusk": bot.pack_dusk, "peak_cells": int(ps.peak_cells), "picked": (ps.picked as Dictionary).duplicate(), "cells": Inventory.used_cells(pinv.pack)}
+				"dusk": bot.pack_dusk, "peak_cells": int(ps.peak_cells), "picked": (ps.picked as Dictionary).duplicate(), "cells": Inventory.used_cells(pinv.pack),
+				"ate": int(ps.get("ate", 0)), "drank": int(ps.get("drank", 0)), "went": pinv.went.duplicate(), "hunger_h": float(sim.avatar.player().hunger_h) if sim.avatar.player() != null else 0.0, "thirst_h": float(sim.avatar.player().thirst_h) if sim.avatar.player() != null else 0.0}
 	out["verdict"] = verdict_of(out)
 	OS.remove_logger(errors)
 	g.world.free()
@@ -1084,6 +1085,8 @@ static func run_lines(r: Dictionary) -> Array:
 		for k in ["food", "water", "ammo", "meds"]:
 			picked_parts.append("%d %s" % [int((pk.get("picked", {}) as Dictionary).get(k, 0)), k])
 		lines.append("  pack: at the first attack bell %s | trips to the stash %d | pack full %d times (%d items dropped) | peak %d of 32 cells | left behind %d units | took %s" % [dusk_text, int(pk.deposits), int(pk.full), int(pk.dropped), int(pk.get("peak_cells", 0)), int(pk.left), ", ".join(picked_parts)])
+		var wnt: Dictionary = pk.get("went", {})
+		lines.append("  needs: ate %d, drank %d from the pack | went hungry %s, thirsty %s in the run (no morning card here to ask) | at the end %.0f hours since a meal, %.0f since a drink" % [int(pk.get("ate", 0)), int(pk.get("drank", 0)), "yes" if bool(wnt.get("hungry", false)) else "no", "yes" if bool(wnt.get("thirsty", false)) else "no", float(pk.get("hunger_h", 0.0)), float(pk.get("thirst_h", 0.0))])
 	if int(r.get("bandaged", 0)) > 0:
 		lines.append("  NOTE: the lab bandaged the lone avatar %d times (a stand-in for the medic: the avatar's own bandage is E in the game)" % int(r.bandaged))
 	lines.append("  real time at a player's pace: %.1f min (%.0f game min slept, in the bed) | rescues %d | slots built %d | first fence %s real min after the claim | bites %d | searches %d | shots %d, kills %d | hp low %d" % [float(r.real_min), float(r.slept_min), int(v.rescues), int(v.slots_built), ("%.1f" % float(v.fence_min)) if v.get("fence_min") != null else "-", int(r.stats.bites), int(r.stats.searched), int(r.stats.shots), int(r.stats.kills), roundi(float(r.stats.hp_min))])
