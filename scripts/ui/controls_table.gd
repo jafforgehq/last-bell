@@ -3,7 +3,7 @@
 ## table are all made from, or checked against, this one list, so they cannot disagree.
 ##
 ## Every key here was read off the town run's own handlers (2026-10-06): scripts/main.gd `_unhandled_input` (Space, 1 2 3 the speeds, Esc, R, Q, F, E, T, G, L, J, N, V, F5, F9),
-## `_input` (F11), scripts/ui/town_hud.gd `on_key` (M, Shift+N, Shift+G), scripts/ui/wheel_ctl.gd `key_down` (C, Shift+C, Z, Esc), scripts/ui/rescue_card.gd (1 2 3, E, Esc) and
+## `_input` (F11), scripts/ui/town_hud.gd `on_key` (M, Shift+N, Shift+G), scripts/ui/hud_stage.gd `on_key` (H: the HUD put away and back), scripts/ui/wheel_ctl.gd `key_down` (C, Shift+C, Z, Esc), scripts/ui/rescue_card.gd (1 2 3, E, Esc) and
 ## scripts/ui/dawn_tally.gd (Enter, Space), and PACE's two: X, held, polled by scripts/ui/pace_keys.gd (Shift is the aim's twin, so the run has a key of its own) and `.`, scripts/ui/wait_button.gd `on_key`.
 ## INV-UI (the backpack, scripts/ui/inv_ui.gd `on_key`): Tab and I (the pack; Tab did nothing in the town before), Esc, R while an item is dragged, Space and Enter while a container is open;
 ## the rows that carry an `id` are the backpack's, and the windows' own tooltips read their keys from here (`key_text`). What is NOT here is not in the town: 1 to 5 (nobody is "picked": a click on a person or a card opens the wheel), the middle button's
@@ -65,6 +65,7 @@ const GROUPS := [
 			{"keys": "M | G", "what": "The map of the town", "hud": ["M", "Map"], "legend": ["b", "map", "M", "map"]},
 			{"keys": "L", "what": "The call to arms, and standing down again", "hud": ["L", "Call to arms"]},
 			{"keys": "V", "what": "Fields of fire: what the guns cover", "hud": ["V", "Fields of fire"]},
+			{"id": "hud_hide", "keys": "H", "what": "Hide the HUD, and show it again. Settings has the HUD: Minimal (boards come when they matter) or Full", "hud": ["H", "Hide the HUD"]},
 			{"keys": "Space", "what": "Pause, and go on", "hud": ["Space", "Pause"]},
 			{"keys": ".", "what": "Wait until the bell: the day runs ahead, and stops if the dead come", "hud": [".", "Wait for the bell"], "legend": ["c", "wait", ".", "wait for the bell"]},
 			{"keys": "1 2 3", "what": "Normal speed, twice as fast, three times", "hud": ["1 2 3", "Speed"]},

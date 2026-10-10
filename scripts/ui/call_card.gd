@@ -28,6 +28,11 @@ var shown_id := 0
 ## True while the News panel is up and there is no room for both: the panel shows the open calls itself, so the card steps aside
 ## (the HUD sets it; `shown_id` and the result still follow the radio).
 var suppressed := false
+## HUD8: the call the player opened from its one line (a click on the card); it stays whole while it is the one shown.
+var expanded_id := 0
+var _margin_top := -1.0
+var _margin_bottom := -1.0
+var _was_lined := false
 var _radio_getter: Callable
 var _result_until := 0
 var _showing_result := false
@@ -61,7 +66,43 @@ func setup(host_hud, radio_getter: Callable, opts: Dictionary = {}) -> void:
 	view.setup(host, radio_getter, opts)
 	view.answered.connect(_on_answered)
 	draw.connect(_draw_edge)
+	gui_input.connect(_on_gui_input)
 	visible = false
+
+
+## HUD8: a click on the one line opens the call whole.
+func _on_gui_input(ev: InputEvent) -> void:
+	if view != null and view.lined and ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+		expanded_id = shown_id
+		view.set_lined(false)
+		accept_event()
+
+
+## HUD8: the kind of the call the card shows ("" when none).
+func shown_kind() -> String:
+	var radio = _radio_getter.call() if _radio_getter.is_valid() else null
+	if radio == null or shown_id == 0:
+		return ""
+	var e := RadioKit.entry_of(radio, shown_id)
+	return String(e.get("kind", "")) if not e.is_empty() else ""
+
+
+## HUD8: the minimal HUD tells the call in one line (the one the player opened stays whole).
+func set_lined(on: bool) -> void:
+	if view == null:
+		return
+	var lined: bool = on and shown_id != expanded_id
+	view.set_lined(lined)
+	if lined == _was_lined:
+		return
+	_was_lined = lined
+	var st: StyleBox = get_theme_stylebox("panel")
+	if st != null:
+		if _margin_top < 0.0:
+			_margin_top = st.content_margin_top
+			_margin_bottom = st.content_margin_bottom
+		st.content_margin_top = 4.0 if lined else _margin_top    # (a line is as thin as its words)
+		st.content_margin_bottom = 4.0 if lined else _margin_bottom
 
 
 ## A bar of the kind's colour down the left edge (as the alert slips have).

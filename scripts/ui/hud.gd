@@ -189,6 +189,8 @@ const PERSON_ROW_GAP := 3
 const PERSON_BLOCK_GAP := 6
 ## The stock of a card whose person is remembered: greyer than a living one's.
 const MEMORIAL_STOCK := Color(0.7, 0.7, 0.72)
+## HUD8: the tint of the card of someone who is down.
+const TROUBLE_TINT := Color(1.0, 0.62, 0.58)
 ## The longest a line of a tooltip about a person is, in letters, before it is broken (the engine's
 ## own wrapping of a tooltip is no help in a narrow window).
 const TIP_WRAP := 44
@@ -224,6 +226,18 @@ const ALERT_GAP := 6.0
 ## (TEMPO, 2026-10-07: 0.7 and 3.0, a 4.4 s sign: 0.45 and 1.8, 2.7 s)
 const BANNER_FADE := 0.45
 const BANNER_HOLD := 1.8
+## HUD8: the sign in the top strip is set in this size (the middle of the window's is 34), and goes in this long when a key or a click puts it away.
+const BANNER_STRIP_FS := 20
+## HUD8: a sign in the top strip is held this long (the middle of the window's is `BANNER_HOLD`).
+const BANNER_HOLD_STRIP := 1.2
+const BANNER_DISMISS_S := 0.2
+## HUD8: the most of the window a page or a window of the HUD takes: the width, the height and the area, as shares (docs/hud-audit.md, 7).
+const WINDOW_MAX_W := 0.45
+const WINDOW_MAX_H := 0.55
+const WINDOW_MAX_AREA := 0.165
+## HUD8: a crew card as an icon is this narrow, and this much shorter than a card with its name.
+const THIN_CARD_W := 36
+const THIN_NAME_PX := 17
 ## A toast is up this many real seconds, fading over the last TOAST_FADE of them.
 ## The card of the offer to leave the base (round 23).
 const LEAVE_TEXT := "Leave the base?  E / click: open the Map"
@@ -689,6 +703,28 @@ var _forecast_squeezed := false
 ## The look of the HUD for the kind of game: "" is the school's (everything), "one_house" is the town's calm one (One House: the Town Board,
 ## Scavenge, the car's fuel and the school's crew-seats strip are put away; the rest is the same). Set by `set_profile`.
 var profile := ""
+
+## HUD8, THE MINIMAL HUD (scripts/ui/hud_stage.gd decides, `apply_stage` lays out): the forms the boards are in. All empty (or false) is the full HUD, as the school's yard and a town in "Full" have it.
+## `stage_on` says that a stage part is there; "min" clock: the day and the hour only; "min" weapon: the readout without the Weapon button; "thin" crew: the cards as icons; "min" toolbar: pause, play, controls, menu.
+var stage_on := false
+var stage_clock := ""
+var stage_weapon := ""
+var stage_crew := ""
+var stage_toolbar := ""
+## How many alert cards the stack shows (0: the feed's own), whether each is one line, and whether only the dangers are shown (the early game raises none the player must see).
+var stage_alert_cap := 0
+var stage_alert_lines := false
+var stage_alert_danger_only := false
+## How the call card tells its call: "" whole, "idea" (an idea in one line), "line" (every call in one line).
+var stage_call := ""
+## The banner hangs in the top strip (under the crew's cards when they are there), not in the middle of the window.
+var stage_banner_strip := false
+## Asked before a banner is shown: Callable(text, sub) -> bool (false: the stage part keeps it for later). Unset: always shown.
+var banner_gate: Callable
+## The rows of the clock the "min" form puts away (the strip of the day and the temperature row), and the toolbar's buttons that stay in the "min" form.
+var clock_lower: Array = []
+var clock_head: HBoxContainer
+var toolbar_spacers: Array = []
 
 
 func setup(game_data: Dictionary, crew: Array) -> void:
@@ -1384,6 +1420,8 @@ func _sync_cards(crew: Array) -> void:
 
 func _size_cards(w: int) -> void:
 	var h := _card_height(w)
+	if stage_crew == "thin":
+		h -= THIN_NAME_PX    # (HUD8: a card as an icon: the face and the health bar, no name)
 	var was := mark_px
 	mark_px = 12 if w >= 56 else 11
 	mark_max = 4 if w >= 56 else (3 if w >= 48 else 2)
@@ -1401,7 +1439,8 @@ func _size_cards(w: int) -> void:
 		# the name takes the room between the picture and the health bar
 		var bar_top := h - inset.w - 3.0
 		c.name.position = Vector2(inset.x, inset.y + pw)
-		c.name.size = Vector2(pw, bar_top - (inset.y + pw))
+		c.name.size = Vector2(pw, maxf(bar_top - (inset.y + pw), 0.0))
+		c.name.visible = stage_crew != "thin"
 		c.name.add_theme_font_size_override("font_size", 13 if w >= 56 else 12)
 		c.hp_bg.position = Vector2(inset.x, bar_top)
 		c.hp_bg.size = Vector2(pw, 3)
@@ -1462,11 +1501,12 @@ func _layout_bar() -> void:
 	if bar == null or left_col == null or right_col == null:
 		return
 	var room := _bar_room()
-	var sig := "%d|%s|%s|%s" % [cards.size(), str(size.x), str(snappedf(float(room.sym), 0.5)), str(snappedf(float(room.free), 0.5))]
+	var thin := stage_crew == "thin"
+	var sig := "%d|%s|%s|%s|%s" % [cards.size(), str(size.x), str(snappedf(float(room.sym), 0.5)), str(snappedf(float(room.free), 0.5)), "thin" if thin else ""]
 	if sig == _bar_sig:
 		return
 	_bar_sig = sig
-	var plan := plan_cards(cards.size(), 48 if compact else 60, float(room.sym), float(room.free))
+	var plan := plan_cards(cards.size(), THIN_CARD_W if thin else (48 if compact else 60), float(room.sym), float(room.free))
 	bar_plan = plan
 	_size_cards(int(plan.w))
 	bar.add_theme_constant_override("h_separation", int(plan.gap))
@@ -1474,10 +1514,7 @@ func _layout_bar() -> void:
 	var shift := float(room.mid) - size.x * 0.5 if bool(plan.roam) else 0.0
 	bar.offset_left = shift
 	bar.offset_right = shift
-	if banner != null and size.x >= 640.0:
-		var rows := int(plan.rows)
-		var bar_h := float(rows * _card_height(int(plan.w)) + (rows - 1) * 4)
-		banner.offset_top = maxf(118.0, 10.0 + bar_h + 22.0)
+	_place_banner()
 
 
 func _on_card_input(ev: InputEvent, p) -> void:
@@ -1560,6 +1597,7 @@ func _build_clock() -> void:
 	clock = _panel(face)
 	var v := _vbox(6)
 	var r1 := _hbox(8)
+	clock_head = r1
 	day_label = _caps("Day 3")
 	r1.add_child(day_label)
 	r1.add_child(_spacer())
@@ -1603,6 +1641,7 @@ func _build_clock() -> void:
 	strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.add_child(strip)
 	var r4 := _hbox(5)
+	clock_lower = [strip, r4]
 	temp_icon = _icon("sun", 13, INK3)
 	temp_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	r4.add_child(temp_icon)
@@ -1878,6 +1917,9 @@ func _slip_style(level: String, hover: bool = false) -> StyleBox:
 			# (the town's slips in a big window: tighter padding, a lighter weight)
 			f.content_margin_top = 5.0
 			f.content_margin_bottom = 5.0
+		if stage_alert_lines:
+			f.content_margin_top = 3.0    # (HUD8: a line of the minimal HUD is as thin as its words)
+			f.content_margin_bottom = 3.0
 		return f
 	var s := _flat(c.lightened(0.07) if hover else c, 3, Color(SLIP_MARK.get(level, SLIP_MARK.warn), 0.45), true)
 	s.content_margin_left = 13
@@ -1944,13 +1986,15 @@ func _update_alert_panel(it: Dictionary) -> void:
 	# fonts, `_alert_height`, not read from it)
 	var inner := _alert_inner_w(slip)
 	var sub := _alert_sub(String(it.sub), inner, ALERT_SUB_LINES_TOWN if _alert_feed != null else (ALERT_SUB_LINES_COMPACT if compact else ALERT_SUB_LINES))
+	if stage_alert_lines:
+		sub = ""    # (HUD8: one line; the second one is the slip's tooltip)
 	if subl.text != sub:
 		subl.text = sub
 	# (the whole of a line that was cut is the slip's tooltip)
 	var tip := String(it.sub) if sub != String(it.sub) else _alert_tip(it)
 	if slip.tooltip_text != tip:
 		slip.tooltip_text = tip
-	subl.visible = it.sub != ""
+	subl.visible = it.sub != "" and not stage_alert_lines
 	if it.shown_level != it.level:
 		it.shown_level = it.level
 		it.col = SLIP_MARK.get(it.level, SLIP_MARK.warn)
@@ -2076,6 +2120,8 @@ func _sync_alerts(sim) -> void:
 	var now := Time.get_ticks_msec()
 	# (the town's feed is calmer than the rules': info cards fade, siblings merge, see alert_feed.gd)
 	var feed: Dictionary = sim.alerts if _alert_feed == null else _alert_feed.feed(sim.alerts, now)
+	if stage_on and (stage_alert_lines or stage_alert_danger_only):
+		feed = _stage_feed(feed)    # (HUD8: one line each, the crew's troubles in one, the early game's dangers only)
 	for id in feed:
 		var a: Dictionary = feed[id]
 		var it: Dictionary = alert_items.get(id, {})
@@ -2128,8 +2174,66 @@ func _sync_alerts(sim) -> void:
 
 func _on_alert_input(ev: InputEvent, id: String) -> void:
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		on_alert.call(id if _alert_feed == null else _alert_feed.target(id))    # (a merged card means its latest alert)
+		if id == CREW_TROUBLE and _crew_trouble_first != "":
+			on_alert.call(_crew_trouble_first)    # (the one line of the crew's troubles: the first of them)
+		else:
+			on_alert.call(id if _alert_feed == null else _alert_feed.target(id))    # (a merged card means its latest alert)
 		accept_event()
+
+
+## HUD8: whether the call card tells its call in one line: always in a fight ("line"), an idea (an offer that waits, never a danger) otherwise ("idea"), never in the full HUD (""). A click opens it whole.
+func _call_lined() -> bool:
+	match stage_call:
+		"line":
+			return true
+		"idea":
+			return call_card.shown_kind() == "idea"
+	return false
+
+
+## HUD8: the id of the one line that holds the crew's troubles ("Ana is down", "Ana and Ben are being bitten"), and the alert behind it that a click on it means.
+const CREW_TROUBLE := "crew-trouble"
+var _crew_trouble_first := ""
+
+
+## HUD8: the feed of the minimal HUD: the early game (`stage_alert_danger_only`) shows the dangers only; the rest of the game shows "X is being bitten" and "X is down" for the whole crew as ONE
+## line (the cards say who it is: the card of a person who is down is darker and red-edged), and every other alert as it was.
+func _stage_feed(feed: Dictionary) -> Dictionary:
+	var out := {}
+	var down: Array = []
+	var bitten: Array = []
+	var born := INF
+	_crew_trouble_first = ""
+	for id in feed:
+		var a: Dictionary = feed[id]
+		if stage_alert_danger_only and String(a.level) != "danger":
+			continue
+		var sid := String(id)
+		if sid.begins_with("down-") or sid.begins_with("hurt-"):
+			(down if sid.begins_with("down-") else bitten).append(String(a.text).get_slice(" is ", 0))
+			born = minf(born, float(a.born))
+			if _crew_trouble_first == "":
+				_crew_trouble_first = sid
+			continue
+		out[id] = a
+	if not down.is_empty() or not bitten.is_empty():
+		var words: Array = []
+		if not down.is_empty():
+			words.append(_names_are(down, "down"))
+		if not bitten.is_empty():
+			words.append(_names_are(bitten, "being bitten"))
+		out[CREW_TROUBLE] = {"id": CREW_TROUBLE, "level": "danger", "text": ", ".join(words), "sub": "", "at": null, "t": 0.0, "ttl": 5.0, "born": born, "fade": 1.0}
+	return out
+
+
+## "Ana is down", "Ana and Ben are down", "Ana, Ben and Cy are being bitten".
+static func _names_are(names: Array, what: String) -> String:
+	var list := ""
+	if names.size() == 1:
+		list = String(names[0])
+	else:
+		list = "%s and %s" % [", ".join(names.slice(0, names.size() - 1)), String(names[names.size() - 1])]
+	return "%s %s %s" % [list, "is" if names.size() == 1 else "are", what]
 
 
 ## The town's feed (HUDA): the stack made again at once (the "+N more" pill's click unfolds or folds it).
@@ -2206,9 +2310,13 @@ const BANNER_MARGIN_PX := 56.0
 func _fit_banner() -> void:
 	var room := maxf(size.x - 2.0 * BANNER_SIDE_PX - BANNER_MARGIN_PX, size.x * 0.4)    # (a window too narrow for the two columns has the sign over the middle of it, 40 percent wide)
 	var fs := 34
+	if stage_banner_strip:
+		# (HUD8: the sign in the top strip is the smaller one, 40 percent of the window wide at most)
+		room = minf(room, size.x * 0.4 - BANNER_MARGIN_PX)
+		fs = BANNER_STRIP_FS
 	var title_font: Font = banner_title.get_theme_font("font")
 	var sub_font: Font = banner_sub.get_theme_font("font")
-	var sub_px := Access.scaled(14)
+	var sub_px := Access.scaled(12 if stage_banner_strip else 14)
 	if room > 120.0 and title_font != null:
 		while fs > 18 and title_font.get_string_size(banner_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, Access.scaled(fs)).x > room:
 			fs -= 2
@@ -2217,6 +2325,12 @@ func _fit_banner() -> void:
 	banner_title.add_theme_font_size_override("font_size", Access.scaled(fs))
 	# (the sign is as wide as these words, not as the widest it has been, and hangs from the middle)
 	var want := banner.get_combined_minimum_size()
+	if stage_banner_strip and title_font != null and sub_font != null:
+		# (HUD8: a label's minimum size is made again after the frame, so a sign whose type has just been made smaller is measured here from its words, not from what the labels still say)
+		var st := banner.get_theme_stylebox("panel").get_minimum_size()
+		var tsz := title_font.get_multiline_string_size(banner_title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, Access.scaled(fs))
+		var ssz := sub_font.get_multiline_string_size(banner_sub.text, HORIZONTAL_ALIGNMENT_LEFT, -1, sub_px) if banner_sub.text != "" else Vector2.ZERO
+		want = Vector2(maxf(tsz.x, ssz.x) + st.x, tsz.y + ssz.y + (2.0 if ssz.y > 0.0 else 0.0) + st.y)
 	banner.offset_left = -want.x * 0.5
 	banner.offset_right = want.x * 0.5
 	banner.offset_bottom = banner.offset_top + want.y
@@ -2240,21 +2354,138 @@ func _lines_to_fit(text: String, font: Font, px: int, room: float) -> String:
 
 
 func show_banner(text: String, sub: String) -> void:
+	if banner_gate.is_valid() and not bool(banner_gate.call(text, sub)):
+		return    # (HUD8: a fight is on: the sign waits, and is shown when it is over if it is not stale)
 	banner_title.text = text.to_upper()
 	banner_sub.text = sub
+	_place_banner()
 	_fit_banner()
 	if banner_tween != null:
 		banner_tween.kill()
 	banner_tween = create_tween()
+	var hold := BANNER_HOLD_STRIP if stage_banner_strip else BANNER_HOLD
 	if _calm():
 		# reduced motion: no fades, the sign is simply there, and gone after as long as it would have been
 		banner.modulate.a = 1.0
-		banner_tween.tween_interval(BANNER_HOLD + BANNER_FADE)
+		banner_tween.tween_interval(hold + BANNER_FADE)
 		banner_tween.tween_callback(func(): banner.modulate.a = 0.0)
 		return
 	banner_tween.tween_property(banner, "modulate:a", 1.0, BANNER_FADE)
-	banner_tween.tween_interval(BANNER_HOLD)
+	banner_tween.tween_interval(hold)
 	banner_tween.tween_property(banner, "modulate:a", 0.0, BANNER_FADE)
+
+
+## HUD8: the banner goes at once (the first key or click after it came up): a short fade, none under Reduce motion.
+func dismiss_banner() -> void:
+	if banner == null or banner.modulate.a <= 0.01:
+		return
+	if banner_tween != null:
+		banner_tween.kill()
+	if _calm():
+		banner.modulate.a = 0.0
+		return
+	banner_tween = create_tween()
+	banner_tween.tween_property(banner, "modulate:a", 0.0, BANNER_DISMISS_S)
+
+
+## HUD8: where the banner hangs. The school's and the full HUD's way: under the crew's cards and at least 118 px from the top. The minimal HUD's TOP STRIP: at the top, under the cards when they are on
+## the screen (never in the middle of the window, where the dead and the avatar are).
+func _place_banner() -> void:
+	if banner == null or (size.x < 640.0 and not stage_banner_strip):
+		return
+	var rows := int(bar_plan.get("rows", 1))
+	var w := int(bar_plan.get("w", 60))
+	var bar_h := float(rows * _card_height(w) + (rows - 1) * 4) - (float(THIN_NAME_PX) if stage_crew == "thin" else 0.0)
+	if stage_banner_strip:
+		var cards_up: bool = bar != null and stage_crew != "off" and bar.visible and bar.modulate.a > 0.05 and not cards.is_empty()
+		banner.offset_top = (10.0 + bar_h + 8.0) if cards_up else 12.0
+		banner.offset_bottom = banner.offset_top + banner.get_combined_minimum_size().y
+	else:
+		banner.offset_top = maxf(118.0, 10.0 + bar_h + 22.0)    # (as it always was: the school's and the full HUD's)
+
+
+# --------------------------------------------------------------- HUD8: the forms --
+
+## Lays the boards out in the forms the stage part (scripts/ui/hud_stage.gd) asked for in `stage_*`: the clock without its lower rows, the gun's readout without its button, the cards as icons, the toolbar
+## as four buttons, the banner in the top strip, the alerts as one line each. Called when a form changes; with all of them empty it puts everything back.
+func apply_stage() -> void:
+	if banner != null:
+		var sb: StyleBox = banner.get_theme_stylebox("panel")
+		if sb != null:
+			sb.content_margin_left = 14.0 if stage_banner_strip else 28.0
+			sb.content_margin_right = 14.0 if stage_banner_strip else 28.0
+			sb.content_margin_top = 6.0 if stage_banner_strip else 10.0
+			sb.content_margin_bottom = 7.0 if stage_banner_strip else 12.0
+		banner_sub.add_theme_font_size_override("font_size", Access.scaled(12 if stage_banner_strip else 14))
+		banner_title.add_theme_font_override("font", Fonts.cond(700, 2 if stage_banner_strip else 5))    # (the sign's letters are spread less in the top strip)
+	if holster_button != null:
+		holster_button.visible = stage_weapon != "min"
+	if alerts_box != null:
+		alerts_box.add_theme_constant_override("separation", 3 if stage_alert_lines else int(ALERT_GAP))    # (a line is close to the next)
+	if _stores_calm != null:
+		_stores_calm.on_resized()    # (the boards' padding is the minimal HUD's or the full one's)
+	# (HUD8: the minimal boards are a little closer: the clock's hour and the readout's rounds are smaller, its bar thinner)
+	if time_label != null:
+		time_label.add_theme_font_size_override("font_size", (24 if compact else 30) if stage_clock == "" else 24)
+	if ammo_label != null:
+		ammo_label.add_theme_font_size_override("font_size", 24 if stage_weapon != "min" else 20)
+		ammo_bar.custom_minimum_size.y = 6.0 if stage_weapon != "min" else 4.0
+	_apply_clock_form()
+	_apply_toolbar_form()
+	_bar_sig = ""
+	_layout_bar()
+	_place_banner()
+	if banner != null and banner_title.text != "":
+		_fit_banner()    # (a sign that was put up before the stage part was there hangs where it should now)
+	if _alert_feed != null:
+		_alert_feed.base_cap = stage_alert_cap if stage_alert_cap > 0 else AlertFeed.SHOWN_MAX
+		for id in alert_items:
+			var it: Dictionary = alert_items[id]
+			var p = it.get("panel")
+			if p != null and is_instance_valid(p):
+				p.add_theme_stylebox_override("panel", _slip_style(String(it.get("shown_level", "warn"))))    # (the slips take the thin or the full padding)
+		if sim_ref != null:
+			refresh_alerts()
+	_layout_dock.call_deferred()
+
+
+## The "min" clock is ONE row: the hour, and "Day 2 · Dusk in 7h 15m" ("Paused" while the game is); its heading row, the strip of the day, the temperature and the dead about, the gate, the forecast, the readiness and
+## the badge of a Big Night are put away. The "mid" clock (the first dusk) is that row and the lookout's forecast with the gate. `update_hud` puts them away again after it has set them each time.
+func _apply_clock_form() -> void:
+	var form := stage_clock
+	for r in clock_lower:
+		if r != null and is_instance_valid(r):
+			r.visible = form == ""
+	if clock_head != null:
+		clock_head.visible = form == ""
+	if form == "min":
+		for c in [gate_row, forecast_label, ready_label, night_badge]:
+			if c != null:
+				c.visible = false
+	elif form == "mid":
+		if night_badge != null:
+			night_badge.visible = false
+	elif sim_ref != null and clock != null:
+		_update_forecast(sim_ref)
+		_update_gate(sim_ref)
+
+
+## The "min" toolbar is pause, play, the controls and the menu; every other button, and the spaces between, are put away (the town's Board button is never there; the radio's and the alarm's are the avatar's).
+func _apply_toolbar_form() -> void:
+	if speed_panel == null or speed_panel.get_child_count() == 0 or speed_buttons.size() < 2:
+		return
+	var row: Node = speed_panel.get_child(0)
+	var small := stage_toolbar == "min"
+	var keep: Array = [speed_buttons[0], speed_buttons[1], help_button, menu_button]
+	for c in row.get_children():
+		if not (c is Control) or c == town_button:
+			continue
+		var natural: bool = avatar_ui if (c == news_button or c == alarm_button) else true
+		var want: bool = keep.has(c) if small else natural
+		if not small and stage_on and (c == speed_buttons[speed_buttons.size() - 1] or c == fields_button):
+			want = false    # (HUD8: the whole toolbar of the minimal HUD is without the third speed and the fields of fire: 3 and V are there)
+		if c.visible != want:
+			c.visible = want
 
 
 # ------------------------------------------------------------ dock / inspect --
@@ -3069,9 +3300,12 @@ func _build_speed() -> void:
 	sep.custom_minimum_size = Vector2(1, 20)
 	sep.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_spacer_fixed(3))
+	var sp_a := _spacer_fixed(3)
+	var sp_b := _spacer_fixed(3)
+	row.add_child(sp_a)
 	row.add_child(sep)
-	row.add_child(_spacer_fixed(3))
+	row.add_child(sp_b)
+	toolbar_spacers = [sp_a, sep, sp_b]
 	fields_button = _speed_button("draft", FIELDS_TIP)
 	fields_button.pressed.connect(func(): if on_fields.is_valid(): on_fields.call())
 	row.add_child(fields_button)
@@ -3861,7 +4095,7 @@ func _on_resized() -> void:
 		_fit_clock_words()
 		_fit_card_words()
 		alerts_box.custom_minimum_size.x = CLOCK_W_COMPACT if compact else CLOCK_W
-		time_label.add_theme_font_size_override("font_size", 24 if compact else 30)
+		time_label.add_theme_font_size_override("font_size", 24 if stage_clock != "" else (24 if compact else 30))
 		# a window too narrow for the hint loses it for good (as it always did; avatar mode's is two short lines and fits)
 		if compact and not avatar_ui and not hint_spent:
 			hint_spent = true
@@ -3969,7 +4203,7 @@ func _update_card(c: Dictionary, sim) -> void:
 		# two lines where the picture is narrow
 		c.word.add_theme_font_override("font", Fonts.cond(700, 0 if word == "In memory" else 1))
 		c.word.autowrap_mode = TextServer.AUTOWRAP_WORD
-		c.card.self_modulate = MEMORIAL_STOCK if word == "In memory" else Color.WHITE
+		c.card.self_modulate = MEMORIAL_STOCK if word == "In memory" else (TROUBLE_TINT if stage_on and p.downed else Color.WHITE)    # (HUD8: the card of someone who is down is red-edged: the one line of alerts names them)
 		c.word.add_theme_color_override("font_color", DANGER_TEXT if word == "Turned" else (INFO if word == "Away" else INK2))
 		c.name.add_theme_color_override("font_color", INK3 if p.dead else INK)
 		var dim := 0.4 if p.dead else (0.7 if p.away != null else (0.45 if p.downed else 1.0))
@@ -4130,6 +4364,11 @@ func update_hud(sim, speed: int, sound_on: bool, walkers: int) -> void:
 		walkers_label.text = "%d walkers" % walkers
 	_update_forecast(sim)
 	_update_gate(sim)
+	if stage_clock != "":
+		_apply_clock_form()    # (HUD8: the minimal clock puts its lower rows away again after they were set)
+		until_label.text = "Paused" if speed == 0 else (until_label.text if compact else "Day %d · %s" % [int(sim.day), until_label.text])
+	if stage_toolbar == "min" or stage_on:
+		_apply_toolbar_form()
 	# speed and sound
 	if speed != last_speed:
 		last_speed = speed
@@ -5326,7 +5565,14 @@ func _layout_news() -> void:
 	var avail := size.y - edge - right_col.get_combined_minimum_size().y
 	if radio_open():
 		radio_panel.set_compact(compact)
-		radio_panel.fit(avail, size.x - 24.0)
+		var max_w := size.x - 24.0
+		if stage_on:
+			# (HUD8: a window is at most 45 percent of the width, 55 of the height and 17 of the screen; what does not fit scrolls, and the page's own least height is kept)
+			max_w = minf(max_w, size.x * WINDOW_MAX_W)
+			var panel_w := minf(RadioPanel.WIDTH_COMPACT if compact else RadioPanel.WIDTH, maxf(180.0, max_w))
+			# (8 px under the share: the page's border and shadow are inked past its box)
+			avail = minf(avail, minf(size.y * WINDOW_MAX_H - 8.0, WINDOW_MAX_AREA * size.x * size.y / panel_w))
+		radio_panel.fit(avail, max_w)
 		_corner(radio_panel, true, true, 12.0, lift)
 
 
@@ -5356,6 +5602,7 @@ func _sync_radio(sim) -> void:
 	var radio = sim.get("radio")
 	if radio == null:
 		return
+	call_card.set_lined(_call_lined())
 	call_card.refresh()
 	if (call_card.shown_id != 0) != _call_seen:
 		_call_seen = call_card.shown_id != 0

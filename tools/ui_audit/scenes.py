@@ -38,7 +38,8 @@ SCENES = {
     "e_night": {"flags": "--stage=night --slots=built --weather=clear --advance=135 --weapon=shotgun --avatar-at=149.5,91.5", "scn": "night", "opts": {"wait": 30, "dead": 2, "gap": 6, "shots": 3, "guide": "done", "tips": 1}, "snaps": ["e_night_1", "e_night_2", "e_night_3"], "seeds": [1], "timeout": 300},
     "e_storm": {"flags": "--stage=night --slots=built --weather=storm --advance=135 --weapon=shotgun --avatar-at=149.5,91.5", "scn": "night", "opts": {"wait": 30, "dead": 2, "gap": 6, "shots": 3, "guide": "done", "tips": 1}, "snaps": ["e_storm_1", "e_storm_2", "e_storm_3"], "seeds": [1], "timeout": 300},
     # (f) the morning card
-    "f_dawn": {"flags": "--stage=night --slots=damaged --moment=dawn", "scn": "dawn", "opts": {"wait": 60, "until": "dawn", "guide": "done"}, "snaps": ["f_dawn"], "seeds": [1], "timeout": 120},
+    # (HUD8: the run's own seed is fixed: an idle crew is left alive at the dawn in some runs and not in others, and a run that ends in the game over card has no morning card to measure)
+    "f_dawn": {"flags": "--stage=night --slots=damaged --moment=dawn --seed=2", "scn": "dawn", "opts": {"wait": 60, "until": "dawn", "guide": "done"}, "snaps": ["f_dawn"], "seeds": [1], "timeout": 120},
     # (g) the Build page and the radio panel open (the build lesson is the guide's own on the Build page: its card and cue stay)
     "g_build": {"flags": "--stage=arrive --lesson=build --radio=build --stock=scrap:30,ammo:24,food:12,water:18,meds:3", "scn": "still", "opts": {"wait": 100}, "snaps": ["g_build"], "seeds": [1], "timeout": 120},
     "g_radio": {"flags": "--stage=fourth --slots=built --hour=15 --radio=news,news", "scn": "still", "opts": {"wait": 100, "guide": "done"}, "snaps": ["g_radio"], "seeds": [1], "timeout": 120},

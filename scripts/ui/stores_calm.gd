@@ -16,6 +16,8 @@ const OneHouse := preload("res://scripts/town/one_house.gd")
 const InvTotals := preload("res://scripts/ui/inv_totals.gd")
 
 const DAYS_SHOWN_BELOW := 5.0
+## HUD8: food or water under this many days is low.
+const LOW_DAYS := 2.0
 ## The stores that are always there; the others (scrap) are shown when they matter.
 const ALWAYS := ["ammo", "food", "water", "meds"]
 const NAMES := {"ammo": "Ammo", "scrap": "Scrap", "food": "Food", "water": "Water", "meds": "Medicine"}
@@ -27,6 +29,11 @@ var strip: HBoxContainer
 var pairs := {}
 ## The stores revealed so far (a reveal is for good).
 var revealed := {}
+## HUD8: "full" (the stores as the player has them), or "low" (the minimal HUD's fight: only the stores that run low: `any_low` says whether there are any).
+var form := "full"
+var any_low := true
+## HUD8: the minimal HUD's strip is one row: the days under food and water come only when they are low (or under the pointer).
+var minimal := false
 var hovered := false
 var _tips := {}
 var _lean := false
@@ -99,6 +106,9 @@ static func panel_style(hud_node, strip_panel: bool) -> StyleBox:
 		st.content_margin_left += 2.0
 		st.content_margin_right += 2.0
 		st.content_margin_top += 1.0
+	if hud_node.get("stage_on") == true:
+		st.content_margin_top -= 2.0    # (HUD8: the minimal HUD's boards are a little closer)
+		st.content_margin_bottom -= 2.0
 	return st
 
 
@@ -107,8 +117,13 @@ func update(sim) -> void:
 	_reveal(sim)
 	var c = hud.get_viewport().gui_get_hovered_control() if hud.is_inside_tree() else null
 	hovered = c != null and (c == hud.res_panel or hud.res_panel.is_ancestor_of(c))
+	any_low = false
 	for kind in pairs:
 		var on: bool = ALWAYS.has(kind) or revealed.has(kind)
+		var low := is_low(kind, sim)
+		any_low = any_low or (low and on)
+		if form == "low":
+			on = on and low
 		var pair: Control = pairs[kind]
 		if pair.visible != on:
 			pair.visible = on
@@ -116,7 +131,9 @@ func update(sim) -> void:
 		if hud.res_days.has(kind) and sim.supplies != null:
 			days = float(sim.supplies.days_left(kind))
 			var d: Label = hud.res_days[kind]
-			var show_days := hovered or days < DAYS_SHOWN_BELOW
+			var show_days := hovered or days < (LOW_DAYS if minimal else DAYS_SHOWN_BELOW)
+			if form == "low":
+				show_days = hovered    # (a fight: the number and the colour; the days are the tooltip)
 			if d.visible != show_days:
 				d.visible = show_days
 		var tip := tip_of(kind, roundi(float(sim.stock[kind])), days)
@@ -124,6 +141,20 @@ func update(sim) -> void:
 			_tips[kind] = tip
 			pair.tooltip_text = tip
 	InvTotals.apply(hud, sim)    # (INV-UI: with an inventory the numbers are what she carries before the claim and the stores after it)
+
+
+## Whether the store `kind` runs low: the rounds under the supplies' own line, medicine under three, food or water under two days at the crew's use (the amber of the HUD's numbers, and the morning card's "Low").
+func is_low(kind: String, sim) -> bool:
+	var v := roundi(float(sim.stock[kind]))
+	match kind:
+		"ammo":
+			var line = sim.supplies.get("low_ammo") if sim.supplies != null else null
+			return float(v) < (float(line) if line != null else 60.0)
+		"meds":
+			return v < 3
+		"food", "water":
+			return sim.supplies != null and float(sim.supplies.days_left(kind)) < LOW_DAYS
+	return false
 
 
 ## "Food: 12. About 12 days at the crew's use." for the tooltip of a pair.

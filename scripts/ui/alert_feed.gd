@@ -36,6 +36,8 @@ const KINDS := {
 var hud
 ## Whether the stack is unfolded (a click on the pill).
 var expanded := false
+## How many cards the folded stack shows: three, and two in the minimal HUD (HUD8: the rest are the "+N more" pill).
+var base_cap := SHOWN_MAX
 var pill: PanelContainer
 var pill_label: Label
 
@@ -287,10 +289,10 @@ func make_pill(column: Control, after: Control) -> void:
 func sync_pill(hidden: int, total: int) -> void:
 	if pill == null:
 		return
-	if total <= SHOWN_MAX:
+	if total <= base_cap:
 		expanded = false
 	var words := ""
-	if expanded and total > SHOWN_MAX:
+	if expanded and total > base_cap:
 		words = "Show fewer"
 	elif hidden > 0:
 		words = "+%d more" % hidden
@@ -310,4 +312,4 @@ func _on_pill_input(ev: InputEvent) -> void:
 
 ## How many cards the stack shows.
 func cap() -> int:
-	return SHOWN_MAX_OPEN if expanded else SHOWN_MAX
+	return SHOWN_MAX_OPEN if expanded else base_cap

@@ -10,6 +10,7 @@ const Buses := preload("res://scripts/audio/buses.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
 const SettingsExtras := preload("res://scripts/ui/settings_extras.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
 ## The volume rows: [pref key, what the player reads, the audio bus].
 const VOLUMES := [["master", "Master", "Master"], ["sfx", "Effects", "SFX"], ["ambience", "Ambience", "Ambience"], ["music", "Music", "Music"], ["ui", "Interface", "UI"]]
@@ -36,6 +37,8 @@ const ROW_H_MID := 34.0
 const ROW_H := 38.0
 ## (the dark look's Brightness row took 25 px of the smallest window: its buttons are 4 px slimmer, nine of them)
 const ROW_H_COMPACT := 28.0
+## (HUD8: the HUD row is one more row, and the smallest window (700 by 560) has the buttons of the rows four pixels slimmer again)
+const ROW_H_SMALLEST := 24.0
 ## In a window shorter than this the switches sit two to a row and lose their second line (it is their tooltip too), and the aiming's note goes, so that the page fits the small
 ## windows (700 by 560, 1024 by 640) without a scroll: the Accessibility and Brightness rows made it 540 px tall.
 const GRID_H := 720.0
@@ -54,6 +57,9 @@ var scale_note: Label
 var toggles := {}
 ## The two ways to aim (AimMode.RIGHT, AimMode.ALWAYS) as buttons, and the line that says what the one chosen does.
 var aim_buttons := {}
+## HUD8: the two HUD modes as buttons ("minimal", "full": scripts/ui/hud_stage.gd) and the line that says what the one chosen does.
+var hud_buttons := {}
+var hud_note: Label
 ## The three "Text size" buttons by size ("normal", "large", "larger"; scripts/ui/settings_extras.gd).
 var text_buttons := {}
 var aim_note: Label
@@ -130,12 +136,14 @@ func _build_body() -> void:
 			continue
 		grid.add_child(_switch_row(String(sw[0]), String(sw[1]), String(sw[2])))
 	body.add_child(grid)
+	body.add_child(_hud_row())
 	body.add_child(section("Controls"))
 	body.add_child(_aim_row())
 	aim_note = note("", ink3(), 13)
 	body.add_child(aim_note)
 	SettingsExtras.add_rows(self)    # (Accessibility: text size, colour-blind markers, reduce flashes)
 	_refresh_aim()
+	_refresh_hud()
 	_refresh_scale()
 
 
@@ -161,7 +169,7 @@ func _layout() -> void:
 		n.visible = not tight
 	if aim_note != null:
 		aim_note.visible = not tight
-	_fit_rows(ROW_H if size.y >= SPACIOUS_H else (ROW_H_MID if size.y >= COMPACT_H and not tight else ROW_H_COMPACT))
+	_fit_rows(ROW_H if size.y >= SPACIOUS_H else (ROW_H_MID if size.y >= COMPACT_H and not tight else (ROW_H_COMPACT if size.y >= COMPACT_H else ROW_H_SMALLEST)))
 	super._layout()
 
 
@@ -170,6 +178,7 @@ func _fit_rows(h: float) -> void:
 	var buttons: Array = [scale_minus, scale_plus]
 	buttons.append_array(toggles.values())
 	buttons.append_array(aim_buttons.values())
+	buttons.append_array(hud_buttons.values())
 	buttons.append_array(text_buttons.values())
 	for b in buttons:
 		if b != null and not is_equal_approx(b.custom_minimum_size.y, h):
@@ -422,6 +431,50 @@ func _on_switch(on: bool, key: String, b: Button) -> void:
 	Prefs.set_value("ui", key, on)
 	_paint_switch(b)
 	_changed()
+
+
+# --------------------------------------------------------------------- HUD --
+
+## HUD8, "HUD": Minimal (the default: the boards come when they matter) or Full (every board, always), side by side (the one chosen is lit), with a line of what it does under.
+func _hud_row() -> Control:
+	var col: VBoxContainer = hud._vbox(2)
+	var row: HBoxContainer = hud._hbox(8)
+	var l: Label = hud._label("HUD", Fonts.sans(500), 15, ink())
+	l.custom_minimum_size.x = 112
+	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(l)
+	for mode in HudStage.MODES:
+		var b := button(String(HudStage.LABELS[mode]), false)
+		b.toggle_mode = true
+		b.custom_minimum_size = Vector2(120, 38)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		b.tooltip_text = String(HudStage.NOTES[mode])
+		b.pressed.connect(_on_hud.bind(String(mode)))
+		row.add_child(b)
+		hud_buttons[String(mode)] = b
+	col.add_child(row)
+	hud_note = note("", ink3(), 13)
+	_notes.append(hud_note)
+	col.add_child(hud_note)
+	return col
+
+
+func _on_hud(mode: String) -> void:
+	HudStage.set_mode(mode)
+	_refresh_hud()
+	_changed()
+
+
+## The buttons and the line show the mode now.
+func _refresh_hud() -> void:
+	var now := HudStage.mode()
+	for mode in hud_buttons:
+		var b: Button = hud_buttons[mode]
+		b.set_pressed_no_signal(mode == now)
+		shell.restyle(b, mode == now)
+	if hud_note != null:
+		hud_note.text = String(HudStage.NOTES[now])
 
 
 # ------------------------------------------------------------------ aiming --

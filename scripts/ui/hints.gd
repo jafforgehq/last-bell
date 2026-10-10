@@ -22,6 +22,7 @@ const Coach := preload("res://scripts/ui/coach.gd")
 const Conditions := preload("res://scripts/tutorial_conditions.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
 const HINTS_PATH := "res://assets/data/hints.json"
 const CARD_W := 320.0
@@ -119,6 +120,10 @@ func can_show() -> bool:
 	if main.get("coach") != null or bool(main.get("tutorial")) or bool(main.get("title_mode")):
 		return false
 	if bool(main.get("menu_open")) or hud.scavenge_dialog != null or hud.game_over != null:
+		return false
+	# (HUD8: the minimal HUD holds the tips back while a fight is on and in the first house, where the lessons teach: they come in the quiet)
+	var stage = HudStage.of(main)
+	if stage != null and not stage.tips_ok():
 		return false
 	return sim.over == ""
 
@@ -264,6 +269,12 @@ func _place(sz: Vector2, vp: Vector2) -> Vector2:
 			blocked = true
 	if hud.get("dock") != null and hud.dock.is_visible_in_tree() and hud.dock.get_global_rect().intersects(mine):
 		blocked = true
+	# (HUD8, the placement rule: nor over a dead one in view, the line of fire or the avatar's room)
+	var keep: Array = HudStage.keep_clear(main)
+	keep.append_array(HudStage.avatar_clear(main))
+	for k in keep:
+		if (k as Rect2).intersects(mine):
+			blocked = true
 	if blocked:
-		return Coach.best_rect(hud, sz, vp, Rect2(), "top", false).position
+		return Coach.best_rect(hud, sz, vp, Rect2(), "top", false, false, keep, Rect2(card.position, sz) if card.visible else Rect2()).position
 	return at

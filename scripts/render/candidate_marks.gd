@@ -18,7 +18,10 @@ const OneHouse := preload("res://scripts/town/one_house.gd")
 const Access := preload("res://scripts/access.gd")
 const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 const TierMarks := preload("res://scripts/ui/tier_marks.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
+## HUD8: within this many tiles of a house the minimal HUD's plate has its second line too.
+const SUB_NEAR_TILES := 2.0
 ## Tiles over which a mark fades in as the avatar comes within `arrival.mark_r`.
 const FADE_TILES := 3.0
 const POLE_PX := 34.0
@@ -112,7 +115,7 @@ func _refresh() -> void:
 			continue
 		var rect := Rect2(Rect2i(town.houses[h].rect))
 		var foot := screen_of(Vector2(rect.get_center().x, rect.position.y))
-		marks.append({"house": h, "label": String(c.get("label", "")), "alpha": alpha, "at": foot, "tier": String(c.get("tier", "ok")), "rect": rect})
+		marks.append({"house": h, "label": String(c.get("label", "")), "alpha": alpha, "at": foot, "tier": String(c.get("tier", "ok")), "rect": rect, "dist": d})
 
 
 ## World tile -> HUD pixel (the camera is main's: centre tile and pixels per tile).
@@ -132,7 +135,7 @@ func _draw_layer() -> void:
 		var foot := _foot_of(m, bounds)
 		if foot.x < -1.0e8:
 			continue
-		var g := _geometry(foot, String(m.label), String(m.get("tier", "ok")), bounds)
+		var g := _geometry(foot, String(m.label), String(m.get("tier", "ok")), bounds, float(m.get("dist", 0.0)))
 		# (the plate is where the free part of the screen put it: `_replace`; the house it belongs to is where the pole stands, and the line says so when the two are apart)
 		var pos: Vector2 = HudFree.fit_inside(Rect2(g.want + Vector2(slide.get(int(m.house), Vector2.ZERO)), g.size), bounds.grow(-EDGE_PX)).position
 		plates.append(Rect2(pos, g.size))
@@ -149,7 +152,7 @@ func _foot_of(m: Dictionary, bounds: Rect2) -> Vector2:
 
 
 ## The sizes and the first-choice place of a mark's plate: over the flag, in the window's edge margin.
-func _geometry(foot: Vector2, label: String, tier: String, bounds: Rect2) -> Dictionary:
+func _geometry(foot: Vector2, label: String, tier: String, bounds: Rect2, dist: float = 0.0) -> Dictionary:
 	var top := foot + Vector2(0.0, -POLE_PX)
 	var title := label
 	var sub := ""
@@ -157,6 +160,8 @@ func _geometry(foot: Vector2, label: String, tier: String, bounds: Rect2) -> Dic
 	if cut > 0:
 		title = label.substr(0, cut)
 		sub = label.substr(cut + 2).trim_suffix(".")
+		if sub != "" and dist > SUB_NEAR_TILES and HudStage.minimal_on(main):
+			sub = ""    # (HUD8: the minimal HUD's plate is one line until she is at the house: "8 rooms, big yard" is for the door)
 	var f_title := Fonts.cond(700)
 	var f_sub := Fonts.sans(400)
 	var w := maxf(f_title.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, TITLE_SIZE).x, f_sub.get_string_size(sub, HORIZONTAL_ALIGNMENT_LEFT, -1, SUB_SIZE).x if sub != "" else 0.0)
@@ -172,13 +177,14 @@ func _geometry(foot: Vector2, label: String, tier: String, bounds: Rect2) -> Dic
 func _replace() -> void:
 	var bounds := Rect2(Vector2.ZERO, layer.size)
 	var blocked := HudFree.rects(main, hud, layer)
+	blocked.append_array(HudStage.keep_clear(main))    # (HUD8, the placement rule: a plate moves off the dead in view and the line of fire, as it moves off a board)
 	var placed: Array = []
 	var next := {}
 	for m in marks:
 		var foot := _foot_of(m, bounds)
 		if foot.x < -1.0e8:
 			continue
-		var g := _geometry(foot, String(m.label), String(m.get("tier", "ok")), bounds)
+		var g := _geometry(foot, String(m.label), String(m.get("tier", "ok")), bounds, float(m.get("dist", 0.0)))
 		var box := Rect2(g.want, g.size)
 		var spot := HudFree.nearest_free(box, bounds.grow(-EDGE_PX), blocked, placed)
 		placed.append(spot.grow(3.0))

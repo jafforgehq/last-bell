@@ -337,6 +337,11 @@ func _has_open(s, kind: String) -> bool:
 
 
 ## `waited` (game minutes) is 0 for the call of a wall that is going, and the time the dead have been at a wall nobody covers for the other.
+## HUD8: where the people fall back to: "the house" in the town (there is no school), "the school" in every other game.
+func _home_word() -> String:
+	return "the house" if sim != null and sim.is_one_house() else "the school"
+
+
 func _raise_going(s, attackers: int, share: float, plated: bool, waited: float = 0.0) -> void:
 	var alone := waited > 0.0
 	if alone and _has_open(s, "going"):
@@ -361,7 +366,7 @@ func _raise_going(s, attackers: int, share: float, plated: bool, waited: float =
 	]
 	if avatar_here():
 		options.append({"id": "coming", "label": "I'm on my way"})
-	options.append({"id": "fall_back", "label": "Give it up, fall back to the school"})
+	options.append({"id": "fall_back", "label": "Give it up, fall back to %s" % _home_word()})
 	radio.raise_call("going", text, sub, options, "hold", NightData.num("calls.going_ttl_min", 20.0), {"seg": int(s.id)}, s.center)
 
 
@@ -394,7 +399,7 @@ func _raise_breach(s) -> void:
 	var here := avatar_here()
 	if here:
 		options.append({"id": "close", "label": "Close it (needs you there)"})
-	options.append({"id": "fall_back", "label": "Pull back to the school"})
+	options.append({"id": "fall_back", "label": "Pull back to %s" % _home_word()})
 	if here:
 		options.append({"id": "coming", "label": "I'm on my way"})
 	radio.raise_call("breach", "%s is down" % _the_cap(s), "The dead are getting in", options, "hold", NightData.num("calls.breach_ttl_min", 20.0), {"seg": int(s.id)}, s.center)
@@ -482,7 +487,7 @@ func carry_out(e: Dictionary, option_id: String) -> String:
 				"reinforce":
 					return "Reinforcements sent (%d)" % radio._reinforce_near(seg, _reinforce_n())
 				"fall_back":
-					return "Falling back to the school (%d)" % radio._fall_back(seg)
+					return "Falling back to %s (%d)" % [_home_word(), radio._fall_back(seg)]
 				"coming":
 					return _coming(seg)
 				"close":

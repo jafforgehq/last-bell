@@ -22,6 +22,9 @@ const TILE_PX := 64.0
 const MAX := 24
 const EVERY := 0.25
 const OUTDOOR_R := 10.0
+## HUD8: the minimal HUD's shimmer is on the unsearched containers within this many tiles of her.
+const MINIMAL_R := 7.0
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 ## How far the quad goes past the furniture's footprint, tiles.
 const PAD := 0.12
 ## The shader's clock runs this much slower than the real one while it is not in view of anything (it does not: kept at one).
@@ -164,6 +167,13 @@ func refresh() -> int:
 	var me = _me()
 	if me != null and not me.dead and not me.turned and me.away == null:
 		_collect(me, items)
+		if HudStage.minimal_on(main):
+			# (HUD8: the minimal HUD marks what is within reach of a walk, not every unsearched thing of the house: the nearest ones, as the prompt is for the nearest thing)
+			var near: Array = []
+			for it in items:
+				if Vector2(it.at).distance_to(Vector2(me.x, me.y)) <= MINIMAL_R:
+					near.append(it)
+			items = near
 	if _stress > 0 and me != null:
 		_stress_fill(me, items)
 	if items.size() > MAX:

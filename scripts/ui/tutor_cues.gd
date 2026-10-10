@@ -34,6 +34,7 @@ const Arrival := preload("res://scripts/town/arrival.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const TownHud := preload("res://scripts/ui/town_hud.gd")
 const BuildStage := preload("res://scripts/ui/build_stage.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
 const GOLD := Color(0.941, 0.761, 0.29)
 const DARK := Color(0.04, 0.08, 0.07)
@@ -51,6 +52,8 @@ const TARGET_R := 20.0
 const KEY_PX := 28.0
 const PAD := 8.0
 const REFUSAL_S := 8.0
+## HUD8: the gap (pixels) between a dead one's box and the ring that marks it.
+const RING_GAP_PX := 10.0
 const POP_S := 1.6
 const REACH_FALLBACK := 7.5
 
@@ -58,6 +61,8 @@ var main
 var hud
 var sim
 var layer: Control
+## HUD8 (scripts/ui/hud_stage.gd): "on" (as it was), "fight" (a fight is on: the cues that are about the dead one, the aim and the reload, stay; the rest wait) or "off".
+var stage_cues := "on"
 ## EARLY: a layer over the HUD's boards for the one cue that points at a control of the HUD (the Build button), and what it draws.
 var top: Control
 var _top_rect := Rect2()
@@ -67,6 +72,13 @@ var cue := ""
 ## EARLY: what the lesson is about now (the guide's `phase`) and the one line of a hint's cue.
 var cue_phase := ""
 var _hint_line := ""
+## HUD8: "2 OF 5" (or "HINT"), the step the plate of a cue carries in the minimal HUD, where the lesson's own card is away.
+var _step_text := ""
+## HUD8: the cue of the lesson that has just been done (it fades out for FADE_S where it stood), how long it has faded, and the opacity it is drawn at while it does (-1: not fading).
+var _out_cue := ""
+var _out_phase := ""
+var _out_t := 0.0
+var _fade_out := -1.0
 var cue_age := 0.0
 var beat := 0.0
 ## The rehearsal card (made once) and how long it has left.
@@ -155,6 +167,10 @@ func on_frame(dt: float) -> void:
 	_now += dt
 	_calm = Access.calm_flashes()
 	_stage()
+	if _out_cue != "":
+		_out_t += dt
+		if _out_t >= FADE_S:
+			_out_cue = ""
 	BuildStage.on_frame(main)    # (a screenshot's `--build=...`: the front fence ordered and her hands at it; nothing without the flag)
 	if _staged and _freeze:
 		main.speed = 0    # (a staged picture stays where it was staged)
@@ -183,6 +199,10 @@ func _read_lesson(dt: float) -> void:
 		cue = ""
 		return
 	if bool(g.get("done", false)):
+		if cue != "" and not _confirmed.has(id) and not off and not _calm and HudStage.minimal_on(main):
+			_out_cue = cue    # (HUD8: the cue of a lesson that is done fades out in a third of a second)
+			_out_phase = cue_phase
+			_out_t = 0.0
 		cue = ""
 		if not _confirmed.has(id):
 			_confirmed[id] = true
@@ -197,6 +217,7 @@ func _read_lesson(dt: float) -> void:
 	# (EARLY: a lesson has phases, and the card may be a hint: the cue follows what the player is at, and comes up afresh when that changes)
 	var phase := String(g.get("phase", ""))
 	_hint_line = String(g.get("line", ""))
+	_step_text = "HINT" if bool(g.get("hint", false)) else (("%d OF %d" % [int(g.get("n", 0)), int(g.get("of", 0))]) if int(g.get("of", 0)) > 0 else "")
 	if id != cue:
 		cue = id
 		cue_phase = phase
@@ -307,6 +328,8 @@ func _pulse() -> float:
 
 
 func _fade() -> float:
+	if _fade_out >= 0.0:
+		return _fade_out
 	return 1.0 if _calm else clampf(cue_age / FADE_S, 0.0, 1.0)
 
 
@@ -330,29 +353,48 @@ func _draw_layer() -> void:
 	_draw_pops()
 	if _sleeping():
 		return
-	if beat <= 0.0 and cue != "":
-		match cue:
-			"walk":
-				_cue_walk()
-			"shoot":
-				# (the one lesson of the gun: the shot, then the reload)
-				if cue_phase == "reload":
-					_cue_reload()
-				else:
-					_cue_shoot()
-			"claim":
-				# (the claim lesson: the front door on the road in, nothing in the house itself (the room chip is the cue), the spot where E claims once it is clear)
-				if cue_phase == "find":
-					_cue_find()
-				elif cue_phase == "claim":
-					_cue_claim()
-			"build":
-				_cue_build()
-			"door", "clear", "search":
-				_cue_hint()
-			"ask":
-				_cue_ask()
-	_draw_refusal()
+	# (HUD8: in a fight only what is about the dead one, the aim and the reload, is drawn; the minimal HUD's "off" draws no cue at all)
+	var allowed := stage_cues == "on" or (stage_cues == "fight" and cue == "shoot")
+	if beat <= 0.0 and cue != "" and allowed:
+		_draw_cue()
+	elif cue == "" and _out_cue != "" and stage_cues != "off":
+		# (HUD8: the cue of a lesson that is done fades out where it stood, instead of going at once)
+		var now_cue := cue
+		var now_phase := cue_phase
+		cue = _out_cue
+		cue_phase = _out_phase
+		_fade_out = clampf(1.0 - _out_t / FADE_S, 0.0, 1.0)
+		_draw_cue()
+		cue = now_cue
+		cue_phase = now_phase
+		_fade_out = -1.0
+	if stage_cues == "on":
+		_draw_refusal()
+
+
+## The cue of the lesson of now (`cue`, `cue_phase`).
+func _draw_cue() -> void:
+	match cue:
+		"walk":
+			_cue_walk()
+		"shoot":
+			# (the one lesson of the gun: the shot, then the reload)
+			if cue_phase == "reload":
+				_cue_reload()
+			else:
+				_cue_shoot()
+		"claim":
+			# (the claim lesson: the front door on the road in, nothing in the house itself (the room chip is the cue), the spot where E claims once it is clear)
+			if cue_phase == "find":
+				_cue_find()
+			elif cue_phase == "claim":
+				_cue_claim()
+		"build":
+			_cue_build()
+		"door", "clear", "search":
+			_cue_hint()
+		"ask":
+			_cue_ask()
 
 
 ## A pulsing ring: a dark rim, the gold line, and (unless the settings say still) a halo that goes out from it and fades. `bold` adds ticks at the four sides (a shape that says "now").
@@ -404,7 +446,7 @@ func _key(rc: Rect2, text: String, lit: bool, a: float = 1.0) -> void:
 
 
 ## A dark plate with a gold edge, the HUD's own look.
-func _plate(rc: Rect2, a: float = 1.0) -> void:
+func _plate(rc: Rect2, a: float = 1.0, chip: bool = false) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(DARK, 0.88 * a)
 	sb.border_color = Color(GOLD, 0.8 * a)
@@ -412,6 +454,12 @@ func _plate(rc: Rect2, a: float = 1.0) -> void:
 	sb.set_corner_radius_all(6)
 	sb.anti_aliasing = true
 	layer.draw_style_box(sb, rc)
+	# (HUD8: in the minimal HUD the lesson's card is merged into its cue: the step is on the plate, "1 OF 5", over its corner)
+	if chip and _step_text != "" and HudStage.minimal_on(main):
+		var f := Fonts.cond(700, 1)
+		var fs := _px(12)
+		layer.draw_string_outline(f, rc.position + Vector2(8.0, -5.0), _step_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(DARK, 0.9 * a))
+		layer.draw_string(f, rc.position + Vector2(8.0, -5.0), _step_text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(GOLD, a))
 
 
 ## Where a plate of `size` stands beside the avatar: up and to the side with more room (above the E prompt's pill, which stands at her body's height), the first place that is inside the
@@ -432,6 +480,9 @@ func _beside(body: Vector2, size: Vector2) -> Vector2:
 	var inside := Rect2(Vector2(PAD, 70.0), vp - Vector2(PAD * 2.0, 70.0 + 90.0))
 	var first := Vector2.INF
 	var blocks := _hud_rects()
+	# (HUD8, the placement rule: nor over a dead one in view, the line of fire from her to the nearest, the muzzle's room)
+	blocks.append_array(HudStage.keep_clear(main))
+	blocks.append_array(HudStage.avatar_clear(main))
 	for s in spots:
 		var rc := Rect2(s, size)
 		if not inside.encloses(rc):
@@ -490,7 +541,7 @@ func _cue_walk() -> void:
 	var a := _fade()
 	var sz := Vector2(KEY_PX * 3.0 + 4.0 * 2.0 + 20.0, KEY_PX * 2.0 + 4.0 + 20.0 + float(_px(15)) + 6.0)
 	var at := _beside(_body(), sz)
-	_plate(Rect2(at, sz), a)
+	_plate(Rect2(at, sz), a, true)
 	var o := at + Vector2(10.0, 10.0)
 	var caps := {"W": [Vector2(1, 0), [KEY_W, KEY_UP]], "A": [Vector2(0, 1), [KEY_A, KEY_LEFT]], "S": [Vector2(1, 1), [KEY_S, KEY_DOWN]], "D": [Vector2(2, 1), [KEY_D, KEY_RIGHT]]}
 	for k in caps:
@@ -519,20 +570,25 @@ func _cue_shoot() -> void:
 		var inside := float(target.dist) <= reach
 		var vp := Rect2(Vector2.ZERO, _view()).grow(-24.0)
 		if vp.has_point(c):
-			_ring(c, maxf(0.75 * z, 20.0), a, inside)
+			if HudStage.minimal_on(main):
+				# (HUD8, the placement rule: the ring goes AROUND the dead one with a gap, on the middle of its box: it never covers it)
+				_ring(_s(Vector2(float(target.x), float(target.y))) + Vector2(0, -0.1 * z), HudStage.RING_CLEAR * z + RING_GAP_PX, a, inside)
+			else:
+				_ring(c, maxf(0.75 * z, 20.0), a, inside)
 		else:
 			_edge_chevron(c, a)
 	if int(me.stats.shots) <= _shots0:
 		var always := AimMode.always()
 		var line := "Move the mouse to aim, click to fire" if always else "Hold the right button to aim, click to fire"
 		var f := Fonts.cond(700)
-		var size := _px(16)
+		var tight := HudStage.minimal_on(main)    # (HUD8: the card is a little smaller in the minimal HUD: the middle of the window is the fight's)
+		var size := _px(15 if tight else 16)
 		var w := f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		var box := Vector2(w + 62.0, 44.0)
+		var box := Vector2(w + (50.0 if tight else 62.0), 38.0 if tight else 44.0)
 		var at := _beside(body, box)
-		_plate(Rect2(at, box), a)
-		_mouse(at + Vector2(14.0, 8.0), a, not always)
-		_text(at + Vector2(50.0, 28.0), line, size, Color(INK, a))
+		_plate(Rect2(at, box), a, true)
+		_mouse(at + (Vector2(10.0, 4.0) if tight else Vector2(14.0, 8.0)), a, not always)
+		_text(at + (Vector2(40.0, 25.0) if tight else Vector2(50.0, 28.0)), line, size, Color(INK, a))
 	drawn = "shoot"
 
 
@@ -569,7 +625,7 @@ func _cue_reload() -> void:
 	var mag_max := int(me.gun.get("mag", 6))
 	var box := Vector2(maxf(w + KEY_PX + 30.0, 24.0 + float(mag_max) * 19.0 + 4.0), 74.0)
 	var at := _beside(_body(), box)
-	_plate(Rect2(at, box), a)
+	_plate(Rect2(at, box), a, true)
 	_text(at + Vector2(12.0, 30.0), line, size, Color(INK, a))
 	_key(Rect2(at + Vector2(12.0 + w + 2.0, 8.0), Vector2(KEY_PX, KEY_PX)), "R", _pulse() > 0.55 or _calm, a)
 	# the magazine, a pip for each round it holds (the ones it lacks are hollow)
@@ -857,7 +913,7 @@ func _hint_text_plate(px: Vector2, line: String, a: float) -> void:
 	var w := f.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var vp := _view()
 	var rc := Rect2(Vector2(clampf(px.x - w * 0.5 - 8.0, PAD, maxf(vp.x - w - 16.0 - PAD, PAD)), clampf(px.y, 70.0, maxf(vp.y - 100.0, 70.0))), Vector2(w + 16.0, float(size) + 10.0))
-	_plate(rc, a)
+	_plate(rc, a, true)
 	layer.draw_string(f, rc.position + Vector2(8.0, float(size) + 1.0), line, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(INK, a))
 
 

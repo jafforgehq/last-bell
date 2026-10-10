@@ -34,10 +34,13 @@ const StanceMarks := preload("res://scripts/render/stance_marks.gd")
 const GateKit := preload("res://scripts/ui/gate_kit.gd")
 const BaseMarks := preload("res://scripts/render/base_marks.gd")
 const PromptKit := preload("res://scripts/render/prompt_kit.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 const TILE := 64.0
 const ACCENT := Color(0.941, 0.761, 0.29)
 ## The size of the names under people: the same floor as the HUD's text (Fonts.MIN_PX).
 const NAME_PX := 12
+## HUD8: the minimal HUD names the crew within this many tiles of the avatar.
+const NAME_NEAR_TILES := 6.0
 ## The size of the YOU tag over the avatar's head.
 const YOU_PX := 12
 ## The tint of a wall section by how many guns reach it: none, one, two or more (the
@@ -600,7 +603,14 @@ func _draw_rally(sim, z: float, vp: Vector2) -> void:
 	rally_ring_px = r
 	rally_lit = count > 0
 	var a := 0.42 if rally_lit else 0.17
-	draw_arc(c, r, 0.0, TAU, clampi(int(r / 5.0), 48, 160), Color(RALLY, a), 2.0 if rally_lit else 1.5, true)
+	if HudStage.minimal_on(main):
+		# (HUD8: the ring is twelve short strokes of its circle: the radius is said, and the middle of the window, where the fight is, is not crossed by a line)
+		var n := 12
+		for k in n:
+			var from := TAU * float(k) / float(n)
+			draw_arc(c, r, from, from + TAU / float(n) * 0.14, 5, Color(RALLY, a * 1.4), 2.5 if rally_lit else 2.0, true)
+	else:
+		draw_arc(c, r, 0.0, TAU, clampi(int(r / 5.0), 48, 160), Color(RALLY, a), 2.0 if rally_lit else 1.5, true)
 	if rally_lit:
 		draw_circle(c, r, Color(RALLY, 0.04))
 
@@ -721,7 +731,9 @@ func _draw_plated(sim, z: float, vp: Vector2) -> void:
 		weak_marks.append({"id": drawn_weak_marks, "at": head, "r": rpx, "near": near, "on": on})
 		var col := WEAK_HOT if on else WEAK
 		var wide := 3.0 if near else 2.0
-		if on:
+		if HudStage.minimal_on(main):
+			wide = 4.0 if on else wide    # (HUD8: a ring that points does not cover: the minimal HUD lights the weak point by its line, not by a disc over the head)
+		elif on:
 			draw_circle(head, rpx, Color(col, 0.28 + 0.2 * pulse))
 		elif near:
 			draw_circle(head, rpx, Color(col, 0.12))
@@ -1033,6 +1045,18 @@ func _edge_mark(target: Vector2, vp: Vector2, color: Color, text: String, font: 
 
 
 # ------------------------------------------------------------- speech bubbles --
+
+## HUD8: whether the name under a person is left out (the minimal HUD only): the one she plays (the YOU tag is there), and the crew farther than `NAME_NEAR_TILES` from her.
+func _name_is_quiet(p, sim) -> bool:
+	if not HudStage.minimal_on(main):
+		return false
+	var me = sim.avatar.player() if sim.get("avatar") != null else null
+	if me == null:
+		return false
+	if p == me:
+		return true
+	return Vector2(p.x - me.x, p.y - me.y).length() > NAME_NEAR_TILES
+
 
 ## A person said something (the `bark` event {"who": id, "text", "context"}): a bubble over their head.
 ## One a person (a new line takes the place of their old one) and BUBBLE_MAX at most (the oldest goes);
@@ -1741,11 +1765,16 @@ func _draw_prompt_pill(words: Dictionary, spot: Vector2, rx: float, vp: Vector2)
 	var covered := _covered_by_hud()
 	var rect := Rect2()
 	var found := false
-	for at in sides:
-		var r := Rect2(at, Vector2(w, h))
-		if view.encloses(r) and not _under_hud(r, covered):
-			rect = r
-			found = true
+	# (HUD8, the placement rule: first a side that is over none of the dead in view; a prompt the player needs is never dropped for it, and if every side has one the first as it was)
+	var dead: Array = HudStage.dead_rects(main, 0.4)
+	for pass_i in 2:
+		for at in sides:
+			var r := Rect2(at, Vector2(w, h))
+			if view.encloses(r) and not _under_hud(r, covered) and (pass_i == 1 or not HudStage._touches(r, dead)):
+				rect = r
+				found = true
+				break
+		if found:
 			break
 	if not found:
 		return
@@ -1910,10 +1939,13 @@ func _draw() -> void:
 			var label: String = p.first
 			var tw := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0
 			var selected: bool = sel != null and sel.ref == p
-			var bg := Color(ACCENT, 0.92) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
-			_pill(Rect2(pos.x - tw / 2, pos.y - 8, tw, 16), bg)
-			var fg := Color("#1a1508") if selected else (ACCENT if p.drafted else INK)
-			draw_string(font, Vector2(pos.x - tw / 2, pos.y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, fg)
+			if not selected and _name_is_quiet(p, sim):
+				pass    # (HUD8: the minimal HUD names the crew within 6 tiles of her, and a person who is picked; the YOU tag says who she is)
+			else:
+				var bg := Color(ACCENT, 0.92) if selected else (Color(44 / 255.0, 40 / 255.0, 20 / 255.0, 0.86) if p.drafted else Color(12 / 255.0, 22 / 255.0, 19 / 255.0, 0.74))
+				_pill(Rect2(pos.x - tw / 2, pos.y - 8, tw, 16), bg)
+				var fg := Color("#1a1508") if selected else (ACCENT if p.drafted else INK)
+				draw_string(font, Vector2(pos.x - tw / 2, pos.y + fs * 0.36), label, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, fg)
 			if p.hp < 100.0:
 				draw_rect(Rect2(pos.x - 14, pos.y + 10, 28, 4), PILL)
 				draw_rect(Rect2(pos.x - 13.5, pos.y + 10.5, 27.0 * p.hp / 100.0, 3), Color("#d0493a") if p.hp < 35 else Color("#8fb85a"))

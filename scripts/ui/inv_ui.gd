@@ -23,6 +23,7 @@ const InvLootWindow := preload("res://scripts/ui/inv_loot_window.gd")
 const InvStashWindow := preload("res://scripts/ui/inv_stash_window.gd")
 const InvStage := preload("res://scripts/ui/inv_stage.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 const CbShapes := preload("res://scripts/ui/cb_shapes.gd")
 const ControlsTable := preload("res://scripts/ui/controls_table.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
@@ -365,6 +366,7 @@ func _kept_clear() -> Array:
 	var c: Vector2 = main._tile_to_screen(at + Vector2(0.0, -0.45))
 	var rad: float = Coach.AVATAR_CLEAR * float(main.zoom_px)
 	out.append(Rect2(c - Vector2(rad, rad), Vector2(rad, rad) * 2.0))
+	out.append_array(HudStage.keep_clear(main))    # (HUD8, the placement rule: nor the awake dead in view and the line of fire; the threat rule does not close the windows)
 	return out
 
 

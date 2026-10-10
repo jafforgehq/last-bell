@@ -28,6 +28,7 @@ extends RefCounted
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const RadioKit := preload("res://scripts/ui/radio_kit.gd")
 const Coach := preload("res://scripts/ui/coach.gd")
+const HudStage := preload("res://scripts/ui/hud_stage.gd")
 
 ## Real seconds the card stays; its fade in and out; rules seconds after the day begins before it comes (the night is judged by then).
 const SHOW_S := 10.0
@@ -36,6 +37,8 @@ const DELAY_S := 0.6
 ## The card's width (less in a narrow window) and the gap from the screen's edge.
 const CARD_W := 500.0
 const CARD_W_MIN := 300.0
+## HUD8: the card of the minimal HUD is this wide (the night's rows and today's line; the stores, the crew and the clock are in their boards).
+const CARD_W_COMPACT := 360.0
 ## A key or a click in the world puts the card away only after this many real seconds (a key pressed as the card comes up is not a wish to be rid of it).
 const KEY_GRACE_S := 0.6
 ## The stores the summary names, in the order it names them, and the words of a person's stance for the crew row.
@@ -378,7 +381,7 @@ static func _names(list: Array, none: String) -> String:
 
 
 ## The rows of the card from the night's numbers and the rules as they stand: [[label, value, tone]...], label "" for a line that stands alone. Tones: "", "ok", "warn", "bad".
-func rows_for(t: Dictionary) -> Array:
+func rows_for(t: Dictionary, compact: bool = false) -> Array:
 	var rows: Array = []
 	var attack := bool(t.get("attack", false))
 	var kills := int(t.get("kills", 0))
@@ -410,6 +413,8 @@ func rows_for(t: Dictionary) -> Array:
 	var low := _stores_low()
 	if low != "":
 		rows.append(["", low + ".", "warn"])
+	if compact:
+		return rows    # (HUD8: the minimal HUD's morning is the night and today's line: the stores, the crew and the clock are on the screen, in their boards)
 	# (RULES2: the rest of the summary: the stores and what changed, what the scavengers brought, who does what, the weather and the clock)
 	var stores_text := _stores_text(t)
 	if stores_text != "":
@@ -568,7 +573,7 @@ func _open() -> void:
 	var col: VBoxContainer = hud._vbox(5)
 	card.add_child(col)
 	var head: HBoxContainer = hud._hbox(10)
-	_title = hud._label(title_text, Fonts.cond(700), 28, hud.INK)
+	_title = hud._label(title_text, Fonts.cond(700), 24 if _compact() else 28, hud.INK)
 	head.add_child(_title)
 	head.add_child(hud._spacer())
 	var day_l: Label = hud._label("DAY %d" % int(t.get("day", sim.day)), Fonts.cond(600, 2), 14, hud.ACCENT)
@@ -579,7 +584,7 @@ func _open() -> void:
 	_wrap_inner = []
 	_wrap_value = []
 	shown_rows = []
-	for r in rows_for(t):
+	for r in rows_for(t, _compact()):
 		_add_row(col, String(r[0]), String(r[1]), String(r[2]))
 		shown_rows.append([String(r[0]), String(r[1])])
 	var sc = _scenario()
@@ -595,7 +600,7 @@ func _open() -> void:
 		ot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(ot)
 		_wrap_inner.append(ot)
-		if String(o.get("sub", "")) != "":
+		if String(o.get("sub", "")) != "" and not _compact():
 			var osub: Label = hud._label(String(o.get("sub", "")), Fonts.sans(400), 14, hud.INK2)
 			osub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			col.add_child(osub)
@@ -697,6 +702,11 @@ func _close(quiet: bool) -> void:
 
 # --------------------------------------------------------------------------- place --
 
+## Whether the card is the minimal HUD's compact one.
+func _compact() -> bool:
+	return HudStage.minimal_on(main)
+
+
 ## The card's size and place (SAVE4): where it hides neither the avatar nor what the day's line points at, by the coach card's own rule (`Coach.best_rect`: the cheapest of the spots round the
 ## window and round the figure that covers least of what is kept clear, then least of the HUD's boards, the place it had kept unless another is clearly better). It used to be centred
 ## 30 px under the avatar's CENTRE, which at 1280 x 800 (a 390 px card) covered her feet.
@@ -704,8 +714,10 @@ func _place() -> void:
 	if card == null:
 		return
 	var vp: Vector2 = hud.size
-	var wmax := clampf(minf(CARD_W, vp.x - 2.0 * EDGE), minf(CARD_W_MIN, vp.x - 2.0 * EDGE), CARD_W)
+	var wfull := CARD_W_COMPACT if _compact() else CARD_W    # (HUD8: the minimal HUD's morning is a corner card, 360 wide)
+	var wmax := clampf(minf(wfull, vp.x - 2.0 * EDGE), minf(CARD_W_MIN, vp.x - 2.0 * EDGE), wfull)
 	var kept := kept_clear()
+	var soft := HudStage.middle_zone(main)    # (HUD8: the card keeps to the sides when it can: the middle of the window is the fight's)
 	# the widths to try: the width it had (it stays while it hides nothing), then the widest down to the narrowest (a small window has no room beside her for the full width)
 	var widths: Array = []
 	for k in [wmax, 440.0, 390.0, 345.0, CARD_W_MIN]:
@@ -720,7 +732,7 @@ func _place() -> void:
 	for cand in widths:
 		var sz := _size_at(float(cand))
 		var prev := Rect2(card.position, sz) if _placed and is_equal_approx(float(cand), _width) else Rect2()
-		var r: Rect2 = Coach.best_rect(hud, sz, vp, Rect2(), "bottom", false, true, kept, prev)
+		var r: Rect2 = Coach.best_rect(hud, sz, vp, Rect2(), "bottom", false, true, kept + soft, prev)
 		var cost := 0.0
 		for k in kept:
 			var ov: Rect2 = r.intersection(k)
@@ -759,6 +771,7 @@ func kept_clear() -> Array:
 	var me = sim.avatar.player() if sim != null and sim.get("avatar") != null else null
 	if me == null or me.away != null:
 		return out
+	out.append_array(HudStage.keep_clear(main))    # (HUD8, the placement rule: nor over the dead in view, nor on the line of fire)
 	var at: Vector2 = main.view_pos(me)
 	var a: Vector2 = main._tile_to_screen(at + Vector2(-0.5, -1.9))
 	var b: Vector2 = main._tile_to_screen(at + Vector2(0.5, 0.5))
