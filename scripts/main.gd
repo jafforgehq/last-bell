@@ -371,6 +371,17 @@ func _ready() -> void:
 	if _title_town:
 		run_meta = TitleScene.run_meta(OS.get_cmdline_user_args())
 	var town_run: bool = _title_town or TownBoot.wants(OS.get_cmdline_user_args(), run_meta)
+	# EXPERIMENT (prison extraction): New game (a windowed town run from the title's meta, no save, no `--town`) or `--prison` plays the prison base and raids; `--onehouse` keeps the old game
+	var uargs := OS.get_cmdline_user_args()
+	var prison_new: bool = not _title_town and town_run and run_meta.has("town") and not ("--town" in uargs) and String(run_meta.get("load", "")) == "" and DisplayServer.get_name() != "headless"
+	if ("--prison" in uargs or prison_new) and not ("--onehouse" in uargs):
+		set_process(false)
+		set_process_input(false)
+		set_process_unhandled_input(false)
+		var prison = load("res://scripts/prison/prison_game.gd").new()
+		prison.name = "Prison"
+		add_child(prison)
+		return
 	# the settings file and the window come first (its size, fullscreen, the interface size): the loading card is drawn in the window the player will play in
 	var prefs_path := prefs_file_for(OS.get_cmdline_user_args())
 	if prefs_path != "":
