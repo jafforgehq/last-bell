@@ -6,6 +6,7 @@
 ## 0z. EXPERIMENT (2026-10-11): prison base + extraction raids, branch `experiment/prison-extraction` (worktree `.worktrees/exp-prison`)
 - A playable slice: a hand-built prison compound with ten NPCs at work and a mass of dead at the gate; E at the gate goes out to a generated map, search/fight, extract (cutscene) banks the loot, death loses the pack.
 - Run: `Godot --path .worktrees/exp-prison -- --prison` (windowed New game also boots it; `--onehouse` keeps the old game). Code: `scripts/prison/`; main.gd has a ~12 line hand-over.
+- Round 2 added: aim fix, minimap, tower guns and alarm, day/night, crew life, new tree variants (Blender was unreachable).
 - Not merged, not pushed, no tests added; sim code untouched. Details, fake parts, verdict and effort: `docs/experiments/prison-extraction.md`.
 
 ## 0. One House (2026-10-05): read this first

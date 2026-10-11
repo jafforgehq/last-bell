@@ -50,7 +50,9 @@ var low := PackedByteArray()
 var objects: Array = []
 var stations := {}    # name -> Vector2 (where a worker stands)
 var towers: Array = []    # Rect2 (tiles) of each watchtower deck
-var labels: Array = []    # {pos, text} signs drawn over the base
+var labels: Array = []
+var fires: Array = []
+var lamps: Array = []    # {pos, text} signs drawn over the base
 var _next_id := 0
 var _proto := {}
 
@@ -299,6 +301,14 @@ func build(seed_i: int = 1) -> Dictionary:
 	_obj("crate", 57.5, 46.5, "s")
 	_obj("crate", 58.5, 46.5, "s")
 	_obj("bin", 38.5, 24.5, "e")
+	stations["chat_a1"] = Vector2(45.2, 27.5)
+	stations["chat_a2"] = Vector2(46.7, 27.5)
+	stations["chat_b1"] = Vector2(73.7, 26.6)
+	stations["chat_b2"] = Vector2(75.2, 26.6)
+	fires = [Vector2(35.5, 45.5), Vector2(61.0, 44.0), Vector2(26.0, 27.0)]
+	lamps = [Vector2(44.5, 40.5), Vector2(51.5, 40.5), Vector2(48.0, 25.0), Vector2(20.0, 25.0), Vector2(76.0, 24.5)]
+	for f in fires:
+		_obj("campfire", f.x, f.y)
 	stations["gate"] = Vector2(48.0, 52.0)
 	stations["truck"] = Vector2(40.0, 48.0)
 	stations["fence_w"] = Vector2(14.0, 54.0)
@@ -309,18 +319,26 @@ func build(seed_i: int = 1) -> Dictionary:
 	labels.append({"pos": Vector2(48.5, 53.6), "text": "GATE"})
 	# trees round the outside, from the template
 	var trees: Array = []
-	var proto_trees: Array = d.trees
-	if not proto_trees.is_empty():
-		var i := 0
-		for x in range(4, W - 4, 5):
-			for y in [3, 66]:
-				if y == 66 and absi(x - 48) < 10:
-					continue
-				var t0: Dictionary = (proto_trees[i % proto_trees.size()] as Dictionary).duplicate(true)
-				t0["x"] = float(x) + 0.5
-				t0["y"] = float(y)
-				trees.append(t0)
-				i += 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var greens := [0, 2, 5, 7, 8, 11, 0, 2, 14, 14, 13, 18, 18, 19, 20]
+	var spots: Array = []
+	for x in range(3, W - 2, 4):
+		spots.append(Vector2(x + rng.randf_range(-1.2, 1.2), rng.randf_range(2.2, 3.6)))
+	for y in range(8, 55, 5):
+		spots.append(Vector2(rng.randf_range(2.0, 4.0), y + rng.randf_range(-1.0, 1.0)))
+		spots.append(Vector2(W - rng.randf_range(3.0, 5.0), y + rng.randf_range(-1.0, 1.0)))
+	for x in range(6, W - 4, 6):
+		if absi(x - 48) > 14:
+			spots.append(Vector2(x + rng.randf_range(-1.5, 1.5), rng.randf_range(69.5, 71.0)))
+	for k in 10:
+		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(60.0, 68.0)))    # scrub in the pen
+	for sp in spots:
+		var pen: bool = sp.y > 59.0 and sp.y < 69.0
+		var n: int = [18, 19, 20][rng.randi() % 3] if pen else greens[rng.randi() % greens.size()]
+		if pen and n == 20:
+			n = 18
+		trees.append({"x": sp.x, "y": sp.y, "variant": n, "file": "res://assets/trees/tree_%d.png" % n})
 	# the data
 	d["W"] = W
 	d["H"] = H
