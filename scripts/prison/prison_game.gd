@@ -408,8 +408,8 @@ func _enter_raid() -> void:
 	raids += 1
 	var seed_i := int(args.get("seed", str(1000 + raids * 17 + int(Time.get_ticks_msec() % 997))))
 	var t: Dictionary = TownGen.make(seed_i, {"blocks": 2})
-	# the autumn crowns of the old trees are swapped for greens, pines and scrub (same art style, tools/make_prison_trees.py)
-	var swap := [0, 2, 5, 7, 8, 11, 14, 18, 19]
+	# the autumn crowns of the old trees are swapped for greens, pines and scrub (same art style, tools/make_prison_trees_blender.py)
+	var swap := [24, 24, 22, 23, 0, 2, 5, 24]
 	for tr in t.data.trees:
 		var m := String(tr.file).get_file().trim_prefix("tree_").trim_suffix(".png")
 		if m.is_valid_int() and [1, 3, 4, 6, 9, 10, 12].has(int(m)):

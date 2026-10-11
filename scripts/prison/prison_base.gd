@@ -321,7 +321,7 @@ func build(seed_i: int = 1) -> Dictionary:
 	var trees: Array = []
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 77
-	var greens := [0, 2, 5, 7, 8, 11, 0, 2, 14, 14, 13, 18, 18, 19, 20]
+	var greens := [24, 24, 24, 24, 22, 22, 21, 23, 23, 0, 2]
 	var spots: Array = []
 	for x in range(3, W - 2, 4):
 		spots.append(Vector2(x + rng.randf_range(-1.2, 1.2), rng.randf_range(2.2, 3.6)))
@@ -335,9 +335,7 @@ func build(seed_i: int = 1) -> Dictionary:
 		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(60.0, 68.0)))    # scrub in the pen
 	for sp in spots:
 		var pen: bool = sp.y > 59.0 and sp.y < 69.0
-		var n: int = [18, 19, 20][rng.randi() % 3] if pen else greens[rng.randi() % greens.size()]
-		if pen and n == 20:
-			n = 18
+		var n: int = 23 if pen else greens[rng.randi() % greens.size()]
 		trees.append({"x": sp.x, "y": sp.y, "variant": n, "file": "res://assets/trees/tree_%d.png" % n})
 	# the data
 	d["W"] = W
