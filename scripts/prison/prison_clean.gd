@@ -77,6 +77,9 @@ func update(dt: float) -> void:
 	for m in crew.members:
 		if m.state == "work" and m.has("eat") and bool(m.eat.get("clean", false)):
 			_work_at(m, dt)
+			if game.args.has("log") and String(m.get("clean_seen", "")) != String(m.eat.say):
+				m["clean_seen"] = String(m.eat.say)
+				print("CLEAN working ", m.def.id, " ", m.eat.say, " at ", snappedf(m.p.x, 0.1), ",", snappedf(m.p.y, 0.1), " t=", snappedf(game.clock, 1.0))
 
 
 func _start_round() -> void:
@@ -114,7 +117,7 @@ func _targets() -> Array:
 	for z in game.run.sim.zombies:
 		if z.state == "dead" and F.has_point(Vector2(z.x, z.y)):
 			out.append({"at": Vector2(z.x, z.y), "w": 3.0})
-	for d in game.fx.combat._decals:    # (the sim's blood sprites: they fade by themselves in 20 s, a broom speeds that up)
+	for d in game.fx.combat._decals:    # (the sim's blood sprites: in the prison they stay for minutes, until a broom comes)
 		var at: Vector2 = d.node.position / TILE
 		if F.has_point(at):
 			out.append({"at": at, "w": 1.0})
@@ -149,7 +152,7 @@ func _work_at(m: Dictionary, dt: float) -> void:
 	var c := Vector2(m.p.x, m.p.y)
 	for d in game.fx.combat._decals:
 		if (d.node.position / TILE).distance_to(c) < REACH:
-			d.age = float(d.age) + dt * SPEED_UP
+			d.age = maxf(float(d.age), game.fx.combat.decal_hold) + dt * (game.fx.combat.decal_life - game.fx.combat.decal_hold) / 4.0    # (gone in about 4 s of sweeping)
 	for z in game.run.sim.zombies:
 		if z.state == "dead" and Vector2(z.x, z.y).distance_to(c) < REACH:
 			z.dead_t = float(z.dead_t) + dt * SPEED_UP
@@ -174,6 +177,17 @@ func paint(c: CanvasItem) -> void:
 			c.draw_rect(Rect2(p + o - Vector2(3, 2), Vector2(6 + (k % 3) * 2, 4)), Color(col, 0.9))
 	for m in game.crew.members:
 		if m.state == "work" and m.has("eat") and bool(m.eat.get("clean", false)) and String(m.eat.work) == "clean":
-			var b := Vector2(m.p.x + 0.8, m.p.y + 0.35) * TILE
+			var b := _bucket_at(Vector2(m.p.x, m.p.y)) * TILE
 			c.draw_rect(Rect2(b - Vector2(6, 9), Vector2(12, 10)), Color(0.35, 0.4, 0.5))
 			c.draw_rect(Rect2(b - Vector2(6, 9), Vector2(12, 3)), Color(0.45, 0.65, 0.85))
+
+
+## The bucket stands on the first free tile beside the cleaner (not under a counter or a wall).
+func _bucket_at(c: Vector2) -> Vector2:
+	var w = game.world
+	for o in [Vector2(0.8, 0.35), Vector2(-0.8, 0.35), Vector2(0.0, 0.95), Vector2(0.8, -0.5), Vector2(-0.8, -0.5)]:
+		var t: Vector2 = c + o
+		var i := int(t.y) * int(w.W) + int(t.x)
+		if i >= 0 and i < w.solid_p.size() and w.solid_p[i] == 0:
+			return t
+	return c + Vector2(0.0, 0.95)

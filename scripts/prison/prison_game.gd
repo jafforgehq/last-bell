@@ -400,6 +400,8 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	fx = FX.new()
 	radial_tex = _radial_texture()
 	fx.setup(data, decals, radial_tex)
+	fx.combat.decal_hold = 600.0    # stains stay until a cleaner comes (prison_clean.gd), up to about 15 minutes
+	fx.combat.decal_life = 900.0
 	fx.combat.sound = sound
 	guard_cd.clear()
 	alarm_t = 0.0

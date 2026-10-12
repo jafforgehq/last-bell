@@ -405,7 +405,7 @@ static func _haul(o: Pose, x: float, u: float, loop: float) -> void:
 ## Sweeping (prison round 5): the long handled tool (the hoe's art stands for a broom) is drawn across the ground and back twice a loop, the body bent over it, a puff of dust at the end of each stroke.
 static func _clean(o: Pose, x: float, u: float, loop: float) -> void:
 	var sw := sin(u * TAU * 2.0)
-	o.tool = "hoe"
+	o.tool = "broom"
 	o.grip2 = 0.45
 	o.stance = 1.5
 	o.lean = 0.26
@@ -415,7 +415,7 @@ static func _clean(o: Pose, x: float, u: float, loop: float) -> void:
 	o.main = sh + Vector2(0.3 + 0.14 * sw, 0.12)
 	o.tool_at = o.main
 	o.tool_l = o.main_l
-	o.tool_yaw = -0.1
+	o.tool_yaw = -0.1 + 0.4 * sw    # the bristles sweep sideways
 	o.off = Vector2(0.18 + 0.1 * sw, -0.12)
 	o.fx = "dust"
 	o.fx_at = Vector2(0.78 + 0.1 * sw, 0.3)
