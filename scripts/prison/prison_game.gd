@@ -33,6 +33,7 @@ const Loot := preload("res://scripts/prison/prison_loot.gd")    # RAIDS hook
 const People := preload("res://scripts/prison/prison_people.gd")    # RAIDS hook
 const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
+const Upg := preload("res://scripts/prison/prison_upgrades.gd")    # WORLD hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -131,6 +132,7 @@ var pack: Pack    # the backpack (prison_pack.gd)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
+var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
@@ -155,6 +157,7 @@ func _ready() -> void:
 		return
 	loot = Loot.new(self)    # RAIDS hook
 	people = People.new(self)    # RAIDS hook
+	upg = Upg.new(self)    # WORLD hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
 	board = Board.new(self)    # UI hook (connects to the econ signals itself: toasts and the stage card replace the message lines)
@@ -551,6 +554,7 @@ func _enter_base() -> void:
 		siege.setup()
 		cleaner = Clean.new(self)
 		cleaner.setup()
+		upg.setup()    # WORLD hook
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
 		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
@@ -702,6 +706,7 @@ func _tick(dt: float) -> void:
 			_base_logic(dt)
 			_fence_guards(dt)
 			cleaner.update(dt)
+			upg.update(dt)    # WORLD hook
 			_pen_life(dt)
 			if dog != null:
 				dog.tick(dt, clock, tod > 6.0 and tod < 20.0, true)
@@ -1917,6 +1922,7 @@ func _draw_glow() -> void:
 	for t in base.towers:
 		var r: Rect2 = t
 		spots.append([Tower.lamp_pos(r), 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
+	spots.append_array(upg.glow_spots(n))    # WORLD hook
 	for sp in spots:
 		var scr: Vector2 = (Vector2(sp[0]) - cam_center) * zoom_px + v / 2.0
 		var rad: float = float(sp[1]) * zoom_px

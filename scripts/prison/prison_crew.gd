@@ -96,6 +96,7 @@ var tod := 8.0    # hour of the day, set by the game
 var play_t := 0.0
 var ball := Vector2(24.0, 49.0)    # the kids' ball
 var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
+var labor_cb: Callable    # WORLD hook: prison_upgrades.gd, called every frame a person works a project stop (m, stop, dt)
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
@@ -284,6 +285,8 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 		"work":
 			m.t = float(m.t) + dt
 			p.work_t = float(m.t)
+			if stop.has("build") and labor_cb.is_valid():    # WORLD hook: labor for the project
+				labor_cb.call(m, stop, dt)
 			if float(m.t) >= float(stop.secs):
 				if m.has("eat"):
 					if bool(m.eat.get("clean", false)):
