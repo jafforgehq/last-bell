@@ -65,6 +65,23 @@ const ALLIES := [
 	{"id": "bea", "name": "Bea", "role": "Ally", "key": "ana", "ally": true, "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}},
 	{"id": "ike", "name": "Ike", "role": "Ally", "key": "hector", "ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}},
 ]
+## MANAGED PHASE: the three allies are crew now: a name, a job and a place, no follow code, no "ally" key (so no health bar, no 'ready' tag, no revive). "ex_ally" only tells the siege to forget them when lost.
+const CREW_FROM_ALLIES := [
+	{"id": "cole", "name": "Cole", "role": "Gate watch", "key": "walt", "ex_ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
+		{"at": Vector2(44.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
+		{"at": Vector2(51.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
+	]},
+	{"id": "bea", "name": "Bea", "role": "Yard patrol", "key": "ana", "ex_ally": true, "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}, "route": [
+		{"at": Vector2(20.0, 46.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
+		{"at": Vector2(36.0, 49.0), "secs": 2.0, "work": "", "face": "E"},
+		{"at": Vector2(70.0, 47.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
+		{"at": Vector2(36.0, 41.0), "secs": 2.0, "work": "", "face": "W"},
+	]},
+	{"id": "ike", "name": "Ike", "role": "Quartermaster", "key": "hector", "ex_ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}, "route": [
+		{"at": "stores_out", "secs": 7.0, "work": "haul", "face": "N", "say": "carrying crates"},
+		{"at": "stores_in", "secs": 7.0, "work": "sort", "face": "N", "say": "counting the stores"},
+	]},
+]
 const ALLY_HP := 45.0
 const YARD := Rect2(9.0, 43.0, 28.0, 11.0)    # where the kids play
 

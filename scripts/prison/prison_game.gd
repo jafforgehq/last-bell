@@ -34,6 +34,8 @@ const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
 
 const CLEAR_WAKE_R := 10.0
+const RELOAD_EVERY := 5    # a crew gun is reloaded after this many shots
+const RELOAD_SECS := 1.7
 const ALLY_FOLLOW := 3.6
 const ALLY_RANGE := 9.0
 const ALLY_REVIVE_HP := 30.0
@@ -104,6 +106,8 @@ var glow: Control
 var radial_tex: Texture2D
 var mini_tex: ImageTexture
 var guard_cd := {}
+var aim_hold := {}    # person id -> seconds the aimed pose is still held
+var shot_n := {}    # person id -> shots fired (a reload pause every RELOAD_EVERY)
 var alarm_t := 0.0
 var alarm_cd := 0.0
 var _repl_t := 0.0
@@ -448,7 +452,7 @@ func _enter_base() -> void:
 	crew = Crew.new()
 	crew.setup(run.sim, world, base, data, clear)
 	if not clear:
-		for a in Crew.ALLIES:
+		for a in Crew.CREW_FROM_ALLIES:    # the allies are crew from here on (a job and a place), not followers
 			if allies_alive.has(String(a.id)):
 				crew._make(a, Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
 	for m in crew.members:
@@ -561,6 +565,18 @@ func _process(delta: float) -> void:
 
 var _perf_last := 0
 var _perf_ms: Array = []
+## Ticks the shooting poses of the crew (they are not in the sim, which would do it): the kick falls away, the reload runs out, the aim is held about a second after a shot and then the work pose (watch) comes back.
+func _gun_poses(dt: float) -> void:
+	for m in crew.members:
+		var g = m.p
+		g.recoil = maxf(0.0, float(g.recoil) - dt * 8.0)
+		g.reloading = maxf(0.0, float(g.reloading) - dt)
+		var h := float(aim_hold.get(g.id, 0.0)) - dt
+		aim_hold[g.id] = h
+		if h <= 0.0 and g.target != null:
+			g.target = null
+
+
 func _tick(dt: float) -> void:
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
 		var nowu := Time.get_ticks_usec()
@@ -587,6 +603,7 @@ func _tick(dt: float) -> void:
 		crew.tod = tod
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
 	if crew != null:
+		_gun_poses(dt)
 		crew.update(dt, stores)
 	fx.update(dt)
 	var p = run.avatar_p
@@ -615,7 +632,8 @@ func _tick(dt: float) -> void:
 			_pen_life(dt)
 			if dog != null:
 				dog.tick(dt, clock, tod > 6.0 and tod < 20.0, true)
-		_allies(dt)
+		if phase == "clear":
+			_allies(dt)    # (follow, shoot, bites and revive are the clear phase only)
 	else:
 		_raid_logic(dt)
 	_day_night(dt)
@@ -1382,12 +1400,20 @@ func _shoot_at(g, z, hit_p: float) -> void:
 	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
 	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)
 	g.aim = ang
-	var mx: float = g.x + cos(ang) * 0.7
-	var my: float = g.y + sin(ang) * 0.7 - 0.3
-	fx.muzzle(mx, my, ang, false)
+	# the pose: PawnNode draws the aimed gun while `target` is set, the kick from `recoil`, the lowered gun and pump from `reloading` (the pawn's own states, ticked in `_gun_poses`)
+	g.target = z
+	g.recoil = 1.0
+	aim_hold[g.id] = 1.1
+	shot_n[g.id] = int(shot_n.get(g.id, 0)) + 1
+	if int(shot_n[g.id]) % RELOAD_EVERY == 0:
+		g.reloading = RELOAD_SECS
+	var mz: Vector2 = run.sim.muzzle(g, ang)    # (the gun's own muzzle, so the flash and the tracer start at the barrel)
+	var mx := mz.x
+	var my := mz.y
 	var hit := randf() < hit_p
 	var tx: float = z.x if hit else z.x + randf_range(-0.8, 0.8)
 	var ty: float = z.y if hit else z.y + 1.2
+	fx.muzzle(mx, my, ang, false)
 	fx.tracer(mx, my, tx, ty)
 	fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
 	shots_fired += 1
@@ -1516,6 +1542,8 @@ func _secure() -> void:
 	busy = true
 	await _cut_out(["PRISON SECURED", "The gate is unlocked. The west breach is sealed."], false)
 	phase = "managed"
+	ally_chasers.clear()    # (no clear-phase state follows: the dead that chased an ally, the revive bar)
+	revive_t = 0.0
 	tod = 8.0
 	_enter_base()
 	await _cut_in()
@@ -1587,7 +1615,7 @@ func _allies(dt: float) -> void:
 				continue
 		g.hp = m.hp
 		m.hold = float(m.get("hold", 0.0)) - dt
-		if best != null and float(m.cd) <= 0.0:
+		if best != null and float(m.cd) <= 0.0 and float(g.reloading) <= 0.0:
 			_shoot_at(g, best, 0.7)
 			m.cd = randf_range(0.9, 1.6)
 			m.hold = 0.35
@@ -1694,7 +1722,7 @@ func _fence_guards(dt: float) -> void:
 			continue
 		var g = m.p
 		guard_cd[g.id] = float(guard_cd.get(g.id, randf() * 2.0)) - dt
-		if float(guard_cd[g.id]) > 0.0:
+		if float(guard_cd[g.id]) > 0.0 or float(g.reloading) > 0.0:
 			continue
 		var best = null
 		var bd := 1.0e9

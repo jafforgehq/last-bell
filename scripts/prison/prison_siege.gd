@@ -555,7 +555,7 @@ func _bites(dt: float) -> void:
 				game._say("%s is hurt, but alive." % String(m.def.name), 4.0)
 			elif float(info.t) <= 0.0:
 				crew.members.erase(m)
-				if m.def.has("ally"):
+				if m.def.has("ex_ally"):
 					game.allies_alive.erase(String(m.def.id))    # (else the next base build brings them back)
 				if m.has("node") and is_instance_valid(m.node):
 					m.node.queue_free()
