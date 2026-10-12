@@ -88,7 +88,7 @@ func attach(s, stash_at: Vector2 = Vector2.INF) -> void:
 	inv.quick = quick
 	inv.stash_at = stash_at
 	var a := String(game.args.get("auto", ""))
-	inv.auto_take = a != "" and a != "loot"    # (a scripted run has the lab's hand that takes everything)
+	inv.auto_take = a != "" and a != "loot" and a != "play"    # (a scripted run has the lab's hand that takes everything)
 	hud = PHud.new()
 	hud.say = Callable(game, "_say")
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -195,6 +195,8 @@ func bank() -> Dictionary:
 	var got: Dictionary = inv.deposit_all(true)
 	for r in inv.credit:
 		inv.credit[r] = 0.0
+	for i in quick.size():
+		quick[i] = ""    # (the belt points at items that are in the stores now)
 	return got
 
 

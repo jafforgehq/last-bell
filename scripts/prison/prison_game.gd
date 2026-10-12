@@ -130,9 +130,10 @@ func _ready() -> void:
 	_fit_window()
 	_make_hud()
 	pack = Pack.new(self)
+	siege = Siege.new(self)    # (before the first stage: a --raid start has no base yet)
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
-	var clear_auto := au == "clearall" or au == "ally"
+	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
 	phase = "managed" if (args.has("managed") or args.has("raid") or (au != "" and not clear_auto)) else "clear"
 	if args.has("raid") or (au != "" and not clear_auto):
 		_enter_raid()
@@ -421,6 +422,7 @@ func _enter_base() -> void:
 			zone_done.resize(Base.ZONES.size())
 			zone_done.fill(false)
 			tod = 9.0
+			pack.kit(stores)    # her rounds are the pack's (inv is active): without the kit she has the 6 loaded shots and cannot reload
 		run.sim.stock = stores    # the same dictionary: what a search finds is in the stores at once
 		pack.attach(run.sim, base.stations.stores)
 		run.avatar_p.x = Base.START.x
@@ -512,7 +514,7 @@ func _enter_raid() -> void:
 	extract_t = 0.0
 	_armed = false
 	run.sim.avatar.set_input(Vector2.ZERO, at, false)
-	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring. " + pack.status(), 7.0)
+	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring.", 7.0)
 
 
 ## Pickup points: the entry road and the far end of the road on the other side of the map.
@@ -674,6 +676,14 @@ func _hands() -> void:
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
 	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire()
+	if not _bot_in.is_empty():
+		move = _bot_in.move
+		aim = _bot_in.aim
+	if String(args.get("auto", "")) == "play" and not busy and mode == "base" and phase == "clear":
+		var b: Dictionary = _bot_clear()
+		move = b.move
+		aim = b.aim
+		fire = b.fire
 	run.sim.avatar.set_input(move, aim, fire)
 
 
@@ -764,6 +774,8 @@ func _raid_logic(dt: float) -> void:
 		else:
 			extract_t = maxf(0.0, extract_t - dt * 2.0)
 		if p.downed or p.dead or float(p.hp) <= 0.5:
+			if args.has("log"):
+				print("DIED hp ", p.hp, " downed ", p.downed, " dead ", p.dead, " at ", me)
 			_extract(false)
 
 
@@ -1012,6 +1024,10 @@ func _scripts(dt: float) -> void:
 				run.avatar_p.x = m.p.x + 0.8
 				run.avatar_p.y = m.p.y
 				break
+	if a == "loop":
+		_auto_loop(dt)
+	if a == "reach" and _auto_t > 0.5:
+		_auto_reach()
 	if a == "clearall" and mode == "base" and phase == "clear" and not busy:
 		_auto_clear()
 
@@ -1049,12 +1065,192 @@ func _auto_clear() -> void:
 	_auto_i += 1
 
 
-var _auto_target := Vector2(-1, -1)
-func _auto_loot() -> void:
+## --auto=play (clear phase): a player-like bot. Shoots the nearest awake dead in sight, reloads, revives a downed ally, searches containers within 12 tiles, else walks to the nearest remaining dead
+## of an uncleared zone with the path finder. Prints STUCK when it has not moved for 6 s.
+var _bot_hold_e := false
+var _bot_last := Vector2.ZERO
+var _bot_still := 0.0
+func _bot_clear() -> Dictionary:
 	var p = run.avatar_p
 	var me := Vector2(p.x, p.y)
+	var out := {"move": Vector2.ZERO, "aim": me + Vector2(1, 0), "fire": false}
+	_bot_hold_e = false
+	if pack.inv != null and pack.inv.open_id != "":
+		pack.inv.take_all_open()
+	var dt := get_process_delta_time()
 	var best = null
 	var bd := 1.0e9
+	for z in _awake_dead():
+		var d := me.distance_to(Vector2(z.x, z.y))
+		if d < 10.0 and d < bd and run.sim.clear_shot(me, Vector2(z.x, z.y), 0.15):
+			bd = d
+			best = z
+	if args.has("botlog") and frames % 300 == 0:
+		if best != null:
+			print("  target ", best.state, " ", Vector2(best.x, best.y), " hp ", best.hp, " kind ", best.get("kind"), " ang ", me.angle_to_point(Vector2(best.x, best.y)))
+		print("BOT t=", snappedf(clock, 0.1), " me ", me, " mag ", p.mag, " best ", best != null, " awake ", _awake_dead().size(), " pack ammo ", pack.inv.shots_available(p), " cleared ", _cleared_n())
+	var goal := Vector2(-1, -1)
+	var dn = null
+	for m in crew.members:
+		if m.state == "downed":
+			dn = m
+	if best != null:
+		out.aim = Vector2(best.x, best.y)
+		out.fire = int(p.mag) > 0
+		if int(p.mag) <= 0:
+			run.sim.avatar.reload()
+		if bd < 2.5:
+			out.move = (me - Vector2(best.x, best.y)).normalized()
+		elif bd > 6.0:
+			var tp: Array = run.sim.path_p.find(world.solid_p, me.x, me.y, best.x, best.y)
+			if not tp.is_empty():
+				out.move = (Vector2(tp[0]) - me).normalized()
+		return out
+	if int(p.mag) < 4:
+		run.sim.avatar.reload()
+	if dn != null and float(stores.meds) >= 1.0:
+		goal = Vector2(dn.p.x, dn.p.y)
+		_bot_hold_e = me.distance_to(goal) < 1.5
+	if goal.x < 0.0:
+		var cb := 12.0
+		for c in town.containers:
+			if run.sim.search.is_looted(String(c.id)):
+				continue
+			var d2 := me.distance_to(Vector2(c.pos))
+			if d2 < cb:
+				cb = d2
+				goal = Vector2(c.pos)
+		if goal.x >= 0.0 and cb < 0.7:
+			if not run.sim.uses.busy():
+				for cd in run.sim.uses.candidates(p):
+					if String(cd.kind) == "container":
+						run.sim.uses.use(cd)
+						break
+			return out
+	if goal.x < 0.0:
+		var f = run.field
+		var nb := 1.0e9
+		for zi in Base.ZONES.size():
+			if zone_done[zi]:
+				continue
+			for i in _dead_in_zone(zi):
+				var pl: Vector2 = f._place_of(i)
+				var d3 := me.distance_to(pl)
+				if d3 < nb:
+					nb = d3
+					goal = pl
+		for z in _awake_dead():
+			var d4 := me.distance_to(Vector2(z.x, z.y))
+			if d4 < nb and Base.zone_at(z.x, z.y) >= 0:
+				nb = d4
+				goal = Vector2(z.x, z.y)
+	if goal.x < 0.0:
+		return out
+	var path: Array = run.sim.path_p.find(world.solid_p, me.x, me.y, goal.x, goal.y)
+	if path.is_empty():
+		print("BOT nopath from ", me, " to ", goal)
+	else:
+		var wp: Vector2 = path[0]
+		if me.distance_to(wp) < 0.35 and path.size() > 1:
+			wp = path[1]
+		out.move = (wp - me).normalized()
+		out.aim = wp
+	if me.distance_to(_bot_last) < 0.3:
+		_bot_still += dt
+		if _bot_still > 6.0:
+			_bot_still = 0.0
+			print("STUCK at ", me, " goal ", goal, " zone ", Base.zone_at(me.x, me.y), " t ", snappedf(clock, 0.1))
+	else:
+		_bot_still = 0.0
+		_bot_last = me
+	return out
+
+
+## --auto=loop --managed [--loops=N] [--loopdie=1,0,...]: base, go out, loot for 25 s (the --auto=loot walker), extract or die (per --loopdie), prints a SNAP line at every step to catch state leaks.
+var _loop_n := 0
+var _loop_die := false
+var _raid_t := 0.0
+func _snap(tag: String) -> void:
+	var cells: int = (pack.grid.cells as Array).size()
+	var q: Array = pack.quick
+	print("SNAP ", tag, " phase=", phase, " mode=", mode, " tod=", snappedf(tod, 0.01), " stores=", stores, " pack_stacks=", cells, " belt=", q, " siege(att=", siege.attacking, " night=", siege.night, " started=", siege.nights_started, " abs_h=", snappedf(siege.abs_h, 0.1), ") crew=", (crew.members.size() if crew != null else -1), " allies=", allies_alive, " busy=", busy, " raids=", raids, " zombies=", run.sim.zombies.size(), " mag=", run.avatar_p.mag, " hp=", run.avatar_p.hp, " exits=", exits.size(), " me=", Vector2(run.avatar_p.x, run.avatar_p.y))
+
+
+func _auto_loop(dt: float) -> void:
+	if busy:
+		return
+	var n_max := int(args.get("loops", "2"))
+	var dies := String(args.get("loopdie", "0,1")).split(",")
+	if mode == "base":
+		if _auto_t > 3.0:
+			_snap("base before raid %d" % _loop_n)
+			if _loop_n >= n_max:
+				get_tree().quit()
+				return
+			_raid_t = 0.0
+			_go_out()
+			_auto_t = 0.0
+	else:
+		_raid_t += dt
+		run.invulnerable = (_raid_t > 0.0 and _raid_t < float(args.get("raidsecs", "25"))) or (_raid_t < 0.0 and not _loop_die)
+		if _raid_t > 0.0:
+			_auto_loot()
+		if _raid_t > float(args.get("raidsecs", "25")):
+			var die: bool = dies[_loop_n % dies.size()] == "1"
+			_loop_die = die
+			_snap("raid end (die=%s)" % die)
+			_loop_n += 1
+			_auto_t = 0.0
+			_raid_t = -1.0e9    # (decided: the ending takes a few seconds)
+			if die:
+				run.avatar_p.hp = 0.0
+			else:
+				_extract(true)
+
+
+## --auto=reach: path finder check from the start point to every container stand point and every dead record of the clear phase (prints the ones with no path), then quits.
+func _auto_reach() -> void:
+	var from := Base.START
+	var bad := 0
+	for ct in town.containers:
+		var pth: Array = run.sim.path_p.find(world.solid_p, from.x, from.y, ct.pos.x, ct.pos.y)
+		var sp: int = world.solid_p[int(ct.pos.y) * world.W + int(ct.pos.x)]
+		if pth.is_empty() or sp != 0:
+			bad += 1
+			print("REACH container ", ct.id, " ", ct.kind, " pos ", ct.pos, " solid ", sp, " path ", pth.size())
+	for i in run.field.n:
+		var pl: Vector2 = run.field._place_of(i)
+		var pth2: Array = run.sim.path_p.find(world.solid_p, from.x, from.y, pl.x, pl.y)
+		if pth2.is_empty():
+			bad += 1
+			print("REACH dead ", i, " zone ", Base.zone_at(pl.x, pl.y), " at ", pl, " solid ", world.solid_p[int(pl.y) * world.W + int(pl.x)])
+	for zi in Base.ZONES.size():
+		for id in Base.ZONES[zi].crew:
+			pass
+	print("REACH done: containers ", town.containers.size(), " dead ", run.field.n, " bad ", bad)
+	get_tree().quit()
+
+
+var _auto_target := Vector2(-1, -1)
+var _bot_in := {}
+var _bot_wait := 0.0
+func _auto_loot() -> void:
+	_bot_in = {}
+	var p = run.avatar_p
+	var me := Vector2(p.x, p.y)
+	_bot_wait -= get_process_delta_time()
+	if _bot_wait > 0.0:
+		_bot_in = {"move": Vector2.ZERO, "aim": me}
+		return
+	var best = null
+	var bd := 1.0e9
+	if not run.sim.uses.busy():
+		for cd in run.sim.uses.candidates(p):
+			if String(cd.kind) == "container" and bool(cd.get("ok", true)):
+				run.sim.uses.use(cd)
+				_bot_wait = 4.0    # (a second use cancels the search)
+				_bot_in = {"move": Vector2.ZERO, "aim": me}
+				return
 	for c in town.containers:
 		if run.sim.search.is_looted(String(c.id)):
 			continue
@@ -1068,13 +1264,14 @@ func _auto_loot() -> void:
 		for c in run.sim.uses.candidates(p):
 			if String(c.kind) == "container":
 				run.sim.uses.use(c)
+				_bot_wait = 4.0
 				break
-		run.sim.avatar.set_input(Vector2.ZERO, me, false)
+		_bot_in = {"move": Vector2.ZERO, "aim": me}
 	else:
 		var path: Array = run.sim.path_p.find(world.solid_p, me.x, me.y, best.pos.x, best.pos.y)
 		if not path.is_empty():
 			var wp: Vector2 = path[mini(1, path.size() - 1)]
-			run.sim.avatar.set_input(wp - me, wp, false)
+			_bot_in = {"move": (wp - me).normalized(), "aim": wp}
 
 
 func _save_shot() -> void:
@@ -1284,7 +1481,7 @@ func _zone_check() -> void:
 		_say("%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
 		sound.play("bell", 0.5, 0.0)
 		if args.has("log"):
-			print("ZONE cleared ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " freed ", names, " stores ", stores)
+			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " freed ", names, " stores ", stores)
 	if _cleared_n() == Base.ZONES.size() and not busy:
 		_secure()
 
