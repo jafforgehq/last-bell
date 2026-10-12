@@ -36,6 +36,10 @@ const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const Upg := preload("res://scripts/prison/prison_upgrades.gd")    # WORLD hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
+const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
+const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: raid companions
+const SearchRules := preload("res://scripts/town/search.gd")
+const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -140,6 +144,12 @@ var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's 
 var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
+var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
+var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
+var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
+var loadout_kit := {}    # what the card chose to take from the stores for the next raid ({} = the standard kit)
+var squad_regroup := false    # the call to the pickup: the companions run to Ruth
+var _weapon_card := false
 
 
 func _ready() -> void:
@@ -149,6 +159,7 @@ func _ready() -> void:
 			var kv := s.trim_prefix("--").split("=", true, 1)
 			args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	data = GD.load_all()
+	Arms.merge(data)    # SQUAD hook: the prison's guns over the shared data (this process only)
 	_fit_window()
 	_make_hud()
 	pack = Pack.new(self)
@@ -160,6 +171,9 @@ func _ready() -> void:
 		return
 	loot = Loot.new(self)    # RAIDS hook
 	people = People.new(self)    # RAIDS hook
+	arms = Arms.new(self)    # SQUAD hook
+	squad = Squad.new(self)
+	loadout = Loadout.new(self)
 	upg = Upg.new(self)    # WORLD hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
@@ -362,6 +376,8 @@ func _draw_bars() -> void:
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(extract_t / EXTRACT_S, 0, 1), 12), Color(0.4, 0.9, 0.5))
 	_draw_minimap(v)
 	PHud.draw(self, bars, v)
+	if mode == "raid":
+		squad.draw_hud(bars, v)    # SQUAD hook: the card of the companions
 	if mode == "raid" and not busy:
 		# arrows to the pickups at the edge of the screen
 		for e in exits:
@@ -445,6 +461,7 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 		roofs.setup(town, data, "house")
 	run = TownRun.new(town, world, fx, 100, true, true)
 	run.sim.feel = fx.combat
+	arms.apply(run.avatar_p)    # SQUAD hook: the gun she chose (before the pawn is made: it draws that gun)
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
 	mini_tex = _mini_texture(town.data)
 	if dog != null:
@@ -602,10 +619,14 @@ func _enter_raid() -> void:
 	var drop: Vector2 = Vector2(t.entry.pos)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	loot.begin(t, seed_i)    # RAIDS hook: loot by place and the marked places (before the sim reads the containers)
+	if crew != null:
+		squad.snapshot()    # SQUAD hook: who could go (the base is torn down by the next line)
 	_make_stage(t, true)
 	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0, "parts": 0.0, "fuel": 0.0}
-	var kit_line: String = pack.kit(stores)
+	var kit_line: String = pack.kit(stores, loadout_kit)
+	loadout_kit = {}
 	pack.attach(run.sim)
+	arms.carry_out()    # SQUAD hook: the main gun and the spare leave the rack
 	var at: Vector2 = Vector2(t.entry.pos)
 	run.avatar_p.x = at.x
 	run.avatar_p.y = at.y
@@ -616,6 +637,10 @@ func _enter_raid() -> void:
 		run.avatar_p.y = float(c[1])
 	exits = _pick_exits(t, at)
 	people.begin_raid(t, seed_i)    # RAIDS hook: a survivor in a building, rarely
+	squad_regroup = false
+	squad.begin_raid()    # SQUAD hook: the companions step out of the truck
+	if args.has("scav-test"):
+		squad.start_test()
 	cam_center = Vector2(run.avatar_p.x, run.avatar_p.y)
 	extract_t = 0.0
 	_armed = false
@@ -779,6 +804,7 @@ func _step() -> void:
 				for k in e.loot:
 					parts.append("+%d %s" % [int(e.loot[k]), k])
 				_say("Found: " + (", ".join(parts) if not parts.is_empty() else "nothing"), 2.5)
+				_auto_pick(String(e.get("container", "")))
 	run.sim.events.clear()
 	if run.invulnerable:
 		run.avatar_p.hp = 100.0
@@ -803,7 +829,7 @@ func _hud_text() -> String:
 
 func _hands() -> void:
 	var move := Vector2.ZERO
-	if not busy:
+	if not busy and not loadout.is_open:
 		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 			move.y -= 1.0
 		if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
@@ -812,14 +838,14 @@ func _hands() -> void:
 			move.x -= 1.0
 		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 			move.x += 1.0
-	if args.has("walk") and not busy:
+	if args.has("walk") and not busy and not loadout.is_open:
 		var w := String(args.walk).split(",")
 		move = Vector2(float(w[0]), float(w[1]))
 	var aim := cam_center + (get_viewport().get_mouse_position() - _vp() / 2.0) / zoom_px
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire() and not board.blocks_fire()
+	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire() and not board.blocks_fire() and not loadout.is_open and not squad.blocks_fire()
 	if not _bot_in.is_empty():
 		move = _bot_in.move
 		aim = _bot_in.aim
@@ -834,19 +860,30 @@ func _hands() -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if run == null:
 		return
-	if loot.key(ev):    # RAIDS hook: the gate's choice takes its keys
+	if loot.key(ev) or loadout.key(ev):    # RAIDS hook: the gate's choice takes its keys; SQUAD hook: so does the loadout card
 		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
+		return
+	if ev is InputEventKey and not busy and squad.key(ev):    # SQUAD hook: C, the orders
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
 		return
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		match ev.keycode:
 			KEY_E:
-				_use()
+				if ev.shift_pressed and mode == "raid":
+					_room_search()
+				else:
+					_use()
 			KEY_R:
 				if mode == "raid" or phase == "clear" or siege.can_fire():
 					run.sim.avatar.reload()
+			KEY_B:    # SQUAD hook: the spare gun
+				if mode == "raid" and not busy:
+					if arms.swap(run.avatar_p):
+						_say("Now: %s." % arms.gun_name(String(run.avatar_p.weapon)), 2.0)
+					else:
+						_say("No spare gun in the pack.", 2.0)
 			KEY_F:
 				if (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
 					run.sim.avatar.melee()
@@ -864,6 +901,44 @@ func _unhandled_input(ev: InputEvent) -> void:
 			play_zoom = zoom_px
 
 
+## The prompt of a use: its words, and for a search how long it takes ("E: Search the cupboard (3 s)"), with the room search on Shift+E where the room has two or more to search.
+func _use_label(c: Dictionary) -> String:
+	var l := "E: %s" % String(c.label)
+	if String(c.get("kind", "")) != "container" or not bool(c.get("session", false)) or run == null:
+		return l
+	var cont: Dictionary = run.sim.houses.container(String(c.get("id", "")))
+	if not cont.is_empty() and not String(c.label).begins_with("Stop"):
+		l += " (%d s)" % ceili(SearchRules.search_secs(run.sim, cont))
+	var rsm = run.sim.get("room_search")
+	if rsm != null and not run.sim.uses.busy():
+		var o: Dictionary = rsm.offer()
+		if not o.is_empty() and bool(o.get("ok", false)):
+			l += "     Shift+E: search all %d in this room (%d s)" % [int(o.n), ceili(float(o.secs))]
+	return l
+
+
+## A searched container with ONE thing in it is taken at once (a floating "+2 Ammo"): the loot window is for more than one.
+func _auto_pick(id: String) -> void:
+	var inv = run.sim.inv
+	if inv == null or id == "" or inv.open_id != id or inv.items_left(id) != 1:
+		return
+	var g: Dictionary = inv.grid_of(id)
+	var pl: Dictionary = g.cells[0]
+	var name := String(preload("res://scripts/sim/inventory.gd").name_of(String(pl.item)))
+	var n := int(pl.count)
+	if inv.take_all_open() > 0 or (g.cells as Array).is_empty():
+		squad.floaters.append({"text": "+%d %s" % [n, name], "pos": Vector2(run.avatar_p.x, run.avatar_p.y - 1.8), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
+
+
+## Shift+E: the whole room (the town's own module: it walks her from container to container).
+func _room_search() -> void:
+	var rsm = run.sim.get("room_search")
+	if rsm == null or busy:
+		return
+	var r: Dictionary = rsm.begin()
+	_say(String(r.get("line", "")) if bool(r.get("ok", false)) else String(r.get("why", "")), 3.0)
+
+
 func _use() -> void:
 	if busy or _prompt.is_empty():
 		return
@@ -874,6 +949,9 @@ func _use() -> void:
 		return
 	if String(_prompt.get("kind", "")) == "survivor":    # RAIDS hook
 		people.talk()
+		return
+	if String(_prompt.get("kind", "")) == "leave":    # SQUAD hook: E in the pickup ring: leave the ones that are not here
+		squad.abandon()
 		return
 	if String(_prompt.get("kind", "")) == "locked":
 		_say("The gate is chained shut and the pen behind it is full. Clear the prison first.", 3.0)
@@ -917,23 +995,34 @@ func _raid_logic(dt: float) -> void:
 	var me := Vector2(p.x, p.y)
 	_prompt = {}
 	if not busy:
-		for c in run.sim.uses.candidates(p):
-			if bool(c.get("ok", true)):
-				_prompt = {"kind": "use", "c": c, "label": "E: %s" % String(c.label)}
-				break
+		_prompt = squad.prompt()    # SQUAD hook: a downed companion beside her
+		if _prompt.is_empty():
+			for c in run.sim.uses.candidates(p):
+				if bool(c.get("ok", true)):
+					_prompt = {"kind": "use", "c": c, "label": _use_label(c)}
+					break
 		if _prompt.is_empty():    # RAIDS hook
 			_prompt = people.prompt()
 		people.update(dt)    # RAIDS hook
+		squad.update(dt)    # SQUAD hook
 		var in_ring := false
 		if me.distance_to(Vector2(exits[0])) > 14.0:
 			_armed = true    # the drop-off ring works only after you have walked away from it
 		for k in exits.size():
 			if me.distance_to(Vector2(exits[k])) < EXTRACT_R and (k > 0 or _armed):
 				in_ring = true
+		if in_ring and squad.any():
+			squad.call_all()    # SQUAD hook: the call to the pickup
+		squad_regroup = in_ring and squad.any()
 		if in_ring and not run.sim.uses.busy():
-			extract_t += dt
-			if extract_t >= EXTRACT_S:
-				_extract(true)
+			var rs: Dictionary = squad.ring_state(dt) if squad.any() else {"ok": true, "text": ""}
+			if bool(rs.ok):
+				extract_t += dt
+				if extract_t >= EXTRACT_S:
+					_extract(true)
+			else:
+				extract_t = 0.0
+				_prompt = {"kind": "leave", "label": String(rs.text)}
 		else:
 			extract_t = maxf(0.0, extract_t - dt * 2.0)
 		if p.downed or p.dead or float(p.hp) <= 0.5:
@@ -960,7 +1049,13 @@ func _extract(alive: bool) -> void:
 	var loot_got := {}
 	pack.close()
 	var join_text: String = people.settle(alive)    # RAIDS hook: does the survivor join (a free bed, alive, at the ring)
+	var gun_lines: Array = []
 	if alive:
+		var back: int = arms.land([pack.grid])    # SQUAD hook: her gun and the guns in the pack go to the rack
+		var sq: Dictionary = squad.settle(true)    # the bags of the companions that are here go into the stock
+		gun_lines = sq.lines
+		if back > 0:
+			gun_lines.append("%d gun%s for the weapon rack." % [back, "" if back == 1 else "s"])
 		pack.bank()    # (the items go back into the raid's stock: the line below banks all of it)
 		for k in STOCK_KEYS:
 			var v := float(run.sim.stock.get(k, 0.0))
@@ -968,6 +1063,9 @@ func _extract(alive: bool) -> void:
 	var lines: Array = ["You reach the pickup. The truck is waiting.", "Back through the gate, back to the compound."]
 	if not alive:
 		lines = ["You go down in the street.", "Whatever you carried stays out there."]
+		arms.lost()    # SQUAD hook
+		gun_lines = squad.settle(false).lines
+	squad.end_raid()
 	await _cut_out(lines, alive)
 	var lost: int = 0 if alive else pack.lose()
 	if alive:
@@ -983,9 +1081,11 @@ func _extract(alive: bool) -> void:
 		sum = "Backpack lost. (%d stacks, nothing banked)" % lost
 	elif sum == "Banked:":
 		sum = "You came back with nothing."
+	if not gun_lines.is_empty():
+		sum += "\n" + "\n".join(gun_lines)
 	print("RESULT ", sum, " | stores ", stores, " | pack stacks ", pack.grid.cells.size())
 	await _cut_in()
-	_say(sum, 8.0)
+	_say(sum, 10.0)
 	if join_text != "":    # RAIDS hook
 		people.banner(join_text, Color(1, 0.6, 0.45) if join_text.contains("left") else Color(0.6, 1, 0.7))
 	busy = false
@@ -1067,6 +1167,8 @@ func _sync_views() -> void:
 	var an = pawn_nodes[run.avatar_p]
 	an.anim_t = clock
 	an.sync(true, sim_steps, alpha)
+	if mode == "raid":
+		squad.sync(view, clock, sim_steps, alpha)    # SQUAD hook
 	if crew != null:
 		for m in crew.members:
 			var n3: PawnNode = m.node
@@ -1161,6 +1263,34 @@ func _paint_overlay(c: CanvasItem) -> void:
 			c.draw_string(font, p - Vector2(60, EXTRACT_R * TILE + 8), "EXTRACTION", HORIZONTAL_ALIGNMENT_CENTER, 120, 18, Color(0.6, 1, 0.7))
 		loot.paint(c)    # RAIDS hook
 		people.paint(c)
+		squad.paint(c)    # SQUAD hook
+		_paint_search(c)
+
+
+## Raid overlay: near her, each container says what it is: a yellow bracket (not searched), a green tick (done), an orange dot (searched, things left in it); the one she is searching has a ring that fills.
+func _paint_search(c: CanvasItem) -> void:
+	var me := Vector2(run.avatar_p.x, run.avatar_p.y)
+	var inv = run.sim.inv
+	var pulse := 0.5 + 0.5 * sin(clock * 4.0)
+	for ct in town.containers:
+		var at := Vector2(ct.at)
+		if me.distance_to(at) > 7.0:
+			continue
+		var id := String(ct.id)
+		var pp := at * TILE
+		if run.sim.search.is_looted(id):
+			if inv != null and inv.items_left(id) > 0:
+				c.draw_circle(pp, 6.0, Color(1.0, 0.6, 0.2, 0.9))
+			else:
+				c.draw_polyline(PackedVector2Array([pp + Vector2(-6, 0), pp + Vector2(-2, 5), pp + Vector2(7, -6)]), Color(0.45, 1.0, 0.5, 0.75), 2.5)
+		else:
+			c.draw_rect(Rect2(pp - Vector2(9, 9), Vector2(18, 18)), Color(1.0, 0.85, 0.25, 0.5 + 0.3 * pulse), false, 2.0)
+	var us = run.sim.uses
+	if us.busy() and String(us._s.kind) == "container":
+		var f := clampf(float(us._s.t) / maxf(float(us._s.of), 0.1), 0.0, 1.0)
+		var cp := Vector2(us._s.at) * TILE
+		c.draw_arc(cp, 20.0, 0, TAU, 28, Color(0, 0, 0, 0.6), 7.0)
+		c.draw_arc(cp, 20.0, -PI / 2.0, -PI / 2.0 + f * TAU, 28, Color(0.95, 0.8, 0.3), 5.0)
 
 
 # --------------------------------------------------------------------- scripted --
@@ -1170,6 +1300,15 @@ func _scripts(dt: float) -> void:
 	if args.has("drive") and frames == 5:
 		driver = Drive.new(self)
 		driver.run(String(args.drive))
+	if args.has("loadout") and frames == 30:    # staging: the loadout card (--loadout=weapon: the clear phase's weapon card)
+		loadout.open("Food and water" if String(args.loadout) != "weapon" else "", String(args.loadout) == "weapon")
+	if args.has("pick") and frames == 32 and loadout.is_open:    # staging: --pick=june,owen ticks companions on the card
+		for id in String(args.pick).split(","):
+			squad.toggle(id)
+		loadout._refresh()
+	if phase == "clear" and mode == "base" and frames == 25 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
+		_weapon_card = true
+		loadout.open("", true)    # the first card of the party: which gun
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
 		run.avatar_p.mag = 2
 		run.sim.avatar.reload()
@@ -1525,6 +1664,7 @@ func _draw_minimap(v: Vector2) -> void:
 			bars.draw_arc(o + Vector2(e) * sc, 5.0, 0, TAU, 14, Color(0.4, 1, 0.5), 2.0)
 		loot.mini(bars, o, sc)    # RAIDS hook
 		people.mini(bars, o, sc)
+		squad.mini(bars, o, sc)    # SQUAD hook
 	var p = run.avatar_p
 	var me := o + Vector2(p.x, p.y) * sc
 	var ang := Vector2(p.x, p.y).angle_to_point(run.avatar_p.input_aim) if run.avatar_p.input_aim != Vector2.ZERO else 0.0
@@ -1654,7 +1794,7 @@ func _clear_logic(dt: float) -> void:
 	if _prompt.is_empty():
 		for c in run.sim.uses.candidates(p):
 			if bool(c.get("ok", true)):
-				_prompt = {"kind": "use", "c": c, "label": "E: %s" % String(c.label)}
+				_prompt = {"kind": "use", "c": c, "label": _use_label(c)}
 				break
 	if _prompt.is_empty() and me.distance_to(Base.GATE_POS) < 7.0:
 		_prompt = {"kind": "locked", "label": "The gate is chained shut. Clear the prison first."}

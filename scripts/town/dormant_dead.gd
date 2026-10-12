@@ -400,6 +400,8 @@ func noise_radius_for(p) -> float:
 	var gun: Dictionary = sim.gun_of(p) if sim != null else {}
 	if bool(gun.get("melee", false)):
 		return float(noise_by_gun.get("melee", 4.0))
+	if gun.has("noise"):    # (a gun's own radius: the prison game's guns)
+		return float(gun.noise)
 	return float(noise_by_gun.get(String(p.weapon), noise_by_gun.get("other", 12.0)))
 
 

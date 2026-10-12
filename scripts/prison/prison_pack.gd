@@ -186,13 +186,16 @@ func open_stash() -> void:
 # ------------------------------------------------------------------------------------ the economy --
 
 ## Going out with nothing in the pack: the standard kit from the stores. The belt is filled from what she carries either way. Returns a line for the message ("" when she chose her own).
-func kit(stores: Dictionary) -> String:
+func kit(stores: Dictionary, custom: Dictionary = {}) -> String:
 	var line := ""
-	if Inventory.is_empty(grid):
-		line = "The quartermaster hands you the standard kit. "
-		for r in KIT:
-			var got := Inventory.withdraw(stores, grid, String(r), int(KIT[r]))
-			if got < int(KIT[r]) and r == "ammo":    # (the stores hold less than the kit: she gets what is there)
+	if Inventory.is_empty(grid) or not custom.is_empty():
+		var want: Dictionary = custom if not custom.is_empty() else KIT
+		line = "The quartermaster hands you the %s kit. " % ("loadout you chose" if not custom.is_empty() else "standard")
+		for r in want:
+			if int(want[r]) <= 0:
+				continue
+			var got := Inventory.withdraw(stores, grid, String(r), int(want[r]))
+			if got < int(want[r]) and r == "ammo":    # (the stores hold less than the kit: she gets what is there)
 				line = "The stores could only spare %d rounds. " % got
 	for id in BELT:
 		if InvApi.count_of(grid, id) > 0 and not quick.has(id):

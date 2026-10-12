@@ -560,7 +560,11 @@ func _shoot(p, gun: Dictionary) -> void:
 		sim.feel.shot(p, p.weapon, p.aim)
 	sim.fx.muzzle(m.x, m.y, p.aim, p.weapon == "shotgun" or p.weapon == "hunting")
 	sim.fx.casing(p.x, p.y - 0.15, p.aim, p.weapon == "shotgun")
-	sim.events.append({"type": "shot", "weapon": gun.sound, "gun": p.weapon, "x": p.x, "y": p.y})
+	var shot_e := {"type": "shot", "weapon": gun.sound, "gun": p.weapon, "x": p.x, "y": p.y}
+	if gun.has("pitch"):    # (the prison game's guns: the sound's pitch and level)
+		shot_e["pitch"] = float(gun.pitch)
+		shot_e["vol"] = float(gun.get("vol", 1.0))
+	sim.events.append(shot_e)
 	if not _packed(p):
 		sim.stock.ammo = maxf(0.0, sim.stock.ammo - sim.shot_cost(p))    # (the town's pack pays at the reload instead: scripts/town/inv.gd)
 	var from := shoulder(p)

@@ -332,7 +332,7 @@ func _pick(i: int) -> void:
 	choosing = false
 	_panel.visible = false
 	picked = i
-	game._go_out()
+	game.loadout.open(String(cfg().options[i].name))    # SQUAD hook: the second step of the gate's choice (gun, kit, companions), which goes out
 
 
 ## Keys while the choice is open. True when used.

@@ -13,7 +13,7 @@ const ATLAS := "res://assets/ui/inv/inv_icons.png"
 const TABLE := "res://assets/ui/inv/inv_icons.json"
 
 ## The items that have a picture of their own (a test says so when items.json has one more); any other is drawn as a box with a question mark.
-const KNOWN := ["shells", "shell_box", "canned_food", "ration_pack", "water_bottle", "water_jug", "bandage", "medkit", "parts_box", "fuel_can"]
+const KNOWN := ["shells", "shell_box", "canned_food", "ration_pack", "water_bottle", "water_jug", "bandage", "medkit", "parts_box", "fuel_can", "gun_shotgun", "gun_service", "gun_smg"]
 ## A stack of loose shells is told by its size: one shell, a few, a box's worth.
 const SHELL_FEW := 2
 const SHELL_BOX := 12
@@ -131,9 +131,9 @@ static func draw_item(ci: CanvasItem, id: String, rect: Rect2, rot: int, cell: f
 
 # ----------------------------------------------------------------------------- equipment --
 
-## The pump shotgun, side on, in `rect` (kept in its own proportions).
-static func draw_gun(ci: CanvasItem, rect: Rect2, tint: Color = Color.WHITE) -> void:
-	draw_fit(ci, "pump_shotgun", rect, tint)
+## The gun `id` (the pump shotgun when none is named), side on, in `rect` (kept in its own proportions).
+static func draw_gun(ci: CanvasItem, rect: Rect2, tint: Color = Color.WHITE, id: String = "shotgun") -> void:
+	draw_fit(ci, "pump_shotgun" if id == "shotgun" or not has_region("gun_" + id) else "gun_" + id, rect, tint)
 
 
 ## The swing of a blow, in `rect`: a bat and the swish of the arc, no item.
