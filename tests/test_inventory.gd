@@ -20,7 +20,7 @@ func test_the_items_in_the_data_are_whole() -> void:
 	for id in ids:
 		var d := Inventory.item(String(id))
 		check(int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) >= 1 and int(d.units) >= 1, "%s has a size, a stack and units" % String(id))
-		check(["ammo", "food", "water", "meds"].has(String(d.res)), "%s stands for a store: %s" % [String(id), String(d.res)])
+		check(["ammo", "food", "water", "meds", "parts", "fuel"].has(String(d.res)), "%s stands for a store: %s" % [String(id), String(d.res)])
 		check(["eat", "drink", "bandage", "none"].has(String(d.use)), "%s has a use: %s" % [String(id), String(d.use)])
 	eq(Inventory.size_of("water_jug"), Vector2i(2, 2), "a jug is two by two")
 	eq(Inventory.size_of("water_bottle"), Vector2i(1, 1), "a bottle is one cell (PH10: it was two)")
