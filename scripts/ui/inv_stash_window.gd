@@ -55,7 +55,8 @@ func setup(controller, hud_node) -> void:
 	col.add_child(head)
 	var strip: HBoxContainer = hud._hbox(4)
 	var rows_here: Array = ROWS.duplicate()
-	if ctl.sim != null and (ctl.sim.stock as Dictionary).has("parts"):
+	var csim = ctl.get("sim")
+	if csim != null and (csim.stock as Dictionary).has("parts"):
 		rows_here.append_array(ROWS_PRISON)
 	for r in rows_here:
 		strip.add_child(_column(String(r[0]), String(r[1]), String(r[2])))

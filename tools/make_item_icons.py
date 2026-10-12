@@ -415,6 +415,43 @@ def icon_medkit():
     return cv.finish()
 
 
+def icon_parts_box():
+    # a small steel box, open at the top: a green circuit board with chips and traces, a screw and a bolt
+    cv = Cv(U, U, 14)
+    cv.rrect(14, 52, 114, 112, 6, STEEL)
+    cv.rrect(14, 52, 114, 66, (6, 6, 0, 0), TIN, ow=3.5, hi=0.35)
+    cv.poly([(22, 54), (30, 22), (100, 22), (108, 54)], OLIVE_D)
+    cv.rrect(28, 24, 100, 48, 3, OLIVE, ow=3.0)
+    cv.rrect(40, 29, 58, 41, 2, STEEL_D, ow=2.0, hi=0, lo=0)
+    cv.rrect(68, 29, 78, 39, 2, BRASS, ow=2.0, hi=0, lo=0)
+    cv.detail([(60, 35), (68, 35)], 2.4, BRASS_L, 0.9)
+    cv.detail([(82, 33), (94, 33), (94, 42)], 2.4, BRASS_L, 0.9)
+    cv.ell(34, 90, 11, 11, TIN, ow=3.5)
+    cv.detail([(28, 90), (40, 90)], 3.4, STEEL_D, 0.9)
+    cv.detail([(34, 84), (34, 96)], 3.4, STEEL_D, 0.9)
+    cv.rrect(58, 80, 100, 100, 3, BRASS, ow=3.0)
+    cv.detail([(66, 90), (92, 90)], 2.6, BRASS_D, 0.8)
+    cv.detail([(19, 72), (19, 106)], 4.0, (255, 255, 255), 0.25)
+    return cv.finish()
+
+
+def icon_fuel_can():
+    # a red-orange jerry can: pressed X on the side, a spout cap and a carry handle on top
+    cv = Cv(U, 2 * U, 14)
+    cv.stroke([(40, 70), (40, 38), (88, 38), (88, 70)], 12, RED_D, ow=3.5, caps=False)
+    cv.rrect(16, 60, 112, 242, 14, ORANGE)
+    cv.rrect(16, 60, 112, 76, (14, 14, 0, 0), RED, ow=3.5, hi=0.3)
+    cv.rrect(86, 36, 112, 64, 4, BRASS, ow=3.5)
+    cv.rrect(90, 28, 108, 42, 3, BRASS_D, ow=3.0)
+    cv.rrect(30, 96, 98, 214, 8, ORANGE_D, ow=3.0)
+    cv.detail([(40, 106), (88, 204)], 6.0, RED_D, 0.9)
+    cv.detail([(88, 106), (40, 204)], 6.0, RED_D, 0.9)
+    cv.rrect(46, 140, 82, 170, 3, CREAM, ow=3.0)
+    cv.poly([(64, 144), (74, 158), (64, 166), (54, 158)], RED, ow=2.4)
+    cv.detail([(23, 84), (23, 200)], 6.0, (255, 255, 255), 0.28)
+    return cv.finish()
+
+
 def icon_unknown():
     cv = Cv(U, U, 20)
     cv.rrect(22, 30, 106, 106, 5, PAPER)
@@ -543,7 +580,7 @@ def icon_ruth():
 
 ICONS = [
     ("shell", icon_shell), ("shells", icon_shells), ("shell_box", icon_shell_box), ("canned_food", icon_canned_food), ("bandage", icon_bandage),
-    ("ration_pack", icon_ration_pack), ("water_bottle", icon_water_bottle), ("water_jug", icon_water_jug), ("medkit", icon_medkit), ("unknown", icon_unknown),
+    ("ration_pack", icon_ration_pack), ("water_bottle", icon_water_bottle), ("water_jug", icon_water_jug), ("medkit", icon_medkit), ("unknown", icon_unknown), ("parts_box", icon_parts_box), ("fuel_can", icon_fuel_can),
     ("pump_shotgun", icon_pump_shotgun), ("melee", icon_melee), ("pack", icon_pack),
     ("slot", lambda: icon_slot("slot")), ("slot_on", lambda: icon_slot("slot_on")), ("slot_off", lambda: icon_slot("slot_off")),
     ("glow", icon_glow), ("ruth", icon_ruth),
