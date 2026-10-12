@@ -1067,6 +1067,8 @@ func _sync_views() -> void:
 			n3.visible = view.has_point(Vector2(m.p.x, m.p.y))
 			if n3.visible:
 				n3.sync(true, sim_steps, alpha)
+				if m.has("lift"):
+					n3.position.y -= float(m.lift) * TILE    # (a kid's hop)
 
 
 func _paint_decks(c: CanvasItem) -> void:

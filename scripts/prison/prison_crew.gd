@@ -358,6 +358,18 @@ func _play(m: Dictionary, dt: float) -> void:
 			other.say = "gotcha, now you!"
 			m.repath = 0.0
 			other.repath = 0.0
+	if m.has("hop"):    # the hopscotch: three hops down the court, the body lifted by a half tile at the top of each (`lift`, drawn by prison_game.gd `_sync_views`)
+		m.hop = float(m.hop) + dt
+		var k: float = float(m.hop) / HOP_SECS
+		if k >= 3.0:
+			m.erase("hop")
+			m["lift"] = 0.0
+			m.tgt = Vector2.ZERO
+		else:
+			m["lift"] = absf(sin(k * PI)) * 0.5
+			p.y += dt / HOP_SECS
+			p.moving = false
+			return
 	if float(m.repath) <= 0.0:
 		m.repath = 0.5
 		var tgt: Vector2
@@ -365,6 +377,11 @@ func _play(m: Dictionary, dt: float) -> void:
 			tgt = Vector2(other.p.x, other.p.y)
 		else:
 			tgt = m.tgt
+			if tgt == HOPSCOTCH and Vector2(p.x, p.y).distance_to(tgt) < 1.2 and m.role == "flee":
+				p.x = HOPSCOTCH.x
+				p.y = HOPSCOTCH.y - 1.0
+				m["hop"] = 0.0
+				return
 			if tgt == Vector2.ZERO or Vector2(p.x, p.y).distance_to(tgt) < 1.2:
 				tgt = Vector2(randf_range(YARD.position.x, YARD.end.x), randf_range(YARD.position.y, YARD.end.y))
 				if randf() < 0.3:
@@ -383,6 +400,7 @@ func _play(m: Dictionary, dt: float) -> void:
 
 
 const HOPSCOTCH := Vector2(14.0, 52.0)
+const HOP_SECS := 0.45
 
 func _have(stores: Dictionary, need: Dictionary) -> bool:
 	for k in need:
