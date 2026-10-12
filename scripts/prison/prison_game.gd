@@ -26,6 +26,7 @@ const Crew := preload("res://scripts/prison/prison_crew.gd")
 const Tower := preload("res://scripts/prison/prison_tower.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
+const Pack := preload("res://scripts/prison/prison_pack.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -114,6 +115,7 @@ var ally_chasers := {}    # Zombie -> member: dead that go for an ally instead o
 var revive_t := 0.0
 var _hurt_t := 0.0
 var _auto_i := 0
+var pack: Pack    # the backpack (prison_pack.gd)
 
 
 func _ready() -> void:
@@ -125,6 +127,7 @@ func _ready() -> void:
 	data = GD.load_all()
 	_fit_window()
 	_make_hud()
+	pack = Pack.new(self)
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally"
@@ -417,6 +420,7 @@ func _enter_base() -> void:
 			zone_done.fill(false)
 			tod = 9.0
 		run.sim.stock = stores    # the same dictionary: what a search finds is in the stores at once
+		pack.attach(run.sim, base.stations.stores)
 		run.avatar_p.x = Base.START.x
 		run.avatar_p.y = Base.START.y
 	else:
@@ -425,7 +429,8 @@ func _enter_base() -> void:
 		run.field.wake_r = 45.0
 		run.field.sleep_r = 80.0
 		run.field.active_cap = 100
-		run.sim.stock = stores.duplicate()
+		run.sim.stock = stores    # (the same dictionary: the stash window moves real stock)
+		pack.attach(run.sim, base.stations.stores)
 		run.avatar_p.x = Base.SPAWN.x
 		run.avatar_p.y = Base.SPAWN.y
 	run.sim.minutes = 8.0 * 60.0
@@ -438,6 +443,7 @@ func _enter_base() -> void:
 	for m in crew.members:
 		var n := PawnNode.new()
 		n.setup(m.p, false, data, String(m.key))
+		n.unarmed = bool(m.def.get("kid", false))
 		if m.def.has("scale"):
 			n.scale = Vector2.ONE * float(m.def.scale)
 		if m.def.has("stand"):
@@ -485,11 +491,8 @@ func _enter_raid() -> void:
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	_make_stage(t, true)
 	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0}
-	_loadout = minf(LOADOUT_AMMO, stores.ammo)
-	stores.ammo -= _loadout
-	run.sim.stock.ammo = _loadout
-	run.sim.stock.meds = minf(1.0, stores.meds)
-	stores.meds -= float(run.sim.stock.meds)
+	var kit_line: String = pack.kit(stores)
+	pack.attach(run.sim)
 	var at: Vector2 = Vector2(t.entry.pos)
 	run.avatar_p.x = at.x
 	run.avatar_p.y = at.y
@@ -503,7 +506,7 @@ func _enter_raid() -> void:
 	extract_t = 0.0
 	_armed = false
 	run.sim.avatar.set_input(Vector2.ZERO, at, false)
-	_say("Out in the town. Search houses (E), find the pickup rings (green arrows), get back alive. Ammo %d in the pack." % int(_loadout), 7.0)
+	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring. " + pack.status(), 7.0)
 
 
 ## Pickup points: the entry road and the far end of the road on the other side of the map.
@@ -568,6 +571,7 @@ func _tick(dt: float) -> void:
 	if roofs != null:
 		roofs.update(TownGen.house_at(town, p.x, p.y), dt)
 	_sync_views()
+	pack.frame(dt)
 	_layout_labels()
 	if _msg_t > 0.0:
 		_msg_t -= dt
@@ -604,6 +608,7 @@ func _step() -> void:
 	run.sim.update(StepClock.STEP)
 	_ally_prey_step(olds)
 	for e in run.sim.events:
+		pack.on_event(e)
 		match String(e.type):
 			"shot":
 				fx.combat.shot_sound(e)
@@ -640,7 +645,7 @@ func _hud_text() -> String:
 		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
 	if mode == "base":
 		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired]
-	return "RAID %d    HP %d    Mag %d    Pack: ammo %d  food %d  water %d  meds %d  scrap %d\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.ammo), int(run.sim.stock.food), int(run.sim.stock.water), int(run.sim.stock.meds), int(run.sim.stock.scrap), run.sim.kills, exits.size()]
+	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size()]
 
 
 func _hands() -> void:
@@ -661,12 +666,14 @@ func _hands() -> void:
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear") and not busy and not args.has("shot")
+	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear") and not busy and not args.has("shot") and not pack.blocks_fire()
 	run.sim.avatar.set_input(move, aim, fire)
 
 
 func _unhandled_input(ev: InputEvent) -> void:
 	if run == null:
+		return
+	if ev is InputEventKey and not busy and pack.key(ev):
 		return
 	if ev is InputEventKey and ev.pressed and not ev.echo:
 		match ev.keycode:
@@ -704,7 +711,7 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "revive":
 		return    # held, not pressed (_clear_logic)
 	if String(_prompt.get("kind", "")) == "stores":
-		_say("Stores: " + _stock_line(), 5.0)
+		pack.open_stash()
 		return
 	var r: Dictionary = run.sim.uses.use(_prompt.c)
 	if String(r.get("line", "")) != "":
@@ -718,9 +725,9 @@ func _base_logic(_dt: float) -> void:
 	var me := Vector2(p.x, p.y)
 	_prompt = {}
 	if me.distance_to(Base.GATE_POS) < 7.0 or me.distance_to(base.stations.truck) < 3.5:
-		_prompt = {"kind": "gate", "label": "E: take the truck out the gate (raid, %d rounds in the pack)" % int(minf(LOADOUT_AMMO, stores.ammo))}
-	elif me.distance_to(base.stations.stores) < 4.0:
-		_prompt = {"kind": "stores", "label": "E: check the stores"}
+		_prompt = {"kind": "gate", "label": "E: take the truck out the gate (raid, with what is in your pack)"}
+	elif me.distance_to(base.stations.stores) < 2.8:
+		_prompt = {"kind": "stores", "label": "E: open the stash (choose what to carry out)"}
 	# the dead at the gate are not for shooting
 	if run.avatar_p.hp < 100.0:
 		run.avatar_p.hp = 100.0
@@ -755,6 +762,7 @@ func _raid_logic(dt: float) -> void:
 
 func _go_out() -> void:
 	busy = true
+	pack.close()
 	await _cut_out(["The gate grinds open. The truck rolls out through the dead.", "Somewhere ahead, a town nobody has searched."], true)
 	_enter_raid()
 	await _cut_in()
@@ -766,7 +774,9 @@ func _extract(alive: bool) -> void:
 		return
 	busy = true
 	var loot := {}
+	pack.close()
 	if alive:
+		pack.bank()    # (the items go back into the raid's stock: the line below banks all of it)
 		for k in STOCK_KEYS:
 			var v := float(run.sim.stock.get(k, 0.0))
 			loot[k] = v
@@ -774,6 +784,7 @@ func _extract(alive: bool) -> void:
 	if not alive:
 		lines = ["You go down in the street.", "Whatever you carried stays out there."]
 	await _cut_out(lines, alive)
+	var lost: int = 0 if alive else pack.lose()
 	if alive:
 		for k in loot:
 			stores[k] = float(stores[k]) + float(loot[k])
@@ -783,9 +794,10 @@ func _extract(alive: bool) -> void:
 		if float(loot[k]) > 0.0:
 			sum += "  +%d %s" % [int(loot[k]), k]
 	if not alive:
-		sum = "Backpack lost. (Ammo %d, nothing banked)" % int(_loadout)
+		sum = "Backpack lost. (%d stacks, nothing banked)" % lost
 	elif sum == "Banked:":
 		sum = "You came back with nothing."
+	print("RESULT ", sum, " | stores ", stores, " | pack stacks ", pack.grid.cells.size())
 	await _cut_in()
 	_say(sum, 8.0)
 	busy = false

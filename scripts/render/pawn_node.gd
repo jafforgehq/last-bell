@@ -677,7 +677,7 @@ func _draw_person() -> void:
 	_apply()
 	_legs(view, _rph, _moving_draw, false, 1.0, true)
 	var body := base * xf
-	if view == "N":
+	if view == "N" and not unarmed:
 		_gun(body, aim, view)
 	_m = body
 	if _wid != 1.0:
@@ -686,7 +686,7 @@ func _draw_person() -> void:
 		_sc(-1, 1)
 	_apply()
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
-	if view != "N":
+	if view != "N" and not unarmed:
 		_gun(body, aim, view)
 	if p.thrust > 0.0:
 		_m = body
