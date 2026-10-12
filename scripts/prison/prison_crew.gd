@@ -95,6 +95,7 @@ var tally := {}
 var tod := 8.0    # hour of the day, set by the game
 var play_t := 0.0
 var ball := Vector2(24.0, 49.0)    # the kids' ball
+var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
@@ -391,6 +392,8 @@ func _finish(m: Dictionary, stop: Dictionary, stores: Dictionary) -> void:
 	var give: Dictionary = stop.get("give", {})
 	var parts: Array = []
 	for k in give:
+		if econ_owned.has(k):
+			continue
 		var v := float(give[k])
 		stores[k] = maxf(0.0, float(stores.get(k, 0.0)) + v)
 		tally[k] = float(tally.get(k, 0.0)) + v

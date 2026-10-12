@@ -29,6 +29,7 @@ const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
 const Clean := preload("res://scripts/prison/prison_clean.gd")
+const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -45,14 +46,14 @@ const BITE_DMG := 8.0
 const DOWN_SECS := 20.0
 const REVIVE_SECS := 2.0
 # (ammo 60 less the 40 round kit Ruth takes on entering = 20 left in the stores)
-const CLEAR_STORES := {"food": 10.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0}
+const CLEAR_STORES := {"food": 10.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0, "parts": 2.0, "fuel": 0.0}
 
 const TILE := GD.TILE
 const CAMERA_EASE := 8.0
 const EXTRACT_R := 2.2
 const EXTRACT_S := 2.0
 const LOADOUT_AMMO := 40.0
-const STOCK_KEYS := ["food", "water", "ammo", "meds", "scrap"]
+const STOCK_KEYS := ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
 
 var args := {}
 var data: Dictionary
@@ -78,7 +79,7 @@ var zoom_px := 40.0
 var play_zoom := 40.0
 var cam_center := Vector2(48, 48)
 var map_view := false
-var stores := {"food": 40.0, "water": 60.0, "ammo": 80.0, "meds": 6.0, "scrap": 30.0}
+var stores := {"food": 40.0, "water": 60.0, "ammo": 80.0, "meds": 6.0, "scrap": 30.0, "parts": 2.0, "fuel": 0.0}
 var raids := 0
 var exits: Array = []
 var extract_t := 0.0
@@ -125,6 +126,8 @@ var _hurt_t := 0.0
 var _auto_i := 0
 var pack: Pack    # the backpack (prison_pack.gd)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
+var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
+var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
 
@@ -139,6 +142,11 @@ func _ready() -> void:
 	_make_hud()
 	pack = Pack.new(self)
 	siege = Siege.new(self)    # (before the first stage: a --raid start has no base yet)
+	econ = Econ.new(self)    # ECON hook
+	econ.person_left.connect(_econ_left)
+	econ.project_done.connect(_econ_done)
+	econ.stage_changed.connect(func(st): _say("The prison is now a %s." % st, 6.0))
+	econ.shortage.connect(func(r): _say("Shortage: the base ran out of %s." % r, 5.0))
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
@@ -263,9 +271,40 @@ func _layout_labels() -> void:
 
 func _stock_line() -> String:
 	var s := ""
+	var rep: Dictionary = econ.daily_report() if phase == "managed" else {}    # ECON hook: per-day net for food and water
 	for k in STOCK_KEYS:
-		s += "%s %d    " % [String(k).capitalize(), int(stores[k])]
+		if phase != "managed" and (k == "parts" or k == "fuel"):
+			continue
+		if rep.has("res") and (k == "food" or k == "water"):
+			s += "%s %d (+%d/-%d)    " % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)]
+		else:
+			s += "%s %d    " % [String(k).capitalize(), int(stores[k])]
 	return s
+
+
+## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
+func _econ_left(nm: String) -> void:
+	if crew == null:
+		econ_gone.append(nm)
+	else:
+		_econ_remove(nm)
+	_say("%s has left the prison." % nm, 6.0)
+
+
+func _econ_remove(nm: String) -> void:
+	for m in crew.members.duplicate():
+		if String(m.def.name) == nm:
+			crew.members.erase(m)
+			if m.def.has("ex_ally"):
+				allies_alive.erase(String(m.def.id))
+			if m.has("node") and is_instance_valid(m.node):
+				m.node.queue_free()
+
+
+func _econ_done(id: String) -> void:
+	if String(id).begins_with("fence"):
+		siege.apply_fence(econ.fence_mult(), String(id) == "fence1")
+	_say("Built: %s." % String(econ.defs[id].name), 5.0)
 
 
 func _draw_bars() -> void:
@@ -453,6 +492,13 @@ func _enter_base() -> void:
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
 	crew.setup(run.sim, world, base, data, clear)
+	if not clear:    # ECON hook: food and water come from the economy, not from the crew's stops
+		crew.econ_owned = ["food", "water"]
+		for nm in econ_gone:
+			_econ_remove(String(nm))
+		econ_gone.clear()
+		if args.has("econ") and String(args.econ).begins_with("start:"):
+			econ.debug_build(String(args.econ).trim_prefix("start:"))
 	if not clear:
 		for a in Crew.CREW_FROM_ALLIES:    # the allies are crew from here on (a job and a place), not followers
 			if allies_alive.has(String(a.id)):
@@ -513,7 +559,7 @@ func _enter_raid() -> void:
 	var drop: Vector2 = Vector2(t.entry.pos)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	_make_stage(t, true)
-	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0}
+	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0, "parts": 0.0, "fuel": 0.0}
 	var kit_line: String = pack.kit(stores)
 	pack.attach(run.sim)
 	var at: Vector2 = Vector2(t.entry.pos)
@@ -609,6 +655,11 @@ func _tick(dt: float) -> void:
 	if crew != null:
 		_gun_poses(dt)
 		crew.update(dt, stores)
+	if econ != null:    # ECON hook
+		if args.has("econ-lab") and phase == "managed":
+			econ.lab(dt)
+		else:
+			econ.update(dt)
 	fx.update(dt)
 	var p = run.avatar_p
 	if not args.has("fixcam"):
@@ -1749,7 +1800,7 @@ func _fence_guards(dt: float) -> void:
 				m.say = String(m.def.role)
 			continue
 		guard_cd[g.id] = (0.7 if alarm_t > 0.0 else randf_range(1.6, 3.0))
-		_shoot_at(g, best, 0.8)
+		_shoot_at(g, best, 0.8 + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0))    # ECON hook: floodlights
 		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
 		m.say = "firing"
 

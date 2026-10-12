@@ -9,6 +9,8 @@
     "water_bottle": {"name": "Water bottle", "w": 1, "h": 1, "stack": 1, "res": "water", "units": 1, "use": "drink", "desc": "A bottle of clean water: one drink, good for half a day."},
     "water_jug": {"name": "Water jug", "w": 2, "h": 2, "stack": 1, "res": "water", "units": 4, "use": "drink", "desc": "A jug of clean water: four bottles' worth. A drink leaves three bottles."},
     "bandage": {"name": "Bandage", "w": 1, "h": 1, "stack": 4, "res": "meds", "units": 1, "use": "bandage", "desc": "Stops a bleeding wound."},
+    "parts_box": {"name": "Parts box", "w": 1, "h": 1, "stack": 4, "res": "parts", "units": 1, "use": "none", "desc": "Electronics, pump and generator pieces. Spent on projects at the base."},
+    "fuel_can": {"name": "Fuel can", "w": 1, "h": 2, "stack": 1, "res": "fuel", "units": 1, "use": "none", "desc": "A can of fuel: a day for the generator."},
     "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."}
   },
   "containers": {
@@ -48,7 +50,9 @@
     "ammo": ["shells"],
     "food": ["canned_food"],
     "water": ["water_jug", "water_bottle"],
-    "meds": ["bandage"]
+    "meds": ["bandage"],
+    "parts": ["parts_box"],
+    "fuel": ["fuel_can"]
   },
   "needs": {"eat_min_h": 6.0, "drink_min_h": 5.0},
   "reveal_s": 0.4,

@@ -128,6 +128,17 @@ func _add_seg(nm: String, side: String, tiles: Array, is_gate := false) -> void:
 		"spot": center + out_v * 1.3, "fix": center - out_v * 1.6, "gate": is_gate, "push": 0, "hit": 0.0, "open": false, "attacked": false})
 
 
+## ECON hook: the fence tier sets every segment's max hp (a built tier adds the difference as hp); `patch` mends every segment to full (fence tier 1).
+func apply_fence(mult: float, patch: bool) -> void:
+	for s in segs:
+		var base_hp := GATE_HP if s.gate else SEG_HP
+		var nm: float = base_hp * mult
+		s.hp = minf(nm, float(s.hp) + maxf(0.0, nm - float(s.max)))
+		s.max = nm
+		if patch and float(s.hp) < nm:
+			_mend(s, nm - float(s.hp))
+
+
 ## Called by prison_game.gd each time the base is built (after a raid too): the fence is solid again in the new world, a segment that fell stays a gap.
 func setup() -> void:
 	wave.clear()
