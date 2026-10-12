@@ -40,6 +40,7 @@ const BITE_R := 0.95
 const BITE_DMG := 8.0
 const DOWN_SECS := 20.0
 const REVIVE_SECS := 2.0
+# (ammo 60 less the 40 round kit Ruth takes on entering = 20 left in the stores)
 const CLEAR_STORES := {"food": 10.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0}
 
 const TILE := GD.TILE

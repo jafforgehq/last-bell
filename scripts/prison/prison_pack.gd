@@ -178,9 +178,11 @@ func open_stash() -> void:
 func kit(stores: Dictionary) -> String:
 	var line := ""
 	if Inventory.is_empty(grid):
-		for r in KIT:
-			Inventory.withdraw(stores, grid, String(r), int(KIT[r]))
 		line = "The quartermaster hands you the standard kit. "
+		for r in KIT:
+			var got := Inventory.withdraw(stores, grid, String(r), int(KIT[r]))
+			if got < int(KIT[r]) and r == "ammo":    # (the stores hold less than the kit: she gets what is there)
+				line = "The stores could only spare %d rounds. " % got
 	for id in BELT:
 		if InvApi.count_of(grid, id) > 0 and not quick.has(id):
 			var slot := quick.find("")
