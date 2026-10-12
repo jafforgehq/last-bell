@@ -30,6 +30,7 @@ const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
 const Clean := preload("res://scripts/prison/prison_clean.gd")
 const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
+const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -126,6 +127,7 @@ var _hurt_t := 0.0
 var _auto_i := 0
 var pack: Pack    # the backpack (prison_pack.gd)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
+var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
@@ -145,8 +147,7 @@ func _ready() -> void:
 	econ = Econ.new(self)    # ECON hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
-	econ.stage_changed.connect(func(st): _say("The prison is now a %s." % st, 6.0))
-	econ.shortage.connect(func(r): _say("Shortage: the base ran out of %s." % r, 5.0))
+	board = Board.new(self)    # UI hook (connects to the econ signals itself: toasts and the stage card replace the message lines)
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
@@ -288,7 +289,6 @@ func _econ_left(nm: String) -> void:
 		econ_gone.append(nm)
 	else:
 		_econ_remove(nm)
-	_say("%s has left the prison." % nm, 6.0)
 
 
 func _econ_remove(nm: String) -> void:
@@ -304,7 +304,6 @@ func _econ_remove(nm: String) -> void:
 func _econ_done(id: String) -> void:
 	if String(id).begins_with("fence"):
 		siege.apply_fence(econ.fence_mult(), String(id) == "fence1")
-	_say("Built: %s." % String(econ.defs[id].name), 5.0)
 
 
 func _draw_bars() -> void:
@@ -673,6 +672,7 @@ func _tick(dt: float) -> void:
 		roofs.update(TownGen.house_at(town, p.x, p.y), dt)
 	_sync_views()
 	pack.frame(dt)
+	board.frame(dt)    # UI hook
 	_layout_labels()
 	if _msg_t > 0.0:
 		_msg_t -= dt
@@ -748,7 +748,7 @@ func _hud_text() -> String:
 				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
 		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
 	if mode == "base":
-		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + siege.hud()
+		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + board.hud_lines() + siege.hud()    # UI hook
 	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size()]
 
 
@@ -770,7 +770,7 @@ func _hands() -> void:
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire()
+	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire() and not board.blocks_fire()
 	if not _bot_in.is_empty():
 		move = _bot_in.move
 		aim = _bot_in.aim
@@ -784,6 +784,8 @@ func _hands() -> void:
 
 func _unhandled_input(ev: InputEvent) -> void:
 	if run == null:
+		return
+	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
 		return
@@ -824,6 +826,9 @@ func _use() -> void:
 		return    # held, not pressed (_clear_logic)
 	if String(_prompt.get("kind", "")) == "repair":
 		return    # SIEGE hook: held E, handled in prison_siege.gd
+	if String(_prompt.get("kind", "")) == "bench" or String(_prompt.get("kind", "")) == "board":    # UI hook
+		board.open("projects" if String(_prompt.kind) == "bench" else "needs")
+		return
 	if String(_prompt.get("kind", "")) == "stores":
 		pack.open_stash()
 		return
@@ -842,6 +847,8 @@ func _base_logic(_dt: float) -> void:
 		_prompt = {"kind": "gate", "label": "E: take the truck out the gate (raid, with what is in your pack)"}
 	elif me.distance_to(base.stations.stores) < 2.8:
 		_prompt = {"kind": "stores", "label": "E: open the stash (choose what to carry out)"}
+	else:
+		_prompt = board.prompt(me)    # UI hook: the bench and the needs sign
 	# the dead at the gate are not for shooting
 	if run.avatar_p.hp < 100.0:
 		run.avatar_p.hp = 100.0
@@ -1020,6 +1027,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 		c.draw_rect(Rect2(g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
 		c.draw_rect(Rect2(g + Vector2(Base.GATE_W * TILE * 0.5 + 2, 0), Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
 		siege.paint(c)    # SIEGE hook
+		board.paint(c)    # UI hook
 		if cleaner != null:
 			cleaner.paint(c)
 		for l in base.labels:
