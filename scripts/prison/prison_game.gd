@@ -28,6 +28,7 @@ const Sound := preload("res://scripts/audio/sound.gd")
 const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
+const PHud := preload("res://scripts/prison/prison_hud.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -281,6 +282,7 @@ func _draw_bars() -> void:
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(extract_t / EXTRACT_S, 0, 1), 12), Color(0.4, 0.9, 0.5))
 	_draw_minimap(v)
+	PHud.draw(self, bars, v)
 	if mode == "raid" and not busy:
 		# arrows to the pickups at the edge of the screen
 		for e in exits:
@@ -1011,6 +1013,9 @@ func _paint_overlay(c: CanvasItem) -> void:
 
 ## --auto=raid: start a raid, walk to the nearest container and search it, then to an exit.  extract / die jump to those endings (for checks).
 func _scripts(dt: float) -> void:
+	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
+		run.avatar_p.mag = 2
+		run.sim.avatar.reload()
 	var a := String(args.get("auto", ""))
 	if a == "":
 		return
