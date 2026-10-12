@@ -171,6 +171,7 @@ func _ready() -> void:
 		if s.begins_with("--"):
 			var kv := s.trim_prefix("--").split("=", true, 1)
 			args[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	PawnNode.zart = not args.has("nozart")    # ROUND 8: the zombie art set (--nozart: the round 7 walkers and the baked runners and brutes, to compare)
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
 	if args.has("nosmooth"):

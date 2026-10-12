@@ -49,6 +49,14 @@ static var rifles_ready := false
 ## in place of the 4 baked views, their legs and the seam crossfade; the gun and the hands stay live at the exact angle.
 static var dirs16 := false
 static var dirs16_dead := true
+## ROUND 8 (prison only): the zombie art set (assets/zombies16, pawn_dirs.gd `zombie_*`): every kind of the dead is drawn from a look of its own kind, with poses for the walk, idle, strike, flinch,
+## fall and rise. `zart_crawlers`: one in four limping walkers crawls (the crawler art; the rules do not know crawlers).
+static var zart := true
+static var zart_crawlers := true
+var _zs = null
+var _zkind := "walker"
+var _was_still := false
+var _wake_ms := 0
 var _d16 = null
 const TURN_PERSON := deg_to_rad(220.0)
 const TURN_AIM := deg_to_rad(360.0)
@@ -203,6 +211,13 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	if dirs16:
 		if zombie_look_ok(e, is_zombie):
 			_d16 = Dirs.get_set("z%d" % (int(e.look_index) % 2) if is_zombie else String((e.look as Dictionary).get("dirs16", "")))
+	if dirs16 and zart and is_zombie:
+		_zkind = Art.kind_of(e)
+		if zart_crawlers and _zkind == "walker" and bool(e.limp) and int(e.look_index) % 4 == 0 and Dirs.zombie_looks("crawler") > 0:
+			_zkind = "crawler"
+		_zs = Dirs.zombie_set(_zkind, Dirs.zombie_look_of(_zkind, int(e.look_index)))
+		if _zs != null:
+			_d16 = _zs
 	_seed_i = int(e.get_instance_id())
 	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)    # (as it was: a person's breath and a walker's idle sway read it)
 	if zombie:
@@ -210,7 +225,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		_leg_kind = kind
 		_style = Art.style(kind)
 		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
-		var tinted := Art.material(kind)
+		var tinted := Art.material(kind) if _zs == null else null
 		if tinted != null:
 			material = tinted
 			_base_material = tinted
@@ -1028,6 +1043,8 @@ func _draw_zombie() -> void:
 		bob -= 0.02 * fk
 	_reset()
 	var fs := figure_scale_xy() * dv.size
+	if _zs != null:
+		fs = Vector2.ONE * (Art.size_of(z) * dv.size / float(Dirs.BAKE_SIZE.get(_zkind, 1.0)))
 	if fs != Vector2.ONE:
 		_fit_figure(fs)
 	_apply()
@@ -1049,6 +1066,9 @@ func _draw_zombie() -> void:
 		_apply()
 	else:
 		_legs(view, phase, walking, limp, 1.0, true)
+	if _zs != null:
+		_draw_zart(walking, phase, windup, hump)
+		return
 	_tr(0, 0.3)
 	_rot(roll)
 	_tr(0, -0.3 - bob)
@@ -1116,6 +1136,9 @@ func _arms_layer(view: String, layer: String, reach: bool, phase: float, windup:
 
 func _draw_dead() -> void:
 	var z = entity
+	if _zs != null:
+		_draw_zart_dead()
+		return
 	var view := _vw
 	var rm := PawnMotion.motion()
 	# ANIM. The rules' fall runs 0.45 s; the collapse is drawn in the first 0.26 s of it: the knees buckle (a rock back and a drop), it topples with the weight of a body (slow, then fast) and
@@ -1201,3 +1224,46 @@ func _blanket_color() -> Color:
 				_bed_col = img.get_pixel(int(img.get_width() * 0.5), int(img.get_height() * 0.6))
 			break
 	return _bed_col
+
+
+## ROUND 8: one of the dead drawn from its look of the zombie art set. The pose follows the figure's own clocks (nothing here is read by the rules): the walk by the distance walked (`phase`),
+## the strike from the rear (windup) to the lunge (the age of the strike), the flinch while `_fl_t` runs, the rise for 0.6 s after it stops standing still, else the sway of standing.
+func _draw_zart(walking: bool, phase: float, windup: float, hump: float) -> void:
+	var z = entity
+	var still: bool = z.state == "still"
+	var now := Time.get_ticks_msec()
+	if _was_still and not still:
+		_wake_ms = now
+	_was_still = still
+	var pose := "idle"
+	var ph := anim_t * 1.7 + _dv.breath
+	if _wake_ms > 0 and now - _wake_ms < 600:
+		pose = "wake"
+		ph = float(now - _wake_ms) / 600.0
+	elif _fl_t < 0.3:
+		pose = "hurt"
+		ph = _fl_t / 0.3
+	elif _atk > 0.0 and (windup > 0.0 or hump > 0.0 or _strike_age < 0.25):
+		pose = "attack"
+		ph = 0.0 if _strike_age >= 0.25 else (0.5 if _strike_age < 0.12 else 0.99)
+	elif walking:
+		pose = "walk"
+		ph = phase
+	Dirs.zombie_blit(_pen, _zs, pose, ph, Dirs.zombie_heading(_ori))
+
+
+## The fall (forward or, when it was thrown the other way, backward) and the corpse of the art set; the old fade of a corpse that has lain a minute.
+func _draw_zart_dead() -> void:
+	var z = entity
+	var f: float = clampf(float(z.fall) / 0.58, 0.0, 1.0)
+	var back: bool = float(z.fall_dir) < 0.0
+	var alpha := 1.0
+	if z.state == "dead" and z.dead_t > 55.0:
+		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
+	_reset()
+	var fs := Vector2.ONE * (Art.size_of(z) * _dv.size / float(Dirs.BAKE_SIZE.get(_zkind, 1.0)))
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	_apply()
+	var pose := ("deathb" if back else "deathf") if (z.state == "dying" and f < 1.0) else ("corpseb" if back else "corpse")
+	Dirs.zombie_blit(_pen, _zs, pose, f, Dirs.zombie_heading(_ori), Color(1, 1, 1, alpha))
