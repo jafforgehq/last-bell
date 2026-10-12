@@ -246,6 +246,9 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 				m["eat"] = {"at": seat, "secs": 12.0, "work": "", "face": "S", "say": "eating", "meal": true}
 				m["ate"] = _meal_id
 				stop = m.eat
+			if not m.has("eat") and not (m.get("clean_q", []) as Array).is_empty():    # a clean-up stop (prison_clean.gd), taken after the meals
+				m["eat"] = (m.clean_q as Array).pop_front()
+				stop = m.eat
 			# start walking to the stop (a stop that needs stock the base has not got is skipped after a short wait)
 			var tgt := _where(stop.at)
 			m.path = sim.path_p.find(world.solid_p, p.x, p.y, tgt.x, tgt.y)
@@ -280,6 +283,8 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 			p.work_t = float(m.t)
 			if float(m.t) >= float(stop.secs):
 				if m.has("eat"):
+					if bool(m.eat.get("clean", false)):
+						floaters.append({"text": "+clean", "pos": Vector2(m.p.x, m.p.y - 1.9), "t": 0.0, "col": Color(0.6, 0.9, 1.0)})
 					m.erase("eat")
 				else:
 					_finish(m, stop, stores)

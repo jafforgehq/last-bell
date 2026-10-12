@@ -28,6 +28,7 @@ const Sound := preload("res://scripts/audio/sound.gd")
 const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
+const Clean := preload("res://scripts/prison/prison_clean.gd")
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -123,6 +124,7 @@ var revive_t := 0.0
 var _hurt_t := 0.0
 var _auto_i := 0
 var pack: Pack    # the backpack (prison_pack.gd)
+var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
 
@@ -488,6 +490,8 @@ func _enter_base() -> void:
 		siege = Siege.new(self)    # SIEGE hook (kept over raids: fence hp, night count)
 	if not clear:
 		siege.setup()
+		cleaner = Clean.new(self)
+		cleaner.setup()
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
 		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
@@ -629,6 +633,7 @@ func _tick(dt: float) -> void:
 		else:
 			_base_logic(dt)
 			_fence_guards(dt)
+			cleaner.update(dt)
 			_pen_life(dt)
 			if dog != null:
 				dog.tick(dt, clock, tod > 6.0 and tod < 20.0, true)
@@ -928,6 +933,7 @@ func _sync_views() -> void:
 			n2.reparent(corpses)
 		n2.anim_t = clock
 		n2.visible = in_view
+		n2.modulate.a = clampf((70.0 - float(z.dead_t)) / 6.0, 0.0, 1.0) if z.state == "dead" else 1.0    # (a body that is taken away fades out)
 		if not n2.visible:
 			continue
 		n2.sync(not (z.state == "dead" and z.dead_t > 0.2), sim_steps, alpha)
@@ -963,6 +969,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 		c.draw_rect(Rect2(g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
 		c.draw_rect(Rect2(g + Vector2(Base.GATE_W * TILE * 0.5 + 2, 0), Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
 		siege.paint(c)    # SIEGE hook
+		if cleaner != null:
+			cleaner.paint(c)
 		for l in base.labels:
 			c.draw_string(font, Vector2(l.pos) * TILE - Vector2(80, 0), String(l.text), HORIZONTAL_ALIGNMENT_CENTER, 160, 20, Color(1, 1, 0.8, 0.8))
 		for m in crew.members:
