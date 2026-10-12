@@ -35,6 +35,7 @@ const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const Upg := preload("res://scripts/prison/prison_upgrades.gd")    # WORLD hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
+const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -135,6 +136,7 @@ var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, acti
 var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
+var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
@@ -1150,6 +1152,9 @@ func _paint_overlay(c: CanvasItem) -> void:
 
 ## --auto=raid: start a raid, walk to the nearest container and search it, then to an exit.  extract / die jump to those endings (for checks).
 func _scripts(dt: float) -> void:
+	if args.has("drive") and frames == 5:
+		driver = Drive.new(self)
+		driver.run(String(args.drive))
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
 		run.avatar_p.mag = 2
 		run.sim.avatar.reload()
