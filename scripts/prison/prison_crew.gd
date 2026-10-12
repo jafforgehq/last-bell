@@ -3,6 +3,7 @@
 ## few seconds (`Person.work` word, `work_t`) and then its effect changes the base's stores (food, water, scrap, ammo, meds) and a little "+2 food" floats up.
 extends RefCounted
 
+const Kids := preload("res://scripts/prison/prison_kids.gd")
 const SPEED := 1.7
 const IDLE_RETRY := 2.5
 
@@ -55,15 +56,11 @@ const ROSTER := [
 		{"at": Vector2(61.0, 26.0), "secs": 1.0, "work": "", "face": "N"},
 		{"at": Vector2(36.0, 26.0), "secs": 1.0, "work": "", "face": "W"},
 	]},
-	{"id": "kit", "name": "Kit", "role": "Kid", "key": "ana", "scale": 0.62, "look": {"top": "#c9553a", "outer": "#c9553a", "pants": "#4a5a7a", "skin": "#c69877"}, "route": [
-		{"at": Vector2(30.0, 26.5), "secs": 4.0, "work": "", "face": "S", "say": "playing"},
-		{"at": Vector2(44.0, 44.0), "secs": 4.0, "work": "", "face": "E", "say": "playing"},
-		{"at": Vector2(26.0, 46.0), "secs": 5.0, "work": "rest", "face": "S", "say": "playing"},
+	{"id": "kit", "name": "Kit", "role": "Kid", "key": "ana", "kid": true, "scale": 0.62, "look": {"top": "#c9553a", "outer": "#c9553a", "pants": "#4a5a7a", "skin": "#c69877"}, "route": [
+		{"at": Vector2(22.0, 46.0), "secs": 1.0, "work": "", "face": "S", "say": "playing"},
 	]},
-	{"id": "pip", "name": "Pip", "role": "Kid", "key": "dez", "scale": 0.58, "look": {"top": "#3a7aa0", "pants": "#6a5a3a", "skin": "#8a5a3c", "hatColor": "#c9a43a"}, "route": [
-		{"at": Vector2(27.0, 46.5), "secs": 5.0, "work": "rest", "face": "N", "say": "playing"},
-		{"at": Vector2(32.0, 27.0), "secs": 3.0, "work": "", "face": "S", "say": "playing"},
-		{"at": Vector2(45.0, 43.0), "secs": 4.0, "work": "", "face": "W", "say": "playing"},
+	{"id": "pip", "name": "Pip", "role": "Kid", "key": "dez", "kid": true, "scale": 0.58, "look": {"top": "#3a7aa0", "pants": "#6a5a3a", "skin": "#8a5a3c", "hatColor": "#c9a43a"}, "route": [
+		{"at": Vector2(26.0, 46.0), "secs": 1.0, "work": "", "face": "N", "say": "playing"},
 	]},
 ]
 
@@ -74,6 +71,7 @@ var data: Dictionary
 var members: Array = []    # {p: Person, def: Dictionary, i: stop index, state: "walk"|"work"|"wait", path, pi, t, secs, node}
 var floaters: Array = []    # {text, pos, t, col}
 var tally := {}
+var kids    # the children at play (prison_kids.gd)
 var tod := 8.0    # hour of the day, set by the game
 var _meal_id := -1    # what each stock got from the crew since the start
 
@@ -86,6 +84,8 @@ func setup(s, w, b, d: Dictionary) -> void:
 	var defs: Dictionary = {}
 	for pd in d.people:
 		defs[String(pd.id)] = pd
+	kids = Kids.new()
+	kids.setup(sim, world)
 	var n := 0
 	for r in ROSTER:
 		var src: Dictionary = (defs[String(r.key)] as Dictionary).duplicate(true)
@@ -153,6 +153,9 @@ func update(dt: float, stores: Dictionary) -> void:
 	for m in members:
 		if m.state == "post":
 			m.p.work_t = float(m.p.work_t) + dt
+			continue
+		if m.def.get("kid", false):
+			kids.step(m, dt, members)
 			continue
 		_step_member(m, dt, stores)
 	for f in floaters:
