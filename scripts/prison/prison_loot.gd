@@ -198,7 +198,7 @@ func paint(c: CanvasItem) -> void:
 			c.draw_circle(at, rad, Color(col, 0.16 + 0.1 * pulse))
 			c.draw_arc(at, rad, 0, TAU, 36, Color(col, 0.95), 5.0 * big)
 			c.draw_arc(at, rad * 0.62, 0, TAU, 28, Color(col, 0.6), 2.0 * big)
-			c.draw_string(font, at - Vector2(90.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(cfg().hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 180.0 * big, int(22.0 * big), col)
+			c.draw_string(font, at - Vector2(170.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(cfg().hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 340.0 * big, int(22.0 * big), col)
 		elif me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
 			c.draw_string(font, at - Vector2(70, 10), String(cfg().names[ty]), HORIZONTAL_ALIGNMENT_CENTER, 140, 14, Color(col, 0.75))
 
@@ -231,6 +231,8 @@ func open_choice() -> bool:
 			tys.append(String(cfg().names[ty]))
 		(_buttons[i] as Button).text = "%d   %s   (%s)%s" % [i + 1, String(o.name), ", ".join(tys), "     <- the base needs this" if i == def else ""]
 	_panel.visible = true
+	_panel.reset_size()
+	_panel.position = game._vp() / 2.0 - Vector2(330, 140)
 	return true
 
 
@@ -262,8 +264,6 @@ func _build() -> void:
 		col.add_child(b)
 		_buttons.append(b)
 	_panel.visible = false
-	_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_panel.position = game._vp() / 2.0 - Vector2(300, 120)
 	game.hud.add_child(_panel)
 
 

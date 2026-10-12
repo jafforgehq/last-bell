@@ -34,6 +34,7 @@ func _c() -> Dictionary:
 ## After the raid's stage is made: puts the survivor in a building, or nobody.
 func begin_raid(t: Dictionary, seed_i: int) -> void:
 	s = {}
+	stage_flags()
 	var sv: Dictionary = _c().survivor
 	var forced: bool = game.args.has("survivor")
 	if not forced and float(Loot._h(seed_i, 4242) % 1000) / 1000.0 >= float(sv.chance):
@@ -108,6 +109,17 @@ func _pick(seed_i: int) -> Dictionary:
 		if not used.has(String(cand.name)):
 			return cand
 	return pool[Loot._h(seed_i, 99) % pool.size()]
+
+
+func stage_flags() -> void:
+	if game.args.has("mapview"):    # staging: the overview (M) from the start
+		game.map_view = true
+		game.zoom_px = 6.0
+	if game.args.has("carry"):    # staging: parts and fuel in the pack (the bank check)
+		game.pack.grid.cells.clear()
+		var Inv := preload("res://scripts/sim/inventory.gd")
+		Inv.auto_add(game.pack.grid, "parts_box", 5)
+		Inv.auto_add(game.pack.grid, "fuel_can", 2)
 
 
 func has_survivor() -> bool:
@@ -269,6 +281,8 @@ func settle(alive: bool) -> String:
 		recruits.append(_make_recruit())
 		out = "%s joins." % nm
 	s = {}
+	if game.args.has("log"):
+		print("PEOPLE ", out, " recruits ", recruits.map(func(d): return "%s/%s" % [d.name, d.role]))
 	return out
 
 
@@ -345,6 +359,10 @@ func walk_out(nm: String) -> bool:
 
 
 func frame(dt: float) -> void:
+	if game.args.has("choice") and game.frames == 30 and game.mode == "base":    # staging: the gate's choice open
+		game.loot.open_choice()
+	if game.args.has("leave") and game.frames == 40 and game.mode == "base":    # staging: the economy fires person_left
+		game.econ.person_left.emit(String(game.args.leave))
 	for m in _leaving.duplicate():
 		if game.crew == null or not game.crew.members.has(m):
 			_leaving.erase(m)
