@@ -251,9 +251,6 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 			if not m.has("eat") and not (m.get("clean_q", []) as Array).is_empty():    # a clean-up stop (prison_clean.gd), taken after the meals
 				m["eat"] = (m.clean_q as Array).pop_front()
 				stop = m.eat
-			if not m.has("eat") and not (m.get("build_q", []) as Array).is_empty():    # WORLD hook: a project stop (prison_upgrades.gd), taken after the meals and the clean-up
-				m["eat"] = (m.build_q as Array).pop_front()
-				stop = m.eat
 			# start walking to the stop (a stop that needs stock the base has not got is skipped after a short wait)
 			var tgt := _where(stop.at)
 			m.path = sim.path_p.find(world.solid_p, p.x, p.y, tgt.x, tgt.y)

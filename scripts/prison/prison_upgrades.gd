@@ -3,7 +3,7 @@
 ## (the game draws everything in `_draw`, and the people animate by the work poses of work_anim.gd): `ground` (under the people: beds, barrels, fence, cots, dirt; redrawn only when a
 ## signature of the tiers, the stage, the crop stages or the queue changes), `top` (over the people: water tower, glass roof, mast, floodlight poles), `lights` (additive cones, only its
 ## alpha moves with the night) and `fx` (the one that is redrawn every frame: smoke, sparks, progress bars, the generator's shake, the crops' harvest pops).
-## Work: a queued project gets a stop in the `build_q` of a living crew member of the project's role (taken in prison_crew.gd like a clean-up stop, only in daylight and never in a siege);
+## Work: a queued project gets a stop (`eat`, the slot a meal or clean-up stop uses in prison_crew.gd, so the route goes on after it) for a living crew member of the project's role, only in daylight and never in a siege, meals first;
 ## the person walks to the site, works in the pose of the building and `labor()` calls `econ.add_labor` every frame; `econ.fallback_labor` is switched off.
 ## Flags: `--tiers=water3,garden3,...` builds those projects (and the ones below) at once, `--econ=build:all` builds every top tier, `--building=water2,fence1` starts those projects
 ## (stores topped up) so that the scaffolds and the crew are seen at work.
@@ -59,17 +59,17 @@ const DIRT_ZONES := [Rect2(11, 9, 22, 13), Rect2(39, 9, 22, 13), Rect2(67, 9, 19
 
 var game
 var econ
-var ground: Node2D
+var ground: Array = []    # one node per prop group (so that a group out of the view is culled): {key, node, sig}
 var top: Node2D
 var lights: Node2D
 var fx: Node2D
 var beds: Array = []    # {c: Vector2 (tiles), t0: game hours the crop was planted, kind: 0 tomato, 1 cabbage, 2 carrot}
-var decals: Array = []    # {p: Vector2, k: int, s: float, r: float}
+var decals: Array = []    # per dirt zone: an Array of {p: Vector2, k: int, s: float, r: float}
 var puffs: Array = []    # {p: Vector2 (px), v: Vector2, age, life, r, a, up}
 var sparks: Array = []    # {p, v, age}
 var bursts: Array = []    # {p: Vector2 (px), age}
 var _gt := 0.0    # game hours since the base was built
-var _sig := 0
+var _top_sig := 0
 var _sig_t := 99.0
 var _puff_t := 0.0
 var _hum_t := 0.0
@@ -89,11 +89,22 @@ func _init(g) -> void:
 # ------------------------------------------------------------------ setup ------
 
 func setup() -> void:
-	for n in [ground, top, lights, fx]:
+	for n in [top, lights, fx]:
 		if n != null and is_instance_valid(n):
 			(n as Node).queue_free()
+	for g in ground:
+		if is_instance_valid(g.node):
+			(g.node as Node).queue_free()
+	ground = []
 	var w: Node2D = game.world
-	ground = _layer(w, 4, _paint_ground)
+	var keys: Array = ["water", "irrig", "kitchen", "infirmary", "dormA", "dormB", "radio", "scaf"]
+	for i in 5:
+		keys.append("fence%d" % i)
+		keys.append("bed%d" % i)
+	for i in DIRT_ZONES.size():
+		keys.append("dirt%d" % i)
+	for k in keys:
+		ground.append({"key": k, "node": _layer(w, 4, Callable(self, "_pg").bind(k)), "sig": -1})
 	lights = _layer(w, 9, _paint_lights)
 	var mat := CanvasItemMaterial.new()
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -106,6 +117,7 @@ func setup() -> void:
 	bursts.clear()
 	_gt = 0.0
 	_sig_t = 99.0
+	_top_sig = -1
 	game.crew.labor_cb = Callable(self, "labor")
 	if not game.args.has("econ-lab"):
 		econ.fallback_labor = false
@@ -128,9 +140,9 @@ func _make_beds() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4242
 	var i := 0
-	for y in [30, 34, 38, 42, 46]:
+	for row in 5:
 		for x in range(66, 85, 3):
-			beds.append({"c": Vector2(float(x) + 1.0, float(y) + 1.0), "t0": -rng.randf_range(0.0, 14.0), "kind": i % 3})
+			beds.append({"c": Vector2(float(x) + 1.0, float(30 + row * 4) + 1.0), "t0": -rng.randf_range(0.0, 14.0), "kind": i % 3, "row": row})
 			i += 1
 
 
@@ -138,18 +150,12 @@ func _make_decals() -> void:
 	decals.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 99
-	var area := 0.0
-	for z in DIRT_ZONES:
-		area += (z as Rect2).get_area()
-	for i in 170:
-		var pick := rng.randf() * area
-		var zr: Rect2 = DIRT_ZONES[0]
-		for z in DIRT_ZONES:
-			pick -= (z as Rect2).get_area()
-			zr = z
-			if pick <= 0.0:
-				break
-		decals.append({"p": zr.position + Vector2(rng.randf() * zr.size.x, rng.randf() * zr.size.y), "k": rng.randi() % 5, "s": 0.3 + rng.randf() * 0.5, "r": rng.randf() * TAU})
+	for zi in DIRT_ZONES.size():    # about one decal for every six tiles of a zone
+		var zr: Rect2 = DIRT_ZONES[zi]
+		var arr: Array = []
+		for i in maxi(2, int(zr.get_area() / 6.0)):
+			arr.append({"p": zr.position + Vector2(rng.randf() * zr.size.x, rng.randf() * zr.size.y), "k": rng.randi() % 5, "s": 0.3 + rng.randf() * 0.5, "r": rng.randf() * TAU})
+		decals.append(arr)
 
 
 func _stage_flags() -> void:
@@ -187,7 +193,14 @@ func _check_sites() -> void:
 # --------------------------------------------------------------- the update ------
 
 func update(dt: float) -> void:
-	if not econ.active() or ground == null:
+	if not econ.active() or ground.is_empty():
+		return
+	if game.args.has("noupg"):    # (a check: the perf cost of this file; "all" hides the layers and stops)
+		for g in ground:
+			g.node.visible = false
+		top.visible = false
+		fx.visible = false
+		lights.visible = false
 		return
 	_clock += dt
 	_gt += dt * HOURS_PER_SEC
@@ -200,10 +213,14 @@ func update(dt: float) -> void:
 	_sig_t += dt
 	if _sig_t > 0.5:
 		_sig_t = 0.0
-		var sg := _signature()
-		if sg != _sig:
-			_sig = sg
-			ground.queue_redraw()
+		for g in ground:
+			var sg := _sig_of(String(g.key))
+			if sg != int(g.sig):
+				g.sig = sg
+				g.node.queue_redraw()
+		var ts := _tiers_sig()
+		if ts != _top_sig:
+			_top_sig = ts
 			top.queue_redraw()
 			lights.queue_redraw()
 	var la := game_night() * (1.0 if _lit() else 0.0)
@@ -216,16 +233,46 @@ func game_night() -> float:
 	return game._night_of(game.tod)
 
 
-func _signature() -> int:
-	var a: Array = [econ.stage(), econ.queue.size()]
+func _tiers_sig() -> int:
+	var a: Array = []
 	for b in ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio"]:
 		a.append(econ.tier(b))
-	for id in econ.queue:
-		a.append(int(float(econ.st[id].done) / float(econ.defs[id].labor) * 12.0))
-	if econ.tier("garden") > 0:
+	return hash(a) + (1 if _lit() else 0)
+
+
+## What a prop group depends on: a changed value redraws that group only.
+func _sig_of(key: String) -> int:
+	if key.begins_with("fence"):
+		return econ.tier("fence")
+	if key.begins_with("dirt"):
+		return int(float(DIRT_BY_STAGE[econ.stage()]) * 100.0)
+	if key.begins_with("bed"):
+		var a: Array = [econ.tier("garden")]
 		for b in beds:
-			a.append(_crop(b))
-	return hash(a)
+			if int(b.row) == int(key.substr(3)):
+				a.append(_crop(b))
+		return hash(a)
+	match key:
+		"water":
+			return econ.tier("water")
+		"irrig":
+			return econ.tier("garden")
+		"kitchen":
+			return econ.tier("kitchen")
+		"infirmary":
+			return econ.tier("infirmary")
+		"dormA":
+			return mini(econ.tier("dormitory"), 2)
+		"dormB":
+			return econ.tier("dormitory")
+		"radio":
+			return econ.tier("radio")
+		"scaf":
+			var q: Array = []
+			for id in econ.queue:
+				q.append(id)
+			return hash(q)
+	return 0
 
 
 func _lit() -> bool:
@@ -241,7 +288,6 @@ func _assign() -> void:
 	var roles: Dictionary = econ.cfg.crew_role
 	if not _calm():
 		for m in game.crew.members:
-			(m as Dictionary).erase("build_q")
 			if m.has("eat") and (m.eat as Dictionary).has("build"):
 				m.erase("eat")
 				m.state = "wait"
@@ -250,7 +296,7 @@ func _assign() -> void:
 	if econ.queue.is_empty():
 		return
 	for m in game.crew.members:
-		if m.state != "wait" or m.has("down") or m.has("eat") or not (m.get("build_q", []) as Array).is_empty() or float(m.get("build_cd", 0.0)) > _clock:
+		if not ["wait", "walk", "arrive", "idle"].has(String(m.state)) or m.has("down") or m.has("eat"):
 			continue
 		var role := String(roles.get(String(m.def.id), ""))
 		if role == "" or m.def.has("stand") or m.def.has("play"):
@@ -260,7 +306,9 @@ func _assign() -> void:
 				continue
 			var s: Dictionary = site_of(id)
 			var side := float(hash(String(m.def.id)) % 3 - 1) * 0.7    # (two workers on one site do not stand on each other)
-			m["build_q"] = [{"at": Vector2(s.stand) + Vector2(side, 0.0), "secs": 24.0, "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}]
+			m["eat"] = {"at": Vector2(s.stand) + Vector2(side, 0.0), "secs": 24.0, "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}    # (taken like a meal stop: the route goes on after it)
+			m.state = "wait"
+			m.p.work = ""
 			if game.args.has("log"):
 				print("WORLD stop ", m.def.name, " -> ", id, " at ", snappedf(game.tod, 0.1))
 			break
@@ -273,7 +321,6 @@ func site_of(id: String) -> Dictionary:
 ## prison_crew.gd calls this every frame a person works a project stop.
 func labor(m: Dictionary, stop: Dictionary, dt: float) -> void:
 	var id := String(stop.build)
-	m["build_cd"] = _clock + 9.0
 	if not game.siege.attacking:
 		econ.add_labor(id, dt)
 	if econ.state(id) == "built":
@@ -282,7 +329,7 @@ func labor(m: Dictionary, stop: Dictionary, dt: float) -> void:
 
 func _done(id: String) -> void:
 	_sig_t = 99.0
-	if _staging or ground == null:
+	if _staging or ground.is_empty():
 		return
 	if game.args.has("log"):
 		print("WORLD built ", id, " at ", snappedf(game.tod, 0.1))
@@ -413,25 +460,43 @@ func _shadow(c: CanvasItem, x: float, y: float, w: float, h: float) -> void:
 	c.draw_rect(Rect2(Vector2(x + 0.12, y + 0.16) * T, Vector2(w, h) * T), Color(0, 0, 0, 0.22))
 
 
-func _paint_ground(c: CanvasItem) -> void:
-	var st: String = econ.stage()
-	_dirt(c, float(DIRT_BY_STAGE[st]))
-	_fence(c, econ.tier("fence"))
-	_water(c, econ.tier("water"))
-	_garden(c, econ.tier("garden"))
-	_kitchen(c, econ.tier("kitchen"))
-	_infirmary(c, econ.tier("infirmary"))
-	_dorm(c, econ.tier("dormitory"))
-	_radio(c, econ.tier("radio"))
-	for id in econ.queue:
-		_scaffold(c, id)
+func _pg(c: CanvasItem, key: String) -> void:
+	if key.begins_with("fence"):
+		_fence(c, econ.tier("fence"), int(key.substr(5)))
+	elif key.begins_with("dirt"):
+		_dirt(c, float(DIRT_BY_STAGE[econ.stage()]), int(key.substr(4)))
+	elif key.begins_with("bed"):
+		if econ.tier("garden") >= 1:
+			for b in beds:
+				if int(b.row) == int(key.substr(3)):
+					_bed(c, b, econ.tier("garden"))
+	else:
+		match key:
+			"water":
+				_water(c, econ.tier("water"))
+			"irrig":
+				_garden(c, econ.tier("garden"))
+			"kitchen":
+				_kitchen(c, econ.tier("kitchen"))
+			"infirmary":
+				_infirmary(c, econ.tier("infirmary"))
+			"dormA":
+				_dorm(c, mini(econ.tier("dormitory"), 2))
+			"dormB":
+				_dorm_b(c, econ.tier("dormitory"))
+			"radio":
+				_radio(c, econ.tier("radio"))
+			"scaf":
+				for id in econ.queue:
+					_scaffold(c, id)
 
 
 ## Stains, crumbs, litter and puddles; the share drawn falls with the stage (the cleaner's rubbish piles are capped in `update`).
-func _dirt(c: CanvasItem, share: float) -> void:
-	var n := int(float(decals.size()) * share)
+func _dirt(c: CanvasItem, share: float, zi: int) -> void:
+	var zd: Array = decals[zi]
+	var n := int(float(zd.size()) * share)
 	for i in n:
-		var d: Dictionary = decals[i]
+		var d: Dictionary = zd[i]
 		var p: Vector2 = Vector2(d.p) * T
 		var s: float = float(d.s) * T
 		match int(d.k):
@@ -452,7 +517,7 @@ func _dirt(c: CanvasItem, share: float) -> void:
 					c.draw_rect(Rect2(p + Vector2(float(k) * 4.0, sin(float(k) * 3.1) * 3.0), Vector2(2.5, 2.5)), Color(0.5, 0.4, 0.28, 0.9))
 
 
-func _fence(c: CanvasItem, tier: int) -> void:
+func _fence(c: CanvasItem, tier: int, only: int) -> void:
 	if tier < 1:
 		return
 	var lines: Array = [
@@ -462,7 +527,10 @@ func _fence(c: CanvasItem, tier: int) -> void:
 		[Vector2(6.5, 4.5), Vector2(6.5, 55.5), Vector2(1, 0)],
 		[Vector2(89.5, 4.5), Vector2(89.5, 55.5), Vector2(-1, 0)],
 	]
-	for L in lines:
+	for li in lines.size():
+		if li != only:
+			continue
+		var L: Array = lines[li]
 		var a: Vector2 = L[0]
 		var b: Vector2 = L[1]
 		var inw: Vector2 = L[2]
@@ -603,8 +671,6 @@ func _bed(c: CanvasItem, b: Dictionary, tier: int) -> void:
 func _garden(c: CanvasItem, tier: int) -> void:
 	if tier < 1:
 		return
-	for b in beds:
-		_bed(c, b, tier)
 	if tier >= 2:    # irrigation: a tank, a manifold and a pipe between every two rows with drip points
 		var pc := Color(0.35, 0.55, 0.75)
 		for y in [33.0, 37.0, 41.0, 45.0]:
@@ -693,13 +759,20 @@ func _bunk(c: CanvasItem, x: float, y: float, blanket: Color) -> void:
 	c.draw_line(Vector2(x + 1.2, y - 0.3) * T, Vector2(x + 1.2, y + 0.4) * T, INK, 1.5)
 
 
-func _dorm(c: CanvasItem, tier: int) -> void:
-	var cols := [Color(0.3, 0.45, 0.65), Color(0.6, 0.3, 0.25), Color(0.4, 0.55, 0.35), Color(0.7, 0.6, 0.3), Color(0.5, 0.35, 0.55), Color(0.3, 0.55, 0.55)]
+func _dorm(c: CanvasItem, tier: int) -> void:    # cell block A: the first two tiers
+	var cols := [Color(0.3, 0.45, 0.65), Color(0.6, 0.3, 0.25), Color(0.4, 0.55, 0.35), Color(0.7, 0.6, 0.3)]
 	var n := 0
 	for t in range(1, tier + 1):
 		for x in DORM_X[t]:
 			_bunk(c, float(x), 14.6, cols[n % cols.size()])
 			n += 1
+
+
+func _dorm_b(c: CanvasItem, tier: int) -> void:    # cell block B: the third tier
+	if tier >= 3:
+		var cols := [Color(0.5, 0.35, 0.55), Color(0.3, 0.55, 0.55)]
+		for k in 2:
+			_bunk(c, float(DORM_X[3][k]), 14.6, cols[k])
 
 
 func _radio(c: CanvasItem, tier: int) -> void:
