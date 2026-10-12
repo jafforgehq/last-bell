@@ -25,6 +25,7 @@ const Base := preload("res://scripts/prison/prison_base.gd")
 const Crew := preload("res://scripts/prison/prison_crew.gd")
 const Tower := preload("res://scripts/prison/prison_tower.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
+const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
@@ -116,6 +117,7 @@ var revive_t := 0.0
 var _hurt_t := 0.0
 var _auto_i := 0
 var pack: Pack    # the backpack (prison_pack.gd)
+var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
 
 func _ready() -> void:
@@ -469,6 +471,10 @@ func _enter_base() -> void:
 		if cc.size() > 2:
 			zoom_px = float(cc[2])
 		args["fixcam"] = "1"
+	if siege == null:
+		siege = Siege.new(self)    # SIEGE hook (kept over raids: fence hp, night count)
+	if not clear:
+		siege.setup()
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
 		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
@@ -590,6 +596,7 @@ func _tick(dt: float) -> void:
 	else:
 		_raid_logic(dt)
 	_day_night(dt)
+	siege.update(dt)    # SIEGE hook
 	hud_label.text = _hud_text()
 	prompt_label.text = String(_prompt.get("label", "")) if not busy else ""
 	overlay.queue_redraw()
@@ -644,7 +651,7 @@ func _hud_text() -> String:
 				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
 		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
 	if mode == "base":
-		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired]
+		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + siege.hud()
 	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size()]
 
 
@@ -666,7 +673,7 @@ func _hands() -> void:
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear") and not busy and not args.has("shot") and not pack.blocks_fire()
+	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire()
 	run.sim.avatar.set_input(move, aim, fire)
 
 
@@ -680,10 +687,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_E:
 				_use()
 			KEY_R:
-				if mode == "raid" or phase == "clear":
+				if mode == "raid" or phase == "clear" or siege.can_fire():
 					run.sim.avatar.reload()
 			KEY_F:
-				if (mode == "raid" or phase == "clear") and not busy:
+				if (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
 					run.sim.avatar.melee()
 			KEY_M:
 				map_view = not map_view
@@ -710,6 +717,8 @@ func _use() -> void:
 		return
 	if String(_prompt.get("kind", "")) == "revive":
 		return    # held, not pressed (_clear_logic)
+	if String(_prompt.get("kind", "")) == "repair":
+		return    # SIEGE hook: held E, handled in prison_siege.gd
 	if String(_prompt.get("kind", "")) == "stores":
 		pack.open_stash()
 		return
@@ -902,6 +911,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 		var g := Vector2(Base.GATE_X, Base.FENCE.end.y - 1) * TILE
 		c.draw_rect(Rect2(g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
 		c.draw_rect(Rect2(g + Vector2(Base.GATE_W * TILE * 0.5 + 2, 0), Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
+		siege.paint(c)    # SIEGE hook
 		for l in base.labels:
 			c.draw_string(font, Vector2(l.pos) * TILE - Vector2(80, 0), String(l.text), HORIZONTAL_ALIGNMENT_CENTER, 160, 20, Color(1, 1, 0.8, 0.8))
 		for m in crew.members:
@@ -1127,6 +1137,7 @@ func _draw_minimap(v: Vector2) -> void:
 		for m in crew.members:
 			bars.draw_circle(o + Vector2(m.p.x, m.p.y) * sc, 1.8, Color(0.4, 0.85, 1.0))
 		bars.draw_rect(Rect2(o + Vector2(5, 57) * sc, Vector2(86, 12) * sc), Color(0.8, 0.1, 0.1, 0.18))
+		siege.mini(bars, o, sc)    # SIEGE hook
 	for z in run.sim.zombies:
 		if z.state == "dying" or z.state == "dead":
 			continue
@@ -1457,7 +1468,7 @@ func _fence_guards(dt: float) -> void:
 			if m.def.has("stand"):
 				m.say = "Contact! Contact!"
 	for m in crew.members:
-		if not m.def.has("stand"):
+		if not m.def.has("stand") or not siege.guard_ok(m):    # SIEGE hook
 			continue
 		var g = m.p
 		guard_cd[g.id] = float(guard_cd.get(g.id, randf() * 2.0)) - dt
@@ -1466,7 +1477,7 @@ func _fence_guards(dt: float) -> void:
 		var best = null
 		var bd := 1.0e9
 		for z in dead:
-			if z.y < fence_y - 0.5 or z.y > fence_y + FENCE_ZONE:
+			if not siege.in_guard_zone(z):    # SIEGE hook (was the strip south of the gate fence)
 				continue
 			var d := Vector2(z.x, z.y).distance_to(Vector2(g.x, g.y))
 			if d < GUARD_RANGE and d < bd:
@@ -1479,6 +1490,7 @@ func _fence_guards(dt: float) -> void:
 			continue
 		guard_cd[g.id] = (0.7 if alarm_t > 0.0 else randf_range(1.6, 3.0))
 		_shoot_at(g, best, 0.8)
+		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
 		m.say = "firing"
 
 
