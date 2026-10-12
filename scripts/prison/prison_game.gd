@@ -1415,6 +1415,8 @@ func _shoot_at(g, z, hit_p: float) -> void:
 	shot_n[g.id] = int(shot_n.get(g.id, 0)) + 1
 	if int(shot_n[g.id]) % RELOAD_EVERY == 0:
 		g.reloading = RELOAD_SECS
+	if args.has("shotlog"):
+		print("SHOT f=", frames, " ", g.id, " n=", shot_n[g.id])
 	var mz: Vector2 = run.sim.muzzle(g, ang)    # (the gun's own muzzle, so the flash and the tracer start at the barrel)
 	var mx := mz.x
 	var my := mz.y

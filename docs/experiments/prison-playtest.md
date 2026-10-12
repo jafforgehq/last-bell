@@ -30,3 +30,10 @@ Managed base, 66 awake dead, 17 crew: avg 8.7 ms, p95 10.2, max 14.4. With a nig
 
 ## Open
 Owner decisions and human checks are in the final report.
+
+## Round 5 checks (HUD, tower poses, allies after the clear, cleaning)
+- HUD: screenshots with `--aimdir` in the clear phase (line, crosshair, "Pump shotgun 6 / 117") and in the managed base (readout, line); `--reloadat=N` staged reload shows the ring and "RELOADING". In the managed base boot without a kit the pack is empty so it reads "6 / 0": correct, the shells are in the pack. NOT checked: a raid screenshot (same code path), colour-blind markers.
+- Tower guards: shot log (`--shotlog=1`) shows a reload pause of about 100 frames after every 5th shot; screenshot shows Walt with the rifle aimed south, then the watch pose again. Weak: facing south the aimed rifle points at the camera and reads small.
+- Allies: `--auto=clearall` reaches PHASE managed with 17 crew, no script errors; screenshot shows Cole "Gate watch", Bea "Yard patrol", Ike "Quartermaster" with no ready tag or bar. A raid loop (2 raids) ran with no errors. NOT checked: an ex-ally bitten in a siege.
+- Cleaning: `--hour0=9.5 --cleannow=1 --log` prints the plans, Mia sweeps with the broom (screenshot), the log says "body being cleared by Mia" and the staged corpses fade (screenshot). Others (laundry, rubbish haul) were only seen in the plan log; the walk to the far yard takes about 40 s real time. Siege interruption is by code only (not run).
+- Ammo split: stores ammo 20 in the clear phase; the short-stores message was not triggered in a run.
