@@ -113,6 +113,17 @@ func frame(dt: float) -> void:
 	_frames += 1
 	hud.size = game._vp()
 	ui.on_frame(dt)
+	if _frames == 5 and _flag == "stash" and game.mode == "base":    # (the stash only opens beside the stores)
+		game.run.avatar_p.x = float(game.base.stations.stores.x)
+		game.run.avatar_p.y = float(game.base.stations.stores.y) + 1.0
+	if _frames == 5 and _flag.begins_with("search") and game.mode == "raid":    # (the nearest container that holds something, not an empty car)
+		var best = null
+		for c in game.town.containers:
+			if not (c.loot as Dictionary).is_empty() and (best == null or Vector2(c.pos).distance_to(Vector2(game.run.avatar_p.x, game.run.avatar_p.y)) < Vector2(best.pos).distance_to(Vector2(game.run.avatar_p.x, game.run.avatar_p.y))):
+				best = c
+		if best != null:
+			game.run.avatar_p.x = float(best.pos.x)
+			game.run.avatar_p.y = float(best.pos.y)
 	if _frames == 12:
 		if _flag == "open" or _flag == "stash":
 			ui.open_pack()

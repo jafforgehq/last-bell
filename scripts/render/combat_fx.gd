@@ -44,6 +44,9 @@ const MAX_LATER := 48
 ## A splat stays at full strength this long (seconds of the game's time), then fades, and is gone after DECAL_LIFE.
 const DECAL_HOLD := 6.0
 const DECAL_LIFE := 20.0
+## The prison keeps stains until a cleaner comes (prison_game.gd sets these); the town's values are the constants.
+var decal_hold := DECAL_HOLD
+var decal_life := DECAL_LIFE
 ## At most this many drops of blood leave a splat of their own in one frame (a volley must not paint the ground).
 const SPLATS_PER_FRAME := 4
 ## A hit on a plated brute that does less than this is the armour's (nights.json: armour 0.1, a head hit 3.0): it rings, it does not bleed.
@@ -965,16 +968,16 @@ func _age_decals(dt: float) -> void:
 		if float(d.grow) > 0.0 and age < 3.0:
 			d.size += float(d.grow) * dt / 3.0
 			_scale_decal(d)
-		if age > DECAL_HOLD:
-			var k := clampf((age - DECAL_HOLD) / (DECAL_LIFE - DECAL_HOLD), 0.0, 1.0)
+		if age > decal_hold:
+			var k := clampf((age - decal_hold) / (decal_life - decal_hold), 0.0, 1.0)
 			var a := float(d.alpha) * (1.0 - k * k * (3.0 - 2.0 * k))
 			d.node.modulate.a = a
-			if age >= DECAL_LIFE:
+			if age >= decal_life:
 				expired += 1
 	if expired > 0:
 		var keep: Array = []
 		for d in _decals:
-			if float(d.age) >= DECAL_LIFE:
+			if float(d.age) >= decal_life:
 				d.node.visible = false
 				_spare.append(d.node)
 			else:

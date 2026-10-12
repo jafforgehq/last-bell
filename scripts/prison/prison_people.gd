@@ -64,7 +64,7 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 	var src: Dictionary = (defs[String(who.key)] as Dictionary).duplicate(true)
 	src["id"] = "found_" + String(who.name).to_lower()
 	src["name"] = String(who.name)
-	src["unarmed"] = true
+	src["unarmed"] = false    # a found survivor carries a rifle and shoots like the clear phase allies
 	var look: Dictionary = (src.look as Dictionary).duplicate(true)
 	for k in who.look:
 		look[k] = who.look[k]
@@ -80,7 +80,6 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 	p.work = "rest"
 	var n := PawnNode.new()
 	n.setup(p, false, game.data, String(who.key))
-	n.unarmed = true
 	game.entities.add_child(n)
 	s = {"name": String(who.name), "who": who, "p": p, "node": n, "hp": float(sv.hp), "state": "wait", "path": [], "pi": 0, "repath": 0.0, "bite": 0.0, "at": at, "def": {"id": String(src.id), "name": String(who.name)}}
 	_t = 0.0
@@ -152,6 +151,22 @@ func update(dt: float) -> void:
 	var me := _me()
 	game.ally_chasers.clear()
 	var mode := String(game.args.get("survivor", ""))
+	if mode == "bite":    # staging: follows, then two dead are put on them (the lost path)
+		_t += dt
+		if _step == 0 and _t > 1.0 and String(s.state) == "wait":
+			game.run.avatar_p.x = at.x
+			game.run.avatar_p.y = at.y + 1.8
+			talk()
+			_step = 1
+		elif _step == 1 and _t > 4.0:
+			var n := 0
+			for z in game.run.sim.zombies:
+				if n < 3 and z.state != "dead" and z.state != "dying":
+					z.x = at.x + 0.3
+					z.y = at.y
+					z.state = "chase"
+					n += 1
+			_step = 2
 	if mode == "run" or mode == "nobed":
 		_t += dt
 		if _step == 0 and _t > 1.5 and String(s.state) == "wait":
@@ -179,6 +194,25 @@ func update(dt: float) -> void:
 			biters += 1
 		if z.state == "chase" and d < 8.0 and d < me.distance_to(Vector2(z.x, z.y)) - 0.5:
 			game.ally_chasers[z] = {"p": p, "state": "ally"}
+	# the pose ticks (the crew's are in prison_game.gd `_gun_poses`) and the shot: nearest dead in sight within 8 tiles
+	p.recoil = maxf(0.0, float(p.recoil) - dt * 8.0)
+	p.reloading = maxf(0.0, float(p.reloading) - dt)
+	var hold := float(game.aim_hold.get(p.id, 0.0)) - dt
+	game.aim_hold[p.id] = hold
+	if hold <= 0.0 and p.target != null:
+		p.target = null
+	s.cd = float(s.get("cd", 0.0)) - dt
+	if float(s.cd) <= 0.0 and float(p.reloading) <= 0.0:
+		var best = null
+		var bd := 8.0
+		for z in game._awake_dead():
+			var dz := at.distance_to(Vector2(z.x, z.y))
+			if dz < bd and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+				bd = dz
+				best = z
+		if best != null:
+			game._shoot_at(p, best, 0.6)
+			s.cd = randf_range(1.0, 1.8)
 	if biters > 0 and float(s.bite) <= 0.0:
 		s.bite = 0.9
 		var dmg: float = game.BITE_DMG * float(mini(biters, 3))
@@ -226,7 +260,9 @@ func _walk(dt: float, speed: float) -> void:
 
 
 func lose() -> void:
-	banner("%s was lost." % String(s.name), Color(1, 0.55, 0.45))
+	banner("%s is gone." % String(s.name), Color(1, 0.55, 0.45))
+	if game.args.has("log"):
+		print("PEOPLE ", s.name, " is gone (bitten to zero)")
 	s.state = "lost"
 	game.ally_chasers.clear()
 	if is_instance_valid(s.node):

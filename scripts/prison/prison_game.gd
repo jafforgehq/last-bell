@@ -35,6 +35,7 @@ const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const Upg := preload("res://scripts/prison/prison_upgrades.gd")    # WORLD hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
+const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -136,6 +137,7 @@ var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project 
 var back_t := 0.0    # seconds since she came back from a raid (the siege shows its "back in the middle" card while this runs)
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
+var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
@@ -181,7 +183,12 @@ func _fit_window() -> void:
 	if win.mode == Window.MODE_WINDOWED and not OS.has_feature("web") and DisplayServer.get_name() != "headless":
 		var s := DisplayServer.screen_get_scale(win.current_screen)
 		var usable := DisplayServer.screen_get_usable_rect(win.current_screen)
-		var want := Vector2i(Vector2(1280, 800) * s)
+		var base_sz := Vector2(1280, 800)
+		if args.has("window"):    # --window=1024x640: a smaller window for layout checks
+			var wp := String(args.window).split("x")
+			if wp.size() == 2:
+				base_sz = Vector2(float(wp[0]), float(wp[1]))
+		var want := Vector2i(base_sz * s)
 		want.x = mini(want.x, int(usable.size.x * 0.94))
 		want.y = mini(want.y, int(usable.size.y * 0.94))
 		win.size = want
@@ -215,13 +222,23 @@ func _make_hud() -> void:
 	hud = CanvasLayer.new()
 	hud.layer = 10
 	add_child(hud)
-	hud_label = _lbl(18, Vector2(14, 10))
+	hud_label = _lbl(15, Vector2(8, 6))
+	var plate := StyleBoxFlat.new()    # a subtle plate so the text reads on grass, concrete and brick
+	plate.bg_color = Color(0.03, 0.05, 0.04, 0.55)
+	plate.set_corner_radius_all(4)
+	plate.content_margin_left = 8
+	plate.content_margin_right = 8
+	plate.content_margin_top = 3
+	plate.content_margin_bottom = 3
+	hud_label.add_theme_stylebox_override("normal", plate)
 	hud.add_child(hud_label)
 	prompt_label = _lbl(22, Vector2(0, 0))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(prompt_label)
 	msg_label = _lbl(20, Vector2(0, 0))
 	msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(msg_label)
 	bars = Control.new()
 	bars.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -276,25 +293,25 @@ func _say(t: String, secs: float = 3.5) -> void:
 
 func _layout_labels() -> void:
 	var v := _vp()
-	prompt_label.size = Vector2(v.x, 30)
-	prompt_label.position = Vector2(0, v.y - 120)
-	msg_label.size = Vector2(v.x, 30)
-	msg_label.position = Vector2(0, 110)
+	prompt_label.size = Vector2(v.x * 0.6, 30)    # (wrapped, centred: a long line no longer runs under the minimap)
+	prompt_label.position = Vector2(v.x * 0.2, v.y - 130)
+	msg_label.size = Vector2(v.x * 0.6, 30)
+	msg_label.position = Vector2(v.x * 0.2, v.y - 200)
 	cap_label.size = Vector2(v.x, 80)
 	cap_label.position = Vector2(0, v.y * 0.5 + 60)
 
 
 func _stock_line() -> String:
-	var s := ""
+	var parts: Array = []
 	var rep: Dictionary = econ.daily_report() if phase == "managed" else {}    # ECON hook: per-day net for food and water
 	for k in STOCK_KEYS:
 		if phase != "managed" and (k == "parts" or k == "fuel"):
 			continue
 		if rep.has("res") and (k == "food" or k == "water"):
-			s += "%s %d (+%d/-%d)    " % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)]
+			parts.append("%s %d (+%d/-%d)" % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)])
 		else:
-			s += "%s %d    " % [String(k).capitalize(), int(stores[k])]
-	return s
+			parts.append("%s %d" % [String(k).capitalize(), int(stores[k])])
+	return "  ".join(parts)
 
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
@@ -390,6 +407,8 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	fx = FX.new()
 	radial_tex = _radial_texture()
 	fx.setup(data, decals, radial_tex)
+	fx.combat.decal_hold = 600.0    # stains stay until a cleaner comes (prison_clean.gd), up to about 15 minutes
+	fx.combat.decal_life = 900.0
 	fx.combat.sound = sound
 	guard_cd.clear()
 	alarm_t = 0.0
@@ -475,6 +494,8 @@ func _radial_texture() -> Texture2D:
 # ----------------------------------------------------------------------- modes --
 
 func _enter_base() -> void:
+	_msg_t = 0.0    # (no message of the last stage is carried over)
+	msg_label.text = ""
 	mode = "base"
 	base = Base.new()
 	var clear := phase == "clear"
@@ -559,13 +580,15 @@ func _enter_base() -> void:
 		cleaner.setup()
 		upg.setup()    # WORLD hook
 	if clear:
-		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
+		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
 		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
 	else:
 		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
 
 
 func _enter_raid() -> void:
+	_msg_t = 0.0    # (no message of the last stage is carried over)
+	msg_label.text = ""
 	mode = "raid"
 	raids += 1
 	var seed_i := int(args.get("seed", str(1000 + raids * 17 + int(Time.get_ticks_msec() % 997))))
@@ -772,9 +795,9 @@ func _hud_text() -> String:
 		for m in crew.members:
 			if m.def.has("ally"):
 				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
-		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
+		return "CLEAR THE PRISON  cleared %d/%d  dead left %d  mag %d  party:%s\n%s" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag), al, _stock_line()]
 	if mode == "base":
-		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + board.hud_lines() + siege.hud()    # UI hook
+		return "%02d:%02d  %s\n%s  |  %s" % [int(tod), int(fposmod(tod, 1.0) * 60.0), _stock_line(), board.hud_lines(), siege.hud()]    # UI hook
 	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d\n%s" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size(), loot.hint()]    # RAIDS hook: the marked places
 
 
@@ -1051,6 +1074,8 @@ func _sync_views() -> void:
 			n3.visible = view.has_point(Vector2(m.p.x, m.p.y))
 			if n3.visible:
 				n3.sync(true, sim_steps, alpha)
+				if m.has("lift"):
+					n3.position.y -= float(m.lift) * TILE    # (a kid's hop)
 
 
 func _paint_decks(c: CanvasItem) -> void:
@@ -1142,6 +1167,9 @@ func _paint_overlay(c: CanvasItem) -> void:
 
 ## --auto=raid: start a raid, walk to the nearest container and search it, then to an exit.  extract / die jump to those endings (for checks).
 func _scripts(dt: float) -> void:
+	if args.has("drive") and frames == 5:
+		driver = Drive.new(self)
+		driver.run(String(args.drive))
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
 		run.avatar_p.mag = 2
 		run.sim.avatar.reload()
@@ -1511,8 +1539,14 @@ func _draw_minimap(v: Vector2) -> void:
 ## One rifle shot from a person that is not in the sim (a tower guard, an ally) at a dead one: muzzle flash, tracer, the real rifle sound, `hit_p` to hit (55 damage, the dead fall and bleed).
 func _shoot_at(g, z, hit_p: float) -> void:
 	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
-	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)
+	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)    # (the pawn draws 4 views, E mirrored for W: the shooter turns to the nearest one)
 	g.aim = ang
+	if g.target == null:    # the first shot of a burst: the rifle is raised for 0.25 s before the flash
+		g.target = z
+		aim_hold[g.id] = 1.4
+		await get_tree().create_timer(0.25).timeout
+		if run == null or not siege._alive(z):
+			return
 	# the pose: PawnNode draws the aimed gun while `target` is set, the kick from `recoil`, the lowered gun and pump from `reloading` (the pawn's own states, ticked in `_gun_poses`)
 	g.target = z
 	g.recoil = 1.0

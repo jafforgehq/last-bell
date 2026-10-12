@@ -31,6 +31,16 @@
    ],
    "axis": true
   },
+  "broom": {
+   "file": "res://assets/objects/tool_broom.png",
+   "w": 224,
+   "h": 100,
+   "grip": [
+    62,
+    49
+   ],
+   "axis": true
+  },
   "can": {
    "file": "res://assets/objects/tool_can.png",
    "w": 104,
