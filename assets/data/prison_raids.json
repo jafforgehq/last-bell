@@ -11,7 +11,7 @@
     "hardware": [["scrap", 0.7, 2, 3], ["parts", 0.4, 1, 1]],
     "garage": [["parts", 0.45, 1, 2], ["fuel", 0.3, 1, 1], ["scrap", 0.4, 1, 3]],
     "petrol": [["fuel", 0.5, 1, 1], ["scrap", 0.2, 1, 1]],
-    "police": [["ammo", 0.8, 4, 8], ["parts", 0.1, 1, 1]]
+    "police": [["ammo", 0.8, 4, 8], ["parts", 0.1, 1, 1], ["gun_smg", 0.1, 1, 1], ["gun_service", 0.1, 1, 1], ["gun_shotgun", 0.08, 1, 1]]
   },
   "kinds": {
     "fridge": {"only": ["food", "water"]}, "kitchen_counter": {"only": ["food", "water"]}, "cupboard": {"only": ["food", "water"]}, "shelf_tins": {"only": ["food", "water"]},

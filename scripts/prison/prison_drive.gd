@@ -110,6 +110,8 @@ func run(name: String) -> void:
 			await _keys()
 		"gate", "gateclick":
 			await _gate(name == "gateclick")
+		"squad":
+			await _squad()
 		"stash":
 			await _stash()
 		"drag":
@@ -221,9 +223,41 @@ func _gate(by_click: bool) -> void:
 	else:
 		await _tap(KEY_4)
 	_check(not g.loot.choosing and g.loot.picked == (2 if by_click else 3), "the choice sets the raid target (picked %d, wanted %d)" % [g.loot.picked, 2 if by_click else 3])
+	await _wait(4)
+	_check(g.loadout.is_open, "the choice opens the loadout card (gun, kit, companions)")
+	await _tap(KEY_ENTER)
 	await _wait(400)
 	_check(g.mode == "raid", "the truck goes out (mode %s)" % g.mode)
 	_check(g.loot.option == (2 if by_click else 3), "the raid hunts option %d: %s" % [g.loot.option, g.loot.target])
+
+
+func _squad() -> void:
+	# the gate's second step with real keys: 1 and 2 pick two companions, W the next gun, Enter goes; in the raid C opens the orders and 2 holds them all
+	await _put(Vector2(g.base.stations.truck) + Vector2(0.0, 1.0))
+	await _tap(KEY_E)
+	await _tap(KEY_1)
+	await _wait(4)
+	_check(g.loadout.is_open, "the choice opens the loadout card")
+	var shown: int = g.squad.cands.size()
+	_check(shown > 5, "the card lists the crew (%d)" % shown)
+	await _tap(KEY_1)
+	await _tap(KEY_2)
+	_check(g.squad.picked.size() == 2, "keys 1 and 2 pick two companions: %s" % [g.squad.picked])
+	await _tap(KEY_3)
+	_check(g.squad.picked.size() == 2, "a third is refused (two at most)")
+	var gun0: String = g.arms.main
+	await _tap(KEY_W)
+	_check(g.arms.main != gun0, "W picks the next gun (%s to %s)" % [gun0, g.arms.main])
+	await _tap(KEY_ENTER)
+	await _wait(400)
+	_check(g.mode == "raid" and g.squad.members.size() == 2, "the raid starts with two companions (%d)" % g.squad.members.size())
+	_check(String(g.run.avatar_p.weapon) == g.arms.main, "Ruth holds the gun she chose (%s)" % g.run.avatar_p.weapon)
+	_check(g.econ.crew().filter(func(c): return c.get("out", false)).size() == 2, "the economy counts them as out")
+	await _tap(KEY_C)
+	_check(g.squad.open, "C opens the orders")
+	await _tap(KEY_2)
+	_check(g.squad.members.all(func(m): return String(m.cmd) == "hold"), "2 holds them all")
+	_check(not g.squad.open, "the panel closes after an order")
 
 
 func _stash() -> void:

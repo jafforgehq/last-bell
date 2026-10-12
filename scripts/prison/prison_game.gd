@@ -462,6 +462,9 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	run = TownRun.new(town, world, fx, 100, true, true)
 	run.sim.feel = fx.combat
 	arms.apply(run.avatar_p)    # SQUAD hook: the gun she chose (before the pawn is made: it draws that gun)
+	if args.has("log") and mode == "raid":
+		var gp = run.avatar_p
+		print("GUN ", gp.weapon, " mag ", gp.mag, " cost ", run.sim.shot_cost(gp), " noise ", run.field.noise_radius_for(gp), " shots per unit ", snappedf(1.0 / run.sim.shot_cost(gp), 0.1), " cooldown ", gp.gun.cooldown, " spread ", run.sim.avatar.spread_of(gp, gp.gun))
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
 	mini_tex = _mini_texture(town.data)
 	if dog != null:
@@ -619,6 +622,14 @@ func _enter_raid() -> void:
 	var drop: Vector2 = Vector2(t.entry.pos)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	loot.begin(t, seed_i)    # RAIDS hook: loot by place and the marked places (before the sim reads the containers)
+	if args.has("findgun"):    # staging: --findgun=smg puts that gun in the container nearest the drop
+		var nb = null
+		for ct in t.containers:
+			if nb == null or Vector2(ct.pos).distance_to(drop) < Vector2(nb.pos).distance_to(drop):
+				nb = ct
+		nb.loot["gun_" + String(args.findgun)] = 1
+		if args.has("log"):
+			print("FINDGUN in ", nb.id, " at ", nb.pos, " items ", preload("res://scripts/sim/inventory.gd").items_for_loot(nb.loot, 5))
 	if crew != null:
 		squad.snapshot()    # SQUAD hook: who could go (the base is torn down by the next line)
 	_make_stage(t, true)
@@ -799,11 +810,16 @@ func _step() -> void:
 				sound.play(String(e.type))
 			"stab":
 				sound.play("stab", 0.6, 0.08)
+			"picked":
+				if String(e.get("item", "")).begins_with("gun_"):
+					_say("Found a %s. It goes to the weapon rack when you get home." % Inventory_name(String(e.item)), 4.0)
 			"searched":
 				var parts: Array = []
 				for k in e.loot:
 					parts.append("+%d %s" % [int(e.loot[k]), k])
 				_say("Found: " + (", ".join(parts) if not parts.is_empty() else "nothing"), 2.5)
+				if args.has("log"):
+					print("SEARCHED ", e.get("container"), " loot ", e.loot, " taken ", e.get("taken"), " pack ", pack.grid.cells.map(func(c): return "%s x%d" % [c.item, c.count]))
 				_auto_pick(String(e.get("container", "")))
 	run.sim.events.clear()
 	if run.invulnerable:
@@ -899,6 +915,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_px /= 1.12
 			play_zoom = zoom_px
+
+
+func Inventory_name(id: String) -> String:
+	return preload("res://scripts/sim/inventory.gd").name_of(id)
 
 
 ## The prompt of a use: its words, and for a search how long it takes ("E: Search the cupboard (3 s)"), with the room search on Shift+E where the room has two or more to search.
@@ -1051,6 +1071,8 @@ func _extract(alive: bool) -> void:
 	var join_text: String = people.settle(alive)    # RAIDS hook: does the survivor join (a free bed, alive, at the ring)
 	var gun_lines: Array = []
 	if alive:
+		if args.has("log"):
+			print("GUNS pack ", pack.grid.cells.filter(func(c): return String(c.item).begins_with("gun_")), " main ", arms.main)
 		var back: int = arms.land([pack.grid])    # SQUAD hook: her gun and the guns in the pack go to the rack
 		var sq: Dictionary = squad.settle(true)    # the bags of the companions that are here go into the stock
 		gun_lines = sq.lines
@@ -1302,6 +1324,8 @@ func _scripts(dt: float) -> void:
 		driver.run(String(args.drive))
 	if args.has("loadout") and frames == 30:    # staging: the loadout card (--loadout=weapon: the clear phase's weapon card)
 		loadout.open("Food and water" if String(args.loadout) != "weapon" else "", String(args.loadout) == "weapon")
+	if args.has("orders") and frames == int(args.orders):    # staging: the orders panel
+		squad.toggle_orders()
 	if args.has("pick") and frames == 32 and loadout.is_open:    # staging: --pick=june,owen ticks companions on the card
 		for id in String(args.pick).split(","):
 			squad.toggle(id)
@@ -1493,7 +1517,7 @@ var _raid_t := 0.0
 func _snap(tag: String) -> void:
 	var cells: int = (pack.grid.cells as Array).size()
 	var q: Array = pack.quick
-	print("SNAP ", tag, " phase=", phase, " mode=", mode, " tod=", snappedf(tod, 0.01), " stores=", stores, " pack_stacks=", cells, " belt=", q, " siege(att=", siege.attacking, " night=", siege.night, " started=", siege.nights_started, " abs_h=", snappedf(siege.abs_h, 0.1), ") crew=", (crew.members.size() if crew != null else -1), " allies=", allies_alive, " busy=", busy, " raids=", raids, " zombies=", run.sim.zombies.size(), " mag=", run.avatar_p.mag, " hp=", run.avatar_p.hp, " exits=", exits.size(), " me=", Vector2(run.avatar_p.x, run.avatar_p.y))
+	print("SNAP ", tag, " phase=", phase, " mode=", mode, " tod=", snappedf(tod, 0.01), " stores=", stores, " pack_stacks=", cells, " belt=", q, " siege(att=", siege.attacking, " night=", siege.night, " started=", siege.nights_started, " abs_h=", snappedf(siege.abs_h, 0.1), ") crew=", (crew.members.size() if crew != null else -1), " allies=", allies_alive, " busy=", busy, " raids=", raids, " zombies=", run.sim.zombies.size(), " mag=", run.avatar_p.mag, " hp=", run.avatar_p.hp, " exits=", exits.size(), " looted=", run.sim.search.looted.size(), " rack=", arms.armory, " main=", arms.main, " me=", Vector2(run.avatar_p.x, run.avatar_p.y))
 
 
 func _auto_loop(dt: float) -> void:

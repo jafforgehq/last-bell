@@ -364,10 +364,16 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			bd = dz
 			best = z
 	var fighting := false
+	m.fight_t = float(m.get("fight_t", 0.0)) - dt
 	if best != null and float(m.cd) <= 0.0 and float(p.reloading) <= 0.0:
-		fighting = _fire(m, best, bd, eff)
-	if best != null and bd < 4.5:
-		fighting = true    # (they do not wander off to a cupboard with one in their face)
+		if _fire(m, best, bd, eff):
+			m.fight_t = 1.2
+	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold":
+		_goto(m, Vector2(best.x, best.y), dt, float(cfg.run))    # (a pike only reaches 1.9 tiles: they walk up to it)
+		m.say = "charging"
+		p.work = ""
+		return
+	fighting = float(m.fight_t) > 0.0
 	if fighting:
 		p.moving = false
 		if eff == "scavenge":
@@ -517,8 +523,8 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 	var cont: Dictionary = sim.houses.container(cur_id)
 	var spot: Vector2 = Vector2(cont.pos)
 	if String(s.stage) == "go":
-		if sim.search.is_looted(cur_id):
-			s.i = int(s.i) + 1    # (Ruth got to it first)
+		if sim.search.is_looted(cur_id) or _claimed(cur_id, m):
+			s.i = int(s.i) + 1    # (Ruth, or the other companion, got to it first)
 			return
 		if _dead_near(spot, float(cfg.dead_wait_r), zs) > int(cfg.dead_wait):
 			p.moving = false
@@ -574,6 +580,15 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 			game._say("%s: bag full. Back with you." % String(m.name), 3.0)
 		elif int(s.i) >= (s.list as Array).size():
 			_house_done(m)
+
+
+## Whether another companion is on this container (walking to it or searching it).
+func _claimed(id: String, me: Dictionary) -> bool:
+	for o in members:
+		if o != me and o.state == "up" and not (o.scav as Dictionary).is_empty() and int(o.scav.i) < (o.scav.list as Array).size() and String(o.scav.list[o.scav.i]) == id:
+			if members.find(o) < members.find(me) or String(o.scav.stage) == "search":    # (the first in the list keeps it)
+				return true
+	return false
 
 
 func _house_done(m: Dictionary) -> void:
@@ -778,7 +793,7 @@ func ring_state(dt: float) -> Dictionary:
 		names.append("%s%s" % [String(m.name), " (down)" if m.state == "down" else " (%d tiles)" % int(me.distance_to(Vector2(m.p.x, m.p.y)))])
 	if wait_t >= float(cfg.wait_s) + 4.0:
 		return {"ok": true, "text": ""}
-	return {"ok": false, "text": "Waiting for %s.  E: leave %s outside" % [" and ".join(names), "them" if far.size() > 1 else ("him or her")]}
+	return {"ok": false, "text": "Waiting for %s.  E: go without them (they are lost)" % " and ".join(names)}
 
 
 func abandon() -> void:
@@ -1056,6 +1071,16 @@ func _run_test(dt: float) -> void:
 			var ex: Vector2 = game.exits[game.exits.size() - 1]
 			game.run.avatar_p.x = ex.x
 			game.run.avatar_p.y = ex.y
-			m.p.x = ex.x + 1.0
-			m.p.y = ex.y
+			if String(game.args.get("scav-test", "")) == "far":    # the companion stays out: the ring waits, then E leaves them
+				m.hp = 0.0    # (down, 60 tiles away: nobody revives them)
+				m.state = "down"
+				m.down_t = 60.0
+				m.p.downed = true
+				_test.stage = "far"
+			else:
+				m.p.x = ex.x + 1.0
+				m.p.y = ex.y
 			print("SCAVTEST to the ring")
+	if String(_test.stage) == "far" and wait_t > 3.0 and not left_behind:
+		print("SCAVTEST ring text: ", ring_state(0.0).text)
+		abandon()
