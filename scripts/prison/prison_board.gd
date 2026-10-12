@@ -8,6 +8,7 @@ extends RefCounted
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Topbar := preload("res://scripts/prison/prison_topbar.gd")
 
 const BOARD_AT := Vector2(54.0, 47.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
@@ -172,9 +173,9 @@ func prompt(me: Vector2) -> Dictionary:
 		return {}
 	for s in ["bench1", "bench2"]:
 		if me.distance_to(game.base.stations[s]) < REACH:
-			return {"kind": "bench", "label": "E: project board (build and upgrade)"}
+			return {"kind": "bench", "label": "E: open the project board (workbench): spend scrap and parts"}
 	if me.distance_to(BOARD_AT) < REACH:
-		return {"kind": "board", "label": "E: needs board (what the prison lacks)"}
+		return {"kind": "board", "label": "E: open the needs board (what we lack, where to raid)"}
 	return {}
 
 
@@ -235,7 +236,7 @@ func blocks_fire() -> bool:
 func frame(_dt: float) -> void:
 	_frames += 1
 	var v: Vector2 = game._vp()
-	toasts.position = Vector2(v.x - 330.0, 14.0)
+	toasts.position = Vector2(v.x - 330.0, game.topbar.toast_y() if game.topbar != null else 14.0)
 	toasts.size.x = 316.0
 	_stage_flags()
 	if not panel.visible:
@@ -475,6 +476,77 @@ func morale_reasons(rep: Dictionary) -> Array:
 	return out
 
 
+## The three needs that matter most, ranked, each with the action that fixes it: [{res, line, action}].
+## Food and water by days left under the critical days, then what the next stage's projects lack (the biggest gap first), then ammo and meds under their low mark.
+func top_needs() -> Array:
+	var out: Array = []
+	var rep: Dictionary = econ.daily_report()
+	var crit: float = float(econ.cfg.needs.critical_days)
+	var rows: Array = []
+	for r in ["food", "water"]:
+		var e: Dictionary = rep.res[r]
+		var d := float(e.days)
+		if d >= 0.0 and d < crit:
+			var b := "garden" if r == "food" else "water"
+			var alt := ""
+			for p in econ.projects(b):
+				if String(p.state) == "available":
+					alt = ", or build %s" % String(p.name)
+					break
+			rows.append([d, r, "%s: %.1f days left at %+d a day" % [RES_NAME[r], d, roundi(float(e.net))], "Raid a %s%s" % [String(econ.cfg.fixes.get(r, "shop")), alt]])
+	var total := {}
+	var first_for := {}
+	var path: Array = econ.goal()
+	if path.is_empty():
+		var nid: String = econ.needs().get("for", "")
+		if nid != "":
+			path = [nid]
+	for id in path:
+		for k in econ.defs[id].cost:
+			total[k] = float(total.get(k, 0.0)) + float(econ.defs[id].cost[k])
+			if not first_for.has(k):
+				first_for[k] = _pname(String(id))
+	for k in total:
+		var sh: float = float(total[k]) - float(game.stores.get(k, 0.0))
+		if sh > 0.0:
+			rows.append([100.0 + 1000.0 / maxf(1.0, sh), k, "%s: short by %d for %s" % [RES_NAME.get(k, k), int(ceil(sh)), first_for[k]], "Raid a %s" % String(econ.cfg.fixes.get(k, "house"))])
+	for r in econ.cfg.needs.low:
+		var have: float = float(game.stores.get(r, 0.0))
+		if have < float(econ.cfg.needs.low[r]) and not rows.any(func(q): return q[1] == r):
+			rows.append([500.0 + have, r, "%s: only %d left" % [RES_NAME.get(r, r), int(have)], "Raid a %s" % String(econ.cfg.fixes.get(r, "house"))])
+	rows.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
+	for q in rows.slice(0, 3):
+		out.append({"res": q[1], "line": q[2], "action": q[3]})
+	return out
+
+
+func _needs_header() -> void:
+	var pc := PanelContainer.new()
+	pc.add_theme_stylebox_override("panel", _box(Color(0.12, 0.09, 0.05, 0.9), Hud.ACCENT, 10, 6))
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 5)
+	pc.add_child(vb)
+	vb.add_child(_lab("WHAT DO WE NEED", 18, Hud.ACCENT, true))
+	var needs := top_needs()
+	if needs.is_empty():
+		vb.add_child(_lab("Nothing is short. Build the next project or stock up before the night.", 15, Hud.OK))
+	var i := 1
+	for n in needs:
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 8)
+		vb.add_child(hb)
+		hb.add_child(_lab("%d" % i, 18, Hud.INK3, true))
+		var ib := Topbar.IconBox.new(20)
+		ib.set_icon(String(n.res) if Topbar.RES.has(String(n.res)) else "target", Topbar.RES_COL.get(String(n.res), Hud.ACCENT))
+		hb.add_child(ib)
+		var l := _lab(String(n.line), 16, Hud.INK)
+		l.custom_minimum_size.x = 330
+		hb.add_child(l)
+		hb.add_child(_lab("-> " + String(n.action), 16, Hud.WARN))
+		i += 1
+	body.add_child(pc)
+
+
 func _needs_tab() -> void:
 	var rep: Dictionary = econ.daily_report()
 	var nx := _next_stage()
@@ -482,6 +554,7 @@ func _needs_tab() -> void:
 	var names: Array = []
 	for id in goal:
 		names.append(_pname(String(id)))
+	_needs_header()
 	body.add_child(_lab("Day %d    Stage: %s" % [int(rep.day), rep.stage], 22, Hud.INK, true))
 	body.add_child(_rich(("Next stage: [b]%s[/b]. Still to build: %s." % [nx, ", ".join(names)]) if nx != "" else "The prison is a Hub. Nothing more to reach.", 15))
 	# production against consumption per day

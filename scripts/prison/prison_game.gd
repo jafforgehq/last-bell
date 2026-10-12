@@ -37,6 +37,9 @@ const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const Upg := preload("res://scripts/prison/prison_upgrades.gd")    # WORLD hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
+const Topbar := preload("res://scripts/prison/prison_topbar.gd")    # UI round 2: top bar and objective tracker
+const Tags := preload("res://scripts/prison/prison_tags.gd")    # UI round 2: crew job tags, building plates, guidance marker
+const Guide := preload("res://scripts/prison/prison_guide.gd")    # UI round 2: first-run cards
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -93,7 +96,6 @@ var extract_t := 0.0
 var busy := false    # a cutscene is playing
 var overlay: Node2D    # world-space drawing (labels, exits, tower decks)
 var hud: CanvasLayer
-var hud_label: Label
 var prompt_label: Label
 var msg_label: Label
 var bars: Control
@@ -137,6 +139,9 @@ var _hurt_t := 0.0
 var _auto_i := 0
 var pack: Pack    # the backpack (prison_pack.gd)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
+var topbar    # UI round 2: prison_topbar.gd
+var tags    # UI round 2: prison_tags.gd
+var guide    # UI round 2: prison_guide.gd
 var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
@@ -177,6 +182,9 @@ func _ready() -> void:
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
 	board = Board.new(self)    # UI hook (connects to the econ signals itself: toasts and the stage card replace the message lines)
+	topbar = Topbar.new(self)
+	tags = Tags.new(self)
+	guide = Guide.new(self)
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
@@ -235,16 +243,6 @@ func _make_hud() -> void:
 	hud = CanvasLayer.new()
 	hud.layer = 10
 	add_child(hud)
-	hud_label = _lbl(15, Vector2(8, 6))
-	var plate := StyleBoxFlat.new()    # a subtle plate so the text reads on grass, concrete and brick
-	plate.bg_color = Color(0.03, 0.05, 0.04, 0.55)
-	plate.set_corner_radius_all(4)
-	plate.content_margin_left = 8
-	plate.content_margin_right = 8
-	plate.content_margin_top = 3
-	plate.content_margin_bottom = 3
-	hud_label.add_theme_stylebox_override("normal", plate)
-	hud.add_child(hud_label)
 	prompt_label = _lbl(22, Vector2(0, 0))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -312,19 +310,6 @@ func _layout_labels() -> void:
 	msg_label.position = Vector2(v.x * 0.2, v.y - 200)
 	cap_label.size = Vector2(v.x, 80)
 	cap_label.position = Vector2(0, v.y * 0.5 + 60)
-
-
-func _stock_line() -> String:
-	var parts: Array = []
-	var rep: Dictionary = econ.daily_report() if phase == "managed" else {}    # ECON hook: per-day net for food and water
-	for k in STOCK_KEYS:
-		if phase != "managed" and (k == "parts" or k == "fuel"):
-			continue
-		if rep.has("res") and (k == "food" or k == "water"):
-			parts.append("%s %d (+%d/-%d)" % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)])
-		else:
-			parts.append("%s %d" % [String(k).capitalize(), int(stores[k])])
-	return "  ".join(parts)
 
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
@@ -799,6 +784,9 @@ func _tick(dt: float) -> void:
 	_sync_views()
 	pack.frame(dt)
 	board.frame(dt)    # UI hook
+	topbar.frame(dt)
+	tags.frame()
+	guide.frame(dt)
 	_layout_labels()
 	if _msg_t > 0.0:
 		_msg_t -= dt
@@ -821,7 +809,6 @@ func _tick(dt: float) -> void:
 		_raid_logic(dt)
 	_day_night(dt)
 	siege.update(dt)    # SIEGE hook
-	hud_label.text = _hud_text()
 	prompt_label.text = String(_prompt.get("label", "")) if not busy else ""
 	overlay.queue_redraw()
 	bars.queue_redraw()
@@ -873,22 +860,6 @@ func _step() -> void:
 		run.avatar_p.downed = false
 
 
-func _hud_text() -> String:
-	var p = run.avatar_p
-	if mode == "base" and phase == "clear":
-		var left := 0
-		for zi in Base.ZONES.size():
-			left += _dead_in_zone(zi).size() if not zone_done[zi] else 0
-		var al := ""
-		for m in crew.members:
-			if m.def.has("ally"):
-				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
-		return "CLEAR THE PRISON  cleared %d/%d  dead left %d  mag %d  party:%s\n%s" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag), al, _stock_line()]
-	if mode == "base":
-		return "%02d:%02d  %s\n%s  |  %s" % [int(tod), int(fposmod(tod, 1.0) * 60.0), _stock_line(), board.hud_lines(), siege.hud()]    # UI hook
-	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d\n%s" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size(), loot.hint()]    # RAIDS hook: the marked places
-
-
 func _hands(dt: float) -> void:
 	var move := Vector2.ZERO
 	if not busy:
@@ -909,7 +880,7 @@ func _hands(dt: float) -> void:
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire() and not board.blocks_fire()
+	var fire: bool = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy and not args.has("shot") and not pack.blocks_fire() and not board.blocks_fire() and not topbar.blocks_fire() and not guide.panel.get_global_rect().has_point(get_viewport().get_mouse_position())
 	if not _bot_in.is_empty():
 		move = _bot_in.move
 		aim = _bot_in.aim
@@ -946,6 +917,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if loot.key(ev):    # RAIDS hook: the gate's choice takes its keys
 		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
+		return
+	if ev is InputEventKey and not busy and (topbar.key(ev) or guide.key(ev)):
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
 		return
@@ -1016,9 +989,9 @@ func _base_logic(_dt: float) -> void:
 	var me := Vector2(p.x, p.y)
 	_prompt = {}
 	if me.distance_to(Base.GATE_POS) < 7.0 or me.distance_to(base.stations.truck) < 3.5:
-		_prompt = {"kind": "gate", "label": "E: take the truck out the gate (raid, with what is in your pack)"}
+		_prompt = {"kind": "gate", "label": "E: take the truck out to raid (loot comes home at an exit)"}
 	elif me.distance_to(base.stations.stores) < 2.8:
-		_prompt = {"kind": "stores", "label": "E: open the stash (choose what to carry out)"}
+		_prompt = {"kind": "stores", "label": "E: open the stash (stock the stores, pack for a raid)"}
 	else:
 		_prompt = board.prompt(me)    # UI hook: the bench and the needs sign
 	# the dead at the gate are not for shooting
@@ -1211,21 +1184,6 @@ func _paint_overlay(c: CanvasItem) -> void:
 		board.paint(c)    # UI hook
 		if cleaner != null:
 			cleaner.paint(c)
-		for l in base.labels:
-			c.draw_string(font, Vector2(l.pos) * TILE - Vector2(80, 0), String(l.text), HORIZONTAL_ALIGNMENT_CENTER, 160, 20, Color(1, 1, 0.8, 0.8))
-		for m in crew.members:
-			var p = m.p
-			var tag := "%s: %s" % [String(m.def.name), String(m.say)]
-			var at := Vector2(p.x, p.y - 1.55) * TILE
-			c.draw_string(font, at - Vector2(100, 0), tag, HORIZONTAL_ALIGNMENT_CENTER, 200, 15, Color(1, 0.6, 0.55, 0.95) if m.state == "downed" else Color(1, 1, 1, 0.92))
-			if m.def.has("ally"):
-				var f2 := clampf(float(m.hp) / Crew.ALLY_HP, 0.0, 1.0)
-				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40, 5)), Color(0, 0, 0, 0.7))
-				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40.0 * f2, 5)), Color(0.3, 0.85, 0.35) if f2 > 0.3 else Color(0.9, 0.25, 0.2))
-			if m.state == "work":
-				var f := clampf(float(m.t) / float(m.def.route[m.i].secs), 0.0, 1.0)
-				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40, 5)), Color(0, 0, 0, 0.6))
-				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40.0 * f, 5)), Color(0.95, 0.8, 0.3))
 		for fl in crew.floaters:
 			var a := 1.0 - float(fl.t) / 2.2
 			var col: Color = fl.col
