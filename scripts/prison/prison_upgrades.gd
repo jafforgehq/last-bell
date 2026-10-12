@@ -206,7 +206,9 @@ func update(dt: float) -> void:
 			ground.queue_redraw()
 			top.queue_redraw()
 			lights.queue_redraw()
-	lights.modulate.a = game_night() * (1.0 if _lit() else 0.0)
+	var la := game_night() * (1.0 if _lit() else 0.0)
+	lights.visible = la > 0.01
+	lights.modulate.a = la
 	fx.queue_redraw()
 
 
@@ -248,7 +250,7 @@ func _assign() -> void:
 	if econ.queue.is_empty():
 		return
 	for m in game.crew.members:
-		if m.state != "wait" or m.has("down") or m.has("eat") or m.has("build_q") or float(m.get("build_cd", 0.0)) > _clock:
+		if m.state != "wait" or m.has("down") or m.has("eat") or not (m.get("build_q", []) as Array).is_empty() or float(m.get("build_cd", 0.0)) > _clock:
 			continue
 		var role := String(roles.get(String(m.def.id), ""))
 		if role == "" or m.def.has("stand") or m.def.has("play"):
@@ -257,7 +259,10 @@ func _assign() -> void:
 			if String(econ.defs[id].role) != role:
 				continue
 			var s: Dictionary = site_of(id)
-			m["build_q"] = [{"at": s.stand, "secs": 16.0, "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}]
+			var side := float(hash(String(m.def.id)) % 3 - 1) * 0.7    # (two workers on one site do not stand on each other)
+			m["build_q"] = [{"at": Vector2(s.stand) + Vector2(side, 0.0), "secs": 24.0, "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}]
+			if game.args.has("log"):
+				print("WORLD stop ", m.def.name, " -> ", id, " at ", snappedf(game.tod, 0.1))
 			break
 
 
@@ -279,6 +284,8 @@ func _done(id: String) -> void:
 	_sig_t = 99.0
 	if _staging or ground == null:
 		return
+	if game.args.has("log"):
+		print("WORLD built ", id, " at ", snappedf(game.tod, 0.1))
 	var s: Dictionary = site_of(id)
 	bursts.append({"p": Vector2(s.anchor) * T, "age": 0.0})
 	game.crew.floaters.append({"text": "Built: %s" % String(econ.defs[id].name), "pos": Vector2(s.anchor) + Vector2(0, -1.4), "t": 0.0, "col": Color(0.6, 1.0, 0.6)})
