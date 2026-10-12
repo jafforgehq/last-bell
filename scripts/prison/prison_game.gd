@@ -42,6 +42,7 @@ const Tags := preload("res://scripts/prison/prison_tags.gd")    # UI round 2: cr
 const Guide := preload("res://scripts/prison/prison_guide.gd")    # UI round 2: first-run cards
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
+const ZMove := preload("res://scripts/prison/prison_dead.gd")    # ZMOVE: how the dead move (heading, gait, pause, rise, lean on the fence)
 const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: raid companions
 const SearchRules := preload("res://scripts/town/search.gd")
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
@@ -155,6 +156,7 @@ var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's 
 var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
+var zmove    # ZMOVE: prison_dead.gd
 var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
 var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
@@ -173,6 +175,7 @@ func _ready() -> void:
 			args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
+	PawnNode.zmove = not args.has("nozmove")    # (--nozmove: the old dead, to compare) ROUND 8: the dead's heading, gait, rise, lunge and collapse
 	if args.has("nosmooth"):
 		PawnNode.smooth_turn = false
 		PawnNode.rifles_ready = false
@@ -273,6 +276,10 @@ func _make_hud() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	if PawnNode.zmove or args.has("zombietest"):
+		zmove = ZMove.new()
+		zmove.setup(self)
+		zmove.on = PawnNode.zmove
 	var nl := CanvasLayer.new()
 	nl.layer = 5
 	add_child(nl)
@@ -770,6 +777,8 @@ func _turntest(dt: float) -> void:
 
 
 func _tick(dt: float) -> void:
+	if zmove != null and args.has("zombietest"):
+		zmove.test(dt)
 	if args.has("turntest") and crew != null:
 		_turntest(dt)
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
@@ -869,7 +878,11 @@ func _step() -> void:
 	var olds := {}
 	for z in ally_chasers:
 		olds[z] = Vector2(z.x, z.y)
+	if zmove != null:
+		zmove.pre()
 	run.sim.update(StepClock.STEP)
+	if zmove != null:
+		zmove.post(StepClock.STEP)
 	_ally_prey_step(olds)
 	for e in run.sim.events:
 		pack.on_event(e)
@@ -878,6 +891,9 @@ func _step() -> void:
 				fx.combat.shot_sound(e)
 			"thud":
 				fx.combat.thud_sound(e)
+			"groan":
+				if zmove != null:
+					zmove.groan(e)
 			"reload":
 				if not fx.combat.reload_event(e, run.avatar_p):
 					sound.play("reload", 0.8)

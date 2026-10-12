@@ -125,6 +125,7 @@ func _make(r: Dictionary, at_in: Vector2, n: int = 0) -> Dictionary:
 	src["id"] = String(r.id)
 	src["name"] = String(r.name)
 	src["unarmed"] = bool(r.get("unarmed", false))
+	src["weapon"] = "rifle"    # the shared people file gave a crew key its person's gun (Sol, June, Ike and Hector the pike, a spear-like picture, Rae the pistol): everyone armed here carries the rifle
 	var look: Dictionary = (src.look as Dictionary).duplicate(true)
 	for k in r.look:
 		look[k] = r.look[k]

@@ -307,6 +307,11 @@ class Dead:
 	var breath := 0.0
 
 
+## ROUND 8 (the prison's dead only): the legs' phase per tile walked, by kind (a runner strides longer, a brute shorter and heavier). The prison's `PawnNode.zmove` and prison_dead.gd both read it.
+static func dead_stride(kind: String) -> float:
+	return 0.8 if kind == "runner" else (1.15 if kind == "brute" else 1.0)
+
+
 ## `kind` walker, runner or brute. A runner cycles its limbs a good deal faster, leans harder into it and is drawn grey and gaunt; a brute is slower, heavier (its steps land) and darker.
 static func dead_variant(seed_i: int, kind: String) -> Dead:
 	var d := Dead.new()

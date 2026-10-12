@@ -460,6 +460,8 @@ func _wave_work(dt: float) -> void:
 		if dist < 1.1:
 			z.state = "still"    # at the fence: stand and tear
 			z.moving = false
+			z.press = 1.0    # (ZMOVE: it leans on the wire facing it and reaches through it)
+			z.aim = (-Vector2(s.out)).angle()
 			s.push = int(s.push) + 1
 		elif repath and (z.state == "wander" or z.state == "still"):
 			game.run.field._investigate(z, w.spot)
@@ -575,7 +577,8 @@ func _bites(dt: float) -> void:
 				game.people.forget(String(m.def.name))    # RAIDS hook: a recruit is not brought back
 				if m.has("node") and is_instance_valid(m.node):
 					m.node.queue_free()
-				(stats.crew as Array).append(String(m.def.name))
+				if stats.has("crew"):    # (none before the first night: a dead one inside by day)
+					(stats.crew as Array).append(String(m.def.name))
 				game._say("%s is gone." % String(m.def.name), 6.0)
 			continue
 		for z in zs:
