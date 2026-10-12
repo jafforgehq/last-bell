@@ -233,9 +233,11 @@ func _make_hud() -> void:
 	hud.add_child(hud_label)
 	prompt_label = _lbl(22, Vector2(0, 0))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(prompt_label)
 	msg_label = _lbl(20, Vector2(0, 0))
 	msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(msg_label)
 	bars = Control.new()
 	bars.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -290,10 +292,10 @@ func _say(t: String, secs: float = 3.5) -> void:
 
 func _layout_labels() -> void:
 	var v := _vp()
-	prompt_label.size = Vector2(v.x, 30)
-	prompt_label.position = Vector2(0, v.y - 120)
-	msg_label.size = Vector2(v.x, 30)
-	msg_label.position = Vector2(0, v.y - 158)
+	prompt_label.size = Vector2(v.x * 0.6, 30)    # (wrapped, centred: a long line no longer runs under the minimap)
+	prompt_label.position = Vector2(v.x * 0.2, v.y - 130)
+	msg_label.size = Vector2(v.x * 0.6, 30)
+	msg_label.position = Vector2(v.x * 0.2, v.y - 200)
 	cap_label.size = Vector2(v.x, 80)
 	cap_label.position = Vector2(0, v.y * 0.5 + 60)
 
@@ -489,6 +491,8 @@ func _radial_texture() -> Texture2D:
 # ----------------------------------------------------------------------- modes --
 
 func _enter_base() -> void:
+	_msg_t = 0.0    # (no message of the last stage is carried over)
+	msg_label.text = ""
 	mode = "base"
 	base = Base.new()
 	var clear := phase == "clear"
@@ -580,6 +584,8 @@ func _enter_base() -> void:
 
 
 func _enter_raid() -> void:
+	_msg_t = 0.0    # (no message of the last stage is carried over)
+	msg_label.text = ""
 	mode = "raid"
 	raids += 1
 	var seed_i := int(args.get("seed", str(1000 + raids * 17 + int(Time.get_ticks_msec() % 997))))

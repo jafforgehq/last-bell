@@ -628,7 +628,6 @@ func toast(text: String, col: Color = Hud.INK) -> void:
 
 
 func _stage_card(stage: String) -> void:
-	toast("The prison is now a %s." % stage, Hud.ACCENT)
 	if card != null and is_instance_valid(card):
 		card.queue_free()
 	var v: Vector2 = game._vp()
