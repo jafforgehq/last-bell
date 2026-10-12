@@ -218,6 +218,8 @@ func update(dt: float, stores: Dictionary) -> void:
 		if m.state == "post":
 			m.p.work_t = float(m.p.work_t) + dt
 			continue
+		if m.state == "leaving":
+			continue    # RAIDS hook: walking out of the gate (prison_people.gd)
 		if m.state == "ally" or m.state == "downed":
 			continue    # the game moves allies (follow, shoot, bites)
 		if m.state == "down":

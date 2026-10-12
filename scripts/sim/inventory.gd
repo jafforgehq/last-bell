@@ -484,7 +484,7 @@ static func items_for_loot(loot: Dictionary, key: int) -> Array:
 	var cfg := config()
 	var conv = cfg.get("convert", {})
 	var unit_items = cfg.get("unit_items", {})
-	for res in ["ammo", "food", "water", "meds"]:
+	for res in ["ammo", "food", "water", "meds", "parts", "fuel"]:    # (parts and fuel: the prison raids)
 		var n := int(floor(float(loot.get(res, 0.0))))
 		if n <= 0:
 			continue

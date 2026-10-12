@@ -29,6 +29,8 @@ const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
 const Clean := preload("res://scripts/prison/prison_clean.gd")
+const Loot := preload("res://scripts/prison/prison_loot.gd")    # RAIDS hook
+const People := preload("res://scripts/prison/prison_people.gd")    # RAIDS hook
 const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
 const PHud := preload("res://scripts/prison/prison_hud.gd")
@@ -130,6 +132,8 @@ var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
+var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
+var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 
 
@@ -145,6 +149,12 @@ func _ready() -> void:
 	pack = Pack.new(self)
 	siege = Siege.new(self)    # (before the first stage: a --raid start has no base yet)
 	econ = Econ.new(self)    # ECON hook
+	if args.has("loot-lab"):    # RAIDS hook
+		Loot.lab(int(args["loot-lab"]))
+		get_tree().quit()
+		return
+	loot = Loot.new(self)    # RAIDS hook
+	people = People.new(self)    # RAIDS hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
 	board = Board.new(self)    # UI hook (connects to the econ signals itself: toasts and the stage card replace the message lines)
@@ -285,6 +295,8 @@ func _stock_line() -> String:
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
 func _econ_left(nm: String) -> void:
+	if crew != null and people.walk_out(nm):    # RAIDS hook: they walk out of the gate
+		return
 	if crew == null:
 		econ_gone.append(nm)
 	else:
@@ -502,6 +514,8 @@ func _enter_base() -> void:
 		for a in Crew.CREW_FROM_ALLIES:    # the allies are crew from here on (a job and a place), not followers
 			if allies_alive.has(String(a.id)):
 				crew._make(a, Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
+	if not clear:
+		people.spawn_recruits()    # RAIDS hook: the people found in raids are crew again
 	for m in crew.members:
 		var n := PawnNode.new()
 		n.setup(m.p, false, data, String(m.key))
@@ -557,6 +571,7 @@ func _enter_raid() -> void:
 			tr["file"] = "res://assets/trees/tree_%d.png" % swap[int(absf(tr.x * 7.0 + tr.y * 13.0)) % swap.size()]
 	var drop: Vector2 = Vector2(t.entry.pos)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
+	loot.begin(t, seed_i)    # RAIDS hook: loot by place and the marked places (before the sim reads the containers)
 	_make_stage(t, true)
 	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0, "parts": 0.0, "fuel": 0.0}
 	var kit_line: String = pack.kit(stores)
@@ -570,6 +585,7 @@ func _enter_raid() -> void:
 		run.avatar_p.x = float(c[0])
 		run.avatar_p.y = float(c[1])
 	exits = _pick_exits(t, at)
+	people.begin_raid(t, seed_i)    # RAIDS hook: a survivor in a building, rarely
 	cam_center = Vector2(run.avatar_p.x, run.avatar_p.y)
 	extract_t = 0.0
 	_armed = false
@@ -654,6 +670,7 @@ func _tick(dt: float) -> void:
 	if crew != null:
 		_gun_poses(dt)
 		crew.update(dt, stores)
+	people.frame(dt)    # RAIDS hook
 	if econ != null:    # ECON hook
 		if args.has("econ-lab") and phase == "managed":
 			econ.lab(dt)
@@ -749,7 +766,7 @@ func _hud_text() -> String:
 		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
 	if mode == "base":
 		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + board.hud_lines() + siege.hud()    # UI hook
-	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size()]
+	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d\n%s" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size(), loot.hint()]    # RAIDS hook: the marked places
 
 
 func _hands() -> void:
@@ -785,6 +802,8 @@ func _hands() -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if run == null:
 		return
+	if loot.key(ev):    # RAIDS hook: the gate's choice takes its keys
+		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
@@ -817,7 +836,12 @@ func _use() -> void:
 	if busy or _prompt.is_empty():
 		return
 	if String(_prompt.get("kind", "")) == "gate":
+		if loot.open_choice():    # RAIDS hook: what to hunt
+			return
 		_go_out()
+		return
+	if String(_prompt.get("kind", "")) == "survivor":    # RAIDS hook
+		people.talk()
 		return
 	if String(_prompt.get("kind", "")) == "locked":
 		_say("The gate is chained shut and the pen behind it is full. Clear the prison first.", 3.0)
@@ -863,6 +887,9 @@ func _raid_logic(dt: float) -> void:
 			if bool(c.get("ok", true)):
 				_prompt = {"kind": "use", "c": c, "label": "E: %s" % String(c.label)}
 				break
+		if _prompt.is_empty():    # RAIDS hook
+			_prompt = people.prompt()
+		people.update(dt)    # RAIDS hook
 		var in_ring := false
 		if me.distance_to(Vector2(exits[0])) > 14.0:
 			_armed = true    # the drop-off ring works only after you have walked away from it
@@ -896,26 +923,27 @@ func _extract(alive: bool) -> void:
 	if busy:
 		return
 	busy = true
-	var loot := {}
+	var loot_got := {}
 	pack.close()
+	var join_text: String = people.settle(alive)    # RAIDS hook: does the survivor join (a free bed, alive, at the ring)
 	if alive:
 		pack.bank()    # (the items go back into the raid's stock: the line below banks all of it)
 		for k in STOCK_KEYS:
 			var v := float(run.sim.stock.get(k, 0.0))
-			loot[k] = v
+			loot_got[k] = v
 	var lines: Array = ["You reach the pickup. The truck is waiting.", "Back through the gate, back to the compound."]
 	if not alive:
 		lines = ["You go down in the street.", "Whatever you carried stays out there."]
 	await _cut_out(lines, alive)
 	var lost: int = 0 if alive else pack.lose()
 	if alive:
-		for k in loot:
-			stores[k] = float(stores[k]) + float(loot[k])
+		for k in loot_got:
+			stores[k] = float(stores[k]) + float(loot_got[k])
 	_enter_base()
 	var sum := "Banked:"
-	for k in loot:
-		if float(loot[k]) > 0.0:
-			sum += "  +%d %s" % [int(loot[k]), k]
+	for k in loot_got:
+		if float(loot_got[k]) > 0.0:
+			sum += "  +%d %s" % [int(loot_got[k]), k]
 	if not alive:
 		sum = "Backpack lost. (%d stacks, nothing banked)" % lost
 	elif sum == "Banked:":
@@ -923,6 +951,8 @@ func _extract(alive: bool) -> void:
 	print("RESULT ", sum, " | stores ", stores, " | pack stacks ", pack.grid.cells.size())
 	await _cut_in()
 	_say(sum, 8.0)
+	if join_text != "":    # RAIDS hook
+		people.banner(join_text, Color(1, 0.6, 0.45) if join_text.contains("left") else Color(0.6, 1, 0.7))
 	busy = false
 
 
@@ -1092,6 +1122,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 			c.draw_circle(p, EXTRACT_R * TILE, Color(0.3, 1, 0.45, 0.12 + 0.1 * pulse))
 			c.draw_arc(p, EXTRACT_R * TILE, 0, TAU, 40, Color(0.4, 1, 0.5, 0.9), 3.0)
 			c.draw_string(font, p - Vector2(60, EXTRACT_R * TILE + 8), "EXTRACTION", HORIZONTAL_ALIGNMENT_CENTER, 120, 18, Color(0.6, 1, 0.7))
+		loot.paint(c)    # RAIDS hook
+		people.paint(c)
 
 
 # --------------------------------------------------------------------- scripted --
@@ -1451,6 +1483,8 @@ func _draw_minimap(v: Vector2) -> void:
 	if mode == "raid":
 		for e in exits:
 			bars.draw_arc(o + Vector2(e) * sc, 5.0, 0, TAU, 14, Color(0.4, 1, 0.5), 2.0)
+		loot.mini(bars, o, sc)    # RAIDS hook
+		people.mini(bars, o, sc)
 	var p = run.avatar_p
 	var me := o + Vector2(p.x, p.y) * sc
 	var ang := Vector2(p.x, p.y).angle_to_point(run.avatar_p.input_aim) if run.avatar_p.input_aim != Vector2.ZERO else 0.0
