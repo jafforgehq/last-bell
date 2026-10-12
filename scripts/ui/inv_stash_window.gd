@@ -10,6 +10,8 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const InvIcons := preload("res://scripts/ui/inv_icons.gd")
 
 const ROWS := [["ammo", "Ammo", "shells"], ["food", "Food", "cans"], ["water", "Water", "bottles"], ["meds", "Medicine", "bandages"], ["scrap", "Scrap", ""]]
+## The prison's stash also holds parts and fuel (shown only when the stock has them: the town game's has not).
+const ROWS_PRISON := [["parts", "Parts", "boxes"], ["fuel", "Fuel", "cans"]]
 const WITHDRAW := [["1", 1], ["5", 5], ["All", -1]]
 
 var ctl
@@ -52,7 +54,10 @@ func setup(controller, hud_node) -> void:
 	head.add_child(close_button)
 	col.add_child(head)
 	var strip: HBoxContainer = hud._hbox(4)
-	for r in ROWS:
+	var rows_here: Array = ROWS.duplicate()
+	if ctl.sim != null and (ctl.sim.stock as Dictionary).has("parts"):
+		rows_here.append_array(ROWS_PRISON)
+	for r in rows_here:
 		strip.add_child(_column(String(r[0]), String(r[1]), String(r[2])))
 	col.add_child(strip)
 	tooltip_text = "Drag an item onto this panel to deposit it"

@@ -24,7 +24,7 @@ const CREAM := Color("#ece4cd")
 const GREY := Color("#7d857e")
 
 ## The colour a store is told by (a faint wash behind its items, the stores panel's rows).
-const RES_COLOR := {"ammo": Color("#d2a94e"), "food": Color("#e09040"), "water": Color("#4f9fd0"), "meds": Color("#e0584a"), "scrap": Color("#9aa39c")}
+const RES_COLOR := {"ammo": Color("#d2a94e"), "food": Color("#e09040"), "water": Color("#4f9fd0"), "meds": Color("#e0584a"), "scrap": Color("#9aa39c"), "parts": Color("#7ad0ff"), "fuel": Color("#e8c040")}
 
 static var _tex: Texture2D = null
 static var _regions := {}

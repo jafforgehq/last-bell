@@ -876,7 +876,7 @@ func deposit_index(index: int) -> void:
 
 func _deposit_words(got: Dictionary) -> String:
 	var parts: Array = []
-	for r in ["ammo", "food", "water", "meds"]:
+	for r in ["ammo", "food", "water", "meds", "parts", "fuel"]:
 		if int(got.get(r, 0)) > 0:
 			parts.append("%d %s" % [int(got[r]), "medicine" if r == "meds" else r])
 	return ("Deposited: " + ", ".join(parts)) if not parts.is_empty() else "Deposited"

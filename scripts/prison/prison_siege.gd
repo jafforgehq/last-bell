@@ -568,6 +568,7 @@ func _bites(dt: float) -> void:
 				crew.members.erase(m)
 				if m.def.has("ex_ally"):
 					game.allies_alive.erase(String(m.def.id))    # (else the next base build brings them back)
+				game.people.forget(String(m.def.name))    # RAIDS hook: a recruit is not brought back
 				if m.has("node") and is_instance_valid(m.node):
 					m.node.queue_free()
 				(stats.crew as Array).append(String(m.def.name))
