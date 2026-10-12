@@ -202,6 +202,8 @@ func update(dt: float, stores: Dictionary) -> void:
 			continue
 		if m.state == "ally" or m.state == "downed":
 			continue    # the game moves allies (follow, shoot, bites)
+		if m.state == "down":
+			continue    # bitten in a siege (prison_siege.gd): lying there until it is over
 		if m.state == "play":
 			_play(m, dt)
 			continue

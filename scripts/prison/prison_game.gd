@@ -139,6 +139,10 @@ func _ready() -> void:
 		_enter_raid()
 	else:
 		_enter_base()
+	if args.has("hour0"):    # a start hour that then runs (--hour freezes the clock)
+		tod = float(args.hour0)
+		siege.abs_h = tod
+		siege._last_tod = tod
 
 
 func _fit_window() -> void:

@@ -555,6 +555,8 @@ func _bites(dt: float) -> void:
 				game._say("%s is hurt, but alive." % String(m.def.name), 4.0)
 			elif float(info.t) <= 0.0:
 				crew.members.erase(m)
+				if m.def.has("ally"):
+					game.allies_alive.erase(String(m.def.id))    # (else the next base build brings them back)
 				if m.has("node") and is_instance_valid(m.node):
 					m.node.queue_free()
 				(stats.crew as Array).append(String(m.def.name))
@@ -566,7 +568,7 @@ func _bites(dt: float) -> void:
 			if Vector2(z.x, z.y).distance_to(Vector2(p.x, p.y)) < BITE_R:
 				m["down"] = {"t": DOWN_SECS, "z": z}
 				m["prev"] = m.state
-				if not m.def.has("stand"):
+				if not m.def.has("stand") and m.def.has("route"):    # (allies and kids have no route: they keep their state)
 					m.state = "down"    # a guard keeps "post" (the crew code has no route for it)
 				p.downed = true
 				p.work = ""
