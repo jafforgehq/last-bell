@@ -481,6 +481,37 @@ def icon_pump_shotgun():
     return cv.finish()
 
 
+def icon_gun_rifle():
+    """A semi-auto service rifle, side on, muzzle to the left (3 cells wide): a long barrel, the wooden hand guard and stock, the receiver, a short magazine under it."""
+    cv = Cv(3 * U, U, 31)
+    cv.rrect(8, 52, 190, 62, 3, STEEL)
+    cv.rrect(5, 50, 15, 64, 2, STEEL_D, ow=3.0)
+    cv.rrect(40, 62, 150, 78, 6, WOOD)
+    cv.detail([(52, 66), (140, 66)], 2.6, (255, 235, 200), 0.35)
+    cv.poly([(150, 46), (232, 46), (240, 58), (240, 78), (150, 80)], STEEL_D, ow=4.0)
+    cv.rrect(160, 54, 214, 60, 2, STEEL, ow=0, hi=0.4, lo=0)
+    cv.rrect(178, 80, 202, 100, 4, STEEL_D, ow=3.5)
+    cv.stroke([(214, 80), (218, 96), (232, 100), (238, 84)], 5.0, STEEL_D, ow=3.0, caps=False)
+    cv.poly([(238, 50), (300, 56), (360, 64), (372, 78), (366, 100), (300, 92), (238, 80)], WOOD, ow=4.0)
+    cv.detail([(246, 58), (330, 68)], 3.0, (255, 235, 200), 0.35)
+    cv.rrect(140, 40, 160, 48, 2, STEEL_D, ow=3.0)
+    return cv.finish()
+
+
+def icon_gun_smg():
+    """A submachine gun, side on, muzzle to the left (2 cells wide): a short shroud, the boxy receiver, a long magazine, a grip and a wire stock."""
+    cv = Cv(2 * U, U, 32)
+    cv.rrect(10, 44, 70, 58, 3, STEEL)
+    cv.rrect(6, 42, 16, 60, 2, STEEL_D, ow=3.0)
+    cv.poly([(66, 38), (160, 38), (164, 76), (66, 76)], STEEL_D, ow=4.0)
+    cv.rrect(76, 44, 150, 52, 2, STEEL, ow=0, hi=0.4, lo=0)
+    cv.poly([(98, 76), (122, 76), (126, 104), (132, 116), (108, 116), (104, 104)], STEEL, ow=4.0)
+    cv.poly([(140, 76), (160, 76), (166, 100), (150, 104)], STEEL_D, ow=4.0)
+    cv.stroke([(160, 46), (200, 44), (204, 74), (162, 72)], 5.0, STEEL, ow=3.0, caps=False)
+    cv.rrect(196, 42, 208, 78, 2, STEEL_D, ow=3.0)
+    return cv.finish()
+
+
 def icon_melee():
     """A bat with the swish of a swing behind it (Ruth swings whatever she holds: it is the blow, not an item)."""
     cv = Cv(U, U, 22)
@@ -581,7 +612,7 @@ def icon_ruth():
 ICONS = [
     ("shell", icon_shell), ("shells", icon_shells), ("shell_box", icon_shell_box), ("canned_food", icon_canned_food), ("bandage", icon_bandage),
     ("ration_pack", icon_ration_pack), ("water_bottle", icon_water_bottle), ("water_jug", icon_water_jug), ("medkit", icon_medkit), ("unknown", icon_unknown), ("parts_box", icon_parts_box), ("fuel_can", icon_fuel_can),
-    ("pump_shotgun", icon_pump_shotgun), ("melee", icon_melee), ("pack", icon_pack),
+    ("pump_shotgun", icon_pump_shotgun), ("gun_shotgun", icon_pump_shotgun), ("gun_service", icon_gun_rifle), ("gun_smg", icon_gun_smg), ("melee", icon_melee), ("pack", icon_pack),
     ("slot", lambda: icon_slot("slot")), ("slot_on", lambda: icon_slot("slot_on")), ("slot_off", lambda: icon_slot("slot_off")),
     ("glow", icon_glow), ("ruth", icon_ruth),
 ]

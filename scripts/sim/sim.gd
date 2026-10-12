@@ -1126,7 +1126,7 @@ func _follow(a, speed: float, dt: float) -> bool:
 
 ## What one shot costs this person's gun from the stock.
 func shot_cost(p: Person) -> float:
-	return SHELL_COST if p.weapon == "shotgun" else SHOT_COST
+	return float(p.gun.get("cost", SHELL_COST if p.weapon == "shotgun" else SHOT_COST))    # (a gun's own `cost`: the prison game's guns, assets/data/prison_weapons.json)
 
 
 ## The weapon someone fights with right now: their own, or the butt of it when the

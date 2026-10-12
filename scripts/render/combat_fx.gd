@@ -75,11 +75,12 @@ const GUNS := {
 	"rifle": {"len": 1.05, "glow": 0.85, "dur": 0.080, "light": 4.0, "kick": 2.6, "shake": 0.3, "nudge": 0.050, "cone": 0.0, "smoke": 0.15},
 	"service": {"len": 1.15, "glow": 0.92, "dur": 0.085, "light": 4.4, "kick": 3.2, "shake": 0.5, "nudge": 0.060, "cone": 0.0, "smoke": 0.17},
 	"hunting": {"len": 1.40, "glow": 1.10, "dur": 0.100, "light": 5.2, "kick": 4.6, "shake": 1.0, "nudge": 0.075, "cone": 0.0, "smoke": 0.22},
+	"smg": {"len": 0.80, "glow": 0.70, "dur": 0.055, "light": 3.0, "kick": 1.4, "shake": 0.2, "nudge": 0.030, "cone": 0.0, "smoke": 0.10},
 	"shotgun": {"len": 1.45, "glow": 1.25, "dur": 0.110, "light": 6.0, "kick": 5.6, "shake": 1.6, "nudge": 0.085, "cone": 0.27, "smoke": 0.26},
 }
 ## FEEL: the light of a muzzle flash. Its strength by gun (a share of the light rig's flash energy: the pump gun is the whole of it), how far ahead of the muzzle (a share of its reach) its
 ## middle is, and its colour.
-const FLASH_E := {"pistol": 0.62, "rifle": 0.74, "service": 0.78, "hunting": 0.9, "shotgun": 1.0}
+const FLASH_E := {"pistol": 0.62, "smg": 0.6, "rifle": 0.74, "service": 0.78, "hunting": 0.9, "shotgun": 1.0}
 ## The drawn flash (glow, cone, star, heart): the share of its strength it has on its first frame, and how long it takes to be full (seconds of the game's time: three frames at 60 Hz).
 const FLASH_GLOW_FIRST := 0.45
 const FLASH_GLOW_RAMP_S := 0.034
@@ -828,7 +829,7 @@ func shot_sound(e: Dictionary) -> void:
 		return    # (the SOUND pass: the pump gun's blast, in a room or in the open: scripts/audio/fight_sounds.gd)
 	var at := Vector2(float(e.x), float(e.y))
 	var vol := clampf(1.0 - at.distance_to(listener) / 50.0, 0.12, 1.0) * 0.8 * _rand_range(0.9, 1.0)
-	sound.play(name, vol, 0.045)
+	sound.play(name, vol * float(e.get("vol", 1.0)), 0.045, float(e.get("pitch", 1.0)))
 
 
 ## The sound of the dead one's fall (main.gd, from the "thud" event): the body comes down a moment after the blow.

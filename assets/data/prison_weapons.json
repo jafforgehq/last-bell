@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "_doc": "The prison game's guns and raid companions (prison_arms.gd, prison_squad.gd). Read at start-up and MERGED over the shared game data (`weapons`, `guns`, `weaponArt`) of this process only: the One House game never loads it. `guns` entries are laid over the weapon of the same name in assets/data/map.json (or make a new one when map.json has none: then `gun_art` gives its picture and the table of its hands). A gun's own keys that the rules read: name, range (tiles), cooldown (s between shots), mag (rounds), reload (s), dmg (a pellet or a bullet), pellets, spread (radians across, grows while the trigger is held and while walking), sound (a sound of map.json), pitch and vol (the sound), cost (store units of ammo a round costs: ONE ammo stock for every gun, the gun says how many rounds a unit loads: 1 / cost), noise (tiles: the dead within it hear a shot and come, scripts/town/dormant_dead.gd). `blurb` is for the loadout panel only. `armory_start` is what the quartermaster owns at the start. `squad`: the raid companions.",
+  "order": ["shotgun", "service", "smg"],
+  "armory_start": {"shotgun": 1, "service": 1, "smg": 1},
+  "guns": {
+    "shotgun": {"cost": 0.34, "noise": 16.0, "blurb": "Five pellets, hits hard close up, 6 shells, slow pump. Loud."},
+    "service": {"name": "Service rifle", "cooldown": 0.6, "spread": 0.04, "cost": 0.25, "noise": 14.0, "blurb": "Semi-auto, 8 rounds, one shot at a time, reaches far. 4 rounds to a unit of ammo."},
+    "smg": {"name": "SMG", "range": 9.5, "cooldown": 0.1, "mag": 30, "reload": 2.2, "dmg": 0.7, "acc": 0.6, "spread": 0.16, "sound": "pistol", "pitch": 1.3, "vol": 0.85, "cost": 0.1, "noise": 13.0, "blurb": "30 rounds, very fast, weak and wild. Eats ammo: 10 rounds to a unit."}
+  },
+  "gun_art": {
+    "smg": {"file": "res://assets/weapons/smg.png", "muzzle": 0.57, "front": 0.4, "rest": 0.55}
+  },
+  "squad": {
+    "max": 2,
+    "hp": 50.0,
+    "fighter_hp": 60.0,
+    "speed": 2.6,
+    "run": 4.2,
+    "follow_r": 2.2,
+    "leash": 25.0,
+    "shoot_r": 8.0,
+    "shot_cost": 0.1,
+    "dead_wait": 2,
+    "dead_wait_r": 8.0,
+    "retreat_hp": 0.35,
+    "down_s": 20.0,
+    "revive_s": 2.0,
+    "join_r": 10.0,
+    "wait_s": 25.0,
+    "bag": {"Scavenger": [6, 3], "default": [4, 2]},
+    "bag_scav": [6, 3],
+    "tags": {
+      "june": ["Scavenger", "Fighter"], "owen": ["Scavenger"], "tomas": ["Scavenger"], "ike": ["Scavenger"], "marcus": ["Scavenger"],
+      "walt": ["Fighter"], "dez": ["Fighter"], "rae": ["Fighter"], "sol": ["Fighter"], "hector": ["Fighter"], "cole": ["Fighter"], "bea": ["Fighter"],
+      "ana": ["Medic"], "mia": [], "nia": []
+    },
+    "role_words": {
+      "cook": "cooking stops", "gardener": "the garden is left to the others", "medic": "the infirmary is unstaffed", "mechanic": "ammo making stops",
+      "hauler": "water hauling stops", "cleaner": "cleaning stops", "guard": "one tower fewer", "fence": "fence mending stops"
+    }
+  }
+}

@@ -140,7 +140,8 @@ func prompt() -> Dictionary:
 func talk() -> void:
 	s.state = "follow"
 	s.p.work = ""
-	game._say("%s: I'm coming with you. Get me to the pickup." % String(s.name), 4.0)
+	game.squad.add_found(s)    # SQUAD hook: a found survivor is a member of the squad (orders, bag, nameplate)
+	game._say("%s: I'm coming with you. Get me to the pickup. (C: orders)" % String(s.name), 4.0)
 
 
 func update(dt: float) -> void:
@@ -184,6 +185,8 @@ func update(dt: float) -> void:
 	if String(s.state) == "wait":
 		p.work_t = float(p.work_t) + dt
 		return
+	if game.squad.drives(s):
+		return    # SQUAD hook: follow, shooting, bites and the orders are the squad's
 	var sv: Dictionary = _c().survivor
 	s.bite = float(s.bite) - dt
 	s.repath = float(s.repath) - dt
@@ -272,7 +275,7 @@ func lose() -> void:
 
 ## Raid world overlay (px): the marker over a waiting survivor, the bark, the health of a follower.
 func paint(c: CanvasItem) -> void:
-	if s.is_empty() or String(s.state) == "lost":
+	if s.is_empty() or String(s.state) == "lost" or (String(s.state) != "wait" and game.squad.drives(s)):
 		return
 	var font := ThemeDB.fallback_font
 	var p = s.p
@@ -293,7 +296,7 @@ func paint(c: CanvasItem) -> void:
 
 
 func mini(bars: Control, o: Vector2, sc: float) -> void:
-	if s.is_empty() or String(s.state) == "lost":
+	if s.is_empty() or String(s.state) == "lost" or (String(s.state) != "wait" and game.squad.drives(s)):
 		return
 	if String(s.state) == "follow" or Vector2(s.p.x, s.p.y).distance_to(_me()) < 22.0:
 		bars.draw_circle(o + Vector2(s.p.x, s.p.y) * sc, 2.6, Color(1, 0.85, 0.3))

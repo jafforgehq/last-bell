@@ -78,7 +78,17 @@ func crew() -> Array:
 			if m.def.has("ally"):
 				continue    # the clear phase's party is not the base's people
 			_roster.append({"id": String(m.def.id), "name": String(m.def.name), "role": String(roles.get(String(m.def.id), "")), "ok": not m.has("down") and String(m.state) != "downed", "guard": m.def.has("stand"), "kid": m.def.has("play")})
-	return _roster
+	var out: Array = game.squad.out_ids() if game != null and game.squad != null else []    # SQUAD hook: the companions of a raid are not at work
+	if out.is_empty():
+		return _roster
+	var shown: Array = []
+	for r in _roster:
+		var e: Dictionary = (r as Dictionary).duplicate()
+		if out.has(String(e.id)):
+			e["ok"] = false
+			e["out"] = true
+		shown.append(e)
+	return shown
 
 
 func people() -> int:

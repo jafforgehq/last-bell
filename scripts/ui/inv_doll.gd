@@ -37,6 +37,7 @@ const SLOT_BG := Color(0.035, 0.07, 0.06, 0.92)
 
 var ctl
 var gun_name := "Pump shotgun"
+var gun_id := "shotgun"
 var mag := 0
 var cap := 0
 var reserve := 0
@@ -112,11 +113,12 @@ func refresh(sim, pack: Dictionary) -> void:
 	var gm := int(w.get("mag", 0))
 	var gc := int(w.get("cap", 0))
 	var nm := String(w.get("name", "Pump shotgun"))
+	var gid := String(w.get("id", "shotgun"))
 	var rl: bool = float(w.get("reloading", 0.0)) > 0.0
 	var belt: Array = InvApi.quick(sim)
 	var entries: Array = []
 	var needs: Dictionary = InvApi.needs(sim)
-	var sig := "%s|%d|%d|%d|%s|%s|%s" % [nm, gm, gc, n, str(rl), str(Access.markers()), str(Access.text_k())]
+	var sig := "%s|%s|%d|%d|%d|%s|%s|%s" % [nm, gid, gm, gc, n, str(rl), str(Access.markers()), str(Access.text_k())]
 	for i in SLOTS:
 		var id := String(belt[i])
 		var count := InvApi.count_of(pack, id) if id != "" else 0
@@ -132,6 +134,7 @@ func refresh(sim, pack: Dictionary) -> void:
 		return
 	_sig = sig
 	gun_name = nm
+	gun_id = gid
 	mag = gm
 	cap = gc
 	reserve = n
@@ -236,7 +239,7 @@ func _draw_weapon(font: Font, small: Font) -> void:
 	if melee_only:
 		draw_string(small, r.position + Vector2(5.0, 22.0), "No gun", HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 8.0, Access.scaled(12), INK3)
 		return
-	InvIcons.draw_gun(self, Rect2(r.position + Vector2(3.0, 2.0), Vector2(r.size.x - 6.0, 20.0)))
+	InvIcons.draw_gun(self, Rect2(r.position + Vector2(3.0, 2.0), Vector2(r.size.x - 6.0, 20.0)), Color.WHITE, gun_id)
 	var low := mag <= maxi(1, ceili(float(cap) * 0.25))
 	var mc: Color = DANGER if mag <= 0 else (WARN if low else INK)
 	var mt := "%d / %d" % [mag, cap]

@@ -11,7 +11,10 @@
     "bandage": {"name": "Bandage", "w": 1, "h": 1, "stack": 4, "res": "meds", "units": 1, "use": "bandage", "desc": "Stops a bleeding wound."},
     "parts_box": {"name": "Parts box", "w": 1, "h": 1, "stack": 2, "res": "parts", "units": 1, "use": "none", "desc": "Electronics, pump and generator pieces. Spent on projects at the base."},
     "fuel_can": {"name": "Fuel can", "w": 1, "h": 2, "stack": 1, "res": "fuel", "units": 1, "use": "none", "desc": "A can of fuel: a day for the generator."},
-    "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."}
+    "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."},
+    "gun_shotgun": {"name": "Pump shotgun", "w": 2, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare pump shotgun (prison game). Back at the base it goes to the weapon rack."},
+    "gun_service": {"name": "Service rifle", "w": 3, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare semi-auto rifle (prison game). Back at the base it goes to the weapon rack."},
+    "gun_smg": {"name": "Submachine gun", "w": 2, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare SMG (prison game). Back at the base it goes to the weapon rack."}
   },
   "containers": {
     "default": {"w": 4, "h": 3},
