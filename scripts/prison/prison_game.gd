@@ -42,6 +42,7 @@ const Tags := preload("res://scripts/prison/prison_tags.gd")    # UI round 2: cr
 const Guide := preload("res://scripts/prison/prison_guide.gd")    # UI round 2: first-run cards
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
+const ZMove := preload("res://scripts/prison/prison_dead.gd")    # ZMOVE: how the dead move (heading, gait, pause, rise, lean on the fence)
 const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: raid companions
 const SearchRules := preload("res://scripts/town/search.gd")
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
@@ -155,6 +156,7 @@ var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's 
 var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
+var zmove    # ZMOVE: prison_dead.gd
 var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
 var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
@@ -174,6 +176,7 @@ func _ready() -> void:
 	PawnNode.zart = not args.has("nozart")    # ROUND 8: the zombie art set (--nozart: the round 7 walkers and the baked runners and brutes, to compare)
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
+	PawnNode.zmove = not args.has("nozmove")    # (--nozmove: the old dead, to compare) ROUND 8: the dead's heading, gait, rise, lunge and collapse
 	if args.has("nosmooth"):
 		PawnNode.smooth_turn = false
 		PawnNode.rifles_ready = false
@@ -274,6 +277,10 @@ func _make_hud() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	if PawnNode.zmove or args.has("zombietest"):
+		zmove = ZMove.new()
+		zmove.setup(self)
+		zmove.on = PawnNode.zmove
 	var nl := CanvasLayer.new()
 	nl.layer = 5
 	add_child(nl)
@@ -771,6 +778,8 @@ func _turntest(dt: float) -> void:
 
 
 func _tick(dt: float) -> void:
+	if zmove != null and args.has("zombietest"):
+		zmove.test(dt)
 	if args.has("turntest") and crew != null:
 		_turntest(dt)
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
@@ -783,7 +792,7 @@ func _tick(dt: float) -> void:
 			var sum := 0.0
 			for v in _perf_ms:
 				sum += float(v)
-			print("PERF frames ", _perf_ms.size(), " avg ms ", snappedf(sum / _perf_ms.size(), 0.01), " p95 ", snappedf(_perf_ms[int(_perf_ms.size() * 0.95)], 0.01), " max ", snappedf(_perf_ms[-1], 0.01), " awake dead ", _awake_dead().size(), " crew ", crew.members.size())
+			print("PERF frames ", _perf_ms.size(), " avg ms ", snappedf(sum / _perf_ms.size(), 0.01), " p95 ", snappedf(_perf_ms[int(_perf_ms.size() * 0.95)], 0.01), " max ", snappedf(_perf_ms[-1], 0.01), " awake dead ", _awake_dead().size(), " crew ", crew.members.size(), " zmove ms per step ", snappedf(float(zmove.usec) / 1000.0 / maxf(1.0, float(zmove.steps)), 0.001) if zmove != null else "off")
 			get_tree().quit()
 	dt = clampf(dt, 0.0, StepClock.MAX_FRAME)
 	clock += dt
@@ -870,7 +879,11 @@ func _step() -> void:
 	var olds := {}
 	for z in ally_chasers:
 		olds[z] = Vector2(z.x, z.y)
+	if zmove != null:
+		zmove.pre()
 	run.sim.update(StepClock.STEP)
+	if zmove != null:
+		zmove.post(StepClock.STEP)
 	_ally_prey_step(olds)
 	for e in run.sim.events:
 		pack.on_event(e)
@@ -879,6 +892,9 @@ func _step() -> void:
 				fx.combat.shot_sound(e)
 			"thud":
 				fx.combat.thud_sound(e)
+			"groan":
+				if zmove != null:
+					zmove.groan(e)
 			"reload":
 				if not fx.combat.reload_event(e, run.avatar_p):
 					sound.play("reload", 0.8)
