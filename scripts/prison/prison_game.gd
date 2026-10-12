@@ -1091,7 +1091,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var a := 1.0 - float(fl.t) / 2.2
 			var col: Color = fl.col
 			col.a = a
-			c.draw_string(font, Vector2(fl.pos) * TILE + Vector2(-60, -float(fl.t) * 22.0), String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 120, 17, col)
+			c.draw_string(font, Vector2(fl.pos) * TILE + Vector2(-130, -float(fl.t) * 22.0), String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 260, 17, col)
 		if phase == "clear":
 			for ct in town.containers:
 				if not run.sim.search.is_looted(String(ct.id)):

@@ -272,7 +272,7 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 			m.state = "walk"
 			p.work = ""
 		"walk":
-			if _advance(m, dt, SPEED):
+			if _advance(m, dt, SPEED * (1.6 if stop.has("build") else 1.0)):    # (a builder hurries to the site)
 				m.state = "arrive"
 		"arrive":
 			p.moving = false

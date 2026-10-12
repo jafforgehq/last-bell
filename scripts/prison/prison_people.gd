@@ -365,6 +365,10 @@ func frame(dt: float) -> void:
 		game.loot.open_choice()
 	if game.args.has("leave") and game.frames == 40 and game.mode == "base":    # staging: the economy fires person_left
 		game.econ.person_left.emit(String(game.args.leave))
+	if game.args.has("role") and game.frames == 40 and game.mode == "base":    # staging: roster changes, e.g. --role=dez:gardener,marcus:guard
+		for kv in String(game.args.role).split(","):
+			var rr: Dictionary = game.crew.set_role(kv.get_slice(":", 0), kv.get_slice(":", 1), game.econ, game.siege.attacking)
+			print("ROLE ", kv, " -> ", rr)
 	for m in _leaving.duplicate():
 		if game.crew == null or not game.crew.members.has(m):
 			_leaving.erase(m)

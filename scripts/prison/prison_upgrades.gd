@@ -974,7 +974,7 @@ func _paint_fx(c: CanvasItem) -> void:
 		var at: Vector2 = Vector2(s.anchor) * T + Vector2(0, -float(Vector2(s.size).y) * T * 0.5 - 20.0)
 		c.draw_rect(Rect2(at + Vector2(-34, 0), Vector2(68, 10)), Color(0, 0, 0, 0.75))
 		c.draw_rect(Rect2(at + Vector2(-32, 2), Vector2(64.0 * f, 6)), Color(0.95, 0.8, 0.3) if worked else Color(0.6, 0.6, 0.6))
-		c.draw_string(font, at + Vector2(-70, -4), String(econ.defs[id].name), HORIZONTAL_ALIGNMENT_CENTER, 140, 14, Color(1, 1, 0.85, 0.95))
+		c.draw_string(font, at + Vector2(-130, -4), String(econ.defs[id].name), HORIZONTAL_ALIGNMENT_CENTER, 260, 14, Color(1, 1, 0.85, 0.95))
 	if _lit():    # the generator shed: it shakes while it runs
 		_shed(c, Vector2(sin(_clock * 53.0), cos(_clock * 61.0)) * 0.7, true)
 	elif econ.tier("power") >= 1:

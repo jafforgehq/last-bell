@@ -372,6 +372,8 @@ func _start_attack(n: int) -> void:
 			m.say = "Here they come!"
 	game.alarm_t = 20.0    # (the guards fire fast for 20 s; in the base Ruth is untouchable anyway, so that is her safe time)
 	if game.back_t > 0.0:
+		if game.args.has("log"):
+			print("SIEGE back-card shown, alarm ", game.alarm_t)
 		game._card("Back in the middle of the attack", "Night %d has begun while you were out. The guards are firing: join the wall." % n, 5.0)
 
 
