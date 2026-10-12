@@ -325,7 +325,7 @@ func _packfull() -> void:
 			break
 		await _wait(1)
 	var left: int = int((inv.containers[seen_id].cells as Array).size()) if seen_id != "" and inv.containers.has(seen_id) else -1
-	_check(shown, "a full-pack line shows ("No room in the pack" from Space, "Pack full" from a pick-up): %s" % g.msg_label.text)
+	_check(shown, "a full-pack line shows (No room in the pack, or Pack full): %s" % g.msg_label.text)
 	_check(left > 0, "the item stays in the container (stacks before %d, after %d)" % [before, left])
 
 
