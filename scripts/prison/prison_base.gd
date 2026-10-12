@@ -40,6 +40,26 @@ const GATE_X := 46
 const GATE_W := 4
 const GATE_POS := Vector2(48.0, 55.5)
 const SPAWN := Vector2(48.0, 49.0)
+## CLEAR PHASE: the party walks in from the west road through a breach in the fence (`GAP`, closed in the managed phase) into the infirmary (a west door is cut for it).
+const GAP := Rect2i(6, 33, 1, 3)
+const START := Vector2(3.5, 34.5)
+## The ten zones of the clear phase: rect (tiles), dead (dormant records), loot (containers), crew (roster ids freed when it is cleared), rel (where they appear). The infirmary's dead stand
+## only in dead_rect (its east end) so that the first room is a few dead for three people.
+const ZONES := [
+	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(10, 29, 15, 13), "dead": 4, "dead_rect": Rect2i(17, 30, 7, 11), "loot": 3, "crew": ["ana"], "rel": Vector2(16.5, 36.0), "keys": ["meds", "food", "scrap"]},
+	{"id": "cella", "name": "Cell block A", "rect": Rect2i(10, 8, 24, 15), "dead": 14, "loot": 4, "crew": ["tomas"], "rel": Vector2(21.5, 15.0), "keys": ["food", "water", "scrap", "ammo"]},
+	{"id": "cellb", "name": "Cell block B", "rect": Rect2i(38, 8, 24, 15), "dead": 14, "loot": 4, "crew": ["june"], "rel": Vector2(49.5, 15.0), "keys": ["ammo", "water", "food", "meds"]},
+	{"id": "canteen", "name": "Canteen", "rect": Rect2i(66, 8, 21, 15), "dead": 12, "loot": 4, "crew": ["mia"], "rel": Vector2(74.5, 14.5), "keys": ["food", "water", "food", "scrap"]},
+	{"id": "workshop", "name": "Workshop", "rect": Rect2i(28, 29, 18, 13), "dead": 8, "loot": 3, "crew": ["hector"], "rel": Vector2(36.5, 36.0), "keys": ["scrap", "ammo", "scrap"]},
+	{"id": "stores", "name": "Stores", "rect": Rect2i(50, 29, 11, 11), "dead": 7, "loot": 4, "crew": ["owen"], "rel": Vector2(55.5, 35.0), "keys": ["food", "water", "ammo", "meds"]},
+	{"id": "garden", "name": "Garden", "rect": Rect2i(63, 28, 24, 22), "dead": 12, "loot": 2, "crew": ["marcus", "nia"], "rel": Vector2(74.5, 31.0), "keys": ["food", "food"]},
+	{"id": "walk", "name": "North walk", "rect": Rect2i(8, 23, 80, 5), "dead": 8, "loot": 2, "crew": ["dez", "rae"], "rel": Vector2(48.0, 25.0), "keys": ["ammo", "scrap"]},
+	{"id": "yard", "name": "Yard", "rect": Rect2i(8, 42, 30, 13), "dead": 10, "loot": 3, "crew": ["kit", "pip"], "rel": Vector2(30.0, 48.0), "keys": ["water", "scrap", "ammo"]},
+	{"id": "gate", "name": "Gate area", "rect": Rect2i(38, 42, 25, 13), "dead": 10, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(48.0, 47.0), "keys": ["ammo", "meds", "water"]},
+]
+const LOOT_N := {"food": [3, 6], "water": [3, 6], "ammo": [6, 12], "meds": [1, 2], "scrap": [3, 6]}
+const SEARCHABLE := {"nightstand": "nightstand", "medicine_cabinet": "cabinet", "shelf_tins": "shelf", "desk": "desk", "bed_single": "bunk", "fridge": "fridge", "kitchen_counter": "cupboard",
+	"workbench": "bench", "toolbox": "toolbox", "tool_chest": "tool chest", "crate": "crate", "woodpile": "woodpile", "shop_shelf": "shelf", "cooler": "cooler", "veg_patch": "garden patch", "bin": "bin"}
 
 var terrain := PackedInt32Array()
 var solid := PackedByteArray()
@@ -164,7 +184,15 @@ func _cell_block(x0: int, y0: int, mirror_label: String) -> void:
 	labels.append({"pos": Vector2(x0 + 12, y0 + 7.4), "text": mirror_label})
 
 
-func build(seed_i: int = 1) -> Dictionary:
+## The zone (index into ZONES) that holds a point, or -1.
+static func zone_at(x: float, y: float) -> int:
+	for i in ZONES.size():
+		if Rect2(ZONES[i].rect).has_point(Vector2(x, y)):
+			return i
+	return -1
+
+
+func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	# the template: constant keys and the prototype objects
 	var town: Dictionary = TownGen.make(1, {"blocks": 2})
 	var d: Dictionary = town.data
@@ -195,8 +223,11 @@ func build(seed_i: int = 1) -> Dictionary:
 		else:
 			_fence(x, FENCE.end.y - 1, L_WIRE)
 	for y in range(FENCE.position.y, FENCE.end.y):
-		_fence(FENCE.position.x, y)
+		if not (clear and GAP.has_point(Vector2i(FENCE.position.x, y))):
+			_fence(FENCE.position.x, y)
 		_fence(FENCE.end.x - 1, y)
+	if clear:
+		_fill(Rect2i(2, GAP.position.y, 8, GAP.size.y), T_CONCRETE, G_SIDEWALK)    # the road in through the breach
 	# a hedge pen closes the sides of the field in front of the gate, so the dead stay where they are shown
 	for y in range(FENCE.end.y, H):
 		for x in [0, 1, 2, 3, 4, 5, W - 6, W - 5, W - 4, W - 3, W - 2, W - 1]:
@@ -233,7 +264,7 @@ func build(seed_i: int = 1) -> Dictionary:
 	stations["canteen"] = Vector2(76.0, 18.0)
 	labels.append({"pos": Vector2(76.5, 9.2), "text": "CANTEEN"})
 	# the infirmary
-	_building(Rect2i(10, 29, 15, 13), T_TERRAZZO, G_BATH, [Rect2i(16, 29, 3, 1)])
+	_building(Rect2i(10, 29, 15, 13), T_TERRAZZO, G_BATH, [Rect2i(16, 29, 3, 1), Rect2i(10, 33, 1, 3)])    # the second door: the west one, where the party comes in
 	for i in 4:
 		_obj("bed_single", 12.5 + float(i) * 3.0, 32.5, "s")
 		_obj("nightstand", 13.5 + float(i) * 3.0, 31.5, "s")
@@ -301,6 +332,8 @@ func build(seed_i: int = 1) -> Dictionary:
 	_obj("crate", 57.5, 46.5, "s")
 	_obj("crate", 58.5, 46.5, "s")
 	_obj("bin", 38.5, 24.5, "e")
+	for c in [Vector2(18.5, 23.5), Vector2(58.5, 26.5), Vector2(82.5, 23.5), Vector2(14.5, 44.5), Vector2(34.5, 52.5), Vector2(24.5, 50.5)]:
+		_obj("crate", c.x, c.y, "s")
 	stations["chat_a1"] = Vector2(45.2, 27.5)
 	stations["chat_a2"] = Vector2(46.7, 27.5)
 	stations["chat_b1"] = Vector2(73.7, 26.6)
@@ -334,6 +367,8 @@ func build(seed_i: int = 1) -> Dictionary:
 	for k in 10:
 		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(60.0, 68.0)))    # scrub in the pen
 	for sp in spots:
+		if sp.x < 7.0 and sp.y > 30.0 and sp.y < 38.0:
+			continue    # the west road in
 		var pen: bool = sp.y > 59.0 and sp.y < 69.0
 		var n: int = 23 if pen else greens[rng.randi() % greens.size()]
 		trees.append({"x": sp.x, "y": sp.y, "variant": n, "file": "res://assets/trees/tree_%d.png" % n})
@@ -378,7 +413,99 @@ func build(seed_i: int = 1) -> Dictionary:
 	town["start"] = {"house": 0, "pos": SPAWN, "room": -1, "ring": {"rect": Rect2i(6, 4, 84, 52), "total": 0, "free": 0}}
 	town["entry"] = {"pos": SPAWN, "face": "N", "road": Rect2i(46, 55, 4, 3), "label": "The gate", "sign": Vector2(-1, -1), "arrows": []}
 	town["dead"] = _crowd(seed_i)
+	if clear:
+		_zones(town, seed_i)
 	return town
+
+
+## CLEAR PHASE: every zone is a "house" (so that the real search and the indoor wake rule work), with its containers (on furniture) and its dormant dead.
+func _zones(town: Dictionary, seed_i: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_i * 31 + 7
+	var houses: Array = []
+	var containers: Array = []
+	var th: PackedInt32Array = town.tile_house
+	var dead: Array = town.dead
+	var tmpl: Dictionary = (town.houses[0] as Dictionary)
+	for zi in ZONES.size():
+		var z: Dictionary = ZONES[zi]
+		var r: Rect2i = z.rect
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				th[idx(x, y)] = zi
+		var h: Dictionary = tmpl.duplicate(true)
+		h["id"] = zi
+		h["rect"] = r
+		h["lot"] = r
+		h["containers"] = []
+		h["address"] = String(z.name)
+		h["main"] = zi == 0
+		houses.append(h)
+		# containers: furniture of the zone, spread out
+		var cands: Array = []
+		for o in objects:
+			if SEARCHABLE.has(String(o.kind)) and r.has_point(Vector2i(int(floor(float(o.cx))), int(floor(float(o.cy))))):
+				cands.append(o)
+		for i in range(cands.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t = cands[i]
+			cands[i] = cands[j]
+			cands[j] = t
+		var chosen: Array = []
+		for o in cands:
+			if chosen.size() >= int(z.loot):
+				break
+			var far := true
+			for c in chosen:
+				if Vector2(float(c.cx), float(c.cy)).distance_to(Vector2(float(o.cx), float(o.cy))) < 3.0:
+					far = false
+			var st := _stand_for(o, zi)
+			if far and st.x >= 0.0:
+				chosen.append(o)
+				var key := String(z.keys[chosen.size() % (z.keys as Array).size()])
+				var n: Array = LOOT_N[key]
+				var cid := "z%d_%d" % [zi, chosen.size()]
+				(h.containers as Array).append(cid)
+				containers.append({"id": cid, "house": zi, "room": -1, "pos": st, "at": Vector2(float(o.cx), float(o.cy)), "kind": SEARCHABLE[String(o.kind)], "loot": {key: rng.randi_range(n[0], n[1])}, "search_s": 3.0})
+		# dead
+		var dr: Rect2i = z.get("dead_rect", r.grow(-1))
+		var tiles: Array = []
+		for y in range(dr.position.y, dr.end.y):
+			for x in range(dr.position.x, dr.end.x):
+				if solid[idx(x, y)] == 0 and th[idx(x, y)] == zi:
+					tiles.append(Vector2(float(x) + 0.5, float(y) + 0.5))
+		var placed: Array = []
+		var tries := 0
+		while placed.size() < int(z.dead) and tries < 600 and not tiles.is_empty():
+			tries += 1
+			var tp: Vector2 = tiles[rng.randi_range(0, tiles.size() - 1)]
+			var ok := true
+			for q in placed:
+				if Vector2(q).distance_to(tp) < 1.6:
+					ok = false
+					break
+			if ok:
+				placed.append(tp)
+				dead.append({"pos": tp, "kind": "runner" if rng.randi() % 12 == 0 else "walker", "state": "still", "house": zi, "room": -1, "group": -1})
+	town["tile_house"] = th
+	town["houses"] = houses
+	town["containers"] = containers
+
+
+## A free tile next to a piece of furniture where a person can stand to search it ((-1, -1) when there is none), south side first.
+func _stand_for(o: Dictionary, zi: int) -> Vector2:
+	var cx := int(floor(float(o.cx)))
+	var cy := int(floor(float(o.cy)))
+	for rr in [1, 2]:
+		for dy in [rr, 0, -rr]:
+			for dx in [0, -rr, rr]:
+				var x: int = cx + dx
+				var y: int = cy + dy
+				if x < 0 or y < 0 or x >= W or y >= H:
+					continue
+				if solid[idx(x, y)] == 0 and zone_at(float(x), float(y)) == zi:
+					return Vector2(float(x) + 0.5, float(y) + 0.5)
+	return Vector2(-1.0, -1.0)
 
 
 func _zeros() -> Array:

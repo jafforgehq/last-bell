@@ -40,6 +40,8 @@ var kind := "walker"
 var tex := {} # view -> Texture2D
 var pawn_rect: Rect2
 var weapon_tex: Texture2D
+## A person whose def says `unarmed` (the prison's kids) never draws a weapon, in hand, put away or at work.
+var unarmed := false
 var weapon_rect: Rect2
 var gun_front = null
 var anim_t := 0.0
@@ -193,6 +195,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
 		weapon_tex = GD.tex(data.weaponArt.files[e.weapon])
 		gun_front = data.guns[e.weapon].front
+		unarmed = bool((e.def as Dictionary).get("unarmed", false))
 		for o in data.objects:
 			if o.kind == "cot" or o.kind == "mattress":
 				beds.append(o)
@@ -698,6 +701,8 @@ const CARRY_SN := 1.35
 ## The weapon in the hands, drawn in the frame `m` (the body's, without the turn's narrowing): at the aim, kicked up by a shot, swung through its arc, lowered for a reload or a run (the carry,
 ## eased), or put away (low, the hands off it, a little faded; round 23, Q).
 func _gun(m: Transform2D, aim: float, view: String) -> void:
+	if unarmed:
+		return
 	var p = entity
 	var rm := PawnMotion.motion()
 	var a := aim
@@ -857,7 +862,7 @@ func _draw_working() -> void:
 
 ## The weapon drawn at the strength `fade` (1 in hand, less as it is put away for work); `aim` is the rules' angle.
 func _weapon_faded(view: String, aim: float, fade: float, mirror: bool) -> void:
-	if fade <= 0.02:
+	if fade <= 0.02 or unarmed:
 		return
 	var a: float = PI - aim if mirror else aim
 	var saved := _m
