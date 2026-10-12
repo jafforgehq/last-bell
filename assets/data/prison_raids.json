@@ -28,7 +28,7 @@
     {"name": "Fuel", "types": ["petrol", "garage"], "res": ["fuel"]},
     {"name": "Ammo", "types": ["police"], "res": ["ammo"]}
   ],
-  "survivor": {"chance": 0.5, "hp": 45.0, "speed": 3.4, "bark_r": 9.0, "talk_r": 2.2, "join_r": 4.5, "bark": "Help! Over here!"},
+  "survivor": {"chance": 0.5, "hp": 30.0, "speed": 3.4, "bark_r": 9.0, "talk_r": 2.2, "join_r": 4.5, "bark": "Help! Over here!"},
   "people": [
     {"name": "Ivo", "key": "hector", "look": {"top": "#7a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
     {"name": "Lena", "key": "ana", "look": {"top": "#4a6a7a", "outer": "#c9b25a", "pants": "#3d3d44", "skin": "#e0b393"}},
