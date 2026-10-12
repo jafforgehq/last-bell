@@ -791,7 +791,7 @@ func _tick(dt: float) -> void:
 			var sum := 0.0
 			for v in _perf_ms:
 				sum += float(v)
-			print("PERF frames ", _perf_ms.size(), " avg ms ", snappedf(sum / _perf_ms.size(), 0.01), " p95 ", snappedf(_perf_ms[int(_perf_ms.size() * 0.95)], 0.01), " max ", snappedf(_perf_ms[-1], 0.01), " awake dead ", _awake_dead().size(), " crew ", crew.members.size())
+			print("PERF frames ", _perf_ms.size(), " avg ms ", snappedf(sum / _perf_ms.size(), 0.01), " p95 ", snappedf(_perf_ms[int(_perf_ms.size() * 0.95)], 0.01), " max ", snappedf(_perf_ms[-1], 0.01), " awake dead ", _awake_dead().size(), " crew ", crew.members.size(), " zmove ms per step ", snappedf(float(zmove.usec) / 1000.0 / maxf(1.0, float(zmove.steps)), 0.001) if zmove != null else "off")
 			get_tree().quit()
 	dt = clampf(dt, 0.0, StepClock.MAX_FRAME)
 	clock += dt

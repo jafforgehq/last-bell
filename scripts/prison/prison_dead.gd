@@ -29,6 +29,9 @@ var _prey := {}
 var _rng := RandomNumberGenerator.new()
 var _grid := {}
 var _n := 0
+var usec := 0    # microseconds spent in `pre` and `post` so far (--perf prints the share of a step)
+var steps := 0
+var _t0 := 0
 var _players: Array = []
 var _streams := {}
 
@@ -59,6 +62,7 @@ func _load(prefix: String, n: int) -> Array:
 func pre() -> void:
 	if not on:
 		return
+	_t0 = Time.get_ticks_usec()
 	sim = game.run.sim
 	_prey.clear()
 	for p in sim.people:
@@ -71,6 +75,7 @@ func pre() -> void:
 		z.oph = z.walk_phase
 		if not z.head_ok:
 			_first(z)
+	usec += Time.get_ticks_usec() - _t0
 
 
 func _first(z) -> void:
@@ -91,6 +96,7 @@ func post(dt: float) -> void:
 	if not on:
 		return
 	sim = game.run.sim
+	_t0 = Time.get_ticks_usec()
 	_n += 1
 	for z in sim.zombies:
 		if z.state == "dying" or z.state == "dead":
@@ -98,6 +104,8 @@ func post(dt: float) -> void:
 		_one(z, dt)
 	if _n % 2 == 0:
 		_spread()
+	usec += Time.get_ticks_usec() - _t0
+	steps += 1
 
 
 func _one(z, dt: float) -> void:
