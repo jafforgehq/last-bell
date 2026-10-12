@@ -108,6 +108,19 @@ static func turn(ori: float, target: float, dt: float) -> float:
 	return wrapf(ori + d * ease_k(TURN_RATE, dt), -PI, PI)
 
 
+## The prison's turning: `ori` one frame nearer `target` at a fixed rate (radians a second), the short way, never past it. No ease and no snap to a quarter: a figure turns through every angle.
+static func turn_lim(ori: float, target: float, dt: float) -> float:
+	return turn_at(ori, target, dt, TAU * 0.6)
+
+
+static func turn_at(ori: float, target: float, dt: float, rate: float) -> float:
+	var d := wrapf(target - ori, -PI, PI)
+	var step := rate * dt
+	if absf(d) <= step:
+		return target
+	return wrapf(ori + signf(d) * step, -PI, PI)
+
+
 ## The view an orientation shows: "E", "S", "N", and "W" (the east view mirrored).
 static func view_of(ori: float) -> String:
 	var q := int(roundf(ori / (PI * 0.5)))
@@ -123,6 +136,18 @@ static func view_of(ori: float) -> String:
 ## How far an orientation is from the middle of the view it shows, radians (0 to a quarter of a half turn).
 static func off_mid(ori: float) -> float:
 	return absf(ori - roundf(ori / (PI * 0.5)) * PI * 0.5)
+
+
+## Where an orientation is near the seam between two views: [the neighbour's view ("E", "S", "N", "W"), how opaque to draw it (0 to 0.5, 0.5 at the seam)]. The prison crossfades the two baked views across the seam.
+const SEAM_BLEND := 0.4
+static func seam(ori: float) -> Array:
+	var qf := ori / (PI * 0.5)
+	var q := roundf(qf)
+	var off := qf - q    # -0.5 .. 0.5 quarter turns
+	var dist := (0.5 - absf(off)) * PI * 0.5
+	if dist >= SEAM_BLEND:
+		return ["", 0.0]
+	return [view_of((q + signf(off)) * PI * 0.5), 0.5 * (1.0 - dist / SEAM_BLEND)]
 
 
 ## How wide the body is drawn at an orientation: 1 in the middle of a view, about four fifths at the seam (less so with reduced motion).

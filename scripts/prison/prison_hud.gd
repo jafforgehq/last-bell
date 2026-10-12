@@ -3,6 +3,7 @@
 ## they use the same rules calls (sim.muzzle, avatar.trace, reach_of, shot_cost, gun_of), so the line stops where the shot would.
 extends RefCounted
 
+const AimMode := preload("res://scripts/aim_mode.gd")
 const INK := Color(0.96, 0.94, 0.86, 0.95)
 const HIT := Color("#ff7d6e")
 const EDGE := Color(0.04, 0.07, 0.06, 0.9)
@@ -34,8 +35,9 @@ static func draw(game, c: Control, v: Vector2) -> void:
 	var to_scr := func(p: Vector2) -> Vector2: return (p - game.cam_center) * zoom + v / 2.0
 	var aim_hit := false
 	var end_scr := Vector2.ZERO
-	# the aim line (not while the gun is being loaded, nor for a blow)
-	if not melee and me.reloading <= 0.0:
+	var aimed: bool = game.aiming_now
+	# the aim line (not while the gun is being loaded, nor for a blow; only while the weapon is up)
+	if aimed and not melee and me.reloading <= 0.0:
 		var shoulder: Vector2 = sim.avatar.shoulder(me)
 		var muzzle: Vector2 = sim.muzzle(me, me.aim)
 		var reach: float = sim.reach_of(live, me)
@@ -58,7 +60,7 @@ static func draw(game, c: Control, v: Vector2) -> void:
 	var at: Vector2 = c.get_viewport().get_mouse_position()
 	if game.args.has("aimdir"):
 		at = end_scr if end_scr != Vector2.ZERO else to_scr.call(Vector2(me.x, me.y) + Vector2.from_angle(me.aim) * 3.0)
-	if Rect2(Vector2.ZERO, v).has_point(at):
+	if aimed and Rect2(Vector2.ZERO, v).has_point(at):
 		var r := 10.0
 		if not melee:
 			var cone: float = sim.avatar.spread_of(me, live)
@@ -72,7 +74,7 @@ static func draw(game, c: Control, v: Vector2) -> void:
 				c.draw_line(at + d * (r - 3.0), at + d * (r + 6.0), col2, w, true)
 		c.draw_circle(at, 1.2, ink)
 	# the reload ring round her, with a pip for each shell of a shell-loader
-	if me.reloading > 0.0 and not melee:
+	if aimed and me.reloading > 0.0 and not melee:
 		var total: float = maxf(0.01, float(me.gun.get("reload", 1.0)) * float(sim.traits.mult(me, "reload")))
 		var f := clampf(1.0 - me.reloading / total, 0.0, 1.0)
 		var cc: Vector2 = to_scr.call(Vector2(me.x, me.y - 0.45))
@@ -94,6 +96,8 @@ static func draw(game, c: Control, v: Vector2) -> void:
 	var state := ""
 	if melee:
 		state = "melee"
+	elif AimMode.holstered:
+		state = "AWAY (Q)"
 	elif me.reloading > 0.0:
 		state = "RELOADING"
 	elif dry:

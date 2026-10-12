@@ -195,6 +195,7 @@ func update(dt: float) -> void:
 		if z.state == "chase" and d < 8.0 and d < me.distance_to(Vector2(z.x, z.y)) - 0.5:
 			game.ally_chasers[z] = {"p": p, "state": "ally"}
 	# the pose ticks (the crew's are in prison_game.gd `_gun_poses`) and the shot: nearest dead in sight within 8 tiles
+	game.turn_aim(p, dt)
 	p.recoil = maxf(0.0, float(p.recoil) - dt * 8.0)
 	p.reloading = maxf(0.0, float(p.reloading) - dt)
 	var hold := float(game.aim_hold.get(p.id, 0.0)) - dt

@@ -19,6 +19,8 @@ const TownRun := preload("res://scripts/town/town_run.gd")
 const TownRoofs := preload("res://scripts/town/town_roofs.gd")
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
+const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
@@ -113,6 +115,10 @@ var glow: Control
 var radial_tex: Texture2D
 var mini_tex: ImageTexture
 var guard_cd := {}
+var aiming_now := false    # the weapon is up and aimed (right button / Shift held, weapon drawn): the HUD marks show only then; other systems: right-click orders only when not aiming
+var _aim_cur := 0.0
+var _aim_ok := false
+var aim_want := {}    # person id -> the angle a shooter is turning its rifle to
 var aim_hold := {}    # person id -> seconds the aimed pose is still held
 var shot_n := {}    # person id -> shots fired (a reload pause every RELOAD_EVERY)
 var alarm_t := 0.0
@@ -143,11 +149,17 @@ var siege    # prison_siege.gd: fence segments and night attacks, runs only in p
 
 
 func _ready() -> void:
+	PawnNode.smooth_turn = true    # (--nosmooth: the old 4-view snap, to compare the frame cost) ROTATION: a continuous drawn angle at a limited turn rate, and rifles at the ready (render side only; off in every other game)
+	PawnNode.rifles_ready = true
 	for a in OS.get_cmdline_user_args():
 		var s := String(a)
 		if s.begins_with("--"):
 			var kv := s.trim_prefix("--").split("=", true, 1)
 			args[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
+	if args.has("nosmooth"):
+		PawnNode.smooth_turn = false
+		PawnNode.rifles_ready = false
 	data = GD.load_all()
 	_fit_window()
 	_make_hud()
@@ -661,9 +673,15 @@ func _process(delta: float) -> void:
 var _perf_last := 0
 var _perf_ms: Array = []
 ## Ticks the shooting poses of the crew (they are not in the sim, which would do it): the kick falls away, the reload runs out, the aim is held about a second after a shot and then the work pose (watch) comes back.
+func turn_aim(g, dt: float) -> void:
+	if aim_want.has(g.id) and g.target != null:
+		g.aim = PawnMotion.turn_at(float(g.aim), float(aim_want[g.id]), dt, PawnNode.TURN_AIM)
+
+
 func _gun_poses(dt: float) -> void:
 	for m in crew.members:
 		var g = m.p
+		turn_aim(g, dt)
 		g.recoil = maxf(0.0, float(g.recoil) - dt * 8.0)
 		g.reloading = maxf(0.0, float(g.reloading) - dt)
 		var h := float(aim_hold.get(g.id, 0.0)) - dt
@@ -672,7 +690,65 @@ func _gun_poses(dt: float) -> void:
 			g.target = null
 
 
+var _seq_i := 0
+var _tt: Dictionary = {}
+
+
+## --turntest=circle|track|dead|aim (checks of the rotation, with --cam on the spot and --seq): circle walks the gate guard Walt round a circle; track makes Walt shoot at a dead one that walks
+## north to south across his front; dead walks a dead one on a circle; aim steps Ruth's aim to a new one of eight headings each second (she turns at 360 degrees a second).
+func _turntest(dt: float) -> void:
+	var mode_s := String(args.turntest)
+	var c := Vector2(48.0, 30.0)
+	if not _tt.has("m"):
+		for m in crew.members:
+			if String(m.def.id) == "walt":
+				_tt["m"] = m
+				m.state = "leaving"
+	if (mode_s == "dead" or mode_s == "track") and not _tt.has("z"):
+		for z in run.sim.zombies:
+			_tt["z"] = z
+			break
+	var t := clock
+	if mode_s == "circle" and _tt.has("m"):
+		var p = _tt.m.p
+		var a := t * 0.6
+		var np := c + Vector2.from_angle(a) * 3.0
+		var d := np - Vector2(p.x, p.y)
+		p.x = np.x
+		p.y = np.y
+		p.moving = true
+		p.work = ""
+		p.walk_phase += dt * 6.0
+		p.facing = run.sim.facing_of(d.x, d.y, p.facing)
+	elif mode_s == "track" and _tt.has("m") and _tt.has("z"):
+		var p = _tt.m.p
+		p.x = c.x
+		p.y = c.y
+		p.work = "watch"
+		p.moving = false
+		var z = _tt.z
+		var k := fposmod(t * 0.25, 1.0)
+		z.x = c.x + 4.0
+		z.y = c.y - 5.0 + 10.0 * k
+		z.state = "idle"
+		z.moving = false
+		if fposmod(t, 0.9) < dt:
+			_shoot_at(p, z, 0.0)
+	elif mode_s == "dead" and _tt.has("z"):
+		var z = _tt.z
+		var a2 := t * 0.5
+		var np2 := c + Vector2.from_angle(a2) * 3.0
+		var d2 := np2 - Vector2(z.x, z.y)
+		z.x = np2.x
+		z.y = np2.y
+		z.moving = true
+		z.state = "chase"
+		z.facing = run.sim.facing_of(d2.x, d2.y, z.facing)
+
+
 func _tick(dt: float) -> void:
+	if args.has("turntest") and crew != null:
+		_turntest(dt)
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
 		var nowu := Time.get_ticks_usec()
 		if frames >= 600 and _perf_last > 0:
@@ -688,7 +764,7 @@ func _tick(dt: float) -> void:
 	dt = clampf(dt, 0.0, StepClock.MAX_FRAME)
 	clock += dt
 	frames += 1
-	_hands()
+	_hands(dt)
 	for i in step_clock.advance(dt, 1.0):
 		_step()
 		sim_steps += 1
@@ -749,7 +825,17 @@ func _tick(dt: float) -> void:
 	bars.queue_redraw()
 	glow.queue_redraw()
 	_scripts(dt)
-	if args.has("shot") and frames >= _shot_wait and not _quit_after:
+	if args.has("seq") and frames >= _shot_wait:    # --seq=N,every: N shots (name_00.png ...) every `every` frames from the first
+		var sq := String(args.seq).split(",")
+		if (frames - _shot_wait) % int(sq[1]) == 0:
+			var keep := String(args.shot)
+			args["shot"] = keep.trim_suffix(".png") + "_%02d.png" % _seq_i
+			_save_shot()
+			args["shot"] = keep
+			_seq_i += 1
+			if _seq_i >= int(sq[0]):
+				get_tree().quit()
+	elif args.has("shot") and frames >= _shot_wait and not _quit_after:
 		_save_shot()
 		get_tree().quit()
 
@@ -801,7 +887,7 @@ func _hud_text() -> String:
 	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d\n%s" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size(), loot.hint()]    # RAIDS hook: the marked places
 
 
-func _hands() -> void:
+func _hands(dt: float) -> void:
 	var move := Vector2.ZERO
 	if not busy:
 		if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
@@ -816,6 +902,8 @@ func _hands() -> void:
 		var w := String(args.walk).split(",")
 		move = Vector2(float(w[0]), float(w[1]))
 	var aim := cam_center + (get_viewport().get_mouse_position() - _vp() / 2.0) / zoom_px
+	if String(args.get("turntest", "")) == "aim":
+		aim = Vector2(run.avatar_p.x, run.avatar_p.y) + Vector2.from_angle(floorf(clock / 1.0) * PI / 4.0) * 4.0
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
@@ -828,6 +916,25 @@ func _hands() -> void:
 		move = b.move
 		aim = b.aim
 		fire = b.fire
+	# AIM MODE (scripts/aim_mode.gd): right button or Shift held = the weapon is up and aimed at the pointer and the left button fires; otherwise no aim is given at all (she faces the
+	# way she walks, the sim turns the gun to it) and nothing fires. Q puts the weapon away: never aimed, never fired. A forced aim (--aimdir, a bot, a check) counts as aiming.
+	var forced := args.has("aimdir") or not _bot_in.is_empty() or String(args.get("auto", "")) == "play" or String(args.get("turntest", "")) == "aim"
+	var me := Vector2(run.avatar_p.x, run.avatar_p.y)
+	var pointer_ok := Rect2(Vector2.ZERO, _vp()).has_point(get_viewport().get_mouse_position())
+	var over_hud: bool = pack.blocks_fire() or board.blocks_fire()
+	aiming_now = (forced and not AimMode.holstered) or AimMode.aiming(AimMode.current(), Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT), Input.is_key_pressed(KEY_SHIFT), pointer_ok, busy, over_hud)
+	run.avatar_p.holstered = AimMode.holstered    # (what the pawn draws: the weapon slung low, the hands off it)
+	run.avatar_p.set_meta("aiming", aiming_now)
+	if aiming_now:
+		# ROTATION: the aim turns at 360 degrees a second, and it is the aim the shot, the line and the drawn gun all use
+		var want := (aim - me).angle() if aim.distance_to(me) > 0.05 else _aim_cur
+		_aim_cur = want if not _aim_ok else PawnMotion.turn_at(_aim_cur, want, dt, PawnNode.TURN_AIM)
+		_aim_ok = true
+		aim = me + Vector2.from_angle(_aim_cur) * maxf(aim.distance_to(me), 0.5)
+	else:
+		_aim_cur = float(run.avatar_p.aim)    # (the next aim starts from where the gun points)
+		aim = Vector2.ZERO
+		fire = false
 	run.sim.avatar.set_input(move, aim, fire)
 
 
@@ -844,8 +951,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 		match ev.keycode:
 			KEY_E:
 				_use()
+			KEY_Q:
+				AimMode.set_holstered(not AimMode.holstered)
+				_say(AimMode.NOW_AWAY_TOWN if AimMode.holstered else AimMode.toggle_toast(false, true), 2.5)
 			KEY_R:
-				if mode == "raid" or phase == "clear" or siege.can_fire():
+				if AimMode.holstered:
+					_say(AimMode.PUT_AWAY, 2.0)
+				elif mode == "raid" or phase == "clear" or siege.can_fire():
 					run.sim.avatar.reload()
 			KEY_F:
 				if (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
@@ -1539,14 +1651,19 @@ func _draw_minimap(v: Vector2) -> void:
 ## One rifle shot from a person that is not in the sim (a tower guard, an ally) at a dead one: muzzle flash, tracer, the real rifle sound, `hit_p` to hit (55 damage, the dead fall and bleed).
 func _shoot_at(g, z, hit_p: float) -> void:
 	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
-	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)    # (the pawn draws 4 views, E mirrored for W: the shooter turns to the nearest one)
-	g.aim = ang
-	if g.target == null:    # the first shot of a burst: the rifle is raised for 0.25 s before the flash
+	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)    # (the rules' 4-way facing; the pawn's own angle turns smoothly to the aim)
+	aim_want[g.id] = ang
+	if g.target == null:    # the first shot of a burst: the rifle is raised and turned to the dead (at least 0.25 s, at most 1.2 s) before the flash
+		g.aim = float(g.get_meta("drawn_ori", ang))    # (the heading the pawn draws now: the raise starts from it)
 		g.target = z
-		aim_hold[g.id] = 1.4
-		await get_tree().create_timer(0.25).timeout
+		aim_hold[g.id] = 1.6
+		var waited := 0.0
+		while run != null and (waited < 0.25 or (absf(angle_difference(float(g.aim), ang)) > 0.1 and waited < 1.2)):
+			await get_tree().process_frame
+			waited += get_process_delta_time()
 		if run == null or not siege._alive(z):
 			return
+	ang = float(g.aim)    # (the flash and the tracer leave the barrel where it points now)
 	# the pose: PawnNode draws the aimed gun while `target` is set, the kick from `recoil`, the lowered gun and pump from `reloading` (the pawn's own states, ticked in `_gun_poses`)
 	g.target = z
 	g.recoil = 1.0

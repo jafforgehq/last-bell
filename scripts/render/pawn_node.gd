@@ -40,6 +40,18 @@ var kind := "walker"
 var tex := {} # view -> Texture2D
 var pawn_rect: Rect2
 var weapon_tex: Texture2D
+## The prison's figures (set by prison_game.gd, off everywhere else): `smooth_turn` keeps a continuous drawn angle that turns at a limited rate toward the way the figure goes or aims
+## (the walkers' 4 baked views are crossfaded across each seam, the weapon is drawn at the exact angle); `rifles_ready` draws a guard's "watch" as the rifle at the low ready, not binoculars.
+static var smooth_turn := false
+static var rifles_ready := false
+const TURN_PERSON := deg_to_rad(220.0)
+const TURN_AIM := deg_to_rad(360.0)
+const TURN_BUSY := deg_to_rad(130.0)
+const TURN_DEAD := deg_to_rad(120.0)
+## The low ready: how far a rifle that is not being aimed is carried toward the low carry (0 shouldered at the aim, 1 fully low), eased (`_rdy`).
+const READY_LOW := 0.5
+var _rdy := 0.0
+var _zpos := Vector2.ZERO
 ## A person whose def says `unarmed` (the prison's kids) never draws a weapon, in hand, put away or at work.
 var unarmed := false
 var weapon_rect: Rect2
@@ -320,15 +332,24 @@ func _anim(jumped: bool, alpha: float, dt: float) -> void:
 	if _alert_t > 0.0:
 		_alert_t = maxf(0.0, _alert_t - dt)
 	_alert = maxf(0.0, _alert - dt * 6.0)
+	var rate := 0.0
+	if smooth_turn:
+		var h := _heading(tgt)
+		tgt = h[0]
+		rate = h[1]
 	if jumped or dt <= 0.0 or not _ori_ok:
 		_ori = tgt
 		_ori_ok = true
+	elif smooth_turn:
+		_ori = PawnMotion.turn_at(_ori, tgt, dt, rate)
 	else:
 		_ori = PawnMotion.turn(_ori, tgt, dt)
 	var v := PawnMotion.view_of(_ori)
 	_mir = v == "W"
 	_vw = "E" if _mir else v
-	_wid = PawnMotion.width(_ori, rm)
+	_wid = 1.0 if smooth_turn else PawnMotion.width(_ori, rm)
+	if smooth_turn:
+		e.set_meta("drawn_ori", _ori)
 	if _pos_ok and dt > 0.0:
 		var inst := (position - _pos_last) / (TILE * dt)
 		if inst.length_squared() > 81.0:
@@ -339,6 +360,29 @@ func _anim(jumped: bool, alpha: float, dt: float) -> void:
 	_pos_last = position
 	_pos_ok = true
 	_anim_person(dt, jumped, alpha, rm)
+
+
+## The prison's heading: [the angle the figure wants to face, how fast it may turn]. Gun up (aiming, recoil, reload) or Ruth: the aim. Walking: the way it goes. A guard on watch: slowly
+## looks about. Standing: where it is, until the rules give it a new facing.
+func _heading(face_tgt: float) -> Array:
+	var e = entity
+	var armed := not unarmed
+	var rate := TURN_PERSON
+	var word := _work_word()
+	if _wk > 0.0 or word == "haul":
+		rate = TURN_BUSY
+	if armed and (e.player or e.target != null or float(e.recoil) > 0.05 or float(e.reloading) > 0.0):
+		return [float(e.aim), TURN_AIM]
+	var fs: String = e.facing
+	var changed := fs != _face_seen
+	_face_seen = fs
+	if e.moving and _vel.length() > 0.4:
+		return [_vel.angle(), rate]
+	if armed and rifles_ready and word == "watch" and not e.moving:
+		return [face_tgt + 0.9 * sin(anim_t * 0.35 + _seed * TAU), rate * 0.4]
+	if changed or not _ori_ok:
+		return [face_tgt, rate]
+	return [_ori, rate]
 
 
 func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
@@ -378,6 +422,8 @@ func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
 	var hol: bool = p.get("holstered") == true
 	_lowk = move_toward(_lowk, 1.0 if (run > 0.3 or hol) else 0.0, dt / 0.09)
 	_holk = move_toward(_holk, 1.0 if hol else 0.0, dt / 0.12)
+	var low_ready: bool = smooth_turn and not unarmed and not p.player and p.target == null and float(p.recoil) <= 0.05 and float(p.reloading) <= 0.0
+	_rdy = move_toward(_rdy, 1.0 if low_ready else 0.0, dt / 0.2)
 	# the swing (the town's: the rules' `swing_t`; the old game's: the blow's own `thrust` as it begins), on the screen's clock from the moment it is seen
 	var st: float = float(p.get_meta("swing_t", -1.0)) if p.player else -1.0
 	var thr: float = p.thrust
@@ -423,20 +469,34 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 	var st: String = z.state
 	var down: bool = st == "dying" or st == "dead"
 	var f: String = z.facing
-	if jumped or f != _face_seen:
+	if smooth_turn:
+		# (the prison: the heading is the way it goes, turned at a fixed rate; a part of a step of change is enough to know)
+		if jumped:
+			_zpos = position
+			_tgt_ori = PawnMotion.FACE_ANG.get(f, PI / 2.0)
+			_ori = _tgt_ori
+		elif stepped:
+			var dp := position - _zpos
+			_zpos = position
+			if z.moving and dp.length() > 0.8 and dp.length() < TILE:
+				_tgt_ori = dp.angle()
+		_turning = _ori != _tgt_ori or jumped
+	elif jumped or f != _face_seen:
 		_face_seen = f
 		_tgt_ori = PawnMotion.FACE_ANG.get(f, PI / 2.0)
 		_turning = true
 	if _turning:
 		if jumped or dt <= 0.0 or down:
 			_ori = _tgt_ori
+		elif smooth_turn:
+			_ori = PawnMotion.turn_at(_ori, _tgt_ori, dt, TURN_DEAD)
 		else:
 			_ori = PawnMotion.turn(_ori, _tgt_ori, dt)
 		_turning = _ori != _tgt_ori
 		var v := PawnMotion.view_of(_ori)
 		_mir = v == "W"
 		_vw = "E" if _mir else v
-		_wid = PawnMotion.width(_ori, PawnMotion.motion())
+		_wid = 1.0 if smooth_turn else PawnMotion.width(_ori, PawnMotion.motion())
 	if down:
 		_hot = false
 		_acc_dt = 0.0
@@ -653,6 +713,8 @@ func _draw_person() -> void:
 	if spd > 0.05:
 		lean = (_vel / spd) * ((0.045 + 0.08 * run) * minf(spd / PawnMotion.WALK_V, 1.6) * rm)
 	var aim: float = p.aim
+	if smooth_turn and _rdy > 0.0 and not p.player:
+		aim = lerp_angle(aim, _ori, _rdy)    # (a rifle that is not aimed points where the figure goes, at the low ready)
 	var aim_v := Vector2.from_angle(aim)
 	var kick := _rk * _rk
 	if kick > 0.0:
@@ -676,6 +738,16 @@ func _draw_person() -> void:
 		_sc(-1, 1)
 	_apply()
 	_legs(view, _rph, _moving_draw, false, 1.0, true)
+	var sm: Array = PawnMotion.seam(_ori) if smooth_turn else ["", 0.0]
+	var nv := String(sm[0])
+	var nmir := nv == "W"
+	if nv != "":
+		nv = "E" if nmir else nv
+		_m = base
+		if nmir:
+			_sc(-1, 1)
+		_apply()
+		_legs(nv, _rph, _moving_draw, false, float(sm[1]), false)
 	var body := base * xf
 	if view == "N" and not unarmed:
 		_gun(body, aim, view)
@@ -686,6 +758,12 @@ func _draw_person() -> void:
 		_sc(-1, 1)
 	_apply()
 	_pen.draw_texture_rect(tex[view], pawn_rect, false)
+	if nv != "":
+		_m = body
+		if nmir:
+			_sc(-1, 1)
+		_apply()
+		_pen.draw_texture_rect(tex[nv], pawn_rect, false, Color(1.0, 1.0, 1.0, float(sm[1])))
 	if view != "N" and not unarmed:
 		_gun(body, aim, view)
 	if p.thrust > 0.0:
@@ -712,7 +790,7 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm
 	if _sw >= 0.0:
 		a += _sw_pose.off
-	var lw := _lowk
+	var lw := maxf(_lowk, _rdy * READY_LOW)
 	if reload:
 		lw = maxf(lw, _rl.low * 0.85)
 	if lw > 0.0:
@@ -835,7 +913,7 @@ func _work_sync(steps: int, alpha: float) -> void:
 ## walking, or in the sights of a weapon, or with a gun going off, is not at work, whatever word the rules have left on them.
 func _work_update(p) -> bool:
 	var word := _work_word()
-	var busy: bool = word != "" and WorkAnim.CYCLE.has(word) and not p.moving and p.target == null and p.reloading <= 0.0 and p.recoil <= 0.0
+	var busy: bool = word != "" and WorkAnim.CYCLE.has(word) and not (rifles_ready and word == "watch" and not unarmed) and not p.moving and p.target == null and p.reloading <= 0.0 and p.recoil <= 0.0
 	var dt := 0.0
 	if _anim_prev >= 0.0:
 		dt = clampf(anim_t - _anim_prev, 0.0, 0.1)
@@ -964,6 +1042,17 @@ func _draw_zombie() -> void:
 	var reach: bool = _atk > 0.5 and st.pose == "sprint"
 	_arms_layer(view, "back", reach, phase, windup, hump, walking)
 	_draw_body(view)
+	if smooth_turn:
+		var sm: Array = PawnMotion.seam(_ori)
+		if String(sm[0]) != "":
+			var nmir: bool = sm[0] == "W"
+			if nmir != mirror:
+				_sc(-1, 1)
+				_apply()
+			_draw_body("E" if nmir else String(sm[0]), Color(1.0, 1.0, 1.0, float(sm[1])))
+			if nmir != mirror:
+				_sc(-1, 1)
+				_apply()
 	_arms_layer(view, "front", reach, phase, windup, hump, walking)
 
 
