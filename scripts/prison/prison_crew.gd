@@ -8,10 +8,10 @@ const IDLE_RETRY := 2.5
 
 ## key: the body of the pawn art (dez, ana, marcus, walt, hector); look: palette overrides so that two on one body read as two people.
 const ROSTER := [
-	{"id": "walt", "name": "Walt", "role": "Gate guard", "key": "walt", "look": {}, "stand": "tower_e", "work": "watch", "face": "S"},
-	{"id": "dez", "name": "Dez", "role": "Tower guard", "key": "dez", "look": {}, "stand": "tower_nw", "work": "watch", "face": "S"},
-	{"id": "rae", "name": "Rae", "role": "Tower guard", "key": "ana", "look": {"top": "#3a4a3a", "outer": "#555a50", "pants": "#2c2c34", "skin": "#a6734e"}, "stand": "tower_se", "work": "watch", "face": "S"},
-	{"id": "sol", "name": "Sol", "role": "Gate guard", "key": "hector", "look": {"top": "#4a4a50", "pants": "#2c3038", "skin": "#c69877"}, "stand": "tower_w", "work": "watch", "face": "S"},
+	{"id": "walt", "name": "Walt", "role": "Gate guard", "key": "walt", "look": {"dirs16": "walt"}, "stand": "tower_e", "work": "watch", "face": "S"},
+	{"id": "dez", "name": "Dez", "role": "Tower guard", "key": "dez", "look": {"dirs16": "dez"}, "stand": "tower_nw", "work": "watch", "face": "S"},
+	{"id": "rae", "name": "Rae", "role": "Tower guard", "key": "ana", "look": {"top": "#3a4a3a", "outer": "#555a50", "pants": "#2c2c34", "skin": "#a6734e", "dirs16": "rae"}, "stand": "tower_se", "work": "watch", "face": "S"},
+	{"id": "sol", "name": "Sol", "role": "Gate guard", "key": "hector", "look": {"top": "#4a4a50", "pants": "#2c3038", "skin": "#c69877", "dirs16": "sol"}, "stand": "tower_w", "work": "watch", "face": "S"},
 	{"id": "mia", "name": "Mia", "role": "Cook", "key": "ana", "look": {"top": "#d9d4c4", "outer": "#a8483c", "pants": "#3d3d44", "skin": "#8a5a3c"}, "route": [
 		{"at": "fridge", "secs": 3.0, "work": "sort", "face": "N"},
 		{"at": "stove", "secs": 8.0, "work": "bench", "face": "N", "say": "cooking"},

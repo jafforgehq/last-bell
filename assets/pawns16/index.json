@@ -1,0 +1,116 @@
+{
+ "sets": {
+  "dez": {
+   "bytes": 405549,
+   "cell": [
+    162,
+    235
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/dez.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    81,
+    139
+   ]
+  },
+  "rae": {
+   "bytes": 450214,
+   "cell": [
+    126,
+    236
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/rae.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    63,
+    140
+   ]
+  },
+  "ruth": {
+   "bytes": 582825,
+   "cell": [
+    140,
+    247
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/ruth.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    70,
+    151
+   ]
+  },
+  "sol": {
+   "bytes": 397072,
+   "cell": [
+    132,
+    236
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/sol.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    66,
+    140
+   ]
+  },
+  "walt": {
+   "bytes": 436949,
+   "cell": [
+    162,
+    235
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/walt.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    81,
+    139
+   ]
+  },
+  "z0": {
+   "bytes": 574093,
+   "cell": [
+    214,
+    236
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/z0.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    107,
+    140
+   ]
+  },
+  "z1": {
+   "bytes": 559099,
+   "cell": [
+    214,
+    237
+   ],
+   "density": 160.0,
+   "dirs": 16,
+   "file": "res://assets/pawns16/z1.png",
+   "frames": 6,
+   "gutter": 2,
+   "origin": [
+    107,
+    141
+   ]
+  }
+ }
+}

@@ -20,6 +20,7 @@ const PawnMesh := preload("res://scripts/render/pawn_mesh.gd")
 const Combat := preload("res://scripts/render/combat_fx.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
+const Dirs := preload("res://scripts/render/pawn_dirs.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -44,6 +45,11 @@ var weapon_tex: Texture2D
 ## (the walkers' 4 baked views are crossfaded across each seam, the weapon is drawn at the exact angle); `rifles_ready` draws a guard's "watch" as the rifle at the low ready, not binoculars.
 static var smooth_turn := false
 static var rifles_ready := false
+## ROUND 7 (prison only): a person whose look has `dirs16` (the name of a set in assets/pawns16) and the plain walkers (`dirs16_dead`) are drawn from a 16-heading render of the whole body (pawn_dirs.gd)
+## in place of the 4 baked views, their legs and the seam crossfade; the gun and the hands stay live at the exact angle.
+static var dirs16 := false
+static var dirs16_dead := true
+var _d16 = null
 const TURN_PERSON := deg_to_rad(220.0)
 const TURN_AIM := deg_to_rad(360.0)
 const TURN_BUSY := deg_to_rad(130.0)
@@ -178,6 +184,13 @@ var _turning := true
 var _leg_kind := "person"
 
 
+## Whether this entity may be drawn from a 16-heading set: a person that names one, or a plain walker (not a runner or a brute) when `dirs16_dead`.
+static func zombie_look_ok(e, is_zombie: bool) -> bool:
+	if is_zombie:
+		return dirs16_dead and Art.kind_of(e) == "walker"
+	return (e.look as Dictionary).has("dirs16")
+
+
 func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	entity = e
 	zombie = is_zombie
@@ -187,6 +200,9 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		tex[v] = GD.tex(data.pawn.files[key][v])
 	pal = Art.palette(e.look)
 	_pal_tex = PawnMesh.palette_texture(pal)
+	if dirs16:
+		if zombie_look_ok(e, is_zombie):
+			_d16 = Dirs.get_set("z%d" % (int(e.look_index) % 2) if is_zombie else String((e.look as Dictionary).get("dirs16", "")))
 	_seed_i = int(e.get_instance_id())
 	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)    # (as it was: a person's breath and a walker's idle sway read it)
 	if zombie:
@@ -695,7 +711,7 @@ func _draw_person() -> void:
 		return
 	var rm := PawnMotion.motion()
 	var view := _vw
-	var mirror := _mir
+	var mirror := _mir and _d16 == null
 	var g := _gait
 	# (PACE: the run, scripts/sim/sprint.gd `lean`, 0 to 1 and set on the avatar only: the legs go faster by themselves (the stride is longer for each tile), the body bobs a little more, leans into it and the gun is carried low)
 	var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
@@ -737,8 +753,11 @@ func _draw_person() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_legs(view, _rph, _moving_draw, false, 1.0, true)
-	var sm: Array = PawnMotion.seam(_ori) if smooth_turn else ["", 0.0]
+	if _d16 == null:
+		_legs(view, _rph, _moving_draw, false, 1.0, true)
+	elif _fast:
+		_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
+	var sm: Array = PawnMotion.seam(_ori) if smooth_turn and _d16 == null else ["", 0.0]
 	var nv := String(sm[0])
 	var nmir := nv == "W"
 	if nv != "":
@@ -752,12 +771,15 @@ func _draw_person() -> void:
 	if view == "N" and not unarmed:
 		_gun(body, aim, view)
 	_m = body
-	if _wid != 1.0:
+	if _wid != 1.0 and _d16 == null:
 		_m = _m * Transform2D(Vector2(_wid, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)    # (a turn: narrower across the seam between two views)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_pen.draw_texture_rect(tex[view], pawn_rect, false)
+	if _d16 != null:
+		Dirs.blit(_pen, _d16, _ori, _rph)
+	else:
+		_pen.draw_texture_rect(tex[view], pawn_rect, false)
 	if nv != "":
 		_m = body
 		if nmir:
@@ -959,7 +981,7 @@ func _draw_zombie() -> void:
 	var z = entity
 	var st := _style
 	var view := _vw
-	var mirror := _mir
+	var mirror := _mir and _d16 == null
 	var rm := PawnMotion.motion()
 	var thump: float = st.claw_thump
 	var dv := _dv
@@ -990,6 +1012,8 @@ func _draw_zombie() -> void:
 			windup = PawnMotion.smooth(1.0 - _at_seen / rear) * _atk
 	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4) + dv.lean
 	var lean := Vector2(lf + dv.tilt * 0.4, 0.0)
+	if _d16 != null and _mir:
+		lean.x = -lf + dv.tilt * 0.4    # (a walker facing west, drawn from the render: forward is to the left)
 	if view == "S":
 		lean = Vector2(dv.tilt, lf * 0.8)
 	elif view == "N":
@@ -1012,7 +1036,10 @@ func _draw_zombie() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	if dv.side < 0.0 and limp and view != "E":
+	if _d16 != null:
+		if _fast:
+			_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
+	elif dv.side < 0.0 and limp and view != "E":
 		# (FEEL: which leg drags: from the front and the back the legs are a pair, so the other leg is the same mesh turned over; in side view the near one drags, as the rules' limp has it)
 		var kept := _m
 		_sc(-1, 1)
@@ -1040,6 +1067,9 @@ func _draw_zombie() -> void:
 		_sc(_wid, 1.0)
 	_apply()
 	var reach: bool = _atk > 0.5 and st.pose == "sprint"
+	if _d16 != null:
+		Dirs.blit(_pen, _d16, _ori, phase if walking else 0.0)
+		return
 	_arms_layer(view, "back", reach, phase, windup, hump, walking)
 	_draw_body(view)
 	if smooth_turn:
