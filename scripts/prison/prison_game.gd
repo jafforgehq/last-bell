@@ -16,6 +16,7 @@ const DrawNode := preload("res://scripts/render/draw_node.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
 const Crew := preload("res://scripts/prison/prison_crew.gd")
+const Tower := preload("res://scripts/prison/prison_tower.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
@@ -293,6 +294,10 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	corpses = Node2D.new()
 	corpses.z_index = 5
 	world.add_child(corpses)
+	var decks := DrawNode.new()    # tower decks: under the guards
+	decks.z_index = 5
+	decks.painter = _paint_decks
+	world.add_child(decks)
 	entities = Node2D.new()
 	entities.z_index = 6
 	entities.y_sort_enabled = true
@@ -384,6 +389,8 @@ func _enter_base() -> void:
 		n.setup(m.p, false, data, String(m.key))
 		if m.def.has("scale"):
 			n.scale = Vector2.ONE * float(m.def.scale)
+		if m.def.has("stand"):
+			n.z_index = 1    # a tower guard stands above his deck and the fence
 		entities.add_child(n)
 		m["node"] = n
 	dog = DogNode.new()
@@ -780,15 +787,17 @@ func _sync_views() -> void:
 				n3.sync(true, sim_steps, alpha)
 
 
+func _paint_decks(c: CanvasItem) -> void:
+	if mode == "base" and base != null:
+		for t in base.towers:
+			Tower.draw_deck(c, t)
+
+
 func _paint_overlay(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
 	if mode == "base":
 		for t in base.towers:
-			var r: Rect2 = t
-			c.draw_rect(Rect2(r.position * TILE + Vector2(6, 6), r.size * TILE - Vector2(12, 12)), Color(0.32, 0.24, 0.17))
-			c.draw_rect(Rect2(r.position * TILE + Vector2(6, 6), r.size * TILE - Vector2(12, 12)), Color(0.15, 0.1, 0.06), false, 3.0)
-			for q in [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]:
-				c.draw_rect(Rect2((r.position + q * (r.size - Vector2(0.4, 0.4))) * TILE, Vector2(0.4, 0.4) * TILE), Color(0.2, 0.14, 0.08))
+			Tower.draw_roof(c, t, _night_of(tod))
 		# the gate leaves
 		var g := Vector2(Base.GATE_X, Base.FENCE.end.y - 1) * TILE
 		c.draw_rect(Rect2(g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
@@ -1098,7 +1107,7 @@ func _draw_glow() -> void:
 		spots.append([l, 6.0, Color(1.0, 0.9, 0.6, 0.55 * n)])
 	for t in base.towers:
 		var r: Rect2 = t
-		spots.append([r.get_center(), 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
+		spots.append([Tower.lamp_pos(r), 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
 	for sp in spots:
 		var scr: Vector2 = (Vector2(sp[0]) - cam_center) * zoom_px + v / 2.0
 		var rad: float = float(sp[1]) * zoom_px

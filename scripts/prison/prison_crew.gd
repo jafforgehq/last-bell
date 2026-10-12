@@ -125,13 +125,13 @@ func _stand(r: Dictionary) -> Vector2:
 func _tower_spot(name: String) -> Vector2:
 	match name:
 		"tower_e":
-			return Vector2(53.0, 52.0)
+			return Vector2(53.5, 52.5)
 		"tower_nw":
-			return Vector2(8.0, 6.0)
+			return Vector2(8.5, 6.5)
 		"tower_se":
-			return Vector2(86.0, 52.0)
+			return Vector2(86.5, 52.5)
 		"tower_w":
-			return Vector2(42.0, 52.0)
+			return Vector2(42.5, 52.5)
 	return Vector2(48.0, 48.0)
 
 
