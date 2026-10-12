@@ -40,6 +40,7 @@ var card: PanelContainer
 var tab := "projects"
 var sel := "water"
 var _sig := ""
+var _etas := {}    # project id -> the ETA label (game hours left at the present crew)
 var _bars := {}    # project id -> ProgressBar
 var _frames := 0
 var _card_tw: Tween
@@ -188,6 +189,7 @@ func open(which: String) -> void:
 func close() -> void:
 	panel.visible = false
 	_bars.clear()
+	_etas.clear()
 
 
 func is_open() -> bool:
@@ -257,6 +259,8 @@ func frame(_dt: float) -> void:
 	for id in _bars:
 		var d: Dictionary = econ.defs[id]
 		_bars[id].value = clampf(float(econ.st.get(id, {}).get("done", 0.0)) / float(d.labor), 0.0, 1.0)
+		if _etas.has(id):
+			(_etas[id] as Label).text = "about %.1f h left" % econ.eta_h(id)
 
 
 func _any_popup(n: Node) -> bool:
@@ -286,6 +290,7 @@ func _signature() -> String:
 
 func _rebuild() -> void:
 	_bars.clear()
+	_etas.clear()
 	for c in body.get_children():
 		body.remove_child(c)
 		c.queue_free()
@@ -412,6 +417,9 @@ func _card(p: Dictionary) -> Control:
 		side.add_child(_lab("BUILT", 18, Hud.OK, true))
 	elif state == "queued" or state == "building":
 		side.add_child(_lab("Under way" if state == "building" else "Queued", 15, Hud.ACCENT, true))
+		var el := _lab("about %.1f h left" % econ.eta_h(id), 13, Hud.INK2)
+		_etas[id] = el
+		side.add_child(el)
 		var pb := _bar(float(p.done) / float(p.labor), Hud.ACCENT)
 		_bars[id] = pb
 		side.add_child(pb)
@@ -539,7 +547,7 @@ func hud_lines() -> String:
 	var building := "nothing under way"
 	if not (econ.queue as Array).is_empty():
 		var id := String(econ.queue[0])
-		building = "%s %d%%" % [_pname(id), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor))]
+		building = "%s %d%%, about %.1f h" % [_pname(id), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor)), econ.eta_h(id)]
 	var l1 := "\n%s  morale %d  beds %d/%d  building: %s" % [rep.stage, int(rep.morale), int(rep.beds.used), int(rep.beds.cap), building]
 	var f: float = float(rep.res.food.days)
 	var w: float = float(rep.res.water.days)
@@ -563,7 +571,7 @@ func _job_text(m: Dictionary) -> String:
 
 
 func _roster_tab() -> void:
-	body.add_child(_rich("Change who does which job. Gardeners, haulers, cooks, medics and mechanics work the buildings; a building makes nothing when nobody holds its role. Tower guards cannot be moved during an attack.", 14))
+	body.add_child(_rich("Change who does which job. Gardeners, haulers, cooks, medics and mechanics work the buildings; a building makes nothing when nobody holds its role. Changing a role moves the person to that work (a guard goes to a free tower post, six in all). Nobody can be moved during an attack.", 14))
 	var g := GridContainer.new()
 	g.columns = 4
 	g.add_theme_constant_override("h_separation", 24)
@@ -577,7 +585,7 @@ func _roster_tab() -> void:
 			continue
 		var id := String(m.def.id)
 		g.add_child(_lab(String(m.def.name), 16, Hud.INK))
-		var locked: bool = m.def.has("play") or (game.siege.attacking and m.def.has("stand"))
+		var locked: bool = m.def.has("play") or game.siege.attacking
 		if m.def.has("play"):
 			g.add_child(_lab("child", 15, DIM))
 		else:
@@ -598,8 +606,10 @@ func _roster_tab() -> void:
 			ob.item_selected.connect(func(i):
 				_popup_open = false
 				if i < ROLES.size():
-					roles[id] = ROLES[i]
-					_sig = "")
+					var res: Dictionary = game.crew.set_role(id, ROLES[i], econ, game.siege.attacking)
+					if not bool(res.ok):
+						toast(String(res.why), Hud.WARN)
+				_sig = "")
 			g.add_child(ob)
 		g.add_child(_lab(_job_text(m), 15, Hud.INK2))
 		var note := ""

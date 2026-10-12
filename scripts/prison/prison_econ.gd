@@ -35,6 +35,8 @@ var day := 1
 var morale := 55.0
 var power_on := false
 var fallback_labor := true    # labor comes by itself while a crew member with the role is alive; the world agent sets false when crew stops call add_labor
+var rate_cb: Callable    # WORLD hook: how many people work a project now (prison_upgrades.gd `workers_on`), for the ETA
+var native_roles: Dictionary = {}    # crew id -> the role their route was made for (the roster can change cfg.crew_role)
 var _stage := "Camp"
 var _last_tod := -1.0
 var _roster: Array = []
@@ -58,6 +60,7 @@ func _init(g) -> void:
 		defs[String(d.id)] = d
 		order.append(String(d.id))
 	morale = float(cfg.start.morale)
+	native_roles = (cfg.get("crew_role", {}) as Dictionary).duplicate()
 
 
 func active() -> bool:
@@ -194,6 +197,16 @@ func add_labor(id: String, secs: float) -> void:
 	st[id].done = float(st[id].done) + secs
 	if float(st[id].done) >= float(defs[id].labor):
 		_finish(id)
+
+
+## Game hours until a started project is built at the present number of workers (one when nobody is there yet).
+func eta_h(id: String) -> float:
+	if not st.has(id) or _built(id):
+		return 0.0
+	var n := 1
+	if rate_cb.is_valid():
+		n = maxi(1, int(rate_cb.call(id)))
+	return maxf(0.0, float(defs[id].labor) - float(st[id].done)) / float(n) * 24.0 / float(cfg.day_secs)
 
 
 func _finish(id: String) -> void:
@@ -466,21 +479,42 @@ func _morale(short: Dictionary) -> void:
 	morale = clampf(morale + d, 0.0, float(m.max))
 
 
-## Morale under the limit: one person leaves in the night (the last adult that is not a guard, a kid or a hauler of the well; a person the base cannot spare is never chosen below `keep_min`).
+## Morale under the limit: one person leaves in the night, never in a siege. The one the base misses least goes first: nobody's job (no role, cleaners), then a worker whose role has
+## another worker, then a patrol guard, then a tower guard, then the only worker of a building; kids are the very last.
 func _leave() -> void:
 	last.left = ""
-	if morale >= float(cfg.morale.leave_below) or people() <= int(cfg.morale.keep_min):
+	if morale >= float(cfg.morale.leave_below) or people() <= int(cfg.morale.keep_min) or game.siege.attacking:
 		return
 	var c := crew().duplicate()
-	c.reverse()
-	for pass_i in 2:
-		for p in c:
-			if p.kid or (pass_i == 0 and (String(p.role) == "guard" or p.guard)):
-				continue
-			last.left = String(p.name)
-			_roster.erase(p)
-			person_left.emit(String(p.name))
-			return
+	var cnt := {}
+	for p in c:
+		if p.ok and not p.kid:
+			cnt[String(p.role)] = int(cnt.get(String(p.role), 0)) + 1
+	var best = null
+	var bs := 99
+	for i in range(c.size() - 1, -1, -1):    # (the later ones first on a tie, as before)
+		var p: Dictionary = c[i]
+		var r := String(p.role)
+		var sc := 5
+		if p.kid:
+			sc = 9
+		elif r == "" or r == "cleaner":
+			sc = 0
+		elif r != "guard" and int(cnt.get(r, 0)) >= 2:
+			sc = 1
+		elif r == "guard" and not p.guard:
+			sc = 2
+		elif r == "guard":
+			sc = 3
+		else:
+			sc = 4
+		if sc < bs:
+			bs = sc
+			best = p
+	if best != null:
+		last.left = String(best.name)
+		_roster.erase(best)
+		person_left.emit(String(best.name))
 
 
 # ---------------------------------------------------------------------- lab ------

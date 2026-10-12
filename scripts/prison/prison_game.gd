@@ -50,7 +50,7 @@ const BITE_DMG := 8.0
 const DOWN_SECS := 20.0
 const REVIVE_SECS := 2.0
 # (ammo 60 less the 40 round kit Ruth takes on entering = 20 left in the stores)
-const CLEAR_STORES := {"food": 10.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0, "parts": 2.0, "fuel": 0.0}
+const CLEAR_STORES := {"food": 25.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0, "parts": 2.0, "fuel": 0.0}
 
 const TILE := GD.TILE
 const CAMERA_EASE := 8.0
@@ -133,6 +133,7 @@ var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
+var back_t := 0.0    # seconds since she came back from a raid (the siege shows its "back in the middle" card while this runs)
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
@@ -307,6 +308,8 @@ func _econ_left(nm: String) -> void:
 
 
 func _econ_remove(nm: String) -> void:
+	if not econ_gone.has(nm):
+		econ_gone.append(nm)
 	for m in crew.members.duplicate():
 		if String(m.def.name) == nm:
 			crew.members.erase(m)
@@ -506,11 +509,10 @@ func _enter_base() -> void:
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
 	crew.setup(run.sim, world, base, data, clear)
-	if not clear:    # ECON hook: food and water come from the economy, not from the crew's stops
-		crew.econ_owned = ["food", "water"]
-		for nm in econ_gone:
+	crew.econ_owned = ["food", "water"]    # ECON hook: food and water come from the economy, not from the crew's stops (and the freed crew eat nothing until the prison is secured)
+	if not clear:
+		for nm in econ_gone:    # (kept for good: a person who walked out does not come back with the next rebuild of the crew)
 			_econ_remove(String(nm))
-		econ_gone.clear()
 		if args.has("econ") and String(args.econ).begins_with("start:"):
 			econ.debug_build(String(args.econ).trim_prefix("start:"))
 	if not clear:
@@ -519,6 +521,7 @@ func _enter_base() -> void:
 				crew._make(a, Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
 	if not clear:
 		people.spawn_recruits()    # RAIDS hook: the people found in raids are crew again
+		crew.sync_roles(econ)    # the roster's roles (set before the raid) move the rebuilt crew to the right work
 	for m in crew.members:
 		var n := PawnNode.new()
 		n.setup(m.p, false, data, String(m.key))
@@ -668,6 +671,7 @@ func _tick(dt: float) -> void:
 		sim_steps += 1
 	if phase != "clear":
 		tod = fposmod(tod + dt * DAY_MIN_PER_SEC / 60.0, 24.0)    # (the clear phase is one fixed morning)
+	back_t = maxf(0.0, back_t - dt)
 	if crew != null:
 		crew.tod = tod
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
@@ -851,6 +855,8 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "locked":
 		_say("The gate is chained shut and the pen behind it is full. Clear the prison first.", 3.0)
 		return
+	if String(_prompt.get("kind", "")) == "help":
+		return    # WORLD hook: held E at a scaffold (prison_upgrades.gd `_ruth`)
 	if String(_prompt.get("kind", "")) == "revive":
 		return    # held, not pressed (_clear_logic)
 	if String(_prompt.get("kind", "")) == "repair":
@@ -944,6 +950,7 @@ func _extract(alive: bool) -> void:
 	if alive:
 		for k in loot_got:
 			stores[k] = float(stores[k]) + float(loot_got[k])
+	back_t = 4.0    # (a night that fell while she was out starts the attack at once: see prison_siege.gd `_start_attack`)
 	_enter_base()
 	var sum := "Banked:"
 	for k in loot_got:
@@ -1921,8 +1928,9 @@ func _draw_glow() -> void:
 		spots.append([l, 6.0, Color(1.0, 0.9, 0.6, 0.55 * n)])
 	for t in base.towers:
 		var r: Rect2 = t
-		spots.append([Tower.lamp_pos(r), 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
+		spots.append([Tower.lamp_pos(r) / TILE, 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
 	spots.append_array(upg.glow_spots(n))    # WORLD hook
+	upg.draw_cones(glow, cam_center, zoom_px, v, n)    # WORLD hook: the floodlight cones, above the night tint
 	for sp in spots:
 		var scr: Vector2 = (Vector2(sp[0]) - cam_center) * zoom_px + v / 2.0
 		var rad: float = float(sp[1]) * zoom_px

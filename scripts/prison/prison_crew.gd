@@ -97,6 +97,7 @@ var play_t := 0.0
 var ball := Vector2(24.0, 49.0)    # the kids' ball
 var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
 var labor_cb: Callable    # WORLD hook: prison_upgrades.gd, called every frame a person works a project stop (m, stop, dt)
+var busy_cb: Callable    # WORLD hook: has_work(m), true when m has a project of their role to build (they skip one meal, `skipped`)
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
@@ -196,13 +197,20 @@ func _tower_spot(name: String) -> Vector2:
 			return Vector2(86.5, 52.5)
 		"tower_w":
 			return Vector2(42.5, 52.5)
+		"tower_ne":
+			return Vector2(86.5, 6.5)
+		"tower_sw":
+			return Vector2(8.5, 52.5)
 	return Vector2(48.0, 48.0)
 
 
+## A stop's spot, moved to the nearest open tile when a prop stands on it (nobody works inside a prop).
 func _where(at) -> Vector2:
-	if at is Vector2:
-		return at
-	return base.stations.get(String(at), Vector2(48.0, 40.0))
+	var v: Vector2 = at if at is Vector2 else base.stations.get(String(at), Vector2(48.0, 40.0))
+	if world == null or not (v.x >= 0.0 and v.y >= 0.0 and v.x < float(world.W) and v.y < float(world.H)) or world.solid_p[int(v.y) * world.W + int(v.x)] == 0:
+		return v
+	var t = sim.path_p.nearest_free(world.solid_p, floori(v.x), floori(v.y))
+	return v if t == null else Vector2(float(t.x) + 0.5, float(t.y) + 0.5)
 
 
 func _meal_window() -> int:
@@ -245,7 +253,11 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 		stop = m.eat
 	match m.state:
 		"wait":
+			if _meal_id >= 0 and int(m.get("ate", -1)) != _meal_id and not m.has("eat") and busy_cb.is_valid() and not bool(m.get("skipped", false)) and bool(busy_cb.call(m)):
+				m["skipped"] = true    # a builder goes to the site first and eats at the next meal
+				m["ate"] = _meal_id
 			if _meal_id >= 0 and int(m.get("ate", -1)) != _meal_id and not m.has("eat"):
+				m["skipped"] = false
 				var seat: Vector2 = base.stations.canteen + Vector2(float(int(m.p.x * 7.0) % 9) * 1.1 - 4.0, float((int(m.p.y) % 3) * 3 - 3))
 				m["eat"] = {"at": seat, "secs": 12.0, "work": "", "face": "S", "say": "eating", "meal": true}
 				m["ate"] = _meal_id
@@ -334,6 +346,8 @@ func _to_post(m: Dictionary, dt: float) -> void:
 		m.p.facing = String(r.face)
 		m.p.moving = false
 		m.state = "post"
+		if m.has("node") and is_instance_valid(m.node):
+			m.node.z_index = 1
 
 
 ## The kids: tag in the yard (one runs, one chases; a touch swaps them), a ball that rolls along, a hopscotch that the runner visits. Never armed, never on a route.
@@ -405,3 +419,125 @@ func _finish(m: Dictionary, stop: Dictionary, stores: Dictionary) -> void:
 		parts.append("%s%s %s" % ["+" if v > 0 else "", ("%d" % int(v)) if absf(v - round(v)) < 0.01 else ("%.1f" % v), k])
 	if not parts.is_empty():
 		floaters.append({"text": ", ".join(parts), "pos": Vector2(m.p.x, m.p.y - 1.9), "t": 0.0, "col": Color(0.7, 1.0, 0.6) if float(give.values()[0]) > 0 else Color(1.0, 0.75, 0.5)})
+
+
+# ------------------------------------------------------------------ roles ------
+## A role set in the roster really moves the person: the route (or the tower) follows the role. The six tower posts are the corners and the two sides of the gate.
+const POSTS := ["tower_nw", "tower_ne", "tower_se", "tower_sw", "tower_w", "tower_e"]
+const ROLE_SAMPLE := {"cook": "mia", "gardener": "marcus", "medic": "ana", "mechanic": "hector", "hauler": "owen"}
+const ROLE_TITLE := {"cook": "Cook", "gardener": "Gardener", "medic": "Medic", "mechanic": "Mechanic", "hauler": "Hauler", "cleaner": "Cleaner", "guard": "Tower guard"}
+const CLEANER_ROUTE := [
+	{"at": "yard", "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the yard"},
+	{"at": Vector2(36.5, 38.5), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the workshop"},
+	{"at": Vector2(58.5, 46.5), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the yard"},
+]
+
+
+func route_for(role: String) -> Array:
+	if role == "cleaner":
+		return CLEANER_ROUTE.duplicate(true)
+	for r in ROSTER:
+		if String(r.id) == String(ROLE_SAMPLE.get(role, "-")):
+			return (r.route as Array).duplicate(true)
+	return [{"at": "yard", "secs": 10.0, "work": "", "face": "S", "say": "waiting for a job"}]
+
+
+func free_post() -> String:
+	var used: Array = []
+	for m in members:
+		if m.def.has("stand"):
+			used.append(String(m.def.stand))
+	for p in POSTS:
+		if not used.has(p):
+			return p
+	return ""
+
+
+func member_of(id: String) -> Dictionary:
+	for m in members:
+		if String(m.def.id) == id and not m.def.has("ally"):
+			return m
+	return {}
+
+
+## The roster changes `id` to `role` (the economy's `cfg.crew_role` is changed here too). Refused during an attack and when all six posts are manned. {ok, why}
+func set_role(id: String, role: String, econ, attacking: bool) -> Dictionary:
+	var m := member_of(id)
+	if m.is_empty() or m.def.has("play"):
+		return {"ok": false, "why": "Nobody by that name is in the base."}
+	if attacking:
+		return {"ok": false, "why": "Not during an attack."}
+	if role == "guard" and not m.def.has("stand") and free_post() == "":
+		return {"ok": false, "why": "All 6 tower posts are manned: nobody else can be a tower guard."}
+	_apply_role(m, role, false)
+	econ.cfg.crew_role[id] = role
+	return {"ok": true, "why": ""}
+
+
+## After a rebuild of the crew (a return from a raid): everybody whose roster role is not the one their route was made for is moved to the new work at once.
+func sync_roles(econ) -> void:
+	for m in members.duplicate():
+		var id := String(m.def.id)
+		if m.def.has("ally") or m.def.has("play") or not econ.cfg.crew_role.has(id):
+			continue
+		var role := String(econ.cfg.crew_role[id])
+		var native := String(econ.native_roles.get(id, role))
+		if role == native:
+			continue
+		if role == "guard" and free_post() == "" and not m.def.has("stand"):
+			econ.cfg.crew_role[id] = native
+			continue
+		_apply_role(m, role, true)
+
+
+func _apply_role(m: Dictionary, role: String, instant: bool) -> void:
+	var d: Dictionary = (m.def as Dictionary).duplicate(true)
+	var p = m.p
+	m.erase("eat")
+	m.erase("clean_q")
+	m.erase("to_post")
+	p.work = ""
+	p.moving = false
+	if role == "guard":
+		if d.has("stand"):
+			return
+		var post := free_post()
+		d.erase("route")
+		d["stand"] = post
+		d["work"] = "watch"
+		d["face"] = "S"
+		d["role"] = "Tower guard"
+		m.def = d
+		var spot := _tower_spot(post)
+		m.path = []
+		if instant:
+			p.x = spot.x
+			p.y = spot.y
+			p.work = "watch"
+			p.facing = "S"
+			m.state = "post"
+			if m.has("node") and is_instance_valid(m.node):
+				m.node.z_index = 1
+		else:
+			m["to_post"] = spot
+			m.state = "walk"
+			m.path = sim.path_p.find(world.solid_p, p.x, p.y, spot.x, spot.y + 2.0)
+			m.pi = 0
+		m.say = "Tower guard"
+		return
+	if d.has("stand"):    # down from the tower
+		var spot2 := _tower_spot(String(d.stand))
+		p.x = spot2.x
+		p.y = spot2.y + 2.0
+		d.erase("stand")
+		d.erase("work")
+		d.erase("face")
+		if m.has("node") and is_instance_valid(m.node):
+			m.node.z_index = 0
+	d["route"] = route_for(role)
+	d["role"] = String(ROLE_TITLE.get(role, "Crew"))
+	m.def = d
+	m.i = 0
+	m.path = []
+	m.state = "wait"
+	m.say = String(d.role)

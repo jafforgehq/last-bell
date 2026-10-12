@@ -88,6 +88,10 @@ func _start_round() -> void:
 		"owen": [_pick(dirty, "haul", "gathering rubbish"), {"at": DUMP, "work": "haul", "face": "S", "say": "carrying rubbish out"}],
 		"ike": [_pick(dirty, "clean", "scrubbing the stains"), {"at": game.base.stations.stores_in + Vector2(0.0, 1.0), "work": "sort", "face": "N", "say": "wiping down the stores"}],
 	}
+	for m in game.crew.members:    # whoever the roster made a cleaner takes the rounds too
+		var cid := String(m.def.id)
+		if not plans.has(cid) and String(game.econ.cfg.crew_role.get(cid, "")) == "cleaner" and not m.def.has("stand"):
+			plans[cid] = [_pick(dirty, "clean", "sweeping up"), _pick(dirty, "haul", "gathering rubbish")]
 	for m in game.crew.members:
 		var id := String(m.def.id)
 		if not plans.has(id) or m.has("down"):

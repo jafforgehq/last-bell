@@ -38,17 +38,26 @@ const SITES := {
 	"infirmary1": {"stand": Vector2(21.8, 36.6), "anchor": Vector2(23.2, 36.4), "face": "E", "work": "hammer", "size": Vector2(1.0, 3.0)},
 	"infirmary2": {"stand": Vector2(17.2, 39.2), "anchor": Vector2(17.2, 40.4), "face": "S", "work": "bench", "size": Vector2(2.4, 0.9)},
 	"infirmary3": {"stand": Vector2(18.2, 36.4), "anchor": Vector2(19.2, 35.2), "face": "N", "work": "bench", "size": Vector2(2.0, 1.2)},
-	"dormitory1": {"stand": Vector2(16.5, 15.6), "anchor": Vector2(16.5, 14.4), "face": "N", "work": "hammer", "size": Vector2(4.4, 1.0)},
-	"dormitory2": {"stand": Vector2(24.5, 15.6), "anchor": Vector2(24.5, 14.4), "face": "N", "work": "hammer", "size": Vector2(4.4, 1.0)},
-	"dormitory3": {"stand": Vector2(44.5, 15.6), "anchor": Vector2(44.5, 14.4), "face": "N", "work": "hammer", "size": Vector2(4.4, 1.0)},
+	"dormitory1": {"stand": Vector2(19.5, 15.5), "anchor": Vector2(19.5, 14.6), "face": "N", "work": "hammer", "size": Vector2(12.0, 1.0)},
+	"dormitory2": {"stand": Vector2(19.5, 15.5), "anchor": Vector2(19.5, 16.5), "face": "S", "work": "hammer", "size": Vector2(12.0, 1.0)},
+	"dormitory3": {"stand": Vector2(47.5, 15.5), "anchor": Vector2(47.5, 14.6), "face": "N", "work": "hammer", "size": Vector2(12.0, 1.0)},
 	"power1": {"stand": Vector2(26.0, 35.8), "anchor": Vector2(26.0, 33.8), "face": "N", "work": "bench", "size": Vector2(2.0, 1.8)},
 	"power2": {"stand": Vector2(30.0, 53.1), "anchor": Vector2(30.0, 54.2), "face": "S", "work": "hammer", "size": Vector2(1.0, 1.2)},
 	"fence1": {"stand": Vector2(26.0, 53.4), "anchor": Vector2(26.0, 55.0), "face": "S", "work": "mend", "size": Vector2(3.0, 0.8)},
 	"fence2": {"stand": Vector2(26.0, 53.4), "anchor": Vector2(26.0, 55.0), "face": "S", "work": "mend", "size": Vector2(3.0, 0.8)},
 	"fence3": {"stand": Vector2(26.0, 53.4), "anchor": Vector2(26.0, 54.4), "face": "S", "work": "mend", "size": Vector2(3.0, 1.2)},
-	"radio1": {"stand": Vector2(58.0, 35.4), "anchor": Vector2(58.8, 36.6), "face": "S", "work": "bench", "size": Vector2(1.8, 1.0)},
+	"radio1": {"stand": Vector2(58.5, 37.8), "anchor": Vector2(58.8, 36.6), "face": "N", "work": "bench", "size": Vector2(1.8, 1.0)},
 }
-const DORM_X := {1: [14.5, 18.5], 2: [22.5, 26.5], 3: [42.5, 46.5]}
+## One bunk per bed a tier adds (4 each): between the cell doors (every 4 tiles from x 11 and x 39) in the corridors of the two cell blocks: tier 1 block A north row, tier 2 block A south row, tier 3 block B north row.
+const BUNKS := {1: [[13.5, 14.6], [17.5, 14.6], [21.5, 14.6], [25.5, 14.6]], 2: [[13.5, 16.5], [17.5, 16.5], [21.5, 16.5], [25.5, 16.5]], 3: [[41.5, 14.6], [45.5, 14.6], [49.5, 14.6], [53.5, 14.6]]}
+## What a built tier puts on the ground that people must walk round: [building, first tier, Rect2 in tiles]. A tile the rect covers (shrunk 0.15) is shut to walking, the dead and the path finders; not to a shot.
+const PROPS := [
+	["water", 1, Rect2(70.74, 23.6, 2.72, 0.68)], ["water", 2, Rect2(77.0, 26.0, 1.2, 1.0)], ["water", 3, Rect2(79.6, 25.4, 2.2, 1.7)], ["water", 3, Rect2(87.3, 24.4, 1.6, 2.3)],
+	["power", 1, Rect2(25.0, 32.6, 2.0, 1.8)], ["garden", 2, Rect2(64.2, 28.9, 1.2, 1.0)], ["radio", 1, Rect2(57.8, 36.2, 1.8, 0.9)], ["radio", 1, Rect2(61.6, 29.1, 0.7, 0.5)],
+	["infirmary", 1, Rect2(22.7, 33.8, 1.1, 2.1)], ["infirmary", 1, Rect2(22.7, 36.9, 1.1, 2.1)], ["infirmary", 2, Rect2(15.8, 40.0, 2.8, 0.8)],
+	["infirmary", 3, Rect2(18.3, 34.6, 1.8, 1.0)], ["infirmary", 3, Rect2(20.4, 34.7, 0.4, 0.7)],
+	["kitchen", 1, Rect2(80.0, 9.0, 2.0, 1.1)], ["kitchen", 2, Rect2(84.7, 14.0, 1.15, 6.3)], ["kitchen", 2, Rect2(82.8, 19.3, 1.8, 1.6)], ["kitchen", 2, Rect2(82.0, 20.1, 0.6, 0.7)],
+]
 const TABLES := [Vector2(70, 16.5), Vector2(75, 16.5), Vector2(80, 16.5), Vector2(70, 19.5), Vector2(75, 19.5), Vector2(80, 19.5)]
 const POLES := [[16.0, 54.2, 0.0, 1.0], [30.0, 54.2, 0.0, 1.0], [64.0, 54.2, 0.0, 1.0], [78.0, 54.2, 0.0, 1.0], [30.0, 5.8, 0.0, -1.0], [48.0, 5.8, 0.0, -1.0], [66.0, 5.8, 0.0, -1.0],
 	[7.3, 18.0, -1.0, 0.0], [7.3, 40.0, -1.0, 0.0], [88.7, 18.0, 1.0, 0.0], [88.7, 40.0, 1.0, 0.0]]
@@ -61,7 +70,8 @@ var game
 var econ
 var ground: Array = []    # one node per prop group (so that a group out of the view is culled): {key, node, sig}
 var top: Node2D
-var lights: Node2D
+var hum: AudioStreamPlayer2D
+var _blocked := {}    # tile index -> true: the tiles this file has shut
 var fx: Node2D
 var beds: Array = []    # {c: Vector2 (tiles), t0: game hours the crop was planted, kind: 0 tomato, 1 cabbage, 2 carrot}
 var decals: Array = []    # per dirt zone: an Array of {p: Vector2, k: int, s: float, r: float}
@@ -72,7 +82,7 @@ var _gt := 0.0    # game hours since the base was built
 var _top_sig := 0
 var _sig_t := 99.0
 var _puff_t := 0.0
-var _hum_t := 0.0
+var _ruth_t := 0.0
 var _stove_t := 0.0
 var _clock := 0.0
 var _staging := false
@@ -89,7 +99,7 @@ func _init(g) -> void:
 # ------------------------------------------------------------------ setup ------
 
 func setup() -> void:
-	for n in [top, lights, fx]:
+	for n in [top, fx, hum]:
 		if n != null and is_instance_valid(n):
 			(n as Node).queue_free()
 	for g in ground:
@@ -105,11 +115,6 @@ func setup() -> void:
 		keys.append("dirt%d" % i)
 	for k in keys:
 		ground.append({"key": k, "node": _layer(w, 4, Callable(self, "_pg").bind(k)), "sig": -1})
-	lights = _layer(w, 9, _paint_lights)
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	mat.light_mode = CanvasItemMaterial.LIGHT_MODE_UNSHADED
-	lights.material = mat
 	fx = _layer(w, 10, _paint_fx)
 	top = _layer(w, 11, _paint_top)
 	puffs.clear()
@@ -119,11 +124,16 @@ func setup() -> void:
 	_sig_t = 99.0
 	_top_sig = -1
 	game.crew.labor_cb = Callable(self, "labor")
+	game.crew.busy_cb = Callable(self, "has_work")
+	econ.rate_cb = Callable(self, "workers_on")
+	_blocked.clear()
+	_make_hum(w)
 	if not game.args.has("econ-lab"):
 		econ.fallback_labor = false
 	_make_beds()
 	_make_decals()
 	_stage_flags()
+	_block_props()
 	_check_sites()
 
 
@@ -179,15 +189,30 @@ func _stage_flags() -> void:
 		game.siege.apply_fence(econ.fence_mult(), false)    # (the siege keeps its hp over the tiers built by a flag)
 
 
-## Sites a person can not walk to are a bug of this table: say so once (with --log).
+## `--log`: sites, crew route stops and tower spots that are shut or that a person can not walk to from the gate are a bug of the tables: say so once (build everything first with `--econ=build:all`).
 func _check_sites() -> void:
 	if not game.args.has("log"):
 		return
+	var pf = game.run.sim.path_p
+	var sol: PackedByteArray = game.world.solid_p
+	var pts: Array = []
 	for id in SITES:
-		var s: Vector2 = SITES[id].stand
-		var pth: Array = game.run.sim.path_p.find(game.world.solid_p, Base.SPAWN.x, Base.SPAWN.y, s.x, s.y)
-		if pth.is_empty():
-			print("WORLD site not reachable: ", id, " ", s)
+		pts.append([id, Vector2(SITES[id].stand)])
+	for r in game.crew.ROSTER:
+		for st in r.get("route", []):
+			pts.append([String(r.id), game.crew._where(st.at)])
+	for k in game.base.stations:
+		pts.append(["station " + String(k), game.base.stations[k]])
+	var bad := 0
+	for q in pts:
+		var v: Vector2 = q[1]
+		if sol[int(v.y) * game.world.W + int(v.x)] != 0 and not String(q[0]).begins_with("station"):
+			print("WORLD stop in a shut tile: ", q[0], " ", v)
+			bad += 1
+		if pf.find(sol, Base.SPAWN.x, Base.SPAWN.y, v.x, v.y).is_empty():
+			print("WORLD stop not reachable: ", q[0], " ", v)
+			bad += 1
+	print("WORLD walk test: ", pts.size(), " points, ", bad, " bad, ", _blocked.size(), " prop tiles shut")
 
 
 # --------------------------------------------------------------- the update ------
@@ -200,7 +225,6 @@ func update(dt: float) -> void:
 			g.node.visible = false
 		top.visible = false
 		fx.visible = false
-		lights.visible = false
 		return
 	_clock += dt
 	_gt += dt * HOURS_PER_SEC
@@ -222,10 +246,8 @@ func update(dt: float) -> void:
 		if ts != _top_sig:
 			_top_sig = ts
 			top.queue_redraw()
-			lights.queue_redraw()
-	var la := game_night() * (1.0 if _lit() else 0.0)
-	lights.visible = la > 0.01
-	lights.modulate.a = la
+	_ruth(dt)
+	_hum_update()
 	fx.queue_redraw()
 
 
@@ -295,23 +317,73 @@ func _assign() -> void:
 		return
 	if econ.queue.is_empty():
 		return
-	for m in game.crew.members:
-		if not ["wait", "walk", "arrive", "idle"].has(String(m.state)) or m.has("down") or m.has("eat"):
+	var wc: Dictionary = econ.cfg.work
+	for id in econ.queue:    # each project takes the NEAREST free people of its role, up to `max_workers` of them
+		var have := workers_on(id)
+		if have >= int(wc.max_workers):
 			continue
-		var role := String(roles.get(String(m.def.id), ""))
-		if role == "" or m.def.has("stand") or m.def.has("play"):
-			continue
-		for id in econ.queue:
-			if String(econ.defs[id].role) != role:
+		var role := String(econ.defs[id].role)
+		var s: Dictionary = site_of(id)
+		var cands: Array = []
+		for m in game.crew.members:
+			if not ["wait", "walk", "arrive", "idle"].has(String(m.state)) or m.has("down") or m.has("eat"):
 				continue
-			var s: Dictionary = site_of(id)
-			var side := float(hash(String(m.def.id)) % 3 - 1) * 0.7    # (two workers on one site do not stand on each other)
-			m["eat"] = {"at": Vector2(s.stand) + Vector2(side, 0.0), "secs": 24.0, "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}    # (taken like a meal stop: the route goes on after it)
+			if String(roles.get(String(m.def.id), "")) != role or m.def.has("stand") or m.def.has("play"):
+				continue
+			cands.append(m)
+		cands.sort_custom(func(x, y): return Vector2(x.p.x, x.p.y).distance_to(s.stand) < Vector2(y.p.x, y.p.y).distance_to(s.stand))
+		for m in cands:
+			if have >= int(wc.max_workers):
+				break
+			var side := float(have) * 0.8 - 0.4    # (two workers on one site do not stand on each other)
+			m["eat"] = {"at": Vector2(s.stand) + Vector2(side, 0.0), "secs": float(wc.stop_secs), "work": s.work, "face": s.face, "say": "building: %s" % String(econ.defs[id].name), "build": id}    # (taken like a meal stop: the route goes on after it)
 			m.state = "wait"
 			m.p.work = ""
+			have += 1
 			if game.args.has("log"):
 				print("WORLD stop ", m.def.name, " -> ", id, " at ", snappedf(game.tod, 0.1))
-			break
+
+
+## How many people are on their way to or at the site of a project.
+func workers_on(id: String) -> int:
+	var n := 0
+	for m in game.crew.members:
+		if m.has("eat") and String((m.eat as Dictionary).get("build", "")) == id:
+			n += 1
+	return n
+
+
+## prison_crew.gd asks before a meal: someone with a project of their role to build skips the meal (once in a row: the next meal they eat, so nobody starves on site).
+func has_work(m: Dictionary) -> bool:
+	if econ.queue.is_empty() or not _calm():
+		return false
+	var role := String(econ.cfg.crew_role.get(String(m.def.id), ""))
+	for id in econ.queue:
+		if String(econ.defs[id].role) == role and workers_on(id) < int(econ.cfg.work.max_workers):
+			return true
+	return false
+
+
+## Hold E at a scaffold: Ruth adds her labor (`work.ruth_rate` secs of labor a second) to the project.
+func _ruth(dt: float) -> void:
+	_ruth_t -= dt
+	if game.siege.attacking or game.busy or game.mode != "base" or econ.queue.is_empty() or game.board.is_open():
+		return
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	for id in econ.queue:
+		var s: Dictionary = site_of(id)
+		if me.distance_to(s.anchor) > float(econ.cfg.work.ruth_reach) + float(Vector2(s.size).x) * 0.5:
+			continue
+		if not game._prompt.is_empty():
+			return
+		game._prompt = {"kind": "help", "label": "Hold E: help build %s (%d%%, about %.1f h left)" % [String(econ.defs[id].name), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor)), econ.eta_h(id)]}
+		if Input.is_key_pressed(KEY_E) or game.args.has("autohelp"):
+			econ.add_labor(id, dt * float(econ.cfg.work.ruth_rate))
+			game.run.sim.avatar.set_input(Vector2.ZERO, Vector2(s.anchor), false)
+			if _ruth_t <= 0.0:
+				_ruth_t = 0.45
+				_blow(String(s.work), id)
+		return
 
 
 func site_of(id: String) -> Dictionary:
@@ -329,6 +401,7 @@ func labor(m: Dictionary, stop: Dictionary, dt: float) -> void:
 
 func _done(id: String) -> void:
 	_sig_t = 99.0
+	_block_props()
 	if _staging or ground.is_empty():
 		return
 	if game.args.has("log"):
@@ -368,7 +441,6 @@ func _crop(b: Dictionary) -> int:
 # ----------------------------------------------------------------- effects ------
 
 func _effects(dt: float) -> void:
-	var avatar := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	# build work: dust and sparks on every blow, the hammer's sound
 	for m in game.crew.members:
 		if m.state != "work" or not m.has("eat") or not (m.eat as Dictionary).has("build"):
@@ -378,17 +450,8 @@ func _effects(dt: float) -> void:
 		var beat := int(float(m.t) / per)
 		if beat != int(m.get("bfx", -1)):
 			m["bfx"] = beat
-			var s: Dictionary = site_of(String(m.eat.build))
-			var at: Vector2 = Vector2(s.anchor) * T + Vector2(randf_range(-0.4, 0.4), randf_range(-0.2, 0.2)) * T * 0.5
-			for k in 3:
-				puffs.append({"p": at, "v": Vector2(randf_range(-14, 14), randf_range(-26, -8)), "age": 0.0, "life": 0.7, "r": 6.0 + randf() * 5.0, "a": 0.55, "up": 0.0, "col": Color(0.78, 0.7, 0.55)})
-			if pose != "garden":
-				for k in 4:
-					sparks.append({"p": at, "v": Vector2(randf_range(-90, 90), randf_range(-110, -30)), "age": 0.0})
-				if Vector2(m.p.x, m.p.y).distance_to(avatar) < 16.0 and game.sound != null:
-					game.sound.play("hammer", 0.3, 0.1)
+			_blow(pose, String(m.eat.build))
 	var gen := _lit()
-	var shed := Vector2(26.0, 33.4) * T
 	_stove_t -= dt
 	_puff_t -= dt
 	if gen and _puff_t <= 0.0:
@@ -397,11 +460,6 @@ func _effects(dt: float) -> void:
 	if econ.tier("kitchen") >= 1 and game.crew._meal_window() >= 0 and _stove_t <= 0.0:
 		_stove_t = 0.25
 		puffs.append({"p": Vector2(80.9, 7.9) * T, "v": Vector2(randf_range(-8, 8), -30.0), "age": 0.0, "life": 2.4, "r": 6.0, "a": 0.5, "up": 18.0, "col": Color(0.82, 0.82, 0.84)})
-	_hum_t -= dt
-	if gen and _hum_t <= 0.0:
-		_hum_t = 2.4
-		if (shed / T).distance_to(avatar) < 18.0 and game.sound != null:
-			game.sound.play("car_gate_motor", 0.07, 0.02, 0.5)
 	for q in puffs:
 		q.age = float(q.age) + dt
 		q.p = Vector2(q.p) + Vector2(q.v) * dt
@@ -417,6 +475,20 @@ func _effects(dt: float) -> void:
 	bursts = bursts.filter(func(q): return float(q.age) < 1.2)
 
 
+## One blow on a site: dust, and sparks unless it is garden work, and the hammer's sound when Ruth is near.
+func _blow(pose: String, id: String) -> void:
+	var s: Dictionary = site_of(id)
+	var at: Vector2 = Vector2(s.anchor) * T + Vector2(randf_range(-0.4, 0.4), randf_range(-0.2, 0.2)) * T * 0.5
+	for k in 3:
+		puffs.append({"p": at, "v": Vector2(randf_range(-14, 14), randf_range(-26, -8)), "age": 0.0, "life": 0.7, "r": 6.0 + randf() * 5.0, "a": 0.55, "up": 0.0, "col": Color(0.78, 0.7, 0.55)})
+	if pose != "garden":
+		for k in 4:
+			sparks.append({"p": at, "v": Vector2(randf_range(-90, 90), randf_range(-110, -30)), "age": 0.0})
+		var avatar := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+		if (Vector2(s.anchor)).distance_to(avatar) < 16.0 and game.sound != null:
+			game.sound.play("hammer", 0.3, 0.1)
+
+
 func glow_spots(n: float) -> Array:
 	var out: Array = []
 	if n <= 0.02:
@@ -424,16 +496,16 @@ func glow_spots(n: float) -> Array:
 	if econ.tier("kitchen") >= 3:
 		for t in TABLES:
 			if Vector2(t).y > 18.0 or Vector2(t).x == 75.0:
-				out.append([Vector2(t) * T, 3.2, Color(1.0, 0.85, 0.5, 0.35 * n)])
+				out.append([Vector2(t), 3.2, Color(1.0, 0.85, 0.5, 0.35 * n)])
 	if _lit():
-		out.append([Vector2(25.4, 33.2) * T, 2.0, Color(1.0, 0.8, 0.4, 0.4 * n)])    # the shed's window
+		out.append([Vector2(25.4, 33.2), 2.0, Color(1.0, 0.8, 0.4, 0.4 * n)])    # the shed's window
 		if econ.tier("power") >= 2:
 			for p in POLES:
-				out.append([Vector2(float(p[0]), float(p[1])) * T, 4.0, Color(1.0, 0.97, 0.8, 0.35 * n)])
+				out.append([Vector2(float(p[0]), float(p[1])), 4.0, Color(1.0, 0.97, 0.8, 0.35 * n)])
 		if econ.tier("radio") >= 1:
-			out.append([Vector2(58.7, 36.5) * T, 2.2, Color(1.0, 0.9, 0.6, 0.3 * n)])
+			out.append([Vector2(58.7, 36.5), 2.2, Color(1.0, 0.9, 0.6, 0.3 * n)])
 	if econ.tier("infirmary") >= 3:
-		out.append([Vector2(19.2, 35.2) * T, 3.0, Color(0.9, 1.0, 1.0, 0.3 * n)])
+		out.append([Vector2(19.2, 35.2), 3.0, Color(0.9, 1.0, 1.0, 0.3 * n)])
 	return out
 
 
@@ -763,16 +835,16 @@ func _dorm(c: CanvasItem, tier: int) -> void:    # cell block A: the first two t
 	var cols := [Color(0.3, 0.45, 0.65), Color(0.6, 0.3, 0.25), Color(0.4, 0.55, 0.35), Color(0.7, 0.6, 0.3)]
 	var n := 0
 	for t in range(1, tier + 1):
-		for x in DORM_X[t]:
-			_bunk(c, float(x), 14.6, cols[n % cols.size()])
+		for b in BUNKS[t]:
+			_bunk(c, float(b[0]), float(b[1]), cols[n % cols.size()])
 			n += 1
 
 
 func _dorm_b(c: CanvasItem, tier: int) -> void:    # cell block B: the third tier
 	if tier >= 3:
-		var cols := [Color(0.5, 0.35, 0.55), Color(0.3, 0.55, 0.55)]
-		for k in 2:
-			_bunk(c, float(DORM_X[3][k]), 14.6, cols[k])
+		var cols := [Color(0.5, 0.35, 0.55), Color(0.3, 0.55, 0.55), Color(0.55, 0.45, 0.3), Color(0.35, 0.5, 0.35)]
+		for k in 4:
+			_bunk(c, float(BUNKS[3][k][0]), float(BUNKS[3][k][1]), cols[k])
 
 
 func _radio(c: CanvasItem, tier: int) -> void:
@@ -864,29 +936,30 @@ func _paint_top(c: CanvasItem) -> void:
 			_disc(c, tp + Vector2(0, -0.25), 0.2, Color(0.95, 0.8, 0.4))
 
 
-func _paint_lights(c: CanvasItem) -> void:
-	if econ.tier("power") < 2:
+## Floodlight cones, drawn by the game's glow layer (prison_game.gd `_draw_glow`) which is ABOVE the night tint: the warm white is added to the dark picture instead of being tinted blue by it.
+func draw_cones(c: CanvasItem, cam: Vector2, zoom: float, vp: Vector2, n: float) -> void:
+	if n <= 0.02 or econ.tier("power") < 2 or not _lit():
 		return
+	c.draw_set_transform(vp / 2.0 - cam * zoom, 0.0, Vector2.ONE * zoom / T)
 	for t in game.base.towers:    # towers throw their cones outward too
 		var lp: Vector2 = Tower.lamp_pos(t)
 		var out_v: Vector2 = (lp / T - Vector2(48.0, 30.0)).normalized()
-		_cone(c, lp, out_v, 8.0 * T, 0.5)
+		_cone(c, lp, out_v, 8.0 * T, 0.5, n)
 	for p in POLES:
 		var pp := Vector2(float(p[0]), float(p[1]) - 0.95) * T
-		_cone(c, pp, Vector2(float(p[2]), float(p[3])), 7.0 * T, 0.5)
+		_cone(c, pp, Vector2(float(p[2]), float(p[3])), 7.0 * T, 0.5, n)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-func _cone(c: CanvasItem, o: Vector2, d: Vector2, length: float, half: float) -> void:
+func _cone(c: CanvasItem, o: Vector2, d: Vector2, length: float, half: float, k: float) -> void:
 	var l := o + d.rotated(-half) * length
 	var r := o + d.rotated(half) * length
 	var m := o + d * length * 1.05
-	var warm := Color(1.0, 0.95, 0.75, 0.5)
-	var zero := Color(1.0, 0.95, 0.75, 0.0)
+	var warm := Color(1.0, 0.95, 0.8, 0.32 * k)
+	var zero := Color(1.0, 0.95, 0.8, 0.0)
 	c.draw_polygon(PackedVector2Array([o, l, m]), PackedColorArray([warm, zero, zero]))
 	c.draw_polygon(PackedVector2Array([o, m, r]), PackedColorArray([warm, zero, zero]))
-	var mid := o + d * length * 0.55
-	c.draw_polygon(PackedVector2Array([o, o + d.rotated(-half * 0.45) * length * 0.8, o + d.rotated(half * 0.45) * length * 0.8]), PackedColorArray([Color(1, 1, 0.9, 0.25), zero, zero]))
-	c.draw_circle(mid, 1.0, Color(0, 0, 0, 0))
+	c.draw_polygon(PackedVector2Array([o, o + d.rotated(-half * 0.45) * length * 0.8, o + d.rotated(half * 0.45) * length * 0.8]), PackedColorArray([Color(1, 1, 0.92, 0.16 * k), zero, zero]))
 
 
 func _paint_fx(c: CanvasItem) -> void:
@@ -938,3 +1011,79 @@ func _shed(c: CanvasItem, jit: Vector2, on: bool) -> void:
 	if not on:
 		c.draw_line((o + Vector2(0.9, 0.2)) * T, (o + Vector2(1.5, 0.8)) * T, Color(0.8, 0.2, 0.15), 2.0)
 		c.draw_line((o + Vector2(1.5, 0.2)) * T, (o + Vector2(0.9, 0.8)) * T, Color(0.8, 0.2, 0.15), 2.0)
+
+
+# ------------------------------------------------------------------ props that block ------
+
+## Shuts the tiles under every prop of a built tier (world grids, shots may still pass, the path finders of the people and of the dead) and the bunks of the dormitory tiers.
+## Run at the start and at every `project_done`, so the path caches know a prop the moment it stands. Nothing is opened again: tiers are never lost.
+func _block_props() -> void:
+	var rects: Array = []
+	for pr in PROPS:
+		if econ.tier(String(pr[0])) >= int(pr[1]):
+			rects.append(pr[2])
+	for t in range(1, econ.tier("dormitory") + 1):
+		for b in BUNKS[t]:
+			rects.append(Rect2(float(b[0]) - 0.86, float(b[1]) - 0.5, 2.33, 0.95))
+	if econ.tier("kitchen") >= 3:
+		for t in TABLES:
+			for sgn in [-1.0, 1.0]:
+				rects.append(Rect2(Vector2(t).x - 1.1, Vector2(t).y + sgn * 0.95 - 0.17, 2.2, 0.34))
+	var w = game.world
+	var sim = game.run.sim
+	for r in rects:
+		var q: Rect2 = Rect2(r).grow(-0.15)
+		for y in range(floori(q.position.y), floori(q.end.y) + 1):
+			for x in range(floori(q.position.x), floori(q.end.x) + 1):
+				var i: int = y * w.W + x
+				if x < 0 or y < 0 or x >= w.W or y >= w.H or _blocked.has(i):
+					continue
+				_blocked[i] = true
+				if w.solid_p[i] != 0:
+					continue    # (a wall or a base prop is there already)
+				w.solid_p[i] = 1
+				w.solid_z[i] = 1
+				if w.shot_low.size() == w.W * w.H:
+					w.shot_low[i] = 1
+				sim.path_p.set_solid(i, true)
+				sim.path_z.set_solid(i, true)
+
+
+# --------------------------------------------------------------------- the generator's hum ------
+
+## A real loop: one second of 60 Hz and its harmonics with a 12 Hz chug (whole cycles, so the join is silent), looping in the stream resource, on an AudioStreamPlayer2D at the shed so the
+## engine's own distance falloff does the fading (about 18 tiles). Plays only while the generator is lit (power built and fuel in the stores).
+func _make_hum(w: Node) -> void:
+	var rate := 22050
+	var pcm := PackedByteArray()
+	pcm.resize(rate * 2)
+	for i in rate:
+		var t := float(i) / float(rate)
+		var v := (0.55 * sin(TAU * 60.0 * t) + 0.25 * sin(TAU * 120.0 * t) + 0.12 * sin(TAU * 180.0 * t) + 0.05 * sin(TAU * 301.0 * t)) * (0.75 + 0.25 * sin(TAU * 12.0 * t))
+		pcm.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 14000.0))
+	var st := AudioStreamWAV.new()
+	st.format = AudioStreamWAV.FORMAT_16_BITS
+	st.mix_rate = rate
+	st.stereo = false
+	st.data = pcm
+	st.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	st.loop_begin = 0
+	st.loop_end = rate
+	hum = AudioStreamPlayer2D.new()
+	hum.stream = st
+	hum.bus = "Ambience" if AudioServer.get_bus_index("Ambience") >= 0 else "Master"
+	hum.volume_db = -24.0
+	hum.max_distance = 18.0 * T
+	hum.attenuation = 1.6
+	hum.position = Vector2(26.0, 33.5) * T
+	w.add_child(hum)
+
+
+func _hum_update() -> void:
+	if hum == null:
+		return
+	var on: bool = _lit() and game.phase == "managed" and not (game.sound != null and game.sound.muted)
+	if on and not hum.playing:
+		hum.play()
+	elif not on and hum.playing:
+		hum.stop()

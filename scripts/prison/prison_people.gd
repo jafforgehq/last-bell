@@ -98,7 +98,7 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 ## The first of the pool (from a hash of the seed) whose name is not in the crew or among the recruits.
 func _pick(seed_i: int) -> Dictionary:
 	var pool: Array = _c().people
-	var used: Array = []
+	var used: Array = game.econ_gone.duplicate()
 	for r in recruits:
 		used.append(String(r.name))
 	if game.crew != null:
@@ -321,7 +321,9 @@ func spawn_recruits() -> void:
 	var i := 0
 	for d in recruits:
 		game.crew._make(d, Base.SPAWN + Vector2(2.0 + float(i) * 1.2, 1.5))
-		game.econ.cfg.crew_role[String(d.id)] = _role_of(d)
+		game.econ.native_roles[String(d.id)] = _role_of(d)
+		if not game.econ.cfg.crew_role.has(String(d.id)):    # (a role set in the roster stays over the raids)
+			game.econ.cfg.crew_role[String(d.id)] = _role_of(d)
 		i += 1
 
 
