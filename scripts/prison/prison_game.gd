@@ -3,7 +3,14 @@
 ## EXTRACT: stand in a pickup ring for 2 s, a short cutscene, and the loot (the raid sim's stock) is banked in the base's stores. DIE in the raid: the pack is lost, same cutscene back.
 ## Keys: WASD walk, mouse aim, left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc quit.
 ## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom.
+##
+## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; ten zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
+## "managed" (the base loop above). HOOK for other systems: connect `phase_changed(new_phase)` or test `phase == "managed"` (`in_managed()`): base attacks, the siege and the fence run only then. The
+## fence breach (`Base.GAP`) is a normal fence tile in the managed layout. Flags: --managed boots straight into "managed"; --prison alone boots "clear"; --auto=clearall (kills zone by zone and
+## searches one container each, for checks), --auto=ally (Ruth walks into the infirmary and the allies get bitten), --log prints ally and zone lines.
 extends Node2D
+
+signal phase_changed(new_phase: String)
 
 const GD := preload("res://scripts/game_data.gd")
 const World := preload("res://scripts/town/town_world.gd")
@@ -22,6 +29,16 @@ const DogNode := preload("res://scripts/render/dog_node.gd")
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
+
+const CLEAR_WAKE_R := 10.0
+const ALLY_FOLLOW := 3.6
+const ALLY_RANGE := 9.0
+const ALLY_REVIVE_HP := 30.0
+const BITE_R := 0.95
+const BITE_DMG := 8.0
+const DOWN_SECS := 20.0
+const REVIVE_SECS := 2.0
+const CLEAR_STORES := {"food": 10.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0}
 
 const TILE := GD.TILE
 const CAMERA_EASE := 8.0
@@ -89,6 +106,14 @@ var _repl_t := 0.0
 var _trickle_t := 0.0
 var shots_fired := 0
 var dog
+var phase := "managed"    # "clear" (clear the prison) then "managed" (the base loop). See the header.
+var zone_done: Array = []    # bool per Base.ZONES
+var _zone_t := 0.0
+var allies_alive: Array = ["cole", "bea", "ike"]
+var ally_chasers := {}    # Zombie -> member: dead that go for an ally instead of Ruth (see _step)
+var revive_t := 0.0
+var _hurt_t := 0.0
+var _auto_i := 0
 
 
 func _ready() -> void:
@@ -101,7 +126,10 @@ func _ready() -> void:
 	_fit_window()
 	_make_hud()
 	_shot_wait = int(args.get("frames", "90"))
-	if args.has("raid") or String(args.get("auto", "")) != "":
+	var au := String(args.get("auto", ""))
+	var clear_auto := au == "clearall" or au == "ally"
+	phase = "managed" if (args.has("managed") or args.has("raid") or (au != "" and not clear_auto)) else "clear"
+	if args.has("raid") or (au != "" and not clear_auto):
 		_enter_raid()
 	else:
 		_enter_base()
@@ -210,7 +238,7 @@ func _layout_labels() -> void:
 	prompt_label.size = Vector2(v.x, 30)
 	prompt_label.position = Vector2(0, v.y - 120)
 	msg_label.size = Vector2(v.x, 30)
-	msg_label.position = Vector2(0, 74)
+	msg_label.position = Vector2(0, 110)
 	cap_label.size = Vector2(v.x, 80)
 	cap_label.position = Vector2(0, v.y * 0.5 + 60)
 
@@ -235,6 +263,9 @@ func _draw_bars() -> void:
 		var f := clampf(float(up.t) / float(up.of), 0.0, 1.0)
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * f, 12), Color(0.95, 0.8, 0.3))
+	if revive_t > 0.0:
+		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
+		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(revive_t / REVIVE_SECS, 0, 1), 12), Color(0.4, 0.8, 1.0))
 	if mode == "raid" and extract_t > 0.0:
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(extract_t / EXTRACT_S, 0, 1), 12), Color(0.4, 0.9, 0.5))
@@ -371,19 +402,39 @@ func _radial_texture() -> Texture2D:
 func _enter_base() -> void:
 	mode = "base"
 	base = Base.new()
-	var t: Dictionary = base.build(1)
+	var clear := phase == "clear"
+	var t: Dictionary = base.build(1, clear)
 	_make_stage(t, false)
-	run.invulnerable = true
-	run.sim.quiet = true
-	run.field.wake_r = 45.0
-	run.field.sleep_r = 80.0
-	run.field.active_cap = 100
-	run.sim.stock = stores.duplicate()
-	run.avatar_p.x = Base.SPAWN.x
-	run.avatar_p.y = Base.SPAWN.y
+	if clear:
+		run.invulnerable = false
+		run.sim.quiet = false
+		run.field.wake_r = CLEAR_WAKE_R
+		run.field.sleep_r = 30.0
+		run.field.active_cap = 60
+		if zone_done.is_empty():
+			stores = CLEAR_STORES.duplicate()
+			zone_done.resize(Base.ZONES.size())
+			zone_done.fill(false)
+			tod = 9.0
+		run.sim.stock = stores    # the same dictionary: what a search finds is in the stores at once
+		run.avatar_p.x = Base.START.x
+		run.avatar_p.y = Base.START.y
+	else:
+		run.invulnerable = true
+		run.sim.quiet = true
+		run.field.wake_r = 45.0
+		run.field.sleep_r = 80.0
+		run.field.active_cap = 100
+		run.sim.stock = stores.duplicate()
+		run.avatar_p.x = Base.SPAWN.x
+		run.avatar_p.y = Base.SPAWN.y
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
-	crew.setup(run.sim, world, base, data)
+	crew.setup(run.sim, world, base, data, clear)
+	if not clear:
+		for a in Crew.ALLIES:
+			if allies_alive.has(String(a.id)):
+				crew._make(a, Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
 	for m in crew.members:
 		var n := PawnNode.new()
 		n.setup(m.p, false, data, String(m.key))
@@ -393,9 +444,14 @@ func _enter_base() -> void:
 			n.z_index = 1    # a tower guard stands above his deck and the fence
 		entities.add_child(n)
 		m["node"] = n
-	dog = DogNode.new()
-	dog.setup(world.solid_p, world.W, 7)
-	entities.add_child(dog)
+	if not clear:
+		dog = DogNode.new()
+		dog.setup(world.solid_p, world.W, 7)
+		entities.add_child(dog)
+	if args.has("allyhp"):
+		for m in crew.members:
+			if m.def.has("ally"):
+				m.hp = float(args.allyhp)
 	if args.has("at"):
 		var c := String(args.at).split(",")
 		run.avatar_p.x = float(c[0])
@@ -407,7 +463,11 @@ func _enter_base() -> void:
 		if cc.size() > 2:
 			zoom_px = float(cc[2])
 		args["fixcam"] = "1"
-	_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
+	if clear:
+		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
+		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
+	else:
+		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
 
 
 func _enter_raid() -> void:
@@ -489,7 +549,8 @@ func _tick(dt: float) -> void:
 	for i in step_clock.advance(dt, 1.0):
 		_step()
 		sim_steps += 1
-	tod = fposmod(tod + dt * DAY_MIN_PER_SEC / 60.0, 24.0)
+	if phase != "clear":
+		tod = fposmod(tod + dt * DAY_MIN_PER_SEC / 60.0, 24.0)    # (the clear phase is one fixed morning)
 	if crew != null:
 		crew.tod = tod
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
@@ -513,11 +574,15 @@ func _tick(dt: float) -> void:
 		if _msg_t <= 0.0:
 			msg_label.text = ""
 	if mode == "base":
-		_base_logic(dt)
-		_fence_guards(dt)
-		_pen_life(dt)
-		if dog != null:
-			dog.tick(dt, clock, tod > 6.0 and tod < 20.0, true)
+		if phase == "clear":
+			_clear_logic(dt)
+		else:
+			_base_logic(dt)
+			_fence_guards(dt)
+			_pen_life(dt)
+			if dog != null:
+				dog.tick(dt, clock, tod > 6.0 and tod < 20.0, true)
+		_allies(dt)
 	else:
 		_raid_logic(dt)
 	_day_night(dt)
@@ -533,7 +598,11 @@ func _tick(dt: float) -> void:
 
 
 func _step() -> void:
+	var olds := {}
+	for z in ally_chasers:
+		olds[z] = Vector2(z.x, z.y)
 	run.sim.update(StepClock.STEP)
+	_ally_prey_step(olds)
 	for e in run.sim.events:
 		match String(e.type):
 			"shot":
@@ -547,6 +616,11 @@ func _step() -> void:
 				sound.play(String(e.type))
 			"stab":
 				sound.play("stab", 0.6, 0.08)
+			"searched":
+				var parts: Array = []
+				for k in e.loot:
+					parts.append("+%d %s" % [int(e.loot[k]), k])
+				_say("Found: " + (", ".join(parts) if not parts.is_empty() else "nothing"), 2.5)
 	run.sim.events.clear()
 	if run.invulnerable:
 		run.avatar_p.hp = 100.0
@@ -555,6 +629,15 @@ func _step() -> void:
 
 func _hud_text() -> String:
 	var p = run.avatar_p
+	if mode == "base" and phase == "clear":
+		var left := 0
+		for zi in Base.ZONES.size():
+			left += _dead_in_zone(zi).size() if not zone_done[zi] else 0
+		var al := ""
+		for m in crew.members:
+			if m.def.has("ally"):
+				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
+		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
 	if mode == "base":
 		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired]
 	return "RAID %d    HP %d    Mag %d    Pack: ammo %d  food %d  water %d  meds %d  scrap %d\nKills %d   Exits: %d" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.ammo), int(run.sim.stock.food), int(run.sim.stock.water), int(run.sim.stock.meds), int(run.sim.stock.scrap), run.sim.kills, exits.size()]
@@ -578,7 +661,7 @@ func _hands() -> void:
 	if args.has("aimdir"):
 		var ad := String(args.aimdir).split(",")
 		aim = Vector2(run.avatar_p.x + float(ad[0]), run.avatar_p.y + float(ad[1]))
-	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and mode == "raid" and not busy and not args.has("shot")
+	var fire := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and (mode == "raid" or phase == "clear") and not busy and not args.has("shot")
 	run.sim.avatar.set_input(move, aim, fire)
 
 
@@ -590,10 +673,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_E:
 				_use()
 			KEY_R:
-				if mode == "raid":
+				if mode == "raid" or phase == "clear":
 					run.sim.avatar.reload()
 			KEY_F:
-				if mode == "raid" and not busy:
+				if (mode == "raid" or phase == "clear") and not busy:
 					run.sim.avatar.melee()
 			KEY_M:
 				map_view = not map_view
@@ -615,6 +698,11 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "gate":
 		_go_out()
 		return
+	if String(_prompt.get("kind", "")) == "locked":
+		_say("The gate is chained shut and the pen behind it is full. Clear the prison first.", 3.0)
+		return
+	if String(_prompt.get("kind", "")) == "revive":
+		return    # held, not pressed (_clear_logic)
 	if String(_prompt.get("kind", "")) == "stores":
 		_say("Stores: " + _stock_line(), 5.0)
 		return
@@ -808,7 +896,11 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var p = m.p
 			var tag := "%s: %s" % [String(m.def.name), String(m.say)]
 			var at := Vector2(p.x, p.y - 1.55) * TILE
-			c.draw_string(font, at - Vector2(100, 0), tag, HORIZONTAL_ALIGNMENT_CENTER, 200, 15, Color(1, 1, 1, 0.92))
+			c.draw_string(font, at - Vector2(100, 0), tag, HORIZONTAL_ALIGNMENT_CENTER, 200, 15, Color(1, 0.6, 0.55, 0.95) if m.state == "downed" else Color(1, 1, 1, 0.92))
+			if m.def.has("ally"):
+				var f2 := clampf(float(m.hp) / Crew.ALLY_HP, 0.0, 1.0)
+				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40, 5)), Color(0, 0, 0, 0.7))
+				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40.0 * f2, 5)), Color(0.3, 0.85, 0.35) if f2 > 0.3 else Color(0.9, 0.25, 0.2))
 			if m.state == "work":
 				var f := clampf(float(m.t) / float(m.def.route[m.i].secs), 0.0, 1.0)
 				c.draw_rect(Rect2(at + Vector2(-20, 4), Vector2(40, 5)), Color(0, 0, 0, 0.6))
@@ -818,6 +910,29 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var col: Color = fl.col
 			col.a = a
 			c.draw_string(font, Vector2(fl.pos) * TILE + Vector2(-60, -float(fl.t) * 22.0), String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 120, 17, col)
+		if phase == "clear":
+			for ct in town.containers:
+				if not run.sim.search.is_looted(String(ct.id)):
+					var cp := Vector2(ct.at) * TILE
+					c.draw_rect(Rect2(cp - Vector2(5, 5), Vector2(10, 10)), Color(1.0, 0.85, 0.25, 0.55 + 0.3 * sin(clock * 4.0)), false, 2.0)
+			c.draw_string(font, Vector2(4.0, 31.6) * TILE, "WEST BREACH", HORIZONTAL_ALIGNMENT_CENTER, 140, 16, Color(1, 0.9, 0.5, 0.85))
+			c.draw_string(font, Vector2(Base.GATE_POS.x, 56.2) * TILE - Vector2(100, 0), "CHAINED", HORIZONTAL_ALIGNMENT_CENTER, 200, 16, Color(1, 0.4, 0.35, 0.9))
+		# the kids' hopscotch (chalk) and ball
+		var hs := Crew.HOPSCOTCH * TILE
+		for k in 6:
+			var q := hs + Vector2(0.0, -float(k) * 0.55 * TILE)
+			var w := 0.55 * TILE
+			c.draw_rect(Rect2(q - Vector2(w / 2.0, w / 2.0), Vector2(w, w)), Color(0.95, 0.95, 0.85, 0.5), false, 2.0)
+			if k == 3 or k == 4:
+				c.draw_rect(Rect2(q + Vector2(w / 2.0, -w / 2.0), Vector2(w, w)), Color(0.95, 0.95, 0.85, 0.5), false, 2.0)
+		var kids := false
+		for m in crew.members:
+			if m.state == "play":
+				kids = true
+		if kids:
+			c.draw_circle(crew.ball * TILE + Vector2(0, 2), 7.0, Color(0, 0, 0, 0.3))
+			c.draw_circle(crew.ball * TILE - Vector2(0, 4), 7.0, Color(0.85, 0.3, 0.25))
+			c.draw_arc(crew.ball * TILE - Vector2(0, 4), 7.0, 0.3, 2.6, 8, Color(1, 1, 1, 0.8), 1.5)
 		# a washing line with laundry, swaying a little
 		var l0 := Vector2(12.5, 46.5) * TILE
 		var l1 := Vector2(24.5, 46.5) * TILE
@@ -869,6 +984,47 @@ func _scripts(dt: float) -> void:
 		_auto_loot()
 	if a == "go" and mode == "base" and _auto_t > 2.0 and not busy:
 		_go_out()
+	if a == "ally" and _auto_t > 14.0 and mode == "base":
+		for m in crew.members:
+			if m.state == "downed":
+				run.avatar_p.x = m.p.x + 0.8
+				run.avatar_p.y = m.p.y
+				break
+	if a == "clearall" and mode == "base" and phase == "clear" and not busy:
+		_auto_clear()
+
+
+## --auto=clearall: zone by zone, walk Ruth onto one container of the zone and search it, then kill every dead one in the zone (the zone check does the rest).
+var _auto_acc := 0.0
+func _auto_clear() -> void:
+	_auto_acc += get_process_delta_time()
+	if _auto_acc < 1.2 or run.sim.uses.busy():
+		return
+	var zi := zone_done.find(false)
+	if zi < 0:
+		return
+	if _auto_i % 2 == 0:
+		_auto_acc = -2.5    # the search takes about 3 s
+		for ct in town.containers:
+			if int(ct.house) == zi and not run.sim.search.is_looted(String(ct.id)):
+				run.avatar_p.x = float(ct.pos.x)
+				run.avatar_p.y = float(ct.pos.y)
+				for cd in run.sim.uses.candidates(run.avatar_p):
+					if String(cd.kind) == "container":
+						run.sim.uses.use(cd)
+						print("AUTO search ", ct.id, " loot ", ct.loot, " stores before ", stores)
+						break
+				break
+	else:
+		_auto_acc = 0.0
+		var ids := _dead_in_zone(zi)
+		for i in ids:
+			if run.field.status[i] == run.field.ACTIVE and run.field.active_of.has(i):
+				run.sim._hurt_zombie(run.field.active_of[i], 9999.0, 0.0, null)
+			else:
+				run.field.remove_record(i)
+		print("AUTO kill zone ", Base.ZONES[zi].id, " dead ", ids.size(), " stores after ", stores)
+	_auto_i += 1
 
 
 var _auto_target := Vector2(-1, -1)
@@ -949,6 +1105,11 @@ func _draw_minimap(v: Vector2) -> void:
 	var o := Vector2(v.x - sz.x - 14.0, v.y - sz.y - 14.0)
 	bars.draw_rect(Rect2(o - Vector2(3, 3), sz + Vector2(6, 6)), Color(0, 0, 0, 0.7))
 	bars.draw_texture_rect(mini_tex, Rect2(o, sz), false, Color(1, 1, 1, 0.92))
+	if mode == "base" and phase == "clear":
+		for zi in Base.ZONES.size():
+			var zr := Rect2(Base.ZONES[zi].rect)
+			bars.draw_rect(Rect2(o + zr.position * sc, zr.size * sc), Color(0.3, 0.9, 0.4, 0.4) if zone_done[zi] else Color(0.55, 0.55, 0.58, 0.45))
+			bars.draw_rect(Rect2(o + zr.position * sc, zr.size * sc), Color(0.3, 0.9, 0.4, 0.9) if zone_done[zi] else Color(0.7, 0.7, 0.72, 0.8), false, 1.0)
 	if mode == "base":
 		bars.draw_circle(o + Base.GATE_POS * sc, 3.5, Color(1, 0.85, 0.3))
 		for m in crew.members:
@@ -969,6 +1130,291 @@ func _draw_minimap(v: Vector2) -> void:
 	# the camera's window
 	var half := _vp() / zoom_px / 2.0 * sc
 	bars.draw_rect(Rect2(o + cam_center * sc - half, half * 2.0), Color(1, 1, 1, 0.5), false, 1.0)
+
+
+
+## One rifle shot from a person that is not in the sim (a tower guard, an ally) at a dead one: muzzle flash, tracer, the real rifle sound, `hit_p` to hit (55 damage, the dead fall and bleed).
+func _shoot_at(g, z, hit_p: float) -> void:
+	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
+	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)
+	g.aim = ang
+	var mx: float = g.x + cos(ang) * 0.7
+	var my: float = g.y + sin(ang) * 0.7 - 0.3
+	fx.muzzle(mx, my, ang, false)
+	var hit := randf() < hit_p
+	var tx: float = z.x if hit else z.x + randf_range(-0.8, 0.8)
+	var ty: float = z.y if hit else z.y + 1.2
+	fx.tracer(mx, my, tx, ty)
+	fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
+	shots_fired += 1
+	if hit:
+		run.sim._hurt_zombie(z, 55.0, ang, null)
+
+
+# ------------------------------------------------------------------ clear phase --
+
+func in_managed() -> bool:
+	return phase == "managed"
+
+
+func _card(title: String, sub: String, secs: float) -> void:
+	cap_label.text = title + "\n" + sub
+	cap_label.modulate.a = 1.0
+	await get_tree().create_timer(secs).timeout
+	var tw := create_tween()
+	tw.tween_property(cap_label, "modulate:a", 0.0, 0.8)
+
+
+func _cleared_n() -> int:
+	var n := 0
+	for d in zone_done:
+		if d:
+			n += 1
+	return n
+
+
+## The record ids of the dead that are in a zone's rect now (dormant or awake, not dying), by where they are.
+func _dead_in_zone(zi: int) -> Array:
+	var f = run.field
+	var r := Rect2(Base.ZONES[zi].rect)
+	var out: Array = []
+	for i in f.n:
+		if f.status[i] == f.KILLED:
+			continue
+		if f.status[i] == f.ACTIVE and f.active_of.has(i):
+			var zz = f.active_of[i]
+			if zz.state == "dying" or zz.state == "dead":
+				continue
+		if r.has_point(f._place_of(i)):
+			out.append(i)
+	return out
+
+
+func _add_member_node(m: Dictionary) -> void:
+	var n := PawnNode.new()
+	n.setup(m.p, false, data, String(m.key))
+	if m.def.has("scale"):
+		n.scale = Vector2.ONE * float(m.def.scale)
+	entities.add_child(n)
+	m["node"] = n
+
+
+func _clear_logic(dt: float) -> void:
+	var p = run.avatar_p
+	var me := Vector2(p.x, p.y)
+	_prompt = {}
+	if p.downed or p.dead or float(p.hp) <= 0.5:
+		p.hp = 100.0
+		p.downed = false
+		p.dead = false
+		p.x = 8.5
+		p.y = 34.5
+		_say("You went down. Your people dragged you back to the breach.", 4.0)
+	var dn = _nearest_downed(me)
+	if dn != null:
+		var ok: bool = float(stores.meds) >= 1.0
+		_prompt = {"kind": "revive", "label": ("Hold E: revive %s (1 med)" % String(dn.def.name)) if ok else "%s is down. No meds to revive." % String(dn.def.name)}
+		var held := Input.is_key_pressed(KEY_E) or (String(args.get("auto", "")) == "ally" and _auto_t > 14.0)
+		if ok and held:
+			revive_t += dt
+			if revive_t >= REVIVE_SECS:
+				stores.meds = float(stores.meds) - 1.0
+				dn.hp = ALLY_REVIVE_HP
+				dn.state = "ally"
+				dn.p.downed = false
+				dn.say = "back up"
+				revive_t = 0.0
+				_say("%s is back on their feet." % String(dn.def.name), 3.0)
+				if args.has("log"):
+					print("ALLY revived ", dn.def.name, " meds left ", stores.meds)
+		else:
+			revive_t = maxf(0.0, revive_t - dt * 2.0)
+	else:
+		revive_t = 0.0
+	if _prompt.is_empty():
+		for c in run.sim.uses.candidates(p):
+			if bool(c.get("ok", true)):
+				_prompt = {"kind": "use", "c": c, "label": "E: %s" % String(c.label)}
+				break
+	if _prompt.is_empty() and me.distance_to(Base.GATE_POS) < 7.0:
+		_prompt = {"kind": "locked", "label": "The gate is chained shut. Clear the prison first."}
+	_zone_t -= dt
+	if _zone_t <= 0.0 and not busy:
+		_zone_t = 0.5
+		_zone_check()
+
+
+func _zone_check() -> void:
+	for zi in Base.ZONES.size():
+		if zone_done[zi] or _dead_in_zone(zi).size() > 0:
+			continue
+		zone_done[zi] = true
+		var z: Dictionary = Base.ZONES[zi]
+		var names: Array = []
+		var k := 0
+		for id in z.crew:
+			var m: Dictionary = crew.release(String(id), Vector2(z.rel) + Vector2(float(k) * 0.9, 0.0))
+			k += 1
+			if not m.is_empty():
+				_add_member_node(m)
+				names.append(String(m.def.name))
+		_say("%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
+		sound.play("bell", 0.5, 0.0)
+		if args.has("log"):
+			print("ZONE cleared ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " freed ", names, " stores ", stores)
+	if _cleared_n() == Base.ZONES.size() and not busy:
+		_secure()
+
+
+## Every zone cleared: the card, the base is rebuilt in its managed form (gate open, breach sealed, the whole crew at work) and `phase_changed("managed")` is emitted.
+func _secure() -> void:
+	busy = true
+	await _cut_out(["PRISON SECURED", "The gate is unlocked. The west breach is sealed."], false)
+	phase = "managed"
+	tod = 8.0
+	_enter_base()
+	await _cut_in()
+	busy = false
+	_say("The prison is yours. Hold it.", 8.0)
+	if args.has("log"):
+		print("PHASE managed: crew ", crew.members.size(), " allies ", allies_alive, " stores ", stores)
+	phase_changed.emit(phase)
+
+
+func _nearest_downed(me: Vector2):
+	for m in crew.members:
+		if m.state == "downed" and me.distance_to(Vector2(m.p.x, m.p.y)) < 1.8:
+			return m
+	return null
+
+
+## The allies, every frame: bites, going down, shooting the nearest dead, following Ruth (hanging back behind her below 30 percent hp). Dead that are closer to an ally than to Ruth
+## are marked in `ally_chasers` (see `_ally_prey_step`).
+func _allies(dt: float) -> void:
+	var rp = run.avatar_p
+	var me := Vector2(rp.x, rp.y)
+	var aim := Vector2(rp.input_aim) - me if rp.input_aim != Vector2.ZERO else Vector2(1, 0)
+	aim = aim.normalized() if aim.length() > 0.1 else Vector2(1, 0)
+	var zs := _awake_dead()
+	var allies: Array = []
+	for m in crew.members:
+		if m.def.has("ally"):
+			allies.append(m)
+	ally_chasers.clear()
+	for m in allies:
+		var g = m.p
+		var at := Vector2(g.x, g.y)
+		if m.state == "downed":
+			m.down_t = float(m.down_t) - dt
+			m.say = "DOWN %ds" % int(ceil(float(m.down_t)))
+			if float(m.down_t) <= 0.0:
+				_ally_gone(m)
+			continue
+		m.cd = float(m.cd) - dt
+		m.bite = float(m.bite) - dt
+		m.repath = float(m.repath) - dt
+		var biters := 0
+		var best = null
+		var bd := 1.0e9
+		var hang: bool = float(m.hp) < 0.3 * Crew.ALLY_HP
+		for z in zs:
+			var d := at.distance_to(Vector2(z.x, z.y))
+			if d < BITE_R:
+				biters += 1
+			if d < (6.5 if hang else ALLY_RANGE) and d < bd and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+				bd = d
+				best = z
+		if biters > 0 and float(m.bite) <= 0.0:
+			m.bite = 0.9
+			var dmg := BITE_DMG * float(mini(biters, 3))
+			m.hp = float(m.hp) - dmg
+			sound.play("bite", 0.5)
+			crew.floaters.append({"text": "-%d" % int(dmg), "pos": Vector2(g.x, g.y - 1.6), "t": 0.0, "col": Color(1, 0.35, 0.3)})
+			if float(m.hp) <= 0.0:
+				m.hp = 0.0
+				m.state = "downed"
+				m.down_t = DOWN_SECS
+				g.downed = true
+				g.moving = false
+				_say("%s is down! Hold E next to them to revive (1 med)." % String(m.def.name), 4.0)
+				if args.has("log"):
+					print("ALLY down ", m.def.name)
+				continue
+		g.hp = m.hp
+		m.hold = float(m.get("hold", 0.0)) - dt
+		if best != null and float(m.cd) <= 0.0:
+			_shoot_at(g, best, 0.7)
+			m.cd = randf_range(0.9, 1.6)
+			m.hold = 0.35
+			m.say = "firing"
+		if float(m.hold) > 0.0:
+			g.moving = false
+			continue
+		# follow
+		var idx := allies.find(m)
+		var slot := me - aim * 3.0 + aim.orthogonal() * (float(idx) - 1.0) * 1.2 if hang else me + Vector2.from_angle(float(idx) * 2.1 + 0.5) * 2.2
+		var dist := at.distance_to(slot)
+		if at.distance_to(me) > 18.0:
+			g.x = me.x
+			g.y = me.y
+			m.path = []
+			continue
+		if dist > 1.1:
+			if float(m.repath) <= 0.0:
+				m.repath = 0.4
+				m.path = run.sim.path_p.find(world.solid_p, g.x, g.y, slot.x, slot.y)
+				if m.path.is_empty():
+					m.path = run.sim.path_p.find(world.solid_p, g.x, g.y, me.x, me.y)
+				m.pi = 0
+			crew._advance(m, dt, 5.0 if dist > 8.0 else ALLY_FOLLOW)
+			if best == null:
+				m.say = "hanging back" if hang else "following"
+		else:
+			g.moving = false
+			if best == null:
+				m.say = "hanging back" if hang else "ready"
+		# dead that are nearer to this ally than to Ruth go for the ally
+		for z in zs:
+			if z.state == "chase" and not ally_chasers.has(z):
+				var da := at.distance_to(Vector2(z.x, z.y))
+				if da < 8.0 and da < me.distance_to(Vector2(z.x, z.y)) - 0.5:
+					ally_chasers[z] = m
+
+
+## After a step of the rules: the dead that were sent after an ally walk toward the ally (the rules moved them toward Ruth; that move is undone).
+func _ally_prey_step(olds: Dictionary) -> void:
+	for z in olds:
+		var m = ally_chasers.get(z)
+		if m == null or z.state != "chase" or m.state != "ally":
+			continue
+		var o: Vector2 = olds[z]
+		var to := Vector2(m.p.x, m.p.y) - o
+		var d := to.length()
+		z.x = o.x
+		z.y = o.y
+		if d < BITE_R * 0.8:
+			z.moving = false
+			continue
+		var dir := to / d
+		var sp: float = z.speed * StepClock.STEP
+		for ax in [Vector2(dir.x, 0.0), Vector2(0.0, dir.y)]:
+			var nx: float = z.x + ax.x * sp
+			var ny: float = z.y + ax.y * sp
+			if world.solid_p[int(ny) * world.W + int(nx)] == 0:
+				z.x = nx
+				z.y = ny
+		z.facing = run.sim.facing_of(dir.x, dir.y, z.facing)
+		z.moving = true
+
+
+func _ally_gone(m: Dictionary) -> void:
+	_say("%s is gone." % String(m.def.name), 5.0)
+	allies_alive.erase(String(m.def.id))
+	crew.members.erase(m)
+	if m.has("node"):
+		m.node.queue_free()
+	if args.has("log"):
+		print("ALLY gone ", m.def.name)
 
 
 # --------------------------------------------------------------- the fence's guns --
@@ -1020,22 +1466,8 @@ func _fence_guards(dt: float) -> void:
 				m.say = String(m.def.role)
 			continue
 		guard_cd[g.id] = (0.7 if alarm_t > 0.0 else randf_range(1.6, 3.0))
-		var ang := Vector2(g.x, g.y).angle_to_point(Vector2(best.x, best.y))
-		g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)
-		var mx: float = g.x + cos(ang) * 0.7
-		var my: float = g.y + sin(ang) * 0.7 - 0.3
-		fx.muzzle(mx, my, ang, false)
-		var hit := randf() < 0.8
-		var tx: float = best.x if hit else best.x + randf_range(-0.8, 0.8)
-		var ty: float = best.y if hit else best.y + 1.2
-		fx.tracer(mx, my, tx, ty)
-		run.sim.events.append({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
-		fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
-		run.sim.events.clear()
-		shots_fired += 1
+		_shoot_at(g, best, 0.8)
 		m.say = "firing"
-		if hit:
-			run.sim._hurt_zombie(best, 55.0, ang, null)
 
 
 ## The pen never empties: new dead drift in from the edges and a slow trickle of them is sent to the fence by the gate.

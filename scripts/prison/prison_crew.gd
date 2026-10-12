@@ -55,17 +55,18 @@ const ROSTER := [
 		{"at": Vector2(61.0, 26.0), "secs": 1.0, "work": "", "face": "N"},
 		{"at": Vector2(36.0, 26.0), "secs": 1.0, "work": "", "face": "W"},
 	]},
-	{"id": "kit", "name": "Kit", "role": "Kid", "key": "ana", "scale": 0.62, "look": {"top": "#c9553a", "outer": "#c9553a", "pants": "#4a5a7a", "skin": "#c69877"}, "route": [
-		{"at": Vector2(30.0, 26.5), "secs": 4.0, "work": "", "face": "S", "say": "playing"},
-		{"at": Vector2(44.0, 44.0), "secs": 4.0, "work": "", "face": "E", "say": "playing"},
-		{"at": Vector2(26.0, 46.0), "secs": 5.0, "work": "rest", "face": "S", "say": "playing"},
-	]},
-	{"id": "pip", "name": "Pip", "role": "Kid", "key": "dez", "scale": 0.58, "look": {"top": "#3a7aa0", "pants": "#6a5a3a", "skin": "#8a5a3c", "hatColor": "#c9a43a"}, "route": [
-		{"at": Vector2(27.0, 46.5), "secs": 5.0, "work": "rest", "face": "N", "say": "playing"},
-		{"at": Vector2(32.0, 27.0), "secs": 3.0, "work": "", "face": "S", "say": "playing"},
-		{"at": Vector2(45.0, 43.0), "secs": 4.0, "work": "", "face": "W", "say": "playing"},
-	]},
+	{"id": "kit", "name": "Kit", "role": "Kid", "key": "ana", "scale": 0.62, "unarmed": true, "play": true, "look": {"top": "#c9553a", "outer": "#c9553a", "pants": "#4a5a7a", "skin": "#c69877"}},
+	{"id": "pip", "name": "Pip", "role": "Kid", "key": "dez", "scale": 0.58, "unarmed": true, "play": true, "look": {"top": "#3a7aa0", "pants": "#6a5a3a", "skin": "#8a5a3c", "hatColor": "#c9a43a"}},
 ]
+
+## CLEAR PHASE: the survivors that walk in with Ruth. They follow her and shoot (prison_game.gd `_allies`); they have hit points and can go down.
+const ALLIES := [
+	{"id": "cole", "name": "Cole", "role": "Ally", "key": "walt", "ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
+	{"id": "bea", "name": "Bea", "role": "Ally", "key": "ana", "ally": true, "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}},
+	{"id": "ike", "name": "Ike", "role": "Ally", "key": "hector", "ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}},
+]
+const ALLY_HP := 45.0
+const YARD := Rect2(9.0, 43.0, 28.0, 11.0)    # where the kids play
 
 var sim
 var world
@@ -75,47 +76,91 @@ var members: Array = []    # {p: Person, def: Dictionary, i: stop index, state: 
 var floaters: Array = []    # {text, pos, t, col}
 var tally := {}
 var tod := 8.0    # hour of the day, set by the game
+var play_t := 0.0
+var ball := Vector2(24.0, 49.0)    # the kids' ball
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
-func setup(s, w, b, d: Dictionary) -> void:
+func setup(s, w, b, d: Dictionary, clear: bool = false) -> void:
 	sim = s
 	world = w
 	base = b
 	data = d
-	var defs: Dictionary = {}
-	for pd in d.people:
-		defs[String(pd.id)] = pd
+	if clear:
+		for i in ALLIES.size():
+			_make(ALLIES[i], Vector2(3.5, 33.2 + float(i) * 1.1))
+		return
 	var n := 0
 	for r in ROSTER:
-		var src: Dictionary = (defs[String(r.key)] as Dictionary).duplicate(true)
-		src["id"] = String(r.id)
-		src["name"] = String(r.name)
-		var look: Dictionary = (src.look as Dictionary).duplicate(true)
-		for k in r.look:
-			look[k] = r.look[k]
-		src["look"] = look
-		src["station"] = ""
-		src["post_id"] = ""
-		var p = sim.make_person(src)
-		p.player = false
-		var m := {"p": p, "def": r, "i": 0, "state": "wait", "path": [], "pi": 0, "t": 0.0, "secs": 0.0, "key": String(r.key), "say": String(r.role)}
-		var at := _stand(r)
-		if r.has("stand"):
-			at = _tower_spot(String(r.stand))
-			p.work = String(r.work)
-			p.facing = String(r.face)
-			m.state = "post"
-		else:
-			var first = r.route[0]
-			at = _where(first.at)
-			at = at + Vector2(float(n % 3) * 0.4 - 0.4, 0.0)
-		p.x = at.x
-		p.y = at.y
-		p.hp = 100.0
-		p.moving = false
-		members.append(m)
+		_make(r, Vector2.ZERO, n)
 		n += 1
+
+
+## One person of a roster entry (a real Person that is not in `sim.people`), placed at `at` (the roster's own place when it is ZERO). Returns the member.
+func _make(r: Dictionary, at_in: Vector2, n: int = 0) -> Dictionary:
+	var defs: Dictionary = {}
+	for pd in data.people:
+		defs[String(pd.id)] = pd
+	var src: Dictionary = (defs[String(r.key)] as Dictionary).duplicate(true)
+	src["id"] = String(r.id)
+	src["name"] = String(r.name)
+	src["unarmed"] = bool(r.get("unarmed", false))
+	var look: Dictionary = (src.look as Dictionary).duplicate(true)
+	for k in r.look:
+		look[k] = r.look[k]
+	src["look"] = look
+	src["station"] = ""
+	src["post_id"] = ""
+	var p = sim.make_person(src)
+	p.player = false
+	var m := {"p": p, "def": r, "i": 0, "state": "wait", "path": [], "pi": 0, "t": 0.0, "secs": 0.0, "key": String(r.key), "say": String(r.role)}
+	var at := at_in
+	if r.has("ally"):
+		m.state = "ally"
+		m["hp"] = ALLY_HP
+		m["cd"] = 1.0
+		m["bite"] = 0.0
+		m["down_t"] = 0.0
+		m["repath"] = 0.0
+	elif r.has("play"):
+		m.state = "play"
+		m["role"] = "flee" if String(r.id) == "kit" else "chase"
+		m["repath"] = 0.0
+		m["tgt"] = Vector2.ZERO
+		m["swap_cd"] = 0.0
+		if at == Vector2.ZERO:
+			at = Vector2(20.0 + float(n % 2) * 2.0, 50.0)
+	elif r.has("stand"):
+		if at == Vector2.ZERO:
+			at = _tower_spot(String(r.stand))
+		p.work = String(r.work)
+		p.facing = String(r.face)
+		m.state = "post"
+	elif at == Vector2.ZERO:
+		at = _where(r.route[0].at) + Vector2(float(n % 3) * 0.4 - 0.4, 0.0)
+	p.x = at.x
+	p.y = at.y
+	p.hp = 100.0
+	p.moving = false
+	members.append(m)
+	return m
+
+
+## CLEAR PHASE: a zone is cleared and this person is free: they appear at `at` and go to their job (a guard walks to the foot of the tower and climbs). Returns the member.
+func release(id: String, at: Vector2) -> Dictionary:
+	for r in ROSTER:
+		if String(r.id) != id:
+			continue
+		var m := _make(r, at, members.size())
+		if r.has("stand"):
+			var spot := _tower_spot(String(r.stand))
+			m.state = "walk"
+			m["to_post"] = spot
+			m.path = sim.path_p.find(world.solid_p, at.x, at.y, spot.x, spot.y + 2.0)
+			m.pi = 0
+			m.p.work = ""
+		return m
+	return {}
 
 
 func _stand(r: Dictionary) -> Vector2:
@@ -150,9 +195,18 @@ func _meal_window() -> int:
 
 func update(dt: float, stores: Dictionary) -> void:
 	_meal_id = _meal_window()
+	play_t += dt
 	for m in members:
 		if m.state == "post":
 			m.p.work_t = float(m.p.work_t) + dt
+			continue
+		if m.state == "ally" or m.state == "downed":
+			continue    # the game moves allies (follow, shoot, bites)
+		if m.state == "play":
+			_play(m, dt)
+			continue
+		if m.has("to_post"):
+			_to_post(m, dt)
 			continue
 		_step_member(m, dt, stores)
 	for f in floaters:
@@ -180,22 +234,8 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 			m.state = "walk"
 			p.work = ""
 		"walk":
-			if m.pi >= m.path.size():
+			if _advance(m, dt, SPEED):
 				m.state = "arrive"
-				return
-			var wp: Vector2 = m.path[m.pi]
-			var to := wp - Vector2(p.x, p.y)
-			var dist := to.length()
-			if dist < 0.12:
-				m.pi += 1
-				return
-			var step := minf(dist, SPEED * dt)
-			var dir := to / dist
-			p.x += dir.x * step
-			p.y += dir.y * step
-			p.facing = sim.facing_of(dir.x, dir.y, p.facing)
-			p.moving = true
-			p.walk_phase += dt * 6.0
 		"arrive":
 			p.moving = false
 			if stop.get("meal", false):
@@ -229,6 +269,90 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 				p.work = ""
 				p.work_t = 0.0
 
+
+## One step along m.path at `speed`; true when the path is done.
+func _advance(m: Dictionary, dt: float, speed: float) -> bool:
+	var p = m.p
+	if m.pi >= m.path.size():
+		p.moving = false
+		return true
+	var wp: Vector2 = m.path[m.pi]
+	var to := wp - Vector2(p.x, p.y)
+	var dist := to.length()
+	if dist < 0.12:
+		m.pi += 1
+		return false
+	var step := minf(dist, speed * dt)
+	var dir := to / dist
+	p.x += dir.x * step
+	p.y += dir.y * step
+	p.facing = sim.facing_of(dir.x, dir.y, p.facing)
+	p.moving = true
+	p.walk_phase += dt * (6.0 * speed / SPEED)
+	return false
+
+
+## A freed guard walks to the foot of the tower, then stands on the deck.
+func _to_post(m: Dictionary, dt: float) -> void:
+	if _advance(m, dt, SPEED * 1.4):
+		var r: Dictionary = m.def
+		var spot: Vector2 = m.to_post
+		m.erase("to_post")
+		m.p.x = spot.x
+		m.p.y = spot.y
+		m.p.work = String(r.work)
+		m.p.facing = String(r.face)
+		m.p.moving = false
+		m.state = "post"
+
+
+## The kids: tag in the yard (one runs, one chases; a touch swaps them), a ball that rolls along, a hopscotch that the runner visits. Never armed, never on a route.
+func _play(m: Dictionary, dt: float) -> void:
+	var p = m.p
+	var other = null
+	for q in members:
+		if q.state == "play" and q != m:
+			other = q
+	m.repath = float(m.repath) - dt
+	m.swap_cd = float(m.swap_cd) - dt
+	p.work = ""
+	var speed := 3.3 if m.role == "flee" else 2.9
+	if other != null and m.role == "chase":
+		var d := Vector2(p.x - other.p.x, p.y - other.p.y).length()
+		if d < 0.9 and float(m.swap_cd) <= 0.0:
+			m.role = "flee"
+			other.role = "chase"
+			m.swap_cd = 3.0
+			other.swap_cd = 3.0
+			m.say = "tag! run!"
+			other.say = "gotcha, now you!"
+			m.repath = 0.0
+			other.repath = 0.0
+	if float(m.repath) <= 0.0:
+		m.repath = 0.5
+		var tgt: Vector2
+		if m.role == "chase" and other != null:
+			tgt = Vector2(other.p.x, other.p.y)
+		else:
+			tgt = m.tgt
+			if tgt == Vector2.ZERO or Vector2(p.x, p.y).distance_to(tgt) < 1.2:
+				tgt = Vector2(randf_range(YARD.position.x, YARD.end.x), randf_range(YARD.position.y, YARD.end.y))
+				if randf() < 0.3:
+					tgt = HOPSCOTCH
+				m.tgt = tgt
+		m.path = sim.path_p.find(world.solid_p, p.x, p.y, tgt.x, tgt.y)
+		m.pi = 0
+	_advance(m, dt, speed)
+	if m.role == "flee" and String(m.say) == "Kid":
+		m.say = "running"
+	# the ball rolls ahead of whoever runs
+	var runner = m if m.role == "flee" else other
+	if runner != null:
+		var want := Vector2(runner.p.x, runner.p.y) + Vector2(0.8, 0.3)
+		ball += (want - ball) * (1.0 - exp(-2.5 * dt))
+
+
+const HOPSCOTCH := Vector2(14.0, 52.0)
 
 func _have(stores: Dictionary, need: Dictionary) -> bool:
 	for k in need:
