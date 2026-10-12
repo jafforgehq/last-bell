@@ -47,9 +47,13 @@ static func draw(game, c: Control, v: Vector2) -> void:
 		var n := clampi(int(a.distance_to(end_scr) / 28.0), 2, 14)
 		for i in n:
 			var k := float(i) / n
-			c.draw_line(a.lerp(end_scr, k), a.lerp(end_scr, float(i + 1) / n), Color(col, lerpf(0.75, 0.08, k)), 1.5, true)
+			var q0 := a.lerp(end_scr, k)
+			var q1 := a.lerp(end_scr, float(i + 1) / n)
+			c.draw_line(q0, q1, Color(EDGE, lerpf(0.7, 0.15, k)), 4.0, true)    # dark outline first: reads on grass, concrete and at night
+			c.draw_line(q0, q1, Color(col, lerpf(1.0, 0.25, k)), 2.2, true)
 		if aim_hit:
-			c.draw_arc(end_scr, 4.0, 0, TAU, 12, Color(HIT, 0.85), 1.5, true)
+			c.draw_arc(end_scr, 5.0, 0, TAU, 12, EDGE, 4.0, true)
+			c.draw_arc(end_scr, 5.0, 0, TAU, 12, HIT, 2.0, true)
 	# the crosshair: at the pointer, or where a forced aim (--aimdir) ends
 	var at: Vector2 = c.get_viewport().get_mouse_position()
 	if game.args.has("aimdir"):
@@ -73,8 +77,9 @@ static func draw(game, c: Control, v: Vector2) -> void:
 		var f := clampf(1.0 - me.reloading / total, 0.0, 1.0)
 		var cc: Vector2 = to_scr.call(Vector2(me.x, me.y - 0.45))
 		var rr := maxf(18.0, 0.66 * zoom)
-		c.draw_arc(cc, rr, 0, TAU, 40, Color(0.04, 0.07, 0.06, 0.5), 4.0, true)
-		c.draw_arc(cc, rr, -PI / 2.0, -PI / 2.0 + f * TAU, 40, ACCENT, 3.0, true)
+		c.draw_arc(cc, rr, 0, TAU, 40, Color(0.04, 0.07, 0.06, 0.85), 8.0, true)
+		c.draw_arc(cc, rr, 0, TAU, 40, Color(1, 1, 1, 0.3), 3.0, true)
+		c.draw_arc(cc, rr, -PI / 2.0, -PI / 2.0 + f * TAU, 40, ACCENT, 5.0, true)
 		var cap := int(me.gun.get("mag", 0))
 		if cap > 1 and cap <= 12:
 			var filled := int(floor(f * cap))

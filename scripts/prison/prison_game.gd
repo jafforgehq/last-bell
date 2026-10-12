@@ -569,7 +569,7 @@ func _enter_base() -> void:
 		cleaner.setup()
 		upg.setup()    # WORLD hook
 	if clear:
-		_card("THE OLD PRISON", "Clear it. Hold it.", 4.5)
+		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
 		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
 	else:
 		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
@@ -1517,8 +1517,14 @@ func _draw_minimap(v: Vector2) -> void:
 ## One rifle shot from a person that is not in the sim (a tower guard, an ally) at a dead one: muzzle flash, tracer, the real rifle sound, `hit_p` to hit (55 damage, the dead fall and bleed).
 func _shoot_at(g, z, hit_p: float) -> void:
 	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
-	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)
+	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)    # (the pawn draws 4 views, E mirrored for W: the shooter turns to the nearest one)
 	g.aim = ang
+	if g.target == null:    # the first shot of a burst: the rifle is raised for 0.25 s before the flash
+		g.target = z
+		aim_hold[g.id] = 1.4
+		await get_tree().create_timer(0.25).timeout
+		if run == null or not siege._alive(z):
+			return
 	# the pose: PawnNode draws the aimed gun while `target` is set, the kick from `recoil`, the lowered gun and pump from `reloading` (the pawn's own states, ticked in `_gun_poses`)
 	g.target = z
 	g.recoil = 1.0
