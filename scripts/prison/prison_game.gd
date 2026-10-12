@@ -180,7 +180,12 @@ func _fit_window() -> void:
 	if win.mode == Window.MODE_WINDOWED and not OS.has_feature("web") and DisplayServer.get_name() != "headless":
 		var s := DisplayServer.screen_get_scale(win.current_screen)
 		var usable := DisplayServer.screen_get_usable_rect(win.current_screen)
-		var want := Vector2i(Vector2(1280, 800) * s)
+		var base_sz := Vector2(1280, 800)
+		if args.has("window"):    # --window=1024x640: a smaller window for layout checks
+			var wp := String(args.window).split("x")
+			if wp.size() == 2:
+				base_sz = Vector2(float(wp[0]), float(wp[1]))
+		var want := Vector2i(base_sz * s)
 		want.x = mini(want.x, int(usable.size.x * 0.94))
 		want.y = mini(want.y, int(usable.size.y * 0.94))
 		win.size = want
@@ -214,7 +219,15 @@ func _make_hud() -> void:
 	hud = CanvasLayer.new()
 	hud.layer = 10
 	add_child(hud)
-	hud_label = _lbl(18, Vector2(14, 10))
+	hud_label = _lbl(15, Vector2(8, 6))
+	var plate := StyleBoxFlat.new()    # a subtle plate so the text reads on grass, concrete and brick
+	plate.bg_color = Color(0.03, 0.05, 0.04, 0.55)
+	plate.set_corner_radius_all(4)
+	plate.content_margin_left = 8
+	plate.content_margin_right = 8
+	plate.content_margin_top = 3
+	plate.content_margin_bottom = 3
+	hud_label.add_theme_stylebox_override("normal", plate)
 	hud.add_child(hud_label)
 	prompt_label = _lbl(22, Vector2(0, 0))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -278,22 +291,22 @@ func _layout_labels() -> void:
 	prompt_label.size = Vector2(v.x, 30)
 	prompt_label.position = Vector2(0, v.y - 120)
 	msg_label.size = Vector2(v.x, 30)
-	msg_label.position = Vector2(0, 110)
+	msg_label.position = Vector2(0, v.y - 158)
 	cap_label.size = Vector2(v.x, 80)
 	cap_label.position = Vector2(0, v.y * 0.5 + 60)
 
 
 func _stock_line() -> String:
-	var s := ""
+	var parts: Array = []
 	var rep: Dictionary = econ.daily_report() if phase == "managed" else {}    # ECON hook: per-day net for food and water
 	for k in STOCK_KEYS:
 		if phase != "managed" and (k == "parts" or k == "fuel"):
 			continue
 		if rep.has("res") and (k == "food" or k == "water"):
-			s += "%s %d (+%d/-%d)    " % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)]
+			parts.append("%s %d (+%d/-%d)" % [String(k).capitalize(), int(stores[k]), roundi(rep.res[k].prod), roundi(rep.res[k].cons)])
 		else:
-			s += "%s %d    " % [String(k).capitalize(), int(stores[k])]
-	return s
+			parts.append("%s %d" % [String(k).capitalize(), int(stores[k])])
+	return "  ".join(parts)
 
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
@@ -768,9 +781,9 @@ func _hud_text() -> String:
 		for m in crew.members:
 			if m.def.has("ally"):
 				al += "  %s %s" % [String(m.def.name), ("DOWN" if m.state == "downed" else "%d" % int(m.hp))]
-		return "CLEAR THE PRISON    Cleared %d/%d    dead left in the zones: %d    Mag %d\n" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag)] + _stock_line() + "\nParty:" + al
+		return "CLEAR THE PRISON  cleared %d/%d  dead left %d  mag %d  party:%s\n%s" % [_cleared_n(), Base.ZONES.size(), left, int(p.mag), al, _stock_line()]
 	if mode == "base":
-		return "PRISON BASE  %02d:%02d    " % [int(tod), int(fposmod(tod, 1.0) * 60.0)] + _stock_line() + "\nTrucks out: %d   shots from the walls: %d" % [raids, shots_fired] + board.hud_lines() + siege.hud()    # UI hook
+		return "%02d:%02d  %s\n%s  |  %s" % [int(tod), int(fposmod(tod, 1.0) * 60.0), _stock_line(), board.hud_lines(), siege.hud()]    # UI hook
 	return "RAID %d    HP %d    Mag %d    scrap %d\n%s\nKills %d   Exits: %d\n%s" % [raids, int(p.hp), int(p.mag), int(run.sim.stock.scrap), pack.status(), run.sim.kills, exits.size(), loot.hint()]    # RAIDS hook: the marked places
 
 

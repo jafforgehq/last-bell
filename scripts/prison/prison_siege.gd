@@ -224,13 +224,13 @@ func hud() -> String:
 	if not active_phase():
 		return ""
 	var w := weakest()
-	var line := "\nFENCE: all sound" if float(w.hp) >= float(w.max) * 0.97 else "\nFENCE weakest: %s %d%% (%s)" % [String(w.name), int(100.0 * float(w.hp) / float(w.max)), state_of(w)]
+	var line := "Fence sound" if float(w.hp) >= float(w.max) * 0.97 else "Fence weakest: %s %d%% (%s)" % [String(w.name), int(100.0 * float(w.hp) / float(w.max)), state_of(w)]
 	if attacking:
-		line += "    ATTACK night %d: %d of the dead still at the walls" % [night, _alive_wave()]
+		line += "  ATTACK night %d: %d of the dead still at the walls" % [night, _alive_wave()]
 	else:
 		var secs := maxf(0.0, (NIGHT_H + 24.0 * float(nights_started) - abs_h) * SEC_PER_HOUR)
-		line += "    Next attack: night %d in %d:%02d" % [nights_started + 1, int(secs) / 60, int(secs) % 60]
-	return line + "    Ammo %d" % int(game.stores.ammo)
+		line += "  Next attack: night %d in %d:%02d" % [nights_started + 1, int(secs) / 60, int(secs) % 60]
+	return line
 
 
 func active_phase() -> bool:

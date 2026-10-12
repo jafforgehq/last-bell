@@ -531,23 +531,16 @@ func _needs_tab() -> void:
 	body.add_child(rb)
 
 
-## Two lines for the HUD text, under the stock line.
+## The stage part of the HUD's second line (food and water days left and the biggest need live on the needs board).
 func hud_lines() -> String:
 	if game.phase != "managed" or game.mode != "base" or econ == null:
 		return ""
 	var rep: Dictionary = econ.daily_report()
-	var building := "nothing under way"
+	var building := "none"
 	if not (econ.queue as Array).is_empty():
 		var id := String(econ.queue[0])
 		building = "%s %d%%" % [_pname(id), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor))]
-	var l1 := "\n%s  morale %d  beds %d/%d  building: %s" % [rep.stage, int(rep.morale), int(rep.beds.used), int(rep.beds.cap), building]
-	var f: float = float(rep.res.food.days)
-	var w: float = float(rep.res.water.days)
-	var nd: Dictionary = econ.needs()
-	var l2 := "\nFood left: %s  water left: %s" % ["steady" if f < 0.0 else "%.1f d" % f, "steady" if w < 0.0 else "%.1f d" % w]
-	if not nd.is_empty():
-		l2 += "  need: %s%s" % [nd.res, " (raid a %s)" % nd.place if nd.get("place", "") != "" else ""]
-	return l1 + l2
+	return "%s  morale %d  beds %d/%d  building: %s" % [rep.stage, int(rep.morale), int(rep.beds.used), int(rep.beds.cap), building]
 
 
 # ------------------------------------------------------------------------------------ roster tab --
@@ -669,12 +662,12 @@ func _stage_card(stage: String) -> void:
 	vb.add_child(d)
 	root.add_child(card)
 	card.size = Vector2(600, 0)
-	card.position = Vector2((v.x - 600.0) / 2.0, v.y * 0.28)
+	card.position = Vector2((v.x - 600.0) / 2.0, v.y * 0.2)
 	card.modulate.a = 0.0
 	_card_tw = card.create_tween()
-	_card_tw.tween_property(card, "modulate:a", 1.0, 0.4)
-	_card_tw.tween_interval(4.5)
-	_card_tw.tween_property(card, "modulate:a", 0.0, 0.9)
+	_card_tw.tween_property(card, "modulate:a", 1.0, 0.3)
+	_card_tw.tween_interval(1.9)
+	_card_tw.tween_property(card, "modulate:a", 0.0, 0.6)
 	_card_tw.tween_callback(card.queue_free)
 
 
