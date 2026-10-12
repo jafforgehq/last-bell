@@ -120,11 +120,13 @@ func frame(dt: float) -> void:
 			inv.open_stash()
 	if _flag.begins_with("search") and _frames == 15:    # (a staged search of the first thing in reach; "search-full" fills the pack first)
 		if _flag == "search-full":
-			for n in 40:
+			for n in 300:    # (until every cell is used: stacks merge, so many rounds)
 				Inventory.auto_add(grid, "water_jug", 1)
 				Inventory.auto_add(grid, "water_bottle", 1)
 				Inventory.auto_add(grid, "ration_pack", 1)
 				Inventory.auto_add(grid, "canned_food", 4)
+				Inventory.auto_add(grid, "medkit", 1)
+				Inventory.auto_add(grid, "bandage", 1)
 		for c in sim.uses.candidates(sim.avatar.player()):
 			if String(c.kind) == "container":
 				sim.uses.use(c)

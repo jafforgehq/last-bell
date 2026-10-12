@@ -451,7 +451,7 @@ func _enter_base() -> void:
 	for m in crew.members:
 		var n := PawnNode.new()
 		n.setup(m.p, false, data, String(m.key))
-		n.unarmed = bool(m.def.get("kid", false))
+		n.unarmed = bool(m.def.get("unarmed", false))
 		if m.def.has("scale"):
 			n.scale = Vector2.ONE * float(m.def.scale)
 		if m.def.has("stand"):
@@ -556,7 +556,21 @@ func _process(delta: float) -> void:
 	_tick(delta)
 
 
+var _perf_last := 0
+var _perf_ms: Array = []
 func _tick(dt: float) -> void:
+	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
+		var nowu := Time.get_ticks_usec()
+		if frames >= 600 and _perf_last > 0:
+			_perf_ms.append(float(nowu - _perf_last) / 1000.0)
+		_perf_last = nowu
+		if frames == 1800:
+			_perf_ms.sort()
+			var sum := 0.0
+			for v in _perf_ms:
+				sum += float(v)
+			print("PERF frames ", _perf_ms.size(), " avg ms ", snappedf(sum / _perf_ms.size(), 0.01), " p95 ", snappedf(_perf_ms[int(_perf_ms.size() * 0.95)], 0.01), " max ", snappedf(_perf_ms[-1], 0.01), " awake dead ", _awake_dead().size(), " crew ", crew.members.size())
+			get_tree().quit()
 	dt = clampf(dt, 0.0, StepClock.MAX_FRAME)
 	clock += dt
 	frames += 1
@@ -1417,6 +1431,7 @@ func _dead_in_zone(zi: int) -> Array:
 func _add_member_node(m: Dictionary) -> void:
 	var n := PawnNode.new()
 	n.setup(m.p, false, data, String(m.key))
+	n.unarmed = bool(m.def.get("unarmed", false))    # (the clear phase frees the kids through here)
 	if m.def.has("scale"):
 		n.scale = Vector2.ONE * float(m.def.scale)
 	entities.add_child(n)
