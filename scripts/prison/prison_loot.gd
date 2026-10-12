@@ -91,9 +91,9 @@ static func prepare(t: Dictionary, seed_i: int) -> Array:
 				if not room_type.has(int(t.containers[ci].room)):
 					n += 1
 			if n > 0:
-				out.append({"house": hid, "type": String(type_of[hid]), "pos": Rect2(h.rect).get_center(), "n": n})
+				out.append({"house": hid, "type": String(type_of[hid]), "pos": Rect2(h.rect).get_center(), "n": n, "door": Vector2(Vector2i(h.door)) + Vector2(0.5, 0.5)})
 	for rm in room_type:
-		out.append({"house": -1, "room": int(rm), "type": String(room_type[rm]), "pos": Rect2(t.rooms[int(rm)].rect).get_center(), "n": 1})
+		out.append({"house": -1, "room": int(rm), "type": String(room_type[rm]), "pos": Rect2(t.rooms[int(rm)].rect).get_center(), "n": 1, "door": _room_door(t, int(rm))})
 	for ci in t.containers.size():
 		var ct: Dictionary = t.containers[ci]
 		var rng := RandomNumberGenerator.new()
@@ -102,6 +102,23 @@ static func prepare(t: Dictionary, seed_i: int) -> Array:
 		ct["loot"] = roll(ty, String(ct.kind), rng)
 		ct["place"] = ty
 	return out
+
+
+## The doorway tile nearest to a room (its own house's doors, inside ones too): where a sign for a room that stands in for a place goes.
+static func _room_door(t: Dictionary, rm: int) -> Vector2:
+	var room: Dictionary = t.rooms[rm]
+	var c := Rect2(room.rect).get_center()
+	var best := c
+	var bd := 1.0e9
+	for h in t.houses:
+		if int(h.id) != int(room.house):
+			continue
+		for d in h.doors:
+			var q := Vector2(Vector2i((d.tiles as Array)[0])) + Vector2(0.5, 0.5)
+			if q.distance_to(c) < bd:
+				bd = q.distance_to(c)
+				best = q
+	return best
 
 
 static func _count(type_of: Dictionary, room_type: Dictionary, ty: String) -> int:
@@ -148,6 +165,10 @@ func begin(t: Dictionary, seed_i: int) -> void:
 		o = picked
 		picked = -1
 	option = clampi(o, 0, (cfg().options as Array).size() - 1)
+	if game.args.has("log"):
+		for pl in places:
+			if pl.type != "house":
+				print("PLACE ", pl.type, " at ", pl.pos, " door ", pl.door, " room ", pl.get("room", -1))
 	target = []
 	for ty in cfg().options[option].types:
 		target.append(String(ty))
@@ -183,7 +204,7 @@ func _on_map(ty: String) -> bool:
 	return target.has(ty)
 
 
-## World overlay (px): a ring and a name on each marked place; the others only name themselves when Ruth is near.
+## World overlay (px): a ring and a name on each marked place, and a small sign (icon and word) at the place's door: always for the targeted types, for the others when Ruth is near.
 func paint(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
@@ -193,14 +214,54 @@ func paint(c: CanvasItem) -> void:
 		var ty := String(pl.type)
 		var at: Vector2 = Vector2(pl.pos) * TILE
 		var col := _col(ty)
+		var door: Vector2 = Vector2(pl.get("door", pl.pos)) * TILE
 		if _on_map(ty):
 			var rad := 2.6 * TILE * big
 			c.draw_circle(at, rad, Color(col, 0.16 + 0.1 * pulse))
 			c.draw_arc(at, rad, 0, TAU, 36, Color(col, 0.95), 5.0 * big)
 			c.draw_arc(at, rad * 0.62, 0, TAU, 28, Color(col, 0.6), 2.0 * big)
 			c.draw_string(font, at - Vector2(170.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(cfg().hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 340.0 * big, int(22.0 * big), col)
+			_sign(c, door, ty, col, 1.0, big)
 		elif me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
-			c.draw_string(font, at - Vector2(70, 10), String(cfg().names[ty]), HORIZONTAL_ALIGNMENT_CENTER, 140, 14, Color(col, 0.75))
+			_sign(c, door, ty, col, 0.8, 1.0)
+
+
+const SIGN_WORD := {"shop": "SHOP", "pharmacy": "PHARMACY", "hardware": "HARDWARE", "garage": "GARAGE", "petrol": "FUEL", "police": "POLICE"}
+
+
+## A plate at the door (above it on the screen): a dark board, the type's colour, a small icon and the word.
+func _sign(c: CanvasItem, door: Vector2, ty: String, col: Color, a: float, k: float) -> void:
+	var font := ThemeDB.fallback_font
+	var w := 132.0 * k
+	var h := 30.0 * k
+	var r := Rect2(door + Vector2(-w / 2.0, -h - 22.0 * k), Vector2(w, h))
+	c.draw_rect(Rect2(r.position + Vector2(2, 2) * k, r.size), Color(0, 0, 0, 0.5 * a))
+	c.draw_rect(r, Color(0.06, 0.07, 0.08, 0.92 * a))
+	c.draw_rect(r, Color(col, a), false, 2.0 * k)
+	c.draw_line(door + Vector2(0, -22.0 * k), door, Color(col, a), 3.0 * k)    # the post down to the doorway
+	var ic := r.position + Vector2(h / 2.0, h / 2.0)
+	var u := h * 0.28
+	var ink := Color(col, a)
+	match ty:
+		"pharmacy":
+			c.draw_rect(Rect2(ic - Vector2(u * 0.35, u), Vector2(u * 0.7, u * 2.0)), ink)
+			c.draw_rect(Rect2(ic - Vector2(u, u * 0.35), Vector2(u * 2.0, u * 0.7)), ink)
+		"hardware":
+			c.draw_rect(Rect2(ic - Vector2(u, u), Vector2(u * 2.0, u * 0.8)), ink)
+			c.draw_rect(Rect2(ic - Vector2(u * 0.25, u), Vector2(u * 0.5, u * 2.0)), ink)
+		"garage":
+			c.draw_rect(Rect2(ic - Vector2(u, u * 0.6), Vector2(u * 2.0, u * 1.0)), ink)
+			c.draw_circle(ic + Vector2(-u * 0.6, u * 0.55), u * 0.35, ink)
+			c.draw_circle(ic + Vector2(u * 0.6, u * 0.55), u * 0.35, ink)
+		"petrol":
+			c.draw_circle(ic + Vector2(0, u * 0.3), u * 0.75, ink)
+			c.draw_colored_polygon(PackedVector2Array([ic + Vector2(0, -u * 1.2), ic + Vector2(-u * 0.6, u * 0.1), ic + Vector2(u * 0.6, u * 0.1)]), ink)
+		"police":
+			c.draw_colored_polygon(PackedVector2Array([ic + Vector2(-u, -u), ic + Vector2(u, -u), ic + Vector2(u, u * 0.2), ic + Vector2(0, u * 1.2), ic + Vector2(-u, u * 0.2)]), ink)
+		_:
+			c.draw_rect(Rect2(ic - Vector2(u, 0), Vector2(u * 2.0, u * 0.9)), ink)
+			c.draw_arc(ic + Vector2(0, 0), u * 0.8, PI, TAU, 8, ink, 2.0 * k)
+	c.draw_string(font, r.position + Vector2(h, h * 0.72), String(SIGN_WORD.get(ty, ty.to_upper())), HORIZONTAL_ALIGNMENT_LEFT, w - h - 4.0 * k, int(15.0 * k), Color(1, 1, 0.92, a))
 
 
 ## The minimap (`o`: its corner in px, `sc`: px per tile): a coloured ring on each marked place.
