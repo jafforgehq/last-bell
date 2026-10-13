@@ -47,6 +47,10 @@ static func install(w, the_base, seed_v: int) -> void:
 	high.z_index = 1
 	w.add_child(low)
 	w.add_child(high)
+	var top := Node2D.new()
+	top.name = "PolishFence"
+	top.z_index = 5
+	w.add_child(top)
 	for cy in range(0, p.H, CHUNK):
 		for cx in range(0, p.W, CHUNK):
 			var a := DrawNode.new()
@@ -55,6 +59,10 @@ static func install(w, the_base, seed_v: int) -> void:
 			var b := DrawNode.new()
 			b.painter = Callable(p, "_floor").bind(cx, cy)
 			high.add_child(b)
+			if the_base != null:
+				var f := DrawNode.new()
+				f.painter = Callable(p, "_fence").bind(cx, cy)
+				top.add_child(f)
 
 
 # ------------------------------------------------------------------ helpers --
@@ -432,3 +440,84 @@ func _bars(c: CanvasItem, cx: int, cy: int) -> void:
 				c.draw_rect(Rect2(x0 - 0.04, y - 0.12, 0.52, 0.05), steel)
 				c.draw_rect(Rect2(x0 - 0.04, y + 0.07, 0.52, 0.05), steel)
 				c.draw_rect(Rect2(dx + 0.55, y - 0.07, 0.1, 0.14), Color(0.66, 0.56, 0.2))    # padlock box
+
+
+# -------------------------------------------------------------- the fence --
+
+## Razor wire along the top of the chain-link and the shadow it throws (down and to the right, like every other shadow).
+func _fence(c: CanvasItem, cx: int, cy: int) -> void:
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
+	for y in range(cy, mini(cy + CHUNK, H)):
+		for x in range(cx, mini(cx + CHUNK, W)):
+			if base.kl[y * W + x] != 3:
+				continue
+			var horiz: bool = (x > 0 and base.kl[y * W + x - 1] != 0) or (x + 1 < W and base.kl[y * W + x + 1] != 0)
+			var vert: bool = (y > 0 and base.kl[(y - 1) * W + x] != 0) or (y + 1 < H and base.kl[(y + 1) * W + x] != 0)
+			var fx := float(x)
+			var fy := float(y)
+			if horiz and not (vert and x % 2 == 0 and false):
+				c.draw_rect(Rect2(fx, fy + 0.58, 1.0, 0.1), Color(0.02, 0.02, 0.01, 0.2))    # the shadow on the ground
+				_coil(c, Vector2(fx, fy + 0.42), Vector2(1.0, 0.0), x)
+			elif vert:
+				c.draw_rect(Rect2(fx + 0.6, fy, 0.1, 1.0), Color(0.02, 0.02, 0.01, 0.2))
+				_coil(c, Vector2(fx + 0.5, fy), Vector2(0.0, 1.0), y)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _coil(c: CanvasItem, p: Vector2, d: Vector2, k: int) -> void:
+	var n := Vector2(-d.y, d.x)
+	var pa := PackedVector2Array()
+	var pb := PackedVector2Array()
+	for i in 13:
+		var t := float(i) / 12.0
+		var ph := t * TAU * 3.0
+		pa.append(p + d * t + n * sin(ph) * 0.045)
+		pb.append(p + d * t + n * sin(ph + PI) * 0.045)
+	c.draw_polyline(pa, Color(0.04, 0.04, 0.05, 0.55), 0.035)
+	c.draw_polyline(pb, Color(0.04, 0.04, 0.05, 0.55), 0.035)
+	c.draw_polyline(pa, Color(0.7, 0.72, 0.76, 0.9), 0.016)
+	c.draw_polyline(pb, Color(0.5, 0.52, 0.56, 0.9), 0.016)
+
+
+## The gate: two steel rolling leaves with ribs, hazard stripes where they meet, a chain and a padlock, razor wire on top. `g` is the top left (pixels) of the gate, `leaf` the size of one leaf.
+static func draw_gate(c: CanvasItem, g: Vector2, leaf: Vector2, gap: float) -> void:
+	for side in 2:
+		var o := g + Vector2((leaf.x + gap) * float(side), 0.0)
+		c.draw_rect(Rect2(o + Vector2(4, 6), leaf), Color(0, 0, 0, 0.30))    # shadow
+		c.draw_rect(Rect2(o, leaf), Color(0.36, 0.39, 0.42))
+		var ribs := 7
+		for i in ribs:
+			var yy := o.y + 4.0 + float(i) * (leaf.y - 8.0) / float(ribs)
+			c.draw_line(Vector2(o.x + 3, yy + 5), Vector2(o.x + leaf.x - 3, yy + 5), Color(0.17, 0.19, 0.21), 2.0)
+			c.draw_line(Vector2(o.x + 3, yy + 3), Vector2(o.x + leaf.x - 3, yy + 3), Color(0.55, 0.58, 0.62, 0.8), 1.0)
+		c.draw_rect(Rect2(o, leaf), Color(0.08, 0.09, 0.1), false, 3.0)
+		c.draw_line(o + Vector2(2, 2), o + Vector2(leaf.x - 2, 2), Color(0.7, 0.73, 0.78, 0.8), 1.0)
+		# hazard stripes on the edge where the leaves meet
+		var ex := o.x + (leaf.x - 12.0 if side == 0 else 0.0)
+		for i in 8:
+			var col := Color(0.92, 0.74, 0.12) if i % 2 == 0 else Color(0.08, 0.08, 0.08)
+			c.draw_rect(Rect2(ex, o.y + float(i) * leaf.y / 8.0, 12.0, leaf.y / 8.0), col)
+		c.draw_rect(Rect2(ex, o.y, 12.0, leaf.y), Color(0, 0, 0, 0.12))
+		# the track the leaf rolls on
+		c.draw_rect(Rect2(o.x - (6.0 if side == 0 else 0.0), o.y + leaf.y - 5.0, leaf.x + 6.0, 4.0), Color(0.1, 0.1, 0.11, 0.8))
+		for wx in [0.18, 0.82]:
+			c.draw_circle(Vector2(o.x + leaf.x * wx, o.y + leaf.y - 3.0), 3.2, Color(0.2, 0.2, 0.22))
+		# razor wire along the top
+		var pa := PackedVector2Array()
+		var pb := PackedVector2Array()
+		for i in 25:
+			var t := float(i) / 24.0
+			var ph := t * TAU * 6.0
+			pa.append(Vector2(o.x + t * leaf.x, o.y - 3.0 + sin(ph) * 3.0))
+			pb.append(Vector2(o.x + t * leaf.x, o.y - 3.0 + sin(ph + PI) * 3.0))
+		c.draw_polyline(pa, Color(0.75, 0.77, 0.82), 1.2)
+		c.draw_polyline(pb, Color(0.5, 0.52, 0.56), 1.2)
+	# chain across the middle and a padlock
+	var m := g + Vector2(leaf.x + gap * 0.5, leaf.y * 0.5)
+	for i in 6:
+		var a := m + Vector2(-13.0 + float(i) * 5.0, sin(float(i) * 1.7) * 2.0)
+		c.draw_circle(a, 2.4, Color(0.1, 0.1, 0.1))
+		c.draw_circle(a, 1.5, Color(0.55, 0.57, 0.6))
+	c.draw_rect(Rect2(m + Vector2(-5, -1), Vector2(10, 11)), Color(0.1, 0.08, 0.04))
+	c.draw_rect(Rect2(m + Vector2(-4, 0), Vector2(8, 9)), Color(0.78, 0.62, 0.2))
+	c.draw_arc(m + Vector2(0, -1), 4.0, PI, TAU, 8, Color(0.7, 0.72, 0.76), 1.6)

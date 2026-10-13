@@ -1356,8 +1356,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 			Tower.draw_roof(c, t, _night_of(tod))
 		# the gate leaves
 		var g := Vector2(Base.GATE_X, Base.FENCE.end.y - 1) * TILE
-		c.draw_rect(Rect2(g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
-		c.draw_rect(Rect2(g + Vector2(Base.GATE_W * TILE * 0.5 + 2, 0), Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE)), Color(0.45, 0.47, 0.5))
+		Polish.draw_gate(c, g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE), 4.0)    # ART
 		siege.paint(c)    # SIEGE hook
 		board.paint(c)    # UI hook
 		if cleaner != null:
