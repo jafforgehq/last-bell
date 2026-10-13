@@ -47,6 +47,7 @@ const Guide := preload("res://scripts/prison/prison_guide.gd")    # UI round 2: 
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
 const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
 const ZMove := preload("res://scripts/prison/prison_dead.gd")    # ZMOVE: how the dead move (heading, gait, pause, rise, lean on the fence)
+const Arc := preload("res://scripts/prison/prison_arc.gd")    # ARC hook: the 30-day story arc, goals and endings
 const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: raid companions
 const SearchRules := preload("res://scripts/town/search.gd")
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
@@ -155,6 +156,7 @@ var topbar    # UI round 2: prison_topbar.gd
 var tags    # UI round 2: prison_tags.gd
 var guide    # UI round 2: prison_guide.gd
 var board    # UI hook: prison_board.gd (project, needs and roster window, toasts, stage card)
+var arc    # ARC hook: prison_arc.gd (calendar, story, goals, convoy, endings)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
 var back_t := 0.0    # seconds since she came back from a raid (the siege shows its "back in the middle" card while this runs)
@@ -216,6 +218,7 @@ func _ready() -> void:
 	topbar = Topbar.new(self)
 	tags = Tags.new(self)
 	guide = Guide.new(self)
+	arc = Arc.new(self)    # ARC hook
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
 	pause_menu.setup(self)
@@ -665,6 +668,7 @@ func _enter_raid() -> void:
 	var drop: Vector2 = Vector2(t.entry.pos)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	loot.begin(t, seed_i)    # RAIDS hook: loot by place and the marked places (before the sim reads the containers)
+	arc.begin_raid(t, seed_i)    # ARC hook: letters in containers, the set-piece cache
 	if args.has("findgun"):    # staging: --findgun=smg puts that gun in the container nearest the drop
 		var nb = null
 		for ct in t.containers:
@@ -975,7 +979,9 @@ func _tick(dt: float) -> void:
 		crew.update(dt, stores)
 	people.frame(dt)    # RAIDS hook
 	if econ != null:    # ECON hook
-		if args.has("econ-lab") and phase == "managed":
+		if args.has("arcauto") and phase == "managed":    # ARC hook: the scripted 30 days (prison_arclab.gd)
+			arc.lab(dt)
+		elif args.has("econ-lab") and phase == "managed":
 			econ.lab(dt)
 		else:
 			econ.update(dt)
@@ -996,6 +1002,7 @@ func _tick(dt: float) -> void:
 	topbar.frame(dt)
 	tags.frame()
 	guide.frame(dt)
+	arc.frame(dt)    # ARC hook
 	_layout_labels()
 	if cap_label.modulate.a > 0.01 or band_a > 0.01:    # ART: the caption band follows its fade
 		band_a = cap_label.modulate.a
@@ -1143,7 +1150,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
 		return
-	if ev is InputEventKey and not busy and (topbar.key(ev) or guide.key(ev) or squad.key(ev)):    # SQUAD hook: C, the orders
+	if ev is InputEventKey and not busy and (topbar.key(ev) or guide.key(ev) or squad.key(ev) or arc.key(ev)):    # SQUAD hook: C, the orders
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
 		return
@@ -1346,10 +1353,12 @@ func _extract(alive: bool) -> void:
 		gun_lines = sq.lines
 		if back > 0:
 			gun_lines.append("%d gun%s for the weapon rack." % [back, "" if back == 1 else "s"])
+		arc.take_notes(pack.grid)    # ARC hook: the letters are read at home
 		pack.bank()    # (the items go back into the raid's stock: the line below banks all of it)
 		for k in STOCK_KEYS:
 			var v := float(run.sim.stock.get(k, 0.0))
 			loot_got[k] = v
+	arc.on_raid(alive, loot_got)    # ARC hook: raids, scrap, kills, the cache, Ruth's deaths
 	var lines: Array = ["You reach the pickup. The truck is waiting.", "Back through the gate, back to the compound."]
 	if not alive:
 		lines = ["You go down in the street.", "Whatever you carried stays out there."]
@@ -1494,6 +1503,7 @@ func _paint_decks(c: CanvasItem) -> void:
 
 func _paint_overlay(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
+	arc.paint(c)    # ARC hook
 	if mode == "base":
 		for t in base.towers:
 			Tower.draw_roof(c, t, _night_of(tod))
@@ -2392,6 +2402,8 @@ func _day_night(_dt: float) -> void:
 	var n := _night_of(tod)
 	var c := _grade(tod)
 	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1)
+	if mode == "base" and arc != null:
+		night_rect.color = night_rect.color.darkened(arc.dim())    # ARC hook: rain, fog and the storm darken the day
 	if vignette != null:
 		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.45 * n if mode == "base" else 0.22)
 	if args.has("hour"):

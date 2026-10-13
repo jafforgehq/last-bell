@@ -279,7 +279,7 @@ func fence_mult() -> float:
 
 
 func hit_bonus() -> float:
-	return float(cfg.light_hit_bonus) if tier("power") >= 2 and power_on else 0.0
+	return float(cfg.light_hit_bonus) if tier("power") >= 2 and power_on and not game.arc.blackout() else 0.0    # (ARC hook: the storm night is dark)
 
 
 ## Production of one resource per day by what is built and who is at work. `power` says whether the generator runs.

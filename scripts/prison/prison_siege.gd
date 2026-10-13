@@ -57,6 +57,7 @@ var _card_label: Label
 var _card_t := 0.0
 var _hit_fx_t := 0.0
 var _logged := -1
+var _runner_p := 0.0    # ARC hook: the share of runners of this night (prison_arc.gd `wave_plan`)
 
 
 func _init(g) -> void:
@@ -324,7 +325,9 @@ func _start_attack(n: int) -> void:
 		s.attacked = false
 	stats = {"hp0": hp0, "killed": 0, "ammo": 0.0, "shots": 0, "lost": [], "crew": [], "n": 0}
 	# which segments: night 1 only where the towers reach; later nights anywhere (and from night 3 at least one the guards cannot cover)
-	var k := mini(3, 1 + (n - 1) / 2)
+	var plan: Dictionary = game.arc.wave_plan(n)    # ARC hook: the night table by day (prison_story.json `nights`)
+	_runner_p = float(plan.runner)
+	var k := int(plan.segs)
 	var pool: Array = []
 	for s in segs:
 		if float(s.hp) > 0.0:
@@ -353,7 +356,7 @@ func _start_attack(n: int) -> void:
 	if picked.is_empty() and not pool.is_empty():
 		picked.append(pool[0])
 	_plan.clear()
-	var per := 4 + 4 * n
+	var per := int(plan.per)
 	var names: Array = []
 	for s in picked:
 		s.attacked = true
@@ -363,6 +366,8 @@ func _start_attack(n: int) -> void:
 		if not names.has(side):
 			names.append(side)
 	var txt := "Night %d: the %s" % [n, " and the ".join(names)]
+	if String(plan.name) != "":
+		txt = "Night %d, %s: the %s" % [n, String(plan.name), " and the ".join(names)]
 	stats["where"] = txt
 	print("SIEGE START ", txt, " segs=", picked.map(func(q): return q.name), " sent=", stats.n)
 	_show_banner(txt, 6.0)
@@ -406,7 +411,7 @@ func _spawn_batches(dt: float) -> void:
 			if s.side == "S":
 				at.y = clampf(at.y, 57.0, 68.0)
 			at = _free_near(at)
-			var kind := "runner" if randf() < minf(0.3, 0.04 * float(night)) else "walker"
+			var kind := "runner" if randf() < _runner_p else "walker"
 			var rec: int = field.add_record(at, kind, false)
 			var z = field._wake(rec)
 			if z == null:
@@ -704,6 +709,7 @@ func _end_attack() -> void:
 	print("SIEGE RESULT night=%d where='%s' lost=%s killed=%d/%d ammo=%.1f shots=%d crew_lost=%s hp0=%.0f hp1=%.0f t=%.0f guards_off=%s" % [night, String(stats.where), lost, int(stats.killed), int(stats.n), float(stats.ammo), int(stats.shots), crew_lost, float(stats.hp0), hp1, t_att, guards_off])
 	_report_done = true
 	forced = false
+	game.arc.night_over(night, stats)    # ARC hook
 	if game.args.has("siegefor"):
 		game.get_tree().quit()
 

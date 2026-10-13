@@ -1,0 +1,176 @@
+{
+  "_doc": "The 30-day arc of the prison's managed phase (scripts/prison/prison_arc.gd, prison_story.gd, prison_endings.gd). Everything the arc says or counts is here. See docs/experiments/prison-story.md for how to add a beat, a letter or an ending. calendar: days of the arc, the day and hour the convoy comes and leaves, the hour a day's story card is shown. phases: the goal chain (a phase is done when its `stage` is reached; `by_day` is the soft deadline the tracker shows). requirements: the convoy's list (kind stock|project|tier|people; must = the convoy takes nobody without it). bonuses: optional extras that add to the score. convoy: seats of the bus and the pickup of the project 'convoy1'. nights: rows [night, dead sent, segments attacked, share of runners]; a night between two rows is interpolated (segments and runners from the row below); a weather's wave_mult multiplies the dead. weather: day -> kind; kinds in weather_kinds. beats: story cards (day, or a `when` rule), letters: notes found in raids. endings: id -> card; text lines may carry an `if` rule (see prison_endings.gd `_facts`). score: points per fact. lab: the numbers of the scripted days (--arcauto).",
+  "calendar": {"days": 30, "convoy_day": 30, "arrive_h": 11.0, "leave_h": 15.0, "card_h": 6.4, "radio_freq": "91.4"},
+  "rules": {
+    "starvation": {"after_days": 3, "per_day": 1},
+    "overrun": {"gaps": 3, "secs": 25.0},
+    "ruth_deaths": 3,
+    "start_beds_note": "people above the beds are not counted twice: the evacuation takes every person alive up to the seats"
+  },
+  "weather_kinds": {
+    "clear": {"label": "clear", "text": ""},
+    "rain": {"label": "rain", "text": "Rain: the barrels fill.", "water": 6, "dim": 0.12},
+    "fog": {"label": "fog", "text": "Fog: the towers see less.", "dim": 0.2},
+    "storm": {"label": "STORM", "text": "A storm: no power tonight, more dead at the wall.", "dim": 0.45, "blackout": true, "wave_mult": 1.3, "water": 10}
+  },
+  "weather": {"3": "rain", "6": "fog", "9": "rain", "13": "rain", "16": "fog", "20": "rain", "24": "storm", "27": "rain"},
+  "phases": [
+    {"id": "establish", "name": "Phase I: Establish", "stage": "Shelter", "by_day": 7, "text": "Water and beds: make the prison somewhere people can stay."},
+    {"id": "prepare", "name": "Phase II: Prepare", "stage": "Fortress", "by_day": 20, "text": "Settlement and Fortress: food, a kitchen, a medic, power and a reinforced fence."},
+    {"id": "evacuate", "name": "Phase III: Evacuate", "stage": "", "by_day": 30, "text": "Be ready at the gate on day 30."}
+  ],
+  "requirements": [
+    {"id": "fuel", "label": "Fuel for the road", "kind": "stock", "res": "fuel", "need": 40, "must": true, "take": true},
+    {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 25, "must": true, "take": true},
+    {"id": "truck", "label": "Convoy truck built", "kind": "project", "project": "convoy1", "must": true},
+    {"id": "radio", "label": "Radio room (tier 1)", "kind": "tier", "building": "radio", "tier": 1, "must": true},
+    {"id": "fence", "label": "Fence tier 2", "kind": "tier", "building": "fence", "tier": 2, "must": true},
+    {"id": "people", "label": "People alive", "kind": "people", "need": 9, "must": false}
+  ],
+  "bonuses": [
+    {"id": "dog", "label": "A seat for the dog", "rule": "seat_spare", "points": 10},
+    {"id": "meds", "label": "Medicine for the sick (10 meds)", "rule": "stock:meds:10", "points": 15},
+    {"id": "food", "label": "Food for the road (30)", "rule": "stock:food:30", "points": 10},
+    {"id": "crew", "label": "Nobody lost on the way (no deaths)", "rule": "no_deaths", "points": 25}
+  ],
+  "convoy": {"bus_seats": 4, "name": "the Harbor Convoy", "waits": "until 15:00"},
+  "evac_tiers": [
+    {"id": "full", "min_share": 0.85, "label": "FULL"},
+    {"id": "good", "min_share": 0.5, "label": "GOOD"},
+    {"id": "bitter", "min_share": 0.0, "label": "BITTER"}
+  ],
+  "nights": [
+    [1, 6, 1, 0.0], [2, 8, 1, 0.0], [3, 12, 1, 0.04], [4, 16, 2, 0.05], [5, 20, 2, 0.08], [7, 26, 2, 0.1], [9, 34, 2, 0.12],
+    [11, 42, 3, 0.15], [14, 54, 3, 0.18], [17, 64, 3, 0.2], [19, 72, 3, 0.22], [21, 58, 3, 0.18], [23, 62, 3, 0.2], [24, 66, 3, 0.22],
+    [26, 62, 3, 0.2], [28, 68, 3, 0.22], [29, 74, 3, 0.24], [30, 108, 4, 0.3]
+  ],
+  "night_names": {"1": "The first night", "4": "The yard fills", "11": "The long wall", "19": "The worst week", "24": "Storm night", "29": "The night before", "30": "The last night"},
+  "beats": [
+    {"id": "first_contact", "day": 1, "tag": "static", "title": "Static",
+      "from": "unknown station",
+      "text": "The prison is yours, and for the first time in days the walls are quiet. Ruth turns the dial on the guard room radio out of habit. Under the hiss a woman is reading numbers, then a name: Harbor Relief, calling any station. She says it twice. Then the signal goes, and the room is only a room again.",
+      "short": "A voice on the radio: Harbor Relief, calling any station."},
+    {"id": "rumour", "day": 3, "tag": "rumour", "title": "A convoy",
+      "from": "Harbor Relief",
+      "text": "The same voice, thinner. Harbor Relief is sending a convoy up the river road: a bus and two trucks, for anyone who can be at a gate when it passes. She gives no date. A man behind her tells her not to promise anything, and she promises anyway: it will stop once, and only once.",
+      "short": "A convoy is coming up the river road. No date yet.",
+      "reward": {"stores": {"food": 4}}},
+    {"id": "ferry_depot", "day": 7, "tag": "distress", "title": "The ferry depot",
+      "from": "a work crew",
+      "text": "A distress call, short and ragged. A work crew is pinned in the old ferry depot, two streets from the river, with fuel and parts they cannot carry out alone. The call ends in the middle of a word and nobody answers after it. Whatever they had is still there: the next raid will have it marked on the map.",
+      "short": "A crew died in the ferry depot. Their cache is still there: the next raid marks it.",
+      "set_piece": {"name": "The ferry depot", "loot": {"fuel": 8, "parts": 9, "meds": 4, "ammo": 18}, "note": true, "found": "The crew's cache. Fuel and parts, and a note in a work glove."}},
+    {"id": "the_dam", "day": 12, "tag": "lure", "title": "The dam",
+      "from": "a warm voice",
+      "text": "A new voice on the old frequency, slow and kind. A group at the dam has children and no ammunition, and will give half their food to anyone who brings a truck. The man on watch beside Ruth says the voice is reading and not remembering. He may be wrong. If he is right, someone is fishing with a radio.",
+      "short": "A voice asks for a truck at the dam. It may be a lure.",
+      "choice": [
+        {"id": "go", "label": "Send the truck", "result": "The truck came back at dusk, shot through, with an empty tank. Nobody was at the dam. The voice was a recording on a car battery, still talking when the driver left it. Those who set it are somewhere on the river road now, and they know where you drive.", "short": "The dam was a lure. The truck came back shot through.", "effects": {"stores": {"fuel": -6, "ammo": -20}, "morale": -8}},
+        {"id": "stay", "label": "Keep the gate shut", "result": "Ruth turned the volume down, and nobody turned it up again. By night it had stopped. Whether there were children at the dam, the prison never learned, and it is what they remember about the twelfth day.", "short": "You kept the gate shut. You will not learn who it was.", "effects": {"morale": -4}}
+      ]},
+    {"id": "arrangement", "day": 18, "tag": "convoy", "title": "The arrangement", "opens_phase": "evacuate",
+      "from": "Halloran, Harbor Relief",
+      "text": "A man this time, clear and tired. Halloran. The convoy passes the river road on day 30 and will wait at your gate until the afternoon, no longer. They want 40 fuel and 25 parts for the road, a radio to talk to you, a fence that can hold while they load, and a truck of your own to join the column. Everyone who is at the gate goes. The bus and your truck have twelve seats between them.",
+      "short": "Halloran: the convoy comes on day 30. Fuel 40, parts 25, a radio room, a fence at tier 2, a truck of your own.",
+      "reward": {"stores": {"parts": 4}}},
+    {"id": "storm", "day": 24, "tag": "storm", "title": "The storm",
+      "from": "Halloran, Harbor Relief",
+      "text": "The sky goes green by afternoon. Halloran's call is half noise: a storm is over the whole coast, and the dead move toward the sound of it. Tonight the generator will not hold, and the lamps will go out. He tells you to keep the wall mended and the guards fed, and then there is only the wind in the speaker.",
+      "short": "A storm on day 24. The lamps will go out and more dead will come.",
+      "event": "storm"},
+    {"id": "last_prep", "day": 28, "tag": "convoy", "title": "Two days",
+      "from": "Halloran, Harbor Relief",
+      "text": "The convoy has crossed the north bridge and is on schedule. Halloran reads the list back like a man who has been lied to before: fuel, parts, the truck, the radio, the fence. Whatever you are missing, you have two days to find it. He does not say what happens to a gate that is not ready.",
+      "short": "The convoy is on schedule. Two days to be ready.",
+      "readiness": true},
+    {"id": "convoy_day", "day": 30, "tag": "convoy", "title": "Day thirty", "silent": true,
+      "from": "Halloran, Harbor Relief",
+      "text": "Halloran, from the river road: they are an hour out. Be at the gate.",
+      "short": "The convoy is an hour out. Be at the gate."}
+  ],
+  "convoy_cards": {
+    "arrive": "The convoy is at the river road gate: a bus, two trucks, men in dust masks watching the fence. Halloran stands on the running board with a list. It waits {leaves}.",
+    "ready": "Everything on the list is here. {seats} seats, {people} people.",
+    "short": "They do not get out. Halloran reads what is missing, and a driver looks at his watch. The convoy rolls on.",
+    "missed": "Nobody was at the gate. The convoy waited as long as it could, then rolled on.",
+    "gone": "The convoy is gone. The road is empty and the gate is closed. Tonight is the last night, and the wall is all that is left."
+  },
+  "letters": [
+    {"id": "l_apology", "title": "A note in a coat", "from": "unsigned", "text": "I took the last of the tinned fish. I am sorry. I could not hear you any more through the door. If you are reading this, the cellar is clear and the key is under the third stair.", "reward": {"stores": {"food": 5}}},
+    {"id": "l_children", "title": "A drawing and a note", "from": "a mother", "text": "We counted the dead outside our window until there were too many to count. We went to the river road because the radio said a bus. If you are warm and reading this, tell the bus we were here.", "reward": {}},
+    {"id": "l_fuel", "title": "A depot ticket", "from": "Harbor Fuel", "text": "Tank 4 was never drained. Dipstick shows a third. Padlock code is the year the ferry opened: 1974. Keep a hand on the pump, it kicks.", "reward": {"stores": {"fuel": 5}}, "clue": "Tank 4 had fuel in it."},
+    {"id": "l_pharmacist", "title": "A pharmacist's letter", "from": "the pharmacy on Bell Street", "text": "I sorted what was left by who would die first and put it in the blue bag behind the counter. I hope that was right. The insulin is gone. The rest is yours.", "reward": {"stores": {"meds": 4}}},
+    {"id": "l_scrapyard", "title": "A folded map", "from": "a mechanic", "text": "The yard has a flatbed with a good axle behind the crusher. Everything else on it is rust. A man who is not afraid of dogs could strip it in a morning.", "reward": {"stores": {"scrap": 12, "parts": 3}}},
+    {"id": "l_weir", "title": "A warning", "from": "a woman at the weir", "text": "The voices on the radio that ask for a truck are men from the weir. They wait at the dam. They do not hurt you until the engine is off. Do not stop for a child that is standing too still.", "reward": {}, "clue": "The dam voices are the weir men."},
+    {"id": "l_soldier", "title": "A soldier's last page", "from": "Private R.", "text": "They told us to hold the bridge and then they told us to leave the bridge, and I did not hear which came last. The rifle is clean. I am going home to look.", "reward": {"stores": {"ammo": 14}}},
+    {"id": "l_dog", "title": "A leash and a note", "from": "a boy", "text": "If a brown dog comes to your door, he is called Biscuit and he is not stupid, he only looks it. Please give him my place.", "reward": {}},
+    {"id": "l_teacher", "title": "A register", "from": "a teacher", "text": "Twenty-two names. I have crossed seventeen. I am keeping the other five in case someone asks. Nobody has asked.", "reward": {}},
+    {"id": "l_cook", "title": "A recipe card", "from": "unsigned", "text": "Dried peas, a tin of anything, boil it till it is one colour. It will not taste of anything. It will keep four people alive for a week. Put the card in the larder and do not read it twice.", "reward": {"stores": {"food": 6}}},
+    {"id": "l_convoy", "title": "A road report", "from": "a driver", "text": "North bridge is passable for anything under four tonnes. The river road is not. If they plan to come that way they will need the long detour, and a lot more fuel than they say.", "reward": {}, "clue": "The convoy takes the long detour."},
+    {"id": "l_radio", "title": "A hand-written schedule", "from": "Harbor Relief operator", "text": "We transmit on the hour for ten minutes. If you hear us and nobody answers, we move to the next name on the list. We have been moving a long time.", "reward": {"stores": {"parts": 3}}}
+  ],
+  "letter_chance": 0.28,
+  "endings": {
+    "evac_full": {"title": "EVACUATED", "sub": "Everyone who came to the gate is on the truck.", "tone": "good", "lines": [
+      "The bus pulled out at 15:00 with {saved} people on it and a dog on somebody's knee. Nobody counted out loud, because everyone was there to count.",
+      "Over {days} days the prison held {nights} nights. {kills} dead were shot at its fence, and you built {projects} things with your hands that you will not see again.",
+      {"if": "dog", "text": "Biscuit rode up front. The driver pretended not to notice."},
+      "The column went north on the long road. Behind it, the gate stood open. It looked like a place people had lived."
+    ]},
+    "evac_good": {"title": "EVACUATED", "sub": "Most of you are on the truck.", "tone": "good", "lines": [
+      "The bus pulled out at 15:00 with {saved} people on it. It was a good number, and nobody said how many had been fewer.",
+      {"if": "lost", "text": "Missing from the seats: {names_lost}. They are on the long list of the prison, and the list will go with you."},
+      "{days} days. {nights} nights held. {kills} dead at the fence. {projects} things built.",
+      {"if": "left_behind", "text": "There were not enough seats: {names_left} stayed at the gate and watched the lights go north."},
+      "Halloran shook Ruth's hand through the window and did not say anything. It was enough."
+    ]},
+    "evac_bitter": {"title": "EVACUATED", "sub": "Only a few of you made the truck.", "tone": "bitter", "lines": [
+      "The bus pulled out at 15:00 with {saved} people on it, and a lot of room.",
+      {"if": "lost", "text": "You left behind more than you took: {names_lost}. The gate looked wrong without them."},
+      "{days} days, {nights} nights, {kills} dead at the fence, {projects} things built, and a long drive to find out what it was for.",
+      {"if": "left_behind", "text": "{names_left} did not fit, or did not come."},
+      "In the dust behind the convoy the prison got smaller until it was just a fence."
+    ]},
+    "evac_lonely": {"title": "EVACUATED", "sub": "Ruth alone.", "tone": "bitter", "lines": [
+      "The bus pulled out at 15:00 with one person on it. Halloran asked if there was anybody else and Ruth said no, and it was not a lie.",
+      {"if": "lost", "text": "She said the names in the dark, from the back seat: {names_lost}."},
+      "{days} days. {nights} nights. {kills} dead. {projects} things built. A gate with nobody at it."
+    ]},
+    "held": {"title": "HELD THE FORT", "sub": "You stayed. The prison is still standing.", "tone": "good", "lines": [
+      "The sun came up on day 31 and the fence was still a fence. There were {kills} dead at the wall, and the survivors are {saved}.",
+      {"if": "convoy_gone", "text": "The convoy went on without you. Somewhere north it is a rumour, and you have a radio room to hear it."},
+      {"if": "lost", "text": "You lost {names_lost} on the way here."},
+      "{days} days held, {nights} nights, {projects} things built. Nobody is coming for you, and nobody has to. There is food in the larder, and a fence."
+    ]},
+    "overrun": {"title": "OVERRUN", "sub": "The fence fell and the prison was lost.", "tone": "bad", "lines": [
+      "On night {night} the wall went in three places at once. The guards fought from the towers until the ammunition was gone.",
+      {"if": "lost", "text": "The ones who did not get out: {names_lost}."},
+      "You held {nights} nights and lasted {days} days. {kills} dead are at the fence. The gate is wide open, and the yard is full."
+    ]},
+    "abandoned": {"title": "ABANDONED", "sub": "Everyone left or died.", "tone": "bad", "lines": [
+      "On day {days} Ruth walked the yard and there was nobody in it. The beds were made. The garden was dry.",
+      {"if": "lost", "text": "Gone for good: {names_lost}."},
+      {"if": "left", "text": "Gone on their own legs: {names_walked}."},
+      "{nights} nights held. {kills} dead at the fence. The radio kept calling for a station that did not answer."
+    ]},
+    "starved": {"title": "STARVED", "sub": "The stores ran out and the people with them.", "tone": "bad", "lines": [
+      "By the {days}th day the larder was empty and the barrels were dry. People left in the night, one by one. Some of them did not leave but lay down.",
+      {"if": "lost", "text": "They are gone: {names_lost}."},
+      "{nights} nights held, {kills} dead at the fence, and nobody to count them."
+    ]},
+    "dead": {"title": "DEAD", "sub": "Ruth did not come back.", "tone": "bad", "lines": [
+      "The truck came back empty the third time. The gate stayed shut, and the radio room kept calling her name until the battery went.",
+      "She lasted {days} days. {nights} nights held, {kills} dead, {projects} things built, and no one left who knew where the keys were."
+    ]}
+  },
+  "score": {"saved": 20, "day": 1, "night": 4, "project": 3, "kill": 0.1, "rescue": 6, "death": -6, "letter": 3, "evac": 60, "held": 40, "bonus": 1, "convoy_ready": 20},
+  "lab": {
+    "skills": {
+      "passive": {"raids": 0.0, "loot": 0.0, "rescue_p": 0.0, "mend": 0.0, "spend": 0.0, "defense": 0.0},
+      "average": {"raids": 1.0, "loot": 0.7, "rescue_p": 0.25, "mend": 0.8, "spend": 1.0, "defense": 1.0},
+      "expert": {"raids": 1.0, "loot": 1.1, "rescue_p": 0.4, "mend": 1.0, "spend": 1.0, "defense": 1.0}
+    },
+    "start_people": 3,
+    "night": {"guard_kills": 22.0, "ruth_kills": 14.0, "ammo_per_kill": 0.8, "scrap_per_dead_leak": 0.35, "hp_per_dead": 4.0, "casualty_per_gap": 0.45, "base_defense": 6.0, "light_bonus": 0.12, "per_rounds_spent": 1.0}
+  }
+}

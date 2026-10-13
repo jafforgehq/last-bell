@@ -9,7 +9,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const KEYS := [
 	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["R", "reload"], ["F", "melee"],
 	["E", "use, search, go out at the gate or the truck"], ["Q", "put the gun away or take it up"], ["B", "the roster"], ["C", "the squad's orders"],
-	["Tab or I", "the backpack"], ["M", "the overview map"], ["Wheel", "zoom"], ["Esc", "this menu"],
+	["Tab or I", "the backpack"], ["O", "fold the objectives"], ["L", "the story log: the radio messages and the convoy's list"], ["M", "the overview map"], ["Wheel", "zoom"], ["Esc", "this menu"],
 ]
 
 var game

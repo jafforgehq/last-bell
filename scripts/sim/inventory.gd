@@ -506,7 +506,7 @@ static func items_for_loot(loot: Dictionary, key: int) -> Array:
 				out.append({"item": plain, "count": k})
 				rest -= k
 	for k in loot:    # (a gun found in a prison raid: loot key "gun_<id>" is the item of that name, whole)
-		if String(k).begins_with("gun_") and int(loot[k]) > 0 and not item(String(k)).is_empty():
+		if (String(k).begins_with("gun_") or String(k) == "note") and int(loot[k]) > 0 and not item(String(k)).is_empty():    # (a letter of the prison story: loot key "note")
 			out.append({"item": String(k), "count": int(loot[k])})
 	out.sort_custom(func(a, b):
 		var sa := size_of(String(a.item))
