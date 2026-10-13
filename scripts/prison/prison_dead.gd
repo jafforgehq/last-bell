@@ -109,8 +109,12 @@ func post(dt: float) -> void:
 
 
 func _one(z, dt: float) -> void:
+	if not z.head_ok:
+		return    # woken inside this very step: `pre` has not seen it yet, its `ox`/`oy` are 0 and the pull-back below would drag it to the map's corner, into walls
 	var kind: String = z.kind
 	var hsh := fposmod(z.zph / TAU * 7.31, 1.0)
+	if sim.world.is_solid(sim.world.solid_z, z.x, z.y):
+		_unstick(z)
 	if z.pst != z.state:
 		if z.pst == "still" and z.rise >= 1.0 and z.state != "still" and z.state != "attack":
 			z.pause = maxf(z.pause, 0.2 + 0.4 * hsh)    # (it notices: the head comes round first)
@@ -159,12 +163,36 @@ func _one(z, dt: float) -> void:
 		k = clampf(1.0 - (diff - float(h[0])) / (float(h[1]) - float(h[0])), float(h[2]), 1.0)
 		k *= _lurch(z, kind)
 	if k < 0.999:
-		z.x = z.ox + dx * k
-		z.y = z.oy + dy * k
+		var nx: float = z.ox + dx * k
+		var ny: float = z.oy + dy * k
+		if sim.world.is_solid(sim.world.solid_z, nx, ny):
+			return    # (never integrate a position into a blocked tile: keep the rules' step)
+		z.x = nx
+		z.y = ny
 		z.walk_phase = z.oph + (z.walk_phase - z.oph) * k
 		if k < 0.08:
 			z.moving = false
 			stats.held += 1
+
+
+## A dead one found on a blocked tile goes to the centre of the nearest free tile (rings of growing radius).
+func _unstick(z) -> void:
+	var tx := floori(z.x)
+	var ty := floori(z.y)
+	for r in range(1, 6):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue
+				var cx := float(tx + dx) + 0.5
+				var cy := float(ty + dy) + 0.5
+				if not sim.world.is_solid(sim.world.solid_z, cx, cy):
+					z.x = cx
+					z.y = cy
+					z.path.clear()
+					z.path_i = 0
+					stats.unstuck = int(stats.get("unstuck", 0)) + 1
+					return
 
 
 ## How much of a step it keeps by where its stride is (it can be above 1 mid swing: the phase of the legs moves with the distance, so the time spent in the slow part is longer and the averages

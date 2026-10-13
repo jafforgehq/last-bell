@@ -149,6 +149,7 @@ var ally_chasers := {}    # Zombie -> member: dead that go for an ally instead o
 var revive_t := 0.0
 var _hurt_t := 0.0
 var _auto_i := 0
+var _deadchecked := false
 var pack: Pack    # the backpack (prison_pack.gd)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var topbar    # UI round 2: prison_topbar.gd
@@ -938,7 +939,52 @@ func _turntest(dt: float) -> void:
 		z.facing = run.sim.facing_of(d2.x, d2.y, z.facing)
 
 
+## --deadcheck=S (S game seconds, once): lists every dead one (asleep or awake) on a blocked tile (wall, fence, prop) and prints counts per cause and per zone: `DEADCHECK ...`. --deadcheck=S,quit quits after.
+func _dead_check() -> void:
+	var cnt := {"wall": 0, "fence": 0, "prop": 0, "solid": 0, "ok": 0}
+	var by_zone := {}
+	var kit: Dictionary = town.data.kit
+	var f = run.sim.field
+	var pts: Array = []
+	for i in f.n:
+		if f.status[i] == f.DORMANT:
+			pts.append(Vector2(f.xs[i], f.ys[i]))
+	var info := {}
+	for z in run.sim.zombies:
+		if z.state != "dying" and z.state != "dead":
+			pts.append(Vector2(z.x, z.y))
+			info[pts.size() - 1] = "%s %s rise %.1f rec %s" % [z.kind, z.state, z.rise, str(f.rec_of.get(z, -1)) + (" rx %.2f,%.2f" % [f.xs[f.rec_of[z]], f.ys[f.rec_of[z]]] if f.rec_of.has(z) else "")]
+	var pi := -1
+	for p in pts:
+		pi += 1
+		var tx := floori(p.x)
+		var ty := floori(p.y)
+		var ix: int = ty * world.W + tx
+		var cause := "ok"
+		if world.is_solid(world.solid_z, p.x, p.y):
+			cause = "solid"
+			if ix >= 0 and ix < (kit.wall as PackedByteArray).size():
+				if (kit.wall as PackedByteArray)[ix] != 0:
+					cause = "wall"
+				elif (kit.line as PackedByteArray)[ix] != 0:
+					cause = "fence"
+				elif (town.data.shot_low as PackedByteArray)[ix] != 0:
+					cause = "prop"
+		cnt[cause] += 1
+		if cause != "ok":
+			var zn := String(Base.ZONES[Base.zone_at(p.x, p.y)].id) if Base.zone_at(p.x, p.y) >= 0 else "outside"
+			by_zone[zn] = int(by_zone.get(zn, 0)) + 1
+			if args.has("deadlist"):
+				print("DEADCHECK at ", p.snapped(Vector2(0.01, 0.01)), " ", cause, " ", zn, " ", info.get(pi, "asleep"))
+	print("DEADCHECK t=", snappedf(clock, 0.1), " phase ", phase, " total ", pts.size(), " ", cnt, " blocked by zone ", by_zone)
+
+
 func _tick(dt: float) -> void:
+	if args.has("deadcheck") and run != null and not _deadchecked and clock >= float(String(args.deadcheck).split(",")[0]):
+		_deadchecked = true
+		_dead_check()
+		if String(args.deadcheck).ends_with("quit"):
+			get_tree().quit()
 	if zmove != null and args.has("zombietest"):
 		zmove.test(dt)
 	if args.has("turntest") and crew != null:
