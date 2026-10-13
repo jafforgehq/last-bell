@@ -2231,7 +2231,7 @@ func _night_of(h: float) -> float:
 
 ## ART: the colour of the light by the hour: neutral day, a long amber sunset (16:30 to 18:30), cold blue night, a pink dawn.
 const GRADE := [[0.0, Color(0.27, 0.33, 0.60)], [5.0, Color(0.27, 0.33, 0.60)], [6.2, Color(0.80, 0.62, 0.62)], [7.5, Color(1.0, 0.9, 0.8)], [9.0, Color(1, 1, 1)], [16.0, Color(1, 1, 1)],
-	[17.3, Color(1.0, 0.86, 0.68)], [18.4, Color(1.0, 0.74, 0.54)], [19.4, Color(0.62, 0.42, 0.52)], [20.6, Color(0.27, 0.33, 0.60)], [24.0, Color(0.27, 0.33, 0.60)]]
+	[17.3, Color(1.0, 0.91, 0.78)], [18.4, Color(1.0, 0.80, 0.64)], [19.4, Color(0.56, 0.46, 0.60)], [20.6, Color(0.27, 0.33, 0.60)], [24.0, Color(0.27, 0.33, 0.60)]]
 
 
 func _grade(h: float) -> Color:

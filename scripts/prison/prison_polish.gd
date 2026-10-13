@@ -394,7 +394,7 @@ func _shadows(c: CanvasItem, cx: int, cy: int) -> void:
 		if not bool(o.get("solid", false)):
 			continue
 		var kind := String(o.kind)
-		if kind.contains("fence") or kind.contains("wall") or kind.contains("lamp") or kind.contains("walkway") or kind.contains("tower") or kind.contains("ladder") or kind == "campfire":
+		if kind.contains("fence") or kind.contains("wall") or kind.contains("lamp") or kind.contains("walkway") or kind.contains("tower") or kind.contains("ladder") or kind == "campfire" or kind.begins_with("car") or kind.contains("truck") or kind.contains("van") or kind.contains("bus") or float(o.w) * float(o.h) > 12.0:
 			continue
 		var w := float(o.w)
 		var h := float(o.h)
