@@ -14,6 +14,7 @@ var root: Control
 var last_score := 0
 var last_lines: Array = []
 var last_text := ""
+var last_saved := 0
 
 
 func _init(g, a) -> void:
@@ -128,6 +129,7 @@ func show(id: String, extra: Dictionary = {}) -> void:
 	var lines := epilogue(id, f)
 	var sc := score(id, f)
 	last_score = int(sc.total)
+	last_saved = int(f.saved)
 	last_lines = lines
 	last_text = "\n".join(lines)
 	var rec := _record(id, int(sc.total), f)

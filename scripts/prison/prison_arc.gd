@@ -286,7 +286,7 @@ func chip() -> Dictionary:
 	var st := "ok"
 	if convoy == "here":
 		main = "CONVOY HERE"
-		sub = "until %s" % String(cfg.calendar.leave_h)
+		sub = "until %02d:00" % int(cfg.calendar.leave_h)
 		st = "danger"
 	elif convoy != "none" or day >= convoy_day():
 		sub = "gone" if convoy == "gone" else ("today" if day == convoy_day() else "passed")
@@ -333,7 +333,10 @@ func frame(dt: float) -> void:
 		return
 	story.frame(dt)
 	if game.args.has("story") and game.frames == 20:
-		story.show_beat(String(game.args.story))
+		if String(game.args.story) == "letter":
+			story.show_letter(next_letter())
+		else:
+			story.show_beat(String(game.args.story))
 	if game.args.has("ending") and game.frames == 20:
 		endings.show_test(String(game.args.ending))
 
@@ -588,12 +591,16 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 			if bool(set_piece.get("note", false)):
 				loot["note"] = 1
 			set_piece["pos"] = Vector2(best.pos)
+			if game.args.has("arclog"):
+				print("ARC cache ", set_piece.name, " in ", best.id, " at ", best.pos, " loot ", best.loot)
 			set_piece["id"] = String(best.id)
 	if letters_found.size() < cfg.letters.size() and rng.randf() < float(cfg.letter_chance):
 		var pool: Array = cs.filter(func(c): return String(c.id) != String(set_piece.get("id", "")) and not (c.loot as Dictionary).has("note"))
 		if not pool.is_empty():
 			var ct2: Dictionary = pool[rng.randi() % pool.size()]
 			(ct2.loot as Dictionary)["note"] = 1
+			if game.args.has("arclog"):
+				print("ARC letter hidden in ", ct2.id, " at ", ct2.pos)
 
 
 ## Back from a raid: the notes in the pack are read (and leave the pack); returns how many.
@@ -606,6 +613,8 @@ func take_notes(grid: Dictionary) -> int:
 		else:
 			keep.append(c)
 	if n > 0:
+		if game.args.has("arclog"):
+			print("ARC notes brought home: ", n)
 		(grid.cells as Array).clear()
 		(grid.cells as Array).append_array(keep)
 		for i in n:
@@ -844,3 +853,20 @@ func _draw_convoy(c: CanvasItem, at: Vector2) -> void:
 ## The key L: the story log (a window of its own, in the base or on a raid).
 func key(ev: InputEvent) -> bool:
 	return story.key(ev)
+
+
+## The weather of night `d` has a blackout (the lab's night model).
+func blackout_for(d: int) -> bool:
+	return bool(weather_of(d).get("blackout", false))
+
+
+var labrun    # prison_arclab.gd, made on the first call of `--arcauto`
+
+
+## `--arcauto`: one scripted day a frame (see prison_arclab.gd).
+func lab(dt: float) -> void:
+	if labrun == null:
+		labrun = load("res://scripts/prison/prison_arclab.gd").new(self)
+	labrun.step(dt)
+	if ended_id != "":
+		labrun.report_if_ended()

@@ -575,7 +575,7 @@ func _lab_play() -> void:
 				continue
 			var b: String = defs[id].building
 			var on_path: bool = want.has(id)
-			if not on_path and (b == "radio" or (b == "dormitory" and int(beds().free) > 2) or not want.is_empty()):
+			if not on_path and (b == "radio" or b == "convoy" or (b == "dormitory" and int(beds().free) > 2) or not want.is_empty()):
 				continue
 			var c := 0.0
 			for k in defs[id].cost:
@@ -609,8 +609,22 @@ func _need(out: Array, id: String) -> void:
 	out.append(id)
 
 
+## ARC hook: the day model's progress on the lab's line: "Day 12 of 30", the convoy's list ready so far, the night's size.
+func _lab_arc() -> String:
+	if game.arc == null or not game.arc.started:
+		return ""
+	var rq: Array = game.arc.requirements()
+	var ok := 0
+	var must := 0
+	for r in rq:
+		if bool(r.must):
+			must += 1
+			ok += 1 if bool(r.ok) else 0
+	return "   [day %d of %d, convoy list %d/%d, next night %d dead]" % [game.arc.day, game.arc.days(), ok, must, int(game.arc.wave_plan(game.arc.day).total)]
+
+
 func _lab_row(tag: String) -> void:
 	var r := daily_report()
 	var s: Dictionary = game.stores
-	print("%-3s %-10s F%4d W%4d S%4d P%3d Fu%3d M%2d | prod F%2d W%2d cons F%2d W%2d | morale %3d people %2d beds %2d | %s" % [tag, _stage, s.food, s.water, s.scrap, s.get("parts", 0), s.get("fuel", 0), s.meds, r.res.food.prod, r.res.water.prod, r.res.food.cons, r.res.water.cons, morale, people(), beds().cap, ", ".join(_lab_log)])
+	print("%-3s %-10s F%4d W%4d S%4d P%3d Fu%3d M%2d | prod F%2d W%2d cons F%2d W%2d | morale %3d people %2d beds %2d | %s" % [tag, _stage, s.food, s.water, s.scrap, s.get("parts", 0), s.get("fuel", 0), s.meds, r.res.food.prod, r.res.water.prod, r.res.food.cons, r.res.water.cons, morale, people(), beds().cap, ", ".join(_lab_log)] + _lab_arc())
 	_lab_log.clear()
