@@ -514,6 +514,9 @@ func top_needs() -> Array:
 		var have: float = float(game.stores.get(r, 0.0))
 		if have < float(econ.cfg.needs.low[r]) and not rows.any(func(q): return q[1] == r):
 			rows.append([500.0 + have, r, "%s: only %d left" % [RES_NAME.get(r, r), int(have)], "Raid a %s" % String(econ.cfg.fixes.get(r, "house"))])
+	var bd0: Dictionary = econ.beds()
+	if int(bd0.free) > 0 and not game.crew_full():    # (fix round 3: people come only from raids)
+		rows.append([600.0 - float(int(bd0.used)) * 10.0, "people", "People: %d of %d beds are taken" % [int(bd0.used), int(bd0.cap)], "Raid for survivors (the HELP! markers on the map)"])
 	rows.sort_custom(func(a, b): return float(a[0]) < float(b[0]))
 	for q in rows.slice(0, 3):
 		out.append({"res": q[1], "line": q[2], "action": q[3]})

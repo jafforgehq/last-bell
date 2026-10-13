@@ -12,13 +12,13 @@ const CARDS := {
 	"clear": [
 		["Welcome to the prison", "You and three survivors hold the west breach. The old prison is full of the dead. Clear it zone by zone, then lock the gate behind you."],
 		["Move, aim, shoot", "WASD walks. The mouse aims and the left button fires. R reloads, F is a blow with the butt, the wheel zooms, M shows the whole prison. The top bar keeps your ammo and meds."],
-		["Clear the zones", "The map at the bottom right marks ten zones. A zone is clear when no dead are left in it, and the people trapped there join you. E searches containers for ammo, food and meds. The pulsing ring in the world and the Objectives list show where to go next."],
+		["Clear the zones", "The map at the bottom right marks ten zones. A zone is clear when no dead are left in it. E searches containers for ammo, food and meds. The pulsing ring in the world and the Objectives list show where to go next."],
 		["Your party", "Cole, Bea and Ike follow you and shoot. Their hearts are on the top bar. When one goes down, hold E beside them to revive them (1 med). Press O to fold the Objectives list, H to see this guide again."],
 	],
 	"managed": [
 		["The prison is yours", "The top bar shows what the base holds: each stock with its cap and the change per day. Amber means less than 3 days left, red less than 1. Hover a chip for what makes and uses it; a click opens the needs board."],
 		["Who does what", "The icon over each person is their job and the ring under their feet is their role colour. Walk close or point at them for the name. B opens the roster, where you change jobs: a base makes nothing when nobody holds its role."],
-		["Build up", "E at the workbench in the workshop opens the project board. Pay the cost from the stores and the crew does the work. Better stages bring more people and more morale; the Objectives list says what is next."],
+		["Build up", "E at the workbench in the workshop opens the project board. Pay the cost from the stores and the crew does the work. People only come from raids: look for the HELP! markers, get them to the pickup, and keep a free bed. Better stages bring more beds and more morale; the Objectives list says what is next."],
 		["Raid and hold", "E at the gate or the truck takes you out to raid for what the needs board asks for. Every night at 21:00 the dead attack the fence: keep the walls mended and the stores stocked. The clock chip counts down to it."],
 	],
 }

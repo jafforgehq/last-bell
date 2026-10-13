@@ -16,6 +16,7 @@ var game
 var recruits: Array = []    # crew definitions of the people found in raids (kept over the rebuilds of the base)
 var all: Array = []    # the survivors of this raid (fix round 3: more than one); `s` is the one a function works on now
 var _cur = null
+var rescued := 0    # how many people raids brought to the prison (the objective counts them)
 var s: Dictionary = {}    # a survivor: {name, p, node, hp, state "wait"|"follow"|"lost", path, pi, repath, bite, at}
 var _banner: Label
 var _banner_t := 0.0
@@ -121,8 +122,7 @@ func _place_one(t: Dictionary, h: Dictionary, seed_i: int, k: int) -> Dictionary
 
 
 ## The first of the pool (from a hash of the seed) whose name is not in the crew or among the recruits.
-func _pick(seed_i: int) -> Dictionary:
-	var pool: Array = _c().people
+func _used() -> Array:
 	var used: Array = game.econ_gone.duplicate()
 	for e in all:
 		used.append(String(e.name))
@@ -131,6 +131,12 @@ func _pick(seed_i: int) -> Dictionary:
 	if game.crew != null:
 		for m in game.crew.members:
 			used.append(String(m.def.name))
+	return used
+
+
+func _pick(seed_i: int) -> Dictionary:
+	var pool: Array = _c().people
+	var used := _used()
 	for i in pool.size():
 		var cand: Dictionary = pool[(Loot._h(seed_i, 99) + i) % pool.size()]
 		if not used.has(String(cand.name)):
@@ -407,6 +413,7 @@ func _settle1(alive: bool) -> String:
 	else:
 		var rc := _make_recruit(s.who)
 		recruits.append(rc)
+		rescued += 1
 		out = "%s joins as %s." % [nm, String(rc.role)]
 	s = {}
 	if game.args.has("log"):
@@ -448,23 +455,52 @@ func _make_recruit(who: Dictionary) -> Dictionary:
 func spawn_recruits() -> void:
 	var i := 0
 	for d in recruits:
-		var at := Base.SPAWN + Vector2(2.0 + float(i) * 1.2, 1.5)
-		if bool(d.get("arrive", false)):    # a new one walks in through the gate
-			at = Base.GATE_POS + Vector2(float(i % 3) * 0.9 - 0.9, -0.9)
-			d.erase("arrive")
-		var m: Dictionary = game.crew._make(d, at)
-		if _role_of(d) == "guard":
-			if game.crew.free_post() == "":
-				d["role"] = "Hauler"    # (all six towers are manned)
-				d["route"] = game.crew.route_for("hauler")
-				game.econ.cfg.crew_role[String(d.id)] = "hauler"
-				m.def = d
-			else:
-				game.crew._apply_role(m, "guard", true)
-		game.econ.native_roles[String(d.id)] = _role_of(d)
-		if not game.econ.cfg.crew_role.has(String(d.id)):    # (a role set in the roster stays over the raids)
-			game.econ.cfg.crew_role[String(d.id)] = _role_of(d)
+		_spawn_one(d, i)
 		i += 1
+
+
+func _spawn_one(d: Dictionary, i: int) -> Dictionary:
+	var at := Base.SPAWN + Vector2(2.0 + float(i) * 1.2, 1.5)
+	if bool(d.get("arrive", false)):    # a new one walks in through the gate
+		at = Base.GATE_POS + Vector2(float(i % 3) * 0.9 - 0.9, -0.9)
+		d.erase("arrive")
+	var m: Dictionary = game.crew._make(d, at)
+	if _role_of(d) == "guard":
+		if game.crew.free_post() == "":
+			d["role"] = "Hauler"    # (all six towers are manned)
+			d["route"] = game.crew.route_for("hauler")
+			game.econ.cfg.crew_role[String(d.id)] = "hauler"
+			m.def = d
+		else:
+			game.crew._apply_role(m, "guard", true)
+	game.econ.native_roles[String(d.id)] = _role_of(d)
+	if not game.econ.cfg.crew_role.has(String(d.id)):    # (a role set in the roster stays over the raids)
+		game.econ.cfg.crew_role[String(d.id)] = _role_of(d)
+	return m
+
+
+## `--econ-lab`: one rescue as if a raid had brought somebody (the next of the pool, a free bed needed): the person is in the crew at once. Returns the name, "" when there is no bed.
+func lab_rescue(seed_i: int) -> String:
+	if int(game.econ.beds().free) <= 0:
+		return ""
+	var who := _pick(seed_i)
+	for role in ["gardener", "medic", "cook", "mechanic", "hauler"]:    # (the lab's raids find the person the base lacks most)
+		if game.econ.workers(role) == 0:
+			for q in _c().people:
+				if String(q.skill) == role and not _used().has(String(q.name)):
+					who = q
+					break
+			break
+	var rc := _make_recruit(who)
+	recruits.append(rc)
+	rescued += 1
+	var m := _spawn_one(rc, recruits.size())
+	if m.has("p") and game.entities != null and not m.has("node"):
+		var n := PawnNode.new()
+		n.setup(m.p, false, game.data, String(m.key))
+		game.entities.add_child(n)
+		m["node"] = n
+	return "%s/%s" % [String(who.name), String(rc.role)]
 
 
 func _role_of(d: Dictionary) -> String:

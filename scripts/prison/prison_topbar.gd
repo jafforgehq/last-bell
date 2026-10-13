@@ -570,7 +570,7 @@ func _fence_chip() -> void:
 func _clear_chips() -> void:
 	var n: int = game._cleared_n()
 	var total: int = Base.ZONES.size()
-	_put("zones", "zones", Hud.OK, "Cleared %d/%d" % [n, total], "", DIM, "", "ok", "Zones cleared: %d of %d. A zone is clear when no dead are left in it; the people trapped there then join you." % [n, total], float(n) / float(total), Hud.OK)
+	_put("zones", "zones", Hud.OK, "Cleared %d/%d" % [n, total], "", DIM, "", "ok", "Zones cleared: %d of %d. A zone is clear when no dead are left in it. Nobody joins you for it: people come from rescues on raids." % [n, total], float(n) / float(total), Hud.OK)
 	(chips["zones"].main as Label).custom_minimum_size.x = 92
 	var vals: Array = []
 	var names: Array = []
@@ -713,6 +713,9 @@ func objectives() -> Array:
 		shown += 1
 		if shown >= 2:
 			break
+	if not game.crew_full():
+		var rs: int = game.people.rescued
+		out.append({"t": "Rescue survivors on raids (%d/6)" % mini(rs, 6), "done": rs >= 6})
 	var sg = game.siege
 	out.append({"t": "Survive night %d" % (sg.night if sg.attacking else sg.nights_started + 1), "done": false})
 	var m: float = econ.morale

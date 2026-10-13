@@ -365,6 +365,8 @@ func _start_attack(n: int) -> void:
 		if m.def.has("stand") and not m.has("down"):
 			armed += 1
 	var sb: Dictionary = game.Bal.d().siege
+	if game.crew_full():
+		armed = int(sb.ref_armed)    # (the old 17-person start sends the old wave)
 	var per := maxi(2, roundi(float(4 + 4 * n) * clampf(float(armed) / float(sb.ref_armed), float(sb.floor), 1.0)))    # (fix round 3: the wave follows the guns on the towers)
 	var names: Array = []
 	for s in picked:

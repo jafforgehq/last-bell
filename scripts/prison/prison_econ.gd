@@ -566,6 +566,10 @@ func _lab_play() -> void:
 		var loot: Dictionary = cfg.loot.get(place, {})
 		for k in loot:
 			game.stores[k] = float(game.stores.get(k, 0.0)) + float(loot[k])
+	if String(game.args.get("econ-rescue", "1")) != "0" and day % 2 == 0:    # (fix round 3: a rescue on every other raid; `--econ-rescue=0` for none)
+		var who: String = game.people.lab_rescue(day * 131 + 7)
+		if who != "":
+			_lab_log.append("rescued " + who)
 	var bought: Array = []
 	while true:
 		var want := goal()    # the next stage's missing tiers come first, then anything else that is affordable
