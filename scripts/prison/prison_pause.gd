@@ -5,6 +5,11 @@ extends Node
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const Prefs := preload("res://scripts/prefs.gd")
+const Buses := preload("res://scripts/audio/buses.gd")
+## ROUND 12: the volume sliders (label, Prefs key in section audio) and the bus each one sets.
+const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambience"], ["Effects", "sfx"]]
+const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
 
 const KEYS := [
 	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["R", "reload"], ["F", "melee"],
@@ -54,6 +59,8 @@ func open(which: String = "main") -> void:
 	if is_open():
 		return
 	opened_frame = Engine.get_process_frames()
+	if game.audio != null:
+		game.audio.ui_open()
 	layer.visible = true
 	get_tree().paused = not game.args.has("shot")    # (a screenshot run counts frames in the paused tree)
 	_page(which)
@@ -103,24 +110,8 @@ func _page(which: String) -> void:
 			body.add_child(_rule())
 			body.add_child(_btn("Back", func(): _page("main")))
 		"settings":
-			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 12)
-			row.add_child(_lab("Master volume", 17, Hud.INK))
-			var sl := HSlider.new()
-			sl.min_value = 0.0
-			sl.max_value = 1.0
-			sl.step = 0.05
-			sl.custom_minimum_size = Vector2(190, 24)
-			sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			sl.focus_mode = Control.FOCUS_NONE
-			sl.value = db_to_linear(AudioServer.get_bus_volume_db(0))
-			var pct := _lab("%d%%" % int(sl.value * 100.0), 16, Hud.INK2)
-			sl.value_changed.connect(func(v: float):
-				AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001)))
-				pct.text = "%d%%" % int(v * 100.0))
-			row.add_child(sl)
-			row.add_child(pct)
-			body.add_child(row)
+			for sl_def in VOLUMES:
+				body.add_child(_volume_row(String(sl_def[0]), String(sl_def[1])))
 			body.add_child(_rule())
 			body.add_child(_btn("Back", func(): _page("main")))
 		_:
@@ -132,6 +123,34 @@ func _page(which: String) -> void:
 			var tip := _lab("Esc goes back to the game", 14, Hud.INK3)
 			tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			body.add_child(tip)
+
+
+## One volume slider: the player's setting for a bus group (the same Prefs and Buses as the town's settings menu: Effects is the SFX bus and the menu sounds).
+func _volume_row(label: String, key: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var l := _lab(label, 17, Hud.INK)
+	l.custom_minimum_size.x = 100
+	row.add_child(l)
+	var sl := HSlider.new()
+	sl.min_value = 0.0
+	sl.max_value = 1.0
+	sl.step = 0.05
+	sl.custom_minimum_size = Vector2(190, 24)
+	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sl.focus_mode = Control.FOCUS_NONE
+	sl.value = Prefs.number("audio", key)
+	var pct := _lab("%d%%" % int(sl.value * 100.0), 16, Hud.INK2)
+	sl.value_changed.connect(func(v: float):
+		Prefs.set_value("audio", key, v)
+		Buses.apply(String(BUS_OF[key]))
+		if key == "sfx":
+			Prefs.set_value("audio", "ui", v)
+			Buses.apply("UI")
+		pct.text = "%d%%" % int(v * 100.0))
+	row.add_child(sl)
+	row.add_child(pct)
+	return row
 
 
 func _quit() -> void:
