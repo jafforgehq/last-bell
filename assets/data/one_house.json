@@ -78,8 +78,8 @@
     "held": {"text": "The night is held", "sub": ""}
   },
   "words": {
-    "tagline": "One house. One survivor. A town full of the dead.",
-    "new_game": "You arrive alone at the edge of a dead town. Choose a house, clear it, claim it, build a fence, find people. When two survivors are home, the dead come every night.",
+    "tagline": "An old prison. A few survivors. A town full of the dead.",
+    "new_game": "You and three survivors reach an old prison. Clear it zone by zone, lock the gate, then raid the town for loot and survivors, build the base up and hold it until the convoy comes on day 30.",
     "voices": ["Nobody is home", "One survivor is home", "Two survivors are home", "Three survivors are home", "Four survivors are home", "Five survivors are home", "Six survivors are home"],
     "intro": ["The bell is ringing somewhere", "Find shelter before dark"],
     "dusk_no_base": ["Night falls", "Get indoors"],
