@@ -44,6 +44,9 @@ const MAX_LATER := 48
 ## A splat stays at full strength this long (seconds of the game's time), then fades, and is gone after DECAL_LIFE.
 const DECAL_HOLD := 6.0
 const DECAL_LIFE := 20.0
+## The prison keeps stains until a cleaner comes (prison_game.gd sets these); the town's values are the constants.
+var decal_hold := DECAL_HOLD
+var decal_life := DECAL_LIFE
 ## At most this many drops of blood leave a splat of their own in one frame (a volley must not paint the ground).
 const SPLATS_PER_FRAME := 4
 ## A hit on a plated brute that does less than this is the armour's (nights.json: armour 0.1, a head hit 3.0): it rings, it does not bleed.
@@ -72,11 +75,12 @@ const GUNS := {
 	"rifle": {"len": 1.05, "glow": 0.85, "dur": 0.080, "light": 4.0, "kick": 2.6, "shake": 0.3, "nudge": 0.050, "cone": 0.0, "smoke": 0.15},
 	"service": {"len": 1.15, "glow": 0.92, "dur": 0.085, "light": 4.4, "kick": 3.2, "shake": 0.5, "nudge": 0.060, "cone": 0.0, "smoke": 0.17},
 	"hunting": {"len": 1.40, "glow": 1.10, "dur": 0.100, "light": 5.2, "kick": 4.6, "shake": 1.0, "nudge": 0.075, "cone": 0.0, "smoke": 0.22},
+	"smg": {"len": 0.80, "glow": 0.70, "dur": 0.055, "light": 3.0, "kick": 1.4, "shake": 0.2, "nudge": 0.030, "cone": 0.0, "smoke": 0.10},
 	"shotgun": {"len": 1.45, "glow": 1.25, "dur": 0.110, "light": 6.0, "kick": 5.6, "shake": 1.6, "nudge": 0.085, "cone": 0.27, "smoke": 0.26},
 }
 ## FEEL: the light of a muzzle flash. Its strength by gun (a share of the light rig's flash energy: the pump gun is the whole of it), how far ahead of the muzzle (a share of its reach) its
 ## middle is, and its colour.
-const FLASH_E := {"pistol": 0.62, "rifle": 0.74, "service": 0.78, "hunting": 0.9, "shotgun": 1.0}
+const FLASH_E := {"pistol": 0.62, "smg": 0.6, "rifle": 0.74, "service": 0.78, "hunting": 0.9, "shotgun": 1.0}
 ## The drawn flash (glow, cone, star, heart): the share of its strength it has on its first frame, and how long it takes to be full (seconds of the game's time: three frames at 60 Hz).
 const FLASH_GLOW_FIRST := 0.45
 const FLASH_GLOW_RAMP_S := 0.034
@@ -825,7 +829,7 @@ func shot_sound(e: Dictionary) -> void:
 		return    # (the SOUND pass: the pump gun's blast, in a room or in the open: scripts/audio/fight_sounds.gd)
 	var at := Vector2(float(e.x), float(e.y))
 	var vol := clampf(1.0 - at.distance_to(listener) / 50.0, 0.12, 1.0) * 0.8 * _rand_range(0.9, 1.0)
-	sound.play(name, vol, 0.045)
+	sound.play(name, vol * float(e.get("vol", 1.0)), 0.045, float(e.get("pitch", 1.0)))
 
 
 ## The sound of the dead one's fall (main.gd, from the "thud" event): the body comes down a moment after the blow.
@@ -965,16 +969,16 @@ func _age_decals(dt: float) -> void:
 		if float(d.grow) > 0.0 and age < 3.0:
 			d.size += float(d.grow) * dt / 3.0
 			_scale_decal(d)
-		if age > DECAL_HOLD:
-			var k := clampf((age - DECAL_HOLD) / (DECAL_LIFE - DECAL_HOLD), 0.0, 1.0)
+		if age > decal_hold:
+			var k := clampf((age - decal_hold) / (decal_life - decal_hold), 0.0, 1.0)
 			var a := float(d.alpha) * (1.0 - k * k * (3.0 - 2.0 * k))
 			d.node.modulate.a = a
-			if age >= DECAL_LIFE:
+			if age >= decal_life:
 				expired += 1
 	if expired > 0:
 		var keep: Array = []
 		for d in _decals:
-			if float(d.age) >= DECAL_LIFE:
+			if float(d.age) >= decal_life:
 				d.node.visible = false
 				_spare.append(d.node)
 			else:

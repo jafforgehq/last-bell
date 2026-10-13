@@ -108,6 +108,19 @@ static func turn(ori: float, target: float, dt: float) -> float:
 	return wrapf(ori + d * ease_k(TURN_RATE, dt), -PI, PI)
 
 
+## The prison's turning: `ori` one frame nearer `target` at a fixed rate (radians a second), the short way, never past it. No ease and no snap to a quarter: a figure turns through every angle.
+static func turn_lim(ori: float, target: float, dt: float) -> float:
+	return turn_at(ori, target, dt, TAU * 0.6)
+
+
+static func turn_at(ori: float, target: float, dt: float, rate: float) -> float:
+	var d := wrapf(target - ori, -PI, PI)
+	var step := rate * dt
+	if absf(d) <= step:
+		return target
+	return wrapf(ori + signf(d) * step, -PI, PI)
+
+
 ## The view an orientation shows: "E", "S", "N", and "W" (the east view mirrored).
 static func view_of(ori: float) -> String:
 	var q := int(roundf(ori / (PI * 0.5)))
@@ -123,6 +136,18 @@ static func view_of(ori: float) -> String:
 ## How far an orientation is from the middle of the view it shows, radians (0 to a quarter of a half turn).
 static func off_mid(ori: float) -> float:
 	return absf(ori - roundf(ori / (PI * 0.5)) * PI * 0.5)
+
+
+## Where an orientation is near the seam between two views: [the neighbour's view ("E", "S", "N", "W"), how opaque to draw it (0 to 0.5, 0.5 at the seam)]. The prison crossfades the two baked views across the seam.
+const SEAM_BLEND := 0.4
+static func seam(ori: float) -> Array:
+	var qf := ori / (PI * 0.5)
+	var q := roundf(qf)
+	var off := qf - q    # -0.5 .. 0.5 quarter turns
+	var dist := (0.5 - absf(off)) * PI * 0.5
+	if dist >= SEAM_BLEND:
+		return ["", 0.0]
+	return [view_of((q + signf(off)) * PI * 0.5), 0.5 * (1.0 - dist / SEAM_BLEND)]
 
 
 ## How wide the body is drawn at an orientation: 1 in the middle of a view, about four fifths at the seam (less so with reduced motion).
@@ -282,6 +307,11 @@ class Dead:
 	var breath := 0.0
 
 
+## ROUND 8 (the prison's dead only): the legs' phase per tile walked, by kind (a runner strides longer, a brute shorter and heavier). The prison's `PawnNode.zmove` and prison_dead.gd both read it.
+static func dead_stride(kind: String) -> float:
+	return 0.8 if kind == "runner" else (1.15 if kind == "brute" else 1.0)
+
+
 ## `kind` walker, runner or brute. A runner cycles its limbs a good deal faster, leans harder into it and is drawn grey and gaunt; a brute is slower, heavier (its steps land) and darker.
 static func dead_variant(seed_i: int, kind: String) -> Dead:
 	var d := Dead.new()
@@ -337,6 +367,8 @@ class Reload:
 	var hand_on := false
 	var pump := 0.0
 	var click := 0.0
+	var carry := false    # the loading hand holds the new shell or magazine (on its way in)
+	var prog := 0.0       # how far the whole reload has gone (0 to 1)
 
 
 ## Fills `r` with the reload at progress `p` (0 to 1) of `n` loadings (a shell gun loads one at a time; a magazine gun, n 1, has the magazine out and in).
@@ -347,6 +379,8 @@ static func reload_pose(r: Reload, p: float, n: int, shell: bool) -> void:
 	r.pump = 0.0
 	r.click = 0.0
 	r.hand_on = false
+	r.carry = false
+	r.prog = p
 	var body_p := clampf((p - 0.06) / 0.80, 0.0, 1.0)
 	var cycles := maxi(n, 1)
 	var c := body_p * float(cycles)
@@ -360,6 +394,7 @@ static func reload_pose(r: Reload, p: float, n: int, shell: bool) -> void:
 		var belt := Vector2(-0.02, 0.46)
 		var rec := Vector2(0.24, 0.06)
 		r.hand = belt.lerp(rec, at)
+		r.carry = u < 0.5
 		if u > 0.45 and u < 0.62:
 			r.click = sin((u - 0.45) / 0.17 * PI)
 	if p >= 0.86 and p < 1.0:

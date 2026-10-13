@@ -9,7 +9,14 @@
     "water_bottle": {"name": "Water bottle", "w": 1, "h": 1, "stack": 1, "res": "water", "units": 1, "use": "drink", "desc": "A bottle of clean water: one drink, good for half a day."},
     "water_jug": {"name": "Water jug", "w": 2, "h": 2, "stack": 1, "res": "water", "units": 4, "use": "drink", "desc": "A jug of clean water: four bottles' worth. A drink leaves three bottles."},
     "bandage": {"name": "Bandage", "w": 1, "h": 1, "stack": 4, "res": "meds", "units": 1, "use": "bandage", "desc": "Stops a bleeding wound."},
-    "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."}
+    "parts_box": {"name": "Parts box", "w": 1, "h": 1, "stack": 2, "res": "parts", "units": 1, "use": "none", "desc": "Electronics, pump and generator pieces. Spent on projects at the base."},
+    "fuel_can": {"name": "Fuel can", "w": 1, "h": 2, "stack": 1, "res": "fuel", "units": 1, "use": "none", "desc": "A can of fuel: a day for the generator."},
+    "medkit": {"name": "Medkit", "w": 2, "h": 1, "stack": 1, "res": "meds", "units": 3, "use": "bandage", "desc": "Bandages and medicine: three doses."},
+    "distraction": {"name": "Bottles and cans", "w": 1, "h": 1, "stack": 6, "res": "", "units": 0, "use": "none", "desc": "Empty bottles, cans and a few firecrackers. G throws one where the pointer is: the dead go to look at the noise instead of at you."},
+    "gun_shotgun": {"name": "Pump shotgun", "w": 2, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare pump shotgun (prison game). Back at the base it goes to the weapon rack."},
+    "gun_service": {"name": "Service rifle", "w": 3, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare semi-auto rifle (prison game). Back at the base it goes to the weapon rack."},
+    "note": {"name": "Note", "w": 1, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A folded letter. It is read at home, and goes in the story log (L)."},
+    "gun_smg": {"name": "Submachine gun", "w": 2, "h": 1, "stack": 1, "res": "", "units": 0, "use": "none", "desc": "A spare SMG (prison game). Back at the base it goes to the weapon rack."}
   },
   "containers": {
     "default": {"w": 4, "h": 3},
@@ -43,12 +50,14 @@
     "water": [["water_jug", 1.0]],
     "meds": [["medkit", 0.5]]
   },
-  "unit_items": {"ammo": "shells", "food": "canned_food", "water": "water_bottle", "meds": "bandage"},
+  "unit_items": {"ammo": "shells", "food": "canned_food", "water": "water_bottle", "meds": "bandage", "parts": "parts_box", "fuel": "fuel_can"},
   "withdraw": {
     "ammo": ["shells"],
     "food": ["canned_food"],
     "water": ["water_jug", "water_bottle"],
-    "meds": ["bandage"]
+    "meds": ["bandage"],
+    "parts": ["parts_box"],
+    "fuel": ["fuel_can"]
   },
   "needs": {"eat_min_h": 6.0, "drink_min_h": 5.0},
   "reveal_s": 0.4,

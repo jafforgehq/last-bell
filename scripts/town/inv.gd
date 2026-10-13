@@ -31,7 +31,7 @@ const PILE_REACH := 1.3
 const STASH_CLOSE := 3.0
 ## The pack counts as full for the base-entry reminder with this few cells free.
 const FULL_CELLS := 1
-const RES := ["ammo", "food", "water", "meds"]
+const RES := ["ammo", "food", "water", "meds", "parts", "fuel"]    # (parts and fuel only ever come from the prison game)
 
 var sim
 var enabled := true
@@ -468,7 +468,8 @@ func take_all_from(id: String) -> Dictionary:
 		var moved := before - left
 		if moved > 0:
 			var res := Inventory.res_of(String(p.item))
-			out[res] = int(out.get(res, 0)) + moved * Inventory.units_of(String(p.item))
+			if res != "":    # (a gun item of the prison game stands for no store)
+				out[res] = int(out.get(res, 0)) + moved * Inventory.units_of(String(p.item))
 			_picked(String(p.item), moved, id)
 		if left <= 0:
 			(g.cells as Array).remove_at(i)

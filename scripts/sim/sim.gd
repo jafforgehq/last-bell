@@ -246,6 +246,23 @@ class Zombie:
 	var claw := 1.0
 	## A brute of a Big Night (round 19): armoured but for its head (nights.gd `damage_to`). Saved with the zombie, optional in a save.
 	var plated := false
+	## The prison's dead (scripts/prison/prison_dead.gd; never read by the other games, never saved): the drawn heading (radians) and whether it is set, how far it has risen from the ground
+	## (1 standing), a pause (seconds standing still, sniffing), the angle it leans on a fence at (`press` > 0 while it does), where it was a step ago, the state it had, and the way the last shot went.
+	var head := 1.5707963
+	var head_ok := false
+	var rise := 1.0
+	var pause := 0.0
+	var press := 0.0
+	var aim := 0.0
+	var ox := 0.0
+	var oy := 0.0
+	var oph := 0.0
+	var pst := ""
+	var fall_ang := 0.0
+	var zcool := 0.0
+	var want := 0.0
+	var idle := 1.5707963
+	var zph := 0.0
 
 
 var world
@@ -1126,7 +1143,7 @@ func _follow(a, speed: float, dt: float) -> bool:
 
 ## What one shot costs this person's gun from the stock.
 func shot_cost(p: Person) -> float:
-	return SHELL_COST if p.weapon == "shotgun" else SHOT_COST
+	return float(p.gun.get("cost", SHELL_COST if p.weapon == "shotgun" else SHOT_COST))    # (a gun's own `cost`: the prison game's guns, assets/data/prison_weapons.json)
 
 
 ## The weapon someone fights with right now: their own, or the butt of it when the
@@ -1356,6 +1373,7 @@ func _hurt_zombie(z: Zombie, dmg: float, ang: float, shooter: Person = null, mel
 		z.state = "dying"
 		z.fall = 0.0
 		z.fall_dir = 1.0 if cos(ang) >= 0.0 else -1.0
+		z.fall_ang = ang
 		if z.slot != null:
 			z.slot.who = null
 			z.slot = null

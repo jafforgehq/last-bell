@@ -22,7 +22,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 const TOOLS_FILE := "res://assets/data/tools.json"
 
 ## The ten words of the contract (the rules' `Person.work`).
-const WORDS := ["bench", "hammer", "mend", "haul", "garden", "nurse", "radio", "watch", "sort", "rest"]
+const WORDS := ["bench", "hammer", "mend", "haul", "garden", "nurse", "radio", "watch", "sort", "rest", "clean"]
 ## The pose comes in and goes out over this many seconds.
 const EASE := 0.2
 ## How long a puff, a spark or a chip shows after the blow, in seconds.
@@ -38,11 +38,11 @@ const HIPS_Y := 0.13
 const TURN_SQUASH := 0.76
 const MIN_SQUASH := 0.6
 ## The pose that stands for a word when the player asked for less motion (a share of its loop).
-const STILL_U := {"hammer": 0.615, "bench": 0.6, "mend": 0.615, "haul": 0.12, "garden": 0.05, "nurse": 0.14, "radio": 0.7, "watch": 0.05, "sort": 0.45, "rest": 0.05}
+const STILL_U := {"hammer": 0.615, "bench": 0.6, "mend": 0.615, "haul": 0.12, "garden": 0.05, "nurse": 0.14, "radio": 0.7, "watch": 0.05, "sort": 0.45, "rest": 0.05, "clean": 0.1}
 ## word -> [the beat in seconds, how many beats make the loop that repeats exactly]
 const CYCLE := {
 	"hammer": [1.25, 1], "bench": [0.9, 1], "mend": [1.1, 1], "haul": [1.6, 2], "garden": [1.4, 5],
-	"nurse": [1.6, 2], "radio": [1.2, 4], "watch": [1.6, 5], "sort": [1.6, 2], "rest": [1.6, 4],
+	"nurse": [1.6, 2], "radio": [1.2, 4], "watch": [1.6, 5], "sort": [1.6, 2], "rest": [1.6, 4], "clean": [1.0, 2],
 }
 ## The swings: the top and the bottom of the tool's angle (radians, 0 forward and up is positive), where it rests, the share
 ## of the loop (of the beat) at which it lands, the reach of the arm, how far the head of the tool is from the hand, how far
@@ -223,6 +223,8 @@ static func contact(word: String) -> float:
 			return 0.5
 		"sort":
 			return 0.36
+		"clean":
+			return 0.25
 	return -1.0
 
 
@@ -358,6 +360,8 @@ static func solve(o: Pose, word: String, t: float, phase: float, reduced_motion:
 			_sort(o, x, u, loop)
 		"rest":
 			_rest(o, u)
+		"clean":
+			_clean(o, x, u, loop)
 	if reduced_motion:
 		o.strike = 0
 		o.item_kind = 0
@@ -396,6 +400,27 @@ static func _haul(o: Pose, x: float, u: float, loop: float) -> void:
 	o.fx = "dust"
 	o.fx_at = Vector2(0.6, 0.3)
 	o.strike = int(floor(x - 0.5))
+
+
+## Sweeping (prison round 5): the long handled tool (the hoe's art stands for a broom) is drawn across the ground and back twice a loop, the body bent over it, a puff of dust at the end of each stroke.
+static func _clean(o: Pose, x: float, u: float, loop: float) -> void:
+	var sw := sin(u * TAU * 2.0)
+	o.tool = "broom"
+	o.grip2 = 0.45
+	o.stance = 1.5
+	o.lean = 0.26
+	o.dip = 0.02
+	o.tool_a = -0.95 + 0.22 * sw
+	var sh := _shoulder(o.lean, o.dip, 0.0)
+	o.main = sh + Vector2(0.3 + 0.14 * sw, 0.12)
+	o.tool_at = o.main
+	o.tool_l = o.main_l
+	o.tool_yaw = -0.1 + 0.4 * sw    # the bristles sweep sideways
+	o.off = Vector2(0.18 + 0.1 * sw, -0.12)
+	o.fx = "dust"
+	o.fx_at = Vector2(0.78 + 0.1 * sw, 0.3)
+	o.hit = fposmod(u * 2.0 - 0.25, 1.0) * loop * 0.5
+	o.strike = int(floor(x * 2.0 - 0.25))
 
 
 static func _garden(o: Pose, x: float, u: float, loop: float) -> void:

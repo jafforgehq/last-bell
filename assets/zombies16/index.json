@@ -1,0 +1,1388 @@
+{
+ "sets": {
+  "brute_0": {
+   "bytes": 595089,
+   "density": 160.0,
+   "file": "res://assets/zombies16/brute_0.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      502,
+      374
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      251,
+      243
+     ],
+     "y": 1576
+    },
+    "deathf": {
+     "cell": [
+      462,
+      321
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      231,
+      214
+     ],
+     "y": 2648
+    },
+    "hurt": {
+     "cell": [
+      388,
+      312
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      194,
+      234
+     ],
+     "y": 2332
+    },
+    "walk": {
+     "cell": [
+      424,
+      390
+     ],
+     "dirs": 8,
+     "frames": 4,
+     "origin": [
+      212,
+      240
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4048,
+    3298
+   ]
+  },
+  "brute_1": {
+   "bytes": 600647,
+   "density": 160.0,
+   "file": "res://assets/zombies16/brute_1.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      502,
+      373
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      251,
+      252
+     ],
+     "y": 1608
+    },
+    "deathf": {
+     "cell": [
+      488,
+      334
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      244,
+      231
+     ],
+     "y": 2700
+    },
+    "hurt": {
+     "cell": [
+      394,
+      334
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      197,
+      256
+     ],
+     "y": 2362
+    },
+    "walk": {
+     "cell": [
+      426,
+      398
+     ],
+     "dirs": 8,
+     "frames": 4,
+     "origin": [
+      213,
+      249
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4048,
+    3376
+   ]
+  },
+  "brute_2": {
+   "bytes": 678004,
+   "density": 160.0,
+   "file": "res://assets/zombies16/brute_2.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      510,
+      374
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      255,
+      242
+     ],
+     "y": 1576
+    },
+    "deathf": {
+     "cell": [
+      462,
+      324
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      231,
+      214
+     ],
+     "y": 2649
+    },
+    "hurt": {
+     "cell": [
+      400,
+      313
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      200,
+      235
+     ],
+     "y": 2332
+    },
+    "walk": {
+     "cell": [
+      430,
+      390
+     ],
+     "dirs": 8,
+     "frames": 4,
+     "origin": [
+      215,
+      239
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4112,
+    3305
+   ]
+  },
+  "brute_3": {
+   "bytes": 669027,
+   "density": 160.0,
+   "file": "res://assets/zombies16/brute_3.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      500,
+      376
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      250,
+      251
+     ],
+     "y": 1600
+    },
+    "deathf": {
+     "cell": [
+      480,
+      326
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      240,
+      230
+     ],
+     "y": 2683
+    },
+    "hurt": {
+     "cell": [
+      394,
+      319
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      197,
+      241
+     ],
+     "y": 2360
+    },
+    "walk": {
+     "cell": [
+      420,
+      396
+     ],
+     "dirs": 8,
+     "frames": 4,
+     "origin": [
+      210,
+      245
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4032,
+    3343
+   ]
+  },
+  "crawler_0": {
+   "bytes": 367805,
+   "density": 160.0,
+   "file": "res://assets/zombies16/crawler_0.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      238,
+      206
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      119,
+      169
+     ],
+     "y": 1290
+    },
+    "deathf": {
+     "cell": [
+      306,
+      180
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      153,
+      91
+     ],
+     "y": 1903
+    },
+    "hurt": {
+     "cell": [
+      232,
+      189
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      116,
+      168
+     ],
+     "y": 1710
+    },
+    "walk": {
+     "cell": [
+      236,
+      211
+     ],
+     "dirs": 8,
+     "frames": 6,
+     "origin": [
+      118,
+      169
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    2480,
+    2271
+   ]
+  },
+  "crawler_1": {
+   "bytes": 312967,
+   "density": 160.0,
+   "file": "res://assets/zombies16/crawler_1.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      232,
+      199
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      116,
+      169
+     ],
+     "y": 1272
+    },
+    "deathf": {
+     "cell": [
+      304,
+      187
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      152,
+      101
+     ],
+     "y": 1866
+    },
+    "hurt": {
+     "cell": [
+      224,
+      184
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      112,
+      169
+     ],
+     "y": 1678
+    },
+    "walk": {
+     "cell": [
+      228,
+      208
+     ],
+     "dirs": 8,
+     "frames": 6,
+     "origin": [
+      114,
+      168
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    2464,
+    2248
+   ]
+  },
+  "crawler_2": {
+   "bytes": 335315,
+   "density": 160.0,
+   "file": "res://assets/zombies16/crawler_2.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      246,
+      206
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      123,
+      171
+     ],
+     "y": 1320
+    },
+    "deathf": {
+     "cell": [
+      312,
+      183
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      156,
+      92
+     ],
+     "y": 1933
+    },
+    "hurt": {
+     "cell": [
+      236,
+      189
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      118,
+      171
+     ],
+     "y": 1740
+    },
+    "walk": {
+     "cell": [
+      244,
+      216
+     ],
+     "dirs": 8,
+     "frames": 6,
+     "origin": [
+      122,
+      171
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    2528,
+    2307
+   ]
+  },
+  "crawler_3": {
+   "bytes": 295418,
+   "density": 160.0,
+   "file": "res://assets/zombies16/crawler_3.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      190,
+      165
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      95,
+      142
+     ],
+     "y": 1038
+    },
+    "deathf": {
+     "cell": [
+      246,
+      155
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      123,
+      87
+     ],
+     "y": 1536
+    },
+    "hurt": {
+     "cell": [
+      182,
+      156
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      91,
+      145
+     ],
+     "y": 1376
+    },
+    "walk": {
+     "cell": [
+      184,
+      169
+     ],
+     "dirs": 8,
+     "frames": 6,
+     "origin": [
+      92,
+      142
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    2000,
+    1854
+   ]
+  },
+  "runner_0": {
+   "bytes": 410134,
+   "density": 160.0,
+   "file": "res://assets/zombies16/runner_0.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      222,
+      193
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      111,
+      144
+     ],
+     "y": 1176
+    },
+    "deathf": {
+     "cell": [
+      274,
+      185
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      137,
+      143
+     ],
+     "y": 1755
+    },
+    "hurt": {
+     "cell": [
+      198,
+      181
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      99,
+      136
+     ],
+     "y": 1570
+    },
+    "walk": {
+     "cell": [
+      198,
+      192
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      99,
+      138
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3232,
+    2133
+   ]
+  },
+  "runner_1": {
+   "bytes": 472622,
+   "density": 160.0,
+   "file": "res://assets/zombies16/runner_1.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      232,
+      200
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      116,
+      148
+     ],
+     "y": 1200
+    },
+    "deathf": {
+     "cell": [
+      282,
+      194
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      141,
+      152
+     ],
+     "y": 1798
+    },
+    "hurt": {
+     "cell": [
+      214,
+      186
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      107,
+      140
+     ],
+     "y": 1608
+    },
+    "walk": {
+     "cell": [
+      204,
+      196
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      102,
+      141
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3328,
+    2194
+   ]
+  },
+  "runner_2": {
+   "bytes": 451645,
+   "density": 160.0,
+   "file": "res://assets/zombies16/runner_2.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      224,
+      190
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      112,
+      140
+     ],
+     "y": 1170
+    },
+    "deathf": {
+     "cell": [
+      268,
+      178
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      134,
+      135
+     ],
+     "y": 1744
+    },
+    "hurt": {
+     "cell": [
+      182,
+      182
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      91,
+      136
+     ],
+     "y": 1558
+    },
+    "walk": {
+     "cell": [
+      198,
+      191
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      99,
+      136
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3232,
+    2108
+   ]
+  },
+  "runner_3": {
+   "bytes": 450561,
+   "density": 160.0,
+   "file": "res://assets/zombies16/runner_3.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      222,
+      189
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      111,
+      140
+     ],
+     "y": 1146
+    },
+    "deathf": {
+     "cell": [
+      268,
+      179
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      134,
+      140
+     ],
+     "y": 1713
+    },
+    "hurt": {
+     "cell": [
+      192,
+      177
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      96,
+      133
+     ],
+     "y": 1532
+    },
+    "walk": {
+     "cell": [
+      194,
+      187
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      97,
+      134
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3168,
+    2079
+   ]
+  },
+  "walker_0": {
+   "bytes": 783751,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_0.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      262,
+      215
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      131,
+      158
+     ],
+     "y": 1736
+    },
+    "deathf": {
+     "cell": [
+      302,
+      207
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      151,
+      153
+     ],
+     "y": 2601
+    },
+    "hurt": {
+     "cell": [
+      204,
+      204
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      102,
+      153
+     ],
+     "y": 2393
+    },
+    "idle": {
+     "cell": [
+      202,
+      216
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      101,
+      157
+     ],
+     "y": 1296
+    },
+    "walk": {
+     "cell": [
+      242,
+      212
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      121,
+      157
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3936,
+    3234
+   ]
+  },
+  "walker_1": {
+   "bytes": 802357,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_1.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      292,
+      240
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      146,
+      178
+     ],
+     "y": 1906
+    },
+    "deathf": {
+     "cell": [
+      340,
+      239
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      170,
+      169
+     ],
+     "y": 2863
+    },
+    "hurt": {
+     "cell": [
+      236,
+      221
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      118,
+      167
+     ],
+     "y": 2638
+    },
+    "idle": {
+     "cell": [
+      236,
+      238
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      118,
+      175
+     ],
+     "y": 1422
+    },
+    "walk": {
+     "cell": [
+      268,
+      233
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      134,
+      175
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4352,
+    3592
+   ]
+  },
+  "walker_2": {
+   "bytes": 685212,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_2.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      254,
+      216
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      127,
+      159
+     ],
+     "y": 1722
+    },
+    "deathf": {
+     "cell": [
+      302,
+      208
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      151,
+      156
+     ],
+     "y": 2586
+    },
+    "hurt": {
+     "cell": [
+      218,
+      200
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      109,
+      150
+     ],
+     "y": 2382
+    },
+    "idle": {
+     "cell": [
+      202,
+      215
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      101,
+      157
+     ],
+     "y": 1284
+    },
+    "walk": {
+     "cell": [
+      236,
+      210
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      118,
+      157
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3840,
+    3222
+   ]
+  },
+  "walker_3": {
+   "bytes": 772716,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_3.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      274,
+      223
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      137,
+      165
+     ],
+     "y": 1828
+    },
+    "deathf": {
+     "cell": [
+      318,
+      215
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      159,
+      159
+     ],
+     "y": 2729
+    },
+    "hurt": {
+     "cell": [
+      210,
+      216
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      105,
+      163
+     ],
+     "y": 2509
+    },
+    "idle": {
+     "cell": [
+      214,
+      223
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      107,
+      164
+     ],
+     "y": 1374
+    },
+    "walk": {
+     "cell": [
+      252,
+      225
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      126,
+      164
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4096,
+    3386
+   ]
+  },
+  "walker_4": {
+   "bytes": 818569,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_4.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      292,
+      240
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      146,
+      181
+     ],
+     "y": 1936
+    },
+    "deathf": {
+     "cell": [
+      344,
+      233
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      172,
+      170
+     ],
+     "y": 2912
+    },
+    "hurt": {
+     "cell": [
+      242,
+      240
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      121,
+      185
+     ],
+     "y": 2668
+    },
+    "idle": {
+     "cell": [
+      230,
+      241
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      115,
+      182
+     ],
+     "y": 1446
+    },
+    "walk": {
+     "cell": [
+      264,
+      237
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      132,
+      181
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    4288,
+    3623
+   ]
+  },
+  "walker_5": {
+   "bytes": 537136,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_5.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      196,
+      165
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      98,
+      122
+     ],
+     "y": 1318
+    },
+    "deathf": {
+     "cell": [
+      234,
+      167
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      117,
+      127
+     ],
+     "y": 1988
+    },
+    "hurt": {
+     "cell": [
+      170,
+      159
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      85,
+      120
+     ],
+     "y": 1825
+    },
+    "idle": {
+     "cell": [
+      156,
+      163
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      78,
+      120
+     ],
+     "y": 984
+    },
+    "walk": {
+     "cell": [
+      180,
+      160
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      90,
+      120
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    2944,
+    2501
+   ]
+  },
+  "walker_6": {
+   "bytes": 619513,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_6.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      238,
+      202
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      119,
+      145
+     ],
+     "y": 1660
+    },
+    "deathf": {
+     "cell": [
+      278,
+      192
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      139,
+      142
+     ],
+     "y": 2471
+    },
+    "hurt": {
+     "cell": [
+      188,
+      189
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      94,
+      142
+     ],
+     "y": 2278
+    },
+    "idle": {
+     "cell": [
+      202,
+      205
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      101,
+      143
+     ],
+     "y": 1242
+    },
+    "walk": {
+     "cell": [
+      226,
+      203
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      113,
+      140
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3680,
+    3059
+   ]
+  },
+  "walker_7": {
+   "bytes": 739791,
+   "density": 160.0,
+   "file": "res://assets/zombies16/walker_7.png",
+   "gutter": 2,
+   "poses": {
+    "attack": {
+     "cell": [
+      252,
+      214
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      126,
+      161
+     ],
+     "y": 1742
+    },
+    "deathf": {
+     "cell": [
+      308,
+      215
+     ],
+     "dirs": 8,
+     "frames": 3,
+     "origin": [
+      154,
+      158
+     ],
+     "y": 2604
+    },
+    "hurt": {
+     "cell": [
+      222,
+      204
+     ],
+     "dirs": 8,
+     "frames": 1,
+     "origin": [
+      111,
+      154
+     ],
+     "y": 2396
+    },
+    "idle": {
+     "cell": [
+      196,
+      213
+     ],
+     "dirs": 8,
+     "frames": 2,
+     "origin": [
+      98,
+      159
+     ],
+     "y": 1308
+    },
+    "walk": {
+     "cell": [
+      232,
+      214
+     ],
+     "dirs": 16,
+     "frames": 6,
+     "origin": [
+      116,
+      158
+     ],
+     "y": 0
+    }
+   },
+   "size": [
+    3776,
+    3261
+   ]
+  }
+ }
+}

@@ -1,0 +1,376 @@
+## EXPERIMENT (prison round 12): the 30-day LAB, `--arcauto[=passive|average|expert] [--seed=N] [--arcdays=N] --managed`. One frame is one day of a scripted player: it raids (loot from the
+## economy's own tables, `loot` in prison_projects.json), spends on the projects the arc needs, mends the fence, rescues people now and then, and the night is resolved by a small model
+## (the table's dead against the guards' fire, the fence's hit points and the ammo, numbers in prison_story.json `lab`). The economy, the arc, the story and the endings are the real code; only
+## the raid and the night are stand-ins (the night model was set against `--siege=N` runs, see docs/experiments/prison-story.md). Prints one line a day and one `ARCLAB RESULT` line.
+## A batch: `for s in 1 2 3 4 5 6 7 8; do Godot --headless --path . --fixed-fps 60 -- --prison --managed --arcauto=average --seed=$s | grep "ARCLAB RESULT"; done`.
+extends RefCounted
+
+const Crew := preload("res://scripts/prison/prison_crew.gd")
+
+var game
+var arc
+var econ
+var cfg: Dictionary = {}
+var skill: Dictionary = {}
+var skill_name := "average"
+var rng := RandomNumberGenerator.new()
+var _init_done := false
+var _days_max := 31
+var _names: Array = []
+var _recruited := 0
+var _log: Array = []
+var _final_night_done := false
+
+
+func _init(a) -> void:
+	arc = a
+	game = a.game
+	econ = game.econ
+	cfg = a.cfg.lab
+	skill_name = String(game.args.get("arcauto", "average"))
+	if skill_name == "1" or not cfg.skills.has(skill_name):
+		skill_name = "average"
+	skill = cfg.skills[skill_name]
+	rng.seed = int(game.args.get("seed", "1"))
+	_days_max = int(game.args.get("arcdays", "31"))
+	var raids = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_raids.json"))
+	for p in raids.people:
+		_names.append(p)
+
+
+func step(_dt: float) -> void:
+	if arc.ended_id != "":
+		return
+	if not arc.started:
+		return
+	if not _init_done:
+		_setup()
+		return
+	if int(econ.day) > _days_max:
+		_finish("time")
+		return
+	_one_day()
+
+
+func _setup() -> void:
+	_init_done = true
+	econ.person_left.connect(func(nm): game._econ_remove(String(nm)))    # no frames run: the walk to the gate is skipped
+	var keep := ["cole", "bea", "ike"]
+	var n_keep := int(cfg.start_people)
+	var kept := 0
+	for m in game.crew.members.duplicate():
+		var id := String(m.def.id)
+		if keep.has(id) and kept < n_keep:
+			kept += 1
+		else:
+			game._econ_remove(String(m.def.name))
+	var s: Dictionary = cfg.start_stores
+	for k in s:
+		game.stores[k] = float(s[k])
+	arc.ever.clear()
+	arc.stats.peak_people = 0
+	arc._track_people()
+	print("ARCLAB start skill=%s seed=%s people=%d" % [skill_name, str(game.args.get("seed", "1")), econ.people()])
+
+
+# ----------------------------------------------------------------------------------- a day --
+
+func _one_day() -> void:
+	var d: int = econ.day
+	var sk := skill
+	var raids_n := int(floor(float(sk.raids))) + (1 if rng.randf() < float(sk.raids) - floor(float(sk.raids)) else 0)
+	var got := {}
+	for r in raids_n:
+		_raid(got)
+		if arc.ended_id != "":
+			return
+	_assign()
+	_mend(float(sk.mend))
+	_spend(float(sk.spend))
+	_ammo()
+	for i in 12:    # the crew's work through the day
+		econ._labor(30.0)
+	if d == arc.convoy_day():
+		_convoy()
+		if arc.ended_id != "":
+			return
+	_night(d)
+	if arc.ended_id != "":
+		return
+	var before := int(econ.day)
+	econ.tick_day()
+	game.tod = 6.5
+	arc.frame(1.0)
+	arc.frame(1.0)
+	_row(d)
+	if arc.ended_id == "" and int(econ.day) > arc.convoy_day() and arc.convoy != "left":
+		_finish("held")
+
+
+func _raid(got: Dictionary) -> void:
+	var sk := skill
+	var places: Array = []
+	for i in int(cfg.raid_places):
+		places.append(_pick_place(places))
+	var dead := rng.randf() < float(cfg.raid_death_p)
+	arc.stats.raids = int(arc.stats.raids) + 1
+	if dead:
+		arc.stats.ruth_deaths = int(arc.stats.ruth_deaths) + 1
+		if int(arc.stats.ruth_deaths) >= int(arc.cfg.rules.ruth_deaths):
+			arc.end("dead")
+		return
+	for place in places:
+		var loot: Dictionary = econ.cfg.loot.get(place, {})
+		for k in loot:
+			var v := float(loot[k]) * float(sk.loot) * rng.randf_range(0.7, 1.3)
+			game.stores[k] = float(game.stores.get(k, 0.0)) + v
+			if k == "scrap":
+				arc.stats.scrap = float(arc.stats.scrap) + v
+	game.stores["ammo"] = float(game.stores.ammo) - float(cfg.raid_ammo)
+	if rng.randf() < float(arc.cfg.letter_chance):
+		arc.next_letter()
+	if rng.randf() < float(sk.rescue_p) and int(econ.beds().free) > 0:
+		_recruit()
+	arc.stats.kills = int(arc.stats.kills) + int(cfg.raid_kills)
+
+
+## The place a raid should visit: the biggest shortage by a score, not one already in this trip.
+func _pick_place(skip: Array) -> String:
+	var rep: Dictionary = econ.daily_report()
+	var sc := {}
+	for r in ["food", "water"]:
+		var days := float(rep.res[r].days)
+		var cons := float(rep.res[r].cons)
+		var s: float = 0.0
+		if days >= 0.0 and days < 4.0:
+			s = (4.0 - days) * 30.0
+		elif float(game.stores[r]) < cons * 3.0:
+			s = 20.0
+		sc[String(econ.cfg.fixes[r])] = maxf(float(sc.get(String(econ.cfg.fixes[r]), 0.0)), s)
+	var need := _needs()
+	for r in ["fuel", "parts", "scrap", "meds", "ammo"]:
+		var sh: float = float(need.get(r, 0.0)) - float(game.stores.get(r, 0.0))
+		if sh > 0.0:
+			var pl := String(econ.cfg.fixes[r])
+			sc[pl] = maxf(float(sc.get(pl, 0.0)), sh * (1.4 if r == "fuel" else 1.0) + (8.0 if r == "ammo" else 0.0))
+	var best := "house"
+	var bs := 0.0
+	for pl in sc:
+		if not skip.has(pl) and float(sc[pl]) > bs:
+			bs = float(sc[pl])
+			best = String(pl)
+	return best
+
+
+## What the base wants in stock now: the cost of the projects on the path, the convoy's list after day 8, a reserve of scrap and ammo.
+func _needs() -> Dictionary:
+	var need := {"scrap": 30.0, "ammo": maxf(60.0, 3.0 * float(arc.wave_plan(int(econ.day))["total"]) * float(cfg.night.ammo_per_kill)), "meds": 4.0}
+	need["scrap"] = float(need.scrap) + maxf(0.0, float(need.ammo) - float(game.stores.ammo)) / 2.0    # the bench turns scrap into rounds
+	var path := _path()
+	for id in path:
+		for k in econ.defs[id].cost:
+			need[k] = float(need.get(k, 0.0)) + float(econ.defs[id].cost[k])
+	if int(econ.day) >= 18:    # the convoy takes its fuel and parts from the stores on day 30: they are fetched late
+		for r in arc.cfg.requirements:
+			if String(r.kind) == "stock":
+				need[String(r.res)] = float(need.get(String(r.res), 0.0)) + float(r.need)
+	return need
+
+
+## The projects the bot works towards, in order: the stage's missing tiers, then the convoy's needs.
+func _path() -> Array:
+	var out: Array = econ.goal()
+	if int(econ.day) >= int(cfg.arc_start_day):
+		for id in ["power1", "radio1", "fence2", "convoy1"]:
+			econ._need(out, id)
+	if int(econ.beds().free) <= 1 and not out.has("dormitory1"):
+		econ._need(out, "dormitory1")
+	return out
+
+
+func _spend(f: float) -> void:
+	if f <= 0.0:
+		return
+	var path := _path()
+	var guard := 0
+	while guard < 12:
+		guard += 1
+		var best := ""
+		var bc := 1.0e9
+		for id in path:
+			if not bool(econ.can_start(String(id)).ok):
+				continue
+			var cost: Dictionary = econ.defs[id].cost
+			if float(game.stores.scrap) - float(cost.get("scrap", 0.0)) < float(cfg.scrap_reserve) and String(id) != "water1":
+				continue
+			var c := 0.0
+			for k in cost:
+				c += float(cost[k])
+			if c < bc:
+				bc = c
+				best = String(id)
+		if best == "" or not econ.start(best):
+			break
+
+
+## The player puts spare people on the wall: guards up to six (the towers' posts), one worker kept for every other job.
+func _assign() -> void:
+	if float(skill.spend) <= 0.0:
+		return
+	var want := mini(6, 2 + int(econ.day) / 4)
+	var have: int = econ.workers("guard")
+	var crew: Array = econ.crew()
+	var cnt := {}
+	for c in crew:
+		cnt[String(c.role)] = int(cnt.get(String(c.role), 0)) + 1
+	for c in crew:
+		if have >= want:
+			break
+		var r := String(c.role)
+		if bool(c.kid) or r == "guard" or int(cnt.get(r, 0)) <= 1:
+			continue
+		econ.cfg.crew_role[String(c.id)] = "guard"
+		cnt[r] = int(cnt[r]) - 1
+		have += 1
+
+
+func _mend(f: float) -> void:
+	var missing := 0.0
+	for s in game.siege.segs:
+		missing += float(s.max) - float(s.hp)
+	var scrap_need := missing / 8.0 * f
+	var spend := minf(scrap_need, float(game.stores.scrap))
+	if spend <= 0.0:
+		return
+	var frac := (spend * 8.0) / maxf(1.0, missing)
+	game.stores["scrap"] = float(game.stores.scrap) - spend
+	for s in game.siege.segs:
+		s.hp = minf(float(s.max), float(s.hp) + (float(s.max) - float(s.hp)) * frac)
+
+
+## A mechanic at the bench turns scrap into rounds.
+func _ammo() -> void:
+	var want := float(_needs().ammo) - float(game.stores.ammo)
+	if want > 0.0 and econ.workers("mechanic") > 0 and float(game.stores.scrap) > float(cfg.scrap_reserve):
+		var k := minf(minf(float(cfg.bench_scrap), want / 2.0), float(game.stores.scrap) - float(cfg.scrap_reserve))
+		game.stores["scrap"] = float(game.stores.scrap) - k
+		game.stores["ammo"] = float(game.stores.ammo) + k * 2.0
+
+
+func _recruit() -> void:
+	var cnt := {}
+	for m in econ.crew():
+		cnt[String(m.role)] = int(cnt.get(String(m.role), 0)) + 1
+	var pick := "hauler"
+	var order := ["mechanic", "gardener", "guard", "medic", "cook", "guard", "hauler"]
+	var bs := 1.0e9
+	for r in order:
+		var sc := float(cnt.get(r, 0)) * 10.0 + float(order.find(r)) * 0.1
+		if sc < bs:
+			bs = sc
+			pick = r
+	var who: Dictionary = _names[_recruited % _names.size()]
+	_recruited += 1
+	var nm := String(who.name) + ("" if _recruited <= _names.size() else str(_recruited))
+	var sample: String = {"gardener": "marcus", "cook": "mia", "medic": "ana", "mechanic": "hector", "hauler": "owen", "guard": "june"}[pick]
+	var route: Array = []
+	for r in Crew.ROSTER:
+		if String(r.id) == sample:
+			for stop in r.route:
+				if not bool(stop.get("chat", false)):
+					route.append((stop as Dictionary).duplicate(true))
+	var id := "r_" + nm.to_lower()
+	econ.cfg.crew_role[id] = pick
+	var def := {"id": id, "name": nm, "role": pick.capitalize(), "key": String(who.key), "look": who.look, "route": route, "recruit": true}
+	if game.crew != null:
+		var m: Dictionary = game.crew._make(def, Vector2(50.0, 44.0))
+		game._add_member_node(m)
+
+
+# ---------------------------------------------------------------------------------- night --
+
+func _night(d: int) -> void:
+	var n: Dictionary = cfg.night
+	var plan: Dictionary = arc.wave_plan(d)
+	var total := float(plan.total)
+	var guards: int = econ.workers("guard")
+	var fp := float(n.base_defense) + float(guards) * float(n.guard_kills) + float(n.ruth_kills) * float(skill.defense)
+	if econ.tier("power") >= 2 and econ.power_on and not arc.blackout_for(d):
+		fp *= 1.0 + float(n.light_bonus)
+	var ammo_need := total * float(n.ammo_per_kill)
+	var have := float(game.stores.ammo)
+	if have < ammo_need:
+		fp *= have / maxf(ammo_need, 1.0)
+	game.stores["ammo"] = maxf(0.0, have - minf(have, ammo_need))
+	var leak := maxf(0.0, total - fp)
+	var killed := minf(total, fp)
+	var segs: Array = game.siege.segs
+	var live: Array = segs.filter(func(s): return float(s.hp) > 0.0)
+	var k := mini(int(plan.segs), live.size())
+	live.shuffle()
+	var hit: Array = live.slice(0, k)
+	var gaps := 0
+	var lost: Array = []
+	var dmg_each := (leak * float(n.hp_per_dead) + total * float(n.wear)) / maxf(1.0, float(k))
+	for s in hit:
+		s.hp = float(s.hp) - dmg_each
+		if float(s.hp) <= 0.0:
+			s.hp = 0.0
+			gaps += 1
+			lost.append(String(s.name))
+	var open_now := 0
+	for s in segs:
+		if float(s.hp) <= 0.0:
+			open_now += 1
+	var crew_lost: Array = []
+	for g in gaps:
+		for v in econ.crew():
+			if rng.randf() < float(n.casualty_p) and not crew_lost.has(String(v.name)):
+				arc.kill(String(v.name), "night")
+				crew_lost.append(String(v.name))
+	game.siege.night = d
+	game.siege.nights_started = d
+	arc.night_over(d, {"killed": int(killed), "lost": lost, "crew": crew_lost})
+	if open_now >= int(arc.cfg.rules.overrun.gaps):
+		arc.end("overrun")
+	_log.append("night %d: dead %d fire %d leak %d gaps %d lost %s" % [d, int(total), int(fp), int(leak), gaps, str(crew_lost)])
+
+
+## Day 30 at noon: the convoy is at the gate; the bot goes when the list is complete.
+func _convoy() -> void:
+	game.tod = 11.5
+	arc._convoy_hours()
+	if arc.convoy == "here":
+		arc.convoy_answer(arc.ready())
+
+
+func _row(d: int) -> void:
+	var reqs: Array = arc.requirements()
+	var ok := 0
+	var must := 0
+	for r in reqs:
+		if bool(r.must):
+			must += 1
+			if bool(r.ok):
+				ok += 1
+	var s: Dictionary = game.stores
+	print("D%02d %-10s people %2d beds %2d morale %3d | F%3d W%3d A%3d S%3d P%3d Fu%3d M%2d | list %d/%d fence%d radio%d truck%d | %s" % [d, econ.stage(), econ.people() + 1, econ.beds().cap, econ.morale, s.food, s.water, s.ammo, s.scrap, s.parts, s.fuel, s.meds, ok, must, econ.tier("fence"), econ.tier("radio"), 1 if econ.tier("convoy") >= 1 else 0, _log[-1] if not _log.is_empty() else ""])
+
+
+func _finish(why: String) -> void:
+	if arc.ended_id == "":
+		arc.end("held" if why == "held" else "abandoned")
+	_report()
+
+
+func report_if_ended() -> void:
+	if arc.ended_id != "":
+		_report()
+
+
+func _report() -> void:
+	var st: Dictionary = arc.stats
+	var ever_n: int = 1 + arc.ever.size()
+	var alive: int = arc.endings.last_saved if arc.ended_id.begins_with("evac") else 1 + econ.people()
+	print("ARCLAB RESULT skill=%s seed=%s ending=%s day=%d people_alive=%d ever=%d share=%.2f rescues=%d deaths=%d walked=%d nights=%d raids=%d ready=%s score=%d" % [skill_name, str(game.args.get("seed", "1")), arc.ended_id, arc.day, alive, ever_n, float(alive) / float(maxi(1, ever_n)), int(st.rescues), int(st.deaths), int(st.left), int(st.nights_held), int(st.raids), str(arc.ready()), arc.endings.last_score])
+	game.get_tree().quit()

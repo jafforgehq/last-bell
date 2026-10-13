@@ -20,6 +20,8 @@ const PawnMesh := preload("res://scripts/render/pawn_mesh.gd")
 const Combat := preload("res://scripts/render/combat_fx.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
+const Dirs := preload("res://scripts/render/pawn_dirs.gd")
+const Hanim := preload("res://scripts/render/hanim.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -40,6 +42,46 @@ var kind := "walker"
 var tex := {} # view -> Texture2D
 var pawn_rect: Rect2
 var weapon_tex: Texture2D
+## The prison's figures (set by prison_game.gd, off everywhere else): `smooth_turn` keeps a continuous drawn angle that turns at a limited rate toward the way the figure goes or aims
+## (the walkers' 4 baked views are crossfaded across each seam, the weapon is drawn at the exact angle); `rifles_ready` draws a guard's "watch" as the rifle at the low ready, not binoculars.
+static var smooth_turn := false
+static var rifles_ready := false
+## ROUND 7 (prison only): a person whose look has `dirs16` (the name of a set in assets/pawns16) and the plain walkers (`dirs16_dead`) are drawn from a 16-heading render of the whole body (pawn_dirs.gd)
+## in place of the 4 baked views, their legs and the seam crossfade; the gun and the hands stay live at the exact angle.
+static var dirs16 := false
+## ROUND 8 (prison only): the dead are drawn by the heading, stride phase, rise and lean the prison's rules layer gives them (scripts/prison/prison_dead.gd): they face where they go and where they look,
+## the legs run by the distance walked, a lunge and a recoil follow a bite, a hit throws them back and makes them stumble, a woken one gets up, a corpse falls the way the shot went.
+static var zmove := false
+static var dirs16_dead := false
+## ROUND 10 (prison only): the dead are drawn from the RimWorld-style baked set assets/pawns/zr<look>_S/E/N.png and lie as a corpse picture (zrc<look>.png).
+static var rimz := false
+## ROUND 11 (prison only, needs `rimz`): the dead are drawn from baked animation frames (scripts/render/rimz_frames.gd, tools/make_zombie_anim.py): a walk, idle, attack, hurt, fall and rise per
+## look, the damage that builds up, a soft shadow. `--noanim` (or `--norimz`) is Round 10's one picture per look with the code's lean and bob.
+static var rimz_anim := false
+## ROUND 8 (prison only): the zombie art set (assets/zombies16, pawn_dirs.gd `zombie_*`): every kind of the dead is drawn from a look of its own kind, with poses for the walk, idle, strike, flinch,
+## fall and rise. `zart_crawlers`: one in four limping walkers crawls (the crawler art; the rules do not know crawlers).
+static var zart := false
+static var zart_crawlers := true
+## ROUND 11 (human combat animation, scripts/render/hanim.gd): set by prison_game.gd, off everywhere else (`--nohanim`). `hurt_cb(at tiles, dir, n)` is told of a blow on a person (blood on the ground).
+static var hanim := false
+static var hurt_cb := Callable()
+var _hx: Hanim.State = null
+var _hand_draw := Vector2.ZERO
+var _zs = null
+var _zkind := "walker"
+var _was_still := false
+var _wake_ms := 0
+var _d16 = null
+const TURN_PERSON := deg_to_rad(220.0)
+const TURN_AIM := deg_to_rad(360.0)
+const TURN_BUSY := deg_to_rad(130.0)
+const TURN_DEAD := deg_to_rad(120.0)
+## The low ready: how far a rifle that is not being aimed is carried toward the low carry (0 shouldered at the aim, 1 fully low), eased (`_rdy`).
+const READY_LOW := 0.5
+var _rdy := 0.0
+var _zpos := Vector2.ZERO
+## A person whose def says `unarmed` (the prison's kids) never draws a weapon, in hand, put away or at work.
+var unarmed := false
 var weapon_rect: Rect2
 var gun_front = null
 var anim_t := 0.0
@@ -144,6 +186,8 @@ var _fl_dir := Vector2.ZERO
 var _stag_seen := 0.0
 var _thump := 0.0
 var _step_i := 0
+## ROUND 8: the way the last blow threw it (a unit vector), for the knock-back and the stumble (the clock is `_fl_t`).
+var _kb := Vector2.ZERO
 ## FEEL: the figure's integer seed (its entity's instance id), what a dead one has of its own (pawn_motion.gd `dead_variant`), the legs' phase as drawn (the rules' times its gait plus its own
 ## start), whether the last frame of a person's stride was a stride (a step is told only when the foot changes), and how startled a person is by a shot near them (1 at the shot, to 0).
 var _seed_i := 0
@@ -162,6 +206,26 @@ var _tgt_ori := PI / 2.0
 var _turning := true
 ## The kind of build the legs have: a person's livelier stride, or the dead's own kind.
 var _leg_kind := "person"
+## ROUND 11: the frame set of this one ("walker3", "" for none), what it is drawn as this frame (pose, view, the frame), whether the baked frame stands in for legs and arms, how often it has been hit,
+## the hit points it started with, the way the last blow went, and the gibs of a close kill.
+var _zset := ""
+var _rz_on := false
+var _rz_pose := ""
+var _rz_fr := {}
+var _rz_nolegs := false
+var _hits := 0
+var _hp0 := 1.0
+var _hit_dir := Vector2.ZERO
+var _gibs: Array = []
+var _gibs_done := false
+var _bite_done := false
+
+
+## Whether this entity may be drawn from a 16-heading set: a person that names one, or a plain walker (not a runner or a brute) when `dirs16_dead`.
+static func zombie_look_ok(e, is_zombie: bool) -> bool:
+	if is_zombie:
+		return dirs16_dead and Art.kind_of(e) == "walker"
+	return (e.look as Dictionary).has("dirs16")
 
 
 func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
@@ -171,16 +235,31 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	pawn_rect = Rect2(box[0], box[1], box[2] - box[0], box[3] - box[1])
 	for v in ["S", "E", "N"]:
 		tex[v] = GD.tex(data.pawn.files[key][v])
+		if rimz and is_zombie:
+			tex[v] = GD.tex("res://assets/pawns/zr%d_%s.png" % [int(e.look_index) % 24, v])
 	pal = Art.palette(e.look)
 	_pal_tex = PawnMesh.palette_texture(pal)
+	if dirs16:
+		if zombie_look_ok(e, is_zombie):
+			_d16 = Dirs.get_set("z%d" % (int(e.look_index) % 2) if is_zombie else String((e.look as Dictionary).get("dirs16", "")))
+	if dirs16 and zart and is_zombie:
+		_zkind = Art.kind_of(e)
+		if zart_crawlers and _zkind == "walker" and bool(e.limp) and int(e.look_index) % 4 == 0 and Dirs.zombie_looks("crawler") > 0:
+			_zkind = "crawler"
+		_zs = Dirs.zombie_set(_zkind, Dirs.zombie_look_of(_zkind, int(e.look_index)))
+		if _zs != null:
+			_d16 = _zs
 	_seed_i = int(e.get_instance_id())
 	_seed = fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0)    # (as it was: a person's breath and a walker's idle sway read it)
 	if zombie:
 		kind = Art.kind_of(e)
 		_leg_kind = kind
 		_style = Art.style(kind)
+		if rimz and rimz_anim:
+			_zset = RimzFrames.set_of(String(e.kind) if RimzFrames.SPECIALS.has(String(e.kind)) else kind, int(e.look_index), bool(e.limp))    # SPECIAL hook
+		_hp0 = maxf(float(e.hp), 1.0)
 		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
-		var tinted := Art.material(kind)
+		var tinted := Art.material(kind) if _zs == null else null
 		if tinted != null:
 			material = tinted
 			_base_material = tinted
@@ -188,11 +267,13 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		_style = Art.PERSON
 		_sw_pose = PawnMotion.Swing.new()
 		_rl = PawnMotion.Reload.new()
+		_hx = Hanim.State.new(fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0))
 		_work_phase = WorkAnim.phase_of(String(e.id))
 		var wb: Array = data.weaponArt.box
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
 		weapon_tex = GD.tex(data.weaponArt.files[e.weapon])
 		gun_front = data.guns[e.weapon].front
+		unarmed = bool((e.def as Dictionary).get("unarmed", false))
 		for o in data.objects:
 			if o.kind == "cot" or o.kind == "mattress":
 				beds.append(o)
@@ -265,6 +346,8 @@ func _sync_inner(redraw: bool, steps: int, alpha: float) -> void:
 	position = _prev.lerp(_cur, alpha) * TILE
 	if zombie:
 		_anim_dead(dt, jumped, stepped or steps < 0)
+		if zmove and _fl_t < 0.5:
+			position += _kb * (0.16 * TILE * exp(-_fl_t * 9.0))    # (a hit throws it back a hand's width and it settles)
 	else:
 		_anim(jumped, alpha, dt)
 	var tint := DEAD_TINT if (not zombie and entity.dead) else Color.WHITE
@@ -293,7 +376,10 @@ func tile_pos() -> Vector2:
 func flinch(dir: Vector2) -> void:
 	if dir.length_squared() > 0.0001:
 		_fl_dir = dir.normalized()
+		_kb = _fl_dir
 	_fl_t = 0.0
+	_hits += 1
+	_hit_dir = dir
 	_hot = true
 
 
@@ -317,15 +403,24 @@ func _anim(jumped: bool, alpha: float, dt: float) -> void:
 	if _alert_t > 0.0:
 		_alert_t = maxf(0.0, _alert_t - dt)
 	_alert = maxf(0.0, _alert - dt * 6.0)
+	var rate := 0.0
+	if smooth_turn:
+		var h := _heading(tgt)
+		tgt = h[0]
+		rate = h[1]
 	if jumped or dt <= 0.0 or not _ori_ok:
 		_ori = tgt
 		_ori_ok = true
+	elif smooth_turn:
+		_ori = PawnMotion.turn_at(_ori, tgt, dt, rate)
 	else:
 		_ori = PawnMotion.turn(_ori, tgt, dt)
 	var v := PawnMotion.view_of(_ori)
 	_mir = v == "W"
 	_vw = "E" if _mir else v
-	_wid = PawnMotion.width(_ori, rm)
+	_wid = 1.0 if smooth_turn else PawnMotion.width(_ori, rm)
+	if smooth_turn:
+		e.set_meta("drawn_ori", _ori)
 	if _pos_ok and dt > 0.0:
 		var inst := (position - _pos_last) / (TILE * dt)
 		if inst.length_squared() > 81.0:
@@ -336,6 +431,29 @@ func _anim(jumped: bool, alpha: float, dt: float) -> void:
 	_pos_last = position
 	_pos_ok = true
 	_anim_person(dt, jumped, alpha, rm)
+
+
+## The prison's heading: [the angle the figure wants to face, how fast it may turn]. Gun up (aiming, recoil, reload) or Ruth: the aim. Walking: the way it goes. A guard on watch: slowly
+## looks about. Standing: where it is, until the rules give it a new facing.
+func _heading(face_tgt: float) -> Array:
+	var e = entity
+	var armed := not unarmed
+	var rate := TURN_PERSON
+	var word := _work_word()
+	if _wk > 0.0 or word == "haul":
+		rate = TURN_BUSY
+	if armed and (e.player or e.target != null or float(e.recoil) > 0.05 or float(e.reloading) > 0.0):
+		return [float(e.aim), TURN_AIM]
+	var fs: String = e.facing
+	var changed := fs != _face_seen
+	_face_seen = fs
+	if e.moving and _vel.length() > 0.4:
+		return [_vel.angle(), rate]
+	if armed and rifles_ready and word == "watch" and not e.moving:
+		return [face_tgt + 0.9 * sin(anim_t * 0.35 + _seed * TAU), rate * 0.4]
+	if changed or not _ori_ok:
+		return [face_tgt, rate]
+	return [_ori, rate]
 
 
 func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
@@ -375,6 +493,8 @@ func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
 	var hol: bool = p.get("holstered") == true
 	_lowk = move_toward(_lowk, 1.0 if (run > 0.3 or hol) else 0.0, dt / 0.09)
 	_holk = move_toward(_holk, 1.0 if hol else 0.0, dt / 0.12)
+	var low_ready: bool = smooth_turn and not unarmed and not p.player and p.target == null and float(p.recoil) <= 0.05 and float(p.reloading) <= 0.0
+	_rdy = move_toward(_rdy, 1.0 if low_ready else 0.0, dt / 0.2)
 	# the swing (the town's: the rules' `swing_t`; the old game's: the blow's own `thrust` as it begins), on the screen's clock from the moment it is seen
 	var st: float = float(p.get_meta("swing_t", -1.0)) if p.player else -1.0
 	var thr: float = p.thrust
@@ -402,10 +522,20 @@ func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
 		PawnMotion.reload_pose(_rl, clampf(1.0 - float(p.reloading) / _rl_total, 0.0, 1.0), maxi(1, cap - _rl_m0) if shell else 1, shell)
 	else:
 		_rl_total = 0.0
+	if hanim and _hx != null and dt > 0.0:
+		var up_want: bool = not unarmed and not hol and (p.target != null or float(p.recoil) > 0.05 or float(p.reloading) > 0.0 or (p.player and bool(p.get_meta("aiming", false))))
+		var was := _hx.hurt_t
+		_hx.tick(p, dt, up_want, Vector2(p.x, p.y), Hanim.threat_cb)
+		if _hx.hurt_t == 0.0 and was > 0.0 and hurt_cb.is_valid():
+			hurt_cb.call(Vector2(p.x, p.y - 0.3), _hx.hurt_dir, 8)
 
 
 ## The motion of one of the dead for a frame: the drawn facing (worked out only while it turns), the attack's beat, the flinch and the thump. The dead are many, so this reads as little of the
 ## rules as it can.
+func zombie_rising() -> bool:
+	return entity.rise < 1.0
+
+
 func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 	var z = entity
 	_a_prev = anim_t
@@ -415,25 +545,51 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 	_land = maxf(0.0, _land - dt * 7.0)
 	if not (stepped or jumped or _turning):
 		# (a frame between two steps of the rules: what the rules say has not changed, only the clocks of the flinch and the strike run on)
-		_hot = _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25) or _land > 0.0
+		_hot = _fl_t < (0.6 if zmove else 0.3) or (_atk > 0.0 and _strike_age < (0.5 if zmove else 0.25)) or _land > 0.0 or (zmove and (zombie_rising() or entity.press > 0.0))
 		return
 	var st: String = z.state
 	var down: bool = st == "dying" or st == "dead"
 	var f: String = z.facing
-	if jumped or f != _face_seen:
+	var zturn := false
+	if zmove and z.head_ok:
+		# (round 8: the rules layer turns the heading at the kind's own rate; this only reads it)
+		var hz: float = z.head
+		zturn = absf(wrapf(hz - _ori, -PI, PI)) > 0.002
+		_ori = hz
+		_tgt_ori = hz
+		_turning = false
+		var vz := PawnMotion.view_of(_ori)
+		_mir = vz == "W"
+		_vw = "E" if _mir else vz
+		_wid = 1.0
+	elif smooth_turn:
+		# (the prison: the heading is the way it goes, turned at a fixed rate; a part of a step of change is enough to know)
+		if jumped:
+			_zpos = position
+			_tgt_ori = PawnMotion.FACE_ANG.get(f, PI / 2.0)
+			_ori = _tgt_ori
+		elif stepped:
+			var dp := position - _zpos
+			_zpos = position
+			if z.moving and dp.length() > 0.8 and dp.length() < TILE:
+				_tgt_ori = dp.angle()
+		_turning = _ori != _tgt_ori or jumped
+	elif jumped or f != _face_seen:
 		_face_seen = f
 		_tgt_ori = PawnMotion.FACE_ANG.get(f, PI / 2.0)
 		_turning = true
 	if _turning:
 		if jumped or dt <= 0.0 or down:
 			_ori = _tgt_ori
+		elif smooth_turn:
+			_ori = PawnMotion.turn_at(_ori, _tgt_ori, dt, TURN_DEAD)
 		else:
 			_ori = PawnMotion.turn(_ori, _tgt_ori, dt)
 		_turning = _ori != _tgt_ori
 		var v := PawnMotion.view_of(_ori)
 		_mir = v == "W"
 		_vw = "E" if _mir else v
-		_wid = PawnMotion.width(_ori, PawnMotion.motion())
+		_wid = 1.0 if smooth_turn else PawnMotion.width(_ori, PawnMotion.motion())
 	if down:
 		_hot = false
 		_acc_dt = 0.0
@@ -450,7 +606,8 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 		_fl_t = 0.0
 		_fl_dir = -(PawnMotion.FACE_DIR.get(f, Vector2(0.0, 1.0)) as Vector2)
 	_stag_seen = sg
-	var fighting: bool = st == "attack" or st == "chase" or st == "hunt" or st == "breach"
+	var leaning: bool = zmove and z.press > 0.0    # (on the fence, reaching through it)
+	var fighting: bool = st == "attack" or st == "chase" or st == "hunt" or st == "breach" or leaning
 	if fighting or _atk > 0.0:
 		# a strike is the rules' `attack_t` being set back after a claw or a bite: the figure rears back as it runs down and lunges when it is reset
 		var at: float = z.attack_t
@@ -463,6 +620,8 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 	# FEEL: the legs' phase as this one draws it (its own gait and its own start in the cycle: no two in step), and a foot landing as it passes a neutral pose: dust under it, and a
 	# brute's weight: the body sinks as the foot lands (and the camera is shaken a hair, as before)
 	_vphase = float(z.walk_phase) * _dv.gait + _dv.ph
+	if zmove:
+		_vphase = float(z.walk_phase) * PawnMotion.dead_stride(kind) + float(z.zph)    # (the legs run by the distance walked, at the rhythm the rules layer lurches by)
 	if z.moving:
 		var si := int(floorf(_vphase / PI))
 		if si != _step_i:
@@ -470,6 +629,8 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 				if kind == "brute":
 					_thump = maxf(_thump, 0.3)
 					_land = 1.0
+				if _zset != "" and _hits >= 2 and float(z.hp) < _hp0 * 0.65 and RimzFrames.blood_cb.is_valid():
+					RimzFrames.blood_cb.call(position.x / TILE + _rng_off(si, 0.12), position.y / TILE + 0.28, 0.07, 0.0, 0.8)    # (a wounded one leaves a trail of drops)
 				if PawnMotion.step_cb.is_valid() and (kind != "walker" or PawnMotion.rnd(_seed_i, si) < 0.6):
 					PawnMotion.step_cb.call(position / TILE, PawnMotion.FACE_DIR.get(f, Vector2.DOWN), 0.42 if kind == "walker" else (0.85 if kind == "runner" else 1.4))
 			_step_i = si
@@ -478,7 +639,7 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 			PawnMotion.thump_cb.call(position / TILE, _thump)
 		_thump = 0.0
 	_acc_dt = 0.0
-	_hot = _turning or _fl_t < 0.3 or (_atk > 0.0 and _strike_age < 0.25) or _land > 0.0
+	_hot = _turning or zturn or _fl_t < (0.6 if zmove else 0.3) or (_atk > 0.0 and _strike_age < (0.5 if zmove else 0.25)) or _land > 0.0 or (zmove and (z.rise < 1.0 or z.press > 0.0))
 
 
 # a tiny canvas-context emulation: translate / rotate / scale in local units
@@ -530,6 +691,9 @@ func _lean(view: String) -> void:
 ## The baked body for one view: the sprite, or for a figure with a hunch (a brute)
 ## the sprite warped by its build. `col` fades it (a corpse going).
 func _draw_body(view: String, col: Color = Color.WHITE) -> void:
+	if _rz_on:
+		_draw_rimz(col)
+		return
 	if not _meshes.has(view):
 		_meshes[view] = Art.sprite_mesh(kind, view, pawn_rect)
 	var mesh = _meshes[view]
@@ -579,6 +743,8 @@ func _draw() -> void:
 		return # the walker standing there now is drawn instead
 	elif entity.resting_bed != null:
 		_draw_resting()
+	elif hanim and _hx != null and entity.dead:
+		_draw_fallen()
 	elif entity.downed:
 		_draw_downed()
 	else:
@@ -632,7 +798,7 @@ func _draw_person() -> void:
 		return
 	var rm := PawnMotion.motion()
 	var view := _vw
-	var mirror := _mir
+	var mirror := _mir and _d16 == null
 	var g := _gait
 	# (PACE: the run, scripts/sim/sprint.gd `lean`, 0 to 1 and set on the avatar only: the legs go faster by themselves (the stride is longer for each tile), the body bobs a little more, leans into it and the gun is carried low)
 	var run: float = float(p.get_meta(RUN_META, 0.0)) if p.player else 0.0
@@ -650,9 +816,36 @@ func _draw_person() -> void:
 	if spd > 0.05:
 		lean = (_vel / spd) * ((0.045 + 0.08 * run) * minf(spd / PawnMotion.WALK_V, 1.6) * rm)
 	var aim: float = p.aim
+	if smooth_turn and _rdy > 0.0 and not p.player:
+		aim = lerp_angle(aim, _ori, _rdy)    # (a rifle that is not aimed points where the figure goes, at the low ready)
 	var aim_v := Vector2.from_angle(aim)
 	var kick := _rk * _rk
-	if kick > 0.0:
+	var hk := 0.0    # (ROUND 11: the head's own jerk, radians)
+	var gu := {}
+	if hanim and _hx != null:
+		var prof := Hanim.profile(p.weapon)
+		var fk := Hanim.flinch_k(_hx)
+		if kick > 0.0:
+			off -= Vector2(aim_v.x, aim_v.y * 0.6) * (kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 1.5 * rm * float(prof.body))
+			roll -= signf(aim_v.x) * kick * float(prof.roll) * rm    # (the upper body rocks back from the shot)
+			hk -= signf(aim_v.x) * kick * float(prof.head) * rm
+		if _hx.up > 0.0 and not unarmed:
+			lean += aim_v * (0.03 * _hx.up * rm)    # (the head tucks down to the stock)
+			sy -= 0.015 * _hx.up * rm
+		if fk > 0.0:
+			var hs := signf(_hx.hurt_dir.x) if absf(_hx.hurt_dir.x) > 0.05 else (1.0 if _hx.seed > 0.5 else -1.0)
+			off += _hx.hurt_dir * (0.09 * fk * rm)
+			roll += hs * 0.13 * fk * rm
+			hk += hs * 0.32 * fk * rm
+			sy += 0.03 * fk * rm
+		if _hx.bite_t > 0.0:
+			roll += sin(anim_t * 26.0) * 0.05 * minf(1.0, _hx.bite_t * 2.0) * rm
+			off.x += sin(anim_t * 33.0) * 0.02 * minf(1.0, _hx.bite_t * 2.0) * rm
+		if _hx.limp and g > 0.0:
+			off.y += 0.035 * maxf(0.0, sin(_rph)) * g * rm
+			roll += 0.035 * sin(_rph) * g * rm
+		gu = Hanim.getup_pose(_hx.getup_t, 1.0 if _hx.seed > 0.5 else -1.0)
+	elif kick > 0.0:
 		# (the kick of a shot: the body is pushed back from the way the gun points and settles over about 150 ms)
 		off -= Vector2(aim_v.x, aim_v.y * 0.6) * (kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 1.5 * rm)
 	if _sw >= 0.0:
@@ -662,6 +855,8 @@ func _draw_person() -> void:
 		roll += _sw_pose.roll
 		sy += _sw_pose.stretch
 	var xf := Transform2D(0.0, Vector2.ONE, 0.0, off) * PawnMotion.lean_xf(lean)
+	if not gu.is_empty():
+		xf = xf.translated(gu.off).translated_local(Vector2(0.0, 0.3)).rotated_local(gu.rot).scaled_local(Vector2(1.0, gu.sy)).translated_local(Vector2(0.0, -0.3))
 	if roll != 0.0 or sy != 1.0:
 		xf = xf.translated_local(Vector2(0.0, PawnMotion.HIPS)).rotated_local(roll).scaled_local(Vector2(1.0, sy)).translated_local(Vector2(0.0, -PawnMotion.HIPS))
 	_reset()
@@ -672,18 +867,44 @@ func _draw_person() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_legs(view, _rph, _moving_draw, false, 1.0, true)
+	if _d16 == null:
+		_legs(view, _rph, _moving_draw, hanim and _hx != null and _hx.limp, 1.0, true)
+	elif _fast:
+		_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
+	var sm: Array = PawnMotion.seam(_ori) if smooth_turn and _d16 == null else ["", 0.0]
+	var nv := String(sm[0])
+	var nmir := nv == "W"
+	if nv != "":
+		nv = "E" if nmir else nv
+		_m = base
+		if nmir:
+			_sc(-1, 1)
+		_apply()
+		_legs(nv, _rph, _moving_draw, false, float(sm[1]), false)
 	var body := base * xf
-	if view == "N":
+	if view == "N" and not unarmed:
 		_gun(body, aim, view)
 	_m = body
-	if _wid != 1.0:
+	if _wid != 1.0 and _d16 == null:
 		_m = _m * Transform2D(Vector2(_wid, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)    # (a turn: narrower across the seam between two views)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	_pen.draw_texture_rect(tex[view], pawn_rect, false)
-	if view != "N":
+	if hanim and absf(hk) > 0.012:
+		_bust(view, hk * (-1.0 if mirror else 1.0))
+	elif _d16 != null:
+		Dirs.blit(_pen, _d16, _ori, _rph)
+	else:
+		_pen.draw_texture_rect(tex[view], pawn_rect, false)
+	if hanim and _hx != null and _hx.stain > 0.0:
+		Hanim.draw_stains(_pen, _hx)    # (blood on the clothes)
+	if nv != "":
+		_m = body
+		if nmir:
+			_sc(-1, 1)
+		_apply()
+		_pen.draw_texture_rect(tex[nv], pawn_rect, false, Color(1.0, 1.0, 1.0, float(sm[1])))
+	if view != "N" and not unarmed:
 		_gun(body, aim, view)
 	if p.thrust > 0.0:
 		_m = body
@@ -698,16 +919,21 @@ const CARRY_SN := 1.35
 ## The weapon in the hands, drawn in the frame `m` (the body's, without the turn's narrowing): at the aim, kicked up by a shot, swung through its arc, lowered for a reload or a run (the carry,
 ## eased), or put away (low, the hands off it, a little faded; round 23, Q).
 func _gun(m: Transform2D, aim: float, view: String) -> void:
+	if unarmed:
+		return
 	var p = entity
 	var rm := PawnMotion.motion()
 	var a := aim
 	var reload := float(p.reloading) > 0.0
 	var kick := _rk * _rk
+	var hx := hanim and _hx != null
 	if kick > 0.0:
-		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm
+		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm * (float(Hanim.profile(p.weapon).rise) if hx else 1.0)
 	if _sw >= 0.0:
 		a += _sw_pose.off
-	var lw := _lowk
+	var lw := maxf(_lowk, _rdy * READY_LOW)
+	if hx and p.player and _hx.up < 1.0 and not unarmed:
+		lw = maxf(lw, (1.0 - _hx.up) * READY_LOW)    # (the raise: the rifle comes up to the shoulder in 0.2 s)
 	if reload:
 		lw = maxf(lw, _rl.low * 0.85)
 	if lw > 0.0:
@@ -720,9 +946,14 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 	var pump := 0.0
 	if reload:
 		pump = _rl.pump
+	elif hx and Hanim.profile(p.weapon).work != "" and _shot_age > float(Hanim.profile(p.weapon).work_at) and _shot_age < float(Hanim.profile(p.weapon).work_at) + float(Hanim.profile(p.weapon).work_len):
+		var pf := Hanim.profile(p.weapon)
+		pump = sin((_shot_age - float(pf.work_at)) / float(pf.work_len) * PI) * rm * (1.0 if pf.work == "pump" else 0.7)
 	elif p.weapon == "shotgun" and _shot_age > 0.3 and _shot_age < 0.55:
 		pump = sin((_shot_age - 0.3) / 0.25 * PI) * rm
 	_m = m
+	if hx and _holk > 0.0:
+		pv += Vector2(-0.14, 0.2) * _holk    # (slung: the weapon slides to the back and hip)
 	_tr(pv.x, pv.y)
 	_rot(a)
 	if cos(a) < 0.0:
@@ -731,6 +962,8 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 	_tr(push, 0)
 	_apply()
 	_pen.draw_texture_rect(weapon_tex, weapon_rect, false, Color(1.0, 1.0, 1.0, lerpf(0.94, 0.75, _holk)))
+	if hx and _holk < 0.5:
+		_gun_arms(pump, reload)
 	if _holk < 0.5:
 		if pump == 0.0 and not reload:
 			_hands_on(null)
@@ -739,12 +972,52 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 			if gun_front != null:
 				_hands_on(Vector2(float(gun_front) - pump * 0.12, 0.02), true)
 			if reload and _rl.hand_on:
-				_hands_on(_rl.hand, true)
+				_hands_on(_hand_draw if hx else _rl.hand, true)
+	_m = m
+	_apply()
+	if hx and reload:
+		_drop_mag(m, a)
+
+
+## The hands on a weapon: both (the baked pair), or with `at` one hand there in the weapon's frame.
+## ROUND 11: the sleeves to the hands on the weapon (the frame is the weapon's, set by `_gun`), and what the loading hand holds: a shell, or a magazine.
+func _gun_arms(pump: float, reload: bool) -> void:
+	var p = entity
+	var fp := Vector2(float(gun_front) - pump * 0.12 if gun_front != null else 0.3, 0.02)
+	Hanim.draw_arm(_pen, Vector2(-0.04, 0.0), Vector2(0.0, 0.05), pal.sleeve, pal.skin, false)
+	Hanim.draw_arm(_pen, Vector2(-0.02, 0.04), fp, pal.sleeve, pal.skin, false)
+	if reload and _rl.hand_on:
+		var shell: bool = int(p.gun.get("mag", 0)) <= 8 and p.weapon != "pistol"
+		var hp := _rl.hand
+		if not shell:
+			hp = Vector2(-0.02, 0.46).lerp(Vector2(0.12, 0.14), clampf(_rl.hand.distance_to(Vector2(-0.02, 0.46)) / 0.5, 0.0, 1.0))
+		_hand_draw = hp
+		Hanim.draw_arm(_pen, Vector2(-0.02, 0.1), hp, pal.sleeve, pal.skin, false)
+		if _rl.carry:
+			if shell:
+				Hanim.draw_shell(_pen, hp + Vector2(0.0, -0.1), 0.5)
+			else:
+				Hanim.draw_mag(_pen, hp + Vector2(0.0, 0.06), 0.15)
+
+
+## The old magazine falling out of the gun on a reload (ROUND 11): leaves the gun at the start of the reload, drops and turns, in the body's frame.
+func _drop_mag(m: Transform2D, a: float) -> void:
+	var p = entity
+	var cap := int(p.gun.get("mag", 0))
+	if cap <= 8 or p.weapon == "pistol" or _rl_total <= 0.0:
+		return
+	var t := (_rl.prog - 0.06) * _rl_total
+	if t < 0.0 or t > 0.55:
+		return
+	var pv := PawnMotion.shoulder(_ori)
+	var at := pv + Vector2.from_angle(a) * 0.3 + Vector2(0.0, 0.12 + 5.0 * t * t)
+	_m = m
+	_apply()
+	Hanim.draw_mag(_pen, at, 0.3 + t * 7.0)
 	_m = m
 	_apply()
 
 
-## The hands on a weapon: both (the baked pair), or with `at` one hand there in the weapon's frame.
 func _hands_on(at, single: bool = false) -> void:
 	if not single:
 		if _fast:
@@ -830,7 +1103,7 @@ func _work_sync(steps: int, alpha: float) -> void:
 ## walking, or in the sights of a weapon, or with a gun going off, is not at work, whatever word the rules have left on them.
 func _work_update(p) -> bool:
 	var word := _work_word()
-	var busy: bool = word != "" and WorkAnim.CYCLE.has(word) and not p.moving and p.target == null and p.reloading <= 0.0 and p.recoil <= 0.0
+	var busy: bool = word != "" and WorkAnim.CYCLE.has(word) and not (rifles_ready and word == "watch" and not unarmed) and not p.moving and p.target == null and p.reloading <= 0.0 and p.recoil <= 0.0
 	var dt := 0.0
 	if _anim_prev >= 0.0:
 		dt = clampf(anim_t - _anim_prev, 0.0, 0.1)
@@ -857,7 +1130,7 @@ func _draw_working() -> void:
 
 ## The weapon drawn at the strength `fade` (1 in hand, less as it is put away for work); `aim` is the rules' angle.
 func _weapon_faded(view: String, aim: float, fade: float, mirror: bool) -> void:
-	if fade <= 0.02:
+	if fade <= 0.02 or unarmed:
 		return
 	var a: float = PI - aim if mirror else aim
 	var saved := _m
@@ -876,7 +1149,7 @@ func _draw_zombie() -> void:
 	var z = entity
 	var st := _style
 	var view := _vw
-	var mirror := _mir
+	var mirror := _mir and _d16 == null
 	var rm := PawnMotion.motion()
 	var thump: float = st.claw_thump
 	var dv := _dv
@@ -905,13 +1178,40 @@ func _draw_zombie() -> void:
 			hump = sin(pow(clampf(_strike_age / 0.22, 0.0, 1.0), 0.6) * PI) * _atk
 		elif _at_seen < rear:
 			windup = PawnMotion.smooth(1.0 - _at_seen / rear) * _atk
-	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4) + dv.lean
+	_rz_on = false
+	_rz_nolegs = false
+	if _zset != "":
+		_rimz_pick(walking and z.rise >= 1.0, phase, windup, hump)
+	var zup := 1.0
+	var recoil := 0.0
+	if zmove:
+		# round 8: the body surges forward on each swing of a stride and rocks unevenly (a shambler's lurch), a runner pitches harder, a brute stamps; the bite is a lunge, then a recoil
+		if walking:
+			var surge := absf(stride) * (0.09 if kind == "runner" else (0.03 if kind == "brute" else 0.06))
+			roll += sin(phase * 0.5) * 0.045 * dv.sway * (1.4 if kind == "walker" else 0.7)
+			bob += surge * 0.18 * dv.bob
+			recoil -= surge * rm
+		if _atk > 0.0 and _strike_age >= 0.22 and _strike_age < 0.5:
+			recoil -= 0.14 * sin((_strike_age - 0.22) / 0.28 * PI) * _atk
+		if z.state == "still" and z.press <= 0.0:
+			recoil += 0.07    # (a slump: the head hangs)
+		zup = lerpf(0.42, 1.0, PawnMotion.smooth(clampf(z.rise, 0.0, 1.0)))
+		if _rz_on and _rz_pose == "rise":
+			zup = 1.0    # (the baked frames rise by themselves)
+		if z.rise < 1.0:
+			walking = false
+			recoil += 0.30 * (1.0 - zup)
+		if _fl_t < 0.6:
+			roll += sin(_fl_t * 24.0) * 0.14 * exp(-_fl_t * 5.0) * rm    # (the stumble after a hit)
+	var lf := (0.04 if walking else 0.0) * rm - 0.28 * windup + 0.42 * hump * minf(thump, 1.4) + dv.lean - recoil
 	var lean := Vector2(lf + dv.tilt * 0.4, 0.0)
+	if _d16 != null and _mir:
+		lean.x = -lf + dv.tilt * 0.4    # (a walker facing west, drawn from the render: forward is to the left)
 	if view == "S":
 		lean = Vector2(dv.tilt, lf * 0.8)
 	elif view == "N":
 		lean = Vector2(dv.tilt, -lf * 0.5)
-	var sy := 1.0 - 0.06 * hump * minf(thump, 1.4) - 0.035 * _land * dv.weight * rm
+	var sy := (1.0 - 0.06 * hump * minf(thump, 1.4) - 0.035 * _land * dv.weight * rm) * zup
 	bob -= 0.012 * _land * dv.weight * rm
 	if _fl_t < 0.3:
 		# a flinch: it jerks away from the blow and comes back (a couple of frames)
@@ -921,15 +1221,24 @@ func _draw_zombie() -> void:
 		bob -= 0.02 * fk
 	_reset()
 	var fs := figure_scale_xy() * dv.size
+	if _zs != null:
+		fs = Vector2.ONE * (Art.size_of(z) * dv.size / float(Dirs.BAKE_SIZE.get(_zkind, 1.0)))
 	if fs != Vector2.ONE:
 		_fit_figure(fs)
 	_apply()
 	if not _fast:
 		Art.shadow(_pen, st)
+	if _rz_on:
+		_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.4, 0.2, 0.8, 0.3), false)    # (ROUND 11: a soft dark shadow under it)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	if dv.side < 0.0 and limp and view != "E":
+	if _rz_nolegs:
+		pass
+	elif _d16 != null:
+		if _fast:
+			_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
+	elif dv.side < 0.0 and limp and view != "E":
 		# (FEEL: which leg drags: from the front and the back the legs are a pair, so the other leg is the same mesh turned over; in side view the near one drags, as the rules' limp has it)
 		var kept := _m
 		_sc(-1, 1)
@@ -939,16 +1248,25 @@ func _draw_zombie() -> void:
 		_apply()
 	else:
 		_legs(view, phase, walking, limp, 1.0, true)
+	if _zs != null:
+		_draw_zart(walking, phase, windup, hump)
+		return
 	_tr(0, 0.3)
 	_rot(roll)
 	_tr(0, -0.3 - bob)
-	_lean(view)
+	if not _rz_on:
+		_lean(view)
 	_m = _m * PawnMotion.lean_xf(lean)
 	if sy != 1.0:
 		_tr(0, Art.FOOT_Y)
 		_sc(1.0, sy)
 		_tr(0, -Art.FOOT_Y)
 	var step := hump * 0.10 * minf(thump, 1.4) * rm
+	if zmove:
+		# (the lunge goes the way it faces, at the exact angle: the figure's frame is the screen's, and the mirror is undone)
+		var lunge := hump * (0.22 if kind == "brute" else 0.16) * rm
+		_tr(cos(_ori) * lunge * (-1.0 if mirror else 1.0), sin(_ori) * lunge * 0.6)
+		step = 0.0
 	if view == "E":
 		_tr(step, 0)
 	else:
@@ -956,10 +1274,26 @@ func _draw_zombie() -> void:
 	if _wid != 1.0:
 		_sc(_wid, 1.0)
 	_apply()
-	var reach: bool = _atk > 0.5 and st.pose == "sprint"
-	_arms_layer(view, "back", reach, phase, windup, hump, walking)
+	var reach: bool = _atk > 0.5 and (st.pose == "sprint" or (zmove and z.press > 0.0))
+	if _d16 != null:
+		Dirs.blit(_pen, _d16, _ori, phase if walking else 0.0)
+		return
+	if not _rz_on:
+		_arms_layer(view, "back", reach, phase, windup, hump, walking)
 	_draw_body(view)
-	_arms_layer(view, "front", reach, phase, windup, hump, walking)
+	if smooth_turn and not _rz_on:
+		var sm: Array = PawnMotion.seam(_ori)
+		if String(sm[0]) != "":
+			var nmir: bool = sm[0] == "W"
+			if nmir != mirror:
+				_sc(-1, 1)
+				_apply()
+			_draw_body("E" if nmir else String(sm[0]), Color(1.0, 1.0, 1.0, float(sm[1])))
+			if nmir != mirror:
+				_sc(-1, 1)
+				_apply()
+	if not _rz_on:
+		_arms_layer(view, "front", reach, phase, windup, hump, walking)
 
 
 ## One layer of the arms of one of the dead, raised as it rears back and slammed down as it strikes (the pose of the arms is moved about the shoulders, the picture of them is the one at rest),
@@ -992,6 +1326,11 @@ func _arms_layer(view: String, layer: String, reach: bool, phase: float, windup:
 
 func _draw_dead() -> void:
 	var z = entity
+	if _zset != "" and _draw_dead_rz(z):
+		return
+	if _zs != null:
+		_draw_zart_dead()
+		return
 	var view := _vw
 	var rm := PawnMotion.motion()
 	# ANIM. The rules' fall runs 0.45 s; the collapse is drawn in the first 0.26 s of it: the knees buckle (a rock back and a drop), it topples with the weight of a body (slow, then fast) and
@@ -1014,6 +1353,19 @@ func _draw_dead() -> void:
 		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
 	_reset()
 	var fs := figure_scale_xy() * _dv.size
+	if rimz and (z.state == "dead" or f >= 1.0):
+		# ROUND 10: once it is down it lies as its own picture (a pool of blood under it), the look and the way it fell choose which of three
+		var ci := int(z.look_index) % 24
+		var pose := (ci * 7 + int(_seed * 97.0)) % 3
+		var ct := GD.tex("res://assets/pawns/zrc%d_%d.png" % [ci, pose])
+		_tr(0, 0.0)
+		if z.fall_dir < 0.0 or cos(float(z.fall_ang)) < -0.2:
+			_sc(-1, 1)
+		if fs != Vector2.ONE:
+			_sc(fs.x, fs.y)
+		_apply()
+		_pen.draw_texture_rect(ct, pawn_rect, false, Color(1, 1, 1, alpha))
+		return
 	if z.state == "dying" and _fast and f < 1.0:
 		if fs != Vector2.ONE:
 			_fit_figure(fs)
@@ -1021,6 +1373,14 @@ func _draw_dead() -> void:
 		_pen.draw_mesh(PawnMesh.shadow(kind), _pal_tex, Transform2D.IDENTITY, Color(1.0, 1.0, 1.0, (1.0 - f) * alpha))
 		_reset()
 	_tr(0, 0.3)
+	if zmove:
+		# round 8: it falls the way the shot went: sideways on a shot along the screen, a slump toward or away from the camera on one across it, and slides a hand's width along it
+		var fa: float = z.fall_ang
+		var along := absf(cos(fa))
+		var gone := PawnMotion.smooth(f)
+		rot *= clampf(along * 1.5, 0.3, 1.0)
+		sy *= lerpf(1.0, 0.5, absf(sin(fa)) * gone * (1.0 - along * 0.5))
+		_tr(cos(fa) * 0.34 * gone, sin(fa) * 0.22 * gone)
 	_rot(z.fall_dir * rot)
 	if _mir:
 		_sc(-1, 1)
@@ -1034,7 +1394,107 @@ func _draw_dead() -> void:
 	_draw_body(view, Color(1, 1, 1, alpha))
 
 
+## Where the head is cut from the trunk (tiles from the feet's origin) to jerk it on its own.
+const NECK_Y := -0.46
+
+
+## The bust drawn in two parts, the head turned `jerk` radians about the neck (ROUND 11).
+func _bust(view: String, jerk: float) -> void:
+	var dst: Rect2
+	var src: Rect2
+	var t: Texture2D
+	if _d16 != null:
+		var r := Dirs.rect_of(_d16, _ori, _rph)
+		dst = r[0]
+		src = r[1]
+		t = _d16.tex
+	else:
+		t = tex[view]
+		dst = pawn_rect
+		src = Rect2(Vector2.ZERO, t.get_size())
+	var f := clampf((NECK_Y - dst.position.y) / dst.size.y, 0.05, 0.95)
+	var top_d := Rect2(dst.position, Vector2(dst.size.x, dst.size.y * f))
+	var top_s := Rect2(src.position, Vector2(src.size.x, src.size.y * f))
+	var low_d := Rect2(dst.position.x, dst.position.y + dst.size.y * f, dst.size.x, dst.size.y * (1.0 - f))
+	var low_s := Rect2(src.position.x, src.position.y + src.size.y * f, src.size.x, src.size.y * (1.0 - f))
+	var saved := _m
+	_pen.draw_texture_rect_region(t, low_d, low_s)
+	_tr(0.0, NECK_Y)
+	_rot(jerk)
+	_tr(0.0, -NECK_Y)
+	_apply()
+	_pen.draw_texture_rect_region(t, top_d, top_s)
+	_m = saved
+	_apply()
+
+
+## The two sleeves of a body in its own frame, from the shoulders to `l` and `r` (ROUND 11).
+func _arms2(l: Vector2, r: Vector2) -> void:
+	Hanim.draw_arm(_pen, Vector2(-0.13, -0.08), l, pal.sleeve, pal.skin)
+	Hanim.draw_arm(_pen, Vector2(0.13, -0.08), r, pal.sleeve, pal.skin)
+
+
+## ROUND 11: the downed person: kneels, topples, lies with a hand to the wound and crawls, or thrashes while a dead one is on them; the way back is the getup of `_draw_person`.
+func _draw_hdowned() -> void:
+	var st := _hx
+	var side := 1.0 if st.seed > 0.5 else -1.0
+	var bitten := st.bite_t > 0.0
+	var pose := Hanim.down_pose(st.dn_t, bitten, st.seed, side)
+	_wk = 0.0
+	_reset()
+	_tr(pose.off.x, pose.off.y + 0.3)
+	_apply()
+	Hanim.draw_pool(_pen, st, 0.12 + 0.2 * PawnMotion.smooth(st.dn_t / 8.0) * float(pose.lie), 0.9 * float(pose.lie))
+	_reset()
+	_tr(pose.off.x, pose.off.y)
+	_tr(0, 0.3)
+	_rot(pose.rot)
+	_sc(1.0, pose.sy)
+	_tr(0, -0.3)
+	_apply()
+	_legs("S", 0.0, false, false, 1.0, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
+	if st.stain > 0.0:
+		Hanim.draw_stains(_pen, st)
+	var w := st.dn_t
+	if bitten:
+		_arms2(Vector2(-0.3 + sin(w * 21.0) * 0.08, -0.5), Vector2(0.3 + sin(w * 17.0 + 1.0) * 0.08, -0.55))
+	else:
+		var c := sin(w * 1.9 + st.seed * 6.0)
+		_arms2(Vector2(0.04, 0.08), Vector2(0.1 * c, -0.45 - 0.1 * c))    # (one hand on the wound, one reaching)
+
+
+## ROUND 11: the fall of a person who dies, in the way the blow went (hanim.gd `fall_pose`), then the corpse: their own clothes, arms flung, a pool of blood that spreads for a few seconds.
+func _draw_fallen() -> void:
+	var st := _hx
+	var t := st.dead_t
+	var pose := Hanim.fall_pose(minf(t, 1.0), st.fall_kind, st.side, st.hurt_dir)
+	var lay := (fposmod(st.seed * 13.0, 1.0) - 0.5) * 0.5 * clampf((t - 0.5) / 0.4, 0.0, 1.0)    # (each lies a little differently)
+	_wk = 0.0
+	_reset()
+	_tr(pose.off.x * 0.0 + st.side * 0.42 * PawnMotion.smooth(t / 0.6) * (1.0 if st.fall_kind == 0 else 0.0), 0.42 + (pose.off.y * 0.7 if st.fall_kind != 0 else 0.0))
+	_apply()
+	var pk := Hanim.pool_k(t)
+	Hanim.draw_pool(_pen, st, (0.2 + (0.6 + 0.25 * fposmod(st.seed * 7.0, 1.0)) * pk) if t > 0.2 else 0.0)
+	_reset()
+	_tr(pose.off.x, pose.off.y)
+	_tr(0, 0.3)
+	_rot(pose.rot + lay)
+	_sc(1.0, pose.sy)
+	_tr(0, -0.3)
+	_apply()
+	_legs("S", 0.0, false, false, 1.0, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
+	Hanim.draw_stains(_pen, st)
+	var fl: float = pose.flung
+	var wob := (fposmod(st.seed * 29.0, 1.0) - 0.5) * 0.2
+	_arms2(Vector2(-0.14, 0.16).lerp(Vector2(-0.36 + wob, -0.22), fl), Vector2(0.14, 0.16).lerp(Vector2(0.34 - wob, -0.26), fl))
+
+
 func _draw_downed() -> void:
+	if hanim and _hx != null:
+		_draw_hdowned()
+		return
 	var p = entity
 	_wk = 0.0
 	_reset()
@@ -1077,3 +1537,202 @@ func _blanket_color() -> Color:
 				_bed_col = img.get_pixel(int(img.get_width() * 0.5), int(img.get_height() * 0.6))
 			break
 	return _bed_col
+
+
+## ROUND 8: one of the dead drawn from its look of the zombie art set. The pose follows the figure's own clocks (nothing here is read by the rules): the walk by the distance walked (`phase`),
+## the strike from the rear (windup) to the lunge (the age of the strike), the flinch while `_fl_t` runs, the rise for 0.6 s after it stops standing still, else the sway of standing.
+func _draw_zart(walking: bool, phase: float, windup: float, hump: float) -> void:
+	var z = entity
+	var still: bool = z.state == "still"
+	var now := Time.get_ticks_msec()
+	if _was_still and not still:
+		_wake_ms = now
+	_was_still = still
+	var pose := "idle"
+	var ph := anim_t * 1.7 + _dv.breath
+	if _wake_ms > 0 and now - _wake_ms < 600:
+		pose = "wake"
+		ph = float(now - _wake_ms) / 600.0
+	elif _fl_t < 0.3:
+		pose = "hurt"
+		ph = _fl_t / 0.3
+	elif _atk > 0.0 and (windup > 0.0 or hump > 0.0 or _strike_age < 0.25):
+		pose = "attack"
+		ph = 0.0 if _strike_age >= 0.25 else (0.5 if _strike_age < 0.12 else 0.99)
+	elif walking:
+		pose = "walk"
+		ph = phase
+	Dirs.zombie_blit(_pen, _zs, pose, ph, Dirs.zombie_heading(_ori))
+
+
+## The fall (forward or, when it was thrown the other way, backward) and the corpse of the art set; the old fade of a corpse that has lain a minute.
+func _draw_zart_dead() -> void:
+	var z = entity
+	var f: float = clampf(float(z.fall) / 0.58, 0.0, 1.0)
+	var back: bool = float(z.fall_dir) < 0.0
+	var alpha := 1.0
+	if z.state == "dead" and z.dead_t > 55.0:
+		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
+	_reset()
+	var fs := Vector2.ONE * (Art.size_of(z) * _dv.size / float(Dirs.BAKE_SIZE.get(_zkind, 1.0)))
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	_apply()
+	var pose := ("deathb" if back else "deathf") if (z.state == "dying" and f < 1.0) else ("corpseb" if back else "corpse")
+	Dirs.zombie_blit(_pen, _zs, pose, f, Dirs.zombie_heading(_ori), Color(1, 1, 1, alpha))
+
+
+# ---------------------------------------------------------------- ROUND 11: the baked frames of the dead
+
+func _rng_off(i: int, amp: float) -> float:
+	return (PawnMotion.rnd(_seed_i, 900 + i) - 0.5) * 2.0 * amp
+
+
+## Which baked frame is this one: the flinch of a hit, the strike (rear back, then lunge and bite), the rise from the ground, the walk by the distance walked, else the idle breath.
+func _rimz_pick(walking: bool, phase: float, windup: float, hump: float) -> void:
+	var z = entity
+	var pose := "idle"
+	var ph := fposmod(anim_t * 0.42 + _seed, 1.0)
+	var view := _vw
+	var strike: bool = _atk > 0.0 and (hump > 0.0 or windup > 0.0)
+	if z.rise < 1.0 and RimzFrames.has_pose(_zset, "rise", "E"):
+		pose = "rise"
+		ph = clampf(float(z.rise), 0.0, 0.999)
+		view = "E"
+		_rz_nolegs = true
+	elif _fl_t < 0.3:
+		pose = "hurt"
+		ph = 0.0 if _fl_t < 0.12 else 0.99
+	elif strike:
+		pose = "attack"
+		ph = 0.5 + 0.49 * clampf(_strike_age / 0.25, 0.0, 1.0) if _strike_age < 0.25 else windup * 0.49
+	elif walking:
+		pose = "walk"
+		ph = fposmod(phase, TAU) / TAU
+	var fr := RimzFrames.frame(_zset, pose, ph, view)
+	if fr.is_empty():
+		fr = RimzFrames.frame(_zset, "idle", ph, view)
+	if fr.is_empty():
+		return
+	if RimzFrames.is_crawl(_zset):
+		_rz_nolegs = true
+	_rz_pose = pose
+	_rz_fr = fr
+	_rz_on = true
+	if pose == "attack" and _strike_age < 0.06 and _atk > 0.5 and RimzFrames.blood_cb.is_valid() and not _bite_done:
+		_bite_done = true    # (the bite lands: a splash of blood on the ground in front of it, once per bite)
+		var d: Vector2 = PawnMotion.FACE_DIR.get(z.facing, Vector2.DOWN)
+		RimzFrames.blood_cb.call(position.x / TILE + d.x * 0.5, position.y / TILE + d.y * 0.5 + 0.1, 0.16, 0.0, 0.8)
+	elif pose != "attack":
+		_bite_done = false
+
+
+## Draws the frame chosen by `_rimz_pick` and the damage on it.
+func _draw_rimz(col: Color) -> void:
+	var u := pawn_rect.size / RimzFrames.HALF
+	var fr: Dictionary = _rz_fr
+	var src: Rect2 = fr.src
+	var dst := Rect2(pawn_rect.position + (fr.off as Vector2) * u, src.size * u)
+	_pen.draw_texture_rect_region(fr.tex, dst, src, col)
+	if _hits > 0 and RimzFrames.fx_tex != null and _rz_pose != "rise":
+		_rimz_damage(col)
+
+
+## The wounds that build up on the baked figure: a bullet wound for each hit (up to six), the spray of the side it was hit on, a ruined hand once it is nearly done for.
+func _rimz_damage(col: Color) -> void:
+	var z = entity
+	var hpf := clampf(float(z.hp) / _hp0, 0.0, 1.0)
+	var u := pawn_rect.size / Vector2(368.0, 327.0)
+	var org := pawn_rect.position
+	var half := 44.0 if _vw == "E" else 52.0
+	var tex: Texture2D = RimzFrames.fx_tex
+	var side := 1.0 if (-_hit_dir.x) >= 0.0 else -1.0
+	var pose_dy := -4.0 if _rz_pose == "attack" else 0.0
+	if _rz_pose in ["walk", "idle"] and RimzFrames.is_crawl(_zset):
+		pose_dy += 18.0
+	var n := mini(_hits, 6)
+	for i in n:
+		var rx := (PawnMotion.rnd(_seed_i, 40 + i) - 0.5) * 2.0 * half * 0.6
+		var ry := 192.0 + PawnMotion.rnd(_seed_i, 60 + i) * 46.0 + pose_dy
+		var sz := 24.0 + 6.0 * PawnMotion.rnd(_seed_i, 80 + i)
+		var cell := RimzFrames.FX_WOUND + (_seed_i + i) % 4
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(184.0 + rx - sz * 0.5, ry - sz * 0.5) * u, Vector2(sz, sz) * u), RimzFrames.fx_src(cell), col)
+	if _hits >= 2:
+		var sp := 60.0
+		var sc := RimzFrames.FX_SPRAY + (0 if side < 0.0 else 1)
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(184.0 + side * half * 0.62 - sp * 0.5, 214.0 + pose_dy - sp * 0.5) * u, Vector2(sp, sp) * u), RimzFrames.fx_src(sc), col)
+	if hpf < 0.4 and _hits >= 4:
+		var hs := -1.0 if (_seed_i % 2) == 0 else 1.0
+		var hx := 184.0 + hs * (60.0 if _vw != "E" else 58.0)
+		var hy := 244.0 + pose_dy
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(hx - 24.0, hy - 24.0) * u, Vector2(48.0, 48.0) * u), RimzFrames.fx_src(RimzFrames.FX_STUMP), col)
+
+
+## A body that falls: the baked fall frames (forward or backward by the way the shot went, side-on), then the corpse picture of its look with its pool; a close kill throws gibs that fade with it.
+func _draw_dead_rz(z) -> bool:
+	var fa: float = z.fall_ang
+	var s := 1.0 if cos(fa) >= 0.0 else -1.0
+	if absf(cos(fa)) < 0.2:
+		s = 1.0 if z.fall_dir >= 0.0 else -1.0
+	var face := -1.0 if _mir else 1.0
+	var crawl := RimzFrames.is_crawl(_zset)
+	var fwd := face == s or crawl
+	var alpha := 1.0
+	if z.state == "dead" and z.dead_t > 55.0:
+		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
+	var f2 := clampf(float(z.fall) / 0.45, 0.0, 1.0)
+	_reset()
+	var fs := figure_scale_xy() * _dv.size
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	_apply()
+	if not _gibs_done and float(z.hp) <= -0.35 * _hp0 and _gibs.is_empty():
+		_make_gibs(s)
+	_gibs_done = true
+	if z.state == "dead":
+		var id := int(_zset.substr(RimzFrames.kind_of_set(_zset).length()))
+		var pose := 2 if crawl else (1 if fwd else 0)
+		var ct := GD.tex("res://assets/pawns/zrc%d_%d.png" % [id, pose])
+		_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.5, 0.0, 1.0, 0.34), false, Color(1, 1, 1, alpha * 0.5))
+		if s > 0.0:
+			_sc(-1, 1)
+			_apply()
+		_pen.draw_texture_rect(ct, pawn_rect, false, Color(1, 1, 1, alpha))
+		_draw_gibs(alpha)
+		return true
+	var pn := "death_f" if fwd else "death_b"
+	if not RimzFrames.has_pose(_zset, pn, "E"):
+		pn = "death_f"
+	var fr := RimzFrames.frame(_zset, pn, f2, "E")
+	if fr.is_empty():
+		return false
+	_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.4, 0.2, 0.8, 0.3), false, Color(1, 1, 1, 1.0 - f2 * 0.6))
+	if _mir:
+		_sc(-1, 1)
+		_apply()
+	var u := pawn_rect.size / RimzFrames.HALF
+	var src: Rect2 = fr.src
+	_pen.draw_texture_rect_region(fr.tex, Rect2(pawn_rect.position + (fr.off as Vector2) * u, src.size * u), src, Color(1, 1, 1, alpha))
+	return true
+
+
+func _make_gibs(dir_s: float) -> void:
+	_gibs.clear()
+	for i in 6:
+		var a := PawnMotion.rnd(_seed_i, 300 + i) * TAU
+		var r := 0.22 + 0.5 * PawnMotion.rnd(_seed_i, 320 + i)
+		_gibs.append({"cell": RimzFrames.FX_GIB + i % 4, "pos": Vector2(cos(a) * r + dir_s * 0.2, 0.1 + sin(a) * r * 0.5), "rot": a, "sz": 0.2 + 0.1 * PawnMotion.rnd(_seed_i, 340 + i)})
+
+
+func _draw_gibs(alpha: float) -> void:
+	if _gibs.is_empty() or RimzFrames.fx_tex == null:
+		return
+	_reset()
+	var fs := figure_scale_xy() * _dv.size
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	for g in _gibs:
+		var m := _m.translated_local(g.pos).rotated_local(float(g.rot))
+		_pen.draw_set_transform_matrix(m)
+		var sz: float = g.sz
+		_pen.draw_texture_rect_region(RimzFrames.fx_tex, Rect2(-sz * 0.5, -sz * 0.5, sz, sz), RimzFrames.fx_src(int(g.cell)), Color(1, 1, 1, alpha))

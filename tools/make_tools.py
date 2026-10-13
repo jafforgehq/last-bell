@@ -179,6 +179,18 @@ def hoe():
     return c.done(), (62, 38), True
 
 
+def broom():
+    c = Canvas(224, 100)
+    c.rect(6, 45, 172, 53, WOOD, r=4)                                         # the long thin handle
+    c.dash(10, 48, 168, 48, WOOD_L)
+    c.rect(168, 38, 186, 60, STEEL_D, r=3)                                    # the ferrule
+    c.rect(180, 10, 218, 90, (196, 162, 82), r=6)                             # the wide bristle head
+    for y in range(18, 86, 8):
+        c.dash(184, y, 214, y, (140, 108, 46), 2)
+    c.rect(180, 10, 190, 90, WOOD_D, r=3)                                     # the head's block
+    return c.done(), (62, 49), True
+
+
 def can():
     c = Canvas(104, 80)
     c.line([(18, 30), (18, 10), (44, 10), (50, 28)], STEEL_D, 6, shade=0)         # the handle
@@ -304,7 +316,7 @@ def headset():
 
 
 TOOLS = {
-    "hammer": hammer, "mallet": mallet, "hoe": hoe, "can": can, "clipboard": clipboard, "bottle": bottle, "mug": mug,
+    "hammer": hammer, "mallet": mallet, "hoe": hoe, "broom": broom, "can": can, "clipboard": clipboard, "bottle": bottle, "mug": mug,
     "mic": mic, "plank": plank, "saw": saw, "crate": crate, "binoculars": binoculars,
     "binoculars_front": binoculars_front, "headset": headset,
 }

@@ -187,7 +187,7 @@ func _snap(o) -> Array:
 # ------------------------------------------------------- every job has a pose --
 
 func test_every_work_word_has_a_pose_and_a_tool_that_loads() -> void:
-	eq(WorkAnim.WORDS.size(), 10, "the ten words of the contract")
+	eq(WorkAnim.WORDS.size(), 11, "the eleven words of the contract (the prison added clean)")
 	for word in ["bench", "hammer", "mend", "haul", "garden", "nurse", "radio", "watch", "sort", "rest"]:
 		check(WorkAnim.WORDS.has(word), "%s is a word" % word)
 	for word in WorkAnim.WORDS:

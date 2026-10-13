@@ -484,7 +484,7 @@ static func items_for_loot(loot: Dictionary, key: int) -> Array:
 	var cfg := config()
 	var conv = cfg.get("convert", {})
 	var unit_items = cfg.get("unit_items", {})
-	for res in ["ammo", "food", "water", "meds"]:
+	for res in ["ammo", "food", "water", "meds", "parts", "fuel"]:    # (parts and fuel: the prison raids)
 		var n := int(floor(float(loot.get(res, 0.0))))
 		if n <= 0:
 			continue
@@ -505,6 +505,9 @@ static func items_for_loot(loot: Dictionary, key: int) -> Array:
 				var k := mini(rest, cap)
 				out.append({"item": plain, "count": k})
 				rest -= k
+	for k in loot:    # (a gun found in a prison raid: loot key "gun_<id>" is the item of that name, whole)
+		if (String(k).begins_with("gun_") or String(k) == "distraction" or String(k) == "note") and int(loot[k]) > 0 and not item(String(k)).is_empty():
+			out.append({"item": String(k), "count": int(loot[k])})
 	out.sort_custom(func(a, b):
 		var sa := size_of(String(a.item))
 		var sb := size_of(String(b.item))

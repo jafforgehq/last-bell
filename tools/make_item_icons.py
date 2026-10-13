@@ -415,6 +415,43 @@ def icon_medkit():
     return cv.finish()
 
 
+def icon_parts_box():
+    # a small steel box, open at the top: a green circuit board with chips and traces, a screw and a bolt
+    cv = Cv(U, U, 14)
+    cv.rrect(14, 52, 114, 112, 6, STEEL)
+    cv.rrect(14, 52, 114, 66, (6, 6, 0, 0), TIN, ow=3.5, hi=0.35)
+    cv.poly([(22, 54), (30, 22), (100, 22), (108, 54)], OLIVE_D)
+    cv.rrect(28, 24, 100, 48, 3, OLIVE, ow=3.0)
+    cv.rrect(40, 29, 58, 41, 2, STEEL_D, ow=2.0, hi=0, lo=0)
+    cv.rrect(68, 29, 78, 39, 2, BRASS, ow=2.0, hi=0, lo=0)
+    cv.detail([(60, 35), (68, 35)], 2.4, BRASS_L, 0.9)
+    cv.detail([(82, 33), (94, 33), (94, 42)], 2.4, BRASS_L, 0.9)
+    cv.ell(34, 90, 11, 11, TIN, ow=3.5)
+    cv.detail([(28, 90), (40, 90)], 3.4, STEEL_D, 0.9)
+    cv.detail([(34, 84), (34, 96)], 3.4, STEEL_D, 0.9)
+    cv.rrect(58, 80, 100, 100, 3, BRASS, ow=3.0)
+    cv.detail([(66, 90), (92, 90)], 2.6, BRASS_D, 0.8)
+    cv.detail([(19, 72), (19, 106)], 4.0, (255, 255, 255), 0.25)
+    return cv.finish()
+
+
+def icon_fuel_can():
+    # a red-orange jerry can: pressed X on the side, a spout cap and a carry handle on top
+    cv = Cv(U, 2 * U, 14)
+    cv.stroke([(40, 70), (40, 38), (88, 38), (88, 70)], 12, RED_D, ow=3.5, caps=False)
+    cv.rrect(16, 60, 112, 242, 14, ORANGE)
+    cv.rrect(16, 60, 112, 76, (14, 14, 0, 0), RED, ow=3.5, hi=0.3)
+    cv.rrect(86, 36, 112, 64, 4, BRASS, ow=3.5)
+    cv.rrect(90, 28, 108, 42, 3, BRASS_D, ow=3.0)
+    cv.rrect(30, 96, 98, 214, 8, ORANGE_D, ow=3.0)
+    cv.detail([(40, 106), (88, 204)], 6.0, RED_D, 0.9)
+    cv.detail([(88, 106), (40, 204)], 6.0, RED_D, 0.9)
+    cv.rrect(46, 140, 82, 170, 3, CREAM, ow=3.0)
+    cv.poly([(64, 144), (74, 158), (64, 166), (54, 158)], RED, ow=2.4)
+    cv.detail([(23, 84), (23, 200)], 6.0, (255, 255, 255), 0.28)
+    return cv.finish()
+
+
 def icon_unknown():
     cv = Cv(U, U, 20)
     cv.rrect(22, 30, 106, 106, 5, PAPER)
@@ -441,6 +478,37 @@ def icon_pump_shotgun():
     cv.poly([(190, 44), (232, 56), (246, 84), (240, 94), (222, 92), (190, 78)], WOOD, ow=4.0)
     cv.detail([(196, 52), (232, 62)], 3.0, (255, 235, 200), 0.35)
     cv.ell(14, 46, 3, 3, BRASS_L, ow=0, hi=0, lo=0)
+    return cv.finish()
+
+
+def icon_gun_rifle():
+    """A semi-auto service rifle, side on, muzzle to the left (3 cells wide): a long barrel, the wooden hand guard and stock, the receiver, a short magazine under it."""
+    cv = Cv(3 * U, U, 31)
+    cv.rrect(8, 52, 190, 62, 3, STEEL)
+    cv.rrect(5, 50, 15, 64, 2, STEEL_D, ow=3.0)
+    cv.rrect(40, 62, 150, 78, 6, WOOD)
+    cv.detail([(52, 66), (140, 66)], 2.6, (255, 235, 200), 0.35)
+    cv.poly([(150, 46), (232, 46), (240, 58), (240, 78), (150, 80)], STEEL_D, ow=4.0)
+    cv.rrect(160, 54, 214, 60, 2, STEEL, ow=0, hi=0.4, lo=0)
+    cv.rrect(178, 80, 202, 100, 4, STEEL_D, ow=3.5)
+    cv.stroke([(214, 80), (218, 96), (232, 100), (238, 84)], 5.0, STEEL_D, ow=3.0, caps=False)
+    cv.poly([(238, 50), (300, 56), (360, 64), (372, 78), (366, 100), (300, 92), (238, 80)], WOOD, ow=4.0)
+    cv.detail([(246, 58), (330, 68)], 3.0, (255, 235, 200), 0.35)
+    cv.rrect(140, 40, 160, 48, 2, STEEL_D, ow=3.0)
+    return cv.finish()
+
+
+def icon_gun_smg():
+    """A submachine gun, side on, muzzle to the left (2 cells wide): a short shroud, the boxy receiver, a long magazine, a grip and a wire stock."""
+    cv = Cv(2 * U, U, 32)
+    cv.rrect(10, 44, 70, 58, 3, STEEL)
+    cv.rrect(6, 42, 16, 60, 2, STEEL_D, ow=3.0)
+    cv.poly([(66, 38), (160, 38), (164, 76), (66, 76)], STEEL_D, ow=4.0)
+    cv.rrect(76, 44, 150, 52, 2, STEEL, ow=0, hi=0.4, lo=0)
+    cv.poly([(98, 76), (122, 76), (126, 104), (132, 116), (108, 116), (104, 104)], STEEL, ow=4.0)
+    cv.poly([(140, 76), (160, 76), (166, 100), (150, 104)], STEEL_D, ow=4.0)
+    cv.stroke([(160, 46), (200, 44), (204, 74), (162, 72)], 5.0, STEEL, ow=3.0, caps=False)
+    cv.rrect(196, 42, 208, 78, 2, STEEL_D, ow=3.0)
     return cv.finish()
 
 
@@ -543,8 +611,8 @@ def icon_ruth():
 
 ICONS = [
     ("shell", icon_shell), ("shells", icon_shells), ("shell_box", icon_shell_box), ("canned_food", icon_canned_food), ("bandage", icon_bandage),
-    ("ration_pack", icon_ration_pack), ("water_bottle", icon_water_bottle), ("water_jug", icon_water_jug), ("medkit", icon_medkit), ("unknown", icon_unknown),
-    ("pump_shotgun", icon_pump_shotgun), ("melee", icon_melee), ("pack", icon_pack),
+    ("ration_pack", icon_ration_pack), ("water_bottle", icon_water_bottle), ("water_jug", icon_water_jug), ("medkit", icon_medkit), ("unknown", icon_unknown), ("parts_box", icon_parts_box), ("fuel_can", icon_fuel_can),
+    ("pump_shotgun", icon_pump_shotgun), ("gun_shotgun", icon_pump_shotgun), ("gun_service", icon_gun_rifle), ("gun_smg", icon_gun_smg), ("melee", icon_melee), ("pack", icon_pack),
     ("slot", lambda: icon_slot("slot")), ("slot_on", lambda: icon_slot("slot_on")), ("slot_off", lambda: icon_slot("slot_off")),
     ("glow", icon_glow), ("ruth", icon_ruth),
 ]
