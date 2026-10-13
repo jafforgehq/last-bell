@@ -487,6 +487,7 @@ func _blow(pose: String, id: String) -> void:
 		var avatar := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 		if (Vector2(s.anchor)).distance_to(avatar) < 16.0 and game.sound != null:
 			game.sound.play("hammer", 0.3, 0.1)
+			game.audio.build_blow(pose, Vector2(s.anchor))
 
 
 func glow_spots(n: float) -> Array:

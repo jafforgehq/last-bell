@@ -34,6 +34,7 @@ const Sound := preload("res://scripts/audio/sound.gd")
 const Siege := preload("res://scripts/prison/prison_siege.gd")
 const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
+const PrisonAudio := preload("res://scripts/prison/prison_audio.gd")    # ROUND 12: sound and atmosphere
 const Clean := preload("res://scripts/prison/prison_clean.gd")
 const Loot := preload("res://scripts/prison/prison_loot.gd")    # RAIDS hook
 const People := preload("res://scripts/prison/prison_people.gd")    # RAIDS hook
@@ -120,6 +121,7 @@ var _armed := false
 var _shot_wait := 90
 var _quit_after := false
 var sound
+var audio    # ROUND 12: prison_audio.gd (the score, the weather, the foley, the voices)
 var tod := 8.0    # hour of the day
 var pause_menu
 var band_a := 0.0    # ART: the caption band's fade
@@ -297,6 +299,9 @@ func _make_hud() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	sound.setup(data.sounds)
+	audio = PrisonAudio.new()
+	add_child(audio)
+	audio.setup(self)
 	if PawnNode.zmove or args.has("zombietest"):
 		zmove = ZMove.new()
 		zmove.setup(self)
@@ -390,6 +395,7 @@ func _econ_remove(nm: String) -> void:
 
 
 func _econ_done(id: String) -> void:
+	audio.project_done()
 	if String(id).begins_with("fence"):
 		siege.apply_fence(econ.fence_mult(), String(id) == "fence1")
 
@@ -764,6 +770,7 @@ var fallen_nodes: Array = []
 
 
 func keep_corpse(m: Dictionary) -> void:
+	audio.on_death(m)
 	if not m.has("node") or not is_instance_valid(m.node):
 		return
 	if not PawnNode.hanim:
@@ -1053,6 +1060,7 @@ func _step() -> void:
 	_ally_prey_step(olds)
 	for e in run.sim.events:
 		pack.on_event(e)
+		audio.on_event(e)
 		match String(e.type):
 			"shot":
 				fx.combat.shot_sound(e)
@@ -1323,6 +1331,7 @@ func _raid_logic(dt: float) -> void:
 
 func _go_out() -> void:
 	busy = true
+	audio.gate_sound()
 	pack.close()
 	await _cut_out(["The gate grinds open. The truck rolls out through the dead.", "Somewhere ahead, a town nobody has searched."], true)
 	_enter_raid()
@@ -1334,6 +1343,7 @@ func _extract(alive: bool) -> void:
 	if busy:
 		return
 	busy = true
+	audio.gate_sound()
 	var loot_got := {}
 	pack.close()
 	var join_text: String = people.settle(alive)    # RAIDS hook: does the survivor join (a free bed, alive, at the ring)

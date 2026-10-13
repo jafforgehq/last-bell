@@ -16,9 +16,17 @@ wet = 0.3
 [sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_rain"]
 cutoff_hz = 20500.0
 
+[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_muffle"]
+cutoff_hz = 20500.0
+
+[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_outside"]
+cutoff_hz = 20500.0
+
 [resource]
-bus/0/effect/0/effect = SubResource("AudioEffectHardLimiter_master")
+bus/0/effect/0/effect = SubResource("AudioEffectLowPassFilter_muffle")
 bus/0/effect/0/enabled = true
+bus/0/effect/1/effect = SubResource("AudioEffectHardLimiter_master")
+bus/0/effect/1/enabled = true
 bus/1/name = &"SFX"
 bus/1/solo = false
 bus/1/mute = false
@@ -73,3 +81,11 @@ bus/8/mute = false
 bus/8/bypass_fx = false
 bus/8/volume_db = 9.0
 bus/8/send = &"SFX"
+bus/9/name = &"Outside"
+bus/9/solo = false
+bus/9/mute = false
+bus/9/bypass_fx = false
+bus/9/volume_db = 0.0
+bus/9/send = &"Ambience"
+bus/9/effect/0/effect = SubResource("AudioEffectLowPassFilter_outside")
+bus/9/effect/0/enabled = true
