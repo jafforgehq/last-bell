@@ -48,6 +48,8 @@ const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME
 const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
 const ZMove := preload("res://scripts/prison/prison_dead.gd")    # ZMOVE: how the dead move (heading, gait, pause, rise, lean on the fence)
 const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: raid companions
+const NoiseMod := preload("res://scripts/prison/prison_noise.gd")    # NOISE hook: Noise.emit, hordes, thrown distractions, car alarms
+const SpecialMod := preload("res://scripts/prison/prison_special.gd")    # SPECIAL hook: screamer, bloater, hunter, breacher
 const SearchRules := preload("res://scripts/town/search.gd")
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
@@ -164,6 +166,8 @@ var driver    # --drive checks (prison_drive.gd)
 var people    # RAIDS hook: prison_people.gd (survivors, recruits, people walking out)
 var siege    # prison_siege.gd: fence segments and night attacks, runs only in phase "managed"
 var zmove    # ZMOVE: prison_dead.gd
+var noise    # NOISE hook: prison_noise.gd
+var special    # SPECIAL hook: prison_special.gd
 var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
 var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
@@ -199,6 +203,8 @@ func _ready() -> void:
 	_make_hud()
 	pack = Pack.new(self)
 	siege = Siege.new(self)    # (before the first stage: a --raid start has no base yet)
+	noise = NoiseMod.new(self)    # NOISE hook
+	special = SpecialMod.new(self)    # SPECIAL hook
 	econ = Econ.new(self)    # ECON hook
 	if args.has("loot-lab"):    # RAIDS hook
 		Loot.lab(int(args["loot-lab"]))
@@ -693,6 +699,9 @@ func _enter_raid() -> void:
 	people.begin_raid(t, seed_i)    # RAIDS hook: a survivor in a building, rarely
 	squad_regroup = false
 	squad.begin_raid()    # SQUAD hook: the companions step out of the truck
+	noise.bind()    # NOISE hook: a horde may cross the town; SPECIAL hook: a screamer, a hunter or a bloater may wait in it
+	noise.on_raid_begin()
+	special.on_raid_begin()
 	if args.has("scav-test"):
 		squad.start_test()
 	cam_center = Vector2(run.avatar_p.x, run.avatar_p.y)
@@ -1021,6 +1030,8 @@ func _tick(dt: float) -> void:
 		_raid_logic(dt)
 	_day_night(dt)
 	siege.update(dt)    # SIEGE hook
+	noise.update(dt)    # NOISE hook
+	special.update(dt)    # SPECIAL hook
 	prompt_label.text = String(_prompt.get("label", "")) if not busy else ""
 	overlay.queue_redraw()
 	bars.queue_redraw()
@@ -1047,9 +1058,11 @@ func _step() -> void:
 		olds[z] = Vector2(z.x, z.y)
 	if zmove != null:
 		zmove.pre()
+	special.pre()    # SPECIAL hook
 	run.sim.update(StepClock.STEP)
 	if zmove != null:
 		zmove.post(StepClock.STEP)
+	special.post(StepClock.STEP)    # SPECIAL hook
 	_ally_prey_step(olds)
 	for e in run.sim.events:
 		pack.on_event(e)
@@ -1072,6 +1085,7 @@ func _step() -> void:
 				if String(e.get("item", "")).begins_with("gun_"):
 					_say("Found a %s. It goes to the weapon rack when you get home." % Inventory_name(String(e.item)), 4.0)
 			"searched":
+				noise.on_search(String(e.get("container", "")), Vector2(e.get("x", run.avatar_p.x), e.get("y", run.avatar_p.y)))    # NOISE hook
 				var parts: Array = []
 				for k in e.loot:
 					parts.append("+%d %s" % [int(e.loot[k]), k])
@@ -1168,8 +1182,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 						_say("Now: %s." % arms.gun_name(String(run.avatar_p.weapon)), 2.0)
 					else:
 						_say("No spare gun in the pack.", 2.0)
+			KEY_G:    # NOISE hook: throw a bottle, can, firecracker or flare to the pointer
+				if not busy and (mode == "raid" or phase == "clear" or siege.can_fire()):
+					noise.throw_at(cam_center + (get_viewport().get_mouse_position() - _vp() / 2.0) / zoom_px)
 			KEY_F:
-				if (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
+				if special.free_pin():    # SPECIAL hook: shoves a hunter off
+					pass
+				elif (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
 					run.sim.avatar.melee()
 			KEY_M:
 				map_view = not map_view
@@ -1494,6 +1513,8 @@ func _paint_decks(c: CanvasItem) -> void:
 
 func _paint_overlay(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
+	noise.paint(c)    # NOISE hook
+	special.paint(c)    # SPECIAL hook
 	if mode == "base":
 		for t in base.towers:
 			Tower.draw_roof(c, t, _night_of(tod))
@@ -1951,6 +1972,8 @@ func _draw_minimap(v: Vector2) -> void:
 		if z.state == "dying" or z.state == "dead":
 			continue
 		bars.draw_rect(Rect2(o + Vector2(z.x, z.y) * sc - Vector2(0.8, 0.8), Vector2(1.6, 1.6)), Color(0.95, 0.25, 0.2))
+	noise.mini(bars, o, sc)    # NOISE hook
+	special.mini(bars, o, sc)    # SPECIAL hook
 	if mode == "raid":
 		for e in exits:
 			bars.draw_arc(o + Vector2(e) * sc, 5.0, 0, TAU, 14, Color(0.4, 1, 0.5), 2.0)

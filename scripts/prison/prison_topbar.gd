@@ -24,10 +24,10 @@ const RES_USE := {
 	"fuel": "Burned by the generator once it is built (1 a day). Found in raids on petrol stations.",
 }
 const ROW_ECON := ["clock", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
-const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence"]
+const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
-const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone"]
-const ROW_RAID := ["clock", "pack", "r_ammo", "r_meds", "need", "exits"]
+const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone", "noise"]
+const ROW_RAID := ["clock", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
 const DIM := Color("#8d927f")
 
 var game
@@ -130,6 +130,7 @@ func _init(g) -> void:
 		_chip(k, row2, 40, false)
 	for k in ["c_ammo", "c_meds", "nextzone"]:
 		_chip(k, row2, 40, false)
+	_chip("noise", row2, 40, false)    # NOISE hook
 	var pips := PipBox.new()
 	chips["party"].main.get_parent().add_child(pips)
 	chips["party"].main.get_parent().move_child(pips, 1)
@@ -364,6 +365,7 @@ func _refresh() -> void:
 		_clear_chips()
 	else:
 		_raid_chips(rep)
+	_noise_chip()
 	_mood_sample()
 	_tracker(managed or clear or mode == "raid")
 	if hover != "" and tip.visible:
@@ -544,10 +546,25 @@ func _mood_sample() -> void:
 			_mood.pop_front()
 
 
+## NOISE hook: the chip that says how loud it is here (quiet, loud, very loud), and a horde or a car alarm when there is one.
+func _noise_chip() -> void:
+	if game.noise == null or not chips.has("noise"):
+		return
+	var want: Control = row1 if game.mode == "raid" else row2    # (the raid has one row)
+	var pc: Control = chips.noise.pc
+	if pc.get_parent() != want:
+		pc.get_parent().remove_child(pc)
+		want.add_child(pc)
+	var c: Array = game.noise.chip()
+	var st := String(c[2])
+	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM), "", st, String(c[3]), float(c[4]), Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK))
+
+
 func _attack_chip() -> void:
 	var sg = game.siege
 	if sg.attacking:
-		_put("attack", "bell", Hud.DANGER_TEXT, "ATTACK", "night %d  %d left" % [sg.night, sg._alive_wave()], Hud.DANGER_TEXT, "", "danger", "The dead are at the walls. Guards shoot from the towers; hold E at a broken wall to mend it.")
+		var hz: String = game.noise.horde_text()    # NOISE hook: "Horde from the east in 40 s"
+		_put("attack", "bell", Hud.DANGER_TEXT, "ATTACK", hz if hz != "" else "night %d  %d left" % [sg.night, sg._alive_wave()], Hud.DANGER_TEXT, "", "danger", "The dead are at the walls. Guards shoot from the towers; hold E at a broken wall to mend it.")
 		return
 	var secs: float = maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR)
 	var st := "warn" if secs < 90.0 else "ok"

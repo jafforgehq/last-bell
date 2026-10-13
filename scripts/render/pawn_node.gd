@@ -256,7 +256,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		_leg_kind = kind
 		_style = Art.style(kind)
 		if rimz and rimz_anim:
-			_zset = RimzFrames.set_of(kind, int(e.look_index), bool(e.limp))
+			_zset = RimzFrames.set_of(String(e.kind) if RimzFrames.SPECIALS.has(String(e.kind)) else kind, int(e.look_index), bool(e.limp))    # SPECIAL hook
 		_hp0 = maxf(float(e.hp), 1.0)
 		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
 		var tinted := Art.material(kind) if _zs == null else null
@@ -1614,7 +1614,7 @@ func _rimz_pick(walking: bool, phase: float, windup: float, hump: float) -> void
 		fr = RimzFrames.frame(_zset, "idle", ph, view)
 	if fr.is_empty():
 		return
-	if RimzFrames.kind_of_set(_zset) == "crawler":
+	if RimzFrames.is_crawl(_zset):
 		_rz_nolegs = true
 	_rz_pose = pose
 	_rz_fr = fr
@@ -1648,7 +1648,7 @@ func _rimz_damage(col: Color) -> void:
 	var tex: Texture2D = RimzFrames.fx_tex
 	var side := 1.0 if (-_hit_dir.x) >= 0.0 else -1.0
 	var pose_dy := -4.0 if _rz_pose == "attack" else 0.0
-	if _rz_pose in ["walk", "idle"] and RimzFrames.kind_of_set(_zset) == "crawler":
+	if _rz_pose in ["walk", "idle"] and RimzFrames.is_crawl(_zset):
 		pose_dy += 18.0
 	var n := mini(_hits, 6)
 	for i in n:
@@ -1675,7 +1675,7 @@ func _draw_dead_rz(z) -> bool:
 	if absf(cos(fa)) < 0.2:
 		s = 1.0 if z.fall_dir >= 0.0 else -1.0
 	var face := -1.0 if _mir else 1.0
-	var crawl := RimzFrames.kind_of_set(_zset) == "crawler"
+	var crawl := RimzFrames.is_crawl(_zset)
 	var fwd := face == s or crawl
 	var alpha := 1.0
 	if z.state == "dead" and z.dead_t > 55.0:
