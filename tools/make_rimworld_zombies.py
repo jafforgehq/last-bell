@@ -519,12 +519,15 @@ def sleeve_col(L):
     return L["top"]
 
 
-def arm(W, L, sh, hand, rng, gone=False, wid=26):
+def arm(W, L, sh, hand, rng, gone=False, wid=26, bend=0.0):
     """One arm from the shoulder to the hand: a sleeve torn at the elbow, a bare grey forearm and a clawed hand with dried blood. `gone`: a bloody stump with bone."""
     sc = sleeve_col(L)
     skin = L["skin"]
     f = 0.5 if L["torn"] > 0.4 else 0.82
     cut = (sh[0] + (hand[0] - sh[0]) * f, sh[1] + (hand[1] - sh[1]) * f)
+    if bend:     # ROUND 11: a bent elbow (the cut point moves sideways off the straight line)
+        ln = math.hypot(hand[0] - sh[0], hand[1] - sh[1]) or 1.0
+        cut = (cut[0] - (hand[1] - sh[1]) / ln * bend, cut[1] + (hand[0] - sh[0]) / ln * bend)
     if gone:
         cut = (sh[0] + (hand[0] - sh[0]) * 0.5, sh[1] + (hand[1] - sh[1]) * 0.5)
         put(W, capsule_m(W, sh, cut, wid, wid - 4), sc)

@@ -54,6 +54,9 @@ static var zmove := false
 static var dirs16_dead := false
 ## ROUND 10 (prison only): the dead are drawn from the RimWorld-style baked set assets/pawns/zr<look>_S/E/N.png and lie as a corpse picture (zrc<look>.png).
 static var rimz := false
+## ROUND 11 (prison only, needs `rimz`): the dead are drawn from baked animation frames (scripts/render/rimz_frames.gd, tools/make_zombie_anim.py): a walk, idle, attack, hurt, fall and rise per
+## look, the damage that builds up, a soft shadow. `--noanim` (or `--norimz`) is Round 10's one picture per look with the code's lean and bob.
+static var rimz_anim := false
 ## ROUND 8 (prison only): the zombie art set (assets/zombies16, pawn_dirs.gd `zombie_*`): every kind of the dead is drawn from a look of its own kind, with poses for the walk, idle, strike, flinch,
 ## fall and rise. `zart_crawlers`: one in four limping walkers crawls (the crawler art; the rules do not know crawlers).
 static var zart := false
@@ -197,6 +200,19 @@ var _tgt_ori := PI / 2.0
 var _turning := true
 ## The kind of build the legs have: a person's livelier stride, or the dead's own kind.
 var _leg_kind := "person"
+## ROUND 11: the frame set of this one ("walker3", "" for none), what it is drawn as this frame (pose, view, the frame), whether the baked frame stands in for legs and arms, how often it has been hit,
+## the hit points it started with, the way the last blow went, and the gibs of a close kill.
+var _zset := ""
+var _rz_on := false
+var _rz_pose := ""
+var _rz_fr := {}
+var _rz_nolegs := false
+var _hits := 0
+var _hp0 := 1.0
+var _hit_dir := Vector2.ZERO
+var _gibs: Array = []
+var _gibs_done := false
+var _bite_done := false
 
 
 ## Whether this entity may be drawn from a 16-heading set: a person that names one, or a plain walker (not a runner or a brute) when `dirs16_dead`.
@@ -233,6 +249,9 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		kind = Art.kind_of(e)
 		_leg_kind = kind
 		_style = Art.style(kind)
+		if rimz and rimz_anim:
+			_zset = RimzFrames.set_of(kind, int(e.look_index), bool(e.limp))
+		_hp0 = maxf(float(e.hp), 1.0)
 		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
 		var tinted := Art.material(kind) if _zs == null else null
 		if tinted != null:
@@ -352,6 +371,8 @@ func flinch(dir: Vector2) -> void:
 		_fl_dir = dir.normalized()
 		_kb = _fl_dir
 	_fl_t = 0.0
+	_hits += 1
+	_hit_dir = dir
 	_hot = true
 
 
@@ -595,6 +616,8 @@ func _anim_dead(dt: float, jumped: bool, stepped: bool) -> void:
 				if kind == "brute":
 					_thump = maxf(_thump, 0.3)
 					_land = 1.0
+				if _zset != "" and _hits >= 2 and float(z.hp) < _hp0 * 0.65 and RimzFrames.blood_cb.is_valid():
+					RimzFrames.blood_cb.call(position.x / TILE + _rng_off(si, 0.12), position.y / TILE + 0.28, 0.07, 0.0, 0.8)    # (a wounded one leaves a trail of drops)
 				if PawnMotion.step_cb.is_valid() and (kind != "walker" or PawnMotion.rnd(_seed_i, si) < 0.6):
 					PawnMotion.step_cb.call(position / TILE, PawnMotion.FACE_DIR.get(f, Vector2.DOWN), 0.42 if kind == "walker" else (0.85 if kind == "runner" else 1.4))
 			_step_i = si
@@ -655,6 +678,9 @@ func _lean(view: String) -> void:
 ## The baked body for one view: the sprite, or for a figure with a hunch (a brute)
 ## the sprite warped by its build. `col` fades it (a corpse going).
 func _draw_body(view: String, col: Color = Color.WHITE) -> void:
+	if _rz_on:
+		_draw_rimz(col)
+		return
 	if not _meshes.has(view):
 		_meshes[view] = Art.sprite_mesh(kind, view, pawn_rect)
 	var mesh = _meshes[view]
@@ -1056,6 +1082,10 @@ func _draw_zombie() -> void:
 			hump = sin(pow(clampf(_strike_age / 0.22, 0.0, 1.0), 0.6) * PI) * _atk
 		elif _at_seen < rear:
 			windup = PawnMotion.smooth(1.0 - _at_seen / rear) * _atk
+	_rz_on = false
+	_rz_nolegs = false
+	if _zset != "":
+		_rimz_pick(walking and z.rise >= 1.0, phase, windup, hump)
 	var zup := 1.0
 	var recoil := 0.0
 	if zmove:
@@ -1070,6 +1100,8 @@ func _draw_zombie() -> void:
 		if z.state == "still" and z.press <= 0.0:
 			recoil += 0.07    # (a slump: the head hangs)
 		zup = lerpf(0.42, 1.0, PawnMotion.smooth(clampf(z.rise, 0.0, 1.0)))
+		if _rz_on and _rz_pose == "rise":
+			zup = 1.0    # (the baked frames rise by themselves)
 		if z.rise < 1.0:
 			walking = false
 			recoil += 0.30 * (1.0 - zup)
@@ -1100,10 +1132,14 @@ func _draw_zombie() -> void:
 	_apply()
 	if not _fast:
 		Art.shadow(_pen, st)
+	if _rz_on:
+		_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.4, 0.2, 0.8, 0.3), false)    # (ROUND 11: a soft dark shadow under it)
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	if _d16 != null:
+	if _rz_nolegs:
+		pass
+	elif _d16 != null:
 		if _fast:
 			_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
 	elif dv.side < 0.0 and limp and view != "E":
@@ -1122,7 +1158,8 @@ func _draw_zombie() -> void:
 	_tr(0, 0.3)
 	_rot(roll)
 	_tr(0, -0.3 - bob)
-	_lean(view)
+	if not _rz_on:
+		_lean(view)
 	_m = _m * PawnMotion.lean_xf(lean)
 	if sy != 1.0:
 		_tr(0, Art.FOOT_Y)
@@ -1145,9 +1182,10 @@ func _draw_zombie() -> void:
 	if _d16 != null:
 		Dirs.blit(_pen, _d16, _ori, phase if walking else 0.0)
 		return
-	_arms_layer(view, "back", reach, phase, windup, hump, walking)
+	if not _rz_on:
+		_arms_layer(view, "back", reach, phase, windup, hump, walking)
 	_draw_body(view)
-	if smooth_turn:
+	if smooth_turn and not _rz_on:
 		var sm: Array = PawnMotion.seam(_ori)
 		if String(sm[0]) != "":
 			var nmir: bool = sm[0] == "W"
@@ -1158,7 +1196,8 @@ func _draw_zombie() -> void:
 			if nmir != mirror:
 				_sc(-1, 1)
 				_apply()
-	_arms_layer(view, "front", reach, phase, windup, hump, walking)
+	if not _rz_on:
+		_arms_layer(view, "front", reach, phase, windup, hump, walking)
 
 
 ## One layer of the arms of one of the dead, raised as it rears back and slammed down as it strikes (the pose of the arms is moved about the shoulders, the picture of them is the one at rest),
@@ -1191,6 +1230,8 @@ func _arms_layer(view: String, layer: String, reach: bool, phase: float, windup:
 
 func _draw_dead() -> void:
 	var z = entity
+	if _zset != "" and _draw_dead_rz(z):
+		return
 	if _zs != null:
 		_draw_zart_dead()
 		return
@@ -1343,3 +1384,159 @@ func _draw_zart_dead() -> void:
 	_apply()
 	var pose := ("deathb" if back else "deathf") if (z.state == "dying" and f < 1.0) else ("corpseb" if back else "corpse")
 	Dirs.zombie_blit(_pen, _zs, pose, f, Dirs.zombie_heading(_ori), Color(1, 1, 1, alpha))
+
+
+# ---------------------------------------------------------------- ROUND 11: the baked frames of the dead
+
+func _rng_off(i: int, amp: float) -> float:
+	return (PawnMotion.rnd(_seed_i, 900 + i) - 0.5) * 2.0 * amp
+
+
+## Which baked frame is this one: the flinch of a hit, the strike (rear back, then lunge and bite), the rise from the ground, the walk by the distance walked, else the idle breath.
+func _rimz_pick(walking: bool, phase: float, windup: float, hump: float) -> void:
+	var z = entity
+	var pose := "idle"
+	var ph := fposmod(anim_t * 0.42 + _seed, 1.0)
+	var view := _vw
+	var strike: bool = _atk > 0.0 and (hump > 0.0 or windup > 0.0)
+	if z.rise < 1.0 and RimzFrames.has_pose(_zset, "rise", "E"):
+		pose = "rise"
+		ph = clampf(float(z.rise), 0.0, 0.999)
+		view = "E"
+		_rz_nolegs = true
+	elif _fl_t < 0.3:
+		pose = "hurt"
+		ph = 0.0 if _fl_t < 0.12 else 0.99
+	elif strike:
+		pose = "attack"
+		ph = 0.5 + 0.49 * clampf(_strike_age / 0.25, 0.0, 1.0) if _strike_age < 0.25 else windup * 0.49
+	elif walking:
+		pose = "walk"
+		ph = fposmod(phase, TAU) / TAU
+	var fr := RimzFrames.frame(_zset, pose, ph, view)
+	if fr.is_empty():
+		fr = RimzFrames.frame(_zset, "idle", ph, view)
+	if fr.is_empty():
+		return
+	if RimzFrames.kind_of_set(_zset) == "crawler":
+		_rz_nolegs = true
+	_rz_pose = pose
+	_rz_fr = fr
+	_rz_on = true
+	if pose == "attack" and _strike_age < 0.06 and _atk > 0.5 and RimzFrames.blood_cb.is_valid() and not _bite_done:
+		_bite_done = true    # (the bite lands: a splash of blood on the ground in front of it, once per bite)
+		var d: Vector2 = PawnMotion.FACE_DIR.get(z.facing, Vector2.DOWN)
+		RimzFrames.blood_cb.call(position.x / TILE + d.x * 0.5, position.y / TILE + d.y * 0.5 + 0.1, 0.16, 0.0, 0.8)
+	elif pose != "attack":
+		_bite_done = false
+
+
+## Draws the frame chosen by `_rimz_pick` and the damage on it.
+func _draw_rimz(col: Color) -> void:
+	var u := pawn_rect.size / RimzFrames.HALF
+	var fr: Dictionary = _rz_fr
+	var src: Rect2 = fr.src
+	var dst := Rect2(pawn_rect.position + (fr.off as Vector2) * u, src.size * u)
+	_pen.draw_texture_rect_region(fr.tex, dst, src, col)
+	if _hits > 0 and RimzFrames.fx_tex != null and _rz_pose != "rise":
+		_rimz_damage(col)
+
+
+## The wounds that build up on the baked figure: a bullet wound for each hit (up to six), the spray of the side it was hit on, a ruined hand once it is nearly done for.
+func _rimz_damage(col: Color) -> void:
+	var z = entity
+	var hpf := clampf(float(z.hp) / _hp0, 0.0, 1.0)
+	var u := pawn_rect.size / Vector2(368.0, 327.0)
+	var org := pawn_rect.position
+	var half := 44.0 if _vw == "E" else 52.0
+	var tex: Texture2D = RimzFrames.fx_tex
+	var side := 1.0 if (-_hit_dir.x) >= 0.0 else -1.0
+	var pose_dy := -4.0 if _rz_pose == "attack" else 0.0
+	if _rz_pose in ["walk", "idle"] and RimzFrames.kind_of_set(_zset) == "crawler":
+		pose_dy += 18.0
+	var n := mini(_hits, 6)
+	for i in n:
+		var rx := (PawnMotion.rnd(_seed_i, 40 + i) - 0.5) * 2.0 * half * 0.6
+		var ry := 192.0 + PawnMotion.rnd(_seed_i, 60 + i) * 46.0 + pose_dy
+		var sz := 24.0 + 6.0 * PawnMotion.rnd(_seed_i, 80 + i)
+		var cell := RimzFrames.FX_WOUND + (_seed_i + i) % 4
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(184.0 + rx - sz * 0.5, ry - sz * 0.5) * u, Vector2(sz, sz) * u), RimzFrames.fx_src(cell), col)
+	if _hits >= 2:
+		var sp := 60.0
+		var sc := RimzFrames.FX_SPRAY + (0 if side < 0.0 else 1)
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(184.0 + side * half * 0.62 - sp * 0.5, 214.0 + pose_dy - sp * 0.5) * u, Vector2(sp, sp) * u), RimzFrames.fx_src(sc), col)
+	if hpf < 0.4 and _hits >= 4:
+		var hs := -1.0 if (_seed_i % 2) == 0 else 1.0
+		var hx := 184.0 + hs * (60.0 if _vw != "E" else 58.0)
+		var hy := 244.0 + pose_dy
+		_pen.draw_texture_rect_region(tex, Rect2(org + Vector2(hx - 24.0, hy - 24.0) * u, Vector2(48.0, 48.0) * u), RimzFrames.fx_src(RimzFrames.FX_STUMP), col)
+
+
+## A body that falls: the baked fall frames (forward or backward by the way the shot went, side-on), then the corpse picture of its look with its pool; a close kill throws gibs that fade with it.
+func _draw_dead_rz(z) -> bool:
+	var fa: float = z.fall_ang
+	var s := 1.0 if cos(fa) >= 0.0 else -1.0
+	if absf(cos(fa)) < 0.2:
+		s = 1.0 if z.fall_dir >= 0.0 else -1.0
+	var face := -1.0 if _mir else 1.0
+	var crawl := RimzFrames.kind_of_set(_zset) == "crawler"
+	var fwd := face == s or crawl
+	var alpha := 1.0
+	if z.state == "dead" and z.dead_t > 55.0:
+		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
+	var f2 := clampf(float(z.fall) / 0.45, 0.0, 1.0)
+	_reset()
+	var fs := figure_scale_xy() * _dv.size
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	_apply()
+	if not _gibs_done and float(z.hp) <= -0.35 * _hp0 and _gibs.is_empty():
+		_make_gibs(s)
+	_gibs_done = true
+	if z.state == "dead":
+		var id := int(_zset.substr(RimzFrames.kind_of_set(_zset).length()))
+		var pose := 2 if crawl else (1 if fwd else 0)
+		var ct := GD.tex("res://assets/pawns/zrc%d_%d.png" % [id, pose])
+		_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.5, 0.0, 1.0, 0.34), false, Color(1, 1, 1, alpha * 0.5))
+		if s > 0.0:
+			_sc(-1, 1)
+			_apply()
+		_pen.draw_texture_rect(ct, pawn_rect, false, Color(1, 1, 1, alpha))
+		_draw_gibs(alpha)
+		return true
+	var pn := "death_f" if fwd else "death_b"
+	if not RimzFrames.has_pose(_zset, pn, "E"):
+		pn = "death_f"
+	var fr := RimzFrames.frame(_zset, pn, f2, "E")
+	if fr.is_empty():
+		return false
+	_pen.draw_texture_rect(RimzFrames.shadow_tex(), Rect2(-0.4, 0.2, 0.8, 0.3), false, Color(1, 1, 1, 1.0 - f2 * 0.6))
+	if _mir:
+		_sc(-1, 1)
+		_apply()
+	var u := pawn_rect.size / RimzFrames.HALF
+	var src: Rect2 = fr.src
+	_pen.draw_texture_rect_region(fr.tex, Rect2(pawn_rect.position + (fr.off as Vector2) * u, src.size * u), src, Color(1, 1, 1, alpha))
+	return true
+
+
+func _make_gibs(dir_s: float) -> void:
+	_gibs.clear()
+	for i in 6:
+		var a := PawnMotion.rnd(_seed_i, 300 + i) * TAU
+		var r := 0.22 + 0.5 * PawnMotion.rnd(_seed_i, 320 + i)
+		_gibs.append({"cell": RimzFrames.FX_GIB + i % 4, "pos": Vector2(cos(a) * r + dir_s * 0.2, 0.1 + sin(a) * r * 0.5), "rot": a, "sz": 0.2 + 0.1 * PawnMotion.rnd(_seed_i, 340 + i)})
+
+
+func _draw_gibs(alpha: float) -> void:
+	if _gibs.is_empty() or RimzFrames.fx_tex == null:
+		return
+	_reset()
+	var fs := figure_scale_xy() * _dv.size
+	if fs != Vector2.ONE:
+		_fit_figure(fs)
+	for g in _gibs:
+		var m := _m.translated_local(g.pos).rotated_local(float(g.rot))
+		_pen.draw_set_transform_matrix(m)
+		var sz: float = g.sz
+		_pen.draw_texture_rect_region(RimzFrames.fx_tex, Rect2(-sz * 0.5, -sz * 0.5, sz, sz), RimzFrames.fx_src(int(g.cell)), Color(1, 1, 1, alpha))
