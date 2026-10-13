@@ -21,6 +21,7 @@ const Combat := preload("res://scripts/render/combat_fx.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const Dirs := preload("res://scripts/render/pawn_dirs.gd")
+const Hanim := preload("res://scripts/render/hanim.gd")
 const TILE := GD.TILE
 ## How the dead are dimmed (a person who died lies where they fell).
 const DEAD_TINT := Color(0.62, 0.6, 0.6)
@@ -61,6 +62,11 @@ static var rimz_anim := false
 ## fall and rise. `zart_crawlers`: one in four limping walkers crawls (the crawler art; the rules do not know crawlers).
 static var zart := false
 static var zart_crawlers := true
+## ROUND 11 (human combat animation, scripts/render/hanim.gd): set by prison_game.gd, off everywhere else (`--nohanim`). `hurt_cb(at tiles, dir, n)` is told of a blow on a person (blood on the ground).
+static var hanim := false
+static var hurt_cb := Callable()
+var _hx: Hanim.State = null
+var _hand_draw := Vector2.ZERO
 var _zs = null
 var _zkind := "walker"
 var _was_still := false
@@ -261,6 +267,7 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		_style = Art.PERSON
 		_sw_pose = PawnMotion.Swing.new()
 		_rl = PawnMotion.Reload.new()
+		_hx = Hanim.State.new(fposmod(float(e.get_instance_id()) * 0.6180339887, 1.0))
 		_work_phase = WorkAnim.phase_of(String(e.id))
 		var wb: Array = data.weaponArt.box
 		weapon_rect = Rect2(wb[0], wb[1], wb[2] - wb[0], wb[3] - wb[1])
@@ -515,6 +522,12 @@ func _anim_person(dt: float, jumped: bool, alpha: float, rm: float) -> void:
 		PawnMotion.reload_pose(_rl, clampf(1.0 - float(p.reloading) / _rl_total, 0.0, 1.0), maxi(1, cap - _rl_m0) if shell else 1, shell)
 	else:
 		_rl_total = 0.0
+	if hanim and _hx != null and dt > 0.0:
+		var up_want: bool = not unarmed and not hol and (p.target != null or float(p.recoil) > 0.05 or float(p.reloading) > 0.0 or (p.player and bool(p.get_meta("aiming", false))))
+		var was := _hx.hurt_t
+		_hx.tick(p, dt, up_want, Vector2(p.x, p.y), Hanim.threat_cb)
+		if _hx.hurt_t == 0.0 and was > 0.0 and hurt_cb.is_valid():
+			hurt_cb.call(Vector2(p.x, p.y - 0.3), _hx.hurt_dir, 8)
 
 
 ## The motion of one of the dead for a frame: the drawn facing (worked out only while it turns), the attack's beat, the flinch and the thump. The dead are many, so this reads as little of the
@@ -730,6 +743,8 @@ func _draw() -> void:
 		return # the walker standing there now is drawn instead
 	elif entity.resting_bed != null:
 		_draw_resting()
+	elif hanim and _hx != null and entity.dead:
+		_draw_fallen()
 	elif entity.downed:
 		_draw_downed()
 	else:
@@ -805,7 +820,32 @@ func _draw_person() -> void:
 		aim = lerp_angle(aim, _ori, _rdy)    # (a rifle that is not aimed points where the figure goes, at the low ready)
 	var aim_v := Vector2.from_angle(aim)
 	var kick := _rk * _rk
-	if kick > 0.0:
+	var hk := 0.0    # (ROUND 11: the head's own jerk, radians)
+	var gu := {}
+	if hanim and _hx != null:
+		var prof := Hanim.profile(p.weapon)
+		var fk := Hanim.flinch_k(_hx)
+		if kick > 0.0:
+			off -= Vector2(aim_v.x, aim_v.y * 0.6) * (kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 1.5 * rm * float(prof.body))
+			roll -= signf(aim_v.x) * kick * float(prof.roll) * rm    # (the upper body rocks back from the shot)
+			hk -= signf(aim_v.x) * kick * float(prof.head) * rm
+		if _hx.up > 0.0 and not unarmed:
+			lean += aim_v * (0.03 * _hx.up * rm)    # (the head tucks down to the stock)
+			sy -= 0.015 * _hx.up * rm
+		if fk > 0.0:
+			var hs := signf(_hx.hurt_dir.x) if absf(_hx.hurt_dir.x) > 0.05 else (1.0 if _hx.seed > 0.5 else -1.0)
+			off += _hx.hurt_dir * (0.09 * fk * rm)
+			roll += hs * 0.13 * fk * rm
+			hk += hs * 0.32 * fk * rm
+			sy += 0.03 * fk * rm
+		if _hx.bite_t > 0.0:
+			roll += sin(anim_t * 26.0) * 0.05 * minf(1.0, _hx.bite_t * 2.0) * rm
+			off.x += sin(anim_t * 33.0) * 0.02 * minf(1.0, _hx.bite_t * 2.0) * rm
+		if _hx.limp and g > 0.0:
+			off.y += 0.035 * maxf(0.0, sin(_rph)) * g * rm
+			roll += 0.035 * sin(_rph) * g * rm
+		gu = Hanim.getup_pose(_hx.getup_t, 1.0 if _hx.seed > 0.5 else -1.0)
+	elif kick > 0.0:
 		# (the kick of a shot: the body is pushed back from the way the gun points and settles over about 150 ms)
 		off -= Vector2(aim_v.x, aim_v.y * 0.6) * (kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 1.5 * rm)
 	if _sw >= 0.0:
@@ -815,6 +855,8 @@ func _draw_person() -> void:
 		roll += _sw_pose.roll
 		sy += _sw_pose.stretch
 	var xf := Transform2D(0.0, Vector2.ONE, 0.0, off) * PawnMotion.lean_xf(lean)
+	if not gu.is_empty():
+		xf = xf.translated(gu.off).translated_local(Vector2(0.0, 0.3)).rotated_local(gu.rot).scaled_local(Vector2(1.0, gu.sy)).translated_local(Vector2(0.0, -0.3))
 	if roll != 0.0 or sy != 1.0:
 		xf = xf.translated_local(Vector2(0.0, PawnMotion.HIPS)).rotated_local(roll).scaled_local(Vector2(1.0, sy)).translated_local(Vector2(0.0, -PawnMotion.HIPS))
 	_reset()
@@ -826,7 +868,7 @@ func _draw_person() -> void:
 		_sc(-1, 1)
 	_apply()
 	if _d16 == null:
-		_legs(view, _rph, _moving_draw, false, 1.0, true)
+		_legs(view, _rph, _moving_draw, hanim and _hx != null and _hx.limp, 1.0, true)
 	elif _fast:
 		_pen.draw_mesh(PawnMesh.shadow(_leg_kind), _pal_tex)
 	var sm: Array = PawnMotion.seam(_ori) if smooth_turn and _d16 == null else ["", 0.0]
@@ -848,10 +890,14 @@ func _draw_person() -> void:
 	if mirror:
 		_sc(-1, 1)
 	_apply()
-	if _d16 != null:
+	if hanim and absf(hk) > 0.012:
+		_bust(view, hk * (-1.0 if mirror else 1.0))
+	elif _d16 != null:
 		Dirs.blit(_pen, _d16, _ori, _rph)
 	else:
 		_pen.draw_texture_rect(tex[view], pawn_rect, false)
+	if hanim and _hx != null and _hx.stain > 0.0:
+		Hanim.draw_stains(_pen, _hx)    # (blood on the clothes)
 	if nv != "":
 		_m = body
 		if nmir:
@@ -880,11 +926,14 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 	var a := aim
 	var reload := float(p.reloading) > 0.0
 	var kick := _rk * _rk
+	var hx := hanim and _hx != null
 	if kick > 0.0:
-		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm
+		a -= signf(cos(aim)) * kick * float(Combat.GUNS.get(p.weapon, Combat.GUNS.rifle).nudge) * 2.4 * rm * (float(Hanim.profile(p.weapon).rise) if hx else 1.0)
 	if _sw >= 0.0:
 		a += _sw_pose.off
 	var lw := maxf(_lowk, _rdy * READY_LOW)
+	if hx and p.player and _hx.up < 1.0 and not unarmed:
+		lw = maxf(lw, (1.0 - _hx.up) * READY_LOW)    # (the raise: the rifle comes up to the shoulder in 0.2 s)
 	if reload:
 		lw = maxf(lw, _rl.low * 0.85)
 	if lw > 0.0:
@@ -897,9 +946,14 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 	var pump := 0.0
 	if reload:
 		pump = _rl.pump
+	elif hx and Hanim.profile(p.weapon).work != "" and _shot_age > float(Hanim.profile(p.weapon).work_at) and _shot_age < float(Hanim.profile(p.weapon).work_at) + float(Hanim.profile(p.weapon).work_len):
+		var pf := Hanim.profile(p.weapon)
+		pump = sin((_shot_age - float(pf.work_at)) / float(pf.work_len) * PI) * rm * (1.0 if pf.work == "pump" else 0.7)
 	elif p.weapon == "shotgun" and _shot_age > 0.3 and _shot_age < 0.55:
 		pump = sin((_shot_age - 0.3) / 0.25 * PI) * rm
 	_m = m
+	if hx and _holk > 0.0:
+		pv += Vector2(-0.14, 0.2) * _holk    # (slung: the weapon slides to the back and hip)
 	_tr(pv.x, pv.y)
 	_rot(a)
 	if cos(a) < 0.0:
@@ -908,6 +962,8 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 	_tr(push, 0)
 	_apply()
 	_pen.draw_texture_rect(weapon_tex, weapon_rect, false, Color(1.0, 1.0, 1.0, lerpf(0.94, 0.75, _holk)))
+	if hx and _holk < 0.5:
+		_gun_arms(pump, reload)
 	if _holk < 0.5:
 		if pump == 0.0 and not reload:
 			_hands_on(null)
@@ -916,12 +972,52 @@ func _gun(m: Transform2D, aim: float, view: String) -> void:
 			if gun_front != null:
 				_hands_on(Vector2(float(gun_front) - pump * 0.12, 0.02), true)
 			if reload and _rl.hand_on:
-				_hands_on(_rl.hand, true)
+				_hands_on(_hand_draw if hx else _rl.hand, true)
+	_m = m
+	_apply()
+	if hx and reload:
+		_drop_mag(m, a)
+
+
+## The hands on a weapon: both (the baked pair), or with `at` one hand there in the weapon's frame.
+## ROUND 11: the sleeves to the hands on the weapon (the frame is the weapon's, set by `_gun`), and what the loading hand holds: a shell, or a magazine.
+func _gun_arms(pump: float, reload: bool) -> void:
+	var p = entity
+	var fp := Vector2(float(gun_front) - pump * 0.12 if gun_front != null else 0.3, 0.02)
+	Hanim.draw_arm(_pen, Vector2(-0.04, 0.0), Vector2(0.0, 0.05), pal.sleeve, pal.skin, false)
+	Hanim.draw_arm(_pen, Vector2(-0.02, 0.04), fp, pal.sleeve, pal.skin, false)
+	if reload and _rl.hand_on:
+		var shell: bool = int(p.gun.get("mag", 0)) <= 8 and p.weapon != "pistol"
+		var hp := _rl.hand
+		if not shell:
+			hp = Vector2(-0.02, 0.46).lerp(Vector2(0.12, 0.14), clampf(_rl.hand.distance_to(Vector2(-0.02, 0.46)) / 0.5, 0.0, 1.0))
+		_hand_draw = hp
+		Hanim.draw_arm(_pen, Vector2(-0.02, 0.1), hp, pal.sleeve, pal.skin, false)
+		if _rl.carry:
+			if shell:
+				Hanim.draw_shell(_pen, hp + Vector2(0.0, -0.1), 0.5)
+			else:
+				Hanim.draw_mag(_pen, hp + Vector2(0.0, 0.06), 0.15)
+
+
+## The old magazine falling out of the gun on a reload (ROUND 11): leaves the gun at the start of the reload, drops and turns, in the body's frame.
+func _drop_mag(m: Transform2D, a: float) -> void:
+	var p = entity
+	var cap := int(p.gun.get("mag", 0))
+	if cap <= 8 or p.weapon == "pistol" or _rl_total <= 0.0:
+		return
+	var t := (_rl.prog - 0.06) * _rl_total
+	if t < 0.0 or t > 0.55:
+		return
+	var pv := PawnMotion.shoulder(_ori)
+	var at := pv + Vector2.from_angle(a) * 0.3 + Vector2(0.0, 0.12 + 5.0 * t * t)
+	_m = m
+	_apply()
+	Hanim.draw_mag(_pen, at, 0.3 + t * 7.0)
 	_m = m
 	_apply()
 
 
-## The hands on a weapon: both (the baked pair), or with `at` one hand there in the weapon's frame.
 func _hands_on(at, single: bool = false) -> void:
 	if not single:
 		if _fast:
@@ -1298,7 +1394,107 @@ func _draw_dead() -> void:
 	_draw_body(view, Color(1, 1, 1, alpha))
 
 
+## Where the head is cut from the trunk (tiles from the feet's origin) to jerk it on its own.
+const NECK_Y := -0.46
+
+
+## The bust drawn in two parts, the head turned `jerk` radians about the neck (ROUND 11).
+func _bust(view: String, jerk: float) -> void:
+	var dst: Rect2
+	var src: Rect2
+	var t: Texture2D
+	if _d16 != null:
+		var r := Dirs.rect_of(_d16, _ori, _rph)
+		dst = r[0]
+		src = r[1]
+		t = _d16.tex
+	else:
+		t = tex[view]
+		dst = pawn_rect
+		src = Rect2(Vector2.ZERO, t.get_size())
+	var f := clampf((NECK_Y - dst.position.y) / dst.size.y, 0.05, 0.95)
+	var top_d := Rect2(dst.position, Vector2(dst.size.x, dst.size.y * f))
+	var top_s := Rect2(src.position, Vector2(src.size.x, src.size.y * f))
+	var low_d := Rect2(dst.position.x, dst.position.y + dst.size.y * f, dst.size.x, dst.size.y * (1.0 - f))
+	var low_s := Rect2(src.position.x, src.position.y + src.size.y * f, src.size.x, src.size.y * (1.0 - f))
+	var saved := _m
+	_pen.draw_texture_rect_region(t, low_d, low_s)
+	_tr(0.0, NECK_Y)
+	_rot(jerk)
+	_tr(0.0, -NECK_Y)
+	_apply()
+	_pen.draw_texture_rect_region(t, top_d, top_s)
+	_m = saved
+	_apply()
+
+
+## The two sleeves of a body in its own frame, from the shoulders to `l` and `r` (ROUND 11).
+func _arms2(l: Vector2, r: Vector2) -> void:
+	Hanim.draw_arm(_pen, Vector2(-0.13, -0.08), l, pal.sleeve, pal.skin)
+	Hanim.draw_arm(_pen, Vector2(0.13, -0.08), r, pal.sleeve, pal.skin)
+
+
+## ROUND 11: the downed person: kneels, topples, lies with a hand to the wound and crawls, or thrashes while a dead one is on them; the way back is the getup of `_draw_person`.
+func _draw_hdowned() -> void:
+	var st := _hx
+	var side := 1.0 if st.seed > 0.5 else -1.0
+	var bitten := st.bite_t > 0.0
+	var pose := Hanim.down_pose(st.dn_t, bitten, st.seed, side)
+	_wk = 0.0
+	_reset()
+	_tr(pose.off.x, pose.off.y + 0.3)
+	_apply()
+	Hanim.draw_pool(_pen, st, 0.12 + 0.2 * PawnMotion.smooth(st.dn_t / 8.0) * float(pose.lie), 0.9 * float(pose.lie))
+	_reset()
+	_tr(pose.off.x, pose.off.y)
+	_tr(0, 0.3)
+	_rot(pose.rot)
+	_sc(1.0, pose.sy)
+	_tr(0, -0.3)
+	_apply()
+	_legs("S", 0.0, false, false, 1.0, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
+	if st.stain > 0.0:
+		Hanim.draw_stains(_pen, st)
+	var w := st.dn_t
+	if bitten:
+		_arms2(Vector2(-0.3 + sin(w * 21.0) * 0.08, -0.5), Vector2(0.3 + sin(w * 17.0 + 1.0) * 0.08, -0.55))
+	else:
+		var c := sin(w * 1.9 + st.seed * 6.0)
+		_arms2(Vector2(0.04, 0.08), Vector2(0.1 * c, -0.45 - 0.1 * c))    # (one hand on the wound, one reaching)
+
+
+## ROUND 11: the fall of a person who dies, in the way the blow went (hanim.gd `fall_pose`), then the corpse: their own clothes, arms flung, a pool of blood that spreads for a few seconds.
+func _draw_fallen() -> void:
+	var st := _hx
+	var t := st.dead_t
+	var pose := Hanim.fall_pose(minf(t, 1.0), st.fall_kind, st.side, st.hurt_dir)
+	var lay := (fposmod(st.seed * 13.0, 1.0) - 0.5) * 0.5 * clampf((t - 0.5) / 0.4, 0.0, 1.0)    # (each lies a little differently)
+	_wk = 0.0
+	_reset()
+	_tr(pose.off.x * 0.0 + st.side * 0.42 * PawnMotion.smooth(t / 0.6) * (1.0 if st.fall_kind == 0 else 0.0), 0.42 + (pose.off.y * 0.7 if st.fall_kind != 0 else 0.0))
+	_apply()
+	var pk := Hanim.pool_k(t)
+	Hanim.draw_pool(_pen, st, (0.2 + (0.6 + 0.25 * fposmod(st.seed * 7.0, 1.0)) * pk) if t > 0.2 else 0.0)
+	_reset()
+	_tr(pose.off.x, pose.off.y)
+	_tr(0, 0.3)
+	_rot(pose.rot + lay)
+	_sc(1.0, pose.sy)
+	_tr(0, -0.3)
+	_apply()
+	_legs("S", 0.0, false, false, 1.0, false)
+	_pen.draw_texture_rect(tex["S"], pawn_rect, false)
+	Hanim.draw_stains(_pen, st)
+	var fl: float = pose.flung
+	var wob := (fposmod(st.seed * 29.0, 1.0) - 0.5) * 0.2
+	_arms2(Vector2(-0.14, 0.16).lerp(Vector2(-0.36 + wob, -0.22), fl), Vector2(0.14, 0.16).lerp(Vector2(0.34 - wob, -0.26), fl))
+
+
 func _draw_downed() -> void:
+	if hanim and _hx != null:
+		_draw_hdowned()
+		return
 	var p = entity
 	_wk = 0.0
 	_reset()

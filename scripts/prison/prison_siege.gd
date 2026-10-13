@@ -575,8 +575,7 @@ func _bites(dt: float) -> void:
 				if m.def.has("ex_ally"):
 					game.allies_alive.erase(String(m.def.id))    # (else the next base build brings them back)
 				game.people.forget(String(m.def.name))    # RAIDS hook: a recruit is not brought back
-				if m.has("node") and is_instance_valid(m.node):
-					m.node.queue_free()
+				game.keep_corpse(m)    # ROUND 11: it falls and lies there (freed with --nohanim)
 				if stats.has("crew"):    # (none before the first night: a dead one inside by day)
 					(stats.crew as Array).append(String(m.def.name))
 				game._say("%s is gone." % String(m.def.name), 6.0)

@@ -22,6 +22,7 @@ const PauseMenu := preload("res://scripts/prison/prison_pause.gd")    # ART: Esc
 const Polish := preload("res://scripts/prison/prison_polish.gd")    # ART: ground, floors, AO, shadows
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
+const Hanim := preload("res://scripts/render/hanim.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
 const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
@@ -185,6 +186,9 @@ func _ready() -> void:
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
 	PawnNode.rimz_anim = PawnNode.rimz and not args.has("noanim")    # ROUND 11: baked animation frames, damage overlays and a soft shadow for the dead (rimz_frames.gd); --noanim: Round 10's one picture
+	PawnNode.hanim = not args.has("nohanim")    # ROUND 11: the human combat animation (scripts/render/hanim.gd: raise, kick, reload props, flinch, downed, fall, pool); --nohanim: the old poses
+	Hanim.threat_cb = _threat_dir
+	PawnNode.hurt_cb = func(at: Vector2, dir: Vector2, n: int) -> void: fx.combat.blood(at.x, at.y, dir.x, dir.y, n)
 	PawnNode.zmove = not args.has("nozmove")    # (--nozmove: the old dead, to compare) ROUND 8: the dead's heading, gait, rise, lunge and collapse
 	if args.has("nosmooth"):
 		PawnNode.smooth_turn = false
@@ -741,6 +745,38 @@ func turn_aim(g, dt: float) -> void:
 		g.aim = PawnMotion.turn_at(float(g.aim), float(aim_want[g.id]), dt, PawnNode.TURN_AIM)
 
 
+## ROUND 11: the way the nearest live dead one pushes at a person standing at `at` (tiles), when it is within 1.8 tiles; zero when none is.
+func _threat_dir(at: Vector2) -> Vector2:
+	var best := Vector2.ZERO
+	var bd := 1.8
+	for z in run.sim.zombies:
+		if z.state == "dead" or z.state == "dying":
+			continue
+		var d := at - Vector2(z.x, z.y)
+		if d.length() < bd:
+			bd = d.length()
+			best = d
+	return best
+
+
+## ROUND 11: a crew member who dies is left lying (the node is kept 45 s and drawn by `_sync_views`) instead of vanishing.
+var fallen_nodes: Array = []
+
+
+func keep_corpse(m: Dictionary) -> void:
+	if not m.has("node") or not is_instance_valid(m.node):
+		return
+	if not PawnNode.hanim:
+		m.node.queue_free()
+		return
+	m.p.hp = 0.0
+	m.p.dead = true
+	m.p.downed = true
+	m.p.moving = false
+	m.node.z_index = -1
+	fallen_nodes.append({"n": m.node, "t": 0.0})
+
+
 func _gun_poses(dt: float) -> void:
 	for m in crew.members:
 		var g = m.p
@@ -755,6 +791,99 @@ func _gun_poses(dt: float) -> void:
 
 var _seq_i := 0
 var _tt: Dictionary = {}
+var _ht: Dictionary = {}
+
+
+## --hanimtest=fire|reload|holster|hurt|down|die [--who=ruth|<crew id>] [--weapon=shotgun|rifle|smg] [--from=left|right|front|back] with --seq=N,every (ROUND 11 checks): the person stands at (48,30), a dead
+## one stands five tiles east (or next to them for hurt, down and die); the scene is a script of the clock since the first shot of the sequence. Not used by the game.
+func _hanimtest(dt: float) -> void:
+	var c := Vector2(48.0, 30.0)
+	var who := String(args.get("who", "walt"))
+	if not _ht.has("n"):
+		if who == "ruth":
+			_ht["p"] = run.avatar_p
+		else:
+			for m in crew.members:
+				if String(m.def.id) == who:
+					_ht["m"] = m
+					m.state = "leaving"
+					_ht["p"] = m.p
+		for z in run.sim.zombies:
+			_ht["z"] = z
+			break
+		if not _ht.has("p") or not _ht.has("z"):
+			return
+		_ht["n"] = pawn_nodes[_ht.p] if who == "ruth" else _ht.m.node
+		var w := String(args.get("weapon", ""))
+		if w != "":
+			_ht.p.weapon = w
+			_ht.p.gun = data.guns[w]
+			_ht.n.set_weapon(data, w)
+	var p = _ht.p
+	var z = _ht.z
+	var mode := String(args.hanimtest)
+	var t := float(frames - _shot_wait) / 60.0
+	p.x = c.x
+	p.y = c.y
+	p.moving = false
+	if _ht.has("m"):
+		p.work = "watch"
+	var from := String(args.get("from", "right"))
+	var off := {"right": Vector2(1.0, 0.0), "left": Vector2(-1.0, 0.0), "front": Vector2(0.0, 1.0), "back": Vector2(0.0, -1.0)}.get(from, Vector2(1.0, 0.0)) as Vector2
+	var near := mode in ["hurt", "down", "die"]
+	var zp := c + off * (0.9 if near else 6.0)
+	z.x = zp.x
+	z.y = zp.y
+	z.state = "idle"
+	z.moving = false
+	var ang := Vector2(p.x, p.y).angle_to_point(Vector2(z.x, z.y))
+	if mode == "fire" or mode == "reload":
+		p.aim = ang
+		p.facing = run.sim.facing_of(cos(ang), sin(ang), p.facing)
+		if who != "ruth":
+			p.target = z
+			aim_hold[p.id] = 1.0
+			aim_want[p.id] = ang
+		else:
+			p.set_meta("aiming", true)
+		var w2 := String(p.weapon)
+		var gap := 0.9 if w2 == "shotgun" else (0.09 if w2 == "smg" else 0.65)
+		var burst := 6 if w2 == "smg" else 3
+		var cyc := gap * burst + 0.7
+		var tt := fposmod(t - 0.3, cyc)
+		if mode == "fire" and t >= 0.3 and tt < gap * burst and fposmod(tt, gap) < dt * 1.01:
+			p.recoil = 1.0
+			var mz: Vector2 = run.sim.muzzle(p, ang)
+			fx.muzzle(mz.x, mz.y, ang, w2 == "shotgun")
+			fx.casing(p.x, p.y - 0.15, ang, w2 == "shotgun")
+			fx.combat.shot_sound({"type": "shot", "weapon": w2, "gun": w2, "x": p.x, "y": p.y})
+		if mode == "reload" and t >= 0.2 and float(p.reloading) <= 0.0 and fposmod(t, 3.0) < dt * 1.01:
+			p.mag = 0
+			p.reloading = 2.2
+		if who == "ruth":
+			p.recoil = maxf(0.0, float(p.recoil) - dt * 8.0)
+			p.reloading = maxf(0.0, float(p.reloading) - dt)
+	elif mode == "holster":
+		AimMode.set_holstered(fposmod(t, 3.0) > 0.6 and fposmod(t, 3.0) < 1.9)
+	elif mode == "hurt":
+		if t > 0.2 and fposmod(t - 0.2, 0.9) < dt * 1.01:
+			p.hp = maxf(5.0, float(p.hp) - 14.0)
+		if t < 0.1:
+			p.hp = 100.0
+	elif mode == "down":
+		p.downed = t > 0.2 and t < 4.6
+		z.state = "idle" if t < 3.2 else "dead"
+		if not p.downed:
+			z.x = c.x + 8.0
+	elif mode == "die":
+		if t > 0.2:
+			p.hp = 0.0
+			p.dead = true
+			p.downed = true
+		z.x = c.x + off.x * 1.0 + (6.0 if t > 0.5 else 0.0)
+		z.y = c.y + off.y * 1.0
+
+
 
 
 ## --turntest=circle|track|dead|aim (checks of the rotation, with --cam on the spot and --seq): circle walks the gate guard Walt round a circle; track makes Walt shoot at a dead one that walks
@@ -814,6 +943,8 @@ func _tick(dt: float) -> void:
 		zmove.test(dt)
 	if args.has("turntest") and crew != null:
 		_turntest(dt)
+	if args.has("hanimtest") and crew != null:
+		_hanimtest(dt)
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
 		var nowu := Time.get_ticks_usec()
 		if frames >= 600 and _perf_last > 0:
@@ -1343,6 +1474,16 @@ func _sync_views() -> void:
 				n3.sync(true, sim_steps, alpha)
 				if m.has("lift"):
 					n3.position.y -= float(m.lift) * TILE    # (a kid's hop)
+	for f in fallen_nodes.duplicate():
+		var fn = f.n
+		f.t = float(f.t) + get_process_delta_time()
+		if not is_instance_valid(fn) or float(f.t) > 45.0:
+			fallen_nodes.erase(f)
+			if is_instance_valid(fn):
+				fn.queue_free()
+			continue
+		fn.anim_t = clock
+		fn.sync(true, sim_steps, alpha)
 
 
 func _paint_decks(c: CanvasItem) -> void:
@@ -1859,6 +2000,8 @@ func _shoot_at(g, z, hit_p: float) -> void:
 	var tx: float = z.x if hit else z.x + randf_range(-0.8, 0.8)
 	var ty: float = z.y if hit else z.y + 1.2
 	fx.muzzle(mx, my, ang, false)
+	if PawnNode.hanim:
+		fx.casing(g.x, g.y - 0.15, ang, false)    # ROUND 11: the brass of the guard's shot lies on the deck
 	fx.tracer(mx, my, tx, ty)
 	fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
 	shots_fired += 1
@@ -2130,7 +2273,7 @@ func _ally_gone(m: Dictionary) -> void:
 	allies_alive.erase(String(m.def.id))
 	crew.members.erase(m)
 	if m.has("node"):
-		m.node.queue_free()
+		keep_corpse(m)
 	if args.has("log"):
 		print("ALLY gone ", m.def.name)
 
