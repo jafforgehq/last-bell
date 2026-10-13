@@ -178,6 +178,7 @@ func _ready() -> void:
 	PawnNode.rimz = not args.has("norimz")    # ROUND 10: the RimWorld-style baked dead (assets/pawns/zr*, tools/make_rimworld_zombies.py); --norimz: the town's old baked dead
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
+	PawnNode.rimz_anim = PawnNode.rimz and not args.has("noanim")    # ROUND 11: baked animation frames, damage overlays and a soft shadow for the dead (rimz_frames.gd); --noanim: Round 10's one picture
 	PawnNode.zmove = not args.has("nozmove")    # (--nozmove: the old dead, to compare) ROUND 8: the dead's heading, gait, rise, lunge and collapse
 	if args.has("nosmooth"):
 		PawnNode.smooth_turn = false
@@ -469,6 +470,7 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 		roofs.setup(town, data, "house")
 	run = TownRun.new(town, world, fx, 100, true, true)
 	run.sim.feel = fx.combat
+	RimzFrames.blood_cb = fx.combat.decal    # (ROUND 11: a wounded one's trail of drops and a bite's splash go to the ground blood)
 	arms.apply(run.avatar_p)    # SQUAD hook: the gun she chose (before the pawn is made: it draws that gun)
 	if args.has("log") and mode == "raid":
 		var gp = run.avatar_p
