@@ -1,46 +1,613 @@
 {
-  "_doc": "Raids and people of the prison (scripts/prison/prison_loot.gd, prison_people.gd). natural: the generator's building kind -> place type. min_places: a raid town always has at least this many places of a type (buildings of the surplus are retagged by a stable hash). rolls: for each place type, what ONE container of it holds: [res, chance, min, max]. kinds: a container kind narrows the rolls (only) or changes a chance (p). names/hints: shown on the raid map. options: the gate's choice (name, place types marked, the shortages it answers). people: the pool of survivors. A town is made with `town_opts`.",
-  "town_opts": {"blocks": 2},
-  "natural": {"supermarket": "shop", "butcher": "shop", "cafe": "shop", "diner": "shop", "rowshop": "shop", "market": "shop", "kiosk": "petrol", "laundromat": "garage", "garage": "garage", "scrapyard": "garage", "warehouse": "hardware", "hardware": "hardware", "barber": "pharmacy", "clinic": "pharmacy", "pharmacy": "pharmacy", "agency": "police", "police": "police", "fire_station": "police"},
-  "min_places": {"petrol": 1, "pharmacy": 1, "hardware": 1, "garage": 1, "police": 1, "shop": 2},
-  "retag_order": ["petrol", "pharmacy", "hardware", "garage", "police"],
+  "_doc": "Raids and people of the prison (scripts/prison/prison_loot.gd, prison_people.gd). natural: the generator's building kind -> place type. min_places: a raid town always has at least this many places of a type (buildings of the surplus are retagged by a stable hash). rolls: for each place type, what ONE container of it holds: [res, chance, min, max]. kinds: a container kind narrows the rolls (only) or changes a chance (p). names/hints: shown on the raid map. options: the gate's choice (name, place types marked, the shortages it answers). people: the pool of survivors. A town is made with `town_opts`. survivor (fix round 3, people come ONLY by rescue): first = the chance of the first survivor in a raid, extra = [[from raid N, chance], ...] one more each, max, hurt = share that need a med to get up (hurt_hp their hit points), locked = share shut in a room (hold E lock_secs, lock_dead dead stand around), skill = what a person does at the base (people entries).",
+  "town_opts": {
+    "blocks": 2
+  },
+  "natural": {
+    "supermarket": "shop",
+    "butcher": "shop",
+    "cafe": "shop",
+    "diner": "shop",
+    "rowshop": "shop",
+    "market": "shop",
+    "kiosk": "petrol",
+    "laundromat": "garage",
+    "garage": "garage",
+    "scrapyard": "garage",
+    "warehouse": "hardware",
+    "hardware": "hardware",
+    "barber": "pharmacy",
+    "clinic": "pharmacy",
+    "pharmacy": "pharmacy",
+    "agency": "police",
+    "police": "police",
+    "fire_station": "police"
+  },
+  "min_places": {
+    "petrol": 1,
+    "pharmacy": 1,
+    "hardware": 1,
+    "garage": 1,
+    "police": 1,
+    "shop": 2
+  },
+  "retag_order": [
+    "petrol",
+    "pharmacy",
+    "hardware",
+    "garage",
+    "police"
+  ],
   "rolls": {
-    "house": [["food", 0.5, 1, 2], ["water", 0.45, 1, 2], ["scrap", 0.2, 1, 2], ["meds", 0.1, 1, 1]],
-    "shop": [["food", 0.8, 1, 3], ["water", 0.7, 1, 3], ["scrap", 0.15, 1, 1]],
-    "pharmacy": [["meds", 0.85, 1, 3], ["scrap", 0.2, 1, 1]],
-    "hardware": [["scrap", 0.7, 2, 3], ["parts", 0.4, 1, 1]],
-    "garage": [["parts", 0.45, 1, 2], ["fuel", 0.3, 1, 1], ["scrap", 0.4, 1, 3]],
-    "petrol": [["fuel", 0.5, 1, 1], ["scrap", 0.2, 1, 1]],
-    "police": [["ammo", 0.8, 4, 8], ["parts", 0.1, 1, 1], ["gun_smg", 0.1, 1, 1], ["gun_service", 0.1, 1, 1], ["gun_shotgun", 0.08, 1, 1]]
+    "house": [
+      [
+        "food",
+        0.5,
+        1,
+        2
+      ],
+      [
+        "water",
+        0.45,
+        1,
+        2
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        2
+      ],
+      [
+        "meds",
+        0.1,
+        1,
+        1
+      ]
+    ],
+    "shop": [
+      [
+        "food",
+        0.8,
+        1,
+        3
+      ],
+      [
+        "water",
+        0.7,
+        1,
+        3
+      ],
+      [
+        "scrap",
+        0.15,
+        1,
+        1
+      ]
+    ],
+    "pharmacy": [
+      [
+        "meds",
+        0.85,
+        1,
+        3
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        1
+      ]
+    ],
+    "hardware": [
+      [
+        "scrap",
+        0.7,
+        2,
+        3
+      ],
+      [
+        "parts",
+        0.4,
+        1,
+        1
+      ]
+    ],
+    "garage": [
+      [
+        "parts",
+        0.45,
+        1,
+        2
+      ],
+      [
+        "fuel",
+        0.3,
+        1,
+        1
+      ],
+      [
+        "scrap",
+        0.4,
+        1,
+        3
+      ]
+    ],
+    "petrol": [
+      [
+        "fuel",
+        0.5,
+        1,
+        1
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        1
+      ]
+    ],
+    "police": [
+      [
+        "ammo",
+        0.8,
+        4,
+        8
+      ],
+      [
+        "parts",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_smg",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_service",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_shotgun",
+        0.08,
+        1,
+        1
+      ]
+    ]
   },
   "kinds": {
-    "fridge": {"only": ["food", "water"]}, "kitchen_counter": {"only": ["food", "water"]}, "cupboard": {"only": ["food", "water"]}, "shelf_tins": {"only": ["food", "water"]},
-    "cooler": {"only": ["food", "water"]}, "medicine_cabinet": {"only": ["meds"], "p": {"meds": 0.4}},
-    "toolbox": {"only": ["scrap", "parts"]}, "workbench": {"only": ["scrap", "parts", "fuel"]}
+    "fridge": {
+      "only": [
+        "food",
+        "water"
+      ]
+    },
+    "kitchen_counter": {
+      "only": [
+        "food",
+        "water"
+      ]
+    },
+    "cupboard": {
+      "only": [
+        "food",
+        "water"
+      ]
+    },
+    "shelf_tins": {
+      "only": [
+        "food",
+        "water"
+      ]
+    },
+    "cooler": {
+      "only": [
+        "food",
+        "water"
+      ]
+    },
+    "medicine_cabinet": {
+      "only": [
+        "meds"
+      ],
+      "p": {
+        "meds": 0.4
+      }
+    },
+    "toolbox": {
+      "only": [
+        "scrap",
+        "parts"
+      ]
+    },
+    "workbench": {
+      "only": [
+        "scrap",
+        "parts",
+        "fuel"
+      ]
+    }
   },
-  "names": {"house": "House", "shop": "Shop", "pharmacy": "Pharmacy", "hardware": "Hardware", "garage": "Garage", "petrol": "Petrol station", "police": "Police post"},
-  "hints": {"house": "food, water, scrap", "shop": "food, water", "pharmacy": "meds", "hardware": "scrap, parts", "garage": "parts, fuel", "petrol": "fuel", "police": "ammo"},
-  "colors": {"house": "#c8c8b4", "shop": "#f0b050", "pharmacy": "#ff6a5a", "hardware": "#b0b8c8", "garage": "#7ad0ff", "petrol": "#ffe040", "police": "#7a8cff"},
+  "names": {
+    "house": "House",
+    "shop": "Shop",
+    "pharmacy": "Pharmacy",
+    "hardware": "Hardware",
+    "garage": "Garage",
+    "petrol": "Petrol station",
+    "police": "Police post"
+  },
+  "hints": {
+    "house": "food, water, scrap",
+    "shop": "food, water",
+    "pharmacy": "meds",
+    "hardware": "scrap, parts",
+    "garage": "parts, fuel",
+    "petrol": "fuel",
+    "police": "ammo"
+  },
+  "colors": {
+    "house": "#c8c8b4",
+    "shop": "#f0b050",
+    "pharmacy": "#ff6a5a",
+    "hardware": "#b0b8c8",
+    "garage": "#7ad0ff",
+    "petrol": "#ffe040",
+    "police": "#7a8cff"
+  },
   "options": [
-    {"name": "Food and water", "types": ["shop"], "res": ["food", "water"]},
-    {"name": "Meds", "types": ["pharmacy"], "res": ["meds"]},
-    {"name": "Parts and scrap", "types": ["hardware", "garage"], "res": ["scrap", "parts"]},
-    {"name": "Fuel", "types": ["petrol", "garage"], "res": ["fuel"]},
-    {"name": "Ammo", "types": ["police"], "res": ["ammo"]}
+    {
+      "name": "Food and water",
+      "types": [
+        "shop"
+      ],
+      "res": [
+        "food",
+        "water"
+      ]
+    },
+    {
+      "name": "Meds",
+      "types": [
+        "pharmacy"
+      ],
+      "res": [
+        "meds"
+      ]
+    },
+    {
+      "name": "Parts and scrap",
+      "types": [
+        "hardware",
+        "garage"
+      ],
+      "res": [
+        "scrap",
+        "parts"
+      ]
+    },
+    {
+      "name": "Fuel",
+      "types": [
+        "petrol",
+        "garage"
+      ],
+      "res": [
+        "fuel"
+      ]
+    },
+    {
+      "name": "Ammo",
+      "types": [
+        "police"
+      ],
+      "res": [
+        "ammo"
+      ]
+    }
   ],
-  "survivor": {"chance": 0.5, "hp": 30.0, "speed": 3.4, "bark_r": 9.0, "talk_r": 2.2, "join_r": 4.5, "bark": "Help! Over here!"},
+  "survivor": {
+    "first": 0.9,
+    "extra": [
+      [
+        3,
+        0.5
+      ],
+      [
+        6,
+        0.35
+      ]
+    ],
+    "max": 3,
+    "hurt": 0.3,
+    "hurt_hp": 8.0,
+    "locked": 0.25,
+    "lock_secs": 3.0,
+    "lock_dead": 2,
+    "hp": 30.0,
+    "speed": 3.4,
+    "bark_r": 9.0,
+    "talk_r": 2.2,
+    "join_r": 4.5,
+    "bark": "Help! Over here!"
+  },
   "people": [
-    {"name": "Ivo", "key": "hector", "look": {"top": "#7a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
-    {"name": "Lena", "key": "ana", "look": {"top": "#4a6a7a", "outer": "#c9b25a", "pants": "#3d3d44", "skin": "#e0b393"}},
-    {"name": "Pavel", "key": "marcus", "look": {"top": "#5a5a4a", "pants": "#2c3038", "skin": "#9a6a48", "hatColor": "#6a3a2a"}},
-    {"name": "Greta", "key": "ana", "look": {"top": "#8a4a6a", "pants": "#4a4036", "skin": "#7a4e34"}},
-    {"name": "Samir", "key": "dez", "look": {"top": "#3a6a4a", "pants": "#3a3a44", "skin": "#8a5a3c", "backpack": "#4a3a2a"}},
-    {"name": "Rosa", "key": "ana", "look": {"top": "#c9553a", "outer": "#4a4a50", "pants": "#2c2c34", "skin": "#c69877"}},
-    {"name": "Teo", "key": "walt", "look": {"top": "#4a4a7a", "pants": "#4a4036", "skin": "#e0b393"}},
-    {"name": "Nell", "key": "ana", "look": {"top": "#d9d4c4", "pants": "#5a4a3a", "skin": "#5e3b2a"}},
-    {"name": "Abel", "key": "marcus", "look": {"top": "#6a6a3a", "pants": "#2c2c34", "skin": "#a6734e", "hatColor": "#3a4a3a"}},
-    {"name": "Vera", "key": "hector", "look": {"top": "#3a3a4a", "outer": "#a8483c", "pants": "#3d3d44", "skin": "#d8aa88"}}
+    {
+      "name": "Ivo",
+      "key": "hector",
+      "look": {
+        "top": "#7a4a3a",
+        "pants": "#3a3a44",
+        "skin": "#c69877"
+      },
+      "skill": "mechanic"
+    },
+    {
+      "name": "Lena",
+      "key": "ana",
+      "look": {
+        "top": "#4a6a7a",
+        "outer": "#c9b25a",
+        "pants": "#3d3d44",
+        "skin": "#e0b393"
+      },
+      "skill": "medic"
+    },
+    {
+      "name": "Pavel",
+      "key": "marcus",
+      "look": {
+        "top": "#5a5a4a",
+        "pants": "#2c3038",
+        "skin": "#9a6a48",
+        "hatColor": "#6a3a2a"
+      },
+      "skill": "gardener"
+    },
+    {
+      "name": "Greta",
+      "key": "ana",
+      "look": {
+        "top": "#8a4a6a",
+        "pants": "#4a4036",
+        "skin": "#7a4e34"
+      },
+      "skill": "cook"
+    },
+    {
+      "name": "Samir",
+      "key": "dez",
+      "look": {
+        "top": "#3a6a4a",
+        "pants": "#3a3a44",
+        "skin": "#8a5a3c",
+        "backpack": "#4a3a2a"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Rosa",
+      "key": "ana",
+      "look": {
+        "top": "#c9553a",
+        "outer": "#4a4a50",
+        "pants": "#2c2c34",
+        "skin": "#c69877"
+      },
+      "skill": "hauler"
+    },
+    {
+      "name": "Teo",
+      "key": "walt",
+      "look": {
+        "top": "#4a4a7a",
+        "pants": "#4a4036",
+        "skin": "#e0b393"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Nell",
+      "key": "ana",
+      "look": {
+        "top": "#d9d4c4",
+        "pants": "#5a4a3a",
+        "skin": "#5e3b2a"
+      },
+      "skill": "medic"
+    },
+    {
+      "name": "Abel",
+      "key": "marcus",
+      "look": {
+        "top": "#6a6a3a",
+        "pants": "#2c2c34",
+        "skin": "#a6734e",
+        "hatColor": "#3a4a3a"
+      },
+      "skill": "gardener"
+    },
+    {
+      "name": "Vera",
+      "key": "hector",
+      "look": {
+        "top": "#3a3a4a",
+        "outer": "#a8483c",
+        "pants": "#3d3d44",
+        "skin": "#d8aa88"
+      },
+      "skill": "mechanic"
+    },
+    {
+      "name": "Walt",
+      "key": "walt",
+      "look": {
+        "dirs16": "walt"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Dez",
+      "key": "dez",
+      "look": {
+        "dirs16": "dez"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Rae",
+      "key": "ana",
+      "look": {
+        "top": "#3a4a3a",
+        "outer": "#555a50",
+        "pants": "#2c2c34",
+        "skin": "#a6734e",
+        "dirs16": "rae"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Sol",
+      "key": "hector",
+      "look": {
+        "top": "#4a4a50",
+        "pants": "#2c3038",
+        "skin": "#c69877",
+        "dirs16": "sol"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Mia",
+      "key": "ana",
+      "look": {
+        "top": "#d9d4c4",
+        "outer": "#a8483c",
+        "pants": "#3d3d44",
+        "skin": "#8a5a3c"
+      },
+      "skill": "cook"
+    },
+    {
+      "name": "Marcus",
+      "key": "marcus",
+      "look": {},
+      "skill": "gardener"
+    },
+    {
+      "name": "Nia",
+      "key": "ana",
+      "look": {
+        "top": "#7a8a4a",
+        "outer": "#c9b25a",
+        "pants": "#5a4a3a",
+        "skin": "#5e3b2a"
+      },
+      "skill": "gardener"
+    },
+    {
+      "name": "Ana",
+      "key": "ana",
+      "look": {},
+      "skill": "medic"
+    },
+    {
+      "name": "Hector",
+      "key": "hector",
+      "look": {},
+      "skill": "mechanic"
+    },
+    {
+      "name": "Tomas",
+      "key": "dez",
+      "look": {
+        "top": "#6a5a44",
+        "pants": "#3a4a5a",
+        "hatColor": "#8a5a2a",
+        "skin": "#9a6a48"
+      },
+      "skill": "mechanic"
+    },
+    {
+      "name": "Owen",
+      "key": "marcus",
+      "look": {
+        "top": "#4a5a7a",
+        "pants": "#4a4036",
+        "skin": "#c69877",
+        "backpack": "#8a5a2a"
+      },
+      "skill": "hauler"
+    },
+    {
+      "name": "June",
+      "key": "hector",
+      "look": {
+        "top": "#3c4a3a",
+        "pants": "#2c2c34",
+        "skin": "#e0b393"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Jonas",
+      "key": "walt",
+      "look": {
+        "top": "#5a3a3a",
+        "pants": "#3a3a44",
+        "skin": "#b5835e"
+      },
+      "skill": "guard"
+    },
+    {
+      "name": "Maren",
+      "key": "ana",
+      "look": {
+        "top": "#4a7a6a",
+        "pants": "#4a4036",
+        "skin": "#d8aa88"
+      },
+      "skill": "cook"
+    }
   ],
-  "roles": {"gardener": ["marcus", "Gardener"], "cook": ["mia", "Cook"], "medic": ["ana", "Medic"], "mechanic": ["hector", "Mechanic"], "hauler": ["owen", "Hauler"]},
-  "role_for_need": {"food": "gardener", "water": "hauler", "meds": "medic", "scrap": "mechanic", "parts": "mechanic", "fuel": "mechanic", "ammo": "mechanic"}
+  "roles": {
+    "gardener": [
+      "marcus",
+      "Gardener"
+    ],
+    "cook": [
+      "mia",
+      "Cook"
+    ],
+    "medic": [
+      "ana",
+      "Medic"
+    ],
+    "mechanic": [
+      "hector",
+      "Mechanic"
+    ],
+    "hauler": [
+      "owen",
+      "Hauler"
+    ],
+    "guard": [
+      "walt",
+      "Tower guard"
+    ]
+  },
+  "role_for_need": {
+    "food": "gardener",
+    "water": "hauler",
+    "meds": "medic",
+    "scrap": "mechanic",
+    "parts": "mechanic",
+    "fuel": "mechanic",
+    "ammo": "guard"
+  }
 }

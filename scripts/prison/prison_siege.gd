@@ -197,6 +197,13 @@ func guard_shot(_g) -> void:
 	stats["shots"] = int(stats.get("shots", 0)) + 1
 
 
+func in_wave(z) -> bool:
+	for w in wave:
+		if w.z == z:
+			return true
+	return false
+
+
 func _alive(z) -> bool:
 	return z.state != "dying" and z.state != "dead" and not z.remove
 
@@ -353,7 +360,12 @@ func _start_attack(n: int) -> void:
 	if picked.is_empty() and not pool.is_empty():
 		picked.append(pool[0])
 	_plan.clear()
-	var per := 4 + 4 * n
+	var armed := 0
+	for m in game.crew.members:
+		if m.def.has("stand") and not m.has("down"):
+			armed += 1
+	var sb: Dictionary = game.Bal.d().siege
+	var per := maxi(2, roundi(float(4 + 4 * n) * clampf(float(armed) / float(sb.ref_armed), float(sb.floor), 1.0)))    # (fix round 3: the wave follows the guns on the towers)
 	var names: Array = []
 	for s in picked:
 		s.attacked = true

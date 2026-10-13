@@ -91,8 +91,9 @@ func crew() -> Array:
 	return shown
 
 
+## Everybody who eats and sleeps here: the crew and Ruth (`start.ruth`; not with `--crew=full`, the old 17-person start).
 func people() -> int:
-	return crew().size()
+	return crew().size() + (0 if game.crew_full() else int(cfg.start.ruth))
 
 
 func workers(role: String) -> int:
@@ -254,7 +255,7 @@ func caps() -> Dictionary:
 
 
 func beds() -> Dictionary:
-	var cap: int = int(cfg.start.beds)
+	var cap: int = int(cfg.start.full_beds) if game.crew_full() else int(cfg.start.beds)
 	for id in order:
 		if _built(id):
 			cap += int(defs[id].effect.get("beds", 0))

@@ -28,6 +28,7 @@ const PawnMotion := preload("res://scripts/render/pawn_motion.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const StepClock := preload("res://scripts/sim/step_clock.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
+const Bal := preload("res://scripts/prison/prison_bal.gd")
 const Crew := preload("res://scripts/prison/prison_crew.gd")
 const Tower := preload("res://scripts/prison/prison_tower.gd")
 const Sound := preload("res://scripts/audio/sound.gd")
@@ -557,6 +558,11 @@ func _radial_texture() -> Texture2D:
 
 # ----------------------------------------------------------------------- modes --
 
+## `--crew=full`: the old start (all fourteen of the roster and the three allies, 18 beds), so that the old checks run.
+func crew_full() -> bool:
+	return String(args.get("crew", "")) == "full"
+
+
 func _enter_base() -> void:
 	_msg_t = 0.0    # (no message of the last stage is carried over)
 	msg_label.text = ""
@@ -593,7 +599,7 @@ func _enter_base() -> void:
 		run.avatar_p.y = Base.SPAWN.y
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
-	crew.setup(run.sim, world, base, data, clear)
+	crew.setup(run.sim, world, base, data, clear, crew_full())
 	crew.econ_owned = ["food", "water"]    # ECON hook: food and water come from the economy, not from the crew's stops (and the freed crew eat nothing until the prison is secured)
 	if not clear:
 		for nm in econ_gone:    # (kept for good: a person who walked out does not come back with the next rebuild of the crew)
@@ -601,9 +607,9 @@ func _enter_base() -> void:
 		if args.has("econ") and String(args.econ).begins_with("start:"):
 			econ.debug_build(String(args.econ).trim_prefix("start:"))
 	if not clear:
-		for a in Crew.CREW_FROM_ALLIES:    # the allies are crew from here on (a job and a place), not followers
+		for a in (Crew.CREW_FROM_ALLIES_FULL if crew_full() else Crew.CREW_FROM_ALLIES):    # the allies are crew from here on (a job and a place), not followers
 			if allies_alive.has(String(a.id)):
-				crew._make(a, Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
+				crew._make(a, Vector2.ZERO if a.has("stand") else Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
 	if not clear:
 		people.spawn_recruits()    # RAIDS hook: the people found in raids are crew again
 		crew.sync_roles(econ)    # the roster's roles (set before the raid) move the rebuilt crew to the right work
@@ -2015,7 +2021,7 @@ func _draw_minimap(v: Vector2) -> void:
 
 
 ## One rifle shot from a person that is not in the sim (a tower guard, an ally) at a dead one: muzzle flash, tracer, the real rifle sound, `hit_p` to hit (55 damage, the dead fall and bleed).
-func _shoot_at(g, z, hit_p: float) -> void:
+func _shoot_at(g, z, hit_p: float, dmg := 55.0) -> void:
 	var ang := Vector2(g.x, g.y).angle_to_point(Vector2(z.x, z.y))
 	g.facing = run.sim.facing_of(cos(ang), sin(ang), g.facing)    # (the rules' 4-way facing; the pawn's own angle turns smoothly to the aim)
 	aim_want[g.id] = ang
@@ -2043,16 +2049,83 @@ func _shoot_at(g, z, hit_p: float) -> void:
 	var mx := mz.x
 	var my := mz.y
 	var hit := randf() < hit_p
-	var tx: float = z.x if hit else z.x + randf_range(-0.8, 0.8)
-	var ty: float = z.y if hit else z.y + 1.2
+	var tx: float = z.x
+	var ty: float = z.y
+	if not hit:
+		var mp := _miss_point(Vector2(mx, my), z)    # (the round goes on past the dead one and stops in the ground or the first wall)
+		tx = mp.x
+		ty = mp.y
 	fx.muzzle(mx, my, ang, false)
 	if PawnNode.hanim:
 		fx.casing(g.x, g.y - 0.15, ang, false)    # ROUND 11: the brass of the guard's shot lies on the deck
 	fx.tracer(mx, my, tx, ty)
 	fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
 	shots_fired += 1
+	if args.has("shotlog"):
+		print("SHOTDBG ", g.id, " hit ", hit, " p ", hit_p, " z.hp ", z.hp, " state ", z.state, " d ", Vector2(g.x, g.y).distance_to(Vector2(z.x, z.y)))
 	if hit:
-		run.sim._hurt_zombie(z, 55.0, ang, null)
+		var head: Dictionary = Bal.role("ally")
+		run.sim._hurt_zombie(z, dmg * (float(head.head_mult) if randf() < float(head.head_p) and dmg < 50.0 else 1.0), ang, null)
+
+
+## Where a round that missed ends: past the target by a random stretch, a little off line, stopped at the first wall or prop.
+func _miss_point(from: Vector2, z) -> Vector2:
+	var to := Vector2(z.x, z.y)
+	var dir := (to - from).rotated(randf_range(-0.14, 0.14)).normalized()
+	var ex: Array = Bal.d().miss_extra
+	var reach := from.distance_to(to) + randf_range(float(ex[0]), float(ex[1]))
+	var at := from
+	var stepn := 0.25
+	while at.distance_to(from) < reach:
+		var nx := at + dir * stepn
+		if world.is_solid(world.solid_p, nx.x, nx.y):
+			break
+		at = nx
+	return at
+
+
+# --------------------------------------------------------------- gunners (fix round 3) --
+
+var _react := {}    # shooter id -> {z, until, last}: who looks at which dead one, since when it may fire
+
+
+## Whether a dead one can be shot at all: awake, not falling, and (when `rise_wait` is on) its rise from the ground is over.
+func targetable(z) -> bool:
+	if z.state == "dying" or z.state == "dead":
+		return false
+	return float(z.rise) >= 1.0 or not bool(Bal.d().rise_wait)
+
+
+## How many other shooters looked at this target within the last 1.5 s.
+func _on_target(g, z) -> int:
+	var n := 0
+	for id in _react:
+		var e: Dictionary = _react[id]
+		if id != g.id and e.z == z and clock - float(e.last) < 1.5:
+			n += 1
+	return n
+
+
+func focus_free(g, z, role: String) -> bool:
+	return _on_target(g, z) < int(Bal.role(role).focus)
+
+
+## The shooter looks at `z`: false while its reaction time to a NEW target has not run out (0.6 to 1.2 s), true after.
+func can_fire(g, z, role: String) -> bool:
+	var e = _react.get(g.id)
+	if e == null or e.z != z or clock - float(e.last) > 1.5:
+		e = {"z": z, "until": clock + Bal.roll(Bal.role(role), "react"), "last": clock}
+		_react[g.id] = e
+	e.last = clock
+	return clock >= float(e.until)
+
+
+## The chance to hit: falls from hit_close to hit_far with the distance, less when the target walks.
+func gun_hit(role: String, d: float, z) -> float:
+	var c: Dictionary = Bal.role(role)
+	var f := clampf(d / float(c.far_tiles), 0.0, 1.0)
+	var p := lerpf(float(c.hit_close), float(c.hit_far), f) - (float(c.moving_pen) if z.moving else 0.0)
+	return clampf(p, 0.05, 0.95)
 
 
 # ------------------------------------------------------------------ clear phase --
@@ -2147,6 +2220,24 @@ func _clear_logic(dt: float) -> void:
 	if _zone_t <= 0.0 and not busy:
 		_zone_t = 0.5
 		_zone_check()
+		_zone_wake()
+
+
+## FIX ROUND 3: from zone `zone_together_from` on, when one of a room's dead is awake the rest of the room wake with it and come at the party (the infirmary's four stay a gentle start).
+func _zone_wake() -> void:
+	var from := int(Bal.d().zone_together_from)
+	var f = run.field
+	var hot := {}
+	for z in run.sim.zombies:
+		if z.state != "dying" and z.state != "dead" and f.rec_of.has(z):
+			var zi := Base.zone_at(z.x, z.y)
+			if zi >= from:
+				hot[zi] = true
+	if hot.is_empty():
+		return
+	for i in f.n:
+		if f.status[i] == f.DORMANT and hot.has(Base.zone_at(f.xs[i], f.ys[i])):
+			f._wake(i, run.avatar_p)
 
 
 func _zone_check() -> void:
@@ -2156,14 +2247,15 @@ func _zone_check() -> void:
 		zone_done[zi] = true
 		var z: Dictionary = Base.ZONES[zi]
 		var names: Array = []
-		var k := 0
-		for id in z.crew:
-			var m: Dictionary = crew.release(String(id), Vector2(z.rel) + Vector2(float(k) * 0.9, 0.0))
-			k += 1
-			if not m.is_empty():
-				_add_member_node(m)
-				names.append(String(m.def.name))
-		_say("%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
+		if crew_full():    # (the old start: the zone frees its people)
+			var k := 0
+			for id in z.crew:
+				var m: Dictionary = crew.release(String(id), Vector2(z.rel) + Vector2(float(k) * 0.9, 0.0))
+				k += 1
+				if not m.is_empty():
+					_add_member_node(m)
+					names.append(String(m.def.name))
+		_say("%s cleared (%d/%d). Loot it, then move on." % [String(z.name), _cleared_n(), Base.ZONES.size()] if names.is_empty() else "%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
 		sound.play("bell", 0.5, 0.0)
 		if args.has("log"):
 			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " freed ", names, " stores ", stores)
@@ -2228,7 +2320,7 @@ func _allies(dt: float) -> void:
 			var d := at.distance_to(Vector2(z.x, z.y))
 			if d < BITE_R:
 				biters += 1
-			if d < (6.5 if hang else ALLY_RANGE) and d < bd and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+			if d < (6.5 if hang else ALLY_RANGE) and d < bd and targetable(z) and focus_free(g, z, "ally") and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
 				bd = d
 				best = z
 		if biters > 0 and float(m.bite) <= 0.0:
@@ -2249,9 +2341,9 @@ func _allies(dt: float) -> void:
 				continue
 		g.hp = m.hp
 		m.hold = float(m.get("hold", 0.0)) - dt
-		if best != null and float(m.cd) <= 0.0 and float(g.reloading) <= 0.0:
-			_shoot_at(g, best, 0.7)
-			m.cd = randf_range(0.9, 1.6)
+		if best != null and can_fire(g, best, "ally") and float(m.cd) <= 0.0 and float(g.reloading) <= 0.0:
+			_shoot_at(g, best, gun_hit("ally", bd, best), float(Bal.role("ally").dmg))
+			m.cd = Bal.roll(Bal.role("ally"), "cd")
 			m.hold = 0.35
 			m.say = "firing"
 		if float(m.hold) > 0.0:
@@ -2364,16 +2456,22 @@ func _fence_guards(dt: float) -> void:
 			if not siege.in_guard_zone(z):    # SIEGE hook (was the strip south of the gate fence)
 				continue
 			var d := Vector2(z.x, z.y).distance_to(Vector2(g.x, g.y))
-			if d < GUARD_RANGE and d < bd:
-				bd = d
+			var pri := 0.0 if (not siege.attacking or siege.in_wave(z)) else 100.0    # (in an attack the guards take the wave before the pen's shufflers)
+			if d < GUARD_RANGE and d + pri < bd and targetable(z) and focus_free(g, z, "guard"):
+				bd = d + pri
 				best = z
 		if best == null:
 			guard_cd[g.id] = 0.4
 			if alarm_t <= 0.0:
 				m.say = String(m.def.role)
 			continue
-		guard_cd[g.id] = (0.7 if alarm_t > 0.0 else randf_range(1.6, 3.0))
-		_shoot_at(g, best, 0.8 + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0))    # ECON hook: floodlights
+		if not can_fire(g, best, "guard"):
+			guard_cd[g.id] = 0.05
+			continue
+		bd = Vector2(best.x, best.y).distance_to(Vector2(g.x, g.y))
+		var gb: Dictionary = Bal.role("guard")
+		guard_cd[g.id] = float(gb.cd_alarm) if alarm_t > 0.0 else Bal.roll(gb, "cd")
+		_shoot_at(g, best, gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0), float(gb.dmg))    # ECON hook: floodlights
 		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
 		m.say = "firing"
 

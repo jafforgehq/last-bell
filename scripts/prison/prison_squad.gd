@@ -20,6 +20,7 @@ const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
 const SearchRules := preload("res://scripts/town/search.gd")
 const TILE := 64.0
+const Bal := preload("res://scripts/prison/prison_bal.gd")
 const CMDS := ["follow", "hold", "scavenge", "cover"]
 const CMD_WORD := {"follow": "Follow", "hold": "Hold here", "scavenge": "Scavenge", "cover": "Cover me"}
 const CMD_COL := {"follow": Color(0.55, 0.85, 1.0), "hold": Color(1.0, 0.8, 0.35), "scavenge": Color(0.55, 1.0, 0.6), "cover": Color(1.0, 0.55, 0.5)}
@@ -360,12 +361,12 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 	var bd := reach
 	for z in zs:
 		var dz := at.distance_to(Vector2(z.x, z.y))
-		if dz < bd and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+		if dz < bd and game.targetable(z) and game.focus_free(p, z, "squad") and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
 			bd = dz
 			best = z
 	var fighting := false
 	m.fight_t = float(m.get("fight_t", 0.0)) - dt
-	if best != null and float(m.cd) <= 0.0 and float(p.reloading) <= 0.0:
+	if best != null and (bool(p.gun.get("melee", false)) or game.can_fire(p, best, "squad")) and float(m.cd) <= 0.0 and float(p.reloading) <= 0.0:
 		if _fire(m, best, bd, eff):
 			m.fight_t = 1.2
 	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold":
@@ -431,9 +432,9 @@ func _fire(m: Dictionary, z, dist: float, eff: String) -> bool:
 		m.noammo_t = float(m.noammo_t) - 0.2
 		m.cd = 0.5
 		return false
-	game._shoot_at(p, z, 0.65)
+	game._shoot_at(p, z, game.gun_hit("squad", dist, z), float(Bal.role("squad").dmg))
 	game.run.field.noise(Vector2(p.x, p.y), null, float(gun.get("noise", 12.0)))
-	m.cd = randf_range(0.9, 1.5) * (0.7 if eff == "cover" else 1.0)
+	m.cd = Bal.roll(Bal.role("squad"), "cd") * (0.7 if eff == "cover" else 1.0)
 	m.say = "firing"
 	return true
 

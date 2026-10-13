@@ -66,7 +66,7 @@ const ALLIES := [
 	{"id": "ike", "name": "Ike", "role": "Ally", "key": "hector", "ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}},
 ]
 ## MANAGED PHASE: the three allies are crew now: a name, a job and a place, no follow code, no "ally" key (so no health bar, no 'ready' tag, no revive). "ex_ally" only tells the siege to forget them when lost.
-const CREW_FROM_ALLIES := [
+const CREW_FROM_ALLIES_FULL := [
 	{"id": "cole", "name": "Cole", "role": "Gate watch", "key": "walt", "ex_ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
 		{"at": Vector2(44.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
 		{"at": Vector2(51.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
@@ -80,6 +80,16 @@ const CREW_FROM_ALLIES := [
 	{"id": "ike", "name": "Ike", "role": "Quartermaster", "key": "hector", "ex_ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}, "route": [
 		{"at": "stores_out", "secs": 7.0, "work": "haul", "face": "N", "say": "carrying crates"},
 		{"at": "stores_in", "secs": 7.0, "work": "sort", "face": "N", "say": "counting the stores"},
+	]},
+]
+## FIX ROUND 3: the managed phase starts with Ruth and these three only (the rest of the ROSTER below is a pool of survivors that raids can find, people.gd): Cole and Bea take the two towers by the
+## gate, Ike carries water. `--crew=full` brings back the old start (ROSTER and CREW_FROM_ALLIES_FULL).
+const CREW_FROM_ALLIES := [
+	{"id": "cole", "name": "Cole", "role": "Tower guard", "key": "walt", "ex_ally": true, "stand": "tower_w", "work": "watch", "face": "S", "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
+	{"id": "bea", "name": "Bea", "role": "Tower guard", "key": "ana", "ex_ally": true, "stand": "tower_e", "work": "watch", "face": "S", "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}},
+	{"id": "ike", "name": "Ike", "role": "Hauler", "key": "hector", "ex_ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}, "route": [
+		{"at": "well", "secs": 6.0, "work": "haul", "face": "S", "give": {"water": 4.0}, "say": "drawing water"},
+		{"at": "stores_in", "secs": 5.0, "work": "haul", "face": "N", "say": "stacking crates"},
 	]},
 ]
 const ALLY_HP := 45.0
@@ -101,7 +111,7 @@ var busy_cb: Callable    # WORLD hook: has_work(m), true when m has a project of
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
-func setup(s, w, b, d: Dictionary, clear: bool = false) -> void:
+func setup(s, w, b, d: Dictionary, clear: bool = false, full: bool = false) -> void:
 	sim = s
 	world = w
 	base = b
@@ -110,6 +120,8 @@ func setup(s, w, b, d: Dictionary, clear: bool = false) -> void:
 		for i in ALLIES.size():
 			_make(ALLIES[i], Vector2(3.5, 33.2 + float(i) * 1.1))
 		return
+	if not full:
+		return    # (fix round 3: nobody else lives here until a raid brings them)
 	var n := 0
 	for r in ROSTER:
 		_make(r, Vector2.ZERO, n)
