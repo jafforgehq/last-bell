@@ -713,7 +713,7 @@ def strips(path, kind, look, scale=3):
         for q in range(0, len(r), 12):
             wrapped.append(r[q:q + 12])
     order = wrapped
-    box = (36, 44, 150, 142)
+    box = (14, 30, 176, 150)
     bw, bh = box[2] - box[0], box[3] - box[1]
     cols = max(len(r) for r in order)
     sheet = Image.new("RGBA", (cols * bw * scale, len(order) * bh * scale), (74, 84, 66, 255))
