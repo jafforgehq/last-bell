@@ -12,8 +12,8 @@ const Topbar := preload("res://scripts/prison/prison_topbar.gd")
 
 const BOARD_AT := Vector2(54.0, 47.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
-const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio"]
-const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio"}
+const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio", "convoy"]
+const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
 const BLURB := {
 	"water": "Everyone drinks 1 water a day. A better well and pump gives more, and a bigger tank keeps it. Worked by a hauler.",
 	"garden": "Grows the food: everyone eats 1 a day and part of the stock spoils. Worked by a gardener.",
@@ -23,6 +23,7 @@ const BLURB := {
 	"power": "The generator runs the electric pump and the floodlights. It burns 1 fuel a day. Worked by a mechanic.",
 	"fence": "Raises the hit points of every fence wall against the nightly attacks. Worked by a mechanic.",
 	"radio": "Calls survivors to the prison: the last step of the Hub stage. Needs power. Worked by a mechanic.",
+	"convoy": "The truck that joins the Harbor Convoy on day 30: 8 seats. Needs the generator and a mechanic. The convoy also wants fuel, parts, a radio room and a fence at tier 2 (the Story tab).",
 }
 const ROLES := ["gardener", "cook", "medic", "mechanic", "guard", "cleaner", "hauler"]
 const RES_NAME := {"food": "Food", "water": "Water", "fuel": "Fuel", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts"}
@@ -71,7 +72,7 @@ func _init(g) -> void:
 	title = _lab("PRISON", 24, Hud.ACCENT, true)
 	title.custom_minimum_size.x = 150
 	head.add_child(title)
-	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster (B)"]]:
+	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster (B)"], ["story", "Story (L)"]]:
 		var b := _btn(String(t[1]))
 		b.toggle_mode = true
 		b.pressed.connect(func(): _show(String(t[0])))
@@ -250,7 +251,7 @@ func frame(_dt: float) -> void:
 	panel.position = ((v - sz) / 2.0).round()
 	for b in tab_btns:
 		tab_btns[b].button_pressed = (b == tab)
-	title.text = {"projects": "PROJECT BOARD", "needs": "NEEDS BOARD", "roster": "ROSTER"}[tab]
+	title.text = {"projects": "PROJECT BOARD", "needs": "NEEDS BOARD", "roster": "ROSTER", "story": "THE STORY"}[tab]
 	if _popup_open:
 		_popup_open = _any_popup(body)
 	var sig := _signature()
@@ -282,6 +283,8 @@ func _signature() -> String:
 		s += econ.state(id).left(2)
 	if tab == "needs":
 		s += "|%d|%d|%d" % [int(econ.morale), econ.day, int(game.siege.abs_h * 60.0 / 4.0)]
+	if tab == "story":
+		s += "|%d|%d|%d" % [game.arc.log_entries.size(), game.arc.day, game.arc.people_alive()]
 	if tab == "roster":
 		for m in game.crew.members:
 			s += "%s%s%s," % [m.def.id, m.say, m.state]
@@ -302,6 +305,8 @@ func _rebuild() -> void:
 			_needs_tab()
 		"roster":
 			_roster_tab()
+		"story":
+			game.arc.story.fill(body, _lab, _rich, _bar)    # ARC hook: calendar, phases, the convoy's list, the messages
 
 
 # ----------------------------------------------------------------------------------- projects tab --

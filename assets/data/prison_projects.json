@@ -21,8 +21,8 @@
   "generator_fuel": 1.0,
   "canteen_food_factor": 0.8,
   "light_hit_bonus": 0.12,
-  "building_role": {"water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic"},
-  "site": {"water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores"},
+  "building_role": {"water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic", "convoy": "mechanic"},
+  "site": {"water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores", "convoy": "truck"},
   "crew_role": {"mia": "cook", "marcus": "gardener", "nia": "gardener", "ana": "medic", "hector": "mechanic", "tomas": "mechanic", "owen": "hauler", "ike": "hauler", "walt": "guard", "dez": "guard", "rae": "guard", "sol": "guard", "june": "guard", "cole": "guard", "bea": "guard"},
   "production": {
     "food": [
@@ -72,6 +72,7 @@
     {"id": "fence1", "building": "fence", "tier": 1, "name": "Patch the fence", "cost": {"scrap": 30}, "labor": 15, "requires": [], "effect": {"fence": 1.0, "patch": true}},
     {"id": "fence2", "building": "fence", "tier": 2, "name": "Reinforced fence", "cost": {"scrap": 70, "parts": 6}, "labor": 38, "requires": [], "effect": {"fence": 1.5}},
     {"id": "fence3", "building": "fence", "tier": 3, "name": "Double fence", "cost": {"scrap": 100, "parts": 20}, "labor": 75, "requires": [], "effect": {"fence": 2.0}},
-    {"id": "radio1", "building": "radio", "tier": 1, "name": "Radio room", "cost": {"parts": 40}, "labor": 75, "requires": ["power1"], "effect": {"hub": true}}
+    {"id": "radio1", "building": "radio", "tier": 1, "name": "Radio room", "cost": {"parts": 40}, "labor": 75, "requires": ["power1"], "effect": {"hub": true}},
+    {"id": "convoy1", "building": "convoy", "tier": 1, "name": "Convoy truck", "cost": {"scrap": 30, "parts": 30, "fuel": 10}, "labor": 120, "requires": ["power1"], "effect": {"seats": 8, "note": "the vehicle that joins the Harbor Convoy: 8 seats, needs a mechanic"}}
   ]
 }

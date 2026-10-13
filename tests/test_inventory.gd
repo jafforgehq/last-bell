@@ -19,7 +19,7 @@ func test_the_items_in_the_data_are_whole() -> void:
 	check(ids.size() >= 7, "the starting list is there: %d" % ids.size())
 	for id in ids:
 		var d := Inventory.item(String(id))
-		if String(id).begins_with("gun_"):    # (the prison game's guns: an item of its own, no store, no units)
+		if String(id).begins_with("gun_") or String(id) == "note":    # (the prison game's guns and the story's letter: an item of its own, no store, no units)
 			check(int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) == 1 and String(d.res) == "" and String(d.use) == "none", "%s is a gun item: a size, one to a place, no store" % String(id))
 			continue
 		if String(id) == "distraction":    # (the prison game's bottles and cans: a stack, no store, no units; G throws one)

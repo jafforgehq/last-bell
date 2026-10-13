@@ -24,7 +24,7 @@ const RES_USE := {
 	"fuel": "Burned by the generator once it is built (1 a day). Found in raids on petrol stations.",
 }
 const ROW_ECON := ["clock", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
-const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise"]
+const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise", "convoy"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
 const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone", "noise"]
 const ROW_RAID := ["clock", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
@@ -126,7 +126,7 @@ func _init(g) -> void:
 		_chip(k, row1, 40, false)
 	for k in ["pack", "r_ammo", "r_meds", "need", "exits"]:
 		_chip(k, row1, 40, false)
-	for k in ["people", "morale", "stage", "attack", "fence"]:
+	for k in ["people", "morale", "stage", "attack", "fence", "convoy"]:
 		_chip(k, row2, 40, false)
 	for k in ["c_ammo", "c_meds", "nextzone"]:
 		_chip(k, row2, 40, false)
@@ -378,7 +378,11 @@ func _clock() -> void:
 	_clock_icon.set_icon("moon" if night else "sun", Color("#9fb4e8") if night else Hud.ACCENT)
 	_clock_main.text = "%02d:%02d" % [int(tod), int(fposmod(tod, 1.0) * 60.0)]
 	if game.phase == "managed":
-		_clock_sub.text = "Day %d  %s" % [game.econ.day, "night" if night else "day"]
+		var arc = game.arc    # ARC hook: "Day 12 of 30", the convoy's day in gold
+		var dn: int = game.econ.day
+		var on_cd: bool = arc != null and dn == arc.convoy_day()
+		_clock_sub.text = ("Day %d of %d  %s" % [dn, arc.days(), "CONVOY" if on_cd else ("night" if night else "day")]) if arc != null else "Day %d  %s" % [dn, "night" if night else "day"]
+		_clock_sub.add_theme_color_override("font_color", Hud.ACCENT if on_cd else DIM)
 	else:
 		_clock_sub.text = "Clear phase"
 
@@ -528,6 +532,7 @@ func _econ_row2(rep: Dictionary) -> void:
 	_put("stage", "star", Hud.ACCENT, String(econ.stage()), ("next: " + nx) if nx != "" else "top stage", DIM, "", "ok", "Prison stage: %s.%s" % [econ.stage(), gtxt], frac, Hud.ACCENT)
 	_attack_chip()
 	_fence_chip()
+	_convoy_chip()
 
 
 func _trend() -> float:
@@ -570,6 +575,16 @@ func _attack_chip() -> void:
 	var st := "warn" if secs < 90.0 else "ok"
 	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, "Night %d" % (sg.nights_started + 1), "in %d:%02d" % [int(secs) / 60, int(secs) % 60], Hud.WARN if st == "warn" else DIM, "", st,
 		"The next attack comes at 21:00. Mend the fence and keep ammo in the stores before it.")
+
+
+func _convoy_chip() -> void:    # ARC hook
+	var arc = game.arc
+	if arc == null or not arc.started:
+		(chips["convoy"].pc as Control).visible = false
+		return
+	var c: Dictionary = arc.chip()
+	_put("convoy", "exit", Hud.ACCENT if String(c.state) == "ok" else (Hud.WARN if String(c.state) == "warn" else Hud.DANGER_TEXT), String(c.main), String(c.sub), DIM, "", String(c.state), String(c.tip), float(c.meter), Hud.ACCENT)
+	(chips["convoy"].main as Label).custom_minimum_size.x = 78
 
 
 func _fence_chip() -> void:
@@ -712,6 +727,11 @@ func objectives() -> Array:
 	var nd2: Dictionary = econ.needs()
 	if not nd2.is_empty() and float(nd2.get("days", -1.0)) >= 0.0:
 		out.append({"t": "Fix %s: %.1f days left - raid a %s" % [nd2.res, float(nd2.days), nd2.place], "done": false, "bad": true})
+	var arc_lines: Array = game.arc.objectives() if game.arc != null else []    # ARC hook: the phase and the convoy's list
+	out.append_array(arc_lines.filter(func(l): return bool(l.get("head", false))))
+	var evac: bool = game.arc != null and game.arc.started and String(game.arc.phase().id) == "evacuate"
+	if evac:
+		out.append_array(arc_lines.filter(func(l): return not bool(l.get("head", false))))
 	var shown := 0
 	for id in econ.goal():
 		var st: String = econ.state(String(id))
@@ -728,7 +748,7 @@ func objectives() -> Array:
 					miss.append("%s %d" % [k, int(can.missing[k])])
 				out.append({"t": "Build %s (needs %s)%s" % [nm, _cost_text(String(id)), (" - short " + ", ".join(miss)) if not miss.is_empty() else ""], "done": false})
 		shown += 1
-		if shown >= 2:
+		if shown >= (1 if evac else 2):
 			break
 	if not game.crew_full():
 		var rs: int = game.people.rescued
@@ -811,4 +831,19 @@ func _tracker(on: bool) -> void:
 		l.custom_minimum_size.x = 276
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(l)
-		tr_body.add_child(hb)
+		if it.has("bar"):    # ARC hook: a thin progress bar under the line
+			var vb := VBoxContainer.new()
+			vb.add_theme_constant_override("separation", 1)
+			vb.add_child(hb)
+			var pb := ProgressBar.new()
+			pb.show_percentage = false
+			pb.max_value = 1.0
+			pb.value = float(it.bar)
+			pb.custom_minimum_size = Vector2(0, 4)
+			pb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			pb.add_theme_stylebox_override("background", _box(Color(0, 0, 0, 0.5), Hud.LINE, 0, 2))
+			pb.add_theme_stylebox_override("fill", _box(Hud.ACCENT, Hud.ACCENT, 0, 2))
+			vb.add_child(pb)
+			tr_body.add_child(vb)
+		else:
+			tr_body.add_child(hb)
