@@ -27,6 +27,7 @@ var _tt := 0.0
 var _ts := 0
 var _gas_told := false
 var _bound = null
+var usec := 0
 
 
 func _init(g) -> void:
@@ -174,7 +175,7 @@ func _persons() -> Array:
 
 
 func pre() -> void:
-	if game.run == null:
+	if game.run == null or (list.is_empty() and gas.is_empty()):
 		return
 	_old.clear()
 	for p in game.run.sim.people:
@@ -183,6 +184,14 @@ func pre() -> void:
 
 func post(dt: float) -> void:
 	if game.run == null or not enabled:
+		return
+	var t0 := Time.get_ticks_usec()
+	_post(dt)
+	usec += Time.get_ticks_usec() - t0
+
+
+func _post(dt: float) -> void:
+	if list.is_empty() and gas.is_empty():
 		return
 	var sim = game.run.sim
 	var persons := _persons()
@@ -484,6 +493,8 @@ func _breacher(z, info: Dictionary, dt: float) -> void:
 				s.hit = 0.8
 				z.attack_t = 0.05
 				stats.rams += 1
+				if game.args.has("special"):
+					print("SPTEST ram ", s.name, " hp ", snappedf(float(s.hp), 0.1), " t_att ", snappedf(float(game.siege.t_att), 0.1))
 				game.sound.play("crash", 0.7)
 				game.noise.emit(Vector2(z.x, z.y), 10.0, "glass")
 				game.fx.hit_material(z.x, z.y, "metal")
@@ -514,7 +525,7 @@ func paint(c: CanvasItem) -> void:
 		for i in 9:
 			var ang: float = float(i) * 2.4 + float(game.clock) * 0.4
 			var off: Vector2 = Vector2.from_angle(ang) * float(g.r) * 0.45 * (0.6 + 0.4 * sin(game.clock * 0.9 + float(i)))
-			c.draw_circle((Vector2(g.pos) + off) * T, float(g.r) * T * (0.42 + 0.06 * sin(game.clock + float(i))), Color(0.55, 0.85, 0.15, a * 0.28))
+			c.draw_circle((Vector2(g.pos) + off) * T, float(g.r) * T * (0.42 + 0.06 * sin(game.clock + float(i))), Color(0.55, 0.85, 0.15, a * 0.42))
 		c.draw_arc(Vector2(g.pos) * T, float(g.r) * T, 0.0, TAU, 36, Color(0.7, 1.0, 0.3, a * 0.5), 2.0)
 	if game.siege != null:
 		for s in game.siege.segs:
@@ -580,14 +591,5 @@ func _test(dt: float) -> void:
 		var info: Dictionary = list[z]
 		if int(_tt * 10.0) % 10 == 0 and int(_tt * 60.0) % 6 == 0:
 			print("SPTEST t=", snappedf(_tt, 0.1), " ", info.kind, " phase=", info.phase, " dist=", snappedf(Vector2(z.x, z.y).distance_to(me), 0.1), " hp=", z.hp, " state=", z.state, " gas=", gas.size(), " pinned=", _pinned.size(), " ", stats)
-		if kind == "bloater" and Vector2(z.x, z.y).distance_to(me) < 5.0 and z.hp > 0.0 and z.state != "dying":
+		if kind == "bloater" and Vector2(z.x, z.y).distance_to(me) < 8.0 and z.hp > 0.0 and z.state != "dying":
 			game.run.sim._hurt_zombie(z, 99.0, 0.0, null)
-	if kind == "breacher" and game.mode == "base" and _ts == 0 and game.siege.attacking and game.siege.t_att > 2.0:
-		_ts = 1
-		var s: Dictionary = game.siege.wave[0].seg if not game.siege.wave.is_empty() else game.siege.segs[0]
-		var at2: Vector2 = Vector2(s.spot) + Vector2(s.out) * 5.0
-		var z2 = make("breacher", game.siege._free_near(at2), "wander")
-		game.siege.wave.append({"z": z2, "seg": s, "spot": game.siege._spot(s, 1.0)})
-		game.run.sim.field._investigate(z2, game.siege.wave[game.siege.wave.size() - 1].spot)
-		z2.wander_t = 90.0
-		print("SPTEST breacher sent at ", s.name, " hp ", s.hp)

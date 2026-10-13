@@ -1123,6 +1123,7 @@ func _hands(dt: float) -> void:
 	if not _bot_in.is_empty():
 		move = _bot_in.move
 		aim = _bot_in.aim
+		fire = bool(_bot_in.get("fire", fire))    # NOISE hook: a staged shooter (--noisetest=kills) fires
 	if String(args.get("auto", "")) == "play" and not busy and mode == "base" and phase == "clear":
 		var b: Dictionary = _bot_clear()
 		move = b.move

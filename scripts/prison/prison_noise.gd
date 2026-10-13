@@ -42,6 +42,7 @@ var _streams := {}
 var _toasted := {}
 var _hold_msg := ""
 var test_log := false
+var usec := 0    # microseconds spent in `update` (--perf prints the share of a frame)
 
 
 static func load_cfg() -> void:
@@ -152,6 +153,7 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var r := (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult)
 	heat[_hkey(pos)] = float(heat.get(_hkey(pos), 0.0)) + float(k.heat)
+	r *= 1.0 + minf(0.5, heat_at(pos) * 0.025)    # (a loud place carries sound farther: continued shooting calls more)
 	if bool(k.ripple) and (pos.distance_to(me) < 3.0 or kind == "throw"):
 		ripples.append({"pos": pos, "r": minf(r, 14.0), "t": 0.0, "life": 1.1, "col": Color(1, 1, 1, 0.28) if kind != "throw" else Color(1.0, 0.9, 0.5, 0.4)})
 	if kind == "shot" or kind == "glass":
@@ -314,6 +316,14 @@ static func hear_p(r: float, d: float, walls: int, kind: String = "shot") -> flo
 # ----------------------------------------------------------------------------- the step --
 
 func update(dt: float) -> void:
+	var t0 := Time.get_ticks_usec()
+	_update(dt)
+	usec += Time.get_ticks_usec() - t0
+	if game.args.has("perf") and game.frames == 1799:
+		print("NOISEPERF module ms/frame ", snappedf(float(usec) / 1799.0 / 1000.0, 0.001), " emits ", stats.emits, " alerted ", stats.alerted, " special ms/frame ", snappedf(float(game.special.usec) / 1799.0 / 1000.0, 0.001))
+
+
+func _update(dt: float) -> void:
 	bind()
 	if game.run == null:
 		return
@@ -341,7 +351,7 @@ func _interest(dt: float) -> void:
 	for z in inv.keys():
 		var e: Dictionary = inv[z]
 		var st: String = z.state
-		if st == "dying" or st == "dead" or z.remove or not game.run.sim.zombies.has(z) or (st != "wander" and st != "still"):
+		if st == "dying" or st == "dead" or z.remove or (st != "wander" and st != "still"):
 			inv.erase(z)
 			continue
 		e.t = float(e.t) + dt
@@ -512,7 +522,7 @@ func _alarms(dt: float) -> void:
 func _horde_alive(h: Dictionary) -> Array:
 	var out: Array = []
 	for z in h.members:
-		if z.state != "dying" and z.state != "dead" and not z.remove and game.run.sim.zombies.has(z):
+		if z.state != "dying" and z.state != "dead" and not z.remove:
 			out.append(z)
 	h.members = out
 	return out
@@ -623,6 +633,7 @@ func on_raid_begin() -> void:
 
 ## The base's night: on the horde nights a horde comes at one fence segment from one side (and walks round the outside to it).
 func on_attack(n: int, _picked: Array) -> void:
+	bind()
 	var bc: Dictionary = cfg.base_horde
 	var forced: bool = game.args.has("horde") or (game.args.has("noisetest") and String(game.args.noisetest) == "horde")
 	if not forced and not (bc.nights as Array).has(n):
@@ -637,6 +648,8 @@ func on_attack(n: int, _picked: Array) -> void:
 	var seg: Dictionary = pool[rng.randi() % pool.size()]
 	var from := Vector2(93.2, 68.0) if side == "E" else (Vector2(2.8, 68.0) if side == "W" else Vector2(92.0, 1.6))
 	var h := spawn_horde(size, from, Vector2(seg.spot), float(bc.speed), "base", 2.5)
+	if game.args.has("log"):
+		print("NOISE base horde side ", side, " seg ", seg.name, " size ", size, " got ", h.get("members", []).size(), " room ", game.run.sim.field.active_cap - game.run.sim.field.active_of.size())
 	if h.is_empty():
 		return
 	h["name"] = {"E": "east", "W": "west", "N": "north"}[side]
@@ -992,6 +1005,35 @@ func _test(dt: float) -> void:
 				_tlog = 5.0
 				if not hordes.is_empty():
 					print("NTEST horde wall=", Time.get_ticks_msec() / 1000, " frames=", game.frames, " t=", snappedf(_tt, 0.1), " centroid=", centroid(hordes[0]).snapped(Vector2(0.1, 0.1)), " dest=", Vector2(hordes[0].dest).snapped(Vector2(0.1, 0.1)), " alive=", (hordes[0].members as Array).size(), " text='", horde_text() + raid_horde_text(), "'")
+		"kills":    # a shooter that stands still with 80 dead asleep round her: how many she kills in 60 s (run it with and without --nonoise)
+			if _tstate == 0 and _tt > 1.0:
+				_tstate = 1
+				_stage_dead(me, 80, 5.0, 34.0)
+				_kills0 = game.run.sim.kills
+			var best = null
+			var bd := 11.0
+			for z in game.run.sim.zombies:
+				if z.state == "dying" or z.state == "dead":
+					continue
+				var dz := Vector2(z.x, z.y).distance_to(me)
+				if dz < bd and game.run.sim.clear_shot(me, Vector2(z.x, z.y), 0.15):
+					bd = dz
+					best = z
+			if best != null:
+				game._bot_in = {"move": Vector2.ZERO, "aim": Vector2(best.x, best.y), "fire": true}
+			else:
+				game._bot_in = {"move": Vector2.ZERO, "aim": me + Vector2(1, 0), "fire": false}
+			if game.run.avatar_p.mag < 2:
+				game.run.sim.avatar.reload()
+			game.run.avatar_p.mag = maxi(int(game.run.avatar_p.mag), 2) if game.run.avatar_p.reloading <= 0.0 else game.run.avatar_p.mag
+			game.run.sim.stock["ammo"] = 999.0
+			_tlog -= dt
+			if _tstate == 1 and _tlog <= 0.0:
+				_tlog = 10.0
+				print("NTEST kills t=", snappedf(_tt, 0.1), " kills=", game.run.sim.kills - _kills0, " awake=", game.run.sim.zombies.size(), " alerted=", stats.alerted, " woke=", stats.woke, " noise=", enabled)
+			if _tt > 61.0:
+				print("NTEST kills_per_min=", game.run.sim.kills - _kills0, " noise=", enabled, " alerted=", stats.alerted)
+				game.get_tree().quit()
 		"alert":
 			if _tstate == 0:
 				_tstate = 1

@@ -91,6 +91,8 @@ static func picture_of(id: String, count: int = 1) -> String:
 		if count >= SHELL_BOX:
 			return "shell_box"
 		return "shell" if count < SHELL_FEW else "shells"
+	if id == "distraction":    # (the prison's bottles and cans are drawn as the bottle: no picture of their own yet)
+		return "water_bottle"
 	return id if has_region(id) else "unknown"
 
 
