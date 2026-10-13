@@ -173,7 +173,9 @@ func _ready() -> void:
 		if s.begins_with("--"):
 			var kv := s.trim_prefix("--").split("=", true, 1)
 			args[kv[0]] = kv[1] if kv.size() > 1 else "1"
-	PawnNode.zart = not args.has("nozart")    # ROUND 8: the zombie art set (--nozart: the round 7 walkers and the baked runners and brutes, to compare)
+	PawnNode.zart = args.has("zart")    # ROUND 8: the Blender chibi zombie art set (ROUND 10: off by default, --zart to compare)
+	PawnNode.dirs16_dead = args.has("dirs16dead")    # ROUND 7: two 3D walker looks (ROUND 10: off by default, --dirs16dead to compare)
+	PawnNode.rimz = not args.has("norimz")    # ROUND 10: the RimWorld-style baked dead (assets/pawns/zr*, tools/make_rimworld_zombies.py); --norimz: the town's old baked dead
 	PawnNode.dirs16 = not args.has("nodirs")    # (--nodirs: the 4 baked views and their crossfade, to compare) ROUND 7: 16-heading renders for Ruth, the guards and the plain walkers
 	AimMode.set_holstered(args.has("holster"))    # AIM MODE (scripts/aim_mode.gd, as in the One House): every run begins with the weapon drawn; `--holster` puts it away
 	PawnNode.zmove = not args.has("nozmove")    # (--nozmove: the old dead, to compare) ROUND 8: the dead's heading, gait, rise, lunge and collapse

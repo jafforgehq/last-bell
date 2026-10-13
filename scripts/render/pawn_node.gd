@@ -51,10 +51,12 @@ static var dirs16 := false
 ## ROUND 8 (prison only): the dead are drawn by the heading, stride phase, rise and lean the prison's rules layer gives them (scripts/prison/prison_dead.gd): they face where they go and where they look,
 ## the legs run by the distance walked, a lunge and a recoil follow a bite, a hit throws them back and makes them stumble, a woken one gets up, a corpse falls the way the shot went.
 static var zmove := false
-static var dirs16_dead := true
+static var dirs16_dead := false
+## ROUND 10 (prison only): the dead are drawn from the RimWorld-style baked set assets/pawns/zr<look>_S/E/N.png and lie as a corpse picture (zrc<look>.png).
+static var rimz := false
 ## ROUND 8 (prison only): the zombie art set (assets/zombies16, pawn_dirs.gd `zombie_*`): every kind of the dead is drawn from a look of its own kind, with poses for the walk, idle, strike, flinch,
 ## fall and rise. `zart_crawlers`: one in four limping walkers crawls (the crawler art; the rules do not know crawlers).
-static var zart := true
+static var zart := false
 static var zart_crawlers := true
 var _zs = null
 var _zkind := "walker"
@@ -211,6 +213,8 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 	pawn_rect = Rect2(box[0], box[1], box[2] - box[0], box[3] - box[1])
 	for v in ["S", "E", "N"]:
 		tex[v] = GD.tex(data.pawn.files[key][v])
+		if rimz and is_zombie:
+			tex[v] = GD.tex("res://assets/pawns/zr%d_%s.png" % [int(e.look_index) % 24, v])
 	pal = Art.palette(e.look)
 	_pal_tex = PawnMesh.palette_texture(pal)
 	if dirs16:
@@ -1212,6 +1216,19 @@ func _draw_dead() -> void:
 		alpha = maxf(0.0, 1.0 - (z.dead_t - 55.0) / 15.0)
 	_reset()
 	var fs := figure_scale_xy() * _dv.size
+	if rimz and (z.state == "dead" or f >= 1.0):
+		# ROUND 10: once it is down it lies as its own picture (a pool of blood under it), the look and the way it fell choose which of three
+		var ci := int(z.look_index) % 24
+		var pose := (ci * 7 + int(_seed * 97.0)) % 3
+		var ct := GD.tex("res://assets/pawns/zrc%d_%d.png" % [ci, pose])
+		_tr(0, 0.0)
+		if z.fall_dir < 0.0 or cos(float(z.fall_ang)) < -0.2:
+			_sc(-1, 1)
+		if fs != Vector2.ONE:
+			_sc(fs.x, fs.y)
+		_apply()
+		_pen.draw_texture_rect(ct, pawn_rect, false, Color(1, 1, 1, alpha))
+		return
 	if z.state == "dying" and _fast and f < 1.0:
 		if fs != Vector2.ONE:
 			_fit_figure(fs)
