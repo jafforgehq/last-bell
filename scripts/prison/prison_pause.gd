@@ -12,7 +12,7 @@ const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambien
 const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
 
 const KEYS := [
-	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["R", "reload"], ["F", "melee"],
+	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["R", "reload"], ["F", "melee (shoves a hunter off)"], ["G", "throw a bottle or can: the dead go to look"],
 	["E", "use, search, go out at the gate or the truck"], ["Q", "put the gun away or take it up"], ["B", "the roster"], ["C", "the squad's orders"],
 	["Tab or I", "the backpack"], ["M", "the overview map"], ["Wheel", "zoom"], ["Esc", "this menu"],
 ]

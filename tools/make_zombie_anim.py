@@ -35,10 +35,14 @@ WALKER_LOOKS = list(range(24))
 RUNNER_LOOKS = [1, 4, 8, 12, 17, 21]
 BRUTE_LOOKS = [2, 9, 13, 20]
 CRAWLER_LOOKS = [3, 10, 15, 22]
+SCREAMER_LOOKS = [1, 5]          # ROUND 12: the special infected (prison_special.gd): a pale tall screamer, a swollen bloater, a hooded hunter on all fours
+BLOATER_LOOKS = [2, 9]
+HUNTER_LOOKS = [3, 10]
+POSE_OF = {"screamer": "walker", "bloater": "brute"}
 FV = [3, 0, 9, 6, 1, 8, 12, 4, 2, 10, 5, 7, 11, 0, 3, 9, 6, 1, 8, 5, 2, 12, 4, 10]     # the face variant of each look (see zombie_heads.FACE_NAMES)
 
 POSES = {"walk": 6, "idle": 4, "attack": 4, "hurt": 2}
-KIND_WALK = {"walker": 6, "runner": 6, "brute": 4, "crawler": 6}
+KIND_WALK = {"walker": 6, "runner": 6, "brute": 4, "crawler": 6, "screamer": 6, "bloater": 4, "hunter": 6}
 
 
 # ------------------------------------------------------------------ compositing
@@ -105,6 +109,35 @@ def look_for(base, kind):
         else:
             L["top"], L["outer"] = (198, 194, 176), None            # a straitjacket (sleeves in the same cloth)
         L["hair_col"] = rw.mulc(L["hair_col"], 0.8)
+    elif kind == "screamer":
+        L["style"] = "plain"
+        L["torn"] = 0.9
+        L["tie"] = None
+        L["pattern"] = None
+        L["hivis"] = False
+        L["job"] = ""
+        L["eyes"] = "white"
+        L["skin"] = rw.mix(L["skin"], (226, 226, 236), 0.55)
+        L["top"] = rw.mix(L["top"], (150, 150, 160), 0.5)
+        L["hair_col"] = rw.mulc(L["hair_col"], 0.55)
+    elif kind == "bloater":
+        L["style"] = "plain"
+        L["torn"] = 0.5
+        L["tie"] = None
+        L["pattern"] = None
+        L["hivis"] = False
+        L["job"] = ""
+        L["bite"] = ""
+        L["ribs"] = False
+        L["arm_gone"] = ""
+        L["skin"] = rw.mix(L["skin"], (150, 168, 66), 0.62)
+        L["top"], L["outer"] = (120, 126, 70), L["skin"]
+        L["hair_col"] = rw.mulc(L["hair_col"], 0.7)
+    elif kind == "hunter":
+        L["skin"] = rw.mix(L["skin"], (170, 150, 150), 0.3)
+        L["top"] = (34, 36, 46)
+        L["outer"] = (34, 36, 46)
+        L["eyes"] = "red"
     return L
 
 
@@ -120,6 +153,10 @@ def body_layer(L, view, ls, rs, kind):
             runner_body(W, L, view, m)
         elif kind == "brute":
             brute_body(W, L, view, m)
+        elif kind == "screamer":
+            screamer_body(W, L, view, m)
+        elif kind == "bloater":
+            bloater_body(W, L, view, m)
         _BODY[key] = W
     return _BODY[key]
 
@@ -143,6 +180,43 @@ def runner_body(W, L, view, m):
         flat(W, line_m(W, [(CX, 178), (CX, 222)], 2.6), sd, clip=m)
         flat(W, poly_m(W, [(CX - 36, 220), (CX + 36, 220), (CX + 40, 250), (CX - 40, 250)]), L["top"], clip=m)
     flat(W, ell_m(W, CX + 14, 206, 12, 14), rw.BLOOD_D, 170, clip=m)
+
+
+def screamer_body(W, L, view, m):
+    """A screamer is a starved, tall figure: a rag of grey cloth over a hollow chest, the throat swollen."""
+    sk = L["skin"]
+    sd = mulc(sk, 0.74)
+    flat(W, poly_m(W, [(CX - 36, 176), (CX + 36, 176), (CX + 28, 230), (CX - 28, 230)]), sk, clip=m)
+    if view != "N":
+        for k in range(5):
+            y = 186 + k * 9
+            flat(W, line_m(W, [(CX - 20, y), (CX, y + 3)], 2.4), sd, clip=m)
+            flat(W, line_m(W, [(CX + 2, y + 3), (CX + 21, y)], 2.4), sd, clip=m)
+        flat(W, ell_m(W, CX, 181, 11, 8), (170, 140, 150), clip=m)     # the swollen throat
+    else:
+        for k in range(6):
+            flat(W, line_m(W, [(CX - 3, 184 + k * 8), (CX + 3, 184 + k * 8)], 2.2), sd, clip=m)
+    flat(W, poly_m(W, [(CX - 32, 228), (CX + 32, 228), (CX + 38, 250), (CX - 38, 250)]), L["top"], clip=m)
+    flat(W, line_m(W, [(CX - 20, 232), (CX - 24, 250)], 2.4), mulc(L["top"], 0.7), clip=m)
+
+
+def bloater_body(W, L, view, m):
+    """A bloater is a round gut: sickly yellow-green skin stretched over sacs, with dark veins and pale pustules."""
+    sk = L["skin"]
+    dark, light = mulc(sk, 0.62), rw.mix(sk, (222, 214, 90), 0.55)
+    flat(W, ell_m(W, CX, 214, 54, 46), sk, clip=m)
+    rng = random.Random(L["i"] * 31 + 5)
+    for q in range(7):
+        a = q / 7 * 6.283 + 0.4
+        cx_, cy_ = CX + math.cos(a) * 26, 214 + math.sin(a) * 22
+        flat(W, ell_m(W, cx_, cy_, 17, 15), dark, clip=m)
+        flat(W, ell_m(W, cx_ - 1, cy_ - 1, 14, 12), light, clip=m)
+        flat(W, ell_m(W, cx_ - 5, cy_ - 5, 4.5, 3.5), (246, 244, 190), clip=m)
+    for q in range(10):
+        flat(W, ell_m(W, CX + rng.uniform(-40, 40), 214 + rng.uniform(-34, 34), 3.6, 3.2), (236, 226, 120), clip=m)
+    flat(W, line_m(W, [(CX - 40, 196), (CX - 6, 226)], 2.2), (84, 100, 44), clip=m)
+    flat(W, line_m(W, [(CX + 38, 200), (CX + 8, 232)], 2.2), (84, 100, 44), clip=m)
+    flat(W, ell_m(W, CX, 246, 40, 8), mulc(L["top"], 0.8), clip=m)
 
 
 def brute_body(W, L, view, m):
@@ -220,16 +294,16 @@ def figure(L, view, P, kind="walker"):
     ls, rs = ls0 + P["shl"], rs0 + P["shr"]
     ls, rs = int(round(ls / 2.0)) * 2, int(round(rs / 2.0)) * 2
     rp = rest_points(L, view, ls0, rs0)
-    bsx = {"runner": 0.9, "brute": 1.24}.get(kind, 1.0) * P.get("bsx", 1.0)
-    bsy = {"brute": 1.06}.get(kind, 1.0) * P.get("bsy", 1.0)
+    bsx = {"runner": 0.9, "brute": 1.24, "screamer": 0.82, "bloater": 1.3}.get(kind, 1.0) * P.get("bsx", 1.0)
+    bsy = {"brute": 1.06, "screamer": 1.1, "bloater": 1.1}.get(kind, 1.0) * P.get("bsy", 1.0)
     bt = dict(c=HIPS, t=(P["dx"], P["dy"]), sx=bsx, sy=bsy * P["sq"], th=P["rot"])
     canvas = new_canvas()
     if P.get("legs") is not None:
         baked_legs(canvas, L, view, **P["legs"])
     bw = body_layer(L, view, ls, rs, kind)
-    awid = {"runner": 19, "brute": 36}.get(kind, 24 if view != "E" else 26)
+    awid = {"runner": 19, "brute": 36, "screamer": 15, "bloater": 40}.get(kind, 24 if view != "E" else 26)
     head_c = xform(rp["head"], **bt)
-    hs = {"brute": 0.8, "runner": 1.0}.get(kind, 1.0) * P.get("hs", 1.0)
+    hs = {"brute": 0.8, "runner": 1.0, "screamer": 1.28, "bloater": 0.8}.get(kind, 1.0) * P.get("hs", 1.0)
     hx, hy = head_c[0] + P["hdx"], head_c[1] + P["hdy"]
     hw = zh.head2(L, view, rp["head"][0], rp["head"][1], P["fv"], P["open"])
     hang = rp["hang"] - P["hrot"] - P["rot"] * 0.7
@@ -402,7 +476,7 @@ def fall_turn(canvas, u, forward, L, kind):
 
 
 # ------------------------------------------------------------------ the crawler
-def crawler(L, view, anim, k, n):
+def crawler(L, view, anim, k, n, hunt=False):
     """A torso that has lost its legs: dragged by the arms, the spine trailing. Own drawing (not the standing layers)."""
     rng = random.Random(L["i"] * 53 + ord(view))
     canvas = new_canvas()
@@ -430,9 +504,15 @@ def crawler(L, view, anim, k, n):
         # the torn end, spine and a smear trailing behind
         tx = CX - 66 + p["lunge"] * 0.4
         flat(W, ell_m(W, tx - 30, oy + 30, 56, 9), rw.BLOOD_D, 210)
-        put(W, capsule_m(W, (tx, oy), (tx - 48, oy + 22), 8, 5), rw.BONE, ow=3.2, shade=False)
-        for q in range(5):
-            put(W, ell_m(W, tx - 6 - q * 9, oy + 4 + q * 4.4, 4.6, 4.2), rw.BONE, ow=2.6, shade=False)
+        if hunt:    # crouched on all fours: two bent hind legs in dark trousers, feet flat
+            for lx, ly in ((tx + 2, oy + 6), (tx + 18, oy + 10)):
+                put(W, capsule_m(W, (lx, oy + 4), (lx - 22, oy + 22), 20, 17), (28, 30, 38))
+                put(W, capsule_m(W, (lx - 22, oy + 22), (lx - 6, oy + 36), 16, 14), (28, 30, 38))
+                put(W, ell_m(W, lx - 2, oy + 38, 15, 7), (22, 20, 20), ow=3, shade=False)
+        else:
+            put(W, capsule_m(W, (tx, oy), (tx - 48, oy + 22), 8, 5), rw.BONE, ow=3.2, shade=False)
+            for q in range(5):
+                put(W, ell_m(W, tx - 6 - q * 9, oy + 4 + q * 4.4, 4.6, 4.2), rw.BONE, ow=2.6, shade=False)
         # far arm (dragging), torso, near arm
         fa = (CX + 22 + p["lunge"], oy - 6)
         put_arm = lambda W_, sh, hd, bend, far: rw.arm(W_, L, sh, hd, rng, False, 24, bend)
@@ -451,6 +531,10 @@ def crawler(L, view, anim, k, n):
         canvas.alpha_composite(Wn.img, (Wn.x0 * SS, Wn.y0 * SS))
         hx, hy = CX + 52 + p["lunge"] + p["hd"] * 0.6, oy - 34 + 8 * fl + (6 if anim != "walk" else 2) - fl * 4
         hw = zh.head2(L, "E", hx, hy, fv, p["open"])
+        if hunt:    # the hood, behind the face
+            Wh = Win(30, 150, 308, 150)
+            put(Wh, ell_m(Wh, hx - 12, hy + 4, 30, 30), (34, 36, 46), ow=3.4)
+            canvas.alpha_composite(Wh.img, (Wh.x0 * SS, Wh.y0 * SS))
         tmp = new_canvas()
         place(tmp, hw.img, hw.x0, hw.y0, c=(hx, hy + 30), th=-(-4 + 0.3 * p["hd"] - 14 * fl), sx=0.92, sy=0.92)
         canvas.alpha_composite(tmp)
@@ -466,7 +550,7 @@ def crawler(L, view, anim, k, n):
         # a trail of spine and a blood smear behind (toward the camera when seen from behind)
         by = oy + (30 if view == "N" else -14)
         flat(W, ell_m(W, CX, by + (14 if view == "N" else -6), 50, 10), rw.BLOOD_D, 200)
-        if view == "N":
+        if view == "N" and not hunt:
             for q in range(5):
                 put(W, ell_m(W, CX + 2 - q * 2, by + 6 + q * 6, 5.4, 4.6), rw.BONE, ow=2.8, shade=False)
         tm = rw.poly_m(W, rw.smooth_poly([(CX - 52, oy - 22), (CX - 34, oy - 38 + fl * 12), (CX + 34, oy - 38 + fl * 12), (CX + 52, oy - 22), (CX + 46, oy + 12), (CX + 10, oy + 26), (CX - 10, oy + 26), (CX - 46, oy + 12)], 2))
@@ -487,6 +571,10 @@ def crawler(L, view, anim, k, n):
         if view == "S":
             hx, hy = CX + p["hd"] * 0.4, oy + 2 + p["dy"] * 0.2 + 10 * fl
             hw = zh.head2(L, "S", hx, hy, fv, p["open"])
+            if hunt:
+                Wh = Win(30, 150, 308, 150)
+                put(Wh, ell_m(Wh, hx, hy - 2, 40, 40), (34, 36, 46), ow=3.4)
+                canvas.alpha_composite(Wh.img, (Wh.x0 * SS, Wh.y0 * SS))
             tmp = new_canvas()
             place(tmp, hw.img, hw.x0, hw.y0, c=(hx, hy + 30), th=-0.5 * p["hd"], sx=0.9, sy=0.9)
             canvas.alpha_composite(tmp)
@@ -521,29 +609,36 @@ def frames_for(kind, look, with_views="SEN"):
     """Yields (key, image at the final size) for one look of one kind."""
     L = look_for(rw.load_looks()[look], kind)
     fv = FV[look]
-    if kind == "crawler":
+    if kind in ("crawler", "hunter"):
+        hunt = kind == "hunter"
         for v in with_views:
             for anim, n in (("walk", 6), ("idle", 4), ("attack", 4), ("hurt", 2)):
                 for k in range(n):
-                    yield "%s/%s/%d" % (v, anim, k), finish(crawler(L, v, anim, k, n))
+                    yield "%s/%s/%d" % (v, anim, k), finish(crawler(L, v, anim, k, n, hunt))
         for k in range(5):
-            yield "E/death_f/%d" % k, finish(crawler(L, "E", "death", k, 5))
+            yield "E/death_f/%d" % k, finish(crawler(L, "E", "death", k, 5, hunt))
         return
     nwalk = KIND_WALK[kind]
     for v in with_views:
         for anim, n, fn in (("walk", nwalk, pose_walk), ("idle", 4, pose_idle), ("attack", 4, pose_attack), ("hurt", 2, pose_hurt)):
             for k in range(n):
-                P = fn(kind, v, k, n, L)
+                P = fn(POSE_OF.get(kind, kind), v, k, n, L)
                 P["fv"] = fv
+                if kind == "screamer":
+                    P["open"] = 1.0
+                    if anim == "attack":    # the scream: head thrown back, jaw wide, arms stiff and away from the body
+                        P.update(hdy=P["hdy"] - 9, hrot=-18 - 4 * (k % 2), open=1.0, aL=(-16, -10), aR=(16, -10), bL=-14, bR=-14)
+                if kind == "bloater":    # the sacs pulse
+                    P["bsx"] = 1.0 + 0.06 * sn(2 * math.pi * k / n * (2 if anim == "walk" else 1))
                 yield "%s/%s/%d" % (v, anim, k), finish(figure(L, v, P, kind))
     for forward, name in ((True, "death_f"), (False, "death_b")):
         for k in range(5):
-            u, P = pose_fall(kind, k, L, forward)
+            u, P = pose_fall(POSE_OF.get(kind, kind), k, L, forward)
             P["fv"] = fv
             c = fall_turn(figure(L, "E", P, kind), u, forward, L, kind)
             yield "E/%s/%d" % (name, k), finish(c)
     for k in range(4):
-        u, P = pose_fall(kind, k, L, True, True)
+        u, P = pose_fall(POSE_OF.get(kind, kind), k, L, True, True)
         P["fv"] = fv
         yield "E/rise/%d" % k, finish(fall_turn(figure(L, "E", P, kind), u, True, L, kind))
 
@@ -607,7 +702,7 @@ def main():
     if a.strips:
         strips(a.strips, a.set or "walker", a.look if a.look >= 0 else 0)
         return
-    sets = {"walker": WALKER_LOOKS, "runner": RUNNER_LOOKS, "brute": BRUTE_LOOKS, "crawler": CRAWLER_LOOKS}
+    sets = {"walker": WALKER_LOOKS, "runner": RUNNER_LOOKS, "brute": BRUTE_LOOKS, "crawler": CRAWLER_LOOKS, "screamer": SCREAMER_LOOKS, "bloater": BLOATER_LOOKS, "hunter": HUNTER_LOOKS}
     jobs = [(k, l) for k, ls in sets.items() if not a.set or a.set == k for l in ls if a.look < 0 or a.look == l]
     ip = os.path.join(OUT, "index.json")
     idx = json.load(open(ip)) if os.path.exists(ip) else {}

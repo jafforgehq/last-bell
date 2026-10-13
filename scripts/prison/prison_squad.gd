@@ -21,9 +21,9 @@ const Inventory := preload("res://scripts/sim/inventory.gd")
 const SearchRules := preload("res://scripts/town/search.gd")
 const TILE := 64.0
 const Bal := preload("res://scripts/prison/prison_bal.gd")
-const CMDS := ["follow", "hold", "scavenge", "cover"]
-const CMD_WORD := {"follow": "Follow", "hold": "Hold here", "scavenge": "Scavenge", "cover": "Cover me"}
-const CMD_COL := {"follow": Color(0.55, 0.85, 1.0), "hold": Color(1.0, 0.8, 0.35), "scavenge": Color(0.55, 1.0, 0.6), "cover": Color(1.0, 0.55, 0.5)}
+const CMDS := ["follow", "hold", "scavenge", "cover", "quiet"]
+const CMD_WORD := {"follow": "Follow", "hold": "Hold here", "scavenge": "Scavenge", "cover": "Cover me", "quiet": "Quiet"}
+const CMD_COL := {"follow": Color(0.55, 0.85, 1.0), "hold": Color(1.0, 0.8, 0.35), "scavenge": Color(0.55, 1.0, 0.6), "cover": Color(1.0, 0.55, 0.5), "quiet": Color(0.7, 0.7, 1.0)}
 
 var game
 var cfg: Dictionary
@@ -423,6 +423,18 @@ func _fire(m: Dictionary, z, dist: float, eff: String) -> bool:
 		m.say = "swinging"
 		game.sound.play("stab", 0.6, 0.08)
 		return true
+	if String(m.cmd) == "quiet":    # NOISE hook: the quiet stance holds fire; a dead one that is on them is stabbed (a blow, 3 tiles of noise), not shot
+		if dist > 1.9:
+			m.cd = 0.3
+			return false
+		p.thrust = 1.0
+		p.facing = game.run.sim.facing_of(z.x - p.x, z.y - p.y, p.facing)
+		game.run.sim._hurt_zombie(z, 3.5, Vector2(p.x, p.y).angle_to_point(Vector2(z.x, z.y)), null)
+		game.run.sim.field.noise(Vector2(p.x, p.y), null, 3.0)
+		m.cd = 1.2
+		m.say = "knifing"
+		game.sound.play("stab", 0.6, 0.08)
+		return true
 	var inv = game.pack.inv
 	var cost := float(cfg.shot_cost)
 	if inv == null or inv.take_float("ammo", cost) < cost - 0.001:
@@ -715,7 +727,7 @@ func command(m: Dictionary, cmd: String) -> void:
 	m.p.work = ""
 	m.wait = 0.0
 	m.hold_at = Vector2(m.p.x, m.p.y)
-	_bark(m, {"follow": "Right behind you.", "hold": "Holding here.", "scavenge": "Looking for a house.", "cover": "I've got you."}[cmd], 2.5)
+	_bark(m, {"follow": "Right behind you.", "hold": "Holding here.", "scavenge": "Looking for a house.", "cover": "I've got you.", "quiet": "Quiet. Knives only."}[cmd], 2.5)
 
 
 func command_all(cmd: String) -> void:
@@ -896,6 +908,9 @@ static func icon(c: CanvasItem, cmd: String, at: Vector2, r: float, col: Color) 
 		"scavenge":
 			c.draw_rect(Rect2(at + Vector2(-r * 0.65, -r * 0.2), Vector2(r * 1.3, r * 0.95)), col)
 			c.draw_arc(at + Vector2(0, -r * 0.2), r * 0.45, PI, TAU, 8, col, 2.0)
+		"quiet":
+			c.draw_arc(at, r * 0.7, 0.0, TAU, 12, col, 2.0)
+			c.draw_line(at + Vector2(-r * 0.5, r * 0.5), at + Vector2(r * 0.5, -r * 0.5), col, 2.0)
 		"cover":
 			c.draw_colored_polygon(PackedVector2Array([at + Vector2(-r * 0.7, -r * 0.7), at + Vector2(r * 0.7, -r * 0.7), at + Vector2(r * 0.7, r * 0.1), at + Vector2(0, r * 0.85), at + Vector2(-r * 0.7, r * 0.1)]), col)
 
@@ -996,7 +1011,7 @@ func _refresh_panel() -> void:
 	for ch in col.get_children():
 		ch.queue_free()
 	var t := Label.new()
-	t.text = "ORDERS   1 Follow   2 Hold here   3 Scavenge   4 Cover me   (all)     Esc or C: close"
+	t.text = "ORDERS   1 Follow   2 Hold here   3 Scavenge   4 Cover me   5 Quiet   (all)     Esc or C: close"
 	t.add_theme_font_size_override("font_size", 16)
 	col.add_child(t)
 	for m in members:

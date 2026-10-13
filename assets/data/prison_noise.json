@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "_doc": "ROUND 12 (prison only): noise, hordes and special infected (scripts/prison/prison_noise.gd, prison_special.gd). Read once at start-up. kinds: what each noise is: loud (tiles, used when a caller gives 0), heat (what one costs the region's heat), cap (the most dead one noise may call), wake (the chance at no distance for a dormant one), see (0 to 1: the share of awake dead that turn to it), ripple (a ring on the ground when it is Ruth's own), to (where they go: spot = the noise, fence = the nearest fence segment). Probability of a dead one hearing at `h` tiles of a noise of radius `r` is wake * (1 - h/r)^fall. h is the distance plus `wall` tiles for every wall tile between (at most `wall_max`). heat: the noise heat of a 16-tile region rises by kind and falls `decay` a second; quiet under `loud_at`, loud under `very_at`, very loud above; the cap of one noise grows by `cap_per_heat` for each point of heat. interest: how long a dead one that went to look mills about at the spot before it loses interest. horde: when more dead than `join_n` are called at once the nearest others within `join_r` tiles follow, up to `join_max`. raid_horde / base_horde: the migrating and the siege hordes. specials: the special infected (stats by kind, the nights they begin, how many a night, the raids' chances).",
+  "kinds": {
+    "shot":      {"loud": 14, "heat": 1.6, "cap": 5, "wake": 0.9, "see": 0.7, "ripple": true},
+    "tower":     {"loud": 12, "heat": 0.0, "cap": 0, "wake": 0.0, "see": 0.0, "ripple": false},
+    "melee":     {"loud": 3,  "heat": 0.5, "cap": 2, "wake": 0.6, "see": 0.5, "ripple": false},
+    "step":      {"loud": 7,  "heat": 0.4, "cap": 2, "wake": 0.5, "see": 0.4, "ripple": false},
+    "search":    {"loud": 4,  "heat": 0.3, "cap": 1, "wake": 0.5, "see": 0.3, "ripple": false},
+    "glass":     {"loud": 14, "heat": 2.0, "cap": 4, "wake": 0.85, "see": 0.6, "ripple": false},
+    "build":     {"loud": 10, "heat": 0.6, "cap": 2, "wake": 0.6, "see": 0.5, "ripple": false, "to": "fence"},
+    "generator": {"loud": 8,  "heat": 0.2, "cap": 2, "wake": 0.5, "see": 0.4, "ripple": false, "to": "fence"},
+    "bell":      {"loud": 24, "heat": 3.0, "cap": 6, "wake": 0.9, "see": 0.8, "ripple": false, "to": "fence"},
+    "throw":     {"loud": 12, "heat": 1.0, "cap": 10, "wake": 0.95, "see": 0.9, "ripple": true},
+    "alarm":     {"loud": 24, "heat": 6.0, "cap": 8, "wake": 0.95, "see": 0.9, "ripple": false},
+    "scream":    {"loud": 30, "heat": 8.0, "cap": 40, "wake": 0.97, "see": 1.0, "ripple": false}
+  },
+  "guns": {"shotgun": 1.0, "service": 1.0, "smg": 0.9, "suppressed": 0.35},
+  "wake": {"fall": 1.2, "wall": 2.6, "wall_max": 3, "indoor_share": 1.0, "rain": 0.8},
+  "heat": {"decay": 0.25, "cell": 16, "loud_at": 5.0, "very_at": 12.0, "cap_per_heat": 0.12, "cap_max": 3.0},
+  "interest": {"min": 8.0, "max": 20.0, "arrive": 1.4},
+  "horde": {"join_n": 9, "join_r": 22.0, "join_max": 24},
+  "throw": {"range": 12.0, "flight": 0.55, "kinds": {"bottle": {"w": 4, "loud": 12, "word": "A bottle smashes"}, "can": {"w": 4, "loud": 9, "word": "A can clatters"}, "firecracker": {"w": 2, "loud": 18, "pops": 6, "word": "Firecrackers go off"}, "flare": {"w": 1, "loud": 14, "pops": 6, "gap": 2.0, "word": "A flare hisses and burns"}}},
+  "alarm": {"shot_r": 4.5, "shot_chance": 0.35, "open_chance": 0.18, "secs": [20, 40], "every": 2.0, "loud": 24},
+  "raid_horde": {"chance": 0.45, "min_day": 2, "size": [30, 70], "far": 42.0, "speed": 2.0, "warn_s": 6.0, "react_r": 7.0},
+  "base_horde": {"nights": [3, 6, 9, 12], "size": [34, 70], "per_night": 8, "max": 100, "speed": 2.2},
+  "specials": {
+    "first_night": 4,
+    "per_night": [[4, 1], [6, 2], [8, 3]],
+    "mix": {"screamer": 3, "hunter": 3, "bloater": 2, "breacher": 3},
+    "raid_min_day": 3,
+    "raid": {"screamer": 0.4, "hunter": 0.4, "bloater": 0.3},
+    "screamer": {"hp": 3, "speed": 1.3, "size": 1.0, "see_r": 14.0, "scream_s": 4.0, "loud": 30.0},
+    "bloater": {"hp": 22, "speed": 0.8, "size": 1.2, "gas_r": 2.4, "gas_s": 8.0, "gas_dps": 2.0, "gas_slow": 0.5, "acid": 40.0, "acid_r": 3.5},
+    "hunter": {"hp": 6, "speed": 3.2, "size": 0.95, "spot_r": 10.0, "leap_r": 3.2, "leap_s": 0.3, "pin_s": 3.0, "pin_dps": 5.0, "crouch_s": 0.5, "cool_s": 4.0, "free_dist": 2.2},
+    "breacher": {"hp": 34, "speed": 1.6, "ram_dps": 40.0, "ram_every": 1.5, "stagger": 0.08}
+  },
+  "toasts": {
+    "screamer": "A screamer! Kill it before it calls the horde.",
+    "bloater": "A bloater. Shoot it from far away: it bursts into poison gas.",
+    "hunter": "A hunter! It leaps. Press F to shove it off when it pins you.",
+    "breacher": "A breacher. It rams the fence: kill it before the wall goes.",
+    "horde_raid": "A horde is crossing the town. Keep away from it, or lure it off with a thrown bottle (G).",
+    "horde_base": "A horde is coming at the fence."
+  }
+}

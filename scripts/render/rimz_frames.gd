@@ -9,6 +9,8 @@ const HALF := Vector2(184.0, 164.0)
 const RUNNERS := [1, 4, 8, 12, 17, 21]
 const BRUTES := [2, 9, 13, 20]
 const CRAWLERS := [3, 10, 15, 22]
+## ROUND 12: the special infected (prison_special.gd): their own sets by kind (looks: screamer 1, 5; bloater 2, 9; hunter 3, 10).
+const SPECIALS := {"screamer": [1, 5], "bloater": [2, 9], "hunter": [3, 10]}
 ## Poses that run once (the phase is how far along, 0 to 1) against those that loop (walk, idle).
 const LOOPING := ["walk", "idle"]
 ## The decal and gib sheet: 8 cells across, 48 px each (tools/make_zombie_anim.py `--fx`).
@@ -50,7 +52,10 @@ static func set_of(kind: String, look: int, limp: bool) -> String:
 		return ""
 	var key := ""
 	var id := 0
-	if kind == "walker" and limp and look % 4 == 0 and _index.has("crawler"):
+	if SPECIALS.has(kind):    # SPECIAL hook
+		key = kind
+		id = SPECIALS[kind][look % 2]
+	elif kind == "walker" and limp and look % 4 == 0 and _index.has("crawler"):
 		key = "crawler"
 		id = CRAWLERS[(look / 4) % CRAWLERS.size()]
 	elif kind == "runner":
@@ -65,6 +70,12 @@ static func set_of(kind: String, look: int, limp: bool) -> String:
 	if not (_index.has(key) and (_index[key] as Dictionary).has(str(id))):
 		return ""
 	return key + str(id)
+
+
+## Sets that are drawn low on all fours (crawler, hunter): no legs of their own, ground pose.
+static func is_crawl(s: String) -> bool:
+	var k := kind_of_set(s)
+	return k == "crawler" or k == "hunter"
 
 
 static func kind_of_set(s: String) -> String:

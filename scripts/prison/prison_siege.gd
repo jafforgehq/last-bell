@@ -379,6 +379,8 @@ func _start_attack(n: int) -> void:
 	var txt := "Night %d: the %s" % [n, " and the ".join(names)]
 	stats["where"] = txt
 	print("SIEGE START ", txt, " segs=", picked.map(func(q): return q.name), " sent=", stats.n)
+	game.noise.on_attack(n, picked)    # NOISE hook: a horde on some nights
+	game.special.on_attack(n, picked)    # SPECIAL hook: the night's special infected
 	_show_banner(txt, 6.0)
 	game._say("The bell is ringing. They are coming.", 5.0)
 	for m in game.crew.members:
@@ -399,6 +401,7 @@ func _bells(dt: float) -> void:
 		_bell_t = 1.6
 		_bell_n -= 1
 		game.sound.play("bell", 0.9, 0.0)
+		game.noise.bell()    # NOISE hook
 
 
 func _spawn_batches(dt: float) -> void:
@@ -460,6 +463,8 @@ func _wave_work(dt: float) -> void:
 	for w in wave:
 		var z = w.z
 		if w.has("done"):
+			continue
+		if game.special.locked(z):    # SPECIAL hook: a screamer that screams or a hunter that leaps is not sent anywhere
 			continue
 		if not _alive(z) or not game.run.sim.zombies.has(z):
 			w["done"] = true
