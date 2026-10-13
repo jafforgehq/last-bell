@@ -118,6 +118,7 @@ var _shot_wait := 90
 var _quit_after := false
 var sound
 var tod := 8.0    # hour of the day
+var vignette: ColorRect
 var night_rect: ColorRect
 var glow: Control
 var radial_tex: Texture2D
@@ -295,6 +296,15 @@ func _make_hud() -> void:
 	night_rect.material = mm
 	night_rect.color = Color(1, 1, 1, 1)
 	nl.add_child(night_rect)
+	vignette = ColorRect.new()    # ART: a soft dark rim, stronger at night
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vm := ShaderMaterial.new()
+	var vs := Shader.new()
+	vs.code = "shader_type canvas_item;\nrender_mode blend_mul;\nuniform float strength = 0.3;\nvoid fragment() {\n\tvec2 q = UV - 0.5;\n\tfloat v = smoothstep(0.30, 0.78, length(q * vec2(1.0, 0.9)));\n\tCOLOR = vec4(mix(vec3(1.0), vec3(0.45, 0.42, 0.5), v * strength * 1.6), 1.0);\n}\n"
+	vm.shader = vs
+	vignette.material = vm
+	nl.add_child(vignette)
 	glow = Control.new()
 	glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2196,14 +2206,26 @@ func _night_of(h: float) -> float:
 	return 1.0
 
 
+## ART: the colour of the light by the hour: neutral day, a long amber sunset (16:30 to 18:30), cold blue night, a pink dawn.
+const GRADE := [[0.0, Color(0.27, 0.33, 0.60)], [5.0, Color(0.27, 0.33, 0.60)], [6.2, Color(0.80, 0.62, 0.62)], [7.5, Color(1.0, 0.9, 0.8)], [9.0, Color(1, 1, 1)], [16.0, Color(1, 1, 1)],
+	[17.3, Color(1.0, 0.86, 0.68)], [18.4, Color(1.0, 0.74, 0.54)], [19.4, Color(0.62, 0.42, 0.52)], [20.6, Color(0.27, 0.33, 0.60)], [24.0, Color(0.27, 0.33, 0.60)]]
+
+
+func _grade(h: float) -> Color:
+	for i in range(1, GRADE.size()):
+		if h <= float(GRADE[i][0]):
+			var a: Array = GRADE[i - 1]
+			var b: Array = GRADE[i]
+			return (a[1] as Color).lerp(b[1], smoothstep(float(a[0]), float(b[0]), h))
+	return GRADE[GRADE.size() - 1][1]
+
+
 func _day_night(_dt: float) -> void:
 	var n := _night_of(tod)
-	var warm := 0.0
-	if tod >= 17.0 and tod < 20.0:
-		warm = 1.0 - absf(tod - 18.5) / 1.5
-	var c := Color(1, 1, 1).lerp(Color(0.32, 0.38, 0.62), n)
-	c = c.lerp(Color(1.0, 0.82, 0.62), clampf(warm, 0.0, 1.0) * 0.6 * (1.0 - n))
-	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1).lerp(c, 0.0)
+	var c := _grade(tod)
+	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1)
+	if vignette != null:
+		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.45 * n if mode == "base" else 0.22)
 	if args.has("hour"):
 		tod = float(args.hour)
 	if sound != null:
@@ -2211,8 +2233,13 @@ func _day_night(_dt: float) -> void:
 		sound.set_ambience(n, horde, _dt)
 
 
+## ART: the lamps and fires come on before the dark (a warm pool at dusk) and go out after dawn.
+func _lamp_of(h: float) -> float:
+	return smoothstep(17.3, 19.2, h) if h >= 12.0 else 1.0 - smoothstep(5.5, 7.0, h)
+
+
 func _draw_glow() -> void:
-	var n := _night_of(tod)
+	var n := _lamp_of(tod)
 	if n <= 0.02 or mode != "base":
 		return
 	var v := _vp()
