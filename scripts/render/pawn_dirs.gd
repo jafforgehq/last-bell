@@ -41,6 +41,16 @@ static func blit(pen, s: Dictionary, ori: float, ph: float, col: Color = Color.W
 	pen.draw_texture_rect_region(s.tex, Rect2(-(s.origin as Vector2) / dens, cell / dens), src, col)
 
 
+## Round 11: the same picture as `blit` but as [dst Rect2 (tiles), src Rect2], so a caller can cut the head from the body.
+static func rect_of(s: Dictionary, ori: float, ph: float) -> Array:
+	var di := posmod(int(roundf(ori / (TAU / float(s.dirs)))), int(s.dirs))
+	var fi := posmod(int(roundf(ph / TAU * float(s.frames))), int(s.frames))
+	var g: int = s.gutter
+	var cell: Vector2 = s.cell
+	var dens: float = s.dens
+	return [Rect2(-(s.origin as Vector2) / dens, cell / dens), Rect2(float(di) * (cell.x + 2.0 * g) + g, float(fi) * (cell.y + 2.0 * g) + g, cell.x, cell.y)]
+
+
 # ==================================================================================================================== ROUND 8: the zombie art set
 ## assets/zombies16 (tools/make_zombie_dirs_blender.py, tools/pack_zombie_dirs.py): for each kind (walker, runner, brute, crawler) several looks, one atlas for each look. An atlas is a stack of
 ## pose regions (walk, idle, attack, hurt, deathf, deathb), each a grid with a column for each heading and a row for each frame. Prison only, like the rest of this file.

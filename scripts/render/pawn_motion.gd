@@ -367,6 +367,8 @@ class Reload:
 	var hand_on := false
 	var pump := 0.0
 	var click := 0.0
+	var carry := false    # the loading hand holds the new shell or magazine (on its way in)
+	var prog := 0.0       # how far the whole reload has gone (0 to 1)
 
 
 ## Fills `r` with the reload at progress `p` (0 to 1) of `n` loadings (a shell gun loads one at a time; a magazine gun, n 1, has the magazine out and in).
@@ -377,6 +379,8 @@ static func reload_pose(r: Reload, p: float, n: int, shell: bool) -> void:
 	r.pump = 0.0
 	r.click = 0.0
 	r.hand_on = false
+	r.carry = false
+	r.prog = p
 	var body_p := clampf((p - 0.06) / 0.80, 0.0, 1.0)
 	var cycles := maxi(n, 1)
 	var c := body_p * float(cycles)
@@ -390,6 +394,7 @@ static func reload_pose(r: Reload, p: float, n: int, shell: bool) -> void:
 		var belt := Vector2(-0.02, 0.46)
 		var rec := Vector2(0.24, 0.06)
 		r.hand = belt.lerp(rec, at)
+		r.carry = u < 0.5
 		if u > 0.45 and u < 0.62:
 			r.click = sin((u - 0.45) / 0.17 * PI)
 	if p >= 0.86 and p < 1.0:
