@@ -17,6 +17,7 @@ const World := preload("res://scripts/town/town_world.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownRun := preload("res://scripts/town/town_run.gd")
 const TownRoofs := preload("res://scripts/town/town_roofs.gd")
+const Polish := preload("res://scripts/prison/prison_polish.gd")    # ART: ground, floors, AO, shadows
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
@@ -422,6 +423,8 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	world.name = "World"
 	stage.add_child(world)
 	world.build(town.data)
+	if not args.has("nopolish"):
+		Polish.install(world, base if (mode == "base" and base != null) else null, int(town.get("seed", 1)))
 	if world.looks.has("tree") and not (world.looks.tree as Array).is_empty():
 		var green = world.looks.tree[0]    # the border belt: one green look in all three slots, no orange and yellow wall
 		world.looks["tree"] = [green, green, green]
