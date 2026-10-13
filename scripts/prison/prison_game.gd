@@ -1,7 +1,7 @@
 ## EXPERIMENT (prison extraction): the whole game loop in one scene. BASE: a hand-authored prison compound (prison_base.gd) with ten people at work (prison_crew.gd) and a mass of dead in the pen in
 ## front of the gate. GO OUT (E at the gate or the truck): a generated 64 x 64 town (TownGen, blocks 2) played with the real Sim (avatar, shooting, melee, search, dormant dead that wake near you).
 ## EXTRACT: stand in a pickup ring for 2 s, a short cutscene, and the loot (the raid sim's stock) is banked in the base's stores. DIE in the raid: the pack is lost, same cutscene back.
-## Keys: WASD walk, mouse aim, left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc quit.
+## Keys: WASD walk, mouse aim, left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc pause menu.
 ## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom.
 ##
 ## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; ten zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
@@ -17,6 +17,8 @@ const World := preload("res://scripts/town/town_world.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownRun := preload("res://scripts/town/town_run.gd")
 const TownRoofs := preload("res://scripts/town/town_roofs.gd")
+const Fonts := preload("res://scripts/ui/fonts.gd")
+const PauseMenu := preload("res://scripts/prison/prison_pause.gd")    # ART: Esc
 const Polish := preload("res://scripts/prison/prison_polish.gd")    # ART: ground, floors, AO, shadows
 const FX := preload("res://scripts/render/fx.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
@@ -118,6 +120,8 @@ var _shot_wait := 90
 var _quit_after := false
 var sound
 var tod := 8.0    # hour of the day
+var pause_menu
+var band_a := 0.0    # ART: the caption band's fade
 var vignette: ColorRect
 var night_rect: ColorRect
 var glow: Control
@@ -207,6 +211,13 @@ func _ready() -> void:
 	topbar = Topbar.new(self)
 	tags = Tags.new(self)
 	guide = Guide.new(self)
+	pause_menu = PauseMenu.new()
+	add_child(pause_menu)
+	pause_menu.setup(self)
+	if args.has("pause"):
+		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open(String(args.pause) if String(args.pause) in ["controls", "settings"] else "main"))
+	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest")):
+		get_tree().create_timer(0.6).timeout.connect(func(): _card("THE PRISON", "Hold the gate. Keep them fed. Survive the nights.", 3.2))
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
@@ -326,7 +337,11 @@ func _make_hud() -> void:
 	fade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cl.add_child(fade)
-	cap_label = _lbl(30, Vector2(0, 0))
+	cap_label = _lbl(34, Vector2(0, 0))
+	cap_label.add_theme_font_override("font", Fonts.cond(700))
+	cap_label.add_theme_color_override("font_color", Color("#eeeadd"))
+	cap_label.add_theme_constant_override("shadow_offset_y", 2)
+	cap_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	cap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap_label.modulate.a = 0.0
 	cl.add_child(cap_label)
@@ -343,8 +358,8 @@ func _layout_labels() -> void:
 	prompt_label.position = Vector2(v.x * 0.2, v.y - 130)
 	msg_label.size = Vector2(v.x * 0.6, 30)
 	msg_label.position = Vector2(v.x * 0.2, v.y - 200)
-	cap_label.size = Vector2(v.x, 80)
-	cap_label.position = Vector2(0, v.y * 0.5 + 60)
+	cap_label.size = Vector2(v.x, 110)
+	cap_label.position = Vector2(0, v.y * 0.5 + 30)
 
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
@@ -849,6 +864,9 @@ func _tick(dt: float) -> void:
 	tags.frame()
 	guide.frame(dt)
 	_layout_labels()
+	if cap_label.modulate.a > 0.01 or band_a > 0.01:    # ART: the caption band follows its fade
+		band_a = cap_label.modulate.a
+		cut_art.queue_redraw()
 	if _msg_t > 0.0:
 		_msg_t -= dt
 		if _msg_t <= 0.0:
@@ -1024,7 +1042,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 				map_view = not map_view
 				zoom_px = 6.0 if map_view else play_zoom
 			KEY_ESCAPE:
-				get_tree().quit()
+				pause_menu.open()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_px *= 1.12
@@ -1258,9 +1276,15 @@ func _cut_in() -> void:
 
 
 func _draw_cut() -> void:
+	var v := _vp()
+	var ba := cap_label.modulate.a
+	if ba > 0.01:    # ART: one band for every title card: dark, a gold rule above and below
+		var br := Rect2(0, cap_label.position.y - 6, v.x, cap_label.size.y + 12)
+		cut_art.draw_rect(br, Color(0.03, 0.04, 0.04, 0.72 * ba))
+		cut_art.draw_rect(Rect2(br.position.x, br.position.y, v.x, 2), Color(0.94, 0.76, 0.29, 0.9 * ba))
+		cut_art.draw_rect(Rect2(br.position.x, br.end.y - 2, v.x, 2), Color(0.94, 0.76, 0.29, 0.9 * ba))
 	if cut_x < 0.0:
 		return
-	var v := _vp()
 	var x := lerpf(-260.0, v.x + 60.0, cut_x)
 	var y := v.y * 0.5
 	cut_art.draw_rect(Rect2(x, y, 200, 70), Color(0.28, 0.3, 0.26))
