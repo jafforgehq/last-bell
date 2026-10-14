@@ -6,12 +6,13 @@ extends RefCounted
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const PATH := "user://prison_ui.cfg"
 
 const CARDS := {
 	"clear": [
 		["Welcome to the prison", "You and three survivors hold the west breach. The old prison is full of the dead. Clear it zone by zone, then lock the gate behind you."],
-		["Move, aim, shoot", "WASD walks. The mouse aims and the left button fires. R reloads, F is a blow with the butt, the wheel zooms, M shows the whole prison. The top bar keeps your ammo and meds."],
+		["Move, aim, shoot", "WASD walks. %AIM%. R reloads, F is a blow with the butt, the wheel zooms, M shows the whole prison. The top bar keeps your ammo and meds."],
 		["Clear the zones", "The map at the bottom right marks ten zones. A zone is clear when no dead are left in it. E searches containers for ammo, food and meds. The pulsing ring in the world and the Objectives list show where to go next."],
 		["Your party", "Cole, Bea and Ike follow you and shoot. Their hearts are on the top bar. When one goes down, hold E beside them to revive them (1 med). Press O to fold the Objectives list, H to see this guide again."],
 	],
@@ -147,7 +148,7 @@ func key(ev: InputEvent) -> bool:
 
 func frame(dt: float) -> void:
 	var k := _phase_key()
-	if enabled and which == "" and k != "" and not bool(seen.get(k, false)) and not game.busy and game.frames > 30:
+	if enabled and which == "" and k != "" and not bool(seen.get(k, false)) and not game.busy and game.frames > 210:
 		which = k
 	if which != "" and which != k:
 		which = ""    # the phase changed under the card (the prison was secured)
@@ -158,12 +159,12 @@ func frame(dt: float) -> void:
 		_quiet = 3.0
 	else:
 		_quiet = maxf(0.0, _quiet - dt)
-	panel.visible = _quiet <= 0.0 and not game.busy and not game.board.is_open() and not game.pack.ui.is_open()
+	panel.visible = _quiet <= 0.0 and not game.busy and not game.board.is_open() and not game.pack.ui.is_open() and not game.loadout.is_open
 	var cards: Array = CARDS[which]
 	idx = clampi(idx, 0, cards.size() - 1)
 	step.text = "GUIDE  %d / %d" % [idx + 1, cards.size()]
 	title.text = String(cards[idx][0])
-	body.text = String(cards[idx][1])
+	body.text = String(cards[idx][1]).replace("%AIM%", AimMode.prison_words())
 	panel.reset_size()
 	var tb: Control = game.topbar.plate
 	panel.position = Vector2(8.0, tb.position.y + tb.size.y + 10.0)

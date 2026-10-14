@@ -85,6 +85,20 @@ static func current() -> String:
 	return RIGHT
 
 
+## The prison game's own mode (`ui.prison_aim_mode`): "always" unless the player picked "right" in the pause menu. The shared `ui.aim_mode` default stays "right".
+static func prison_mode() -> String:
+	return RIGHT if String(Prefs.get_value("ui", "prison_aim_mode", ALWAYS)) == RIGHT else ALWAYS
+
+
+static func set_prison_mode(mode: String) -> void:
+	Prefs.set_value("ui", "prison_aim_mode", RIGHT if mode == RIGHT else ALWAYS)
+
+
+## What the prison's guide, controls page and opening message say about the mouse.
+static func prison_words() -> String:
+	return "Hold the right button (or Shift) to aim, then the left button fires" if prison_mode() == RIGHT else "The mouse aims and the left button fires"
+
+
 ## Whether the mouse aims all the time (the old way).
 static func always() -> bool:
 	return current() == ALWAYS

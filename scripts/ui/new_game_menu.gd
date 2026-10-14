@@ -265,10 +265,11 @@ func _town_facts(i: int) -> String:
 		parts.append("%d%% fewer of the dead each night." % roundi((1.0 - dead) * 100.0))
 	else:
 		parts.append("%d%% more of the dead each night." % roundi((dead - 1.0) * 100.0))
-	if infect >= 0.995:
-		parts.append("Every bite infects.")
-	else:
-		parts.append("A bite infects %d times in 10." % roundi(infect * 10.0))
+	if not OneHouse.town_start(shell.main):    # (the windowed New game is the prison, where a bite does not infect)
+		if infect >= 0.995:
+			parts.append("Every bite infects.")
+		else:
+			parts.append("A bite infects %d times in 10." % roundi(infect * 10.0))
 	return " ".join(parts)
 
 
