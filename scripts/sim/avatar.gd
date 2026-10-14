@@ -285,11 +285,16 @@ func update(p, dt: float) -> void:
 	p.melee_t = maxf(0.0, p.melee_t - dt)
 	p.bloom = maxf(0.0, p.bloom - dt * BLOOM_DECAY)
 	p.target = null
+	if p.reloading > 0.0 and p.input_fire and p.mag > 0 and p.gun.get("shell_reload", false):
+		p.reloading = 0.0    # (the trigger cancels a shell-by-shell reload: the shells in are the shells loaded)
 	if p.reloading > 0.0:
 		p.reloading -= dt
 		if p.reloading <= 0.0:
 			p.reloading = 0.0
-			p.mag = _reloaded_mag(p)
+			if p.gun.get("shell_reload", false):
+				_load_shell(p)
+			else:
+				p.mag = _reloaded_mag(p)
 	_move(p, dt)
 	_aim(p, dt)
 	if p.input_reload:
@@ -692,9 +697,29 @@ func _start_reload(p) -> bool:
 		return false
 	if p.mag >= int(p.gun.get("mag", 0)) or not _can_load(p):
 		return false
-	p.reloading = float(p.gun.reload) * sim.traits.mult(p, "reload")
+	p.reloading = shell_time(p)
 	sim.events.append({"type": "reload", "x": p.x, "y": p.y})
 	return true
+
+
+## The seconds one shell takes of a shell-loader (`shell_reload` in the gun): the gun's `reload` is the whole magazine's, so a shell is a share of it. (The HUD's ring asks too.)
+func shell_time(p) -> float:
+	var t: float = float(p.gun.reload) * float(sim.traits.mult(p, "reload"))
+	if p.gun.get("shell_reload", false):
+		return t / maxf(1.0, float(p.gun.get("mag", 1)))
+	return t
+
+
+## One shell goes in; the next follows unless the magazine is full or the pack is dry.
+func _load_shell(p) -> void:
+	var cap := int(p.gun.get("mag", 0))
+	if _packed(p):
+		p.mag += sim.inv.load_shots(p, 1)
+	elif _can_load(p):
+		p.mag += 1
+	if p.mag < cap and _can_load(p):
+		p.reloading = shell_time(p)
+		sim.events.append({"type": "reload", "x": p.x, "y": p.y})
 
 
 ## INV-CORE: in the town the player's rounds are the pack's (scripts/town/inv.gd). Whether this person draws on it.

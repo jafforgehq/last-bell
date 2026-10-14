@@ -1,5 +1,8 @@
 [gd_resource type="AudioBusLayout" format=3 uid="uid://b64avtni1rhci"]
 
+[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_muffle"]
+cutoff_hz = 20500.0
+
 [sub_resource type="AudioEffectHardLimiter" id="AudioEffectHardLimiter_master"]
 ceiling_db = -0.5
 release = 0.12
@@ -14,9 +17,6 @@ dry = 0.75
 wet = 0.3
 
 [sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_rain"]
-cutoff_hz = 20500.0
-
-[sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_muffle"]
 cutoff_hz = 20500.0
 
 [sub_resource type="AudioEffectLowPassFilter" id="AudioEffectLowPassFilter_outside"]

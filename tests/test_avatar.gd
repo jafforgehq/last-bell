@@ -1096,3 +1096,46 @@ func test_a_squad_mate_succeeds_in_a_place_when_the_avatar_falls() -> void:
 func g_free(ctx: Dictionary) -> void:
 	ctx.world.free()
 	ctx.g.world.free()
+
+
+## A gun with `shell_reload` loads one shell at a time and the trigger cancels it.
+func test_a_shell_loader_reloads_one_shell_at_a_time_and_fire_cancels() -> void:
+	var g := _game("shotgun")
+	var p = g.p
+	var sim = g.sim
+	p.gun = p.gun.duplicate()
+	p.gun["shell_reload"] = true
+	sim.stock.ammo = 400.0
+	p.mag = 2
+	var cap := int(p.gun.mag)
+	check(sim.avatar._start_reload(p), "the reload starts")
+	var per: float = sim.avatar.shell_time(p)
+	_step(sim, per + 0.05)
+	check(p.mag == 3 and p.reloading > 0.0, "one shell in, the next going: mag %d" % p.mag)
+	sim.avatar.set_input(Vector2.ZERO, Vector2(49.0, 30.5), true)
+	_step(sim, 0.05)
+	check(p.reloading == 0.0 and p.mag == 2, "fire cancels the reload and fires: mag %d" % p.mag)
+	sim.avatar.set_input(Vector2.ZERO, Vector2(49.0, 30.5), false)
+	sim.avatar._start_reload(p)
+	_step(sim, per * float(cap) + 0.5)
+	check(p.mag == cap and p.reloading == 0.0, "left alone it fills: mag %d" % p.mag)
+	g.world.free()
+
+
+## A gun's `stagger` and `stagger_chance` set the stun of its hit; a gun without them stuns 0.25 s.
+func test_stagger_is_per_gun() -> void:
+	var g := _game("shotgun")
+	var p = g.p
+	var z = _dead_at(g.sim, 43.0, 30.5, 100.0)
+	p.gun = p.gun.duplicate()
+	p.gun["stagger"] = 0.45
+	g.sim._hurt_zombie(z, 1.0, 0.0, p)
+	check(is_equal_approx(z.stagger, 0.45), "the gun's stagger: %f" % z.stagger)
+	p.gun["stagger_chance"] = 0.0
+	z.stagger = 0.0
+	g.sim._hurt_zombie(z, 1.0, 0.0, p)
+	check(z.stagger == 0.0, "a failed roll leaves it: %f" % z.stagger)
+	p.gun.erase("stagger")
+	g.sim._hurt_zombie(z, 1.0, 0.0, p)
+	check(is_equal_approx(z.stagger, 0.25), "no key: the old 0.25: %f" % z.stagger)
+	g.world.free()
