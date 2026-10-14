@@ -737,6 +737,8 @@ func objectives() -> Array:
 	var evac: bool = game.arc != null and game.arc.started and String(game.arc.phase().id) == "evacuate"
 	if evac:
 		out.append_array(arc_lines.filter(func(l): return not bool(l.get("head", false))))
+	else:
+		out.append_array(arc_lines.filter(func(l): return bool(l.get("list", false))))    # (the convoy's list and its parts total, from day 3)
 	var shown := 0
 	for id in econ.goal():
 		var st: String = econ.state(String(id))

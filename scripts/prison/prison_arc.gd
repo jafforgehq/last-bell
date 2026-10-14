@@ -260,6 +260,38 @@ func phases_list() -> Array:
 
 # ------------------------------------------------------------------------- tracker and bar --
 
+## The parts the convoy's list asks for in all (the projects on its path plus the stock handed over) and how many are still to find after what is built, being built and held.
+func convoy_parts() -> Dictionary:
+	var econ = game.econ
+	var ids := {}
+	for r in cfg.requirements:
+		if String(r.kind) == "project":
+			_chain(ids, String(r.project))
+		elif String(r.kind) == "tier":
+			for t in range(1, int(r.tier) + 1):
+				_chain(ids, "%s%d" % [String(r.building), t])
+	var total := 0.0
+	var left := 0.0
+	for id in ids:
+		var p := float(econ.defs[id].cost.get("parts", 0.0))
+		total += p
+		if not ["built", "building"].has(String(econ.state(String(id)))):
+			left += p
+	for r in cfg.requirements:
+		if String(r.kind) == "stock" and String(r.res) == "parts":
+			total += float(r.need)
+			left += float(r.need)
+	return {"total": total, "left": maxf(0.0, left - _stock("parts"))}
+
+
+func _chain(ids: Dictionary, id: String) -> void:
+	if ids.has(id):
+		return
+	ids[id] = true
+	for r in game.econ.defs[id].requires:
+		_chain(ids, String(r))
+
+
 ## The tracker's lines for the arc (the top bar's `objectives()` adds them after the urgent line). Each: {t, done, bad, bar (0 to 1, optional)}.
 func objectives() -> Array:
 	var out: Array = []
@@ -270,6 +302,15 @@ func objectives() -> Array:
 	var head := "%s  -  day %d of %d%s" % [String(ph.name), day, days(), ("  (%d left to the convoy)" % left) if left > 0 and convoy == "none" else ""]
 	var late: bool = int(ph.by_day) > 0 and day > int(ph.by_day) and not bool(ph.done) and String(ph.id) != "evacuate"
 	out.append({"t": head, "done": false, "bad": late, "head": true})
+	if convoy == "none" and day >= 3:    # the rumour is out: the list and its parts total are on the tracker from day 3
+		var cp := convoy_parts()
+		var ok_n := 0
+		var must_n := 0
+		for r in requirements():
+			if bool(r.must):
+				must_n += 1
+				ok_n += 1 if bool(r.ok) else 0
+		out.append({"t": "Convoy list: %d of %d ready. Parts %d in all, %d still to find" % [ok_n, must_n, int(cp.total), int(cp.left)], "done": ok_n == must_n, "bad": left <= 3 and ok_n < must_n, "bar": 1.0 - float(cp.left) / maxf(1.0, float(cp.total)), "list": true})
 	if String(ph.id) == "evacuate":
 		var n := 0
 		for r in requirements():
@@ -313,6 +354,8 @@ func chip() -> Dictionary:
 	var tip := "%s comes to the gate on day %d at %02d:00 and waits %s. Ready: %d of %d things on its list.\n" % [String(cfg.convoy.name).capitalize(), convoy_day(), int(cfg.calendar.arrive_h), String(cfg.convoy.waits), ok_n, must_n]
 	for r in reqs:
 		tip += "\n%s %s: %s" % ["[x]" if bool(r.ok) else "[ ]", String(r.label), String(r.text)]
+	var cp := convoy_parts()
+	tip += "\n\nParts in all: %d, still to find: %d." % [int(cp.total), int(cp.left)]
 	tip += "\nSeats: %d for %d people.   L: the story log." % [seats(), people_alive()]
 	return {"main": main, "sub": sub, "state": st, "tip": tip, "meter": float(ok_n) / maxf(1.0, float(must_n))}
 
