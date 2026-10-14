@@ -16,12 +16,12 @@
   "weather": {"3": "rain", "6": "fog", "9": "rain", "13": "rain", "16": "fog", "20": "rain", "24": "storm", "27": "rain"},
   "phases": [
     {"id": "establish", "name": "Phase I: Establish", "stage": "Shelter", "by_day": 7, "text": "Water and beds: make the prison somewhere people can stay."},
-    {"id": "prepare", "name": "Phase II: Prepare", "stage": "Fortress", "by_day": 20, "text": "Settlement and Fortress: food, a kitchen, a medic, power and a reinforced fence."},
+    {"id": "prepare", "name": "Phase II: Prepare", "stage": "Fortress", "by_day": 20, "text": "Settlement and Fortress: food, a kitchen, a medic, power, a reinforced fence and the convoy truck."},
     {"id": "evacuate", "name": "Phase III: Evacuate", "stage": "", "by_day": 30, "text": "Be ready at the gate on day 30."}
   ],
   "requirements": [
     {"id": "fuel", "label": "Fuel for the road", "kind": "stock", "res": "fuel", "need": 32, "must": true, "take": true},
-    {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 25, "must": true, "take": true},
+    {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 35, "must": true, "take": true},
     {"id": "truck", "label": "Convoy truck built", "kind": "project", "project": "convoy1", "must": true},
     {"id": "radio", "label": "Radio room (tier 1)", "kind": "tier", "building": "radio", "tier": 1, "must": true},
     {"id": "fence", "label": "Fence tier 2", "kind": "tier", "building": "fence", "tier": 2, "must": true},
@@ -76,8 +76,8 @@
         }}}},
     {"id": "arrangement", "day": 18, "tag": "convoy", "title": "The arrangement", "opens_phase": "evacuate",
       "from": "Halloran, Harbor Relief",
-      "text": "A man this time, clear and tired. Halloran. The convoy passes the river road on day 30 and will wait at your gate until the afternoon, no longer. They want 32 fuel and 25 parts for the road, a radio to talk to you, a fence that can hold while they load, and a truck of your own to join the column. Everyone who is at the gate goes. The bus and your truck have twelve seats between them.",
-      "short": "Halloran: the convoy comes on day 30. Fuel 40, parts 25, a radio room, a fence at tier 2, a truck of your own.",
+      "text": "A man this time, clear and tired. Halloran. The convoy passes the river road on day 30 and will wait at your gate until the afternoon, no longer. They want 32 fuel and 40 parts for the road, a radio to talk to you, a fence that can hold while they load, and a truck of your own to join the column. Everyone who is at the gate goes. The bus and your truck have twelve seats between them.",
+      "short": "Halloran: the convoy comes on day 30. Fuel 32, parts 40, a radio room, a fence at tier 2, a truck of your own.",
       "reward": {"stores": {"parts": 4}}},
     {"id": "storm", "day": 24, "tag": "storm", "title": "The storm",
       "from": "Halloran, Harbor Relief",
@@ -179,10 +179,10 @@
     "skills": {
       "passive": {"raids": 0.0, "loot": 0.0, "rescue_p": 0.0, "mend": 0.0, "spend": 0.0, "defense": 1.0},
       "average": {"raids": 1.0, "loot": 0.8, "rescue_p": 0.25, "mend": 0.8, "spend": 1.0, "defense": 0.7},
-      "expert": {"raids": 1.0, "loot": 1.1, "rescue_p": 0.4, "mend": 1.0, "spend": 1.0, "defense": 1.0}
+      "expert": {"raids": 1.0, "loot": 1.0, "rescue_p": 0.4, "mend": 1.0, "spend": 1.0, "defense": 1.0}
     },
     "start_people": 3,
-    "start_stores": {"food": 45, "water": 45, "ammo": 60, "meds": 4, "scrap": 25, "parts": 2, "fuel": 0},
+    "start_stores": {"food": 40, "water": 30, "ammo": 40, "meds": 3, "scrap": 24, "parts": 2, "fuel": 0},
     "raid_places": 3, "raid_death_p": 0.02, "raid_ammo": 6, "raid_kills": 5, "arc_start_day": 6, "scrap_reserve": 15, "bench_scrap": 20,
     "night": {"base_defense": 0.0, "guard_kills": 5.0, "ruth_kills": 28.0, "ammo_per_kill": 0.5, "hp_per_dead": 8.0, "wear": 0.6, "casualty_p": 0.2, "light_bonus": 0.12}
   }

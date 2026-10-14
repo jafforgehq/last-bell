@@ -23,11 +23,11 @@ Letters: about one raid in four hides a `note` item in a random container (rare,
 
 ## The goals
 
-The objectives tracker (key O) shows, under the urgent line, the phase line `Phase II: Prepare - day 12 of 30 (18 left to the convoy)` (red when the phase is later than its `by_day`) and, from the day the convoy confirms (18) or when Phase III is reached, the convoy's list with thin progress bars. The top bar's clock reads **Day 12 of 30** (gold "CONVOY" on day 30), and a new chip **Convoy: day 30, in 18 d** (amber with 7 days left, red with 3) carries a meter of the list and a hover with every item.
+The objectives tracker (key O) shows, under the urgent line, the phase line `Phase II: Prepare - day 12 of 30 (18 left to the convoy)` (red when the phase is later than its `by_day`) and, from day 3 (the rumour), one line for the convoy's list: `Convoy list: 2 of 5 ready. Parts 151 in all, 120 still to find`, with a bar for the parts. From the day the convoy confirms (18) or when Phase III is reached the two missing items of the list follow, each with a thin bar. The parts total counts the projects on the list's path (generator, radio room, fence tier 2, convoy truck) that are not built yet plus the parts handed over, less what is in the stores. The convoy chip's hover shows the same total. The top bar's clock reads **Day 12 of 30** (gold "CONVOY" on day 30), and a new chip **Convoy: day 30, in 18 d** (amber with 7 days left, red with 3) carries a meter of the list and a hover with every item.
 
 * **Phase I: Establish** (by day 7): stage Shelter (water, dormitory).
 * **Phase II: Prepare** (by day 20): Settlement and Fortress (garden 2, kitchen, infirmary, fence 2, power 2).
-* **Phase III: Evacuate**: the convoy's list. Required: **fuel 40, parts 25** (in the stores on day 30, handed over), **Convoy truck** built (project `convoy1`: scrap 30, parts 30, fuel 10, 120 s of a mechanic, needs the generator; 8 seats), **radio room tier 1**, **fence tier 2**. Not required, shown with a bar: **people alive 9** (the bus has 4 seats, the truck 8: 12 seats in all, so at most 12 people go; Ruth and the children first).
+* **Phase III: Evacuate**: the convoy's list. Required: **fuel 32, parts 35** (in the stores on day 30, handed over), **Convoy truck** built (project `convoy1`: scrap 30, parts 40, fuel 10, 120 s of a mechanic, needs the generator; 8 seats), **radio room tier 1**, **fence tier 2**. Not required, shown with a bar: **people alive 9** (the bus has 4 seats, the truck 8: 12 seats in all, so at most 12 people go; Ruth and the children first).
 * Extras that add to the score: a seat for the dog (+10), 10 meds for the sick (+15), 30 food for the road (+10), nobody lost on the way (+25).
 
 If the required list is complete the convoy takes everyone who fits. If not, the convoy does not stop (the card reads what is missing); the run goes on to the last night.
@@ -53,29 +53,25 @@ The card shows the epilogue (made from what happened: the names of the people lo
 
 ## Pacing, as measured (the lab)
 
-`--arcauto[=passive|average|expert] --managed [--seed=N]` runs a scripted player through the 30 days, one day a frame, with the real economy, arc, story and endings; the raid and the night are stand-ins (see the weak spots). It prints one line a day (people, beds, morale, stores, the convoy list n/5, fence, radio, truck, the night's size and what it did) and one `ARCLAB RESULT` line. A batch: see the header of `prison_arclab.gd`.
+`--prison --managed --arcauto[=passive|average|expert] [--seed=N]` runs a scripted player through the 30 days, one day a frame, with the real economy, arc, story and endings, and now the real loot model; only the night is a stand-in. It prints one line a day (people, beds, morale, stores, the convoy list n/5, fence, radio, truck, the night's size and what it did) and one `ARCLAB RESULT` line. A batch: see the header of `prison_arclab.gd`. `--arcraids` adds one line per raid (kind of town, the places hunted, what the walk found).
 
-Seeds 1 to 12, three people at the start, the table above:
+**The raid.** Each lab raid does what a player does at the gate: the bot reads the biggest shortage, picks from the kinds of town on offer that day (`Loot.offer(day)`) the one that answers it (industrial yard for parts, fuel and scrap, residential for food and water, hospital for meds, police for ammo, else the mixed town), picks the gate option that hunts it, generates a town, retags and re-rolls it with `prison_loot.gd` for that kind and walks it with the loot lab's greedy 180 s walk (4 tiles a second, 6 seconds a container, nearest first). The walk finds no fights and has no 32-cell pack limit, so the skills scale it: average 0.8, expert 1.0. This replaces the old model, which paid about 13 parts and 12 fuel for every raid whatever the town, several times what a mixed town holds (a mixed town gives about 2.4 parts and 1.6 fuel to an untargeted raid, a hunt in it about 5 parts, an industrial yard about 12 to 19 parts and 9 fuel).
 
-| Player | Reaches the convoy | Endings | People on the truck (of everyone who ever lived there) | Ends |
-| --- | --- | --- | --- | --- |
-| passive (no raids, no spending) | 0 of 12 | overrun 12 | none | day 12 to 15 (the fence, unmended, falls at night 12 to 14) |
-| average (a raid a day, spends, mends, 3 rescues in 12 days) | 8 of 12 | full 5, good 1, bitter 2, overrun 3, abandoned 1 | 79 percent of those who got there (53 percent counting the lost runs) | evac day 30; failures day 24 to 29 (the storm and the last week) |
-| expert (more loot, more rescues) | 12 of 12 | full 7, good 5 | 85 percent | day 30 |
+**The start.** The lab no longer opens on the `--managed` defaults. `lab.start_stores` is the new game's stores plus a typical clear phase: `CLEAR_STORES` (food 25, water 12, ammo 60 less the 40-round kit, meds 3, scrap 4, parts 2) plus about a third of the 32 containers' loot: food 40, water 30, ammo 40, meds 3, scrap 24, parts 2, fuel 0. (The clear bot `--auto=clearall` searches one container a zone and does not bank the loot, so the bank is an estimate from the loot of the ten containers it opened, scaled up.)
 
-The goal progress for one average run (seed 4: the convoy's list of 5 must-haves met, the stage, people with Ruth, the night's size):
+**The list, retuned.** Parts for the road 25 to 35, convoy truck 30 to 40 parts (fuel 32, 10 for the truck, unchanged), so the list asks for 151 parts in all (generator 30, radio room 40, truck 40, fence tier 2 six, handed over 35) and 32 fuel on top of the generator's one a day. The caps are unchanged (parts 60, fuel 40; the requirement of 32 is no longer the cap). The convoy truck is in the Fortress stage (fence 2, power 2, truck), so the stage tracker steers parts towards it instead of into Hub tiers the list does not need. The lab's bot follows the same path from day 6 and, from day 18, does not spend the handed-over fuel and parts on anything off the path.
 
-| Day | Stage | List | People | Fence / radio / truck | Night (dead, wall fire) |
-| --- | --- | --- | --- | --- | --- |
-| 1 | Shelter | 0/5 | 5 | 0 / 0 / 0 | 5, 24 |
-| 5 | Shelter | 1/5 | 5 | 0 / 0 / 0 | 14, 24 |
-| 10 | Fortress | 2/5 | 8 | 2 / 0 / built | 24, 27 |
-| 15 | Hub | 3/5 | 8 | 2 / 1 / built | 42, 27 (leak 14) |
-| 20 | Hub | 4/5 | 10 | 2 / 1 / built | 52, 38 |
-| 25 | Hub | 4/5 | 13 | 2 / 1 / built | 50, 19 (leak 30) |
-| 29 | Hub | 4/5 | 8 | 2 / 1 / built | 58, 12 (leak 45): five lost in the last nights |
+Seeds 1 to 8, eight runs per skill, three people at the start. Before is the old raid model and the old start; after is the real loot, the real start and the new list.
 
-The 5th item (the stock of fuel and parts) is fetched in the last days because the generator burns the fuel; the lab's bot takes it from day 18. The tuning knobs, in the order to turn them: the `nights` rows (the biggest lever: between the table of an earlier run, about 15 percent lower, every average run got there, and about 15 percent higher none did), `lab.night.guard_kills` and `ruth_kills`, `caps` (fuel 40 and parts 60 are the economy's caps: the requirement fuel 40 sits exactly on the cap), the convoy truck's cost in `prison_projects.json`, `rules`. The target "an average competent player gets there with about 70 percent of the people, a passive one fails by day 15 to 20" holds for the lab (79 percent, and the passive run ends at day 12 to 15: a little early; raise `start_stores` or lower nights 9 to 14 to move it).
+| Player | Before | After |
+| --- | --- | --- |
+| passive (no raids, no spending) | 0 of 8, overrun day 20 to 24 | 0 of 8, overrun day 19 to 21 |
+| average (a raid a day, spends, mends, rescues at 25 percent a raid) | 7 of 8 evac_full, 1 dead (Ruth lost on a raid) | 5 of 8 evac_full, 2 overrun on day 30 with the list unfinished, 1 held (list unfinished) |
+| expert (more loot, more rescues) | 8 of 8 (4 full, 4 good) | 6 of 8 (5 full, 1 good), 1 overrun on day 25, 1 held (list unfinished) |
+
+Every failed average run ends day 30 with the list unfinished (parts or the truck), so the list is the lever, not the night. The list is reachable but not free. These are bot runs: three human runs of days 1 to 30 are the real decision.
+
+A day-by-day line for any run: `--prison --managed --arcauto=average --seed=N`. The stock of fuel and parts is fetched in the last days because the generator burns the fuel. The tuning knobs, in the order to turn them: the `nights` rows (the biggest lever for the night), `lab.skills.*.loot`, the list's parts (`requirements` and the costs of `power1`, `radio1`, `convoy1` in `prison_projects.json`), `caps`, `lab.start_stores`, `rules`.
 
 ## Flags
 
@@ -94,7 +90,7 @@ The 5th item (the stock of fuel and parts) is fetched in the last days because t
 
 ## Weak spots
 
-* The lab's raid and night are a model, not the game: one raid is three places' loot (`loot` of the economy's own table) times a skill factor, and a night is the table's dead against `guard_kills` 5 each and Ruth's 28 (times her skill) from `lab.night` with the leak breaking walls (8 hp a dead). It was set against one real run (`--siege=10 --siegefor=90`: 19 of 38 dead killed in 90 s, 4.3 shots a kill, 20 rounds, one wall down and 11 of 17 crew lost). A human playtest of days 15 to 30 is the missing check; every number is in the JSON.
+* The lab's night is a model, not the game, and its raid is the loot lab's greedy walk (no fights, no pack limit, no companions, a fixed 180 s; the skill factor stands in for the hands). A night is the table's dead against `guard_kills` 5 each and Ruth's 28 (times her skill) from `lab.night` with the leak breaking walls (8 hp a dead). It was set against one real run (`--siege=10 --siegefor=90`: 19 of 38 dead killed in 90 s, 4.3 shots a kill, 20 rounds, one wall down and 11 of 17 crew lost). A human playtest of days 15 to 30 is the missing check; every number is in the JSON.
 * The lab starts with three people (the base starts small), and rescues come at 25 percent a raid (expert 40). If the other agent's rescue rules differ, set `lab.start_people` and the skills' `rescue_p`.
 * The real game's storm has no rain art (a darker tint and the banner only), the convoy is drawn from rectangles, and the "dog" is a seat rule (the dog never dies).
 * Cards pause the whole game; nothing shows in scripted runs unless `--arcshow`.
