@@ -11,6 +11,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
 const Demo := preload("res://scripts/demo.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
+const PrisonSave := preload("res://scripts/prison/prison_save.gd")    # the prison's save: Continue
 
 const TAGLINE := "Hold the schoolyard for thirty nights."
 ## The small tag of the demo's title (round 26).
@@ -102,7 +103,7 @@ func _build_column() -> void:
 	board.add_child(wrap)
 	column.add_child(board)
 	var orientation_done := Prefs.flag("tutorial_done")
-	_add(list, "continue", shell.menu_item("Continue", "No saved game yet"), shell.continue_game)
+	_add(list, "continue", shell.menu_item("Continue", "No saved game yet"), _continue)
 	_add(list, "new", shell.menu_item("New game"), shell.open_new_game)
 	if not OneHouse.town_start(shell.main):    # (the town's lessons are in its first house; Orientation Day is the school's: `--school`)
 		_add(list, "orientation", shell.menu_item("Orientation Day", ORIENTATION_BLURB, not orientation_done), shell.start_orientation)
@@ -111,6 +112,19 @@ func _build_column() -> void:
 	_add(list, "credits", shell.menu_item("Credits"), shell.open_credits)
 	if not shell.on_web():
 		_add(list, "quit", shell.menu_item("Quit"), shell.quit_game)
+
+
+## Continue: the prison's save when there is one (a bad file says why and loads nothing), else the old games' newest.
+func _continue() -> void:
+	var prison: Dictionary = PrisonSave.peek()
+	if prison.is_empty() or shell.main == null or not shell.main.has_method("continue_prison"):
+		shell.continue_game()
+	elif bool(prison.ok):
+		shell.play("ui_confirm")
+		shell.main.continue_prison()
+	else:
+		shell.play("ui_error")
+		shell.toast(String(prison.why), "danger")
 
 
 func _add(list: Control, key: String, b: Button, action: Callable) -> void:
@@ -162,6 +176,12 @@ func refresh() -> void:
 	var best: Dictionary = shell.newest_save()
 	var c: Button = items["continue"]
 	var sub: Label = c.get_meta("sub")
+	var prison: Dictionary = PrisonSave.peek()    # (the prison's save comes first: it is the game now; a file that cannot be used says why, on the button and when it is pressed)
+	if not prison.is_empty():
+		sub.text = String(prison.line)
+		c.tooltip_text = ""
+		shell.set_item_enabled(c, true)
+		return
 	if best.is_empty():
 		# (SAVE4: a save of an older version is never continued; the line says so rather than "no saved game")
 		var older: bool = shell.has_method("has_incompatible_save") and shell.has_incompatible_save()

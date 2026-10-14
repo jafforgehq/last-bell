@@ -870,3 +870,36 @@ func lab(dt: float) -> void:
 	labrun.step(dt)
 	if ended_id != "":
 		labrun.report_if_ended()
+
+
+## SAVE hook (prison_save.gd): the story so far. The calendar's day is the economy's (`econ.day`).
+func to_dict() -> Dictionary:
+	return {"day": day, "weather": weather, "ended_id": ended_id, "convoy": convoy, "delivered": delivered.duplicate(), "choices": choices.duplicate(), "letters_found": letters_found.duplicate(),
+		"log_entries": log_entries.duplicate(true), "set_piece": set_piece.duplicate(true), "storm_seen": storm_seen, "stats": stats.duplicate(), "ever": ever.duplicate(true), "queue": _queue.duplicate(),
+		"convoy_open": _convoy_open, "convoy_decided": _convoy_decided, "walked": _walked.duplicate(), "notes_wait": _notes_wait.duplicate()}
+
+
+## Puts a saved story back (before the base is built): the arc is `started`, so its first-frame begin (which would deliver the day's beats again) does not run.
+func from_dict(d: Dictionary) -> void:
+	day = int(d.get("day", 1))
+	weather = String(d.get("weather", "clear"))
+	convoy = String(d.get("convoy", "none"))
+	delivered = (d.get("delivered", {}) as Dictionary).duplicate()
+	choices = (d.get("choices", {}) as Dictionary).duplicate()
+	letters_found = (d.get("letters_found", []) as Array).duplicate()
+	log_entries = (d.get("log_entries", []) as Array).duplicate(true)
+	set_piece = (d.get("set_piece", {}) as Dictionary).duplicate(true)
+	storm_seen = bool(d.get("storm_seen", false))
+	for k in (d.get("stats", {}) as Dictionary):
+		stats[String(k)] = d.stats[k]
+	ever = (d.get("ever", {}) as Dictionary).duplicate(true)
+	_queue = (d.get("queue", []) as Array).duplicate()
+	_convoy_open = bool(d.get("convoy_open", false))
+	_convoy_decided = bool(d.get("convoy_decided", false))
+	_walked = (d.get("walked", []) as Array).duplicate()
+	_notes_wait = (d.get("notes_wait", []) as Array).duplicate()
+	started = true
+	_last_day = int(game.econ.day)
+	day = _last_day
+	_start_t = 0.0
+	story.log_changed()

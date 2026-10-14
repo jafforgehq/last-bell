@@ -574,3 +574,15 @@ func banner(text: String, col: Color = Color(0.6, 1, 0.7), secs: float = 6.0) ->
 	_banner.visible = true
 	_banner.modulate.a = 1.0
 	_banner_t = secs
+
+
+## SAVE hook (prison_save.gd): the people raids brought (the base's crew is rebuilt from these and the names in `econ_gone` at every return).
+func to_dict() -> Dictionary:
+	return {"recruits": recruits.duplicate(true), "rescued": rescued}
+
+
+func from_dict(d: Dictionary) -> void:
+	recruits = (d.get("recruits", []) as Array).duplicate(true)
+	rescued = int(d.get("rescued", 0))
+	for r in recruits:
+		r.erase("arrive")    # (they were in the base when it was saved: nobody walks in through the gate)

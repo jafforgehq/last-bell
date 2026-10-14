@@ -1628,6 +1628,11 @@ func load_run(path: String) -> bool:
 	return true
 
 
+## The title's Continue for the prison's save (prison_save.gd): the prison starts as a new game does and reads the save before it builds the base.
+func continue_prison() -> void:
+	_begin({"town": true, "prison_load": true})
+
+
 ## Back to the title screen.
 func show_title() -> void:
 	_begin({"title": true})

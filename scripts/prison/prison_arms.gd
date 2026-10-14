@@ -203,3 +203,16 @@ func has_spare_in_pack() -> bool:
 		if String(pl.item).begins_with("gun_"):
 			return true
 	return false
+
+
+## SAVE hook (prison_save.gd): the rack, the gun in her hands and the spare.
+func to_dict() -> Dictionary:
+	return {"armory": armory.duplicate(), "main": main, "spare": spare}
+
+
+func from_dict(d: Dictionary) -> void:
+	armory = {}
+	for k in (d.get("armory", {}) as Dictionary):
+		armory[String(k)] = int(d.armory[k])
+	main = String(d.get("main", main))
+	spare = String(d.get("spare", ""))

@@ -7,6 +7,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
+const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: Save and Save and quit
 ## ROUND 12: the volume sliders (label, Prefs key in section audio) and the bus each one sets.
 const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambience"], ["Effects", "sfx"]]
 const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
@@ -26,6 +27,7 @@ var page := "main"
 var opened_frame := -10
 var _quit_armed := false
 var _quit_btn: Button
+var _save_note := ""    # SAVE: what the last press of Save said
 
 
 func setup(g) -> void:
@@ -59,6 +61,7 @@ func open(which: String = "main") -> void:
 	if is_open():
 		return
 	opened_frame = Engine.get_process_frames()
+	_save_note = ""
 	if game.audio != null:
 		game.audio.ui_open()
 	layer.visible = true
@@ -118,6 +121,7 @@ func _page(which: String) -> void:
 			body.add_child(_btn("Resume", close, true))
 			body.add_child(_btn("Controls", func(): _page("controls")))
 			body.add_child(_btn("Settings", func(): _page("settings")))
+			_save_rows()
 			_quit_btn = _btn("Quit", _quit)
 			body.add_child(_quit_btn)
 			var tip := _lab("Esc goes back to the game", 14, Hud.INK3)
@@ -151,6 +155,33 @@ func _volume_row(label: String, key: String) -> HBoxContainer:
 	row.add_child(sl)
 	row.add_child(pct)
 	return row
+
+
+## SAVE: the two buttons, grey (with the reason under them) when the game cannot be saved now.
+func _save_rows() -> void:
+	var why := Save.why_not(game)
+	for row in [["Save", false], ["Save and quit", true]]:
+		var b := _btn(String(row[0]), _save.bind(bool(row[1])))
+		b.disabled = why != ""
+		b.modulate.a = 0.45 if why != "" else 1.0
+		body.add_child(b)
+	var note := why if why != "" else _save_note
+	if note != "":
+		var l := _lab(note, 14, Hud.INK2)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 330
+		body.add_child(l)
+
+
+func _save(and_quit: bool) -> void:
+	var err: String = Save.write(game, "manual")
+	_save_note = "Saved." if err == "" else err
+	if err == "" and and_quit:
+		get_tree().paused = false
+		get_tree().quit()
+		return
+	_page("main")
 
 
 func _quit() -> void:
