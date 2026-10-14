@@ -235,3 +235,22 @@ func status() -> String:
 	for r in ["ammo", "food", "water", "meds"]:
 		t[r] = Inventory.units(grid, r)
 	return "Pack %d/%d cells  ammo %d  food %d  water %d  meds %d    (I: backpack, 1-4: belt)" % [Inventory.used_cells(grid), Inventory.cell_count(grid), t.ammo, t.food, t.water, t.meds]
+
+
+## SAVE hook (prison_save.gd): the backpack grid and the belt (the stash is the stores).
+func to_dict() -> Dictionary:
+	return {"grid": grid.duplicate(true), "quick": quick.duplicate()}
+
+
+func from_dict(d: Dictionary) -> void:
+	var g: Dictionary = d.get("grid", {})
+	var fresh := Inventory.make_pack()
+	for c in (g.get("cells", []) as Array):
+		if Inventory.item(String(c.item)).is_empty():
+			continue    # (an item the data no longer has)
+		(fresh.cells as Array).append({"item": String(c.item), "x": int(c.x), "y": int(c.y), "rot": bool(c.rot), "count": int(c.count)})
+	grid.clear()
+	grid.merge(fresh)
+	var q: Array = d.get("quick", [])
+	for i in quick.size():
+		quick[i] = String(q[i]) if i < q.size() else ""

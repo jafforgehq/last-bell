@@ -54,6 +54,7 @@ const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: 
 const NoiseMod := preload("res://scripts/prison/prison_noise.gd")    # NOISE hook: Noise.emit, hordes, thrown distractions, car alarms
 const SpecialMod := preload("res://scripts/prison/prison_special.gd")    # SPECIAL hook: screamer, bloater, hunter, breacher
 const SearchRules := preload("res://scripts/town/search.gd")
+const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: the one save slot (prison_save.gd)
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -177,6 +178,7 @@ var special    # SPECIAL hook: prison_special.gd
 var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
 var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
+var save_day := -1    # SAVE: the economy day of the last save (the dawn autosave is once a day)
 var loadout_kit := {}    # what the card chose to take from the stores for the next raid ({} = the standard kit)
 var squad_regroup := false    # the call to the pickup: the companions run to Ruth
 var _weapon_card := false
@@ -249,10 +251,26 @@ func _ready() -> void:
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
 	phase = "managed" if (args.has("managed") or args.has("raid") or (au != "" and not clear_auto)) else "clear"
+	var save_note := ""    # SAVE: `--continue` or the title's Continue: the save is put back before the base is built
+	var save_day_in := 0
+	if Save.wants(args):
+		var sv := Save.read(args)
+		if bool(sv.ok):
+			phase = "managed"
+			Save.apply(self, sv.data)
+			save_day_in = int(econ.day)
+		else:
+			save_note = "%s A new game begins." % String(sv.why)
 	if args.has("raid") or (au != "" and not clear_auto):
 		_enter_raid()
 	else:
 		_enter_base()
+	if save_day_in > 0:
+		_say("Welcome back. Day %d." % save_day_in, 5.0)
+		if args.has("saveecho"):
+			Save.echo(self)
+	elif save_note != "":
+		_say(save_note, 9.0)
 	if args.has("hour0"):    # a start hour that then runs (--hour freezes the clock)
 		tod = float(args.hour0)
 		siege.abs_h = tod
@@ -1374,6 +1392,7 @@ func _base_logic(_dt: float) -> void:
 	# the dead at the gate are not for shooting
 	if run.avatar_p.hp < 100.0:
 		run.avatar_p.hp = 100.0
+	Save.dawn(self)    # SAVE: once a day, in the morning
 
 
 func _raid_logic(dt: float) -> void:
@@ -1481,6 +1500,7 @@ func _extract(alive: bool) -> void:
 	if join_text != "":    # RAIDS hook
 		people.banner(join_text, Color(1, 0.6, 0.45) if join_text.contains("left") else Color(0.6, 1, 0.7))
 	busy = false
+	Save.raid_return(self)    # SAVE
 
 
 func _cut_out(lines: Array, truck: bool) -> void:

@@ -633,3 +633,35 @@ func _lab_row(tag: String) -> void:
 	var s: Dictionary = game.stores
 	print("%-3s %-10s F%4d W%4d S%4d P%3d Fu%3d M%2d | prod F%2d W%2d cons F%2d W%2d | morale %3d people %2d beds %2d | %s" % [tag, _stage, s.food, s.water, s.scrap, s.get("parts", 0), s.get("fuel", 0), s.meds, r.res.food.prod, r.res.water.prod, r.res.food.cons, r.res.water.cons, morale, people(), beds().cap, ", ".join(_lab_log)] + _lab_arc())
 	_lab_log.clear()
+
+
+## SAVE hook (prison_save.gd): what the economy keeps from day to day. The projects' definitions are the JSON's; only progress is saved.
+func to_dict() -> Dictionary:
+	return {"day": day, "morale": morale, "power_on": power_on, "st": st.duplicate(true), "queue": queue.duplicate(), "streak": _streak.duplicate(), "crew_role": (cfg.crew_role as Dictionary).duplicate(),
+		"native_roles": native_roles.duplicate(), "last": last.duplicate(true)}
+
+
+## Puts a saved economy back (before the base is built). A project the data no longer knows is dropped.
+func from_dict(d: Dictionary) -> void:
+	day = int(d.get("day", 1))
+	morale = float(d.get("morale", morale))
+	power_on = bool(d.get("power_on", false))
+	st = {}
+	for id in (d.get("st", {}) as Dictionary):
+		if defs.has(String(id)):
+			var e: Dictionary = d.st[id]
+			st[String(id)] = {"done": float(e.get("done", 0.0)), "built": bool(e.get("built", false))}
+	queue = []
+	for id in (d.get("queue", []) as Array):
+		if st.has(String(id)) and not bool(st[String(id)].built):
+			queue.append(String(id))
+	for k in (d.get("streak", {}) as Dictionary):
+		_streak[String(k)] = int(d.streak[k])
+	for k in (d.get("crew_role", {}) as Dictionary):
+		cfg.crew_role[String(k)] = String(d.crew_role[k])
+	for k in (d.get("native_roles", {}) as Dictionary):
+		native_roles[String(k)] = String(d.native_roles[k])
+	var l: Dictionary = d.get("last", {})
+	last = {"spoiled": float(l.get("spoiled", 0.0)), "lost": float(l.get("lost", 0.0)), "left": String(l.get("left", "")), "short": l.get("short", {})}
+	_stage = _calc_stage()    # (no signal: nobody is told of a stage that was reached before the save)
+	_last_tod = float(game.tod)

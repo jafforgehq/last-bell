@@ -841,3 +841,28 @@ func mini(bars: Control, o: Vector2, sc: float) -> void:
 			col = Color(1, 0.3, 0.25) if sin(game.clock * 7.0) > 0.0 else Color(1, 0.7, 0.4)
 		if col.a > 0.0:
 			bars.draw_line(o + a * sc, o + b * sc, col, 3.0)
+
+
+## SAVE hook (prison_save.gd): the fence and the count of nights (saved only in the calm base, never in an attack).
+func to_dict() -> Dictionary:
+	var fence := {}
+	for s in segs:
+		fence[String(s.name)] = {"hp": float(s.hp), "max": float(s.max)}
+	return {"fence": fence, "nights_started": nights_started, "night": night, "abs_h": abs_h, "report_done": _report_done}
+
+
+## Puts the saved fence back (before the base is built: `setup` opens the gap of a segment with no hp left).
+func from_dict(d: Dictionary) -> void:
+	var fence: Dictionary = d.get("fence", {})
+	for s in segs:
+		if fence.has(String(s.name)):
+			s.max = float(fence[String(s.name)].max)
+			s.hp = clampf(float(fence[String(s.name)].hp), 0.0, float(s.max))
+	nights_started = int(d.get("nights_started", 0))
+	night = int(d.get("night", 0))
+	abs_h = float(d.get("abs_h", abs_h))
+	_last_tod = float(game.tod)
+	_report_done = bool(d.get("report_done", false))
+	attacking = false
+	pending = 0
+	forced = false
