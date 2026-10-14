@@ -19,6 +19,14 @@ var target: Array = []    # place types marked on the map
 var option := 0
 var picked := -1    # the gate's choice, used by the next raid    # the chosen option of cfg.options
 var choosing := false
+var kind := ""    # the kind of town of this raid ("" = today's town)
+var force_kind := ""    # ARC hook: an event card's raid_mod sets this to force the next raid's kind (used once; "" = free choice)
+var picked_kind := ""    # the kind chosen at the gate
+var offered: Array = []    # the kinds on offer today (ids)
+var _kind_sel := 0
+var _kind_btns: Array = []
+var _kind_info: Label
+var _kind_row: HBoxContainer
 var _panel: PanelContainer
 var _buttons: Array = []
 var _title: Label
@@ -36,6 +44,61 @@ func _init(g = null) -> void:
 	game = g
 
 
+# ------------------------------------------------------------------ the town kinds --
+
+## The data of a kind ({} for "" or an unknown id: today's town).
+static func kind_cfg(k: String) -> Dictionary:
+	var tk = cfg().get("town_kinds", {})
+	return (tk[k] as Dictionary) if tk is Dictionary and k != "" and tk.has(k) and tk[k] is Dictionary else {}
+
+
+## The base tables with the kind's laid over them: {natural, min_places, rolls, hints, retag_order}.
+static func eff(k: String) -> Dictionary:
+	var c := cfg()
+	var kc := kind_cfg(k)
+	var out := {}
+	for key in ["natural", "min_places", "rolls", "hints"]:
+		var d: Dictionary = (c.get(key, {}) as Dictionary).duplicate()
+		d.merge(kc.get(key, {}), true)
+		out[key] = d
+	out["retag_order"] = kc.get("retag_order", c.retag_order)
+	return out
+
+
+## The kinds on offer on a day (2 or 3 ids, stable per day); [] when the data has no kinds.
+static func offer(day: int) -> Array:
+	var tk = cfg().get("town_kinds", {})
+	if not (tk is Dictionary):
+		return []
+	var ids: Array = []
+	for k in tk:
+		if not String(k).begins_with("_") and tk[k] is Dictionary:
+			ids.append(String(k))
+	if ids.size() < 2:
+		return []
+	ids.erase("standard")
+	ids.sort_custom(func(a, b): return _h(day, a.hash() & 0xffff) < _h(day, b.hash() & 0xffff))
+	var out: Array = ids.slice(0, 1 + (day % 2))    # (one or two special kinds a day)
+	if (cfg().town_kinds as Dictionary).has("standard"):
+		out.insert(day % 3 % (out.size() + 1), "standard")    # (the plain town is always one of the offers)
+	return out
+
+
+## The survivor table of this raid (the base with the kind's changes).
+func survivor_cfg() -> Dictionary:
+	var sv: Dictionary = (cfg().survivor as Dictionary).duplicate()
+	sv.merge(kind_cfg(kind).get("survivor", {}), true)
+	return sv
+
+
+func noise_mult() -> float:
+	return float(kind_cfg(kind).get("noise_mult", 1.0))
+
+
+func alarm_open(def: float) -> float:
+	return float(kind_cfg(kind).get("alarm_open", def))
+
+
 # ------------------------------------------------------------------ the post-pass --
 
 static func _h(a: int, b: int) -> int:
@@ -43,8 +106,8 @@ static func _h(a: int, b: int) -> int:
 
 
 ## Retags the buildings and re-rolls the containers' loot of a town. Returns the places [{house, type, pos, n}] (a building, or one ROOM of a building when the town has too few buildings for the minimums).
-static func prepare(t: Dictionary, seed_i: int) -> Array:
-	var c := cfg()
+static func prepare(t: Dictionary, seed_i: int, k := "") -> Array:
+	var c := eff(k)
 	var natural: Dictionary = c.natural
 	var by_house := {}    # house id -> container indexes
 	for ci in t.containers.size():
@@ -99,7 +162,7 @@ static func prepare(t: Dictionary, seed_i: int) -> Array:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = _h(seed_i, ci + 1)
 		var ty := String(room_type.get(int(ct.room), type_of.get(int(ct.house), "house")))
-		ct["loot"] = roll(ty, String(ct.kind), rng)
+		ct["loot"] = roll(ty, String(ct.kind), rng, c.rolls)
 		ct["place"] = ty
 	return out
 
@@ -133,10 +196,10 @@ static func _count(type_of: Dictionary, room_type: Dictionary, ty: String) -> in
 
 
 ## What one container of a place type holds: {res: n}.
-static func roll(ty: String, kind: String, rng: RandomNumberGenerator) -> Dictionary:
+static func roll(ty: String, ckind: String, rng: RandomNumberGenerator, tables = null) -> Dictionary:
 	var c := cfg()
-	var rolls: Array = c.rolls[ty]
-	var k: Dictionary = c.kinds.get(kind, {})
+	var rolls: Array = (tables if tables != null else c.rolls)[ty]
+	var k: Dictionary = c.kinds.get(ckind, {})
 	var only: Array = k.get("only", [])
 	var use: Array = []
 	for r in rolls:
@@ -156,7 +219,19 @@ static func roll(ty: String, kind: String, rng: RandomNumberGenerator) -> Dictio
 
 ## A raid starts: the town is retagged (before the stage is made) and the target is the choice made at the gate (else the biggest need).
 func begin(t: Dictionary, seed_i: int) -> void:
-	places = prepare(t, seed_i)
+	kind = ""
+	if not (cfg().get("town_kinds", {}) as Dictionary).is_empty():
+		if force_kind != "":
+			kind = force_kind
+		elif game.args.has("townkind"):
+			kind = String(game.args.townkind)
+		elif picked_kind != "":
+			kind = picked_kind
+	force_kind = ""
+	picked_kind = ""
+	if kind == "standard" or kind_cfg(kind).is_empty():
+		kind = ""
+	places = prepare(t, seed_i, kind)
 	t["places"] = places
 	var o := default_option()
 	if game.args.has("target"):
@@ -192,7 +267,7 @@ func hint() -> String:
 	var hs: Array = []
 	for ty in target:
 		names.append(String(cfg().names[ty]))
-		hs.append(String(cfg().hints[ty]))
+		hs.append(String(eff(kind).hints[ty]))
 	return "Marked: %s (%s)" % [" / ".join(names), "; ".join(hs)] if not target.is_empty() else ""
 
 
@@ -210,6 +285,9 @@ func paint(c: CanvasItem) -> void:
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var pulse := 0.5 + 0.5 * sin(game.clock * 3.0)
 	var big := maxf(1.0, 22.0 / game.zoom_px * 2.0)    # (the overview: rings and names grow so that they can be seen)
+	var tint := String(kind_cfg(kind).get("tint", ""))
+	if tint != "":
+		c.draw_rect(Rect2(Vector2.ZERO, Vector2(64, 64) * TILE), Color(Color(tint), 0.1))    # (the kind's colour wash over the town)
 	for pl in places:
 		var ty := String(pl.type)
 		var at: Vector2 = Vector2(pl.pos) * TILE
@@ -220,7 +298,7 @@ func paint(c: CanvasItem) -> void:
 			c.draw_circle(at, rad, Color(col, 0.16 + 0.1 * pulse))
 			c.draw_arc(at, rad, 0, TAU, 36, Color(col, 0.95), 5.0 * big)
 			c.draw_arc(at, rad * 0.62, 0, TAU, 28, Color(col, 0.6), 2.0 * big)
-			c.draw_string(font, at - Vector2(170.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(cfg().hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 340.0 * big, int(22.0 * big), col)
+			c.draw_string(font, at - Vector2(170.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(eff(kind).hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 340.0 * big, int(22.0 * big), col)
 			_sign(c, door, ty, col, 1.0, big)
 		elif me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
 			_sign(c, door, ty, col, 0.8, 1.0)
@@ -291,10 +369,40 @@ func open_choice() -> bool:
 		for ty in o.types:
 			tys.append(String(cfg().names[ty]))
 		(_buttons[i] as Button).text = "%d   %s   (%s)%s" % [i + 1, String(o.name), ", ".join(tys), "     <- the base needs this" if i == def else ""]
+	var day := int(game.econ.day) if game.econ != null else 1
+	offered = [force_kind] if force_kind != "" and not kind_cfg(force_kind).is_empty() else offer(day)
+	if game.args.has("townkind"):
+		offered = [String(game.args.townkind)]
+	_kind_sel = 0
+	var nk := String(nd.get("res", ""))
+	for i in offered.size():    # (the kind that answers the shortage is pre-picked)
+		if (kind_cfg(String(offered[i])).get("answers", []) as Array).has(nk):
+			_kind_sel = i
+	_kind_row.visible = not offered.is_empty()
+	_kind_info.visible = not offered.is_empty()
+	for i in _kind_btns.size():
+		(_kind_btns[i] as Button).visible = i < offered.size()
+		if i < offered.size():
+			(_kind_btns[i] as Button).text = String(kind_cfg(String(offered[i])).get("name", offered[i]))
+	_show_kind()
 	_panel.visible = true
 	_panel.reset_size()
-	_panel.position = game._vp() / 2.0 - Vector2(330, 140)
+	_panel.position = game._vp() / 2.0 - Vector2(330, 190)
 	return true
+
+
+func _show_kind() -> void:
+	if offered.is_empty():
+		return
+	var kc := kind_cfg(String(offered[_kind_sel]))
+	_kind_info.text = "Holds: %s\nDanger: %s" % [String(kc.get("holds", "")), String(kc.get("danger", ""))]
+	for i in _kind_btns.size():
+		(_kind_btns[i] as Button).modulate = Color(1, 0.9, 0.5) if i == _kind_sel else Color(0.75, 0.75, 0.75)
+
+
+func _sel_kind(i: int) -> void:
+	_kind_sel = clampi(i, 0, maxi(0, offered.size() - 1))
+	_show_kind()
 
 
 func _build() -> void:
@@ -309,13 +417,30 @@ func _build() -> void:
 	col.add_theme_constant_override("separation", 6)
 	_panel.add_child(col)
 	_title = Label.new()
-	_title.text = "Where to? (number key or click, E or Enter: what the base needs, Esc: stay)"
+	_title.text = "Where to? (number key or click, Left/Right: kind of town, E or Enter: what the base needs, Esc: stay)"
 	_title.add_theme_font_size_override("font_size", 18)
 	col.add_child(_title)
 	_sub = Label.new()
 	_sub.add_theme_font_size_override("font_size", 16)
 	_sub.modulate = Color(1, 0.85, 0.5)
 	col.add_child(_sub)
+	_kind_row = HBoxContainer.new()
+	_kind_row.add_theme_constant_override("separation", 6)
+	col.add_child(_kind_row)
+	var kl := Label.new()
+	kl.text = "Town:"
+	_kind_row.add_child(kl)
+	for i in 3:
+		var kb := Button.new()
+		kb.focus_mode = Control.FOCUS_NONE
+		kb.add_theme_font_size_override("font_size", 16)
+		kb.pressed.connect(func(): _sel_kind(i))
+		_kind_row.add_child(kb)
+		_kind_btns.append(kb)
+	_kind_info = Label.new()
+	_kind_info.add_theme_font_size_override("font_size", 15)
+	_kind_info.modulate = Color(0.8, 0.9, 1.0)
+	col.add_child(_kind_info)
 	for i in (cfg().options as Array).size():
 		var b := Button.new()
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -332,6 +457,7 @@ func _pick(i: int) -> void:
 	choosing = false
 	_panel.visible = false
 	picked = i
+	picked_kind = String(offered[_kind_sel]) if not offered.is_empty() else ""
 	game.loadout.open(String(cfg().options[i].name))    # SQUAD hook: the second step of the gate's choice (gun, kit, companions), which goes out
 
 
@@ -342,6 +468,10 @@ func key(ev: InputEvent) -> bool:
 	var k: int = ev.keycode
 	if k >= KEY_1 and k < KEY_1 + _buttons.size():
 		_pick(k - KEY_1)
+	elif k == KEY_LEFT or k == KEY_A:
+		_sel_kind(_kind_sel - 1)
+	elif k == KEY_RIGHT or k == KEY_D or k == KEY_TAB:
+		_sel_kind((_kind_sel + 1) % maxi(1, offered.size()))
 	elif k == KEY_E or k == KEY_ENTER or k == KEY_KP_ENTER:
 		_pick(default_option())
 	elif k == KEY_ESCAPE:
@@ -400,6 +530,39 @@ static func lab(n: int) -> void:
 	var per := n / float((c.options as Array).size())
 	for r in allres:
 		print("LOOTLAB 3-min raid hunting %-6s only when it is the target: avg %.1f" % [r, tsums[r] / maxf(1.0, per)])
+	var tk: Dictionary = c.get("town_kinds", {})
+	for k in tk:
+		if not String(k).begins_with("_"):
+			_lab_kind(n, String(k), allres, types)
+
+
+## One town kind: place counts and the blind 3-minute raid's yield per resource (LOOTKIND lines).
+static func _lab_kind(n: int, k: String, allres: Array, types: Array) -> void:
+	var count := {}
+	var sums := {}
+	for ty in types:
+		count[ty] = 0
+	for r in allres:
+		sums[r] = 0.0
+	var guns := 0.0
+	for s in range(1, n + 1):
+		var t: Dictionary = TownGen.make(s, cfg().town_opts)
+		var pls := prepare(t, s, k)
+		for p in pls:
+			count[p.type] = int(count[p.type]) + 1
+		var got := _sim_raid(t, pls, [])
+		for r in allres:
+			sums[r] += float(got.get(r, 0))
+		for g in ["gun_smg", "gun_service", "gun_shotgun"]:
+			guns += float(got.get(g, 0))
+	var pl: Array = []
+	for ty in types:
+		pl.append("%s %.1f" % [ty, float(count[ty]) / n])
+	print("LOOTKIND %-11s places/town: %s" % [k, ", ".join(pl)])
+	var ys: Array = []
+	for r in allres:
+		ys.append("%s %.1f" % [r, sums[r] / n])
+	print("LOOTKIND %-11s per 3-min raid: %s, guns %.2f" % [k, ", ".join(ys), guns / n])
 
 
 ## One greedy raid of 180 s: {res: units}.

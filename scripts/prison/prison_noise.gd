@@ -151,7 +151,7 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 	var field = game.run.sim.field
 	stats.emits += 1
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
-	var r := (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult)
+	var r: float = (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult) * (float(game.loot.noise_mult()) if game.mode == "raid" and game.loot != null else 1.0)
 	heat[_hkey(pos)] = float(heat.get(_hkey(pos), 0.0)) + float(k.heat)
 	r *= 1.0 + minf(0.5, heat_at(pos) * 0.025)    # (a loud place carries sound farther: continued shooting calls more)
 	if bool(k.ripple) and (pos.distance_to(me) < 3.0 or kind == "throw"):
@@ -484,7 +484,7 @@ func on_search(container: String, at: Vector2) -> void:
 	emit_at(at, 0.0, "search", Vector2.INF)
 	if container.begins_with("car"):
 		for c in cars:
-			if not bool(c.used) and (c.pos as Vector2).distance_to(at) < 3.5 and rng.randf() < float(cfg.alarm.open_chance):
+			if not bool(c.used) and (c.pos as Vector2).distance_to(at) < 3.5 and rng.randf() < (game.loot.alarm_open(float(cfg.alarm.open_chance)) if game.loot != null else float(cfg.alarm.open_chance)):
 				start_alarm(c)
 
 
