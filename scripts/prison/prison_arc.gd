@@ -47,6 +47,7 @@ var _track_t := 0.0
 var _pending_end := ""
 var _convoy_open := false
 var _convoy_decided := false
+var _convoy_missed := false    # the convoy came and went while she was out: the card is shown when she is back in the base
 var _walked: Array = []
 var _queue: Array = []
 var _notes_wait: Array = []
@@ -415,7 +416,10 @@ func _day_banner() -> void:
 	var sub := String(w.label)
 	if sub != "clear":
 		t += "   " + sub
-	story.banner(t, String(w.get("text", "")))
+	var warn := String(w.get("text", ""))
+	if day == convoy_day() and not ready():    # (the convoy is a one-shot: say at dawn what the list still lacks)
+		warn = "NOT READY: " + "; ".join(missing())
+	story.banner(t, warn)
 
 
 ## Starvation: a streak of days without food or water takes people.
@@ -679,7 +683,7 @@ func night_over(night: int, stat: Dictionary) -> void:
 	if ended_id == "":
 		stats.nights_held = maxi(int(stats.nights_held), night)
 	if night >= convoy_day() and ended_id == "" and _overrun_t() < float(cfg.rules.overrun.secs):
-		_pending_end = "held"
+		_pending_end = held_id() if _fence_stands() else "overrun"
 
 
 func _overrun_t() -> float:
@@ -712,12 +716,27 @@ func _late_end() -> void:
 	if day >= 3 and game.econ.people() == 0 and int(stats.peak_people) >= 2:
 		_pending_end = "starved" if int(stats.starved) > 0 else "abandoned"
 	if day > convoy_day() and not game.siege.attacking and convoy != "left" and float(game.tod) >= float(cfg.calendar.card_h) and game.siege.nights_started >= convoy_day():
-		_pending_end = "held"
+		_pending_end = held_id() if _fence_stands() else "overrun"
+
+
+## The fence still stands: fewer gaps than the overrun rule.
+func _fence_stands() -> bool:
+	return _gaps() < int(cfg.rules.overrun.gaps)
+
+
+## Surviving the last night is "held" only with the convoy's list met; without it the people stayed because nothing came for them (a bitter ending, lower score).
+func held_id() -> String:
+	return "held" if ready() else "held_bitter"
 
 
 # ---------------------------------------------------------------------------------- convoy --
 
 func _convoy_hours() -> void:
+	if _convoy_missed and not game.busy and game.mode == "base" and not game.siege.attacking and not scripted:
+		_convoy_missed = false
+		var mis: Array = missing()
+		story.show_card({"kicker": "THE RIVER ROAD  -  DAY %d" % day, "title": "The convoy", "from": "Halloran, Harbor Relief", "text": String(cfg.convoy_cards.missed),
+			"extra": ("It could not wait for you. On its list you were missing: " + "; ".join(mis) + ".") if not mis.is_empty() else "Everything on its list was ready. You were not there.", "tone": "convoy"})
 	if day != convoy_day() or convoy == "left" or convoy == "gone":
 		return
 	var h: float = float(game.tod)
@@ -725,18 +744,20 @@ func _convoy_hours() -> void:
 	if convoy == "none" and h >= float(cal.arrive_h) and h < float(cal.leave_h):
 		convoy = "here"
 		if not scripted:
-			story.banner("THE CONVOY IS AT THE GATE", "Halloran waits until %02d:00." % int(cal.leave_h))
+			story.banner("THE CONVOY IS AT THE GATE", "Halloran waits until %02d:00." % int(cal.leave_h) + ("" if ready() else "  NOT READY: " + "; ".join(missing())))
 	if convoy == "here":
 		if h >= float(cal.leave_h):
 			convoy = "gone"
 			log_entries.append({"day": day, "kind": "radio", "title": "The convoy leaves", "from": "Harbor Relief", "text": String(cfg.convoy_cards.missed if not _convoy_decided else cfg.convoy_cards.gone), "tag": "convoy", "result": ""})
 			story.log_changed()
 			_convoy_open = false
+			_convoy_missed = not _convoy_decided
 		elif not _convoy_open and not game.busy and game.mode == "base" and not game.siege.attacking and (not scripted or game.args.has("arcshow")):
 			_convoy_open = true
 			story.show_convoy()
 	elif convoy == "none" and h >= float(cal.leave_h):
 		convoy = "gone"
+		_convoy_missed = true    # (the raid took the whole afternoon: no card was ever shown)
 
 
 ## The player's answer to the convoy card.

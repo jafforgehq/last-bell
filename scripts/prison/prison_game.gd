@@ -165,6 +165,7 @@ var board    # UI hook: prison_board.gd (project, needs and roster window, toast
 var arc    # ARC hook: prison_arc.gd (calendar, story, goals, convoy, endings)
 var econ    # ECON hook: prison_econ.gd, the economy core (kept over raids, active only in phase "managed")
 var upg    # WORLD hook: prison_upgrades.gd, the visible result of each project and the crew's work on site
+var kit_out := {}    # what the kit took out of the stores at the raid start (the "Banked" line leaves it out: it is not loot)
 var back_t := 0.0    # seconds since she came back from a raid (the siege shows its "back in the middle" card while this runs)
 var econ_gone: Array = []    # names of people who left while the crew was out of the scene
 var loot    # RAIDS hook: prison_loot.gd (loot by place, raid marks, the gate's choice)
@@ -700,7 +701,11 @@ func _enter_raid() -> void:
 		squad.snapshot()    # SQUAD hook: who could go (the base is torn down by the next line)
 	_make_stage(t, true)
 	run.sim.stock = {"food": 0.0, "water": 0.0, "ammo": 0.0, "meds": 0.0, "scrap": 0.0, "parts": 0.0, "fuel": 0.0}
+	var before_kit := stores.duplicate()
 	var kit_line: String = pack.kit(stores, loadout_kit)
+	kit_out = {}
+	for k in STOCK_KEYS:
+		kit_out[k] = float(before_kit.get(k, 0.0)) - float(stores.get(k, 0.0))
 	loadout_kit = {}
 	pack.attach(run.sim)
 	arms.carry_out()    # SQUAD hook: the main gun and the spare leave the rack
@@ -1456,8 +1461,9 @@ func _extract(alive: bool) -> void:
 	_enter_base()
 	var sum := "Banked:"
 	for k in loot_got:
-		if float(loot_got[k]) > 0.0:
-			sum += "  +%d %s" % [int(loot_got[k]), k]
+		var found := float(loot_got[k]) - float(kit_out.get(k, 0.0))    # (the unspent kit comes back in the pack: not loot)
+		if found >= 1.0:
+			sum += "  +%d %s" % [int(found), k]
 	if not alive:
 		sum = "Backpack lost. (%d stacks, nothing banked)" % lost
 	elif sum == "Banked:":

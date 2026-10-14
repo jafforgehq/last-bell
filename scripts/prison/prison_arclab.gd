@@ -292,8 +292,9 @@ func _recruit() -> void:
 func _night(d: int) -> void:
 	var n: Dictionary = cfg.night
 	var plan: Dictionary = arc.wave_plan(d)
-	var total := float(plan.total)
 	var guards: int = econ.workers("guard")
+	var gf: float = game.siege.guard_factor(guards)    # (the real siege sends the table's dead times this, and the base horde too)
+	var total := maxf(2.0, roundf(float(plan.total) * gf)) + float(game.noise.base_horde_size(d, gf))
 	var fp := float(n.base_defense) + float(guards) * float(n.guard_kills) + float(n.ruth_kills) * float(skill.defense)
 	if econ.tier("power") >= 2 and econ.power_on and not arc.blackout_for(d):
 		fp *= 1.0 + float(n.light_bonus)
@@ -359,7 +360,7 @@ func _row(d: int) -> void:
 
 func _finish(why: String) -> void:
 	if arc.ended_id == "":
-		arc.end("held" if why == "held" else "abandoned")
+		arc.end(arc.held_id() if why == "held" else "abandoned")
 	_report()
 
 
