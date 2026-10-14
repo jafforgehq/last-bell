@@ -1045,7 +1045,9 @@ func lab(dt: float) -> void:
 func to_dict() -> Dictionary:
 	return {"day": day, "weather": weather, "ended_id": ended_id, "convoy": convoy, "delivered": delivered.duplicate(), "choices": choices.duplicate(), "letters_found": letters_found.duplicate(),
 		"log_entries": log_entries.duplicate(true), "set_piece": set_piece.duplicate(true), "storm_seen": storm_seen, "stats": stats.duplicate(), "ever": ever.duplicate(true), "queue": _queue.duplicate(),
-		"convoy_open": _convoy_open, "convoy_decided": _convoy_decided, "walked": _walked.duplicate(), "notes_wait": _notes_wait.duplicate()}
+		"convoy_open": _convoy_open, "convoy_decided": _convoy_decided, "walked": _walked.duplicate(), "notes_wait": _notes_wait.duplicate(),
+		"run_seed": run_seed, "flags": flags.duplicate(), "events_seen": events_seen.duplicate(), "person_traits": person_traits.duplicate(true), "hurt": hurt.duplicate(),
+		"night_mods": night_mods.duplicate(true), "weather_over": weather_over.duplicate(), "raid_mod": raid_mod, "event_pending": event_pending.duplicate(true)}
 
 
 ## Puts a saved story back (before the base is built): the arc is `started`, so its first-frame begin (which would deliver the day's beats again) does not run.
@@ -1067,6 +1069,15 @@ func from_dict(d: Dictionary) -> void:
 	_convoy_decided = bool(d.get("convoy_decided", false))
 	_walked = (d.get("walked", []) as Array).duplicate()
 	_notes_wait = (d.get("notes_wait", []) as Array).duplicate()
+	run_seed = int(d.get("run_seed", 0))
+	flags = (d.get("flags", {}) as Dictionary).duplicate()
+	events_seen = (d.get("events_seen", []) as Array).duplicate()
+	person_traits = (d.get("person_traits", {}) as Dictionary).duplicate(true)
+	hurt = (d.get("hurt", {}) as Dictionary).duplicate()
+	night_mods = (d.get("night_mods", {}) as Dictionary).duplicate(true)
+	weather_over = (d.get("weather_over", {}) as Dictionary).duplicate()
+	raid_mod = String(d.get("raid_mod", ""))
+	event_pending = (d.get("event_pending", {}) as Dictionary).duplicate(true)
 	started = true
 	_last_day = int(game.econ.day)
 	day = _last_day
