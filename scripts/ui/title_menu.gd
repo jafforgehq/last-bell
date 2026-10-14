@@ -12,6 +12,7 @@ const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
 const Demo := preload("res://scripts/demo.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 
+const BuildInfo := preload("res://scripts/build_info.gd")
 const TAGLINE := "Hold the schoolyard for thirty nights."
 ## The small tag of the demo's title (round 26).
 const DEMO_TAG := "DEMO: THE FIRST THREE NIGHTS"
@@ -146,6 +147,8 @@ func _build_logo() -> Control:
 	tagline.add_theme_constant_override("outline_size", 5)
 	tagline.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.85))
 	box.add_child(tagline)
+	var ver: Label = hud._label("build " + BuildInfo.VERSION, Fonts.sans(500), 12, hud.INK3)    # PLAYLOG: the build the testers report
+	box.add_child(ver)
 	# (round 26: the demo's title says so: a small gold tag under the tagline)
 	if Demo.on():
 		demo_tag = hud._label(DEMO_TAG, Fonts.cond(700, 3), 15, hud.ACCENT)

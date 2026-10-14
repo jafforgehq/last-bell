@@ -6,6 +6,7 @@ extends Node
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const BuildInfo := preload("res://scripts/build_info.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 ## ROUND 12: the volume sliders (label, Prefs key in section audio) and the bus each one sets.
 const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambience"], ["Effects", "sfx"]]
@@ -118,11 +119,32 @@ func _page(which: String) -> void:
 			body.add_child(_btn("Resume", close, true))
 			body.add_child(_btn("Controls", func(): _page("controls")))
 			body.add_child(_btn("Settings", func(): _page("settings")))
+			body.add_child(report_row(game.arc.plog, "Copy report"))
 			_quit_btn = _btn("Quit", _quit)
 			body.add_child(_quit_btn)
-			var tip := _lab("Esc goes back to the game", 14, Hud.INK3)
+			var tip := _lab("Esc goes back to the game   |   build " + BuildInfo.VERSION, 14, Hud.INK3)
 			tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			body.add_child(tip)
+
+
+## PLAYLOG: a one-line notes box and the "Copy report" button (also used by the ending card). The note goes in the report; the box keeps the keys to itself while it has focus.
+func report_row(plog, label: String) -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	var le := LineEdit.new()
+	le.placeholder_text = "What felt wrong? (optional, one line)"
+	le.max_length = 200
+	le.text = plog.notes
+	le.add_theme_font_override("font", Fonts.sans(500))
+	le.add_theme_font_size_override("font_size", 16)
+	le.text_changed.connect(func(t: String): plog.notes = t)
+	col.add_child(le)
+	var b := _btn(label, func(): pass)
+	b.pressed.connect(func():
+		plog.copy_report()
+		b.text = "Copied. Send it to Fedja")
+	col.add_child(b)
+	return col
 
 
 ## One volume slider: the player's setting for a bus group (the same Prefs and Buses as the town's settings menu: Effects is the SFX bus and the menu sounds).
@@ -159,6 +181,7 @@ func _quit() -> void:
 		_quit_btn.text = "Really quit? Click again"
 		_quit_btn.add_theme_color_override("font_color", Hud.DANGER_TEXT)
 		return
+	game.arc.plog.quit_at()    # PLAYLOG hook: where the player quit
 	get_tree().paused = false
 	get_tree().quit()
 
