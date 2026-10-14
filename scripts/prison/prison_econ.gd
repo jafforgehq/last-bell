@@ -77,7 +77,7 @@ func crew() -> Array:
 		for m in game.crew.members:
 			if m.def.has("ally"):
 				continue    # the clear phase's party is not the base's people
-			_roster.append({"id": String(m.def.id), "name": String(m.def.name), "role": String(roles.get(String(m.def.id), "")), "ok": not m.has("down") and String(m.state) != "downed", "guard": m.def.has("stand"), "kid": m.def.has("play")})
+			_roster.append({"id": String(m.def.id), "name": String(m.def.name), "role": String(roles.get(String(m.def.id), "")), "ok": not m.has("down") and String(m.state) != "downed" and not (game.arc != null and game.arc.hurt_now(String(m.def.name))), "guard": m.def.has("stand"), "kid": m.def.has("play")})
 	var out: Array = game.squad.out_ids() if game != null and game.squad != null else []    # SQUAD hook: the companions of a raid are not at work
 	if out.is_empty():
 		return _roster
@@ -297,6 +297,8 @@ func _produce(r: String, power: bool) -> float:
 
 func _consume(r: String) -> float:
 	var n: float = float(people()) * float(cfg.per_person[r])
+	if r == "food" and game.arc != null:
+		n += game.arc.extra_eating()    # TRAITS hook: scroungers eat more
 	if r == "food" and tier("kitchen") >= 3 and workers("cook") > 0:
 		n *= float(cfg.canteen_food_factor)
 	return n
@@ -484,9 +486,12 @@ func _morale(short: Dictionary) -> void:
 	for b in m.building:
 		var role := String(cfg.building_role[b])
 		if workers(role) > 0:
-			d += float(m.building[b][mini(tier(String(b)), (m.building[b] as Array).size() - 1)])
+			var bon := float(m.building[b][mini(tier(String(b)), (m.building[b] as Array).size() - 1)])
+			d += bon * (1.2 if game.arc != null and game.arc.count_trait("pacifist", role) > 0 else 1.0)    # TRAITS hook: a pacifist cook or medic does the job 20% better
 	if people() > int(beds().cap):
 		d -= float(m.overcrowd)
+	if game.arc != null:
+		d += game.arc.calm()    # TRAITS hook: veterans
 	morale = clampf(morale + d, 0.0, float(m.max))
 
 

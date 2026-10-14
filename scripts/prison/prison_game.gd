@@ -614,6 +614,7 @@ func _enter_base() -> void:
 		run.avatar_p.y = Base.SPAWN.y
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
+	crew.traits_cb = arc.traits_of
 	crew.setup(run.sim, world, base, data, clear, crew_full())
 	crew.econ_owned = ["food", "water"]    # ECON hook: food and water come from the economy, not from the crew's stops (and the freed crew eat nothing until the prison is secured)
 	if not clear:
@@ -1440,6 +1441,11 @@ func _extract(alive: bool) -> void:
 		for k in STOCK_KEYS:
 			var v := float(run.sim.stock.get(k, 0.0))
 			loot_got[k] = v
+		var raiders: Array = []    # TRAITS hook: who came home with her (scroungers and thieves change the takings)
+		for sm in squad.members:
+			if not sm.found and sm.state != "gone" and not (sq.left as Array).has(String(sm.name)):
+				raiders.append(String(sm.name))
+		gun_lines.append_array(arc.raid_bonus(raiders, loot_got))
 	arc.on_raid(alive, loot_got)    # ARC hook: raids, scrap, kills, the cache, Ruth's deaths
 	var lines: Array = ["You reach the pickup. The truck is waiting.", "Back through the gate, back to the compound."]
 	if not alive:
@@ -2491,6 +2497,9 @@ func _fence_guards(dt: float) -> void:
 		if not m.def.has("stand") or not siege.guard_ok(m):    # SIEGE hook
 			continue
 		var g = m.p
+		var tr = run.sim.traits    # TRAITS hook (prison_events.gd): a pacifist carries no gun, a coward leaves the tower when morale is low, a hothead fires faster for more ammo, aim and reload follow the traits
+		if tr.has_trait(g, "pacifist") or (siege.attacking and float(econ.morale) < 30.0 and tr.has_trait(g, "coward")):
+			continue
 		guard_cd[g.id] = float(guard_cd.get(g.id, randf() * 2.0)) - dt
 		if float(guard_cd[g.id]) > 0.0 or float(g.reloading) > 0.0:
 			continue
@@ -2514,9 +2523,10 @@ func _fence_guards(dt: float) -> void:
 			continue
 		bd = Vector2(best.x, best.y).distance_to(Vector2(g.x, g.y))
 		var gb: Dictionary = Bal.role("guard")
-		guard_cd[g.id] = float(gb.cd_alarm) if alarm_t > 0.0 else Bal.roll(gb, "cd")
-		_shoot_at(g, best, gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0), float(gb.dmg))    # ECON hook: floodlights
+		guard_cd[g.id] = (float(gb.cd_alarm) if alarm_t > 0.0 else Bal.roll(gb, "cd")) * tr.mult(g, "reload")
+		_shoot_at(g, best, clampf((gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0)) * tr.mult(g, "aim"), 0.05, 0.95), float(gb.dmg))    # ECON hook: floodlights
 		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
+		stores.ammo = maxf(0.0, float(stores.ammo) - (siege.GUARD_SHOT_COST if siege.attacking else siege.GUARD_SHOT_COST * 0.2) * (tr.mult(g, "ammo") - 1.0))
 		m.say = "firing"
 
 

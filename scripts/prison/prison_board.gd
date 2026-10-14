@@ -651,7 +651,7 @@ func _roster_tab() -> void:
 	g.add_theme_constant_override("h_separation", 24)
 	g.add_theme_constant_override("v_separation", 6)
 	body.add_child(g)
-	for h in ["Name", "Role", "Doing now", "Note"]:
+	for h in ["Name", "Role", "Doing now", "Note, traits and background"]:
 		g.add_child(_lab(h, 13, DIM))
 	var roles: Dictionary = econ.cfg.crew_role
 	for m in game.crew.members:
@@ -691,7 +691,18 @@ func _roster_tab() -> void:
 			note = "on the wall"
 		elif m.def.has("stand"):
 			note = "tower guard"
-		g.add_child(_lab(note, 14, DIM))
+		var who := String(m.def.name)    # TRAITS: the traits after the note, the background under it
+		if game.arc.hurt_now(who):
+			note = ("hurt, " + note) if note != "" else "hurt"
+		var nb := VBoxContainer.new()
+		nb.add_child(_lab((note + "   " if note != "" else "") + game.arc.events.trait_text(who), 14, DIM))
+		var bio: String = game.arc.events.bio_of(who)
+		if bio != "":
+			var bl := _lab(bio, 12, Hud.INK3)
+			bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			bl.custom_minimum_size.x = 360
+			nb.add_child(bl)
+		g.add_child(nb)
 	var cnt := ""
 	for r in ROLES:
 		cnt += "%s %d    " % [String(r).capitalize(), econ.workers(String(r))]

@@ -356,6 +356,8 @@ func frame(dt: float) -> void:
 			id = arc.next_due()
 		while arc.take_wait():
 			arc.next_letter()
+		if arc.next_event() != "":
+			arc.deliver_event(-1)    # EVENTS: a scripted run takes the safe answer
 		return
 	if not can_show():
 		return
@@ -364,6 +366,24 @@ func frame(dt: float) -> void:
 		show_beat(due)
 	elif arc.take_wait():
 		show_letter(arc.next_letter())
+	elif arc.next_event() != "":
+		show_event()
+
+
+## EVENTS: the morning card (prison_events.gd). Its answer applies the effects and shows what came of it.
+func show_event() -> void:
+	var v: Dictionary = arc.event_view()
+	if v.is_empty() or (v.choices as Array).is_empty():
+		arc.deliver_event(-1)
+		return
+	var labs: Array = []
+	for i in (v.choices as Array).size():
+		labs.append("%d  %s" % [i + 1, String(v.choices[i].label)])
+	show_card({"kicker": "MORNING  -  DAY %d" % arc.day, "title": String(v.title), "from": String(v.from), "text": String(v.text), "tone": String(v.tone), "buttons": labs,
+		"on_answer": func(i: int):
+			var res: Dictionary = arc.deliver_event(i)
+			if not res.is_empty() and String(res.result) != "":
+				show_card({"kicker": "MORNING  -  DAY %d" % arc.day, "title": String(v.title), "from": "what happened", "text": String(res.result), "tone": String(v.tone), "extra": String(res.extra)})})
 
 
 ## The card of a beat; its answer (or Continue) delivers it. A silent beat has no card.
@@ -380,6 +400,9 @@ func show_beat(id: String) -> void:
 		extra = arc.readiness_text()
 	if String(b.get("opens_phase", "")) != "":
 		extra = "New goal: Phase III, Evacuate. See the story log (L) and the objectives (O)."
+	for f in b.get("if_flag", {}):    # (a letter found earlier changes what the card says)
+		if arc.flags.has(String(f)):
+			extra = (extra + "\n" if extra != "" else "") + String(b.if_flag[f].get("extra", ""))
 	if String(b.get("event", "")) == "storm":
 		extra = "Tonight: no power, a bigger wave. Mend the fence and fill the stores."
 	var d := {"kicker": "RADIO  -  DAY %d  -  %s MHZ" % [arc.day, String(arc.cfg.calendar.radio_freq)], "title": String(b.title), "from": String(b.from), "text": text, "extra": extra, "tone": "radio"}
@@ -398,10 +421,9 @@ func show_beat(id: String) -> void:
 
 
 func _result_card(b: Dictionary, choice_id: String) -> void:
-	for c in b.choice:
-		if String(c.id) == choice_id:
-			show_card({"kicker": "RADIO  -  DAY %d" % arc.day, "title": String(b.title), "from": "what happened", "text": String(c.result), "tone": "radio", "extra": _fx_text(c.get("effects", {}))})
-			return
+	var c: Dictionary = arc.choice_of(b, choice_id)
+	if not c.is_empty():
+		show_card({"kicker": "RADIO  -  DAY %d" % arc.day, "title": String(b.title), "from": "what happened", "text": String(c.result), "tone": "radio", "extra": _fx_text(c.get("effects", {}))})
 
 
 func _fx_text(fx: Dictionary) -> String:

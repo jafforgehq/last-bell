@@ -16,6 +16,7 @@ extends RefCounted
 
 const Story := preload("res://scripts/prison/prison_story.gd")
 const Endings := preload("res://scripts/prison/prison_endings.gd")
+const Events := preload("res://scripts/prison/prison_events.gd")
 const PATH := "res://assets/data/prison_story.json"
 
 signal day_changed(day: int)
@@ -38,6 +39,18 @@ var set_piece: Dictionary = {}    # a cache the next raid marks: {name, loot, no
 var storm_seen := false
 var stats := {"kills": 0, "raids": 0, "rescues": 0, "deaths": 0, "left": 0, "scrap": 0.0, "nights_held": 0, "letters": 0, "ruth_deaths": 0, "starved": 0, "peak_people": 0, "fence_lost": 0}
 var ever: Dictionary = {}    # person name -> {day, fate ("" | "died" | "walked"), cause, day_out}
+# EVENTS (prison_events.gd): the plain dicts a save can read. flags: memory key -> the day it was set. person_traits: name -> trait ids an event gave on top of prison_bios.json. hurt: name -> the last day
+# they are out. night_mods: night number (string) -> {size, weather}. event_pending: the card drawn for this morning {id, who}. raid_mod: the next raid's variant (read and cleared by `take_raid_mod`).
+var events
+var run_seed := 0
+var flags: Dictionary = {}
+var events_seen: Array = []
+var person_traits: Dictionary = {}
+var hurt: Dictionary = {}
+var night_mods: Dictionary = {}
+var weather_over: Dictionary = {}
+var raid_mod := ""
+var event_pending: Dictionary = {}
 var scripted := false    # a scripted run (--auto, --shot ...): cards go to the log only
 var _cfg_nights: Array = []
 var _last_day := 0
@@ -61,6 +74,7 @@ func _init(g) -> void:
 	_cfg_nights = cfg.get("nights", [])
 	var a: Dictionary = g.args
 	scripted = (a.has("shot") or a.has("auto") or a.has("drive") or a.has("perf") or a.has("seq") or a.has("raid") or a.has("log") or a.has("turntest") or a.has("econ-lab") or a.has("arcauto") or a.has("loot-lab") or a.has("siege")) and not a.has("arcshow")
+	events = Events.new(self)
 	story = Story.new(g, self)
 	endings = Endings.new(g, self)
 	g.econ.person_left.connect(func(nm): _walked.append(String(nm)))
@@ -85,7 +99,7 @@ func active() -> bool:
 
 
 func weather_of(d: int) -> Dictionary:
-	var kind := String(cfg.weather.get(str(d), "clear"))
+	var kind := String(weather_over.get(str(d), cfg.weather.get(str(d), "clear")))    # (EVENTS: a card can change tonight's weather)
 	var e: Dictionary = (cfg.weather_kinds.get(kind, cfg.weather_kinds.clear) as Dictionary).duplicate()
 	e["kind"] = kind
 	return e
@@ -133,6 +147,7 @@ func wave_plan(n: int) -> Dictionary:
 	if n > int((rows[rows.size() - 1] as Array)[0]):
 		total = float((rows[rows.size() - 1] as Array)[1]) * (1.0 + 0.15 * float(n - int((rows[rows.size() - 1] as Array)[0])))
 	total *= float(weather_of(n).get("wave_mult", 1.0))
+	total *= float((night_mods.get(str(n), {}) as Dictionary).get("size", 1.0))    # EVENTS hook: a card made tonight bigger or smaller
 	var segs := int(lo[2])
 	var runner := lerpf(float(lo[3]), float(hi[3]), t)
 	var tot := maxi(2, roundi(total))
@@ -348,6 +363,8 @@ func _begin() -> void:
 	_start_t = 0.0
 	_track_people()
 	var a: Dictionary = game.args
+	if run_seed == 0:
+		run_seed = int(a.get("seed", str(randi() % 900000 + 1)))    # EVENTS: the card draw is a function of this and the day (a save keeps it)
 	if a.has("day") and int(a.day) > 1:
 		_jump(int(a.day))
 	if a.has("arcready"):
@@ -399,6 +416,8 @@ func _on_day(d: int) -> void:
 		storm_seen = true
 	_starve()
 	_queue_due(false)
+	if _queue.is_empty() and event_pending.is_empty():
+		event_pending = events.draw(d)    # EVENTS hook: a morning with no story beat may get a card
 	_day_banner()
 	day_changed.emit(d)
 	if game.args.has("arclog"):
@@ -497,12 +516,22 @@ func alive_names() -> Array:
 
 # ----------------------------------------------------------------------- beats and letters --
 
+## A choice of a beat as it stands now: `if_flag` on the beat ({flag: {"extra": text, "choices": {choice id: keys that replace the choice's own}}}) changes it once the flag is set (the weir letter and the dam).
+func choice_of(b: Dictionary, choice_id: String) -> Dictionary:
+	for c in b.get("choice", []):
+		if String(c.id) == choice_id:
+			var out: Dictionary = (c as Dictionary).duplicate(true)
+			for f in b.get("if_flag", {}):
+				if flags.has(String(f)):
+					out.merge((b.if_flag[f].get("choices", {}) as Dictionary).get(choice_id, {}), true)
+			return out
+	return {}
+
+
 func _entry(b: Dictionary, d: int) -> Dictionary:
 	var res := ""
 	if choices.has(String(b.id)):
-		for c in b.get("choice", []):
-			if String(c.id) == String(choices[String(b.id)]):
-				res = String(c.result)
+		res = String(choice_of(b, String(choices[String(b.id)])).get("result", ""))
 	return {"day": d, "kind": "radio", "id": String(b.id), "title": String(b.title), "from": String(b.from), "text": String(b.text), "tag": String(b.get("tag", "")), "result": res, "short": String(b.get("short", ""))}
 
 
@@ -541,9 +570,7 @@ func deliver(id: String, choice_id: String = "") -> void:
 		choice_id = String(choices[id])
 	_apply(b.get("reward", {}))
 	if b.has("choice"):
-		for c in b.choice:
-			if String(c.id) == choice_id:
-				_apply(c.get("effects", {}))
+		_apply(choice_of(b, choice_id).get("effects", {}))
 	if b.has("set_piece"):
 		set_piece = (b.set_piece as Dictionary).duplicate(true)
 		set_piece["pos"] = Vector2(-1, -1)
@@ -551,11 +578,15 @@ func deliver(id: String, choice_id: String = "") -> void:
 	story.log_changed()
 
 
-func _apply(fx: Dictionary) -> void:
+## The effects of a beat, a choice, a letter or an event card: stores {res: n}, morale n, and (events, see prison_events.gd `apply_extra`) person, flag, night_mod, raid_mod, set_piece. `ctx` carries the
+## card's person and collects the lines the result card shows.
+func _apply(fx: Dictionary, ctx: Dictionary = {}) -> void:
 	for k in fx.get("stores", {}):
 		game.stores[k] = maxf(0.0, float(game.stores.get(k, 0.0)) + float(fx.stores[k]))
 	if fx.has("morale"):
 		game.econ.morale = clampf(float(game.econ.morale) + float(fx.morale), 0.0, 100.0)
+	if fx.has("person") or fx.has("flag") or fx.has("night_mod") or fx.has("raid_mod") or fx.has("set_piece"):
+		events.apply_extra(fx, ctx)
 
 
 ## The readiness line for the last beats: the convoy's list as it stands.
@@ -666,6 +697,123 @@ func take_wait() -> bool:
 		return false
 	_notes_wait.pop_front()
 	return true
+
+
+# ----------------------------------------------------------------------------- events --
+
+## The id of this morning's event card when it is time to show it ("" otherwise). The story calls it every frame, after the beats.
+func next_event() -> String:
+	if event_pending.is_empty() or _start_t < 4.0 or not _queue.is_empty():
+		return ""
+	return String(event_pending.id)
+
+
+## The card with its text filled for the person it is about, and the choices on offer.
+func event_view() -> Dictionary:
+	var c: Dictionary = events.card(String(event_pending.get("id", "")))
+	if c.is_empty():
+		return {}
+	var ctx := {"who": String(event_pending.get("who", ""))}
+	return {"card": c, "title": String(c.title), "from": String(c.get("from", "")), "text": events.fill(String(c.text), ctx), "tone": String(c.get("tone", "radio")), "choices": events.choices(c)}
+
+
+## The player's answer (an index into `event_view().choices`; -1 takes the safe one). Returns {result, extra}: the words and the effects of the choice, for the result card.
+func deliver_event(i: int) -> Dictionary:
+	var v := event_view()
+	if v.is_empty():
+		event_pending = {}
+		return {}
+	var chs: Array = v.choices
+	if chs.is_empty():
+		event_pending = {}
+		return {}
+	if i < 0 and game.args.has("eventpick"):    # a check: a scripted run answers with this choice (0 = the first, clamped) instead of the safe one, so every effect can be tried
+		i = int(game.args.eventpick)
+	var c: Dictionary = chs[events.safe_index(v.card) if i < 0 else clampi(i, 0, chs.size() - 1)]
+	var ctx := {"who": String(event_pending.get("who", ""))}
+	events_seen.append(String(v.card.id))
+	event_pending = {}
+	if game.args.has("arclog"):
+		print("ARC event day ", day, " ", v.card.id, " -> ", c.id, " who ", ctx.who)
+	_apply(c.get("effects", {}), ctx)
+	weather = String(weather_of(day).kind)
+	var res: String = events.fill(String(c.get("result", "")), ctx)
+	log_entries.append({"day": day, "kind": "radio", "title": String(v.title), "from": String(v.from), "text": String(v.text), "tag": "event", "result": res})
+	story.log_changed()
+	var extra: Array = []
+	var fx: String = story._fx_text(c.get("effects", {}))
+	if fx != "":
+		extra.append(fx)
+	extra.append_array(ctx.get("lines", []))
+	return {"result": res, "extra": ", ".join(extra)}
+
+
+## RAID hook (another agent): the variant the last card asked for ("" when none); reading it clears it.
+func take_raid_mod() -> String:
+	var m := raid_mod
+	raid_mod = ""
+	return m
+
+
+# ----------------------------------------------------------------------- people's traits --
+
+func traits_of(nm: String) -> Array:
+	return events.traits_of(nm)
+
+
+func hurt_now(nm: String) -> bool:
+	return hurt.has(nm) and day <= int(hurt[nm])
+
+
+## How many of the crew on their feet (not kids) have trait `id`, optionally only those whose econ role is `role`.
+func count_trait(id: String, role: String = "") -> int:
+	var n := 0
+	for c in game.econ.crew():
+		if bool(c.ok) and not bool(c.kid) and (role == "" or String(c.role) == role) and events.has(String(c.name), id):
+			n += 1
+	return n
+
+
+## Veterans calm the base: the morale a day gets from them (at most two count).
+func calm() -> float:
+	var s := 0.0
+	for c in game.econ.crew():
+		if bool(c.ok) and not bool(c.kid):
+			s += events.sum(String(c.name), "calm")
+	return minf(s, 1.2)
+
+
+## What scroungers eat on top of their share, a day.
+func extra_eating() -> float:
+	var s := 0.0
+	for c in game.econ.crew():
+		s += events.sum(String(c.name), "eats")
+	return s
+
+
+## A raid is over and `names` came home with Ruth: scroungers find more, thieves bring one thing extra and now and then something of the stores goes missing. Changes `loot` (the raid's takings),
+## returns the lines for the banner.
+func raid_bonus(names: Array, loot: Dictionary) -> Array:
+	var lines: Array = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = run_seed * 31 + day * 977 + int(stats.raids)
+	for nm in names:
+		var n := String(nm)
+		if events.sum(n, "loot") > 0.0:
+			loot["scrap"] = float(loot.get("scrap", 0.0)) + 3.0
+			loot["food"] = float(loot.get("food", 0.0)) + 2.0
+			lines.append("%s turned out two more pockets: +3 scrap, +2 food." % n)
+		if events.sum(n, "loot_extra") > 0.0:
+			var k: String = ["parts", "meds", "ammo", "fuel"][rng.randi() % 4]
+			loot[k] = float(loot.get(k, 0.0)) + (2.0 if k == "meds" or k == "fuel" else 4.0)
+			lines.append("%s came back with a little extra: %s." % [n, k])
+			if rng.randf() < 0.12:
+				var miss: String = ["scrap", "meds", "ammo"][rng.randi() % 3]
+				var took := minf(float(game.stores.get(miss, 0.0)), 4.0 if miss != "meds" else 1.0)
+				game.stores[miss] = float(game.stores.get(miss, 0.0)) - took
+				if took > 0.0:
+					lines.append("Some %s is missing from the stores. Nobody saw anything." % miss)
+	return lines
 
 
 # ---------------------------------------------------------------------------------- nights --

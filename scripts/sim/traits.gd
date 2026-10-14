@@ -14,6 +14,7 @@
 ##   dead_morale    what the dead at the wall do to morale     morale_recover  how fast morale comes back up
 ##   grief          how hard a friend's death hits             xp           how fast skills grow (skills.gd)
 ##   cure   (added) the chance a cure takes (medical.gd)       bond (added) a friend's aim bonus (bonds.gd)
+## The prison's own traits (coward, hothead, scrounger, thief, veteran, pacifist: "only": "prison" in the file) use keys the prison's code asks for (prison_events.gd); the colony ignores them.
 ## Everything is saved, so a crew drawn some other way keeps its traits.
 extends RefCounted
 
@@ -59,7 +60,8 @@ func _load() -> void:
 		if crowd is Dictionary:
 			t["crowded"] = {"dead": int(crowd.get("dead", 1)), "tiles": float(crowd.get("tiles", 10.0)), "effects": _numbers(crowd.get("effects", {}))}
 		defs[id] = t
-		order.append(id)
+		if String(raw.get("only", "")) == "":    # ("only": "prison" traits are given by hand there and never dealt to a colony recruit: `order` is what recruits draw from)
+			order.append(id)
 
 
 static func _numbers(raw) -> Dictionary:

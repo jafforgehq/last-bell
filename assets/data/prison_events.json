@@ -1,0 +1,255 @@
+{
+  "_doc": "The event deck: cards for a morning with no story beat (scripts/prison/prison_events.gd, prison_arc.gd `events`). `chance` is the share of such mornings that get a card, `first_day` and `last_day` the days it can happen. A card is drawn by a seed (arc.run_seed and the day), is never drawn twice, and is filtered by `if`. `urgent` cards (follow-ups to a flag) skip the chance roll. `pick` names the card's person ({who} in the text). A choice may have its own `if`, `safe` marks the answer a scripted run takes. The whole language of `if` and of the effects is in the header of prison_events.gd.",
+  "chance": 0.7,
+  "first_day": 2,
+  "last_day": 28,
+  "cards": [
+    {
+      "id": "stranger_gate", "title": "A man at the gate", "from": "the east tower", "tone": "letter",
+      "if": {"day": [2, 12], "unused": "Ivo"},
+      "text": "A man stands at the gate before the shift has changed, hands open, nothing in them. He will not say where he came from. He says his name is Ivo, that he can mend anything with an engine in it, and that he has not eaten since the river. The tower says he walked the last block backwards, to see who was behind him.",
+      "choices": [
+        {"id": "in", "label": "Let him in", "if": {"beds_free": 1, "unused": "Ivo"},
+          "result": "Ivo takes the chair by the stove and does not speak for an hour. By evening there is a roll of tools on the bench that nobody remembers him carrying, and the generator sounds better than it has all week.",
+          "effects": {"person": {"op": "add", "name": "Ivo"}, "flag": "stranger_in"}},
+        {"id": "ration", "label": "Give him a ration and a direction", "safe": true,
+          "result": "He eats standing at the gate, thanks the guard by his rank, and walks east. Whatever he could mend, he will mend somewhere else.",
+          "effects": {"stores": {"food": -2}}},
+        {"id": "shut", "label": "Keep the gate shut",
+          "result": "Nobody opens it. He waits an hour, and then he is not there. The tower watches the road until noon.",
+          "effects": {"morale": -2, "flag": "stranger_turned"}}
+      ]
+    },
+    {
+      "id": "rust_barrels", "title": "Rust in the barrels", "from": "the cook", "tone": "letter",
+      "if": {"day": [4, 24], "stock_min": {"water": 15}},
+      "text": "The water from the east barrels comes up the colour of tea. Someone scrapes the lid and finds the iron ring has rusted through in two places. The barrels are full. Nobody can say how long they have been like this.",
+      "choices": [
+        {"id": "strain", "label": "Strain it through cloth and boil it", "safe": true,
+          "result": "It takes a morning and every clean sheet in the laundry. The water comes out dull and tastes of coins, but it is water.",
+          "effects": {"stores": {"water": -6}}},
+        {"id": "pour", "label": "Pour the barrels out and refill from the well", "if": {"stock_min": {"water": 25}},
+          "result": "The crew carries buckets until noon. The ground by the east wall is red where it was tipped out, and the water that goes into the new barrels is clear.",
+          "effects": {"stores": {"water": -16}, "morale": 1}},
+        {"id": "drink", "label": "Drink it as it is",
+          "result": "By evening {name} is bent over a bucket, and two more are not far behind. Nobody says anything about the barrels.",
+          "effects": {"morale": -2, "person": {"op": "wound", "who": "random", "days": 2}}}
+      ]
+    },
+    {
+      "id": "thief_crew", "title": "The count is short", "from": "Ruth's book", "tone": "letter",
+      "pick": "trait:thief|random",
+      "if": {"day": [6, 26], "any": [{"trait": "thief"}, {"crew_min": 3}]},
+      "text": "Four tins of fish and a box of rounds are not where the book says. The book is never wrong. The night watch swears nobody went near the stores, and the night watch is not lying: three people were in the stores last night, and {who} was the one who did not look up.",
+      "choices": [
+        {"id": "search_found", "label": "Search every bag", "if": {"trait": "thief"},
+          "result": "Under {who}'s mattress: four tins, a handful of rounds, and the expression of someone who expected it. Nothing is said. The tins go back on the shelf in front of everyone.",
+          "effects": {"stores": {"food": 3, "ammo": 6}, "morale": -2}},
+        {"id": "search_empty", "label": "Search every bag", "if": {"no_trait": "thief"},
+          "result": "Nothing. Eleven bags turned out on the floor, and everyone remembers who turned them. The tins are found on Thursday behind the flour. Nobody says sorry.",
+          "effects": {"morale": -5}},
+        {"id": "count", "label": "Say nothing and count twice a day", "safe": true,
+          "result": "The count is done at dawn and at dusk now, aloud, by two people. The tins do not move again. Neither does the mood in the kitchen.",
+          "effects": {"stores": {"food": -4}, "morale": -1}},
+        {"id": "out", "label": "Put {who} out of the gate",
+          "result": "{who} takes a coat and a ration at the gate and does not look back. The count comes right the next morning. Something quieter takes its place.",
+          "effects": {"morale": -3, "person": {"op": "leave", "who": "$who"}}}
+      ]
+    },
+    {
+      "id": "wounded_soldier", "title": "A soldier on the road", "from": "the north tower", "tone": "letter",
+      "if": {"day": [5, 22], "unused": "Jonas"},
+      "text": "A man is sitting against the milestone on the river road with his rifle across his knees and a trouser leg cut open to the thigh. The tower sees him wave, then stop waving. His boots are the issued kind. The wound looks clean, and old enough to smell.",
+      "choices": [
+        {"id": "in", "label": "Bring him in", "if": {"beds_free": 1, "unused": "Jonas"},
+          "result": "Two of the crew carry him through the gate on a door. He gives the medic the date, his unit and the wrong weekday, and asks whether the wall is held at night. 'Held by whom?' 'That is what I am asking.'",
+          "effects": {"stores": {"food": -2, "meds": -2}, "person": {"op": "add", "name": "Jonas", "hurt": 3}, "flag": "soldier_in"}},
+        {"id": "aid", "label": "Lower water and a dressing on a rope", "safe": true,
+          "result": "A guard lets down a bucket and a roll of lint, and goes back up. The man drinks, dresses it himself, and leaves a magazine at the foot of the milestone. In the morning he is gone.",
+          "effects": {"stores": {"water": -3, "meds": -1, "ammo": 4}, "flag": "soldier_aided"}},
+        {"id": "leave", "label": "Leave him",
+          "result": "The tower watches until dark. At first light the milestone is empty, and nobody can say what that means.",
+          "effects": {"morale": -3, "flag": "soldier_left"}}
+      ]
+    },
+    {
+      "id": "generator_coughs", "title": "The generator coughs", "from": "the guard room", "tone": "letter",
+      "if": {"day": [8, 26], "tier": {"power": 1}},
+      "text": "The generator coughs twice at supper and the lamps in the guard room go brown. The mechanic says it is the fuel, or the filter, or the plug, in that order, and with less confidence each time.",
+      "choices": [
+        {"id": "fix", "label": "Strip a part from the spares and fix it properly", "safe": true,
+          "result": "It takes the evening and a part nobody wanted to give up. By midnight it runs clean, and the mechanic sits beside it for an hour, listening.",
+          "effects": {"stores": {"parts": -1}, "person": {"op": "trait", "who": "role:mechanic", "add": "tinkerer"}}},
+        {"id": "fuel", "label": "Run it hard on a cleaner fuel", "if": {"stock_min": {"fuel": 6}},
+          "result": "The lamps come back bright. It burns a quarter more than it should, and nobody mentions that to the book.",
+          "effects": {"stores": {"fuel": -4}}},
+        {"id": "limp", "label": "Let it limp",
+          "result": "It limps. The lights dip every few minutes, and the dead at the wall seem to count them.",
+          "effects": {"morale": -2, "night_mod": {"size": 1.1}}}
+      ]
+    },
+    {
+      "id": "relief_volunteers", "title": "Volunteers", "from": "Harbor Relief", "tone": "radio",
+      "if": {"day": [9, 20], "crew_min": 5},
+      "text": "The operator is brisk tonight. The Relief has a work party at the north bridge: a lorry on its side, a load of fuel under it, no hands to turn it over. She asks for one person who can lift and can be spared. She will leave a drum at the bridge for whoever goes. 'I will not tell you it is safe,' she says. 'I never have.'",
+      "choices": [
+        {"id": "send", "label": "Send one volunteer",
+          "result": "{name} goes out before light with a spade and a bag of tins. The drum is at the bridge by noon, as promised. Nobody sees {name} again, but that evening the operator reads a name off her list, and it is theirs.",
+          "effects": {"stores": {"fuel": 9, "parts": 3}, "morale": 1, "flag": "relief_helped", "person": {"op": "leave", "who": "random"}}},
+        {"id": "decline", "label": "Decline", "safe": true,
+          "result": "She says 'I understand,' in the voice of someone writing it down.",
+          "effects": {"morale": -1, "flag": "relief_declined"}}
+      ]
+    },
+    {
+      "id": "relief_thanks", "title": "A tin on the step", "from": "the north bridge", "tone": "letter", "urgent": true,
+      "if": {"day": [13, 27], "flag": "relief_helped", "flag_age": {"relief_helped": 4}},
+      "text": "A sealed tin on the gate step at dawn, with a card under the lid. 'From the north bridge. For the one you sent. They are well, and they eat more than they say.'",
+      "choices": [
+        {"id": "open", "label": "Open it", "safe": true,
+          "result": "The tin is full of peaches. It is the first fruit anyone here has seen since spring, and the kitchen is quiet for a full minute.",
+          "effects": {"stores": {"food": 8, "scrap": 4}, "morale": 3}}
+      ]
+    },
+    {
+      "id": "sick_child", "title": "A boy at the fence", "from": "the south tower", "tone": "letter",
+      "if": {"day": [6, 24]},
+      "text": "A woman stands at the fence with a boy on her back, six years old, hot to the touch, eyes shut. She has walked from the river and says so as a fact, not a plea. She asks for nothing for herself. The medic looks at him through the wire and says it is a fever, and may be only a fever.",
+      "choices": [
+        {"id": "meds", "label": "Open the gate and use the meds", "if": {"stock_min": {"meds": 3}},
+          "result": "The fever breaks at four in the morning, which the medic marks on the wall in pencil. By noon the boy has eaten a whole egg. His mother does not say thank you. She asks if there is washing she can do, and they are gone at dusk with a ration and a coat.",
+          "effects": {"stores": {"meds": -3}, "morale": 3, "flag": "child_saved", "person": {"op": "trait", "who": "role:medic", "add": "steady"}}},
+        {"id": "wire", "label": "Pass food and water through the wire", "safe": true,
+          "result": "She takes it, thanks the guard by his rank, and turns from the gate with the boy still on her back. The tower watches them as far as the corner.",
+          "effects": {"stores": {"food": -3, "water": -2}, "morale": -1}},
+        {"id": "away", "label": "Turn them away",
+          "result": "The gate stays shut. She does not argue. The guard on that tower asks to be moved to another one in the morning.",
+          "effects": {"morale": -5, "flag": "child_turned"}}
+      ]
+    },
+    {
+      "id": "mother_returns", "title": "The woman from the fence", "from": "the gate", "tone": "letter", "urgent": true,
+      "if": {"day": [11, 28], "flag": "child_saved", "flag_age": {"child_saved": 5}},
+      "text": "She is at the gate again, alone, with a sack on her shoulder and no boy. He is well, she says, with a cousin past the north bridge. She came back because she owes a debt and does not like owing. The sack is flour and onions from the house she walked out of.",
+      "choices": [
+        {"id": "stay", "label": "Take the sack and let her stay", "if": {"beds_free": 1, "unused": "Maren"},
+          "result": "She is in the kitchen before anyone has found her a cup. By evening there is a rota on the wall in handwriting nobody else here uses.",
+          "effects": {"stores": {"food": 10}, "morale": 2, "person": {"op": "add", "name": "Maren"}}},
+        {"id": "thanks", "label": "Take the sack and send her home with thanks", "safe": true,
+          "result": "She nods as if that was the arrangement all along, and walks back the way she came. The flour is good.",
+          "effects": {"stores": {"food": 10}, "morale": 1}}
+      ]
+    },
+    {
+      "id": "locked_pharmacy", "title": "The pharmacy on Bell Street", "from": "Ruth", "tone": "letter",
+      "pick": "trait:thief|random",
+      "if": {"day": [5, 25], "stock_max": {"meds": 8}},
+      "text": "The pharmacy's shutter is down, rusted at the foot, with a sign taped over the glass: BACK IN 5 MINUTES. Ruth has walked past it on three raids. The shelves behind the glass are full, and the lock is a good one.",
+      "choices": [
+        {"id": "pick", "label": "Open it quietly", "if": {"trait": "thief"},
+          "result": "{who} kneels at the lock for eleven minutes with two bent wires and a face of perfect boredom. The shutter goes up without a sound. The blue bag is behind the counter, where a letter once said it would be.",
+          "effects": {"stores": {"meds": 8}}},
+        {"id": "truck", "label": "Pull the shutter off with the truck",
+          "result": "The shutter comes off with a noise that carries to the river. The shelves are two-thirds full. The dead hear it before the guards do.",
+          "effects": {"stores": {"fuel": -2, "parts": -1, "meds": 6}, "night_mod": {"size": 1.1}}},
+        {"id": "leave", "label": "Leave it", "safe": true,
+          "result": "The shelves stay full and the sign stays up. Ruth will pass it again on the next raid.",
+          "effects": {"morale": 0}}
+      ]
+    },
+    {
+      "id": "radio_voice", "title": "Are you there", "from": "an unknown voice", "tone": "radio",
+      "if": {"day": [4, 26]},
+      "text": "A voice on the guard room radio at three in the morning, not the Relief's and not the warm one from the dam. A young man, reading it like a note he has been handed: 'Ruth. Ruth, are you there? Leave the gate light on for us.' Nobody has said her name on the air.",
+      "choices": [
+        {"id": "answer", "label": "Answer it",
+          "result": "She keys the handset and says only, 'Who is this?' The line hisses for the length of a held breath. Then 'Thank you,' and it is gone. At dusk a fog comes up the road, and a good many people seem to be standing in it.",
+          "effects": {"morale": -2, "flag": "radio_answered", "raid_mod": "watchers", "night_mod": {"size": 1.0, "weather": "fog"}}},
+        {"id": "off", "label": "Switch the set off",
+          "result": "Ruth turns the dial to nothing and puts the handset in the drawer. The guard room is very quiet. She has the feeling of someone who has locked a door with another person on the other side.",
+          "effects": {"morale": -1, "flag": "radio_dark"}},
+        {"id": "listen", "label": "Listen, and say nothing", "safe": true,
+          "result": "91.4, then 91.9, then nothing. She tapes the page inside the cupboard door. If it speaks again, she will know where to listen.",
+          "effects": {"morale": -1, "flag": "radio_noted"}}
+      ]
+    },
+    {
+      "id": "rumour_quay", "title": "Two women at the fence", "from": "the west tower", "tone": "letter",
+      "if": {"day": [8, 26]},
+      "text": "Two women who share one coat and one pair of boots tell the tower about a cache: a ferry office on the east quay, a strongbox under the counter, a lock nobody has found the key for. They want a hot meal and a promise that no one goes without them. They cannot say what is in the box.",
+      "choices": [
+        {"id": "feed", "label": "Feed them and mark the quay",
+          "result": "They eat like people who have counted every mouthful for a month. Ruth marks the quay on the map, and they go back out before dark, together, in the same coat.",
+          "effects": {"stores": {"food": -3}, "morale": 1, "set_piece": {"name": "The ferry office", "loot": {"scrap": 14, "parts": 4, "ammo": 8}, "note": false, "found": "A strongbox under the counter, and no key. A hammer and a chisel did the rest: scrap, parts and a box of rounds."}}},
+        {"id": "shut", "label": "Thank them and shut the gate", "safe": true,
+          "result": "They nod as if they expected it. The tower hears them arguing about it all the way to the corner.",
+          "effects": {"morale": -1}}
+      ]
+    },
+    {
+      "id": "ration_count", "title": "The count is bad", "from": "the cook", "tone": "letter",
+      "if": {"day": [8, 26], "stock_max": {"food": 30}},
+      "text": "Ruth does the count twice and it comes out the same. At the going rate the food lasts nine days, the garden is two weeks from giving more, and the east tower has asked, politely, for a second bowl. 'Half rations or full,' the cook says. 'I can't make a third thing.'",
+      "choices": [
+        {"id": "half", "label": "Half rations for everyone",
+          "result": "Nobody argues, which is worse than arguing. The bowls are half empty and the dishes are very clean.",
+          "effects": {"stores": {"food": 6}, "morale": -4}},
+        {"id": "wall", "label": "Full rations for the wall, half for the rest",
+          "result": "The tower crews eat first and are watched while they do it. The ones in the yard watch back.",
+          "effects": {"stores": {"food": 2}, "morale": -3}},
+        {"id": "full", "label": "Full rations for all", "safe": true,
+          "result": "The soup is thin but there is plenty of it, and by evening the yard is the loudest it has been in a week. Tomorrow's count will be worse.",
+          "effects": {"stores": {"food": -3}, "morale": 2}}
+      ]
+    },
+    {
+      "id": "sister_across_river", "title": "A sister across the river", "from": "the office", "tone": "letter",
+      "pick": "guard|random",
+      "if": {"day": [8, 26], "stock_min": {"fuel": 6}, "crew_min": 2},
+      "text": "{who} comes to the office with a map and stands the whole time. A sister, two nieces, a house across the river with a red door. Eleven miles, a half tank, back by dark. The truck is the only thing here that goes that far, and the half tank is a good deal of what is in it.",
+      "choices": [
+        {"id": "lend", "label": "Lend the truck",
+          "result": "{who} is back at midnight, limping, with a key on a string. The sister would not leave her house. They talked on the step for an hour. The limp is from a fence on the way out. {who} does the night watch twice that week without being asked.",
+          "effects": {"stores": {"fuel": -5}, "morale": 3, "person": [{"op": "wound", "who": "$who", "days": 1}, {"op": "trait", "who": "$who", "add": "loyal"}]}},
+        {"id": "note", "label": "Send food and a note with Ruth on the next raid", "safe": true,
+          "result": "Ruth leaves a box of tins and the note at the red door on her next raid, wedged under the knocker. {who} does not ask whether anybody answered.",
+          "effects": {"stores": {"food": -6}, "morale": 1}},
+        {"id": "rounds", "label": "Send a box of rounds as well, for the road",
+          "result": "Ruth leaves the rounds and the note at the red door. {who} says the sister will not know what to do with them, and that is the point. A day later {who} is on the tower again, and aims a little more carefully.",
+          "effects": {"stores": {"ammo": -8}, "morale": 2, "person": {"op": "trait", "who": "$who", "add": "loyal"}}},
+        {"id": "refuse", "label": "Refuse",
+          "result": "{who} folds the map along its old creases and puts it away. The request is not made again, and the next shift change is very polite.",
+          "effects": {"morale": -4}}
+      ]
+    },
+    {
+      "id": "weir_men", "title": "The men from the dam", "from": "the gate", "tone": "letter", "urgent": true,
+      "if": {"day": [14, 28], "flag": "dam_go", "flag_age": {"dam_go": 2}},
+      "text": "A man in a clean coat stands at the gate with both hands where they can be seen. He is polite. He says there was never a dam, only a name that sounded like a place where people are kind. They watched your truck go and come back. He wants food for twelve, two barrels of water, and a promise that nobody on the wall will fire at the road for a week. He has eleven friends, and he does not look at the towers once.",
+      "choices": [
+        {"id": "engine", "label": "Tell him the engine is running", "if": {"flag": "weir_warned"},
+          "result": "Ruth says it as the woman at the weir wrote it, flat, without a question in it: 'The engine is running.' He takes a moment too long to decide what that means. He touches two fingers to his forehead and takes the long way round, and the road is quiet for the rest of the week.",
+          "effects": {"morale": 4, "night_mod": {"size": 0.9}, "flag": "weir_beaten"}},
+        {"id": "pay", "label": "Pay him in food and water", "safe": true,
+          "result": "The sacks and the barrels go out on a trolley. He thanks the gate, not the person behind it. The road is quiet for a week, in the way a held breath is quiet.",
+          "effects": {"stores": {"food": -8, "water": -10}, "morale": -2, "flag": "weir_paid"}},
+        {"id": "shoot", "label": "Fire over his head",
+          "result": "Four shots over his head and one into the post beside it. He walks back down the road at an ordinary pace and does not look round, and that is what worries the tower.",
+          "effects": {"stores": {"ammo": -8}, "morale": 2, "night_mod": {"size": 1.15}, "flag": "weir_shot"}}
+      ]
+    },
+    {
+      "id": "brown_dog", "title": "A brown dog", "from": "the gate", "tone": "letter",
+      "if": {"day": [3, 26]},
+      "text": "A brown dog sits at the gate in the rain and does not bark. He looks stupid, the way some dogs do, which is not the same as being stupid. He is wearing a leash with nothing on the other end. When the tower whistles he turns his head the wrong way, politely.",
+      "choices": [
+        {"id": "in", "label": "Let him in", "safe": true,
+          "result": "He walks the wall once, inspects every guard, and lies down across the kitchen door. By evening he has been given a name by three people, all different.",
+          "effects": {"stores": {"food": -1}, "morale": 3, "flag": "dog_in"}},
+        {"id": "off", "label": "Shoo him off",
+          "result": "He goes about thirty yards and sits down again. He is still there at dusk.",
+          "effects": {"morale": -1}}
+      ]
+    }
+  ]
+}
