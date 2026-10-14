@@ -1362,10 +1362,20 @@ func _shot_noise(p: Person) -> void:
 			w.state = "approach"
 
 
+## How long a hit stuns: 0.25 s for everything, except a shot from a gun that carries `stagger` (seconds, the prison's assets/data/prison_weapons.json)
+## and `stagger_chance` (default 1): a roll that fails leaves the dead one's stun as it was.
+func _stagger_of(z: Zombie, shooter: Person, melee: bool) -> float:
+	if shooter == null or melee or not shooter.gun.has("stagger"):
+		return 0.25
+	if rng.randf() < float(shooter.gun.get("stagger_chance", 1.0)):
+		return float(shooter.gun.stagger)
+	return z.stagger
+
+
 ## `shooter` is whoever struck the blow (it is credited with the kill, `melee` or not).
 func _hurt_zombie(z: Zombie, dmg: float, ang: float, shooter: Person = null, melee := false) -> void:
 	z.hp -= dmg
-	z.stagger = 0.25
+	z.stagger = _stagger_of(z, shooter, melee)
 	if feel != null:
 		feel.hit(z, ang, dmg, melee, shooter)    # (before the blood: it says whether this one is told, a hit on steel does not bleed)
 	fx.blood(z.x, z.y - 0.25, cos(ang), sin(ang), 9)

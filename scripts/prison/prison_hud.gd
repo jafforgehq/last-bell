@@ -77,6 +77,9 @@ static func draw(game, c: Control, v: Vector2) -> void:
 	if aimed and me.reloading > 0.0 and not melee:
 		var total: float = maxf(0.01, float(me.gun.get("reload", 1.0)) * float(sim.traits.mult(me, "reload")))
 		var f := clampf(1.0 - me.reloading / total, 0.0, 1.0)
+		if me.gun.get("shell_reload", false):    # (a shell at a time: the ring is the shells in, and the one going in)
+			var per: float = sim.avatar.shell_time(me)
+			f = clampf((float(me.mag) + 1.0 - me.reloading / maxf(per, 0.01)) / maxf(1.0, float(me.gun.get("mag", 1))), 0.0, 1.0)
 		var cc: Vector2 = to_scr.call(Vector2(me.x, me.y - 0.45))
 		var rr := maxf(18.0, 0.66 * zoom)
 		c.draw_arc(cc, rr, 0, TAU, 40, Color(0.04, 0.07, 0.06, 0.85), 8.0, true)
@@ -84,7 +87,7 @@ static func draw(game, c: Control, v: Vector2) -> void:
 		c.draw_arc(cc, rr, -PI / 2.0, -PI / 2.0 + f * TAU, 40, ACCENT, 5.0, true)
 		var cap := int(me.gun.get("mag", 0))
 		if cap > 1 and cap <= 12:
-			var filled := int(floor(f * cap))
+			var filled := int(me.mag) if me.gun.get("shell_reload", false) else int(floor(f * cap))
 			for k in cap:
 				var ang := -PI / 2.0 + TAU * (float(k) + 0.5) / float(cap)
 				c.draw_circle(cc + Vector2.from_angle(ang) * rr, 4.0, Color("#c9a54a") if k < filled else Color(0.30, 0.30, 0.26, 0.9))
