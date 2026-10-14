@@ -296,7 +296,7 @@ func _produce(r: String, power: bool) -> float:
 
 
 func _consume(r: String) -> float:
-	var n: float = float(people()) * float(cfg.per_person[r])
+	var n: float = float(people()) * float(cfg.per_person[r]) * float(game.Bal.dm("drain"))
 	if r == "food" and tier("kitchen") >= 3 and workers("cook") > 0:
 		n *= float(cfg.canteen_food_factor)
 	return n

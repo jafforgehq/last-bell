@@ -120,6 +120,9 @@ func _page(which: String) -> void:
 			body.add_child(_btn("Settings", func(): _page("settings")))
 			_quit_btn = _btn("Quit", _quit)
 			body.add_child(_quit_btn)
+			var run_l := _lab("%s   seed %d" % [game.Bal.dm("name", "Standard"), game.Bal.run_seed], 14, Hud.INK3)
+			run_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			body.add_child(run_l)
 			var tip := _lab("Esc goes back to the game", 14, Hud.INK3)
 			tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			body.add_child(tip)

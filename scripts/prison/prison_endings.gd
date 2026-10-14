@@ -174,7 +174,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 12)
 	pc.add_child(outer)
-	var kick: Label = S._lab("DAY %d OF %d" % [mini(arc.day, arc.days()), arc.days()], 16, Hud.INK3, true)
+	var kick: Label = S._lab("DAY %d OF %d   %s   SEED %d" % [mini(arc.day, arc.days()), arc.days(), String(game.Bal.dm("name", "Standard")).to_upper(), game.Bal.run_seed], 16, Hud.INK3, true)
 	kick.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	outer.add_child(kick)
 	var big: Label = S._lab(String(e.title), 64, col, true)
@@ -253,6 +253,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 
 func new_game() -> void:
 	game.get_tree().paused = false
+	Engine.set_meta("run", {"difficulty": game.Bal.level, "seed": randi() % 900000 + 100000, "town": true})    # (the next run keeps the difficulty and takes a new seed)
 	game.get_tree().reload_current_scene()
 
 

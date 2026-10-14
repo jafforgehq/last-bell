@@ -13,6 +13,7 @@ const Prefs := preload("res://scripts/prefs.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
+const PrisonBal := preload("res://scripts/prison/prison_bal.gd")
 
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
@@ -151,7 +152,7 @@ func _build_seed() -> void:
 	seed_error.visible = false
 	body.add_child(seed_error)
 	# (CLEAR3: the seed makes the town: the same number is the same streets, houses and dead, and Random is a new place; `TownBoot.seed_of`)
-	var seed_words := "The seed makes the town: the same number is the same streets, houses and dead, and Random is a new place." if town_mode else "Any whole number. The same seed and the same orders play the same game."
+	var seed_words := "The seed makes the raid towns and what is on their shelves: the same number is the same places, and Random is a new set." if town_mode else "Any whole number. The same seed and the same orders play the same game."
 	body.add_child(note(seed_words, ink3(), 13))
 
 
@@ -170,7 +171,7 @@ func default_focus() -> Control:
 
 ## One difficulty: its name and its line, the whole card a button that stays pressed.
 func _card(i: int) -> Button:
-	var b := _pick_card(Kit.difficulty_name(i), Kit.difficulty_line(i))
+	var b := _pick_card(PrisonBal.dm("name", "", i), PrisonBal.dm("line", "", i)) if town_mode else _pick_card(Kit.difficulty_name(i), Kit.difficulty_line(i))
 	b.pressed.connect(_choose.bind(i))
 	return b
 
@@ -251,7 +252,7 @@ func _choose(i: int) -> void:
 		var s: Label = b.get_meta("sub")
 		t.add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
 		s.add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
-	facts_label.text = _town_facts(difficulty) if town_mode else Kit.difficulty_facts(difficulty, crew)
+	facts_label.text = PrisonBal.dm("facts", "", difficulty) if town_mode else Kit.difficulty_facts(difficulty, crew)
 
 
 ## What a difficulty changes in the town run, from the rules' own numbers: the size of the nights (they begin with the second survivor) and the bite.
