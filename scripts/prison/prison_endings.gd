@@ -237,6 +237,11 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	var nb: Button = S._btn("New game")
 	nb.pressed.connect(new_game)
 	row.add_child(nb)
+	var cb: Button = S._btn("Copy report")    # PLAYLOG hook: the run as text, to send to the owner
+	cb.pressed.connect(func():
+		arc.plog.copy_report()
+		cb.text = "Copied. Send it to Fedja")
+	row.add_child(cb)
 	var qb: Button = S._btn("Quit")
 	qb.pressed.connect(func(): game.get_tree().quit())
 	row.add_child(qb)

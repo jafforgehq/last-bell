@@ -17,6 +17,7 @@ extends RefCounted
 const Story := preload("res://scripts/prison/prison_story.gd")
 const Endings := preload("res://scripts/prison/prison_endings.gd")
 const Events := preload("res://scripts/prison/prison_events.gd")
+const Playlog := preload("res://scripts/prison/prison_playlog.gd")    # PLAYLOG hook: the run, one line a day
 const PATH := "res://assets/data/prison_story.json"
 
 signal day_changed(day: int)
@@ -26,6 +27,7 @@ var game
 var cfg: Dictionary = {}
 var story
 var endings
+var plog    # PLAYLOG hook
 var day := 1
 var weather := "clear"
 var started := false
@@ -78,6 +80,7 @@ func _init(g) -> void:
 	events = Events.new(self)
 	story = Story.new(g, self)
 	endings = Endings.new(g, self)
+	plog = Playlog.new(g, self)
 	g.econ.person_left.connect(func(nm): _walked.append(String(nm)))
 
 
@@ -408,6 +411,7 @@ func _make_ready() -> void:
 
 
 func _on_day(d: int) -> void:
+	plog.close_day()    # PLAYLOG hook (the day that ends)
 	day = d
 	weather = String(weather_of(d).kind)
 	var w := weather_of(d)
@@ -572,6 +576,7 @@ func deliver(id: String, choice_id: String = "") -> void:
 	elif b.has("choice"):
 		choices[id] = String(b.choice[b.choice.size() - 1].id)    # a scripted run takes the last (the safe) answer
 		choice_id = String(choices[id])
+	plog.event(id, choice_id)    # PLAYLOG hook
 	_apply(b.get("reward", {}))
 	if b.has("choice"):
 		_apply(choice_of(b, choice_id).get("effects", {}))
@@ -662,6 +667,7 @@ func on_raid(alive: bool, loot_got: Dictionary) -> void:
 	if not started:
 		return
 	stats.raids = int(stats.raids) + 1
+	plog.raid(alive, loot_got)    # PLAYLOG hook
 	stats.scrap = float(stats.scrap) + float(loot_got.get("scrap", 0.0))
 	var f = game.run.field
 	var killed := 0
@@ -826,6 +832,7 @@ func raid_bonus(names: Array, loot: Dictionary) -> Array:
 func night_over(night: int, stat: Dictionary) -> void:
 	if not started:
 		return
+	plog.night(stat)    # PLAYLOG hook
 	stats.kills = int(stats.kills) + int(stat.get("killed", 0))
 	stats.fence_lost = int(stats.fence_lost) + (stat.lost as Array).size()
 	if ended_id == "":
@@ -978,6 +985,7 @@ func end(id: String, extra: Dictionary = {}) -> void:
 	if ended_id != "":
 		return
 	ended_id = id
+	plog.finish("ending " + id)    # PLAYLOG hook
 	if id == "evac_full" or id == "evac_good" or id == "evac_bitter" or id == "evac_lonely":
 		convoy = "left"
 	endings.show(id, extra)
