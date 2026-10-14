@@ -48,7 +48,7 @@ func facts(id: String, extra: Dictionary) -> Dictionary:
 	var lost: Array = arc.names_with("died")
 	var walked: Array = arc.names_with("walked")
 	var left_b: Array = extra.get("left", [])
-	var days: int = mini(arc.day, arc.days()) if id == "held" or id.begins_with("evac") else arc.day
+	var days: int = mini(arc.day, arc.days()) if id == "held" or id == "held_bitter" or id.begins_with("evac") else arc.day
 	var bonuses: Array = extra.get("bonuses", [])
 	var has_dog := false
 	for b in bonuses:
@@ -89,7 +89,7 @@ func score(id: String, f: Dictionary) -> Dictionary:
 	var add := func(label: String, pts: float):
 		lines.append([label, pts])
 	var evac: bool = id.begins_with("evac")
-	var n_saved := int(f.saved) if (evac or id == "held") else 0
+	var n_saved := int(f.saved) if (evac or id == "held" or id == "held_bitter") else 0
 	if n_saved > 0:
 		add.call("%d people %s x %d" % [n_saved, "on the truck" if evac else "alive", int(sc.saved)], float(n_saved) * float(sc.saved))
 	add.call("%d days x %d" % [f.days, int(sc.day)], float(f.days) * float(sc.day))
@@ -103,8 +103,8 @@ func score(id: String, f: Dictionary) -> Dictionary:
 		add.call("%d letters read x %d" % [int(st.letters), int(sc.letter)], float(int(st.letters)) * float(sc.letter))
 	if evac:
 		add.call("The convoy took you", float(sc.evac) + float(sc.convoy_ready))
-	elif id == "held":
-		add.call("The fort held to the dawn", float(sc.held))
+	elif id == "held" or id == "held_bitter":
+		add.call("The fort held to the dawn", float(sc[id]))
 	for b in f.bonuses:
 		add.call(String(b.label), float(b.points) * float(sc.bonus))
 	var total := 0.0    # (a lambda copies a number, so the sum is made here)

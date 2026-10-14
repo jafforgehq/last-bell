@@ -20,7 +20,7 @@
     {"id": "evacuate", "name": "Phase III: Evacuate", "stage": "", "by_day": 30, "text": "Be ready at the gate on day 30."}
   ],
   "requirements": [
-    {"id": "fuel", "label": "Fuel for the road", "kind": "stock", "res": "fuel", "need": 40, "must": true, "take": true},
+    {"id": "fuel", "label": "Fuel for the road", "kind": "stock", "res": "fuel", "need": 32, "must": true, "take": true},
     {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 25, "must": true, "take": true},
     {"id": "truck", "label": "Convoy truck built", "kind": "project", "project": "convoy1", "must": true},
     {"id": "radio", "label": "Radio room (tier 1)", "kind": "tier", "building": "radio", "tier": 1, "must": true},
@@ -70,7 +70,7 @@
       ]},
     {"id": "arrangement", "day": 18, "tag": "convoy", "title": "The arrangement", "opens_phase": "evacuate",
       "from": "Halloran, Harbor Relief",
-      "text": "A man this time, clear and tired. Halloran. The convoy passes the river road on day 30 and will wait at your gate until the afternoon, no longer. They want 40 fuel and 25 parts for the road, a radio to talk to you, a fence that can hold while they load, and a truck of your own to join the column. Everyone who is at the gate goes. The bus and your truck have twelve seats between them.",
+      "text": "A man this time, clear and tired. Halloran. The convoy passes the river road on day 30 and will wait at your gate until the afternoon, no longer. They want 32 fuel and 25 parts for the road, a radio to talk to you, a fence that can hold while they load, and a truck of your own to join the column. Everyone who is at the gate goes. The bus and your truck have twelve seats between them.",
       "short": "Halloran: the convoy comes on day 30. Fuel 40, parts 25, a radio room, a fence at tier 2, a truck of your own.",
       "reward": {"stores": {"parts": 4}}},
     {"id": "storm", "day": 24, "tag": "storm", "title": "The storm",
@@ -142,6 +142,11 @@
       {"if": "lost", "text": "You lost {names_lost} on the way here."},
       "{days} days held, {nights} nights, {projects} things built. Nobody is coming for you, and nobody has to. There is food in the larder, and a fence."
     ]},
+    "held_bitter": {"title": "HELD, ALONE", "sub": "The fence stood. Nobody came for you.", "tone": "bitter", "lines": [
+      "The sun came up on day 31 and the fence was still a fence. The convoy had come and gone, and the list was not met. There were {kills} dead at the wall, and the survivors are {saved}.",
+      {"if": "lost", "text": "You lost {names_lost} on the way here."},
+      "{days} days, {nights} nights, {projects} things built. The road north is open and you have no way to drive it. You are alive, and that is all it is."
+    ]},
     "overrun": {"title": "OVERRUN", "sub": "The fence fell and the prison was lost.", "tone": "bad", "lines": [
       "On night {night} the wall went in three places at once. The guards fought from the towers until the ammunition was gone.",
       {"if": "lost", "text": "The ones who did not get out: {names_lost}."},
@@ -163,7 +168,7 @@
       "She lasted {days} days. {nights} nights held, {kills} dead, {projects} things built, and no one left who knew where the keys were."
     ]}
   },
-  "score": {"saved": 20, "day": 1, "night": 4, "project": 3, "kill": 0.1, "rescue": 6, "death": -6, "letter": 3, "evac": 60, "held": 40, "bonus": 1, "convoy_ready": 20},
+  "score": {"saved": 20, "day": 1, "night": 4, "project": 3, "kill": 0.1, "rescue": 6, "death": -6, "letter": 3, "evac": 60, "held": 40, "held_bitter": 20, "bonus": 1, "convoy_ready": 20},
   "lab": {
     "skills": {
       "passive": {"raids": 0.0, "loot": 0.0, "rescue_p": 0.0, "mend": 0.0, "spend": 0.0, "defense": 1.0},

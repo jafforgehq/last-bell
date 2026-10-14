@@ -631,14 +631,26 @@ func on_raid_begin() -> void:
 	sting("horde")
 
 
+## How many dead the base horde of night `n` has (0 on other nights): scaled by the same guard factor as the siege's wave, and small before `early_until`.
+func base_horde_size(n: int, f: float) -> int:
+	var bc: Dictionary = cfg.base_horde
+	if not (bc.nights as Array).has(float(n)):    # (JSON numbers are floats: has(n) with an int never matched)
+		return 0
+	var raw := mini(int(bc.max), int(bc.size[0]) + int(bc.per_night) * maxi(0, n - int((bc.nights as Array)[0])))
+	var size := maxi(2, roundi(float(raw) * f))
+	return mini(size, int(bc.early_cap)) if n < int(bc.early_until) else size
+
+
 ## The base's night: on the horde nights a horde comes at one fence segment from one side (and walks round the outside to it).
 func on_attack(n: int, _picked: Array) -> void:
 	bind()
 	var bc: Dictionary = cfg.base_horde
 	var forced: bool = game.args.has("horde") or (game.args.has("noisetest") and String(game.args.noisetest) == "horde")
-	if not forced and not (bc.nights as Array).has(n):
+	var size := base_horde_size(n, game.siege.guard_factor(game.siege.armed_count()))
+	if not forced and size == 0:
 		return
-	var size := mini(int(bc.max), int(bc.size[0]) + int(bc.per_night) * maxi(0, n - 3))
+	if forced and size == 0:
+		size = int(bc.size[0])
 	if game.args.has("horde"):
 		size = int(game.args.horde)
 	var side: String = ["E", "W", "N"][rng.randi() % 3]

@@ -156,6 +156,23 @@ func setup() -> void:
 		forced = true
 
 
+## The tower guards at their posts (the old 17-person start counts as a full crew).
+func armed_count() -> int:
+	if game.crew_full():
+		return int(game.Bal.d().siege.ref_armed)
+	var armed := 0
+	for m in game.crew.members:
+		if m.def.has("stand") and not m.has("down"):
+			armed += 1
+	return armed
+
+
+## How much of the night's dead are sent: armed guards over ref_armed, between floor and 1.
+func guard_factor(armed: int) -> float:
+	var sb: Dictionary = game.Bal.d().siege
+	return clampf(float(armed) / float(sb.ref_armed), float(sb.floor), 1.0)
+
+
 func args_siege() -> int:
 	return int(game.args.get("siege", "0"))
 
@@ -276,7 +293,7 @@ func update(dt: float) -> void:
 		if forced or abs_h < 24.0 * float(n - 1) + 24.0 + DAWN_H:
 			_start_attack(n)
 		else:
-			nights_started = n
+			_resolve_missed(n)
 	var ammo := float(game.stores.ammo)
 	if _last_ammo >= 0.0 and ammo < _last_ammo:
 		stats["ammo"] = float(stats.get("ammo", 0.0)) + _last_ammo - ammo
@@ -363,14 +380,7 @@ func _start_attack(n: int) -> void:
 	if picked.is_empty() and not pool.is_empty():
 		picked.append(pool[0])
 	_plan.clear()
-	var armed := 0
-	for m in game.crew.members:
-		if m.def.has("stand") and not m.has("down"):
-			armed += 1
-	var sb: Dictionary = game.Bal.d().siege
-	if game.crew_full():
-		armed = int(sb.ref_armed)    # (the old 17-person start sends the old wave)
-	var per := maxi(2, roundi(float(plan.per) * clampf(float(armed) / float(sb.ref_armed), float(sb.floor), 1.0)))    # (fix round 3: the wave follows the guns on the towers)
+	var per := maxi(2, roundi(float(plan.per) * guard_factor(armed_count())))    # (fix round 3: the wave follows the guns on the towers)
 	var names: Array = []
 	for s in picked:
 		s.attacked = true
@@ -396,6 +406,63 @@ func _start_attack(n: int) -> void:
 		if game.args.has("log"):
 			print("SIEGE back-card shown, alarm ", game.alarm_t)
 		game._card("Back in the middle of the attack", "Night %d has begun while you were out. The guards are firing: join the wall." % n, 5.0)
+
+
+## A night that was over before she got home (a raid that came back after dawn): the guards fought it alone. A small model with the arc lab's night numbers
+## (prison_story.json lab.night): the wave and the horde the guards would have met, their fire against it, the fence taking the rest, a crew roll for each gap. A morning card says so.
+func _resolve_missed(n: int) -> void:
+	nights_started = maxi(nights_started, n)
+	night = n
+	var lb: Dictionary = game.arc.cfg.lab.night
+	var plan: Dictionary = game.arc.wave_plan(n)
+	var armed := armed_count()
+	var f := guard_factor(armed)
+	var live: Array = segs.filter(func(s): return float(s.hp) > 0.0)
+	live.shuffle()
+	var k := mini(int(plan.segs), live.size())
+	if k == 0:
+		return
+	var sent: int = maxi(2, roundi(float(plan.per) * f)) * k + int(game.noise.base_horde_size(n, f))
+	var fire := float(armed) * float(lb.guard_kills)
+	var need := float(sent) * float(lb.ammo_per_kill)
+	var have := float(game.stores.ammo)
+	if have < need:
+		fire *= have / maxf(need, 1.0)
+	var used := minf(have, need)
+	game.stores.ammo = have - used
+	var killed: int = mini(sent, int(fire))
+	var leak := float(sent - killed)
+	var dmg_each := (leak * float(lb.hp_per_dead) + float(sent) * float(lb.wear)) / float(k)
+	var hp0 := 0.0
+	for s in segs:
+		hp0 += float(s.hp)
+	var lost: Array = []
+	for s in live.slice(0, k):
+		s.hp = maxf(0.0, float(s.hp) - dmg_each)
+		if float(s.hp) <= 0.0:
+			_set_gap(s, true)
+			lost.append(String(s.name))
+	var crew_lost: Array = []
+	for g in lost.size():
+		for c in game.econ.crew():
+			if randf() < float(lb.casualty_p) and not crew_lost.has(String(c.name)):
+				game.arc.kill(String(c.name), "night")
+				crew_lost.append(String(c.name))
+	var hp1 := 0.0
+	for s in segs:
+		hp1 += float(s.hp)
+	stats = {"hp0": hp0, "killed": killed, "ammo": used, "shots": 0, "lost": lost, "crew": crew_lost, "n": sent, "where": "Night %d (you were out)" % n}
+	var txt := "MORNING.  Night %d came while you were out.\nThe guards held it alone.\n\n" % n
+	txt += "Fence lost:   %s\n" % (", ".join(lost) if not lost.is_empty() else "none")
+	txt += "Fence damage: %d hp\n" % maxi(0, int(hp0 - hp1))
+	txt += "Dead killed:  %d of %d sent\n" % [killed, sent]
+	txt += "Ammo used:    %d rounds\n" % int(used)
+	txt += "Crew lost:    %s" % (", ".join(crew_lost) if not crew_lost.is_empty() else "nobody")
+	_card_label.text = txt
+	_card.visible = true
+	_card_t = 16.0
+	print("SIEGE MISSED night=%d sent=%d killed=%d ammo=%.1f lost=%s crew_lost=%s hp0=%.0f hp1=%.0f" % [n, sent, killed, used, lost, crew_lost, hp0, hp1])
+	game.arc.night_over(n, stats)    # ARC hook
 
 
 func _bells(dt: float) -> void:
