@@ -11,6 +11,7 @@
 extends RefCounted
 
 const PN := preload("res://scripts/prison/prison_noise.gd")
+const Loot := preload("res://scripts/prison/prison_loot.gd")
 const TAG := {"screamer": Color(0.8, 0.85, 1.0), "bloater": Color(0.75, 0.9, 0.3), "hunter": Color(1.0, 0.4, 0.35), "breacher": Color(1.0, 0.65, 0.25)}
 const LETTER := {"screamer": "S", "bloater": "B", "hunter": "H", "breacher": "R"}
 
@@ -135,6 +136,7 @@ func on_raid_begin() -> void:
 	_plan.clear()
 	if not enabled:
 		return
+	_kind_spawns()
 	var day := int(game.econ.day) if game.econ != null else 1
 	var spc: Dictionary = PN.cfg.specials
 	if day < int(spc.raid_min_day) and not game.args.has("rspecial"):
@@ -162,6 +164,33 @@ func on_raid_begin() -> void:
 		at = game.noise._free(at)
 		make(kind, at, "still")
 		placed += 1
+
+
+## The town kind's own special-spawn rule (data: town_kinds.<kind>.spawn): near the drop, near the far pickup, at places of given types. Not held back by raid_min_day.
+func _kind_spawns() -> void:
+	var sp: Dictionary = Loot.kind_cfg(game.loot.kind).get("spawn", {})
+	if sp.is_empty():
+		return
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	for kind in sp.get("entry", {}):
+		for i in int(sp.entry[kind]):
+			make(String(kind), game.noise._free(me + Vector2(rng.randf_range(9.0, 14.0), rng.randf_range(-6.0, 6.0))), "still")
+	var ex: Array = game.exits
+	if sp.has("exit") and not ex.is_empty():
+		var far: Vector2 = Vector2(ex[ex.size() - 1])
+		for kind in sp.exit:
+			for i in int(sp.exit[kind]):
+				make(String(kind), game.noise._free(far + Vector2(rng.randf_range(-5.0, 5.0), rng.randf_range(-5.0, 5.0))), "still")
+	for kind in sp.get("places", {}):
+		var rule: Dictionary = sp.places[kind]
+		var pool: Array = game.loot.places.filter(func(pl): return (rule.types as Array).has(String(pl.type)) and Vector2(pl.pos).distance_to(me) > 20.0)
+		for i in int(rule.n):
+			if pool.is_empty():
+				break
+			var pl: Dictionary = pool[rng.randi() % pool.size()]
+			make(String(kind), game.noise._free(Vector2(pl.pos) + Vector2(rng.randf_range(-3.0, 3.0), rng.randf_range(2.0, 5.0))), "still")
+	if game.args.has("log"):
+		print("KINDSPAWN ", game.loot.kind, " ", list.values().map(func(i): return "%s@%s" % [i.kind, Vector2(i.z.x, i.z.y).round()]))
 
 
 # ------------------------------------------------------------------------------- the step --

@@ -40,7 +40,7 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 	s = {}
 	all = []
 	stage_flags()
-	var sv: Dictionary = _c().survivor
+	var sv: Dictionary = game.loot.survivor_cfg()    # (the base table with the town kind's changes)
 	var n := 0
 	if float(Loot._h(seed_i, 4242) % 1000) / 1000.0 < float(sv.first):
 		n = 1
@@ -75,7 +75,7 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 
 ## One survivor in a room of house `h`: {name, who, p, node, hp, state, ..., hurt (needs a med), locked (shut in: hold E, with dead around)}.
 func _place_one(t: Dictionary, h: Dictionary, seed_i: int, k: int) -> Dictionary:
-	var sv: Dictionary = _c().survivor
+	var sv: Dictionary = game.loot.survivor_cfg()
 	var room: Dictionary = t.rooms[int((h.rooms as Array)[Loot._h(seed_i, 7) % (h.rooms as Array).size()]) ]
 	var rr := Rect2(room.rect)
 	var at := rr.get_center()
@@ -111,6 +111,9 @@ func _place_one(t: Dictionary, h: Dictionary, seed_i: int, k: int) -> Dictionary
 	game.entities.add_child(n)
 	var hurt := float(Loot._h(seed_i, 5151) % 1000) / 1000.0 < float(sv.hurt)
 	var locked := float(Loot._h(seed_i, 6161) % 1000) / 1000.0 < float(sv.locked) and not hurt
+	if bool(sv.get("lock_first", false)) and k == 0:    # (a hospital: one locked ward)
+		locked = true
+		hurt = false
 	if game.args.has("survivor") and k == 0:
 		hurt = String(game.args.survivor) == "hurt"
 		locked = String(game.args.survivor) == "locked"
