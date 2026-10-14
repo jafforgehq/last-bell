@@ -703,6 +703,11 @@ func _enter_raid() -> void:
 	var kit_line: String = pack.kit(stores, loadout_kit)
 	loadout_kit = {}
 	pack.attach(run.sim)
+	run.sim.minutes = fposmod(tod, 24.0) * 60.0    # TIME hook: the raid clock is the base's clock, at the same rate as the HUD
+	run.sim.min_per_sec = DAY_MIN_PER_SEC
+	run.sim.phase = run.sim.seasons.phase_at(run.sim.minutes)
+	speed = 1
+	_dusk_chimed = false
 	arms.carry_out()    # SQUAD hook: the main gun and the spare leave the rack
 	var at: Vector2 = Vector2(t.entry.pos)
 	run.avatar_p.x = at.x
@@ -760,7 +765,53 @@ func _pick_exits(t: Dictionary, from: Vector2) -> Array:
 func _process(delta: float) -> void:
 	if run == null:
 		return
-	_tick(delta)
+	if args.has("speed") and frames >= 5 and frames < 8 and _speed_ok():    # staging: --speed=2 starts at 2x; the TIME line is printed at frame 300
+		speed = clampi(int(args.speed), 1, 3)
+	if args.has("speed") and frames >= 300 and not _time_logged:
+		_time_logged = true
+		print("TIME speed ", speed, " tod ", snappedf(tod, 0.01), " sim hour ", snappedf(run.sim.minutes / 60.0, 0.01), " mode ", mode, " clock ", snappedf(clock, 0.1))
+	if speed > 1 and not _speed_ok():
+		speed = 1
+	if speed == 1:
+		_tick(delta)
+		return
+	var total := clampf(delta, 0.0, StepClock.MAX_FRAME) * float(speed)    # TIME hook: N sub-steps of at most 0.1 s each, so the modules' variable dt stays small
+	var n := ceili(total / StepClock.MAX_FRAME - 0.001)
+	for i in n:
+		_tick(total / float(n))
+
+
+## TIME hook (F1/F2/F3, - and =): the managed base runs at 1x, 2x or 3x. Back to 1x whenever a card or board is open, a night attack starts, and in raids and the clear phase.
+var speed := 1
+var _dusk_chimed := false
+var _time_logged := false
+
+
+func _speed_ok() -> bool:
+	return phase == "managed" and mode == "base" and not busy and not board.is_open() and not loadout.is_open and not squad.open and not siege.attacking and arc.story.card == null and not (pack.ui != null and pack.ui.is_open())
+
+
+func _set_speed(n: int) -> void:
+	if not _speed_ok():
+		return
+	speed = clampi(n, 1, 3)
+
+
+## TIME hook: {} by day far from dusk; {secs, night} in a raid within 45 s of the dusk (the sim's own dusk hour) and through the dark. The chip, the tint and the chime read it.
+func dusk_state() -> Dictionary:
+	if mode != "raid" or run == null:
+		return {}
+	var d: float = run.sim.seasons.dusk_hour()
+	var h := fposmod(tod, 24.0)
+	if h >= d or h < 5.5:
+		return {"secs": 0.0, "night": true}
+	var left := (d - h) * 60.0 / DAY_MIN_PER_SEC
+	if h >= 6.5 and left <= 45.0:
+		if not _dusk_chimed:
+			_dusk_chimed = true
+			sound.play("bell", 0.5, 0.0)
+		return {"secs": left, "night": false}
+	return {}
 
 
 var _perf_last := 0
@@ -1258,6 +1309,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 					pass
 				elif (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
 					run.sim.avatar.melee()
+			KEY_F1, KEY_F2, KEY_F3:    # TIME hook
+				_set_speed(int(ev.keycode - KEY_F1) + 1)
+			KEY_EQUAL:
+				_set_speed(speed + 1)
+			KEY_MINUS:
+				_set_speed(speed - 1)
 			KEY_M:
 				map_view = not map_view
 				zoom_px = 6.0 if map_view else play_zoom
@@ -2580,6 +2637,8 @@ func _day_night(_dt: float) -> void:
 	var n := _night_of(tod)
 	var c := _grade(tod)
 	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1)
+	if mode == "raid" and run != null and run.sim.phase != "day" and not args.has("night"):
+		night_rect.color = Color(1, 1, 1).lerp(c, 0.6)    # TIME hook: the dusk tint when the night wake starts
 	if mode == "base" and arc != null:
 		night_rect.color = night_rect.color.darkened(arc.dim())    # ARC hook: rain, fog and the storm darken the day
 	if vignette != null:

@@ -23,11 +23,11 @@ const RES_USE := {
 	"parts": "Needed by the pump, generator and radio projects. Found in raids on garages.",
 	"fuel": "Burned by the generator once it is built (1 a day). Found in raids on petrol stations.",
 }
-const ROW_ECON := ["clock", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
+const ROW_ECON := ["clock", "speed", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
 const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise", "convoy"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
 const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone", "noise"]
-const ROW_RAID := ["clock", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
+const ROW_RAID := ["clock", "dusk", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
 const DIM := Color("#8d927f")
 
 var game
@@ -120,6 +120,8 @@ func _init(g) -> void:
 	vb.add_child(row1)
 	vb.add_child(row2)
 	_build_clock()
+	_chip("speed", row1, 24, false)    # TIME hook
+	_chip("dusk", row1, 60, false)
 	for k in ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]:
 		_chip(k, row1, 46, true)
 	for k in ["zones", "party", "dead"]:
@@ -356,6 +358,7 @@ func _refresh() -> void:
 		(chips[k].pc as Control).visible = show.has(k)
 	row2.visible = mode != "raid"
 	_clock()
+	_time_chips()
 	var rep: Dictionary = game.econ.daily_report() if game.econ != null else {}
 	if managed:
 		for r in RES:
@@ -385,6 +388,20 @@ func _clock() -> void:
 		_clock_sub.add_theme_color_override("font_color", Hud.ACCENT if on_cd else DIM)
 	else:
 		_clock_sub.text = "Clear phase"
+
+
+## TIME hook: the speed chip in the managed base, the dusk chip in a raid.
+func _time_chips() -> void:
+	_put("speed", "sun", Hud.ACCENT if game.speed > 1 else DIM, "%dx" % game.speed, "F1-F3", DIM, "", "ok", "Time speed: F1, F2, F3 (or - and =) run the base at 1x, 2x, 3x. It drops to 1x when a card opens, at night attacks, in raids.")
+	var ds: Dictionary = game.dusk_state()
+	(chips["dusk"].pc as Control).visible = not ds.is_empty() and game.mode == "raid"
+	if ds.is_empty():
+		return
+	if bool(ds.night):
+		_put("dusk", "moon", Hud.DANGER_TEXT, "NIGHT", "the dead wake", Hud.DANGER_TEXT, "", "danger", "It is dark: the dead hear from farther. Head for an exit.")
+	else:
+		var s := int(ds.secs)
+		_put("dusk", "moon", Hud.WARN, "Dusk %d:%02d" % [s / 60, s % 60], "", DIM, "", "warn", "Night falls soon and the dead wake from farther. Wrap up and head for an exit.", 1.0 - float(ds.secs) / 45.0, Hud.WARN)
 
 
 func _state_style(st: String) -> StyleBoxFlat:
@@ -571,7 +588,7 @@ func _attack_chip() -> void:
 		var hz: String = game.noise.horde_text()    # NOISE hook: "Horde from the east in 40 s"
 		_put("attack", "bell", Hud.DANGER_TEXT, "ATTACK", hz if hz != "" else "night %d  %d left" % [sg.night, sg._alive_wave()], Hud.DANGER_TEXT, "", "danger", "The dead are at the walls. Guards shoot from the towers; hold E at a broken wall to mend it.")
 		return
-	var secs: float = maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR)
+	var secs: float = maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR / float(game.speed))
 	var st := "warn" if secs < 90.0 else "ok"
 	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, "Night %d" % (sg.nights_started + 1), "in %d:%02d" % [int(secs) / 60, int(secs) % 60], Hud.WARN if st == "warn" else DIM, "", st,
 		"The next attack comes at 21:00. Mend the fence and keep ammo in the stores before it.")

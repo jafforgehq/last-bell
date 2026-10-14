@@ -236,7 +236,7 @@ func hud() -> String:
 	if attacking:
 		line += "  ATTACK night %d: %d of the dead still at the walls" % [night, _alive_wave()]
 	else:
-		var secs := maxf(0.0, (NIGHT_H + 24.0 * float(nights_started) - abs_h) * SEC_PER_HOUR)
+		var secs := maxf(0.0, (NIGHT_H + 24.0 * float(nights_started) - abs_h) * SEC_PER_HOUR / float(game.speed))
 		line += "  Next attack: night %d in %d:%02d" % [nights_started + 1, int(secs) / 60, int(secs) % 60]
 	return line
 
