@@ -786,7 +786,12 @@ func _end_attack() -> void:
 	txt += "Fence damage: %d hp\n" % maxi(0, int(float(stats.hp0) - hp1))
 	txt += "Dead killed:  %d of %d sent\n" % [int(stats.killed), int(stats.n)]
 	txt += "Ammo used:    %d rounds (guards fired %d shots)\n" % [int(float(stats.ammo)), int(stats.shots)]
-	txt += "Crew lost:    %s\n\n" % (", ".join(crew_lost) if not crew_lost.is_empty() else "nobody")
+	txt += "Crew lost:    %s\n\n" % (", ".join(crew_lost.map(game.arc.events.label)) if not crew_lost.is_empty() else "nobody")    # (TRAITS: "Cole (Steady, Veteran)" and who they were, one line each)
+	txt = txt.trim_suffix("\n\n") + "\n"
+	for nm in crew_lost:
+		if game.arc.events.bio_of(String(nm)) != "":
+			txt += "  %s\n" % game.arc.events.bio_of(String(nm))
+	txt += "\n"
 	txt += "Weakest now:  %s %d%%     Scrap %d" % [String(weakest().name), int(100.0 * float(weakest().hp) / float(weakest().max)), int(game.stores.scrap)]
 	_card_label.text = txt
 	_card.visible = true

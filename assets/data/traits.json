@@ -89,6 +89,63 @@
       "effects": {
         "xp": 1.3
       }
+    },
+    {
+      "id": "coward",
+      "only": "prison",
+      "name": "Coward",
+      "blurb": "Flinches. Shots land 8% less often, and when morale is low they leave the tower.",
+      "effects": {
+        "aim": 0.92
+      }
+    },
+    {
+      "id": "hothead",
+      "only": "prison",
+      "name": "Hothead",
+      "blurb": "Fires too soon and too often: 25% faster, and half again the ammo.",
+      "effects": {
+        "reload": 0.75,
+        "ammo": 1.5
+      }
+    },
+    {
+      "id": "scrounger",
+      "only": "prison",
+      "name": "Scrounger",
+      "blurb": "Finds more on a raid, and eats more at home.",
+      "effects": {
+        "loot": 1,
+        "eats": 0.5
+      }
+    },
+    {
+      "id": "thief",
+      "only": "prison",
+      "name": "Thief",
+      "blurb": "Comes back from a raid with one thing extra. Now and then something goes missing.",
+      "effects": {
+        "loot_extra": 1
+      }
+    },
+    {
+      "id": "veteran",
+      "only": "prison",
+      "name": "Veteran",
+      "blurb": "Seen it before. Shots land 10% more often, and the base is a little calmer for it.",
+      "effects": {
+        "aim": 1.1,
+        "calm": 0.6
+      }
+    },
+    {
+      "id": "pacifist",
+      "only": "prison",
+      "name": "Pacifist",
+      "blurb": "Will not carry a gun. A pacifist cook or medic makes the kitchen or the infirmary worth 20% more to morale.",
+      "effects": {
+        "cook": 1.2
+      }
     }
   ]
 }

@@ -108,6 +108,7 @@ var ball := Vector2(24.0, 49.0)    # the kids' ball
 var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
 var labor_cb: Callable    # WORLD hook: prison_upgrades.gd, called every frame a person works a project stop (m, stop, dt)
 var busy_cb: Callable    # WORLD hook: has_work(m), true when m has a project of their role to build (they skip one meal, `skipped`)
+var traits_cb: Callable    # TRAITS hook: prison_game.gd sets it to arc.traits_of (name -> trait ids); the crew is rebuilt after every raid, so who has what is kept by name in the arc
 var _meal_id := -1    # what each stock got from the crew since the start
 
 
@@ -146,6 +147,8 @@ func _make(r: Dictionary, at_in: Vector2, n: int = 0) -> Dictionary:
 	src["post_id"] = ""
 	var p = sim.make_person(src)
 	p.player = false
+	if traits_cb.is_valid():
+		sim.traits.give(p, traits_cb.call(String(r.name)))
 	var m := {"p": p, "def": r, "i": 0, "state": "wait", "path": [], "pi": 0, "t": 0.0, "secs": 0.0, "key": String(r.key), "say": String(r.role)}
 	var at := at_in
 	if r.has("ally"):

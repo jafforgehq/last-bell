@@ -176,7 +176,8 @@ func prompt() -> Dictionary:
 		if bool(s.locked):
 			return {"kind": "survivor_locked", "label": "Hold E: force the door to %s (%d%%)" % [String(s.name), int(100.0 * float(s.lock_t) / float(_c().survivor.lock_secs))]}
 		var free: int = int(game.econ.beds().free)
-		var lbl := "E: ask %s (%s) to come with you%s" % [String(s.name), String(s.who.skill), "" if free > 0 else "  (no free bed at the base!)"]
+		var tt: String = game.arc.events.trait_text(String(s.name))    # TRAITS: who they are, before the player asks
+		var lbl := "E: ask %s (%s%s) to come with you%s" % [String(s.name), String(s.who.skill), "; " + tt if tt != "" else "", "" if free > 0 else "  (no free bed at the base!)"]
 		if bool(s.hurt):
 			lbl = "E: give %s a med (they are hurt)" % String(s.name)
 		return {"kind": "survivor", "label": lbl}
@@ -198,7 +199,8 @@ func talk() -> void:
 	s.state = "follow"
 	s.p.work = ""
 	game.squad.add_found(s)    # SQUAD hook: a found survivor is a member of the squad (orders, bag, nameplate)
-	game._say("%s: I'm coming with you. Get me to the pickup. (C: orders)" % String(s.name), 4.0)
+	var bio: String = game.arc.events.bio_of(String(s.name))
+	game._say("%s: I'm coming with you. Get me to the pickup. (C: orders)%s" % [String(s.name), ("\n" + bio) if bio != "" else ""], 5.0)
 
 
 func update(dt: float) -> void:
@@ -414,7 +416,7 @@ func _settle1(alive: bool) -> String:
 		var rc := _make_recruit(s.who)
 		recruits.append(rc)
 		rescued += 1
-		out = "%s joins as %s." % [nm, String(rc.role)]
+		out = "%s joins as %s.%s" % [nm, String(rc.role), (" " + game.arc.events.trait_text(nm) + ".") if game.arc.events.trait_text(nm) != "" else ""]
 	s = {}
 	if game.args.has("log"):
 		print("PEOPLE ", out, " recruits ", recruits.map(func(d): return "%s/%s" % [d.name, d.role]))
