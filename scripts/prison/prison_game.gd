@@ -1114,6 +1114,12 @@ func _tick(dt: float) -> void:
 			if _seq_i >= int(sq[0]):
 				get_tree().quit()
 	elif args.has("shot") and frames >= _shot_wait and not _quit_after:
+		if args.has("nohud") and not _hud_hidden:    # --nohud: a clean frame (the title's backdrop is baked from one); the shot is taken a frame later
+			_hud_hidden = true
+			for ch in get_children():
+				if ch is CanvasLayer and ch.layer != 5:    # (layer 5 is the night and the lamps' glow)
+					ch.visible = false
+			return
 		_save_shot()
 		get_tree().quit()
 
@@ -1978,6 +1984,9 @@ func _auto_loot() -> void:
 		if not path.is_empty():
 			var wp: Vector2 = path[mini(1, path.size() - 1)]
 			_bot_in = {"move": (wp - me).normalized(), "aim": wp}
+
+
+var _hud_hidden := false
 
 
 func _save_shot() -> void:

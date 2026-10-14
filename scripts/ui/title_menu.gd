@@ -52,6 +52,10 @@ func setup(shell_node) -> void:
 	hud = shell.hud
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if shell.main != null and shell.main.get("title_scene") != null:    # the real game's title: the prison at night over the old town (scripts/ui/title_backdrop.gd)
+		var pic: Control = load("res://scripts/ui/title_backdrop.gd").new()
+		add_child(pic)
+		pic.setup(shell.reduce_motion())
 	vignette = _backdrop(Kit.vignette_texture())
 	pulse = _backdrop(Kit.vignette_texture(0.95))
 	pulse.modulate.a = 0.0
