@@ -6,13 +6,14 @@ extends Node
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 ## ROUND 12: the volume sliders (label, Prefs key in section audio) and the bus each one sets.
 const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambience"], ["Effects", "sfx"]]
 const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
 
 const KEYS := [
-	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["R", "reload"], ["F", "melee (shoves a hunter off)"], ["G", "throw a bottle or can: the dead go to look"],
+	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["Right button or Shift", "aim first, when Settings says so"], ["R", "reload"], ["F", "melee (shoves a hunter off)"], ["G", "throw a bottle or can: the dead go to look"],
 	["E", "use, search, go out at the gate or the truck"], ["Q", "put the gun away or take it up"], ["B", "the roster"], ["C", "the squad's orders"],
 	["Tab or I", "the backpack"], ["O", "fold the objectives"], ["L", "the story log: the radio messages and the convoy's list"], ["M", "the overview map"], ["Wheel", "zoom"], ["Esc", "this menu"],
 ]
@@ -101,6 +102,12 @@ func _page(which: String) -> void:
 			grid.add_theme_constant_override("h_separation", 18)
 			grid.add_theme_constant_override("v_separation", 5)
 			for k in KEYS:
+				if k[0] == "Mouse":
+					k = ["Mouse", "aims all the time: the left button fires" if AimMode.prison_mode() == AimMode.ALWAYS else "free pointer: hold the right button (or Shift) to aim"]
+				elif k[0] == "Left button" and AimMode.prison_mode() == AimMode.RIGHT:
+					k = ["Left button", "fire while the right button is held (out on a raid, or when the wall is under attack)"]
+				elif k[0] == "Right button or Shift":
+					continue
 				grid.add_child(_lab(String(k[0]), 17, Hud.ACCENT, true))
 				var d := _lab(String(k[1]), 16, Hud.INK2)
 				d.custom_minimum_size.x = 330
@@ -113,6 +120,13 @@ func _page(which: String) -> void:
 			for sl_def in VOLUMES:
 				body.add_child(_volume_row(String(sl_def[0]), String(sl_def[1])))
 			body.add_child(_rule())
+			var aim_btn := _btn("", func(): pass)
+			var set_txt := func(): aim_btn.text = "Aim: " + String(AimMode.LABELS[AimMode.prison_mode()])
+			set_txt.call()
+			aim_btn.pressed.connect(func():
+				AimMode.set_prison_mode(AimMode.RIGHT if AimMode.prison_mode() == AimMode.ALWAYS else AimMode.ALWAYS)
+				set_txt.call())
+			body.add_child(aim_btn)
 			body.add_child(_btn("Back", func(): _page("main")))
 		_:
 			body.add_child(_btn("Resume", close, true))

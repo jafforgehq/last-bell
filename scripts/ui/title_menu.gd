@@ -159,6 +159,10 @@ func _build_logo() -> Control:
 ## Brings what the menu says up to date: the Continue line (the newest save and its day), and
 ## the lines that depend on the settings.
 func refresh() -> void:
+	# The prison game hides Continue and Load until it has a save: its main node answers `prison_save_exists()` (no such method yet = none).
+	var prison_title: bool = OneHouse.town_start(shell.main) and not (shell.main.has_method("prison_save_exists") and shell.main.prison_save_exists())
+	items["continue"].visible = not prison_title
+	items["load"].visible = not prison_title
 	var best: Dictionary = shell.newest_save()
 	var c: Button = items["continue"]
 	var sub: Label = c.get_meta("sub")

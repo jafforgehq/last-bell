@@ -11,6 +11,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Icons := preload("res://scripts/prison/prison_icons.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
+const PHud := preload("res://scripts/prison/prison_hud.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
 
 const RES := ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
@@ -620,6 +621,10 @@ func _clear_chips() -> void:
 			left += game._dead_in_zone(zi).size()
 	_put("dead", "target", Hud.DANGER_TEXT, "%d" % left, "dead left", DIM, "", "ok", "Dead still standing in the zones that are not clear.")
 	for r in ["ammo", "meds"]:
+		if r == "ammo":
+			var sp: int = PHud.reserve(game, game.run.avatar_p)    # shots in the pack: the gun readout's unit
+			_put("c_ammo", "ammo", RES_COL.ammo, "%d" % sp, "spare", DIM, "", "danger" if sp <= 0 else ("warn" if sp < 12 else "ok"), "Shots in your backpack, not counting the gun's magazine. The stores hold %d units of ammo.\n%s" % [int(game.stores.get("ammo", 0.0)), RES_USE.ammo])
+			continue
 		var low: Dictionary = game.econ.cfg.needs.low
 		var stock := float(game.stores.get(r, 0.0))
 		var st := "danger" if stock < 0.5 else ("warn" if stock < float(low.get(r, 0.0)) else "ok")
@@ -636,8 +641,8 @@ func _raid_chips(_rep: Dictionary) -> void:
 	var full := float(used) / maxf(1.0, float(total))
 	var st := "danger" if full >= 0.95 else ("warn" if full >= 0.8 else "ok")
 	_put("pack", "pack", Hud.INK2, "%d/%d" % [used, total], "pack", DIM, "", st, "Backpack cells used: %d of %d.%s\nI opens it; loot that does not fit stays behind." % [used, total, "  It is nearly full." if st != "ok" else ""], full, Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.INFO))
-	var am := int(Inventory.units(grid, "ammo"))
-	_put("r_ammo", "ammo", RES_COL.ammo, "%d" % am, "spare", DIM, "", "danger" if am <= 0 else ("warn" if am < 12 else "ok"), "Rounds in the backpack, not counting the gun's magazine. R reloads.")
+	var am := PHud.reserve(game, game.run.avatar_p)    # shots, the gun readout's unit
+	_put("r_ammo", "ammo", RES_COL.ammo, "%d" % am, "spare", DIM, "", "danger" if am <= 0 else ("warn" if am < 12 else "ok"), "Shots in the backpack, not counting the gun's magazine. R reloads.")
 	var md := int(Inventory.units(grid, "meds"))
 	_put("r_meds", "meds", RES_COL.meds, "%d" % md, "meds", DIM, "", "ok", "Medicine carried. Unspent meds go home with you.")
 	var nd: Dictionary = game.econ.needs() if game.econ != null else {}

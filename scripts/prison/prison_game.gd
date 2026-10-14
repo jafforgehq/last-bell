@@ -1,7 +1,7 @@
 ## EXPERIMENT (prison extraction): the whole game loop in one scene. BASE: a hand-authored prison compound (prison_base.gd) with ten people at work (prison_crew.gd) and a mass of dead in the pen in
 ## front of the gate. GO OUT (E at the gate or the truck): a generated 64 x 64 town (TownGen, blocks 2) played with the real Sim (avatar, shooting, melee, search, dormant dead that wake near you).
 ## EXTRACT: stand in a pickup ring for 2 s, a short cutscene, and the loot (the raid sim's stock) is banked in the base's stores. DIE in the raid: the pack is lost, same cutscene back.
-## Keys: WASD walk, mouse aim, left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc pause menu.
+## Keys: WASD walk, mouse aim (right button aims first when the pause menu says so), left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc pause menu.
 ## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom.
 ##
 ## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; ten zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
@@ -180,6 +180,15 @@ var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the 
 var loadout_kit := {}    # what the card chose to take from the stores for the next raid ({} = the standard kit)
 var squad_regroup := false    # the call to the pickup: the companions run to Ruth
 var _weapon_card := false
+
+
+## The static callables hold lambdas that capture `fx`: left set, the engine aborts on quit ("recursive_mutex lock failed").
+func _exit_tree() -> void:
+	PawnNode.hurt_cb = Callable()
+	Hanim.threat_cb = Callable()
+	RimzFrames.blood_cb = Callable()
+	PawnMotion.thump_cb = Callable()
+	PawnMotion.step_cb = Callable()
 
 
 func _ready() -> void:
@@ -612,6 +621,8 @@ func _enter_base() -> void:
 		pack.attach(run.sim, base.stations.stores)
 		run.avatar_p.x = Base.SPAWN.x
 		run.avatar_p.y = Base.SPAWN.y
+		if int(pack.Inventory.units(pack.grid, "ammo")) < 1:
+			pack.kit(stores, {"ammo": 20})    # the pack starts the base day with rounds, so the gun does not read 6 / 0
 	run.sim.minutes = 8.0 * 60.0
 	crew = Crew.new()
 	crew.setup(run.sim, world, base, data, clear, crew_full())
@@ -666,7 +677,7 @@ func _enter_base() -> void:
 		upg.setup()    # WORLD hook
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
-		_say("WASD walk, mouse aim, left button fire, R reload, F melee, E search. Clear every zone.", 7.0)
+		_say("WASD walk. %s. R reload, F melee, E search. Clear every zone." % AimMode.prison_words(), 7.0)
 	else:
 		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
 
@@ -1202,7 +1213,7 @@ func _hands(dt: float) -> void:
 	var me := Vector2(run.avatar_p.x, run.avatar_p.y)
 	var pointer_ok := Rect2(Vector2.ZERO, _vp()).has_point(get_viewport().get_mouse_position())
 	var over_hud: bool = pack.blocks_fire() or board.blocks_fire()
-	aiming_now = (forced and not AimMode.holstered) or AimMode.aiming(AimMode.current(), Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT), Input.is_key_pressed(KEY_SHIFT), pointer_ok, busy, over_hud)
+	aiming_now = (forced and not AimMode.holstered) or AimMode.aiming(AimMode.prison_mode(), Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT), Input.is_key_pressed(KEY_SHIFT), pointer_ok, busy, over_hud)
 	run.avatar_p.holstered = AimMode.holstered    # (what the pawn draws: the weapon slung low, the hands off it)
 	run.avatar_p.set_meta("aiming", aiming_now)
 	if aiming_now:
@@ -1692,7 +1703,7 @@ func _scripts(dt: float) -> void:
 		for id in String(args.pick).split(","):
 			squad.toggle(id)
 		loadout._refresh()
-	if phase == "clear" and mode == "base" and frames == 25 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
+	if phase == "clear" and mode == "base" and frames >= 200 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
 		_weapon_card = true
 		loadout.open("", true)    # the first card of the party: which gun
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
