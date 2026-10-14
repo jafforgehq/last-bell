@@ -380,7 +380,7 @@ func _start_attack(n: int) -> void:
 	if picked.is_empty() and not pool.is_empty():
 		picked.append(pool[0])
 	_plan.clear()
-	var per := maxi(2, roundi(float(plan.per) * guard_factor(armed_count())))    # (fix round 3: the wave follows the guns on the towers)
+	var per := maxi(2, roundi(float(plan.per) * float(game.Bal.dm("wave")) * guard_factor(armed_count())))    # (fix round 3: the wave follows the guns on the towers)
 	var names: Array = []
 	for s in picked:
 		s.attacked = true

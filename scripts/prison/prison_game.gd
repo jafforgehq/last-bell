@@ -215,6 +215,9 @@ func _ready() -> void:
 	if args.has("nosmooth"):
 		PawnNode.smooth_turn = false
 		PawnNode.rifles_ready = false
+	var rm: Dictionary = Engine.get_meta("run") if Engine.has_meta("run") else {}    # the New game card's {difficulty, seed}; `--difficulty=0..2 --seed=N` the same
+	Bal.level = clampi(int(args.get("difficulty", rm.get("difficulty", 1))), 0, 2)
+	Bal.run_seed = int(args.get("seed", rm.get("seed", randi() % 900000 + 100000)))
 	data = GD.load_all()
 	Arms.merge(data)    # SQUAD hook: the prison's guns over the shared data (this process only)
 	_fit_window()
@@ -707,7 +710,7 @@ func _enter_raid() -> void:
 	msg_label.text = ""
 	mode = "raid"
 	raids += 1
-	var seed_i := int(args.get("seed", str(1000 + raids * 17 + int(Time.get_ticks_msec() % 997))))
+	var seed_i := Bal.derive(raids)    # (the run seed and the raid number: a seed replays its towns)
 	var t: Dictionary = TownGen.make(seed_i, {"blocks": 2})
 	# the autumn crowns of the old trees are swapped for greens, pines and scrub (same art style, tools/make_prison_trees_blender.py)
 	var swap := [24, 24, 22, 23, 0, 2, 5, 24]

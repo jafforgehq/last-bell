@@ -116,7 +116,7 @@ func _raid(got: Dictionary) -> void:
 	arc.stats.raids = int(arc.stats.raids) + 1
 	if dead:
 		arc.stats.ruth_deaths = int(arc.stats.ruth_deaths) + 1
-		if int(arc.stats.ruth_deaths) >= int(arc.cfg.rules.ruth_deaths):
+		if int(arc.stats.ruth_deaths) >= int(game.Bal.dm("ruth_deaths", arc.cfg.rules.ruth_deaths)):
 			arc.end("dead")
 		return
 	for place in places:

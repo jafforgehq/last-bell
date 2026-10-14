@@ -7,6 +7,7 @@
 ## Owned by prison_game.gd (`loot`, `# RAIDS hook`). `--loot-lab=N` prints the distribution (see `lab`).
 extends RefCounted
 
+const Bal := preload("res://scripts/prison/prison_bal.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const PATH := "res://assets/data/prison_raids.json"
 const TILE := 64.0
@@ -212,6 +213,10 @@ static func roll(ty: String, ckind: String, rng: RandomNumberGenerator, tables =
 		var p := float((k.get("p", {}) as Dictionary).get(String(r[0]), r[1]))
 		if rng.randf() < p:
 			loot[String(r[0])] = int(loot.get(String(r[0]), 0)) + rng.randi_range(int(r[2]), int(r[3]))
+	var lm := float(Bal.dm("loot"))    # the difficulty's share of the shelves (after the dice, so a seed rolls the same on every level)
+	if lm != 1.0:
+		for item in loot:
+			loot[item] = maxi(1, roundi(float(loot[item]) * lm))
 	return loot
 
 

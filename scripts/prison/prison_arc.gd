@@ -682,10 +682,10 @@ func on_raid(alive: bool, loot_got: Dictionary) -> void:
 		story.log_changed()
 	if not alive:
 		stats.ruth_deaths = int(stats.ruth_deaths) + 1
-		if int(stats.ruth_deaths) >= int(cfg.rules.ruth_deaths):
+		if int(stats.ruth_deaths) >= int(game.Bal.dm("ruth_deaths", cfg.rules.ruth_deaths)):
 			_pending_end = "dead"
 		elif not scripted:
-			game.people.banner("Ruth went down in the street (%d of %d). The pack is lost." % [int(stats.ruth_deaths), int(cfg.rules.ruth_deaths)], Color(1, 0.5, 0.45), 7.0)
+			game.people.banner("Ruth went down in the street (%d of %d). The pack is lost." % [int(stats.ruth_deaths), int(game.Bal.dm("ruth_deaths", cfg.rules.ruth_deaths))], Color(1, 0.5, 0.45), 7.0)
 
 
 ## A letter is read (a note came home): picks the next one nobody has read.
