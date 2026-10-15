@@ -51,6 +51,15 @@
     {"name": "Fortress", "tiers": {"fence": 2, "power": 2, "convoy": 1}},
     {"name": "Hub", "tiers": {"radio": 1, "water": 2, "garden": 2, "kitchen": 2, "infirmary": 2, "dormitory": 2, "power": 2, "fence": 2}}
   ],
+  "barricades": [
+    {"id": "sandbag", "name": "Sandbag line", "cost": {"scrap": 14}, "dur": 100.0, "wear_night": 0.15, "shield": 0.5, "slow": 0.75, "wear_dps": 0.4,
+     "blurb": "Takes half of the damage the dead do to the wire there while it lasts, and slows them a little."},
+    {"id": "spikes", "name": "Spike strip", "cost": {"scrap": 10, "parts": 3}, "dur": 70.0, "wear_night": 0.25, "shield": 0.15, "slow": 0.6, "wear_dps": 0.5, "spike": 0.25,
+     "blurb": "The dead at the wire there are cut as they push, and walk slower."},
+    {"id": "tripwire", "name": "Tripwire and cans", "cost": {"scrap": 6, "parts": 2}, "dur": 45.0, "wear_night": 0.3, "shield": 0.0, "slow": 0.5, "wear_dps": 0.3, "stun": 2.5,
+     "noise": {"loud": 18.0, "kind": "throw", "every": 25.0, "cost": 6.0},
+     "blurb": "Each of the dead trips on it once and goes down for a moment, and the rattle pulls the pen's dead to that wire, where the guns are. Slows them."}
+  ],
   "projects": [
     {"id": "water1", "building": "water", "tier": 1, "name": "Rain barrels", "cost": {"scrap": 12}, "labor": 15, "requires": [], "effect": {"note": "a little water while it rains"}},
     {"id": "water2", "building": "water", "tier": 2, "name": "Hand pump on the well", "cost": {"scrap": 35, "parts": 10}, "labor": 38, "requires": [], "effect": {"cap": {"water": 40}, "note": "needs a hauler at the pump"}},

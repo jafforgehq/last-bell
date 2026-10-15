@@ -9,6 +9,8 @@ extends RefCounted
 
 const GD := preload("res://scripts/game_data.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
+const Posts := preload("res://scripts/prison/prison_posts.gd")
+const Barricade := preload("res://scripts/prison/prison_barricade.gd")
 
 const TILE := GD.TILE
 const SEG_HP := 120.0
@@ -57,11 +59,15 @@ var _card_label: Label
 var _card_t := 0.0
 var _hit_fx_t := 0.0
 var _logged := -1
+var posts    # crew posts (prison_posts.gd)
+var bars    # barricades (prison_barricade.gd)
 var _runner_p := 0.0    # ARC hook: the share of runners of this night (prison_arc.gd `wave_plan`)
 
 
 func _init(g) -> void:
 	game = g
+	posts = Posts.new(g)
+	bars = Barricade.new(g)
 	guards_off = g.args.has("noguards")
 	_banner = Label.new()
 	_banner.add_theme_font_size_override("font_size", 40)
@@ -151,6 +157,14 @@ func setup() -> void:
 		s.push = 0
 		if float(s.hp) <= 0.0:
 			_set_gap(s, true)
+	if game.args.has("posts") and game.crew != null:    # test flag: --posts=cole:gate_line,bea:east_wall puts them on posts at once
+		for kv in String(game.args.posts).split(","):
+			var m: Dictionary = game.crew.member_of(kv.get_slice(":", 0))
+			if not m.is_empty():
+				print("POST ", kv, " ", game.crew.put_on_post(m, kv.get_slice(":", 1), true))
+	if game.args.has("barricades-now"):    # test flag: --barricades-now=sandbag:5,spikes:6 (id:segment index)
+		for kv in String(game.args["barricades-now"]).split(","):
+			bars.build(segs[int(kv.get_slice(":", 1))], kv.get_slice(":", 0), true)
 	if args_siege() > 0 and not _report_done and nights_started == 0 and not attacking:
 		pending = args_siege()
 		forced = true
@@ -162,7 +176,7 @@ func armed_count() -> int:
 		return int(game.Bal.d().siege.ref_armed)
 	var armed := 0
 	for m in game.crew.members:
-		if m.def.has("stand") and not m.has("down"):
+		if m.def.has("stand") and not m.has("down") and not m.has("broke"):
 			armed += 1
 	return armed
 
@@ -199,7 +213,7 @@ func can_fire() -> bool:
 
 
 func guard_ok(m: Dictionary) -> bool:
-	return not guards_off and not m.has("down") and float(game.stores.ammo) >= GUARD_SHOT_COST
+	return not guards_off and not m.has("down") and not m.has("broke") and float(game.stores.ammo) >= GUARD_SHOT_COST
 
 
 ## Where a guard shoots: the strip of ground 5 tiles outside the fence and everything inside it (the dead that got in).
@@ -303,6 +317,8 @@ func update(dt: float) -> void:
 		_spawn_batches(dt)
 		_bells(dt)
 	_wave_work(dt)
+	bars.work(dt)    # BARRICADE hook: slow, spikes, tripwire
+	posts.nerve(dt)    # POSTS hook: a coward on an exposed post may break
 	_ambient(dt)
 	_flood(dt)
 	_bites(dt)
@@ -379,6 +395,9 @@ func _start_attack(n: int) -> void:
 					break
 	if picked.is_empty() and not pool.is_empty():
 		picked.append(pool[0])
+	if game.args.has("barricade"):    # test flag: --barricade=ID puts that barricade on every attacked segment
+		for s in picked:
+			bars.build(s, String(game.args.barricade), true)
 	_plan.clear()
 	var per := maxi(2, roundi(float(plan.per) * float(game.Bal.dm("wave")) * guard_factor(armed_count())))    # (fix round 3: the wave follows the guns on the towers)
 	var names: Array = []
@@ -451,6 +470,7 @@ func _resolve_missed(n: int) -> void:
 	var hp1 := 0.0
 	for s in segs:
 		hp1 += float(s.hp)
+	bars.night_wear()
 	stats = {"hp0": hp0, "killed": killed, "ammo": used, "shots": 0, "lost": lost, "crew": crew_lost, "n": sent, "where": "Night %d (you were out)" % n}
 	var txt := "MORNING.  Night %d came while you were out.\nThe guards held it alone.\n\n" % n
 	txt += "Fence lost:   %s\n" % (", ".join(lost) if not lost.is_empty() else "none")
@@ -504,7 +524,7 @@ func _spawn_batches(dt: float) -> void:
 			if z == null:
 				continue
 			z.speed *= 2.0    # a wave is driven: faster than the pen's shufflers
-			wave.append({"z": z, "seg": s, "spot": _spot(s, 3.0)})
+			wave.append({"z": z, "seg": s, "spot": _spot(s, 3.0), "speed0": float(z.speed)})
 			field._investigate(z, wave[wave.size() - 1].spot)
 			z.wander_t = 90.0
 
@@ -586,8 +606,10 @@ func _ambient(dt: float) -> void:
 
 func _damage(s: Dictionary, amount: float) -> void:
 	var before := state_of(s)
-	s.hp = maxf(0.0, float(s.hp) - amount)
+	bars.absorb(s, amount)    # BARRICADE hook: a sandbag line takes part of it
+	s.hp = maxf(0.0, float(s.hp) - amount * bars.damage_mult(s))
 	if float(s.hp) <= 0.0 and not s.open:
+		bars.on_breach(s)
 		_set_gap(s, true)
 		game.sound.play("crash")
 		game._say("BREACH: %s is down!" % String(s.name), 6.0)
@@ -677,7 +699,7 @@ func _bites(dt: float) -> void:
 		for z in zs:
 			if not _alive(z) or not _inside(z):
 				continue
-			if Vector2(z.x, z.y).distance_to(Vector2(p.x, p.y)) < BITE_R:
+			if Vector2(z.x, z.y).distance_to(Vector2(p.x, p.y)) < posts.bite_r(m, BITE_R):    # POSTS hook: cover shrinks the reach
 				m["down"] = {"t": DOWN_SECS, "z": z}
 				m["prev"] = m.state
 				if not m.def.has("stand") and m.def.has("route"):    # (allies and kids have no route: they keep their state)
@@ -779,6 +801,8 @@ func _show_banner(text: String, secs: float) -> void:
 
 func _end_attack() -> void:
 	attacking = false
+	bars.night_wear()
+	posts.dawn()
 	var hp1 := 0.0
 	for s in segs:
 		hp1 += float(s.hp)
@@ -891,6 +915,7 @@ func paint(c: CanvasItem) -> void:
 			var wpx := 70.0
 			c.draw_rect(Rect2(bc - Vector2(wpx / 2.0, 5), Vector2(wpx, 10)), Color(0, 0, 0, 0.7))
 			c.draw_rect(Rect2(bc - Vector2(wpx / 2.0, 5), Vector2(wpx * f, 10)), Color(0.85, 0.25, 0.2).lerp(Color(0.5, 0.85, 0.35), f))
+	bars.paint(c)
 	# the guards' dead
 	var font := ThemeDB.fallback_font
 	for m in game.crew.members:
@@ -923,7 +948,7 @@ func to_dict() -> Dictionary:
 	var fence := {}
 	for s in segs:
 		fence[String(s.name)] = {"hp": float(s.hp), "max": float(s.max)}
-	return {"fence": fence, "nights_started": nights_started, "night": night, "abs_h": abs_h, "report_done": _report_done}
+	return {"posts": posts.to_dict(), "barricades": bars.to_dict(), "fence": fence, "nights_started": nights_started, "night": night, "abs_h": abs_h, "report_done": _report_done}
 
 
 ## Puts the saved fence back (before the base is built: `setup` opens the gap of a segment with no hp left).
@@ -933,6 +958,8 @@ func from_dict(d: Dictionary) -> void:
 		if fence.has(String(s.name)):
 			s.max = float(fence[String(s.name)].max)
 			s.hp = clampf(float(fence[String(s.name)].hp), 0.0, float(s.max))
+	posts.from_dict(d.get("posts", {}))
+	bars.from_dict(d.get("barricades", {}))
 	nights_started = int(d.get("nights_started", 0))
 	night = int(d.get("night", 0))
 	abs_h = float(d.get("abs_h", abs_h))

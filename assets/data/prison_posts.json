@@ -1,0 +1,18 @@
+{
+  "_doc": "Crew posts of the prison base (scripts/prison/prison_posts.gd). A person on a post stands at `pos` (tiles) and shoots only the dead in the field of fire: within `range` tiles and within `arc` degrees either side of `face` (degrees, 0 = east, 90 = south). `cover` (0..1) shrinks the reach of a bite on them. `exposed` posts can break a coward. `fit`: trait id -> aim multiplier at this post. Towers stay as they were; a person with no post is a tower guard.",
+  "break": {"dead_within": 4.5, "dead_min": 2, "chance_per_s": 0.12},
+  "posts": [
+    {"id": "gate_line", "name": "Gate line", "pos": [47.5, 52.6], "face": 90, "arc": 75, "range": 12.0, "cover": 0.5, "exposed": false,
+     "blurb": "Behind the gate pillars. Covers the gate and the south wire.", "fit": {"veteran": 1.10, "steady": 1.06, "sharp_eyed": 1.04, "coward": 1.0}},
+    {"id": "yard_corner", "name": "Yard corner", "pos": [10.5, 50.5], "face": 45, "arc": 85, "range": 13.0, "cover": 0.2, "exposed": true,
+     "blurb": "Open ground in the south-west corner. Covers the west wire and the yard.", "fit": {"sharp_eyed": 1.08, "tough": 1.05, "hothead": 1.10, "coward": 0.85, "nervous": 0.9}},
+    {"id": "east_wall", "name": "East wall", "pos": [85.0, 46.0], "face": 0, "arc": 90, "range": 12.0, "cover": 0.3, "exposed": true,
+     "blurb": "By the garden fence. Covers the east wire.", "fit": {"sharp_eyed": 1.08, "steady": 1.05, "veteran": 1.08, "coward": 0.85, "nervous": 0.9}},
+    {"id": "north_wire", "name": "North wire", "pos": [48.0, 6.0], "face": 270, "arc": 100, "range": 12.0, "cover": 0.1, "exposed": true,
+     "blurb": "A bare strip along the north fence. Covers the north wire.", "fit": {"hothead": 1.08, "veteran": 1.08, "tough": 1.05, "coward": 0.8, "nervous": 0.9}},
+    {"id": "infirmary_door", "name": "Infirmary door", "pos": [17.0, 30.4], "face": 270, "arc": 65, "range": 10.0, "cover": 0.6, "exposed": false,
+     "blurb": "In the doorway of the infirmary. The last line if the north walk is lost.", "fit": {"steady": 1.06, "triage": 1.04, "coward": 1.0}},
+    {"id": "workshop_door", "name": "Workshop door", "pos": [36.0, 30.4], "face": 270, "arc": 65, "range": 10.0, "cover": 0.6, "exposed": false,
+     "blurb": "In the doorway of the workshop. The last line if the north walk is lost.", "fit": {"steady": 1.06, "tinkerer": 1.05, "veteran": 1.06, "coward": 1.0}}
+  ]
+}
