@@ -160,6 +160,7 @@ var _auto_i := 0
 var _deadchecked := false
 var pack: Pack    # the backpack (prison_pack.gd)
 var doors    # DOORS: prison_doors.gd
+var _decks_node: Node2D    # the node that paints the doors and tower decks (doors.tick(dt) asks it to repaint every frame)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var topbar    # UI round 2: prison_topbar.gd
 var tags    # UI round 2: prison_tags.gd
@@ -530,6 +531,7 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	decks.z_index = 5
 	decks.painter = _paint_decks
 	world.add_child(decks)
+	_decks_node = decks
 	entities = Node2D.new()
 	entities.z_index = 6
 	entities.y_sort_enabled = true
@@ -623,6 +625,7 @@ func _enter_base() -> void:
 	_make_stage(t, false)
 	doors = Doors.new()
 	doors.setup(self, clear and not args.has("nodoors"))    # DOORS: shut in the clear phase, open (drawn only) after
+	doors.node = _decks_node
 	if clear:
 		run.invulnerable = false
 		run.sim.quiet = false
@@ -1129,6 +1132,10 @@ func _tick(dt: float) -> void:
 		zmove.test(dt)
 	if args.has("turntest") and crew != null:
 		_turntest(dt)
+	if args.has("doortest") and doors != null:    # --doortest=N,every: door N toggles at frame 30 and every `every` frames after (a check of the swing; Ruth is put beside it with --at)
+		var dt2 := String(args.doortest).split(",")
+		if frames >= 30 and (frames - 30) % int(dt2[1]) == 0:
+			doors.toggle_now(int(dt2[0]))
 	if args.has("hanimtest") and crew != null:
 		_hanimtest(dt)
 	if args.has("perf"):    # --perf: wall ms per frame, frames 600 to 1800, then one PERF line and quit (use with --managed --siege=3 --noguards)
@@ -1169,6 +1176,8 @@ func _tick(dt: float) -> void:
 		else:
 			econ.update(dt)
 	fx.update(dt)
+	if doors != null and mode == "base":
+		doors.tick(dt)
 	var p = run.avatar_p
 	if not args.has("fixcam"):
 		var goal := Vector2(p.x, p.y) if not map_view else Vector2(float(world.W) / 2.0, float(world.H) / 2.0)

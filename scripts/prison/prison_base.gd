@@ -76,7 +76,7 @@ const DOORS := [
 	{"name": "Canteen", "rect": Rect2i(37, 12, 1, 3)}, {"name": "Canteen", "rect": Rect2i(44, 20, 4, 1)},
 	{"name": "Workshop", "rect": Rect2i(32, 24, 5, 1)},
 	{"name": "Stores", "rect": Rect2i(52, 24, 3, 1)}, {"name": "Stores", "rect": Rect2i(52, 34, 3, 1)},
-	{"name": "Garden", "rect": Rect2i(41, 39, 2, 1)}, {"name": "Garden", "rect": Rect2i(49, 52, 2, 1)},
+	{"name": "Garden", "rect": Rect2i(41, 39, 2, 1)},
 ]
 const LOOT_N := {"food": [3, 6], "water": [3, 6], "ammo": [6, 12], "meds": [1, 2], "scrap": [3, 6]}
 const SEARCHABLE := {"nightstand": "nightstand", "medicine_cabinet": "cabinet", "shelf_tins": "shelf", "desk": "desk", "bed_single": "bunk", "fridge": "fridge", "kitchen_counter": "cupboard",
@@ -317,7 +317,7 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	stations["stores_out"] = Vector2(53.5, 32.0)
 	stations["stores"] = Vector2(53.5, 29.0)
 	labels.append({"pos": Vector2(53.5, 24.4), "text": "STORES"})
-	# the garden: rows of soil in the south-east of the yard, a plain wire fence round it (gates at the north and the south)
+	# the garden: rows of soil in the south-east of the yard, a plain wire fence round it (one gate, at the north)
 	var g := GARDEN
 	_fill(Rect2i(g.position.x + 1, g.position.y + 1, g.size.x - 2, g.size.y - 2), T_SOIL, G_DIRT)
 	for y in [g.position.y + 2, g.position.y + 6, g.position.y + 10]:
@@ -331,8 +331,6 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 		_fence(x, g.end.y - 1, L_WIRE)
 	for gx in [g.position.x + 1, g.position.x + 2]:
 		_put(gx, g.position.y, T_SOIL, G_DIRT, 0)
-	for gx in [g.position.x + 9, g.position.x + 10]:
-		_put(gx, g.end.y - 1, T_SOIL, G_DIRT, 0)
 	stations["garden1"] = Vector2(44.5, 43.2)
 	stations["garden2"] = Vector2(53.5, 47.2)
 	stations["garden3"] = Vector2(47.5, 51.2)

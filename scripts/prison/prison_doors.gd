@@ -5,24 +5,32 @@ extends RefCounted
 
 const Base := preload("res://scripts/prison/prison_base.gd")
 const REACH := 1.7    # tiles from the doorway at which E answers
-const DUR := 0.25    # seconds a door takes to swing open or shut
+const DUR := 0.3    # seconds a door takes to swing open or shut
+const NEAR := 2.2    # managed base: tiles from a doorway at which Ruth or the crew make its leaves swing open (drawn only)
+const LEAF := 7.0    # px thickness of a leaf
 const STAGGER := 0.06    # seconds between the doors of the all-open event
 
 var game
-var open: Array = []    # bool per Base.DOORS
+var open: Array = []    # bool per Base.DOORS (the real state: the tiles are shut or not)
+var shown: Array = []    # bool per door: which way the drawn leaves are heading (same as `open`, but in the managed base they follow whoever walks by)
+var clear := true
+var node: CanvasItem    # the node that draws the leaves (redrawn every frame: a CanvasItem only repaints when asked)
 var _from: Array = []    # float per door: how open it was drawn when it last started to move
-var _t0: Array = []    # int per door: the msec at which that move started
+var _t0: Array = []    # float per door: the time (`_now`) at which that move started
+var _now := 0.0    # seconds of door time, advanced by tick (so a paused or slowed game does not skip the swing)
 
 
-func setup(g, clear: bool) -> void:
+func setup(g, clear_phase: bool) -> void:
 	game = g
+	clear = clear_phase
 	open.resize(Base.DOORS.size())
-	open.fill(not clear)
+	open.fill(not clear_phase)
+	shown = open.duplicate()
 	_from.resize(open.size())
-	_from.fill(0.0 if clear else 1.0)
+	_from.fill(0.0 if clear_phase else 1.0)
 	_t0.resize(open.size())
-	_t0.fill(-100000)
-	if clear:
+	_t0.fill(-100.0)
+	if clear_phase:
 		for i in open.size():
 			_apply(i)
 
@@ -86,6 +94,14 @@ func toggle(i: int) -> String:
 	return "Door open." if bool(open[i]) else "Door shut."
 
 
+## Debug (--doortest): flips door i whatever stands in it.
+func toggle_now(i: int) -> void:
+	var cur := _k(i)
+	open[i] = not bool(open[i])
+	_apply(i)
+	_swing(i, cur)
+
+
 ## The bot's way: a path as if every door were open (the walker then meets a door on it and opens it, `bot_open`).
 func path(from: Vector2, to: Vector2) -> Array:
 	var shut: Array = []
@@ -112,20 +128,52 @@ func bot_open(me: Vector2) -> void:
 			toggle(i)
 
 
-## How far a door is open, 0 (shut) to 1 (open), eased: it moves for DUR seconds after `_swing` (a stagger can delay the start).
+## How far a door is open, 0 (shut) to 1 (open), eased: it moves for DUR seconds after `_go` (a stagger can delay the start).
 func _k(i: int) -> float:
-	var f := clampf(float(Time.get_ticks_msec() - int(_t0[i])) / (DUR * 1000.0), 0.0, 1.0)
-	return lerpf(float(_from[i]), 1.0 if bool(open[i]) else 0.0, f)
+	var f := clampf((_now - float(_t0[i])) / DUR, 0.0, 1.0)
+	return lerpf(float(_from[i]), 1.0 if bool(shown[i]) else 0.0, f)
 
 
 ## Starts the swing of door i to its new state (from wherever it is now), `delay` seconds from now, with its sound.
 func _swing(i: int, cur: float, delay: float = 0.0) -> void:
+	shown[i] = open[i]
+	_go(i, cur, delay)
+
+
+func _go(i: int, cur: float, delay: float = 0.0) -> void:
 	_from[i] = cur
-	_t0[i] = Time.get_ticks_msec() + int(delay * 1000.0)
+	_t0[i] = _now + delay
 	if delay <= 0.0:
 		_sound(i)
 	elif is_instance_valid(game) and game.is_inside_tree():
 		game.get_tree().create_timer(delay).timeout.connect(_sound.bind(i))
+
+
+## Every frame: repaints the leaves (a CanvasItem only repaints when asked, which is why the swing was never seen), and in the managed base (doors open for good, only drawn) swings a door open while
+## Ruth or one of the crew is near it and shut again when they have gone.
+func tick(dt: float) -> void:
+	_now += dt
+	if clear and is_instance_valid(game) and game.crew != null:
+		for m in game.crew.members:    # a crew member or ally who comes to a shut door opens it
+			for i in open.size():
+				if not bool(open[i]) and _dist(i, Vector2(m.p.x, m.p.y)) < 1.0:
+					toggle_now(i)
+	if not clear and is_instance_valid(game):
+		var who: Array = [Vector2(game.run.avatar_p.x, game.run.avatar_p.y)]
+		for m in game.crew.members:
+			who.append(Vector2(m.p.x, m.p.y))
+		for i in open.size():
+			var want := false
+			for p in who:
+				if _dist(i, p) < NEAR:
+					want = true
+					break
+			if want != bool(shown[i]):
+				var cur := _k(i)
+				shown[i] = want
+				_go(i, cur)
+	if node != null:
+		node.queue_redraw()
 
 
 ## A short sound at the door, wood for a plain door and steel for a cell block's.
@@ -133,7 +181,7 @@ func _sound(i: int) -> void:
 	if not is_instance_valid(game) or game.audio == null:
 		return
 	var at := Rect2(Base.DOORS[i].rect).get_center()
-	var o := bool(open[i])
+	var o := bool(shown[i])
 	var cell := String(Base.DOORS[i].name) == "Cell block"
 	var rng := randf_range(0.95, 1.05)
 	if cell:
@@ -160,35 +208,56 @@ func paint(c: CanvasItem) -> void:
 		_paint_door(c, i, _k(i))
 
 
-## One door at progress k. A door is drawn as its face (planks, a handle) seen from the south: opening swings it about its hinge end, so the face is squeezed toward the hinge until only the
-## leaf's edge shows (5 px, the old open drawing), and the jambs and the dark threshold come in as it goes.
+## Which way door i swings: to the side of the doorway that lies inside a zone (the room), else the north or west side. Returns the unit normal.
+func _side(i: int) -> Vector2:
+	var r := Rect2(Base.DOORS[i].rect)
+	var horiz := r.size.x >= r.size.y
+	var n := Vector2(0, -1) if horiz else Vector2(-1, 0)
+	var mid := r.get_center()
+	var off: float = (r.size.y if horiz else r.size.x) + 0.5
+	var a := mid + n * off
+	var b := mid - n * off
+	return -n if (Base.zone_at(b.x, b.y) >= 0 and Base.zone_at(a.x, a.y) < 0) else n
+
+
+## One door at progress k: two leaves (a thick plank slab with a dark outline) hinged at the two ends of the doorway, each half its length. Shut they meet in the middle; opening turns each about its
+## hinge through 90 degrees into the room, so the doorway is clear and the leaves stand across the wall line.
 func _paint_door(c: CanvasItem, i: int, k: float) -> void:
 	var t: float = game.TILE
 	var edge := Color(0.07, 0.06, 0.05)
 	var e := k * k * (3.0 - 2.0 * k)
 	var r := Rect2(Base.DOORS[i].rect)
-	var px := Rect2(r.position * t, r.size * t)
 	var horiz := r.size.x >= r.size.y
-	var full: float = px.size.x if horiz else px.size.y    # the doorway's length
-	var depth: float = px.size.y if horiz else px.size.x
-	var w := lerpf(full, 5.0, e)    # the leaf's length along the doorway
-	var off := lerpf(0.0, -2.0, e)
-	var leaf := Rect2(px.position + (Vector2(0, off) if horiz else Vector2(off, 0)), Vector2(w, depth) if horiz else Vector2(depth, w))
+	var steel := String(Base.DOORS[i].name) == "Cell block"
+	var px := Rect2(r.position * t, r.size * t)
+	var along := Vector2(1, 0) if horiz else Vector2(0, 1)
+	var norm := _side(i)
+	var full: float = px.size.x if horiz else px.size.y
+	var centre := px.get_center()
 	if e > 0.0:
-		c.draw_rect(px, Color(0.0, 0.0, 0.0, 0.12 * e))    # the threshold
-	c.draw_rect(Rect2(leaf.position + Vector2(lerpf(3.0, 2.0, e), lerpf(5.0, 2.0, e)), leaf.size), Color(0, 0, 0, 0.3))
-	c.draw_rect(leaf, Color(0.42, 0.3, 0.18).lerp(Color(0.45, 0.33, 0.2), e))
-	if e < 0.85:
-		var n := int(full / 8.0)
-		for q in range(1, n):
-			var o := float(q) * 8.0 * w / full
-			if horiz:
-				c.draw_line(Vector2(leaf.position.x + o, leaf.position.y + 2), Vector2(leaf.position.x + o, leaf.end.y - 2), Color(0.26, 0.18, 0.1), 2.0)
-			else:
-				c.draw_line(Vector2(leaf.position.x + 2, leaf.position.y + o), Vector2(leaf.end.x - 2, leaf.position.y + o), Color(0.26, 0.18, 0.1), 2.0)
-	c.draw_rect(leaf, edge, false, lerpf(3.0, 2.0, e))
+		c.draw_rect(px, Color(0.0, 0.0, 0.0, 0.18 * e))    # the dark threshold the open doorway shows
+	var fill := Color(0.42, 0.3, 0.18) if not steel else Color(0.38, 0.4, 0.43)
+	var grain := Color(0.26, 0.18, 0.1) if not steel else Color(0.25, 0.27, 0.3)
+	var ang := e * (PI * 0.5)
+	var hw := LEAF * 0.5
+	var ll := full * 0.5
+	for h in 2:
+		var hinge := centre - along * full * 0.5 if h == 0 else centre + along * full * 0.5
+		var dir := along if h == 0 else -along    # the way the leaf points when shut
+		var d := dir * cos(ang) + norm * sin(ang)    # turned toward `norm`: 90 degrees ends up along it
+		var nrm := Vector2(-d.y, d.x)
+		var q := PackedVector2Array([hinge + nrm * hw, hinge + d * ll + nrm * hw, hinge + d * ll - nrm * hw, hinge - nrm * hw])
+		var sh := PackedVector2Array()
+		for v in q:
+			sh.append(v + Vector2(2, 3))
+		c.draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
+		c.draw_colored_polygon(q, fill)
+		for s in range(1, int(ll / 8.0)):
+			var m := hinge + d * (float(s) * 8.0)
+			c.draw_line(m + nrm * (hw - 1.0), m - nrm * (hw - 1.0), grain, 1.5)
+		q.append(q[0])
+		c.draw_polyline(q, edge, 2.0)
+		c.draw_circle(hinge, 3.0, edge)    # the hinge
 	if e < 0.5:
-		c.draw_rect(Rect2(leaf.get_center() + (Vector2(-3, 6) if horiz else Vector2(6, -3)), Vector2(6, 6)), Color(0.8, 0.7, 0.3, 1.0 - 2.0 * e))    # the handle
-	if e > 0.0:
-		for p in [px.position, px.end]:
-			c.draw_rect(Rect2(p - Vector2(3, 3), Vector2(6, 6)), Color(edge, e))
+		for sgn in [-1.0, 1.0]:
+			c.draw_circle(centre + along * 6.0 * sgn, 2.5, Color(0.8, 0.7, 0.3, 1.0 - 2.0 * e))    # the handles
