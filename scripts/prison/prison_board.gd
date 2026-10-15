@@ -12,6 +12,7 @@ const Topbar := preload("res://scripts/prison/prison_topbar.gd")
 
 const BOARD_AT := Vector2(31.0, 46.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
+const NAME_MAX := 14    # the longest name a person can be given in the Roster
 const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio", "convoy"]
 const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
 const BLURB := {
@@ -418,6 +419,8 @@ func frame(_dt: float) -> void:
 
 
 func _any_popup(n: Node) -> bool:
+	if n is LineEdit and (n as LineEdit).has_focus():    # (a name being typed in the Roster: the page must not be rebuilt under it)
+		return true
 	if n is OptionButton and (n as OptionButton).get_popup().visible:
 		return true
 	for c in n.get_children():
@@ -859,7 +862,7 @@ func _roster_tab() -> void:
 		if m.def.has("ally"):
 			continue
 		var id := String(m.def.id)
-		g.add_child(_lab(String(m.def.name), 16, Hud.INK))
+		g.add_child(_name_cell(String(m.def.name)))
 		var locked: bool = m.def.has("play") or game.siege.attacking
 		if m.def.has("play"):
 			g.add_child(_lab("child", 15, DIM))
@@ -914,6 +917,46 @@ func _roster_tab() -> void:
 	body.add_child(_lab(tr if tr != "" else "The base is tidy.", 14, Hud.WARN if tr != "" else Hud.INFO))
 
 
+## A person's name in the Roster: a flat button that turns into a box (Enter keeps the name, Esc or an empty box takes the old one back; 14 characters at most). META: the name is only what is shown.
+func _name_cell(nm: String) -> Control:
+	var b := Button.new()
+	b.text = game.arc.dn(nm)
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.tooltip_text = "Click to rename"
+	b.add_theme_font_override("font", Fonts.sans(500))
+	b.add_theme_font_size_override("font_size", 16)
+	b.add_theme_color_override("font_color", Hud.INK)
+	b.pressed.connect(func():
+		_popup_open = true
+		var le := LineEdit.new()
+		le.text = game.arc.dn(nm)
+		le.max_length = NAME_MAX
+		le.custom_minimum_size.x = 130
+		le.add_theme_font_override("font", Fonts.sans(500))
+		le.add_theme_font_size_override("font_size", 16)
+		le.text_submitted.connect(func(t: String):
+			rename(nm, t)
+			le.release_focus()
+			_sig = "")
+		b.get_parent().add_child(le)
+		b.get_parent().move_child(le, b.get_index())
+		b.queue_free()
+		le.grab_focus()
+		le.select_all())
+	return b
+
+
+## Gives a person a new shown name ("" or their own name takes the custom one away).
+func rename(nm: String, shown: String) -> void:
+	shown = shown.strip_edges().left(NAME_MAX)
+	if shown == "" or shown == nm:
+		game.arc.renames.erase(nm)
+	else:
+		game.arc.renames[nm] = shown
+
+
 # --------------------------------------------------------------------------------- defence tab --
 
 func _pick(items: Array, cur: int, on_pick: Callable, disabled := false) -> OptionButton:
@@ -960,7 +1003,7 @@ func _defence_tab() -> void:
 		var names: Array = ["Nobody"]
 		var cur := 0
 		for m in people:
-			names.append(String(m.def.name) + (" (%s)" % game.arc.events.trait_text(String(m.def.name)) if game.arc.events.trait_text(String(m.def.name)) != "" else ""))
+			names.append(game.arc.dn(String(m.def.name)) + (" (%s)" % game.arc.events.trait_text(String(m.def.name)) if game.arc.events.trait_text(String(m.def.name)) != "" else ""))
 			if m == hold:
 				cur = names.size() - 1
 		var on_pick := func(i):

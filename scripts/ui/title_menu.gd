@@ -12,6 +12,7 @@ const BellGlyph := preload("res://scripts/ui/bell_glyph.gd")
 const Demo := preload("res://scripts/demo.gd")
 const OneHouse := preload("res://scripts/town/one_house.gd")
 const PrisonSave := preload("res://scripts/prison/prison_save.gd")    # the prison's save: Continue
+const Meta := preload("res://scripts/prison/prison_meta.gd")    # the daily seed and the milestones
 
 const BuildInfo := preload("res://scripts/build_info.gd")
 const TAGLINE := "Hold the schoolyard for thirty nights."
@@ -44,6 +45,7 @@ var _pulse_k := 0.0
 var shade: TextureRect
 var scroll: ScrollContainer
 var column: VBoxContainer
+var milestones_panel: PanelContainer    # META: the list of twelve (null until the line is pressed)
 var _last_focus: Control = null
 ## The bell tolls once, the first time the title is shown in a run of the program.
 static var _tolled := false
@@ -110,6 +112,11 @@ func _build_column() -> void:
 	var orientation_done := Prefs.flag("tutorial_done")
 	_add(list, "continue", shell.menu_item("Continue", "No saved game yet"), _continue)
 	_add(list, "new", shell.menu_item("New game"), shell.open_new_game)
+	if OneHouse.town_start(shell.main):    # META (the prison): the daily seed and the milestones
+		var daily := Meta.daily()
+		_add(list, "daily", shell.menu_item("Daily seed: %d (%s)" % [int(daily.seed), String(daily.date)], "Start a new game with it"), _daily)
+		var got := Meta.unlocked().size()
+		_add(list, "milestones", shell.menu_item("Milestones", "%d of %d" % [got, Meta.LIST.size()]), _toggle_milestones)
 	if not OneHouse.town_start(shell.main):    # (the town's lessons are in its first house; Orientation Day is the school's: `--school`)
 		_add(list, "orientation", shell.menu_item("Orientation Day", ORIENTATION_BLURB, not orientation_done), shell.start_orientation)
 	_add(list, "load", shell.menu_item("Load"), shell.open_load.bind(false))
@@ -117,6 +124,35 @@ func _build_column() -> void:
 	_add(list, "credits", shell.menu_item("Credits"), shell.open_credits)
 	if not shell.on_web():
 		_add(list, "quit", shell.menu_item("Quit"), shell.quit_game)
+
+
+## A new game on today's seed (UTC date), at the difficulty last chosen.
+func _daily() -> void:
+	shell.play("ui_confirm")
+	hud.start_run({"difficulty": clampi(int(Prefs.get_value("ui", "difficulty", 1)), 0, 2), "seed": int(Meta.daily().seed), "town": true})
+
+
+## The twelve milestones, a small panel beside the menu: a tick for each one earned.
+func _toggle_milestones() -> void:
+	if milestones_panel != null:
+		milestones_panel.visible = not milestones_panel.visible
+		return
+	milestones_panel = hud._panel()
+	var col: VBoxContainer = hud._vbox(4)
+	var wrap := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		wrap.add_theme_constant_override("margin_" + side, 12)
+	wrap.add_child(col)
+	milestones_panel.add_child(wrap)
+	col.add_child(hud._label("MILESTONES", Fonts.cond(700, 1), 18, hud.ACCENT))
+	var have := Meta.unlocked()
+	for m in Meta.LIST:
+		var on: bool = have.has(m[0])
+		col.add_child(hud._label("%s  %s" % ["[x]" if on else "[ ]", String(m[1])], Fonts.sans(500), 15, hud.INK if on else hud.INK3))
+		var d: Label = hud._label("      " + String(m[2]), Fonts.sans(400), 12, hud.INK2 if on else hud.INK3)
+		col.add_child(d)
+	add_child(milestones_panel)
+	_layout()
 
 
 ## Continue: the prison's save when there is one (a bad file says why and loads nothing), else the old games' newest.
@@ -263,6 +299,8 @@ func _layout() -> void:
 	scroll.position = Vector2(left, top)
 	scroll.size = Vector2(col_w + 8.0, maxf(120.0, room - top))
 	hint.position = Vector2(left, size.y - 30.0)
+	if milestones_panel != null:
+		milestones_panel.position = Vector2(left + col_w + 40.0, top)
 
 
 # ----------------------------------------------------------------- focus --

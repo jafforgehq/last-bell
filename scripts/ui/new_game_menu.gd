@@ -15,6 +15,7 @@ const Waves := preload("res://scripts/sim/waves.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const PrisonBal := preload("res://scripts/prison/prison_bal.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const Meta := preload("res://scripts/prison/prison_meta.gd")
 
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
@@ -54,6 +55,7 @@ var campaign := false
 ## The two length buttons, Autumn first.
 var length_cards: Array = []
 var facts_label: Label
+var ng_plus: CheckBox    # New game plus (the prison): the last finished run's best gun and survivor
 var seed_edit: LineEdit
 var seed_error: Label
 var random_button: Button
@@ -109,6 +111,14 @@ func _build_body() -> void:
 			aim_cards.append(ac)
 		body.add_child(aim_row)
 		_build_seed()
+		var legacy := Meta.legacy_line()
+		if legacy != "":
+			ng_plus = CheckBox.new()
+			ng_plus.text = "New game plus: " + legacy
+			ng_plus.add_theme_font_override("font", Fonts.sans(500))
+			ng_plus.add_theme_font_size_override("font_size", 16)
+			ng_plus.add_theme_color_override("font_color", hud.INK)
+			body.add_child(ng_plus)
 		_choose(difficulty)
 		_choose_aim(aim)
 		return
@@ -358,7 +368,7 @@ func _start() -> void:
 		# (One House, CLEAR3: the seed is the town's and the run's dice: `TownBoot.seed_of` takes the town from the meta's seed)
 		close_sound = ""
 		shell.play("ui_confirm")
-		hud.start_run({"difficulty": difficulty, "seed": int(parsed.value), "town": true})
+		hud.start_run({"difficulty": difficulty, "seed": int(parsed.value), "town": true, "ngplus": ng_plus != null and ng_plus.button_pressed})
 		close()
 		return
 	Prefs.set_value("ui", "crew", crew)

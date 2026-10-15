@@ -48,6 +48,7 @@ const Topbar := preload("res://scripts/prison/prison_topbar.gd")    # UI round 2
 const Tags := preload("res://scripts/prison/prison_tags.gd")    # UI round 2: crew job tags, building plates, guidance marker
 const Guide := preload("res://scripts/prison/prison_guide.gd")    # UI round 2: first-run cards
 const Drive := preload("res://scripts/prison/prison_drive.gd")    # --drive=NAME: real input events (fix round B)
+const Meta := preload("res://scripts/prison/prison_meta.gd")    # META hook: legacy, milestones, the daily seed
 const Arms := preload("res://scripts/prison/prison_arms.gd")    # SQUAD hook: guns and the weapon rack
 const ZMove := preload("res://scripts/prison/prison_dead.gd")    # ZMOVE: how the dead move (heading, gait, pause, rise, lean on the fence)
 const Arc := preload("res://scripts/prison/prison_arc.gd")    # ARC hook: the 30-day story arc, goals and endings
@@ -253,7 +254,7 @@ func _ready() -> void:
 	pause_menu.setup(self)
 	_text_scale_up.call_deferred()
 	if args.has("pause"):
-		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open(String(args.pause) if String(args.pause) in ["controls", "settings"] else "main"))
+		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open("event log" if String(args.pause) == "eventlog" else (String(args.pause) if String(args.pause) in ["controls", "settings"] else "main")))
 	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest")):
 		get_tree().create_timer(0.6).timeout.connect(func(): _card("THE PRISON", "Hold the gate. Keep them fed. Survive the nights.", 3.2))
 	_shot_wait = int(args.get("frames", "90"))
@@ -270,6 +271,8 @@ func _ready() -> void:
 			save_day_in = int(econ.day)
 		else:
 			save_note = "%s A new game begins." % String(sv.why)
+	if not Save.wants(args) and (args.has("ngplus") or bool(rm.get("ngplus", false))):
+		Meta.apply_legacy(self)    # META: New game plus: the last run's best gun and survivor
 	if args.has("raid") or (au != "" and not clear_auto):
 		_enter_raid()
 	else:

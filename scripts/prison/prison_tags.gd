@@ -213,7 +213,7 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 		var word := String(job[1])
 		_text_plate(Vector2(cc.x + 14.0, cc.y + 4.0), word, 12, Color(icol.lightened(0.3), 1.0))
 	if near:
-		var nm := "%s - %s" % [String(m.def.name), String(m.def.role) if String(m.def.get("role", "")) != "" else ROLE_NAME.get(role, "")]
+		var nm := "%s - %s" % [game.arc.dn(String(m.def.name)), String(m.def.role) if String(m.def.get("role", "")) != "" else ROLE_NAME.get(role, "")]
 		var sub := String(m.get("say", ""))
 		var text := nm
 		if sub != "" and sub != String(m.def.role):

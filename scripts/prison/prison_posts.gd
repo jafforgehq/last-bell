@@ -94,7 +94,7 @@ func nerve(dt: float) -> void:
 		if n >= int(b.dead_min) and randf() < float(b.chance_per_s) * dt:
 			m["broke"] = true
 			m.say = "I can't!"
-			game._say("%s broke and ran from the %s!" % [String(m.def.name), String(p.name).to_lower()], 5.0)
+			game._say("%s broke and ran from the %s!" % [game.arc.dn(String(m.def.name)), String(p.name).to_lower()], 5.0)
 
 
 func dawn() -> void:

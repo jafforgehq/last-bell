@@ -8,6 +8,7 @@ const TownRoofs := preload("res://scripts/town/town_roofs.gd")
 const Pathfinder := preload("res://scripts/sim/pathfinder.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const PrisonArms := preload("res://scripts/prison/prison_arms.gd")
+const PrisonMeta := preload("res://scripts/prison/prison_meta.gd")
 
 var _town: Dictionary = {}
 
@@ -180,3 +181,18 @@ func test_the_prison_knife_takes_two_or_three_stabs_half_a_second_apart_and_no_a
 		check(z.state == "dying" or z.state == "dead" or z.hp <= 0.0, "a walker of %d hp is dead" % int(hp))
 		check(stabs >= 2 and stabs <= 3, "in 2 or 3 stabs (%d)" % stabs)
 	world.free()
+
+
+func test_the_prison_meta_files_follow_the_savefile_and_the_daily_seed_is_a_function_of_the_date() -> void:
+	PrisonMeta.sf_override = "test_meta_%d" % OS.get_process_id()
+	eq(PrisonMeta.path(PrisonMeta.LEGACY), "user://%s.legacy.json" % PrisonMeta.sf_override, "a named savefile has its own legacy file")
+	eq(PrisonMeta.path(PrisonMeta.MILES), "user://%s.milestones.json" % PrisonMeta.sf_override, "and its own milestones")
+	check(PrisonMeta.legacy().is_empty() and PrisonMeta.unlocked().is_empty(), "no files, no legacy and no milestones")
+	PrisonMeta.sf_override = ""
+	eq(PrisonMeta.path(PrisonMeta.LEGACY), "user://prison_legacy.json", "no savefile, the real file")
+	eq(PrisonMeta.LIST.size(), 12, "twelve milestones")
+	var a := PrisonMeta.daily(1760486400)
+	eq(a.date, "2025-10-15", "the date is the UTC day")
+	eq(PrisonMeta.daily(1760486400 + 3600).seed, a.seed, "the same day is the same seed")
+	check(PrisonMeta.daily(1760486400 + 86400).seed != a.seed, "the next day is another seed")
+	check(int(a.seed) >= 100000 and int(a.seed) <= 999999, "a six-digit seed")
