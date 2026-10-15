@@ -264,6 +264,7 @@ func begin(t: Dictionary, seed_i: int) -> void:
 		kind = ""
 	_thin_dead(t, seed_i)
 	places = prepare(t, seed_i, kind)
+	game.raidx.scale_loot(t, seed_i)    # RAID EXTRAS: the shelves of the map's Day or Night
 	t["places"] = places
 	var o := default_option()
 	if game.args.has("target"):
@@ -304,7 +305,7 @@ func _thin_dead(t: Dictionary, seed_i: int) -> void:
 
 
 func dead_mult() -> float:
-	return float(kind_cfg(kind).get("dead_mult", 1.0))
+	return float(kind_cfg(kind).get("dead_mult", 1.0)) * (float(game.raidx.dead_mult()) if game != null and game.raidx != null else 1.0)    # (RAID EXTRAS: times the map's Day or Night)
 
 
 ## The option (cfg.options index) a trip to a place marks: the one for the base's shortage when the place answers it, else the place's own `hunt`.

@@ -2,6 +2,7 @@
 ## when the pause menu asks, and read by the title's Continue and `--prison --continue`.
 ## WHAT IS SAVED: the managed base only: the clock and the night count, the stores, the economy (projects, tiers, roles, morale), the story (beats seen, choices, letters, log, stats), the fence's hit points, the crew
 ## (the three first people by `allies_alive`, who walked out or died by `econ_gone`, the people raids brought by `people.recruits`), the weapon rack, the backpack and the belt.
+## ALSO (no version change: an older file lacks the key and loads with empty defaults): `raidx`, the destination map's Done and Avoid marks and the three loadout presets.
 ## WHAT IS NOT: a raid, a night attack and the clear phase (a save is refused in all three; the clear phase starts again from its beginning); a crew member's place on the floor (the crew is rebuilt at the gate, as at every
 ## return from a raid); the dead of the pen; the gate's choice of target.
 ## FAIL SAFE: a file that cannot be read, is not what it says or is of another version is refused with a line of words and nothing is loaded; the previous save is kept as `prison_save.bak.json` and is the fallback.
@@ -97,7 +98,7 @@ static func snapshot(g) -> Dictionary:
 		"version": VERSION, "unix": int(Time.get_unix_time_from_system()),
 		"day": int(g.econ.day), "days": int(g.arc.days()), "nights": int(g.siege.nights_started), "people": int(g.econ.people()),
 		"game": {"tod": float(g.tod), "stores": stores, "raids": int(g.raids), "allies_alive": g.allies_alive.duplicate(), "econ_gone": g.econ_gone.duplicate(), "shots_fired": int(g.shots_fired)},
-		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict(), "clean": g.cleaner.to_dict() if g.cleaner != null else {}, "level": int(g.Bal.level), "run_seed": int(g.Bal.run_seed)}
+		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict(), "clean": g.cleaner.to_dict() if g.cleaner != null else {}, "raidx": g.raidx.to_dict(), "level": int(g.Bal.level), "run_seed": int(g.Bal.run_seed)}
 
 
 ## `--saveecho` (a check): writes what the game holds now to user://<savefile>.echo.json, to be compared with the save it was loaded from.
@@ -173,6 +174,7 @@ static func apply(g, d: Dictionary) -> void:
 	g.pack.from_dict(d.pack)
 	g.Clean.pending = d.get("clean", {})    # (the piles are put on the spots when the base is built)
 	g.arc.from_dict(ints(d.arc))
+	g.raidx.from_dict(ints(d.get("raidx", {})))    # (RAID EXTRAS: the map's marks and the loadout presets; an older save has none and starts with none)
 	g.save_day = int(g.econ.day)
 
 

@@ -1,7 +1,8 @@
 ## EXPERIMENT (prison loadout, comp round): THE LOADOUT CARD. Two uses of one panel: at the start of the clear phase ("pick your weapon": the weapon row only) and at the gate, as the SECOND step of the gate's
 ## choice (the first is where to hunt, prison_loot.gd): the gun in her hands and a spare, how much ammo, medicine, food and water to carry, and WHO COMES (the squad, scripts/prison/prison_squad.gd), with what the
 ## base loses while they are out. Keys: W gun, X spare, A ammo, H meds, F food, D water, 1 to 9 a companion (click works on every row), Enter or E: go, Esc: back. The kit rows only show when the pack is empty
-## (a pack she packed at the stash is taken as it is). Owned by prison_game.gd (`loadout`, `# SQUAD hook`).
+## (a pack she packed at the stash is taken as it is). Three PRESETS (RAID EXTRAS): Save keeps the gun, the spare, the kit and the companions chosen now under a number, a click on the number puts them back
+## (what is not there any more is skipped); they are saved with the game (prison_raidx.gd). Owned by prison_game.gd (`loadout`, `# SQUAD hook`).
 extends RefCounted
 
 const PIcons := preload("res://scripts/prison/prison_icons.gd")
@@ -85,7 +86,7 @@ func _btn(text: String, on: bool, cb: Callable, enabled: bool = true) -> Button:
 func _row(label: String, key: String) -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
-	var l := _lbl("%s  [%s]" % [label, key], 16, Color(0.85, 0.85, 0.75), false)
+	var l := _lbl(("%s  [%s]" % [label, key]) if key != "" else label, 16, Color(0.85, 0.85, 0.75), false)
 	l.custom_minimum_size = Vector2(170, 0)
 	h.add_child(l)
 	return h
@@ -116,6 +117,13 @@ func _refresh() -> void:
 			sr.add_child(_btn(arms.gun_name(gid), arms.spare == gid, func(): _set_spare(gid)))
 	_col.add_child(sr)
 	_col.add_child(_lbl("The weapon rack: %s.  A spare rides in the pack (B swaps it in); guns found out there come back to the rack. If she dies they are lost." % _rack_text(), 13, Color(0.75, 0.75, 0.7)))
+	# the presets
+	var pr := _row("Presets", "")
+	for i in 3:
+		var pd: Dictionary = game.raidx.presets[i]
+		pr.add_child(_btn("%d: %s" % [i + 1, _preset_text(pd)], false, func(): apply_preset(i), not pd.is_empty()))
+		pr.add_child(_btn("Save", false, func(): save_preset(i)))
+	_col.add_child(pr)
 	# the kit
 	if Inventory.is_empty(game.pack.grid):
 		var ar := _row("Ammo", "A")
@@ -142,7 +150,7 @@ func _refresh() -> void:
 	# the squad
 	_col.add_child(_lbl("SQUAD: up to 2 come with you (number key or click). They carry their own bag and bring it back; they shoot with your ammo.", 15, Color(1, 0.85, 0.4)))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(680, 230)
+	scroll.custom_minimum_size = Vector2(680, 180)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 2)
@@ -170,6 +178,41 @@ func _refresh() -> void:
 	for line in squad.loss_lines():
 		_col.add_child(_lbl("The base: %s." % line, 14, Color(1, 0.7, 0.55)))
 	_place()
+
+
+func _preset_text(pd: Dictionary) -> String:
+	if pd.is_empty():
+		return "empty"
+	var n: int = (pd.get("picked", []) as Array).size()
+	return "%s %s" % [game.arms.gun_name(String(pd.get("main", ""))), ("+%d" % n) if n > 0 else "solo"]
+
+
+## Preset `i` keeps what the card shows now.
+func save_preset(i: int) -> void:
+	game.raidx.presets[i] = {"main": String(game.arms.main), "spare": String(game.arms.spare), "kit": kit.duplicate(), "picked": game.squad.picked.duplicate()}
+	_refresh()
+
+
+## Preset `i` put back on the card: the gun and the spare if the rack still holds them, the kit within the stores, the companions who can still go.
+func apply_preset(i: int) -> void:
+	var pd: Dictionary = game.raidx.presets[i]
+	if pd.is_empty():
+		return
+	var arms = game.arms
+	var main := String(pd.get("main", ""))
+	if main != "" and arms.owned(main) > 0:
+		arms.main = main
+	var sp := String(pd.get("spare", ""))
+	arms.spare = sp if sp != "" and arms.owned(sp) - (1 if sp == arms.main else 0) > 0 else ""
+	var k: Dictionary = pd.get("kit", {})
+	if Inventory.is_empty(game.pack.grid):
+		kit.ammo = mini(int(k.get("ammo", kit.ammo)), floori(float(game.stores.ammo)))
+		for r in ["meds", "food", "water"]:
+			kit[r] = clampi(int(k.get(r, kit[r])), 0, mini(4, floori(float(game.stores[r]))))
+	game.squad.picked = []
+	for id in pd.get("picked", []):
+		game.squad.toggle(String(id))
+	_refresh()
 
 
 func _place() -> void:

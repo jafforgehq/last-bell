@@ -353,6 +353,17 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			game._say("%s is down! Hold E next to them to revive (1 med)." % String(m.name), 4.0)
 			return
 	p.hp = m.hp
+	if game.raidx.retreating:    # RAID EXTRAS: the V key: everybody runs to the nearest pickup ring and waits in it, whatever the order was
+		var ring: Vector2 = game.raidx.nearest_exit(at)
+		if ring != Vector2.INF:
+			p.work = ""
+			m.scav = {}
+			if at.distance_to(ring) > game.EXTRACT_R - 1.5:
+				_goto(m, ring, dt, float(cfg.run))
+			else:
+				p.moving = false
+			m.say = "retreating"
+			return
 	var cmd := String(m.cmd)
 	# the rules (see the header): count the awake dead near them; fall back to Ruth when hurt or when `swarm_n` or more are about
 	var near_n := 0
@@ -771,6 +782,13 @@ func command(m: Dictionary, cmd: String) -> void:
 func command_all(cmd: String) -> void:
 	for m in members:
 		command(m, cmd)
+
+
+## The V key: a shout from each of them (the running itself is in `_step`).
+func retreat_barks() -> void:
+	for m in members:
+		if m.state == "up":
+			_bark(m, "Run for the ring!", 3.0)
 
 
 ## The call to the pickup: everybody on their feet walks to Ruth, running.

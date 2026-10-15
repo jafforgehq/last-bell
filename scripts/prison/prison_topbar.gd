@@ -41,7 +41,7 @@ const ROW_ECON := ["clock", "speed", "food", "water", "ammo", "meds", "scrap", "
 const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise", "convoy"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
 const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone", "noise"]
-const ROW_RAID := ["clock", "dusk", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
+const ROW_RAID := ["clock", "dusk", "weather", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
 const DIM := Color("#8d927f")
 
 var game
@@ -140,7 +140,7 @@ func _init(g) -> void:
 		_chip(k, row1, 46, true)
 	for k in ["zones", "party", "dead"]:
 		_chip(k, row1, 40, false)
-	for k in ["pack", "r_ammo", "r_meds", "need", "exits"]:
+	for k in ["weather", "pack", "r_ammo", "r_meds", "need", "exits"]:
 		_chip(k, row1, 40, false)
 	for k in ["people", "morale", "stage", "attack", "fence", "convoy"]:
 		_chip(k, row2, 40, false)
@@ -700,7 +700,12 @@ func _raid_chips(_rep: Dictionary) -> void:
 		_put("need", String(nd.res) if RES.has(String(nd.res)) else "target", RES_COL.get(String(nd.res), Hud.ACCENT), "Need %s" % String(nd.res), "carrying %d" % have, DIM, "", "warn", ("%s\n%s" % [String(nd.get("reason", "")), hint]).strip_edges())
 	(chips["need"].main as Label).custom_minimum_size.x = 70
 	var ex: int = game.exits.size()
-	_put("exits", "exit", Hud.OK, "Exits %d" % ex, "", DIM, "", "ok", "Reach a green EXTRACTION ring and hold still to go home with the pack. The first one is where the truck dropped you.")
+	_put("exits", "exit", Hud.OK, "Exits %d" % ex, "", DIM, "", "ok", "Reach a green EXTRACTION ring and hold still to go home with the pack. The first one is where the truck dropped you.\nV: retreat. The whole squad runs to the nearest ring and an arrow shows you the way.")
+	var rx = game.raidx    # RAID EXTRAS: today's weather (and the hour the map chose)
+	var wid := String(rx.weather)
+	var wcfg: Dictionary = rx.weather_cfg(wid)
+	_put("weather", {"rain": "rain", "fog": "fog"}.get(wid, "sun"), Color("#9fc4e8") if wid == "rain" else (Color("#c9d0d2") if wid == "fog" else Hud.ACCENT), String(wcfg.get("name", "Clear")), "night" if rx.hour() >= 20.0 or rx.hour() < 5.5 else "day", DIM, "", "warn" if wid == "fog" else "ok", "Weather today: %s. %s" % [String(wcfg.get("name", "Clear")), String(wcfg.get("note", ""))])
+	(chips["weather"].main as Label).custom_minimum_size.x = 44
 
 
 # --------------------------------------------------------------------------------------- hover --

@@ -258,6 +258,8 @@ func setup(e, is_zombie: bool, data: Dictionary, key: String) -> void:
 		if rimz and rimz_anim:
 			_zset = RimzFrames.set_of(String(e.kind) if RimzFrames.SPECIALS.has(String(e.kind)) else kind, int(e.look_index), bool(e.limp))    # SPECIAL hook
 		_hp0 = maxf(float(e.hp), 1.0)
+		if bool(e.get("gown")):    # a hospital patient (prison_special.gd): a pale blue-white gown over the walker's art
+			self_modulate = Color(0.85, 0.95, 1.0)
 		_dv = PawnMotion.dead_variant(_seed_i, kind)    # (FEEL: its own gait, lean, tilt, carry, size and dirt, from its seed)
 		var tinted := Art.material(kind) if _zs == null else null
 		if tinted != null:

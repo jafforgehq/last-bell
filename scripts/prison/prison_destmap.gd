@@ -2,7 +2,10 @@
 ## or the number keys) and the side panel names it, says in plain words what a trip there may find (often / sometimes / rarely, never a number), its danger, the dead, the fuel it costs and a Go button.
 ## Places not open yet are grey with the reason. Places that cover what the base is short of (prison_loot.gd `short_res`) pulse green. Opened by E at the truck (loot.open_choice) or M at the base (view only).
 ## Go calls loot.go_to(id). Pure view: every number is the data's.
+## RAID EXTRAS (scripts/prison/prison_raidx.gd): a Day or Night choice (T), today's weather, a fuel gauge with the reason Go is refused, and a mark for each place (X: none, done, avoid).
 extends RefCounted
+
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 
 const TAGS := {"often": Color(0.5, 0.88, 0.5), "sometimes": Color(0.95, 0.82, 0.4), "rarely": Color(0.7, 0.7, 0.75)}
 const DANGER_WORD := ["", "Low", "Moderate", "High", "Very high", "Deadly"]
@@ -37,6 +40,10 @@ var side: RichTextLabel
 var go_btn: Button
 var sub: Label
 var note: Label
+var pick_time := ""    # "day" or "night": kept between visits to the map
+var time_btns: Array = []
+var mark_btn: Button
+var fuel_c: Canvas
 
 
 func _init(l, g) -> void:
@@ -50,6 +57,8 @@ func open(view: bool, forced_id: String) -> void:
 	forced = forced_id
 	day = int(game.econ.day) if game.econ != null else 1
 	shorts = loot.short_res()
+	if pick_time == "" or game.raidx.time_cfg(pick_time).is_empty():
+		pick_time = game.raidx.default_time()
 	var nd: Dictionary = game.econ.needs()
 	if root == null:
 		_build()
@@ -111,10 +120,22 @@ func status(id: String) -> Dictionary:
 	var fuel := float(game.stores.get("fuel", 0.0))
 	var fc := int(pc.get("fuel", 0))
 	if fuel < float(fc):
-		return {"ok": false, "open": true, "why": "The truck needs %d fuel for the trip; the stores hold %d." % [fc, int(fuel)]}
+		return {"ok": false, "open": true, "fuel_short": true, "why": "Not enough fuel: the trip costs %d and the tank holds %d (short by %d). %s" % [fc, int(fuel), fc - int(fuel), _refuel_text(fuel)]}
 	if view_only:
 		return {"ok": false, "open": true, "why": "To go, walk to the truck and press E."}
 	return {"ok": true, "open": true, "why": ""}
+
+
+## Where fuel can be found with what the tank holds now (the open places that answer fuel and cost no more than the tank), else the data's plain note.
+func _refuel_text(fuel: float) -> String:
+	var names: Array = []
+	for id in ids:
+		var pc: Dictionary = loot.place_cfg(String(id))
+		if (loot.kind_cfg(String(id)).get("answers", []) as Array).has("fuel") and day >= int(pc.get("unlock_day", 1)) and float(pc.get("fuel", 0)) <= fuel:
+			names.append(String(pc.name))
+	if names.is_empty():
+		return String(game.raidx.cfg().get("fuel_note", ""))
+	return "Refuel first: a trip to %s finds fuel." % " or ".join(names)
 
 
 func _build() -> void:
@@ -155,10 +176,32 @@ func _build() -> void:
 	side.bbcode_enabled = true
 	side.fit_content = false
 	side.scroll_active = false
-	side.custom_minimum_size = Vector2(300,canvas.custom_minimum_size.y - 70.0)
-	side.add_theme_font_size_override("normal_font_size", 15)
-	side.add_theme_font_size_override("bold_font_size", 17)
+	side.custom_minimum_size = Vector2(300, canvas.custom_minimum_size.y - 110.0)
+	side.add_theme_font_size_override("normal_font_size", 14)
+	side.add_theme_font_size_override("bold_font_size", 15)
 	sc.add_child(side)
+	var trow := HBoxContainer.new()    # RAID EXTRAS: when to go, and the player's mark of the place
+	trow.add_theme_constant_override("separation", 6)
+	for tid in ["day", "night"]:
+		var tb := Button.new()
+		tb.focus_mode = Control.FOCUS_NONE
+		tb.add_theme_font_size_override("font_size", 16)
+		tb.text = String(game.raidx.time_cfg(tid).get("name", tid))
+		tb.pressed.connect(func(): set_time(tid))
+		trow.add_child(tb)
+		time_btns.append(tb)
+	mark_btn = Button.new()
+	mark_btn.focus_mode = Control.FOCUS_NONE
+	mark_btn.add_theme_font_size_override("font_size", 15)
+	mark_btn.pressed.connect(cycle_mark)
+	trow.add_child(mark_btn)
+	sc.add_child(trow)
+	fuel_c = Canvas.new()    # RAID EXTRAS: the fuel gauge
+	fuel_c.custom_minimum_size = Vector2(300, 26)
+	fuel_c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fuel_c.draw_cb = _draw_fuel
+	fuel_c.input_cb = func(_ev): pass
+	sc.add_child(fuel_c)
 	note = Label.new()
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size.x = 300.0
@@ -185,7 +228,20 @@ func go() -> void:
 		return
 	var id := String(ids[sel])
 	if status(id).ok:
+		game.raidx.time = pick_time    # (the raid reads it when it begins)
 		loot.go_to(id)
+
+
+func set_time(t: String) -> void:
+	if not game.raidx.time_cfg(t).is_empty():
+		pick_time = t
+		_refresh()
+
+
+## X: the mark of the chosen place goes none, done, avoid, none.
+func cycle_mark() -> void:
+	game.raidx.cycle_mark(String(ids[sel]))
+	_refresh()
 
 
 func _refresh() -> void:
@@ -208,11 +264,22 @@ func _refresh() -> void:
 		b += "[color=#80e080][b]Covers what the base lacks:[/b] %s[/color]\n" % ", ".join(cv)
 	if bool(pc.get("convoy", false)):
 		b += "[color=#9ab8ff]The convoy's list is filled fastest here.[/color]\n"
+	var mk: String = game.raidx.mark_of(id)
+	if mk == "done":
+		b += "[color=#80e080]You marked this place done.[/color]\n"
+	elif mk == "avoid":
+		b += "[color=#ff9080]You marked this place to avoid.[/color]\n"
 	side.text = ""
 	side.append_text(b)
 	note.text = String(stt.why)
 	go_btn.disabled = not bool(stt.ok)
-	go_btn.text = "Go to %s" % String(pc.name) if bool(stt.ok) else ("Closed" if not bool(stt.open) else "Go to %s" % String(pc.name))
+	go_btn.text = "Go to %s" % String(pc.name) if bool(stt.ok) else ("Closed" if not bool(stt.open) else ("Not enough fuel" if bool(stt.get("fuel_short", false)) else "Go to %s" % String(pc.name)))
+	for i in time_btns.size():
+		var tid: String = ["day", "night"][i]
+		(time_btns[i] as Button).add_theme_color_override("font_color", Color(1, 0.85, 0.3) if tid == pick_time else Color(0.75, 0.75, 0.75))
+		(time_btns[i] as Button).text = "%s%s" % [String(game.raidx.time_cfg(tid).get("name", tid)), " (T)" if tid != pick_time else " *"]
+	mk = game.raidx.mark_of(id)
+	mark_btn.text = "Mark (X): %s" % (String(game.raidx.cfg().mark_words.get(mk, "none")) if mk != "" else "none")
 	canvas.queue_redraw()
 
 
@@ -238,6 +305,10 @@ func key(ev: InputEvent) -> bool:
 		select(posmod(sel - 1, ids.size()))
 	elif k == KEY_RIGHT or k == KEY_D or k == KEY_DOWN or k == KEY_S or k == KEY_TAB:
 		select((sel + 1) % ids.size())
+	elif k == KEY_T:
+		set_time("night" if pick_time == "day" else "day")
+	elif k == KEY_X:
+		cycle_mark()
 	elif k == KEY_E or k == KEY_ENTER or k == KEY_KP_ENTER:
 		go()
 	elif k == KEY_ESCAPE or k == KEY_M:
@@ -317,3 +388,38 @@ func _draw_map(c: Canvas) -> void:
 		var dg := clampi(int(pc.danger), 1, 5)
 		for d in 5:    # (danger pips under the name)
 			c.draw_circle(Vector2(p.x - 20.0 + d * 10.0, ly + 8.0), 3.0, Color(0.9, 0.3, 0.25) if d < dg and bool(stt.open) else (Color(0.4, 0.2, 0.2) if d < dg else Color(0.25, 0.25, 0.25)))
+		var mk: String = game.raidx.mark_of(id)    # the player's mark: a badge on the marker
+		if mk != "":
+			var bp := p + Vector2(13.0, -13.0)
+			var bc := Color(0.35, 0.8, 0.45) if mk == "done" else Color(0.9, 0.3, 0.25)
+			c.draw_circle(bp, 9.0, Color(0.03, 0.03, 0.03))
+			c.draw_circle(bp, 7.5, bc.darkened(0.2))
+			PIcons.draw(c, "check" if mk == "done" else "cross", bp, 12.0, Color(1, 1, 1))
+	var wid: String = game.raidx.forecast()    # today's weather and the chosen hour, in the corner
+	var wcol := Color("#9fc4e8") if wid == "rain" else (Color("#c9d0d2") if wid == "fog" else Color(1.0, 0.85, 0.4))
+	PIcons.draw(c, {"rain": "rain", "fog": "fog"}.get(wid, "sun"), Vector2(20, 20), 22.0, wcol)
+	c.draw_string(font, Vector2(36, 26), "%s, %s" % [String(game.raidx.weather_cfg(wid).get("name", "")), String(game.raidx.time_cfg(pick_time).get("name", "")).to_lower()], HORIZONTAL_ALIGNMENT_LEFT, 200, 15, Color(0.92, 0.92, 0.88))
+	var wc: Dictionary = game.raidx.weather_cfg(wid)    # what the choices mean, in the map's corner
+	var tc: Dictionary = game.raidx.time_cfg(pick_time)
+	c.draw_string(font, Vector2(10, sz.y - 30), "%s: %s" % [String(tc.get("name", "")), String(tc.get("note", ""))], HORIZONTAL_ALIGNMENT_LEFT, sz.x - 20, 13, Color(0.92, 0.92, 0.88))
+	c.draw_string(font, Vector2(10, sz.y - 12), "%s: %s" % [String(wc.get("name", "")), String(wc.get("note", ""))], HORIZONTAL_ALIGNMENT_LEFT, sz.x - 20, 13, wcol)
+	if pick_time == "night":    # (a dark wash over the map: the night choice is felt)
+		c.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.05, 0.08, 0.2, 0.28))
+
+
+## The fuel gauge: what the tank holds against what the chosen trip costs.
+func _draw_fuel(c: Canvas) -> void:
+	var font := ThemeDB.fallback_font
+	var fuel := float(game.stores.get("fuel", 0.0))
+	var cost := float(loot.place_cfg(String(ids[sel])).get("fuel", 0))
+	var cap := maxf(maxf(float(game.econ.caps().get("fuel", 10.0)), fuel), maxf(cost, 1.0))
+	var bar := Rect2(64, 7, c.size.x - 64.0, 12)
+	var ok := fuel >= cost
+	c.draw_string(font, Vector2(0, 18), "FUEL", HORIZONTAL_ALIGNMENT_LEFT, 60, 14, Color(0.85, 0.85, 0.8))
+	c.draw_rect(bar, Color(0.12, 0.12, 0.12))
+	c.draw_rect(Rect2(bar.position, Vector2(bar.size.x * clampf(fuel / cap, 0.0, 1.0), bar.size.y)), Color(0.4, 0.8, 0.45) if ok else Color(0.9, 0.35, 0.3))
+	c.draw_rect(bar, Color(0.7, 0.7, 0.65), false, 1.0)
+	if cost > 0.0:    # (the trip's cost: a white tick on the bar)
+		var x := bar.position.x + bar.size.x * clampf(cost / cap, 0.0, 1.0)
+		c.draw_line(Vector2(x, 3), Vector2(x, 23), Color(1, 1, 1), 2.0)
+	c.draw_string(font, Vector2(70, 18), "%d now / trip %d" % [int(fuel), int(cost)], HORIZONTAL_ALIGNMENT_LEFT, 220, 13, Color(1, 1, 1))

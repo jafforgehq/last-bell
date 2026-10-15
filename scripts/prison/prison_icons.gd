@@ -169,6 +169,22 @@ static func draw(c: CanvasItem, id: String, p: Vector2, s: float, col: Color) ->
 			c.draw_rect(Rect2(p + Vector2(-r * 0.7, -r * 0.5), Vector2(r * 1.4, r * 1.45)), col)
 			c.draw_arc(p + Vector2(0, -r * 0.5), r * 0.45, PI, TAU, 8, col, w, true)
 			c.draw_rect(Rect2(p + Vector2(-r * 0.4, r * 0.15), Vector2(r * 0.8, r * 0.4)), dk)
+		"rain":    # a cloud and three slanted drops
+			c.draw_circle(p + Vector2(-r * 0.35, -r * 0.2), r * 0.45, col)
+			c.draw_circle(p + Vector2(r * 0.25, -r * 0.35), r * 0.55, col)
+			c.draw_rect(Rect2(p + Vector2(-r * 0.8, -r * 0.2), Vector2(r * 1.6, r * 0.4)), col)
+			for i in 3:
+				var x := (float(i) - 1.0) * r * 0.5
+				c.draw_line(p + Vector2(x + r * 0.15, r * 0.45), p + Vector2(x - r * 0.1, r * 0.95), col, w * 0.8)
+		"fog":    # three drifting bars
+			for i in 3:
+				var y := (float(i) - 1.0) * r * 0.55
+				c.draw_line(p + Vector2(-r * 0.8 + (r * 0.3 if i == 1 else 0.0), y), p + Vector2(r * 0.8 - (r * 0.3 if i == 0 else 0.0), y), col, w * 1.1)
+		"check":
+			c.draw_polyline(PackedVector2Array([p + Vector2(-r * 0.7, 0), p + Vector2(-r * 0.2, r * 0.55), p + Vector2(r * 0.8, -r * 0.6)]), col, w * 1.3, true)
+		"cross":
+			c.draw_line(p + Vector2(-r * 0.6, -r * 0.6), p + Vector2(r * 0.6, r * 0.6), col, w * 1.3)
+			c.draw_line(p + Vector2(-r * 0.6, r * 0.6), p + Vector2(r * 0.6, -r * 0.6), col, w * 1.3)
 		"target":
 			c.draw_arc(p, r * 0.85, 0, TAU, 16, col, w, true)
 			c.draw_arc(p, r * 0.4, 0, TAU, 12, col, w, true)

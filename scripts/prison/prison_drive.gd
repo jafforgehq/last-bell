@@ -114,6 +114,10 @@ func run(name: String) -> void:
 			await _places()
 		"squad":
 			await _squad()
+		"raidx":
+			await _raidx()
+		"searched":
+			await _searched()
 		"stash":
 			await _stash()
 		"drag":
@@ -287,6 +291,79 @@ func _squad() -> void:
 	g.squad.command_all("follow")
 	await _wait(30)
 	_check(g.squad.members.all(func(m): return String(m.say) in ["with you", "fighting", "firing"] or String(m.say).begins_with("hurt")), "the status line says what they do (%s)" % [g.squad.members.map(func(m): return m.say)])
+
+
+## RAID EXTRAS: fuel refusal, Done and Avoid marks, Night, presets, weather, the retreat key, the hospital patient, the save round trip.
+func _raidx() -> void:
+	var rx = g.raidx
+	g.stores["fuel"] = 0.0
+	g.econ.day = 9
+	await _put(Vector2(g.base.stations.truck) + Vector2(0.0, 1.0))
+	await _tap(KEY_E)
+	var d = g.loot.dest
+	await _tap(KEY_1 + int(d.ids.find("port")))
+	_check(d.go_btn.disabled and d.note.text.begins_with("Not enough fuel") and d.go_btn.text == "Not enough fuel", "no fuel: Go is refused with a clear message (%s)" % d.note.text)
+	g.stores["fuel"] = 10.0
+	d.select(d.ids.find("hospital"))
+	_check(not d.go_btn.disabled, "with fuel (and a free place) Go is on")
+	await _tap(KEY_X)
+	_check(rx.mark_of("hospital") == "done", "X marks the place done")
+	await _tap(KEY_X)
+	_check(rx.mark_of("hospital") == "avoid", "X again: avoid")
+	await _tap(KEY_X)
+	_check(rx.mark_of("hospital") == "", "X again: no mark")
+	await _tap(KEY_X)
+	await _tap(KEY_T)
+	_check(d.pick_time == "night", "T picks the night")
+	await _tap(KEY_ENTER)
+	await _wait(4)
+	await _tap(KEY_1)
+	await _tap(KEY_2)
+	var picked0: Array = g.squad.picked.duplicate()
+	g.loadout.save_preset(1)
+	g.squad.picked = []
+	g.loadout.apply_preset(1)
+	_check(picked0.size() == 2 and g.squad.picked == picked0, "a preset keeps the two companions and puts them back (%s)" % [g.squad.picked])
+	await _tap(KEY_ENTER)
+	await _wait(400)
+	_check(g.mode == "raid" and g.loot.kind == "hospital", "the raid is at the hospital")
+	_check(rx.hour() >= 20.0 and String(g.run.sim.phase) != "day", "Night: the raid hour is %.1f, phase %s" % [rx.hour(), g.run.sim.phase])
+	_check(["clear", "rain", "fog"].has(String(rx.weather)), "the raid has a weather (%s)" % rx.weather)
+	await _tap(KEY_V)
+	await _wait(40)
+	_check(rx.retreating and g.squad.members.all(func(m): return String(m.say) == "retreating" or m.state != "up"), "V: the squad retreats (%s)" % [g.squad.members.map(func(m): return m.say)])
+	await _tap(KEY_V)
+	_check(not rx.retreating, "V again stands down")
+	var pats: Array = g.special.list.values().filter(func(i): return i.kind == "patient")
+	_check(pats.size() >= 1 and pats.size() <= 2 and pats.all(func(i): return i.phase == "idle"), "the hospital has 1 or 2 patients lying still (%d)" % pats.size())
+	if not pats.is_empty():
+		var z = pats[0].z
+		await _put(Vector2(z.x, z.y) + Vector2(2.0, 0.0))
+		await _wait(10)
+		_check(String(pats[0].phase) == "lunge", "a patient lunges when Ruth is within 3 tiles")
+	var dd := {"marks": {"hospital": "avoid", "x": "bad"}, "presets": [{"main": "smg"}, {}, {}]}
+	rx.from_dict(dd)
+	_check(rx.mark_of("hospital") == "avoid" and rx.mark_of("x") == "" and rx.presets.size() == 3 and rx.presets[0].main == "smg", "marks and presets load (bad entries dropped)")
+	rx.from_dict({})
+	_check(rx.marks.is_empty() and rx.presets == [{}, {}, {}], "an older save has neither: both empty")
+
+
+## RAID EXTRAS: the searched marks. Ruth stands in a room, one container is searched by the sim, the others of the room are marked searched and empty; a picture goes to --shot when given.
+func _searched() -> void:
+	await _put(Vector2(11.5, 42.5))
+	var room := -2
+	for ct in g.town.containers:
+		if Vector2(ct.pos).distance_to(Vector2(11.5, 42.5)) < 0.6:
+			room = int(ct.room)
+	var n := 0
+	for ct in g.town.containers:
+		if int(ct.room) == room:
+			g.run.sim.search.looted[String(ct.id)] = true
+			n += 1
+	_check(n >= 1, "a room with containers was marked searched (%d)" % n)
+	await _wait(10)
+	if g.args.has("shot"):
+		g.get_viewport().get_texture().get_image().save_png(String(g.args.shot))
 
 
 func _stash() -> void:

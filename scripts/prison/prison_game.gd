@@ -61,6 +61,7 @@ const SearchRules := preload("res://scripts/town/search.gd")
 const Doors := preload("res://scripts/prison/prison_doors.gd")    # DOORS: the doors of the clear phase
 const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: the one save slot (prison_save.gd)
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
+const RaidX := preload("res://scripts/prison/prison_raidx.gd")    # RAID EXTRAS: day or night, weather, the retreat key, the map's marks, loadout presets
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
 const FENCE_ZONE := 5.0    # a guard shoots what comes within this many tiles of the fence line
@@ -186,6 +187,8 @@ var special    # SPECIAL hook: prison_special.gd
 var arms    # SQUAD hook: prison_arms.gd (the guns, the weapon rack)
 var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
+var raidx    # RAID EXTRAS: prison_raidx.gd
+var wx: Control    # the weather layer (rain, fog) over the world
 var save_day := -1    # SAVE: the economy day of the last save (the dawn autosave is once a day)
 var loadout_kit := {}    # what the card chose to take from the stores for the next raid ({} = the standard kit)
 var squad_regroup := false    # the call to the pickup: the companions run to Ruth
@@ -243,6 +246,7 @@ func _ready() -> void:
 	arms = Arms.new(self)    # SQUAD hook
 	squad = Squad.new(self)
 	loadout = Loadout.new(self)
+	raidx = RaidX.new(self)
 	upg = Upg.new(self)    # WORLD hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
@@ -386,6 +390,11 @@ func _make_hud() -> void:
 	glow.material = am
 	glow.draw.connect(_draw_glow)
 	nl.add_child(glow)
+	wx = Control.new()    # RAID EXTRAS: the rain streaks and the fog
+	wx.set_anchors_preset(Control.PRESET_FULL_RECT)
+	wx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	wx.draw.connect(_draw_wx)
+	nl.add_child(wx)
 	var cl := CanvasLayer.new()
 	cl.layer = 30
 	add_child(cl)
@@ -475,6 +484,7 @@ func _draw_bars() -> void:
 	PHud.draw(self, bars, v)
 	if mode == "raid":
 		squad.draw_hud(bars, v)    # SQUAD hook: the card of the companions
+		raidx.draw_hud(bars, v)    # RAID EXTRAS: the retreat arrow
 	if mode == "raid" and not busy:
 		# arrows to the pickups at the edge of the screen
 		for e in exits:
@@ -761,6 +771,7 @@ func _enter_raid() -> void:
 	loadout_kit = {}
 	pack.attach(run.sim)
 	run.sim.minutes = fposmod(tod, 24.0) * 60.0    # TIME hook: the raid clock is the base's clock, at the same rate as the HUD
+	raidx.begin(seed_i)    # RAID EXTRAS: the map's Day or Night sets the hour, the weather of the seed
 	run.sim.min_per_sec = DAY_MIN_PER_SEC
 	run.sim.phase = run.sim.seasons.phase_at(run.sim.minutes)
 	speed = 1
@@ -788,7 +799,7 @@ func _enter_raid() -> void:
 	extract_t = 0.0
 	_armed = false
 	run.sim.avatar.set_input(Vector2.ZERO, at, false)
-	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring.", 7.0)
+	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring. V: retreat.", 7.0)
 
 
 ## Pickup points: the entry road and the far end of the road on the other side of the map.
@@ -894,7 +905,7 @@ func dusk_state() -> Dictionary:
 	if mode != "raid" or run == null:
 		return {}
 	var d: float = run.sim.seasons.dusk_hour()
-	var h := fposmod(tod, 24.0)
+	var h: float = raidx.hour()
 	if h >= d or h < 5.5:
 		return {"secs": 0.0, "night": true}
 	var left := (d - h) * 60.0 / DAY_MIN_PER_SEC
@@ -1281,6 +1292,7 @@ func _tick(dt: float) -> void:
 	overlay.queue_redraw()
 	bars.queue_redraw()
 	glow.queue_redraw()
+	wx.queue_redraw()
 	_scripts(dt)
 	if args.has("seq") and frames >= _shot_wait:    # --seq=N,every: N shots (name_00.png ...) every `every` frames from the first
 		var sq := String(args.seq).split(",")
@@ -1410,7 +1422,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
 		return
-	if ev is InputEventKey and not busy and (topbar.key(ev) or guide.key(ev) or squad.key(ev) or arc.key(ev)):    # SQUAD hook: C, the orders
+	if ev is InputEventKey and not busy and (topbar.key(ev) or guide.key(ev) or squad.key(ev) or arc.key(ev) or raidx.key(ev)):    # SQUAD hook: C, the orders
 		return
 	if ev is InputEventKey and not busy and pack.key(ev):
 		return
@@ -1883,21 +1895,42 @@ func _paint_search(c: CanvasItem) -> void:
 	var me := Vector2(run.avatar_p.x, run.avatar_p.y)
 	var inv = run.sim.inv
 	var pulse := 0.5 + 0.5 * sin(clock * 4.0)
+	var rooms := {}    # room index -> [containers, emptied] (what Ruth need not come back to: RAID EXTRAS)
 	for ct in town.containers:
 		var at := Vector2(ct.at)
-		if me.distance_to(at) > 7.0:
+		if me.distance_to(at) > 14.0:
 			continue
 		var id := String(ct.id)
 		var pp := at * TILE
-		if run.sim.search.is_looted(id):
-			if inv != null and inv.items_left(id) > 0:
+		var looted: bool = run.sim.search.is_looted(id)
+		var empty: bool = looted and (inv == null or inv.items_left(id) <= 0)
+		var rm := int(ct.get("room", -1))
+		if rm >= 0:
+			var rr: Array = rooms.get(rm, [0, 0])
+			rr[0] += 1
+			rr[1] += 1 if empty else 0
+			rooms[rm] = rr
+		if me.distance_to(at) > 7.0:
+			continue
+		if looted:
+			if not empty:
 				c.draw_circle(pp, 6.0, Color(1.0, 0.6, 0.2, 0.9))
-			else:
-				c.draw_polyline(PackedVector2Array([pp + Vector2(-6, 0), pp + Vector2(-2, 5), pp + Vector2(7, -6)]), Color(0.45, 1.0, 0.5, 0.75), 2.5)
+			else:    # (emptied: a dim check, so she does not walk back to it)
+				c.draw_polyline(PackedVector2Array([pp + Vector2(-6, 0), pp + Vector2(-2, 5), pp + Vector2(7, -6)]), Color(0.6, 0.8, 0.62, 0.6), 3.0)
 		else:
 			c.draw_rect(Rect2(pp - Vector2(9, 9), Vector2(18, 18)), Color(1.0, 0.85, 0.25, 0.5 + 0.3 * pulse), false, 2.0)
 			if Access.markers():
 				PIcons.mark(c, "loot", pp, 6.0, Color(1.0, 0.85, 0.25))
+	for rm in rooms:    # the room's outline shows 'searched': a dim green line and check when every container is emptied, a dim amber line when some are
+		var rr: Array = rooms[rm]
+		if int(rr[1]) <= 0 or rm >= town.rooms.size():
+			continue
+		var all_done: bool = int(rr[1]) >= int(rr[0])
+		var rect := Rect2(Vector2(Rect2i(town.rooms[rm].rect).position) * TILE, Vector2(Rect2i(town.rooms[rm].rect).size) * TILE)
+		c.draw_rect(rect, Color(0.55, 0.85, 0.6, 0.6) if all_done else Color(0.9, 0.7, 0.3, 0.4), false, 4.0)
+		if all_done:
+			var m := rect.get_center()
+			c.draw_polyline(PackedVector2Array([m + Vector2(-14, 0), m + Vector2(-5, 11), m + Vector2(15, -12)]), Color(0.55, 0.8, 0.6, 0.3), 5.0)
 	var us = run.sim.uses
 	if us.busy() and String(us._s.kind) == "container":
 		var f := clampf(float(us._s.t) / maxf(float(us._s.of), 0.1), 0.0, 1.0)
@@ -2874,20 +2907,28 @@ func _grade(h: float) -> Color:
 
 
 func _day_night(_dt: float) -> void:
-	var n := _night_of(tod)
-	var c := _grade(tod)
+	var hr: float = raidx.hour() if mode == "raid" and raidx != null else tod    # (a raid has its own hour when the map chose Day or Night)
+	var n := _night_of(hr)
+	var c := _grade(hr)
 	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1)
 	if mode == "raid" and run != null and run.sim.phase != "day" and not args.has("night"):
 		night_rect.color = Color(1, 1, 1).lerp(c, 0.6)    # TIME hook: the dusk tint when the night wake starts
 	if mode == "base" and arc != null:
 		night_rect.color = night_rect.color.darkened(arc.dim())    # ARC hook: rain, fog and the storm darken the day
+	if mode == "raid" and raidx != null:
+		night_rect.color = night_rect.color.darkened(raidx.dim())    # RAID EXTRAS: the raid's weather
 	if vignette != null:
-		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.45 * n if mode == "base" else 0.22)
+		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.45 * n if mode == "base" else 0.22 + 0.2 * n)
 	if args.has("hour"):
 		tod = float(args.hour)
 	if sound != null:
 		var horde := clampf(float(_awake_dead().size()) / 60.0, 0.0, 1.0) * (0.8 if mode == "base" else 0.4)
 		sound.set_ambience(n, horde, _dt)
+
+
+func _draw_wx() -> void:
+	if raidx != null:
+		raidx.paint_weather(wx, _vp())
 
 
 ## ART: the lamps and fires come on before the dark (a warm pool at dusk) and go out after dawn.

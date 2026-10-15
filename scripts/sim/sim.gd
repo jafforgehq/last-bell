@@ -263,6 +263,8 @@ class Zombie:
 	var want := 0.0
 	var idle := 1.5707963
 	var zph := 0.0
+	## A hospital patient (scripts/prison/prison_special.gd): drawn in a pale gown tint. Never saved.
+	var gown := false
 
 
 var world

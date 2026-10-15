@@ -1877,5 +1877,53 @@
       "layout": "apron",
       "tag": "AP"
     }
+  },
+  "raid_extra": {
+    "_doc": "RAID EXTRAS (scripts/prison/prison_raidx.gd). times: the destination map's Day or Night choice. hour = the clock hour the raid starts at (the night grade and the dead's night wake follow it), loot_mult scales what every container holds (a share of a unit is a seeded chance), dead_mult scales the town's dead, default_time = the choice when the map opens. weather: one is drawn for each raid from the run seed by weight w (the map shows today's before Go). noise_mult scales how far a noise carries, dim darkens the world (0 to 1), vision_tiles is the radius the fog leaves clear on the screen (the rest is hidden), notice_r is how far a dead one notices a person by sight (tiles, 7 in clear weather), wake_mult scales how near Ruth must be to wake a sleeping dead one. mark_words: the map's own marks of a place. fuel_note: what the map says when the tank is short.",
+    "default_time": "day",
+    "times": {
+      "day": {
+        "name": "Day",
+        "hour": 8.0,
+        "loot_mult": 0.8,
+        "dead_mult": 0.8,
+        "note": "Safer: fewer dead, a little less on the shelves, full light."
+      },
+      "night": {
+        "name": "Night",
+        "hour": 20.6,
+        "loot_mult": 1.35,
+        "dead_mult": 1.5,
+        "note": "More on the shelves and more dead about. It is dark, and the dead wake from farther."
+      }
+    },
+    "weather": {
+      "clear": {
+        "w": 6.0,
+        "name": "Clear",
+        "note": "Nothing in the way."
+      },
+      "rain": {
+        "w": 2.5,
+        "name": "Rain",
+        "noise_mult": 0.8,
+        "dim": 0.2,
+        "note": "Rain covers shots and steps a little, and the town is darker."
+      },
+      "fog": {
+        "w": 1.5,
+        "name": "Fog",
+        "vision_tiles": 9.0,
+        "notice_r": 4.5,
+        "wake_mult": 0.75,
+        "dim": 0.06,
+        "note": "You see only a few steps. The dead notice you from less far too."
+      }
+    },
+    "mark_words": {
+      "done": "Done",
+      "avoid": "Avoid"
+    },
+    "fuel_note": "Bring fuel home first: the petrol and garage places and the industrial yard find it."
   }
 }

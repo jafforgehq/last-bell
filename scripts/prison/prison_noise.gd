@@ -152,7 +152,7 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 	var field = game.run.sim.field
 	stats.emits += 1
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
-	var r: float = (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult) * (float(game.loot.noise_mult()) if game.mode == "raid" and game.loot != null else 1.0)
+	var r: float = (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult) * (float(game.loot.noise_mult()) if game.mode == "raid" and game.loot != null else 1.0) * game.raidx.noise_mult()
 	heat[_hkey(pos)] = float(heat.get(_hkey(pos), 0.0)) + float(k.heat)
 	r *= 1.0 + minf(0.5, heat_at(pos) * 0.025)    # (a loud place carries sound farther: continued shooting calls more)
 	if bool(k.ripple) and (pos.distance_to(me) < 3.0 or kind == "throw"):

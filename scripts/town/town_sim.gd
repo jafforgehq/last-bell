@@ -55,6 +55,8 @@ const PARTS := {
 var town_data: Dictionary = {}
 var houses
 var field
+## How far a dead one notices a person by sight (tiles); a raid's fog shortens it (scripts/prison/prison_raidx.gd).
+var notice_r := 7.0
 var clearing
 var search
 var base
@@ -228,7 +230,7 @@ func _notice() -> void:
 				continue
 			var dx: float = p.x - z.x
 			var dy: float = p.y - z.y
-			if dx * dx + dy * dy < 49.0 and clear_shot(Vector2(z.x, z.y), Vector2(p.x, p.y), 0.15):
+			if dx * dx + dy * dy < notice_r * notice_r and clear_shot(Vector2(z.x, z.y), Vector2(p.x, p.y), 0.15):
 				start_chase(z, p)
 				break
 

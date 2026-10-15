@@ -4,6 +4,8 @@
 ##   BLOATER   swollen, yellow-green. Slow. When it dies it bursts into a poison cloud (8 s; 2 hp a second and a slow walk inside) and, at the base, eats 40 hp of a fence segment near it.
 ##   HUNTER    lean, hooded, on all fours, fast. Within 10 tiles of a person it runs, crouches half a second, leaps 3 tiles in 0.3 s and PINS them for 3 s (the dead's own bite: the
 ##             pinned one cannot move; F shoves it off). Killing it frees them.
+##   PATIENT   (hospital raids only, one or two a map) a figure in a pale gown lying in a ward like a downed survivor. It does not stir until a person comes within 3 tiles or Ruth uses a med item within 9, then it
+##             lunges (fast, 5 hit points). Killed, it gives 1 or 2 meds. Drawn as a crawler of the walker's set with a pale tint (`Zombie.gown`).
 ##   BREACHER  the brute of a night's wave, made worse: at the fence it rams (60 hp of the segment a hit, 40 a second), and a shot staggers it for a blink instead of stopping it.
 ## They are ordinary `Sim.Zombie`s (spawned as walker or brute, then given a kind name, hit points, speed and size) so the rules, the shooting and the kill count see nothing new; the drawing picks
 ## their own baked sets by kind name (`RimzFrames.SPECIALS`, tools/make_zombie_anim.py). Numbers: the `specials` block of assets/data/prison_noise.json. Owned by prison_game.gd (`special`).
@@ -13,8 +15,8 @@ extends RefCounted
 const Arms := preload("res://scripts/prison/prison_arms.gd")
 const PN := preload("res://scripts/prison/prison_noise.gd")
 const Loot := preload("res://scripts/prison/prison_loot.gd")
-const TAG := {"screamer": Color(0.8, 0.85, 1.0), "bloater": Color(0.75, 0.9, 0.3), "hunter": Color(1.0, 0.4, 0.35), "breacher": Color(1.0, 0.65, 0.25)}
-const LETTER := {"screamer": "S", "bloater": "B", "hunter": "H", "breacher": "R"}
+const TAG := {"screamer": Color(0.8, 0.85, 1.0), "bloater": Color(0.75, 0.9, 0.3), "hunter": Color(1.0, 0.4, 0.35), "breacher": Color(1.0, 0.65, 0.25), "patient": Color(0.8, 0.95, 0.95)}
+const LETTER := {"screamer": "S", "bloater": "B", "hunter": "H", "breacher": "R", "patient": "P"}
 
 var game
 var rng := RandomNumberGenerator.new()
@@ -51,15 +53,21 @@ func make(kind: String, at: Vector2, state := "wander"):
 	var base := "brute" if kind == "breacher" else "walker"
 	var z = sim.spawn(at.x, at.y, state, base)
 	var c: Dictionary = sc(kind)
-	z.kind = "brute" if kind == "breacher" else kind
+	z.kind = "brute" if kind == "breacher" else ("walker" if kind == "patient" else kind)
 	z.hp = float(c.hp)
 	z.speed = float(c.speed)
 	z.size = float(c.get("size", 1.4))
 	z.limp = false
 	z.groan_t = 3.0 + rng.randf() * 5.0
+	if kind == "patient":    # lies in the ward: a crawler of the walker's set (look a multiple of 4), in a pale gown, quiet until woken
+		z.limp = true
+		z.look_index = (int(z.look_index) / 4) * 4
+		z.gown = true
+		z.speed = 0.0
+		z.groan_t = 1.0e9
 	if kind == "breacher":
 		z.claw = 6.0
-	list[z] = {"kind": kind, "z": z, "phase": "idle", "t": 0.0, "cool": 0.0, "seen": false, "ram": 0.0, "hp0": float(c.hp), "target": null}
+	list[z] = {"kind": kind, "z": z, "phase": "idle", "t": 0.0, "cool": 0.0, "seen": false, "ram": 0.0, "hp0": float(c.hp), "target": null, "meds0": _meds_carried()}
 	stats.spawned += 1
 	return z
 
@@ -138,6 +146,7 @@ func on_raid_begin() -> void:
 	if not enabled:
 		return
 	_kind_spawns()
+	_patients()
 	var day := int(game.econ.day) if game.econ != null else 1
 	var spc: Dictionary = PN.cfg.specials
 	if day < int(spc.raid_min_day) and not game.args.has("rspecial"):
@@ -165,6 +174,73 @@ func on_raid_begin() -> void:
 		at = game.noise._free(at)
 		make(kind, at, "still")
 		placed += 1
+
+
+## The hospital's patients: one or two, each lying by a container of a pharmacy (a ward) that is not near the drop.
+func _patients() -> void:
+	var c: Dictionary = sc("patient")
+	if String(game.loot.kind) != String(c.place):
+		return
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var pool: Array = game.town.containers.filter(func(ct): return (c.types as Array).has(String(ct.get("place", ""))) and Vector2(ct.pos).distance_to(me) > 18.0)
+	for i in rng.randi_range(int(c.count[0]), int(c.count[1])):
+		if pool.is_empty():
+			break
+		var ct: Dictionary = pool[rng.randi() % pool.size()]
+		pool.erase(ct)
+		make("patient", game.noise._free(Vector2(ct.pos) + Vector2(0.8, 0.2)), "still")
+	if game.args.has("log"):
+		print("PATIENTS ", list.values().filter(func(i): return i.kind == "patient").map(func(i): return Vector2(i.z.x, i.z.y).round()))
+
+
+## Meds in the pack and the belt (an item used drops the count).
+func _meds_carried() -> int:
+	var n := 0
+	for cell in game.pack.grid.cells:
+		if ["bandage", "medkit"].has(String(cell.item)):
+			n += int(cell.count)
+	return n
+
+
+## A patient stays still until a person is within `wake_r` tiles, Ruth uses a med item within `med_r`, or anything else wakes it (a noise): then it lunges.
+func _patient(z, info: Dictionary, _dt: float, persons: Array) -> void:
+	if String(info.phase) != "idle":
+		return
+	var c: Dictionary = sc("patient")
+	var zp := Vector2(z.x, z.y)
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var wake := String(z.state) != "still"
+	for p in persons:
+		if zp.distance_to(Vector2(p.x, p.y)) <= float(c.wake_r):
+			wake = true
+	var meds := _meds_carried()
+	if meds < int(info.meds0) and zp.distance_to(me) <= float(c.med_r):
+		wake = true
+	info.meds0 = meds
+	if not wake:
+		return
+	info.phase = "lunge"
+	z.speed = float(c.speed)
+	z.groan_t = 0.2
+	var tgt = null
+	for p in persons:
+		if tgt == null or zp.distance_to(Vector2(p.x, p.y)) < zp.distance_to(Vector2(tgt.x, tgt.y)):
+			tgt = p
+	if tgt != null:
+		game.run.sim.start_chase(z, tgt)
+	game.noise.toast_first("patient")
+
+
+## The meds a patient had on it.
+func _patient_loot() -> void:
+	var c: Dictionary = sc("patient")
+	var n := rng.randi_range(int(c.meds[0]), int(c.meds[1]))
+	var inv = game.run.sim.inv
+	if inv != null:
+		inv.give_units("meds", n, "patient")
+	else:
+		game.run.sim.stock["meds"] = float(game.run.sim.stock.get("meds", 0.0)) + float(n)
+	game.board.toast("The patient had medicine: +%d meds." % n, Color(0.6, 1.0, 0.7))
 
 
 ## The town kind's own special-spawn rule (data: town_kinds.<kind>.spawn): near the drop, near the far pickup, at places of given types. Not held back by raid_min_day.
@@ -241,7 +317,9 @@ func _post(dt: float) -> void:
 				_hunter(z, info, dt, persons)
 			"breacher":
 				_breacher(z, info, dt)
-		if not bool(info.seen):
+			"patient":
+				_patient(z, info, dt, persons)
+		if not bool(info.seen) and String(info.kind) != "patient":
 			var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 			if Vector2(z.x, z.y).distance_to(me) < 20.0:
 				info.seen = true
@@ -321,6 +399,8 @@ func _screamer(z, info: Dictionary, dt: float, persons: Array) -> void:
 
 func _died(z, info: Dictionary) -> void:
 	var kind := String(info.kind)
+	if kind == "patient":
+		_patient_loot()
 	if kind == "screamer" and String(info.phase) == "scream":
 		stats.silenced += 1
 		game.board.toast("Silenced in time.", Color(0.6, 1.0, 0.7))
@@ -568,6 +648,13 @@ func paint(c: CanvasItem) -> void:
 		var info: Dictionary = list[z]
 		var kind := String(info.kind)
 		var zp := Vector2(z.x, z.y)
+		if kind == "patient":    # the pale hospital gown over the crawler's back (code-drawn)
+			var gc := zp * T + Vector2(0, 2)
+			var gw := PackedVector2Array([gc + Vector2(-0.22, -0.3) * T, gc + Vector2(0.22, -0.3) * T, gc + Vector2(0.22, -0.04) * T, gc + Vector2(-0.22, -0.04) * T])
+			c.draw_colored_polygon(gw, Color(0.9, 0.96, 0.99, 0.8))
+			c.draw_polyline(PackedVector2Array([gw[0], gw[3], gw[2], gw[1]]), Color(0.12, 0.16, 0.2, 0.8), 1.5)
+			if String(info.phase) == "idle":
+				continue
 		if zp.distance_to(me) < 26.0:
 			c.draw_string(font, zp * T + Vector2(-60, -1.55 * T), kind.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, 120, 15, TAG[kind])
 		if kind == "screamer" and String(info.phase) == "scream":
@@ -590,6 +677,8 @@ func mini(bars: CanvasItem, o: Vector2, scl: float) -> void:
 	var font := ThemeDB.fallback_font
 	for z in list:
 		var kind := String(list[z].kind)
+		if kind == "patient" and String(list[z].phase) == "idle":
+			continue
 		var q: Vector2 = o + Vector2(z.x, z.y) * scl
 		bars.draw_circle(q, 4.0, Color(0, 0, 0, 0.7))
 		bars.draw_circle(q, 3.0, TAG[kind])
@@ -613,7 +702,7 @@ func _test(dt: float) -> void:
 		_ts = 1
 		var ahead := Vector2.from_angle(float(p.aim) if absf(float(p.aim)) > 0.001 else 0.0)
 		var at: Vector2 = game.noise._free(me + ahead * 12.0)
-		var z = make(kind, at, "still" if kind == "screamer" else "wander")
+		var z = make(kind, at, "still" if kind in ["screamer", "patient"] else "wander")
 		game.zoom_px = 26.0
 		game.play_zoom = 26.0
 		print("SPTEST spawned ", kind, " at ", at.snapped(Vector2(0.1, 0.1)), " me ", me.snapped(Vector2(0.1, 0.1)))
