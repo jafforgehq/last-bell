@@ -110,6 +110,10 @@ func update(dt: float) -> void:
 	if _last_tod != -2.0 or rounds > 0:
 		_last_tod = game.tod
 	for m in crew.members:
+		if _is_cleaner(m) and m.state == "walk":    # a cleaner who walks past a pile picks it up on the way (the base is big, most of his day is walking)
+			for s in spots:
+				if (s.at as Vector2).distance_to(Vector2(m.p.x, m.p.y)) < 1.3:
+					s.dirt = maxf(0.0, float(s.dirt) - dt / 3.0)
 		if m.state == "work" and m.has("eat") and bool(m.eat.get("clean", false)):
 			_work_at(m, dt)
 			if game.args.has("log") and String(m.get("clean_seen", "")) != String(m.eat.say):
