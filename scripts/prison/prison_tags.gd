@@ -38,6 +38,7 @@ const NEAR_PLATE := 15.0
 var game
 var c: Control
 var hover_id := ""
+var leaver_id := ""    # who would quit first, while morale is within 10 of the limit
 var near_id := ""    # the one nearest person within 6 tiles gets the full name line (a clump does not stack its names)
 var _font: Font
 var _plate_box: StyleBoxFlat
@@ -121,6 +122,12 @@ func _draw() -> void:
 		_plates(me, v, zoom)
 	hover_id = ""
 	near_id = ""
+	leaver_id = ""
+	var ec = game.econ
+	if is_base and game.phase == "managed" and ec != null and ec.morale < float(ec.cfg.morale.leave_below) + 10.0 and ec.people() > int(ec.cfg.morale.keep_min):
+		var lv = ec.next_leaver()
+		if lv != null:
+			leaver_id = String(lv.id)
 	var nd := NEAR_TAG
 	for m in game.crew.members:
 		var dd := me.distance_to(Vector2(m.p.x, m.p.y))
@@ -181,6 +188,12 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 		c.draw_circle(feet - Vector2(0, 7), 3.0, col)
 		return
 	var near := near_id == String(m.def.id) or hov
+	if m.def.has("ally") and not near and zoom >= 12.0:    # a friend always shows a coloured name and a health bar over the head
+		var ac := Color(String(m.def.look.get("top", "#a8d8ff"))).lightened(0.55)
+		var an := String(m.def.name)
+		var aw := _font.get_string_size(an, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		var atop := _to_scr(Vector2(p.x, p.y - 1.55 * sc), v) + Vector2(0, -18)
+		_text_plate(atop + Vector2(-aw / 2.0, 0), an, 12, Color("#ff8a7a") if String(m.state) == "downed" else ac)
 	var mid := d < MID_TAG or near
 	var job := job_of(m)
 	var top := _to_scr(Vector2(p.x, p.y - 1.55 * sc), v)
@@ -190,6 +203,11 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	c.draw_circle(cc, 10.5, Color(0.03, 0.05, 0.04, 0.82))
 	c.draw_arc(cc, 10.5, 0.0, TAU, 20, icol, 2.0, true)
 	Icons.draw(c, String(job[0]), cc, 14.0, icol.lightened(0.15))
+	if leaver_id == String(m.def.id):    # a small amber badge: this one is close to leaving (low morale)
+		var bc := cc + Vector2(-20, -2)
+		c.draw_circle(bc, 8.5, Color(0.03, 0.05, 0.04, 0.88))
+		c.draw_arc(bc, 8.5, 0.0, TAU, 16, Hud.WARN, 2.0, true)
+		Icons.draw(c, "exit", bc, 11.0, Hud.WARN)
 	var y_line := cc.y - 16.0
 	if mid:
 		var word := String(job[1])
@@ -205,7 +223,7 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 		y_line -= 18.0
 	# the work bar and an ally's health
 	var bar := cc + Vector2(-16, 14)
-	if m.def.has("ally") and mid:
+	if m.def.has("ally"):
 		var f2 := clampf(float(m.hp) / 45.0, 0.0, 1.0)
 		c.draw_rect(Rect2(bar + Vector2(0, 14), Vector2(32, 4)), Color(0, 0, 0, 0.7))
 		c.draw_rect(Rect2(bar + Vector2(0, 14), Vector2(32.0 * f2, 4)), Color(0.3, 0.85, 0.35) if f2 > 0.3 else Color(0.9, 0.25, 0.2))

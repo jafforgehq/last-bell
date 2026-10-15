@@ -769,6 +769,7 @@ func _enter_raid() -> void:
 	exits = _pick_exits(t, at)
 	people.begin_raid(t, seed_i)    # RAIDS hook: a survivor in a building, rarely
 	squad_regroup = false
+	_pack_seen.clear()
 	squad.begin_raid()    # SQUAD hook: the companions step out of the truck
 	noise.bind()    # NOISE hook: a horde may cross the town; SPECIAL hook: a screamer, a hunter or a bloater may wait in it
 	noise.on_raid_begin()
@@ -1431,17 +1432,28 @@ func _use_label(c: Dictionary) -> String:
 	return l
 
 
-## A searched container with ONE thing in it is taken at once (a floating "+2 Ammo"): the loot window is for more than one.
+## A searched container with ONE thing in it is taken at once: the loot window is for more than one.
 func _auto_pick(id: String) -> void:
 	var inv = run.sim.inv
 	if inv == null or id == "" or inv.open_id != id or inv.items_left(id) != 1:
 		return
-	var g: Dictionary = inv.grid_of(id)
-	var pl: Dictionary = g.cells[0]
-	var name := String(preload("res://scripts/sim/inventory.gd").name_of(String(pl.item)))
-	var n := int(pl.count)
-	if inv.take_all_open() > 0 or (g.cells as Array).is_empty():
-		squad.floaters.append({"text": "+%d %s" % [n, name], "pos": Vector2(run.avatar_p.x, run.avatar_p.y - 1.8), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
+	inv.take_all_open()    # (the pack count change floats the "+2 ammo": _pickup_floaters)
+
+
+## A rise in what the pack holds of a store resource floats "+3 scrap" up from where she stands, whichever way it was taken (one item, take all, a room search).
+var _pack_seen := {}
+
+
+func _pickup_floaters() -> void:
+	if pack == null or pack.grid == null:
+		return
+	var n_floats := 0
+	for r in ["scrap", "ammo", "food", "water", "meds", "parts", "fuel"]:
+		var now := int(pack.Inventory.units(pack.grid, r))
+		if _pack_seen.has(r) and now > int(_pack_seen[r]):
+			squad.floaters.append({"text": "+%d %s" % [now - int(_pack_seen[r]), r], "pos": Vector2(run.avatar_p.x, run.avatar_p.y - 1.8 - 0.5 * n_floats), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
+			n_floats += 1
+		_pack_seen[r] = now
 
 
 ## Shift+E: the whole room (the town's own module: it walks her from container to container).
@@ -1527,6 +1539,7 @@ func _raid_logic(dt: float) -> void:
 		if _prompt.is_empty():    # RAIDS hook
 			_prompt = people.prompt()
 		people.update(dt)    # RAIDS hook
+		_pickup_floaters()
 		squad.update(dt)    # SQUAD hook
 		var in_ring := false
 		if me.distance_to(Vector2(exits[0])) > 14.0:
@@ -2207,7 +2220,13 @@ func _draw_minimap(v: Vector2) -> void:
 	if mode == "base":
 		bars.draw_circle(o + Base.GATE_POS * sc, 3.5, Color(1, 0.85, 0.3))
 		for m in crew.members:
-			bars.draw_circle(o + Vector2(m.p.x, m.p.y) * sc, 1.8, Color(0.4, 0.85, 1.0))
+			var cat := o + Vector2(m.p.x, m.p.y) * sc
+			if m.state == "downed":    # a downed ally pings red on the map
+				var u := fmod(clock * 1.6, 1.0)
+				bars.draw_circle(cat, 2.4, Color(1, 0.2, 0.15))
+				bars.draw_arc(cat, 3.0 + 8.0 * u, 0, TAU, 20, Color(1, 0.2, 0.15, 1.0 - u), 2.0)
+			else:
+				bars.draw_circle(cat, 1.8, Color(0.4, 0.85, 1.0))
 		bars.draw_rect(Rect2(o + Vector2(float(Base.FENCE.position.x), Base.PEN_Y) * sc, Vector2(float(Base.FENCE.size.x), 12.0) * sc), Color(0.8, 0.1, 0.1, 0.18))
 		siege.mini(bars, o, sc)    # SIEGE hook
 		if cleaner != null:

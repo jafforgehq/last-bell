@@ -35,6 +35,9 @@ var enabled := false
 var seen := {}
 var _quiet := 0.0
 var _cfg := ConfigFile.new()
+var hint: PanelContainer    # the one-line key hint of the first raid
+var hint_state := 0    # 0 waiting for a raid, 1 showing, 2 faded for good
+const HINT := "E search    F knife    G companions (if you have them)    M map"
 
 
 func _init(g) -> void:
@@ -44,8 +47,11 @@ func _init(g) -> void:
 	enabled = a.has("guide") or (DisplayServer.get_name() != "headless" and not scripted)
 	if _cfg.load(PATH) == OK:
 		seen = {"clear": bool(_cfg.get_value("guide", "clear", false)), "managed": bool(_cfg.get_value("guide", "managed", false))}
+		if bool(_cfg.get_value("guide", "raid", false)):
+			hint_state = 2
 	if a.has("guide"):
 		seen = {}
+		hint_state = 0
 		idx = clampi(int(a.guide) if String(a.guide) != "1" else 0, 0, 3)
 	var layer := CanvasLayer.new()
 	layer.layer = 11
@@ -75,6 +81,12 @@ func _init(g) -> void:
 	var sk := _btn("Skip guide")
 	sk.pressed.connect(_skip)
 	hb.add_child(sk)
+	hint = PanelContainer.new()
+	hint.visible = false
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.add_theme_stylebox_override("panel", _box(Color(0.04, 0.07, 0.06, 0.88), Hud.LINE, 6, 5))
+	hint.add_child(_lab(HINT, 14, Hud.INK, false))
+	layer.add_child(hint)
 
 
 func _box(bg: Color, line: Color, margin: int, radius: int) -> StyleBoxFlat:
@@ -147,6 +159,7 @@ func key(ev: InputEvent) -> bool:
 
 
 func frame(dt: float) -> void:
+	raid_hint(dt)
 	var k := _phase_key()
 	if enabled and which == "" and k != "" and not bool(seen.get(k, false)) and not game.busy and game.frames > 210:
 		which = k
@@ -168,3 +181,24 @@ func frame(dt: float) -> void:
 	panel.reset_size()
 	var tb: Control = game.topbar.plate
 	panel.position = Vector2(8.0, tb.position.y + tb.size.y + 10.0)
+
+
+## The controls line of the first raid: shown once per profile (saved when it first appears), kept for the whole raid, faded when she is home again.
+func raid_hint(dt: float) -> void:
+	if hint_state == 0 and enabled and game.mode == "raid" and not game.busy:
+		hint_state = 1
+		hint.modulate.a = 1.0
+		if not game.args.has("guide"):
+			_cfg.set_value("guide", "raid", true)
+			_cfg.save(PATH)
+	if hint_state != 1:
+		hint.visible = false
+		return
+	if game.mode != "raid":
+		hint.modulate.a = maxf(0.0, hint.modulate.a - dt / 1.5)
+		if hint.modulate.a <= 0.0:
+			hint_state = 2
+	var v: Vector2 = game._vp()
+	hint.visible = not game.busy
+	hint.reset_size()
+	hint.position = Vector2((v.x - hint.size.x) / 2.0, 52.0)
