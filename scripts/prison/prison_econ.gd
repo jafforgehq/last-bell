@@ -42,6 +42,14 @@ var _last_tod := -1.0
 var _roster: Array = []
 var _streak := {"food": 0, "water": 0}
 var last := {"spoiled": 0.0, "lost": 0.0, "left": "", "short": {}}
+## UNDO: the last project ordered can be taken back, with a full refund, for `UNDO_S` game seconds.
+const UNDO_S := 30.0
+var undo_id := ""
+var undo_left := 0.0
+## MORNING: what the last day change did, for the morning card ({day, ate, made, built (names), spoiled}); `morning_new` is set by the day change and cleared by whoever shows the card.
+var dawn_log := {}
+var morning_new := false
+var _built_today: Array = []
 
 
 func _init(g) -> void:
@@ -179,6 +187,25 @@ func start(id: String) -> bool:
 	for k in defs[id].cost:
 		game.stores[k] = float(game.stores[k]) - float(defs[id].cost[k])
 	_queue(id)
+	undo_id = id
+	undo_left = UNDO_S
+	return true
+
+
+## Takes back the last order while the undo window is open: the whole cost comes back and the project is as if never started.
+func can_undo() -> bool:
+	return undo_id != "" and undo_left > 0.0 and st.has(undo_id) and not _built(undo_id)
+
+
+func undo_start() -> bool:
+	if not can_undo():
+		return false
+	for k in defs[undo_id].cost:
+		game.stores[k] = float(game.stores.get(k, 0.0)) + float(defs[undo_id].cost[k])
+	st.erase(undo_id)
+	queue.erase(undo_id)
+	undo_id = ""
+	undo_left = 0.0
 	return true
 
 
@@ -223,6 +250,7 @@ func eta_h(id: String) -> float:
 func _finish(id: String) -> void:
 	st[id].built = true
 	queue.erase(id)
+	_built_today.append(String(defs[id].name))
 	var old := _stage
 	project_done.emit(id)
 	_stage = _calc_stage()
@@ -422,6 +450,10 @@ func update(dt: float) -> void:
 	if not active():
 		_last_tod = -1.0
 		return
+	if undo_left > 0.0:
+		undo_left -= dt
+		if undo_left <= 0.0:
+			undo_id = ""
 	if fallback_labor:
 		_labor(dt)
 	var tod: float = game.tod
@@ -463,6 +495,9 @@ func tick_day() -> void:
 			s[r] = float(cp[r])
 	if game.cleaner != null:
 		game.cleaner.daily()    # TRASH hook: a dirty dormitory makes someone ill
+	dawn_log = {"day": day, "ate": {"food": float(f.food.cons), "water": float(f.water.cons)}, "made": {"food": float(f.food.prod), "water": float(f.water.prod)}, "built": _built_today.duplicate(), "spoiled": spoiled}
+	_built_today.clear()
+	morning_new = true
 	_morale(short)
 	last = {"spoiled": spoiled, "lost": lost, "left": last.left, "short": short}
 	_leave()

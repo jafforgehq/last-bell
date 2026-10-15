@@ -14,6 +14,7 @@ const OneHouse := preload("res://scripts/town/one_house.gd")
 const Waves := preload("res://scripts/sim/waves.gd")
 const Medical := preload("res://scripts/sim/medical.gd")
 const PrisonBal := preload("res://scripts/prison/prison_bal.gd")
+const AimMode := preload("res://scripts/aim_mode.gd")
 
 const MAX_SEED_CHARS := 12
 ## The crews to choose from (how many people a run begins with), what each is called, a line for it on its card, and
@@ -35,6 +36,9 @@ const LENGTH_NAMES := ["Autumn: thirty nights", "Campaign: the four seasons"]
 const LENGTH_LINES := ["Hold the wall for thirty nights.", "Autumn, Winter, Spring and Summer, each with its own Big Night."]
 
 var difficulty := 1
+## The town run's aim mode (AimMode.RIGHT or AimMode.ALWAYS), the last one used (`ui.prison_aim_mode`), and its two cards (the modes in AimMode.MODES order).
+var aim := AimMode.ALWAYS
+var aim_cards: Array = []
 ## Whether this New game starts the town run (One House: one survivor in one house; no crew and no length to choose) rather than the school's (`--school`, and a test's stand-in for the
 ## game). Set when the screen is built, unless it was set before.
 var town_mode := false
@@ -95,8 +99,18 @@ func _build_body() -> void:
 	if town_mode:
 		caption_label.text = OneHouse.text("words.new_game_caption", "The nights and the seed").to_upper()    # (the caption is the shell's: it speaks of the crew and the length)
 		body.add_child(note(OneHouse.text("words.new_game", "One house, one survivor. Clear it, claim it, find people."), ink2(), 14))
+		aim = AimMode.prison_mode()
+		body.add_child(section("Aim"))
+		var aim_row: HBoxContainer = hud._hbox(8)
+		for m in AimMode.MODES:
+			var ac := _pick_card(String(AimMode.LABELS[m]), String(AimMode.NOTES_TOWN[m]), 88.0)
+			ac.pressed.connect(_choose_aim.bind(m))
+			aim_row.add_child(ac)
+			aim_cards.append(ac)
+		body.add_child(aim_row)
 		_build_seed()
 		_choose(difficulty)
+		_choose_aim(aim)
 		return
 
 	crew = int(Prefs.get_value("ui", "crew", DEFAULT_CREW))
@@ -274,6 +288,18 @@ func _town_facts(i: int) -> String:
 	return " ".join(parts)
 
 
+## Picks how the mouse aims in the town run: its card lights up (kept when the run starts).
+func _choose_aim(m: String) -> void:
+	aim = m if AimMode.MODES.has(m) else AimMode.ALWAYS
+	for k in aim_cards.size():
+		var b: Button = aim_cards[k]
+		var on: bool = AimMode.MODES[k] == aim
+		b.set_pressed_no_signal(on)
+		shell.restyle(b, on)
+		(b.get_meta("title") as Label).add_theme_color_override("font_color", hud.ACCENT_INK if on else hud.INK)
+		(b.get_meta("sub") as Label).add_theme_color_override("font_color", Color(hud.ACCENT_INK, 0.86) if on else hud.INK2)
+
+
 ## Picks a crew (0 the small one, 1 the crew of five): its card lights up and the words under the cards say what it means.
 func _choose_crew(i: int) -> void:
 	i = clampi(i, 0, CREWS.size() - 1)
@@ -328,6 +354,7 @@ func _start() -> void:
 		return
 	Prefs.set_value("ui", "difficulty", difficulty)
 	if town_mode:
+		AimMode.set_prison_mode(aim)
 		# (One House, CLEAR3: the seed is the town's and the run's dice: `TownBoot.seed_of` takes the town from the meta's seed)
 		close_sound = ""
 		shell.play("ui_confirm")
