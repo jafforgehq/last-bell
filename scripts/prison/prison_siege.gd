@@ -457,7 +457,10 @@ func _resolve_missed(n: int) -> void:
 	txt += "Fence damage: %d hp\n" % maxi(0, int(hp0 - hp1))
 	txt += "Dead killed:  %d of %d sent\n" % [killed, sent]
 	txt += "Ammo used:    %d rounds\n" % int(used)
-	txt += "Crew lost:    %s" % (", ".join(crew_lost) if not crew_lost.is_empty() else "nobody")
+	txt += "Crew lost:    %s" % (", ".join(crew_lost.map(game.arc.events.label)) if not crew_lost.is_empty() else "nobody")    # (TRAITS, as the night's own card)
+	for nm in crew_lost:
+		if game.arc.events.bio_of(String(nm)) != "":
+			txt += "\n  %s" % game.arc.events.bio_of(String(nm))
 	_card_label.text = txt
 	_card.visible = true
 	_card_t = 16.0

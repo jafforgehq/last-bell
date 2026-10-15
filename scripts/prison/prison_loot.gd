@@ -428,6 +428,8 @@ func _build() -> void:
 	_title = Label.new()
 	_title.text = "Where to? (number key or click, Left/Right: kind of town, E or Enter: what the base needs, Esc: stay)"
 	_title.add_theme_font_size_override("font_size", 18)
+	_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # (the long hint line made the panel wider than the screen)
+	_title.custom_minimum_size.x = 640.0
 	col.add_child(_title)
 	_sub = Label.new()
 	_sub.add_theme_font_size_override("font_size", 16)
@@ -478,7 +480,7 @@ func key(ev: InputEvent) -> bool:
 	if k >= KEY_1 and k < KEY_1 + _buttons.size():
 		_pick(k - KEY_1)
 	elif k == KEY_LEFT or k == KEY_A:
-		_sel_kind(_kind_sel - 1)
+		_sel_kind(posmod(_kind_sel - 1, maxi(1, offered.size())))
 	elif k == KEY_RIGHT or k == KEY_D or k == KEY_TAB:
 		_sel_kind((_kind_sel + 1) % maxi(1, offered.size()))
 	elif k == KEY_E or k == KEY_ENTER or k == KEY_KP_ENTER:

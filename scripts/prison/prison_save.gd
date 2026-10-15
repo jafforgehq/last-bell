@@ -148,7 +148,7 @@ static func peek(args: Dictionary = {}) -> Dictionary:
 	if not bool(r.ok):
 		return {} if bool(r.get("missing", false)) else {"ok": false, "line": String(r.why), "why": String(r.why)}
 	var d: Dictionary = r.data
-	var line := "Day %d of %d, %d people. Saved at dawn or after a raid; a raid in progress or the clear phase starts again from the save." % [int(d.day), int(d.days), int(d.people)]
+	var line := "Day %d of %d, %d people. Saved at dawn." % [int(d.day), int(d.days), int(d.people)]
 	return {"ok": true, "line": line, "why": "", "unix": int(d.get("unix", 0)), "backup": bool(r.get("backup", false))}
 
 
