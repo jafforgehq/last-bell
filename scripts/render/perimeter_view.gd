@@ -23,6 +23,7 @@ extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")
 const Prefs := preload("res://scripts/prefs.gd")
+const Access := preload("res://scripts/access.gd")
 const TownArt := preload("res://scripts/town/town_art.gd")
 const BuildNode := preload("res://scripts/render/build_node.gd")
 const Lighting := preload("res://scripts/render/lighting.gd")
@@ -929,7 +930,7 @@ func _paint_dyn(ci) -> void:
 			_paint_rise(ci, id, f)
 			continue
 		if f.kind == "shake":
-			off = Vector2(sin(_clock * 83.0), sin(_clock * 61.0 + 1.3) * 0.55) * SHAKE_PX * k
+			off = Vector2(sin(_clock * 83.0), sin(_clock * 61.0 + 1.3) * 0.55) * SHAKE_PX * k * Access.shake_k()
 		else:
 			flash = 0.55 * k
 		for op in _sec_ops.get(id, []):

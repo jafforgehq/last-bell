@@ -155,6 +155,7 @@ var _splat_budget := SPLATS_PER_FRAME
 ## The camera's push (screen pixels) and the freeze of the picture (real seconds left).
 var _push := Vector2.ZERO
 var hitstop := 0.0
+var shake_k := 1.0    # the "Screen shake" setting (scripts/access.gd): how much of the camera's push is kept
 var _hitstop_gap := 0.0
 ## The town's melee numbers (assets/data/melee.json, `Melee.read()`: main.gd gives them in the town and nowhere else): {} everywhere else, and then the blow feels as it always did. `blow_s` is the trail's life.
 var melee_cfg: Dictionary = {}
@@ -194,6 +195,7 @@ func _init() -> void:
 	_col.resize(MAX_PARTS)
 	calm = Prefs.on("ui", "reduce_motion")
 	soft = Access.reduce_flashes()
+	shake_k = Access.shake_k()
 
 
 func setup(blood_textures: Array, parent: Node2D, radial_tex: Texture2D, light_puff: Texture2D, dark_puff: Texture2D) -> void:
@@ -322,6 +324,7 @@ func tick_real(dt: float) -> void:
 		_calm_at = real_t
 		calm = Prefs.on("ui", "reduce_motion")
 		soft = Access.reduce_flashes()
+		shake_k = Access.shake_k()
 	if calm:
 		_push = Vector2.ZERO
 		hitstop = 0.0
@@ -335,7 +338,7 @@ func tick_real(dt: float) -> void:
 
 ## Where the camera is pushed to now, in screen pixels (nothing under "reduce motion").
 func camera_push() -> Vector2:
-	return _push if enabled and not calm else Vector2.ZERO
+	return _push * shake_k if enabled and not calm else Vector2.ZERO
 
 
 ## Whether the picture is frozen for a close kill (real seconds left); nothing under "reduce motion".

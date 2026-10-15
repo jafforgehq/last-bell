@@ -185,9 +185,9 @@ func _sound(i: int) -> void:
 	var cell := String(Base.DOORS[i].name) == "Cell block"
 	var rng := randf_range(0.95, 1.05)
 	if cell:
-		game.audio.sfx("pd_cell_open_0" if o else "pd_cell_slam_0", -6.0, rng, "SFX", 0.05, at, 24.0)
+		game.audio.sfx("pd_cell_open_0" if o else "pd_steel_clang_0", -5.0, rng, "SFX", 0.05, at, 26.0)
 	else:
-		game.audio.sfx("door_open_0" if o else "door_close_0", -5.0, rng, "SFX", 0.05, at, 24.0, game.audio.OLD)
+		game.audio.sfx("pd_wood_open_0" if o else "pd_wood_close_0", -1.0, rng, "SFX", 0.05, at, 24.0)
 
 
 ## The all-open event after the last zone: every shut door swings open one after the other (about 0.06 s apart). Returns how long the whole thing takes, in seconds.

@@ -723,10 +723,10 @@ func _door(house: int, entering: bool) -> void:
 					cell = true
 	if cell:
 		sfx("pd_cell_open_0", -5.0, _rng.randf_range(0.96, 1.04), "SFX", 0.3)
-		get_tree().create_timer(0.55, true, false, true).timeout.connect(func(): sfx("pd_cell_slam_%d" % _rng.randi_range(0, 1), -8.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3))
+		get_tree().create_timer(0.55, true, false, true).timeout.connect(func(): sfx("pd_steel_clang_0", -6.0, _rng.randf_range(0.97, 1.03), "SFX", 0.3))
 	else:
-		sfx("door_open_0", -5.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3, null, 20.0, OLD)
-		get_tree().create_timer(0.6, true, false, true).timeout.connect(func(): sfx("door_close_0", -7.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3, null, 20.0, OLD))
+		sfx("pd_wood_open_0", -2.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3)
+		get_tree().create_timer(0.6, true, false, true).timeout.connect(func(): sfx("pd_wood_close_0", -3.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3))
 
 
 ## The prison gate (the truck goes out, the truck comes back): the chain, then the rolling door.
@@ -740,6 +740,10 @@ func _claw(e: Dictionary, me: Vector2) -> void:
 	if at.distance_to(me) > 22.0 or _t - float(_next.chain) < 0.9:
 		return
 	_next.chain = _t
+	if String(e.get("material", "")) != "metal":    # (a door or a barricade: the dead lean on it, a dull thump and a creak; the fence rattles on top of that)
+		sfx("pd_push_%d" % _rng.randi_range(0, 1), -4.0, _rng.randf_range(0.92, 1.08), "SFX", 0.0, at, 24.0)
+		return
+	sfx("pd_push_%d" % _rng.randi_range(0, 1), -8.0, _rng.randf_range(0.85, 0.95), "SFX", 0.0, at, 22.0)
 	sfx("pd_chain_0", -14.0, _rng.randf_range(1.1, 1.35), "SFX", 0.0, at, 22.0)
 
 

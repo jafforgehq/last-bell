@@ -307,6 +307,34 @@
   "seam": null,
   "seconds": 1.6
  },
+ "pd_push_0": {
+  "bytes": 44144,
+  "clipped": 0,
+  "file": "pd_push_0.wav",
+  "kind": "foley",
+  "loop": false,
+  "notes": "the dead lean on a door or a fence: a dull thump and a creak",
+  "peak_db": -10.0,
+  "rate": 22050,
+  "rms_db": -27.96,
+  "samples": 22050,
+  "seam": null,
+  "seconds": 1.0
+ },
+ "pd_push_1": {
+  "bytes": 44144,
+  "clipped": 0,
+  "file": "pd_push_1.wav",
+  "kind": "foley",
+  "loop": false,
+  "notes": "the dead lean on a door or a fence: a dull thump and a creak",
+  "peak_db": -10.0,
+  "rate": 22050,
+  "rms_db": -28.81,
+  "samples": 22050,
+  "seam": null,
+  "seconds": 1.0
+ },
  "pd_rolling_0": {
   "bytes": 172032,
   "clipped": 0,
@@ -320,6 +348,48 @@
   "samples": 85994,
   "seam": null,
   "seconds": 3.9
+ },
+ "pd_steel_clang_0": {
+  "bytes": 169826,
+  "clipped": 0,
+  "file": "pd_steel_clang_0.wav",
+  "kind": "foley",
+  "loop": false,
+  "notes": "the cell block's steel door clangs",
+  "peak_db": -7.0,
+  "rate": 22050,
+  "rms_db": -30.09,
+  "samples": 84891,
+  "seam": null,
+  "seconds": 3.85
+ },
+ "pd_wood_close_0": {
+  "bytes": 44144,
+  "clipped": 0,
+  "file": "pd_wood_close_0.wav",
+  "kind": "foley",
+  "loop": false,
+  "notes": "a wooden door creaks shut and knocks into its frame",
+  "peak_db": -8.0,
+  "rate": 22050,
+  "rms_db": -25.67,
+  "samples": 22050,
+  "seam": null,
+  "seconds": 1.0
+ },
+ "pd_wood_open_0": {
+  "bytes": 44144,
+  "clipped": 0,
+  "file": "pd_wood_open_0.wav",
+  "kind": "foley",
+  "loop": false,
+  "notes": "a wooden door creaks open",
+  "peak_db": -8.0,
+  "rate": 22050,
+  "rms_db": -27.21,
+  "samples": 22050,
+  "seam": null,
+  "seconds": 1.0
  },
  "pf_drag_0": {
   "bytes": 39734,

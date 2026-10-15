@@ -34,6 +34,11 @@ static func scaled(px: int) -> int:
 	return maxi(px, roundi(float(px) * text_k()))
 
 
+## "Screen shake" (the prison's Settings): 0 to 1, how much of every camera kick, shake and nudge is kept (1 by default).
+static func shake_k() -> float:
+	return clampf(Prefs.number("ui", "shake"), 0.0, 1.0)
+
+
 ## "Colour-blind markers" is on.
 static func markers() -> bool:
 	return Prefs.on("ui", "colour_blind")

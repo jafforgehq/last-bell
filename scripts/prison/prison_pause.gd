@@ -7,6 +7,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Prefs := preload("res://scripts/prefs.gd")
 const AimMode := preload("res://scripts/aim_mode.gd")
+const Access := preload("res://scripts/access.gd")
 const BuildInfo := preload("res://scripts/build_info.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: Save and Save and quit
@@ -124,6 +125,9 @@ func _page(which: String) -> void:
 			for sl_def in VOLUMES:
 				body.add_child(_volume_row(String(sl_def[0]), String(sl_def[1])))
 			body.add_child(_rule())
+			body.add_child(_text_row())
+			body.add_child(_shake_row())
+			body.add_child(_rule())
 			var aim_btn := _btn("", func(): pass)
 			var set_txt := func(): aim_btn.text = "Aim: " + String(AimMode.LABELS[AimMode.prison_mode()])
 			set_txt.call()
@@ -191,6 +195,61 @@ func _volume_row(label: String, key: String) -> HBoxContainer:
 			Prefs.set_value("audio", "ui", v)
 			Buses.apply("UI")
 		pct.text = "%d%%" % int(v * 100.0))
+	row.add_child(sl)
+	row.add_child(pct)
+	return row
+
+
+## "Text size": three stops (Normal, Large, Larger: the setting scripts/access.gd keeps, which never draws under the original size); the words change at once.
+func _text_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var l := _lab("Text size", 17, Hud.INK)
+	l.custom_minimum_size.x = 100
+	row.add_child(l)
+	var sl := HSlider.new()
+	sl.min_value = 0.0
+	sl.max_value = float(Access.TEXT_SIZES.size() - 1)
+	sl.step = 1.0
+	sl.tick_count = Access.TEXT_SIZES.size()
+	sl.custom_minimum_size = Vector2(190, 24)
+	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sl.focus_mode = Control.FOCUS_NONE
+	sl.value = float(maxi(0, Access.TEXT_SIZES.find(Access.text_size())))
+	var name_l := _lab(String(Access.TEXT_LABELS[Access.text_size()]), 16, Hud.INK2)
+	name_l.custom_minimum_size.x = 56
+	sl.value_changed.connect(func(v: float):
+		var id := String(Access.TEXT_SIZES[int(v)])
+		Prefs.set_value("ui", "text_size", id)
+		name_l.text = String(Access.TEXT_LABELS[id])
+		if game.text_scale != null:
+			game.text_scale.refresh())
+	row.add_child(sl)
+	row.add_child(name_l)
+	return row
+
+
+## "Screen shake": 0 to 100 percent of every camera kick, shake and nudge (Access.shake_k; the camera reads it twice a second).
+func _shake_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var l := _lab("Screen shake", 17, Hud.INK)
+	l.custom_minimum_size.x = 100
+	row.add_child(l)
+	var sl := HSlider.new()
+	sl.min_value = 0.0
+	sl.max_value = 100.0
+	sl.step = 5.0
+	sl.custom_minimum_size = Vector2(190, 24)
+	sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sl.focus_mode = Control.FOCUS_NONE
+	sl.value = Access.shake_k() * 100.0
+	var pct := _lab("%d%%" % int(sl.value), 16, Hud.INK2)
+	pct.custom_minimum_size.x = 56
+	sl.value_changed.connect(func(v: float):
+		Prefs.set_value("ui", "shake", v / 100.0)
+		game.fx.combat.shake_k = v / 100.0
+		pct.text = "%d%%" % int(v))
 	row.add_child(sl)
 	row.add_child(pct)
 	return row

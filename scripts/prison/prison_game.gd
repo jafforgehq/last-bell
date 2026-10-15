@@ -13,6 +13,7 @@ extends Node2D
 signal phase_changed(new_phase: String)
 
 const GD := preload("res://scripts/game_data.gd")
+const TextScale := preload("res://scripts/ui/text_scale.gd")
 const World := preload("res://scripts/town/town_world.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const TownRun := preload("res://scripts/town/town_run.gd")
@@ -250,6 +251,7 @@ func _ready() -> void:
 	pause_menu = PauseMenu.new()
 	add_child(pause_menu)
 	pause_menu.setup(self)
+	_text_scale_up.call_deferred()
 	if args.has("pause"):
 		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open(String(args.pause) if String(args.pause) in ["controls", "settings"] else "main"))
 	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest")):
@@ -1122,6 +1124,18 @@ func _knife_hint() -> void:
 			return
 
 
+## "Text size" (Settings): the words of every layer of the game (the HUD, the cards, the pause menu) are scaled by scripts/ui/text_scale.gd, which wants no `main` here: its roots are the layers.
+var text_scale: Node
+func _text_scale_up() -> void:
+	text_scale = TextScale.new()
+	for c in get_children():
+		if c is CanvasLayer:
+			text_scale.roots.append(c)
+	add_child(text_scale)
+	text_scale.name = "TextScale"
+	text_scale.refresh()
+
+
 func _tick(dt: float) -> void:
 	if args.has("deadcheck") and run != null and not _deadchecked and clock >= float(String(args.deadcheck).split(",")[0]):
 		_deadchecked = true
@@ -1277,7 +1291,7 @@ func _step() -> void:
 			"bite", "crash":
 				sound.play(String(e.type))
 			"stab":
-				sound.play("stab", 0.6, 0.08)
+				sound.play("melee_swing", 0.75, 0.08)    # (the slash's whoosh; the hit's wet thud, spark and blood puff and the camera's nudge are combat_fx.gd `hit` and `_melee_impact`)
 			"picked":
 				if String(e.get("item", "")).begins_with("gun_"):
 					_say("Found a %s. It goes to the weapon rack when you get home." % Inventory_name(String(e.item)), 4.0)

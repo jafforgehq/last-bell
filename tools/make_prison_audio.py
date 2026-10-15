@@ -674,6 +674,54 @@ def foley_combat():
         fin("pw_rattle_%d" % k, v, SR, 621 + k, False, "foley", "a death rattle", peak=-11.0)
 
 
+def creak(secs, f0, f1, rate, r, level=1.0):
+    """A wooden hinge: a stick-slip pulse train (the wood grabs and lets go `rate` times a second) that rings a few wood-body partials and some grit; the pitch drifts f0 to f1."""
+    n = int(secs * SR)
+    t = np.arange(n) / SR
+    ph = np.cumsum(rate * (1.0 + 0.35 * np.sin(TAU * 3.1 * t + r.uniform(0, TAU)))) / SR
+    pulse = (ph % 1.0) ** 3
+    f = f0 + (f1 - f0) * D.ramp(t, secs)
+    body = sum(a * np.sin(TAU * np.cumsum(f * m) / SR) for m, a in ((1.0, 1.0), (2.01, 0.55), (3.02, 0.3), (4.9, 0.12)))
+    grit = D.bandpass(r.standard_normal(n), 500.0, 2600.0, SR, 2, circular=False)
+    env = D.ramp(t, 0.06) * D.ramp(secs - t, 0.15) * (0.55 + 0.45 * np.abs(np.sin(TAU * 1.7 * t + r.uniform(0, TAU))))
+    return (body * 0.7 + grit * 0.5) * pulse * env * level
+
+
+def foley_feel():
+    """Quick wins K: a wooden door's creak (open, close), a heavy steel clang for the cell block, the dead pushing on a door or the fence."""
+    r = np.random.default_rng(471)
+    x = seq(1.0, SR)
+    put(x, creak(0.8, 190.0, 330.0, 22.0, r), 0.0, SR, 1.0)
+    put(x, noise_burst(0.02, 800.0, 3500.0, 0.005, SR, r, 0.0005), 0.8, SR, 0.7)
+    put(x, D.thump(SR, 140.0, 80.0, 0.12, 30.0, 0.03, 0.2, r), 0.8, SR, 0.5)
+    fin("pd_wood_open_0", x, SR, 471, False, "foley", "a wooden door creaks open", peak=-8.0)
+    r = np.random.default_rng(472)
+    x = seq(1.0, SR)
+    put(x, creak(0.6, 320.0, 200.0, 26.0, r), 0.0, SR, 0.9)
+    put(x, D.thump(SR, 120.0, 55.0, 0.2, 25.0, 0.06, 0.3, r), 0.6, SR, 1.0)
+    put(x, noise_burst(0.1, 200.0, 1500.0, 0.025, SR, r, 0.001), 0.6, SR, 0.8)
+    fin("pd_wood_close_0", x, SR, 472, False, "foley", "a wooden door creaks shut and knocks into its frame", peak=-8.0)
+    r = np.random.default_rng(473)
+    x = seq(2.6, SR)
+    n = int(2.4 * SR)
+    t = np.arange(n) / SR
+    hit = np.zeros(n)
+    for ratio, amp, tau in ((1.0, 1.0, 1.5), (1.47, 0.8, 1.1), (2.09, 0.7, 0.8), (2.71, 0.5, 0.6), (3.6, 0.4, 0.4), (4.8, 0.25, 0.25)):
+        hit += amp * np.sin(TAU * 118.0 * ratio * (1 + r.uniform(-0.01, 0.01)) * t + r.uniform(0, TAU)) * np.exp(-t / tau)
+    put(x, hit, 0.0, SR, 1.0)
+    put(x, noise_burst(0.15, 400.0, 7000.0, 0.02, SR, r, 0.0005), 0.0, SR, 1.6)
+    put(x, D.thump(SR, 80.0, 38.0, 0.4, 22.0, 0.1, 0.3, r), 0.0, SR, 1.0)
+    put(x, hit * 0.45, 0.14, SR, 1.0)
+    fin("pd_steel_clang_0", room(x, SR, 1.0, 0.25, 474), SR, 473, False, "foley", "the cell block's steel door clangs", peak=-7.0)
+    for k in range(2):
+        r = np.random.default_rng(481 + k)
+        x = seq(1.0, SR)
+        put(x, D.thump(SR, 95.0 - 15 * k, 45.0, 0.3, 22.0, 0.09, 0.3, r), 0.0, SR, 1.0)
+        put(x, noise_burst(0.2, 100.0, 900.0, 0.05, SR, r, 0.002), 0.0, SR, 0.7)
+        put(x, creak(0.45, 150.0 + 25 * k, 210.0, 18.0, r), 0.08, SR, 0.55)
+        fin("pd_push_%d" % k, x, SR, 481 + k, False, "foley", "the dead lean on a door or a fence: a dull thump and a creak", peak=-10.0)
+
+
 def foley():
     foley_steps()
     foley_doors()
@@ -681,6 +729,7 @@ def foley():
     foley_build()
     foley_ui()
     foley_combat()
+    foley_feel()
 
 
 def tails():
@@ -779,7 +828,7 @@ def barks():
         fin("pv_%s_whistle" % who, x, SR, seed + 7, False, "voice", "a whistle", peak=-14.0)
 
 
-GROUPS = {"music": music, "stingers": stingers, "ambience": ambience, "foley": foley, "tails": tails, "barks": barks}
+GROUPS = {"feel": foley_feel, "music": music, "stingers": stingers, "ambience": ambience, "foley": foley, "tails": tails, "barks": barks}
 
 if __name__ == "__main__":
     which = [a for a in sys.argv[1:] if not a.startswith("--")] or list(GROUPS)

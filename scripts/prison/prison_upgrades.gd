@@ -9,6 +9,7 @@
 ## (stores topped up) so that the scaffolds and the crew are seen at work.
 extends RefCounted
 
+const Access := preload("res://scripts/access.gd")
 const DrawNode := preload("res://scripts/render/draw_node.gd")
 const Tower := preload("res://scripts/prison/prison_tower.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
@@ -1000,7 +1001,7 @@ func _paint_fx(c: CanvasItem) -> void:
 		c.draw_rect(Rect2(at + Vector2(-32, 2), Vector2(64.0 * f, 6)), Color(0.95, 0.8, 0.3) if worked else Color(0.6, 0.6, 0.6))
 		c.draw_string(font, at + Vector2(-130, -4), String(econ.defs[id].name), HORIZONTAL_ALIGNMENT_CENTER, 260, 14, Color(1, 1, 0.85, 0.95))
 	if _lit():    # the generator shed: it shakes while it runs
-		_shed(c, Vector2(sin(_clock * 53.0), cos(_clock * 61.0)) * 0.7, true)
+		_shed(c, Vector2(sin(_clock * 53.0), cos(_clock * 61.0)) * 0.7 * Access.shake_k(), true)
 	elif econ.tier("power") >= 1:
 		_shed(c, Vector2.ZERO, false)
 	if econ.tier("radio") >= 1:

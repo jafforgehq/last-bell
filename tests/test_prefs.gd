@@ -53,3 +53,14 @@ func test_helpers_read_numbers_and_switches() -> void:
 	Prefs.set_value("ui", "scale", "wide")
 	near(Prefs.number("ui", "scale"), 1.0, 0.0001, "a value of the wrong kind falls back to the default")
 	_fresh()
+
+
+func test_screen_shake_defaults_to_full_and_is_clamped() -> void:
+	const Access := preload("res://scripts/access.gd")
+	_fresh()
+	near(Access.shake_k(), 1.0, 0.0001, "full shake by default")
+	Prefs.set_value("ui", "shake", 0.25)
+	near(Access.shake_k(), 0.25, 0.0001, "a quarter")
+	Prefs.set_value("ui", "shake", 7.0)
+	near(Access.shake_k(), 1.0, 0.0001, "never more than all of it")
+	_fresh()
