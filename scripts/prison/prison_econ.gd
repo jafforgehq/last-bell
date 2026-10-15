@@ -506,6 +506,15 @@ func _leave() -> void:
 	last.left = ""
 	if morale >= float(cfg.morale.leave_below) or people() <= int(cfg.morale.keep_min) or game.siege.attacking:
 		return
+	var best = next_leaver()
+	if best != null:
+		last.left = String(best.name)
+		_roster.erase(best)
+		person_left.emit(String(best.name))
+
+
+## The person the base misses least (null for nobody): the one who goes first when morale is under the limit.
+func next_leaver():
 	var c := crew().duplicate()
 	var cnt := {}
 	for p in c:
@@ -532,10 +541,7 @@ func _leave() -> void:
 		if sc < bs:
 			bs = sc
 			best = p
-	if best != null:
-		last.left = String(best.name)
-		_roster.erase(best)
-		person_left.emit(String(best.name))
+	return best
 
 
 # ---------------------------------------------------------------------- lab ------

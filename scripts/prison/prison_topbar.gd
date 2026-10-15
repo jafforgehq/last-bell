@@ -24,6 +24,19 @@ const RES_USE := {
 	"parts": "Needed by the pump, generator and radio projects. Found in raids on garages.",
 	"fuel": "Burned by the generator once it is built (1 a day). Found in raids on petrol stations.",
 }
+## The last line of a chip's hover text: what to do when it runs low.
+const RES_LOW := {
+	"food": "When low: build or staff the garden, or raid a shop or house for food.",
+	"water": "When low: build the well or pump, or raid for bottled water.",
+	"ammo": "When low: put a mechanic on the workbench (scrap to rounds) or raid a police station.",
+	"meds": "When low: raid a pharmacy or hospital, or staff the infirmary.",
+	"scrap": "When low: raid industrial places and strip what you find.",
+	"parts": "When low: raid a garage.",
+	"fuel": "When low: raid a petrol station before the generator stops.",
+	"people": "When over the beds: build a dormitory, or morale falls.",
+	"morale": "When low: fix hunger and thirst, tidy the base, build comforts; people leave below the limit.",
+	"noise": "When loud: stop shooting, use the knife (F) or move away.",
+}
 const ROW_ECON := ["clock", "speed", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
 const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise", "convoy"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
@@ -505,7 +518,7 @@ func _res_tip(r: String, rep: Dictionary, stock: float, cap: int, days: float) -
 	var place := String(econ.cfg.fixes.get(r, ""))
 	if place != "":
 		t += "\nFind more: raid a %s.   Click: needs board." % place
-	return t
+	return t + "\n" + String(RES_LOW.get(r, ""))
 
 
 func _econ_row2(rep: Dictionary) -> void:
@@ -513,7 +526,7 @@ func _econ_row2(rep: Dictionary) -> void:
 	var bd: Dictionary = rep.beds
 	var over: bool = int(bd.free) < 0
 	_put("people", "people", Hud.INFO, "%d/%d" % [int(bd.used), int(bd.cap)], "beds", DIM, "", "danger" if over else "ok",
-		"People %d, beds %d.%s" % [int(bd.used), int(bd.cap), "\nMore people than beds costs morale every day: build a dormitory." if over else "\nEveryone eats and drinks 1 a day."])
+		"People %d, beds %d.%s" % [int(bd.used), int(bd.cap), "\nMore people than beds costs morale every day: build a dormitory." if over else "\nEveryone eats and drinks 1 a day."] + "\n" + String(RES_LOW.people))
 	var m := float(rep.morale)
 	var trend := _trend()
 	var face := "face_good" if m >= 50.0 else ("face_mid" if m >= 25.0 else "face_bad")
@@ -522,7 +535,7 @@ func _econ_row2(rep: Dictionary) -> void:
 	var rt := "Morale %d / 100 (people leave below %d)" % [int(m), int(econ.cfg.morale.leave_below)]
 	for q in reasons:
 		rt += "\n%s %s" % ["+" if q[1] else "-", q[0]]
-	_put("morale", face, mcol, "%d" % int(m), "morale", DIM, "up" if trend > 0.6 else ("down" if trend < -0.6 else "flat"), "danger" if m < 25.0 else ("warn" if m < 40.0 else "ok"), rt, m / 100.0, mcol)
+	_put("morale", face, mcol, "%d" % int(m), "morale", DIM, "up" if trend > 0.6 else ("down" if trend < -0.6 else "flat"), "danger" if m < 25.0 else ("warn" if m < 40.0 else "ok"), rt + "\n" + String(RES_LOW.morale), m / 100.0, mcol)
 	# the stage and the way to the next one
 	var names: Array = ["Camp"]
 	for s in econ.cfg.stages:
@@ -580,7 +593,7 @@ func _noise_chip() -> void:
 		want.add_child(pc)
 	var c: Array = game.noise.chip()
 	var st := String(c[2])
-	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM), "", st, String(c[3]), float(c[4]), Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK))
+	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM), "", st, String(c[3]) + "\n" + String(RES_LOW.noise), float(c[4]), Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK))
 
 
 func _attack_chip() -> void:
@@ -595,8 +608,11 @@ func _attack_chip() -> void:
 	var horde: bool = game.arc.is_horde_night(hn)
 	if not horde:
 		st = "ok"
-	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, "Horde night %d" % hn if horde else "Quiet night", "in %d:%02d" % [int(secs) / 60, int(secs) % 60] if horde else "next horde: night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
+	var days: int = game.arc.next_horde_night(hn) - hn
+	var head := "Horde tonight" if horde else ("Horde in %d day%s" % [days, "" if days == 1 else "s"] if days <= 5 else "Quiet")
+	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, head, "in %d:%02d" % [int(secs) / 60, int(secs) % 60] if horde else "night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
 		"A horde comes at 21:00 tonight. Mend the fence and keep ammo in the stores before it." if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
+	(chips["attack"].main as Label).custom_minimum_size.x = 100
 
 
 func _convoy_chip() -> void:    # ARC hook
@@ -615,7 +631,16 @@ func _fence_chip() -> void:
 	var f: float = float(w.hp) / float(w.max)
 	var st := "danger" if f < 0.3 else ("warn" if f < 0.6 else "ok")
 	var col := Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK)
-	_put("fence", "fence", col, "%d%%" % int(f * 100.0), String(w.name) if f < 0.97 else "sound", DIM, "", st,
+	var main := "%d%%" % int(f * 100.0)
+	var sub: String = String(w.name) if f < 0.97 else "sound"
+	if sg.attacking or game.arc.is_horde_night(sg.nights_started + 1):    # a horde night: how many parts still stand
+		var up := 0
+		for sgm in sg.segs:
+			if float(sgm.hp) > 0.0:
+				up += 1
+		main = "Fence %d/%d" % [up, sg.segs.size()]
+		sub = "intact"
+	_put("fence", "fence", col, main, sub, DIM, "", st,
 		"Weakest fence part: %s at %d%% (%s).\nMend with scrap: hold E at the damaged wall, or a mechanic does it." % [String(w.name), int(f * 100.0), sg.state_of(w)], f, col)
 
 
@@ -644,12 +669,12 @@ func _clear_chips() -> void:
 	for r in ["ammo", "meds"]:
 		if r == "ammo":
 			var sp: int = PHud.reserve(game, game.run.avatar_p)    # shots in the pack: the gun readout's unit
-			_put("c_ammo", "ammo", RES_COL.ammo, "%d" % sp, "spare", DIM, "", "danger" if sp <= 0 else ("warn" if sp < 12 else "ok"), "Shots in your backpack, not counting the gun's magazine. The stores hold %d units of ammo.\n%s" % [int(game.stores.get("ammo", 0.0)), RES_USE.ammo])
+			_put("c_ammo", "ammo", RES_COL.ammo, "%d" % sp, "spare", DIM, "", "danger" if sp <= 0 else ("warn" if sp < 12 else "ok"), "Shots in your backpack, not counting the gun's magazine. The stores hold %d units of ammo.\n%s" % [int(game.stores.get("ammo", 0.0)), RES_USE.ammo] + "\n" + String(RES_LOW.ammo))
 			continue
 		var low: Dictionary = game.econ.cfg.needs.low
 		var stock := float(game.stores.get(r, 0.0))
 		var st := "danger" if stock < 0.5 else ("warn" if stock < float(low.get(r, 0.0)) else "ok")
-		_put("c_" + r, r, RES_COL[r], "%d" % int(stock), RES_NAME[r].to_lower(), DIM, "", st, "%s in the stores: %d.\n%s" % [RES_NAME[r], int(stock), RES_USE[r]])
+		_put("c_" + r, r, RES_COL[r], "%d" % int(stock), RES_NAME[r].to_lower(), DIM, "", st, "%s in the stores: %d.\n%s" % [RES_NAME[r], int(stock), RES_USE[r]] + "\n" + String(RES_LOW[r]))
 	var nz := _next_zone()
 	_put("nextzone", "target", Hud.ACCENT, ("Next: " + String(Base.ZONES[nz].name)) if nz >= 0 else "Secure the gate", "", DIM, "", "ok", "The pulsing marker in the world points there.")
 	(chips["nextzone"].main as Label).custom_minimum_size.x = 100
@@ -663,9 +688,9 @@ func _raid_chips(_rep: Dictionary) -> void:
 	var st := "danger" if full >= 0.95 else ("warn" if full >= 0.8 else "ok")
 	_put("pack", "pack", Hud.INK2, "%d/%d" % [used, total], "pack", DIM, "", st, "Backpack cells used: %d of %d.%s\nI opens it; loot that does not fit stays behind." % [used, total, "  It is nearly full." if st != "ok" else ""], full, Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.INFO))
 	var am := PHud.reserve(game, game.run.avatar_p)    # shots, the gun readout's unit
-	_put("r_ammo", "ammo", RES_COL.ammo, "%d" % am, "spare", DIM, "", "danger" if am <= 0 else ("warn" if am < 12 else "ok"), "Shots in the backpack, not counting the gun's magazine. R reloads.")
+	_put("r_ammo", "ammo", RES_COL.ammo, "%d" % am, "spare", DIM, "", "danger" if am <= 0 else ("warn" if am < 12 else "ok"), "Shots in the backpack, not counting the gun's magazine. R reloads.\n" + String(RES_LOW.ammo))
 	var md := int(Inventory.units(grid, "meds"))
-	_put("r_meds", "meds", RES_COL.meds, "%d" % md, "meds", DIM, "", "ok", "Medicine carried. Unspent meds go home with you.")
+	_put("r_meds", "meds", RES_COL.meds, "%d" % md, "meds", DIM, "", "ok", "Medicine carried. Unspent meds go home with you.\n" + String(RES_LOW.meds))
 	var nd: Dictionary = game.econ.needs() if game.econ != null else {}
 	var hint: String = game.loot.hint()
 	if nd.is_empty():

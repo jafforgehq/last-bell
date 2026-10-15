@@ -897,6 +897,9 @@ func end_raid() -> void:
 
 # ------------------------------------------------------------------- drawing ---------
 
+const NAME_COLS := [Color("#8fe0ff"), Color("#ffd27a"), Color("#c9f08a"), Color("#f5a3d0")]    # a name colour for each companion
+
+
 static func icon(c: CanvasItem, cmd: String, at: Vector2, r: float, col: Color) -> void:
 	var dark := Color(0.04, 0.06, 0.05, 0.9)
 	c.draw_circle(at, r + 2.0, dark)
@@ -918,13 +921,15 @@ static func icon(c: CanvasItem, cmd: String, at: Vector2, r: float, col: Color) 
 ## The world overlay (px): over each companion a name, a command icon, a bar of health, what they are doing and what they say; a search bar while they search; the floating "+2 food".
 func paint(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
+	var ci := -1
 	for m in members:
+		ci += 1
 		if m.state == "gone":
 			continue
 		var p = m.p
 		var at := Vector2(p.x, p.y - 1.45) * TILE
 		var col: Color = CMD_COL[String(m.cmd)]
-		c.draw_string(font, at + Vector2(-60, -2), String(m.name), HORIZONTAL_ALIGNMENT_CENTER, 120, 16, Color(1, 0.55, 0.5) if m.state == "down" else Color(1, 1, 0.9))
+		c.draw_string(font, at + Vector2(-60, -2), String(m.name), HORIZONTAL_ALIGNMENT_CENTER, 120, 16, Color(1, 0.55, 0.5) if m.state == "down" else NAME_COLS[ci % NAME_COLS.size()])
 		icon(c, String(m.cmd), at + Vector2(-36 - 0.0, -8), 7.0, col)
 		var f := clampf(float(m.hp) / float(m.max), 0.0, 1.0)
 		c.draw_rect(Rect2(at + Vector2(-22, 3), Vector2(44, 5)), Color(0, 0, 0, 0.7))
@@ -953,6 +958,9 @@ func mini(bars: Control, o: Vector2, sc: float) -> void:
 		var col: Color = CMD_COL[String(m.cmd)] if m.state == "up" else Color(1, 0.3, 0.25)
 		bars.draw_circle(at, 3.0, col)
 		bars.draw_arc(at, 4.2, 0, TAU, 12, Color(0, 0, 0, 0.9), 1.2)
+		if m.state != "up":    # a downed friend pings: a red ring that swells and fades, twice a second
+			var u := fmod(game.clock * 1.6, 1.0)
+			bars.draw_arc(at, 4.0 + 8.0 * u, 0, TAU, 20, Color(1, 0.2, 0.15, 1.0 - u), 2.0)
 
 
 ## The card on the left of the screen (screen px): a row for each companion: name, order, health, what they are doing, bag.
