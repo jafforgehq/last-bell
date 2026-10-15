@@ -63,7 +63,7 @@ func setup(shell_node) -> void:
 	pulse.modulate.a = 0.0
 	shade = _backdrop(Kit.shade_texture())
 	_build_column()
-	hint = hud._label("Arrow keys and Enter, or the mouse", Fonts.sans(400), 12, hud.INK3)
+	hint = hud._label("Arrow keys and Enter, or the mouse   |   build " + BuildInfo.VERSION, Fonts.sans(400), 12, hud.INK3)
 	hint.add_theme_constant_override("outline_size", 4)
 	hint.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.8))
 	add_child(hint)
@@ -165,8 +165,6 @@ func _build_logo() -> Control:
 	tagline.add_theme_constant_override("outline_size", 5)
 	tagline.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.85))
 	box.add_child(tagline)
-	var ver: Label = hud._label("build " + BuildInfo.VERSION, Fonts.sans(500), 12, hud.INK3)    # PLAYLOG: the build the testers report
-	box.add_child(ver)
 	# (round 26: the demo's title says so: a small gold tag under the tagline)
 	if Demo.on():
 		demo_tag = hud._label(DEMO_TAG, Fonts.cond(700, 3), 15, hud.ACCENT)
