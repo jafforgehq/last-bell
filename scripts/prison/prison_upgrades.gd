@@ -63,7 +63,6 @@ const POLES := [[16.0, 54.2, 0.0, 1.0], [30.0, 54.2, 0.0, 1.0], [64.0, 54.2, 0.0
 	[7.3, 18.0, -1.0, 0.0], [7.3, 40.0, -1.0, 0.0], [88.7, 18.0, 1.0, 0.0], [88.7, 40.0, 1.0, 0.0]]
 const GROW_H := [0.0, 9.0, 6.0, 4.0]    # game hours from planting to ripe, by garden tier
 const DIRT_BY_STAGE := {"Camp": 1.0, "Shelter": 0.5, "Settlement": 0.0, "Fortress": 0.0, "Hub": 0.0}
-const DIRT_CAP := {"Camp": 1.0, "Shelter": 0.6, "Settlement": 0.25, "Fortress": 0.1, "Hub": 0.05}
 const DIRT_ZONES := [Rect2(11, 9, 22, 13), Rect2(39, 9, 22, 13), Rect2(67, 9, 19, 13), Rect2(11, 30, 13, 11), Rect2(29, 30, 16, 11), Rect2(51, 30, 9, 9), Rect2(9, 44, 28, 10), Rect2(39, 44, 22, 9), Rect2(9, 24, 78, 2)]
 
 var game
@@ -228,9 +227,6 @@ func update(dt: float) -> void:
 		return
 	_clock += dt
 	_gt += dt * HOURS_PER_SEC
-	var st: String = econ.stage()
-	for s in game.cleaner.spots:    # the rubbish piles grow back less and less as the prison gets clean
-		s.dirt = minf(float(s.dirt), float(DIRT_CAP[st]))
 	_assign()
 	_harvest()
 	_effects(dt)
