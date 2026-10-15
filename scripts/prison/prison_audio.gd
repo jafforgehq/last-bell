@@ -590,7 +590,7 @@ func _places() -> void:
 		else:
 			d.want = 0.0
 	# floodlights: the three nearest poles, on while the power is on at night
-	var fl_on: bool = base_mode and game.phase == "managed" and game.econ != null and game.econ.tier("power") >= 2 and game.upg._lit() and night > 0.3
+	var fl_on: bool = base_mode and game.phase == "managed" and game.econ != null and game.econ.tier("power") >= 1 and game.upg._lit() and night > 0.3
 	var poles: Array = []
 	if fl_on:
 		poles = (game.upg.POLES as Array).duplicate()

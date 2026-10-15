@@ -174,7 +174,7 @@ func _stage_flags() -> void:
 		for id in String(a.tiers).split(","):
 			econ.debug_build(id)
 	if String(a.get("econ", "")) == "build:all":
-		for id in ["water3", "garden3", "kitchen3", "infirmary3", "dormitory3", "power2", "fence3", "radio1"]:
+		for id in ["water1", "garden1", "kitchen1", "infirmary1", "dormitory1", "power1", "fence2", "radio1", "convoy1"]:
 			econ.debug_build(id)
 	if a.has("fuel"):
 		game.stores["fuel"] = float(a.fuel)
@@ -496,7 +496,7 @@ func glow_spots(n: float) -> Array:
 				out.append([Vector2(t), 3.2, Color(1.0, 0.85, 0.5, 0.35 * n)])
 	if _lit():
 		out.append([Vector2(25.4, 33.2), 2.0, Color(1.0, 0.8, 0.4, 0.4 * n)])    # the shed's window
-		if econ.tier("power") >= 2:
+		if econ.tier("power") >= 1:
 			for p in POLES:
 				out.append([Vector2(float(p[0]), float(p[1])), 4.0, Color(1.0, 0.97, 0.8, 0.35 * n)])
 		if econ.tier("radio") >= 1:
@@ -903,7 +903,7 @@ func _paint_top(c: CanvasItem) -> void:
 	if econ.tier("kitchen") >= 1:    # the range's chimney pipe goes up through the wall
 		_ln(c, Vector2(80.9, 9.0), Vector2(80.9, 7.7), METAL_D, 4.0)
 		_r(c, 80.7, 7.5, 0.4, 0.2, METAL_D)
-	if econ.tier("power") >= 2:    # floodlight poles on the fence line
+	if econ.tier("power") >= 1:    # floodlight poles on the fence line
 		for p in POLES:
 			var pp := Vector2(float(p[0]), float(p[1]))
 			var out_v := Vector2(float(p[2]), float(p[3]))
@@ -935,7 +935,7 @@ func _paint_top(c: CanvasItem) -> void:
 
 ## Floodlight cones, drawn by the game's glow layer (prison_game.gd `_draw_glow`) which is ABOVE the night tint: the warm white is added to the dark picture instead of being tinted blue by it.
 func draw_cones(c: CanvasItem, cam: Vector2, zoom: float, vp: Vector2, n: float) -> void:
-	if n <= 0.02 or econ.tier("power") < 2 or not _lit():
+	if n <= 0.02 or econ.tier("power") < 1 or not _lit():
 		return
 	c.draw_set_transform(vp / 2.0 - cam * zoom, 0.0, Vector2.ONE * zoom / T)
 	for t in game.base.towers:    # towers throw their cones outward too

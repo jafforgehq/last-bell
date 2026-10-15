@@ -1,5 +1,5 @@
 {
-  "_doc": "Economy of the prison base (scripts/prison/prison_econ.gd). Every number is here. projects: id, building, tier, name, cost {res: n}, labor (seconds of work by a crew member with `role`), requires (project ids; the tier below the same building is always required), effect. building_role: who works a building (construction labor and, for production, the daily worker). production: per building a list by tier (0 = what the prison has at the start): amt per day with the worker, none without a worker, passive per day always; power: the tier needs the generator running (else the tier below is used). day: seconds of game time in a day. stages: the rules, in order; a stage needs the one before it.",
+  "_doc": "Economy of the prison base (scripts/prison/prison_econ.gd). Every number is here. projects: id, building, tier, name, gives (the one plain line the Base screen shows), cost {res: n}, labor (seconds of work by a crew member with `role`), requires (project ids; the tier below the same building is always required), effect. building_role: who works a building (construction labor and, for production, the daily worker). production: per building a list by tier (0 = what the prison has at the start): amt per day with the worker, none without a worker, passive per day always; power: the tier needs the generator running (else the tier below is used). day: seconds of game time in a day. stages: the rules, in order; a stage needs the one before it.",
   "day_secs": 360.0,
   "day_change_h": 6.0,
   "work": {"stop_secs": 20.0, "max_workers": 2, "ruth_rate": 1.0, "ruth_reach": 3.0},
@@ -16,20 +16,19 @@
     "leave_below": 25.0,
     "keep_min": 4,
     "max": 100.0,
-    "building": {"kitchen": [0, 2, 4, 7], "infirmary": [0, 1, 2, 4]}
+    "building": {"kitchen": [0, 5], "infirmary": [0, 3]}
   },
   "generator_fuel": 1.0,
-  "canteen_food_factor": 0.8,
   "light_hit_bonus": 0.12,
   "building_role": {"water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic", "convoy": "mechanic"},
   "site": {"water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores", "convoy": "truck"},
   "crew_role": {"mia": "cook", "marcus": "gardener", "nia": "gardener", "ana": "medic", "hector": "mechanic", "tomas": "mechanic", "owen": "hauler", "ike": "hauler", "walt": "guard", "dez": "guard", "rae": "guard", "sol": "guard", "june": "guard", "cole": "guard", "bea": "guard"},
   "production": {
     "food": [
-      {"amt": 10.0}, {"amt": 13.0}, {"amt": 18.0}, {"amt": 26.0, "none": 16.0}
+      {"amt": 10.0}, {"amt": 17.0}
     ],
     "water": [
-      {"amt": 10.0}, {"amt": 10.0, "passive": 2.0}, {"amt": 14.0, "passive": 2.0}, {"amt": 26.0, "passive": 2.0, "none": 26.0, "power": true}
+      {"amt": 10.0}, {"amt": 14.0, "passive": 2.0}
     ]
   },
   "production_role": {"food": "gardener", "water": "hauler"},
@@ -47,9 +46,9 @@
   "needs": {"critical_days": 3.0, "low": {"meds": 3.0, "ammo": 20.0}},
   "stages": [
     {"name": "Shelter", "tiers": {"water": 1, "dormitory": 1}},
-    {"name": "Settlement", "tiers": {"garden": 2, "kitchen": 1, "infirmary": 1}},
-    {"name": "Fortress", "tiers": {"fence": 2, "power": 2, "convoy": 1}},
-    {"name": "Hub", "tiers": {"radio": 1, "water": 2, "garden": 2, "kitchen": 2, "infirmary": 2, "dormitory": 2, "power": 2, "fence": 2}}
+    {"name": "Settlement", "tiers": {"garden": 1, "kitchen": 1, "infirmary": 1}},
+    {"name": "Fortress", "tiers": {"fence": 2, "power": 1, "convoy": 1}},
+    {"name": "Hub", "tiers": {"radio": 1}}
   ],
   "barricades": [
     {"id": "sandbag", "name": "Sandbag line", "cost": {"scrap": 14}, "dur": 100.0, "wear_night": 0.15, "shield": 0.5, "slow": 0.75, "wear_dps": 0.4,
@@ -61,27 +60,15 @@
      "blurb": "Each of the dead trips on it once and goes down for a moment, and the rattle pulls the pen's dead to that wire, where the guns are. Slows them."}
   ],
   "projects": [
-    {"id": "water1", "building": "water", "tier": 1, "name": "Rain barrels", "cost": {"scrap": 12}, "labor": 15, "requires": [], "effect": {"note": "a little water while it rains"}},
-    {"id": "water2", "building": "water", "tier": 2, "name": "Hand pump on the well", "cost": {"scrap": 35, "parts": 10}, "labor": 38, "requires": [], "effect": {"cap": {"water": 40}, "note": "needs a hauler at the pump"}},
-    {"id": "water3", "building": "water", "tier": 3, "name": "Electric pump and filter", "cost": {"scrap": 40, "parts": 30}, "labor": 75, "requires": ["power1"], "effect": {"cap": {"water": 60}, "note": "needs power and fuel, no worker"}},
-    {"id": "garden1", "building": "garden", "tier": 1, "name": "Garden beds", "cost": {"scrap": 12}, "labor": 15, "requires": [], "effect": {}},
-    {"id": "garden2", "building": "garden", "tier": 2, "name": "Irrigation", "cost": {"scrap": 30, "parts": 10}, "labor": 38, "requires": ["water2"], "effect": {}},
-    {"id": "garden3", "building": "garden", "tier": 3, "name": "Greenhouse", "cost": {"scrap": 60, "parts": 25}, "labor": 75, "requires": ["power1"], "effect": {"note": "all year, fewer people needed"}},
-    {"id": "kitchen1", "building": "kitchen", "tier": 1, "name": "Stove", "cost": {"scrap": 12}, "labor": 15, "requires": [], "effect": {"note": "meals raise morale"}},
-    {"id": "kitchen2", "building": "kitchen", "tier": 2, "name": "Larder", "cost": {"scrap": 25}, "labor": 38, "requires": [], "effect": {"spoil": 0.5, "cap": {"food": 40}}},
-    {"id": "kitchen3", "building": "kitchen", "tier": 3, "name": "Canteen", "cost": {"scrap": 40}, "labor": 75, "requires": [], "effect": {"note": "meals feed more per unit"}},
-    {"id": "infirmary1", "building": "infirmary", "tier": 1, "name": "Cots", "cost": {"scrap": 12}, "labor": 15, "requires": [], "effect": {"beds": 2}},
-    {"id": "infirmary2", "building": "infirmary", "tier": 2, "name": "Medicine bench", "cost": {"scrap": 22, "parts": 8}, "labor": 38, "requires": [], "effect": {"note": "meds treat bites"}},
-    {"id": "infirmary3", "building": "infirmary", "tier": 3, "name": "Surgery", "cost": {"parts": 20}, "labor": 75, "requires": [], "effect": {}},
-    {"id": "dormitory1", "building": "dormitory", "tier": 1, "name": "Bunks", "cost": {"scrap": 18, "parts": 5}, "labor": 15, "requires": [], "effect": {"beds": 4}},
-    {"id": "dormitory2", "building": "dormitory", "tier": 2, "name": "Bunk room", "cost": {"scrap": 35, "parts": 10}, "labor": 38, "requires": [], "effect": {"beds": 4}},
-    {"id": "dormitory3", "building": "dormitory", "tier": 3, "name": "Barracks", "cost": {"scrap": 45, "parts": 14}, "labor": 75, "requires": [], "effect": {"beds": 4}},
-    {"id": "power1", "building": "power", "tier": 1, "name": "Generator", "cost": {"parts": 30}, "labor": 38, "requires": [], "effect": {"note": "burns 1 fuel a day"}},
-    {"id": "power2", "building": "power", "tier": 2, "name": "Floodlights", "cost": {"parts": 24}, "labor": 38, "requires": [], "effect": {"hit": 0.12, "note": "guards hit more at night while the generator runs"}},
-    {"id": "fence1", "building": "fence", "tier": 1, "name": "Patch the fence", "cost": {"scrap": 30}, "labor": 15, "requires": [], "effect": {"fence": 1.0, "patch": true}},
-    {"id": "fence2", "building": "fence", "tier": 2, "name": "Reinforced fence", "cost": {"scrap": 70, "parts": 6}, "labor": 38, "requires": [], "effect": {"fence": 1.5}},
-    {"id": "fence3", "building": "fence", "tier": 3, "name": "Double fence", "cost": {"scrap": 100, "parts": 20}, "labor": 75, "requires": [], "effect": {"fence": 2.0}},
-    {"id": "radio1", "building": "radio", "tier": 1, "name": "Radio room", "cost": {"parts": 40}, "labor": 75, "requires": ["power1"], "effect": {"hub": true}},
-    {"id": "convoy1", "building": "convoy", "tier": 1, "name": "Convoy truck", "cost": {"scrap": 30, "parts": 40, "fuel": 10}, "labor": 120, "requires": ["power1"], "effect": {"seats": 8, "note": "the vehicle that joins the Harbor Convoy: 8 seats, needs a mechanic"}}
+    {"id": "water1", "gives": "Fresh water every day (a hauler works the pump). Without water people leave within days.", "building": "water", "tier": 1, "name": "Well pump and rain barrels", "cost": {"scrap": 20}, "labor": 30, "requires": [], "effect": {"note": "water from the well each day, and more while it rains"}},
+    {"id": "garden1", "gives": "Grows the food everyone eats (a gardener tends it). Hunger drags morale down fast.", "building": "garden", "tier": 1, "name": "Garden beds", "cost": {"scrap": 20}, "labor": 30, "requires": [], "effect": {}},
+    {"id": "kitchen1", "gives": "A cook turns food into hot meals: morale up every day, and the larder stops half the spoilage.", "building": "kitchen", "tier": 1, "name": "Kitchen and larder", "cost": {"scrap": 25}, "labor": 30, "requires": [], "effect": {"spoil": 0.5, "cap": {"food": 40}, "note": "meals raise morale"}},
+    {"id": "infirmary1", "gives": "Two more beds, and a medic treats bites and the sick. Needed to keep people alive and calm.", "building": "infirmary", "tier": 1, "name": "Infirmary", "cost": {"scrap": 22, "parts": 4}, "labor": 30, "requires": [], "effect": {"beds": 2, "note": "meds treat bites"}},
+    {"id": "dormitory1", "gives": "Eight more beds. More people than beds costs morale, and people only come from raids.", "building": "dormitory", "tier": 1, "name": "Bunks", "cost": {"scrap": 35, "parts": 8}, "labor": 30, "requires": [], "effect": {"beds": 8}},
+    {"id": "power1", "gives": "Electricity: floodlights help your guards hit at night. Burns 1 fuel a day. The convoy needs it.", "building": "power", "tier": 1, "name": "Generator and floodlights", "cost": {"parts": 36}, "labor": 38, "requires": [], "effect": {"hit": 0.12, "note": "burns 1 fuel a day; guards hit more at night while it runs"}},
+    {"id": "fence1", "gives": "Mends every broken wall of the fence. Cheap, do it before the first nights.", "building": "fence", "tier": 1, "name": "Patch the fence", "cost": {"scrap": 30}, "labor": 15, "requires": [], "effect": {"fence": 1.0, "patch": true}},
+    {"id": "fence2", "gives": "Stronger walls: the dead break through less. The convoy will not load without it.", "building": "fence", "tier": 2, "name": "Reinforced fence", "cost": {"scrap": 70, "parts": 6}, "labor": 38, "requires": [], "effect": {"fence": 1.5}},
+    {"id": "radio1", "gives": "Calls survivors to your gate and lets you hear the convoy. The convoy needs it.", "building": "radio", "tier": 1, "name": "Radio room", "cost": {"parts": 40}, "labor": 75, "requires": ["power1"], "effect": {"hub": true}},
+    {"id": "convoy1", "gives": "Your own truck for the Harbor Convoy on day 30: eight seats out. The convoy needs it.", "building": "convoy", "tier": 1, "name": "Convoy truck", "cost": {"scrap": 30, "parts": 40, "fuel": 10}, "labor": 120, "requires": ["power1"], "effect": {"seats": 8, "note": "the vehicle that joins the Harbor Convoy: 8 seats, needs a mechanic"}}
   ]
 }

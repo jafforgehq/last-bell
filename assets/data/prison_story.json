@@ -21,7 +21,7 @@
   ],
   "requirements": [
     {"id": "fuel", "label": "Fuel for the road", "kind": "stock", "res": "fuel", "need": 32, "must": true, "take": true},
-    {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 35, "must": true, "take": true},
+    {"id": "parts", "label": "Parts for the road", "kind": "stock", "res": "parts", "need": 40, "must": true, "take": true},
     {"id": "truck", "label": "Convoy truck built", "kind": "project", "project": "convoy1", "must": true},
     {"id": "radio", "label": "Radio room (tier 1)", "kind": "tier", "building": "radio", "tier": 1, "must": true},
     {"id": "fence", "label": "Fence tier 2", "kind": "tier", "building": "fence", "tier": 2, "must": true},

@@ -10,6 +10,10 @@ Raid, carry loot home, put it in the stash, spend it on projects at the project 
 
 The base stock dictionary `stores` already holds food, water, ammo, meds and scrap. Add `parts` (electronics, pump and generator pieces) and `fuel`. Items in the backpack map to stock units through the existing item data; add item entries for parts and fuel cans. Storage has a cap per resource that rises with projects (larder, water tower). Food over the cap spoils, water over the cap is lost.
 
+## Projects, cut down (2026-10-15, playtest-2 feedback: "base management is hard to understand")
+
+The 21 projects of three tiers were cut to ten: water1 (well pump and rain barrels), garden1, kitchen1 (kitchen and larder), infirmary1, dormitory1 (8 beds), power1 (generator and floodlights, merged), fence1 and fence2, radio1, convoy1. The convoy list is unchanged except parts 40 (the story text already said 40); the parts for it are now the generator 36, the radio 40, the reinforced fence 6, the truck 40 and 40 in stock. Arc lab, average bot, seeds 1 to 8: 5 of 8 evacuate before and after (seeds 1, 3, 5, 7 full, 6 good). The save version is 2: a version 1 save is refused with a message telling the player to start a new game. The Base screen (key B, button "Base (B)") has a line under the title for each tab, a legend line of keys, a "gives" line and a status line on every project, and the first managed day shows a five-step checklist (`--checklist` shows it in scripted runs). The text below describes the original three-tier design and is kept for history.
+
 ## Projects (data, `assets/data/prison_projects.json`)
 
 Each building has up to three tiers. A project has: id, building, tier, cost (resource amounts), labor (crew-seconds of work at the site), required role, requires (other project tiers, power), and an effect. Cost numbers below are starting values for the tuning pass.

@@ -442,7 +442,7 @@ func _jump(n: int) -> void:
 ## --arcready (a check): the convoy's list is met, so the day-30 card can be tried.
 func _make_ready() -> void:
 	var econ = game.econ
-	for id in ["power1", "radio1", "fence2", "convoy1", "dormitory2", "water2", "garden2", "kitchen1", "infirmary1"]:
+	for id in ["power1", "radio1", "fence2", "convoy1", "dormitory1", "water1", "garden1", "kitchen1", "infirmary1"]:
 		econ.debug_build(id)
 	game.stores["fuel"] = maxf(float(game.stores.get("fuel", 0.0)), 45.0)
 	game.stores["parts"] = maxf(float(game.stores.get("parts", 0.0)), 30.0)

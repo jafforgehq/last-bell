@@ -15,12 +15,12 @@ const REACH := 2.8
 const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio", "convoy"]
 const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
 const BLURB := {
-	"water": "Everyone drinks 1 water a day. A better well and pump gives more, and a bigger tank keeps it. Worked by a hauler.",
+	"water": "Everyone drinks 1 water a day. The pump and barrels give more. Worked by a hauler.",
 	"garden": "Grows the food: everyone eats 1 a day and part of the stock spoils. Worked by a gardener.",
 	"kitchen": "Cooks the meals. A cook alive in a kitchen lifts morale every day; the larder keeps food from spoiling. Worked by a cook.",
 	"infirmary": "Cots and medicine. A medic alive in the infirmary lifts morale and treats bites. Worked by a medic.",
 	"dormitory": "Beds. More people than beds costs morale every day. Worked by a hauler.",
-	"power": "The generator runs the electric pump and the floodlights. It burns 1 fuel a day. Worked by a mechanic.",
+	"power": "The generator runs the floodlights and the radio room. It burns 1 fuel a day. Worked by a mechanic.",
 	"fence": "Raises the hit points of every fence wall against the nightly attacks. Worked by a mechanic.",
 	"radio": "Calls survivors to the prison: the last step of the Hub stage. Needs power. Worked by a mechanic.",
 	"convoy": "The truck that joins the Harbor Convoy on day 30: 8 seats. Needs the generator and a mechanic. The convoy also wants fuel, parts, a radio room and a fence at tier 2 (the Story tab).",
@@ -28,6 +28,21 @@ const BLURB := {
 const ROLES := ["gardener", "cook", "medic", "mechanic", "guard", "cleaner", "hauler"]
 const RES_NAME := {"food": "Food", "water": "Water", "fuel": "Fuel", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts"}
 const DIM := Color("#8d927f")
+const TAB_HINT := {
+	"projects": "PROJECTS: what to build. Pick a building on the left, then press Start on a project: it spends the scrap and parts now, and the crew does the work.",
+	"needs": "NEEDS: what the base is short of, what the day costs, and which kind of place to raid for it.",
+	"roster": "ROSTER: who does which job. A building makes nothing until somebody holds its role. Change a role with the drop-down.",
+	"defence": "DEFENCE: put a person on a post of the wall and set barricades. Do it before 21:00, when the dead attack.",
+	"story": "STORY: the 30-day plan, the radio messages, and the list the convoy wants on day 30.",
+}
+const LEGEND := "B or Esc close     L the story     F1 F2 F3 game speed     E at the workbench or the gate board     Tab backpack     H help"
+const STEPS := [
+	["open", "Press B to open the Base screen"],
+	["water", "Start the Water project (Projects tab)"],
+	["role", "Give somebody a job (Roster tab)"],
+	["post", "Post a guard on the wall (Defence tab)"],
+	["night", "Wait for the night, or press F3 to speed up"],
+]
 
 var game
 var econ
@@ -48,6 +63,12 @@ var _frames := 0
 var _card_tw: Tween
 var _popup_open := false
 var _bseg := 0    # the Defence tab: the fence segment chosen for a barricade
+var hint: Button    # "Base (B)": always on in the managed base
+var tabhint: Label
+var steps_panel: PanelContainer
+var steps_lab: Label
+var did := {}    # the first-day checklist: step id -> done
+var steps_off := false
 
 
 func _init(g) -> void:
@@ -73,7 +94,7 @@ func _init(g) -> void:
 	title = _lab("PRISON", 24, Hud.ACCENT, true)
 	title.custom_minimum_size.x = 150
 	head.add_child(title)
-	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster (B)"], ["defence", "Defence"], ["story", "Story (L)"]]:
+	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster"], ["defence", "Defence"], ["story", "Story (L)"]]:
 		var b := _btn(String(t[1]))
 		b.toggle_mode = true
 		b.pressed.connect(func(): _show(String(t[0])))
@@ -85,6 +106,9 @@ func _init(g) -> void:
 	var x := _btn("Close (Esc)")
 	x.pressed.connect(close)
 	head.add_child(x)
+	tabhint = _lab("", 14, Hud.INFO)
+	tabhint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(tabhint)
 	var sc := ScrollContainer.new()
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -93,6 +117,27 @@ func _init(g) -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 8)
 	sc.add_child(body)
+	var leg := _lab(LEGEND, 12, DIM)
+	leg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(leg)
+	hint = _btn("Base (B)")
+	hint.visible = false
+	hint.pressed.connect(func(): open("projects"))
+	root.add_child(hint)
+	steps_panel = PanelContainer.new()
+	steps_panel.visible = false
+	steps_panel.add_theme_stylebox_override("panel", _box(Color(0.04, 0.07, 0.06, 0.92), Hud.ACCENT, 10, 8))
+	var sv := VBoxContainer.new()
+	sv.add_theme_constant_override("separation", 3)
+	steps_panel.add_child(sv)
+	sv.add_child(_lab("FIRST DAY: THE BASE IN 5 STEPS", 14, Hud.ACCENT, true))
+	steps_lab = _lab("", 14, Hud.INK)
+	sv.add_child(steps_lab)
+	var hide := _btn("Hide")
+	hide.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	hide.pressed.connect(func(): steps_off = true)
+	sv.add_child(hide)
+	root.add_child(steps_panel)
 	toasts = VBoxContainer.new()
 	toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	toasts.add_theme_constant_override("separation", 6)
@@ -186,6 +231,7 @@ func open(which: String) -> void:
 		return
 	game.pack.close()
 	panel.visible = true
+	did["open"] = true
 	_show(which)
 
 
@@ -214,23 +260,23 @@ func key(ev: InputEvent) -> bool:
 			close()
 			return true
 		if k.keycode == KEY_B:
-			if tab == "roster":
-				close()
-			else:
-				_show("roster")
+			close()
 			return true
 		if k.keycode == KEY_TAB or k.keycode == KEY_I:
 			close()
 		return false
 	if k.keycode == KEY_B and game.phase == "managed" and game.mode == "base" and not game.busy:
-		open("roster")
+		open(tab)
 		return true
 	return false
 
 
 ## The mouse is over the window: the gun must not fire through it.
 func blocks_fire() -> bool:
-	return panel.visible and Rect2(panel.position, panel.size).grow(6.0).has_point(game.get_viewport().get_mouse_position())
+	var m: Vector2 = game.get_viewport().get_mouse_position()
+	if hint.visible and Rect2(hint.position, hint.size).grow(6.0).has_point(m):
+		return true
+	return panel.visible and Rect2(panel.position, panel.size).grow(6.0).has_point(m)
 
 
 # ------------------------------------------------------------------------------------------ frame --
@@ -241,6 +287,10 @@ func frame(_dt: float) -> void:
 	toasts.position = Vector2(v.x - 330.0, game.topbar.toast_y() if game.topbar != null else 14.0)
 	toasts.size.x = 316.0
 	_stage_flags()
+	var base_on: bool = game.phase == "managed" and game.mode == "base" and not game.busy
+	hint.visible = base_on and not panel.visible
+	hint.position = Vector2((v.x - hint.size.x) / 2.0, v.y - 46.0)
+	_checklist(base_on)
 	if not panel.visible:
 		return
 	if game.phase != "managed" or game.mode != "base":
@@ -252,7 +302,9 @@ func frame(_dt: float) -> void:
 	panel.position = ((v - sz) / 2.0).round()
 	for b in tab_btns:
 		tab_btns[b].button_pressed = (b == tab)
-	title.text = {"projects": "PROJECT BOARD", "needs": "NEEDS BOARD", "roster": "ROSTER", "defence": "DEFENCE", "story": "THE STORY"}[tab]
+	title.text = "BASE"
+	tabhint.text = TAB_HINT[tab]
+	tabhint.custom_minimum_size.x = sz.x - 40.0
 	if _popup_open:
 		_popup_open = _any_popup(body)
 	var sig := _signature()
@@ -409,7 +461,10 @@ func _card(p: Dictionary) -> Control:
 	col.add_theme_constant_override("separation", 3)
 	hb.add_child(col)
 	col.add_child(_lab("Tier %d   %s" % [int(p.tier), p.name], 19, Hud.INK, true))
-	col.add_child(_lab(_effect_text(p), 14, Hud.INK2))
+	var gl := _lab(String(p.get("gives", "")), 14, Hud.INK)
+	gl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(gl)
+	col.add_child(_lab(_effect_text(p), 13, DIM))
 	var cost := ""
 	for k in p.cost:
 		var have := int(floor(float(game.stores.get(k, 0.0))))
@@ -419,8 +474,8 @@ func _card(p: Dictionary) -> Control:
 		else:
 			cost += "[color=%s]%d %s (short %d)[/color]    " % [_col(Hud.DANGER_TEXT), need, k, need - have]
 	col.add_child(_rich("Cost: " + cost + "[color=%s]   Labor: %d s by a %s[/color]" % [_col(Hud.INK3), int(p.labor), p.role], 14))
-	if state == "locked" or (state == "available" and not bool(can.ok) and (can.missing as Dictionary).is_empty()):
-		col.add_child(_lab(("Locked: " if state == "locked" else "Cannot start: ") + String(can.why), 14, Hud.DANGER_TEXT if state != "locked" else Hud.WARN))
+	var stt := _status(p, can)
+	col.add_child(_lab(String(stt[0]), 14, stt[1]))
 	var side := VBoxContainer.new()
 	side.custom_minimum_size.x = 140
 	side.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -446,6 +501,25 @@ func _card(p: Dictionary) -> Control:
 			_sig = "")
 		side.add_child(b)
 	return pc
+
+
+## One plain status line for a project: [text, colour].
+func _status(p: Dictionary, can: Dictionary) -> Array:
+	var state := String(p.state)
+	if state == "built":
+		return ["Built.", Hud.OK]
+	if state == "queued" or state == "building":
+		return ["The crew is working on it.", Hud.ACCENT]
+	if state == "locked":
+		return ["Locked: " + String(can.why) + " first.", Hud.WARN]
+	if bool(can.ok):
+		return ["You can afford it. Press Start.", Hud.OK]
+	if not (can.missing as Dictionary).is_empty():
+		var parts: Array = []
+		for k in can.missing:
+			parts.append("%d %s" % [int(can.missing[k]), k])
+		return ["Missing " + ", ".join(parts) + ". Raid for it.", Hud.DANGER_TEXT]
+	return ["Needs a %s: nobody holds that job. Give one in the Roster." % String(p.role), Hud.DANGER_TEXT]
 
 
 # ------------------------------------------------------------------------------------- needs tab --
@@ -627,7 +701,7 @@ func _needs_tab() -> void:
 		body.add_child(_lab(s, 16, Hud.WARN))
 		if String(nd.get("reason", "")) != "":
 			body.add_child(_lab(String(nd.reason), 14, DIM))
-	var rb := _btn("Roster (B)")
+	var rb := _btn("Roster")
 	rb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	rb.pressed.connect(func(): _show("roster"))
 	body.add_child(rb)
@@ -696,6 +770,8 @@ func _roster_tab() -> void:
 					var res: Dictionary = game.crew.set_role(id, ROLES[i], econ, game.siege.attacking)
 					if not bool(res.ok):
 						toast(String(res.why), Hud.WARN)
+					else:
+						did["role"] = true
 				_sig = "")
 			g.add_child(ob)
 		g.add_child(_lab(_job_text(m), 15, Hud.INK2))
@@ -782,6 +858,8 @@ func _defence_tab() -> void:
 				res = game.crew.assign_post(String(people[i - 1].def.id), pid, econ, siege.attacking)
 			if not bool(res.ok):
 				toast(String(res.why), Hud.WARN)
+			elif i > 0:
+				did["post"] = true
 		hb.add_child(_pick(names, cur, on_pick, locked))
 		body.add_child(pc)
 	body.add_child(_lab("Barricades", 22, Hud.INK, true))
@@ -821,6 +899,28 @@ func _defence_tab() -> void:
 		body.add_child(r2)
 	var sm: String = bars.summary()
 	body.add_child(_lab("Standing now: " + (sm if sm != "" else "none"), 14, Hud.INFO))
+
+
+# ------------------------------------------------------------------------------- the first-day list --
+
+## The checklist of the first managed day: under the top bar until every step is done, gone for good with Hide, and gone from day 3. Off in scripted runs like the guide (`--guide` shows it).
+func _checklist(base_on: bool) -> void:
+	var on: bool = base_on and not steps_off and int(econ.day) <= 2 and (game.guide.enabled or game.args.has("checklist"))
+	did["water"] = did.get("water", false) or econ.st.has("water1")
+	did["night"] = did.get("night", false) or game.siege.nights_started >= 1
+	var left := 0
+	var txt := ""
+	for s in STEPS:
+		var ok: bool = did.get(s[0], false)
+		left += 0 if ok else 1
+		txt += "%s  %s\n" % ["[x]" if ok else "[ ]", s[1]]
+	if left == 0:
+		steps_off = true
+	steps_panel.visible = on and not panel.visible and not game.guide.panel.visible
+	steps_lab.text = txt.strip_edges()
+	steps_panel.reset_size()
+	var tb: Control = game.topbar.plate
+	steps_panel.position = Vector2(8.0, tb.position.y + tb.size.y + 10.0)
 
 
 # ----------------------------------------------------------------------------- toasts and the card --

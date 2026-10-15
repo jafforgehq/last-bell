@@ -152,7 +152,8 @@ func _board() -> void:
 func _roster() -> void:
 	await _put(Vector2(g.base.stations.bench1) + Vector2(0.0, 1.2))
 	await _tap(KEY_B)
-	_check(g.board.is_open() and g.board.tab == "roster", "B opens the roster")
+	_check(g.board.is_open(), "B opens the Base screen")
+	g.board._show("roster")
 	await _wait(8)
 	var obs := _find(g.board.panel, func(n): return n is OptionButton and not (n as OptionButton).disabled)
 	_check(not obs.is_empty(), "role drop-downs on the roster (%d)" % obs.size())
@@ -202,7 +203,7 @@ func _keys() -> void:
 	await _tap(KEY_I)
 	_check(g.pack.ui.is_open(), "I opens the backpack")
 	await _tap(KEY_B)
-	_check(g.board.is_open() and not g.pack.ui.is_open(), "B opens the roster and closes the backpack (%s, pack open %s)" % [g.board.is_open(), g.pack.ui.is_open()])
+	_check(g.board.is_open() and not g.pack.ui.is_open(), "B opens the Base screen and closes the backpack (%s, pack open %s)" % [g.board.is_open(), g.pack.ui.is_open()])
 	await _tap(KEY_I)
 	_check(not g.board.is_open() and g.pack.ui.is_open(), "I closes the board and opens the backpack")
 	await _tap(KEY_ESCAPE)
