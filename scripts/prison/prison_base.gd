@@ -57,6 +57,16 @@ const ZONES := [
 	{"id": "yard", "name": "Yard", "rect": Rect2i(8, 42, 30, 13), "dead": 10, "loot": 3, "crew": ["kit", "pip"], "rel": Vector2(30.0, 48.0), "keys": ["water", "scrap", "ammo"]},
 	{"id": "gate", "name": "Gate area", "rect": Rect2i(38, 42, 25, 13), "dead": 10, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(48.0, 47.0), "keys": ["ammo", "meds", "water"]},
 ]
+## The doors: one in every doorway of a building (name = the building it shuts). The clear phase starts them all shut (prison_doors.gd); the managed base has them open.
+const DOORS := [
+	{"name": "Infirmary", "rect": Rect2i(10, 33, 1, 3)}, {"name": "Infirmary", "rect": Rect2i(16, 29, 3, 1)},
+	{"name": "Cell block A", "rect": Rect2i(10, 14, 1, 3)}, {"name": "Cell block A", "rect": Rect2i(33, 14, 1, 3)},
+	{"name": "Cell block B", "rect": Rect2i(38, 14, 1, 3)}, {"name": "Cell block B", "rect": Rect2i(61, 14, 1, 3)},
+	{"name": "Canteen", "rect": Rect2i(66, 16, 1, 3)}, {"name": "Canteen", "rect": Rect2i(74, 22, 4, 1)},
+	{"name": "Workshop", "rect": Rect2i(34, 29, 5, 1)},
+	{"name": "Stores", "rect": Rect2i(54, 29, 3, 1)}, {"name": "Stores", "rect": Rect2i(54, 39, 3, 1)},
+	{"name": "Garden", "rect": Rect2i(74, 28, 2, 1)}, {"name": "Garden", "rect": Rect2i(74, 49, 2, 1)},
+]
 const LOOT_N := {"food": [3, 6], "water": [3, 6], "ammo": [6, 12], "meds": [1, 2], "scrap": [3, 6]}
 const SEARCHABLE := {"nightstand": "nightstand", "medicine_cabinet": "cabinet", "shelf_tins": "shelf", "desk": "desk", "bed_single": "bunk", "fridge": "fridge", "kitchen_counter": "cupboard",
 	"workbench": "bench", "toolbox": "toolbox", "tool_chest": "tool chest", "crate": "crate", "woodpile": "woodpile", "shop_shelf": "shelf", "cooler": "cooler", "veg_patch": "garden patch", "bin": "bin"}
