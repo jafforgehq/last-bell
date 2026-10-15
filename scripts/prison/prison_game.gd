@@ -54,6 +54,7 @@ const Squad := preload("res://scripts/prison/prison_squad.gd")    # SQUAD hook: 
 const NoiseMod := preload("res://scripts/prison/prison_noise.gd")    # NOISE hook: Noise.emit, hordes, thrown distractions, car alarms
 const SpecialMod := preload("res://scripts/prison/prison_special.gd")    # SPECIAL hook: screamer, bloater, hunter, breacher
 const SearchRules := preload("res://scripts/town/search.gd")
+const Doors := preload("res://scripts/prison/prison_doors.gd")    # DOORS: the doors of the clear phase
 const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: the one save slot (prison_save.gd)
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
@@ -158,6 +159,7 @@ var _hurt_t := 0.0
 var _auto_i := 0
 var _deadchecked := false
 var pack: Pack    # the backpack (prison_pack.gd)
+var doors    # DOORS: prison_doors.gd
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var topbar    # UI round 2: prison_topbar.gd
 var tags    # UI round 2: prison_tags.gd
@@ -617,6 +619,8 @@ func _enter_base() -> void:
 	var clear := phase == "clear"
 	var t: Dictionary = base.build(1, clear)
 	_make_stage(t, false)
+	doors = Doors.new()
+	doors.setup(self, clear and not args.has("nodoors"))    # DOORS: shut in the clear phase, open (drawn only) after
 	if clear:
 		run.invulnerable = false
 		run.sim.quiet = false
@@ -1429,6 +1433,9 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "leave":    # SQUAD hook: E in the pickup ring: leave the ones that are not here
 		squad.abandon()
 		return
+	if String(_prompt.get("kind", "")) == "door":
+		_say(doors.toggle(int(_prompt.i)), 1.5)
+		return
 	if String(_prompt.get("kind", "")) == "locked":
 		_say("The gate is chained shut and the pen behind it is full. Clear the prison first.", 3.0)
 		return
@@ -1688,6 +1695,8 @@ func _sync_views() -> void:
 
 func _paint_decks(c: CanvasItem) -> void:
 	if mode == "base" and base != null:
+		if doors != null:
+			doors.paint(c)
 		for t in base.towers:
 			Tower.draw_deck(c, t)
 
@@ -1882,6 +1891,8 @@ func _auto_clear() -> void:
 
 ## --auto=play (clear phase): a player-like bot. Shoots the nearest awake dead in sight, reloads, revives a downed ally, searches containers within 12 tiles, else walks to the nearest remaining dead
 ## of an uncleared zone with the path finder. Prints STUCK when it has not moved for 6 s.
+var _bot_goal := Vector2.ZERO
+var _bot_goal_until := 0.0
 var _bot_hold_e := false
 var _bot_last := Vector2.ZERO
 var _bot_still := 0.0
@@ -1959,9 +1970,15 @@ func _bot_clear() -> Dictionary:
 			if d4 < nb and Base.zone_at(z.x, z.y) >= 0:
 				nb = d4
 				goal = Vector2(z.x, z.y)
+		if clock < _bot_goal_until and goal.x >= 0.0:
+			goal = _bot_goal    # (it keeps a goal for 3 s: two dead as far away as each other made it turn on the spot)
+		else:
+			_bot_goal = goal
+			_bot_goal_until = clock + 3.0
 	if goal.x < 0.0:
 		return out
-	var path: Array = run.sim.path_p.find(world.solid_p, me.x, me.y, goal.x, goal.y)
+	doors.bot_open(me)
+	var path: Array = doors.path(me, goal)    # (as if every door were open; the bot opens the ones it meets)
 	if path.is_empty():
 		print("BOT nopath from ", me, " to ", goal)
 	else:
@@ -2028,14 +2045,14 @@ func _auto_reach() -> void:
 	var from := Base.START
 	var bad := 0
 	for ct in town.containers:
-		var pth: Array = run.sim.path_p.find(world.solid_p, from.x, from.y, ct.pos.x, ct.pos.y)
+		var pth: Array = doors.path(from, Vector2(ct.pos))
 		var sp: int = world.solid_p[int(ct.pos.y) * world.W + int(ct.pos.x)]
 		if pth.is_empty() or sp != 0:
 			bad += 1
 			print("REACH container ", ct.id, " ", ct.kind, " pos ", ct.pos, " solid ", sp, " path ", pth.size())
 	for i in run.field.n:
 		var pl: Vector2 = run.field._place_of(i)
-		var pth2: Array = run.sim.path_p.find(world.solid_p, from.x, from.y, pl.x, pl.y)
+		var pth2: Array = doors.path(from, pl)
 		if pth2.is_empty():
 			bad += 1
 			print("REACH dead ", i, " zone ", Base.zone_at(pl.x, pl.y), " at ", pl, " solid ", world.solid_p[int(pl.y) * world.W + int(pl.x)])
@@ -2370,6 +2387,8 @@ func _clear_logic(dt: float) -> void:
 			if bool(c.get("ok", true)):
 				_prompt = {"kind": "use", "c": c, "label": _use_label(c)}
 				break
+	if _prompt.is_empty():
+		_prompt = doors.prompt(me)    # DOORS
 	if _prompt.is_empty() and me.distance_to(Base.GATE_POS) < 7.0:
 		_prompt = {"kind": "locked", "label": "The gate is chained shut. Clear the prison first."}
 	_zone_t -= dt
