@@ -32,6 +32,7 @@ var _last_tod := -1.0
 var rounds := 0
 var _stage_t := 0.0
 var _staged := false
+var _logged := -1
 
 
 func _init(g) -> void:
@@ -85,6 +86,9 @@ func update(dt: float) -> void:
 		_last_tod = game.tod
 		return
 	_dispatch(dt)
+	if game.args.has("log") and int(game.clock) % 10 == 0 and int(game.clock) != _logged:    # --log: the trash count every ten game seconds
+		_logged = int(game.clock)
+		print("TRASH t=", _logged, " tod=", snappedf(game.tod, 0.1), " piles=", piles(), " dirt=", snappedf(spots.reduce(func(a, s): return a + float(s.dirt), 0.0), 0.01), " spots=", spots.size(), " ", game.crew.members.filter(func(m): return _is_cleaner(m)).map(func(m): return "%s %s %s q%d at %s,%s" % [m.def.id, m.state, String(m.eat.say) if m.has("eat") else "-", (m.get("clean_q", []) as Array).size(), snappedf(m.p.x, 0.1), snappedf(m.p.y, 0.1)]))
 	if _last_tod == -2.0:    # (--cleannow, a check: two of the dead are brought into the yard and shot, then the round starts)
 		_stage_t += dt
 		if _stage_t >= 1.0 and not _staged:
@@ -106,6 +110,10 @@ func update(dt: float) -> void:
 	if _last_tod != -2.0 or rounds > 0:
 		_last_tod = game.tod
 	for m in crew.members:
+		if _is_cleaner(m) and m.state == "walk":    # a cleaner who walks past a pile picks it up on the way (the base is big, most of his day is walking)
+			for s in spots:
+				if (s.at as Vector2).distance_to(Vector2(m.p.x, m.p.y)) < 1.3:
+					s.dirt = maxf(0.0, float(s.dirt) - dt / 3.0)
 		if m.state == "work" and m.has("eat") and bool(m.eat.get("clean", false)):
 			_work_at(m, dt)
 			if game.args.has("log") and String(m.get("clean_seen", "")) != String(m.eat.say):
@@ -124,7 +132,7 @@ func _start_round() -> void:
 	}
 	for m in game.crew.members:
 		var id := String(m.def.id)
-		if not plans.has(id) or m.has("down"):
+		if not plans.has(id) or m.has("down") or _is_cleaner(m):    # (the cleaner has his own queue of piles from `_dispatch`; a round must not overwrite it)
 			continue
 		var q: Array = []
 		for st in plans[id]:
@@ -193,7 +201,7 @@ func _work_at(m: Dictionary, dt: float) -> void:
 	if _is_cleaner(m):    # (only the cleaner takes the rubbish away; the others' stops tidy the stains)
 		for s in spots:
 			if (s.at as Vector2).distance_to(c) < REACH:
-				s.dirt = maxf(0.0, float(s.dirt) - dt / 7.0)
+				s.dirt = maxf(0.0, float(s.dirt) - dt / 5.0)
 
 
 ## Drawn in the world overlay: the rubbish piles and a bucket by anyone with a broom or a mop in hand.
@@ -273,7 +281,7 @@ func piles(area := "") -> int:
 	return n
 
 
-## A free cleaner takes the two nearest piles nobody else is going to (a short stop at each, the "clean" work pose).
+## A free cleaner takes the three nearest piles nobody else is going to (a short stop at each, the "clean" work pose).
 func _dispatch(dt: float) -> void:
 	_qt += dt
 	if _qt < 2.0:
@@ -286,9 +294,9 @@ func _dispatch(dt: float) -> void:
 		var free: Array = spots.filter(func(s): return float(s.dirt) > PILE and game.clock - float(s.by_t) > 25.0)
 		free.sort_custom(func(a, b): return (a.at as Vector2).distance_to(from) < (b.at as Vector2).distance_to(from))
 		var q: Array = []
-		for s in free.slice(0, 2):
+		for s in free.slice(0, 3):
 			s.by_t = game.clock
-			q.append({"at": s.at, "secs": 8.0, "work": "clean", "face": "S", "say": "clearing the %s" % ("rubbish" if s.area == "yard" else "%s rubbish" % s.area), "clean": true})
+			q.append({"at": s.at, "secs": 6.0, "work": "clean", "face": "S", "say": "clearing the %s" % ("rubbish" if s.area == "yard" else "%s rubbish" % s.area), "clean": true})
 		if not q.is_empty():
 			m["clean_q"] = q
 
