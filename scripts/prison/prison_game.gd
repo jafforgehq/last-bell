@@ -819,9 +819,17 @@ func _process(delta: float) -> void:
 		return
 	if args.has("speed") and frames >= 5 and frames < 8 and _speed_ok():    # staging: --speed=2 starts at 2x; the TIME line is printed at frame 300
 		speed = clampi(int(args.speed), 1, 3)
+	if args.has("waitdusk") and frames == 20 and _speed_ok():    # staging: --waitdusk starts the wait for dusk at frame 20
+		_toggle_wait_dusk()
 	if args.has("speed") and frames >= 300 and not _time_logged:
 		_time_logged = true
 		print("TIME speed ", speed, " tod ", snappedf(tod, 0.01), " sim hour ", snappedf(run.sim.minutes / 60.0, 0.01), " mode ", mode, " clock ", snappedf(clock, 0.1))
+	if wait_dusk:
+		if not _speed_ok() or _dusk_reached():    # a card, a board, an attack or the dusk itself ends the wait
+			wait_dusk = false
+			speed = 1
+		else:
+			speed = 3
 	if speed > 1 and not _speed_ok():
 		speed = 1
 	if speed == 1:
@@ -837,6 +845,31 @@ func _process(delta: float) -> void:
 var speed := 1
 var _dusk_chimed := false
 var _time_logged := false
+## WAIT hook (the key `.`): the base runs at 3x until dusk, then drops to 1x; any card, board or night attack stops it at once.
+var wait_dusk := false
+
+
+## The hour the wait ends at: the sim's dusk, never later than the half hour before the first attack.
+func _dusk_hour() -> float:
+	return minf(float(run.sim.seasons.dusk_hour()), Siege.NIGHT_H - 0.5)
+
+
+func _dusk_reached() -> bool:
+	var h := fposmod(tod, 24.0)
+	return h >= _dusk_hour() or h < 5.5
+
+
+func _toggle_wait_dusk() -> void:
+	if wait_dusk:
+		wait_dusk = false
+		speed = 1
+		_say("Stopped waiting.", 2.0)
+	elif not _speed_ok():
+		_say("Not now: close the card or the board first, and not during an attack.", 2.5)
+	elif _dusk_reached():
+		_say("It is already dusk.", 2.0)
+	else:
+		wait_dusk = true
 
 
 func _speed_ok() -> bool:
@@ -846,6 +879,7 @@ func _speed_ok() -> bool:
 func _set_speed(n: int) -> void:
 	if not _speed_ok():
 		return
+	wait_dusk = false    # (a speed key takes the wheel back from the wait)
 	speed = clampi(n, 1, 3)
 
 
@@ -1403,6 +1437,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 					pass
 				elif (mode == "raid" or phase == "clear" or siege.can_fire()) and not busy:
 					run.sim.avatar.melee()
+			KEY_PERIOD:    # WAIT hook
+				if phase == "managed" and mode == "base" and not busy:
+					_toggle_wait_dusk()
 			KEY_F1, KEY_F2, KEY_F3:    # TIME hook
 				_set_speed(int(ev.keycode - KEY_F1) + 1)
 			KEY_EQUAL:

@@ -315,6 +315,22 @@ func test_new_game_remembers_the_difficulty_last_chosen() -> void:
 	_done(ctx)
 
 
+func test_new_game_remembers_the_aim_mode_of_the_town_run() -> void:
+	var ctx := Fakes.build()
+	var AimModeScript := preload("res://scripts/aim_mode.gd")
+	Prefs.set_value("ui", "prison_aim_mode", "right")
+	var screen = ctx.shell.open_new_game()
+	await HudKit.settle()
+	if screen.town_mode:    # (the aim cards exist only in the town run's New game)
+		eq(screen.aim, "right", "the last aim mode is preselected")
+		screen.aim_cards[1].pressed.emit()
+		screen.start_button.pressed.emit()
+		eq(AimModeScript.prison_mode(), "always", "and the one chosen is kept")
+	else:
+		check(screen.aim_cards.is_empty(), "no aim cards in the school's New game")
+	_done(ctx)
+
+
 func test_the_difficulty_words_are_true_to_the_rules() -> void:
 	# the one-liners promise fewer of the dead and kinder wounds for Story, more for Brutal: the numbers agree
 	check(Waves.DIFFICULTY[0] < Waves.DIFFICULTY[1] and Waves.DIFFICULTY[1] < Waves.DIFFICULTY[2], "more of the dead as it gets harder")

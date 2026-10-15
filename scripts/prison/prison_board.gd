@@ -35,13 +35,13 @@ const TAB_HINT := {
 	"defence": "DEFENCE: put a person on a post of the wall and set barricades. Do it before 21:00, when the dead attack.",
 	"story": "STORY: the 30-day plan, the radio messages, and the list the convoy wants on day 30.",
 }
-const LEGEND := "B or Esc close     L the story     F1 F2 F3 game speed     E at the workbench or the gate board     Tab backpack     H help"
+const LEGEND := "B or Esc close     L the story     F1 F2 F3 game speed     . wait for dusk     U undo the last order     E at the workbench or the gate board     Tab backpack     H help"
 const STEPS := [
 	["open", "Press B to open the Base screen"],
 	["water", "Start the Water project (Projects tab)"],
 	["role", "Give somebody a job (Roster tab)"],
 	["post", "Post a guard on the wall (Defence tab)"],
-	["night", "Wait for the night, or press F3 to speed up"],
+	["night", "Wait for the night: F3 speeds up, the period key waits for dusk"],
 ]
 
 var game
@@ -69,6 +69,12 @@ var steps_panel: PanelContainer
 var steps_lab: Label
 var did := {}    # the first-day checklist: step id -> done
 var steps_off := false
+var undo_btn: Button    # UNDO: the last order, for 30 game seconds
+var wait_lab: Label    # WAIT: shown while the base fast-forwards to dusk
+var morning: Control    # MORNING: the summary card of the dawn (any key closes it)
+var _hl := ""    # WHAT NEXT: the project the button picked (its card is lit)
+var _whynext := ""
+var _clean_rounds := 0    # the cleaner's rounds at the last dawn
 
 
 func _init(g) -> void:
@@ -103,6 +109,10 @@ func _init(g) -> void:
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(sp)
+	undo_btn = _btn("Undo")
+	undo_btn.visible = false
+	undo_btn.pressed.connect(undo)
+	head.add_child(undo_btn)
 	var x := _btn("Close (Esc)")
 	x.pressed.connect(close)
 	head.add_child(x)
@@ -124,6 +134,9 @@ func _init(g) -> void:
 	hint.visible = false
 	hint.pressed.connect(func(): open("projects"))
 	root.add_child(hint)
+	wait_lab = _lab("Waiting for dusk, 3x. Press . to stop.", 18, Hud.ACCENT, true)
+	wait_lab.visible = false
+	root.add_child(wait_lab)
 	steps_panel = PanelContainer.new()
 	steps_panel.visible = false
 	steps_panel.add_theme_stylebox_override("panel", _box(Color(0.04, 0.07, 0.06, 0.92), Hud.ACCENT, 10, 8))
@@ -242,11 +255,85 @@ func close() -> void:
 
 
 func is_open() -> bool:
-	return panel.visible
+	return panel.visible or (morning != null and morning.visible)    # (the morning card is as modal as the window: no speed, no story card over it)
 
 
 func _show(t: String) -> void:
+	if t != tab:
+		_hl = ""
+		_whynext = ""
 	tab = t
+	_sig = ""
+
+
+## UNDO: the last order is taken back with its whole cost, while the 30 game seconds last.
+func undo() -> void:
+	var id: String = econ.undo_id
+	if econ.undo_start():
+		toast("Undone: %s. The cost is back." % _pname(id), Hud.INFO)
+		_sig = ""
+
+
+## WHAT NEXT: the one project to start. Of the ones that can be started (their tiers below are built), an affordable one first, else the one nearest to affordable. A project that is on the way
+## to the next stage, or that makes what the base is shortest of (`econ.needs()`), wins over a cheaper one. Returns {id, why}; selects its building and lights its card.
+func pick_next() -> Dictionary:
+	var nd: Dictionary = econ.needs()
+	var want := String(nd.get("res", ""))
+	var path: Array = econ.goal()
+	var best := ""
+	var best_sc := 1.0e9
+	var best_ok := false
+	for id in econ.order:
+		if econ.state(id) != "available":
+			continue
+		var d: Dictionary = econ.defs[id]
+		var can: Dictionary = econ.can_start(id)
+		var ok := bool(can.ok)
+		var tot := 0.0
+		var miss := 0.0
+		for k in d.cost:
+			tot += float(d.cost[k])
+		for k in can.missing:
+			miss += float(can.missing[k])
+		var sc := tot * 0.001 + (0.0 if ok else 1.0 + miss / maxf(tot, 1.0) + (0.5 if econ.workers(String(d.role)) == 0 else 0.0))
+		if want != "" and String(econ.cfg.production_building.get(want, "")) == String(d.building):
+			sc -= 0.4
+		if path.has(id):
+			sc -= 0.2
+		if best == "" or (ok and not best_ok) or (ok == best_ok and sc < best_sc):
+			best = String(id)
+			best_sc = sc
+			best_ok = ok
+	if best == "":
+		return {"id": "", "why": "Nothing is left to start: the rest is built or waits on a project in the queue."}
+	var d2: Dictionary = econ.defs[best]
+	var why := ""
+	var can2: Dictionary = econ.can_start(best)
+	if best_ok:
+		why = "You can afford %s now" % String(d2.name)
+	elif not (can2.missing as Dictionary).is_empty():
+		var parts: Array = []
+		for k in can2.missing:
+			parts.append("%d %s" % [int(can2.missing[k]), k])
+		why = "%s is the nearest to affordable: you are %s short" % [String(d2.name), " and ".join(parts)]
+	else:
+		why = "%s needs a %s: give somebody that job in the Roster" % [String(d2.name), String(d2.role)]
+	if want != "" and String(econ.cfg.production_building.get(want, "")) == String(d2.building):
+		why += ", and %s is what the base is shortest of." % want
+	elif path.has(best):
+		why += ", and it is on the way to the next stage."
+	else:
+		why += "."
+	return {"id": best, "why": why}
+
+
+func what_next() -> void:
+	var r := pick_next()
+	_hl = String(r.id)
+	_whynext = String(r.why)
+	if _hl != "":
+		sel = String(econ.defs[_hl].building)
+	tab = "projects"
 	_sig = ""
 
 
@@ -255,6 +342,12 @@ func key(ev: InputEvent) -> bool:
 	if not (ev is InputEventKey) or not ev.pressed or ev.echo:
 		return false
 	var k := ev as InputEventKey
+	if morning != null and morning.visible:    # MORNING: any key puts the card away
+		morning.visible = false
+		return true
+	if k.keycode == KEY_U and game.phase == "managed" and game.mode == "base" and not game.busy and econ.can_undo():    # UNDO
+		undo()
+		return true
 	if panel.visible:
 		if k.keycode == KEY_ESCAPE:
 			close()
@@ -291,6 +384,12 @@ func frame(_dt: float) -> void:
 	hint.visible = base_on and not panel.visible
 	hint.position = Vector2((v.x - hint.size.x) / 2.0, v.y - 46.0)
 	_checklist(base_on)
+	wait_lab.visible = game.wait_dusk and base_on
+	wait_lab.position = Vector2((v.x - wait_lab.size.x) / 2.0, 156.0)
+	undo_btn.visible = panel.visible and econ.can_undo()
+	if undo_btn.visible:
+		undo_btn.text = "Undo: %s (%d s)  U" % [_pname(econ.undo_id), ceili(econ.undo_left)]
+	_morning_frame(base_on, v)
 	if not panel.visible:
 		return
 	if game.phase != "managed" or game.mode != "base":
@@ -329,7 +428,7 @@ func _any_popup(n: Node) -> bool:
 
 ## Everything the rows show except the progress bars, as one string.
 func _signature() -> String:
-	var s := "%s|%s|%s|" % [tab, sel, game.siege.attacking]
+	var s := "%s|%s|%s|%s|%s|" % [tab, sel, game.siege.attacking, _hl, _whynext]
 	for k in game.stores:
 		s += "%d," % int(game.stores[k])
 	for id in econ.order:
@@ -430,7 +529,18 @@ func _projects_tab() -> void:
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	right.add_theme_constant_override("separation", 8)
 	hb.add_child(right)
-	right.add_child(_lab(TITLES[sel], 22, Hud.INK, true))
+	var th := HBoxContainer.new()
+	th.add_theme_constant_override("separation", 12)
+	th.add_child(_lab(TITLES[sel], 22, Hud.INK, true))
+	var wn := _btn("What next?")
+	wn.tooltip_text = "Jumps to the one project that helps most right now: one you can afford first, otherwise the nearest to affordable."
+	wn.pressed.connect(what_next)
+	th.add_child(wn)
+	right.add_child(th)
+	if _whynext != "":
+		var wl := _lab(_whynext, 15, Hud.WARN)
+		wl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		right.add_child(wl)
 	var role := String(econ.cfg.building_role[sel])
 	var bl := _rich("%s\n[color=%s]Worker: %s, alive now: %d[/color]" % [BLURB[sel], _col(Hud.INFO), role, econ.workers(role)], 15)
 	right.add_child(bl)
@@ -448,7 +558,11 @@ func _card(p: Dictionary) -> Control:
 	elif state == "queued" or state == "building":
 		line = Hud.ACCENT
 	var pc := PanelContainer.new()
-	pc.add_theme_stylebox_override("panel", _box(Hud.PANEL_HI, line, 10))
+	var sb := _box(Hud.PANEL_HI, line, 10)
+	if id == _hl:    # WHAT NEXT: the picked project has a thick warm border
+		sb.border_color = Hud.WARN
+		sb.set_border_width_all(4)
+	pc.add_theme_stylebox_override("panel", sb)
 	pc.mouse_filter = Control.MOUSE_FILTER_PASS
 	pc.tooltip_text = "%s\n%s" % [_pname(id), _effect_text(p)]
 	if state == "locked":
@@ -986,6 +1100,82 @@ func _stage_card(stage: String) -> void:
 	_card_tw.tween_callback(card.queue_free)
 
 
+# ------------------------------------------------------------------------------- the morning card --
+
+## MORNING: after the economy's day change (6:00) the card waits for the night report (6:30), the story's cards and the morning event, then shows once. Not in scripted runs (`--board=morning` shows it).
+func _morning_frame(base_on: bool, v: Vector2) -> void:
+	if morning != null and morning.visible:
+		morning.position = ((v - morning.size) / 2.0).round()
+		if not base_on:
+			morning.visible = false
+		return
+	if not econ.morning_new:
+		return
+	var h: float = fposmod(float(game.tod), 24.0)
+	if h > 14.0 or game.arc.scripted or game.phase != "managed":    # (a stale one, or a run with no hands)
+		econ.morning_new = false
+		return
+	var quiet: bool = base_on and h >= 6.6 and not panel.visible and not game.arc.story.card_open() and game.arc.event_pending.is_empty() and game.arc._queue.is_empty() and not game.siege.attacking and not game.siege._card.visible and not game.loadout.is_open
+	if quiet:
+		econ.morning_new = false
+		_morning_show()
+
+
+func _morning_show() -> void:
+	if morning != null:
+		morning.queue_free()
+	var lg: Dictionary = econ.dawn_log
+	var pc := PanelContainer.new()
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_theme_stylebox_override("panel", _box(Color(0.05, 0.075, 0.065, 0.985), Hud.ACCENT, 24, 8))
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 8)
+	pc.add_child(vb)
+	vb.add_child(_lab("MORNING  -  DAY %d" % int(game.arc.day), 38, Hud.ACCENT, true))
+	var rule := ColorRect.new()
+	rule.color = Hud.LINE2
+	rule.custom_minimum_size = Vector2(0, 1)
+	vb.add_child(rule)
+	var rows: Array = []
+	var n: int = game.cleaner.rounds - _clean_rounds if game.cleaner != null else 0
+	if game.cleaner != null:
+		_clean_rounds = game.cleaner.rounds
+		var left: int = game.cleaner.piles()
+		rows.append(["Cleaned", ("%d rounds of cleaning" % n if n > 0 else "no cleaning") + ("; %d piles of trash left" % left if left > 0 else "; the base is tidy"), Hud.OK if left == 0 else Hud.WARN])
+	var ate: Dictionary = lg.get("ate", {})
+	var made: Dictionary = lg.get("made", {})
+	rows.append(["Eaten", "%d food, %d water" % [roundi(float(ate.get("food", 0.0))), roundi(float(ate.get("water", 0.0)))], Hud.INK])
+	rows.append(["Produced", "%d food, %d water" % [roundi(float(made.get("food", 0.0))), roundi(float(made.get("water", 0.0)))], Hud.INK])
+	var bl: Array = lg.get("built", [])
+	rows.append(["Built", ", ".join(bl) if not bl.is_empty() else "nothing finished", Hud.INK if not bl.is_empty() else DIM])
+	var hurt: Array = []
+	for m in game.crew.members:
+		if not m.def.has("ally") and game.arc.hurt_now(String(m.def.name)):
+			hurt.append(String(m.def.name))
+	var mo := float(econ.morale)
+	var mood := "morale %d of 100%s" % [int(mo), " (low: people are unhappy)" if mo < 40.0 else ""]
+	if String(econ.last.get("left", "")) != "":
+		mood += "; %s left in the night" % String(econ.last.left)
+	rows.append(["People", mood + ("; hurt: " + ", ".join(hurt) if not hurt.is_empty() else "; nobody hurt"), Hud.WARN if mo < 40.0 or not hurt.is_empty() else Hud.INK])
+	var horde: bool = game.arc.is_horde_night(int(game.arc.day))
+	rows.append(["Tonight", "A HORDE NIGHT: the dead come in numbers, mend the walls and stock ammo." if horde else "A quiet night is expected.", Hud.DANGER_TEXT if horde else Hud.OK])
+	var g := GridContainer.new()
+	g.columns = 2
+	g.add_theme_constant_override("h_separation", 20)
+	g.add_theme_constant_override("v_separation", 8)
+	for r in rows:
+		g.add_child(_lab(String(r[0]), 17, DIM, true))
+		var l := _lab(String(r[1]), 18, r[2])
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size.x = 520
+		g.add_child(l)
+	vb.add_child(g)
+	vb.add_child(_lab("Press any key", 14, Hud.INK3))
+	root.add_child(pc)
+	morning = pc
+	pc.reset_size()
+
+
 # --------------------------------------------------------------------------------------- the sign --
 
 ## The needs sign by the gate, drawn into the game's overlay (world pixels).
@@ -1019,6 +1209,12 @@ func _stage_flags() -> void:
 		match bp[0]:
 			"card":
 				_stage_card("Shelter")
+			"next":
+				open("projects")
+				what_next()
+			"morning":
+				econ.dawn_log = {"day": econ.day, "ate": {"food": 12.0, "water": 12.0}, "made": {"food": 8.0, "water": 14.0}, "built": ["Rain barrels"], "spoiled": 1.0}
+				_morning_show()
 			"toast":
 				toast("Built: Rain barrels", Hud.OK)
 				toast("Shortage: the base ran out of food.", Hud.WARN)
