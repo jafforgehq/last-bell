@@ -11,7 +11,7 @@ const LEAF := 7.0    # px thickness of a leaf
 const STAGGER := 0.06    # seconds between the doors of the all-open event
 
 var game
-var open: Array = []    # bool per Base.DOORS (the real state: the tiles are shut or not)
+var open: Array = []    # bool per Base.doors() (the real state: the tiles are shut or not)
 var shown: Array = []    # bool per door: which way the drawn leaves are heading (same as `open`, but in the managed base they follow whoever walks by)
 var clear := true
 var node: CanvasItem    # the node that draws the leaves (redrawn every frame: a CanvasItem only repaints when asked)
@@ -23,7 +23,7 @@ var _now := 0.0    # seconds of door time, advanced by tick (so a paused or slow
 func setup(g, clear_phase: bool) -> void:
 	game = g
 	clear = clear_phase
-	open.resize(Base.DOORS.size())
+	open.resize(Base.doors().size())
 	open.fill(not clear_phase)
 	shown = open.duplicate()
 	_from.resize(open.size())
@@ -39,7 +39,7 @@ func _apply(i: int) -> void:
 	var w = game.world
 	var sim = game.run.sim
 	var shut := 0 if bool(open[i]) else 1
-	var r: Rect2i = Base.DOORS[i].rect
+	var r: Rect2i = Base.doors()[i].rect
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
 			var k: int = y * w.W + x
@@ -51,7 +51,7 @@ func _apply(i: int) -> void:
 
 
 func _dist(i: int, p: Vector2) -> float:
-	var r := Rect2(Base.DOORS[i].rect)
+	var r := Rect2(Base.doors()[i].rect)
 	return Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y)).distance_to(p)
 
 
@@ -66,12 +66,12 @@ func prompt(me: Vector2) -> Dictionary:
 			best = i
 	if best < 0:
 		return {}
-	return {"kind": "door", "i": best, "label": "E: %s door (%s)" % ["close" if bool(open[best]) else "open", String(Base.DOORS[best].name)]}
+	return {"kind": "door", "i": best, "label": "E: %s door (%s)" % ["close" if bool(open[best]) else "open", String(Base.doors()[best].name)]}
 
 
 ## Whoever stands in the doorway (Ruth, the crew, a dead one) keeps it from shutting.
 func _blocked(i: int) -> bool:
-	var r := Rect2(Base.DOORS[i].rect).grow(0.4)
+	var r := Rect2(Base.doors()[i].rect).grow(0.4)
 	if r.has_point(Vector2(game.run.avatar_p.x, game.run.avatar_p.y)):
 		return true
 	for m in game.crew.members:
@@ -116,7 +116,7 @@ func path(from: Vector2, to: Vector2) -> Array:
 
 
 func _grid(i: int, solid: bool) -> void:
-	var r: Rect2i = Base.DOORS[i].rect
+	var r: Rect2i = Base.doors()[i].rect
 	for y in range(r.position.y, r.end.y):
 		for x in range(r.position.x, r.end.x):
 			game.run.sim.path_p.grid.set_point_solid(Vector2i(x, y), solid)
@@ -180,9 +180,9 @@ func tick(dt: float) -> void:
 func _sound(i: int) -> void:
 	if not is_instance_valid(game) or game.audio == null:
 		return
-	var at := Rect2(Base.DOORS[i].rect).get_center()
+	var at := Rect2(Base.doors()[i].rect).get_center()
 	var o := bool(shown[i])
-	var cell := String(Base.DOORS[i].name) == "Cell block"
+	var cell := String(Base.doors()[i].name) == "Cell block"
 	var rng := randf_range(0.95, 1.05)
 	if cell:
 		game.audio.sfx("pd_cell_open_0" if o else "pd_steel_clang_0", -5.0, rng, "SFX", 0.05, at, 26.0)
@@ -210,7 +210,7 @@ func paint(c: CanvasItem) -> void:
 
 ## Which way door i swings: to the side of the doorway that lies inside a zone (the room), else the north or west side. Returns the unit normal.
 func _side(i: int) -> Vector2:
-	var r := Rect2(Base.DOORS[i].rect)
+	var r := Rect2(Base.doors()[i].rect)
 	var horiz := r.size.x >= r.size.y
 	var n := Vector2(0, -1) if horiz else Vector2(-1, 0)
 	var mid := r.get_center()
@@ -226,9 +226,9 @@ func _paint_door(c: CanvasItem, i: int, k: float) -> void:
 	var t: float = game.TILE
 	var edge := Color(0.07, 0.06, 0.05)
 	var e := k * k * (3.0 - 2.0 * k)
-	var r := Rect2(Base.DOORS[i].rect)
+	var r := Rect2(Base.doors()[i].rect)
 	var horiz := r.size.x >= r.size.y
-	var steel := String(Base.DOORS[i].name) == "Cell block"
+	var steel := String(Base.doors()[i].name) == "Cell block"
 	var px := Rect2(r.position * t, r.size * t)
 	var along := Vector2(1, 0) if horiz else Vector2(0, 1)
 	var norm := _side(i)

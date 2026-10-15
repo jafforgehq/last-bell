@@ -6,6 +6,8 @@
 ## person who is not a crew member. Owned by prison_game.gd (`people`, `# RAIDS hook`). Data: assets/data/prison_raids.json (`survivor`, `people`, `roles`).
 extends RefCounted
 
+const Access := preload("res://scripts/access.gd")
+const Icons := preload("res://scripts/prison/prison_icons.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const Crew := preload("res://scripts/prison/prison_crew.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
@@ -385,7 +387,10 @@ func _mini1(bars: Control, o: Vector2, sc: float) -> void:
 	if s.is_empty() or String(s.state) == "lost" or (String(s.state) != "wait" and game.squad.drives(s)):
 		return
 	if String(s.state) == "follow" or String(s.state) == "wait":    # (a waiting one shows on the map all the time: the "Help!" marker)
-		bars.draw_circle(o + Vector2(s.p.x, s.p.y) * sc, 2.6, Color(1, 0.85, 0.3))
+		if Access.markers():
+			Icons.mark(bars, "ally", o + Vector2(s.p.x, s.p.y) * sc, 3.6, Color(1, 0.85, 0.3))
+		else:
+			bars.draw_circle(o + Vector2(s.p.x, s.p.y) * sc, 2.6, Color(1, 0.85, 0.3))
 
 
 # ------------------------------------------------------------------ extraction ------

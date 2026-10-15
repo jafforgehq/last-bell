@@ -12,6 +12,8 @@ extends Node2D
 
 signal phase_changed(new_phase: String)
 
+const Access := preload("res://scripts/access.gd")
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const GD := preload("res://scripts/game_data.gd")
 const TextScale := preload("res://scripts/ui/text_scale.gd")
 const World := preload("res://scripts/town/town_world.gd")
@@ -625,6 +627,7 @@ func _enter_base() -> void:
 	msg_label.text = ""
 	mode = "base"
 	base = Base.new()
+	Base.east = bool(args.has("east")) or (not args.has("west") and Base.variant_for(Bal.run_seed))    # VARIANT: the east entry on even seeds
 	var clear := phase == "clear"
 	var t: Dictionary = base.build(1, clear)
 	_make_stage(t, false)
@@ -646,8 +649,8 @@ func _enter_base() -> void:
 			pack.kit(stores)    # her rounds are the pack's (inv is active): without the kit she has the 6 loaded shots and cannot reload
 		run.sim.stock = stores    # the same dictionary: what a search finds is in the stores at once
 		pack.attach(run.sim, base.stations.stores)
-		run.avatar_p.x = Base.START.x
-		run.avatar_p.y = Base.START.y
+		run.avatar_p.x = Base.start().x
+		run.avatar_p.y = Base.start().y
 	else:
 		run.invulnerable = true
 		run.sim.quiet = true
@@ -1893,6 +1896,8 @@ func _paint_search(c: CanvasItem) -> void:
 				c.draw_polyline(PackedVector2Array([pp + Vector2(-6, 0), pp + Vector2(-2, 5), pp + Vector2(7, -6)]), Color(0.45, 1.0, 0.5, 0.75), 2.5)
 		else:
 			c.draw_rect(Rect2(pp - Vector2(9, 9), Vector2(18, 18)), Color(1.0, 0.85, 0.25, 0.5 + 0.3 * pulse), false, 2.0)
+			if Access.markers():
+				PIcons.mark(c, "loot", pp, 6.0, Color(1.0, 0.85, 0.25))
 	var us = run.sim.uses
 	if us.busy() and String(us._s.kind) == "container":
 		var f := clampf(float(us._s.t) / maxf(float(us._s.of), 0.1), 0.0, 1.0)
@@ -2149,7 +2154,7 @@ func _auto_loop(dt: float) -> void:
 
 ## --auto=reach: path finder check from the start point to every container stand point and every dead record of the clear phase (prints the ones with no path), then quits.
 func _auto_reach() -> void:
-	var from := Base.START
+	var from := Base.start()
 	var bad := 0
 	for ct in town.containers:
 		var pth: Array = doors.path(from, Vector2(ct.pos))
@@ -2265,7 +2270,8 @@ func _draw_minimap(v: Vector2) -> void:
 	var sz := Vector2(float(world.W), float(world.H)) * sc
 	var o := Vector2(v.x - sz.x - 14.0, v.y - sz.y - 14.0)
 	bars.draw_rect(Rect2(o - Vector2(3, 3), sz + Vector2(6, 6)), Color(0, 0, 0, 0.7))
-	bars.draw_texture_rect(mini_tex, Rect2(o, sz), false, Color(1, 1, 1, 0.92))
+	var mt := Color(1, 1, 1).lerp(_grade(tod), 0.6)    # MINIMAP TINT: orange at dusk, blue at night
+	bars.draw_texture_rect(mini_tex, Rect2(o, sz), false, Color(mt.r, mt.g, mt.b, 0.92))
 	if mode == "base" and phase == "clear":
 		for zi in Base.ZONES.size():
 			var zr := Rect2(Base.ZONES[zi].rect)
@@ -2279,6 +2285,8 @@ func _draw_minimap(v: Vector2) -> void:
 				var u := fmod(clock * 1.6, 1.0)
 				bars.draw_circle(cat, 2.4, Color(1, 0.2, 0.15))
 				bars.draw_arc(cat, 3.0 + 8.0 * u, 0, TAU, 20, Color(1, 0.2, 0.15, 1.0 - u), 2.0)
+			elif Access.markers():
+				PIcons.mark(bars, "ally", cat, 2.6, Color(0.4, 0.85, 1.0))
 			else:
 				bars.draw_circle(cat, 1.8, Color(0.4, 0.85, 1.0))
 		bars.draw_rect(Rect2(o + Vector2(float(Base.FENCE.position.x), Base.PEN_Y) * sc, Vector2(float(Base.FENCE.size.x), 12.0) * sc), Color(0.8, 0.1, 0.1, 0.18))
@@ -2288,7 +2296,10 @@ func _draw_minimap(v: Vector2) -> void:
 	for z in run.sim.zombies:
 		if z.state == "dying" or z.state == "dead":
 			continue
-		bars.draw_rect(Rect2(o + Vector2(z.x, z.y) * sc - Vector2(0.8, 0.8), Vector2(1.6, 1.6)), Color(0.95, 0.25, 0.2))
+		if Access.markers():
+			PIcons.mark(bars, "dead", o + Vector2(z.x, z.y) * sc, 1.5, Color(0.95, 0.25, 0.2))
+		else:
+			bars.draw_rect(Rect2(o + Vector2(z.x, z.y) * sc - Vector2(0.8, 0.8), Vector2(1.6, 1.6)), Color(0.95, 0.25, 0.2))
 	noise.mini(bars, o, sc)    # NOISE hook
 	special.mini(bars, o, sc)    # SPECIAL hook
 	if mode == "raid":

@@ -539,6 +539,40 @@ func _on_day(d: int) -> void:
 		print("ARC day ", d, " weather ", weather, " phase ", phase().id, " people ", people_alive(), " ready ", ready(), " stores ", game.stores)
 
 
+## The convoy's line for a morning ("" when none is due): from `convoy_radio.first_day`, every 3 or 4 days, counting down to the convoy and reacting to the base.
+func convoy_line(d: int) -> String:
+	var cr: Dictionary = cfg.get("convoy_radio", {})
+	if cr.is_empty() or convoy == "left" or d >= convoy_day():
+		return ""
+	var cd := int(cr.first_day)
+	var i := 0
+	while cd < d:
+		cd += int((cr.gaps as Array)[i % (cr.gaps as Array).size()])
+		i += 1
+	if cd != d:
+		return ""
+	var fr := 1.0
+	var segs: Array = game.siege.segs
+	if not segs.is_empty():
+		fr = 0.0
+		for s in segs:
+			fr += float(s.hp) / maxf(float(s.max), 1.0)
+		fr /= float(segs.size())
+	var kind := "calm"
+	var miss: Array = missing() if d >= 18 else []
+	if fr < 0.55:
+		kind = "fence"
+	elif float(game.stores.get("food", 0.0)) < 10.0:
+		kind = "food"
+	elif d >= 18 and not miss.is_empty():
+		kind = "missing"
+	elif d >= 18:
+		kind = "ready"
+	var pool: Array = cr.pools[kind]
+	var line := String(pool[(d * 7 + run_seed) % pool.size()])
+	return line.replace("{days}", str(convoy_day() - d)).replace("{missing}", String(miss[0]) if not miss.is_empty() else "")
+
+
 func _day_banner() -> void:
 	if scripted:
 		return
@@ -556,6 +590,12 @@ func _day_banner() -> void:
 		warn = ("The dead are stirring: a horde is expected tomorrow night.  " + warn).strip_edges()
 	if day == convoy_day() and not ready():    # (the convoy is a one-shot: say at dawn what the list still lacks)
 		warn = "NOT READY: " + "; ".join(missing())
+	var cl := convoy_line(day)    # CONVOY RADIO: a short line every 3 to 4 days
+	if cl != "":
+		warn = (warn + "\n" + cl).strip_edges()
+		log_entries.append({"day": day, "kind": "radio", "title": "The convoy on the radio", "from": "Harbor Relief", "text": cl, "tag": "convoy", "result": ""})
+		story.log_changed()
+		game.sound.play("ui_radio_on", 0.5, 0.0)
 	story.banner(t, warn)
 
 

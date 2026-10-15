@@ -5,6 +5,22 @@
   "last_day": 28,
   "cards": [
     {
+      "id": "stranger_at_gate", "title": "Somebody at the gate", "from": "the gate tower", "tone": "letter", "odds": 0.17, "repeat": true,
+      "if": {"day": [4, 28]},
+      "text": "A stranger stands in the road with both hands in the air and a pack on one shoulder. The tower has them in the sights. They say they have walked two days and ask for the gate, a meal, or at least a fair trade.",
+      "choices": [
+        {"id": "let_in", "label": "Let them in (needs a free bed)", "if": {"beds_free": 1},
+          "result": "The gate opens a hand's width. {name} gives a name, takes the bed they are shown and says very little.",
+          "effects": {"person": {"op": "add", "hurt": 2, "hurt_odds": 0.4, "traits": ["steady", "scrounger", "veteran", "coward"], "trait_odds": 0.5, "else": {"morale": -1}}}},
+        {"id": "trade", "label": "Trade: 10 scrap for 5 ammo", "if": {"stock_min": {"scrap": 10}},
+          "result": "A short bargain across the wire. The stranger counts the scrap twice, hands over a clip and a half, and walks on.",
+          "effects": {"stores": {"scrap": -10, "ammo": 5}}},
+        {"id": "away", "label": "Turn them away", "safe": true,
+          "result": "Nobody opens the gate. The stranger waits, then shoulders the pack and walks on down the road.",
+          "effects": {}}
+      ]
+    },
+    {
       "id": "stranger_gate", "title": "A man at the gate", "from": "the east tower", "tone": "letter",
       "if": {"day": [2, 12], "unused": "Ivo"},
       "text": "A man stands at the gate before the shift has changed, hands open, nothing in them. He will not say where he came from. He says his name is Ivo, that he can mend anything with an engine in it, and that he has not eaten since the river. The tower says he walked the last block backwards, to see who was behind him.",

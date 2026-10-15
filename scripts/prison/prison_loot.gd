@@ -7,6 +7,8 @@
 ## Owned by prison_game.gd (`loot`, `# RAIDS hook`). `--loot-lab=N` prints the distribution (see `lab`).
 extends RefCounted
 
+const Access := preload("res://scripts/access.gd")
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Bal := preload("res://scripts/prison/prison_bal.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const DestMap := preload("res://scripts/prison/prison_destmap.gd")
@@ -455,7 +457,10 @@ func mini(bars: Control, o: Vector2, sc: float) -> void:
 	for pl in places:
 		if _on_map(String(pl.type)):
 			bars.draw_arc(o + Vector2(pl.pos) * sc, 4.5, 0, TAU, 14, _col(String(pl.type)), 2.0)
-			bars.draw_circle(o + Vector2(pl.pos) * sc, 1.6, _col(String(pl.type)))
+			if Access.markers():
+				PIcons.mark(bars, "loot", o + Vector2(pl.pos) * sc, 3.0, _col(String(pl.type)))
+			else:
+				bars.draw_circle(o + Vector2(pl.pos) * sc, 1.6, _col(String(pl.type)))
 
 
 # ------------------------------------------------------------------ the gate's choice --

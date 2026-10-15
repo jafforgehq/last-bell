@@ -645,10 +645,24 @@ func _ambient(dt: float) -> void:
 				break
 
 
+## DAMAGE NUMBERS: hits on a segment add up and float up from it as "-N" about every 0.8 s while a horde is on it.
+func _float_damage(s: Dictionary, dealt: float) -> void:
+	s["acc"] = float(s.get("acc", 0.0)) + dealt
+	var now := Time.get_ticks_msec()
+	if float(s.acc) < 1.0 or now - int(s.get("acc_ms", 0)) < 800 or not attacking or game.crew == null:
+		return
+	s["acc_ms"] = now
+	var at: Vector2 = (Vector2(s.center) + Vector2(s.along) * randf_range(-2.0, 2.0))
+	game.crew.floaters.append({"text": "-%d" % int(round(float(s.acc))), "pos": Vector2(at.x, at.y - 0.6), "t": 0.0, "col": Color(1.0, 0.55, 0.3)})
+	s["acc"] = 0.0
+
+
 func _damage(s: Dictionary, amount: float) -> void:
 	var before := state_of(s)
 	bars.absorb(s, amount)    # BARRICADE hook: a sandbag line takes part of it
-	s.hp = maxf(0.0, float(s.hp) - amount * bars.damage_mult(s))
+	var dealt: float = amount * bars.damage_mult(s)
+	s.hp = maxf(0.0, float(s.hp) - dealt)
+	_float_damage(s, dealt)
 	if float(s.hp) <= 0.0 and not s.open:
 		bars.on_breach(s)
 		_set_gap(s, true)

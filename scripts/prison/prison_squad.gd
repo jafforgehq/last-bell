@@ -16,6 +16,8 @@
 ## a downed one is lost the same way unless revived; Ruth's death brings the ones on their feet home with empty bags. The base loses their work while they are out (prison_econ.gd reads `out_ids`).
 extends RefCounted
 
+const Access := preload("res://scripts/access.gd")
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const PawnNode := preload("res://scripts/render/pawn_node.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
 const SearchRules := preload("res://scripts/town/search.gd")
@@ -956,7 +958,10 @@ func mini(bars: Control, o: Vector2, sc: float) -> void:
 			continue
 		var at: Vector2 = o + Vector2(m.p.x, m.p.y) * sc
 		var col: Color = CMD_COL[String(m.cmd)] if m.state == "up" else Color(1, 0.3, 0.25)
-		bars.draw_circle(at, 3.0, col)
+		if Access.markers():
+			PIcons.mark(bars, "ally", at, 4.2, col)
+		else:
+			bars.draw_circle(at, 3.0, col)
 		bars.draw_arc(at, 4.2, 0, TAU, 12, Color(0, 0, 0, 0.9), 1.2)
 		if m.state != "up":    # a downed friend pings: a red ring that swells and fades, twice a second
 			var u := fmod(game.clock * 1.6, 1.0)
@@ -974,8 +979,9 @@ func draw_hud(c: Control, v: Vector2) -> void:
 		var r := Rect2(14, y, 230, 48)
 		c.draw_rect(r, Color(0, 0, 0, 0.55))
 		c.draw_rect(r, Color(CMD_COL[String(m.cmd)], 0.8), false, 1.0)
-		icon(c, String(m.cmd), r.position + Vector2(14, 14), 7.0, CMD_COL[String(m.cmd)])
-		c.draw_string(font, r.position + Vector2(28, 17), "%s  %s" % [String(m.name), String(CMD_WORD[String(m.cmd)])], HORIZONTAL_ALIGNMENT_LEFT, 196, 14, Color(1, 1, 0.9))
+		PIcons.portrait(c, String(m.id), Rect2(r.position + Vector2(4, 4), Vector2(20, 20)))    # PORTRAIT
+		icon(c, String(m.cmd), r.position + Vector2(36, 14), 7.0, CMD_COL[String(m.cmd)])
+		c.draw_string(font, r.position + Vector2(50, 17), "%s  %s" % [String(m.name), String(CMD_WORD[String(m.cmd)])], HORIZONTAL_ALIGNMENT_LEFT, 176, 14, Color(1, 1, 0.9))
 		var f := clampf(float(m.hp) / float(m.max), 0.0, 1.0)
 		c.draw_rect(Rect2(r.position + Vector2(8, 24), Vector2(214, 4)), Color(0.15, 0.15, 0.12))
 		c.draw_rect(Rect2(r.position + Vector2(8, 24), Vector2(214.0 * f, 4)), Color(0.4, 0.9, 0.5) if f > 0.35 else Color(0.95, 0.35, 0.3))

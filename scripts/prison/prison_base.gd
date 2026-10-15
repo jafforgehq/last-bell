@@ -44,6 +44,11 @@ const SPAWN := Vector2(23.0, 47.0)
 ## CLEAR PHASE: the party walks in from the west road through a breach in the fence (`GAP`, closed in the managed phase) into the infirmary (a west door is cut for it).
 const GAP := Rect2i(5, 28, 1, 3)
 const START := Vector2(2.5, 29.5)
+## VARIANT B (chosen by the run seed): the party comes in from the EAST road instead, through a breach in the east fence and a door cut in the east wall of the stores, so the clear order runs the other way round (stores first, infirmary last). Everything else is the same compound.
+const GAP_E := Rect2i(61, 28, 1, 3)
+const START_E := Vector2(64.5, 29.5)
+const DOOR_E := Rect2i(58, 28, 1, 3)
+static var east := false
 ## The buildings (tiles). Row one: the cell block and the canteen with its kitchen. Row two: the infirmary, the workshop and the stores. Row three: the gate yard and the garden.
 const CELLS := Rect2i(9, 6, 26, 15)
 const CANTEEN := Rect2i(37, 6, 20, 15)
@@ -78,6 +83,18 @@ const DOORS := [
 	{"name": "Stores", "rect": Rect2i(52, 24, 3, 1)}, {"name": "Stores", "rect": Rect2i(52, 34, 3, 1)},
 	{"name": "Garden", "rect": Rect2i(41, 39, 2, 1)},
 ]
+static func start() -> Vector2:
+	return START_E if east else START
+
+
+static func doors() -> Array:
+	return DOORS + [{"name": "Stores", "rect": DOOR_E}] if east else DOORS
+
+
+static func variant_for(seed_i: int) -> bool:
+	return seed_i % 2 == 0
+
+
 const LOOT_N := {"food": [3, 6], "water": [3, 6], "ammo": [6, 12], "meds": [1, 2], "scrap": [3, 6]}
 const SEARCHABLE := {"nightstand": "nightstand", "medicine_cabinet": "cabinet", "shelf_tins": "shelf", "desk": "desk", "bed_single": "bunk", "fridge": "fridge", "kitchen_counter": "cupboard",
 	"workbench": "bench", "toolbox": "toolbox", "tool_chest": "tool chest", "crate": "crate", "woodpile": "woodpile", "shop_shelf": "shelf", "cooler": "cooler", "veg_patch": "garden patch", "bin": "bin"}
@@ -244,11 +261,12 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 		else:
 			_fence(x, FENCE.end.y - 1, L_WIRE)
 	for y in range(FENCE.position.y, FENCE.end.y):
-		if not (clear and GAP.has_point(Vector2i(FENCE.position.x, y))):
+		if not (clear and not east and GAP.has_point(Vector2i(FENCE.position.x, y))):
 			_fence(FENCE.position.x, y)
-		_fence(FENCE.end.x - 1, y)
+		if not (clear and east and GAP_E.has_point(Vector2i(FENCE.end.x - 1, y))):
+			_fence(FENCE.end.x - 1, y)
 	if clear:
-		_fill(Rect2i(2, GAP.position.y, 6, GAP.size.y), T_CONCRETE, G_SIDEWALK)    # the road in through the breach
+		_fill(Rect2i(59, GAP_E.position.y, 6, GAP_E.size.y) if east else Rect2i(2, GAP.position.y, 6, GAP.size.y), T_CONCRETE, G_SIDEWALK)    # the road in through the breach
 	# a hedge pen closes the sides of the field in front of the gate, so the dead stay where they are shown
 	for y in range(FENCE.end.y, H):
 		for x in [0, 1, 2, 3, 4, W - 5, W - 4, W - 3, W - 2, W - 1]:
@@ -307,10 +325,10 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	stations["bench2"] = Vector2(39.0, 28.9)
 	labels.append({"pos": Vector2(34.5, 24.4), "text": "WORKSHOP"})
 	# the stores: where the loot is banked
-	_building(STORES, T_CONCRETE, G_HALL, [Rect2i(52, 24, 3, 1), Rect2i(52, 34, 3, 1)])
+	_building(STORES, T_CONCRETE, G_HALL, [Rect2i(52, 24, 3, 1), Rect2i(52, 34, 3, 1)] + ([DOOR_E] if east else []))
 	_row("shop_shelf", 50.0, 26.5, 4, 2.0, "s")
 	_row("shelf_tins", 50.0, 30.5, 4, 2.0, "s")
-	_obj("cooler", 57.5, 28.5, "w")
+	_obj("cooler", 57.5, 25.5 if east else 28.5, "w")    # (clear of the east door in variant B)
 	_obj("crate", 49.5, 33.5, "n")
 	_obj("crate", 57.5, 33.5, "n")
 	stations["stores_in"] = Vector2(53.5, 26.4)
@@ -386,7 +404,7 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	for k in 10:
 		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(58.0, 66.0)))    # scrub in the pen
 	for sp in spots:
-		if sp.x < 7.0 and sp.y > 26.0 and sp.y < 33.0:
+		if (sp.x > float(W) - 7.0 if east else sp.x < 7.0) and sp.y > 26.0 and sp.y < 33.0:
 			continue    # the west road in
 		var pen: bool = sp.y > 57.0 and sp.y < 67.0
 		var n: int = 23 if pen else greens[rng.randi() % greens.size()]
@@ -488,6 +506,8 @@ func _zones(town: Dictionary, seed_i: int) -> void:
 				containers.append({"id": cid, "house": zi, "room": -1, "pos": st, "at": Vector2(float(o.cx), float(o.cy)), "kind": SEARCHABLE[String(o.kind)], "loot": {key: rng.randi_range(n[0], n[1])}, "search_s": 3.0})
 		# dead
 		var drs = z.get("dead_rect", r.grow(-1))
+		if east and String(z.id) == "workshop":
+			drs = [Rect2i(27, 25, 16, 11), Rect2i(49, 25, 5, 9)]
 		var tiles: Array = []
 		for dr in (drs if drs is Array else [drs]):
 			for y in range(dr.position.y, dr.end.y):

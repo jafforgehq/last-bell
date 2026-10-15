@@ -5,6 +5,7 @@
 ## 2. THE DECK: assets/data/prison_events.json, a card each for a morning with no story beat. `draw(day)` picks one (seeded by `arc.run_seed` and the day, never the same card twice, filtered by
 ##    `if`); the story shows it (prison_story.gd `show_event`); `arc.deliver_event` applies the choice through `arc._apply`, which hands the new effect keys to `apply_extra` here.
 ## Card: {id, title, from, tone, text, pick (who the card is about: "trait:thief|random"), urgent (bypasses the draw chance), if {...}, choices: [{id, label, if, safe, result, effects}]}.
+## Rare card keys: `odds` (a share of the quiet mornings, rolled on its own: it comes before the common draw) and `repeat` (it can be drawn again, as a stranger can).
 ## `if`: day [a,b], stock_min {res:n}, stock_max {res:n}, tier {building:n}, trait id, crew_min n, crew_max n (crew without kids and Ruth), morale_min, morale_max, role id (someone alive does it),
 ##    beds_free n, flag id|[ids], no_flag id|[ids], flag_age {id: days since it was set}, seen id (a card shown before), no_trait id, unused name (nobody of the pool by that name is in the crew yet),
 ##    any [conditions] (one of them holds).
@@ -122,7 +123,13 @@ func draw(d: int) -> Dictionary:
 	var ok: Array = []
 	var urgent: Array = []
 	for c in cards:
-		if arc.events_seen.has(String(c.id)) or not _cond(c.get("if", {}), d):
+		if (arc.events_seen.has(String(c.id)) and not bool(c.get("repeat", false))) or not _cond(c.get("if", {}), d):
+			continue
+		if c.has("odds"):    # a rare card: its own roll, and it may come again
+			var ro := RandomNumberGenerator.new()
+			ro.seed = hash([arc.run_seed, d, String(c.id)])    # (hashed: nearby day seeds of _rng give nearby first numbers)
+			if ro.randf() < float(c.odds):
+				return {"id": String(c.id), "who": ""}
 			continue
 		(urgent if bool(c.get("urgent", false)) else ok).append(c)
 	var r := _rng(1)
@@ -318,12 +325,19 @@ func _add(op: Dictionary, ctx: Dictionary) -> bool:
 		var nm := String(q.name)
 		if used.has(nm):
 			continue
-		if (op.has("name") and nm == String(op.name)) or (not op.has("name") and String(q.skill) == String(op.get("skill", ""))):
+		if (op.has("name") and nm == String(op.name)) or (not op.has("name") and (not op.has("skill") or String(q.skill) == String(op.skill))):
 			who = q
 			break
 	if who.is_empty():
 		return false
 	var nm2 := String(who.name)
+	var rr := _rng(9)
+	if op.has("traits") and rr.randf() < float(op.get("trait_odds", 0.5)):    # a stranger may come with a trait of their own
+		op = op.duplicate()
+		op["trait"] = (op.traits as Array)[rr.randi() % (op.traits as Array).size()]
+	if op.has("hurt_odds") and rr.randf() >= float(op.hurt_odds):
+		op = op.duplicate()
+		op["hurt"] = 0
 	if op.has("trait") and defs.has(String(op.trait)):
 		arc.person_traits[nm2] = (arc.person_traits.get(nm2, []) as Array) + ([String(op.trait)] if not has(nm2, String(op.trait)) else [])
 	var rc: Dictionary = people._make_recruit(who)
