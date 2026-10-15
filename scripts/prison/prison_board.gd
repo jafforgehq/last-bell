@@ -537,7 +537,7 @@ func next_attack() -> String:
 	if sg.attacking:
 		return "UNDER ATTACK: night %d, %d of the dead still at the walls" % [sg.night, sg._alive_wave()]
 	var secs := maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR)
-	return "night %d in %d:%02d" % [sg.nights_started + 1, int(secs) / 60, int(secs) % 60]
+	return "%s (night %d in %d:%02d)" % [game.arc.horde_line(sg.nights_started + 1), sg.nights_started + 1, int(secs) / 60, int(secs) % 60]
 
 
 func morale_reasons(rep: Dictionary) -> Array:
@@ -688,7 +688,7 @@ func _needs_tab() -> void:
 	# people and beds, attack, shortage
 	var bd: Dictionary = rep.beds
 	body.add_child(_lab("People %d      Beds %d / %d%s" % [int(rep.people), int(bd.used), int(bd.cap), "   (too many people)" if int(bd.free) < 0 else ""], 16, Hud.INK if int(bd.free) >= 0 else Hud.DANGER_TEXT))
-	body.add_child(_lab("Next attack: " + next_attack(), 16, Hud.INK if not game.siege.attacking else Hud.DANGER_TEXT))
+	body.add_child(_lab("Next horde: " + next_attack(), 16, Hud.INK if not game.siege.attacking else Hud.DANGER_TEXT))
 	var nd: Dictionary = econ.needs()
 	if nd.is_empty():
 		body.add_child(_lab("Biggest shortage: none", 16, Hud.OK))

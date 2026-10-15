@@ -44,6 +44,7 @@
     [11, 26, 3, 0.15], [14, 37, 3, 0.18], [17, 51, 3, 0.2], [19, 57, 3, 0.22], [21, 47, 3, 0.18], [23, 49, 3, 0.2], [24, 51, 3, 0.22],
     [26, 49, 3, 0.2], [28, 53, 3, 0.22], [29, 58, 3, 0.24], [30, 95, 4, 0.3]
   ],
+  "hordes": {"_doc": "The horde nights (prison_arc.gd is_horde_night): the base is attacked only on these nights, the others are quiet. forced: nights that are always a horde (the first, the base hordes 6/9/12 of prison_noise.json, the storm, the last). Between them a gap of gap[0] to gap[1] days, drawn from the run seed. size_mult: the night table's wave times this (fewer, bigger hordes). small: a noise (scream, alarm, a very loud base) on a quiet night may call a small horde of size[0] to size[1] (scaled by the guards), at most one in cooldown_h hours.", "forced": [1, 6, 9, 12, 24, 30], "gap": [3, 5], "size_mult": 1.3, "small": {"chance": 0.5, "size": [5, 9], "cooldown_h": 8.0, "min_day": 2}},
   "night_names": {"1": "The first night", "4": "The yard fills", "11": "The long wall", "19": "The worst week", "24": "Storm night", "29": "The night before", "30": "The last night"},
   "beats": [
     {"id": "first_contact", "day": 1, "tag": "static", "title": "Static",

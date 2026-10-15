@@ -2651,7 +2651,7 @@ func _fence_guards(dt: float) -> void:
 			near += 1
 	alarm_cd = maxf(0.0, alarm_cd - dt)
 	alarm_t = maxf(0.0, alarm_t - dt)
-	if near >= 4 and alarm_cd <= 0.0:
+	if near >= 4 and alarm_cd <= 0.0 and siege.attacking:    # (HORDES: no alarm for the loose dead outside)
 		alarm_cd = 45.0
 		alarm_t = 14.0
 		sound.play("bell", 0.9, 0.0)
@@ -2714,16 +2714,23 @@ func _pen_life(dt: float) -> void:
 			var i: int = run.field.add_record(at, "runner" if randf() < 0.08 else "walker", false)
 			var z = run.field._wake(i)
 			if z != null:
-				run.field._investigate(z, Vector2(48.0 + randfn(0.0, 11.0), 57.4))
+				run.field._investigate(z, _pen_spot(48.0 + randfn(0.0, 11.0)))
 	if _trickle_t <= 0.0:
-		_trickle_t = 3.0
+		_trickle_t = 3.0 if siege.attacking else 0.4    # (quiet: the penned crowd drifts loose from the fence)
 		if not dead.is_empty():
 			var z2 = dead[randi() % dead.size()]
 			if z2.y > 56.0 and String(z2.state) != "chase":
-				run.field._investigate(z2, Vector2(clampf(48.0 + randfn(0.0, 12.0), 10.0, 86.0), 57.2 + randf() * 0.6))
+				run.field._investigate(z2, _pen_spot(clampf(48.0 + randfn(0.0, 12.0), 10.0, 86.0)))
 
 
 const W_BASE := 96.0
+
+
+## Where a dead one of the pen drifts to: by day and on a quiet night loose in the field, not leaning on the gate; in a horde attack at the wire (HORDES).
+func _pen_spot(x: float) -> Vector2:
+	if siege != null and siege.attacking:
+		return Vector2(x, 57.2 + randf() * 0.6)
+	return Vector2(x, randf_range(60.0, 67.0))
 
 
 # ------------------------------------------------------------------- night and glow --

@@ -324,6 +324,12 @@ func _recruit() -> void:
 # ---------------------------------------------------------------------------------- night --
 
 func _night(d: int) -> void:
+	if not arc.is_horde_night(d):    # HORDES: a quiet night
+		game.siege.night = d
+		game.siege.nights_started = d
+		arc.night_over(d, {"killed": 0, "lost": [], "crew": []})
+		_log.append("night %d: quiet" % d)
+		return
 	var n: Dictionary = cfg.night
 	var plan: Dictionary = arc.wave_plan(d)
 	var guards: int = econ.workers("guard")

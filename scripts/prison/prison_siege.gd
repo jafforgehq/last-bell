@@ -45,7 +45,8 @@ var _plan: Array = []    # [{seg, n}] per night, spawned in batches
 var _bell_n := 0
 var _bell_t := 0.0
 var _clear_t := 0.0
-var stats := {}
+var stats := {"hp0": 0.0, "killed": 0, "ammo": 0.0, "shots": 0, "lost": [], "crew": [], "n": 0, "where": ""}
+var _small_at := -100.0    # abs_h of the last small horde a noise called
 var _last_ammo := -1.0
 var _fl := 0
 var _spot_t := 0.0
@@ -268,7 +269,7 @@ func hud() -> String:
 		line += "  ATTACK night %d: %d of the dead still at the walls" % [night, _alive_wave()]
 	else:
 		var secs := maxf(0.0, (NIGHT_H + 24.0 * float(nights_started) - abs_h) * SEC_PER_HOUR / float(game.speed))
-		line += "  Next attack: night %d in %d:%02d" % [nights_started + 1, int(secs) / 60, int(secs) % 60]
+		line += "  %s (night %d in %d:%02d)" % [game.arc.horde_line(nights_started + 1), nights_started + 1, int(secs) / 60, int(secs) % 60]
 	return line
 
 
@@ -304,7 +305,9 @@ func update(dt: float) -> void:
 	if pending > 0 and not attacking:
 		var n := pending
 		pending = 0
-		if forced or abs_h < 24.0 * float(n - 1) + 24.0 + DAWN_H:
+		if not forced and not game.arc.is_horde_night(n):
+			_quiet_night(n)    # HORDES: most nights nobody touches the fence
+		elif forced or abs_h < 24.0 * float(n - 1) + 24.0 + DAWN_H:
 			_start_attack(n)
 		else:
 			_resolve_missed(n)
@@ -425,6 +428,42 @@ func _start_attack(n: int) -> void:
 		if game.args.has("log"):
 			print("SIEGE back-card shown, alarm ", game.alarm_t)
 		game._card("Back in the middle of the attack", "Night %d has begun while you were out. The guards are firing: join the wall." % n, 5.0)
+
+
+## A night with no horde: darkness and a few stragglers, nothing at the fence. The arc still counts it as held.
+func _quiet_night(n: int) -> void:
+	nights_started = maxi(nights_started, n)
+	night = n
+	stats = {"hp0": 0.0, "killed": 0, "ammo": 0.0, "shots": 0, "lost": [], "crew": [], "n": 0, "where": "Night %d (quiet)" % n}
+	print("SIEGE QUIET night=", n)
+	game.arc.night_over(n, stats)    # ARC hook
+
+
+## A noise (a scream, an alarm, a very loud base) on a quiet stretch may call a small horde at one fence side: it tears at the fence like a night's wave until the guards kill it.
+func small_horde(why: String) -> void:
+	var hc: Dictionary = (game.arc.cfg.get("hordes", {}) as Dictionary).get("small", {})
+	if hc.is_empty() or attacking or not active() or not game.arc.started or int(game.arc.day) < int(hc.min_day) or abs_h - _small_at < float(hc.cooldown_h):
+		return
+	var r: RandomNumberGenerator = game.noise.rng
+	if r.randf() > float(hc.chance):
+		return
+	var size := maxi(2, roundi(r.randf_range(float(hc.size[0]), float(hc.size[1])) * guard_factor(armed_count())))
+	var side: String = ["E", "W", "N"][r.randi() % 3]
+	var pool: Array = segs.filter(func(q): return q.side == side and float(q.hp) > 0.0)
+	if pool.is_empty():
+		return
+	var seg: Dictionary = pool[r.randi() % pool.size()]
+	var from := Vector2(64.2, 66.0) if side == "E" else (Vector2(2.8, 66.0) if side == "W" else Vector2(63.0, 1.6))
+	var h: Dictionary = game.noise.spawn_horde(size, from, Vector2(seg.spot), float(game.noise.cfg.base_horde.speed), "base", 2.5)
+	if h.is_empty():
+		return
+	_small_at = abs_h
+	h["name"] = {"E": "east", "W": "west", "N": "north"}[side]
+	for z in h.members:
+		wave.append({"z": z, "seg": seg, "spot": _spot(seg, 3.0)})
+		game.noise.inv.erase(z)
+	_show_banner("The %s drew a small horde from the %s" % [why, String(h.name)], 5.0)
+	print("SIEGE SMALL HORDE ", why, " side ", side, " size ", h.members.size())
 
 
 ## A night that was over before she got home (a raid that came back after dawn): the guards fought it alone. A small model with the arc lab's night numbers
@@ -594,6 +633,8 @@ func _wave_work(dt: float) -> void:
 
 
 func _ambient(dt: float) -> void:
+	if not attacking:
+		return    # HORDES: the dead outside only tear at the fence in a horde attack
 	for z in game.run.sim.zombies:
 		if not _alive(z) or z.y < float(Base.FENCE.end.y) - 0.5 or z.y > float(Base.FENCE.end.y) + 3.0 or z.x < float(Base.FENCE.position.x) or z.x > float(Base.FENCE.end.x):
 			continue
@@ -801,6 +842,11 @@ func _show_banner(text: String, secs: float) -> void:
 
 func _end_attack() -> void:
 	attacking = false
+	for w in wave:    # (what is left of the horde at dawn drifts off: no day gnawing)
+		if _alive(w.z):
+			w.z.state = "wander"
+			w.z.wander_t = 0.0
+	wave.clear()
 	bars.night_wear()
 	posts.dawn()
 	var hp1 := 0.0
