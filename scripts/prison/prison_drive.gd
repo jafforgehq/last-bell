@@ -281,6 +281,12 @@ func _squad() -> void:
 	await _tap(KEY_2)
 	_check(g.squad.members.all(func(m): return String(m.cmd) == "hold"), "2 holds them all")
 	_check(not g.squad.open, "the panel closes after an order")
+	await _tap(KEY_C)
+	await _tap(KEY_6)
+	_check(g.squad.members.all(func(m): return String(m.cmd) == "spread"), "6 spreads them out")
+	g.squad.command_all("follow")
+	await _wait(30)
+	_check(g.squad.members.all(func(m): return String(m.say) in ["with you", "fighting", "firing"] or String(m.say).begins_with("hurt")), "the status line says what they do (%s)" % [g.squad.members.map(func(m): return m.say)])
 
 
 func _stash() -> void:
