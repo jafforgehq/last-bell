@@ -39,13 +39,164 @@
     "police"
   ],
   "rolls": {
-    "house": [["food", 0.5, 1, 2], ["water", 0.45, 1, 2], ["scrap", 0.2, 1, 2], ["meds", 0.1, 1, 1], ["distraction", 0.07, 1, 3]],
-    "shop": [["food", 0.8, 1, 3], ["water", 0.7, 1, 3], ["scrap", 0.15, 1, 1], ["distraction", 0.09, 1, 3]],
-    "pharmacy": [["meds", 0.85, 1, 3], ["scrap", 0.2, 1, 1]],
-    "hardware": [["scrap", 0.7, 2, 3], ["parts", 0.4, 1, 1]],
-    "garage": [["parts", 0.45, 1, 2], ["fuel", 0.3, 1, 1], ["scrap", 0.4, 1, 3], ["distraction", 0.08, 1, 2]],
-    "petrol": [["fuel", 0.5, 1, 1], ["scrap", 0.2, 1, 1]],
-    "police": [["ammo", 0.8, 4, 8], ["parts", 0.1, 1, 1], ["gun_smg", 0.1, 1, 1], ["gun_service", 0.1, 1, 1], ["gun_shotgun", 0.08, 1, 1]]
+    "house": [
+      [
+        "food",
+        0.5,
+        1,
+        2
+      ],
+      [
+        "water",
+        0.45,
+        1,
+        2
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        2
+      ],
+      [
+        "meds",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "distraction",
+        0.07,
+        1,
+        3
+      ]
+    ],
+    "shop": [
+      [
+        "food",
+        0.8,
+        1,
+        3
+      ],
+      [
+        "water",
+        0.7,
+        1,
+        3
+      ],
+      [
+        "scrap",
+        0.15,
+        1,
+        1
+      ],
+      [
+        "distraction",
+        0.09,
+        1,
+        3
+      ]
+    ],
+    "pharmacy": [
+      [
+        "meds",
+        0.85,
+        1,
+        3
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        1
+      ]
+    ],
+    "hardware": [
+      [
+        "scrap",
+        0.7,
+        2,
+        3
+      ],
+      [
+        "parts",
+        0.4,
+        1,
+        1
+      ]
+    ],
+    "garage": [
+      [
+        "parts",
+        0.45,
+        1,
+        2
+      ],
+      [
+        "fuel",
+        0.3,
+        1,
+        1
+      ],
+      [
+        "scrap",
+        0.4,
+        1,
+        3
+      ],
+      [
+        "distraction",
+        0.08,
+        1,
+        2
+      ]
+    ],
+    "petrol": [
+      [
+        "fuel",
+        0.5,
+        1,
+        1
+      ],
+      [
+        "scrap",
+        0.2,
+        1,
+        1
+      ]
+    ],
+    "police": [
+      [
+        "ammo",
+        0.8,
+        4,
+        8
+      ],
+      [
+        "parts",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_smg",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_service",
+        0.1,
+        1,
+        1
+      ],
+      [
+        "gun_shotgun",
+        0.08,
+        1,
+        1
+      ]
+    ]
   },
   "kinds": {
     "fridge": {
@@ -622,6 +773,509 @@
           "hunter": 3
         }
       }
+    },
+    "supermarket": {
+      "name": "Supermarket district",
+      "holds": "food and water on the shelves, a little medicine behind the counter",
+      "danger": "a crowd between the aisles",
+      "tint": "#e8c060",
+      "weight": 1,
+      "answers": [
+        "food",
+        "water"
+      ],
+      "natural": {
+        "supermarket": "shop",
+        "butcher": "shop",
+        "cafe": "shop",
+        "diner": "shop",
+        "rowshop": "shop",
+        "market": "shop",
+        "kiosk": "shop",
+        "laundromat": "shop",
+        "barber": "pharmacy",
+        "clinic": "pharmacy"
+      },
+      "min_places": {
+        "shop": 7,
+        "pharmacy": 1,
+        "petrol": 0,
+        "hardware": 0,
+        "garage": 0,
+        "police": 0
+      },
+      "retag_order": [
+        "shop",
+        "pharmacy"
+      ],
+      "rolls": {
+        "shop": [
+          [
+            "food",
+            0.92,
+            1,
+            3
+          ],
+          [
+            "water",
+            0.85,
+            1,
+            3
+          ],
+          [
+            "meds",
+            0.12,
+            1,
+            1
+          ],
+          [
+            "scrap",
+            0.15,
+            1,
+            1
+          ],
+          [
+            "distraction",
+            0.09,
+            1,
+            3
+          ]
+        ],
+        "pharmacy": [
+          [
+            "meds",
+            0.7,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            1
+          ]
+        ]
+      },
+      "hints": {
+        "shop": "food, water"
+      }
+    },
+    "port": {
+      "name": "Container port",
+      "holds": "fuel, parts and crates of scrap; sheds and cranes",
+      "danger": "breachers in the sheds, a bloater at the far quay",
+      "tint": "#6a98c8",
+      "weight": 1,
+      "answers": [
+        "fuel",
+        "parts",
+        "scrap"
+      ],
+      "natural": {
+        "supermarket": "hardware",
+        "market": "hardware",
+        "rowshop": "hardware",
+        "butcher": "garage",
+        "cafe": "garage",
+        "diner": "garage",
+        "warehouse": "hardware",
+        "kiosk": "petrol"
+      },
+      "min_places": {
+        "shop": 0,
+        "petrol": 2,
+        "hardware": 3,
+        "garage": 3,
+        "pharmacy": 0,
+        "police": 0
+      },
+      "retag_order": [
+        "petrol",
+        "garage",
+        "hardware"
+      ],
+      "rolls": {
+        "garage": [
+          [
+            "parts",
+            0.6,
+            1,
+            3
+          ],
+          [
+            "fuel",
+            0.6,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.5,
+            1,
+            3
+          ],
+          [
+            "distraction",
+            0.08,
+            1,
+            2
+          ]
+        ],
+        "petrol": [
+          [
+            "fuel",
+            0.9,
+            1,
+            3
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            1
+          ]
+        ],
+        "hardware": [
+          [
+            "scrap",
+            0.8,
+            2,
+            4
+          ],
+          [
+            "parts",
+            0.6,
+            1,
+            2
+          ],
+          [
+            "fuel",
+            0.25,
+            1,
+            1
+          ]
+        ],
+        "house": [
+          [
+            "food",
+            0.2,
+            1,
+            2
+          ],
+          [
+            "water",
+            0.2,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.3,
+            1,
+            2
+          ],
+          [
+            "distraction",
+            0.07,
+            1,
+            3
+          ]
+        ]
+      },
+      "hints": {
+        "garage": "parts, fuel, crates",
+        "hardware": "crates, parts, breachers",
+        "petrol": "fuel"
+      },
+      "alarm_open": 0.4,
+      "spawn": {
+        "exit": {
+          "bloater": 1
+        },
+        "places": {
+          "breacher": {
+            "n": 3,
+            "types": [
+              "hardware",
+              "garage"
+            ]
+          }
+        }
+      }
+    },
+    "stadium": {
+      "name": "Stadium",
+      "holds": "kiosks full of food and water, many people to rescue",
+      "danger": "a huge crowd on the pitch, a screamer at the gate",
+      "tint": "#86b870",
+      "weight": 1,
+      "answers": [
+        "food",
+        "water"
+      ],
+      "natural": {
+        "supermarket": "shop",
+        "butcher": "shop",
+        "cafe": "shop",
+        "diner": "shop",
+        "rowshop": "shop",
+        "market": "shop",
+        "kiosk": "shop",
+        "laundromat": "shop",
+        "barber": "pharmacy",
+        "clinic": "pharmacy"
+      },
+      "min_places": {
+        "shop": 5,
+        "pharmacy": 1,
+        "petrol": 0,
+        "hardware": 1,
+        "garage": 0,
+        "police": 1
+      },
+      "retag_order": [
+        "shop",
+        "pharmacy",
+        "hardware",
+        "police"
+      ],
+      "rolls": {
+        "shop": [
+          [
+            "food",
+            0.88,
+            1,
+            4
+          ],
+          [
+            "water",
+            0.88,
+            1,
+            4
+          ],
+          [
+            "scrap",
+            0.15,
+            1,
+            1
+          ],
+          [
+            "distraction",
+            0.09,
+            1,
+            3
+          ]
+        ],
+        "pharmacy": [
+          [
+            "meds",
+            0.8,
+            1,
+            3
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            1
+          ]
+        ]
+      },
+      "hints": {
+        "shop": "food, water, crowds"
+      },
+      "noise_mult": 1.4,
+      "spawn": {
+        "entry": {
+          "screamer": 1
+        },
+        "exit": {
+          "bloater": 1
+        }
+      },
+      "survivor": {
+        "first": 1.0,
+        "extra": [
+          [
+            1,
+            0.8
+          ],
+          [
+            3,
+            0.6
+          ]
+        ],
+        "max": 5,
+        "hurt": 0.3,
+        "locked": 0.5
+      }
+    },
+    "airport": {
+      "name": "Airport",
+      "holds": "aircraft parts, fuel and medicine; the best shelves left",
+      "danger": "a hunter pack on the apron, breachers in the hangars, a screamer at the gate",
+      "tint": "#b8c4dc",
+      "weight": 1,
+      "answers": [
+        "parts",
+        "fuel",
+        "meds"
+      ],
+      "natural": {
+        "supermarket": "hardware",
+        "market": "hardware",
+        "rowshop": "hardware",
+        "butcher": "garage",
+        "cafe": "pharmacy",
+        "diner": "garage",
+        "warehouse": "hardware",
+        "kiosk": "petrol"
+      },
+      "min_places": {
+        "shop": 0,
+        "petrol": 2,
+        "hardware": 3,
+        "garage": 3,
+        "pharmacy": 2,
+        "police": 1
+      },
+      "retag_order": [
+        "pharmacy",
+        "petrol",
+        "hardware",
+        "garage",
+        "police"
+      ],
+      "rolls": {
+        "hardware": [
+          [
+            "scrap",
+            0.6,
+            2,
+            3
+          ],
+          [
+            "parts",
+            0.85,
+            1,
+            3
+          ],
+          [
+            "fuel",
+            0.2,
+            1,
+            1
+          ]
+        ],
+        "garage": [
+          [
+            "parts",
+            0.8,
+            1,
+            3
+          ],
+          [
+            "fuel",
+            0.7,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.3,
+            1,
+            2
+          ],
+          [
+            "distraction",
+            0.08,
+            1,
+            2
+          ]
+        ],
+        "petrol": [
+          [
+            "fuel",
+            0.95,
+            1,
+            3
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            1
+          ]
+        ],
+        "pharmacy": [
+          [
+            "meds",
+            0.95,
+            2,
+            4
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            1
+          ]
+        ],
+        "house": [
+          [
+            "food",
+            0.3,
+            1,
+            2
+          ],
+          [
+            "water",
+            0.3,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.2,
+            1,
+            2
+          ],
+          [
+            "meds",
+            0.15,
+            1,
+            1
+          ],
+          [
+            "distraction",
+            0.07,
+            1,
+            3
+          ]
+        ]
+      },
+      "hints": {
+        "hardware": "parts, hangars",
+        "garage": "parts, fuel",
+        "petrol": "fuel",
+        "pharmacy": "meds"
+      },
+      "spawn": {
+        "entry": {
+          "screamer": 1
+        },
+        "exit": {
+          "hunter": 2
+        },
+        "places": {
+          "breacher": {
+            "n": 2,
+            "types": [
+              "hardware"
+            ]
+          }
+        }
+      }
     }
   },
   "survivor": {
@@ -922,5 +1576,306 @@
     "parts": "mechanic",
     "fuel": "mechanic",
     "ammo": "guard"
+  },
+  "places": {
+    "_doc": "THE DESTINATION MAP (prison_destmap.gd, prison_loot.gd). One entry per named place on the gate's map; its id is the raid's town kind id (loot.kind). kind = the town_kinds entry whose tables the raid uses; any key of this entry that a kind also has (tint, spawn, noise_mult, alarm_open, survivor, answers, natural, min_places, rolls, hints, retag_order) overrides the kind's. dead_mult = how many dead stand in the town compared to the standard town (the generator's dead are thinned or doubled). map = x,y on the map (0..1), the prison is at 0.5,0.52. dist = kilometres, fuel = fuel units taken from the stores when the truck goes, danger 1..5, unlock_day = the first day on offer (unlock_note says why not before). hunt = the index of cfg.options to mark when nothing the base lacks is found here. finds = [what, often|sometimes|rarely] in plain words (probabilities stay hidden). layout = a drawn hint on the raid map (shops, houses, wards, yard, armoury, quay, stands, apron).",
+    "suburb": {
+      "kind": "residential",
+      "name": "Suburb",
+      "blurb": "Quiet streets of family houses. Pantries and cellars, and now and then somebody hiding upstairs.",
+      "threats": "Locked doors; sound carries far.",
+      "finds": [
+        [
+          "Food",
+          "often"
+        ],
+        [
+          "Water",
+          "often"
+        ],
+        [
+          "Survivors to rescue",
+          "sometimes"
+        ],
+        [
+          "Scrap",
+          "rarely"
+        ],
+        [
+          "Medicine",
+          "rarely"
+        ]
+      ],
+      "danger": 1,
+      "dead_mult": 0.8,
+      "dist": 1.5,
+      "fuel": 0,
+      "unlock_day": 1,
+      "hunt": 0,
+      "map": [
+        0.28,
+        0.64
+      ],
+      "layout": "houses",
+      "tint": "#b0a090",
+      "tag": "SB"
+    },
+    "supermarket": {
+      "kind": "supermarket",
+      "name": "Supermarket",
+      "blurb": "A strip of shops and one big supermarket. Shelves still hold tins and bottled water.",
+      "threats": "A crowd between the aisles.",
+      "finds": [
+        [
+          "Food",
+          "often"
+        ],
+        [
+          "Water",
+          "often"
+        ],
+        [
+          "Medicine",
+          "rarely"
+        ],
+        [
+          "Scrap",
+          "rarely"
+        ]
+      ],
+      "danger": 2,
+      "dead_mult": 1.0,
+      "dist": 2.0,
+      "fuel": 0,
+      "unlock_day": 1,
+      "hunt": 0,
+      "map": [
+        0.58,
+        0.72
+      ],
+      "layout": "shops",
+      "tag": "SM"
+    },
+    "industrial": {
+      "kind": "industrial",
+      "name": "Industrial yard",
+      "blurb": "Warehouses, garages and a scrapyard behind a chain fence.",
+      "threats": "Car alarms everywhere; breachers in the sheds.",
+      "finds": [
+        [
+          "Scrap",
+          "often"
+        ],
+        [
+          "Parts",
+          "often"
+        ],
+        [
+          "Fuel",
+          "sometimes"
+        ],
+        [
+          "Food",
+          "rarely"
+        ]
+      ],
+      "danger": 2,
+      "dead_mult": 1.0,
+      "dist": 3.0,
+      "fuel": 0,
+      "unlock_day": 1,
+      "hunt": 2,
+      "map": [
+        0.78,
+        0.44
+      ],
+      "layout": "yard",
+      "tag": "IN"
+    },
+    "hospital": {
+      "kind": "hospital",
+      "name": "Hospital",
+      "blurb": "A hospital campus: pharmacies, wards and people who could not leave.",
+      "threats": "A screamer at the gate, one locked ward.",
+      "finds": [
+        [
+          "Medicine",
+          "often"
+        ],
+        [
+          "Survivors to rescue",
+          "sometimes"
+        ],
+        [
+          "Food",
+          "rarely"
+        ],
+        [
+          "Water",
+          "rarely"
+        ]
+      ],
+      "danger": 3,
+      "dead_mult": 1.15,
+      "dist": 3.5,
+      "fuel": 0,
+      "unlock_day": 1,
+      "hunt": 1,
+      "map": [
+        0.42,
+        0.26
+      ],
+      "layout": "wards",
+      "tag": "HO"
+    },
+    "police": {
+      "kind": "police",
+      "name": "Police station",
+      "blurb": "The station, the armoury and the lock-up. Locked and loud.",
+      "threats": "A hunter pack by the far pickup.",
+      "finds": [
+        [
+          "Ammunition",
+          "often"
+        ],
+        [
+          "Guns",
+          "sometimes"
+        ],
+        [
+          "Parts",
+          "rarely"
+        ]
+      ],
+      "danger": 4,
+      "dead_mult": 1.3,
+      "dist": 4.0,
+      "fuel": 0,
+      "unlock_day": 2,
+      "unlock_note": "The station is cordoned off. The dead have to thin out first.",
+      "hunt": 4,
+      "map": [
+        0.66,
+        0.2
+      ],
+      "layout": "armoury",
+      "tag": "PD"
+    },
+    "stadium": {
+      "kind": "stadium",
+      "name": "Stadium",
+      "blurb": "Fifty thousand seats and the people who sheltered there. Kiosks under every stand.",
+      "threats": "A large crowd of dead, a screamer at the gate.",
+      "finds": [
+        [
+          "Food",
+          "often"
+        ],
+        [
+          "Water",
+          "often"
+        ],
+        [
+          "Survivors to rescue",
+          "often"
+        ],
+        [
+          "Medicine",
+          "rarely"
+        ]
+      ],
+      "danger": 4,
+      "dead_mult": 2.2,
+      "dist": 8.0,
+      "fuel": 1,
+      "unlock_day": 5,
+      "unlock_note": "The road to the stadium is blocked by wrecks until about day 5.",
+      "hunt": 0,
+      "map": [
+        0.14,
+        0.36
+      ],
+      "layout": "stands",
+      "tag": "ST"
+    },
+    "port": {
+      "kind": "port",
+      "name": "Port",
+      "blurb": "Container stacks, cranes and fuel depots on the quay. Big, and a long way.",
+      "threats": "Breachers in the sheds, a bloater at the far quay.",
+      "finds": [
+        [
+          "Fuel",
+          "often"
+        ],
+        [
+          "Parts",
+          "often"
+        ],
+        [
+          "Crates of scrap",
+          "often"
+        ],
+        [
+          "Food",
+          "rarely"
+        ]
+      ],
+      "danger": 4,
+      "dead_mult": 1.5,
+      "dist": 12.0,
+      "fuel": 2,
+      "unlock_day": 8,
+      "unlock_note": "The coast road is cut. It should open about day 8.",
+      "hunt": 3,
+      "map": [
+        0.88,
+        0.82
+      ],
+      "layout": "quay",
+      "tag": "PT"
+    },
+    "airport": {
+      "kind": "airport",
+      "name": "Airport",
+      "blurb": "Hangars, a fuel farm and a clinic. What is left here is what the convoy's list asks for.",
+      "threats": "A hunter pack on the apron, breachers in the hangars, a screamer at the gate.",
+      "finds": [
+        [
+          "Parts",
+          "often"
+        ],
+        [
+          "Fuel",
+          "often"
+        ],
+        [
+          "Medicine",
+          "often"
+        ],
+        [
+          "Scrap",
+          "sometimes"
+        ],
+        [
+          "Guns",
+          "rarely"
+        ]
+      ],
+      "danger": 5,
+      "dead_mult": 1.8,
+      "dist": 18.0,
+      "fuel": 3,
+      "unlock_day": 12,
+      "unlock_note": "The airport is beyond the hills. The radio says the way opens about day 12.",
+      "hunt": 2,
+      "convoy": true,
+      "map": [
+        0.1,
+        0.84
+      ],
+      "layout": "apron",
+      "tag": "AP"
+    }
   }
 }

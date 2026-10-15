@@ -110,6 +110,8 @@ func run(name: String) -> void:
 			await _keys()
 		"gate", "gateclick":
 			await _gate(name == "gateclick")
+		"places":
+			await _places()
 		"squad":
 			await _squad()
 		"stash":
@@ -213,29 +215,49 @@ func _gate(by_click: bool) -> void:
 	await _put(Vector2(g.base.stations.truck) + Vector2(0.0, 1.0))
 	_check(String(g._prompt.get("kind", "")) == "gate", "at the truck the prompt is the gate")
 	await _tap(KEY_E)
-	_check(g.loot.choosing, "E opens the gate choice")
+	_check(g.loot.choosing and g.loot.dest.is_open, "E opens the destination map")
 	await _wait(4)
+	_check(g.loot.dest.ids.size() >= 7, "the map lists the places (%d)" % g.loot.dest.ids.size())
+	var want := "hospital"
+	var i := int(g.loot.dest.ids.find(want))
 	if by_click:
-		var bs := _buttons(g.loot._panel, "3")
-		_check(bs.size() == 1, "the third option button is found")
-		if bs.size() == 1:
-			await _click(_center(bs[0]))
+		var pos: Vector2 = g.loot.dest.canvas.global_position + g.loot.dest._pos(want, g.loot.dest.canvas.size)
+		await _click(pos)
 	else:
-		await _tap(KEY_4)
-	_check(not g.loot.choosing and g.loot.picked == (2 if by_click else 3), "the choice sets the raid target (picked %d, wanted %d)" % [g.loot.picked, 2 if by_click else 3])
+		await _tap(KEY_1 + i)
+	_check(String(g.loot.dest.ids[g.loot.dest.sel]) == want, "the marker is selected (%s)" % String(g.loot.dest.ids[g.loot.dest.sel]))
+	_check(not g.loot.dest.go_btn.disabled, "Go is on for an open place")
+	await _tap(KEY_ENTER)
+	_check(not g.loot.choosing and g.loot.picked_kind == want and g.loot.picked == 1, "Go sets the town (%s) and the meds mark (picked %d)" % [g.loot.picked_kind, g.loot.picked])
 	await _wait(4)
 	_check(g.loadout.is_open, "the choice opens the loadout card (gun, kit, companions)")
 	await _tap(KEY_ENTER)
 	await _wait(400)
 	_check(g.mode == "raid", "the truck goes out (mode %s)" % g.mode)
-	_check(g.loot.option == (2 if by_click else 3), "the raid hunts option %d: %s" % [g.loot.option, g.loot.target])
+	_check(g.loot.kind == want and g.loot.option == 1, "the raid is at the %s and hunts option %d: %s" % [g.loot.kind, g.loot.option, g.loot.target])
+
+
+## The data of the places is whole: every place has a town kind, finds with the three words, an unlock day, a map spot, and the late places are later than the early ones.
+func _places() -> void:
+	var L = g.loot
+	var late := {}
+	for id in L.place_ids():
+		var pc: Dictionary = L.place_cfg(id)
+		_check(not L.raw_kind(String(pc.kind)).is_empty(), "%s has the town kind %s" % [id, pc.kind])
+		_check(not (pc.finds as Array).is_empty() and (pc.finds as Array).all(func(f): return ["often", "sometimes", "rarely"].has(String(f[1]))), "%s: finds use often/sometimes/rarely" % id)
+		_check(int(pc.danger) >= 1 and int(pc.danger) <= 5 and (pc.map as Array).size() == 2, "%s: danger 1 to 5 and a map spot" % id)
+		late[id] = int(pc.unlock_day)
+	_check(int(late.stadium) == 5 and int(late.port) == 8 and int(late.airport) == 12, "stadium day 5, port day 8, airport day 12")
+	_check(L.offer(1).size() < L.offer(12).size() and L.offer(12).size() == L.place_ids().size(), "places open by day (day 1: %d, day 12: %d)" % [L.offer(1).size(), L.offer(12).size()])
+	_check(L.kind_cfg("airport").get("answers", []).has("parts") and L.place_for("police") == "police", "a place carries its kind's data; an event's kind word finds its place")
 
 
 func _squad() -> void:
 	# the gate's second step with real keys: 1 and 2 pick two companions, W the next gun, Enter goes; in the raid C opens the orders and 2 holds them all
 	await _put(Vector2(g.base.stations.truck) + Vector2(0.0, 1.0))
 	await _tap(KEY_E)
-	await _tap(KEY_1)
+	await _tap(KEY_1)    # (the map: the first place, then Enter goes)
+	await _tap(KEY_ENTER)
 	await _wait(4)
 	_check(g.loadout.is_open, "the choice opens the loadout card")
 	var shown: int = g.squad.cands.size()

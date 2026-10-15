@@ -9,6 +9,7 @@ extends RefCounted
 
 const Bal := preload("res://scripts/prison/prison_bal.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
+const DestMap := preload("res://scripts/prison/prison_destmap.gd")
 const PATH := "res://assets/data/prison_raids.json"
 const TILE := 64.0
 
@@ -23,16 +24,8 @@ var choosing := false
 var kind := ""    # the kind of town of this raid ("" = today's town)
 const RAID_MOD_KIND := {"watchers": "police"}    # event word -> town kind
 var force_kind := ""    # ARC hook: an event card's raid_mod sets this to force the next raid's kind (used once; "" = free choice)
-var picked_kind := ""    # the kind chosen at the gate
-var offered: Array = []    # the kinds on offer today (ids)
-var _kind_sel := 0
-var _kind_btns: Array = []
-var _kind_info: Label
-var _kind_row: HBoxContainer
-var _panel: PanelContainer
-var _buttons: Array = []
-var _title: Label
-var _sub: Label
+var picked_kind := ""    # the place (id in cfg.places) chosen at the gate
+var dest    # the destination map (prison_destmap.gd)
 
 
 static func cfg() -> Dictionary:
@@ -48,10 +41,50 @@ func _init(g = null) -> void:
 
 # ------------------------------------------------------------------ the town kinds --
 
-## The data of a kind ({} for "" or an unknown id: today's town).
+## The data of a kind or a place ({} for "" or an unknown id: today's town). A place id gives its town kind's data with the place's own keys laid over it (`places` in the data).
 static func kind_cfg(k: String) -> Dictionary:
+	var pc := place_cfg(k)
+	if not pc.is_empty():
+		var out := raw_kind(String(pc.get("kind", ""))).duplicate()
+		for key in PLACE_KEYS:
+			if pc.has(key):
+				out[key] = pc[key]
+		out["dead_mult"] = float(pc.get("dead_mult", 1.0))
+		return out
+	return raw_kind(k)
+
+
+const PLACE_KEYS := ["tint", "spawn", "noise_mult", "alarm_open", "survivor", "answers", "natural", "min_places", "rolls", "hints", "retag_order", "layout"]
+
+
+static func raw_kind(k: String) -> Dictionary:
 	var tk = cfg().get("town_kinds", {})
 	return (tk[k] as Dictionary) if tk is Dictionary and k != "" and tk.has(k) and tk[k] is Dictionary else {}
+
+
+## A place of the destination map ({} when `k` is not one).
+static func place_cfg(k: String) -> Dictionary:
+	var pl = cfg().get("places", {})
+	return (pl[k] as Dictionary) if pl is Dictionary and k != "" and pl.has(k) and pl[k] is Dictionary else {}
+
+
+## The ids of the places in map order.
+static func place_ids() -> Array:
+	var out: Array = []
+	for k in cfg().get("places", {}):
+		if not String(k).begins_with("_"):
+			out.append(String(k))
+	return out
+
+
+## The place an id of a town kind or a place stands for ("" when none): an event's raid_mod names a kind.
+static func place_for(k: String) -> String:
+	if not place_cfg(k).is_empty():
+		return k
+	for id in place_ids():
+		if String(place_cfg(id).get("kind", "")) == k:
+			return id
+	return ""
 
 
 ## The base tables with the kind's laid over them: {natural, min_places, rolls, hints, retag_order}.
@@ -67,23 +100,9 @@ static func eff(k: String) -> Dictionary:
 	return out
 
 
-## The kinds on offer on a day (2 or 3 ids, stable per day); [] when the data has no kinds.
+## The places on the map that are open on a day (ids).
 static func offer(day: int) -> Array:
-	var tk = cfg().get("town_kinds", {})
-	if not (tk is Dictionary):
-		return []
-	var ids: Array = []
-	for k in tk:
-		if not String(k).begins_with("_") and tk[k] is Dictionary:
-			ids.append(String(k))
-	if ids.size() < 2:
-		return []
-	ids.erase("standard")
-	ids.sort_custom(func(a, b): return _h(day, a.hash() & 0xffff) < _h(day, b.hash() & 0xffff))
-	var out: Array = ids.slice(0, 1 + (day % 2))    # (one or two special kinds a day)
-	if (cfg().town_kinds as Dictionary).has("standard"):
-		out.insert(day % 3 % (out.size() + 1), "standard")    # (the plain town is always one of the offers)
-	return out
+	return place_ids().filter(func(id): return day >= int(place_cfg(id).get("unlock_day", 1)))
 
 
 ## The survivor table of this raid (the base with the kind's changes).
@@ -233,10 +252,15 @@ func begin(t: Dictionary, seed_i: int) -> void:
 			kind = String(game.args.townkind)
 		elif picked_kind != "":
 			kind = picked_kind
+	if kind != "" and place_for(kind) != "":
+		kind = place_for(kind)    # (an event's kind word is the map's place of that kind)
+	if picked_kind != "" and kind == picked_kind and game.stores != null:    # the truck's fuel is spent when it goes (not for a staged --raid)
+		game.stores["fuel"] = maxf(0.0, float(game.stores.get("fuel", 0.0)) - float(place_cfg(kind).get("fuel", 0)))
 	force_kind = ""
 	picked_kind = ""
 	if kind == "standard" or kind_cfg(kind).is_empty():
 		kind = ""
+	_thin_dead(t, seed_i)
 	places = prepare(t, seed_i, kind)
 	t["places"] = places
 	var o := default_option()
@@ -253,6 +277,57 @@ func begin(t: Dictionary, seed_i: int) -> void:
 	target = []
 	for ty in cfg().options[option].types:
 		target.append(String(ty))
+
+
+## The place's dead density: the town's dead are thinned (a share kept) or crowded (copies set a little beside them), stable per seed.
+func _thin_dead(t: Dictionary, seed_i: int) -> void:
+	var m := dead_mult()
+	if m == 1.0 or not t.has("dead"):
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.seed = _h(seed_i, 4141)
+	var out: Array = []
+	for r in t.dead:
+		if m < 1.0:
+			if rng.randf() < m:
+				out.append(r)
+			continue
+		out.append(r)
+		var extra := int(floor(m - 1.0)) + (1 if rng.randf() < fposmod(m - 1.0, 1.0) else 0)
+		for i in extra:
+			var c: Dictionary = (r as Dictionary).duplicate()
+			c["pos"] = Vector2(r.pos) + Vector2(rng.randf_range(-0.9, 0.9), rng.randf_range(-0.9, 0.9))
+			out.append(c)
+	t["dead"] = out
+
+
+func dead_mult() -> float:
+	return float(kind_cfg(kind).get("dead_mult", 1.0))
+
+
+## The option (cfg.options index) a trip to a place marks: the one for the base's shortage when the place answers it, else the place's own `hunt`.
+func option_for(id: String) -> int:
+	var ans: Array = kind_cfg(id).get("answers", [])
+	var opts: Array = cfg().options
+	for res in short_res():
+		if ans.has(res):
+			for i in opts.size():
+				if (opts[i].res as Array).has(res):
+					return i
+	return clampi(int(place_cfg(id).get("hunt", default_option())), 0, opts.size() - 1)
+
+
+## What the base is short of: the econ's biggest shortage first, then the convoy list's unmet stock lines (from the day the list shows).
+func short_res() -> Array:
+	var out: Array = []
+	var nd: Dictionary = game.econ.needs()
+	if not nd.is_empty():
+		out.append(String(nd.res))
+	if game.arc != null and int(game.econ.day) >= 3:    # (the convoy list shows from day 3)
+		for r in game.arc.requirements():
+			if String(r.kind) == "stock" and not bool(r.ok) and String(r.res) != "" and not out.has(String(r.res)):
+				out.append(String(r.res))
+	return out
 
 
 ## The option the base needs most now (the econ's biggest shortage), 0 when nothing is short.
@@ -294,6 +369,7 @@ func paint(c: CanvasItem) -> void:
 	var tint := String(kind_cfg(kind).get("tint", ""))
 	if tint != "":
 		c.draw_rect(Rect2(Vector2.ZERO, Vector2(64, 64) * TILE), Color(Color(tint), 0.1))    # (the kind's colour wash over the town)
+	_paint_layout(c, tint)
 	for pl in places:
 		var ty := String(pl.type)
 		var at: Vector2 = Vector2(pl.pos) * TILE
@@ -308,6 +384,32 @@ func paint(c: CanvasItem) -> void:
 			_sign(c, door, ty, col, 1.0, big)
 		elif me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
 			_sign(c, door, ty, col, 0.8, 1.0)
+
+
+## The place's own look on the raid map, drawn along the town's edges and middle (a hint, not a rule): water and cranes at the port, a runway at the airport, the stands of the stadium, a chain fence round the yard, a frame in the place's colour for the rest.
+func _paint_layout(c: CanvasItem, tint: String) -> void:
+	var lay := String(kind_cfg(kind).get("layout", ""))
+	if lay == "":
+		return
+	var col := Color(tint) if tint != "" else Color(0.8, 0.8, 0.8)
+	var W := 64.0 * TILE
+	c.draw_rect(Rect2(Vector2.ZERO, Vector2(W, W)), Color(col, 0.55), false, 10.0)
+	match lay:
+		"quay":
+			c.draw_rect(Rect2(Vector2(W - 7.0 * TILE, 0), Vector2(7.0 * TILE, W)), Color(0.15, 0.3, 0.5, 0.35))
+			for i in 8:
+				c.draw_rect(Rect2(Vector2(W - 11.0 * TILE, (5.0 + i * 7.0) * TILE), Vector2(3.0 * TILE, 1.6 * TILE)), Color(0.8, 0.45, 0.2, 0.3))    # (container stacks on the quay)
+		"apron":
+			c.draw_rect(Rect2(Vector2(0, 2.0 * TILE), Vector2(W, 3.0 * TILE)), Color(0.35, 0.37, 0.42, 0.4))
+			for i in 16:
+				c.draw_rect(Rect2(Vector2((1.0 + i * 4.0) * TILE, 3.4 * TILE), Vector2(2.0 * TILE, 0.3 * TILE)), Color(1, 1, 0.9, 0.4))
+		"stands":
+			c.draw_arc(Vector2(W * 0.5, W * 0.5), 14.0 * TILE, 0, TAU, 64, Color(col, 0.5), 14.0)
+			c.draw_arc(Vector2(W * 0.5, W * 0.5), 9.0 * TILE, 0, TAU, 48, Color(0.5, 0.75, 0.4, 0.35), 8.0)
+		"yard":
+			for i in 32:
+				c.draw_rect(Rect2(Vector2(i * 2.0 * TILE, 0), Vector2(0.5 * TILE, 0.5 * TILE)), Color(0.9, 0.6, 0.2, 0.35))
+				c.draw_rect(Rect2(Vector2(i * 2.0 * TILE, W - 0.5 * TILE), Vector2(0.5 * TILE, 0.5 * TILE)), Color(0.9, 0.6, 0.2, 0.35))
 
 
 const SIGN_WORD := {"shop": "SHOP", "pharmacy": "PHARMACY", "hardware": "HARDWARE", "garage": "GARAGE", "petrol": "FUEL", "police": "POLICE"}
@@ -358,137 +460,38 @@ func mini(bars: Control, o: Vector2, sc: float) -> void:
 
 # ------------------------------------------------------------------ the gate's choice --
 
-## E at the truck: opens the choice (true: the game must not go out yet).
-func open_choice() -> bool:
+## E at the truck (or M): opens the destination map (true: the game must not go out yet). `view` = only look (M away from the truck).
+func open_choice(view := false) -> bool:
 	if game.args.has("target") or game.args.has("auto") or choosing:
 		return false
-	choosing = true
-	var def := default_option()
-	option = def
-	if _panel == null:
-		_build()
-	var nd: Dictionary = game.econ.needs()
-	_sub.text = String(nd.get("reason", "Nothing is short. Pick what to hunt.")) if not nd.is_empty() else "Nothing is short. Pick what to hunt."
-	for i in _buttons.size():
-		var o: Dictionary = cfg().options[i]
-		var tys: Array = []
-		for ty in o.types:
-			tys.append(String(cfg().names[ty]))
-		(_buttons[i] as Button).text = "%d   %s   (%s)%s" % [i + 1, String(o.name), ", ".join(tys), "     <- the base needs this" if i == def else ""]
-	var day := int(game.econ.day) if game.econ != null else 1
 	var rm: String = game.arc.take_raid_mod() if game.arc != null else ""    # EVENTS: a card's raid_mod picks the next town (a kind id, or the card's own word via RAID_MOD_KIND)
 	if rm != "":
 		force_kind = String(RAID_MOD_KIND.get(rm, rm))
-	offered = [force_kind] if force_kind != "" and not kind_cfg(force_kind).is_empty() else offer(day)
+	var forced := place_for(force_kind) if force_kind != "" else ""
 	if game.args.has("townkind"):
-		offered = [String(game.args.townkind)]
-	_kind_sel = 0
-	var nk := String(nd.get("res", ""))
-	for i in offered.size():    # (the kind that answers the shortage is pre-picked)
-		if (kind_cfg(String(offered[i])).get("answers", []) as Array).has(nk):
-			_kind_sel = i
-	_kind_row.visible = not offered.is_empty()
-	_kind_info.visible = not offered.is_empty()
-	for i in _kind_btns.size():
-		(_kind_btns[i] as Button).visible = i < offered.size()
-		if i < offered.size():
-			(_kind_btns[i] as Button).text = String(kind_cfg(String(offered[i])).get("name", offered[i]))
-	_show_kind()
-	_panel.visible = true
-	_panel.reset_size()
-	_panel.position = game._vp() / 2.0 - Vector2(330, 190)
+		forced = place_for(String(game.args.townkind))
+	if dest == null:
+		dest = DestMap.new(self, game)
+	choosing = true
+	option = default_option()
+	dest.open(view, forced)
 	return true
 
 
-func _show_kind() -> void:
-	if offered.is_empty():
-		return
-	var kc := kind_cfg(String(offered[_kind_sel]))
-	_kind_info.text = "Holds: %s\nDanger: %s" % [String(kc.get("holds", "")), String(kc.get("danger", ""))]
-	for i in _kind_btns.size():
-		(_kind_btns[i] as Button).modulate = Color(1, 0.9, 0.5) if i == _kind_sel else Color(0.75, 0.75, 0.75)
-
-
-func _sel_kind(i: int) -> void:
-	_kind_sel = clampi(i, 0, maxi(0, offered.size() - 1))
-	_show_kind()
-
-
-func _build() -> void:
-	_panel = PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.05, 0.06, 0.07, 0.94)
-	st.border_color = Color(0.85, 0.7, 0.3)
-	st.set_border_width_all(2)
-	st.set_content_margin_all(14)
-	_panel.add_theme_stylebox_override("panel", st)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 6)
-	_panel.add_child(col)
-	_title = Label.new()
-	_title.text = "Where to? (number key or click, Left/Right: kind of town, E or Enter: what the base needs, Esc: stay)"
-	_title.add_theme_font_size_override("font_size", 18)
-	_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # (the long hint line made the panel wider than the screen)
-	_title.custom_minimum_size.x = 640.0
-	col.add_child(_title)
-	_sub = Label.new()
-	_sub.add_theme_font_size_override("font_size", 16)
-	_sub.modulate = Color(1, 0.85, 0.5)
-	col.add_child(_sub)
-	_kind_row = HBoxContainer.new()
-	_kind_row.add_theme_constant_override("separation", 6)
-	col.add_child(_kind_row)
-	var kl := Label.new()
-	kl.text = "Town:"
-	_kind_row.add_child(kl)
-	for i in 3:
-		var kb := Button.new()
-		kb.focus_mode = Control.FOCUS_NONE
-		kb.add_theme_font_size_override("font_size", 16)
-		kb.pressed.connect(func(): _sel_kind(i))
-		_kind_row.add_child(kb)
-		_kind_btns.append(kb)
-	_kind_info = Label.new()
-	_kind_info.add_theme_font_size_override("font_size", 15)
-	_kind_info.modulate = Color(0.8, 0.9, 1.0)
-	col.add_child(_kind_info)
-	for i in (cfg().options as Array).size():
-		var b := Button.new()
-		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		b.add_theme_font_size_override("font_size", 18)
-		b.focus_mode = Control.FOCUS_NONE
-		b.pressed.connect(func(): _pick(i))
-		col.add_child(b)
-		_buttons.append(b)
-	_panel.visible = false
-	game.hud.add_child(_panel)
-
-
-func _pick(i: int) -> void:
+## The map's Go: the place is the raid's town, its marks the shortage's (or the place's own), then the loadout card.
+func go_to(id: String) -> void:
 	choosing = false
-	_panel.visible = false
-	picked = i
-	picked_kind = String(offered[_kind_sel]) if not offered.is_empty() else ""
-	game.loadout.open(String(cfg().options[i].name))    # SQUAD hook: the second step of the gate's choice (gun, kit, companions), which goes out
+	dest.close()
+	picked = option_for(id)
+	picked_kind = id
+	game.loadout.open(String(place_cfg(id).get("name", id)))    # SQUAD hook: the second step of the gate's choice (gun, kit, companions), which goes out
 
 
-## Keys while the choice is open. True when used.
+## Keys while the map is open. True when used.
 func key(ev: InputEvent) -> bool:
-	if not choosing or not (ev is InputEventKey) or not ev.pressed or ev.echo:
+	if not choosing or dest == null:
 		return false
-	var k: int = ev.keycode
-	if k >= KEY_1 and k < KEY_1 + _buttons.size():
-		_pick(k - KEY_1)
-	elif k == KEY_LEFT or k == KEY_A:
-		_sel_kind(posmod(_kind_sel - 1, maxi(1, offered.size())))
-	elif k == KEY_RIGHT or k == KEY_D or k == KEY_TAB:
-		_sel_kind((_kind_sel + 1) % maxi(1, offered.size()))
-	elif k == KEY_E or k == KEY_ENTER or k == KEY_KP_ENTER:
-		_pick(default_option())
-	elif k == KEY_ESCAPE:
-		choosing = false
-		_panel.visible = false
-	return true
+	return dest.key(ev)
 
 
 # ------------------------------------------------------------------ the lab --

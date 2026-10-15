@@ -1366,8 +1366,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_MINUS:
 				_set_speed(speed - 1)
 			KEY_M:
-				map_view = not map_view
-				zoom_px = 6.0 if map_view else play_zoom
+				if mode == "base" and phase == "managed" and not busy:    # the destination map (view only away from the truck)
+					loot.open_choice(String(_prompt.get("kind", "")) != "gate")
+				else:
+					map_view = not map_view
+					zoom_px = 6.0 if map_view else play_zoom
 			KEY_ESCAPE:
 				pause_menu.open()
 	elif ev is InputEventMouseButton and ev.pressed:
