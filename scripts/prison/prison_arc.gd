@@ -134,6 +134,52 @@ func dim() -> float:
 	return f
 
 
+## HORDE NIGHTS (prison_story.json `hordes`): the base is attacked only on these nights. The forced nights stand, between them a gap of 3 to 5 days drawn from the run seed.
+var _horde_set := {}
+var _horde_seed := -1
+
+
+func is_horde_night(n: int) -> bool:
+	var hc: Dictionary = cfg.get("hordes", {})
+	if hc.is_empty():
+		return true    # (no data: every night, as before)
+	if _horde_seed != run_seed:
+		_horde_seed = run_seed
+		_horde_set.clear()
+		var r := RandomNumberGenerator.new()
+		r.seed = run_seed * 6151 + 17
+		var forced: Array = hc.forced
+		var last := 0
+		while last < 90:
+			var nxt := last + r.randi_range(int(hc.gap[0]), int(hc.gap[1]))
+			for f in forced:
+				if int(f) > last and int(f) <= nxt:
+					nxt = int(f)
+					break
+			for f in forced:    # (a forced night just after it is taken as this one: hordes are never closer than the gap)
+				if int(f) > nxt and int(f) - nxt < int(hc.gap[0]):
+					nxt = int(f)
+					break
+			_horde_set[nxt] = true
+			last = nxt
+	return _horde_set.has(n)
+
+
+## The next horde night from night `n` on (n itself counts).
+func next_horde_night(n: int) -> int:
+	for k in range(n, n + 100):
+		if is_horde_night(k):
+			return k
+	return n
+
+
+## One line for the HUD: "Horde tonight", "Quiet tonight, next horde: night 6".
+func horde_line(n: int, tonight := true) -> String:
+	if is_horde_night(n):
+		return "HORDE tonight" if tonight else "Horde: night %d" % n
+	return "%s, next horde: night %d" % ["Quiet tonight" if tonight else "Quiet", next_horde_night(n)]
+
+
 ## The night table: the dead sent on night n, the segments and the runner share (rows are interpolated), times the weather of that day.
 func wave_plan(n: int) -> Dictionary:
 	var rows: Array = _cfg_nights
@@ -150,7 +196,7 @@ func wave_plan(n: int) -> Dictionary:
 	var total := lerpf(float(lo[1]), float(hi[1]), t)
 	if n > int((rows[rows.size() - 1] as Array)[0]):
 		total = float((rows[rows.size() - 1] as Array)[1]) * (1.0 + 0.15 * float(n - int((rows[rows.size() - 1] as Array)[0])))
-	total *= float(weather_of(n).get("wave_mult", 1.0))
+	total *= float(weather_of(n).get("wave_mult", 1.0)) * float((cfg.get("hordes", {}) as Dictionary).get("size_mult", 1.0))
 	total *= float((night_mods.get(str(n), {}) as Dictionary).get("size", 1.0))    # EVENTS hook: a card made tonight bigger or smaller
 	var segs := int(lo[2])
 	var runner := lerpf(float(lo[3]), float(hi[3]), t)
@@ -483,6 +529,10 @@ func _day_banner() -> void:
 	if sub != "clear":
 		t += "   " + sub
 	var warn := String(w.get("text", ""))
+	if is_horde_night(day):
+		warn = ("The dead are gathering: a horde comes tonight.  " + warn).strip_edges()
+	elif is_horde_night(day + 1):
+		warn = ("The dead are stirring: a horde is expected tomorrow night.  " + warn).strip_edges()
 	if day == convoy_day() and not ready():    # (the convoy is a one-shot: say at dawn what the list still lacks)
 		warn = "NOT READY: " + "; ".join(missing())
 	story.banner(t, warn)

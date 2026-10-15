@@ -591,8 +591,12 @@ func _attack_chip() -> void:
 		return
 	var secs: float = maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR / float(game.speed))
 	var st := "warn" if secs < 90.0 else "ok"
-	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, "Night %d" % (sg.nights_started + 1), "in %d:%02d" % [int(secs) / 60, int(secs) % 60], Hud.WARN if st == "warn" else DIM, "", st,
-		"The next attack comes at 21:00. Mend the fence and keep ammo in the stores before it.")
+	var hn: int = sg.nights_started + 1
+	var horde: bool = game.arc.is_horde_night(hn)
+	if not horde:
+		st = "ok"
+	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, "Horde night %d" % hn if horde else "Quiet night", "in %d:%02d" % [int(secs) / 60, int(secs) % 60] if horde else "next horde: night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
+		"A horde comes at 21:00 tonight. Mend the fence and keep ammo in the stores before it." if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
 
 
 func _convoy_chip() -> void:    # ARC hook
@@ -778,7 +782,11 @@ func objectives() -> Array:
 		var rs: int = game.people.rescued
 		out.append({"t": "Rescue survivors on raids (%d/6)" % mini(rs, 6), "done": rs >= 6})
 	var sg = game.siege
-	out.append({"t": "Survive night %d" % (sg.night if sg.attacking else sg.nights_started + 1), "done": false})
+	var nn: int = sg.night if sg.attacking else sg.nights_started + 1
+	if sg.attacking or game.arc.is_horde_night(nn):
+		out.append({"t": "Survive night %d" % nn, "done": false})
+	else:
+		out.append({"t": "Quiet nights: raid and build before the horde of night %d" % game.arc.next_horde_night(nn), "done": false})
 	var m: float = econ.morale
 	out.append({"t": "%s morale above 60 (now %d)" % ["Keep" if m >= 60.0 else "Raise", int(m)], "done": m >= 60.0})
 	var bd: Dictionary = econ.beds()

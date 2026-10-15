@@ -22,6 +22,7 @@ static var inst
 var game
 var enabled := true
 var rng := RandomNumberGenerator.new()
+var _small_raid := false    # a noise already called a small horde in this raid
 var heat := {}    # region key -> heat
 var inv := {}    # Zombie -> {tgt, arrived, mill, horde}: the dead that went to look
 var ripples: Array = []    # {pos, r, t, life, col}
@@ -222,6 +223,7 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 		called.append(z)
 	last_alert = called.size()
 	stats.alerted += called.size()
+	_small_horde_check(pos, kind)
 	# the swell: past join_n the nearest others follow, and a horde that heard it turns as one
 	var hc: Dictionary = cfg.horde
 	if called.size() + inv.size() > int(hc.join_n) and not called.is_empty() and kind != "tower":
@@ -593,9 +595,34 @@ func spawn_horde(n: int, from: Vector2, to: Vector2, speed: float, kind_name: St
 	return h
 
 
+## HORDES: a scream, an alarm or a very loud place may call a smaller horde: at the base it tears at the fence (prison_siege.gd `small_horde`), in a raid it walks at the noise (once a raid).
+func _small_horde_check(pos: Vector2, kind: String) -> void:
+	if game.phase != "managed" or game.run == null:
+		return
+	var loud := kind == "scream" or kind == "alarm" or (kind == "shot" and heat_at(pos) >= float(cfg.heat.very_at))
+	if not loud:
+		return
+	if game.mode == "base":
+		if game.siege != null:
+			game.siege.small_horde("scream" if kind == "scream" else "noise")
+		return
+	var hc: Dictionary = (game.arc.cfg.get("hordes", {}) as Dictionary).get("small", {})
+	if game.mode != "raid" or _small_raid or hc.is_empty() or int(game.arc.day) < int(hc.min_day) or rng.randf() > float(hc.chance):
+		return
+	var n := rng.randi_range(int(hc.size[0]), int(hc.size[1]))
+	var a := rng.randf() * TAU
+	var h := spawn_horde(n, _free(pos + Vector2(cos(a), sin(a)) * 26.0), pos, float(cfg.raid_horde.speed), "raid", 3.0)
+	if h.is_empty():
+		return
+	_small_raid = true
+	h["name"] = _dir_word(Vector2(cos(a), sin(a)))
+	_toast_once("horde_small" + str(game.raids), "The noise drew a horde from the %s." % String(h.name), Color(1.0, 0.5, 0.4))
+
+
 ## A raid has begun: maybe a horde crosses the town (never on the first days).
 func on_raid_begin() -> void:
 	_reset_run()
+	_small_raid = false
 	var hc: Dictionary = cfg.raid_horde
 	var day := int(game.econ.day) if game.econ != null else 1
 	var forced: bool = game.args.has("noisetest") and String(game.args.noisetest) == "horde"

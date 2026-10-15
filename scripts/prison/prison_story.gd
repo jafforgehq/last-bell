@@ -560,6 +560,7 @@ func fill(body: VBoxContainer, lab: Callable, rich: Callable, bar: Callable) -> 
 	body.add_child(r1)
 	var w: Dictionary = arc.weather_now()
 	var plan: Dictionary = arc.wave_plan(int(arc.game.siege.nights_started) + (0 if arc.game.siege.attacking else 1))
+	body.add_child(lab.call(arc.horde_line(int(arc.game.siege.nights_started) + (0 if arc.game.siege.attacking else 1)), 15, Hud.WARN, false))
 	body.add_child(lab.call("Tonight: %s%s - about %d dead at %d wall%s%s" % [("night %d" % (arc.game.siege.night if arc.game.siege.attacking else arc.game.siege.nights_started + 1)), (" (" + String(plan.name) + ")") if String(plan.name) != "" else "", int(plan.total), int(plan.segs), "" if int(plan.segs) == 1 else "s", ("   weather: " + String(w.label)) if String(w.kind) != "clear" else ""], 15, Hud.WARN, false))
 	body.add_child(lab.call("Phases", 18, Hud.ACCENT, true))
 	for p in arc.phases_list():
