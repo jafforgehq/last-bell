@@ -268,6 +268,8 @@ func _spoil_rate() -> float:
 	for id in order:
 		if _built(id) and defs[id].effect.has("spoil"):
 			r *= float(defs[id].effect.spoil)
+	if game.cleaner != null:
+		r *= game.cleaner.spoil_mult()    # TRASH hook: rubbish at the kitchen
 	return r
 
 
@@ -461,6 +463,8 @@ func tick_day() -> void:
 		if float(s.get(r, 0.0)) > float(cp[r]):
 			lost += float(s[r]) - float(cp[r])
 			s[r] = float(cp[r])
+	if game.cleaner != null:
+		game.cleaner.daily()    # TRASH hook: a dirty dormitory makes someone ill
 	_morale(short)
 	last = {"spoiled": spoiled, "lost": lost, "left": last.left, "short": short}
 	_leave()
@@ -493,6 +497,8 @@ func _morale(short: Dictionary) -> void:
 		d -= float(m.overcrowd)
 	if game.arc != null:
 		d += game.arc.calm()    # TRAITS hook: veterans
+	if game.cleaner != null:
+		d += game.cleaner.morale_delta()    # TRASH hook: piles drag, a tidy base lifts
 	morale = clampf(morale + d, 0.0, float(m.max))
 
 

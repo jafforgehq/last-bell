@@ -1444,6 +1444,9 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "stores":
 		pack.open_stash()
 		return
+	if String(_prompt.get("kind", "")) == "trash":
+		_say(cleaner.sweep(Vector2(run.avatar_p.x, run.avatar_p.y)), 2.0)
+		return
 	var r: Dictionary = run.sim.uses.use(_prompt.c)
 	if String(r.get("line", "")) != "":
 		_say(String(r.line), 2.0)
@@ -1461,6 +1464,8 @@ func _base_logic(_dt: float) -> void:
 		_prompt = {"kind": "stores", "label": "E: open the stash (stock the stores, pack for a raid)"}
 	else:
 		_prompt = board.prompt(me)    # UI hook: the bench and the needs sign
+		if _prompt.is_empty() and cleaner != null:
+			_prompt = cleaner.prompt(me)    # TRASH hook: E clears a pile
 	# the dead at the gate are not for shooting
 	if run.avatar_p.hp < 100.0:
 		run.avatar_p.hp = 100.0
@@ -2153,6 +2158,8 @@ func _draw_minimap(v: Vector2) -> void:
 			bars.draw_circle(o + Vector2(m.p.x, m.p.y) * sc, 1.8, Color(0.4, 0.85, 1.0))
 		bars.draw_rect(Rect2(o + Vector2(5, 57) * sc, Vector2(86, 12) * sc), Color(0.8, 0.1, 0.1, 0.18))
 		siege.mini(bars, o, sc)    # SIEGE hook
+		if cleaner != null:
+			cleaner.mini(bars, o, sc)    # TRASH hook
 	for z in run.sim.zombies:
 		if z.state == "dying" or z.state == "dead":
 			continue

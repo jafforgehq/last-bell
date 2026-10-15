@@ -474,6 +474,12 @@ func morale_reasons(rep: Dictionary) -> Array:
 		out.append(["hot meals from the kitchen", true])
 	if econ.tier("infirmary") > 0 and econ.workers("medic") > 0:
 		out.append(["the infirmary is staffed", true])
+	if game.cleaner != null:    # TRASH hook
+		var n: int = game.cleaner.piles()
+		if n == 0:
+			out.append(["the base is tidy", true])
+		elif n >= 3:
+			out.append(["%d piles of trash" % n, false])
 	if out.is_empty() or not out.any(func(o): return not o[1]):
 		out.append(["nothing is wrong: morale recovers", true])
 	if float(rep.morale) < float(econ.cfg.morale.leave_below):
@@ -707,6 +713,8 @@ func _roster_tab() -> void:
 	for r in ROLES:
 		cnt += "%s %d    " % [String(r).capitalize(), econ.workers(String(r))]
 	body.add_child(_lab("Alive per role:  " + cnt, 14, Hud.INFO))
+	var tr: String = game.cleaner.report() if game.cleaner != null else ""    # TRASH hook
+	body.add_child(_lab(tr if tr != "" else "The base is tidy.", 14, Hud.WARN if tr != "" else Hud.INFO))
 
 
 # ----------------------------------------------------------------------------- toasts and the card --

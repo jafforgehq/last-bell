@@ -97,7 +97,7 @@ static func snapshot(g) -> Dictionary:
 		"version": VERSION, "unix": int(Time.get_unix_time_from_system()),
 		"day": int(g.econ.day), "days": int(g.arc.days()), "nights": int(g.siege.nights_started), "people": int(g.econ.people()),
 		"game": {"tod": float(g.tod), "stores": stores, "raids": int(g.raids), "allies_alive": g.allies_alive.duplicate(), "econ_gone": g.econ_gone.duplicate(), "shots_fired": int(g.shots_fired)},
-		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict(), "level": int(g.Bal.level), "run_seed": int(g.Bal.run_seed)}
+		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict(), "clean": g.cleaner.to_dict() if g.cleaner != null else {}, "level": int(g.Bal.level), "run_seed": int(g.Bal.run_seed)}
 
 
 ## `--saveecho` (a check): writes what the game holds now to user://<savefile>.echo.json, to be compared with the save it was loaded from.
@@ -171,6 +171,7 @@ static func apply(g, d: Dictionary) -> void:
 	g.people.from_dict(d.people_mod)
 	g.arms.from_dict(d.arms)
 	g.pack.from_dict(d.pack)
+	g.Clean.pending = d.get("clean", {})    # (the piles are put on the spots when the base is built)
 	g.arc.from_dict(ints(d.arc))
 	g.save_day = int(g.econ.day)
 
