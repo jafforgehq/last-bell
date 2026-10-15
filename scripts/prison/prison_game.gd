@@ -665,6 +665,7 @@ func _enter_base() -> void:
 				crew._make(a, Vector2.ZERO if a.has("stand") else Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
 	if not clear:
 		people.spawn_recruits()    # RAIDS hook: the people found in raids are crew again
+		crew.posts = siege.posts
 		crew.sync_roles(econ)    # the roster's roles (set before the raid) move the rebuilt crew to the right work
 	for m in crew.members:
 		var n := PawnNode.new()
@@ -673,7 +674,7 @@ func _enter_base() -> void:
 		if m.def.has("scale"):
 			n.scale = Vector2.ONE * float(m.def.scale)
 		if m.def.has("stand"):
-			n.z_index = 1    # a tower guard stands above his deck and the fence
+			n.z_index = 1 if String(m.def.stand).begins_with("tower") else 0    # a tower guard stands above his deck and the fence
 		entities.add_child(n)
 		m["node"] = n
 	if not clear:
@@ -2628,6 +2629,7 @@ func _fence_guards(dt: float) -> void:
 	for m in crew.members:
 		if not m.def.has("stand") or not siege.guard_ok(m):    # SIEGE hook
 			continue
+		var post_aim: float = siege.posts.aim_mult(m)    # POSTS hook: the post's fit for this person; a ground post shoots only in its field of fire
 		var g = m.p
 		var tr = run.sim.traits    # TRAITS hook (prison_events.gd): a pacifist carries no gun, a coward leaves the tower when morale is low, a hothead fires faster for more ammo, aim and reload follow the traits
 		if tr.has_trait(g, "pacifist") or (siege.attacking and float(econ.morale) < 30.0 and tr.has_trait(g, "coward")):
@@ -2638,7 +2640,7 @@ func _fence_guards(dt: float) -> void:
 		var best = null
 		var bd := 1.0e9
 		for z in dead:
-			if not siege.in_guard_zone(z):    # SIEGE hook (was the strip south of the gate fence)
+			if not siege.in_guard_zone(z) or not siege.posts.in_field(m, z):    # SIEGE hook (was the strip south of the gate fence)
 				continue
 			var d := Vector2(z.x, z.y).distance_to(Vector2(g.x, g.y))
 			var pri := 0.0 if (not siege.attacking or siege.in_wave(z)) else 100.0    # (in an attack the guards take the wave before the pen's shufflers)
@@ -2656,7 +2658,7 @@ func _fence_guards(dt: float) -> void:
 		bd = Vector2(best.x, best.y).distance_to(Vector2(g.x, g.y))
 		var gb: Dictionary = Bal.role("guard")
 		guard_cd[g.id] = (float(gb.cd_alarm) if alarm_t > 0.0 else Bal.roll(gb, "cd")) * tr.mult(g, "reload")
-		_shoot_at(g, best, clampf((gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0)) * tr.mult(g, "aim"), 0.05, 0.95), float(gb.dmg))    # ECON hook: floodlights
+		_shoot_at(g, best, clampf((gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0)) * tr.mult(g, "aim") * post_aim, 0.05, 0.95), float(gb.dmg))    # ECON hook: floodlights
 		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
 		stores.ammo = maxf(0.0, float(stores.ammo) - (siege.GUARD_SHOT_COST if siege.attacking else siege.GUARD_SHOT_COST * 0.2) * (tr.mult(g, "ammo") - 1.0))
 		m.say = "firing"

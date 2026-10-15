@@ -3,6 +3,7 @@
 ## few seconds (`Person.work` word, `work_t`) and then its effect changes the base's stores (food, water, scrap, ammo, meds) and a little "+2 food" floats up.
 extends RefCounted
 
+const Posts := preload("res://scripts/prison/prison_posts.gd")
 const SPEED := 1.7
 const IDLE_RETRY := 2.5
 
@@ -217,7 +218,7 @@ func _tower_spot(name: String) -> Vector2:
 			return Vector2(86.5, 6.5)
 		"tower_sw":
 			return Vector2(8.5, 52.5)
-	return Vector2(48.0, 48.0)
+	return Posts.spot(name)    # a ground post (prison_posts.gd), else the middle of the yard
 
 
 ## A stop's spot, moved to the nearest open tile when a prop stands on it (nobody works inside a prop).
@@ -363,7 +364,7 @@ func _to_post(m: Dictionary, dt: float) -> void:
 		m.p.moving = false
 		m.state = "post"
 		if m.has("node") and is_instance_valid(m.node):
-			m.node.z_index = 1
+			m.node.z_index = 1 if String(r.get("stand", "tower")).begins_with("tower") else 0
 
 
 ## The kids: tag in the yard (one runs, one chases; a touch swaps them), a ball that rolls along, a hopscotch that the runner visits. Never armed, never on a route.
@@ -476,6 +477,76 @@ func route_for(role: String) -> Array:
 	return [{"at": "yard", "secs": 10.0, "work": "", "face": "S", "say": "waiting for a job"}]
 
 
+var posts    # prison_posts.gd (made by the siege; null in the clear phase)
+
+
+## Puts a person (a guard of any kind, or anybody else, who becomes one) on a ground post or back on a free tower ("tower"). `instant`: no walk. {ok, why}
+func put_on_post(m: Dictionary, post: String, instant := false) -> Dictionary:
+	var to_tower := post == "tower"
+	if not to_tower and Posts.get_post(post).is_empty():
+		return {"ok": false, "why": "No such post."}
+	if to_tower:
+		post = free_post() if not String(m.def.get("stand", "")).begins_with("tower") else String(m.def.stand)
+		if post == "":
+			return {"ok": false, "why": "All 6 towers are manned."}
+	elif posts != null and not posts.holder(post).is_empty() and posts.holder(post) != m:
+		return {"ok": false, "why": "Somebody stands there already."}
+	var d: Dictionary = (m.def as Dictionary).duplicate(true)
+	var p = m.p
+	var from_tower := String(d.get("stand", "")).begins_with("tower")
+	m.erase("eat")
+	m.erase("clean_q")
+	m.erase("to_post")
+	m.erase("broke")
+	d.erase("route")
+	d["stand"] = post
+	d["work"] = "watch"
+	d["face"] = "S" if post.begins_with("tower") else ["E", "S", "W", "N"][posmod(roundi(float(Posts.get_post(post).face) / 90.0), 4)]
+	d["role"] = "Tower guard" if post.begins_with("tower") else String(Posts.get_post(post).name)
+	m.def = d
+	if posts != null:
+		if post.begins_with("tower"):
+			posts.assign.erase(String(d.id))
+		else:
+			posts.assign[String(d.id)] = post
+	var spot := _tower_spot(post)
+	p.work = ""
+	p.moving = false
+	m.path = []
+	if m.has("node") and is_instance_valid(m.node) and not post.begins_with("tower") and instant:
+		m.node.z_index = 0
+	if instant or m.state == "ally":
+		p.x = spot.x
+		p.y = spot.y
+		p.work = "watch"
+		p.facing = String(d.face)
+		m.state = "post"
+		if m.has("node") and is_instance_valid(m.node):
+			m.node.z_index = 1 if post.begins_with("tower") else 0
+	else:
+		m["to_post"] = spot
+		m.state = "walk"
+		m.path = sim.path_p.find(world.solid_p, p.x, p.y, spot.x, spot.y + (2.0 if post.begins_with("tower") else 0.0))
+		m.pi = 0
+		if from_tower and m.has("node") and is_instance_valid(m.node):
+			m.node.z_index = 0
+	m.say = String(d.role)
+	return {"ok": true, "why": ""}
+
+
+## The post board: `post` is a ground post id or "tower" (back to a free tower), `id` a person. Refused during an attack.
+func assign_post(id: String, post: String, econ, attacking: bool) -> Dictionary:
+	var m := member_of(id)
+	if m.is_empty() or m.def.has("play") or m.def.has("ally"):
+		return {"ok": false, "why": "Nobody by that name can be posted."}
+	if attacking:
+		return {"ok": false, "why": "Not during an attack."}
+	var r := put_on_post(m, post)
+	if bool(r.ok):
+		econ.cfg.crew_role[id] = "guard"
+	return r
+
+
 func free_post() -> String:
 	var used: Array = []
 	for m in members:
@@ -522,6 +593,8 @@ func sync_roles(econ) -> void:
 			econ.cfg.crew_role[id] = native
 			continue
 		_apply_role(m, role, true)
+	if posts != null:
+		posts.reapply()
 
 
 func _apply_role(m: Dictionary, role: String, instant: bool) -> void:
@@ -562,7 +635,9 @@ func _apply_role(m: Dictionary, role: String, instant: bool) -> void:
 	if d.has("stand"):    # down from the tower
 		var spot2 := _tower_spot(String(d.stand))
 		p.x = spot2.x
-		p.y = spot2.y + 2.0
+		p.y = spot2.y + (2.0 if String(d.stand).begins_with("tower") else 0.0)
+		if posts != null:
+			posts.assign.erase(String(d.id))
 		d.erase("stand")
 		d.erase("work")
 		d.erase("face")

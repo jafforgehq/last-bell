@@ -47,6 +47,7 @@ var _bars := {}    # project id -> ProgressBar
 var _frames := 0
 var _card_tw: Tween
 var _popup_open := false
+var _bseg := 0    # the Defence tab: the fence segment chosen for a barricade
 
 
 func _init(g) -> void:
@@ -72,7 +73,7 @@ func _init(g) -> void:
 	title = _lab("PRISON", 24, Hud.ACCENT, true)
 	title.custom_minimum_size.x = 150
 	head.add_child(title)
-	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster (B)"], ["story", "Story (L)"]]:
+	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster (B)"], ["defence", "Defence"], ["story", "Story (L)"]]:
 		var b := _btn(String(t[1]))
 		b.toggle_mode = true
 		b.pressed.connect(func(): _show(String(t[0])))
@@ -251,7 +252,7 @@ func frame(_dt: float) -> void:
 	panel.position = ((v - sz) / 2.0).round()
 	for b in tab_btns:
 		tab_btns[b].button_pressed = (b == tab)
-	title.text = {"projects": "PROJECT BOARD", "needs": "NEEDS BOARD", "roster": "ROSTER", "story": "THE STORY"}[tab]
+	title.text = {"projects": "PROJECT BOARD", "needs": "NEEDS BOARD", "roster": "ROSTER", "defence": "DEFENCE", "story": "THE STORY"}[tab]
 	if _popup_open:
 		_popup_open = _any_popup(body)
 	var sig := _signature()
@@ -283,6 +284,10 @@ func _signature() -> String:
 		s += econ.state(id).left(2)
 	if tab == "needs":
 		s += "|%d|%d|%d" % [int(econ.morale), econ.day, int(game.siege.abs_h * 60.0 / 4.0)]
+	if tab == "defence":
+		s += "|%d|%s|%s" % [_bseg, game.siege.posts.assign.hash(), game.siege.bars.to_dict().hash()]
+		for m in game.crew.members:
+			s += "%s%s," % [m.def.id, m.def.get("stand", "")]
 	if tab == "story":
 		s += "|%d|%d|%d" % [game.arc.log_entries.size(), game.arc.day, game.arc.people_alive()]
 	if tab == "roster":
@@ -305,6 +310,8 @@ func _rebuild() -> void:
 			_needs_tab()
 		"roster":
 			_roster_tab()
+		"defence":
+			_defence_tab()
 		"story":
 			game.arc.story.fill(body, _lab, _rich, _bar)    # ARC hook: calendar, phases, the convoy's list, the messages
 
@@ -696,7 +703,7 @@ func _roster_tab() -> void:
 		if game.siege.attacking and m.def.has("stand"):
 			note = "on the wall"
 		elif m.def.has("stand"):
-			note = "tower guard"
+			note = String(m.def.role).to_lower() if not String(m.def.stand).begins_with("tower") else "tower guard"
 		var who := String(m.def.name)    # TRAITS: the traits after the note, the background under it
 		if game.arc.hurt_now(who):
 			note = ("hurt, " + note) if note != "" else "hurt"
@@ -715,6 +722,105 @@ func _roster_tab() -> void:
 	body.add_child(_lab("Alive per role:  " + cnt, 14, Hud.INFO))
 	var tr: String = game.cleaner.report() if game.cleaner != null else ""    # TRASH hook
 	body.add_child(_lab(tr if tr != "" else "The base is tidy.", 14, Hud.WARN if tr != "" else Hud.INFO))
+
+
+# --------------------------------------------------------------------------------- defence tab --
+
+func _pick(items: Array, cur: int, on_pick: Callable, disabled := false) -> OptionButton:
+	var ob := OptionButton.new()
+	ob.focus_mode = Control.FOCUS_NONE
+	ob.add_theme_font_override("font", Fonts.sans(500))
+	ob.add_theme_font_size_override("font_size", 15)
+	ob.custom_minimum_size.x = 170
+	for it in items:
+		ob.add_item(String(it))
+	ob.selected = cur
+	ob.disabled = disabled
+	ob.pressed.connect(func(): _popup_open = true)
+	ob.item_selected.connect(func(i):
+		_popup_open = false
+		on_pick.call(i)
+		_sig = "")
+	return ob
+
+
+## Crew posts (who stands where, and how they shoot there) and barricades (cheap, worn out by the nights).
+func _defence_tab() -> void:
+	var siege = game.siege
+	var locked: bool = siege.attacking
+	body.add_child(_rich("Post a person on a spot of the compound. They shoot only the dead in the post's field of fire, take fewer bites in cover, and shoot better or worse by their traits; a coward on an open post can break and run. Somebody with no post is a tower guard. Nobody can be moved or built for during an attack.", 14))
+	var people: Array = []
+	for m in game.crew.members:
+		if not m.def.has("play") and not m.def.has("ally"):
+			people.append(m)
+	for p in siege.posts.cfg.posts:
+		var pid := String(p.id)
+		var hold: Dictionary = siege.posts.holder(pid)
+		var pc := PanelContainer.new()
+		pc.add_theme_stylebox_override("panel", _box(Hud.PANEL_HI, Hud.OK if not hold.is_empty() else Hud.LINE2, 10))
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 12)
+		pc.add_child(hb)
+		var col := VBoxContainer.new()
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hb.add_child(col)
+		col.add_child(_lab(String(p.name), 18, Hud.INK, true))
+		col.add_child(_lab("%s  Cover %d%%, reach %d tiles, field %d degrees%s." % [String(p.blurb), int(100.0 * float(p.cover)), int(p.range), int(2.0 * float(p.arc)), ", open ground" if bool(p.exposed) else ""], 13, Hud.INK2))
+		col.add_child(_lab(siege.posts.fit_text(p), 13, DIM))
+		var names: Array = ["Nobody"]
+		var cur := 0
+		for m in people:
+			names.append(String(m.def.name) + (" (%s)" % game.arc.events.trait_text(String(m.def.name)) if game.arc.events.trait_text(String(m.def.name)) != "" else ""))
+			if m == hold:
+				cur = names.size() - 1
+		var on_pick := func(i):
+			var res: Dictionary = {"ok": true, "why": ""}
+			if i == 0:
+				if not hold.is_empty():
+					res = game.crew.assign_post(String(hold.def.id), "tower", econ, siege.attacking)
+			else:
+				res = game.crew.assign_post(String(people[i - 1].def.id), pid, econ, siege.attacking)
+			if not bool(res.ok):
+				toast(String(res.why), Hud.WARN)
+		hb.add_child(_pick(names, cur, on_pick, locked))
+		body.add_child(pc)
+	body.add_child(_lab("Barricades", 22, Hud.INK, true))
+	body.add_child(_rich("One in front of a fence segment. Each wears out as it works and a little every night, and is lost if the wire falls. Buy again when it is gone.", 14))
+	var bars = siege.bars
+	var segs: Array = []
+	var names2: Array = []
+	for s in siege.segs:
+		segs.append(s)
+		var b: Dictionary = bars.of(s)
+		names2.append(String(s.name) + ((" - " + String(bars.defs[b.id].name)) if not b.is_empty() else "") + (" (down)" if float(s.hp) <= 0.0 else ""))
+	_bseg = clampi(_bseg, 0, segs.size() - 1)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.add_child(_lab("Segment", 15, Hud.INK2))
+	row.add_child(_pick(names2, _bseg, func(i): _bseg = i))
+	body.add_child(row)
+	var cur_seg: Dictionary = segs[_bseg]
+	for id in bars.order:
+		var d: Dictionary = bars.defs[id]
+		var can: Dictionary = bars.can_build(cur_seg, String(id))
+		var r2 := HBoxContainer.new()
+		r2.add_theme_constant_override("separation", 12)
+		var tx := VBoxContainer.new()
+		tx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tx.add_child(_lab("%s   (%s)" % [String(d.name), bars.cost_text(String(id))], 16, Hud.INK))
+		tx.add_child(_lab(String(d.blurb), 13, Hud.INK2))
+		r2.add_child(tx)
+		var bb := _btn("Build")
+		bb.disabled = not bool(can.ok)
+		bb.tooltip_text = String(can.why)
+		bb.pressed.connect(func():
+			var res: Dictionary = bars.build(cur_seg, String(id))
+			toast(("Built: %s at the %s" % [String(d.name), String(cur_seg.name)]) if bool(res.ok) else String(res.why), Hud.INFO if bool(res.ok) else Hud.WARN)
+			_sig = "")
+		r2.add_child(bb)
+		body.add_child(r2)
+	var sm: String = bars.summary()
+	body.add_child(_lab("Standing now: " + (sm if sm != "" else "none"), 14, Hud.INFO))
 
 
 # ----------------------------------------------------------------------------- toasts and the card --
