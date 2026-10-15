@@ -385,12 +385,12 @@ func _base_noises(dt: float) -> void:
 	if _gen_t <= 0.0:
 		_gen_t = 4.0
 		if game.upg != null and game.upg.has_method("_lit") and bool(game.upg._lit()):
-			emit_at(Vector2(30.0, 53.0), 0.0, "generator", Vector2.INF)
+			emit_at(Vector2(24.0, 28.5), 0.0, "generator", Vector2.INF)
 
 
 ## The bell of the siege (prison_siege.gd `_bells`): a loud noise from the middle of the compound.
 func bell() -> void:
-	emit_at(Vector2(48.0, 50.0), 0.0, "bell", Vector2.INF)
+	emit_at(Vector2(23.0, 46.0), 0.0, "bell", Vector2.INF)
 
 
 # ----------------------------------------------------------------------------- thrown things --
@@ -658,7 +658,7 @@ func on_attack(n: int, _picked: Array) -> void:
 	if pool.is_empty():
 		return
 	var seg: Dictionary = pool[rng.randi() % pool.size()]
-	var from := Vector2(93.2, 68.0) if side == "E" else (Vector2(2.8, 68.0) if side == "W" else Vector2(92.0, 1.6))
+	var from := Vector2(64.2, 66.0) if side == "E" else (Vector2(2.8, 66.0) if side == "W" else Vector2(63.0, 1.6))
 	var h := spawn_horde(size, from, Vector2(seg.spot), float(bc.speed), "base", 2.5)
 	if game.args.has("log"):
 		print("NOISE base horde side ", side, " seg ", seg.name, " size ", size, " got ", h.get("members", []).size(), " room ", game.run.sim.field.active_cap - game.run.sim.field.active_of.size())

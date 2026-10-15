@@ -328,7 +328,7 @@ var _marks := {}
 func test(dt: float) -> void:
 	sim = game.run.sim
 	var mode := String(game.args.zombietest)
-	var c := Vector2(21.0, 66.0)
+	var c := Vector2(11.0, 64.0)
 	if _zs.is_empty() and mode != "herd":
 		_stage(mode, c)
 	_tt += dt
@@ -336,8 +336,8 @@ func test(dt: float) -> void:
 	if game.crew != null:
 		for m in game.crew.members:
 			if not m.p.player:
-				m.p.x = 48.0 + float(m.p.get_instance_id() % 7)    # (the crew are kept in the yard, away from the staged dead)
-				m.p.y = 20.0
+				m.p.x = 30.0 + float(m.p.get_instance_id() % 7)    # (the crew are kept in the yard, away from the staged dead)
+				m.p.y = 22.0
 	var T := float(game.args.get("ztime", 8.0))
 	match mode:
 		"walk":

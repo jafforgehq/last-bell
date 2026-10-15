@@ -1,4 +1,4 @@
-## EXPERIMENT (prison siege): base attacks. The perimeter is cut into 14 fence segments plus the gate, each with hit points and a drawn damage state (cracked, sagging, down). Each night a
+## EXPERIMENT (prison siege): base attacks. The perimeter is cut into 9 fence segments plus the gate, each with hit points and a drawn damage state (cracked, sagging, down). Each night a
 ## bell rings and a wave of the dead is sent at 1 to 3 segments (more of them, and more segments, every night). The dead that stand at a segment tear at it; the tower guards shoot (each shot
 ## costs ammo from the stores); a segment at 0 hp becomes a gap, the dead walk through it toward the nearest person, and a crew member that one of them reaches is bitten ("X is down") and lost
 ## after a few seconds unless that dead one is killed first. The player (hold E at a damaged segment, 1 scrap per HP_PER_SCRAP hp) and Tomas the fence crew repair. A card sums up each night.
@@ -97,15 +97,15 @@ func _init(g) -> void:
 ## The segments: [x0, x1) spans of the four sides, the gate cut out of the south side. Corners belong to the north and south sides.
 func _build_segments() -> void:
 	var F: Rect2i = Base.FENCE
-	var xs_n := [6, 27, 48, 69, 90]
-	for i in 4:
+	var xs_n := [F.position.x, 33, F.end.x]
+	for i in 2:
 		_add_seg("north fence %d" % (i + 1), "N", _span(xs_n[i], xs_n[i + 1], F.position.y, true))
-	var xs_s := [[6, 26], [26, 46], [50, 70], [70, 90]]
-	for i in 4:
+	var xs_s := [[F.position.x, Base.GATE_X], [Base.GATE_X + Base.GATE_W, 43], [43, F.end.x]]
+	for i in 3:
 		_add_seg("south fence %d" % (i + 1), "S", _span(xs_s[i][0], xs_s[i][1], F.end.y - 1, true))
 	_add_seg("the gate", "S", _span(Base.GATE_X, Base.GATE_X + Base.GATE_W, F.end.y - 1, true), true)
-	var ys := [5, 22, 39, 55]
-	for i in 3:
+	var ys := [F.position.y + 1, 29, F.end.y - 1]
+	for i in 2:
 		_add_seg("west fence %d" % (i + 1), "W", _span(ys[i], ys[i + 1], F.position.x, false))
 		_add_seg("east fence %d" % (i + 1), "E", _span(ys[i], ys[i + 1], F.end.x - 1, false))
 
@@ -241,7 +241,7 @@ func _alive(z) -> bool:
 
 
 func _inside(z) -> bool:
-	return z.x > 6.0 and z.x < 90.0 and z.y > 4.0 and z.y < 56.0
+	return z.x > float(Base.FENCE.position.x) and z.x < float(Base.FENCE.end.x) and z.y > float(Base.FENCE.position.y) and z.y < float(Base.FENCE.end.y)
 
 
 func _covered(s: Dictionary) -> bool:
@@ -516,7 +516,7 @@ func _spawn_batches(dt: float) -> void:
 			var behind := 1.0 + randf() * 5.0 + float(_batches)
 			var at: Vector2 = spot + s.out * behind + s.along * randf_range(-7.0, 7.0)
 			if s.side == "S":
-				at.y = clampf(at.y, 57.0, 68.0)
+				at.y = clampf(at.y, float(Base.FENCE.end.y) + 2.0, float(Base.H) - 4.0)
 			at = _free_near(at)
 			var kind := "runner" if randf() < _runner_p else "walker"
 			var rec: int = field.add_record(at, kind, false)
@@ -544,7 +544,7 @@ func _free_near(at: Vector2) -> Vector2:
 			return a
 		a = at + Vector2(randf_range(-3.0, 3.0), randf_range(-3.0, 3.0))
 		a = Vector2(clampf(a.x, 2.5, float(Base.W) - 2.5), clampf(a.y, 2.5, float(Base.H) - 2.5))
-	return Vector2(48.0, 60.0)
+	return Vector2(Base.GATE_POS.x, Base.PEN_Y + 4.0)
 
 
 ## The dead that were sent: walk to their spot, stand there and tear at their segment. Counts the ones that die.
@@ -595,7 +595,7 @@ func _wave_work(dt: float) -> void:
 
 func _ambient(dt: float) -> void:
 	for z in game.run.sim.zombies:
-		if not _alive(z) or z.y < 55.5 or z.y > 58.0 or z.x < 6.0 or z.x > 90.0:
+		if not _alive(z) or z.y < float(Base.FENCE.end.y) - 0.5 or z.y > float(Base.FENCE.end.y) + 3.0 or z.x < float(Base.FENCE.position.x) or z.x > float(Base.FENCE.end.x):
 			continue
 		var gx := floori(z.x)
 		for s in segs:

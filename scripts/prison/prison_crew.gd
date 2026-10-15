@@ -48,13 +48,13 @@ const ROSTER := [
 		{"at": "chat_a2", "secs": 9.0, "work": "", "face": "W", "say": "chatting with Mia", "chat": true},
 	]},
 	{"id": "june", "name": "June", "role": "Patrol", "key": "hector", "look": {"top": "#3c4a3a", "pants": "#2c2c34", "skin": "#e0b393"}, "route": [
-		{"at": Vector2(9.5, 27.0), "secs": 2.0, "work": "radio", "face": "S", "say": "on patrol"},
-		{"at": Vector2(9.5, 48.0), "secs": 1.0, "work": "", "face": "E"},
-		{"at": Vector2(36.0, 49.0), "secs": 1.0, "work": "", "face": "S"},
-		{"at": Vector2(60.0, 49.0), "secs": 2.0, "work": "radio", "face": "S", "say": "on patrol"},
-		{"at": Vector2(51.5, 50.3), "secs": 14.0, "work": "watch", "face": "S", "say": "relieving the gate guard"},
-		{"at": Vector2(61.0, 26.0), "secs": 1.0, "work": "", "face": "N"},
-		{"at": Vector2(36.0, 26.0), "secs": 1.0, "work": "", "face": "W"},
+		{"at": Vector2(7.0, 23.0), "secs": 2.0, "work": "radio", "face": "S", "say": "on patrol"},
+		{"at": Vector2(7.0, 45.0), "secs": 1.0, "work": "", "face": "E"},
+		{"at": Vector2(30.0, 38.5), "secs": 1.0, "work": "", "face": "S"},
+		{"at": Vector2(59.5, 40.0), "secs": 2.0, "work": "radio", "face": "S", "say": "on patrol"},
+		{"at": Vector2(26.5, 51.3), "secs": 14.0, "work": "watch", "face": "S", "say": "relieving the gate guard"},
+		{"at": Vector2(57.5, 22.0), "secs": 1.0, "work": "", "face": "N"},
+		{"at": Vector2(40.0, 22.0), "secs": 1.0, "work": "", "face": "W"},
 	]},
 	{"id": "kit", "name": "Kit", "role": "Kid", "key": "ana", "scale": 0.62, "unarmed": true, "play": true, "look": {"top": "#c9553a", "outer": "#c9553a", "pants": "#4a5a7a", "skin": "#c69877"}},
 	{"id": "pip", "name": "Pip", "role": "Kid", "key": "dez", "scale": 0.58, "unarmed": true, "play": true, "look": {"top": "#3a7aa0", "pants": "#6a5a3a", "skin": "#8a5a3c", "hatColor": "#c9a43a"}},
@@ -69,14 +69,14 @@ const ALLIES := [
 ## MANAGED PHASE: the three allies are crew now: a name, a job and a place, no follow code, no "ally" key (so no health bar, no 'ready' tag, no revive). "ex_ally" only tells the siege to forget them when lost.
 const CREW_FROM_ALLIES_FULL := [
 	{"id": "cole", "name": "Cole", "role": "Gate watch", "key": "walt", "ex_ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
-		{"at": Vector2(44.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
-		{"at": Vector2(51.5, 50.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
+		{"at": Vector2(19.5, 51.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
+		{"at": Vector2(26.5, 51.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
 	]},
 	{"id": "bea", "name": "Bea", "role": "Yard patrol", "key": "ana", "ex_ally": true, "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}, "route": [
-		{"at": Vector2(20.0, 46.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
-		{"at": Vector2(36.0, 49.0), "secs": 2.0, "work": "", "face": "E"},
-		{"at": Vector2(70.0, 47.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
-		{"at": Vector2(36.0, 41.0), "secs": 2.0, "work": "", "face": "W"},
+		{"at": Vector2(11.0, 46.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
+		{"at": Vector2(20.0, 43.0), "secs": 2.0, "work": "", "face": "E"},
+		{"at": Vector2(36.0, 47.0), "secs": 6.0, "work": "watch", "face": "S", "say": "on patrol"},
+		{"at": Vector2(20.0, 40.5), "secs": 2.0, "work": "", "face": "W"},
 	]},
 	{"id": "ike", "name": "Ike", "role": "Quartermaster", "key": "hector", "ex_ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}, "route": [
 		{"at": "stores_out", "secs": 7.0, "work": "haul", "face": "N", "say": "carrying crates"},
@@ -94,7 +94,7 @@ const CREW_FROM_ALLIES := [
 	]},
 ]
 const ALLY_HP := 45.0
-const YARD := Rect2(9.0, 43.0, 28.0, 11.0)    # where the kids play
+const YARD := Rect2(9.0, 41.0, 19.0, 11.0)    # where the kids play
 
 var sim
 var world
@@ -105,7 +105,7 @@ var floaters: Array = []    # {text, pos, t, col}
 var tally := {}
 var tod := 8.0    # hour of the day, set by the game
 var play_t := 0.0
-var ball := Vector2(24.0, 49.0)    # the kids' ball
+var ball := Vector2(20.0, 45.0)    # the kids' ball
 var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
 var labor_cb: Callable    # WORLD hook: prison_upgrades.gd, called every frame a person works a project stop (m, stop, dt)
 var busy_cb: Callable    # WORLD hook: has_work(m), true when m has a project of their role to build (they skip one meal, `skipped`)
@@ -120,7 +120,7 @@ func setup(s, w, b, d: Dictionary, clear: bool = false, full: bool = false) -> v
 	data = d
 	if clear:
 		for i in ALLIES.size():
-			_make(ALLIES[i], Vector2(3.5, 33.2 + float(i) * 1.1))
+			_make(ALLIES[i], Vector2(2.5, 28.4 + float(i)))
 		return
 	if not full:
 		return    # (fix round 3: nobody else lives here until a raid brings them)
@@ -166,7 +166,7 @@ func _make(r: Dictionary, at_in: Vector2, n: int = 0) -> Dictionary:
 		m["tgt"] = Vector2.ZERO
 		m["swap_cd"] = 0.0
 		if at == Vector2.ZERO:
-			at = Vector2(20.0 + float(n % 2) * 2.0, 50.0)
+			at = Vector2(14.0 + float(n % 2) * 2.0, 46.0)
 	elif r.has("stand"):
 		if at == Vector2.ZERO:
 			at = _tower_spot(String(r.stand))
@@ -201,29 +201,29 @@ func release(id: String, at: Vector2) -> Dictionary:
 
 
 func _stand(r: Dictionary) -> Vector2:
-	return Vector2(48.0, 48.0)
+	return Vector2(23.0, 47.0)
 
 
 func _tower_spot(name: String) -> Vector2:
 	match name:
 		"tower_e":
-			return Vector2(53.5, 52.5)
+			return Vector2(28.5, 50.5)
 		"tower_nw":
-			return Vector2(8.5, 6.5)
+			return Vector2(7.5, 6.5)
 		"tower_se":
-			return Vector2(86.5, 52.5)
+			return Vector2(59.5, 50.5)
 		"tower_w":
-			return Vector2(42.5, 52.5)
+			return Vector2(17.5, 50.5)
 		"tower_ne":
-			return Vector2(86.5, 6.5)
+			return Vector2(59.5, 6.5)
 		"tower_sw":
-			return Vector2(8.5, 52.5)
+			return Vector2(7.5, 50.5)
 	return Posts.spot(name)    # a ground post (prison_posts.gd), else the middle of the yard
 
 
 ## A stop's spot, moved to the nearest open tile when a prop stands on it (nobody works inside a prop).
 func _where(at) -> Vector2:
-	var v: Vector2 = at if at is Vector2 else base.stations.get(String(at), Vector2(48.0, 40.0))
+	var v: Vector2 = at if at is Vector2 else base.stations.get(String(at), Vector2(30.0, 38.0))
 	if world == null or not (v.x >= 0.0 and v.y >= 0.0 and v.x < float(world.W) and v.y < float(world.H)) or world.solid_p[int(v.y) * world.W + int(v.x)] == 0:
 		return v
 	var t = sim.path_p.nearest_free(world.solid_p, floori(v.x), floori(v.y))
@@ -430,7 +430,7 @@ func _play(m: Dictionary, dt: float) -> void:
 		ball += (want - ball) * (1.0 - exp(-2.5 * dt))
 
 
-const HOPSCOTCH := Vector2(14.0, 52.0)
+const HOPSCOTCH := Vector2(11.0, 50.0)
 const HOP_SECS := 0.45
 
 func _have(stores: Dictionary, need: Dictionary) -> bool:
@@ -463,8 +463,8 @@ const ROLE_SAMPLE := {"cook": "mia", "gardener": "marcus", "medic": "ana", "mech
 const ROLE_TITLE := {"cook": "Cook", "gardener": "Gardener", "medic": "Medic", "mechanic": "Mechanic", "hauler": "Hauler", "cleaner": "Cleaner", "guard": "Tower guard"}
 const CLEANER_ROUTE := [
 	{"at": "yard", "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the yard"},
-	{"at": Vector2(36.5, 38.5), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the workshop"},
-	{"at": Vector2(58.5, 46.5), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the yard"},
+	{"at": Vector2(34.0, 31.0), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the workshop"},
+	{"at": Vector2(36.0, 45.0), "secs": 9.0, "work": "clean", "face": "S", "say": "sweeping the yard"},
 ]
 
 

@@ -30,7 +30,7 @@ const JOBS := [
 	["ready", "boot", "Follow"], ["following", "boot", "Follow"], ["hanging", "boot", "Follow"], ["back up", "boot", "Follow"],
 ]
 const ROLE_JOB := {"gardener": ["leaf", "Farming"], "cook": ["pot", "Cooking"], "medic": ["cross", "Nursing"], "mechanic": ["wrench", "Repair"], "guard": ["shield", "Guard"], "cleaner": ["broom", "Cleaning"], "hauler": ["crate", "Hauling"]}
-const PLATE_NAME := {"CELL BLOCK A": "DORMITORY A", "CELL BLOCK B": "DORMITORY B"}
+const PLATE_NAME := {"CELL BLOCK": "DORMITORY"}
 const NEAR_TAG := 6.0
 const MID_TAG := 13.0
 const NEAR_PLATE := 15.0
