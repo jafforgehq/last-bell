@@ -210,7 +210,7 @@ func safe_index(c: Dictionary) -> int:
 
 ## The text with the card's person and the one an effect picked put in.
 func fill(text: String, ctx: Dictionary) -> String:
-	return text.replace("{who}", String(ctx.get("who", "someone"))).replace("{name}", String(ctx.get("name", ctx.get("who", "someone"))))
+	return text.replace("{who}", arc.dn(String(ctx.get("who", "someone")))).replace("{name}", arc.dn(String(ctx.get("name", ctx.get("who", "someone")))))
 
 
 # ---------------------------------------------------------------------------- who and what --

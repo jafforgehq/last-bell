@@ -17,6 +17,7 @@ extends RefCounted
 const Story := preload("res://scripts/prison/prison_story.gd")
 const Endings := preload("res://scripts/prison/prison_endings.gd")
 const Events := preload("res://scripts/prison/prison_events.gd")
+const Meta := preload("res://scripts/prison/prison_meta.gd")
 const Playlog := preload("res://scripts/prison/prison_playlog.gd")    # PLAYLOG hook: the run, one line a day
 const PATH := "res://assets/data/prison_story.json"
 
@@ -39,7 +40,11 @@ var letters_found: Array = []
 var log_entries: Array = []    # [{day, kind, title, from, text, tag, result}]
 var set_piece: Dictionary = {}    # a cache the next raid marks: {name, loot, note, pos, id}
 var storm_seen := false
-var stats := {"kills": 0, "raids": 0, "rescues": 0, "deaths": 0, "left": 0, "scrap": 0.0, "nights_held": 0, "letters": 0, "ruth_deaths": 0, "starved": 0, "peak_people": 0, "fence_lost": 0}
+var stats := {"kills": 0, "raids": 0, "rescues": 0, "deaths": 0, "left": 0, "scrap": 0.0, "nights_held": 0, "letters": 0, "ruth_deaths": 0, "starved": 0, "peak_people": 0, "fence_lost": 0, "dist": 0.0}    # dist: tiles Ruth walked in the base and on raids (not the clear phase)
+var event_log: Array = []    # META: [{day, id, title, choice}] every morning card answered this run (the pause menu's Event log)
+var renames: Dictionary = {}    # META: person name -> the name the player typed in the Roster (the crew's own names stay the keys everywhere)
+var _hint: Dictionary = {}    # name -> cause the siege gave before the roster noticed the loss
+var _last_pos := Vector2.ZERO
 var ever: Dictionary = {}    # person name -> {day, fate ("" | "died" | "walked"), cause, day_out}
 # EVENTS (prison_events.gd): the plain dicts a save can read. flags: memory key -> the day it was set. person_traits: name -> trait ids an event gave on top of prison_bios.json. hurt: name -> the last day
 # they are out. night_mods: night number (string) -> {size, weather}. event_pending: the card drawn for this morning {id, who}. raid_mod: the next raid's variant (read and cleared by `take_raid_mod`).
@@ -209,6 +214,11 @@ func wave_plan(n: int) -> Dictionary:
 
 func _stock(res: String) -> float:
 	return float(game.stores.get(res, 0.0))
+
+
+## The name to show for a person (what the Roster says they are called now).
+func dn(nm: String) -> String:
+	return String(renames.get(nm, nm))
 
 
 func people_alive() -> int:
@@ -427,10 +437,15 @@ func frame(dt: float) -> void:
 	if d != _last_day:
 		_last_day = d
 		_on_day(d)
+	var here := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	if here.distance_to(_last_pos) < 4.0:    # (a jump between the base and a raid's map is not a walk)
+		stats.dist = float(stats.dist) + here.distance_to(_last_pos)
+	_last_pos = here
 	_track_t += dt
 	if _track_t >= 1.0:
 		_track_t = 0.0
 		_track_people()
+		Meta.check(game)
 	_overrun(dt)
 	_convoy_hours()
 	_late_end()
@@ -460,6 +475,12 @@ func _begin() -> void:
 		run_seed = int(game.Bal.run_seed)    # EVENTS: the card draw is a function of this and the day (a save keeps it)
 	if a.has("day") and int(a.day) > 1:
 		_jump(int(a.day))
+	if a.has("metastage"):    # staging (a check): a few cards answered, a name changed, two dead, for the Event log, the memorial and the stats
+		event_log = [{"day": 2, "id": "a", "title": "A man at the gate", "choice": "Let him in"}, {"day": 5, "id": "b", "title": "Rain in the night", "choice": "Send the crew to the roof"}]
+		renames["Cole"] = "Colonel"
+		ever["Tess"] = {"day": 1, "fate": "died", "cause": "night attack 3", "day_out": 8, "role": "cook", "kid": false, "start": false}
+		ever["Pip"] = {"day": 4, "fate": "died", "cause": "starved", "day_out": 11, "role": "", "kid": true, "start": false}
+		stats.dist = 5230.0
 	if a.has("arcready"):
 		_make_ready()
 	_last_day = int(game.econ.day)
@@ -567,13 +588,13 @@ func kill(nm: String, cause: String) -> void:
 	game.people.forget(nm)
 	_mark(nm, "died", cause)
 	if not scripted:
-		game.people.banner("%s has died of hunger." % nm if cause == "starved" else "%s is dead." % nm, Color(1, 0.5, 0.45))
+		game.people.banner("%s has died of hunger." % dn(nm) if cause == "starved" else "%s is dead." % dn(nm), Color(1, 0.5, 0.45))
 
 
 func _mark(nm: String, fate: String, cause: String) -> void:
 	if ever.has(nm) and String(ever[nm].fate) == "":
 		ever[nm].fate = fate
-		ever[nm]["cause"] = cause
+		ever[nm]["cause"] = cause if cause != "" else String(_hint.get(nm, ""))
 		ever[nm]["day_out"] = day
 		if fate == "died":
 			stats.deaths = int(stats.deaths) + 1
@@ -605,6 +626,17 @@ func names_with(fate: String) -> Array:
 	for nm in ever:
 		if String(ever[nm].fate) == fate:
 			out.append(String(nm))
+	return out
+
+
+## The memorial wall: [{name, day, cause}] for everybody who died, in the order they went. The cause is in words ("night attack 3", "starved", "a raid").
+func memorial() -> Array:
+	var out: Array = []
+	for nm in ever:
+		if String(ever[nm].fate) == "died":
+			var c := String(ever[nm].get("cause", ""))
+			out.append({"name": dn(String(nm)), "day": int(ever[nm].get("day_out", 0)), "cause": c if c != "" else "unknown"})
+	out.sort_custom(func(x, y): return int(x.day) < int(y.day))
 	return out
 
 
@@ -835,6 +867,7 @@ func deliver_event(i: int) -> Dictionary:
 	var c: Dictionary = chs[events.safe_index(v.card) if i < 0 else clampi(i, 0, chs.size() - 1)]
 	var ctx := {"who": String(event_pending.get("who", ""))}
 	events_seen.append(String(v.card.id))
+	event_log.append({"day": day, "id": String(v.card.id), "title": String(v.title), "choice": String(c.get("label", c.id))})
 	event_pending = {}
 	if game.args.has("arclog"):
 		print("ARC event day ", day, " ", v.card.id, " -> ", c.id, " who ", ctx.who)
@@ -926,6 +959,10 @@ func night_over(night: int, stat: Dictionary) -> void:
 	if not started:
 		return
 	plog.night(stat)    # PLAYLOG hook
+	for nm in stat.get("crew", []):
+		_hint[String(nm)] = "night attack %d" % night
+		if ever.has(String(nm)) and String(ever[nm].cause) == "":
+			ever[String(nm)]["cause"] = _hint[String(nm)]
 	stats.kills = int(stats.kills) + int(stat.get("killed", 0))
 	stats.fence_lost = int(stats.fence_lost) + (stat.lost as Array).size()
 	if ended_id == "":
@@ -1079,6 +1116,8 @@ func end(id: String, extra: Dictionary = {}) -> void:
 		return
 	ended_id = id
 	plog.finish("ending " + id)    # PLAYLOG hook
+	Meta.write_legacy(game, id)
+	Meta.check(game, id)
 	if id == "evac_full" or id == "evac_good" or id == "evac_bitter" or id == "evac_lonely":
 		convoy = "left"
 	endings.show(id, extra)
@@ -1148,7 +1187,7 @@ func to_dict() -> Dictionary:
 		"log_entries": log_entries.duplicate(true), "set_piece": set_piece.duplicate(true), "storm_seen": storm_seen, "stats": stats.duplicate(), "ever": ever.duplicate(true), "queue": _queue.duplicate(),
 		"convoy_open": _convoy_open, "convoy_decided": _convoy_decided, "walked": _walked.duplicate(), "notes_wait": _notes_wait.duplicate(),
 		"run_seed": run_seed, "flags": flags.duplicate(), "events_seen": events_seen.duplicate(), "person_traits": person_traits.duplicate(true), "hurt": hurt.duplicate(),
-		"night_mods": night_mods.duplicate(true), "weather_over": weather_over.duplicate(), "raid_mod": raid_mod, "event_pending": event_pending.duplicate(true)}
+		"night_mods": night_mods.duplicate(true), "weather_over": weather_over.duplicate(), "raid_mod": raid_mod, "event_pending": event_pending.duplicate(true), "event_log": event_log.duplicate(true), "renames": renames.duplicate()}
 
 
 ## Puts a saved story back (before the base is built): the arc is `started`, so its first-frame begin (which would deliver the day's beats again) does not run.
@@ -1179,6 +1218,12 @@ func from_dict(d: Dictionary) -> void:
 	weather_over = (d.get("weather_over", {}) as Dictionary).duplicate()
 	raid_mod = String(d.get("raid_mod", ""))
 	event_pending = (d.get("event_pending", {}) as Dictionary).duplicate(true)
+	renames = (d.get("renames", {}) as Dictionary).duplicate()
+	event_log = (d.get("event_log", []) as Array).duplicate(true)
+	if not d.has("event_log"):    # a save from before the Event log: the cards are in the story log (the choice itself was not kept; the result stands in for it)
+		for e in log_entries:
+			if String(e.get("tag", "")) == "event":
+				event_log.append({"day": int(e.day), "id": "", "title": String(e.title), "choice": String(e.get("result", ""))})
 	started = true
 	_last_day = int(game.econ.day)
 	day = _last_day

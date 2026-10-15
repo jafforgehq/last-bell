@@ -27,6 +27,7 @@ func is_open() -> bool:
 
 
 func _names(list: Array) -> String:
+	list = list.map(func(n): return arc.dn(String(n)))
 	if list.is_empty():
 		return "nobody"
 	if list.size() == 1:
@@ -116,7 +117,7 @@ func score(id: String, f: Dictionary) -> Dictionary:
 func stats_rows() -> Array:
 	var st: Dictionary = arc.stats
 	return [["Days", min(arc.day, arc.days())], ["Nights held", int(st.nights_held)], ["Dead at the fence", int(st.kills)], ["Raids", int(st.raids)], ["Rescues", int(st.rescues)],
-		["Deaths", int(st.deaths)], ["Walked out", int(st.left)], ["Scrap brought home", int(st.scrap)], ["Letters read", int(st.letters)], ["Fence walls lost", int(st.fence_lost)]]
+		["Deaths", int(st.deaths)], ["Walked out", int(st.left)], ["Scrap brought home", int(st.scrap)], ["Letters read", int(st.letters)], ["Fence walls lost", int(st.fence_lost)], ["Distance walked", "%d m" % int(st.dist)]]
 
 
 func show(id: String, extra: Dictionary = {}) -> void:
@@ -231,6 +232,16 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 			var vl: Label = S._lab(str(r[1]), 14, Hud.INK)
 			vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			g2.add_child(vl)
+	var dead: Array = arc.memorial()    # META: who died, when, and how
+	if not dead.is_empty():
+		var wall := VBoxContainer.new()
+		wall.add_theme_constant_override("separation", 2)
+		left.add_child(wall)    # (under the epilogue: the right column and the buttons keep their room)
+		wall.add_child(S._lab("THE LOST", 16, col, true))
+		for d in dead.slice(0, 8):
+			wall.add_child(S._lab("%s   day %d, %s" % [d.name, d.day, d.cause], 14, Hud.INK2))
+		if dead.size() > 8:
+			wall.add_child(S._lab("and %d more (the memorial wall in the Story tab)" % (dead.size() - 8), 14, Hud.INK3))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 14)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -267,8 +278,9 @@ func _record(id: String, total: int, f: Dictionary) -> Dictionary:
 	var rec := {"best": total, "runs": 1, "best_id": id}
 	if game.args.has("nosave") or game.args.has("arcauto") or game.args.has("econ-lab"):
 		return rec
-	if FileAccess.file_exists(REC):
-		var old = JSON.parse_string(FileAccess.get_file_as_string(REC))
+	var rp := REC if String(game.args.get("savefile", "")) == "" else "user://%s.arc.json" % String(game.args.savefile).get_file()    # (a run with --savefile keeps its own record)
+	if FileAccess.file_exists(rp):
+		var old = JSON.parse_string(FileAccess.get_file_as_string(rp))
 		if old is Dictionary:
 			rec.runs = int(old.get("runs", 0)) + 1
 			if int(old.get("best", 0)) >= total:
@@ -276,7 +288,7 @@ func _record(id: String, total: int, f: Dictionary) -> Dictionary:
 				rec.best_id = String(old.get("best_id", id))
 	var out := rec.duplicate()
 	out["last"] = {"ending": id, "score": total, "days": f.days, "saved": f.saved, "kills": f.kills, "nights": f.nights, "date": Time.get_datetime_string_from_system()}
-	var fa := FileAccess.open(REC, FileAccess.WRITE)
+	var fa := FileAccess.open(rp, FileAccess.WRITE)
 	if fa != null:
 		fa.store_string(JSON.stringify(out))
 	return rec

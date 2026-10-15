@@ -120,6 +120,25 @@ func _page(which: String) -> void:
 			body.add_child(grid)
 			body.add_child(_rule())
 			body.add_child(_btn("Back", func(): _page("main")))
+		"event log":    # META: every morning card answered this run
+			var log: Array = game.arc.event_log
+			if log.is_empty():
+				body.add_child(_lab("No morning cards yet.", 16, Hud.INK3))
+			var sc := ScrollContainer.new()
+			sc.custom_minimum_size = Vector2(520, minf(360.0, 60.0 * float(log.size()) + 10.0))
+			var col := VBoxContainer.new()
+			col.add_theme_constant_override("separation", 8)
+			sc.add_child(col)
+			for i in range(log.size() - 1, -1, -1):
+				var e: Dictionary = log[i]
+				col.add_child(_lab("Day %d   %s" % [int(e.day), String(e.title)], 17, Hud.INK, true))
+				var c := _lab("You chose: " + String(e.choice), 14, Hud.INK2)
+				c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				c.custom_minimum_size.x = 500
+				col.add_child(c)
+			body.add_child(sc)
+			body.add_child(_rule())
+			body.add_child(_btn("Back", func(): _page("main")))
 		"settings":
 			for sl_def in VOLUMES:
 				body.add_child(_volume_row(String(sl_def[0]), String(sl_def[1])))
@@ -136,6 +155,7 @@ func _page(which: String) -> void:
 			body.add_child(_btn("Resume", close, true))
 			body.add_child(_btn("Controls", func(): _page("controls")))
 			body.add_child(_btn("Settings", func(): _page("settings")))
+			body.add_child(_btn("Event log", func(): _page("event log")))
 			_save_rows()
 			body.add_child(report_row(game.arc.plog, "Copy report"))
 			_quit_btn = _btn("Quit", _quit)

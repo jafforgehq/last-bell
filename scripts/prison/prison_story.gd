@@ -581,6 +581,12 @@ func fill(body: VBoxContainer, lab: Callable, rich: Callable, bar: Callable) -> 
 	for b in arc.cfg.bonuses:
 		bl.append(String(b.label) + " +%d" % int(b.points))
 	body.add_child(lab.call("Extras that count: " + "; ".join(bl), 14, Hud.INK3, false))
+	body.add_child(lab.call("Memorial wall", 18, Hud.ACCENT, true))    # META: the dead by name, with the day and the cause
+	var wall: Array = arc.memorial()
+	if wall.is_empty():
+		body.add_child(lab.call("Nobody has died yet.", 15, Hud.INK3, false))
+	for d in wall:
+		body.add_child(lab.call("%s   day %d, %s" % [d.name, d.day, d.cause], 15, Hud.INK2, false))
 	body.add_child(lab.call("Messages", 18, Hud.ACCENT, true))
 	if arc.log_entries.is_empty():
 		body.add_child(lab.call("Nothing yet. The radio is quiet.", 15, Hud.INK3, false))
