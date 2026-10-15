@@ -21,6 +21,7 @@ var option := 0
 var picked := -1    # the gate's choice, used by the next raid    # the chosen option of cfg.options
 var choosing := false
 var kind := ""    # the kind of town of this raid ("" = today's town)
+const RAID_MOD_KIND := {"watchers": "police"}    # event word -> town kind
 var force_kind := ""    # ARC hook: an event card's raid_mod sets this to force the next raid's kind (used once; "" = free choice)
 var picked_kind := ""    # the kind chosen at the gate
 var offered: Array = []    # the kinds on offer today (ids)
@@ -375,6 +376,9 @@ func open_choice() -> bool:
 			tys.append(String(cfg().names[ty]))
 		(_buttons[i] as Button).text = "%d   %s   (%s)%s" % [i + 1, String(o.name), ", ".join(tys), "     <- the base needs this" if i == def else ""]
 	var day := int(game.econ.day) if game.econ != null else 1
+	var rm: String = game.arc.take_raid_mod() if game.arc != null else ""    # EVENTS: a card's raid_mod picks the next town (a kind id, or the card's own word via RAID_MOD_KIND)
+	if rm != "":
+		force_kind = String(RAID_MOD_KIND.get(rm, rm))
 	offered = [force_kind] if force_kind != "" and not kind_cfg(force_kind).is_empty() else offer(day)
 	if game.args.has("townkind"):
 		offered = [String(game.args.townkind)]

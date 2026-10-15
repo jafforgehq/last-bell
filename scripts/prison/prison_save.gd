@@ -97,7 +97,7 @@ static func snapshot(g) -> Dictionary:
 		"version": VERSION, "unix": int(Time.get_unix_time_from_system()),
 		"day": int(g.econ.day), "days": int(g.arc.days()), "nights": int(g.siege.nights_started), "people": int(g.econ.people()),
 		"game": {"tod": float(g.tod), "stores": stores, "raids": int(g.raids), "allies_alive": g.allies_alive.duplicate(), "econ_gone": g.econ_gone.duplicate(), "shots_fired": int(g.shots_fired)},
-		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict()}
+		"econ": g.econ.to_dict(), "arc": g.arc.to_dict(), "siege": g.siege.to_dict(), "people_mod": g.people.to_dict(), "arms": g.arms.to_dict(), "pack": g.pack.to_dict(), "level": int(g.Bal.level), "run_seed": int(g.Bal.run_seed)}
 
 
 ## `--saveecho` (a check): writes what the game holds now to user://<savefile>.echo.json, to be compared with the save it was loaded from.
@@ -164,6 +164,8 @@ static func apply(g, d: Dictionary) -> void:
 	g.allies_alive = (gm.allies_alive as Array).duplicate()
 	g.econ_gone = (gm.econ_gone as Array).duplicate()
 	g.shots_fired = int(gm.get("shots_fired", 0))
+	g.Bal.level = clampi(int(d.get("level", 1)), 0, 2)    # (the difficulty and the run seed come back with the run)
+	g.Bal.run_seed = int(d.get("run_seed", g.Bal.run_seed))
 	g.econ.from_dict(d.econ)
 	g.siege.from_dict(d.siege)
 	g.people.from_dict(d.people_mod)

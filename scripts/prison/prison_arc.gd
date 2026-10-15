@@ -411,7 +411,7 @@ func _begin() -> void:
 	_track_people()
 	var a: Dictionary = game.args
 	if run_seed == 0:
-		run_seed = int(a.get("seed", str(randi() % 900000 + 1)))    # EVENTS: the card draw is a function of this and the day (a save keeps it)
+		run_seed = int(game.Bal.run_seed)    # EVENTS: the card draw is a function of this and the day (a save keeps it)
 	if a.has("day") and int(a.day) > 1:
 		_jump(int(a.day))
 	if a.has("arcready"):
