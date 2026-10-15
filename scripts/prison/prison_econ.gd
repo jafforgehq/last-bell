@@ -282,7 +282,7 @@ func fence_mult() -> float:
 
 
 func hit_bonus() -> float:
-	return float(cfg.light_hit_bonus) if tier("power") >= 2 and power_on and not game.arc.blackout() else 0.0    # (ARC hook: the storm night is dark)
+	return float(cfg.light_hit_bonus) if tier("power") >= 1 and power_on and not game.arc.blackout() else 0.0    # (ARC hook: the storm night is dark)
 
 
 ## Production of one resource per day by what is built and who is at work. `power` says whether the generator runs.
@@ -302,8 +302,6 @@ func _consume(r: String) -> float:
 	if r == "food" and game.arc != null:
 		n += game.arc.extra_eating()    # TRAITS hook: scroungers eat more
 	n *= float(game.Bal.dm("drain"))
-	if r == "food" and tier("kitchen") >= 3 and workers("cook") > 0:
-		n *= float(cfg.canteen_food_factor)
 	return n
 
 

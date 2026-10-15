@@ -8,7 +8,7 @@
 ## The file name can be changed with `--savefile=NAME` (a lab or a test then never touches the player's save).
 extends RefCounted
 
-const VERSION := 1
+const VERSION := 2    # 2: the project list was cut to ten (water, garden, kitchen, infirmary, dormitory, power, fence 1-2, radio, convoy)
 const FILE := "prison_save.json"
 const SECTIONS := ["game", "econ", "arc", "siege", "people", "arms", "pack"]
 
@@ -132,7 +132,7 @@ static func _read_file(p: String) -> Dictionary:
 		return {"ok": false, "why": "The save is damaged and cannot be read."}
 	var d: Dictionary = _dec(parsed)
 	if not d.has("version") or int(d.version) != VERSION:
-		return {"ok": false, "why": "The save is from another version of the game and cannot be continued.", "version": true}
+		return {"ok": false, "why": "This save is from an older version of the game (the base projects changed) and cannot be continued. Start a new game.", "version": true}
 	for s in ["game", "econ", "arc", "siege", "people_mod", "arms", "pack"]:
 		if typeof(d.get(s)) != TYPE_DICTIONARY:
 			return {"ok": false, "why": "The save is damaged and cannot be read."}

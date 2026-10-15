@@ -326,7 +326,7 @@ func _night(d: int) -> void:
 	var gf: float = game.siege.guard_factor(guards)    # (the real siege sends the table's dead times this, and the base horde too)
 	var total := maxf(2.0, roundf(float(plan.total) * gf)) + float(game.noise.base_horde_size(d, gf))
 	var fp := float(n.base_defense) + float(guards) * float(n.guard_kills) + float(n.ruth_kills) * float(skill.defense)
-	if econ.tier("power") >= 2 and econ.power_on and not arc.blackout_for(d):
+	if econ.tier("power") >= 1 and econ.power_on and not arc.blackout_for(d):
 		fp *= 1.0 + float(n.light_bonus)
 	var ammo_need := total * float(n.ammo_per_kill)
 	var have := float(game.stores.ammo)
