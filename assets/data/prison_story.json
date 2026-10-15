@@ -33,6 +33,17 @@
     {"id": "food", "label": "Food for the road (30)", "rule": "stock:food:30", "points": 10},
     {"id": "crew", "label": "Nobody lost on the way (no deaths)", "rule": "no_deaths", "points": 25}
   ],
+  "convoy_radio": {
+    "_doc": "A short line from the Harbor Convoy on the morning banner every 3 to 4 days from first_day (the gaps alternate 3, 4, 3, 4), with the radio sound. The first matching `when` in this order picks the pool: fence (the average fence segment is under 55 percent), food (food under 10), missing (day 18 or later and the list is not met; {missing} is the first thing lacking), ready (day 18 or later and the list is met), else calm. {days} is the days to day 30.",
+    "first_day": 5, "gaps": [3, 4],
+    "pools": {
+      "fence": ["Harbor Relief: the scouts say your fence looks thin from the road. {days} days. Mend it before it matters.", "Halloran: a fence that is half gone does not hold a convoy's loading. {days} days left."],
+      "food": ["Harbor Relief: eat first, plan second. The convoy cannot carry people who starved at the gate. {days} days.", "Halloran: your stores sound low from here. {days} days to go."],
+      "missing": ["Halloran: still short, {missing}. {days} days.", "Harbor Relief: the list is not met, {missing}. The column does not wait. {days} days."],
+      "ready": ["Halloran: by our count you are ready. Hold the fence. {days} days.", "Harbor Relief: your list is met. Keep it that way. {days} days."],
+      "calm": ["Harbor Relief: the column is on the road. {days} days to the gate.", "Halloran: the convoy is on schedule. Keep your radio on. {days} days.", "Harbor Relief: roads are clear so far. {days} days."]
+    }
+  },
   "convoy": {"bus_seats": 4, "name": "the Harbor Convoy", "waits": "until 15:00"},
   "evac_tiers": [
     {"id": "full", "min_share": 0.85, "label": "FULL"},

@@ -6,6 +6,7 @@
 ## The job of a person is read from what the crew module says it is doing (`m.say`, `m.state`), role colours from the economy's role table (so changing a role in the roster recolours the ring).
 extends RefCounted
 
+const Access := preload("res://scripts/access.gd")
 const Icons := preload("res://scripts/prison/prison_icons.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
@@ -178,7 +179,10 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	c.draw_arc(Vector2.ZERO, rr, 0.0, TAU, 28, Color(col, 0.95 if (hov or d < MID_TAG) else 0.75), 2.2 if hov else 1.6, true)
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if zoom < 12.0:    # the overview: a dot is all there is room for
-		c.draw_circle(feet - Vector2(0, 7), 3.0, col)
+		if Access.markers():
+			Icons.mark(c, "ally", feet - Vector2(0, 7), 4.0, col)
+		else:
+			c.draw_circle(feet - Vector2(0, 7), 3.0, col)
 		return
 	var near := near_id == String(m.def.id) or hov
 	var mid := d < MID_TAG or near
@@ -190,6 +194,8 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	c.draw_circle(cc, 10.5, Color(0.03, 0.05, 0.04, 0.82))
 	c.draw_arc(cc, 10.5, 0.0, TAU, 20, icol, 2.0, true)
 	Icons.draw(c, String(job[0]), cc, 14.0, icol.lightened(0.15))
+	if Access.markers():    # COLOUR-BLIND: a triangle over each person, an X for the downed
+		Icons.mark(c, "dead" if downed else "ally", cc + Vector2(0, -16), 4.5, icol)
 	var y_line := cc.y - 16.0
 	if mid:
 		var word := String(job[1])

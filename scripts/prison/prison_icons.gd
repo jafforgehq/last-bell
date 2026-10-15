@@ -175,3 +175,65 @@ static func draw(c: CanvasItem, id: String, p: Vector2, s: float, col: Color) ->
 			c.draw_circle(p, r * 0.12, col)
 		_:
 			c.draw_circle(p, r * 0.4, col)
+
+
+const SKINS := [Color("#f0c8a0"), Color("#d9a577"), Color("#b87f56"), Color("#8a5a3c"), Color("#5e3b2a")]
+const HAIRS := [Color("#1f1a17"), Color("#4a3020"), Color("#7a4a2a"), Color("#b8863a"), Color("#8a8a8a"), Color("#a8483c")]
+const CLOTHES := [Color("#4a6a8a"), Color("#7a8a4a"), Color("#a8483c"), Color("#6a5a44"), Color("#555a50"), Color("#8a6aa0"), Color("#c9b25a")]
+
+
+## A small bust for a person, drawn flat with a dark outline into `r` of any CanvasItem. Skin, hair and clothes come from the id, so a person looks the same everywhere.
+static func portrait(c: CanvasItem, id: String, r: Rect2) -> void:
+	var h := absi(id.hash())
+	var skin: Color = SKINS[h % SKINS.size()]
+	var hair: Color = HAIRS[(h / 7) % HAIRS.size()]
+	var top: Color = CLOTHES[(h / 53) % CLOTHES.size()]
+	var s := minf(r.size.x, r.size.y)
+	var ctr := r.position + r.size * 0.5
+	var u := s / 20.0
+	c.draw_rect(r, Color(0.12, 0.15, 0.16, 0.9))
+	# shoulders
+	var sh := PackedVector2Array([ctr + Vector2(-8, 10) * u, ctr + Vector2(-7, 5.5) * u, ctr + Vector2(-3, 4) * u, ctr + Vector2(3, 4) * u, ctr + Vector2(7, 5.5) * u, ctr + Vector2(8, 10) * u])
+	c.draw_colored_polygon(sh, top)
+	c.draw_polyline(sh, EDGE, maxf(1.0, u * 0.7))
+	c.draw_rect(Rect2(ctr + Vector2(-1.8, 2.2) * u, Vector2(3.6, 3.0) * u), skin.darkened(0.15))
+	# head and hair
+	var hc := ctr + Vector2(0, -2.2) * u
+	c.draw_circle(hc, 5.6 * u, EDGE)
+	c.draw_circle(hc, 4.8 * u, skin)
+	if (h / 11) % 3 == 0:    # a short crop
+		c.draw_arc(hc, 4.6 * u, PI * 1.05, PI * 1.95, 10, hair, 2.4 * u, true)
+	else:
+		c.draw_colored_polygon(PackedVector2Array([hc + Vector2(-5, 0.5) * u, hc + Vector2(-4.4, -3.8) * u, hc + Vector2(0, -5.6) * u, hc + Vector2(4.4, -3.8) * u, hc + Vector2(5, 0.5) * u, hc + Vector2(3.4, -1.6) * u, hc + Vector2(-3.4, -1.6) * u]), hair)
+		if (h / 11) % 3 == 1:    # long hair falls past the ears
+			c.draw_rect(Rect2(hc + Vector2(-5.2, -1.0) * u, Vector2(1.6, 5.0) * u), hair)
+			c.draw_rect(Rect2(hc + Vector2(3.6, -1.0) * u, Vector2(1.6, 5.0) * u), hair)
+	c.draw_circle(hc + Vector2(-1.9, 0.4) * u, 0.55 * u, EDGE)
+	c.draw_circle(hc + Vector2(1.9, 0.4) * u, 0.55 * u, EDGE)
+	c.draw_rect(r, EDGE, false, 1.0)
+
+
+## A Control with the person's bust in it, `px` square.
+static func portrait_box(id: String, px: float = 28.0) -> Control:
+	var b := Control.new()
+	b.custom_minimum_size = Vector2(px, px)
+	b.draw.connect(func() -> void: portrait(b, id, Rect2(Vector2.ZERO, b.size)))
+	return b
+
+
+## COLOUR-BLIND MARKERS: ally = triangle, dead = X, loot = diamond, drawn with a dark outline. Callers use them in place of a plain dot only when `Access.markers()` is on.
+static func mark(c: CanvasItem, shape: String, p: Vector2, r: float, col: Color) -> void:
+	match shape:
+		"ally":
+			var t := PackedVector2Array([p + Vector2(0, -r), p + Vector2(r * 0.95, r * 0.8), p + Vector2(-r * 0.95, r * 0.8)])
+			c.draw_colored_polygon(t, col)
+			c.draw_polyline(PackedVector2Array([t[0], t[1], t[2], t[0]]), EDGE, 1.0)
+		"dead":
+			c.draw_line(p + Vector2(-r, -r), p + Vector2(r, r), EDGE, 3.0)
+			c.draw_line(p + Vector2(-r, r), p + Vector2(r, -r), EDGE, 3.0)
+			c.draw_line(p + Vector2(-r, -r), p + Vector2(r, r), col, 1.6)
+			c.draw_line(p + Vector2(-r, r), p + Vector2(r, -r), col, 1.6)
+		_:    # loot
+			var d := PackedVector2Array([p + Vector2(0, -r), p + Vector2(r, 0), p + Vector2(0, r), p + Vector2(-r, 0)])
+			c.draw_colored_polygon(d, col)
+			c.draw_polyline(PackedVector2Array([d[0], d[1], d[2], d[3], d[0]]), EDGE, 1.0)

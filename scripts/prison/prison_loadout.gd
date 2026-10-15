@@ -4,6 +4,7 @@
 ## (a pack she packed at the stash is taken as it is). Owned by prison_game.gd (`loadout`, `# SQUAD hook`).
 extends RefCounted
 
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
 const AMMO_STEPS := [0, 20, 40, 60, 80, 120]
 
@@ -159,7 +160,11 @@ func _refresh() -> void:
 			text += "   - stays: %s" % String(can.why)
 		var b := _btn(("> " if sel else "   ") + text, sel, func(): _toggle(id), bool(can.ok) or sel)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		list.add_child(b)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var prow := HBoxContainer.new()    # PORTRAIT
+		prow.add_child(PIcons.portrait_box(id, 26.0))
+		prow.add_child(b)
+		list.add_child(prow)
 	if squad.cands.is_empty():
 		_col.add_child(_lbl("Nobody at the base can be spared.", 14))
 	for line in squad.loss_lines():

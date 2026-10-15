@@ -6,6 +6,7 @@
 ## Staging flags (see docs/experiments/prison-management.md): --board=projects[:building]|needs|roster|card|toast, --econ=give:scrap=50,parts=20, --board-start=water1.
 extends RefCounted
 
+const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Topbar := preload("res://scripts/prison/prison_topbar.gd")
@@ -745,7 +746,11 @@ func _roster_tab() -> void:
 		if m.def.has("ally"):
 			continue
 		var id := String(m.def.id)
-		g.add_child(_lab(String(m.def.name), 16, Hud.INK))
+		var nm_box := HBoxContainer.new()    # PORTRAIT: a small bust beside the name
+		nm_box.add_theme_constant_override("separation", 6)
+		nm_box.add_child(PIcons.portrait_box(id, 30.0))
+		nm_box.add_child(_lab(String(m.def.name), 16, Hud.INK))
+		g.add_child(nm_box)
 		var locked: bool = m.def.has("play") or game.siege.attacking
 		if m.def.has("play"):
 			g.add_child(_lab("child", 15, DIM))
