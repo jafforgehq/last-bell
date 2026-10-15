@@ -625,6 +625,7 @@ func _enter_base() -> void:
 		run.invulnerable = false
 		run.sim.quiet = false
 		run.field.wake_r = CLEAR_WAKE_R
+		run.field.hp_mult = float(Bal.dm("dead_hp"))
 		run.field.sleep_r = 30.0
 		run.field.active_cap = 60
 		if zone_done.is_empty():
@@ -1899,6 +1900,7 @@ func _auto_clear() -> void:
 ## of an uncleared zone with the path finder. Prints STUCK when it has not moved for 6 s.
 var _bot_goal := Vector2.ZERO
 var _bot_goal_until := 0.0
+var _ruth_logged := false
 var _bot_hold_e := false
 var _bot_last := Vector2.ZERO
 var _bot_still := 0.0
@@ -2402,6 +2404,11 @@ func _clear_logic(dt: float) -> void:
 	_zone_t -= dt
 	if _zone_t <= 0.0 and not busy:
 		_zone_t = 0.5
+		if args.has("log") and run.avatar_p.downed and not _ruth_logged:
+			_ruth_logged = true
+			print("RUTH downed t=", snappedf(clock, 0.1))
+		if not run.avatar_p.downed:
+			_ruth_logged = false
 		_zone_check()
 		_zone_wake()
 
@@ -2441,7 +2448,7 @@ func _zone_check() -> void:
 		_say("%s cleared (%d/%d). Loot it, then move on." % [String(z.name), _cleared_n(), Base.ZONES.size()] if names.is_empty() else "%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
 		sound.play("bell", 0.5, 0.0)
 		if args.has("log"):
-			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " freed ", names, " stores ", stores)
+			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " ammoU ", snappedf(float(pack.Inventory.units(pack.grid, "ammo")),0.1), " hp ", int(run.avatar_p.hp))
 	if _cleared_n() == Base.ZONES.size() and not busy:
 		_secure()
 
@@ -2526,7 +2533,7 @@ func _allies(dt: float) -> void:
 		m.hold = float(m.get("hold", 0.0)) - dt
 		if best != null and can_fire(g, best, "ally") and float(m.cd) <= 0.0 and float(g.reloading) <= 0.0:
 			_shoot_at(g, best, gun_hit("ally", bd, best), float(Bal.role("ally").dmg))
-			m.cd = Bal.roll(Bal.role("ally"), "cd")
+			m.cd = Bal.roll(Bal.role("ally"), "cd") * float(Bal.dm("ally_cd"))
 			m.hold = 0.35
 			m.say = "firing"
 		if float(m.hold) > 0.0:

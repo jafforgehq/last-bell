@@ -49,6 +49,7 @@ var cols := 0
 var rows := 0
 var active_cap := 100
 var wake_r := WAKE_R
+var hp_mult := 1.0    # prison clear phase: the difficulty's share of a fresh one's hit points
 var sleep_r := SLEEP_R
 var noise_r := NOISE_R
 var noise_cap := NOISE_CAP
@@ -367,6 +368,8 @@ func _wake(i: int, chase_prey = null):
 	z.look = sim.looks[z.look_index]
 	if hp[i] > 0.0:
 		z.hp = hp[i]
+	else:
+		z.hp *= hp_mult
 	z.state = "still" if stands[i] == 1 else "wander"
 	status[i] = ACTIVE
 	active_of[i] = z
