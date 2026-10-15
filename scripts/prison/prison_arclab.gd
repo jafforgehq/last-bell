@@ -111,7 +111,10 @@ func _one_day() -> void:
 
 func _raid(got: Dictionary) -> void:
 	var sk := skill
-	var dead := rng.randf() < float(cfg.raid_death_p)
+	var pick := _pick_raid()
+	var pc: Dictionary = Loot.place_cfg(String(pick.kind))
+	game.stores["fuel"] = maxf(0.0, float(game.stores.get("fuel", 0.0)) - float(pc.get("fuel", 0)))
+	var dead := rng.randf() < float(cfg.raid_death_p) * float(pc.get("danger", 2.5)) / 2.5    # (a deadlier place kills more often)
 	arc.stats.raids = int(arc.stats.raids) + 1
 	if dead:
 		arc.stats.ruth_deaths = int(arc.stats.ruth_deaths) + 1
@@ -119,7 +122,6 @@ func _raid(got: Dictionary) -> void:
 			arc.end("dead")
 		return
 	# the REAL loot model: a generated town, retagged and re-rolled by prison_loot.gd for the chosen kind, and the loot lab's greedy 180 s walk (a stand-in for the hands: no fights, no pack limit)
-	var pick := _pick_raid()
 	var ts := rng.randi_range(1, 40)
 	if not _towns.has(ts):
 		_towns[ts] = TownGen.make(ts, Loot.cfg().town_opts)
@@ -156,7 +158,9 @@ func _pick_raid() -> Dictionary:
 		sh[r] = (float(need.get(r, 0.0)) - float(game.stores.get(r, 0.0))) * (1.4 if r == "fuel" else 1.0) + (8.0 if r == "ammo" else 0.0)
 	var kind := "standard"
 	var best := 0.0
-	for k in Loot.offer(int(econ.day)):
+	for k in Loot.offer(int(econ.day)):    # (the places open today that the truck has the fuel for)
+		if float(Loot.place_cfg(String(k)).get("fuel", 0)) > float(game.stores.get("fuel", 0.0)):
+			continue
 		var sc := 0.0
 		for r in Loot.kind_cfg(String(k)).get("answers", []):
 			sc += maxf(0.0, float(sh.get(String(r), 0.0)))
