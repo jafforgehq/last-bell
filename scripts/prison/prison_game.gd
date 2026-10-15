@@ -2095,6 +2095,8 @@ func _auto_reach() -> void:
 
 
 var _auto_target := Vector2(-1, -1)
+var _bot_noise_t := 20.0
+var _bot_noise_n := 0
 var _bot_in := {}
 var _bot_wait := 0.0
 func _auto_loot() -> void:
@@ -2105,6 +2107,24 @@ func _auto_loot() -> void:
 	if _bot_wait > 0.0:
 		_bot_in = {"move": Vector2.ZERO, "aim": me}
 		return
+	if args.has("botshoot"):    # a measuring bot (--auto=loot --botshoot): shoots the nearest dead in sight within 7 tiles, loots between; every 30 s a loud noise 10 tiles off wakes the dead (a car alarm, a far shot)
+		_bot_noise_t -= get_process_delta_time()
+		if _bot_noise_t <= 0.0:
+			_bot_noise_t = 30.0
+			_bot_noise_n += 1
+			run.field.noise(me + Vector2.from_angle(float(_bot_noise_n) * 2.4) * 10.0, null, 45.0)
+		var tz = null
+		var td := 7.0
+		for z in _awake_dead():
+			var dz := me.distance_to(Vector2(z.x, z.y))
+			if dz < td and run.sim.clear_shot(me, Vector2(z.x, z.y), 0.15):
+				td = dz
+				tz = z
+		if tz != null:
+			if int(p.mag) <= 0:
+				run.sim.avatar.reload()
+			_bot_in = {"move": Vector2.ZERO, "aim": Vector2(tz.x, tz.y), "fire": int(p.mag) > 0}
+			return
 	var best = null
 	var bd := 1.0e9
 	if not run.sim.uses.busy():
