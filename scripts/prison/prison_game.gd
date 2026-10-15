@@ -1801,7 +1801,7 @@ func _scripts(dt: float) -> void:
 		for id in String(args.pick).split(","):
 			squad.toggle(id)
 		loadout._refresh()
-	if phase == "clear" and mode == "base" and frames >= 200 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
+	if phase == "clear" and mode == "base" and frames >= 200 and cap_label.modulate.a <= 0.05 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
 		_weapon_card = true
 		loadout.open("", true)    # the first card of the party: which gun
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
