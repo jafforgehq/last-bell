@@ -10,6 +10,7 @@
 ## Flags: `--special=screamer|bloater|hunter|breacher` puts one 12 tiles in front of Ruth (breacher: at the first attacked fence segment); `--nospecial` turns them off.
 extends RefCounted
 
+const Arms := preload("res://scripts/prison/prison_arms.gd")
 const PN := preload("res://scripts/prison/prison_noise.gd")
 const Loot := preload("res://scripts/prison/prison_loot.gd")
 const TAG := {"screamer": Color(0.8, 0.85, 1.0), "bloater": Color(0.75, 0.9, 0.3), "hunter": Color(1.0, 0.4, 0.35), "breacher": Color(1.0, 0.65, 0.25)}
@@ -498,7 +499,10 @@ func free_pin() -> bool:
 	z.y += away.y * float(sc("hunter").free_dist)
 	release(info)
 	z.stagger = 1.5
-	game._say("You shove it off.", 2.0)
+	var stab := float(Arms.cfg().get("knife", {}).get("hunter_stab", 0.0))    # (the knife goes in as it is shoved off: 6 hp, so it takes a second stab)
+	if stab > 0.0:
+		game.run.sim._hurt_zombie(z, stab, away.angle(), p, true)
+	game._say("You stab it and shove it off." if stab > 0.0 else "You shove it off.", 2.0)
 	return true
 
 

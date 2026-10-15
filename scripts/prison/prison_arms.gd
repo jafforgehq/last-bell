@@ -48,6 +48,16 @@ static func merge(data: Dictionary) -> void:
 		sh["desc"] = "Rounds for every gun: one unit loads 3 shells, 4 rifle rounds or 10 SMG rounds. The reload takes them from the pack."
 
 
+## The knife (F): the prison's numbers laid over this run's swing (`avatar.melee_rules.cfg`, assets/data/melee.json); the times that follow from each other are made so again.
+static func apply_knife(rules) -> void:
+	var k: Dictionary = cfg().get("knife", {})
+	for key in k:
+		if not String(key).begins_with("_"):
+			rules.cfg[key] = k[key]
+	rules.cfg["windup_s"] = rules.cfg.hit_at_s
+	rules.cfg["cycle_s"] = float(rules.cfg.hit_at_s) + float(rules.cfg.recover_s)
+
+
 func _init(g) -> void:
 	game = g
 	armory = (cfg().armory_start as Dictionary).duplicate()

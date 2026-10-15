@@ -294,7 +294,7 @@ func _land(p) -> void:
 func _base_damage(z) -> float:
 	if z.kind == Kinds.BRUTE:
 		return float(cfg.brute_chip_frac) * _mean_hp(Kinds.BRUTE)
-	return float(cfg.damage_walker_frac) * _mean_hp(Kinds.WALKER)
+	return float(cfg.damage_walker_frac) * _mean_hp(Kinds.WALKER) * float((cfg.get("kind_mult", {}) as Dictionary).get(String(z.kind), 1.0))    # (kind_mult: the prison knife on a bloater)
 
 
 func _mean_hp(kind: String) -> float:

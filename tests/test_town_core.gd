@@ -7,6 +7,7 @@ const TownRun := preload("res://scripts/town/town_run.gd")
 const TownRoofs := preload("res://scripts/town/town_roofs.gd")
 const Pathfinder := preload("res://scripts/sim/pathfinder.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
+const PrisonArms := preload("res://scripts/prison/prison_arms.gd")
 
 var _town: Dictionary = {}
 
@@ -146,3 +147,36 @@ func test_the_roof_of_the_house_the_avatar_is_in_opens_and_the_others_stay_shut(
 	roofs.update(-1, 1.0)
 	eq(roofs.shown, t.houses.size(), "out again, all shut")
 	roofs.free()
+
+
+func test_the_prison_knife_takes_two_or_three_stabs_half_a_second_apart_and_no_ammo() -> void:
+	var t := _make()
+	var world = TownWorld.new()
+	world.build(t.data)
+	var run = TownRun.new(t, world, FxNull.new(), 30, true, true)
+	var sim = run.sim
+	var rules = sim.avatar.melee_rules
+	PrisonArms.apply_knife(rules)
+	near(float(rules.cfg.cycle_s), 0.5, 0.0001, "a stab takes half a second")
+	check(float(rules.cfg.noise_hit) < 6.0, "and is quiet beside a shot")
+	var me = run.avatar_p
+	me.mag = 0
+	sim.stock.ammo = 0.0
+	for hp in [4.0, 6.0]:
+		var z = sim.spawn(me.x + 1.0, me.y, "wander", "walker")
+		z.hp = hp
+		z.limp = false
+		var stabs := 0
+		for k in 5:
+			if z.state == "dying" or z.state == "dead":
+				break
+			sim.avatar.set_input(Vector2.ZERO, Vector2(me.x + 5.0, me.y), false)
+			sim.avatar.melee()
+			stabs += 1
+			for i in 15:
+				sim.update(1.0 / 30.0)
+			z.x = me.x + 1.0
+			z.y = me.y
+		check(z.state == "dying" or z.state == "dead" or z.hp <= 0.0, "a walker of %d hp is dead" % int(hp))
+		check(stabs >= 2 and stabs <= 3, "in 2 or 3 stabs (%d)" % stabs)
+	world.free()

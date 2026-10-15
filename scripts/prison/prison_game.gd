@@ -552,6 +552,8 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 		roofs.setup(town, data, "house")
 	run = TownRun.new(town, world, fx, 100, true, true)
 	run.sim.feel = fx.combat
+	Arms.apply_knife(run.sim.avatar.melee_rules)    # (F is the knife: always carried, a half-second swing, quiet)
+	fx.combat.set_melee(run.sim.avatar.melee_rules.cfg)
 	RimzFrames.blood_cb = fx.combat.decal    # (ROUND 11: a wounded one's trail of drops and a bite's splash go to the ground blood)
 	arms.apply(run.avatar_p)    # SQUAD hook: the gun she chose (before the pawn is made: it draws that gun)
 	if args.has("log") and mode == "raid":
@@ -706,7 +708,7 @@ func _enter_base() -> void:
 		upg.setup()    # WORLD hook
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
-		_say("WASD walk. %s. R reload, F melee, E search. Clear every zone." % AimMode.prison_words(), 7.0)
+		_say("WASD walk. %s. R reload, F knife, E search. Clear every zone." % AimMode.prison_words(), 7.0)
 	else:
 		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
 
@@ -1100,6 +1102,23 @@ func _dead_check() -> void:
 	print("DEADCHECK t=", snappedf(clock, 0.1), " phase ", phase, " total ", pts.size(), " ", cnt, " blocked by zone ", by_zone)
 
 
+## The knife's first-use hint, once a session: a dead one within reach of Ruth while the gun is dry, or the first dead one at her elbow.
+static var _knife_told := false
+
+func _knife_hint() -> void:
+	if _knife_told or run == null or run.avatar_p == null or run.avatar_p.dead or not PHud.armed(self):
+		return
+	var me = run.avatar_p
+	var dry: bool = int(me.mag) <= 0 and PHud.reserve(self, me) <= 0
+	for z in run.sim.zombies:
+		if z.state == "dying" or z.state == "dead" or z.state == "still":
+			continue
+		if Vector2(z.x - me.x, z.y - me.y).length() < (2.4 if dry else 1.6):
+			_knife_told = true
+			_say("A dead one is close: press F to stab it with your knife. It is quiet and needs no ammo.", 6.0)
+			return
+
+
 func _tick(dt: float) -> void:
 	if args.has("deadcheck") and run != null and not _deadchecked and clock >= float(String(args.deadcheck).split(",")[0]):
 		_deadchecked = true
@@ -1128,6 +1147,7 @@ func _tick(dt: float) -> void:
 	clock += dt
 	frames += 1
 	_hands(dt)
+	_knife_hint()
 	for i in step_clock.advance(dt, 1.0):
 		_step()
 		sim_steps += 1

@@ -114,6 +114,7 @@ static func draw(game, c: Control, v: Vector2) -> void:
 	c.draw_string(font, box.position + Vector2(8, 17), state, HORIZONTAL_ALIGNMENT_RIGHT, 214, 13, ACCENT if me.reloading > 0.0 else DANGER)
 	var col3 := DANGER if dry else (WARN if low else INK)
 	c.draw_string(font, box.position + Vector2(8, 42), "-" if melee else "%d / %d" % [ready, rounds], HORIZONTAL_ALIGNMENT_LEFT, 150, 24, col3)
+	c.draw_string(font, box.position + Vector2(8, 42), "F: Knife", HORIZONTAL_ALIGNMENT_RIGHT, 214, 14, Color(INK, 0.45) if me.melee_t > 0.0 else INK)    # (greyed while a stab is in the air)
 	var cap2 := int(me.gun.get("mag", 0))
 	var bf := 1.0 if melee or cap2 <= 0 else clampf(float(ready) / float(cap2), 0.0, 1.0)
 	c.draw_rect(Rect2(box.position + Vector2(8, 46), Vector2(214, 4)), Color(0.15, 0.15, 0.12))
