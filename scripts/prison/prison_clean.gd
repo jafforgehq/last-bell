@@ -9,9 +9,9 @@ const TILE := preload("res://scripts/game_data.gd").TILE
 const TIMES := [9.0, 12.0, 15.0, 17.5]    # a round starts when the clock passes one of these
 const REACH := 3.2
 const SPEED_UP := 14.0    # the stains and bodies age this much faster under a broom
-const RUBBISH := [Vector2(20.5, 47.5), Vector2(30.5, 45.5), Vector2(58.5, 46.5), Vector2(66.5, 41.5), Vector2(36.5, 38.5), Vector2(44.5, 44.5), Vector2(52.5, 28.5)]
+const RUBBISH := [Vector2(13.5, 46.5), Vector2(22.5, 43.5), Vector2(33.5, 45.5), Vector2(37.5, 38.0), Vector2(22.0, 22.5)]
 # TRASH: the crew leaves rubbish at the places where it works, eats and sleeps (a pile = a spot with dirt over PILE). One cleaner keeps a ten-person base tidy; with none the piles grow to a cap of 1.0.
-const EXTRA := [Vector2(75.0, 14.5), Vector2(79.5, 16.5), Vector2(16.5, 37.5), Vector2(12.5, 36.5), Vector2(22.5, 38.5), Vector2(33.5, 36.0), Vector2(40.0, 36.0)]
+const EXTRA := [Vector2(48.0, 12.5), Vector2(43.5, 16.0), Vector2(13.5, 33.5), Vector2(11.5, 31.5), Vector2(20.0, 34.0), Vector2(33.5, 31.5), Vector2(38.5, 32.0)]
 const AREA_ST := {"kitchen": "stove", "dormitory": "bed", "infirmary": "meds", "workshop": "bench1"}
 const RATE := {"kitchen": 1.3, "dormitory": 1.3, "workshop": 1.2, "infirmary": 1.1, "yard": 0.5}    # how fast a place gets dirty
 const PILE := 0.3
@@ -20,8 +20,8 @@ const AFTER_BUMP := 0.12    # a raid or a night leaves this much more
 const DRAG := 0.25    # morale lost a day per pile ...
 const DRAG_MAX := 2.5    # ... but never more than this
 const TIDY := 0.5    # morale gained a day when there is no pile
-const LAUNDRY := Vector2(18.5, 47.5)
-const DUMP := Vector2(48.0, 50.5)
+const LAUNDRY := Base.LAUNDRY
+const DUMP := Vector2(23.0, 50.5)
 
 var game
 var spots: Array = []    # {at: Vector2, dirt: 0..1, area: String, by_t: when a cleaner took it}
@@ -60,7 +60,7 @@ func setup() -> void:
 	_last_tod = game.tod
 	if game.args.has("cleannow"):
 		_last_tod = -2.0
-		for at in [Vector2(36.0, 44.0), Vector2(37.5, 45.0), Vector2(60.0, 44.0)]:    # (a check: blood in the yard for the cleaners to find)
+		for at in [Vector2(34.0, 44.0), Vector2(35.5, 45.0), Vector2(16.0, 42.0)]:    # (a check: blood in the yard for the cleaners to find)
 			game.fx.combat.decal(at.x, at.y, 1.2, 0.3, 0.9)
 
 
@@ -174,7 +174,7 @@ func _pick(dirty: Array, work: String, say: String) -> Dictionary:
 		if _used.size() > 6:
 			_used.pop_front()
 		return {"at": at, "work": work, "say": say}
-	var fallback: Vector2 = [Vector2(36.0, 44.0), Vector2(60.0, 44.0), Vector2(46.0, 40.0)][rounds % 3]
+	var fallback: Vector2 = [Vector2(34.0, 44.0), Vector2(20.0, 42.0), Vector2(30.0, 38.0)][rounds % 3]
 	return {"at": fallback, "work": work, "say": say}
 
 

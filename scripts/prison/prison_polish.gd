@@ -196,26 +196,26 @@ func _tyres(c: CanvasItem, m: Dictionary, cx: int, cy: int) -> void:
 
 ## The base only: the dead press on the fence south of the gate, and trample the grass to bare mud; bones and rags in it.
 func _outside(c: CanvasItem, cx: int, cy: int) -> void:
-	var gx: float = 48.0
+	var gx: float = base.GATE_POS.x
 	var fy: float = float(base.FENCE.end.y)
 	for i in 70:
-		var x := gx + (_r(float(i), 1.0, 90) + _r(float(i), 2.0, 91) - 1.0) * 26.0
+		var x := gx + (_r(float(i), 1.0, 90) + _r(float(i), 2.0, 91) - 1.0) * 20.0
 		var y := fy + 0.2 + _r(float(i), 3.0, 92) * 3.2
 		if int(x) < cx or int(x) >= cx + CHUNK or int(y) < cy or int(y) >= cy + CHUNK:
 			continue
 		if _g(int(x), int(y)) != G_LAWN:
 			continue
-		var f := 1.0 - minf(absf(x - gx) / 26.0, 1.0)
+		var f := 1.0 - minf(absf(x - gx) / 20.0, 1.0)
 		_blob(c, Vector2(x, y), 0.8 + _r(float(i), 4.0, 93), 0.4 + _r(float(i), 5.0, 94) * 0.4, 0.0, Color(0.20, 0.14, 0.08, 0.20 * f + 0.04))
 	for i in 18:    # mud with a wet shine
-		var x := gx + (_r(float(i), 6.0, 95) - 0.5) * 30.0
+		var x := gx + (_r(float(i), 6.0, 95) - 0.5) * 24.0
 		var y := fy + 0.4 + _r(float(i), 7.0, 96) * 2.6
 		if int(x) < cx or int(x) >= cx + CHUNK or int(y) < cy or int(y) >= cy + CHUNK or _g(int(x), int(y)) != G_LAWN:
 			continue
 		_blob(c, Vector2(x, y), 0.5 + _r(float(i), 8.0, 97) * 0.4, 0.28, _r(float(i), 9.0, 98) * 0.6, Color(0.13, 0.09, 0.05, 0.38))
 		_blob(c, Vector2(x - 0.1, y - 0.07), 0.2, 0.09, 0.0, Color(0.6, 0.62, 0.6, 0.14), 2)
 	for i in 26:    # bones and rags
-		var x := gx + (_r(float(i), 10.0, 99) - 0.5) * 36.0
+		var x := gx + (_r(float(i), 10.0, 99) - 0.5) * 28.0
 		var y := fy + 0.3 + _r(float(i), 11.0, 100) * 3.4
 		if int(x) < cx or int(x) >= cx + CHUNK or int(y) < cy or int(y) >= cy + CHUNK or _g(int(x), int(y)) != G_LAWN:
 			continue
@@ -313,16 +313,14 @@ func _room_kind(x: int, y: int) -> String:
 		if not r.has_point(Vector2i(x, y)):
 			continue
 		match String(z.id):
-			"cella", "cellb":
+			"cells":
 				return "cell"
 			"canteen":
-				return "ktile" if y < 13 else "tile"
+				return "ktile" if y < 12 else "tile"
 			"infirmary":
 				return "lino"
 			"workshop":
-				return "work"
-			"stores":
-				return "store"
+				return "store" if base.STORES.has_point(Vector2i(x, y)) else "work"
 	return ""
 
 
@@ -335,7 +333,7 @@ func _rooms(c: CanvasItem, cx: int, cy: int) -> void:
 	# drains in the cells and the corridor
 	for z in base.ZONES:
 		var id := String(z.id)
-		if id != "cella" and id != "cellb":
+		if id != "cells":
 			continue
 		var r: Rect2i = z.rect
 		for row in 2:
@@ -417,7 +415,7 @@ func _shadows(c: CanvasItem, cx: int, cy: int) -> void:
 func _bars(c: CanvasItem, cx: int, cy: int) -> void:
 	for z in base.ZONES:
 		var id := String(z.id)
-		if id != "cella" and id != "cellb":
+		if id != "cells":
 			continue
 		var r: Rect2i = z.rect
 		for row in 2:

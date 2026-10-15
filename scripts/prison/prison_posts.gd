@@ -26,7 +26,7 @@ static func get_post(id: String) -> Dictionary:
 
 static func spot(id: String) -> Vector2:
 	var p := get_post(id)
-	return Vector2(float(p.pos[0]), float(p.pos[1])) if not p.is_empty() else Vector2(48.0, 48.0)
+	return Vector2(float(p.pos[0]), float(p.pos[1])) if not p.is_empty() else Vector2(23.0, 47.0)
 
 
 func _init(g) -> void:

@@ -199,7 +199,7 @@ func debug_build(id: String) -> void:
 
 func site(id: String) -> Vector2:
 	var name := String(cfg.site.get(String(defs[id].building), "stores")) if defs.has(id) else "stores"
-	return game.base.stations.get(name, Vector2(48.0, 40.0)) if game != null and game.base != null else Vector2(48.0, 40.0)
+	return game.base.stations.get(name, Vector2(30.0, 38.0)) if game != null and game.base != null else Vector2(30.0, 38.0)
 
 
 func add_labor(id: String, secs: float) -> void:

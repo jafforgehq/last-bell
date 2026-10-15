@@ -5,8 +5,8 @@ extends RefCounted
 
 const TownGen := preload("res://scripts/town/town_gen.gd")
 
-const W := 96
-const H := 72
+const W := 67
+const H := 70
 # terrain ids of the generator (data.terrainTypes)
 const T_ASPHALT := 1
 const T_SIDEWALK := 2
@@ -35,37 +35,48 @@ const L_CHAIN := 3
 const L_HEDGE := 5
 const L_WIRE := 6
 
-const FENCE := Rect2i(6, 4, 84, 52)    # x 6..89, y 4..55
-const GATE_X := 46
+## The compound was cut down on 2026-10-15 (owner: "the prison is too big"): 57 x 50 tiles inside the fence instead of 84 x 52, six clear-phase zones instead of ten, 62 dead instead of 99.
+const FENCE := Rect2i(5, 4, 57, 50)    # x 5..61, y 4..53
+const GATE_X := 21
 const GATE_W := 4
-const GATE_POS := Vector2(48.0, 55.5)
-const SPAWN := Vector2(48.0, 49.0)
+const GATE_POS := Vector2(23.0, 53.5)
+const SPAWN := Vector2(23.0, 47.0)
 ## CLEAR PHASE: the party walks in from the west road through a breach in the fence (`GAP`, closed in the managed phase) into the infirmary (a west door is cut for it).
-const GAP := Rect2i(6, 33, 1, 3)
-const START := Vector2(3.5, 34.5)
-## The ten zones of the clear phase: rect (tiles), dead (dormant records), loot (containers), crew (roster ids freed when it is cleared), rel (where they appear). The infirmary's dead stand
-## only in dead_rect (its east end) so that the first room is a few dead for three people.
+const GAP := Rect2i(5, 28, 1, 3)
+const START := Vector2(2.5, 29.5)
+## The buildings (tiles). Row one: the cell block and the canteen with its kitchen. Row two: the infirmary, the workshop and the stores. Row three: the gate yard and the garden.
+const CELLS := Rect2i(9, 6, 26, 15)
+const CANTEEN := Rect2i(37, 6, 20, 15)
+const INFIRMARY := Rect2i(8, 24, 15, 13)
+const WORKSHOP := Rect2i(26, 24, 18, 13)
+const STORES := Rect2i(48, 24, 11, 11)
+const GARDEN := Rect2i(40, 39, 18, 14)    # the wire fence round the beds
+const WELL := Vector2(51.6, 37.6)    # the well, in the strip between the second row and the garden
+const LAUNDRY := Vector2(14.0, 42.5)    # where the washing is done (the cleaner, the sound)
+const PEN_Y := 54.6    # the pen of the dead outside the gate starts here (y of its first row)
+## Where the art of the base's built tiers (prison_upgrades.gd) moved to, as offsets from the old, larger map.
+const OFF_ROW2 := Vector2(-2.0, -5.0)    # infirmary, power shed, workshop, stores, radio
+const OFF_CELLS := Vector2(-1.0, -2.0)
+const OFF_KITCHEN := Vector2(-30.0, -2.0)    # the kitchen end of the canteen (range, larder)
+const OFF_BARRELS := Vector2(-31.0, -2.0)
+## The six zones of the clear phase: rect (tiles), dead (dormant records), dead_rect (where they stand: a rect or an array of rects), loot (containers), crew (roster ids freed when it is cleared), rel (where they
+## appear). The infirmary's dead stand only in its east end so that the first room is a few dead for three people. The last zone is the gate.
 const ZONES := [
-	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(10, 29, 15, 13), "dead": 4, "dead_rect": Rect2i(17, 30, 7, 11), "loot": 3, "crew": ["ana"], "rel": Vector2(16.5, 36.0), "keys": ["meds", "food", "scrap"]},
-	{"id": "cella", "name": "Cell block A", "rect": Rect2i(10, 8, 24, 15), "dead": 14, "loot": 4, "crew": ["tomas"], "rel": Vector2(21.5, 15.0), "keys": ["food", "water", "scrap", "ammo"]},
-	{"id": "cellb", "name": "Cell block B", "rect": Rect2i(38, 8, 24, 15), "dead": 14, "loot": 4, "crew": ["june"], "rel": Vector2(49.5, 15.0), "keys": ["ammo", "water", "food", "meds"]},
-	{"id": "canteen", "name": "Canteen", "rect": Rect2i(66, 8, 21, 15), "dead": 12, "loot": 4, "crew": ["mia"], "rel": Vector2(74.5, 14.5), "keys": ["food", "water", "food", "scrap"]},
-	{"id": "workshop", "name": "Workshop", "rect": Rect2i(28, 29, 18, 13), "dead": 8, "loot": 3, "crew": ["hector"], "rel": Vector2(36.5, 36.0), "keys": ["scrap", "ammo", "scrap"]},
-	{"id": "stores", "name": "Stores", "rect": Rect2i(50, 29, 11, 11), "dead": 7, "loot": 4, "crew": ["owen"], "rel": Vector2(55.5, 35.0), "keys": ["food", "water", "ammo", "meds"]},
-	{"id": "garden", "name": "Garden", "rect": Rect2i(63, 28, 24, 22), "dead": 12, "loot": 2, "crew": ["marcus", "nia"], "rel": Vector2(74.5, 31.0), "keys": ["food", "food"]},
-	{"id": "walk", "name": "North walk", "rect": Rect2i(8, 23, 80, 5), "dead": 8, "loot": 2, "crew": ["dez", "rae"], "rel": Vector2(48.0, 25.0), "keys": ["ammo", "scrap"]},
-	{"id": "yard", "name": "Yard", "rect": Rect2i(8, 42, 30, 13), "dead": 10, "loot": 3, "crew": ["kit", "pip"], "rel": Vector2(30.0, 48.0), "keys": ["water", "scrap", "ammo"]},
-	{"id": "gate", "name": "Gate area", "rect": Rect2i(38, 42, 25, 13), "dead": 10, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(48.0, 47.0), "keys": ["ammo", "meds", "water"]},
+	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(8, 24, 15, 13), "dead": 4, "dead_rect": Rect2i(15, 25, 7, 11), "loot": 3, "crew": ["ana", "tomas"], "rel": Vector2(14.5, 31.0), "keys": ["meds", "food", "scrap"]},
+	{"id": "cells", "name": "Cell block", "rect": Rect2i(9, 6, 26, 15), "dead": 16, "loot": 5, "crew": ["june", "dez", "rae"], "rel": Vector2(22.0, 13.5), "keys": ["food", "water", "scrap", "ammo", "ammo"]},
+	{"id": "canteen", "name": "Canteen and kitchen", "rect": Rect2i(37, 6, 20, 15), "dead": 11, "loot": 4, "crew": ["mia", "kit"], "rel": Vector2(44.5, 12.5), "keys": ["food", "water", "food", "scrap"]},
+	{"id": "workshop", "name": "Workshop and stores", "rect": Rect2i(26, 24, 33, 13), "dead": 12, "dead_rect": [Rect2i(27, 25, 16, 11), Rect2i(49, 25, 9, 9)], "loot": 6, "crew": ["hector", "owen"], "rel": Vector2(34.5, 31.0), "keys": ["scrap", "ammo", "scrap", "food", "ammo", "meds"]},
+	{"id": "yard", "name": "Yard and garden", "rect": Rect2i(31, 38, 29, 15), "dead": 11, "loot": 4, "crew": ["marcus", "nia", "pip"], "rel": Vector2(36.0, 47.0), "keys": ["food", "water", "scrap", "ammo"]},
+	{"id": "gate", "name": "Gate area", "rect": Rect2i(8, 40, 22, 13), "dead": 8, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(23.0, 45.0), "keys": ["ammo", "meds", "water"]},
 ]
 ## The doors: one in every doorway of a building (name = the building it shuts). The clear phase starts them all shut (prison_doors.gd); the managed base has them open.
 const DOORS := [
-	{"name": "Infirmary", "rect": Rect2i(10, 33, 1, 3)}, {"name": "Infirmary", "rect": Rect2i(16, 29, 3, 1)},
-	{"name": "Cell block A", "rect": Rect2i(10, 14, 1, 3)}, {"name": "Cell block A", "rect": Rect2i(33, 14, 1, 3)},
-	{"name": "Cell block B", "rect": Rect2i(38, 14, 1, 3)}, {"name": "Cell block B", "rect": Rect2i(61, 14, 1, 3)},
-	{"name": "Canteen", "rect": Rect2i(66, 16, 1, 3)}, {"name": "Canteen", "rect": Rect2i(74, 22, 4, 1)},
-	{"name": "Workshop", "rect": Rect2i(34, 29, 5, 1)},
-	{"name": "Stores", "rect": Rect2i(54, 29, 3, 1)}, {"name": "Stores", "rect": Rect2i(54, 39, 3, 1)},
-	{"name": "Garden", "rect": Rect2i(74, 28, 2, 1)}, {"name": "Garden", "rect": Rect2i(74, 49, 2, 1)},
+	{"name": "Infirmary", "rect": Rect2i(8, 28, 1, 3)}, {"name": "Infirmary", "rect": Rect2i(14, 24, 3, 1)},
+	{"name": "Cell block", "rect": Rect2i(9, 12, 1, 3)}, {"name": "Cell block", "rect": Rect2i(34, 12, 1, 3)},
+	{"name": "Canteen", "rect": Rect2i(37, 12, 1, 3)}, {"name": "Canteen", "rect": Rect2i(44, 20, 4, 1)},
+	{"name": "Workshop", "rect": Rect2i(32, 24, 5, 1)},
+	{"name": "Stores", "rect": Rect2i(52, 24, 3, 1)}, {"name": "Stores", "rect": Rect2i(52, 34, 3, 1)},
+	{"name": "Garden", "rect": Rect2i(41, 39, 2, 1)}, {"name": "Garden", "rect": Rect2i(49, 52, 2, 1)},
 ]
 const LOOT_N := {"food": [3, 6], "water": [3, 6], "ammo": [6, 12], "meds": [1, 2], "scrap": [3, 6]}
 const SEARCHABLE := {"nightstand": "nightstand", "medicine_cabinet": "cabinet", "shelf_tins": "shelf", "desk": "desk", "bed_single": "bunk", "fridge": "fridge", "kitchen_counter": "cupboard",
@@ -175,12 +186,12 @@ func _row(kind: String, x0: float, y: float, n: int, step: float = 1.0, facing: 
 
 
 func _cell_block(x0: int, y0: int, mirror_label: String) -> void:
-	# 24 x 15: cells along north (y0+1..y0+4) and south (y0+10..y0+13), a corridor y0+6..y0+8, open at both ends
-	var r := Rect2i(x0, y0, 24, 15)
-	_building(r, T_CONCRETE, G_HALL, [Rect2i(x0, y0 + 6, 1, 3), Rect2i(x0 + 23, y0 + 6, 1, 3)])
+	# 26 x 15: six cells along the north (y0+1..y0+4) and the south (y0+10..y0+13), a corridor y0+6..y0+8, open at both ends
+	var r := Rect2i(x0, y0, 26, 15)
+	_building(r, T_CONCRETE, G_HALL, [Rect2i(x0, y0 + 6, 1, 3), Rect2i(x0 + 25, y0 + 6, 1, 3)])
 	for row in 2:
 		var wy := y0 + 5 if row == 0 else y0 + 9
-		for x in range(x0 + 1, x0 + 23):
+		for x in range(x0 + 1, x0 + 25):
 			_wall(x, wy)
 		for c in 6:
 			var cx := x0 + 1 + c * 4    # cell interior x cx..cx+2, the wall column at cx+3 (not after the last)
@@ -191,7 +202,7 @@ func _cell_block(x0: int, y0: int, mirror_label: String) -> void:
 			var by := float(y0 + 2) if row == 0 else float(y0 + 11)
 			_obj("bed_single", float(cx) + 0.5, by + 0.5, "s" if row == 0 else "n")
 			_obj("toilet", float(cx) + 2.5, float(y0 + 4) if row == 0 else float(y0 + 10) + 0.5, "s" if row == 0 else "n")
-	labels.append({"pos": Vector2(x0 + 12, y0 + 7.4), "text": mirror_label})
+	labels.append({"pos": Vector2(x0 + 13, y0 + 7.4), "text": mirror_label})
 
 
 ## The zone (index into ZONES) that holds a point, or -1.
@@ -219,12 +230,12 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	terrain.fill(T_GRASS)
 	# outside: grass; the road across the south; the pen for the dead in front of the gate
 	_fill(Rect2i(0, 0, W, H), T_GRASS, G_LAWN)
-	_fill(Rect2i(0, 58, W, 6), T_ASPHALT, G_ASPHALT)
-	_fill(Rect2i(GATE_X - 1, 55, GATE_W + 2, 3), T_ASPHALT, G_ASPHALT)
+	_fill(Rect2i(0, 56, W, 6), T_ASPHALT, G_ASPHALT)
+	_fill(Rect2i(GATE_X - 1, FENCE.end.y - 1, GATE_W + 2, 3), T_ASPHALT, G_ASPHALT)
 	# inside the fence: packed dirt yard, paths of concrete
 	_fill(Rect2i(FENCE.position.x + 1, FENCE.position.y + 1, FENCE.size.x - 2, FENCE.size.y - 2), T_DIRT, G_DIRT)
-	_fill(Rect2i(GATE_X - 1, 24, GATE_W + 2, 31), T_CONCRETE, G_SIDEWALK)    # the road from the gate north to the blocks
-	_fill(Rect2i(8, 23, 80, 3), T_CONCRETE, G_SIDEWALK)    # the walk between the cell blocks and the shops
+	_fill(Rect2i(GATE_X - 1, 37, GATE_W + 2, 17), T_CONCRETE, G_SIDEWALK)    # the road from the gate north to the second row
+	_fill(Rect2i(6, 21, 55, 3), T_CONCRETE, G_SIDEWALK)    # the walk between the cell block, the canteen and the second row
 	# the perimeter fence and the gate (the gate is shut: E there takes you out)
 	for x in range(FENCE.position.x, FENCE.end.x):
 		_fence(x, FENCE.position.y)
@@ -237,10 +248,10 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 			_fence(FENCE.position.x, y)
 		_fence(FENCE.end.x - 1, y)
 	if clear:
-		_fill(Rect2i(2, GAP.position.y, 8, GAP.size.y), T_CONCRETE, G_SIDEWALK)    # the road in through the breach
+		_fill(Rect2i(2, GAP.position.y, 6, GAP.size.y), T_CONCRETE, G_SIDEWALK)    # the road in through the breach
 	# a hedge pen closes the sides of the field in front of the gate, so the dead stay where they are shown
 	for y in range(FENCE.end.y, H):
-		for x in [0, 1, 2, 3, 4, 5, W - 6, W - 5, W - 4, W - 3, W - 2, W - 1]:
+		for x in [0, 1, 2, 3, 4, W - 5, W - 4, W - 3, W - 2, W - 1]:
 			_fence(x, y, L_HEDGE)
 	for x in range(0, W):
 		_fence(x, H - 1, L_HEDGE)
@@ -250,116 +261,116 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	for x in range(0, W):
 		_fence(x, 0, L_HEDGE)
 		_fence(x, 1, L_HEDGE)
-	# the cell blocks
-	_cell_block(10, 8, "CELL BLOCK A")
-	_cell_block(38, 8, "CELL BLOCK B")
-	# the canteen and its kitchen
-	_building(Rect2i(66, 8, 21, 15), T_TERRAZZO, G_HALL, [Rect2i(74, 22, 4, 1), Rect2i(66, 16, 1, 3)])
-	for y in range(9, 14):
-		for x in range(67, 86):
+	# the cell block
+	_cell_block(CELLS.position.x, CELLS.position.y, "CELL BLOCK")
+	# the canteen and its kitchen (kitchen on the north wall at the east end, the dining hall below)
+	_building(CANTEEN, T_TERRAZZO, G_HALL, [Rect2i(44, 20, 4, 1), Rect2i(37, 12, 1, 3)])
+	for y in range(7, 12):
+		for x in range(38, 56):
 			_put(x, y, T_KITCHEN, G_KITCHEN, 0)
-	_row("kitchen_counter", 68.5, 9.5, 9, 1.0, "s")
-	_obj("stove", 78.5, 9.5, "s")
-	_obj("stove", 79.5, 9.5, "s")
-	_obj("fridge", 82.5, 9.5, "s")
-	_obj("fridge", 83.5, 9.5, "s")
-	_obj("kitchen_sink", 84.5, 9.5, "s")
-	_row("kitchen_counter", 70.5, 12.5, 6, 1.0, "n")
+	_row("kitchen_counter", 38.5, 7.5, 9, 1.0, "s")
+	_obj("stove", 48.5, 7.5, "s")
+	_obj("stove", 49.5, 7.5, "s")
+	_obj("fridge", 52.5, 7.5, "s")
+	_obj("fridge", 53.5, 7.5, "s")
+	_obj("kitchen_sink", 54.5, 7.5, "s")
+	_row("kitchen_counter", 40.5, 10.5, 6, 1.0, "n")
 	for r in 2:
 		for c in 3:
-			_obj("dining_table", 70.0 + float(c) * 5.0, 16.5 + float(r) * 3.0, "s")
-	stations["fridge"] = Vector2(82.5, 11.2)
-	stations["stove"] = Vector2(78.5, 11.0)
-	stations["serve"] = Vector2(72.0, 12.0)
-	stations["canteen"] = Vector2(76.0, 18.0)
-	labels.append({"pos": Vector2(76.5, 9.2), "text": "CANTEEN"})
+			_obj("dining_table", 41.0 + float(c) * 5.0, 14.5 + float(r) * 3.0, "s")
+	stations["fridge"] = Vector2(52.5, 9.2)
+	stations["stove"] = Vector2(48.5, 9.0)
+	stations["serve"] = Vector2(42.0, 10.0)
+	stations["canteen"] = Vector2(46.0, 16.0)
+	labels.append({"pos": Vector2(46.5, 7.2), "text": "CANTEEN"})
 	# the infirmary
-	_building(Rect2i(10, 29, 15, 13), T_TERRAZZO, G_BATH, [Rect2i(16, 29, 3, 1), Rect2i(10, 33, 1, 3)])    # the second door: the west one, where the party comes in
+	_building(INFIRMARY, T_TERRAZZO, G_BATH, [Rect2i(14, 24, 3, 1), Rect2i(8, 28, 1, 3)])    # the second door: the west one, where the party comes in
 	for i in 4:
-		_obj("bed_single", 12.5 + float(i) * 3.0, 32.5, "s")
-		_obj("nightstand", 13.5 + float(i) * 3.0, 31.5, "s")
-	_row("medicine_cabinet", 12.5, 30.5, 3, 4.0, "s")
-	_obj("desk", 20.0, 38.0, "s")
-	_obj("shelf_tins", 12.0, 39.5, "n")
-	stations["bed"] = Vector2(14.5, 34.6)
-	stations["meds"] = Vector2(20.5, 36.6)
-	labels.append({"pos": Vector2(17.5, 29.4), "text": "INFIRMARY"})
+		_obj("bed_single", 10.5 + float(i) * 3.0, 27.5, "s")
+		_obj("nightstand", 11.5 + float(i) * 3.0, 26.5, "s")
+	_row("medicine_cabinet", 10.5, 25.5, 3, 4.0, "s")
+	_obj("desk", 18.0, 33.0, "s")
+	_obj("shelf_tins", 10.0, 34.5, "n")
+	stations["bed"] = Vector2(12.5, 29.6)
+	stations["meds"] = Vector2(18.5, 31.6)
+	labels.append({"pos": Vector2(15.5, 24.4), "text": "INFIRMARY"})
 	# the workshop (a wide garage door on the walk side)
-	_building(Rect2i(28, 29, 18, 13), T_CONCRETE, G_HALL, [Rect2i(34, 29, 5, 1)])
-	_obj("workbench", 31.0, 32.0, "s")
-	_obj("workbench", 41.0, 32.0, "s")
-	_obj("tool_chest", 44.0, 34.0, "w")
-	_obj("toolbox", 30.5, 38.5, "s")
-	_obj("woodpile", 38.0, 39.5, "n")
-	_obj("crate", 43.5, 39.5, "n")
-	_obj("crate", 29.5, 36.5, "e")
-	stations["bench1"] = Vector2(31.0, 33.9)
-	stations["bench2"] = Vector2(41.0, 33.9)
-	labels.append({"pos": Vector2(36.5, 29.4), "text": "WORKSHOP"})
+	_building(WORKSHOP, T_CONCRETE, G_HALL, [Rect2i(32, 24, 5, 1)])
+	_obj("workbench", 29.0, 27.0, "s")
+	_obj("workbench", 39.0, 27.0, "s")
+	_obj("tool_chest", 42.0, 29.0, "w")
+	_obj("toolbox", 28.5, 33.5, "s")
+	_obj("woodpile", 36.0, 34.5, "n")
+	_obj("crate", 41.5, 34.5, "n")
+	_obj("crate", 27.5, 31.5, "e")
+	stations["bench1"] = Vector2(29.0, 28.9)
+	stations["bench2"] = Vector2(39.0, 28.9)
+	labels.append({"pos": Vector2(34.5, 24.4), "text": "WORKSHOP"})
 	# the stores: where the loot is banked
-	_building(Rect2i(50, 29, 11, 11), T_CONCRETE, G_HALL, [Rect2i(54, 29, 3, 1), Rect2i(54, 39, 3, 1)])
-	_row("shop_shelf", 52.0, 31.5, 4, 2.0, "s")
-	_row("shelf_tins", 52.0, 35.5, 4, 2.0, "s")
-	_obj("cooler", 59.5, 33.5, "w")
-	_obj("crate", 51.5, 38.5, "n")
-	_obj("crate", 59.5, 38.5, "n")
-	stations["stores_in"] = Vector2(55.5, 31.4)
-	stations["stores_out"] = Vector2(55.5, 37.0)
-	stations["stores"] = Vector2(55.5, 34.0)
-	labels.append({"pos": Vector2(55.5, 29.4), "text": "STORES"})
-	# the garden: rows of soil in the east of the yard, a plain wire fence round it
-	_fill(Rect2i(64, 29, 22, 20), T_SOIL, G_DIRT)
-	for y in [30, 34, 38, 42, 46]:
-		for x in range(66, 85, 3):
+	_building(STORES, T_CONCRETE, G_HALL, [Rect2i(52, 24, 3, 1), Rect2i(52, 34, 3, 1)])
+	_row("shop_shelf", 50.0, 26.5, 4, 2.0, "s")
+	_row("shelf_tins", 50.0, 30.5, 4, 2.0, "s")
+	_obj("cooler", 57.5, 28.5, "w")
+	_obj("crate", 49.5, 33.5, "n")
+	_obj("crate", 57.5, 33.5, "n")
+	stations["stores_in"] = Vector2(53.5, 26.4)
+	stations["stores_out"] = Vector2(53.5, 32.0)
+	stations["stores"] = Vector2(53.5, 29.0)
+	labels.append({"pos": Vector2(53.5, 24.4), "text": "STORES"})
+	# the garden: rows of soil in the south-east of the yard, a plain wire fence round it (gates at the north and the south)
+	var g := GARDEN
+	_fill(Rect2i(g.position.x + 1, g.position.y + 1, g.size.x - 2, g.size.y - 2), T_SOIL, G_DIRT)
+	for y in [g.position.y + 2, g.position.y + 6, g.position.y + 10]:
+		for x in range(g.position.x + 3, g.position.x + 16, 3):
 			_obj("veg_patch", float(x) + 1.0, float(y) + 1.0, "s", (x + y) % 3)
-	for y in range(28, 50):
-		_fence(63, y, L_WIRE)
-		_fence(86, y, L_WIRE)
-	for x in range(63, 87):
-		_fence(x, 28, L_WIRE)
-		_fence(x, 49, L_WIRE)
-	_put(74, 28, T_SOIL, G_DIRT, 0)
-	_put(75, 28, T_SOIL, G_DIRT, 0)
-	_put(74, 49, T_SOIL, G_DIRT, 0)
-	_put(75, 49, T_SOIL, G_DIRT, 0)
-	stations["garden1"] = Vector2(68.5, 32.2)
-	stations["garden2"] = Vector2(79.5, 36.2)
-	stations["garden3"] = Vector2(70.5, 44.2)
-	stations["well"] = Vector2(75.0, 27.0)
-	labels.append({"pos": Vector2(74.5, 28.4), "text": "GARDEN"})
+	for y in range(g.position.y, g.end.y):
+		_fence(g.position.x, y, L_WIRE)
+		_fence(g.end.x - 1, y, L_WIRE)
+	for x in range(g.position.x, g.end.x):
+		_fence(x, g.position.y, L_WIRE)
+		_fence(x, g.end.y - 1, L_WIRE)
+	for gx in [g.position.x + 1, g.position.x + 2]:
+		_put(gx, g.position.y, T_SOIL, G_DIRT, 0)
+	for gx in [g.position.x + 9, g.position.x + 10]:
+		_put(gx, g.end.y - 1, T_SOIL, G_DIRT, 0)
+	stations["garden1"] = Vector2(44.5, 43.2)
+	stations["garden2"] = Vector2(53.5, 47.2)
+	stations["garden3"] = Vector2(47.5, 51.2)
+	stations["well"] = Vector2(49.0, 37.4)
+	labels.append({"pos": Vector2(48.5, 39.4), "text": "GARDEN"})
 	# watchtowers: a 3 x 3 footprint, drawn by the game; the guard stands on the deck
-	for t in [Vector2i(8, 6), Vector2i(86, 6), Vector2i(8, 52), Vector2i(86, 52), Vector2i(42, 52), Vector2i(53, 52)]:
+	for t in [Vector2i(7, 6), Vector2i(59, 6), Vector2i(7, 50), Vector2i(59, 50), Vector2i(GATE_X - 4, 50), Vector2i(GATE_X + 7, 50)]:
 		towers.append(Rect2(t.x - 1, t.y - 1, 3, 3))
 		for yy in range(t.y - 1, t.y + 2):
 			for xx in range(t.x - 1, t.x + 2):
 				solid[idx(xx, yy)] = 1
 	# the gate: sandbags inside, the truck that goes out, lamps
-	_obj("sandbags", 44.5, 50.5, "s")
-	_obj("sandbags", 51.5, 50.5, "s")
-	_obj("car_h", 40.0, 46.0, "e")
-	_obj("lamp_floor", 44.5, 40.5)
-	_obj("lamp_floor", 51.5, 40.5)
-	_obj("crate", 57.5, 46.5, "s")
-	_obj("crate", 58.5, 46.5, "s")
-	_obj("bin", 38.5, 24.5, "e")
-	for c in [Vector2(18.5, 23.5), Vector2(58.5, 26.5), Vector2(82.5, 23.5), Vector2(14.5, 44.5), Vector2(34.5, 52.5), Vector2(24.5, 50.5)]:
+	_obj("sandbags", 19.5, 48.5, "s")
+	_obj("sandbags", 26.5, 48.5, "s")
+	_obj("car_h", 15.0, 46.0, "e")
+	_obj("lamp_floor", 19.5, 38.5)
+	_obj("lamp_floor", 26.5, 38.5)
+	_obj("crate", 27.5, 44.5, "s")
+	_obj("crate", 28.5, 44.5, "s")
+	_obj("bin", 33.0, 22.5, "e")
+	for c in [Vector2(12.5, 22.5), Vector2(56.5, 22.5), Vector2(34.5, 41.5), Vector2(36.5, 50.5), Vector2(10.5, 44.5), Vector2(13.5, 50.5)]:
 		_obj("crate", c.x, c.y, "s")
-	stations["chat_a1"] = Vector2(45.2, 27.5)
-	stations["chat_a2"] = Vector2(46.7, 27.5)
-	stations["chat_b1"] = Vector2(73.7, 26.6)
-	stations["chat_b2"] = Vector2(75.2, 26.6)
-	fires = [Vector2(35.5, 45.5), Vector2(61.0, 44.0), Vector2(26.0, 27.0)]
-	lamps = [Vector2(44.5, 40.5), Vector2(51.5, 40.5), Vector2(48.0, 25.0), Vector2(20.0, 25.0), Vector2(76.0, 24.5)]
+	stations["chat_a1"] = Vector2(49.5, 22.5)
+	stations["chat_a2"] = Vector2(51.0, 22.5)
+	stations["chat_b1"] = Vector2(43.5, 37.4)
+	stations["chat_b2"] = Vector2(45.0, 37.4)
+	fires = [Vector2(35.0, 43.5), Vector2(10.5, 38.5), Vector2(24.0, 22.5)]
+	lamps = [Vector2(19.5, 38.5), Vector2(26.5, 38.5), Vector2(30.0, 22.0), Vector2(14.0, 22.0), Vector2(50.0, 22.0)]
 	for f in fires:
 		_obj("campfire", f.x, f.y)
-	stations["gate"] = Vector2(48.0, 52.0)
-	stations["truck"] = Vector2(40.0, 48.0)
-	stations["fence_w"] = Vector2(14.0, 54.0)
-	stations["fence_m"] = Vector2(26.0, 54.0)
-	stations["fence_e"] = Vector2(72.0, 54.0)
-	stations["fence_e2"] = Vector2(84.0, 20.0)
-	stations["yard"] = Vector2(48.0, 27.0)
-	labels.append({"pos": Vector2(48.5, 53.6), "text": "GATE"})
+	stations["gate"] = Vector2(23.0, 50.0)
+	stations["truck"] = Vector2(15.0, 48.0)
+	stations["fence_w"] = Vector2(10.0, 52.0)
+	stations["fence_m"] = Vector2(16.0, 52.0)
+	stations["fence_e"] = Vector2(34.0, 52.0)
+	stations["fence_e2"] = Vector2(60.0, 30.0)
+	stations["yard"] = Vector2(30.0, 22.0)
+	labels.append({"pos": Vector2(23.5, 51.6), "text": "GATE"})
 	# trees round the outside, from the template
 	var trees: Array = []
 	var rng := RandomNumberGenerator.new()
@@ -368,18 +379,18 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	var spots: Array = []
 	for x in range(3, W - 2, 4):
 		spots.append(Vector2(x + rng.randf_range(-1.2, 1.2), rng.randf_range(2.2, 3.6)))
-	for y in range(8, 55, 5):
+	for y in range(8, FENCE.end.y, 5):
 		spots.append(Vector2(rng.randf_range(2.0, 4.0), y + rng.randf_range(-1.0, 1.0)))
 		spots.append(Vector2(W - rng.randf_range(3.0, 5.0), y + rng.randf_range(-1.0, 1.0)))
 	for x in range(6, W - 4, 6):
-		if absi(x - 48) > 14:
-			spots.append(Vector2(x + rng.randf_range(-1.5, 1.5), rng.randf_range(69.5, 71.0)))
+		if absi(x - int(GATE_POS.x)) > 14:
+			spots.append(Vector2(x + rng.randf_range(-1.5, 1.5), rng.randf_range(float(H) - 2.5, float(H) - 1.0)))
 	for k in 10:
-		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(60.0, 68.0)))    # scrub in the pen
+		spots.append(Vector2(rng.randf_range(8.0, W - 8.0), rng.randf_range(58.0, 66.0)))    # scrub in the pen
 	for sp in spots:
-		if sp.x < 7.0 and sp.y > 30.0 and sp.y < 38.0:
+		if sp.x < 7.0 and sp.y > 26.0 and sp.y < 33.0:
 			continue    # the west road in
-		var pen: bool = sp.y > 59.0 and sp.y < 69.0
+		var pen: bool = sp.y > 57.0 and sp.y < 67.0
 		var n: int = 23 if pen else greens[rng.randi() % greens.size()]
 		trees.append({"x": sp.x, "y": sp.y, "variant": n, "file": "res://assets/trees/tree_%d.png" % n})
 	# the data
@@ -391,19 +402,19 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	d["solidP"] = Array(solid)
 	d["shot_low"] = low
 	d["objects"] = objects
-	d["marks"] = [{"kind": "lanes", "cx": 48.0, "cy": 61.0, "w": 92.0, "h": 6.0, "dir": "h", "gaps": [], "seed": 1000}]
+	d["marks"] = [{"kind": "lanes", "cx": float(W) / 2.0, "cy": 59.0, "w": float(W) - 4.0, "h": 6.0, "dir": "h", "gaps": [], "seed": 1000}]
 	d["walls"] = []
 	d["segments"] = []
 	d["trees"] = trees
 	d["lights"] = []
 	d["rooms"] = {}
 	d["spawns"] = [[SPAWN.x, SPAWN.y]]
-	d["yard"] = [8, 24, 80, 30]
+	d["yard"] = [6, 21, 55, 32]
 	d["kit"] = {"ground": kg, "wall": kw, "line": kl, "windows": [], "gates": [], "houses": []}
 	town["data"] = d
 	town["size"] = Vector2i(W, H)
 	# one stand-in house (the stores) so that the colony's modules that ask for "the base house" find one; no tile belongs to it
-	var fake := {"id": 0, "kind": "civic", "type": "civic", "rect": Rect2i(50, 29, 11, 11), "lot": Rect2i(6, 4, 84, 52), "rooms": [], "containers": [], "dead": [], "doors": [], "door": Vector2i(55, 40),
+	var fake := {"id": 0, "kind": "civic", "type": "civic", "rect": STORES, "lot": FENCE, "rooms": [], "containers": [], "dead": [], "doors": [], "door": Vector2i(53, 35),
 		"main": true, "front": "S", "fenced": true, "state": "intact", "wall": 1, "roof": "flat", "boarded": false, "barricaded": false, "number": 1, "street": "Prison Road", "address": "1 Prison Road"}
 	town["houses"] = [fake]
 	town["rooms"] = []
@@ -420,8 +431,8 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	town["streets"] = []
 	town["lots"] = []
 	town["landmarks"] = []
-	town["start"] = {"house": 0, "pos": SPAWN, "room": -1, "ring": {"rect": Rect2i(6, 4, 84, 52), "total": 0, "free": 0}}
-	town["entry"] = {"pos": SPAWN, "face": "N", "road": Rect2i(46, 55, 4, 3), "label": "The gate", "sign": Vector2(-1, -1), "arrows": []}
+	town["start"] = {"house": 0, "pos": SPAWN, "room": -1, "ring": {"rect": FENCE, "total": 0, "free": 0}}
+	town["entry"] = {"pos": SPAWN, "face": "N", "road": Rect2i(GATE_X, FENCE.end.y - 1, GATE_W, 3), "label": "The gate", "sign": Vector2(-1, -1), "arrows": []}
 	town["dead"] = _crowd(seed_i)
 	if clear:
 		_zones(town, seed_i)
@@ -478,12 +489,13 @@ func _zones(town: Dictionary, seed_i: int) -> void:
 				(h.containers as Array).append(cid)
 				containers.append({"id": cid, "house": zi, "room": -1, "pos": st, "at": Vector2(float(o.cx), float(o.cy)), "kind": SEARCHABLE[String(o.kind)], "loot": {key: rng.randi_range(n[0], n[1])}, "search_s": 3.0})
 		# dead
-		var dr: Rect2i = z.get("dead_rect", r.grow(-1))
+		var drs = z.get("dead_rect", r.grow(-1))
 		var tiles: Array = []
-		for y in range(dr.position.y, dr.end.y):
-			for x in range(dr.position.x, dr.end.x):
-				if solid[idx(x, y)] == 0 and th[idx(x, y)] == zi:
-					tiles.append(Vector2(float(x) + 0.5, float(y) + 0.5))
+		for dr in (drs if drs is Array else [drs]):
+			for y in range(dr.position.y, dr.end.y):
+				for x in range(dr.position.x, dr.end.x):
+					if solid[idx(x, y)] == 0 and th[idx(x, y)] == zi:
+						tiles.append(Vector2(float(x) + 0.5, float(y) + 0.5))
 		var placed: Array = []
 		var tries := 0
 		while placed.size() < int(z.dead) and tries < 600 and not tiles.is_empty():
@@ -525,18 +537,18 @@ func _zeros() -> Array:
 	return a
 
 
-## The mass in front of the gate: about 70 dead in the pen (y 57..70), a third of them standing, the rest shuffling in place.
+## The mass in front of the gate: about 70 dead in the pen (y 55..68), a third of them standing, the rest shuffling in place.
 func _crowd(seed_i: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_i * 7919 + 13
 	var out: Array = []
 	for i in 72:
 		var x := rng.randf_range(8.0, W - 8.0)
-		var y := rng.randf_range(56.8, 69.0)
+		var y := rng.randf_range(PEN_Y + 0.2, float(H) - 2.0)
 		# thicker at the gate
 		if i % 2 == 0:
-			x = clampf(48.0 + rng.randfn(0.0, 9.0), 8.0, W - 8.0)
-			y = rng.randf_range(56.6, 63.0)
+			x = clampf(GATE_POS.x + rng.randfn(0.0, 9.0), 8.0, W - 8.0)
+			y = rng.randf_range(PEN_Y, PEN_Y + 6.4)
 		var k := "walker"
 		if i % 17 == 0:
 			k = "runner"

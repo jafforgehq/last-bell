@@ -10,7 +10,7 @@ const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Topbar := preload("res://scripts/prison/prison_topbar.gd")
 
-const BOARD_AT := Vector2(54.0, 47.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
+const BOARD_AT := Vector2(31.0, 46.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
 const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio", "convoy"]
 const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}

@@ -4,7 +4,7 @@
 ## Keys: WASD walk, mouse aim (right button aims first when the pause menu says so), left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc pause menu.
 ## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom.
 ##
-## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; ten zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
+## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; six zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
 ## "managed" (the base loop above). HOOK for other systems: connect `phase_changed(new_phase)` or test `phase == "managed"` (`in_managed()`): base attacks, the siege and the fence run only then. The
 ## fence breach (`Base.GAP`) is a normal fence tile in the managed layout. Flags: --managed boots straight into "managed"; --prison alone boots "clear"; --auto=clearall (kills zone by zone and
 ## searches one container each, for checks), --auto=ally (Ruth walks into the infirmary and the allies get bitten), --log prints ally and zone lines.
@@ -921,7 +921,7 @@ var _ht: Dictionary = {}
 ## --hanimtest=fire|reload|holster|hurt|down|die [--who=ruth|<crew id>] [--weapon=shotgun|rifle|smg] [--from=left|right|front|back] with --seq=N,every (ROUND 11 checks): the person stands at (48,30), a dead
 ## one stands five tiles east (or next to them for hurt, down and die); the scene is a script of the clock since the first shot of the sequence. Not used by the game.
 func _hanimtest(dt: float) -> void:
-	var c := Vector2(48.0, 30.0)
+	var c := Vector2(35.0, 38.0)
 	var who := String(args.get("who", "walt"))
 	if not _ht.has("n"):
 		if who == "ruth":
@@ -1014,7 +1014,7 @@ func _hanimtest(dt: float) -> void:
 ## north to south across his front; dead walks a dead one on a circle; aim steps Ruth's aim to a new one of eight headings each second (she turns at 360 degrees a second).
 func _turntest(dt: float) -> void:
 	var mode_s := String(args.turntest)
-	var c := Vector2(48.0, 30.0)
+	var c := Vector2(35.0, 38.0)
 	if not _tt.has("m"):
 		for m in crew.members:
 			if String(m.def.id) == "walt":
@@ -1756,8 +1756,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 				if not run.sim.search.is_looted(String(ct.id)):
 					var cp := Vector2(ct.at) * TILE
 					c.draw_rect(Rect2(cp - Vector2(5, 5), Vector2(10, 10)), Color(1.0, 0.85, 0.25, 0.55 + 0.3 * sin(clock * 4.0)), false, 2.0)
-			c.draw_string(font, Vector2(4.0, 31.6) * TILE, "WEST BREACH", HORIZONTAL_ALIGNMENT_CENTER, 140, 16, Color(1, 0.9, 0.5, 0.85))
-			c.draw_string(font, Vector2(Base.GATE_POS.x, 56.2) * TILE - Vector2(100, 0), "CHAINED", HORIZONTAL_ALIGNMENT_CENTER, 200, 16, Color(1, 0.4, 0.35, 0.9))
+			c.draw_string(font, Vector2(1.4, 27.4) * TILE, "WEST BREACH", HORIZONTAL_ALIGNMENT_CENTER, 140, 16, Color(1, 0.9, 0.5, 0.85))
+			c.draw_string(font, Vector2(Base.GATE_POS.x, float(Base.FENCE.end.y) + 0.2) * TILE - Vector2(100, 0), "CHAINED", HORIZONTAL_ALIGNMENT_CENTER, 200, 16, Color(1, 0.4, 0.35, 0.9))
 		# the kids' hopscotch (chalk) and ball
 		var hs := Crew.HOPSCOTCH * TILE
 		for k in 6:
@@ -1775,8 +1775,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 			c.draw_circle(crew.ball * TILE - Vector2(0, 4), 7.0, Color(0.85, 0.3, 0.25))
 			c.draw_arc(crew.ball * TILE - Vector2(0, 4), 7.0, 0.3, 2.6, 8, Color(1, 1, 1, 0.8), 1.5)
 		# a washing line with laundry, swaying a little
-		var l0 := Vector2(12.5, 46.5) * TILE
-		var l1 := Vector2(24.5, 46.5) * TILE
+		var l0 := Vector2(9.5, 41.5) * TILE
+		var l1 := Vector2(19.0, 41.5) * TILE
 		c.draw_line(l0, l1, Color(0.2, 0.15, 0.1), 2.0)
 		c.draw_rect(Rect2(l0 - Vector2(3, 0), Vector2(6, 22)), Color(0.25, 0.18, 0.1))
 		c.draw_rect(Rect2(l1 - Vector2(3, 0), Vector2(6, 22)), Color(0.25, 0.18, 0.1))
@@ -1785,7 +1785,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var x := lerpf(l0.x, l1.x, (float(k) + 0.5) / 6.0)
 			var sw := sin(clock * 1.7 + float(k)) * 2.0
 			c.draw_rect(Rect2(Vector2(x - 9.0 + sw, l0.y + 1.0), Vector2(18, 22 + (k % 3) * 5)), cols[k], true)
-		c.draw_string(font, Vector2(Base.GATE_POS.x, 62.5) * TILE - Vector2(150, 0), "THE DEAD OUTSIDE THE FENCE", HORIZONTAL_ALIGNMENT_CENTER, 300, 18, Color(1, 0.5, 0.45, 0.7))
+		c.draw_string(font, Vector2(Base.GATE_POS.x, Base.PEN_Y + 5.9) * TILE - Vector2(150, 0), "THE DEAD OUTSIDE THE FENCE", HORIZONTAL_ALIGNMENT_CENTER, 300, 18, Color(1, 0.5, 0.45, 0.7))
 	else:
 		var pulse := 0.5 + 0.5 * sin(clock * 4.0)
 		for e in exits:
@@ -2199,7 +2199,7 @@ func _draw_minimap(v: Vector2) -> void:
 		bars.draw_circle(o + Base.GATE_POS * sc, 3.5, Color(1, 0.85, 0.3))
 		for m in crew.members:
 			bars.draw_circle(o + Vector2(m.p.x, m.p.y) * sc, 1.8, Color(0.4, 0.85, 1.0))
-		bars.draw_rect(Rect2(o + Vector2(5, 57) * sc, Vector2(86, 12) * sc), Color(0.8, 0.1, 0.1, 0.18))
+		bars.draw_rect(Rect2(o + Vector2(float(Base.FENCE.position.x), Base.PEN_Y) * sc, Vector2(float(Base.FENCE.size.x), 12.0) * sc), Color(0.8, 0.1, 0.1, 0.18))
 		siege.mini(bars, o, sc)    # SIEGE hook
 		if cleaner != null:
 			cleaner.mini(bars, o, sc)    # TRASH hook
@@ -2479,6 +2479,9 @@ func _zone_check() -> void:
 ## Every zone cleared: the card, the base is rebuilt in its managed form (gate open, breach sealed, the whole crew at work) and `phase_changed("managed")` is emitted.
 func _secure() -> void:
 	busy = true
+	var swing: float = doors.open_all() if doors != null else 0.0    # DOORS: every shut door swings open, one after the other, before the card
+	if swing > 0.0:
+		await get_tree().create_timer(swing + 0.35).timeout
 	await _cut_out(["PRISON SECURED", "The gate is unlocked. The west breach is sealed."], false)
 	phase = "managed"
 	ally_chasers.clear()    # (no clear-phase state follows: the dead that chased an ally, the revive bar)

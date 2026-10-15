@@ -317,7 +317,7 @@ func _recruit() -> void:
 	econ.cfg.crew_role[id] = pick
 	var def := {"id": id, "name": nm, "role": pick.capitalize(), "key": String(who.key), "look": who.look, "route": route, "recruit": true}
 	if game.crew != null:
-		var m: Dictionary = game.crew._make(def, Vector2(50.0, 44.0))
+		var m: Dictionary = game.crew._make(def, Vector2(30.0, 38.0))
 		game._add_member_node(m)
 
 

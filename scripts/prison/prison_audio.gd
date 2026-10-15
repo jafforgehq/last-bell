@@ -32,11 +32,11 @@ const SENSE := 0.2
 const MAX_STARTS_PER_SEC := 18
 const POOL := 14
 const POOL2 := 12
-const PEN := Vector2(48.0, 62.5)
-const CANTEEN := Vector2(76.0, 18.0)
-const RADIO := Vector2(58.8, 36.6)
-const LAUNDRY := Vector2(18.5, 46.5)
-const STOVE := Vector2(78.5, 11.0)
+const PEN := Vector2(23.0, 60.5)
+const CANTEEN := Vector2(46.0, 16.0)
+const RADIO := Vector2(56.8, 31.6)
+const LAUNDRY := Vector2(14.0, 42.5)
+const STOVE := Vector2(48.5, 9.0)
 ## terrain id (scripts/prison/prison_base.gd T_*) -> the ground's name
 const GROUND := {1: "pave", 2: "pave", 3: "grass", 4: "grass", 5: "dirt", 7: "tile", 11: "tile", 12: "pave", 13: "dirt", 20: "pave", 21: "tile", 22: "pave"}
 const STEP_FILES := {"pave": "fs_pave", "grass": "fs_grass", "dirt": "fs_dirt", "gravel": "fs_gravel", "tile": "fs_tile", "wood": "fs_wood"}
@@ -719,7 +719,7 @@ func _door(house: int, entering: bool) -> void:
 		var c := Vector2(r.get_center())
 		if game.mode == "base":
 			for z in game.base.ZONES:
-				if (z.id == "cella" or z.id == "cellb") and Rect2(z.rect).has_point(c):
+				if z.id == "cells" and Rect2(z.rect).has_point(c):
 					cell = true
 	if cell:
 		sfx("pd_cell_open_0", -5.0, _rng.randf_range(0.96, 1.04), "SFX", 0.3)
@@ -886,8 +886,8 @@ func _life(dt: float) -> void:
 	if base_mode and _t >= float(_next.cough):
 		_next.cough = _t + _rng.randf_range(45.0, 100.0)
 		if night > 0.4:
-			if me.distance_to(Vector2(26.0, 20.0)) < 22.0:
-				bark("old", "cough", -7.0, Vector2(26.0, 20.0))
+			if me.distance_to(Vector2(22.0, 13.5)) < 22.0:
+				bark("old", "cough", -7.0, Vector2(22.0, 13.5))
 
 
 ## ------------------------------------------------------------------------------ one-shots
