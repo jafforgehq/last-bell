@@ -22,7 +22,7 @@ func test_the_items_in_the_data_are_whole() -> void:
 		if String(id).begins_with("gun_") or String(id) == "note":    # (the prison game's guns and the story's letter: an item of its own, no store, no units)
 			check(int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) == 1 and String(d.res) == "" and String(d.use) == "none", "%s is a gun item: a size, one to a place, no store" % String(id))
 			continue
-		if String(id) == "distraction":    # (the prison game's bottles and cans: a stack, no store, no units; G throws one)
+		if String(id) == "distraction" or String(id) == "flare":    # (the prison game's bottles and cans: a stack, no store, no units; G throws one)
 			check(int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) >= 1 and String(d.res) == "" and String(d.use) == "none", "distraction is a throwable stack: a size, no store")
 			continue
 		check(int(d.w) >= 1 and int(d.h) >= 1 and int(d.stack) >= 1 and int(d.units) >= 1, "%s has a size, a stack and units" % String(id))
@@ -34,6 +34,27 @@ func test_the_items_in_the_data_are_whole() -> void:
 	var pack := Inventory.make_pack()
 	eq([int(pack.w), int(pack.h)], [8, 4], "the pack is eight by four")
 	check(Inventory.item("nothing").is_empty() and not Inventory.can_place(pack, "nothing", 1, 0, 0), "an unknown item is never placed")
+
+
+func test_the_prison_flare_and_event_odds_data() -> void:
+	check(Inventory.item("flare").size() > 0 and Inventory.stack_of("flare") >= 2, "the signal flare is an item that stacks")
+	var items: Array = Inventory.items_for_loot({"flare": 2}, 1)
+	check(items.size() == 1 and String(items[0].item) == "flare" and int(items[0].count) == 2, "a flare found in a raid is a pack item (%s)" % [items])
+	var raids = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_raids.json"))
+	var n := 0
+	for k in ["garage", "petrol", "police", "hardware"]:
+		for e in raids.rolls[k]:
+			if e[0] == "flare":
+				n += 1
+	check(n == 4, "four place tables can hold a flare (%d)" % n)
+	var ev = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_events.json"))
+	for c in ev.cards:
+		for ch in c.choices:
+			var odds := 0.0
+			for op in ([ch.effects.person] if ch.get("effects", {}).get("person") is Dictionary else []):
+				odds = float(op.get("hurt_odds", 0.0))
+			if odds > 0.0:
+				check(ch.has("chance") and is_equal_approx(float(ch.chance[0].p), odds), "%s: the shown chance is the rolled one" % String(ch.id))
 
 
 func test_placement_bounds_overlap_and_rotation() -> void:

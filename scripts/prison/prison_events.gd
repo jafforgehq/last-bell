@@ -14,6 +14,7 @@
 ##    {"op": "add", "name"|"skill", "trait", "hurt": days, "else": effects if there is no bed or nobody left to find}
 ##    {"op": "wound", "who", "days"}   {"op": "kill", "who"}   {"op": "leave", "who"}   {"op": "trait", "who", "add"}
 ##    `who`: "$who" (the card's person), "random", "trait:id", "role:id", "guard", or a name; kids are never picked at random.
+## `chance` on a choice: [{p, text}], shown on its button ("40 percent: they arrive hurt"); the number is the one the effect rolls with (a test keeps `hurt_odds` and it equal).
 ## Text: {who} is the card's person, {name} the person an effect just picked or added.
 extends RefCounted
 
@@ -280,6 +281,14 @@ func apply_extra(fx: Dictionary, ctx: Dictionary) -> void:
 	var ops = fx.get("person", [])
 	for op in (ops if ops is Array else [ops]):
 		_op(op, ctx, r)
+
+
+## The odds of a choice's random branches in words ("40 percent: they arrive hurt"), "" when the choice is no roll.
+static func odds_text(ch: Dictionary) -> String:
+	var parts: Array = []
+	for e in ch.get("chance", []):
+		parts.append("%d percent: %s" % [roundi(float(e.p) * 100.0), String(e.text)])
+	return "; ".join(parts)
 
 
 func _op(op: Dictionary, ctx: Dictionary, r: RandomNumberGenerator) -> void:

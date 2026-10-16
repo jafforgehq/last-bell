@@ -11,7 +11,7 @@
       "choices": [
         {"id": "let_in", "label": "Let them in (needs a free bed)", "if": {"beds_free": 1},
           "result": "The gate opens a hand's width. {name} gives a name, takes the bed they are shown and says very little.",
-          "effects": {"person": {"op": "add", "hurt": 2, "hurt_odds": 0.4, "traits": ["steady", "scrounger", "veteran", "coward"], "trait_odds": 0.5, "else": {"morale": -1}}}},
+          "chance": [{"p": 0.4, "text": "they arrive hurt"}], "effects": {"person": {"op": "add", "hurt": 2, "hurt_odds": 0.4, "traits": ["steady", "scrounger", "veteran", "coward"], "trait_odds": 0.5, "else": {"morale": -1}}}},
         {"id": "trade", "label": "Trade: 10 scrap for 5 ammo", "if": {"stock_min": {"scrap": 10}},
           "result": "A short bargain across the wire. The stranger counts the scrap twice, hands over a clip and a half, and walks on.",
           "effects": {"stores": {"scrap": -10, "ammo": 5}}},
