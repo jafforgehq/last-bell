@@ -30,10 +30,14 @@ func use_town(t: Dictionary) -> void:
 	for c in town.get("containers", []):
 		_by_id[String(c.id)] = c
 	cars = CarLoot.containers(town)
+	for c in town.get("containers", []):
+		if bool(c.get("car", false)):    # (a raid site's loot in the open, prison_site.gd: a container stack, a fuel truck... is searched like a car)
+			cars.append(c)
 	_car_of_obj.clear()
 	for c in cars:
 		_by_id[String(c.id)] = c
-		_car_of_obj[int(c.obj)] = String(c.id)
+		if int(c.obj) >= 0:
+			_car_of_obj[int(c.obj)] = String(c.id)
 
 
 ## SCAV3: the id of the car container made from object `obj_idx` of the generator's object list ("" when that object is none).

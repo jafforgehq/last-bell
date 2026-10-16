@@ -450,7 +450,6 @@ func blocks_fire() -> bool:
 
 func frame(_dt: float) -> void:
 	_frames += 1
-	game.msg_label.visible = not is_open()    # (the line at the bottom would show through the window)
 	var v: Vector2 = game._vp()
 	toasts.position = Vector2(v.x - 330.0, game.topbar.toast_y() if game.topbar != null else 14.0)
 	toasts.size.x = 316.0

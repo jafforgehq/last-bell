@@ -784,20 +784,14 @@ func paint(c: CanvasItem) -> void:
 		c.draw_circle(gp, 4.0, Color(0, 0, 0, 0.35))
 		c.draw_circle(gp - Vector2(0, hh + 10.0), 5.0, Color(0.7, 0.9, 0.8) if th.kind == "bottle" else Color(0.8, 0.8, 0.85))
 	for p in pops:
-		if bool(p.flare):
-			var fl: float = 0.7 + 0.3 * sin(float(game.clock) * 18.0)
-			c.draw_circle(Vector2(p.pos) * T, 2.6 * T * fl, Color(1.0, 0.25, 0.15, 0.16))
-			if float(p.get("life", 14.0)) < 14.0:    # (the signal flare: a clear red glow circle that shrinks as it burns out)
-				var left: float = clampf(1.0 - float(p.age) / float(p.life), 0.0, 1.0)
-				c.draw_circle(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), Color(1.0, 0.15, 0.1, 0.12 + 0.1 * fl))
-				c.draw_arc(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), 0.0, TAU, 48, Color(1.0, 0.3, 0.2, 0.7 * left + 0.2), 3.0)
-			c.draw_circle(Vector2(p.pos) * T, 0.9 * T * fl, Color(1.0, 0.7, 0.4, 0.5))
+		if bool(p.flare) and float(p.get("life", 14.0)) < 14.0:    # (the signal flare: a thin rim that shrinks as it burns out; its light is `flare_lights`, its glow on the ground `paint_ground`)
+			var left: float = clampf(1.0 - float(p.age) / float(p.life), 0.0, 1.0)
+			c.draw_arc(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), 0.0, TAU, 48, Color(1.0, 0.55, 0.25, 0.45 * left + 0.15), 2.5)
 	var blink: bool = int(game.clock * 4.0) % 2 == 0
 	for a in alarms:
 		var ap := Vector2(a.pos) * T
 		c.draw_circle(ap + Vector2(-12, -18), 5.0, Color(1, 0.15, 0.1, 0.95) if blink else Color(1, 0.8, 0.2, 0.3))
 		c.draw_circle(ap + Vector2(12, -18), 5.0, Color(1, 0.8, 0.2, 0.3) if blink else Color(0.2, 0.4, 1.0, 0.95))
-		c.draw_circle(ap, 3.2 * T, Color(1, 0.2, 0.1, 0.1 if blink else 0.04))
 		var pu := fposmod(float(a.t), float(cfg.alarm.every)) / float(cfg.alarm.every)
 		c.draw_arc(ap, (1.0 + 7.0 * pu) * T, 0.0, TAU, 40, Color(1, 0.4, 0.3, 0.45 * (1.0 - pu)), 2.5)
 	# the horde: a red ring under each of them and the word over the front of it
@@ -818,6 +812,32 @@ func paint(c: CanvasItem) -> void:
 		if not shown.has(key) and not bool(e.horde):
 			shown[key] = true
 			c.draw_arc(Vector2(e.tgt) * T, 0.6 * T, 0.0, TAU, 16, Color(1.0, 0.8, 0.3, 0.25), 2.0)
+
+
+## Under the people (the ground layer, z 5): a burning flare's spot and the faint disc of a car alarm, their opacity capped so that whoever lies or stands there stays plain to see.
+func paint_ground(c: CanvasItem) -> void:
+	var T: float = game.TILE
+	for p in pops:
+		if bool(p.flare):
+			var fl: float = 0.75 + 0.25 * sin(float(game.clock) * 17.0) * sin(float(game.clock) * 7.3)
+			c.draw_circle(Vector2(p.pos) * T, 2.2 * T * fl, Color(1.0, 0.45, 0.2, 0.07))
+			c.draw_circle(Vector2(p.pos) * T, 0.5 * T * fl, Color(1.0, 0.75, 0.4, 0.45))
+			c.draw_circle(Vector2(p.pos) * T, 0.16 * T, Color(1.0, 0.95, 0.85, 0.95))
+	var blink: bool = int(game.clock * 4.0) % 2 == 0
+	for a in alarms:
+		c.draw_circle(Vector2(a.pos) * T, 3.2 * T, Color(1, 0.2, 0.1, 0.05 if blink else 0.02))
+
+
+## The flares' own light (the screen's additive glow layer, over the night): a warm flicker [tile pos, radius in tiles, colour] for each burning flare, unlike the noise rings.
+func flare_lights() -> Array:
+	var out: Array = []
+	for p in pops:
+		if bool(p.flare):
+			var t := float(game.clock)
+			var fl := 0.8 + 0.12 * sin(t * 23.0 + float(p.pos.x)) + 0.08 * sin(t * 9.7)
+			var left := clampf(1.0 - float(p.get("age", 0.0)) / maxf(0.1, float(p.get("life", 14.0))), 0.0, 1.0)
+			out.append([Vector2(p.pos), 5.0 * fl * (0.6 + 0.4 * left), Color(1.0, 0.5, 0.22, 0.75 * fl)])
+	return out
 
 
 ## On the minimap: the awake chasers brighter, the horde as a red blob, the alarms flashing.

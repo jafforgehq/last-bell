@@ -1300,6 +1300,38 @@
             1,
             3
           ]
+        ],
+        "shop": [
+          [
+            "food",
+            0.6,
+            1,
+            2
+          ],
+          [
+            "water",
+            0.6,
+            1,
+            2
+          ],
+          [
+            "meds",
+            0.3,
+            1,
+            2
+          ],
+          [
+            "scrap",
+            0.1,
+            1,
+            1
+          ],
+          [
+            "distraction",
+            0.07,
+            1,
+            3
+          ]
         ]
       },
       "hints": {
@@ -1626,7 +1658,7 @@
     "ammo": "guard"
   },
   "places": {
-    "_doc": "THE DESTINATION MAP (prison_destmap.gd, prison_loot.gd). One entry per named place on the gate's map; its id is the raid's town kind id (loot.kind). kind = the town_kinds entry whose tables the raid uses; any key of this entry that a kind also has (tint, spawn, noise_mult, alarm_open, survivor, answers, natural, min_places, rolls, hints, retag_order) overrides the kind's. dead_mult = how many dead stand in the town compared to the standard town (the generator's dead are thinned or doubled). map = x,y on the map (0..1), the prison is at 0.5,0.52. dist = kilometres, fuel = fuel units taken from the stores when the truck goes, danger 1..5, unlock_day = the first day on offer (unlock_note says why not before). hunt = the index of cfg.options to mark when nothing the base lacks is found here. finds = [what, often|sometimes|rarely] in plain words (probabilities stay hidden). layout = a drawn hint on the raid map (shops, houses, wards, yard, armoury, quay, stands, apron).",
+    "_doc": "THE DESTINATION MAP (prison_destmap.gd, prison_loot.gd). One entry per named place on the gate's map; its id is the raid's town kind id (loot.kind). kind = the town_kinds entry whose tables the raid uses; any key of this entry that a kind also has (tint, spawn, noise_mult, alarm_open, survivor, answers, natural, min_places, rolls, hints, retag_order) overrides the kind's. dead_mult = how many dead stand in the town compared to the standard town (the generator's dead are thinned or doubled). map = x,y on the map (0..1), the prison is at 0.5,0.52. dist = kilometres, fuel = fuel units taken from the stores when the truck goes, danger 1..5, unlock_day = the first day on offer (unlock_note says why not before). hunt = the index of cfg.options to mark when nothing the base lacks is found here. finds = [what, often|sometimes|rarely] in plain words (probabilities stay hidden). layout = a drawn hint on the raid map (shops, houses, wards, yard, armoury, quay, stands, apron). buildings (RAID SITES, scripts/prison/prison_site.gd): a place whose layout has a site of its own (quay, apron, stands, wards, shops, armoury, yard) is a hand-laid map; this names each of its buildings, rooms and groups of open-air loot by key: type = the place type its containers roll on, name and hint = what the raid map shows ('Hangar: parts, fuel').",
     "suburb": {
       "kind": "residential",
       "name": "Suburb",
@@ -1702,6 +1734,38 @@
         0.72
       ],
       "layout": "shops",
+      "buildings": {
+        "store": {
+          "type": "shop",
+          "name": "Supermarket",
+          "hint": "food, water"
+        },
+        "stockroom": {
+          "type": "shop",
+          "name": "Stockroom",
+          "hint": "food, water"
+        },
+        "pharmacy": {
+          "type": "pharmacy",
+          "name": "Pharmacy counter",
+          "hint": "meds"
+        },
+        "bakery": {
+          "type": "shop",
+          "name": "Bakery",
+          "hint": "food, water"
+        },
+        "hardware": {
+          "type": "hardware",
+          "name": "Hardware shop",
+          "hint": "scrap, parts"
+        },
+        "petrol": {
+          "type": "petrol",
+          "name": "Petrol station",
+          "hint": "fuel"
+        }
+      },
       "tag": "SM"
     },
     "industrial": {
@@ -1738,6 +1802,33 @@
         0.44
       ],
       "layout": "yard",
+      "buildings": {
+        "workshop": {
+          "type": "hardware",
+          "name": "Workshop",
+          "hint": "scrap, parts"
+        },
+        "garage": {
+          "type": "garage",
+          "name": "Garage",
+          "hint": "parts, fuel"
+        },
+        "warehouse": {
+          "type": "hardware",
+          "name": "Warehouse",
+          "hint": "scrap, parts"
+        },
+        "security": {
+          "type": "police",
+          "name": "Security hut",
+          "hint": "ammo"
+        },
+        "scrap": {
+          "type": "hardware",
+          "name": "Scrap piles",
+          "hint": "scrap, parts"
+        }
+      },
       "tag": "IN"
     },
     "hospital": {
@@ -1774,6 +1865,43 @@
         0.26
       ],
       "layout": "wards",
+      "buildings": {
+        "hospital": {
+          "type": "pharmacy",
+          "name": "Hospital wards",
+          "hint": "meds"
+        },
+        "staff_room": {
+          "type": "shop",
+          "name": "Staff room",
+          "hint": "food, water"
+        },
+        "morgue": {
+          "type": "house",
+          "name": "Morgue",
+          "hint": "scrap, a little meds"
+        },
+        "ambulances": {
+          "type": "pharmacy",
+          "name": "Ambulances",
+          "hint": "meds"
+        },
+        "garage": {
+          "type": "garage",
+          "name": "Ambulance garage",
+          "hint": "parts, fuel"
+        },
+        "boiler": {
+          "type": "hardware",
+          "name": "Boiler house",
+          "hint": "scrap, parts"
+        },
+        "kiosk": {
+          "type": "shop",
+          "name": "Kiosk",
+          "hint": "food, water"
+        }
+      },
       "tag": "HO"
     },
     "police": {
@@ -1807,6 +1935,48 @@
         0.2
       ],
       "layout": "armoury",
+      "buildings": {
+        "station": {
+          "type": "house",
+          "name": "Police station",
+          "hint": "scrap, a little meds"
+        },
+        "armoury": {
+          "type": "police",
+          "name": "Armoury",
+          "hint": "ammo, guns"
+        },
+        "evidence": {
+          "type": "police",
+          "name": "Evidence store",
+          "hint": "ammo, guns"
+        },
+        "patrol_cars": {
+          "type": "police",
+          "name": "Patrol cars",
+          "hint": "ammo"
+        },
+        "motor_pool": {
+          "type": "garage",
+          "name": "Motor pool",
+          "hint": "parts, fuel"
+        },
+        "clinic": {
+          "type": "pharmacy",
+          "name": "Clinic",
+          "hint": "meds"
+        },
+        "hardware": {
+          "type": "hardware",
+          "name": "Hardware shop",
+          "hint": "scrap, parts"
+        },
+        "pumps": {
+          "type": "petrol",
+          "name": "Fuel pumps",
+          "hint": "fuel"
+        }
+      },
       "tag": "PD"
     },
     "stadium": {
@@ -1844,6 +2014,33 @@
         0.36
       ],
       "layout": "stands",
+      "buildings": {
+        "security": {
+          "type": "police",
+          "name": "Security office",
+          "hint": "ammo"
+        },
+        "first_aid": {
+          "type": "pharmacy",
+          "name": "First aid post",
+          "hint": "meds"
+        },
+        "club_shop": {
+          "type": "shop",
+          "name": "Club shop",
+          "hint": "food, water"
+        },
+        "grounds_store": {
+          "type": "hardware",
+          "name": "Grounds store",
+          "hint": "scrap, parts"
+        },
+        "stalls": {
+          "type": "shop",
+          "name": "Food stalls",
+          "hint": "food, water, crowds"
+        }
+      },
       "tag": "ST"
     },
     "port": {
@@ -1881,6 +2078,28 @@
         0.82
       ],
       "layout": "quay",
+      "buildings": {
+        "warehouse": {
+          "type": "hardware",
+          "name": "Warehouse",
+          "hint": "crates, parts, scrap"
+        },
+        "dock_office": {
+          "type": "garage",
+          "name": "Dock office",
+          "hint": "parts, fuel"
+        },
+        "depot": {
+          "type": "petrol",
+          "name": "Fuel depot",
+          "hint": "fuel"
+        },
+        "stacks": {
+          "type": "hardware",
+          "name": "Container stacks",
+          "hint": "crates, parts"
+        }
+      },
       "tag": "PT"
     },
     "airport": {
@@ -1923,6 +2142,33 @@
         0.84
       ],
       "layout": "apron",
+      "buildings": {
+        "hangar": {
+          "type": "garage",
+          "name": "Hangar",
+          "hint": "parts, fuel"
+        },
+        "parts_store": {
+          "type": "hardware",
+          "name": "Parts store",
+          "hint": "parts, scrap"
+        },
+        "terminal": {
+          "type": "shop",
+          "name": "Terminal",
+          "hint": "food, meds"
+        },
+        "first_aid": {
+          "type": "pharmacy",
+          "name": "First aid",
+          "hint": "meds"
+        },
+        "security": {
+          "type": "police",
+          "name": "Security office",
+          "hint": "ammo"
+        }
+      },
       "tag": "AP"
     }
   },

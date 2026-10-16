@@ -277,6 +277,38 @@ func test_every_container_of_the_towns_holds_its_loot_in_its_grid() -> void:
 		check(all.size() > 20, "there are containers to hold it: %d" % all.size())
 
 
+## RAID SITES (scripts/prison/prison_site.gd): every place with a map of its own is whole: each container and the pickup point reachable on foot from the entry, the places named by the data,
+## each container's loot rolled from its place type and held in a small grid, the open-air ones searched like the street's cars.
+func test_every_raid_site_is_reachable_and_holds_its_loot() -> void:
+	var Loot = load("res://scripts/prison/prison_loot.gd")
+	var Site = load("res://scripts/prison/prison_site.gd")
+	var Houses = load("res://scripts/town/houses.gd")
+	var n := 0
+	for id in Loot.place_ids():
+		if not Site.LAYOUTS.has(String(Loot.place_cfg(id).get("layout", ""))):
+			continue
+		n += 1
+		for s in [1, 2]:
+			var t: Dictionary = Loot.make_town(s, id)
+			check(t.has("site"), "%s has a map of its own" % id)
+			var pls: Array = Loot.prepare(t, s, id)
+			eq(Site.unreachable(t), [], "%s seed %d: every container and the pickup point can be reached" % [id, s])
+			check((t.containers as Array).size() >= 15 and pls.size() >= 3, "%s seed %d: %d containers in %d places" % [id, s, (t.containers as Array).size(), pls.size()])
+			for pl in pls:
+				check(String(pl.get("name", "")) != "" and String(pl.get("hint", "")) != "", "%s: the place %s has a name and a hint" % [id, pl.get("name", "?")])
+			var outdoor := 0
+			for c in t.containers:
+				check(c.has("place"), "%s %s rolled from a place type" % [id, c.id])
+				var grid := Inventory.make_container(String(c.kind), c.loot, String(c.id).hash())
+				check(int(grid.w) * int(grid.h) <= 36, "%s %s is a small grid" % [id, c.id])
+				if bool(c.get("car", false)):
+					outdoor += 1
+			var hs = Houses.new()
+			hs.use_town(t)
+			eq(hs.cars.filter(func(c): return bool(c.get("car", false)) and String(c.id).begins_with("yd")).size(), outdoor, "%s: the loot in the open is searched like a car" % id)
+	eq(n, 7, "seven places have a map of their own (the suburb keeps the streets)")
+
+
 # ------------------------------------------------------------------- the pack in the rules --
 
 func _p(sim):

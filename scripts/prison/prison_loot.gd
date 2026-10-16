@@ -12,6 +12,7 @@ const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Bal := preload("res://scripts/prison/prison_bal.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
 const DestMap := preload("res://scripts/prison/prison_destmap.gd")
+const Site := preload("res://scripts/prison/prison_site.gd")
 const PATH := "res://assets/data/prison_raids.json"
 const TILE := 64.0
 
@@ -128,9 +129,17 @@ static func _h(a: int, b: int) -> int:
 	return ((a * 73856093) ^ (b * 19349663)) & 0x7fffffff
 
 
+## The raid map of a place or town kind `k` (a seed): the place's own site when its layout has one (prison_site.gd: the port, the airport, the stadium...), else the generator's town.
+static func make_town(seed_i: int, k: String) -> Dictionary:
+	var t: Dictionary = Site.make(seed_i, place_cfg(place_for(k))) if k != "" and place_for(k) != "" else {}
+	return t if not t.is_empty() else TownGen.make(seed_i, cfg().town_opts)
+
+
 ## Retags the buildings and re-rolls the containers' loot of a town. Returns the places [{house, type, pos, n}] (a building, or one ROOM of a building when the town has too few buildings for the minimums).
 static func prepare(t: Dictionary, seed_i: int, k := "") -> Array:
 	var c := eff(k)
+	if t.has("site"):
+		return _prepare_site(t, seed_i, c)
 	var natural: Dictionary = c.natural
 	var by_house := {}    # house id -> container indexes
 	for ci in t.containers.size():
@@ -190,6 +199,50 @@ static func prepare(t: Dictionary, seed_i: int, k := "") -> Array:
 	return out
 
 
+## A site (prison_site.gd) says the type of each building, room and open-air container itself (no retag): a place for each typed building (its containers outside typed rooms), each typed
+## room and each group of open-air containers, with the name and hint of the place's `buildings` data; every container rolled from its own type's table.
+static func _prepare_site(t: Dictionary, seed_i: int, c: Dictionary) -> Array:
+	var out: Array = []
+	var n_house := {}
+	var n_room := {}
+	for ct in t.containers:
+		var rm := int(ct.room)
+		if rm >= 0 and t.rooms[rm].has("ptype"):
+			n_room[rm] = int(n_room.get(rm, 0)) + 1
+		elif int(ct.house) >= 0:
+			n_house[int(ct.house)] = int(n_house.get(int(ct.house), 0)) + 1
+	for h in t.houses:
+		if int(n_house.get(int(h.id), 0)) > 0:
+			out.append({"house": int(h.id), "type": String(h.ptype), "pos": Rect2(h.rect).get_center(), "n": int(n_house[int(h.id)]), "door": Vector2(Vector2i(h.door)) + Vector2(0.5, 0.5),
+				"name": String(h.label), "hint": String(h.hint), "rect": Rect2(h.rect)})
+	for rm in n_room:
+		var room: Dictionary = t.rooms[int(rm)]
+		out.append({"house": -1, "room": int(rm), "type": String(room.ptype), "pos": Rect2(room.rect).get_center(), "n": int(n_room[rm]), "door": _room_door(t, int(rm)),
+			"name": String(room.label), "hint": String(room.hint), "rect": Rect2(room.rect).grow(1.0)})
+	for g in t.site.groups:
+		var gr: Rect2 = g.rect
+		var n := 0
+		for ct in t.containers:
+			if bool(ct.get("car", false)) and gr.has_point(Vector2(ct.pos)):
+				n += 1
+		if n > 0:
+			out.append({"house": -1, "room": -1, "type": String(g.type), "pos": gr.get_center(), "n": n, "door": gr.get_center(), "name": String(g.name), "hint": String(g.hint), "rect": gr,
+				"group": true})
+	for ci in t.containers.size():
+		var ct: Dictionary = t.containers[ci]
+		var rng := RandomNumberGenerator.new()
+		rng.seed = _h(seed_i, ci + 1)
+		var ty := String(ct.get("ptype", ""))
+		if ty == "":
+			var rm2 := int(ct.room)
+			ty = String(t.rooms[rm2].ptype) if rm2 >= 0 and t.rooms[rm2].has("ptype") else (String(t.houses[int(ct.house)].ptype) if int(ct.house) >= 0 else "house")
+		if not (c.rolls as Dictionary).has(ty):
+			ty = "house"
+		ct["loot"] = roll(ty, String(ct.kind), rng, c.rolls)
+		ct["place"] = ty
+	return out
+
+
 ## The doorway tile nearest to a room (its own house's doors, inside ones too): where a sign for a room that stands in for a place goes.
 static func _room_door(t: Dictionary, rm: int) -> Vector2:
 	var room: Dictionary = t.rooms[rm]
@@ -244,8 +297,8 @@ static func roll(ty: String, ckind: String, rng: RandomNumberGenerator, tables =
 
 # ------------------------------------------------------------------ the raid's marks --
 
-## A raid starts: the town is retagged (before the stage is made) and the target is the choice made at the gate (else the biggest need).
-func begin(t: Dictionary, seed_i: int) -> void:
+## The kind (the place) of the raid that starts now: the event's, the flag's or the gate's choice (the truck's fuel is spent here). Called before the town is made (`make_town`).
+func resolve_kind() -> String:
 	kind = ""
 	if not (cfg().get("town_kinds", {}) as Dictionary).is_empty():
 		if force_kind != "":
@@ -262,6 +315,11 @@ func begin(t: Dictionary, seed_i: int) -> void:
 	picked_kind = ""
 	if kind == "standard" or kind_cfg(kind).is_empty():
 		kind = ""
+	return kind
+
+
+## A raid starts: the town (made for `kind`) is retagged (before the stage is made) and the target is the choice made at the gate (else the biggest need).
+func begin(t: Dictionary, seed_i: int) -> void:
 	_thin_dead(t, seed_i)
 	places = prepare(t, seed_i, kind)
 	game.raidx.scale_loot(t, seed_i)    # RAID EXTRAS: the shelves of the map's Day or Night
@@ -363,73 +421,113 @@ func _on_map(ty: String) -> bool:
 	return target.has(ty)
 
 
-## World overlay (px): a ring and a name on each marked place, and a small sign (icon and word) at the place's door: always for the targeted types, for the others when Ruth is near.
+## World overlay (px): an outline round each marked place (the building's walls, the room, the group's area: no fill, so nothing under it is hidden) and ONE plate per place at its door (icon,
+## name and, on a marked place, what it holds): always for the marked types, for the others when Ruth is near. On the overview (zoomed out) the plates are left to `map_labels`, on the HUD.
 func paint(c: CanvasItem) -> void:
-	var font := ThemeDB.fallback_font
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var pulse := 0.5 + 0.5 * sin(game.clock * 3.0)
-	var big := maxf(1.0, 22.0 / game.zoom_px * 2.0)    # (the overview: rings and names grow so that they can be seen)
+	var big := maxf(1.0, 22.0 / game.zoom_px * 2.0)    # (the overview: the lines grow so that they can be seen)
 	var tint := String(kind_cfg(kind).get("tint", ""))
 	if tint != "":
-		c.draw_rect(Rect2(Vector2.ZERO, Vector2(64, 64) * TILE), Color(Color(tint), 0.1))    # (the kind's colour wash over the town)
-	_paint_layout(c, tint)
+		c.draw_rect(Rect2(Vector2.ZERO, Vector2(64, 64) * TILE), Color(Color(tint), 0.06))    # (the kind's colour wash over the town)
 	for pl in places:
 		var ty := String(pl.type)
-		var at: Vector2 = Vector2(pl.pos) * TILE
 		var col := _col(ty)
 		var door: Vector2 = Vector2(pl.get("door", pl.pos)) * TILE
 		if _on_map(ty):
-			var rad := 2.6 * TILE * big
-			c.draw_circle(at, rad, Color(col, 0.16 + 0.1 * pulse))
-			c.draw_arc(at, rad, 0, TAU, 36, Color(col, 0.95), 5.0 * big)
-			c.draw_arc(at, rad * 0.62, 0, TAU, 28, Color(col, 0.6), 2.0 * big)
-			c.draw_string(font, at - Vector2(170.0 * big, rad + 6.0), "%s: %s" % [String(cfg().names[ty]), String(eff(kind).hints[ty])], HORIZONTAL_ALIGNMENT_CENTER, 340.0 * big, int(22.0 * big), col)
-			_sign(c, door, ty, col, 1.0, big)
-		elif me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
-			_sign(c, door, ty, col, 0.8, 1.0)
+			var r := _rect_of(pl)
+			var rr := Rect2(r.position * TILE, r.size * TILE).grow(0.35 * TILE)
+			c.draw_rect(rr, Color(0, 0, 0, 0.5), false, 9.0 * big)
+			c.draw_rect(rr, Color(col.lightened(0.15), 0.65 + 0.35 * pulse), false, 5.0 * big)
+			if big <= 1.5:
+				_sign(c, door, ty, col, 1.0, 1.0, _name_of(pl), _hint_of(pl))
+		elif big <= 1.5 and me.distance_to(Vector2(pl.pos)) < 16.0 and ty != "house":
+			_sign(c, door, ty, col, 0.8, 1.0, _name_of(pl), "")
 
 
-## The place's own look on the raid map, drawn along the town's edges and middle (a hint, not a rule): water and cranes at the port, a runway at the airport, the stands of the stadium, a chain fence round the yard, a frame in the place's colour for the rest.
-func _paint_layout(c: CanvasItem, tint: String) -> void:
-	var lay := String(kind_cfg(kind).get("layout", ""))
-	if lay == "":
+## The area of a place in tiles: its rect (a site's), the walls of its house, the room, else a small square round it.
+func _rect_of(pl: Dictionary) -> Rect2:
+	if pl.has("rect"):
+		return Rect2(pl.rect)
+	if int(pl.get("house", -1)) >= 0 and game.town != null and int(pl.house) < (game.town.houses as Array).size():
+		return Rect2(game.town.houses[int(pl.house)].rect)
+	if int(pl.get("room", -1)) >= 0 and game.town != null:
+		return Rect2(game.town.rooms[int(pl.room)].rect)
+	return Rect2(Vector2(pl.pos) - Vector2(2, 2), Vector2(4, 4))
+
+
+func _name_of(pl: Dictionary) -> String:
+	return String(pl.get("name", cfg().names.get(String(pl.type), String(pl.type))))
+
+
+func _hint_of(pl: Dictionary) -> String:
+	var h := String(pl.get("hint", ""))
+	return h if h != "" else String(eff(kind).hints.get(String(pl.type), ""))
+
+
+## The overview's names (HUD px, `v` the screen): one plate for each marked place, "Name: what it holds", above its area, moved below or beside it when it would cover another plate or
+## the HUD (the top bar, the objectives, the minimap, the gun, the squad card, the message lane), left out when it fits nowhere.
+func map_labels(c: Control, v: Vector2) -> void:
+	if game.mode != "raid" or game.zoom_px > 16.0:
 		return
-	var col := Color(tint) if tint != "" else Color(0.8, 0.8, 0.8)
-	var W := 64.0 * TILE
-	c.draw_rect(Rect2(Vector2.ZERO, Vector2(W, W)), Color(col, 0.55), false, 10.0)
-	match lay:
-		"quay":
-			c.draw_rect(Rect2(Vector2(W - 7.0 * TILE, 0), Vector2(7.0 * TILE, W)), Color(0.15, 0.3, 0.5, 0.35))
-			for i in 8:
-				c.draw_rect(Rect2(Vector2(W - 11.0 * TILE, (5.0 + i * 7.0) * TILE), Vector2(3.0 * TILE, 1.6 * TILE)), Color(0.8, 0.45, 0.2, 0.3))    # (container stacks on the quay)
-		"apron":
-			c.draw_rect(Rect2(Vector2(0, 2.0 * TILE), Vector2(W, 3.0 * TILE)), Color(0.35, 0.37, 0.42, 0.4))
-			for i in 16:
-				c.draw_rect(Rect2(Vector2((1.0 + i * 4.0) * TILE, 3.4 * TILE), Vector2(2.0 * TILE, 0.3 * TILE)), Color(1, 1, 0.9, 0.4))
-		"stands":
-			c.draw_arc(Vector2(W * 0.5, W * 0.5), 14.0 * TILE, 0, TAU, 64, Color(col, 0.5), 14.0)
-			c.draw_arc(Vector2(W * 0.5, W * 0.5), 9.0 * TILE, 0, TAU, 48, Color(0.5, 0.75, 0.4, 0.35), 8.0)
-		"yard":
-			for i in 32:
-				c.draw_rect(Rect2(Vector2(i * 2.0 * TILE, 0), Vector2(0.5 * TILE, 0.5 * TILE)), Color(0.9, 0.6, 0.2, 0.35))
-				c.draw_rect(Rect2(Vector2(i * 2.0 * TILE, W - 0.5 * TILE), Vector2(0.5 * TILE, 0.5 * TILE)), Color(0.9, 0.6, 0.2, 0.35))
+	var font := ThemeDB.fallback_font
+	var block: Array = [Rect2(0, 0, v.x, 100), Rect2(0, v.y - 200, 430, 200), Rect2(v.x * 0.2, v.y - 250, v.x * 0.6, 250), Rect2(0, 300, 420, 170)]
+	var msz := Vector2(64, 64) * 2.6
+	block.append(Rect2(v - msz - Vector2(30, 30), msz + Vector2(30, 30)))
+	var tb = game.get("topbar")
+	if tb != null and tb.get("tracker") != null and tb.tracker.visible:
+		block.append(tb.tracker.get_global_rect().grow(8.0))
+	var xf: Transform2D = game.world.get_global_transform_with_canvas()    # (the world as the camera shows it now: tiles to the screen)
+	var taken: Array = []
+	for pl in places:
+		var ty := String(pl.type)
+		if not _on_map(ty):
+			continue
+		var r := _rect_of(pl)
+		var a: Vector2 = xf * (r.position * TILE)
+		var b: Vector2 = xf * (r.end * TILE)
+		var txt := "%s: %s" % [_name_of(pl), _hint_of(pl)]
+		var sz := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15) + Vector2(16, 10)
+		var mid: float = (a.x + b.x) * 0.5
+		var tries := [Vector2(mid - sz.x / 2.0, a.y - sz.y - 4.0), Vector2(mid - sz.x / 2.0, b.y + 4.0), Vector2(b.x + 4.0, (a.y + b.y - sz.y) / 2.0), Vector2(a.x - sz.x - 4.0, (a.y + b.y - sz.y) / 2.0),
+			Vector2(mid - sz.x / 2.0, (a.y + b.y - sz.y) / 2.0)]
+		for q in tries:
+			var lr := Rect2(q, sz)
+			if lr.position.x < 4.0 or lr.position.y < 4.0 or lr.end.x > v.x - 4.0 or lr.end.y > v.y - 4.0:
+				continue
+			var ok := true
+			for o in block + taken:
+				if Rect2(o).intersects(lr):
+					ok = false
+					break
+			if not ok:
+				continue
+			taken.append(lr.grow(3.0))
+			var col := _col(ty)
+			c.draw_rect(lr, Color(0.04, 0.05, 0.06, 0.88))
+			c.draw_rect(lr, col, false, 2.0)
+			c.draw_string(font, lr.position + Vector2(8, sz.y - 9.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 0.92))
+			break
 
 
 const SIGN_WORD := {"shop": "SHOP", "pharmacy": "PHARMACY", "hardware": "HARDWARE", "garage": "GARAGE", "petrol": "FUEL", "police": "POLICE"}
 
 
 ## A plate at the door (above it on the screen): a dark board, the type's colour, a small icon and the word.
-func _sign(c: CanvasItem, door: Vector2, ty: String, col: Color, a: float, k: float) -> void:
+func _sign(c: CanvasItem, door: Vector2, ty: String, col: Color, a: float, k: float, word: String = "", hint_txt: String = "") -> void:
 	var font := ThemeDB.fallback_font
-	var w := 132.0 * k
-	var h := 30.0 * k
+	word = word.to_upper() if word != "" else String(SIGN_WORD.get(ty, ty.to_upper()))
+	var w := maxf(132.0, font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x + 44.0) * k
+	if hint_txt != "":
+		w = maxf(w, (font.get_string_size(hint_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x + 16.0) * k)
+	var h := (30.0 if hint_txt == "" else 48.0) * k
 	var r := Rect2(door + Vector2(-w / 2.0, -h - 22.0 * k), Vector2(w, h))
 	c.draw_rect(Rect2(r.position + Vector2(2, 2) * k, r.size), Color(0, 0, 0, 0.5 * a))
 	c.draw_rect(r, Color(0.06, 0.07, 0.08, 0.92 * a))
 	c.draw_rect(r, Color(col, a), false, 2.0 * k)
 	c.draw_line(door + Vector2(0, -22.0 * k), door, Color(col, a), 3.0 * k)    # the post down to the doorway
-	var ic := r.position + Vector2(h / 2.0, h / 2.0)
-	var u := h * 0.28
+	var ic := r.position + Vector2(15.0, 15.0) * k
+	var u := 30.0 * k * 0.28
 	var ink := Color(col, a)
 	match ty:
 		"pharmacy":
@@ -450,7 +548,9 @@ func _sign(c: CanvasItem, door: Vector2, ty: String, col: Color, a: float, k: fl
 		_:
 			c.draw_rect(Rect2(ic - Vector2(u, 0), Vector2(u * 2.0, u * 0.9)), ink)
 			c.draw_arc(ic + Vector2(0, 0), u * 0.8, PI, TAU, 8, ink, 2.0 * k)
-	c.draw_string(font, r.position + Vector2(h, h * 0.72), String(SIGN_WORD.get(ty, ty.to_upper())), HORIZONTAL_ALIGNMENT_LEFT, w - h - 4.0 * k, int(15.0 * k), Color(1, 1, 0.92, a))
+	c.draw_string(font, r.position + Vector2(30.0, 21.6) * k, word, HORIZONTAL_ALIGNMENT_LEFT, w - 34.0 * k, int(15.0 * k), Color(1, 1, 0.92, a))
+	if hint_txt != "":
+		c.draw_string(font, r.position + Vector2(8.0, 41.0) * k, hint_txt, HORIZONTAL_ALIGNMENT_LEFT, w - 12.0 * k, int(13.0 * k), Color(col.lightened(0.3), a))
 
 
 ## The minimap (`o`: its corner in px, `sc`: px per tile): a coloured ring on each marked place.
@@ -556,6 +656,37 @@ static func lab(n: int) -> void:
 			_lab_kind(n, String(k), allres, types)
 
 
+## `--sitecheck=N`: each place with a site of its own (prison_site.gd), seeds 1..N: the containers, the dead, the places with their names and types, what is NOT reachable on foot from the
+## entry (containers, the pickup point: it must be none) and a blind 3-minute raid's yield (SITECHECK lines; a line "SITECHECK FAIL" for each problem).
+static func site_check(n: int) -> void:
+	var fails := 0
+	for id in place_ids():
+		var pc := place_cfg(id)
+		if not Site.LAYOUTS.has(String(pc.get("layout", ""))):
+			continue
+		for s in range(1, n + 1):
+			var t := make_town(s, id)
+			if not t.has("site"):
+				print("SITECHECK FAIL %s seed %d: no site made" % [id, s])
+				fails += 1
+				continue
+			var pls := prepare(t, s, id)
+			var bad := Site.unreachable(t)
+			var got := _sim_raid(t, pls, [])
+			var names: Array = pls.map(func(p): return "%s(%s %d)" % [p.name, p.type, p.n])
+			print("SITECHECK %s seed %d: %d containers, %d dead, %d houses, places %s, exit %s, raid %s" % [id, s, (t.containers as Array).size(), (t.dead as Array).size(), (t.houses as Array).size(), ", ".join(names), t.site.exit, got])
+			var old := TownGen.make(s, cfg().town_opts)    # (the generator's town of the same kind, to compare the yield)
+			var opl := prepare(old, s, id)
+			print("SITECHECK %s seed %d (the old town): %d containers, %d dead, raid %s" % [id, s, (old.containers as Array).size(), (old.dead as Array).size(), _sim_raid(old, opl, [])])
+			if not bad.is_empty():
+				print("SITECHECK FAIL %s seed %d: not reachable %s" % [id, s, bad])
+				fails += 1
+			for h in t.houses:
+				if (h.containers as Array).is_empty():
+					print("SITECHECK note %s seed %d: %s has no container" % [id, s, h.label])
+	print("SITECHECK done, failures: %d" % fails)
+
+
 ## One town kind: place counts and the blind 3-minute raid's yield per resource (LOOTKIND lines).
 static func _lab_kind(n: int, k: String, allres: Array, types: Array) -> void:
 	var count := {}
@@ -566,7 +697,7 @@ static func _lab_kind(n: int, k: String, allres: Array, types: Array) -> void:
 		sums[r] = 0.0
 	var guns := 0.0
 	for s in range(1, n + 1):
-		var t: Dictionary = TownGen.make(s, cfg().town_opts)
+		var t: Dictionary = make_town(s, k)
 		var pls := prepare(t, s, k)
 		for p in pls:
 			count[p.type] = int(count[p.type]) + 1

@@ -236,8 +236,12 @@ func paint(c: CanvasItem) -> void:
 func _fog_tex() -> GradientTexture2D:
 	if _fog == null:
 		var g := Gradient.new()
-		g.offsets = PackedFloat32Array([0.0, 0.5, 0.82, 1.0])
-		g.colors = PackedColorArray([Color(0.72, 0.76, 0.78, 0.0), Color(0.72, 0.76, 0.78, 0.0), Color(0.72, 0.76, 0.78, 0.78), Color(0.72, 0.76, 0.78, 0.94)])
+		var offs := PackedFloat32Array([0.0, 0.38, 0.458, 0.535, 0.613, 0.69, 0.768, 0.845, 0.922, 1.0])    # (one smooth radial falloff: clear to 38 % of the radius, then a smoothstep to the full fog at the edge)
+		var cols := PackedColorArray()
+		for a in [0.0, 0.0, 0.04, 0.147, 0.297, 0.47, 0.643, 0.793, 0.9, 0.94]:
+			cols.append(Color(0.72, 0.76, 0.78, a))
+		g.offsets = offs
+		g.colors = cols
 		_fog = GradientTexture2D.new()
 		_fog.gradient = g
 		_fog.fill = GradientTexture2D.FILL_RADIAL
@@ -262,8 +266,9 @@ func paint_weather(c: CanvasItem, v: Vector2) -> void:
 			c.draw_line(Vector2(x, y), Vector2(x - 4.0, y + 15.0 * sp), Color(0.78, 0.86, 1.0, 0.3), 1.2)
 	var vt := vision_tiles()
 	if vt > 0.0:
-		var me: Vector2 = (Vector2(game.run.avatar_p.x, game.run.avatar_p.y) - game.cam_center) * game.zoom_px + v / 2.0
-		var r: float = vt * game.zoom_px
+		var xf: Transform2D = game.world.get_global_transform_with_canvas()    # (where the camera really shows her: it stops at the map's edge, so she is not always mid-screen)
+		var me: Vector2 = xf * (Vector2(game.run.avatar_p.x, game.run.avatar_p.y) * game.TILE)
+		var r: float = vt * game.TILE * xf.get_scale().x
 		var rect := Rect2(me - Vector2(r, r), Vector2(r, r) * 2.0)
 		var lit: Color = game.night_rect.color    # (the fog is lit like the world: dark blue at night, not a bright grey sheet)
 		lit.a = 1.0

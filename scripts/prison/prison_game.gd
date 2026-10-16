@@ -42,6 +42,7 @@ const PrisonAudio := preload("res://scripts/prison/prison_audio.gd")    # ROUND 
 const Clean := preload("res://scripts/prison/prison_clean.gd")
 const Barks := preload("res://scripts/prison/prison_barks.gd")    # BARKS: a survivor's line over their head, once a day
 const Loot := preload("res://scripts/prison/prison_loot.gd")    # RAIDS hook
+const Site := preload("res://scripts/prison/prison_site.gd")    # RAID SITES: the places' own maps
 const People := preload("res://scripts/prison/prison_people.gd")    # RAIDS hook
 const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
 const Board := preload("res://scripts/prison/prison_board.gd")    # UI hook
@@ -117,6 +118,7 @@ var exits: Array = []
 var extract_t := 0.0
 var busy := false    # a cutscene is playing
 var overlay: Node2D    # world-space drawing (labels, exits, tower decks)
+var _flare_node: Node2D    # NOISE hook: the ground layer of the flares and alarms (redrawn each frame)
 var hud: CanvasLayer
 var prompt_label: Label    # MESSAGE LANES (prompt lane): the E/F prompt, or else the current context hint, one at a time on a dark plate above the weapon panel
 var last_msg := ""    # the last toast or hint text (checks read it)
@@ -260,6 +262,10 @@ func _ready() -> void:
 	econ = Econ.new(self)    # ECON hook
 	if args.has("loot-lab"):    # RAIDS hook
 		Loot.lab(int(args["loot-lab"]))
+		get_tree().quit()
+		return
+	if args.has("sitecheck"):    # RAID SITES: every place's map, seeds 1..N: what can be reached, the places, the loot (SITECHECK lines)
+		Loot.site_check(maxi(1, int(args.sitecheck)))
 		get_tree().quit()
 		return
 	loot = Loot.new(self)    # RAIDS hook
@@ -670,6 +676,8 @@ func _draw_bars() -> void:
 			bars.draw_rect(Rect2(0, 0, w, v.y), c)
 			bars.draw_rect(Rect2(v.x - w, 0, w, v.y), c)
 	_draw_minimap(v)
+	if mode == "raid" and not busy:
+		loot.map_labels(bars, v)    # RAIDS hook: the overview's names of the marked places, clear of the HUD
 	PHud.draw(self, bars, v)
 	if mode == "raid":
 		squad.draw_hud(bars, v)    # SQUAD hook: the card of the companions
@@ -715,6 +723,19 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 	if world.looks.has("tree") and not (world.looks.tree as Array).is_empty():
 		var green = world.looks.tree[0]    # the border belt: one green look in all three slots, no orange and yellow wall
 		world.looks["tree"] = [green, green, green]
+	if town.has("site"):    # RAID SITES: the code-drawn ground of the place (water, runway, stands, planes, stacks...) under the people and the blood
+		var sg := DrawNode.new()
+		sg.z_index = 5
+		sg.painter = func(c): Site.paint(c, town, false)
+		world.add_child(sg)
+		var sh := DrawNode.new()
+		sh.z_index = 8
+		sh.painter = func(c): Site.paint(c, town, true)
+		world.add_child(sh)
+	_flare_node = DrawNode.new()    # NOISE hook: a flare's spot and an alarm's disc lie under the people (a patient by a flare stays in sight)
+	_flare_node.z_index = 5
+	_flare_node.painter = _paint_flares
+	world.add_child(_flare_node)
 	decals = Node2D.new()
 	decals.z_index = 5
 	world.add_child(decals)
@@ -929,7 +950,7 @@ func _enter_raid() -> void:
 	mode = "raid"
 	raids += 1
 	var seed_i := Bal.derive(raids)    # (the run seed and the raid number: a seed replays its towns)
-	var t: Dictionary = TownGen.make(seed_i, {"blocks": 2})
+	var t: Dictionary = Loot.make_town(seed_i, loot.resolve_kind())    # RAID SITES: the place's own map (the port's quay, the airport's runway...), else the generator's town
 	# the autumn crowns of the old trees are swapped for greens, pines and scrub (same art style, tools/make_prison_trees_blender.py)
 	var swap := [24, 24, 22, 23, 0, 2, 5, 24]
 	for tr in t.data.trees:
@@ -985,6 +1006,12 @@ func _enter_raid() -> void:
 	if args.has("scav-test"):
 		squad.start_test()
 	cam_center = Vector2(run.avatar_p.x, run.avatar_p.y)
+	if args.has("cam"):    # staging: --cam=x,y,zoom frames the raid map too (the overview shots)
+		var rc := String(args.cam).split(",")
+		cam_center = Vector2(float(rc[0]), float(rc[1]))
+		if rc.size() > 2:
+			zoom_px = float(rc[2])
+		args["fixcam"] = "1"
 	extract_t = 0.0
 	_armed = false
 	run.sim.avatar.set_input(Vector2.ZERO, at, false)
@@ -995,6 +1022,8 @@ func _enter_raid() -> void:
 
 ## Pickup points: the entry road and the far end of the road on the other side of the map.
 func _pick_exits(t: Dictionary, from: Vector2) -> Array:
+	if t.has("site"):
+		return [from, Vector2(t.site.exit)]    # (a site names its own way out)
 	var d: Dictionary = t.data
 	var W := int(d.W)
 	var H := int(d.H)
@@ -1511,6 +1540,8 @@ func _tick(dt: float) -> void:
 	prompt_label.text = pt if not busy else ""
 	prompt_label.visible = prompt_label.text != ""
 	overlay.queue_redraw()
+	if _flare_node != null and is_instance_valid(_flare_node):
+		_flare_node.queue_redraw()
 	bars.queue_redraw()
 	glow.queue_redraw()
 	wx.queue_redraw()
@@ -2239,6 +2270,10 @@ func _scripts(dt: float) -> void:
 		driver.run(String(args.drive))
 	if args.has("loadout") and frames == 30:    # staging: the loadout card (--loadout=weapon: the clear phase's weapon card)
 		loadout.open("Food and water" if String(args.loadout) != "weapon" else "", String(args.loadout) == "weapon")
+	if args.has("flareat") and frames == 60 and mode == "raid":    # staging: --flareat=x,y burns a signal flare there (the flare's own light, the patient beside it)
+		var fa := String(args.flareat).split(",")
+		preload("res://scripts/sim/inventory.gd").auto_add(pack.grid, "flare", 1)
+		noise.throw_at(Vector2(float(fa[0]), float(fa[1])), "flare")
 	if args.has("orders") and frames == int(args.orders):    # staging: the orders panel
 		squad.toggle_orders()
 	if args.has("pick") and frames == 32 and loadout.is_open:    # staging: --pick=june,owen ticks companions on the card
@@ -2599,7 +2634,9 @@ func _mini_texture(d: Dictionary) -> ImageTexture:
 					c = Color(0.75, 0.35, 0.28)
 				22:
 					c = Color(0.85, 0.85, 0.9)
-			if int(d.kit.line[i]) == 5:
+			if d.has("site_mini") and int(d.site_mini[i]) > 0:    # RAID SITES: the sea, the runway, the pitch, the seats
+				c = Site.MINI[int(d.site_mini[i])]
+			elif int(d.kit.line[i]) == 5:
 				c = Color(0.15, 0.3, 0.12)
 			elif int(d.solidP[i]) == 1 and t != 20 and t != 21 and t != 22:
 				c = c.darkened(0.35)
@@ -3239,7 +3276,19 @@ func _lamp_of(h: float) -> float:
 	return smoothstep(17.3, 19.2, h) if h >= 12.0 else 1.0 - smoothstep(5.5, 7.0, h)
 
 
+func _paint_flares(c: CanvasItem) -> void:
+	if noise != null and mode == "raid":
+		noise.paint_ground(c)
+
+
 func _draw_glow() -> void:
+	if mode == "raid" and run != null and noise != null:    # NOISE hook: a burning flare's own warm, flickering light
+		var xf: Transform2D = world.get_global_transform_with_canvas()
+		for sp in noise.flare_lights():
+			var sc: Vector2 = xf * (Vector2(sp[0]) * TILE)
+			var rr: float = float(sp[1]) * TILE * xf.get_scale().x
+			glow.draw_texture_rect(radial_tex, Rect2(sc - Vector2(rr, rr), Vector2(rr, rr) * 2.0), false, sp[2])
+		return
 	var n := _lamp_of(tod)
 	if n <= 0.02 or mode != "base":
 		return

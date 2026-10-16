@@ -6,7 +6,6 @@ extends RefCounted
 
 const Crew := preload("res://scripts/prison/prison_crew.gd")
 const Loot := preload("res://scripts/prison/prison_loot.gd")
-const TownGen := preload("res://scripts/town/town_gen.gd")
 
 var game
 var arc
@@ -123,9 +122,10 @@ func _raid(got: Dictionary) -> void:
 		return
 	# the REAL loot model: a generated town, retagged and re-rolled by prison_loot.gd for the chosen kind, and the loot lab's greedy 180 s walk (a stand-in for the hands: no fights, no pack limit)
 	var ts := rng.randi_range(1, 40)
-	if not _towns.has(ts):
-		_towns[ts] = TownGen.make(ts, Loot.cfg().town_opts)
-	var t: Dictionary = _towns[ts]
+	var tk := "%d:%s" % [ts, String(pick.kind)]
+	if not _towns.has(tk):
+		_towns[tk] = Loot.make_town(ts, String(pick.kind))    # (RAID SITES: the place's own map when it has one)
+	var t: Dictionary = _towns[tk]
 	var pls := Loot.prepare(t, rng.randi() & 0x7fffffff, String(pick.kind))
 	var found: Dictionary = Loot._sim_raid(t, pls, pick.types)
 	if game.args.has("arcraids"):
