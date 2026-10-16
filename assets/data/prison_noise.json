@@ -20,7 +20,7 @@
   "heat": {"decay": 0.25, "cell": 16, "loud_at": 5.0, "very_at": 12.0, "cap_per_heat": 0.12, "cap_max": 3.0},
   "interest": {"min": 8.0, "max": 20.0, "arrive": 1.4},
   "horde": {"join_n": 9, "join_r": 22.0, "join_max": 24},
-  "throw": {"range": 12.0, "flight": 0.55, "kinds": {"bottle": {"w": 4, "loud": 12, "word": "A bottle smashes"}, "can": {"w": 4, "loud": 9, "word": "A can clatters"}, "firecracker": {"w": 2, "loud": 18, "pops": 6, "word": "Firecrackers go off"}, "flare": {"w": 1, "loud": 14, "pops": 6, "gap": 2.0, "word": "A flare hisses and burns"}}},
+  "throw": {"range": 12.0, "flight": 0.55, "kinds": {"bottle": {"w": 4, "loud": 12, "word": "A bottle smashes"}, "can": {"w": 4, "loud": 9, "word": "A can clatters"}, "firecracker": {"w": 2, "loud": 18, "pops": 6, "word": "Firecrackers go off"}, "flare": {"w": 1, "loud": 14, "pops": 6, "gap": 2.0, "word": "A flare hisses and burns"}, "signal": {"w": 0, "loud": 25, "pops": 4, "gap": 2.0, "life": 8.0, "flare": true, "word": "A flare burns red"}}},
   "alarm": {"shot_r": 4.5, "shot_chance": 0.35, "open_chance": 0.18, "secs": [20, 40], "every": 2.0, "loud": 24},
   "raid_horde": {"chance": 0.45, "min_day": 2, "size": [30, 70], "far": 42.0, "speed": 2.0, "warn_s": 6.0, "react_r": 7.0},
   "base_horde": {"nights": [6, 9, 12], "size": [20, 30], "per_night": 6, "max": 60, "early_cap": 12, "early_until": 9, "speed": 2.2},

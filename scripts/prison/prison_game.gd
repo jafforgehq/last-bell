@@ -40,6 +40,7 @@ const DogNode := preload("res://scripts/render/dog_node.gd")
 const Pack := preload("res://scripts/prison/prison_pack.gd")
 const PrisonAudio := preload("res://scripts/prison/prison_audio.gd")    # ROUND 12: sound and atmosphere
 const Clean := preload("res://scripts/prison/prison_clean.gd")
+const Barks := preload("res://scripts/prison/prison_barks.gd")    # BARKS: a survivor's line over their head, once a day
 const Loot := preload("res://scripts/prison/prison_loot.gd")    # RAIDS hook
 const People := preload("res://scripts/prison/prison_people.gd")    # RAIDS hook
 const Econ := preload("res://scripts/prison/prison_econ.gd")    # ECON hook
@@ -176,6 +177,7 @@ var _deadchecked := false
 var pack: Pack    # the backpack (prison_pack.gd)
 var doors    # DOORS: prison_doors.gd
 var _decks_node: Node2D    # the node that paints the doors and tower decks (doors.tick(dt) asks it to repaint every frame)
+var barks    # prison_barks.gd: survivor barks (managed base only)
 var cleaner    # prison_clean.gd: the periodic clean-up (managed base only)
 var topbar    # UI round 2: prison_topbar.gd
 var tags    # UI round 2: prison_tags.gd
@@ -834,6 +836,8 @@ func _enter_base() -> void:
 		siege.setup()
 		cleaner = Clean.new(self)
 		cleaner.setup()
+		if barks == null:
+			barks = Barks.new(self)
 		upg.setup()    # WORLD hook
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
@@ -1404,6 +1408,9 @@ func _tick(dt: float) -> void:
 	_day_night(dt)
 	siege.update(dt)    # SIEGE hook
 	noise.update(dt)    # NOISE hook
+	raidx.update(dt)    # RAID EXTRAS: the ping fades
+	if barks != null:
+		barks.update(dt)    # BARKS
 	special.update(dt)    # SPECIAL hook
 	prompt_label.text = String(_prompt.get("label", "")) if not busy else ""
 	overlay.queue_redraw()
@@ -1571,6 +1578,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_G:    # NOISE hook: throw a bottle, can, firecracker or flare to the pointer
 				if not busy and (mode == "raid" or phase == "clear" or siege.can_fire()):
 					noise.throw_at(cam_center + (get_viewport().get_mouse_position() - _vp() / 2.0) / zoom_px)
+			KEY_T:    # NOISE hook: a signal flare to the pointer (8 s of red light and noise)
+				if not busy and mode == "raid":
+					noise.throw_at(cam_center + (get_viewport().get_mouse_position() - _vp() / 2.0) / zoom_px, "flare")
 			KEY_F:
 				if special.free_pin():    # SPECIAL hook: shoves a hunter off
 					pass
@@ -1594,6 +1604,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			KEY_ESCAPE:
 				pause_menu.open()
 	elif ev is InputEventMouseButton and ev.pressed:
+		if raidx.mouse(ev):
+			return
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_px *= 1.12
 			play_zoom = zoom_px
@@ -1946,6 +1958,7 @@ func _paint_decks(c: CanvasItem) -> void:
 func _paint_overlay(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
 	noise.paint(c)    # NOISE hook
+	raidx.paint(c)    # RAID EXTRAS: the ping ring
 	special.paint(c)    # SPECIAL hook
 	arc.paint(c)    # ARC hook
 	if mode == "base":
@@ -1958,6 +1971,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 		board.paint(c)    # UI hook
 		if cleaner != null:
 			cleaner.paint(c)
+		if barks != null:
+			barks.paint(c)
 		for fl in crew.floaters:
 			var a := 1.0 - float(fl.t) / 2.2
 			var col: Color = fl.col
@@ -2836,6 +2851,9 @@ func _allies(dt: float) -> void:
 		# follow
 		var idx := allies.find(m)
 		var slot := me - aim * 3.0 + aim.orthogonal() * (float(idx) - 1.0) * 1.2 if hang else me + Vector2.from_angle(float(idx) * 2.1 + 0.5) * 2.2
+		var pg: Vector2 = raidx.ally_spot(idx)    # RAID EXTRAS: a ping, they stand about it
+		if pg != Vector2.INF and not hang:
+			slot = pg
 		var dist := at.distance_to(slot)
 		if at.distance_to(me) > 18.0:
 			g.x = me.x

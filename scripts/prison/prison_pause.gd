@@ -16,7 +16,7 @@ const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambien
 const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
 
 const KEYS := [
-	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["Right button or Shift", "aim first, when Settings says so"], ["R", "reload"], ["F", "stab with the knife, any time (quiet; shoves a hunter off)"], ["G", "throw a bottle or can: the dead go to look"],
+	["WASD", "walk"], ["Mouse", "aim"], ["Left button", "fire (out on a raid, or when the wall is under attack)"], ["Right button or Shift", "aim first, when Settings says so"], ["R", "reload"], ["F", "stab with the knife, any time (quiet; shoves a hunter off)"], ["G", "throw a bottle or can: the dead go to look"], ["T", "throw a signal flare at the pointer: eight seconds of red light and noise that pull the dead within 25 tiles"], ["Middle button", "ping a spot in a raid or the clear phase: the squad runs there and holds (20 s)"],
 	["E", "use, search, go out at the gate or the truck"], ["Q", "put the gun away or take it up"], ["B", "the roster"], ["C", "the squad's orders"], ["V", "retreat: the whole squad runs to the nearest pickup ring (V again: stand down)"],
 	["Tab or I", "the backpack"], ["O", "fold the objectives"], ["L", "the story log: the radio messages and the convoy's list"], ["M", "the overview map"], ["F1 F2 F3", "base speed 1x, 2x, 3x (also - and =)"], ["Wheel", "zoom"], ["Esc", "this menu"],
 ]

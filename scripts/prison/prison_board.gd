@@ -1227,14 +1227,25 @@ func _morning_show() -> void:
 	var bl: Array = lg.get("built", [])
 	rows.append(["Built", ", ".join(bl) if not bl.is_empty() else "nothing finished", Hud.INK if not bl.is_empty() else DIM])
 	var hurt: Array = []
+	var edge: Array = []    # MORNING: the night cost morale: those who stood it (a horde night's guards) are on edge
+	var dropped: bool = float(econ.morale) <= float(lg.get("morale0", econ.morale)) - 1.5
+	var wire: int = int(game.siege.stats.get("killed", 0))    # (the siege kill counter of the night just over)
 	for m in game.crew.members:
-		if not m.def.has("ally") and game.arc.hurt_now(String(m.def.name)):
+		if m.def.has("ally"):
+			continue
+		if game.arc.hurt_now(String(m.def.name)):
 			hurt.append(String(m.def.name))
+		elif dropped and m.def.has("stand") and wire > 0:
+			edge.append(String(m.def.name))
 	var mo := float(econ.morale)
 	var mood := "morale %d of 100%s" % [int(mo), " (low: people are unhappy)" if mo < 40.0 else ""]
 	if String(econ.last.get("left", "")) != "":
 		mood += "; %s left in the night" % String(econ.last.left)
-	rows.append(["People", mood + ("; hurt: " + ", ".join(hurt) if not hurt.is_empty() else "; nobody hurt"), Hud.WARN if mo < 40.0 or not hurt.is_empty() else Hud.INK])
+	rows.append(["People", mood, Hud.WARN if mo < 40.0 else Hud.INK])
+	var bad: Array = hurt.map(func(n): return "%s (hurt or ill)" % n) + edge.map(func(n): return "%s (on edge)" % n)
+	rows.append(["Slept badly", ", ".join(bad) if not bad.is_empty() else "nobody", Hud.WARN if not bad.is_empty() else Hud.OK])
+	if wire > 0:
+		rows.append(["Last night", "%d dead at the wire" % wire, Hud.INK])
 	var horde: bool = game.arc.is_horde_night(int(game.arc.day))
 	rows.append(["Tonight", "A HORDE NIGHT: the dead come in numbers, mend the walls and stock ammo." if horde else "A quiet night is expected.", Hud.DANGER_TEXT if horde else Hud.OK])
 	var g := GridContainer.new()

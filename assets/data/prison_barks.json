@@ -1,0 +1,18 @@
+{
+  "_doc": "Survivor barks of the managed base (scripts/prison/prison_barks.gd). Each survivor says at most one short line a game day, as a speech bubble over their head, and only one bubble shows at a time. `every`: seconds between tries, `show`: seconds a bubble stays, `low_days`: days of food or water left that count as low, `low_morale`: morale under it is low, `piles`: dirty places that make the cleaner complain. States are tried in this order (the first that applies and has someone who has not spoken today wins); `who` picks the speaker: any, cook, cleaner, guard, newest. None during raids, attacks, cards or the morning card.",
+  "every": 9.0,
+  "show": 4.5,
+  "low_days": 2.0,
+  "low_morale": 40.0,
+  "piles": 3,
+  "order": ["new_recruit", "after_horde", "low_water", "low_food", "low_morale", "cleaner_busy", "quiet_night"],
+  "states": {
+    "new_recruit": {"who": "newest", "lines": ["Thanks for taking me in.", "Where do I sleep?", "I will pull my weight."]},
+    "after_horde": {"who": "any", "lines": ["That was a lot of them.", "My ears are still ringing.", "Is the fence still up?", "Count the wire, boss."]},
+    "low_water": {"who": "any", "lines": ["Water's low, boss.", "The barrels are nearly dry.", "We need water."]},
+    "low_food": {"who": "cook", "lines": ["The pantry is thin, boss.", "Not much left to cook.", "We need food."]},
+    "low_morale": {"who": "any", "lines": ["I can't sleep.", "How long can we do this?", "Nobody is smiling any more."]},
+    "cleaner_busy": {"who": "cleaner", "lines": ["Rubbish everywhere.", "I only have two hands.", "Somebody help me with this mess."]},
+    "quiet_night": {"who": "any", "lines": ["Nice and quiet.", "Good night for it.", "Listen. Nothing out there."]}
+  }
+}

@@ -464,6 +464,7 @@ func update(dt: float) -> void:
 
 
 func tick_day() -> void:
+	var morale0 := morale    # (the morning card's "slept badly" line: did the night cost morale)
 	day += 1
 	var s: Dictionary = game.stores
 	power_on = _power_now()
@@ -499,6 +500,7 @@ func tick_day() -> void:
 	_built_today.clear()
 	morning_new = true
 	_morale(short)
+	dawn_log["morale0"] = morale0
 	last = {"spoiled": spoiled, "lost": lost, "left": last.left, "short": short}
 	_leave()
 	if game.args.has("log"):

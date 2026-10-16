@@ -3,6 +3,8 @@
 ## Run: `Godot --path . --fixed-fps 60 --disable-vsync -- --prison --managed --drive=board`
 extends RefCounted
 
+const Inventory := preload("res://scripts/sim/inventory.gd")
+
 var g    # prison_game.gd
 var fails := 0
 
@@ -116,6 +118,8 @@ func run(name: String) -> void:
 			await _squad()
 		"raidx":
 			await _raidx()
+		"barks":
+			await _barks()
 		"searched":
 			await _searched()
 		"stash":
@@ -334,6 +338,18 @@ func _raidx() -> void:
 	_check(rx.retreating and g.squad.members.all(func(m): return String(m.say) == "retreating" or m.state != "up"), "V: the squad retreats (%s)" % [g.squad.members.map(func(m): return m.say)])
 	await _tap(KEY_V)
 	_check(not rx.retreating, "V again stands down")
+	var ping_at := Vector2(g.run.avatar_p.x + 6.0, g.run.avatar_p.y)
+	rx.set_ping(ping_at)
+	_check(not rx.ping.is_empty() and g.squad.members.all(func(m): return m.state != "up" or String(m.cmd) == "hold"), "a ping sets Hold on the squad")
+	await _wait(120)
+	_check(g.squad.members.all(func(m): return m.state != "up" or Vector2(m.p.x, m.p.y).distance_to(ping_at) < 3.0), "the squad ran to the ping (%s)" % [g.squad.members.map(func(m): return snappedf(Vector2(m.p.x, m.p.y).distance_to(ping_at), 0.1))])
+	rx.update(21.0)
+	_check(rx.ping.is_empty() and g.squad.members.all(func(m): return m.state != "up" or String(m.cmd) == "follow"), "the ping fades after 20 s and the squad follows again")
+	Inventory.auto_add(g.pack.grid, "flare", 2)
+	var fl0: int = Inventory.count_of(g.pack.grid, "flare")
+	g.noise.throw_at(Vector2(g.run.avatar_p.x + 8.0, g.run.avatar_p.y), "flare")
+	await _wait(60)
+	_check(Inventory.count_of(g.pack.grid, "flare") == fl0 - 1 and g.noise.pops.any(func(p): return bool(p.flare) and float(p.life) == 8.0), "a thrown flare uses one and burns for 8 s")
 	var pats: Array = g.special.list.values().filter(func(i): return i.kind == "patient")
 	_check(pats.size() >= 1 and pats.size() <= 2 and pats.all(func(i): return i.phase == "idle"), "the hospital has 1 or 2 patients lying still (%d)" % pats.size())
 	if not pats.is_empty():
@@ -346,6 +362,27 @@ func _raidx() -> void:
 	_check(rx.mark_of("hospital") == "avoid" and rx.mark_of("x") == "" and rx.presets.size() == 3 and rx.presets[0].main == "smg", "marks and presets load (bad entries dropped)")
 	rx.from_dict({})
 	_check(rx.marks.is_empty() and rx.presets == [{}, {}, {}], "an older save has neither: both empty")
+
+
+## BARKS: low morale gives one bubble at a time, one a person a day, and a picture goes to --shot.
+func _barks() -> void:
+	var b = g.barks
+	g.econ.morale = 20.0
+	g.stores["water"] = 1.0
+	g.arc.story.card_open()
+	var seen: Array = []
+	for i in 12:
+		await _wait(150)
+		if not b.cur.is_empty() and not seen.has(String(b.cur.id)):
+			seen.append(String(b.cur.id))
+			if seen.size() == 1 and g.args.has("barkshot"):
+				await _wait(20)
+				g.get_viewport().get_texture().get_image().save_png(String(g.args.barkshot))
+	_check(seen.size() >= 1, "somebody barked (%s: %s)" % [seen, b._last])
+	var ids := {}
+	for id in seen:
+		ids[id] = true
+	_check(ids.size() == seen.size(), "nobody barked twice in a day")
 
 
 ## RAID EXTRAS: the searched marks. Ruth stands in a room, one container is searched by the sim, the others of the room are marked searched and empty; a picture goes to --shot when given.

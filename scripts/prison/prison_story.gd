@@ -378,7 +378,8 @@ func show_event() -> void:
 		return
 	var labs: Array = []
 	for i in (v.choices as Array).size():
-		labs.append("%d  %s" % [i + 1, String(v.choices[i].label)])
+		var od: String = arc.events.odds_text(v.choices[i])    # (a roll shows its odds on the button)
+		labs.append("%d  %s%s" % [i + 1, String(v.choices[i].label), "  (%s)" % od if od != "" else ""])
 	show_card({"kicker": "MORNING  -  DAY %d" % arc.day, "title": String(v.title), "from": String(v.from), "text": String(v.text), "tone": String(v.tone), "buttons": labs,
 		"on_answer": func(i: int):
 			var res: Dictionary = arc.deliver_event(i)

@@ -401,10 +401,10 @@ func has_throwable() -> bool:
 	return game.pack != null and not game.pack.grid.is_empty() and Inventory.count_of(game.pack.grid, "distraction") > 0
 
 
-func _take_one() -> bool:
+func _take_one(item: String = "distraction") -> bool:
 	var cells: Array = game.pack.grid.cells
 	for i in cells.size():
-		if String(cells[i].item) == "distraction":
+		if String(cells[i].item) == item:
 			if int(cells[i].count) > 1:
 				cells[i].count = int(cells[i].count) - 1
 			else:
@@ -416,11 +416,11 @@ func _take_one() -> bool:
 
 
 ## G: throw a bottle, a can, a firecracker or a flare to `at` (at most `range` tiles from her). False when she has nothing to throw.
-func throw_at(at: Vector2) -> bool:
+func throw_at(at: Vector2, item: String = "distraction") -> bool:
 	if game.run == null or game.busy:
 		return false
-	if not _take_one():
-		game._say("Nothing to throw. Bottles and cans turn up in houses and shops.", 2.5)
+	if not _take_one(item):
+		game._say("No flare in the pack. They turn up in garages and police stations." if item == "flare" else "Nothing to throw. Bottles and cans turn up in houses and shops.", 2.5)
 		return false
 	var tc: Dictionary = cfg.throw
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
@@ -434,10 +434,14 @@ func throw_at(at: Vector2) -> bool:
 	var pick := rng.randf() * tot
 	var kind := "bottle"
 	for kn in tc.kinds:
+		if float(tc.kinds[kn].w) <= 0.0:
+			continue    # (the signal flare is only thrown as the flare item, T)
 		pick -= float(tc.kinds[kn].w)
 		if pick <= 0.0:
 			kind = String(kn)
 			break
+	if item == "flare":
+		kind = "signal"
 	throws.append({"from": me, "to": to, "t": 0.0, "kind": kind})
 	game.run.avatar_p.facing = game.run.sim.facing_of(d.x, d.y, game.run.avatar_p.facing)
 	_play("whoosh", -14.0, me)
@@ -456,7 +460,7 @@ func _throws(dt: float) -> void:
 			_play("smash" if th.kind == "bottle" else ("clink" if th.kind == "can" else "pop"), -4.0, to)
 			game.fx.hit_material(to.x, to.y, "metal")
 			if kd.has("pops"):
-				pops.append({"pos": to, "left": int(kd.pops), "t": 0.5, "gap": float(kd.get("gap", 0.45)), "loud": float(kd.loud), "flare": th.kind == "flare", "age": 0.0})
+				pops.append({"pos": to, "left": int(kd.pops), "t": 0.5, "gap": float(kd.get("gap", 0.45)), "loud": float(kd.loud), "flare": bool(kd.get("flare", th.kind == "flare")), "life": float(kd.get("life", 14.0)), "age": 0.0})
 	throws = throws.filter(func(t): return not t.has("done"))
 
 
@@ -469,7 +473,7 @@ func _pops(dt: float) -> void:
 			p.left = int(p.left) - 1
 			emit_at(p.pos, float(p.loud) * 0.9, "throw", Vector2.INF)
 			_play("pop" if not p.flare else "hiss", -6.0, p.pos)
-	pops = pops.filter(func(p): return int(p.left) > 0 or (bool(p.flare) and float(p.age) < 14.0))
+	pops = pops.filter(func(p): return int(p.left) > 0 or (bool(p.flare) and float(p.age) < float(p.get("life", 14.0))))
 
 
 # ----------------------------------------------------------------------------- car alarms --
@@ -784,6 +788,10 @@ func paint(c: CanvasItem) -> void:
 		if bool(p.flare):
 			var fl: float = 0.7 + 0.3 * sin(float(game.clock) * 18.0)
 			c.draw_circle(Vector2(p.pos) * T, 2.6 * T * fl, Color(1.0, 0.25, 0.15, 0.16))
+			if float(p.get("life", 14.0)) < 14.0:    # (the signal flare: a clear red glow circle that shrinks as it burns out)
+				var left: float = clampf(1.0 - float(p.age) / float(p.life), 0.0, 1.0)
+				c.draw_circle(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), Color(1.0, 0.15, 0.1, 0.12 + 0.1 * fl))
+				c.draw_arc(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), 0.0, TAU, 48, Color(1.0, 0.3, 0.2, 0.7 * left + 0.2), 3.0)
 			c.draw_circle(Vector2(p.pos) * T, 0.9 * T * fl, Color(1.0, 0.7, 0.4, 0.5))
 	var blink: bool = int(game.clock * 4.0) % 2 == 0
 	for a in alarms:

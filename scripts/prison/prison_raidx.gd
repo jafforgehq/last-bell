@@ -3,6 +3,7 @@
 ##   WEATHER       one for each raid, drawn from the run seed by weight (`forecast` is the next raid's, shown on the map before Go): clear, rain (shots and steps carry less far, a darker town, streaks on the
 ##                 screen) or fog (a code-drawn fog hides all but a few tiles round Ruth, the dead notice her from less far and wake nearer).
 ##   RETREAT       the V key: every companion runs to the nearest pickup ring and an arrow points Ruth to it (V again cancels).
+##   PING          the middle mouse button sets a ping where the pointer is (raid or clear phase): the squad (or the clear phase's allies) run there and hold; it fades after 20 s or at the next ping.
 ##   MARKS         a place of the map marked Done or Avoid by the player (saved in the prison save, `raidx`), and the three loadout presets (saved with it). An old save has neither: both start empty.
 ## Owned by prison_game.gd (`raidx`).
 extends RefCounted
@@ -19,6 +20,8 @@ var presets: Array = [{}, {}, {}]    # {main, spare, kit {ammo, meds, food, wate
 var retreating := false
 var hour0 := -1.0    # the clock hour the raid began at when the map chose one (-1: the base clock)
 var tod0 := 0.0
+var ping := {}    # {pos (tiles), t (seconds left)}: the ping marker, empty when none
+const PING_SECS := 20.0
 var _fog: GradientTexture2D
 
 
@@ -107,6 +110,7 @@ func scale_loot(t: Dictionary, seed_i: int) -> void:
 ## After the stage is made: the weather's effects on the town's rules and the hour.
 func begin(seed_i: int) -> void:
 	retreating = false
+	ping = {}
 	weather = forecast() if game.args.has("weather") else weather_for(seed_i)
 	var tc := time_cfg(time)
 	time = ""    # (used: the next raid asks the map again)
@@ -165,6 +169,66 @@ func key(ev: InputEvent) -> bool:
 		toggle_retreat()
 		return true
 	return false
+
+
+# ------------------------------------------------------------------ the ping ----------
+
+## Middle button: ping the pointer's spot. True when used.
+func mouse(ev: InputEvent) -> bool:
+	if not (ev is InputEventMouseButton) or not ev.pressed or ev.button_index != MOUSE_BUTTON_MIDDLE:
+		return false
+	if game.busy or not (game.mode == "raid" or game.phase == "clear") or game.run == null or game.loadout.is_open:
+		return false
+	set_ping(game.cam_center + (game.get_viewport().get_mouse_position() - game._vp() / 2.0) / game.zoom_px)
+	return true
+
+
+## The squad runs to `at` and holds there (the Hold order, each on their own spot of a ring); the clear phase's allies stand about it.
+func set_ping(at: Vector2) -> void:
+	_release()
+	ping = {"pos": at, "t": PING_SECS}
+	var i := 0
+	for m in game.squad.members:
+		if m.state == "up":
+			game.squad.command(m, "hold")
+			m.hold_at = at + Vector2.from_angle(float(i) * 2.4) * 1.3
+			i += 1
+
+
+## Where ally number `i` of the clear phase stands while a ping is up (Vector2.INF when none).
+func ally_spot(i: int) -> Vector2:
+	return Vector2(ping.pos) + Vector2.from_angle(float(i) * 2.4) * 1.3 if not ping.is_empty() else Vector2.INF
+
+
+## Back to "follow" for whoever still holds the ping's spot.
+func _release() -> void:
+	if ping.is_empty():
+		return
+	for m in game.squad.members:
+		if m.state == "up" and String(m.cmd) == "hold" and Vector2(m.hold_at).distance_to(Vector2(ping.pos)) < 2.0:
+			game.squad.command(m, "follow")
+
+
+func update(dt: float) -> void:
+	if ping.is_empty():
+		return
+	ping.t = float(ping.t) - dt
+	if float(ping.t) <= 0.0 or not (game.mode == "raid" or game.phase == "clear"):
+		_release()
+		ping = {}
+
+
+## A pulsing ring (world px) with a fade over the last 3 s.
+func paint(c: CanvasItem) -> void:
+	if ping.is_empty():
+		return
+	var at: Vector2 = Vector2(ping.pos) * TILE
+	var fade := clampf(float(ping.t) / 3.0, 0.0, 1.0)
+	var u := fposmod(float(game.clock) * 1.3, 1.0)
+	c.draw_circle(at, 0.7 * TILE, Color(0.4, 0.85, 1.0, 0.16 * fade))
+	c.draw_arc(at, 0.7 * TILE, 0.0, TAU, 32, Color(0.4, 0.85, 1.0, 0.9 * fade), 3.0)
+	c.draw_arc(at, (0.7 + 1.4 * u) * TILE, 0.0, TAU, 40, Color(0.4, 0.85, 1.0, 0.7 * (1.0 - u) * fade), 3.0)
+	c.draw_string(ThemeDB.fallback_font, at + Vector2(-60, -0.9 * TILE), "HOLD", HORIZONTAL_ALIGNMENT_CENTER, 120, 15, Color(0.7, 0.92, 1.0, fade))
 
 
 # ------------------------------------------------------------------ the screen: rain, fog, the retreat's arrow --
