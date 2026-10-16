@@ -8,7 +8,7 @@
 ##   projects(building := "") -> Array of {id, building, tier, name, cost, labor, role, requires (all ids needed), effect, state, done, why}   state(id) -> "locked"|"available"|"queued"|"building"|"built"
 ##   can_start(id) -> {ok, why, missing {res: n}}     start(id) -> bool (spends the cost from game.stores and queues the work)
 ##   tier(building) -> int (0 = nothing built)        stage() -> "Camp"|"Shelter"|"Settlement"|"Fortress"|"Hub"      caps() -> {res: cap}      beds() -> {used, cap, free}
-##   daily_report() -> {day, stage, morale, people, beds, power_on, res {food|water|fuel: {stock, prod, cons, net, days}}, next_shortage {res, days} ({} if none), last {spoiled, lost, left, short}}
+##   daily_report() -> {day, stage, morale, people, beds, power_on, res {food|water|fuel: {stock, prod, cons, spoil, net, days}}, next_shortage {res, days} ({} if none), last {spoiled, lost, left, short}}
 ##   needs() -> {res, days, short, place, reason}  (the biggest shortage and the place type that fixes it; {} when all is well)
 ##   site(id) -> Vector2 (where the work is done)      add_labor(id, secs)  (the world agent calls it from the crew's work stop; then set `fallback_labor = false`)
 ##   fence_mult() -> float (siege fence hp)            hit_bonus() -> float (guards' hit chance at night, floodlights)
@@ -360,7 +360,7 @@ func daily_report() -> Dictionary:
 	for r in f:
 		var stock: float = float(game.stores.get(r, 0.0))
 		var days := -1.0 if float(f[r].net) >= -0.001 else stock / -float(f[r].net)
-		res[r] = {"stock": stock, "prod": f[r].prod, "cons": f[r].cons, "net": f[r].net, "days": days}
+		res[r] = {"stock": stock, "prod": f[r].prod, "cons": f[r].cons, "spoil": f[r].spoil, "net": f[r].net, "days": days}
 		if days >= 0.0 and (nxt.is_empty() or days < float(nxt.days)) and float(f[r].cons) > 0.0:
 			nxt = {"res": r, "days": days}
 	return {"day": day, "stage": _stage, "morale": morale, "people": people(), "beds": beds(), "power_on": _power_now(), "res": res, "next_shortage": nxt, "last": last}
@@ -645,6 +645,14 @@ func _lab_play() -> void:
 			break
 		bought.append(best)
 	print("  raid %-9s bought %s" % [place, ", ".join(bought)])
+
+
+## How a raid place id of `fixes` reads in a sentence ("Raid a hardware store"): the ids stay the loot table's keys.
+const PLACE_WORD := {"hardware": "hardware store", "petrol": "petrol station", "police": "police station"}
+
+
+func place_word(id: String) -> String:
+	return String(PLACE_WORD.get(id, id))
 
 
 ## The project ids still missing for the next stage (the tiers of its rules, every tier below included): what the player should be saving for.

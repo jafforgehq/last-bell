@@ -131,59 +131,59 @@
   "endings": {
     "evac_full": {"title": "EVACUATED", "sub": "Everyone who came to the gate is on the truck.", "tone": "good", "lines": [
       "The bus pulled out at 15:00 with {saved} people on it and a dog on somebody's knee. Nobody counted out loud, because everyone was there to count.",
-      "Over {days} days the prison held {nights} nights. {kills} dead were shot at its fence, and you built {projects} things with your hands that you will not see again.",
+      "Over {days} days the prison held {nights} nights. [kills|{kills} dead were shot at its fence|Not one of the dead was shot at its fence], and you built [projects|{projects} things with your hands that you will not see again|nothing there that you have to leave behind].",
       {"if": "dog", "text": "Biscuit rode up front. The driver pretended not to notice."},
       "The column went north on the long road. Behind it, the gate stood open. It looked like a place people had lived."
     ]},
     "evac_good": {"title": "EVACUATED", "sub": "Most of you are on the truck.", "tone": "good", "lines": [
       "The bus pulled out at 15:00 with {saved} people on it. It was a good number, and nobody said how many had been fewer.",
       {"if": "lost", "text": "Missing from the seats: {names_lost}. They are on the long list of the prison, and the list will go with you."},
-      "{days} days. {nights} nights held. {kills} dead at the fence. {projects} things built.",
+      "{days} days. {nights} nights held. [kills|{kills} dead at the fence|Not one dead at the fence]. [projects|{projects} things built|Nothing built].",
       {"if": "left_behind", "text": "There were not enough seats: {names_left} stayed at the gate and watched the lights go north."},
       "Halloran shook Ruth's hand through the window and did not say anything. It was enough."
     ]},
     "evac_bitter": {"title": "EVACUATED", "sub": "Only a few of you made the truck.", "tone": "bitter", "lines": [
       "The bus pulled out at 15:00 with {saved} people on it, and a lot of room.",
       {"if": "lost", "text": "You left behind more than you took: {names_lost}. The gate looked wrong without them."},
-      "{days} days, {nights} nights, {kills} dead at the fence, {projects} things built, and a long drive to find out what it was for.",
+      "{days} days, {nights} nights, [kills|{kills} dead at the fence|no dead at the fence], [projects|{projects} things built|nothing built], and a long drive to find out what it was for.",
       {"if": "left_behind", "text": "{names_left} did not fit, or did not come."},
       "In the dust behind the convoy the prison got smaller until it was just a fence."
     ]},
     "evac_lonely": {"title": "EVACUATED", "sub": "Ruth alone.", "tone": "bitter", "lines": [
       "The bus pulled out at 15:00 with one person on it. Halloran asked if there was anybody else and Ruth said no, and it was not a lie.",
       {"if": "lost", "text": "She said the names in the dark, from the back seat: {names_lost}."},
-      "{days} days. {nights} nights. {kills} dead. {projects} things built. A gate with nobody at it."
+      "{days} days. {nights} nights. [kills|{kills} dead at the fence|No dead at the fence]. [projects|{projects} things built|Nothing built]. A gate with nobody at it."
     ]},
     "held": {"title": "HELD THE FORT", "sub": "You stayed. The prison is still standing.", "tone": "good", "lines": [
-      "The sun came up on day 31 and the fence was still a fence. There were {kills} dead at the wall, and the survivors are {saved}.",
+      "The sun came up on day 31 and the fence was still a fence. [kills|There were {kills} dead at the wall|Not one of the dead had reached the wall], and the survivors are {saved}.",
       {"if": "convoy_gone", "text": "The convoy went on without you. Somewhere north it is a rumour, and you have a radio room to hear it."},
       {"if": "lost", "text": "You lost {names_lost} on the way here."},
-      "{days} days held, {nights} nights, {projects} things built. Nobody is coming for you, and nobody has to. There is food in the larder, and a fence."
+      "{days} days held, {nights} nights, [projects|{projects} things built|nothing new built]. Nobody is coming for you, and nobody has to. There is food in the larder, and a fence."
     ]},
     "held_bitter": {"title": "HELD, ALONE", "sub": "The fence stood. Nobody came for you.", "tone": "bitter", "lines": [
-      "The sun came up on day 31 and the fence was still a fence. The convoy had come and gone, and the list was not met. There were {kills} dead at the wall, and the survivors are {saved}.",
+      "The sun came up on day 31 and the fence was still a fence. The convoy had come and gone, and the list was not met. [kills|There were {kills} dead at the wall|Not one of the dead had reached the wall], and the survivors are {saved}.",
       {"if": "lost", "text": "You lost {names_lost} on the way here."},
-      "{days} days, {nights} nights, {projects} things built. The road north is open and you have no way to drive it. You are alive, and that is all it is."
+      "{days} days, {nights} nights, [projects|{projects} things built|nothing new built]. The road north is open and you have no way to drive it. You are alive, and that is all it is."
     ]},
     "overrun": {"title": "OVERRUN", "sub": "The fence fell and the prison was lost.", "tone": "bad", "lines": [
       "On night {night} the wall went in three places at once. The guards fought from the towers until the ammunition was gone.",
       {"if": "lost", "text": "The ones who did not get out: {names_lost}."},
-      "You held {nights} nights and lasted {days} days. {kills} dead are at the fence. The gate is wide open, and the yard is full."
+      "You held [nights|{nights} nights|not one night] and lasted {days} days. [kills|{kills} dead are at the fence|Not one of the dead was shot at the fence]. The gate is wide open, and the yard is full."
     ]},
     "abandoned": {"title": "ABANDONED", "sub": "Everyone left or died.", "tone": "bad", "lines": [
       "On day {days} Ruth walked the yard and there was nobody in it. The beds were made. The garden was dry.",
       {"if": "lost", "text": "Gone for good: {names_lost}."},
       {"if": "left", "text": "Gone on their own legs: {names_walked}."},
-      "{nights} nights held. {kills} dead at the fence. The radio kept calling for a station that did not answer."
+      "[nights|{nights} nights held|Not one night held]. [kills|{kills} dead at the fence|No dead at the fence]. The radio kept calling for a station that did not answer."
     ]},
     "starved": {"title": "STARVED", "sub": "The stores ran out and the people with them.", "tone": "bad", "lines": [
-      "By the {days}th day the larder was empty and the barrels were dry. People left in the night, one by one. Some of them did not leave but lay down.",
+      "By day {days} the larder was empty and the barrels were dry. People left in the night, one by one. Some of them did not leave but lay down.",
       {"if": "lost", "text": "They are gone: {names_lost}."},
-      "{nights} nights held, {kills} dead at the fence, and nobody to count them."
+      "[nights|{nights} nights held|Not one night held], [kills|{kills} dead at the fence|no dead at the fence], and nobody to count them."
     ]},
     "dead": {"title": "DEAD", "sub": "Ruth did not come back.", "tone": "bad", "lines": [
       "The truck came back empty the third time. The gate stayed shut, and the radio room kept calling her name until the battery went.",
-      "She lasted {days} days. {nights} nights held, {kills} dead, {projects} things built, and no one left who knew where the keys were."
+      "She lasted {days} days. [nights|{nights} nights held|Not one night held], [kills|{kills} dead at the fence|no dead at the fence], [projects|{projects} things built|nothing built], and no one left who knew where the keys were."
     ]}
   },
   "score": {"saved": 20, "day": 1, "night": 4, "project": 3, "kill": 0.1, "rescue": 6, "death": -6, "letter": 3, "evac": 60, "held": 40, "held_bitter": 20, "bonus": 1, "convoy_ready": 20},

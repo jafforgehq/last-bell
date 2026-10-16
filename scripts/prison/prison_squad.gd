@@ -495,6 +495,7 @@ func _fire(m: Dictionary, z, dist: float, eff: String) -> bool:
 	game.run.field.noise(Vector2(p.x, p.y), null, float(gun.get("noise", 12.0)))
 	m.cd = Bal.roll(Bal.role("squad"), "cd") * (0.7 if eff == "cover" else 1.0)
 	m.say = "firing"
+	m.fired_at = game.clock    # (the Firing tag lasts 1.5 s after the shot)
 	return true
 
 

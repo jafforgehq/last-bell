@@ -254,10 +254,17 @@ func _refresh() -> void:
 	for f in pc.finds:
 		b += "   %s  [color=#%s]%s[/color]\n" % [String(f[0]), (TAGS[String(f[1])] as Color).to_html(false), String(f[1])]
 	var dg := clampi(int(pc.danger), 1, 5)
-	b += "\n[b]Danger:[/b] %s %s\n" % ["#".repeat(dg) + "-".repeat(5 - dg), DANGER_WORD[dg]]
+	b += "\n[b]Danger:[/b] "
+	side.text = ""
+	side.append_text(b)
+	for i in 5:    # five pips, the lit ones red (drawn squares, not "##---")
+		side.add_image(_pip(i < dg), 12, 12)
+		side.add_text(" ")
+	b = " %s\n" % DANGER_WORD[dg]
 	b += "[b]The dead:[/b] %s\n" % _crowd(float(kc.get("dead_mult", 1.0)))
 	b += "[b]Watch for:[/b] %s\n" % String(pc.threats)
 	var fc := int(pc.get("fuel", 0))
+	fuel_c.visible = fc > 0    # (no gauge for a trip that costs no fuel)
 	b += "[b]Travel:[/b] %s km%s\n" % [str(pc.dist), (", costs %d fuel" % fc) if fc > 0 else ", no fuel"]
 	var cv: Array = covers(id)
 	if not cv.is_empty() and bool(stt.open):
@@ -269,7 +276,6 @@ func _refresh() -> void:
 		b += "[color=#80e080]You marked this place done.[/color]\n"
 	elif mk == "avoid":
 		b += "[color=#ff9080]You marked this place to avoid.[/color]\n"
-	side.text = ""
 	side.append_text(b)
 	note.text = String(stt.why)
 	go_btn.disabled = not bool(stt.ok)
@@ -281,6 +287,19 @@ func _refresh() -> void:
 	mk = game.raidx.mark_of(id)
 	mark_btn.text = "Mark (X): %s" % (String(game.raidx.cfg().mark_words.get(mk, "none")) if mk != "" else "none")
 	canvas.queue_redraw()
+
+
+static var _pips := {}
+
+
+## A danger pip: a flat square with the dark outline, red when lit, grey when not.
+static func _pip(on: bool) -> ImageTexture:
+	if not _pips.has(on):
+		var im := Image.create(12, 12, false, Image.FORMAT_RGBA8)
+		im.fill(Color("#0e1a15"))
+		im.fill_rect(Rect2i(2, 2, 8, 8), Color("#e0584a") if on else Color("#4a524c"))
+		_pips[on] = ImageTexture.create_from_image(im)
+	return _pips[on]
 
 
 static func _crowd(m: float) -> String:
@@ -353,7 +372,7 @@ func _draw_map(c: Canvas) -> void:
 		c.draw_line(Vector2(sz.x * (0.78 + 0.05 * w), y), Vector2(sz.x * (0.84 + 0.05 * w), y), Color(0.4, 0.6, 0.8, 0.35), 1.5)
 	c.draw_line(Vector2(0.03, 0.93) * sz, Vector2(0.21, 0.79) * sz, Color(0.38, 0.4, 0.45), 9.0)    # the airport's runway
 	c.draw_line(Vector2(0.03, 0.93) * sz, Vector2(0.21, 0.79) * sz, Color(0.9, 0.9, 0.8, 0.55), 1.5)
-	c.draw_arc(_pos("stadium", sz) + Vector2(0, 0), 30.0, 0, TAU, 40, Color(0.4, 0.6, 0.35), 3.0)    # the stadium's bowl
+	c.draw_arc(_pos("stadium", sz) + Vector2(0, 0), 30.0, 0, TAU, 40, Color(0.42, 0.43, 0.4), 3.0)    # the stadium's bowl (concrete grey: a green ring is the shortage mark, and the stadium may be locked)
 	var base := Vector2(0.5, 0.52) * sz
 	for id in ids:
 		var op: bool = status(String(id)).open
@@ -394,7 +413,11 @@ func _draw_map(c: Canvas) -> void:
 			var bc := Color(0.35, 0.8, 0.45) if mk == "done" else Color(0.9, 0.3, 0.25)
 			c.draw_circle(bp, 9.0, Color(0.03, 0.03, 0.03))
 			c.draw_circle(bp, 7.5, bc.darkened(0.2))
-			PIcons.draw(c, "check" if mk == "done" else "cross", bp, 12.0, Color(1, 1, 1))
+			if mk == "done":
+				PIcons.draw(c, "check", bp, 12.0, Color(1, 1, 1))
+			else:    # (PIcons' "cross" is the medic's plus: avoid is an X)
+				c.draw_line(bp + Vector2(-3.5, -3.5), bp + Vector2(3.5, 3.5), Color(1, 1, 1), 2.2)
+				c.draw_line(bp + Vector2(-3.5, 3.5), bp + Vector2(3.5, -3.5), Color(1, 1, 1), 2.2)
 	var wid: String = game.raidx.forecast()    # today's weather and the chosen hour, in the corner
 	var wcol := Color("#9fc4e8") if wid == "rain" else (Color("#c9d0d2") if wid == "fog" else Color(1.0, 0.85, 0.4))
 	PIcons.draw(c, {"rain": "rain", "fog": "fog"}.get(wid, "sun"), Vector2(20, 20), 22.0, wcol)

@@ -506,15 +506,23 @@ func _aim_words(mode: String) -> String:
 	return String(AimMode.NOTES[mode])
 
 
+## The real game (the prison, reached by the town start) keeps its own aim pref, the one New game writes; the school keeps `ui.aim_mode`.
+func _aim_now() -> String:
+	return AimMode.prison_mode() if OneHouse.town_start(shell.main) else AimMode.current()
+
+
 func _on_aim(mode: String) -> void:
-	AimMode.set_mode(mode)
+	if OneHouse.town_start(shell.main):
+		AimMode.set_prison_mode(mode)
+	else:
+		AimMode.set_mode(mode)
 	_refresh_aim()
 	_changed()
 
 
 ## The buttons and the line show the mode now.
 func _refresh_aim() -> void:
-	var now := AimMode.current()
+	var now := _aim_now()
 	for mode in aim_buttons:
 		var b: Button = aim_buttons[mode]
 		b.set_pressed_no_signal(mode == now)

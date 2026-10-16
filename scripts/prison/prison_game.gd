@@ -1983,7 +1983,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 				if not run.sim.search.is_looted(String(ct.id)):
 					var cp := Vector2(ct.at) * TILE
 					c.draw_rect(Rect2(cp - Vector2(5, 5), Vector2(10, 10)), Color(1.0, 0.85, 0.25, 0.55 + 0.3 * sin(clock * 4.0)), false, 2.0)
-			c.draw_string(font, Vector2(1.4, 27.4) * TILE, "WEST BREACH", HORIZONTAL_ALIGNMENT_CENTER, 140, 16, Color(1, 0.9, 0.5, 0.85))
+			c.draw_string(font, (Vector2(float(Base.W) - 1.4 - 140.0 / TILE, 27.4) if Base.east else Vector2(1.4, 27.4)) * TILE, "EAST BREACH" if Base.east else "WEST BREACH", HORIZONTAL_ALIGNMENT_CENTER, 140, 16, Color(1, 0.9, 0.5, 0.85))
 			c.draw_string(font, Vector2(Base.GATE_POS.x, float(Base.FENCE.end.y) + 0.2) * TILE - Vector2(100, 0), "CHAINED", HORIZONTAL_ALIGNMENT_CENTER, 200, 16, Color(1, 0.4, 0.35, 0.9))
 		# the kids' hopscotch (chalk) and ball
 		var hs := Crew.HOPSCOTCH * TILE
@@ -2765,7 +2765,7 @@ func _secure() -> void:
 	var swing: float = doors.open_all() if doors != null else 0.0    # DOORS: every shut door swings open, one after the other, before the card
 	if swing > 0.0:
 		await get_tree().create_timer(swing + 0.35).timeout
-	await _cut_out(["PRISON SECURED", "The gate is unlocked. The west breach is sealed."], false)
+	await _cut_out(["PRISON SECURED", "The gate is unlocked. The %s breach is sealed." % ("east" if Base.east else "west")], false)
 	phase = "managed"
 	ally_chasers.clear()    # (no clear-phase state follows: the dead that chased an ally, the revive bar)
 	revive_t = 0.0
@@ -2845,6 +2845,7 @@ func _allies(dt: float) -> void:
 			m.cd = Bal.roll(Bal.role("ally"), "cd") * float(Bal.dm("ally_cd"))
 			m.hold = 0.35
 			m.say = "firing"
+			m.fired_at = clock    # (the Firing tag lasts 1.5 s after the shot)
 		if float(m.hold) > 0.0:
 			g.moving = false
 			continue
@@ -2981,6 +2982,7 @@ func _fence_guards(dt: float) -> void:
 		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
 		stores.ammo = maxf(0.0, float(stores.ammo) - (siege.GUARD_SHOT_COST if siege.attacking else siege.GUARD_SHOT_COST * 0.2) * (tr.mult(g, "ammo") - 1.0))
 		m.say = "firing"
+		m.fired_at = clock    # (the Firing tag lasts 1.5 s after the shot)
 
 
 ## The pen never empties: new dead drift in from the edges and a slow trickle of them is sent to the fence by the gate.
@@ -3051,8 +3053,9 @@ func _day_night(_dt: float) -> void:
 	var n := _night_of(hr)
 	var c := _grade(hr)
 	night_rect.color = c if mode == "base" or args.has("night") else Color(1, 1, 1)
-	if mode == "raid" and run != null and run.sim.phase != "day" and not args.has("night"):
-		night_rect.color = Color(1, 1, 1).lerp(c, 0.6)    # TIME hook: the dusk tint when the night wake starts
+	if mode == "raid" and run != null and not args.has("night"):
+		var k := maxf(0.6 if run.sim.phase != "day" else 0.0, 0.88 * n)    # TIME hook: the dusk tint when the night wake starts; a night raid (its own hour) is nearly as dark as the base's night
+		night_rect.color = Color(1, 1, 1).lerp(c, k)
 	if mode == "base" and arc != null:
 		night_rect.color = night_rect.color.darkened(arc.dim())    # ARC hook: rain, fog and the storm darken the day
 	if mode == "raid" and raidx != null:

@@ -72,8 +72,8 @@ func job_of(m: Dictionary) -> Array:
 	if st == "leaving":
 		return ["exit", "Leaving"]
 	var say := String(m.get("say", "")).to_lower()
-	if say == "firing" and float(game.aim_hold.get(m.p.id, 0.0)) <= 0.0:
-		say = ""    # (the word stays after the shot; the pose has gone back to the watch)
+	if say == "firing" and float(game.clock) - float(m.get("fired_at", -99.0)) > 1.5:
+		say = ""    # (the word stays after the shot: the tag only while a shot was fired in the last 1.5 s)
 	for j in JOBS:
 		if say.contains(String(j[0])):
 			return [j[1], j[2]]
@@ -157,7 +157,7 @@ func _plates(me: Vector2, v: Vector2, zoom: float) -> void:
 		var sp := _to_scr(lp, v)
 		if not Rect2(Vector2(-60, -20), v + Vector2(120, 40)).has_point(sp):
 			continue
-		var text := String(PLATE_NAME.get(String(l.text), String(l.text)))
+		var text := String(l.text) if game.phase == "clear" else String(PLATE_NAME.get(String(l.text), String(l.text)))    # (in the clear it is the zone the marker names, the Cell block; in the base the dormitory)
 		var size := 12 if zoom >= 20.0 else 10
 		var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

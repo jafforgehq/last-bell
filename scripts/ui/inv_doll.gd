@@ -42,6 +42,7 @@ var mag := 0
 var cap := 0
 var reserve := 0
 var melee_only := false
+var melee_name := "Swing"    # what F does: the town's swing, or the prison's knife (drawn by hand: the atlas has no knife)
 var can_reload := false
 var can_reload_now := false
 var reloading := false
@@ -108,7 +109,9 @@ func _key_at(local: Vector2) -> String:
 
 ## Each time the sim's pack, her gun or the belt changed: reads them and draws again when they differ from what is shown.
 func refresh(sim, pack: Dictionary) -> void:
-	var w: Dictionary = InvApi.equipment(sim).get("weapon", {})
+	var eq: Dictionary = InvApi.equipment(sim)
+	var w: Dictionary = eq.get("weapon", {})
+	melee_name = String(eq.get("melee", {}).get("name", "Swing"))
 	var n := int(w.get("reserve", InvApi.units(pack, "ammo") if not pack.is_empty() else 0))
 	var gm := int(w.get("mag", 0))
 	var gc := int(w.get("cap", 0))
@@ -118,7 +121,7 @@ func refresh(sim, pack: Dictionary) -> void:
 	var belt: Array = InvApi.quick(sim)
 	var entries: Array = []
 	var needs: Dictionary = InvApi.needs(sim)
-	var sig := "%s|%s|%d|%d|%d|%s|%s|%s" % [nm, gid, gm, gc, n, str(rl), str(Access.markers()), str(Access.text_k())]
+	var sig := "%s|%s|%s|%d|%d|%d|%s|%s|%s" % [melee_name, nm, gid, gm, gc, n, str(rl), str(Access.markers()), str(Access.text_k())]
 	for i in SLOTS:
 		var id := String(belt[i])
 		var count := InvApi.count_of(pack, id) if id != "" else 0
@@ -185,7 +188,7 @@ func _get_tooltip(at_position: Vector2) -> String:
 			return "No gun in hand: only the swing"
 		return "%s: %d in the magazine of %d, %d shells in the pack.\nClick the strip, or press R, to reload from the shells in the pack." % [gun_name, mag, cap, reserve]
 	if key == "melee":
-		return "The swing: no item, no ammunition. A blow is quiet.\nKey: F"
+		return ("The knife: no ammunition, quiet, any time.\nKey: F" if melee_name == "Knife" else "The swing: no item, no ammunition. A blow is quiet.\nKey: F")
 	return "Ruth. The pump shotgun is in her hand; four quick slots hang on her belt.\nDrag a bandage, a meal or a drink onto a slot, then press its number."
 
 
@@ -267,11 +270,34 @@ func _draw_weapon(font: Font, small: Font) -> void:
 func _draw_melee(small: Font) -> void:
 	var r := MELEE
 	_slot_box(r, hover == "melee")
-	InvIcons.draw_melee(self, Rect2(r.position + Vector2(8.0, 2.0), Vector2(34.0, 34.0)))
-	var word := "F  Swing"
+	var ir := Rect2(r.position + Vector2(8.0, 2.0), Vector2(34.0, 34.0))
+	if melee_name == "Knife":
+		_draw_knife(ir)
+	else:
+		InvIcons.draw_melee(self, ir)
+	var word := "F  " + melee_name
 	var wfs := _fit(small, word, r.size.x - 4.0, Access.scaled(12))
 	var ww := small.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, wfs).x
 	draw_string(small, r.position + Vector2((r.size.x - ww) * 0.5, 47.0), word, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 4.0, wfs, INK2)
+
+
+## A flat knife on the diagonal, RimWorld style: a steel blade with a light edge, a brass guard, a dark grip, all with the dark outline.
+func _draw_knife(r: Rect2) -> void:
+	var o := r.position
+	var k := r.size.x / 34.0
+	var blade := PackedVector2Array([Vector2(9, 25), Vector2(27, 5), Vector2(29, 7), Vector2(12, 28)])
+	var grip := PackedVector2Array([Vector2(3, 29), Vector2(8, 24), Vector2(12, 28), Vector2(7, 33)])
+	for i in 4:
+		blade[i] = o + blade[i] * k
+		grip[i] = o + grip[i] * k
+	var outl := Color("#0e1a15")
+	draw_colored_polygon(blade, Color("#c9d1d3"))
+	draw_polyline(blade + PackedVector2Array([blade[0]]), outl, 2.0)
+	draw_line(o + Vector2(10.5, 26) * k, o + Vector2(27.5, 6.5) * k, Color("#eef3f4"), 1.5)
+	draw_colored_polygon(grip, Color("#5a3a26"))
+	draw_polyline(grip + PackedVector2Array([grip[0]]), outl, 2.0)
+	draw_line(o + Vector2(6, 22) * k, o + Vector2(14, 30) * k, outl, 5.0)
+	draw_line(o + Vector2(6.5, 22.5) * k, o + Vector2(13.5, 29.5) * k, Color("#d2a94e"), 2.5)
 
 
 func _draw_quick(i: int, font: Font) -> void:

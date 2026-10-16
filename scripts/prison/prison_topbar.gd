@@ -390,15 +390,16 @@ func _refresh() -> void:
 
 
 func _clock() -> void:
-	var tod: float = game.tod
+	var tod: float = game.raidx.hour() if game.mode == "raid" and game.raidx != null else game.tod    # (a raid runs on the hour the map chose)
 	var night: bool = game._night_of(tod) > 0.5
+	var period := "night" if night else ("morning" if tod < 12.0 else ("afternoon" if tod < 17.0 else "evening"))
 	_clock_icon.set_icon("moon" if night else "sun", Color("#9fb4e8") if night else Hud.ACCENT)
 	_clock_main.text = "%02d:%02d" % [int(tod), int(fposmod(tod, 1.0) * 60.0)]
 	if game.phase == "managed":
 		var arc = game.arc    # ARC hook: "Day 12 of 30", the convoy's day in gold
 		var dn: int = game.econ.day
 		var on_cd: bool = arc != null and dn == arc.convoy_day()
-		_clock_sub.text = ("Day %d of %d  %s" % [dn, arc.days(), "CONVOY" if on_cd else ("night" if night else "day")]) if arc != null else "Day %d  %s" % [dn, "night" if night else "day"]
+		_clock_sub.text = ("Day %d of %d, %s" % [dn, arc.days(), "CONVOY" if on_cd else period]) if arc != null else "Day %d, %s" % [dn, period]
 		_clock_sub.add_theme_color_override("font_color", Hud.ACCENT if on_cd else DIM)
 	else:
 		_clock_sub.text = "Clear phase"
@@ -517,7 +518,7 @@ func _res_tip(r: String, rep: Dictionary, stock: float, cap: int, days: float) -
 		t += "\n" + String(RES_USE.get(r, ""))
 	var place := String(econ.cfg.fixes.get(r, ""))
 	if place != "":
-		t += "\nFind more: raid a %s.   Click: needs board." % place
+		t += "\nFind more: raid a %s.   Click: needs board." % econ.place_word(place)
 	return t + "\n" + String(RES_LOW.get(r, ""))
 
 
@@ -610,8 +611,11 @@ func _attack_chip() -> void:
 		st = "ok"
 	var days: int = game.arc.next_horde_night(hn) - hn
 	var head := "Horde tonight" if horde else ("Horde in %d day%s" % [days, "" if days == 1 else "s"] if days <= 5 else "Quiet")
-	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, head, "in %d:%02d" % [int(secs) / 60, int(secs) % 60] if horde else "night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
-		"A horde comes at 21:00 tonight. Mend the fence and keep ammo in the stores before it." if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
+	var hrs: float = maxf(0.0, sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h)    # game hours to the horde (the chip speaks the clock's time, not real seconds)
+	var when := ("at %02d:00" % int(sg.NIGHT_H)) if hrs >= 1.0 else "in %d min" % ceili(hrs * 60.0)
+	var why := "The dead followed you in from the clear: they come for the fence on the first night. " if hn == 1 else ""
+	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, head, when if horde else "night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
+		why + "A horde comes at %02d:00 tonight. Mend the fence and keep ammo in the stores before it." % int(sg.NIGHT_H) if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
 	(chips["attack"].main as Label).custom_minimum_size.x = 100
 
 
@@ -631,15 +635,12 @@ func _fence_chip() -> void:
 	var f: float = float(w.hp) / float(w.max)
 	var st := "danger" if f < 0.3 else ("warn" if f < 0.6 else "ok")
 	var col := Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK)
-	var main := "%d%%" % int(f * 100.0)
-	var sub: String = String(w.name) if f < 0.97 else "sound"
-	if sg.attacking or game.arc.is_horde_night(sg.nights_started + 1):    # a horde night: how many parts still stand
-		var up := 0
-		for sgm in sg.segs:
-			if float(sgm.hp) > 0.0:
-				up += 1
-		main = "Fence %d/%d" % [up, sg.segs.size()]
-		sub = "intact"
+	var up := 0    # one format day and night: how many parts still stand, then the weakest one when it is hurt
+	for sgm in sg.segs:
+		if float(sgm.hp) > 0.0:
+			up += 1
+	var main := "Fence %d/%d" % [up, sg.segs.size()]
+	var sub: String = "intact" if f >= 0.97 else "%s %d%%" % [String(w.name), int(f * 100.0)]
 	_put("fence", "fence", col, main, sub, DIM, "", st,
 		"Weakest fence part: %s at %d%% (%s).\nMend with scrap: hold E at the damaged wall, or a mechanic does it." % [String(w.name), int(f * 100.0), sg.state_of(w)], f, col)
 
@@ -704,7 +705,8 @@ func _raid_chips(_rep: Dictionary) -> void:
 	var rx = game.raidx    # RAID EXTRAS: today's weather (and the hour the map chose)
 	var wid := String(rx.weather)
 	var wcfg: Dictionary = rx.weather_cfg(wid)
-	_put("weather", {"rain": "rain", "fog": "fog"}.get(wid, "sun"), Color("#9fc4e8") if wid == "rain" else (Color("#c9d0d2") if wid == "fog" else Hud.ACCENT), String(wcfg.get("name", "Clear")), "night" if rx.hour() >= 20.0 or rx.hour() < 5.5 else "day", DIM, "", "warn" if wid == "fog" else "ok", "Weather today: %s. %s" % [String(wcfg.get("name", "Clear")), String(wcfg.get("note", ""))])
+	var rnight: bool = game._night_of(rx.hour()) > 0.5
+	_put("weather", {"rain": "rain", "fog": "fog"}.get(wid, "moon" if rnight else "sun"), Color("#9fc4e8") if wid == "rain" else (Color("#c9d0d2") if wid == "fog" else (Color("#9fb4e8") if rnight else Hud.ACCENT)), String(wcfg.get("name", "Clear")), "night" if rnight else "day", DIM, "", "warn" if wid == "fog" else "ok", "Weather today: %s. %s" % [String(wcfg.get("name", "Clear")), String(wcfg.get("note", ""))])
 	(chips["weather"].main as Label).custom_minimum_size.x = 44
 
 
@@ -782,7 +784,7 @@ func objectives() -> Array:
 		return out
 	var nd2: Dictionary = econ.needs()
 	if not nd2.is_empty() and float(nd2.get("days", -1.0)) >= 0.0:
-		out.append({"t": "Fix %s: %.1f days left - raid a %s" % [nd2.res, float(nd2.days), nd2.place], "done": false, "bad": true})
+		out.append({"t": "Fix %s: %.1f days left - raid a %s" % [nd2.res, float(nd2.days), game.econ.place_word(String(nd2.place))], "done": false, "bad": true})
 	var arc_lines: Array = game.arc.objectives() if game.arc != null else []    # ARC hook: the phase and the convoy's list
 	out.append_array(arc_lines.filter(func(l): return bool(l.get("head", false))))
 	var evac: bool = game.arc != null and game.arc.started and String(game.arc.phase().id) == "evacuate"

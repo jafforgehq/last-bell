@@ -265,15 +265,17 @@ func paint_weather(c: CanvasItem, v: Vector2) -> void:
 		var me: Vector2 = (Vector2(game.run.avatar_p.x, game.run.avatar_p.y) - game.cam_center) * game.zoom_px + v / 2.0
 		var r: float = vt * game.zoom_px
 		var rect := Rect2(me - Vector2(r, r), Vector2(r, r) * 2.0)
-		c.draw_texture_rect(_fog_tex(), rect, false)
-		var col := Color(0.72, 0.76, 0.78, 0.94)
+		var lit: Color = game.night_rect.color    # (the fog is lit like the world: dark blue at night, not a bright grey sheet)
+		lit.a = 1.0
+		c.draw_texture_rect(_fog_tex(), rect, false, lit)
+		var col := Color(0.72, 0.76, 0.78, 0.94) * lit
 		c.draw_rect(Rect2(0, 0, v.x, maxf(0.0, rect.position.y)), col)
 		c.draw_rect(Rect2(0, rect.end.y, v.x, maxf(0.0, v.y - rect.end.y)), col)
 		c.draw_rect(Rect2(0, rect.position.y, maxf(0.0, rect.position.x), rect.size.y), col)
 		c.draw_rect(Rect2(rect.end.x, rect.position.y, maxf(0.0, v.x - rect.end.x), rect.size.y), col)
 		for i in 9:    # (slow drifting wisps)
 			var a := t * 0.05 + float(i) * 0.7
-			c.draw_circle(me + Vector2(cos(a * 1.3), sin(a)) * r * (0.55 + 0.4 * fposmod(float(i) * 0.31, 1.0)), r * 0.28, Color(0.8, 0.84, 0.86, 0.1))
+			c.draw_circle(me + Vector2(cos(a * 1.3), sin(a)) * r * (0.55 + 0.4 * fposmod(float(i) * 0.31, 1.0)), r * 0.28, Color(0.8, 0.84, 0.86, 0.1) * lit)
 
 
 ## The retreat's arrow, on the HUD (screen px): to the nearest pickup ring, with the distance, always while it is on.
@@ -291,7 +293,7 @@ func draw_hud(c: Control, v: Vector2) -> void:
 	var col := Color(1.0, 0.55 + 0.25 * pulse, 0.3)
 	var at := v / 2.0 + dir * minf(150.0, d * float(game.zoom_px))
 	c.draw_colored_polygon(PackedVector2Array([at + dir * 26.0, at + dir.rotated(2.45) * 20.0, at + dir.rotated(-2.45) * 20.0]), col)
-	c.draw_string(font, at - Vector2(70, 26) - dir * 6.0, "RETREAT  %d tiles" % int(d), HORIZONTAL_ALIGNMENT_CENTER, 140, 15, col)
+	c.draw_string(font, at - Vector2(70, 26) - dir * 6.0, "In the ring: hold still" if d < float(game.EXTRACT_R) else "RETREAT  %d tiles" % ceili(d), HORIZONTAL_ALIGNMENT_CENTER, 140, 15, col)
 
 
 # ------------------------------------------------------------------ marks and presets (saved) --

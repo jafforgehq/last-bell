@@ -30,6 +30,9 @@ const BLURB := {
 const ROLES := ["gardener", "cook", "medic", "mechanic", "guard", "cleaner", "hauler"]
 const RES_NAME := {"food": "Food", "water": "Water", "fuel": "Fuel", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts"}
 const DIM := Color("#8d927f")
+## Where a crew stop is, in words (prison_crew.gd's `at` names without the number), for the roster's "walking to the ...".
+const STOP_WORD := {"bed": "infirmary", "bench": "workbench", "chat_a": "yard", "chat_b": "yard", "fence_e": "fence", "fence_m": "fence", "fence_w": "fence", "fridge": "kitchen",
+	"garden": "garden", "meds": "medicine shelf", "serve": "canteen", "stores_in": "stores", "stores_out": "stores", "stove": "kitchen", "well": "pump", "yard": "yard"}
 const TAB_HINT := {
 	"projects": "PROJECTS: what to build. Pick a building on the left, then press Start on a project: it spends the scrap and parts now, and the crew does the work.",
 	"needs": "NEEDS: what the base is short of, what the day costs, and which kind of place to raid for it.",
@@ -614,14 +617,17 @@ func _card(p: Dictionary) -> Control:
 	col.add_child(gl)
 	col.add_child(_lab(_effect_text(p), 13, DIM))
 	var cost := ""
+	var paid := state == "built" or state == "queued" or state == "building"    # (Start spent the cost: no shortage any more)
 	for k in p.cost:
 		var have := int(floor(float(game.stores.get(k, 0.0))))
 		var need := int(p.cost[k])
-		if state == "built" or have >= need:
+		if paid or have >= need:
 			cost += "%d %s    " % [need, k]
 		else:
 			cost += "[color=%s]%d %s (short %d)[/color]    " % [_col(Hud.DANGER_TEXT), need, k, need - have]
-	col.add_child(_rich("Cost: " + cost + "[color=%s]   Labor: %d s by a %s[/color]" % [_col(Hud.INK3), int(p.labor), p.role], 14))
+	if paid:
+		cost = "[color=%s]Paid: %s[/color]" % [_col(DIM), cost]
+	col.add_child(_rich(("" if paid else "Cost: ") + cost + "[color=%s]   Labor: %d s by a %s[/color]" % [_col(Hud.INK3), int(p.labor), p.role], 14))
 	var stt := _status(p, can)
 	col.add_child(_lab(String(stt[0]), 14, stt[1]))
 	var side := VBoxContainer.new()
@@ -684,8 +690,8 @@ func next_attack() -> String:
 	var sg = game.siege
 	if sg.attacking:
 		return "UNDER ATTACK: night %d, %d of the dead still at the walls" % [sg.night, sg._alive_wave()]
-	var secs := maxf(0.0, (sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h) * sg.SEC_PER_HOUR)
-	return "%s (night %d in %d:%02d)" % [game.arc.horde_line(sg.nights_started + 1), sg.nights_started + 1, int(secs) / 60, int(secs) % 60]
+	var hrs := maxf(0.0, sg.NIGHT_H + 24.0 * float(sg.nights_started) - sg.abs_h)    # game hours, as the clock reads (not real seconds)
+	return "%s (night %d, %s)" % [game.arc.horde_line(sg.nights_started + 1), sg.nights_started + 1, ("at %02d:00" % int(sg.NIGHT_H)) if hrs < 24.0 and hrs >= 1.0 else ("in %d min" % ceili(hrs * 60.0) if hrs < 1.0 else "in %d h" % int(hrs))]
 
 
 func morale_reasons(rep: Dictionary) -> Array:
@@ -733,7 +739,7 @@ func top_needs() -> Array:
 				if String(p.state) == "available":
 					alt = ", or build %s" % String(p.name)
 					break
-			rows.append([d, r, "%s: %.1f days left at %+d a day" % [RES_NAME[r], d, roundi(float(e.net))], "Raid a %s%s" % [String(econ.cfg.fixes.get(r, "shop")), alt]])
+			rows.append([d, r, "%s: %.1f days left at %+d a day" % [RES_NAME[r], d, roundi(float(e.net))], "Raid a %s%s" % [econ.place_word(String(econ.cfg.fixes.get(r, "shop"))), alt]])
 	var total := {}
 	var first_for := {}
 	var path: Array = econ.goal()
@@ -749,11 +755,11 @@ func top_needs() -> Array:
 	for k in total:
 		var sh: float = float(total[k]) - float(game.stores.get(k, 0.0))
 		if sh > 0.0:
-			rows.append([100.0 + 1000.0 / maxf(1.0, sh), k, "%s: short by %d for %s" % [RES_NAME.get(k, k), int(ceil(sh)), first_for[k]], "Raid a %s" % String(econ.cfg.fixes.get(k, "house"))])
+			rows.append([100.0 + 1000.0 / maxf(1.0, sh), k, "%s: short by %d for %s" % [RES_NAME.get(k, k), int(ceil(sh)), first_for[k]], "Raid a %s" % econ.place_word(String(econ.cfg.fixes.get(k, "house")))])
 	for r in econ.cfg.needs.low:
 		var have: float = float(game.stores.get(r, 0.0))
 		if have < float(econ.cfg.needs.low[r]) and not rows.any(func(q): return q[1] == r):
-			rows.append([500.0 + have, r, "%s: only %d left" % [RES_NAME.get(r, r), int(have)], "Raid a %s" % String(econ.cfg.fixes.get(r, "house"))])
+			rows.append([500.0 + have, r, "%s: only %d left" % [RES_NAME.get(r, r), int(have)], "Raid a %s" % econ.place_word(String(econ.cfg.fixes.get(r, "house")))])
 	var bd0: Dictionary = econ.beds()
 	if int(bd0.free) > 0 and not game.crew_full():    # (fix round 3: people come only from raids)
 		rows.append([600.0 - float(int(bd0.used)) * 10.0, "people", "People: %d of %d beds are taken" % [int(bd0.used), int(bd0.cap)], "Raid for survivors (the HELP! markers on the map)"])
@@ -803,21 +809,25 @@ func _needs_tab() -> void:
 	# production against consumption per day
 	body.add_child(_lab("Per day", 17, Hud.ACCENT, true))
 	var g := GridContainer.new()
-	g.columns = 6
+	g.columns = 7
 	g.add_theme_constant_override("h_separation", 22)
 	g.add_theme_constant_override("v_separation", 3)
 	body.add_child(g)
-	for h in ["", "Stock", "Made", "Used", "Net", "Left"]:
+	for h in ["", "Stock", "Made", "Used", "Spoiled", "Net", "Left"]:
 		g.add_child(_lab(h, 13, DIM))
 	var caps: Dictionary = econ.caps()
 	for r in ["food", "water", "fuel"]:
 		var e: Dictionary = rep.res[r]
-		var net := float(e.net)
+		var mk := roundi(float(e.prod))
+		var us := roundi(float(e.cons))
+		var sp := roundi(float(e.get("spoil", 0.0)))
+		var net := mk - us - sp    # (the shown parts add up to the shown net)
 		g.add_child(_lab(RES_NAME[r], 15, Hud.INK))
 		g.add_child(_lab("%d / %d" % [int(e.stock), int(caps.get(r, 0))], 15, Hud.INK2))
-		g.add_child(_lab("+%.0f" % float(e.prod), 15, Hud.INK2))
-		g.add_child(_lab("-%.0f" % float(e.cons), 15, Hud.INK2))
-		g.add_child(_lab("%+d" % roundi(net), 15, Hud.OK if net >= 0.0 else Hud.DANGER_TEXT))
+		g.add_child(_lab("+%d" % mk, 15, Hud.INK2))
+		g.add_child(_lab("-%d" % us if us > 0 else "0", 15, Hud.INK2))
+		g.add_child(_lab("-%d" % sp if sp > 0 else "0", 15, Hud.INK2))
+		g.add_child(_lab("%+d" % net, 15, Hud.OK if net >= 0 else Hud.DANGER_TEXT))
 		var days := float(e.days)
 		g.add_child(_lab("steady" if days < 0.0 else "%.1f days" % days, 15, Hud.INK2 if days < 0.0 or days >= 3.0 else Hud.DANGER_TEXT))
 	var others := ""
@@ -845,7 +855,7 @@ func _needs_tab() -> void:
 		if float(nd.get("days", -1.0)) >= 0.0:
 			s += " (%.1f days left)" % float(nd.days)
 		if nd.get("place", "") != "":
-			s += ".  Raid a %s." % nd.place
+			s += ".  Raid a %s." % econ.place_word(String(nd.place))
 		body.add_child(_lab(s, 16, Hud.WARN))
 		if String(nd.get("reason", "")) != "":
 			body.add_child(_lab(String(nd.reason), 14, DIM))
@@ -876,7 +886,14 @@ func _job_text(m: Dictionary) -> String:
 		return "on watch"
 	if m.state == "play":
 		return "playing"
-	return "%s (%s)" % [m.say, m.state]
+	if m.state == "walk":    # "walking to the pump", not "Hauler (walk)"
+		var route: Array = m.def.get("route", [])
+		var stop: Dictionary = m.eat if m.has("eat") else (route[int(m.i)] if int(m.get("i", -1)) >= 0 and int(m.i) < route.size() else {})
+		var at = "serve" if bool(stop.get("meal", false)) else stop.get("at", "")
+		if at is String and STOP_WORD.has(String(at).rstrip("0123456789")):
+			return "walking to the " + String(STOP_WORD[String(at).rstrip("0123456789")])
+		return ("on the way: " + String(stop.say)) if stop.has("say") else "walking"
+	return String(m.say)
 
 
 func _roster_tab() -> void:
@@ -1153,17 +1170,24 @@ func _stage_card(stage: String) -> void:
 	big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(big)
 	var built: Array = []
-	for s in econ.cfg.stages:
-		if String(s.name) == stage:
-			for b in s.tiers:
-				built.append(_pname("%s%d" % [b, int(s.tiers[b])]))
-	var goal: Array = econ.goal()
-	var nxt: Array = []
-	for id in goal:
-		nxt.append(_pname(String(id)))
-	var nx := _next_stage()
+	var nx := ""    # the stage AFTER the one on the card, and what it still lacks (not the econ's own next, which a staged card can lag)
+	var need: Array = []
+	var stages: Array = econ.cfg.stages
+	for i in stages.size():
+		if String(stages[i].name) == stage:
+			for b in stages[i].tiers:
+				built.append(_pname("%s%d" % [b, int(stages[i].tiers[b])]))
+			if i + 1 < stages.size():
+				nx = String(stages[i + 1].name)
+				for b in stages[i + 1].tiers:
+					for tr in range(1, int(stages[i + 1].tiers[b]) + 1):
+						econ._need(need, "%s%d" % [b, tr])
+	var nxt: Array = need.map(func(id): return _pname(String(id)))
 	var t := ("Reached with: " + ", ".join(built) + ".") if not built.is_empty() else "The prison is yours, bare walls and a gate."
-	t += ("\nNext, %s: %s." % [nx, ", ".join(nxt)]) if nx != "" else "\nThe radio is on the air. Hold the prison."
+	if nx == "":
+		t += "\nThe radio is on the air. Hold the prison."
+	elif not nxt.is_empty():
+		t += "\nNext, %s: %s." % [nx, ", ".join(nxt)]
 	var d := _rich(t, 18)
 	d.custom_minimum_size.x = 520
 	vb.add_child(d)

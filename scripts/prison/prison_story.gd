@@ -240,6 +240,24 @@ func _bar(frac: float, col: Color, h: float = 12.0) -> ProgressBar:
 	return p
 
 
+## A drawn check box for a list row (not a typed "[ ]"): "done" a green box with a tick, "now" an amber box with a dot, "" an empty grey box.
+func _tick(state: String) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(16, 16)
+	c.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(func():
+		var col: Color = Hud.OK if state == "done" else (Hud.WARN if state == "now" else Hud.INK3)
+		var r := Rect2(Vector2(1, 1), Vector2(14, 14))
+		c.draw_rect(r, Color(0.05, 0.07, 0.06, 0.9))
+		c.draw_rect(r, col, false, 2.0)
+		if state == "done":
+			c.draw_polyline(PackedVector2Array([Vector2(4, 8), Vector2(7, 11), Vector2(12, 4)]), col, 2.2)
+		elif state == "now":
+			c.draw_rect(Rect2(Vector2(5, 5), Vector2(6, 6)), col))
+	return c
+
+
 func _vp() -> Vector2:
 	return game._vp()
 
@@ -566,7 +584,13 @@ func fill(body: VBoxContainer, lab: Callable, rich: Callable, bar: Callable) -> 
 	body.add_child(lab.call("Phases", 18, Hud.ACCENT, true))
 	for p in arc.phases_list():
 		var cur: bool = String(p.id) == String(arc.phase().id)
-		body.add_child(lab.call("%s %s   (by day %d)%s" % ["[x]" if bool(p.done) else ("[>]" if cur else "[ ]"), String(p.name), int(p.by_day), "" if not cur else "   - " + String(p.text)], 15, Hud.OK if bool(p.done) else (Hud.INK if cur else Hud.INK3), false))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(_tick("done" if bool(p.done) else ("now" if cur else "")))
+		var pl: Label = lab.call("%s   (by day %d)%s" % [String(p.name), int(p.by_day), "" if not cur else "   - " + String(p.text)], 15, Hud.OK if bool(p.done) else (Hud.INK if cur else Hud.INK3), false)
+		pl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(pl)
+		body.add_child(row)
 	body.add_child(lab.call("The convoy's list", 18, Hud.ACCENT, true))
 	var g := GridContainer.new()
 	g.columns = 3

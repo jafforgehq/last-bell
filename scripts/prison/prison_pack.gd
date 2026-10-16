@@ -30,6 +30,11 @@ class PInv:
 	func can_stash() -> bool:
 		return stash_open
 
+	func equipment() -> Dictionary:    # (F in the prison is Ruth's knife, as the HUD says)
+		var e: Dictionary = super()
+		e["melee"] = {"name": "Knife"}
+		return e
+
 
 ## A bare Hud: the windows borrow its colours and builders; its toasts go to the game's message line.
 class PHud:

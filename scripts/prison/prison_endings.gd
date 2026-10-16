@@ -57,15 +57,20 @@ func facts(id: String, extra: Dictionary) -> Dictionary:
 			has_dog = true
 	return {
 		"saved": saved.size(), "names_saved": _names(saved), "names_lost": _names(lost), "names_walked": _names(walked), "names_left": _names(left_b),
-		"days": days, "kills": int(arc.stats.kills), "nights": int(arc.stats.nights_held), "projects": _projects(), "night": int(game.siege.night),
+		"days": days, "kills": int(arc.stats.kills), "nights": int(arc.stats.nights_held), "projects": _projects(), "night": int(arc.stats.nights_held) + 1,    # (the night it fell is the one after the last night held)
 		"if": {"lost": not lost.is_empty(), "left": not walked.is_empty(), "left_behind": not left_b.is_empty(), "dog": has_dog, "convoy_gone": String(arc.convoy) == "gone"},
 		"saved_list": saved, "bonuses": bonuses}
 
 
+## `[key|text when key is not 0|text when it is 0]` picks a sentence by a count (no "0 dead were shot"); "1 nights" reads "1 night".
 func _fill(s: String, f: Dictionary) -> String:
+	for m in RegEx.create_from_string("\\[(\\w+)\\|([^|\\]]*)\\|([^\\]]*)\\]").search_all(s):
+		s = s.replace(m.get_string(0), m.get_string(2) if int(f.get(m.get_string(1), 0)) != 0 else m.get_string(3))
 	for k in f:
 		if f[k] is int or f[k] is String:
 			s = s.replace("{%s}" % k, str(f[k]))
+	for w in ["night", "day", "thing"]:
+		s = RegEx.create_from_string("(?<!\\d)\\b1 %ss\\b" % w).sub(s, "1 " + w, true)
 	return s
 
 
@@ -93,9 +98,9 @@ func score(id: String, f: Dictionary) -> Dictionary:
 	var n_saved := int(f.saved) if (evac or id == "held" or id == "held_bitter") else 0
 	if n_saved > 0:
 		add.call("%d people %s x %d" % [n_saved, "on the truck" if evac else "alive", int(sc.saved)], float(n_saved) * float(sc.saved))
-	add.call("%d days x %d" % [f.days, int(sc.day)], float(f.days) * float(sc.day))
-	add.call("%d nights held x %d" % [f.nights, int(sc.night)], float(f.nights) * float(sc.night))
-	add.call("%d projects built x %d" % [f.projects, int(sc.project)], float(f.projects) * float(sc.project))
+	add.call("%d day%s x %d" % [f.days, "" if int(f.days) == 1 else "s", int(sc.day)], float(f.days) * float(sc.day))
+	add.call("%d night%s held x %d" % [f.nights, "" if int(f.nights) == 1 else "s", int(sc.night)], float(f.nights) * float(sc.night))
+	add.call("%d project%s built x %d" % [f.projects, "" if int(f.projects) == 1 else "s", int(sc.project)], float(f.projects) * float(sc.project))
 	add.call("%d dead at the fence x %s" % [f.kills, str(sc.kill)], float(f.kills) * float(sc.kill))
 	add.call("%d rescued x %d" % [int(st.rescues), int(sc.rescue)], float(int(st.rescues)) * float(sc.rescue))
 	if int(st.deaths) > 0:

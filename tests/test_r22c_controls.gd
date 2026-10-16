@@ -709,6 +709,7 @@ func test_world_click_finds_what_a_point_is_on() -> void:
 
 func test_the_settings_screen_offers_the_choice_with_its_words() -> void:
 	var main := _game()
+	Prefs.set_value("ui", "prison_aim_mode", "right")    # (the real game's Settings read and write the pref New game writes: the prison's)
 	main.open_pause()
 	var menu = main.shell.open_settings()
 	await TutorialKit.settle()
@@ -723,10 +724,10 @@ func test_the_settings_screen_offers_the_choice_with_its_words() -> void:
 	check(menu.aim_note.text.to_lower().contains("right button") and menu.aim_note.text.contains("Shift"), "the line says how: %s" % menu.aim_note.text)
 	menu.aim_buttons.always.pressed.emit()
 	await TutorialKit.settle()
-	eq(AimMode.current(), "always", "choosing it is kept at once")
+	eq(AimMode.prison_mode(), "always", "choosing it is kept at once, in the pref New game reads")
 	check(menu.aim_buttons.always.button_pressed and not menu.aim_buttons.right.button_pressed, "and shown")
 	check(menu.aim_note.text.contains("all the time"), "the line changes: %s" % menu.aim_note.text)
 	menu.aim_buttons.right.pressed.emit()
-	eq(AimMode.current(), "right", "and back")
+	eq(AimMode.prison_mode(), "right", "and back")
 	main.shell.close_all()
 	await TutorialKit.leave(main)
