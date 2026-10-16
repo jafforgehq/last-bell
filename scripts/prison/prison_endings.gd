@@ -161,7 +161,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	var dim := ColorRect.new()
-	dim.color = Color(0.015, 0.02, 0.02, 0.82)
+	dim.color = Color(0.01, 0.015, 0.015, 0.93)    # (the world all but gone behind the card)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(dim)
@@ -212,6 +212,8 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 		g.add_theme_constant_override("v_separation", 2)
 		right.add_child(g)
 		for r in sc.lines:
+			if absf(float(r[1])) < 0.05:
+				continue    # (a row worth nothing is left out: the card fits 720 px)
 			g.add_child(S._lab(String(r[0]), 14, Hud.INK2))
 			var pts := float(r[1])
 			var pl: Label = S._lab("%+d" % roundi(pts) if absf(pts - roundf(pts)) < 0.05 else "%+.1f" % pts, 14, Hud.OK if pts >= 0.0 else Hud.DANGER_TEXT)
@@ -223,11 +225,13 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 		right.add_child(best)
 		right.add_child(S._lab("THE RUN", 16, col, true))
 		var g2 := GridContainer.new()
-		g2.columns = 2
+		g2.columns = 4    # (two pairs a row, the zero rows left out: the card fits 720 px)
 		g2.add_theme_constant_override("h_separation", 20)
 		g2.add_theme_constant_override("v_separation", 2)
 		right.add_child(g2)
 		for r in stats_rows():
+			if str(r[1]) == "0" or str(r[1]) == "0 m":
+				continue
 			g2.add_child(S._lab(String(r[0]), 14, Hud.INK2))
 			var vl: Label = S._lab(str(r[1]), 14, Hud.INK)
 			vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

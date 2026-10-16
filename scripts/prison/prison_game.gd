@@ -581,6 +581,16 @@ func _draw_bars() -> void:
 	if mode == "raid" and extract_t > 0.0:
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(extract_t / EXTRACT_S, 0, 1), 12), Color(0.4, 0.9, 0.5))
+		var near_dead := 0    # the dead inside the pickup ring with her
+		for z in run.sim.zombies:
+			if z.state != "dead" and z.state != "dying" and Vector2(z.x, z.y).distance_to(Vector2(p.x, p.y)) < EXTRACT_R:
+				near_dead += 1
+		var et := "Extracting %d s" % ceili(maxf(0.0, EXTRACT_S - extract_t))
+		bars.draw_string_outline(ThemeDB.fallback_font, Vector2(v.x / 2 - 110, v.y - 90), et, HORIZONTAL_ALIGNMENT_LEFT, 220, 15, 4, Color(0, 0, 0, 0.85))
+		bars.draw_string(ThemeDB.fallback_font, Vector2(v.x / 2 - 110, v.y - 90), et, HORIZONTAL_ALIGNMENT_LEFT, 220, 15, Color(0.75, 1.0, 0.8))
+		if near_dead > 0:
+			bars.draw_string_outline(ThemeDB.fallback_font, Vector2(v.x / 2 - 110, v.y - 90), "Dead in the ring", HORIZONTAL_ALIGNMENT_RIGHT, 220, 15, 4, Color(0, 0, 0, 0.85))
+			bars.draw_string(ThemeDB.fallback_font, Vector2(v.x / 2 - 110, v.y - 90), "Dead in the ring", HORIZONTAL_ALIGNMENT_RIGHT, 220, 15, Color(1.0, 0.4, 0.32))
 	if _danger_a > 0.01:    # DANGER SENSE: a soft red edge, pulsing
 		var pl := 0.55 + 0.45 * sin(clock * 5.0)
 		for i in 6:
@@ -3089,6 +3099,10 @@ func _draw_glow() -> void:
 	for t in base.towers:
 		var r: Rect2 = t
 		spots.append([Tower.lamp_pos(r) / TILE, 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
+	if crew != null:    # a faint light on each guard and each one on a post, so the crew reads at night
+		for m in crew.members:
+			if m.def.has("stand"):
+				spots.append([Vector2(m.p.x, m.p.y), 2.4, Color(0.85, 0.9, 1.0, 0.42 * n)])
 	spots.append_array(upg.glow_spots(n))    # WORLD hook
 	upg.draw_cones(glow, cam_center, zoom_px, v, n)    # WORLD hook: the floodlight cones, above the night tint
 	for sp in spots:

@@ -201,6 +201,22 @@ func _draw() -> void:
 		if i == hover_index and i != held_index:
 			draw_rect(plate, Color(ACCENT, 0.95), false, 2.0)
 	draw_rect(Rect2(Vector2(PAD, PAD), Vector2(float(cs) * cell, float(rs) * cell)), Color(EDGE, 0.5), false, 1.5)
+	if kind == "loot" and hover_index >= 0 and hover_index < cells.size() and hover_index != held_index and not (revealed >= 0 and hover_index >= revealed):
+		_draw_caption(cells[hover_index], font)
+
+
+## The hovered stack of a container named under it ("Canned food x2"), on a dark plate inside the grid (over it when it is on the last row).
+func _draw_caption(c: Dictionary, font: Font) -> void:
+	var foot := InvGeom.stack_rect(c, _size_fn, cell, PAD)
+	var txt := String(InvApi.item(String(c.item)).get("name", c.item)) + (" x%d" % int(c.count) if int(c.count) > 1 else "")
+	var fs := Access.scaled(12)
+	var w := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 10.0
+	var h := float(fs) + 6.0
+	var x := clampf(foot.get_center().x - w * 0.5, 0.0, maxf(0.0, size.x - w))
+	var y := foot.end.y + 2.0 if foot.end.y + h + 2.0 <= size.y else foot.position.y - h - 2.0
+	draw_rect(Rect2(x, y, w, h), Color(0.03, 0.05, 0.045, 0.92))
+	draw_rect(Rect2(x, y, w, h), Color(ACCENT, 0.8), false, 1.0)
+	draw_string(font, Vector2(x + 5.0, y + h - 5.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, INK)
 
 
 ## A stack that has not been found yet: its footprint, dark, with a question mark.

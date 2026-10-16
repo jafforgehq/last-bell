@@ -49,7 +49,13 @@ func setup(g) -> void:
 	layer.add_child(centre)
 	panel = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(380, 0)
-	panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 22, 8))
+	var fr: StyleBox = Hud.frame("panel")    # the chalkboard in oak trim of the title, New game and Settings screens (flat when the picture is missing)
+	if fr != null:
+		fr.content_margin_left = 30
+		fr.content_margin_right = 30
+		fr.content_margin_top = 26
+		fr.content_margin_bottom = 26
+	panel.add_theme_stylebox_override("panel", fr if fr != null else _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 22, 8))
 	centre.add_child(panel)
 	body = VBoxContainer.new()
 	body.add_theme_constant_override("separation", 10)
@@ -115,10 +121,14 @@ func _page(which: String) -> void:
 					continue
 				grid.add_child(_lab(String(k[0]), 17, Hud.ACCENT, true))
 				var d := _lab(String(k[1]), 16, Hud.INK2)
-				d.custom_minimum_size.x = 330
+				d.custom_minimum_size.x = 380
 				d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				grid.add_child(d)
-			body.add_child(grid)
+			var gsc := ScrollContainer.new()    # (the list scrolls; Back stays under it)
+			gsc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			gsc.custom_minimum_size = Vector2(560, clampf(game._vp().y - 250.0, 200.0, 460.0))
+			gsc.add_child(grid)
+			body.add_child(gsc)
 			body.add_child(_rule())
 			body.add_child(_btn("Back", func(): _page("main")))
 		"event log":    # META: every morning card answered this run
@@ -183,6 +193,7 @@ func report_row(plog, label: String) -> VBoxContainer:
 	le.add_theme_font_override("font", Fonts.sans(500))
 	le.add_theme_font_size_override("font_size", 16)
 	le.text_changed.connect(func(t: String): plog.notes = t)
+	le.visible = "playtest" in BuildInfo.VERSION    # (the tester's box: only in a playtest build)
 	col.add_child(le)
 	var b := _btn(label, func(): pass)
 	b.pressed.connect(func():
@@ -359,9 +370,17 @@ func _btn(text: String, action: Callable, primary := false) -> Button:
 	hover.border_color = Hud.ACCENT
 	var press := hover.duplicate() as StyleBoxFlat
 	press.bg_color = press.bg_color.darkened(0.2)
-	b.add_theme_stylebox_override("normal", base)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", press)
+	var looks: Array = [base, hover, press]
+	var kinds: Array = ["button_primary", "button_primary_hover", "button_primary_pressed"] if primary else ["button", "button_hover", "button_pressed"]
+	for i in 3:    # the menus' framed buttons when their pictures are there
+		var f: StyleBox = Hud.frame(String(kinds[i]))
+		if f != null:
+			f.content_margin_top = 0
+			f.content_margin_bottom = 0
+			looks[i] = f
+	b.add_theme_stylebox_override("normal", looks[0])
+	b.add_theme_stylebox_override("hover", looks[1])
+	b.add_theme_stylebox_override("pressed", looks[2])
 	b.add_theme_color_override("font_color", Hud.ACCENT_INK if primary else Hud.INK)
 	b.add_theme_color_override("font_hover_color", Hud.ACCENT_INK if primary else Hud.ACCENT)
 	b.add_theme_color_override("font_pressed_color", Hud.ACCENT_INK if primary else Hud.ACCENT)

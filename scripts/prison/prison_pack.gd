@@ -95,6 +95,7 @@ func attach(s, stash_at: Vector2 = Vector2.INF) -> void:
 	game.hud.add_child(hud)
 	hud.size = game._vp()
 	ui = InvUi.new()
+	ui.loot_opens_pack = false    # (a search shows only the container; Tab or I brings the pack up)
 	ui.on_ready(self)
 	_frames = 0
 
