@@ -296,6 +296,11 @@ func blocks_fire() -> bool:
 	return Rect2(plate.position, plate.size).grow(4.0).has_point(m) or (tracker.visible and Rect2(tracker.position, tracker.size).grow(4.0).has_point(m))
 
 
+## A window or a card is up over the game: the objectives step out of its way.
+func _modal() -> bool:
+	return (game.board != null and game.board.is_open()) or (game.loadout != null and game.loadout.is_open) or (game.squad != null and game.squad.open) or (game.arc != null and (game.arc.story.card_open() or game.arc.endings.is_open()))
+
+
 ## The y under the tracker, where the toasts begin.
 func toast_y() -> float:
 	return (tracker.position.y + tracker.size.y + 8.0) if tracker.visible else plate.position.y + plate.size.y + 8.0
@@ -331,7 +336,7 @@ func frame(dt: float) -> void:
 	plate.reset_size()
 	plate.position = Vector2(8, 6)
 	var bw := plate.size.x
-	tracker.visible = not game.busy
+	tracker.visible = not game.busy and not _modal()    # (hidden under a window: the loadout, the Base screen, a card, the orders)
 	plate.visible = not game.busy
 	tracker.reset_size()
 	var tw := 316.0

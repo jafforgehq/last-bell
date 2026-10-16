@@ -1062,7 +1062,19 @@ func toggle_orders() -> void:
 	if open:
 		_refresh_panel()
 		_panel.reset_size()
-		_panel.position = Vector2(260, game._vp().y * 0.3 - 10.0)
+		_panel.position = _orders_at(game.get_viewport().get_mouse_position(), _panel.size, game._vp())
+
+
+## Where the orders panel goes: beside the pointer (right and below, flipped at the window's edges), and off the middle of the screen where Ruth stands.
+static func _orders_at(m: Vector2, sz: Vector2, vp: Vector2) -> Vector2:
+	var p := m + Vector2(22, 22)
+	if p.x + sz.x > vp.x - 8.0:
+		p.x = m.x - 22.0 - sz.x
+	if p.y + sz.y > vp.y - 8.0:
+		p.y = m.y - 22.0 - sz.y
+	if Rect2(p, sz).grow(40.0).has_point(vp / 2.0):    # (it would cover Ruth: to the other side of the pointer)
+		p.x = m.x - 22.0 - sz.x if p.x > m.x else m.x + 22.0
+	return Vector2(clampf(p.x, 8.0, maxf(8.0, vp.x - sz.x - 8.0)), clampf(p.y, 8.0, maxf(8.0, vp.y - sz.y - 8.0)))
 
 
 func _build_panel() -> void:
@@ -1071,7 +1083,8 @@ func _build_panel() -> void:
 	st.bg_color = Color(0.05, 0.06, 0.07, 0.94)
 	st.border_color = Color(0.85, 0.7, 0.3)
 	st.set_border_width_all(2)
-	st.set_content_margin_all(10)
+	st.set_corner_radius_all(6)
+	st.set_content_margin_all(8)
 	_panel.add_theme_stylebox_override("panel", st)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 5)
@@ -1081,31 +1094,73 @@ func _build_panel() -> void:
 	game.hud.add_child(_panel)
 
 
+## A small order button: lit in the order's colour while it is the one given.
+func _order_btn(text: String, cmd: String, lit: bool) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT if text.length() > 2 else HORIZONTAL_ALIGNMENT_CENTER
+	b.add_theme_font_size_override("font_size", 14)
+	var c: Color = CMD_COL[cmd]
+	for state in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(c.darkened(0.55), 0.95) if lit else (Color(0.16, 0.18, 0.2, 0.95) if state == "hover" else Color(0.1, 0.11, 0.12, 0.9))
+		sb.border_color = c if lit or state == "hover" else Color(1, 1, 1, 0.12)
+		sb.set_border_width_all(2 if lit else 1)
+		sb.set_corner_radius_all(4)
+		sb.content_margin_left = 8
+		sb.content_margin_right = 8
+		sb.content_margin_top = 3
+		sb.content_margin_bottom = 3
+		b.add_theme_stylebox_override(state, sb)
+	b.add_theme_color_override("font_color", c if lit else Color(0.9, 0.9, 0.82))
+	b.add_theme_color_override("font_hover_color", c)
+	return b
+
+
+## The orders as a compact table: a row an order (its key, for everyone), a column a companion; the order each one has now is lit.
 func _refresh_panel() -> void:
 	var col: VBoxContainer = _panel.get_node("col")
 	for ch in col.get_children():
+		col.remove_child(ch)
 		ch.queue_free()
 	var t := Label.new()
-	t.text = "ORDERS   1 Stay close   2 Hold   3 Scavenge here   4 Cover me   5 Quiet   6 Spread out   (all)     Esc or C: close"
-	t.add_theme_font_size_override("font_size", 16)
+	t.text = "ORDERS   keys 1-6: everyone   C or Esc: close"
+	t.add_theme_font_size_override("font_size", 13)
+	t.add_theme_color_override("font_color", Color(0.94, 0.76, 0.29))
 	col.add_child(t)
+	var g := GridContainer.new()
+	g.columns = 1 + members.size()
+	g.add_theme_constant_override("h_separation", 4)
+	g.add_theme_constant_override("v_separation", 3)
+	col.add_child(g)
+	g.add_child(Control.new())
 	for m in members:
-		var row := HBoxContainer.new()
 		var nm := Label.new()
-		nm.text = "%s  (%s)" % [String(m.name), String(CMD_WORD[String(m.cmd)])]
-		nm.custom_minimum_size = Vector2(190, 0)
-		nm.add_theme_font_size_override("font_size", 16)
-		row.add_child(nm)
-		for k in CMDS.size():
-			var b := Button.new()
-			b.text = "%d %s" % [k + 1, CMD_WORD[CMDS[k]]]
-			b.focus_mode = Control.FOCUS_NONE
-			b.add_theme_font_size_override("font_size", 16)
+		nm.text = String(m.name)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.add_theme_font_size_override("font_size", 14)
+		g.add_child(nm)
+	for k in CMDS.size():
+		var cmd: String = CMDS[k]
+		var all_on := true
+		for m in members:
+			all_on = all_on and String(m.cmd) == cmd
+		var ab := _order_btn("%d  %s" % [k + 1, CMD_WORD[cmd]], cmd, all_on)
+		ab.tooltip_text = "Everyone: %s (key %d)" % [CMD_WORD[cmd], k + 1]
+		ab.pressed.connect(func():
+			command_all(cmd)
+			toggle_orders())
+		g.add_child(ab)
+		for m in members:
+			var on: bool = String(m.cmd) == cmd
+			var b := _order_btn("\u25cf" if on else "", cmd, on)
+			b.custom_minimum_size = Vector2(maxf(44.0, 9.0 * float(String(m.name).length())), 0)
+			b.tooltip_text = "%s: %s" % [String(m.name), CMD_WORD[cmd]]
 			b.pressed.connect(func():
-				command(m, CMDS[k])
+				command(m, cmd)
 				toggle_orders())
-			row.add_child(b)
-		col.add_child(row)
+			g.add_child(b)
 
 
 ## Keys while the panel is up (and C to open it in a raid). True when used.

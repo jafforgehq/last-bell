@@ -7,7 +7,7 @@ const Base := preload("res://scripts/prison/prison_base.gd")
 const REACH := 1.7    # tiles from the doorway at which E answers
 const DUR := 0.3    # seconds a door takes to swing open or shut
 const NEAR := 2.2    # managed base: tiles from a doorway at which Ruth or the crew make its leaves swing open (drawn only)
-const LEAF := 7.0    # px thickness of a leaf
+const LEAF := 11.0    # px thickness of a leaf (thick, so a shut door reads apart from the wall trim)
 const STAGGER := 0.06    # seconds between the doors of the all-open event
 
 var game
@@ -236,7 +236,7 @@ func _paint_door(c: CanvasItem, i: int, k: float) -> void:
 	var centre := px.get_center()
 	if e > 0.0:
 		c.draw_rect(px, Color(0.0, 0.0, 0.0, 0.18 * e))    # the dark threshold the open doorway shows
-	var fill := Color(0.42, 0.3, 0.18) if not steel else Color(0.38, 0.4, 0.43)
+	var fill := Color(0.6, 0.42, 0.22) if not steel else Color(0.52, 0.55, 0.6)
 	var grain := Color(0.26, 0.18, 0.1) if not steel else Color(0.25, 0.27, 0.3)
 	var ang := e * (PI * 0.5)
 	var hw := LEAF * 0.5
@@ -256,8 +256,9 @@ func _paint_door(c: CanvasItem, i: int, k: float) -> void:
 			var m := hinge + d * (float(s) * 8.0)
 			c.draw_line(m + nrm * (hw - 1.0), m - nrm * (hw - 1.0), grain, 1.5)
 		q.append(q[0])
-		c.draw_polyline(q, edge, 2.0)
-		c.draw_circle(hinge, 3.0, edge)    # the hinge
+		c.draw_polyline(q, edge, 3.0)
+		c.draw_rect(Rect2(hinge - Vector2(hw + 1.0, hw + 1.0), Vector2(hw + 1.0, hw + 1.0) * 2.0), edge)    # the hinge: a dark plate with a brass pin
+		c.draw_circle(hinge, 2.5, Color(0.85, 0.7, 0.35))
 	if e < 0.5:
 		for sgn in [-1.0, 1.0]:
 			c.draw_circle(centre + along * 6.0 * sgn, 2.5, Color(0.8, 0.7, 0.3, 1.0 - 2.0 * e))    # the handles

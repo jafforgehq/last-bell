@@ -83,6 +83,9 @@ var morning: Control    # MORNING: the summary card of the dawn (any key closes 
 var _hl := ""    # WHAT NEXT: the project the button picked (its card is lit)
 var _whynext := ""
 var _clean_rounds := 0    # the cleaner's rounds at the last dawn
+var scroll: ScrollContainer    # the page under the tabs
+var more_lab: Label    # "More below": the page runs on under the fold
+var _bar_head: Control    # the Barricades header of the Defence tab (its jump button scrolls to it)
 
 
 func _init(g) -> void:
@@ -97,7 +100,7 @@ func _init(g) -> void:
 	layer.add_child(root)
 	panel = PanelContainer.new()
 	panel.visible = false
-	panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 14, 6))
+	panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 1.0), Hud.LINE2, 14, 6))    # (opaque: at 0.97 the world's labels still read through it)
 	root.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
@@ -127,7 +130,8 @@ func _init(g) -> void:
 	tabhint = _lab("", 14, Hud.INFO)
 	tabhint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(tabhint)
-	var sc := ScrollContainer.new()
+	scroll = ScrollContainer.new()
+	var sc := scroll
 	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(sc)
@@ -135,6 +139,10 @@ func _init(g) -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 8)
 	sc.add_child(body)
+	more_lab = _lab("More below: scroll down", 13, Hud.ACCENT, true)    # the scroll cue, shown while the page runs on under the fold
+	more_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	more_lab.visible = false
+	v.add_child(more_lab)
 	var leg := _lab(LEGEND, 12, DIM)
 	leg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(leg)
@@ -220,6 +228,37 @@ func _btn(text: String) -> Button:
 	b.add_theme_font_override("font", Fonts.cond(600))
 	b.add_theme_font_size_override("font_size", 16)
 	return b
+
+
+## The main choice of a card: a gold fill with dark words (the menus' Start).
+func _accent(b: Button) -> void:
+	for st in ["normal", "hover", "pressed"]:
+		var bx := _box(Hud.ACCENT.lightened(0.14) if st == "hover" else (Hud.ACCENT.darkened(0.1) if st == "pressed" else Hud.ACCENT), Hud.ACCENT, 8, 5)
+		bx.content_margin_top = 4
+		bx.content_margin_bottom = 4
+		b.add_theme_stylebox_override(st, bx)
+	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
+		b.add_theme_color_override(c, Hud.ACCENT_INK)
+
+
+## A small pencil (the rename mark by a name in the Roster), drawn once.
+static var _pencil: ImageTexture
+static func pencil_tex() -> ImageTexture:
+	if _pencil == null:
+		var im := Image.create(14, 14, false, Image.FORMAT_RGBA8)
+		for i in 10:    # the shaft, corner to corner, with a dark edge
+			for w in [-1, 0, 1]:
+				var x: int = 2 + i + w
+				var y: int = 11 - i
+				if x >= 0 and x < 14:
+					im.set_pixel(x, y, Color(0.94, 0.76, 0.29) if w == 0 else Color(0.1, 0.08, 0.05))
+		im.set_pixel(1, 12, Color(0.1, 0.08, 0.05))    # the point
+		im.set_pixel(2, 12, Color(0.1, 0.08, 0.05))
+		im.set_pixel(1, 11, Color(0.1, 0.08, 0.05))
+		for d in [[11, 1], [12, 2], [12, 1]]:    # the rubber
+			im.set_pixel(d[0], d[1], Color(0.88, 0.45, 0.45))
+		_pencil = ImageTexture.create_from_image(im)
+	return _pencil
 
 
 func _bar(frac: float, col: Color, h: float = 12.0) -> ProgressBar:
@@ -410,6 +449,7 @@ func blocks_fire() -> bool:
 
 func frame(_dt: float) -> void:
 	_frames += 1
+	game.msg_label.visible = not is_open()    # (the line at the bottom would show through the window)
 	var v: Vector2 = game._vp()
 	toasts.position = Vector2(v.x - 330.0, game.topbar.toast_y() if game.topbar != null else 14.0)
 	toasts.size.x = 316.0
@@ -430,10 +470,13 @@ func frame(_dt: float) -> void:
 	if game.phase != "managed" or game.mode != "base":
 		close()
 		return
-	var sz := Vector2(minf(980.0, v.x - 24.0), minf(660.0, v.y - 24.0))
+	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y + 6.0) if game.topbar != null and game.topbar.plate.visible else 12.0    # under the top bar: its chips (morale) stay in sight
+	var sz := Vector2(minf(980.0, v.x - 24.0), minf(660.0, v.y - top - 12.0))
 	panel.custom_minimum_size = sz
 	panel.size = sz
-	panel.position = ((v - sz) / 2.0).round()
+	panel.position = Vector2(round((v.x - sz.x) / 2.0), round(top))
+	var vs := scroll.get_v_scroll_bar()
+	more_lab.visible = vs.max_value > vs.page + 4.0 and vs.value < vs.max_value - vs.page - 4.0
 	for b in tab_btns:
 		tab_btns[b].button_pressed = (b == tab)
 	title.text = "BASE"
@@ -648,6 +691,8 @@ func _card(p: Dictionary) -> Control:
 	else:
 		var b := _btn("Start")
 		b.disabled = not bool(can.ok)
+		if bool(can.ok):
+			_accent(b)
 		b.tooltip_text = "Spends the cost now; the crew does the work." if bool(can.ok) else String(can.why)
 		b.pressed.connect(func():
 			if econ.start(id):
@@ -977,6 +1022,9 @@ func _name_cell(nm: String) -> Control:
 	b.focus_mode = Control.FOCUS_NONE
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.tooltip_text = "Click to rename"
+	b.icon = pencil_tex()    # the visible mark that the name can be changed
+	b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	b.add_theme_constant_override("h_separation", 6)
 	b.add_theme_font_override("font", Fonts.sans(500))
 	b.add_theme_font_size_override("font_size", 16)
 	b.add_theme_color_override("font_color", Hud.INK)
@@ -1034,6 +1082,18 @@ func _defence_tab() -> void:
 	var siege = game.siege
 	var locked: bool = siege.attacking
 	body.add_child(_rich("Post a person on a spot of the compound. They shoot only the dead in the post's field of fire, take fewer bites in cover, and shoot better or worse by their traits; a coward on an open post can break and run. Somebody with no post is a tower guard. Nobody can be moved or built for during an attack.", 14))
+	var heads := HBoxContainer.new()    # the two parts of the tab, named above the fold
+	heads.add_theme_constant_override("separation", 12)
+	heads.add_child(_lab("Posts", 22, Hud.INK, true))
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heads.add_child(sp)
+	var jb := _btn("Barricades (below)")
+	jb.pressed.connect(func():
+		if is_instance_valid(_bar_head):
+			scroll.scroll_vertical = int(_bar_head.position.y))
+	heads.add_child(jb)
+	body.add_child(heads)
 	var people: Array = []
 	for m in game.crew.members:
 		if not m.def.has("play") and not m.def.has("ally"):
@@ -1050,8 +1110,12 @@ func _defence_tab() -> void:
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(col)
 		col.add_child(_lab(String(p.name), 18, Hud.INK, true))
-		col.add_child(_lab("%s  Cover %d%%, reach %d tiles, field %d degrees%s." % [String(p.blurb), int(100.0 * float(p.cover)), int(p.range), int(2.0 * float(p.arc)), ", open ground" if bool(p.exposed) else ""], 13, Hud.INK2))
-		col.add_child(_lab(siege.posts.fit_text(p), 13, DIM))
+		var bl := _lab("%s  Cover %d%%, reach %d tiles, field %d degrees%s." % [String(p.blurb), int(100.0 * float(p.cover)), int(p.range), int(2.0 * float(p.arc)), ", open ground" if bool(p.exposed) else ""], 13, Hud.INK2)
+		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # (wrapped: the Defence tab is as wide as the others)
+		col.add_child(bl)
+		var fl := _lab(siege.posts.fit_text(p), 13, DIM)
+		fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		col.add_child(fl)
 		var names: Array = ["Nobody"]
 		var cur := 0
 		for m in people:
@@ -1071,7 +1135,8 @@ func _defence_tab() -> void:
 				did["post"] = true
 		hb.add_child(_pick(names, cur, on_pick, locked))
 		body.add_child(pc)
-	body.add_child(_lab("Barricades", 22, Hud.INK, true))
+	_bar_head = _lab("Barricades", 22, Hud.INK, true)
+	body.add_child(_bar_head)
 	body.add_child(_rich("One in front of a fence segment. Each wears out as it works and a little every night, and is lost if the wire falls. Buy again when it is gone.", 14))
 	var bars = siege.bars
 	var segs: Array = []

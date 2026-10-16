@@ -8,6 +8,7 @@ extends RefCounted
 const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
 const AMMO_STEPS := [0, 20, 40, 60, 80, 120]
+const ROW_H := 36.0    # one squad row and its gap on the loadout card
 
 var game
 var is_open := false
@@ -150,7 +151,7 @@ func _refresh() -> void:
 	# the squad
 	_col.add_child(_lbl("SQUAD: up to 2 come with you (number key or click). They carry their own bag and bring it back; they shoot with your ammo.", 15, Color(1, 0.85, 0.4)))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(680, 180)
+	scroll.custom_minimum_size = Vector2(680, maxf(0.0, minf(5.0, float(squad.cands.size())) * ROW_H - 2.0))    # (whole rows: five shown, the rest a scroll away)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 2)
@@ -170,9 +171,12 @@ func _refresh() -> void:
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var prow := HBoxContainer.new()    # PORTRAIT
+		prow.custom_minimum_size.y = ROW_H - 2.0
 		prow.add_child(PIcons.portrait_box(id, 26.0))
 		prow.add_child(b)
 		list.add_child(prow)
+	if squad.cands.size() > 5:
+		_col.add_child(_lbl("%d more below: scroll the list" % (squad.cands.size() - 5), 13, Color(0.75, 0.75, 0.7)))
 	if squad.cands.is_empty():
 		_col.add_child(_lbl("Nobody at the base can be spared.", 14))
 	for line in squad.loss_lines():

@@ -57,6 +57,8 @@ var chip_label: Label
 var chip_icon: Control
 ## The player opened the pack (Tab, I, the chip): it stays up till they put it away. A container or the stash opens it too, and it goes with them.
 var pack_user := false
+## Whether a container that opens brings the pack up beside it (the prison game: no, only the container; Tab shows the pack).
+var loot_opens_pack := true
 var cell := 34.0
 ## The drag in hand: {"src": "pack" | "loot", "grid": the control, "index", "item", "count", "rot", "grab": Vector2i, "pos": Vector2, "target": {...}}, {} for none.
 var drag := {}
@@ -220,7 +222,7 @@ func _poll_now() -> void:
 	var lo := InvApi.loot(sim)
 	var stash := InvApi.stash_open(sim)
 	var want_loot := not lo.is_empty()
-	var want_pack := pack_user or want_loot or stash
+	var want_pack := pack_user or (want_loot and loot_opens_pack) or stash
 	var vis := "%s%s%s" % ["p" if want_pack else "", "l" if want_loot else "", "s" if stash else ""]
 	var changed := vis != _last_visible
 	if hud.size != _hud_size:
