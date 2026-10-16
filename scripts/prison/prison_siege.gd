@@ -53,8 +53,6 @@ var _spot_t := 0.0
 var _rep_acc := 0.0
 var guards_off := false
 var _report_done := false
-var _banner: Label
-var _banner_t := 0.0
 var _card: PanelContainer
 var _card_label: Label
 var _card_t := 0.0
@@ -70,15 +68,6 @@ func _init(g) -> void:
 	posts = Posts.new(g)
 	bars = Barricade.new(g)
 	guards_off = g.args.has("noguards")
-	_banner = Label.new()
-	_banner.add_theme_font_size_override("font_size", 40)
-	_banner.add_theme_color_override("font_color", Color(1.0, 0.82, 0.55))
-	_banner.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
-	_banner.add_theme_constant_override("shadow_offset_x", 2)
-	_banner.add_theme_constant_override("shadow_offset_y", 2)
-	_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner.modulate.a = 0.0
-	g.hud.add_child(_banner)
 	_card = PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.07, 0.06, 0.92)
@@ -667,7 +656,6 @@ func _damage(s: Dictionary, amount: float) -> void:
 		bars.on_breach(s)
 		_set_gap(s, true)
 		game.sound.play("crash")
-		game._say("BREACH: %s is down!" % String(s.name), 6.0)
 		_show_banner("BREACH  %s" % String(s.name).to_upper(), 4.0)
 		(stats.lost as Array).append(String(s.name))
 	elif before != state_of(s) and game.fx != null:
@@ -849,9 +837,7 @@ var _rep_acc_t := 0.0
 # ------------------------------------------------------------------------------- ui --
 
 func _show_banner(text: String, secs: float) -> void:
-	_banner.text = text
-	_banner_t = secs
-	_banner.modulate.a = 1.0
+	game._banner(text, "", secs, 38, Color(1.0, 0.82, 0.55))    # MESSAGE LANES: the banner lane under the top bar
 
 
 func _end_attack() -> void:
@@ -894,11 +880,6 @@ func _end_attack() -> void:
 
 func _ui(dt: float) -> void:
 	var v: Vector2 = game._vp()
-	_banner.size = Vector2(v.x, 50)
-	_banner.position = Vector2(0, v.y * 0.2)
-	if _banner_t > 0.0:
-		_banner_t -= dt
-		_banner.modulate.a = clampf(_banner_t, 0.0, 1.0)
 	_card.position = Vector2(v.x * 0.5 - _card.size.x * 0.5, v.y * 0.5 - _card.size.y * 0.5 - 40.0)
 	if _card.visible:
 		_card_t -= dt

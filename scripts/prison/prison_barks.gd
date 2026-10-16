@@ -4,7 +4,6 @@
 extends RefCounted
 
 const PATH := "res://assets/data/prison_barks.json"
-const TILE := 64.0
 
 var game
 var cfg: Dictionary = {}
@@ -122,19 +121,21 @@ func say(id: String, text: String, why: String = "") -> void:
 		print("BARK ", id, " ", why, " '", text, "' day ", game.arc.day)
 
 
-func paint(c: CanvasItem) -> void:
+## The bubble in screen space (prison_tags.gd draws it on the HUD, over the night): above the name tag, a dark outline round a light fill. `to_scr` turns a tile position into a screen one.
+func paint(c: CanvasItem, to_scr: Callable) -> void:
 	if cur.is_empty():
 		return
 	var m := _member(String(cur.id))
 	if m.is_empty():
 		return
 	var font := ThemeDB.fallback_font
-	var fs := 16
+	var fs := 15
 	var w: float = font.get_string_size(String(cur.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 18.0
 	var a: float = clampf(float(cur.t) / 0.6, 0.0, 1.0)
-	var at: Vector2 = Vector2(m.p.x, m.p.y) * TILE + Vector2(0, -122)
-	var box := Rect2(at + Vector2(-w / 2.0, -26), Vector2(w, 28))
+	var sc := float(m.def.get("scale", 1.0))
+	var at: Vector2 = to_scr.call(Vector2(m.p.x, m.p.y - 1.55 * sc)) + Vector2(0, -42)    # (over the icon, the state word and the name line)
+	var box := Rect2(at + Vector2(-w / 2.0, -26), Vector2(w, 26))
 	c.draw_rect(box.grow(2.0), Color(0.08, 0.08, 0.07, 0.9 * a))
 	c.draw_rect(box, Color(0.97, 0.95, 0.86, 0.96 * a))
-	c.draw_colored_polygon(PackedVector2Array([at + Vector2(-6, 2), at + Vector2(6, 2), at + Vector2(0, 12)]), Color(0.97, 0.95, 0.86, 0.96 * a))
-	c.draw_string(font, box.position + Vector2(9, 20), String(cur.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.12, 0.1, 0.08, a))
+	c.draw_colored_polygon(PackedVector2Array([at + Vector2(-6, 0), at + Vector2(6, 0), at + Vector2(0, 9)]), Color(0.97, 0.95, 0.86, 0.96 * a))
+	c.draw_string(font, box.position + Vector2(9, 19), String(cur.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.12, 0.1, 0.08, a))

@@ -741,7 +741,6 @@ func _toast_once(key: String, text: String, col: Color) -> void:
 		return
 	_toasted[key] = true
 	game.board.toast(text, col)
-	game._say(text, 5.0)
 
 
 ## First time a kind of special is seen: the line that teaches it (prison_special.gd calls this).

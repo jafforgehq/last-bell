@@ -497,12 +497,12 @@ func _packfull() -> void:
 	await _tap(KEY_SPACE)
 	var shown := false
 	for i in 90:
-		if g.msg_label.text.begins_with("Pack full") or g.msg_label.text.begins_with("No room"):
+		if g.last_msg.begins_with("Pack full") or g.last_msg.begins_with("No room"):
 			shown = true
 			break
 		await _wait(1)
 	var left: int = int((inv.containers[seen_id].cells as Array).size()) if seen_id != "" and inv.containers.has(seen_id) else -1
-	_check(shown, "a full-pack line shows (No room in the pack, or Pack full): %s" % g.msg_label.text)
+	_check(shown, "a full-pack line shows (No room in the pack, or Pack full): %s" % g.last_msg)
 	_check(left > 0, "the item stays in the container (stacks before %d, after %d)" % [before, left])
 
 

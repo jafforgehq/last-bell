@@ -536,7 +536,7 @@ func _hunter(z, info: Dictionary, dt: float, persons: Array) -> void:
 				z.hunt_id = String(p.id)
 				z.attack_t = 0.3
 				if p == game.run.avatar_p:
-					game._say("PINNED! Press F to shove it off, or kill it.", 3.0)
+					game._hint("PINNED! Press F to shove it off, or kill it.", 3.0)
 			else:
 				info.phase = "idle"
 				info.cool = float(c.cool_s)

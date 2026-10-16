@@ -14,10 +14,6 @@ var layer: CanvasLayer
 var card: Control    # the open card (a StaticCard) or null
 var log_panel: PanelContainer
 var log_body: VBoxContainer
-var banner_box: PanelContainer
-var banner_a: Label
-var banner_b: Label
-var _banner_tw: Tween
 var _open_beat := ""
 var _log_sig := 0
 var _log_dirty := true
@@ -131,20 +127,6 @@ func _init(g, a) -> void:
 	layer.layer = 14
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	g.add_child(layer)
-	banner_box = PanelContainer.new()
-	banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner_box.add_theme_stylebox_override("panel", _box(Color(0.03, 0.05, 0.04, 0.78), Hud.ACCENT, 14, 4))
-	banner_box.modulate.a = 0.0
-	var bv := VBoxContainer.new()
-	bv.add_theme_constant_override("separation", 2)
-	banner_box.add_child(bv)
-	banner_a = _lab("", 34, Hud.ACCENT, true)
-	banner_a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	banner_b = _lab("", 16, Hud.INK2)
-	banner_b.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bv.add_child(banner_a)
-	bv.add_child(banner_b)
-	layer.add_child(banner_box)
 	log_panel = PanelContainer.new()
 	log_panel.visible = false
 	log_panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 14, 6))
@@ -344,7 +326,6 @@ func can_show() -> bool:
 
 
 func frame(dt: float) -> void:
-	_banner_place()
 	if log_panel.visible:
 		_log_frame()
 	if card_open() or not arc.active():
@@ -475,24 +456,7 @@ func show_convoy() -> void:
 # ----------------------------------------------------------------------------- the banner --
 
 func banner(a: String, b: String = "") -> void:
-	banner_a.text = a
-	banner_b.text = b
-	banner_b.visible = b != ""
-	banner_box.reset_size()
-	if _banner_tw != null:
-		_banner_tw.kill()
-	_banner_tw = layer.create_tween()
-	banner_box.modulate.a = 0.0
-	_banner_tw.tween_property(banner_box, "modulate:a", 1.0, 0.5)
-	_banner_tw.tween_interval(3.6)
-	_banner_tw.tween_property(banner_box, "modulate:a", 0.0, 1.2)
-
-
-func _banner_place() -> void:
-	var v := _vp()
-	banner_box.reset_size()
-	banner_box.position = Vector2((v.x - banner_box.size.x) / 2.0, v.y * 0.14)
-
+	game._banner(a, b, 5.3, 34, Hud.ACCENT)    # MESSAGE LANES: the day banner and the convoy go through the game's banner lane
 
 # ------------------------------------------------------------------------------- the log --
 

@@ -20,8 +20,6 @@ var all: Array = []    # the survivors of this raid (fix round 3: more than one)
 var _cur = null
 var rescued := 0    # how many people raids brought to the prison (the objective counts them)
 var s: Dictionary = {}    # a survivor: {name, p, node, hp, state "wait"|"follow"|"lost", path, pi, repath, bite, at}
-var _banner: Label
-var _banner_t := 0.0
 var _leaving: Array = []
 var _t := 0.0
 var _step := 0
@@ -562,28 +560,11 @@ func frame(dt: float) -> void:
 			_leaving.erase(m)
 			forget(String(m.def.name))
 			game._econ_remove(String(m.def.name))
-	if _banner_t > 0.0:
-		_banner_t -= dt
-		_banner.modulate.a = clampf(_banner_t, 0.0, 1.0)
-		if _banner_t <= 0.0:
-			_banner.visible = false
 
 
+## A join, a death, a person who left: a banner of the game's banner lane (queued under the top bar).
 func banner(text: String, col: Color = Color(0.6, 1, 0.7), secs: float = 6.0) -> void:
-	if _banner == null:
-		_banner = Label.new()
-		_banner.add_theme_font_size_override("font_size", 34)
-		_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-		_banner.add_theme_constant_override("outline_size", 8)
-		_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		game.hud.add_child(_banner)
-	_banner.text = text
-	_banner.add_theme_color_override("font_color", col)
-	_banner.size = Vector2(game._vp().x, 50)
-	_banner.position = Vector2(0, 160)
-	_banner.visible = true
-	_banner.modulate.a = 1.0
-	_banner_t = secs
+	game._banner(text, "", secs, 30, col)
 
 
 ## SAVE hook (prison_save.gd): the people raids brought (the base's crew is rebuilt from these and the names in `econ_gone` at every return).

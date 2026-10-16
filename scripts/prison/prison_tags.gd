@@ -42,6 +42,7 @@ var hover_id := ""
 var leaver_id := ""    # who would quit first, while morale is within 10 of the limit
 var near_id := ""    # the one nearest person within 6 tiles gets the full name line (a clump does not stack its names)
 var _font: Font
+var _words := {}    # person id -> [state word, msec it changed]: the word shows for 3 s after a change, or on hover
 var _plate_box: StyleBoxFlat
 
 
@@ -145,6 +146,19 @@ func _draw() -> void:
 		for m in game.crew.members:
 			_member(m, me, v, zoom)
 		_guide(me, v, zoom)
+		_floaters(v, zoom)
+		if game.barks != null:
+			game.barks.paint(c, func(p: Vector2) -> Vector2: return _to_scr(p, v))
+
+
+## The crew's floaters ("+clean", the fence damage "-N"), in screen space over the night layer, with a dark outline.
+func _floaters(v: Vector2, zoom: float) -> void:
+	for fl in game.crew.floaters:
+		var col: Color = fl.col
+		col.a = 1.0 - float(fl.t) / 2.2
+		var at := _to_scr(Vector2(fl.pos), v) + Vector2(-130.0, -float(fl.t) * 0.35 * zoom)
+		c.draw_string_outline(_font, at, String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 260, 15, 4, Color(0, 0, 0, 0.85 * col.a))
+		c.draw_string(_font, at, String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 260, 15, col)
 
 
 func _plates(me: Vector2, v: Vector2, zoom: float) -> void:
@@ -192,7 +206,7 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 			c.draw_circle(feet - Vector2(0, 7), 3.0, col)
 		return
 	var near := near_id == String(m.def.id) or hov
-	if m.def.has("ally") and not near and zoom >= 12.0:    # a friend always shows a coloured name and a health bar over the head
+	if m.def.has("ally") and zoom >= 12.0:    # a friend always shows a coloured name (only the name) and a health bar over the head
 		var ac := Color(String(m.def.look.get("top", "#a8d8ff"))).lightened(0.55)
 		var an := String(m.def.name)
 		var aw := _font.get_string_size(an, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
@@ -215,14 +229,20 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	if Access.markers():    # COLOUR-BLIND: a triangle over each person, an X for the downed
 		Icons.mark(c, "dead" if downed else "ally", cc + Vector2(0, -16), 4.5, icol)
 	var y_line := cc.y - 16.0
-	if mid:
-		var word := String(job[1])
+	var word := String(job[1])
+	var now := Time.get_ticks_msec()
+	var wk: Array = _words.get(String(m.def.id), [])
+	if wk.is_empty() or String(wk[0]) != word:
+		wk = [word, now]
+		_words[String(m.def.id)] = wk
+	var show_word: bool = hov or (mid and now - int(wk[1]) < 3000)    # the state word only on a change (3 s) or on hover: the icon says it the rest of the time
+	if show_word:
 		_text_plate(Vector2(cc.x + 14.0, cc.y + 4.0), word, 12, Color(icol.lightened(0.3), 1.0))
-	if near:
+	if near and not m.def.has("ally"):    # (an ally's name is already over the head)
 		var nm := "%s - %s" % [game.arc.dn(String(m.def.name)), String(m.def.role) if String(m.def.get("role", "")) != "" else ROLE_NAME.get(role, "")]
 		var sub := String(m.get("say", ""))
 		var text := nm
-		if sub != "" and sub != String(m.def.role):
+		if sub != "" and sub != String(m.def.role) and not show_word:    # (not the same state twice: "Ally: firing" next to "Firing")
 			text = "%s: %s" % [nm, sub]
 		var tw := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 		_text_plate(Vector2(cc.x - tw / 2.0, y_line), text, 13, Color(1, 1, 1, 0.97))
