@@ -337,7 +337,7 @@ func test_the_title_of_the_real_game_starts_a_run_through_its_menus() -> void:
 	check(Engine.has_meta("run"), "the choice is in Engine meta")
 	# (the real game's New game starts the town, One House: no crew and no length to choose, so the choice is the difficulty, the seed and the town; the school's
 	# start with its crew is reached only by `--school`, and the menus' own tests drive it through a stand-in game)
-	eq(Engine.get_meta("run"), {"difficulty": 2, "seed": 4242, "town": true}, "a Brutal town run on seed 4242")
+	eq(Engine.get_meta("run"), {"difficulty": 2, "seed": 4242, "town": true, "ngplus": false}, "a Brutal town run on seed 4242")
 	Engine.remove_meta("run")
 	# Continue: the newest save
 	Fakes.write_save(paths[0], 6, 12.0, 1)
