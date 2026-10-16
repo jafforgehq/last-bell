@@ -615,6 +615,34 @@
   "seam": 0.565,
   "seconds": 32.0
  },
+ "pm_night_calm": {
+  "bytes": 512044,
+  "clipped": 0,
+  "file": "pm_night_calm.wav",
+  "kind": "music",
+  "loop": true,
+  "notes": "a calm night: slow bowed fifths and far bells in D minor",
+  "peak_db": -11.63,
+  "rate": 16000,
+  "rms_db": -24.0,
+  "samples": 256000,
+  "seam": 0.152,
+  "seconds": 16.0
+ },
+ "pm_night_tense": {
+  "bytes": 512044,
+  "clipped": 0,
+  "file": "pm_night_tense.wav",
+  "kind": "music",
+  "loop": true,
+  "notes": "a tense night: a kick on the beat, a tritone bass, ticks and rising strings",
+  "peak_db": -5.84,
+  "rate": 16000,
+  "rms_db": -20.0,
+  "samples": 256000,
+  "seam": 3.27,
+  "seconds": 16.0
+ },
  "pm_perc": {
   "bytes": 512044,
   "clipped": 0,

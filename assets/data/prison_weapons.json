@@ -6,7 +6,7 @@
   "guns": {
     "shotgun": {"stagger": 0.45, "stagger_chance": 1.0, "shell_reload": true, "cost": 0.34, "noise": 16.0, "blurb": "Five pellets, hits hard close up, 6 shells, slow pump. Loud."},
     "service": {"name": "Service rifle", "cooldown": 0.6, "stagger": 0.3, "stagger_chance": 0.85, "spread": 0.04, "cost": 0.25, "noise": 14.0, "blurb": "Semi-auto, 8 rounds, one shot at a time, reaches far. 4 rounds to a unit of ammo."},
-    "smg": {"name": "SMG", "range": 9.5, "cooldown": 0.1, "stagger": 0.25, "stagger_chance": 1.0, "mag": 30, "reload": 2.2, "dmg": 0.85, "acc": 0.6, "spread": 0.16, "sound": "pistol", "pitch": 1.3, "vol": 0.85, "cost": 0.06, "noise": 13.0, "blurb": "30 rounds, very fast, weak and wild. Eats ammo: 16 rounds to a unit."}
+    "smg": {"name": "SMG", "range": 9.5, "cooldown": 0.1, "stagger": 0.25, "stagger_chance": 1.0, "mag": 30, "reload": 2.2, "dmg": 0.85, "acc": 0.6, "spread": 0.16, "sound": "pistol", "vol": 0.9, "cost": 0.06, "noise": 13.0, "blurb": "30 rounds, very fast, weak and wild. Eats ammo: 16 rounds to a unit."}
   },
   "knife": {
     "_doc": "THE KNIFE (F), always carried, laid over assets/data/melee.json for the prison only (prison_arms.gd apply_knife). Same keys as melee.json: hit_at_s 0.16 plus recover_s 0.34 makes a 0.5 s swing; damage_walker_frac 0.45 of a 5.5 hp walker is 2.5 a stab (a walker of 4 hp dies in 2, of 5 to 7 in 3, a runner in 1 or 2, a screamer of 3 hp in 2); brute_chip_frac 0.07 chips a brute or breacher (1.8 a stab); kind_mult scales a stab on a kind (a bloater is 0.6); noise_hit and noise_kill are tiles, far below a shot (13 to 16).",

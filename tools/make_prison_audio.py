@@ -10,6 +10,7 @@ MUSIC (16 kHz, 60 bpm, D minor; loops whose every voice is circular, so the join
 length and are started together by scripts/prison/prison_audio.gd)
     pm_drone 16 s   pm_motif 32 s   pm_drip 16 s   pm_pulse 16 s   pm_perc 16 s   pm_danger 16 s
     pm_explore 32 s (A dorian, the clear phase)   pm_raid 16 s   pm_chase 16 s (120 bpm)
+    pm_night_calm 16 s, pm_night_tense 16 s (the night cues: assets/data/prison_music_cues.json)
     stingers: pst_fall (a segment falls), pst_death (a dark swell), pst_dawn (the relief)
 AMBIENCE (16 kHz loops): pa_rain_roof, pa_rain_concrete, pa_rain_grass, pa_wind_low, pa_wind_gust, pa_fire, pa_buzz, pa_room, pa_flutter, pa_static
     and one-shots pa_clatter_0..2 (the canteen), pa_owl_0..1
@@ -253,8 +254,43 @@ def m_chase():
     fin("pm_chase", L.buf, MR, 181, True, "music", "a driving 120 bpm chase: kick, bass, snare, brass stabs", rms=-18.0)
 
 
+def m_night_calm():
+    """The quiet night (a night with no wave at the walls): two slow bowed fifths and a few far bell notes in D minor."""
+    L = D.Loop(16, MR, 191)
+    r = L.rng
+    for f, at in ((73.42, 0.0), (110.0, 0.0), (174.61, 4.0), (146.83, 8.0)):
+        L.add(at, D.bowed(f, 9.0, MR, r, vel=0.4, attack=3.5, release=3.5, voices=2, bright=0.5), 0.5)
+    for at, f, v in ((1.5, 587.3, .3), (5.8, 698.5, .25), (9.6, 440.0, .3), (13.0, 523.3, .25)):
+        b = D.chime(f, 3.5, MR, r, v)
+        L.add(at, b, 0.8)
+        L.add(at + 0.9, D.lowpass(b, 1400.0, MR, 2, circular=False), 0.25)
+    L.lowpass(2200.0)
+    L.room(3.0, 0.4, seed=192)
+    fin("pm_night_calm", L.buf, MR, 191, True, "music", "a calm night: slow bowed fifths and far bells in D minor", rms=-24.0)
+
+
+def m_night_tense():
+    """A horde night's wave begins: 120 bpm kick on the beat, a tritone bass ostinato, ticks and a rising dissonant string."""
+    L = D.Loop(16, MR, 201)
+    r = L.rng
+    for b in range(32):
+        L.add(b * 0.5, D.thump(MR, 120.0, 46.0, 0.35, 24.0, 0.12, 0.2, r), 0.9 if b % 4 == 0 else 0.55)
+    pat = (36.71, 36.71, 51.91, 36.71, 43.65, 36.71, 51.91, 48.99)
+    for i in range(32):
+        L.add(i * 0.5 + 0.25, bass(pat[i % 8] * 2.0, 0.2, MR, r, tau=0.12, top=600.0), 0.3)
+    for s in range(64):
+        n = int(0.01 * MR)
+        t = np.arange(n) / MR
+        tick = D.bandpass(r.standard_normal(n), 2000.0, 6000.0, MR, 2, circular=False) * np.exp(-t / 0.002)
+        L.add(s * 0.25 + 0.125, tick, 0.5 if s % 2 else 0.3)
+    for f in (146.83, 207.65, 311.13):
+        L.add(0.0, D.bowed(f, 13.0, MR, r, vel=0.5, attack=7.0, release=4.0, voices=3, bright=0.9), 0.35)
+    L.room(1.6, 0.2, seed=202)
+    fin("pm_night_tense", L.buf, MR, 201, True, "music", "a tense night: a kick on the beat, a tritone bass, ticks and rising strings", rms=-20.0)
+
+
 def music():
-    for f in (m_drone, m_motif, m_drip, m_pulse, m_perc, m_danger, m_explore, m_raid, m_chase):
+    for f in (m_drone, m_motif, m_drip, m_pulse, m_perc, m_danger, m_explore, m_raid, m_chase, m_night_calm, m_night_tense):
         f()
 
 

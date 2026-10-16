@@ -18,6 +18,8 @@ const TURN := {"walker": 1.9, "runner": 6.0, "brute": 1.2}
 const HOLD := {"walker": [0.5, 1.3, 0.0], "runner": [1.0, 2.2, 0.25], "brute": [0.35, 1.0, 0.0]}
 const REACH := 34.0    # tiles a groan carries
 const VOICES := 4
+const NEAR_VOICES := 3    # (FEEL: only the nearest this many awake dead are heard groaning, placed in the world: louder, panned by where they stand)
+const GROAN_FILES := {"walker": ["zgroan", 8], "far": ["zgroan_far", 3], "runner": ["zgrowl", 4], "brute": ["zbrute_growl", 2]}
 const CELL_KEY := 1024
 
 var game
@@ -293,6 +295,9 @@ func groan(e: Dictionary) -> void:
 	if d > REACH:
 		return
 	var kind := String(e.get("kind", "walker"))
+	if game.audio != null and game.audio.enabled:
+		_groan_placed(e, kind, d, me)
+		return
 	var pool: Array = _streams.get(kind, _streams.walker)
 	if kind == "walker" and d > 16.0 and not (_streams.far as Array).is_empty():
 		pool = _streams.far
@@ -310,6 +315,25 @@ func groan(e: Dictionary) -> void:
 	player.volume_db = base - 28.0 * pow(d / REACH, 0.8)
 	player.pitch_scale = (1.18 if kind == "runner" else (0.82 if kind == "brute" else 1.0)) * (0.92 + 0.16 * _rng.randf())
 	player.play()
+
+
+## The groan put where the groaner stands (PrisonAudio.sfx with a position: it pans by the screen and fades by the distance). Only the NEAR_VOICES nearest awake dead
+## are heard, which also caps the sources.
+func _groan_placed(e: Dictionary, kind: String, d: float, me: Vector2) -> void:
+	var nearer := 0
+	for z in game.run.sim.zombies:
+		if z.state == "dying" or z.state == "dead":
+			continue
+		var dx: float = float(z.x) - me.x
+		var dy: float = float(z.y) - me.y
+		if dx * dx + dy * dy < d * d - 0.01:
+			nearer += 1
+			if nearer >= NEAR_VOICES:
+				return
+	var f: Array = GROAN_FILES.get("far" if kind == "walker" and d > 16.0 else kind, GROAN_FILES.walker)
+	var db := (-4.0 if bool(e.get("stray", false)) else 0.0)
+	var pitch := (1.18 if kind == "runner" else (0.82 if kind == "brute" else 1.0)) * (0.92 + 0.16 * _rng.randf())
+	game.audio.sfx("%s_%d" % [f[0], _rng.randi() % int(f[1])], db, pitch, "SFX", 0.0, Vector2(float(e.x), float(e.y)), REACH, game.audio.OLD)
 
 
 # ---------------------------------------------------------------------- checks --

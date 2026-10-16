@@ -26,6 +26,8 @@ const STEMS_32 := ["motif", "explore"]
 ## How loud a stem is at gain 1 in decibels (the files are levelled alike; these set the mix of a mood).
 const STEM_DB := {"drone": 0.0, "motif": 0.0, "drip": 0.0, "pulse": 0.0, "perc": 0.0, "danger": -1.0, "explore": 0.0, "raid": 0.0, "chase": -1.0}
 const CHASE_N := 4
+## FEEL: the night cues' names and the cross-fade come from this file; a missing file or a missing sound leaves the cue out.
+const CUES_FILE := "res://assets/data/prison_music_cues.json"
 const CHASERS := ["approach", "attack", "hunt"]
 const STRIDE := 0.8
 const SENSE := 0.2
@@ -53,6 +55,8 @@ var _t := 0.0
 var _slow := 0.0
 var _frames := 0
 var _music := {}
+var _cues := {"calm": "", "tense": ""}    # (cue -> stem key in _music; "" when the file is not there)
+var _cue_fade := 2.0
 var _gain := {}
 var _loading: Array = []
 var _started := false
@@ -134,9 +138,11 @@ func setup(g) -> void:
 		st.bus = "Music"
 		add_child(st)
 		_stingers.append(st)
+	_read_cues()
 	var names: Array = []
-	for n in STEMS_16 + STEMS_32:
-		names.append("pm_" + n)
+	for n in STEMS_16 + STEMS_32 + _cues.values():
+		if n != "":
+			names.append("pm_" + n)
 	for n in names:
 		_loading.append(n)
 	_make_beds()
@@ -151,6 +157,18 @@ func setup(g) -> void:
 
 
 ## ------------------------------------------------------------------------------ loading
+
+## The night cues: {"calm": "pm_night_calm", "tense": "pm_night_tense", "fade_s": 2.0} (a cue whose sound is not imported is dropped).
+func _read_cues() -> void:
+	var f := FileAccess.open(CUES_FILE, FileAccess.READ)
+	var d = JSON.parse_string(f.get_as_text()) if f != null else null
+	if not d is Dictionary:
+		return
+	_cue_fade = maxf(0.1, float(d.get("fade_s", 2.0)))
+	for k in _cues:
+		var n := String(d.get(k, "")).trim_prefix("pm_")
+		_cues[k] = n if n != "" and ResourceLoader.exists("%spm_%s.wav" % [DIR, n]) else ""
+
 
 func _stream(key: String, dir := DIR) -> AudioStream:
 	var k := dir + key
@@ -258,7 +276,9 @@ func _start_music() -> void:
 	if _started or not music_on:
 		return
 	_started = true
-	for n in STEMS_16 + STEMS_32:
+	for n in STEMS_16 + STEMS_32 + _cues.values():
+		if n == "":
+			continue
 		var st := _looped("pm_" + n)
 		if st == null:
 			continue
@@ -439,11 +459,14 @@ func _watch_state() -> void:
 
 func _music_update(dt: float) -> void:
 	var tgt := _targets() if _started else {}
-	var dlin := db_to_linear(_duck)
+	var dlin := db_to_linear(_duck - 5.0 * _muffle)    # (low health or a blast: the score sinks a little under the low-pass)
 	for n in _music:
 		var g: float = _gain[n]
 		var w: float = tgt.get(n, 0.0)
-		g += (w - g) * (1.0 - exp(-dt / (2.2 if w > g else 4.0)))
+		if _cues.values().has(n):
+			g = move_toward(g, w, dt / _cue_fade)    # (the night cues cross-fade in a straight line over the fade time)
+		else:
+			g += (w - g) * (1.0 - exp(-dt / (2.2 if w > g else 4.0)))
 		_gain[n] = g
 		var p: AudioStreamPlayer = _music[n]
 		p.volume_db = linear_to_db(g * dlin) + float(STEM_DB.get(n, 0.0)) if g > 0.003 else -80.0
@@ -470,6 +493,11 @@ func _targets() -> Dictionary:
 		t["danger"] = 0.3 * c
 		t["pulse"] = 0.3 * c
 	else:
+		if s.phase == "managed" and n > 0.5:
+			if _cues.tense != "" and s.attacking:
+				t[_cues.tense] = 0.8    # (a horde night's wave has begun)
+			elif _cues.calm != "":
+				t[_cues.calm] = 0.8    # (a quiet night)
 		var h: float = s.tod
 		var dusk := smoothstep(16.5, 19.5, h) if h > 12.0 else 0.0
 		var calm := 1.0 - n
@@ -618,14 +646,14 @@ func _places() -> void:
 
 func _hearing(dt: float) -> void:
 	var hp: float = s.hp
-	var k := clampf(1.0 - hp / 0.3, 0.0, 1.0) if game.mode == "raid" or game.phase == "clear" else 0.0
+	var k := clampf(0.35 + 0.65 * (1.0 - hp / 0.3), 0.0, 1.0) if hp <= 0.3 else 0.0    # (30 percent or less: a slight muffle that deepens as she weakens)
 	_deaf = maxf(0.0, _deaf - dt)
 	k = maxf(k, clampf(_deaf / 2.0, 0.0, 1.0))
 	_muffle = move_toward(_muffle, k, 1.5 * dt)
 	var fx = AudioServer.get_bus_effect(0, 0) if AudioServer.get_bus_effect_count(0) > 0 else null
 	if fx is AudioEffectLowPassFilter:
 		fx.cutoff_hz = exp(lerpf(log(20500.0), log(2200.0), _muffle))
-	if hp < 0.3 and hp > 0.0 and not get_tree().paused and (game.mode == "raid" or game.phase == "clear"):
+	if hp <= 0.3 and hp > 0.0 and not get_tree().paused:
 		_heart_t -= dt
 		if _heart_t <= 0.0:
 			_heart_t = lerpf(0.55, 0.95, hp / 0.3)

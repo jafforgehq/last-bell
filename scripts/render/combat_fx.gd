@@ -59,6 +59,8 @@ const HITSTOP_GAP := 0.4
 const HITSTOP_SHOTGUN_S := 0.026
 const HITSTOP_SHOTGUN_RANGE := 6.0
 const KILL_PUSH_PX := 1.6
+## FEEL: every blast of the player's pump gun holds the picture this long (real seconds), unless "Screen shake" is off.
+const HITSTOP_BLAST_S := 0.05
 ## How long the struck one is white (real seconds: two frames at 60 Hz and a little over).
 const FLASH_S := 0.045
 ## The shake's decay (per second) and the farthest it can pull the picture (screen pixels at the 1280 x 800 window).
@@ -447,6 +449,9 @@ func shot(p, weapon: String, ang: float) -> void:
 	_push += push
 	if _push.length() > KICK_MAX:
 		_push = _push.normalized() * KICK_MAX
+	if weapon == "shotgun" and shake_k > 0.0:
+		hitstop = maxf(hitstop, HITSTOP_BLAST_S)
+		hitstops_asked += 1
 
 
 ## The flash at the muzzle (fx.muzzle): a star and a glow by weapon, a cone for the pump gun, the gun's smoke, and the light.
@@ -658,7 +663,7 @@ func kill(z, ang: float, melee: bool, shooter) -> void:
 	elif shooter != null and bool(shooter.player) and not calm and _hitstop_gap <= 0.0:
 		var shotgun := String(shooter.weapon) == "shotgun" or String(shooter.weapon) == "hunting"
 		if Vector2(float(shooter.x) - float(z.x), float(shooter.y) - float(z.y)).length() <= (HITSTOP_SHOTGUN_RANGE if shotgun else HITSTOP_RANGE):
-			hitstop = HITSTOP_SHOTGUN_S if shotgun else HITSTOP_S
+			hitstop = maxf(hitstop, HITSTOP_SHOTGUN_S if shotgun else HITSTOP_S)
 			_hitstop_gap = HITSTOP_GAP
 			hitstops_asked += 1
 			if shotgun:

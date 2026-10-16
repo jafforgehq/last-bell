@@ -3,6 +3,7 @@
 
     shot_pistol_0..1      a 9 mm: a bright slap, a short low pop, a little room (0.38 s)
     shot_rifle_0..2       the carbine: a hard crack, a chest thump and a slap-back echo (0.55 s)
+    shot_smg_0            the SMG: a tight rattle, a hard short crack and the bolt's ticks (0.2 s)
     shot_service_0        the M1: a heavier crack with a ring of steel in it (0.65 s)
     shot_hunting_0        the hunting rifle: deep and long, three echoes (1.0 s)
     shot_shotgun_0..1     the pump gun: a wall of low boom, a hiss of pellets, a long room (0.9 s)
@@ -45,6 +46,7 @@ PEAKS = {
     "shot_pistol": -4.0,
     "shot_rifle": -3.5,
     "shot_service": -3.5,
+    "shot_smg": -4.0,
     "shot_hunting": -3.0,
     "shot_shotgun": -3.0,
     "hit_flesh": -9.0,
@@ -213,6 +215,23 @@ def make_rifle(i):
                    tail=(0.12, 1800.0, 0.2),
                    echoes=[(0.06, 0.28, 3000.0), (0.15, 0.15, 2200.0), (0.28, 0.07, 1600.0)],
                    drive=3.6)
+
+
+def make_smg():
+    """The SMG: a tight rattle, a hard short crack with the bolt's ticks behind it and almost no room (0.2 s), unlike the pistol's slap or the pump gun's boom."""
+    rng = np.random.default_rng(400)
+    t = axis(0.2)
+    ticks = ring(2600.0, 0.2, 0.004) * 0.25
+    out = gunshot(rng, 0.2,
+                  crack=(0.003, 2200.0, 10000.0, 1.6),
+                  thump_spec=(420.0, 160.0, 0.02, 0.3),
+                  boom=(0.02, 300.0, 1800.0, 0.5),
+                  tail=(0.03, 3500.0, 0.05),
+                  echoes=[(0.025, 0.12, 4000.0)],
+                  drive=3.6)
+    place(out, ticks * np.exp(-t / 0.004), 0.05, 0.5)
+    place(out, ticks * np.exp(-t / 0.004), 0.085, 0.35)
+    return out
 
 
 def make_service():
@@ -398,6 +417,7 @@ def sounds():
     for i in range(3):
         out["shot_rifle_%d" % i] = make_rifle(i)
     out["shot_service_0"] = make_service()
+    out["shot_smg_0"] = make_smg()
     out["shot_hunting_0"] = make_hunting()
     for i in range(2):
         out["shot_shotgun_%d" % i] = make_shotgun(i)

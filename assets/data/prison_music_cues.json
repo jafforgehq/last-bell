@@ -1,0 +1,6 @@
+{
+  "_doc": "The night music cues of the managed base (scripts/prison/prison_audio.gd). calm: the loop on a quiet night (no wave at the walls). tense: the loop that comes in when a horde night's wave begins. Names of files in assets/audio/prison (made by tools/make_prison_audio.py); a name that is empty or not imported is left out. fade_s: the cross-fade, in seconds.",
+  "calm": "pm_night_calm",
+  "tense": "pm_night_tense",
+  "fade_s": 2.0
+}
