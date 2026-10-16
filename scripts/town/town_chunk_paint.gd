@@ -27,10 +27,13 @@ var layer := 0
 var chunk := 0
 var road_id := 0
 var grass_id := 0
+## False on a map whose roads are not the generator's grid (a raid site, scripts/prison/prison_site.gd: `data.road_grid`): no lane paint, zebras, manholes or drains there.
+var grid := true
 
 
 func setup(w, r: Rect2, lyr: int = 0, ci: int = 0) -> void:
 	world = w
+	grid = bool(w.d.get("road_grid", true))
 	rect = r
 	layer = lyr
 	chunk = ci
@@ -233,6 +236,9 @@ func _road(x: int, y: int) -> void:
 	var W: int = world.W
 	var x2 := x * 2
 	var y2 := y * 2
+	if not grid:
+		in_h = false
+		in_v = false
 	if in_h and not in_v:
 		var near_edge: bool = x < 5 or x > W - 6
 		if ly == BLOCK:

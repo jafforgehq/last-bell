@@ -309,6 +309,36 @@ func test_every_raid_site_is_reachable_and_holds_its_loot() -> void:
 	eq(n, 7, "seven places have a map of their own (the suburb keeps the streets)")
 
 
+## RAID SITES (task W): Ruth is set down a few tiles in from the edge entry, toward the middle; a site has no street paint and every building a painted roof (the hospital a red cross);
+## the message lanes move off Ruth and the crosshair (prison_game.gd `lane_dodge`).
+func test_raid_sites_set_ruth_down_inside_and_the_lanes_dodge_her() -> void:
+	var Loot = load("res://scripts/prison/prison_loot.gd")
+	var Site = load("res://scripts/prison/prison_site.gd")
+	for id in Loot.place_ids():
+		if not Site.LAYOUTS.has(String(Loot.place_cfg(id).get("layout", ""))):
+			continue
+		var t: Dictionary = Loot.make_town(1, id)
+		var e := Vector2(t.entry.pos)
+		var d := Vector2(t.site.drop)
+		var mid := Vector2(32, 32)
+		check(d.distance_to(e) >= 3.0 and d.distance_to(e) <= 12.0 and d.distance_to(mid) < e.distance_to(mid), "%s: set down at %s, a few tiles in from the entry %s" % [id, d, e])
+		eq(Vector2(t.start.pos), d, "%s: the start is the drop" % id)
+		eq(bool(t.data.get("road_grid", true)), false, "%s: no street paint on the site's roads" % id)
+		for h in t.houses:
+			check(h.get("roof_look") is Dictionary, "%s: %s has a painted roof" % [id, h.label])
+		if id == "hospital":
+			eq(String(t.houses[0].roof_look.get("sign", "")), "cross", "the hospital's roof has the red cross")
+	var G = load("res://scripts/prison/prison_game.gd")
+	var v := Vector2(1280, 720)
+	var lane := Rect2(440, 580, 400, 50)
+	eq(G.lane_dodge(lane, [Vector2(100, 100)], v, -1.0), 580.0, "nobody near: the prompt lane stays home")
+	var y: float = G.lane_dodge(lane, [Vector2(640, 600)], v, -1.0)
+	check(y + 50.0 <= 600.0 - G.LANE_CLEAR + 0.1, "Ruth on the prompt lane: it goes above her (%s)" % y)
+	var top := Rect2(440, 60, 400, 60)
+	var yb: float = G.lane_dodge(top, [Vector2(640, 90)], v, 1.0)
+	check(yb >= 90.0 + G.LANE_CLEAR - 0.1, "Ruth under the banner: it goes below her (%s)" % yb)
+
+
 # ------------------------------------------------------------------- the pack in the rules --
 
 func _p(sim):

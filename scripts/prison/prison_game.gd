@@ -532,7 +532,8 @@ func _ban_tick(dt: float) -> void:
 	var top := 14.0
 	if topbar != null:
 		top = topbar.plate.position.y + topbar.plate.size.y + 10.0
-	ban_box.position = Vector2((v.x - ban_box.size.x) / 2.0, top)
+	var br := Rect2((v.x - ban_box.size.x) / 2.0, top, ban_box.size.x, ban_box.size.y)
+	ban_box.position = Vector2(br.position.x, lane_dodge(br, _lane_points(), v, 1.0))
 	if _ban_t >= secs:
 		_ban_cur = {}
 
@@ -584,6 +585,45 @@ func _danger_check(dt: float) -> void:
 	_danger_a = move_toward(_danger_a, 1.0 if _danger_on else 0.0, dt * 2.0)
 
 
+## MESSAGE LANES: how near (px) Ruth or the crosshair may come to the prompt lane or the banner lane before the lane moves out of the way.
+const LANE_CLEAR := 140.0
+
+
+## MESSAGE LANES: the screen points a lane keeps clear of: Ruth and the pointer (the crosshair) when it is on the screen.
+func _lane_points() -> Array:
+	var v := _vp()
+	var out: Array = []
+	if run != null and run.avatar_p != null:
+		out.append((Vector2(run.avatar_p.x, run.avatar_p.y) - cam_center) * zoom_px + v / 2.0)
+	var m := get_viewport().get_mouse_position()
+	if Rect2(Vector2.ZERO, v).has_point(m):
+		out.append(m)
+	return out
+
+
+## MESSAGE LANES: the top (y) of a lane plate at `r` once it has moved off `pts`: a point within LANE_CLEAR px of the plate pushes it past itself, up (`dir` -1: the prompt lane, it goes
+## above Ruth) or down (+1: the banner lane, it goes below her). When that would push it off the middle of the screen, it goes to the other side of the point instead.
+static func lane_dodge(r: Rect2, pts: Array, v: Vector2, dir: float) -> float:
+	var y := r.position.y
+	for pass_ in 2:
+		for p in pts:
+			var q: Vector2 = p
+			if not Rect2(r.position.x, y, r.size.x, r.size.y).grow(LANE_CLEAR).has_point(q):
+				continue
+			y = q.y - LANE_CLEAR - r.size.y if dir < 0.0 else q.y + LANE_CLEAR
+	if dir < 0.0 and y < v.y * 0.3:    # (not past the upper part of the screen: below the points instead, or the home place)
+		var low := 0.0
+		for p in pts:
+			low = maxf(low, (p as Vector2).y)
+		y = low + LANE_CLEAR if low + LANE_CLEAR + r.size.y < v.y - 8.0 else r.position.y
+	elif dir > 0.0 and y + r.size.y > v.y * 0.7:
+		var high := v.y
+		for p in pts:
+			high = minf(high, (p as Vector2).y)
+		y = high - LANE_CLEAR - r.size.y if high - LANE_CLEAR - r.size.y > 8.0 else r.position.y
+	return y
+
+
 func _layout_labels() -> void:
 	var v := _vp()
 	if prompt_label.visible:    # (a plate as wide as the line, wrapped past 60 % of the width so it never runs under the minimap)
@@ -591,7 +631,8 @@ func _layout_labels() -> void:
 		var w := minf(f.get_string_size(prompt_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, prompt_label.get_theme_font_size("font_size")).x + 30.0, v.x * 0.6)
 		prompt_label.custom_minimum_size.x = w
 		prompt_label.size = Vector2(w, 0)
-		prompt_label.position = Vector2((v.x - w) / 2.0, v.y - 92.0 - prompt_label.size.y)
+		var pr := Rect2((v.x - w) / 2.0, v.y - 92.0 - prompt_label.size.y, w, prompt_label.size.y)
+		prompt_label.position = Vector2(pr.position.x, lane_dodge(pr, _lane_points(), v, -1.0))
 	cap_label.size = Vector2(v.x, 110)
 	cap_label.position = Vector2(0, v.y * 0.5 + 110)    # (under the truck, clear of Ruth at the centre)
 
@@ -957,7 +998,7 @@ func _enter_raid() -> void:
 		var m := String(tr.file).get_file().trim_prefix("tree_").trim_suffix(".png")
 		if m.is_valid_int() and [1, 3, 4, 6, 9, 10, 12].has(int(m)):
 			tr["file"] = "res://assets/trees/tree_%d.png" % swap[int(absf(tr.x * 7.0 + tr.y * 13.0)) % swap.size()]
-	var drop: Vector2 = Vector2(t.entry.pos)
+	var drop: Vector2 = Vector2(t.site.drop) if t.has("site") else Vector2(t.entry.pos)    # (a site sets Ruth down a few tiles in from its edge entry)
 	t["dead"] = (t.dead as Array).filter(func(r): return Vector2(r.pos).distance_to(drop) > 16.0)    # a quiet drop-off
 	loot.begin(t, seed_i)    # RAIDS hook: loot by place and the marked places (before the sim reads the containers)
 	arc.begin_raid(t, seed_i)    # ARC hook: letters in containers, the set-piece cache
@@ -987,7 +1028,7 @@ func _enter_raid() -> void:
 	speed = 1
 	_dusk_chimed = false
 	arms.carry_out()    # SQUAD hook: the main gun and the spare leave the rack
-	var at: Vector2 = Vector2(t.entry.pos)
+	var at: Vector2 = drop
 	run.avatar_p.x = at.x
 	run.avatar_p.y = at.y
 	run.avatar_p.hp = 100.0
@@ -995,7 +1036,7 @@ func _enter_raid() -> void:
 		var c := String(args.at).split(",")
 		run.avatar_p.x = float(c[0])
 		run.avatar_p.y = float(c[1])
-	exits = _pick_exits(t, at)
+	exits = _pick_exits(t, Vector2(t.entry.pos))    # (the first pickup ring is the entry at the map's edge, not where she is set down)
 	people.begin_raid(t, seed_i)    # RAIDS hook: a survivor in a building, rarely
 	squad_regroup = false
 	_pack_seen.clear()

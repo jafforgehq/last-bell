@@ -1934,6 +1934,8 @@
         0.66,
         0.2
       ],
+      "_rolls": "The station's own tables (the police kind's, with less ammo in each police container): the site has six of them in reach, about 12 to 18 rounds a three-minute raid by day.",
+      "rolls": {"police": [["ammo", 0.85, 2, 4], ["parts", 0.15, 1, 1], ["gun_smg", 0.2, 1, 1], ["gun_service", 0.2, 1, 1], ["gun_shotgun", 0.15, 1, 1]], "house": [["scrap", 0.25, 1, 2], ["meds", 0.1, 1, 1], ["distraction", 0.08, 1, 3]], "shop": [["scrap", 0.2, 1, 1], ["distraction", 0.09, 1, 3], ["flare", 0.04, 1, 1]]},
       "layout": "armoury",
       "buildings": {
         "station": {

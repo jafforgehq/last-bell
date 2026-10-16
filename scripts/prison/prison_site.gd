@@ -75,6 +75,8 @@ var groups: Array = []
 var entry := Vector2(4.5, 31.5)
 var entry_road := Rect2i(0, 30, 12, 4)
 var exit_at := Vector2(59.5, 31.5)
+## Where Ruth is set down: a few tiles in from the entry (which stays at the edge, the first pickup ring), toward the middle of the map, so the camera is not held at the edge (`_drop`).
+var drop := Vector2(4.5, 31.5)
 var _cv
 var _kit
 
@@ -146,6 +148,7 @@ func _build(seed_in: int, l: String, place: Dictionary) -> Dictionary:
 	_trees()
 	_finish_containers()
 	_reach()
+	_drop()
 	return _result()
 
 
@@ -265,6 +268,20 @@ func _entry(r: Rect2i, at: Vector2) -> void:
 
 # ------------------------------------------------------------------ buildings --
 
+## The painted roof of a building by its key (scripts/town/town_roofs.gd `paint_look`): the sign ("cross", a word, or "#": its number among the buildings of that key), the roof's tint
+## (multiplies the grey roof), the trim, and the sign's plate and ink. A key not here gets a plain flat roof with its units and trim.
+const ROOF_LOOK := {
+	"hospital": {"sign": "cross", "tint": Color(1.08, 1.08, 1.06), "trim": Color(0.88, 0.88, 0.86)},
+	"clinic": {"sign": "cross"}, "first_aid": {"sign": "cross"},
+	"store": {"sign": "MARKET", "tint": Color(1.0, 0.95, 0.85), "trim": Color(0.74, 0.3, 0.24)},
+	"station": {"sign": "POLICE", "tint": Color(0.88, 0.92, 1.02), "trim": Color(0.3, 0.38, 0.6), "plate": Color(0.2, 0.27, 0.48), "ink": Color(0.95, 0.95, 0.92)},
+	"terminal": {"sign": "AIRPORT", "tint": Color(0.96, 0.98, 1.02), "plate": Color(0.92, 0.92, 0.9), "ink": Color(0.18, 0.34, 0.6)},
+	"hangar": {"sign": "#", "tint": Color(0.9, 0.95, 0.98), "plate": Color(0.86, 0.66, 0.22), "ink": Color(0.15, 0.14, 0.12)},
+	"warehouse": {"sign": "#", "tint": Color(0.92, 0.9, 0.86), "plate": Color(0.86, 0.66, 0.22), "ink": Color(0.15, 0.14, 0.12)},
+	"workshop": {"tint": Color(0.92, 0.9, 0.86)}, "garage": {"tint": Color(0.9, 0.9, 0.92)},
+}
+
+
 ## A building: `r` its outer walls, `rms` its rooms [[Rect2i floor, name, ground, place type or "", label or ""], ...] (separated by one tile of wall), `doors` the doorways (Rect2i cut through
 ## a wall, outer or inner). `key` names its entry of the place's `buildings` (type, name, hint). Returns the house id.
 func _bldg(key: String, r: Rect2i, rms: Array, doors: Array, mat: int = 1) -> int:
@@ -339,6 +356,9 @@ func _bldg(key: String, r: Rect2i, rms: Array, doors: Array, mat: int = 1) -> in
 		"roof": hid % 3, "state": "intact", "boarded": false, "barricaded": false, "drive": Rect2i(), "landmark": "", "street": "", "number": hid + 1, "main": true,
 		"ptype": String(bc2.get("type", "house")), "label": String(bc2.get("name", key.capitalize())), "hint": String(bc2.get("hint", "")),
 	}
+	var lk: Dictionary = (ROOF_LOOK.get(key, {}) as Dictionary).duplicate()
+	lk["n"] = str(1 + houses.filter(func(o): return String(o.kind) == key).size())
+	house["roof_look"] = lk
 	houses.append(house)
 	_windows(r, hid)
 	return hid
@@ -511,6 +531,33 @@ func _reach() -> void:
 		exit_at = best
 
 
+## The drop point: of the open outdoor tiles (with open tiles all round) within DROP_STEPS steps on foot of the entry, the one nearest the middle of the map.
+const DROP_STEPS := 9
+
+
+func _drop() -> void:
+	drop = entry
+	var free := func(x: int, y: int) -> bool: return _in(x, y) and solid[_i(x, y)] == 0 and th[_i(x, y)] < 0
+	var mid := Vector2(W, H) * 0.5
+	var steps := {Vector2i(int(entry.x), int(entry.y)): 0}
+	var q: Array = [Vector2i(int(entry.x), int(entry.y))]
+	var best := entry.distance_to(mid)
+	while not q.is_empty():
+		var c: Vector2i = q.pop_front()
+		var n := int(steps[c])
+		var at := Vector2(c) + Vector2(0.5, 0.5)
+		if at.distance_to(mid) < best and free.call(c.x + 1, c.y) and free.call(c.x - 1, c.y) and free.call(c.x, c.y + 1) and free.call(c.x, c.y - 1):
+			best = at.distance_to(mid)
+			drop = at
+		if n >= DROP_STEPS:
+			continue
+		for d in [Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0)]:
+			var nb: Vector2i = c + d
+			if not steps.has(nb) and free.call(nb.x, nb.y):
+				steps[nb] = n + 1
+				q.append(nb)
+
+
 ## The tiles reachable on foot from `from` (4 ways) over a solid grid of W x H.
 static func flood(grid, from: Vector2) -> PackedByteArray:
 	var seen := PackedByteArray()
@@ -538,7 +585,7 @@ static func flood(grid, from: Vector2) -> PackedByteArray:
 	return seen
 
 
-## The check of a made site (`town` = a result of `make`): [what is not reachable from the entry]: containers by id, "exit". Empty when all is well.
+## The check of a made site (`town` = a result of `make`): [what is not reachable from the entry]: containers by id, "exit", "drop" (where Ruth is set down). Empty when all is well.
 static func unreachable(town: Dictionary) -> Array:
 	var out: Array = []
 	var seen := flood(town.data.solidP, Vector2(town.entry.pos))
@@ -549,6 +596,9 @@ static func unreachable(town: Dictionary) -> Array:
 	var ex: Vector2 = town.site.exit
 	if seen[int(ex.y) * W + int(ex.x)] == 0:
 		out.append("exit")
+	var dp: Vector2 = town.site.get("drop", town.entry.pos)
+	if seen[int(dp.y) * W + int(dp.x)] == 0:
+		out.append("drop")
 	return out
 
 
@@ -618,6 +668,7 @@ func _result() -> Dictionary:
 	d["people"] = []
 	d["bonds"] = []
 	d["site_mini"] = mini
+	d["road_grid"] = false    # (the roads here are not the generator's grid: no street paint, scripts/town/town_chunk_paint.gd)
 	var hr: Array = []
 	for h in houses:
 		var r: Rect2i = h.rect
@@ -628,11 +679,11 @@ func _result() -> Dictionary:
 		c.erase("fp")
 	return {
 		"seed": seed_i, "version": 1, "size": Vector2i(W, H), "data": d, "houses": houses, "rooms": rooms, "containers": conts, "dead": dead,
-		"start": {"house": 0, "pos": entry, "room": -1, "ring": {}},
+		"start": {"house": 0, "pos": drop, "room": -1, "ring": {}},
 		"entry": {"pos": entry, "face": "E", "road": entry_road, "label": "The way in", "sign": Vector2(-1, -1), "arrows": []},
 		"candidates": [], "rescue_for": {}, "rescue": [], "tile_house": th, "tile_room": tr, "fields": [], "lots": [], "landmarks": [],
 		"streets": {"pitch": 32, "block": 28, "road": 4, "names_x": [], "names_y": [], "roads": [], "avenue": -1},
-		"site": {"layout": lay, "props": props, "groups": groups, "exit": exit_at},
+		"site": {"layout": lay, "props": props, "groups": groups, "exit": exit_at, "drop": drop},
 	}
 
 
