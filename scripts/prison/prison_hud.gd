@@ -4,6 +4,7 @@
 extends RefCounted
 
 const AimMode := preload("res://scripts/aim_mode.gd")
+const Access := preload("res://scripts/access.gd")
 const INK := Color(0.96, 0.94, 0.86, 0.95)
 const HIT := Color("#ff7d6e")
 const EDGE := Color(0.04, 0.07, 0.06, 0.9)
@@ -107,13 +108,23 @@ static func draw(game, c: Control, v: Vector2) -> void:
 		state = "EMPTY"
 	elif ready <= 0:
 		state = "R to reload"
+	# FEEL: one round left, or a dry pull a moment ago: the readout goes red and (unless flashes are reduced) pulses
+	var last_round: bool = not melee and ready == 1
+	var dry_flash: bool = not melee and game.fx.combat.dry_age() < 0.3
+	var pulse := 0.0
+	if (last_round or dry_flash) and not Access.calm_flashes():
+		pulse = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.014)
+		if dry_flash:
+			pulse = 1.0 - clampf(game.fx.combat.dry_age() / 0.3, 0.0, 1.0)
 	var box := Rect2(14, v.y - 96, 230, 52)
 	c.draw_rect(box, Color(0, 0, 0, 0.6))
+	if last_round or dry_flash:
+		c.draw_rect(box, Color(0.85, 0.12, 0.1, 0.18 + 0.4 * pulse))
 	var font := ThemeDB.fallback_font
 	c.draw_string(font, box.position + Vector2(8, 17), String(me.gun.get("name", me.weapon)), HORIZONTAL_ALIGNMENT_LEFT, 150, 14, Color(0.85, 0.85, 0.8))
 	c.draw_string(font, box.position + Vector2(8, 17), state, HORIZONTAL_ALIGNMENT_RIGHT, 214, 13, ACCENT if me.reloading > 0.0 else DANGER)
-	var col3 := DANGER if dry else (WARN if low else INK)
-	c.draw_string(font, box.position + Vector2(8, 42), "-" if melee else "%d / %d" % [ready, rounds], HORIZONTAL_ALIGNMENT_LEFT, 150, 24, col3)
+	var col3 := DANGER if (dry or last_round or dry_flash) else (WARN if low else INK)
+	c.draw_string(font, box.position + Vector2(8, 42), "-" if melee else "%d / %d" % [ready, rounds], HORIZONTAL_ALIGNMENT_LEFT, 150, 24 + int(6.0 * pulse), col3)
 	c.draw_string(font, box.position + Vector2(8, 42), "F: Knife", HORIZONTAL_ALIGNMENT_RIGHT, 214, 14, Color(INK, 0.45) if me.melee_t > 0.0 else INK)    # (greyed while a stab is in the air)
 	var cap2 := int(me.gun.get("mag", 0))
 	var bf := 1.0 if melee or cap2 <= 0 else clampf(float(ready) / float(cap2), 0.0, 1.0)

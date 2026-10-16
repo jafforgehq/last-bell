@@ -1327,6 +1327,10 @@ func _tick(dt: float) -> void:
 	dt = clampf(dt, 0.0, StepClock.MAX_FRAME)
 	clock += dt
 	frames += 1
+	if args.has("mag"):    # staging: --mag=N keeps N rounds in the gun (the ammo readout's last-round flash)
+		run.avatar_p.mag = int(args.mag)
+	if args.has("lowhp"):    # staging: --lowhp=N keeps Ruth at N hp (the heartbeat and the muffle)
+		run.avatar_p.hp = float(args.lowhp)
 	_hands(dt)
 	_knife_hint()
 	for i in step_clock.advance(dt, 1.0):
@@ -1349,7 +1353,9 @@ func _tick(dt: float) -> void:
 			econ.lab(dt)
 		else:
 			econ.update(dt)
-	fx.update(dt)
+	fx.combat.tick_real(dt)
+	if not fx.combat.frozen():    # (FEEL: a blast of the pump gun holds the picture for 50 ms: the rules go on, the effects wait)
+		fx.update(dt)
 	if doors != null and mode == "base":
 		doors.tick(dt)
 	var p = run.avatar_p
@@ -1359,6 +1365,7 @@ func _tick(dt: float) -> void:
 	zoom_px = clampf(zoom_px, maxf(2.0, minf(_vp().x / (float(world.W) + 2.0), _vp().y / (float(world.H) + 2.0))), 84.0)
 	camera.position = cam_center * TILE
 	camera.zoom = Vector2.ONE * (zoom_px / TILE)
+	camera.offset = fx.combat.camera_push() / camera.zoom.x    # (FEEL: the kick of a shot; nothing under Reduce motion, scaled by Screen shake)
 	world.show_chunks(Rect2(cam_center - _vp() / 2.0 / zoom_px, _vp() / zoom_px).grow(2.0))
 	if roofs != null:
 		roofs.update(TownGen.house_at(town, p.x, p.y), dt)
@@ -1523,6 +1530,10 @@ func _hands(dt: float) -> void:
 		aim = Vector2.ZERO
 		fire = false
 	run.sim.avatar.set_input(move, aim, fire)
+	if fire and aiming_now:    # (FEEL: the trigger on an empty gun clicks, and the readout flashes)
+		var pm = run.avatar_p
+		if not bool(pm.gun.get("melee", false)) and not pm.dead and not pm.downed and (int(pm.mag) <= 0 or (float(pm.reloading) > 0.0 and not bool(pm.gun.get("shell_reload", false)))):
+			fx.combat.dry_fire(pm)
 
 
 func _unhandled_input(ev: InputEvent) -> void:

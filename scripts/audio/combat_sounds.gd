@@ -8,7 +8,7 @@ extends RefCounted
 const DIR := "res://assets/audio/"
 ## name -> how many files there are (`<name>_0.wav` ...).
 const COUNTS := {
-	"shot_service": 1, "shot_hunting": 1,
+	"shot_service": 1, "shot_hunting": 1, "shot_smg": 1,
 	"hit_flesh": 3, "hit_plate": 3, "hit_wall": 2,
 	"melee_swing": 2, "melee_hit": 2,
 	"dry_click": 1, "mag_out": 1, "mag_in": 1, "bolt": 1, "shell_in": 2, "pump": 1, "casing": 2,
