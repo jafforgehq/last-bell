@@ -122,6 +122,16 @@ var msg_label: Label
 var bars: Control
 var fade: ColorRect
 var cap_label: Label
+var ban_label: Label    # the big banner (the opening line, ZONE CLEARED) and its small line under it
+var ban_sub: Label
+var _ban_tw: Tween
+var loot_label: Label    # the one-line list of the last take ("Shells x4, Bandage x1"), fades after 3 s
+var _loot_t := 0.0
+var _loot_acc := {}
+var _loot_seen := {}
+var _danger_t := 0.0    # DANGER SENSE: 3 or more awake dead within 8 tiles and off screen pulse the screen edge red
+var _danger_on := false
+var _danger_a := 0.0
 var cut_art: Control
 var cut_x := -1.0
 var _msg_t := 0.0
@@ -283,6 +293,8 @@ func _ready() -> void:
 		_enter_raid()
 	else:
 		_enter_base()
+	if phase == "clear" and not Save.wants(args):    # OPENING LINE: once per new run, never on a load
+		_banner("Day 1. The bell is ringing. Clear the prison.", "", 10.0, 30)
 	if save_day_in > 0:
 		_say("Welcome back. Day %d." % save_day_in, 5.0)
 		if args.has("saveecho"):
@@ -347,6 +359,10 @@ func _make_hud() -> void:
 	msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(msg_label)
+	loot_label = _lbl(18, Vector2(0, 0))
+	loot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	loot_label.modulate.a = 0.0
+	hud.add_child(loot_label)
 	bars = Control.new()
 	bars.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -416,6 +432,20 @@ func _make_hud() -> void:
 	cap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap_label.modulate.a = 0.0
 	cl.add_child(cap_label)
+	ban_label = _lbl(30, Vector2(0, 0))
+	ban_label.add_theme_font_override("font", Fonts.cond(700))
+	ban_label.add_theme_constant_override("outline_size", 6)
+	ban_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	ban_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ban_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ban_label.modulate.a = 0.0
+	cl.add_child(ban_label)
+	ban_sub = _lbl(24, Vector2(0, 0))
+	ban_sub.add_theme_constant_override("outline_size", 5)
+	ban_sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	ban_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ban_sub.modulate.a = 0.0
+	cl.add_child(ban_sub)
 
 
 func _say(t: String, secs: float = 3.5) -> void:
@@ -423,8 +453,77 @@ func _say(t: String, secs: float = 3.5) -> void:
 	_msg_t = secs
 
 
+## A big banner that fades in, holds and fades out: `title` (size `px`) and a small line under it.
+func _banner(title: String, sub: String, secs: float, px: int) -> void:
+	ban_label.text = title
+	ban_label.add_theme_font_size_override("font_size", px)
+	ban_sub.text = sub
+	if _ban_tw != null:
+		_ban_tw.kill()
+	ban_label.modulate.a = 0.0
+	ban_sub.modulate.a = 0.0
+	_ban_tw = create_tween().set_parallel(true)
+	for l in [ban_label, ban_sub]:
+		_ban_tw.tween_property(l, "modulate:a", 1.0, 0.7)
+		_ban_tw.tween_property(l, "modulate:a", 0.0, 0.9).set_delay(maxf(0.8, secs - 0.9))
+
+
+## LOOT LINE: items that came into the pack since the last tick are added to one line at the bottom ("Shells x4, Bandage x1"), the last take (a take more than 1.5 s after the one before starts a new line). The "+N ammo" floaters stay as they are: they show the units, this shows the things.
+func _loot_line(dt: float) -> void:
+	_loot_t -= dt
+	if _loot_t > 0.0 and _loot_t < 1.5:
+		loot_label.modulate.a = clampf(_loot_t / 1.5, 0.0, 1.0)    # (the last 1.5 s of its 3 fade out)
+	elif _loot_t <= 0.0:
+		loot_label.modulate.a = 0.0
+	if pack == null or pack.grid == null:
+		return
+	var got := {}
+	for id in pack.Inventory.item_ids():
+		var now: int = pack.Inventory.count_of(pack.grid, String(id))
+		if _loot_seen.has(id) and now > int(_loot_seen[id]):
+			got[id] = now - int(_loot_seen[id])
+		_loot_seen[id] = now
+	if got.is_empty():
+		return
+	if _loot_t < 1.5:    # (the last line is on its way out: a new line)
+		_loot_acc = {}
+	for id in got:
+		_loot_acc[id] = int(_loot_acc.get(id, 0)) + int(got[id])
+	var parts: Array = []
+	for id in _loot_acc:
+		parts.append("%s x%d" % [pack.Inventory.name_of(String(id)), int(_loot_acc[id])])
+	loot_label.text = ", ".join(parts)
+	loot_label.modulate.a = 1.0
+	_loot_t = 3.0
+
+
+## DANGER SENSE (each 0.25 s): the edge pulses red while 3 or more awake dead are within 8 tiles of Ruth and not on the screen.
+func _danger_check(dt: float) -> void:
+	_danger_t -= dt
+	if _danger_t <= 0.0:
+		_danger_t = 0.25
+		var p = run.avatar_p
+		var half := _vp() / 2.0 / zoom_px
+		var n := 0
+		for z in run.sim.zombies:
+			if z.state == "dying" or z.state == "dead" or z.state == "still":
+				continue
+			var dx: float = absf(float(z.x) - cam_center.x)
+			var dy: float = absf(float(z.y) - cam_center.y)
+			if (dx > half.x or dy > half.y) and Vector2(z.x - p.x, z.y - p.y).length() < 8.0:
+				n += 1
+		_danger_on = n >= 3 and not busy
+	_danger_a = move_toward(_danger_a, 1.0 if _danger_on else 0.0, dt * 2.0)
+
+
 func _layout_labels() -> void:
 	var v := _vp()
+	loot_label.size = Vector2(v.x * 0.6, 28)
+	loot_label.position = Vector2(v.x * 0.2, v.y - 46)
+	ban_label.size = Vector2(v.x, 80)
+	ban_label.position = Vector2(0, v.y * 0.2)
+	ban_sub.size = Vector2(v.x, 36)
+	ban_sub.position = Vector2(0, v.y * 0.2 + 76)
 	prompt_label.size = Vector2(v.x * 0.6, 30)    # (wrapped, centred: a long line no longer runs under the minimap)
 	prompt_label.position = Vector2(v.x * 0.2, v.y - 130)
 	msg_label.size = Vector2(v.x * 0.6, 30)
@@ -480,6 +579,15 @@ func _draw_bars() -> void:
 	if mode == "raid" and extract_t > 0.0:
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220, 12), Color(0, 0, 0, 0.6))
 		bars.draw_rect(Rect2(v.x / 2 - 110, v.y - 84, 220.0 * clampf(extract_t / EXTRACT_S, 0, 1), 12), Color(0.4, 0.9, 0.5))
+	if _danger_a > 0.01:    # DANGER SENSE: a soft red edge, pulsing
+		var pl := 0.55 + 0.45 * sin(clock * 5.0)
+		for i in 6:
+			var w := 10.0 + 14.0 * float(i)
+			var c := Color(0.85, 0.1, 0.08, 0.06 * pl * _danger_a)
+			bars.draw_rect(Rect2(0, 0, v.x, w), c)
+			bars.draw_rect(Rect2(0, v.y - w, v.x, w), c)
+			bars.draw_rect(Rect2(0, 0, w, v.y), c)
+			bars.draw_rect(Rect2(v.x - w, 0, w, v.y), c)
 	_draw_minimap(v)
 	PHud.draw(self, bars, v)
 	if mode == "raid":
@@ -1262,6 +1370,8 @@ func _tick(dt: float) -> void:
 	guide.frame(dt)
 	arc.frame(dt)    # ARC hook
 	_layout_labels()
+	_loot_line(dt)
+	_danger_check(dt)
 	if cap_label.modulate.a > 0.01 or band_a > 0.01:    # ART: the caption band follows its fade
 		band_a = cap_label.modulate.a
 		cut_art.queue_redraw()
@@ -2615,7 +2725,8 @@ func _zone_check() -> void:
 					_add_member_node(m)
 					names.append(String(m.def.name))
 		_say("%s cleared (%d/%d). Loot it, then move on." % [String(z.name), _cleared_n(), Base.ZONES.size()] if names.is_empty() else "%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
-		sound.play("bell", 0.5, 0.0)
+		sound.play("bell", 0.5, 0.0)    # (the short sound of the banner)
+		_banner("ZONE CLEARED", "%s   %d of %d" % [String(z.name), _cleared_n(), Base.ZONES.size()], 3.6, 56)
 		if args.has("log"):
 			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " ammoU ", snappedf(float(pack.Inventory.units(pack.grid, "ammo")),0.1), " hp ", int(run.avatar_p.hp))
 	if _cleared_n() == Base.ZONES.size() and not busy:

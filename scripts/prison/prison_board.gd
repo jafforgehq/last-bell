@@ -66,6 +66,9 @@ var _card_tw: Tween
 var _popup_open := false
 var _bseg := 0    # the Defence tab: the fence segment chosen for a barricade
 var hint: Button    # "Base (B)": always on in the managed base
+var hint_dot: Label    # a pulsing dot on it while a project can be started; opening the Base screen clears it until the next one
+var _dot_ready := false
+var _dot_acked := false
 var tabhint: Label
 var steps_panel: PanelContainer
 var steps_lab: Label
@@ -136,6 +139,14 @@ func _init(g) -> void:
 	hint.visible = false
 	hint.pressed.connect(func(): open("projects"))
 	root.add_child(hint)
+	hint_dot = Label.new()
+	hint_dot.text = "\u25cf"
+	hint_dot.add_theme_font_size_override("font_size", 18)
+	hint_dot.add_theme_color_override("font_color", Hud.WARN)
+	hint_dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint_dot.visible = false
+	hint.add_child(hint_dot)
+	hint_dot.position = Vector2(hint.size.x - 14.0, -10.0)
 	wait_lab = _lab("Waiting for dusk, 3x. Press . to stop.", 18, Hud.ACCENT, true)
 	wait_lab.visible = false
 	root.add_child(wait_lab)
@@ -246,8 +257,26 @@ func open(which: String) -> void:
 		return
 	game.pack.close()
 	panel.visible = true
+	_dot_acked = true
 	did["open"] = true
 	_show(which)
+
+
+## The dot on Base (B): some project can be started now (affordable, with a worker). Checked twice a second; it is cleared when the Base screen opens and comes back when a project becomes startable again.
+func _dot_frame(base_on: bool) -> void:
+	if _frames % 30 == 1:
+		var ok := false
+		for p in econ.projects():
+			if bool(econ.can_start(String(p.id)).ok):
+				ok = true
+				break
+		if ok and not _dot_ready:
+			_dot_acked = false
+		_dot_ready = ok
+	hint_dot.visible = base_on and _dot_ready and not _dot_acked
+	if hint_dot.visible:
+		hint_dot.position = Vector2(hint.size.x - 14.0, -10.0)
+		hint_dot.modulate.a = 0.45 + 0.55 * (0.5 + 0.5 * sin(float(_frames) * 0.12))
 
 
 func close() -> void:
@@ -385,6 +414,7 @@ func frame(_dt: float) -> void:
 	var base_on: bool = game.phase == "managed" and game.mode == "base" and not game.busy
 	hint.visible = base_on and not panel.visible
 	hint.position = Vector2((v.x - hint.size.x) / 2.0, v.y - 46.0)
+	_dot_frame(base_on)
 	_checklist(base_on)
 	wait_lab.visible = game.wait_dusk and base_on
 	wait_lab.position = Vector2((v.x - wait_lab.size.x) / 2.0, 156.0)

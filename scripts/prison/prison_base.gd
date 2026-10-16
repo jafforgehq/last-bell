@@ -67,8 +67,8 @@ const OFF_BARRELS := Vector2(-31.0, -2.0)
 ## The six zones of the clear phase: rect (tiles), dead (dormant records), dead_rect (where they stand: a rect or an array of rects), loot (containers), crew (roster ids freed when it is cleared), rel (where they
 ## appear). The infirmary's dead stand only in its east end so that the first room is a few dead for three people. The last zone is the gate.
 const ZONES := [
-	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(8, 24, 15, 13), "dead": 4, "dead_rect": Rect2i(15, 25, 7, 11), "loot": 3, "crew": ["ana", "tomas"], "rel": Vector2(14.5, 31.0), "keys": ["meds", "food", "scrap"]},
-	{"id": "cells", "name": "Cell block", "rect": Rect2i(9, 6, 26, 15), "dead": 16, "loot": 5, "crew": ["june", "dez", "rae"], "rel": Vector2(22.0, 13.5), "keys": ["food", "water", "scrap", "ammo", "ammo"]},
+	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(8, 24, 15, 13), "dead": 3, "dead_rect": Rect2i(15, 25, 7, 11), "loot": 3, "crew": ["ana", "tomas"], "rel": Vector2(14.5, 31.0), "keys": ["meds", "food", "scrap"]},
+	{"id": "cells", "name": "Cell block", "rect": Rect2i(9, 6, 26, 15), "dead": 17, "loot": 5, "crew": ["june", "dez", "rae"], "rel": Vector2(22.0, 13.5), "keys": ["food", "water", "scrap", "ammo", "ammo"]},
 	{"id": "canteen", "name": "Canteen and kitchen", "rect": Rect2i(37, 6, 20, 15), "dead": 11, "loot": 4, "crew": ["mia", "kit"], "rel": Vector2(44.5, 12.5), "keys": ["food", "water", "food", "scrap"]},
 	{"id": "workshop", "name": "Workshop and stores", "rect": Rect2i(26, 24, 33, 13), "dead": 12, "dead_rect": [Rect2i(27, 25, 16, 11), Rect2i(49, 25, 9, 9)], "loot": 6, "crew": ["hector", "owen"], "rel": Vector2(34.5, 31.0), "keys": ["scrap", "ammo", "scrap", "food", "ammo", "meds"]},
 	{"id": "yard", "name": "Yard and garden", "rect": Rect2i(31, 38, 29, 15), "dead": 11, "loot": 4, "crew": ["marcus", "nia", "pip"], "rel": Vector2(36.0, 47.0), "keys": ["food", "water", "scrap", "ammo"]},
@@ -456,6 +456,17 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 
 
 ## CLEAR PHASE: every zone is a "house" (so that the real search and the indoor wake rule work), with its containers (on furniture) and its dormant dead.
+## Dead in a zone: the zone next to the breach holds only 3 so the first minute teaches the controls. On the east entry that is the stores, and its 9 extra dead go to the cells and the canteen (the total stays 62).
+static func dead_n(zi: int) -> int:
+	var n: int = int(ZONES[zi].dead)
+	if east:
+		match String(ZONES[zi].id):
+			"workshop": return 3
+			"cells": return n + 5
+			"canteen": return n + 4
+	return n
+
+
 func _zones(town: Dictionary, seed_i: int) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_i * 31 + 7
@@ -516,7 +527,7 @@ func _zones(town: Dictionary, seed_i: int) -> void:
 						tiles.append(Vector2(float(x) + 0.5, float(y) + 0.5))
 		var placed: Array = []
 		var tries := 0
-		while placed.size() < int(z.dead) and tries < 600 and not tiles.is_empty():
+		while placed.size() < dead_n(zi) and tries < 600 and not tiles.is_empty():
 			tries += 1
 			var tp: Vector2 = tiles[rng.randi_range(0, tiles.size() - 1)]
 			var ok := true
