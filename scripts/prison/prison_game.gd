@@ -118,16 +118,26 @@ var extract_t := 0.0
 var busy := false    # a cutscene is playing
 var overlay: Node2D    # world-space drawing (labels, exits, tower decks)
 var hud: CanvasLayer
-var prompt_label: Label
-var msg_label: Label
+var prompt_label: Label    # MESSAGE LANES (prompt lane): the E/F prompt, or else the current context hint, one at a time on a dark plate above the weapon panel
+var last_msg := ""    # the last toast or hint text (checks read it)
+var hint_text := ""    # the context hint waiting for the prompt lane (it shows after the banners, while no E prompt is up)
+var _hint_t := 0.0
 var bars: Control
 var fade: ColorRect
 var cap_label: Label
-var ban_label: Label    # the big banner (the opening line, ZONE CLEARED) and its small line under it
+var ban_label: Label    # MESSAGE LANES (banner lane): the big banner under the top bar (the opening line, ZONE CLEARED, PRISON SECURED, horde warnings), one at a time, queued
 var ban_sub: Label
-var _ban_tw: Tween
-var loot_label: Label    # the one-line list of the last take ("Shells x4, Bandage x1"), fades after 3 s
+var ban_box: PanelContainer
+var _ban_q: Array = []
+var _ban_cur := {}
+var _ban_t := 0.0
+var _loot_lab: Label    # the toast of the last take ("Shells x4, Bandage x1"), updated while the take goes on
 var _loot_t := 0.0
+var _skip := false    # a key or a click during a transition cuts it short
+var res_card: PanelContainer    # the raid result card (banked, lost, spent, companions), closed by any key
+var _res_t := 0.0
+var _raid_spent := 0    # rounds Ruth fired on this raid
+var _last_mag := 0
 var _loot_acc := {}
 var _loot_seen := {}
 var _danger_t := 0.0    # DANGER SENSE: 3 or more awake dead within 8 tiles and off screen pulse the screen edge red
@@ -135,7 +145,6 @@ var _danger_on := false
 var _danger_a := 0.0
 var cut_art: Control
 var cut_x := -1.0
-var _msg_t := 0.0
 var _prompt: Dictionary = {}
 var _loadout := 0.0
 var _auto_t := 0.0
@@ -274,7 +283,7 @@ func _ready() -> void:
 	if args.has("pause"):
 		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open("event log" if String(args.pause) == "eventlog" else (String(args.pause) if String(args.pause) in ["controls", "settings"] else "main")))
 	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest")):
-		get_tree().create_timer(0.6).timeout.connect(func(): _card("THE PRISON", "Hold the gate. Keep them fed. Survive the nights.", 3.2))
+		get_tree().create_timer(0.6).timeout.connect(func(): if phase != "clear": _card("THE PRISON", "Hold the gate. Keep them fed. Survive the nights.", 3.2))
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
 	var clear_auto := au == "clearall" or au == "ally" or au == "play" or au == "reach" or au == "loop"
@@ -296,7 +305,7 @@ func _ready() -> void:
 	else:
 		_enter_base()
 	if phase == "clear" and not Save.wants(args):    # OPENING LINE: once per new run, never on a load
-		_banner("Day 1. The bell is ringing. Clear the prison.", "", 10.0, 30)
+		_banner("Day 1. The bell is ringing. Clear the prison.", "", 5.0, 30)    # (after THE OLD PRISON; the controls hint follows it)
 	if save_day_in > 0:
 		_say("Welcome back. Day %d." % save_day_in, 5.0)
 		if args.has("saveecho"):
@@ -353,18 +362,12 @@ func _make_hud() -> void:
 	hud = CanvasLayer.new()
 	hud.layer = 10
 	add_child(hud)
-	prompt_label = _lbl(22, Vector2(0, 0))
+	prompt_label = _lbl(20, Vector2(0, 0))
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	prompt_label.add_theme_stylebox_override("normal", _plate(0.82, 12, 5))
+	prompt_label.visible = false
 	hud.add_child(prompt_label)
-	msg_label = _lbl(20, Vector2(0, 0))
-	msg_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	msg_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hud.add_child(msg_label)
-	loot_label = _lbl(18, Vector2(0, 0))
-	loot_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	loot_label.modulate.a = 0.0
-	hud.add_child(loot_label)
 	bars = Control.new()
 	bars.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bars.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -434,49 +437,103 @@ func _make_hud() -> void:
 	cap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cap_label.modulate.a = 0.0
 	cl.add_child(cap_label)
+	ban_box = PanelContainer.new()    # (on the cut layer: a banner shows over a faded transition)
+	ban_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bs := _plate(0.84, 22, 10)
+	bs.border_color = Color(0.94, 0.76, 0.29, 0.9)
+	bs.border_width_top = 2
+	bs.border_width_bottom = 2
+	ban_box.add_theme_stylebox_override("panel", bs)
+	ban_box.visible = false
+	cl.add_child(ban_box)
+	var bv := VBoxContainer.new()
+	bv.add_theme_constant_override("separation", 2)
+	ban_box.add_child(bv)
 	ban_label = _lbl(30, Vector2(0, 0))
 	ban_label.add_theme_font_override("font", Fonts.cond(700))
-	ban_label.add_theme_constant_override("outline_size", 6)
-	ban_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	ban_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ban_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	ban_label.modulate.a = 0.0
-	cl.add_child(ban_label)
-	ban_sub = _lbl(24, Vector2(0, 0))
-	ban_sub.add_theme_constant_override("outline_size", 5)
-	ban_sub.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	bv.add_child(ban_label)
+	ban_sub = _lbl(19, Vector2(0, 0))
 	ban_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ban_sub.modulate.a = 0.0
-	cl.add_child(ban_sub)
+	ban_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	bv.add_child(ban_sub)
 
 
-func _say(t: String, secs: float = 3.5) -> void:
-	msg_label.text = t
-	_msg_t = secs
+func _plate(a: float, mx: int, my: int) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = Color(0.03, 0.05, 0.04, a)
+	s.set_corner_radius_all(5)
+	s.content_margin_left = mx
+	s.content_margin_right = mx
+	s.content_margin_top = my
+	s.content_margin_bottom = my
+	return s
 
 
-## A big banner that fades in, holds and fades out: `title` (size `px`) and a small line under it.
-func _banner(title: String, sub: String, secs: float, px: int) -> void:
-	ban_label.text = title
-	ban_label.add_theme_font_size_override("font_size", px)
-	ban_sub.text = sub
-	if _ban_tw != null:
-		_ban_tw.kill()
-	ban_label.modulate.a = 0.0
-	ban_sub.modulate.a = 0.0
-	_ban_tw = create_tween().set_parallel(true)
-	for l in [ban_label, ban_sub]:
-		_ban_tw.tween_property(l, "modulate:a", 1.0, 0.7)
-		_ban_tw.tween_property(l, "modulate:a", 0.0, 0.9).set_delay(maxf(0.8, secs - 0.9))
+## MESSAGE LANES (toast lane): a short event goes to the toasts on the right under Objectives (prison_board.gd `toast`: at most 3, each text once in 5 s). `secs` is kept for the callers; the toast times itself.
+func _say(t: String, _secs: float = 3.5) -> void:
+	last_msg = t
+	if board != null:
+		board.toast(t)
 
 
-## LOOT LINE: items that came into the pack since the last tick are added to one line at the bottom ("Shells x4, Bandage x1"), the last take (a take more than 1.5 s after the one before starts a new line). The "+N ammo" floaters stay as they are: they show the units, this shows the things.
+## MESSAGE LANES (prompt lane): a context hint ("press F to stab it", the controls) for `secs` once the banners are done, while no E prompt is up.
+func _hint(t: String, secs: float) -> void:
+	last_msg = t
+	hint_text = t
+	_hint_t = secs
+
+
+## MESSAGE LANES (banner lane): a big moment, queued: `title` (size `px`) and a small line under it, one at a time under the top bar. The same banner twice in the queue shows once.
+func _banner(title: String, sub: String, secs: float, px: int = 34, col: Color = Color(1, 1, 0.88)) -> void:
+	for b in [_ban_cur] + _ban_q:
+		if not b.is_empty() and String(b.title) == title and String(b.sub) == sub:
+			return
+	_ban_q.append({"title": title, "sub": sub, "secs": secs, "px": px, "col": col})
+
+
+func _ban_busy() -> bool:
+	return not _ban_cur.is_empty() or not _ban_q.is_empty()
+
+
+func _ban_tick(dt: float) -> void:
+	if loadout != null and loadout.is_open and not busy:    # (the weapon card first: the queue waits behind it)
+		ban_box.visible = false
+		return
+	if _ban_cur.is_empty() and not _ban_q.is_empty():
+		_ban_cur = _ban_q.pop_front()
+		_ban_t = 0.0
+		ban_label.text = String(_ban_cur.title)
+		ban_label.add_theme_font_size_override("font_size", Access.scaled(int(_ban_cur.px)))
+		ban_label.add_theme_color_override("font_color", _ban_cur.col)
+		ban_sub.text = String(_ban_cur.sub)
+		ban_sub.visible = ban_sub.text != ""
+	if _ban_cur.is_empty():
+		ban_box.visible = false
+		return
+	_ban_t += dt
+	var secs := float(_ban_cur.secs)
+	var v := _vp()
+	var maxw := v.x * 0.8
+	if topbar != null and topbar.tracker.visible:    # (kept clear of the Objectives panel on the right)
+		maxw = clampf(2.0 * (topbar.tracker.position.x - v.x / 2.0) - 24.0, 360.0, maxw)
+	var f: Font = ban_sub.get_theme_font("font")
+	var fs: int = ban_sub.get_theme_font_size("font_size")
+	ban_sub.custom_minimum_size.x = minf(f.get_multiline_string_size(ban_sub.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 6.0, maxw - 44.0)
+	ban_box.visible = true
+	ban_box.modulate.a = clampf(minf(_ban_t / 0.35, (secs - _ban_t) / 0.6), 0.0, 1.0)
+	ban_box.reset_size()
+	var top := 14.0
+	if topbar != null:
+		top = topbar.plate.position.y + topbar.plate.size.y + 10.0
+	ban_box.position = Vector2((v.x - ban_box.size.x) / 2.0, top)
+	if _ban_t >= secs:
+		_ban_cur = {}
+
+
+## LOOT LINE: items that came into the pack since the last tick are added to one toast ("Shells x4, Bandage x1"), the last take (a take more than 1.5 s after the one before starts a new toast). The "+N ammo" floaters stay as they are: they show the units, this shows the things.
 func _loot_line(dt: float) -> void:
 	_loot_t -= dt
-	if _loot_t > 0.0 and _loot_t < 1.5:
-		loot_label.modulate.a = clampf(_loot_t / 1.5, 0.0, 1.0)    # (the last 1.5 s of its 3 fade out)
-	elif _loot_t <= 0.0:
-		loot_label.modulate.a = 0.0
 	if pack == null or pack.grid == null:
 		return
 	var got := {}
@@ -485,17 +542,20 @@ func _loot_line(dt: float) -> void:
 		if _loot_seen.has(id) and now > int(_loot_seen[id]):
 			got[id] = now - int(_loot_seen[id])
 		_loot_seen[id] = now
-	if got.is_empty():
+	if got.is_empty() or (mode == "base" and phase == "managed"):    # (the base's kit refill is not loot)
 		return
-	if _loot_t < 1.5:    # (the last line is on its way out: a new line)
+	var fresh := _loot_t < 1.5 or _loot_lab == null or not is_instance_valid(_loot_lab)    # (the last take is over: a new toast)
+	if fresh:
 		_loot_acc = {}
 	for id in got:
 		_loot_acc[id] = int(_loot_acc.get(id, 0)) + int(got[id])
 	var parts: Array = []
 	for id in _loot_acc:
 		parts.append("%s x%d" % [pack.Inventory.name_of(String(id)), int(_loot_acc[id])])
-	loot_label.text = ", ".join(parts)
-	loot_label.modulate.a = 1.0
+	if fresh:
+		_loot_lab = board.toast(", ".join(parts), Color(0.8, 1.0, 0.75))
+	elif _loot_lab != null:
+		_loot_lab.text = ", ".join(parts)
 	_loot_t = 3.0
 
 
@@ -520,18 +580,14 @@ func _danger_check(dt: float) -> void:
 
 func _layout_labels() -> void:
 	var v := _vp()
-	loot_label.size = Vector2(v.x * 0.6, 28)
-	loot_label.position = Vector2(v.x * 0.2, v.y - 46)
-	ban_label.size = Vector2(v.x, 80)
-	ban_label.position = Vector2(0, v.y * 0.2)
-	ban_sub.size = Vector2(v.x, 36)
-	ban_sub.position = Vector2(0, v.y * 0.2 + 76)
-	prompt_label.size = Vector2(v.x * 0.6, 30)    # (wrapped, centred: a long line no longer runs under the minimap)
-	prompt_label.position = Vector2(v.x * 0.2, v.y - 130)
-	msg_label.size = Vector2(v.x * 0.6, 30)
-	msg_label.position = Vector2(v.x * 0.2, v.y - 200)
+	if prompt_label.visible:    # (a plate as wide as the line, wrapped past 60 % of the width so it never runs under the minimap)
+		var f: Font = prompt_label.get_theme_font("font")
+		var w := minf(f.get_string_size(prompt_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, prompt_label.get_theme_font_size("font_size")).x + 30.0, v.x * 0.6)
+		prompt_label.custom_minimum_size.x = w
+		prompt_label.size = Vector2(w, 0)
+		prompt_label.position = Vector2((v.x - w) / 2.0, v.y - 92.0 - prompt_label.size.y)
 	cap_label.size = Vector2(v.x, 110)
-	cap_label.position = Vector2(0, v.y * 0.5 + 30)
+	cap_label.position = Vector2(0, v.y * 0.5 + 110)    # (under the truck, clear of Ruth at the centre)
 
 
 ## ECON hook: someone leaves the base (morale), or a project is done (the fence tier changes the siege's hp).
@@ -568,8 +624,21 @@ func _draw_bars() -> void:
 	var v := _vp()
 	var p = run.avatar_p
 	var hp := clampf(float(p.hp) / 100.0, 0.0, 1.0)
+	var hcol := Color(0.42, 0.72, 0.42) if hp > 0.5 else (Color(0.92, 0.68, 0.25) if hp > 0.25 else Color(0.85, 0.2, 0.18))    # LOW HEALTH: green when healthy, amber, then red
 	bars.draw_rect(Rect2(14, v.y - 34, 220, 14), Color(0, 0, 0, 0.6))
-	bars.draw_rect(Rect2(14, v.y - 34, 220.0 * hp, 14), Color(0.8, 0.2, 0.18))
+	bars.draw_rect(Rect2(14, v.y - 34, 220.0 * hp, 14), hcol)
+	bars.draw_string_outline(Fonts.sans(700), Vector2(20, v.y - 22.5), "%d hp" % ceili(float(p.hp)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 3, Color(0, 0, 0, 0.8))
+	bars.draw_string(Fonts.sans(700), Vector2(20, v.y - 22.5), "%d hp" % ceili(float(p.hp)), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 1, 0.94))
+	if hp < 0.25 and not busy and not p.dead:    # a red edge below a quarter (steady under Reduce flashes)
+		var pk := 1.0 if Access.reduce_flashes() else 0.75 + 0.25 * sin(clock * 3.0)
+		var k := (0.6 + 0.4 * (0.25 - hp) / 0.25) * pk
+		for i in 8:
+			var w := 6.0 + 11.0 * float(i)
+			var c := Color(0.75, 0.04, 0.03, 0.055 * k)
+			bars.draw_rect(Rect2(0, 0, v.x, w), c)
+			bars.draw_rect(Rect2(0, v.y - w, v.x, w), c)
+			bars.draw_rect(Rect2(0, 0, w, v.y), c)
+			bars.draw_rect(Rect2(v.x - w, 0, w, v.y), c)
 	var up: Dictionary = run.sim.uses.progress()
 	if float(up.of) > 0.0:
 		var f := clampf(float(up.t) / float(up.of), 0.0, 1.0)
@@ -753,8 +822,7 @@ func crew_full() -> bool:
 
 
 func _enter_base() -> void:
-	_msg_t = 0.0    # (no message of the last stage is carried over)
-	msg_label.text = ""
+	hint_text = ""    # (no hint of the last stage is carried over)
 	mode = "base"
 	base = Base.new()
 	Base.east = bool(args.has("east")) or (not args.has("west") and Base.variant_for(Bal.run_seed))    # VARIANT: the east entry on even seeds
@@ -851,14 +919,13 @@ func _enter_base() -> void:
 		upg.setup()    # WORLD hook
 	if clear:
 		_card("THE OLD PRISON", "Clear it. Hold it.", 2.2)
-		_say("WASD walk. %s. R reload, F knife, E search. Clear every zone." % AimMode.prison_words(), 7.0)
+		_hint("WASD walk. %s. R reload, F knife, E search. Clear every zone." % AimMode.prison_words(), 8.0)
 	else:
-		_say("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 6.0)
+		_hint("The compound. Walk around and watch the others work. E at the gate or the truck: go out.", 10.0)    # (B ends it early)
 
 
 func _enter_raid() -> void:
-	_msg_t = 0.0    # (no message of the last stage is carried over)
-	msg_label.text = ""
+	hint_text = ""    # (no hint of the last stage is carried over)
 	mode = "raid"
 	raids += 1
 	var seed_i := Bal.derive(raids)    # (the run seed and the raid number: a seed replays its towns)
@@ -921,7 +988,9 @@ func _enter_raid() -> void:
 	extract_t = 0.0
 	_armed = false
 	run.sim.avatar.set_input(Vector2.ZERO, at, false)
-	_say(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring. V: retreat.", 7.0)
+	_raid_spent = 0
+	_last_mag = int(run.avatar_p.mag)
+	_hint(kit_line + "Out in the town. Search (E), take the loot (Space), reach a pickup ring. V: retreat.", 7.0)
 
 
 ## Pickup points: the entry road and the far end of the road on the other side of the map.
@@ -1294,7 +1363,7 @@ func _knife_hint() -> void:
 			continue
 		if Vector2(z.x - me.x, z.y - me.y).length() < (2.4 if dry else 1.6):
 			_knife_told = true
-			_say("A dead one is close: press F to stab it with your knife. It is quiet and needs no ammo.", 6.0)
+			_hint("A dead one is close: press F to stab it with your knife. It is quiet and needs no ammo.", 6.0)
 			return
 
 
@@ -1375,6 +1444,9 @@ func _tick(dt: float) -> void:
 	var p = run.avatar_p
 	if not args.has("fixcam"):
 		var goal := Vector2(p.x, p.y) if not map_view else Vector2(float(world.W) / 2.0, float(world.H) / 2.0)
+		if siege.attacking and mode == "base" and phase == "managed" and not map_view:    # NIGHT CAMERA: an attack frames the south fence mid-screen, Ruth kept on screen; back when it ends
+			var half := _vp().y / 2.0 / zoom_px
+			goal.y = p.y + clampf(float(Base.FENCE.end.y) - 1.5 - p.y, -0.4 * half, 0.4 * half)
 		cam_center += (goal - cam_center) * (1.0 - exp(-CAMERA_EASE * dt))
 	zoom_px = clampf(zoom_px, maxf(2.0, minf(_vp().x / (float(world.W) + 2.0), _vp().y / (float(world.H) + 2.0))), 84.0)
 	camera.position = cam_center * TILE
@@ -1391,15 +1463,21 @@ func _tick(dt: float) -> void:
 	guide.frame(dt)
 	arc.frame(dt)    # ARC hook
 	_layout_labels()
+	_ban_tick(dt)
 	_loot_line(dt)
 	_danger_check(dt)
+	if mode == "raid":
+		var mg := int(run.avatar_p.mag)
+		if mg < _last_mag:
+			_raid_spent += _last_mag - mg
+		_last_mag = mg
+	if res_card != null:
+		_res_t -= dt
+		if _res_t <= 0.0:
+			_close_result()
 	if cap_label.modulate.a > 0.01 or band_a > 0.01:    # ART: the caption band follows its fade
 		band_a = cap_label.modulate.a
 		cut_art.queue_redraw()
-	if _msg_t > 0.0:
-		_msg_t -= dt
-		if _msg_t <= 0.0:
-			msg_label.text = ""
 	if mode == "base":
 		if phase == "clear":
 			_clear_logic(dt)
@@ -1422,7 +1500,16 @@ func _tick(dt: float) -> void:
 	if barks != null:
 		barks.update(dt)    # BARKS
 	special.update(dt)    # SPECIAL hook
-	prompt_label.text = String(_prompt.get("label", "")) if not busy else ""
+	var pt := String(_prompt.get("label", ""))
+	if siege.attacking and String(_prompt.get("kind", "")) == "gate":
+		pt = ""    # (no raid offer while the dead are at the fence)
+	if pt == "" and hint_text != "" and not _ban_busy() and not loadout.is_open and not busy:
+		pt = hint_text
+		_hint_t -= dt
+		if _hint_t <= 0.0:
+			hint_text = ""
+	prompt_label.text = pt if not busy else ""
+	prompt_label.visible = prompt_label.text != ""
 	overlay.queue_redraw()
 	bars.queue_redraw()
 	glow.queue_redraw()
@@ -1556,6 +1643,8 @@ func _hands(dt: float) -> void:
 func _unhandled_input(ev: InputEvent) -> void:
 	if run == null:
 		return
+	if ev is InputEventKey and ev.pressed and ev.keycode == KEY_B and mode == "base":
+		hint_text = ""    # (B ends the day-1 line at once)
 	if loot.key(ev) or loadout.key(ev):    # RAIDS hook: the gate's choice takes its keys; SQUAD hook: so does the loadout card
 		return
 	if ev is InputEventKey and not busy and board.key(ev):    # UI hook
@@ -1837,46 +1926,108 @@ func _extract(alive: bool) -> void:
 		var found := float(loot_got[k]) - float(kit_out.get(k, 0.0))    # (the unspent kit comes back in the pack: not loot)
 		if found >= 1.0:
 			sum += "  +%d %s" % [int(found), k]
+	var res: Array = [sum if sum != "Banked:" else "Banked: nothing", "Lost: nothing"]
 	if not alive:
 		sum = "Backpack lost. (%d stacks, nothing banked)" % lost
+		res = ["Banked: nothing", "Lost: the backpack (%d stacks)" % lost]
 	elif sum == "Banked:":
 		sum = "You came back with nothing."
+	res.append("Spent: %d round%s" % [_raid_spent, "" if _raid_spent == 1 else "s"])
+	res.append_array(gun_lines)
 	if not gun_lines.is_empty():
 		sum += "\n" + "\n".join(gun_lines)
 	print("RESULT ", sum, " | stores ", stores, " | pack stacks ", pack.grid.cells.size())
+	last_msg = sum
 	await _cut_in()
-	_say(sum, 10.0)
+	_result_card("BACK AT THE PRISON" if alive else "YOU WENT DOWN", res)
 	if join_text != "":    # RAIDS hook
 		people.banner(join_text, Color(1, 0.6, 0.45) if join_text.contains("left") else Color(0.6, 1, 0.7))
 	busy = false
 	Save.raid_return(self)    # SAVE
 
 
+## A transition: the world fades to 60 % dark behind one caption band (and the truck), 1.1 s, cut short by any key or click (`_input`).
 func _cut_out(lines: Array, truck: bool) -> void:
+	_skip = false
 	cut_x = -1.0
 	var tw := create_tween()
-	tw.tween_property(fade, "color:a", 1.0, 0.7)
-	await tw.finished
-	for i in lines.size():
-		cap_label.text = String(lines[i])
-		cap_label.modulate.a = 1.0
-		if truck:
-			cut_x = 0.0
-			var t2 := create_tween()
-			t2.tween_property(self, "cut_x", 1.0, 1.5)
-			var t3 := create_tween()
-			t3.tween_method(func(_v): cut_art.queue_redraw(), 0.0, 1.0, 1.5)
-		await get_tree().create_timer(1.6).timeout
+	tw.tween_property(fade, "color:a", 0.6, 0.3)
+	cap_label.text = "\n".join(lines)
+	cap_label.modulate.a = 1.0 if not lines.is_empty() else 0.0
+	var t2: Tween
+	if truck:
+		cut_x = 0.0
+		t2 = create_tween()
+		t2.tween_property(self, "cut_x", 1.0, 1.1)
+	await _wait(1.1)
+	tw.kill()
+	if t2 != null:
+		t2.kill()
 	cap_label.modulate.a = 0.0
 	cut_x = -1.0
 	cut_art.queue_redraw()
 
 
 func _cut_in() -> void:
-	await get_tree().create_timer(0.2).timeout
 	var tw := create_tween()
-	tw.tween_property(fade, "color:a", 0.0, 0.9)
+	tw.tween_property(fade, "color:a", 0.0, 0.35)
 	await tw.finished
+
+
+func _wait(secs: float) -> void:
+	var t := 0.0
+	while t < secs and not _skip:
+		await get_tree().process_frame
+		t += get_process_delta_time()
+
+
+func _input(ev: InputEvent) -> void:
+	var press: bool = (ev is InputEventKey and ev.pressed and not ev.echo) or (ev is InputEventMouseButton and ev.pressed and ev.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT])
+	if not press:
+		return
+	if busy:
+		_skip = true
+	elif res_card != null:
+		_close_result()
+		get_viewport().set_input_as_handled()
+
+
+## The raid result card: a title and short lines (banked, lost, spent, the companions), centred in the upper half; any key closes it (or 20 s).
+func _result_card(title: String, lines: Array) -> void:
+	_close_result()
+	res_card = PanelContainer.new()
+	res_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := _plate(0.92, 26, 16)
+	st.border_color = Color(0.94, 0.76, 0.29, 0.9)
+	st.set_border_width_all(1)
+	res_card.add_theme_stylebox_override("panel", st)
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 6)
+	res_card.add_child(vb)
+	var tl := _lbl(Access.scaled(30), Vector2.ZERO)
+	tl.add_theme_font_override("font", Fonts.cond(700))
+	tl.add_theme_color_override("font_color", Color(0.94, 0.76, 0.29))
+	tl.text = title
+	vb.add_child(tl)
+	for ln in lines:
+		var l := _lbl(Access.scaled(18), Vector2.ZERO)
+		l.text = String(ln)
+		vb.add_child(l)
+	var k := _lbl(Access.scaled(14), Vector2.ZERO)
+	k.text = "Any key: carry on"
+	k.add_theme_color_override("font_color", Color(0.7, 0.7, 0.64))
+	vb.add_child(k)
+	cut_art.get_parent().add_child(res_card)
+	res_card.reset_size()
+	var v := _vp()
+	res_card.position = Vector2((v.x - res_card.size.x) / 2.0, topbar.plate.position.y + topbar.plate.size.y + 10.0)
+	_res_t = 20.0
+
+
+func _close_result() -> void:
+	if res_card != null:
+		res_card.queue_free()
+		res_card = null
 
 
 func _draw_cut() -> void:
@@ -1981,13 +2132,7 @@ func _paint_overlay(c: CanvasItem) -> void:
 		board.paint(c)    # UI hook
 		if cleaner != null:
 			cleaner.paint(c)
-		if barks != null:
-			barks.paint(c)
-		for fl in crew.floaters:
-			var a := 1.0 - float(fl.t) / 2.2
-			var col: Color = fl.col
-			col.a = a
-			c.draw_string(font, Vector2(fl.pos) * TILE + Vector2(-130, -float(fl.t) * 22.0), String(fl.text), HORIZONTAL_ALIGNMENT_CENTER, 260, 17, col)
+		# (the barks and the crew's floaters, the fence damage numbers among them, are drawn in screen space over the night by prison_tags.gd)
 		if phase == "clear":
 			for ct in town.containers:
 				if not run.sim.search.is_looted(String(ct.id)):
@@ -2100,7 +2245,7 @@ func _scripts(dt: float) -> void:
 		for id in String(args.pick).split(","):
 			squad.toggle(id)
 		loadout._refresh()
-	if phase == "clear" and mode == "base" and frames >= 200 and cap_label.modulate.a <= 0.05 and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
+	if phase == "clear" and mode == "base" and frames >= 200 and not (_ban_cur.get("title", "") == "THE OLD PRISON" or _ban_q.any(func(b): return b.title == "THE OLD PRISON")) and not _weapon_card and String(args.get("auto", "")) == "" and not args.has("shot") and not args.has("loadout") and DisplayServer.get_name() != "headless":
 		_weapon_card = true
 		loadout.open("", true)    # the first card of the party: which gun
 	if args.has("reloadat") and frames == int(args.reloadat):    # (a check: half empty, then a reload, for the ring screenshot)
@@ -2632,12 +2777,9 @@ func in_managed() -> bool:
 	return phase == "managed"
 
 
+## A title card is a banner of the banner lane now (queued, under the top bar).
 func _card(title: String, sub: String, secs: float) -> void:
-	cap_label.text = title + "\n" + sub
-	cap_label.modulate.a = 1.0
-	await get_tree().create_timer(secs).timeout
-	var tw := create_tween()
-	tw.tween_property(cap_label, "modulate:a", 0.0, 0.8)
+	_banner(title, sub, secs + 0.8, 44)
 
 
 func _cleared_n() -> int:
@@ -2761,8 +2903,9 @@ func _zone_check() -> void:
 					_add_member_node(m)
 					names.append(String(m.def.name))
 		_say("%s cleared (%d/%d). Loot it, then move on." % [String(z.name), _cleared_n(), Base.ZONES.size()] if names.is_empty() else "%s cleared (%d/%d). %s %s free." % [String(z.name), _cleared_n(), Base.ZONES.size(), " and ".join(names), "is" if names.size() == 1 else "are"], 6.0)
-		sound.play("bell", 0.5, 0.0)    # (the short sound of the banner)
-		_banner("ZONE CLEARED", "%s   %d of %d" % [String(z.name), _cleared_n(), Base.ZONES.size()], 3.6, 56)
+		if _cleared_n() < Base.ZONES.size():    # (the last zone gets PRISON SECURED instead)
+			sound.play("bell", 0.5, 0.0)    # (the short sound of the banner)
+			_banner("ZONE CLEARED", "%s   %d of %d" % [String(z.name), _cleared_n(), Base.ZONES.size()], 3.6, 56)
 		if args.has("log"):
 			print("ZONE cleared t=", snappedf(clock, 0.1), " ", z.id, " ", _cleared_n(), "/", Base.ZONES.size(), " ammoU ", snappedf(float(pack.Inventory.units(pack.grid, "ammo")),0.1), " hp ", int(run.avatar_p.hp))
 	if _cleared_n() == Base.ZONES.size() and not busy:
@@ -2775,7 +2918,13 @@ func _secure() -> void:
 	var swing: float = doors.open_all() if doors != null else 0.0    # DOORS: every shut door swings open, one after the other, before the card
 	if swing > 0.0:
 		await get_tree().create_timer(swing + 0.35).timeout
-	await _cut_out(["PRISON SECURED", "The gate is unlocked. The %s breach is sealed." % ("east" if Base.east else "west")], false)
+	var kills := 0
+	for i in run.field.n:
+		if run.field.status[i] == run.field.KILLED:
+			kills += 1
+	sound.play("bell", 0.9, 0.0)
+	_banner("PRISON SECURED", "%d of %d zones cleared   %d dead put down\nStores: %d food, %d water, %d meds, %d scrap" % [_cleared_n(), Base.ZONES.size(), kills, int(stores.food), int(stores.water), int(stores.meds), int(stores.scrap)], 5.0, 56, Color(0.94, 0.76, 0.29))    # (two short lines: the plate stays clear of Ruth)
+	await _cut_out([], false)
 	phase = "managed"
 	ally_chasers.clear()    # (no clear-phase state follows: the dead that chased an ally, the revive bar)
 	revive_t = 0.0
@@ -2783,6 +2932,7 @@ func _secure() -> void:
 	_enter_base()
 	await _cut_in()
 	busy = false
+	_say("The gate is unlocked. The %s breach is sealed." % ("east" if Base.east else "west"), 6.0)
 	_say("The prison is yours. Hold it.", 8.0)
 	if args.has("log"):
 		print("PHASE managed: crew ", crew.members.size(), " allies ", allies_alive, " stores ", stores)

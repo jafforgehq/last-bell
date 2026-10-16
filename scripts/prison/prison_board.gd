@@ -58,6 +58,7 @@ var body: VBoxContainer
 var title: Label
 var tab_btns := {}
 var toasts: VBoxContainer
+var _toast_seen := {}    # toast text -> the msec it last showed
 var card: PanelContainer
 var tab := "projects"
 var sel := "water"
@@ -1199,7 +1200,12 @@ func _checklist(base_on: bool) -> void:
 
 # ----------------------------------------------------------------------------- toasts and the card --
 
-func toast(text: String, col: Color = Hud.INK) -> void:
+## MESSAGE LANES (toast lane): a short event on a dark plate on the right under Objectives; at most 3 stack, and the same text twice within 5 s shows once. Returns the label (null when not shown).
+func toast(text: String, col: Color = Hud.INK) -> Label:
+	var now := Time.get_ticks_msec()
+	if text == "" or now - int(_toast_seen.get(text, -100000)) < 5000:
+		return null
+	_toast_seen[text] = now
 	var pc := PanelContainer.new()
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pc.add_theme_stylebox_override("panel", _box(Hud.PANEL, col, 9))
@@ -1208,13 +1214,15 @@ func toast(text: String, col: Color = Hud.INK) -> void:
 	l.custom_minimum_size.x = 290
 	pc.add_child(l)
 	toasts.add_child(pc)
-	while toasts.get_child_count() > 4:
-		toasts.get_child(0).queue_free()
-		toasts.remove_child(toasts.get_child(0))
+	while toasts.get_child_count() > 3:
+		var old := toasts.get_child(0)
+		toasts.remove_child(old)
+		old.queue_free()
 	var tw := pc.create_tween()
 	tw.tween_interval(5.0)
 	tw.tween_property(pc, "modulate:a", 0.0, 0.8)
 	tw.tween_callback(pc.queue_free)
+	return l
 
 
 func _stage_card(stage: String) -> void:

@@ -905,7 +905,6 @@ func _lose(m: Dictionary, text: String) -> void:
 	stats.lost = int(stats.lost) + 1
 	if game.args.has("log"):
 		print("SQUADSTAT lost ", m.name, " t=", snappedf(_t, 0.1))
-	game._say(text, 4.0)
 	game.people.banner(text, Color(1, 0.55, 0.45))
 	_forget(m)
 	m.state = "gone"
