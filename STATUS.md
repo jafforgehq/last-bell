@@ -402,7 +402,7 @@ Upload recipe that works (Claude in Chrome tools, your logged-in Chrome): full d
 - **Delete only by moving to `~/.Trash`**, never `rm`. **Never kill processes by pattern.**
 - Keep builds lean and fast; short honest status with real numbers; don't ask mid-build questions that have a sensible default.
 - The itch page stays Restricted with its password; the repo stays private.
-- Use Meshy for art only when it clearly helps (costs confirmed and logged in `docs/assets-log.md`); do not draw realistic sprites as flat shapes in code (you rejected that).
+- No paid or AI art services ever (no Meshy, Pixellab or Blender generate_3d): art is made in code, PIL scripts and headless Blender only. As of 2026-10-17 the game contains no AI-generated pictures (`docs/assets-log.md`).
 - Before any paid release: a rights audit of every asset (sounds, fonts, images, AI-made pictures, with the AI-content disclosure Steam asks for) and a trademark check of the name.
 
 ## 9. What to do next (suggested order)
