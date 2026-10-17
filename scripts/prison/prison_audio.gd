@@ -17,6 +17,7 @@ extends Node
 
 const Buses := preload("res://scripts/audio/buses.gd")
 const TownGen := preload("res://scripts/town/town_gen.gd")
+const Library := preload("res://scripts/audio/library.gd")
 
 const DIR := "res://assets/audio/prison/"
 const OLD := "res://assets/audio/"
@@ -177,7 +178,7 @@ func _stream(key: String, dir := DIR) -> AudioStream:
 	var path := "%s%s.wav" % [dir, key]
 	var st: AudioStream = null
 	if ResourceLoader.exists(path):
-		st = load(path)
+		st = Library.recorded(load(path))    # (a recording stands in for the synthesised file where there is one: scripts/audio/library.gd)
 	_cache[k] = st
 	return st
 

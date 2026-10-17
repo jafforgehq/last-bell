@@ -30,6 +30,7 @@ const Buses := preload("res://scripts/audio/buses.gd")
 const Music := preload("res://scripts/audio/music.gd")
 const GD := preload("res://scripts/game_data.gd")
 const Foley := preload("res://scripts/audio/foley.gd")
+const Library := preload("res://scripts/audio/library.gd")
 const LifeSounds := preload("res://scripts/audio/life_sounds.gd")
 
 const TILE := GD.TILE
@@ -257,7 +258,7 @@ func _load_list(names: Array) -> Array:
 		if ResourceLoader.exists(path):
 			var s = load(path)
 			if s != null:
-				out.append(s)
+				out.append(Library.recorded(s))
 	return out
 
 
