@@ -81,7 +81,7 @@ func _init(g) -> void:
 	cfg = parsed if parsed is Dictionary else {}
 	_cfg_nights = cfg.get("nights", [])
 	var a: Dictionary = g.args
-	scripted = (a.has("shot") or a.has("auto") or a.has("drive") or a.has("perf") or a.has("seq") or a.has("raid") or a.has("log") or a.has("turntest") or a.has("econ-lab") or a.has("arcauto") or a.has("loot-lab") or a.has("siege")) and not a.has("arcshow")
+	scripted = (a.has("shot") or a.has("auto") or a.has("drive") or a.has("perf") or a.has("seq") or a.has("raid") or a.has("log") or a.has("turntest") or a.has("econ-lab") or a.has("arcauto") or a.has("loot-lab") or a.has("siege") or a.has("trailercam") or a.has("nohud")) and not a.has("arcshow")
 	events = Events.new(self)
 	story = Story.new(g, self)
 	endings = Endings.new(g, self)

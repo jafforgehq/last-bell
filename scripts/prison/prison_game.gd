@@ -2,7 +2,8 @@
 ## front of the gate. GO OUT (E at the gate or the truck): a generated 64 x 64 town (TownGen, blocks 2) played with the real Sim (avatar, shooting, melee, search, dormant dead that wake near you).
 ## EXTRACT: stand in a pickup ring for 2 s, a short cutscene, and the loot (the raid sim's stock) is banked in the base's stores. DIE in the raid: the pack is lost, same cutscene back.
 ## Keys: WASD walk, mouse aim (right button aims first when the pause menu says so), left button fire (raid only), R reload, F melee, E use/search/go out, Shift sprint is not wired, wheel zoom, M overview, Esc pause menu.
-## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom.
+## Flags: --shot=path --frames=N (screenshot then quit), --raid (start in a raid), --at=x,y (avatar position), --seed=N, --auto=raid|extract|die (scripted run for checks), --cam=x,y,zoom,
+## trailer staging (debug only): --nohud[=keepbanners|tags] and --trailercam=x0,y0,z0:x1,y1,z1:SECONDS (see `_trailer_cam`, `_trailer_nohud`).
 ##
 ## PHASES (`phase`): "clear" first (the party of Ruth + 3 allies walks in through a breach in the west fence; six zones full of dormant dead; each cleared zone frees crew; the gate stays shut), then
 ## "managed" (the base loop above). HOOK for other systems: connect `phase_changed(new_phase)` or test `phase == "managed"` (`in_managed()`): base attacks, the siege and the fence run only then. The
@@ -103,6 +104,7 @@ var corpses: Node2D
 var decals: Node2D
 var roofs
 var camera: Camera2D
+var _tcam_t := 0.0    # STAGING: seconds into the `--trailercam` move
 var pawn_nodes := {}
 var step_clock := StepClock.new()
 var clock := 0.0
@@ -288,7 +290,7 @@ func _ready() -> void:
 	_text_scale_up.call_deferred()
 	if args.has("pause"):
 		get_tree().create_timer(0.4).timeout.connect(func(): pause_menu.open("event log" if String(args.pause) == "eventlog" else (String(args.pause) if String(args.pause) in ["controls", "settings"] else "main")))
-	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest")):
+	elif not (args.has("shot") or args.has("auto") or args.has("drive") or args.has("perf") or args.has("seq") or args.has("raid") or args.has("log") or args.has("turntest") or args.has("trailercam") or args.has("nohud")):
 		get_tree().create_timer(0.6).timeout.connect(func(): if phase != "clear": _card("THE PRISON", "Hold the gate. Keep them fed. Survive the nights.", 3.2))
 	_shot_wait = int(args.get("frames", "90"))
 	var au := String(args.get("auto", ""))
@@ -1514,6 +1516,8 @@ func _tick(dt: float) -> void:
 	if doors != null and mode == "base":
 		doors.tick(dt)
 	var p = run.avatar_p
+	if args.has("trailercam"):
+		_trailer_cam(dt)
 	if not args.has("fixcam"):
 		var goal := Vector2(p.x, p.y) if not map_view else Vector2(float(world.W) / 2.0, float(world.H) / 2.0)
 		if siege.attacking and mode == "base" and phase == "managed" and not map_view:    # NIGHT CAMERA: an attack frames the south fence mid-screen, Ruth kept on screen; back when it ends
@@ -1536,6 +1540,8 @@ func _tick(dt: float) -> void:
 	arc.frame(dt)    # ARC hook
 	_layout_labels()
 	_ban_tick(dt)
+	if args.has("nohud"):
+		_trailer_nohud()
 	_loot_line(dt)
 	_danger_check(dt)
 	if mode == "raid":
@@ -1608,6 +1614,46 @@ func _tick(dt: float) -> void:
 			return
 		_save_shot()
 		get_tree().quit()
+
+
+## STAGING (trailer, debug only): `--trailercam=x0,y0,zoom0:x1,y1,zoom1:SECONDS` moves the camera from one tile spot and zoom (px a tile) to the other over
+## SECONDS with an ease in and out, Ruth ignored; it then holds the end. `--trailercam=x,y,zoom` alone holds one framing; `ruth` in place of x,y (`ruth,30:ruth,44:6`)
+## is Ruth's spot that frame (a wide follow, or a push in onto her). Sets `fixcam` so the follow code is skipped.
+func _trailer_cam(dt: float) -> void:
+	var legs := String(args.trailercam).split(":")
+	var a := legs[0].split(",")
+	var b := legs[1].split(",") if legs.size() > 1 else a
+	var secs := float(legs[2]) if legs.size() > 2 else 1.0
+	_tcam_t += dt
+	var u := clampf(_tcam_t / maxf(secs, 0.01), 0.0, 1.0)
+	u = u * u * (3.0 - 2.0 * u)
+	cam_center = _tcam_spot(a).lerp(_tcam_spot(b), u)
+	# zoom eased in log space, so a push in reads as an even move; written every frame, so nothing that sets zoom_px later in the run wins
+	zoom_px = exp(lerpf(log(float(a[-1])), log(float(b[-1])), u))
+	args["fixcam"] = "1"
+	map_view = false
+
+
+func _tcam_spot(f: PackedStringArray) -> Vector2:
+	return Vector2(run.avatar_p.x, run.avatar_p.y) if f[0] == "ruth" else Vector2(float(f[0]), float(f[1]))
+
+
+## STAGING (trailer, debug only): `--nohud` hides every HUD layer (top bar, Objectives, toasts, minimap, prompts, cards, the pack) each frame, so layers made
+## later are hidden too; only the night layer (5) and the cut layer (30: fades, captions) stay. Banners are hidden unless `--nohud=keepbanners`;
+## `--nohud=tags` keeps the name tags over the heads. The world's markers are skipped in `_paint_overlay`.
+func _trailer_nohud() -> void:
+	var opt := String(args.nohud)
+	for ch in get_children():
+		if ch is CanvasLayer and ch.layer != 5 and ch.layer != 30:
+			ch.visible = false
+	if opt.contains("tags") and tags != null:
+		hud.visible = true
+		for ch in hud.get_children():
+			if ch is CanvasItem:
+				ch.visible = ch == tags.c
+	if not opt.contains("keepbanners"):
+		ban_box.visible = false
+		cap_label.visible = false
 
 
 func _step() -> void:
@@ -2193,7 +2239,8 @@ func _paint_decks(c: CanvasItem) -> void:
 func _paint_overlay(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
 	noise.paint(c)    # NOISE hook
-	raidx.paint(c)    # RAID EXTRAS: the ping ring
+	if not args.has("nohud"):
+		raidx.paint(c)    # RAID EXTRAS: the ping ring
 	special.paint(c)    # SPECIAL hook
 	arc.paint(c)    # ARC hook
 	if mode == "base":
@@ -2203,11 +2250,12 @@ func _paint_overlay(c: CanvasItem) -> void:
 		var g := Vector2(Base.GATE_X, Base.FENCE.end.y - 1) * TILE
 		Polish.draw_gate(c, g, Vector2(Base.GATE_W * TILE * 0.5 - 2, TILE), 4.0)    # ART
 		siege.paint(c)    # SIEGE hook
-		board.paint(c)    # UI hook
+		if not args.has("nohud"):
+			board.paint(c)    # UI hook
 		if cleaner != null:
 			cleaner.paint(c)
 		# (the barks and the crew's floaters, the fence damage numbers among them, are drawn in screen space over the night by prison_tags.gd)
-		if phase == "clear":
+		if phase == "clear" and not args.has("nohud"):
 			for ct in town.containers:
 				if not run.sim.search.is_looted(String(ct.id)):
 					var cp := Vector2(ct.at) * TILE
@@ -2241,7 +2289,12 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var x := lerpf(l0.x, l1.x, (float(k) + 0.5) / 6.0)
 			var sw := sin(clock * 1.7 + float(k)) * 2.0
 			c.draw_rect(Rect2(Vector2(x - 9.0 + sw, l0.y + 1.0), Vector2(18, 22 + (k % 3) * 5)), cols[k], true)
-		c.draw_string(font, Vector2(Base.GATE_POS.x, Base.PEN_Y + 5.9) * TILE - Vector2(150, 0), "THE DEAD OUTSIDE THE FENCE", HORIZONTAL_ALIGNMENT_CENTER, 300, 18, Color(1, 0.5, 0.45, 0.7))
+		if not args.has("nohud"):
+			c.draw_string(font, Vector2(Base.GATE_POS.x, Base.PEN_Y + 5.9) * TILE - Vector2(150, 0), "THE DEAD OUTSIDE THE FENCE", HORIZONTAL_ALIGNMENT_CENTER, 300, 18, Color(1, 0.5, 0.45, 0.7))
+	elif args.has("nohud"):    # staging (trailer): the raid's markers, rings and words off; `--nohud=tags` keeps the names over the heads
+		if String(args.nohud).contains("tags"):
+			people.paint(c)
+			squad.paint(c)
 	else:
 		var pulse := 0.5 + 0.5 * sin(clock * 4.0)
 		for e in exits:

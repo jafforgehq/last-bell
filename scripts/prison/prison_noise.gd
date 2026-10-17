@@ -772,7 +772,8 @@ func chip() -> Array:
 func paint(c: CanvasItem) -> void:
 	var T: float = game.TILE
 	var font := ThemeDB.fallback_font
-	for r in ripples:
+	var clean: bool = game.args.has("nohud")    # STAGING (trailer): the rings and words are markers; the thrown thing and the alarm's lights are the world
+	for r in ([] if clean else ripples):
 		var u := float(r.t) / float(r.life)
 		var col: Color = r.col
 		col.a *= (1.0 - u)
@@ -784,7 +785,7 @@ func paint(c: CanvasItem) -> void:
 		c.draw_circle(gp, 4.0, Color(0, 0, 0, 0.35))
 		c.draw_circle(gp - Vector2(0, hh + 10.0), 5.0, Color(0.7, 0.9, 0.8) if th.kind == "bottle" else Color(0.8, 0.8, 0.85))
 	for p in pops:
-		if bool(p.flare) and float(p.get("life", 14.0)) < 14.0:    # (the signal flare: a thin rim that shrinks as it burns out; its light is `flare_lights`, its glow on the ground `paint_ground`)
+		if bool(p.flare) and float(p.get("life", 14.0)) < 14.0 and not clean:    # (the signal flare: a thin rim that shrinks as it burns out; its light is `flare_lights`, its glow on the ground `paint_ground`)
 			var left: float = clampf(1.0 - float(p.age) / float(p.life), 0.0, 1.0)
 			c.draw_arc(Vector2(p.pos) * T, 4.0 * T * (0.6 + 0.4 * left), 0.0, TAU, 48, Color(1.0, 0.55, 0.25, 0.45 * left + 0.15), 2.5)
 	var blink: bool = int(game.clock * 4.0) % 2 == 0
@@ -795,7 +796,7 @@ func paint(c: CanvasItem) -> void:
 		var pu := fposmod(float(a.t), float(cfg.alarm.every)) / float(cfg.alarm.every)
 		c.draw_arc(ap, (1.0 + 7.0 * pu) * T, 0.0, TAU, 40, Color(1, 0.4, 0.3, 0.45 * (1.0 - pu)), 2.5)
 	# the horde: a red ring under each of them and the word over the front of it
-	for h in hordes:
+	for h in ([] if clean else hordes):
 		var n := 0
 		for z in h.members:
 			if z.state == "wander" or z.state == "still":
@@ -806,7 +807,7 @@ func paint(c: CanvasItem) -> void:
 			c.draw_string(font, cc + Vector2(-80, -1.6 * T), "HORDE x%d" % n, HORIZONTAL_ALIGNMENT_CENTER, 160, 18, Color(1.0, 0.45, 0.4, 0.9))
 	# the dead that went to look: a faint ring where they go
 	var shown := {}
-	for z in inv:
+	for z in ({} if clean else inv):
 		var e: Dictionary = inv[z]
 		var key := Vector2i((e.tgt as Vector2).round())
 		if not shown.has(key) and not bool(e.horde):
