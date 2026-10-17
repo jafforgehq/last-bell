@@ -9,6 +9,7 @@
 extends RefCounted
 
 const TownArt := preload("res://scripts/town/town_art.gd")
+const Library := preload("res://scripts/audio/library.gd")
 
 const DIR := "res://assets/audio/"
 
@@ -89,7 +90,7 @@ static func load_group(key: String) -> Array:
 		if ResourceLoader.exists(path):
 			var s = load(path)
 			if s != null:
-				out.append(s)
+				out.append(Library.recorded(s))
 	return out
 
 
