@@ -341,12 +341,12 @@ static func forecast(with: Dictionary = {}) -> Dictionary:
 ## place of round 3 (the owner's data has its own: this one stands in for it).
 static func sample_sites(with_scrapyard: bool = false) -> Array:
 	var sites := [
-		{"id": "pharmacy", "name": "The pharmacy", "blurb": "Shelves stripped, but the back room was locked.", "danger": 2, "loot": {"meds": [3, 6]}, "extra": {"food": [0.4, 2]}, "image": "res://assets/ui/sites/pharmacy.png", "available": true, "note": ""},
-		{"id": "hardware", "name": "The hardware store", "blurb": "Crowbars, nails, boxes of shells.", "danger": 2, "loot": {"scrap": [10, 20], "ammo": [20, 60]}, "extra": {}, "image": "res://assets/ui/sites/hardware.png", "available": false, "note": "Picked over"},
-		{"id": "houses", "name": "Neighbourhood houses", "blurb": "Somebody's pantry is somebody's pantry.", "danger": 1, "loot": {"food": [8, 14], "water": [10, 20]}, "extra": {"meds": [0.3, 1]}, "image": "res://assets/ui/sites/houses.png", "available": true, "note": ""},
+		{"id": "pharmacy", "name": "The pharmacy", "blurb": "Shelves stripped, but the back room was locked.", "danger": 2, "loot": {"meds": [3, 6]}, "extra": {"food": [0.4, 2]}, "image": "", "available": true, "note": ""},
+		{"id": "hardware", "name": "The hardware store", "blurb": "Crowbars, nails, boxes of shells.", "danger": 2, "loot": {"scrap": [10, 20], "ammo": [20, 60]}, "extra": {}, "image": "", "available": false, "note": "Picked over"},
+		{"id": "houses", "name": "Neighbourhood houses", "blurb": "Somebody's pantry is somebody's pantry.", "danger": 1, "loot": {"food": [8, 14], "water": [10, 20]}, "extra": {"meds": [0.3, 1]}, "image": "", "available": true, "note": ""},
 	]
 	if with_scrapyard:
-		sites.append({"id": "scrapyard", "name": "The scrapyard", "blurb": "Stacks of cars and a dog that is not a dog any more. Plenty of scrap, for anyone who can carry it.", "danger": 3, "loot": {"scrap": [35, 60]}, "extra": {"food": [0.3, 2]}, "image": "res://assets/ui/sites/scrapyard.png", "available": true, "note": ""})
+		sites.append({"id": "scrapyard", "name": "The scrapyard", "blurb": "Stacks of cars and a dog that is not a dog any more. Plenty of scrap, for anyone who can carry it.", "danger": 3, "loot": {"scrap": [35, 60]}, "extra": {"food": [0.3, 2]}, "image": "", "available": true, "note": ""})
 	return sites
 
 

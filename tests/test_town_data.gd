@@ -353,8 +353,7 @@ func test_thirty_five_places_each_with_what_the_board_needs() -> void:
 		check(blurb.length() >= 40 and blurb.length() <= 230, "%s: the blurb is one or two sentences, not %d characters" % [id, blurb.length()])
 		check(_inner_breaks(blurb) <= 1, "%s: the blurb is at most two sentences" % id)
 		check(blurb.ends_with(".") and not blurb.contains("{") and not blurb.contains("}"), "%s: the blurb is plain text ending in a full stop" % id)
-		if p.has("image"):
-			check(id in OLD_IDS and String(p.image).begins_with("res://assets/ui/sites/"), "%s: only the four old places have pictures" % id)
+		check(not p.has("image"), "%s: no place has a picture (the cards draw their placeholder)" % id)
 	for k in KINDS + CITY_KINDS:
 		check(kinds.has(k), "the board has a place of kind %s" % k)
 	for id in OLD_IDS:

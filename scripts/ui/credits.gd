@@ -10,7 +10,7 @@ const ENTRIES := [
 	["Engine", "Godot 4.7, under the MIT licence"],
 	["Type", "Barlow, by The Barlow Project Authors, under the SIL Open Font Licence 1.1"],
 	["Sound", "Synthesised in-house"],
-	["Pictures", "Some of the pictures were made with AI tools and finished by hand."],
+	["Pictures", "Drawn in-house, in code and in Blender"],
 ]
 const THANKS := "Thank you for playing."
 

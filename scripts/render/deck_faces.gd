@@ -3,8 +3,7 @@
 ## tilted view a raised thing shows its front (south) face: a scaffold of posts,
 ## rope-lashed braces and concrete footings standing on the ground, dark under
 ## the planks, with a shadow on the ground in front and ladders hooked over the
-## edge. This draws those, from the pieces tools/make_deck_art.py cuts out of
-## the reference pictures. Units are tiles; (x, y) is the map's, y growing south.
+## edge. This draws those, from the pieces tools/make_deck_art.py draws. Units are tiles; (x, y) is the map's, y growing south.
 extends Node2D
 
 const GD := preload("res://scripts/game_data.gd")

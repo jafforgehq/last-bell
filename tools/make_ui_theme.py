@@ -3,24 +3,23 @@
 chalkboard panels in oak trim, brass for the clock, hall-pass badges for the crew,
 paper slips for the alerts, notebook paper for the modals, buttons, chips and so on.
 
-    python3 tools/make_ui_theme.py            # writes assets/ui/theme/*.png, frames.json and
-                                              # assets/ui/sites/scrapyard.png
+    python3 tools/make_ui_theme.py            # writes assets/ui/theme/*.png and frames.json
     UI_DEBUG=some/dir python3 tools/make_ui_theme.py   # also contact sheets of the frames, each
                                               # stretched to sizes the HUD uses (sheet.png, f_<name>.png)
     UI_SHEET=panel,card UI_DEBUG=... ...      # also sel.png: those frames only
     UI_DRY=1 ...                              # do not write the pictures, only check and draw sheets
     UI_ONLY=bubble python3 tools/make_ui_theme.py   # write only those frames' pictures and their entries in
-                                              # frames.json (the others, and the scrapyard picture, are left as they are)
+                                              # frames.json (the others are left as they are)
 
 Then run `Godot --headless --path . --import` once: the pictures are imported like any other.
 The output is the same bytes every time (all the noise is seeded).
 
-The materials are pictures made with Meshy from text prompts (docs/assets-log.md) and kept
-in tools/ui_src/: mat_slate_a (a chalkboard wiped with a cloth), mat_oak_a, mat_brass_a,
-mat_paper_a (ruled notebook paper), mat_card_a (card stock) and mat_chalk_a (chalk dust).
-They are flattened (the uneven light of a picture taken with a lens is divided out), toned to
-the game's palette and made to wrap (so a texture can be tiled: each is cut as a tile that
-joins itself, with a blend that keeps the grain), then the frames are drawn with them: the
+The materials are drawn here from seeded noise, no picture is read (since 2026-10-17; before
+that they were pictures made with an image model, see docs/assets-log.md): a chalkboard with the
+swipes of an eraser (material_slate), the chalk dust over it (material_dust), oak with growth
+rings, streaks and pores (material_oak), brushed brass (material_brass), notebook paper
+(material_paper) and card stock (material_card). Each is toned to the game's palette and wraps
+(a tile cut from it is blended to join itself), then the frames are drawn with them: the
 trims are cut with mitred corners and lit from the top left like a moulding, the boards sit in
 a soft baked shadow, there are nail heads, screws, a pushpin, punched holes, a folded page, a
 slot for a lanyard, a chalk dust that gathers on the slate. The finest grain (the buttons, the
@@ -90,7 +89,6 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, "tools", "ui_src")
 OUT = os.path.join(ROOT, "assets", "ui", "theme")
 RES = "res://assets/ui/theme/"
 
@@ -168,20 +166,6 @@ def resize(a, w, h):
 
 # ---------------------------------------------------------------- materials --
 
-def load_rgb(name):
-    return np.asarray(Image.open(os.path.join(SRC, name)).convert("RGB")).astype(np.float32)
-
-
-def flatten(a, sigma, mult=True):
-    """Takes the uneven light out of a picture (a vignette, a lens): divides (or
-    subtracts) a heavy blur of it, keeping the average."""
-    low = gblur(a, sigma)
-    mean = low.mean(axis=(0, 1))
-    if mult:
-        return a / np.maximum(low, 1.0) * mean
-    return a - low + mean
-
-
 def retone(a, mean_rgb, gain=1.0, floor=0.0):
     """The same picture with another average colour and `gain` times the variation."""
     m = a.mean(axis=(0, 1))
@@ -237,31 +221,123 @@ def mirrored_x(a):
     return np.concatenate([a, a[:, ::-1]], axis=1)
 
 
-def _remove_rules(p):
-    """Takes the ruled lines (blue, 2 rows thick) and the red margin line out of the
-    notebook sheet by painting them over from the rows and columns beside them."""
-    p = p.copy()
-    lum = p.mean(axis=2)
-    band = lum[:, 260:880].mean(axis=1)
-    rows = np.array([i for i in range(4, len(band) - 4) if band[i] < np.median(band[max(0, i - 8):i + 9]) - 3.0])
-    mask = np.zeros(len(band), bool)
-    mask[rows] = True
-    for dy in (-1, 1):
-        mask |= np.roll(mask, dy)
-    for y in np.where(mask)[0]:
-        up = y
-        while up > 0 and mask[up]:
-            up -= 1
-        down = y
-        while down < len(mask) - 1 and mask[down]:
-            down += 1
-        t = (y - up) / max(1, down - up)
-        p[y] = p[up] * (1.0 - t) + p[down] * t
-    redness = (p[..., 0] - p[..., 1]).mean(axis=0)
-    cols = np.where(redness > redness.mean() + 6.0)[0]
-    for x in cols:
-        p[:, x] = p[:, max(0, cols.min() - 3)] * 0.5 + p[:, min(p.shape[1] - 1, cols.max() + 3)] * 0.5
-    return p
+def toned(v, mean_rgb, std_rgb):
+    """A colour picture from a field `v`: `mean_rgb` on average, `std_rgb` the spread of each channel."""
+    v = (v - v.mean()) / max(float(v.std()), 1e-6)
+    return np.clip(np.asarray(mean_rgb, np.float32) + v[..., None] * np.asarray(std_rgb, np.float32), 0.0, 255.0)
+
+
+def swipes(n, count, seed, strength=(0.25, 1.0), radius=(90.0, 260.0), band=(40.0, 110.0), span=(35.0, 110.0), soft=1.6):
+    """Wide soft arcs like the swipes of an eraser or a cloth over a board, n x n and wrapping both ways
+    (each arc is drawn on a 3 x 3 canvas and the nine tiles are added up). Each swipe is a band of thin
+    concentric arcs that start and stop a little apart and are of uneven strength, so it is streaked along
+    its length and soft at its two sides. Not normalised: 0 is no dust."""
+    rng = np.random.RandomState(seed)
+    acc = np.zeros((3 * n, 3 * n), np.float32)
+    for _ in range(count):
+        layer = Image.new("F", (3 * n, 3 * n), 0.0)
+        dr = ImageDraw.Draw(layer)
+        px, py = rng.uniform(n, 2 * n, 2)                  # a point on the swipe
+        r = rng.uniform(*radius)
+        th = rng.uniform(0.0, 2.0 * np.pi)
+        ox, oy = px - r * np.cos(th), py - r * np.sin(th)  # the centre of its circle
+        a0 = np.degrees(th) - rng.uniform(*span) / 2.0
+        sp = rng.uniform(*span)
+        bw = rng.uniform(*band)
+        lines = max(4, int(bw / 1.6))
+        amp = rng.uniform(*strength)
+        for k in range(lines):
+            t = (k + 0.5) / lines
+            rr = r - bw / 2.0 + t * bw + rng.uniform(-0.8, 0.8)
+            val = amp * math.sin(math.pi * t) ** 0.7 * rng.uniform(0.15, 1.0)
+            st = a0 + rng.uniform(0.0, sp * 0.3)
+            en = a0 + sp - rng.uniform(0.0, sp * 0.3)
+            dr.arc([ox - rr, oy - rr, ox + rr, oy + rr], st, en, fill=float(val), width=int(rng.choice([1, 1, 2, 3])))
+        acc += np.asarray(layer, np.float32)
+    out = acc.reshape(3, n, 3, n).sum(axis=(0, 2))
+    return gblur(out, soft, wrap=True)
+
+
+def specks(n, count, seed, size=(0.6, 1.6)):
+    """A few small soft dots, wrapping (0..1)."""
+    rng = np.random.RandomState(seed)
+    out = np.zeros((n, n), np.float32)
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+    for _ in range(count):
+        cx, cy = rng.uniform(0, n, 2)
+        dx = (xx - cx + n / 2) % n - n / 2
+        dy = (yy - cy + n / 2) % n - n / 2
+        out = np.maximum(out, np.exp(-(dx * dx + dy * dy) / (2.0 * rng.uniform(*size) ** 2)) * rng.uniform(0.5, 1.0))
+    return out
+
+
+def material_slate(n=512):
+    """A dark green-black chalkboard: a slow mottle, the ghosts of wide eraser swipes and a fine grain."""
+    mott = periodic_noise(n, n, (38.0, 90.0), (1.0, 0.7), seed=21)
+    sw = swipes(n, 40, seed=22, strength=(0.2, 0.7), soft=0.9)
+    grain = periodic_noise(n, n, (0.6, 1.4), (1.0, 0.5), seed=23)
+    v = 0.45 * mott + 0.7 * sw / max(float(sw.std()), 1e-6) + 0.8 * grain
+    return toned(v, (24, 35, 31), (5.1, 4.9, 5.2))
+
+
+def material_dust(n=512):
+    """Chalk dust wiped about with an eraser, 0..1: soft wide arcs, broken up by a grain."""
+    sw = swipes(n, 30, seed=31, strength=(0.4, 1.0), band=(50.0, 130.0), soft=1.2)
+    grain = periodic_noise(n, n, (1.5, 3.5), (1.0, 0.6), seed=32)
+    d = sw * np.clip(0.85 + 0.15 * grain, 0.4, 1.3)
+    d = (d - np.percentile(d, 55)) / (np.percentile(d, 99.5) - np.percentile(d, 55))
+    return np.repeat(np.clip(d, 0.0, 1.0)[..., None], 3, axis=2)
+
+
+def material_oak(n=640):
+    """Varnished oak with the grain along x: growth rings (sharp dark lines on a wavering band), long
+    fine streaks, and small dark pores drawn out along the grain. Wraps both ways."""
+    yy = np.mgrid[0:n, 0:n][0].astype(np.float32)
+    warp = periodic_noise(n, n, (55.0, 110.0), (1.0, 0.8), seed=41)
+    phase = 2.0 * np.pi * (yy + 3.5 * warp) / n
+    ring = (0.5 + 0.5 * np.sin(phase * 30.0)) ** 6
+    ring2 = (0.5 + 0.5 * np.sin(phase * 97.0 + 1.3)) ** 4
+    fine = brushed_noise(n, n, 4.0, 0.4, seed=42)
+    rng = np.random.RandomState(43)
+    pores = gblur_aniso((rng.rand(n, n) < 0.035).astype(np.float32), 1.6, 0.4)
+    pores = np.clip(pores / max(float(np.percentile(pores, 99.7)), 1e-6), 0.0, 1.0)
+    mott = periodic_noise(n, n, (30.0, 70.0), (1.0, 0.6), seed=45)
+    v = -0.7 * ring - 0.35 * ring2 + 0.45 * fine - 1.1 * pores + 0.1 * mott
+    return toned(v, OAK, (12.3, 11.8, 10.2))
+
+
+def gblur_aniso(a, sx, sy):
+    """A wrapping gaussian blur with its own width along x and along y."""
+    ny, nx = a.shape
+    fy = np.fft.fftfreq(ny)[:, None]
+    fx = np.fft.rfftfreq(nx)[None, :]
+    k = np.exp(-2 * np.pi ** 2 * ((sx * fx) ** 2 + (sy * fy) ** 2)).astype(np.float32)
+    return np.fft.irfft2(np.fft.rfft2(a) * k, s=(ny, nx)).astype(np.float32)
+
+
+def material_brass(n=640):
+    """Brushed antique brass: fine and long streaks along x and a few soft patches of tarnish."""
+    v = 0.8 * brushed_noise(n, n, 7.0, 0.5, seed=51) + 0.6 * brushed_noise(n, n, 45.0, 1.5, seed=52)
+    t = smoothstep(1.0, 2.2, periodic_noise(n, n, (10.0, 30.0), (1.0, 0.8), seed=53))
+    rgb = toned(v + 0.2 * periodic_noise(n, n, (60.0,), (1.0,), seed=54), (170, 130, 58), (6.9, 7.0, 6.1))
+    rgb = rgb - t[..., None] * np.asarray((10.0, 7.0, 1.5), np.float32)
+    return np.clip(rgb - rgb.mean(axis=(0, 1)) + np.asarray((170, 130, 58), np.float32), 0.0, 255.0)
+
+
+def material_paper(n=464):
+    """Notebook paper (no rules: the frames draw them): a fine fibre and a faint cloud."""
+    v = periodic_noise(n, n, (0.7, 2.5), (1.0, 0.6), seed=61) + 0.5 * brushed_noise(n, n, 4.0, 0.6, seed=62) \
+        + 0.6 * periodic_noise(n, n, (45.0,), (1.0,), seed=63)
+    return toned(v, (240, 235, 220), (2.4, 2.2, 2.8))
+
+
+def material_card(n=472):
+    """Pale card stock: a fibre grain that runs up and down, a faint cloud and a few specks."""
+    v = brushed_noise(n, n, 0.5, 5.0, seed=71) + 0.7 * periodic_noise(n, n, (0.7, 1.6), (1.0, 0.5), seed=72) \
+        + 0.45 * periodic_noise(n, n, (40.0,), (1.0,), seed=73)
+    rgb = toned(v, (214, 207, 190), (8.0, 8.4, 8.8))
+    sp = specks(n, 14, seed=74)
+    return np.clip(rgb - sp[..., None] * np.asarray((70.0, 72.0, 70.0), np.float32), 0.0, 255.0)
 
 
 class Materials:
@@ -269,26 +345,14 @@ class Materials:
     demand for the size a frame wants and kept."""
 
     def __init__(self):
-        # slate: dark green-black, with the swipes of a cloth and fine chalk grain
-        s = flatten(load_rgb("mat_slate_a.png"), 110)[80:944, 80:944]
-        self._slate = retone(resize(s, 512, 512), (24, 35, 31), gain=1.5)
-        # chalk dust: only the light swipes of the wiped board, 0..1
-        d = flatten(load_rgb("mat_chalk_a.png"), 70, mult=False).mean(axis=2)
-        d = np.asarray(Image.fromarray(d.astype(np.float32)).resize((512, 512), Image.LANCZOS))
-        d = (d - np.percentile(d, 55)) / (np.percentile(d, 99.5) - np.percentile(d, 55))
-        self._dust = np.repeat(np.clip(d, 0.0, 1.0)[..., None], 3, axis=2)
-        # oak and brass: grain along x
-        o = flatten(load_rgb("mat_oak_a.png"), 90, mult=False)
-        self._oak = retone(resize(o, 640, 640), OAK, gain=1.15)
-        b = flatten(load_rgb("mat_brass_a.png"), 90, mult=False)
-        self._brass = retone(resize(b, 640, 640), (170, 130, 58), gain=0.75)
-        # paper: the picture of the ruled sheet with its rules taken out
-        p = _remove_rules(load_rgb("mat_paper_a.png")[48:976, 48:976])
-        p = flatten(p, 120, mult=False)
-        self._paper = retone(resize(p, 464, 464), (240, 235, 220), gain=1.5)
-        # card stock: pale warm grey with a few specks
-        c = flatten(load_rgb("mat_card_a.png"), 120, mult=False)[40:984, 40:984]
-        self._card = retone(resize(c, 472, 472), (214, 207, 190), gain=0.9)
+        # every material is drawn by the code below from seeded noise (no picture is read): a chalkboard,
+        # the chalk dust over it, oak and brass with the grain along x, notebook paper and card stock
+        self._slate = material_slate()
+        self._dust = material_dust()
+        self._oak = material_oak()
+        self._brass = material_brass()
+        self._paper = material_paper()
+        self._card = material_card()
         self._cache = {}
 
     def _get(self, key, make):
@@ -1223,27 +1287,6 @@ def contact_sheet(frames, path, tint_map=None, kinds=("day", "night")):
     pil.save(path)
 
 
-# ------------------------------------------------------------------- sites --
-
-def build_sites():
-    """The picture of the scrapyard for the scavenging dialog (assets/ui/sites/): the Meshy picture
-    in tools/ui_src/ref_scrapyard_a.png cropped to 16:9 and resized to 720x405 like the other three,
-    with the light brought up a touch (the picture came out darker than its neighbours) and its colours
-    a little richer. Returns the path written."""
-    ref = Image.open(os.path.join(SRC, "ref_scrapyard_a.png")).convert("RGB")
-    w, h = ref.size
-    cw = int(round(h * 16 / 9))
-    x0 = (w - cw) // 2
-    pic = ref.crop((x0, 0, x0 + cw, h)).resize((720, 405), Image.LANCZOS)
-    a = np.asarray(pic).astype(np.float32) / 255.0
-    a = a ** 0.92                                              # a little lighter in the middle tones
-    grey = (a @ np.array([0.2126, 0.7152, 0.0722], np.float32))[..., None]
-    a = np.clip(grey + (a - grey) * 1.10, 0.0, 1.0)            # a little more colour
-    path = os.path.join(ROOT, "assets", "ui", "sites", "scrapyard.png")
-    Image.fromarray(np.round(a * 255.0).astype(np.uint8)).save(path, optimize=True)
-    return path
-
-
 def write_all(frames, only=None):
     """Writes the pictures and frames.json. With `only` (a list of names) just those frames are
     written, and their entries are put into the frames.json that is there, the rest left as it is."""
@@ -1280,8 +1323,6 @@ def main():
             contact_sheet([f for f in frames if f.name in pick], os.path.join(out, "sel.png"))
     if not os.environ.get("UI_DRY"):
         only = [n for n in os.environ.get("UI_ONLY", "").split(",") if n]
-        if not only:
-            print("wrote", build_sites())
         table = write_all(frames, only)
         print("wrote %d frames to %s" % (len(only) if only else len(table), OUT))
         for f in frames:

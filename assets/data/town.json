@@ -11,8 +11,7 @@
 			"danger": 1,
 			"loot": {"food": [8, 14], "water": [10, 20]},
 			"extra": {"meds": [0.5, 1.5]},
-			"known": true,
-			"image": "res://assets/ui/sites/houses.png"
+			"known": true
 		},
 		{
 			"id": "bakery",
@@ -35,8 +34,7 @@
 			"danger": 2,
 			"loot": {"meds": [6, 11]},
 			"extra": {"food": [0.5, 4]},
-			"known": true,
-			"image": "res://assets/ui/sites/pharmacy.png"
+			"known": true
 		},
 		{
 			"id": "hardware",
@@ -47,8 +45,7 @@
 			"danger": 2,
 			"loot": {"scrap": [18, 34], "ammo": [70, 130]},
 			"extra": {},
-			"known": true,
-			"image": "res://assets/ui/sites/hardware.png"
+			"known": true
 		},
 		{
 			"id": "church",
@@ -160,8 +157,7 @@
 			"loot": {"scrap": [35, 60]},
 			"extra": {"food": [0.3, 3]},
 			"nest": {"strength": 2},
-			"outpost": {"yield": {"scrap": 4}, "cost": 60},
-			"image": "res://assets/ui/sites/scrapyard.png"
+			"outpost": {"yield": {"scrap": 4}, "cost": 60}
 		},
 		{
 			"id": "radio_shop",

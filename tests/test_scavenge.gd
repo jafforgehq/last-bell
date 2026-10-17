@@ -155,8 +155,7 @@ func test_the_four_sites_load_from_data() -> void:
 		by[s.id] = s
 		check(String(s.name) != "", "%s has a name" % s.id)
 		check(String(s.blurb).length() > 20, "%s has a line of flavour" % s.id)
-		check(String(s.image) == "res://assets/ui/sites/%s.png" % s.id, "%s has its picture path" % s.id)
-		check(FileAccess.file_exists(String(s.image)), "%s has its picture" % s.id)
+		check(String(s.image) == "", "%s has no picture (the card draws its placeholder)" % s.id)
 	check(by.has("pharmacy") and by.has("hardware") and by.has("houses") and by.has("scrapyard"), "pharmacy, hardware, houses and the scrapyard")
 	eq(by.pharmacy.name, "The pharmacy", "the pharmacy's name")
 	eq(by.hardware.name, "The hardware store", "the hardware store's name")

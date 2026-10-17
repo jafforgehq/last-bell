@@ -28,9 +28,9 @@ const FIX := {
 	"home": [50, 35],
 	"places": [
 		{"id": "houses", "name": "Neighbourhood houses", "kind": "houses", "pos": [58, 35], "blurb": "Somebody's pantry is somebody's pantry.", "danger": 1, "known": true,
-			"loot": {"food": [8, 14], "water": [10, 20]}, "extra": {"meds": [0.3, 1]}, "image": "res://assets/ui/sites/houses.png"},
+			"loot": {"food": [8, 14], "water": [10, 20]}, "extra": {"meds": [0.3, 1]}, "image": ""},
 		{"id": "pharmacy", "name": "The pharmacy", "kind": "pharmacy", "pos": [64, 27], "blurb": "Shelves stripped, but the back room was locked.", "danger": 2, "known": true,
-			"loot": {"meds": [6, 11]}, "extra": {}, "image": "res://assets/ui/sites/pharmacy.png"},
+			"loot": {"meds": [6, 11]}, "extra": {}, "image": ""},
 		{"id": "depot", "name": "The bus depot", "kind": "bus_depot", "pos": [42, 26], "blurb": "Buses, nose to tail.", "danger": 2, "known": true,
 			"loot": {"scrap": [10, 20]}, "extra": {}, "nest": {"strength": 2}, "survivor": true, "outpost": {"yield": {"scrap": 3}, "cost": 20}},
 		{"id": "chapel", "name": "St. Aidan's chapel", "kind": "church", "pos": [50, 20], "blurb": "Quiet. Too quiet, or just a chapel.", "danger": 0, "known": true,
@@ -448,7 +448,7 @@ func test_choosing_a_place_fills_the_card() -> void:
 	check(all.has("Meds"), "and what it is likely to give (the hint)")
 	check(all.has("6–11"), "with its amounts")
 	check(not board.facts.nest.cap.visible and not board.facts.hiding.cap.visible and not board.facts.outpost.cap.visible and not board.facts.held.cap.visible, "no nest, nobody hiding, no outpost, no garrison: none of them is on the card")
-	check(board.thumb.visible and board.thumb.texture != null, "the picture of the pharmacy")
+	check(not board.thumb.visible and board.thumb.texture == null, "no picture of the pharmacy (the places have none): the thumbnail is hidden")
 	eq(board.map.chosen, "pharmacy", "and the pin is the chosen one")
 	check(not select_unknown(board), "a place that is not known cannot be chosen")
 	Kit.free_all(ctx)

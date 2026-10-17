@@ -209,15 +209,13 @@ func test_opening_it_twice_does_not_stack_dialogs() -> void:
 func test_a_site_without_a_picture_gets_a_placeholder() -> void:
 	var ctx := _ready_to_send()
 	var sites := Kit.sample_sites()
-	sites[0]["image"] = "res://assets/ui/sites/there-is-no-such-picture.png"
+	sites[0]["image"] = "res://assets/there-is-no-such-picture.png"
 	sites[1]["image"] = ""
 	ctx.sim.scavenge.list = sites
 	ctx.hud.open_scavenge(ctx.hud.selection)
 	var d = ctx.hud.scavenge_dialog
 	check(d.site_cards.pharmacy.image.texture == null and d.site_cards.pharmacy.placeholder.visible, "a missing file")
 	check(d.site_cards.hardware.image.texture == null and d.site_cards.hardware.placeholder.visible, "no path at all")
-	if FileAccess.file_exists("res://assets/ui/sites/houses.png"):
-		check(d.site_cards.houses.image.texture != null and not d.site_cards.houses.placeholder.visible, "a picture that exists is shown")
 	Kit.free_all(ctx)
 
 

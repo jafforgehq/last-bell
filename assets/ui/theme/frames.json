@@ -23,7 +23,7 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#17221e",
+  "avg": "#1a2622",
   "ink": "#ece6d8"
  },
  "card": {
@@ -131,8 +131,39 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#ede9dc",
+  "avg": "#ebe7d9",
   "ink": "#262b36"
+ },
+ "bubble": {
+  "file": "res://assets/ui/theme/bubble.png",
+  "margin": [
+   50,
+   18,
+   20,
+   38
+  ],
+  "content": [
+   8.0,
+   5.0,
+   8.0,
+   6.0
+  ],
+  "expand": [
+   3.0,
+   2.0,
+   3.0,
+   13.0
+  ],
+  "stretch": [
+   "stretch",
+   "stretch"
+  ],
+  "avg": "#fbf7ed",
+  "ink": "#1a1508",
+  "tail": [
+   8.5,
+   8.0
+  ]
  },
  "button": {
   "file": "res://assets/ui/theme/button.png",
@@ -347,7 +378,7 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#161e1b",
+  "avg": "#131c18",
   "ink": "#ece6d8"
  },
  "clock": {
@@ -374,7 +405,7 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#16201d",
+  "avg": "#16211d",
   "ink": "#ece6d8"
  },
  "tooltip": {
@@ -536,7 +567,7 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#1e2925",
+  "avg": "#16211d",
   "ink": "#ece6d8"
  },
  "panel_slim": {
@@ -563,7 +594,7 @@
    "tile_fit",
    "tile_fit"
   ],
-  "avg": "#1b2623",
+  "avg": "#17221e",
   "ink": "#ece6d8"
  },
  "bar_fill": {
@@ -592,36 +623,5 @@
   ],
   "avg": "#cfcfcf",
   "ink": "#ece6d8"
- },
- "bubble": {
-  "file": "res://assets/ui/theme/bubble.png",
-  "margin": [
-   50,
-   18,
-   20,
-   38
-  ],
-  "content": [
-   8.0,
-   5.0,
-   8.0,
-   6.0
-  ],
-  "expand": [
-   3.0,
-   2.0,
-   3.0,
-   13.0
-  ],
-  "stretch": [
-   "stretch",
-   "stretch"
-  ],
-  "avg": "#fbf7ed",
-  "ink": "#1a1508",
-  "tail": [
-   8.5,
-   8.0
-  ]
  }
 }

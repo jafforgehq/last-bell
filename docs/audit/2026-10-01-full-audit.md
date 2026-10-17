@@ -146,11 +146,11 @@ Medium: single selection with no box-select or groups (left-drag pans); WASD by 
 
 The HUD is a good dark UI with no identity. The title, the bell and the school are the identity. I generated three concept boards (27 credits) to show the direction; they are mood boards, not final art (AI text is unreliable, so the squiggles are deliberate).
 
-![Chalkboard HUD concept](img/concept_ui_chalkboard.jpg)
+*(The concept picture that stood here was made with an image model and was removed on 2026-10-17; see docs/assets-log.md.)*
 
 Slate chalkboard panels in oak trim for the resource bar; crew as laminated school ID badges on lanyards; a brass bell clock for day and night; pinned slips for alerts; notebook paper for modals (a scavenging trip becomes a permission slip); a report card for the end screen. Bus yellow (#f0c24a, already your accent) stays the highlight. The HUD stays dark; paper appears only in modals.
 
-![Key art concept](img/concept_keyart.jpg)
+*(The concept picture that stood here was made with an image model and was removed on 2026-10-17; see docs/assets-log.md.)*
 
 The key art above is a candidate for the title screen and the Steam capsule (after a proper pass). Note what it shows: the bell, the towers and searchlights, the bus and containers, six silhouettes. It is the game.
 
@@ -203,7 +203,7 @@ One city block: the schoolyard in the middle, the school building at the bottom,
 | Fits the web demo | Yes | Yes if the sites are small | Doubtful |
 | Replayability | High: sites drawn per seed, districts unlock | High | High, but only after years of content |
 
-![Town Board concept](img/concept_city_map.jpg)
+*(The concept picture that stood here was made with an image model and was removed on 2026-10-17; see docs/assets-log.md.)*
 
 ### 5.3 Recommendation
 
