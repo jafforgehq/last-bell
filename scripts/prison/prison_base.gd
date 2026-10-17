@@ -306,7 +306,8 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	for i in 4:
 		_obj("bed_single", 10.5 + float(i) * 3.0, 27.5, "s")
 		_obj("nightstand", 11.5 + float(i) * 3.0, 26.5, "s")
-	_row("medicine_cabinet", 10.5, 25.5, 3, 4.0, "s")
+	for x in [10.5, 12.5, 19.5]:    # (none at 14.5: that one stood in the swing of the north door's leaves)
+		_obj("medicine_cabinet", x, 25.5, "s")
 	_obj("desk", 18.0, 33.0, "s")
 	_obj("shelf_tins", 10.0, 34.5, "n")
 	stations["bed"] = Vector2(12.5, 29.6)
