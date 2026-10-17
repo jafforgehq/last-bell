@@ -30,6 +30,8 @@ const G_WOOD := 5
 const G_HALL := 6
 const G_KITCHEN := 7
 const G_BATH := 9
+## The kit's codes are the GROUNDS index plus one (town_art.gd), so the names above are one off from the look they give (G_DIRT shows sidewalk slabs). This one is the bare dirt look, for the garden.
+const G_SOIL_LOOK := 4
 # fence line codes (TownArt.LINES)
 const L_CHAIN := 3
 const L_HEDGE := 5
@@ -143,8 +145,8 @@ func _wall(x: int, y: int, mat: int = 1) -> void:
 	kw[idx(x, y)] = mat
 
 
-func _fence(x: int, y: int, line: int = L_CHAIN) -> void:
-	_put(x, y, T_METAL, G_LAWN, 1)
+func _fence(x: int, y: int, line: int = L_CHAIN, g: int = G_LAWN) -> void:
+	_put(x, y, T_METAL, g, 1)
 	kl[idx(x, y)] = line
 
 
@@ -339,18 +341,18 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	labels.append({"pos": Vector2(53.5, 24.4), "text": "STORES"})
 	# the garden: rows of soil in the south-east of the yard, a plain wire fence round it (one gate, at the north)
 	var g := GARDEN
-	_fill(Rect2i(g.position.x + 1, g.position.y + 1, g.size.x - 2, g.size.y - 2), T_SOIL, G_DIRT)
+	_fill(Rect2i(g.position.x + 1, g.position.y + 1, g.size.x - 2, g.size.y - 2), T_SOIL, G_SOIL_LOOK)
 	for y in [g.position.y + 2, g.position.y + 6, g.position.y + 10]:
 		for x in range(g.position.x + 3, g.position.x + 16, 3):
 			_obj("veg_patch", float(x) + 1.0, float(y) + 1.0, "s", (x + y) % 3)
 	for y in range(g.position.y, g.end.y):
-		_fence(g.position.x, y, L_WIRE)
-		_fence(g.end.x - 1, y, L_WIRE)
+		_fence(g.position.x, y, L_WIRE, G_SOIL_LOOK)
+		_fence(g.end.x - 1, y, L_WIRE, G_SOIL_LOOK)
 	for x in range(g.position.x, g.end.x):
-		_fence(x, g.position.y, L_WIRE)
-		_fence(x, g.end.y - 1, L_WIRE)
+		_fence(x, g.position.y, L_WIRE, G_SOIL_LOOK)
+		_fence(x, g.end.y - 1, L_WIRE, G_SOIL_LOOK)
 	for gx in [g.position.x + 1, g.position.x + 2]:
-		_put(gx, g.position.y, T_SOIL, G_DIRT, 0)
+		_put(gx, g.position.y, T_SOIL, G_SOIL_LOOK, 0)
 	stations["garden1"] = Vector2(44.5, 43.2)
 	stations["garden2"] = Vector2(53.5, 47.2)
 	stations["garden3"] = Vector2(47.5, 51.2)
