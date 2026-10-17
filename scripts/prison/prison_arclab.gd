@@ -56,7 +56,7 @@ func step(_dt: float) -> void:
 func _setup() -> void:
 	_init_done = true
 	econ.person_left.connect(func(nm): game._econ_remove(String(nm)))    # no frames run: the walk to the gate is skipped
-	var keep := ["cole", "bea", "ike"]
+	var keep := ["cole", "bea", "ike", "hal", "wren"]
 	var n_keep := int(cfg.start_people)
 	var kept := 0
 	for m in game.crew.members.duplicate():
@@ -194,6 +194,7 @@ func _needs() -> Dictionary:
 		for r in arc.cfg.requirements:
 			if String(r.kind) == "stock":
 				need[String(r.res)] = float(need.get(String(r.res), 0.0)) + float(r.need)
+		need["fuel"] = float(need.get("fuel", 0.0)) + econ._fuel_burn() * maxf(0.0, float(arc.convoy_day() - int(econ.day)))    # (the generator burns fuel every day until the convoy: a list met on day 28 fell short on day 30)
 	return need
 
 

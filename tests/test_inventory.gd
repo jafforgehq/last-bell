@@ -57,6 +57,24 @@ func test_the_prison_flare_and_event_odds_data() -> void:
 				check(ch.has("chance") and is_equal_approx(float(ch.chance[0].p), odds), "%s: the shown chance is the rolled one" % String(ch.id))
 
 
+## PLAYTEST 4: Ruth starts with five allies, each with a bio and a base job, and the stores of the clear always pay for the first project (the water pump).
+func test_the_prison_starts_with_five_allies_and_the_first_project_affordable() -> void:
+	var Crew = load("res://scripts/prison/prison_crew.gd")
+	var G = load("res://scripts/prison/prison_game.gd")
+	eq(Crew.ALLIES.size(), 5, "five allies walk in with Ruth")
+	eq(Crew.CREW_FROM_ALLIES.size(), 5, "and all five join the base crew")
+	var bios = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_bios.json"))
+	var proj = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_projects.json"))
+	for a in Crew.ALLIES:
+		check(bios.people.has(String(a.name)), "%s has a bio" % String(a.name))
+		check(proj.crew_role.has(String(a.id)), "%s has a base role" % String(a.name))
+	var water := 0.0
+	for p in proj.projects:
+		if String(p.id) == "water1":
+			water = float(p.cost.scrap)
+	check(float(G.CLEAR_STORES.scrap) >= water, "the clear's own stores pay for the water pump (%d of %d scrap)" % [int(G.CLEAR_STORES.scrap), int(water)])
+
+
 func test_placement_bounds_overlap_and_rotation() -> void:
 	var g := Inventory.make_grid(3, 2)
 	check(Inventory.can_place(g, "water_jug", 1, 0, 0), "a jug fits in the corner")

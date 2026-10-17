@@ -3,7 +3,7 @@
   "day_secs": 360.0,
   "day_change_h": 6.0,
   "work": {"stop_secs": 20.0, "max_workers": 2, "ruth_rate": 1.0, "ruth_reach": 3.0},
-  "start": {"morale": 45.0, "beds": 8, "full_beds": 18, "ruth": 1, "parts": 2.0, "fuel": 0.0},
+  "start": {"morale": 45.0, "beds": 8, "full_beds": 20, "ruth": 1, "parts": 2.0, "fuel": 0.0},
   "per_person": {"food": 1.0, "water": 1.0},
   "caps": {"food": 80.0, "water": 100.0, "ammo": 400.0, "meds": 40.0, "scrap": 250.0, "parts": 60.0, "fuel": 40.0},
   "spoil": {"food": 0.05},
@@ -22,7 +22,7 @@
   "light_hit_bonus": 0.12,
   "building_role": {"water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic", "convoy": "mechanic"},
   "site": {"water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores", "convoy": "truck"},
-  "crew_role": {"mia": "cook", "marcus": "gardener", "nia": "gardener", "ana": "medic", "hector": "mechanic", "tomas": "mechanic", "owen": "hauler", "ike": "hauler", "walt": "guard", "dez": "guard", "rae": "guard", "sol": "guard", "june": "guard", "cole": "guard", "bea": "guard"},
+  "crew_role": {"mia": "cook", "marcus": "gardener", "nia": "gardener", "ana": "medic", "hector": "mechanic", "tomas": "mechanic", "owen": "hauler", "ike": "hauler", "walt": "guard", "dez": "guard", "rae": "guard", "sol": "guard", "june": "guard", "cole": "guard", "bea": "guard", "hal": "gardener", "wren": "mechanic"},
   "production": {
     "food": [
       {"amt": 10.0}, {"amt": 17.0}

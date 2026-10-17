@@ -137,6 +137,14 @@ func run(name: String) -> void:
 
 func _board() -> void:
 	var st: Dictionary = g.stores
+	st.scrap = 6.0    # (playtest 4: the first project unaffordable after the clear; the checklist and What next? must say how to get the scrap)
+	g.board._checklist(true)
+	_check(g.board.steps_lab.text.contains("Raid for scrap (you need 14 more): E at the truck"), "with 6 scrap the Water step says to raid for 14 more (%s)" % g.board.steps_lab.text.replace("\n", " / "))
+	var wn: Dictionary = g.board.pick_next()
+	_check(String(wn.why).contains("Raid for it: E at the truck"), "What next? on a pick that cannot be paid says how to get it (%s)" % String(wn.why))
+	st.scrap = 20.0
+	g.board._checklist(true)
+	_check(g.board.steps_lab.text.contains("Start the Water project"), "with the 20 scrap of a cleared prison the Water step is to start it")
 	st.scrap = 200.0
 	st.parts = 30.0
 	await _put(Vector2(g.base.stations.bench1) + Vector2(0.0, 1.2))

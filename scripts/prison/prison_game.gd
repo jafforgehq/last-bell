@@ -79,7 +79,7 @@ const BITE_DMG := 8.0
 const DOWN_SECS := 20.0
 const REVIVE_SECS := 2.0
 # (ammo 60 less the 40 round kit Ruth takes on entering = 20 left in the stores)
-const CLEAR_STORES := {"food": 25.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 4.0, "parts": 2.0, "fuel": 0.0}
+const CLEAR_STORES := {"food": 25.0, "water": 12.0, "ammo": 60.0, "meds": 3.0, "scrap": 20.0, "parts": 2.0, "fuel": 0.0}    # (scrap 20: the water pump, the first project, is affordable on day 1 even after a clear with no searching)
 
 const TILE := GD.TILE
 const CAMERA_EASE := 8.0
@@ -179,7 +179,7 @@ var dog
 var phase := "managed"    # "clear" (clear the prison) then "managed" (the base loop). See the header.
 var zone_done: Array = []    # bool per Base.ZONES
 var _zone_t := 0.0
-var allies_alive: Array = ["cole", "bea", "ike"]
+var allies_alive: Array = ["cole", "bea", "ike", "hal", "wren"]
 var ally_chasers := {}    # Zombie -> member: dead that go for an ally instead of Ruth (see _step)
 var revive_t := 0.0
 var _hurt_t := 0.0
@@ -878,7 +878,7 @@ func _radial_texture() -> Texture2D:
 
 # ----------------------------------------------------------------------- modes --
 
-## `--crew=full`: the old start (all fourteen of the roster and the three allies, 18 beds), so that the old checks run.
+## `--crew=full`: the old start (all fourteen of the roster and the five allies, 20 beds), so that the old checks run.
 func crew_full() -> bool:
 	return String(args.get("crew", "")) == "full"
 
@@ -936,7 +936,7 @@ func _enter_base() -> void:
 	if not clear:
 		for a in (Crew.CREW_FROM_ALLIES_FULL if crew_full() else Crew.CREW_FROM_ALLIES):    # the allies are crew from here on (a job and a place), not followers
 			if allies_alive.has(String(a.id)):
-				crew._make(a, Vector2.ZERO if a.has("stand") else Base.SPAWN + Vector2(-2.0, 1.5 + float(allies_alive.find(String(a.id)))))
+				crew._make(a, Vector2.ZERO if a.has("stand") else Base.SPAWN + Vector2(-3.0 + 1.5 * float(allies_alive.find(String(a.id))), 1.5))    # (in a row: a column of five reached the gate)
 	if not clear:
 		people.spawn_recruits()    # RAIDS hook: the people found in raids are crew again
 		crew.posts = siege.posts
@@ -3089,7 +3089,7 @@ func _allies(dt: float) -> void:
 			continue
 		# follow
 		var idx := allies.find(m)
-		var slot := me - aim * 3.0 + aim.orthogonal() * (float(idx) - 1.0) * 1.2 if hang else me + Vector2.from_angle(float(idx) * 2.1 + 0.5) * 2.2
+		var slot := me - aim * 3.0 + aim.orthogonal() * (float(idx) - float(allies.size() - 1) / 2.0) * 1.2 if hang else me + Vector2.from_angle(float(idx) * TAU / float(allies.size()) + 0.5) * 2.2    # (spread evenly round her, however many are left)
 		var pg: Vector2 = raidx.ally_spot(idx)    # RAID EXTRAS: a ping, they stand about it
 		if pg != Vector2.INF and not hang:
 			slot = pg

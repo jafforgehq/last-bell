@@ -382,14 +382,18 @@ func pick_next() -> Dictionary:
 		return {"id": "", "why": "Nothing is left to start: the rest is built or waits on a project in the queue."}
 	var d2: Dictionary = econ.defs[best]
 	var why := ""
+	var raid := ""
 	var can2: Dictionary = econ.can_start(best)
 	if best_ok:
 		why = "You can afford %s now" % String(d2.name)
 	elif not (can2.missing as Dictionary).is_empty():
-		var parts: Array = []
+		var kinds: Array = []
 		for k in can2.missing:
-			parts.append("%d %s" % [int(can2.missing[k]), k])
-		why = "%s is the nearest to affordable: you are %s short" % [String(d2.name), " and ".join(parts)]
+			var kind := String(econ.cfg.fixes.get(k, ""))
+			if kind != "" and not kinds.has(kind):
+				kinds.append(kind)
+		why = "%s is the nearest to affordable: you are %s short" % [String(d2.name), short_text(can2.missing)]
+		raid = " Raid for it: E at the truck%s." % ((" (a %s place has the most)" % " or ".join(kinds)) if not kinds.is_empty() else "")    # (never a pick the player cannot afford without the way to afford it)
 	else:
 		why = "%s needs a %s: give somebody that job in the Roster" % [String(d2.name), String(d2.role)]
 	if want != "" and String(econ.cfg.production_building.get(want, "")) == String(d2.building):
@@ -398,7 +402,15 @@ func pick_next() -> Dictionary:
 		why += ", and it is on the way to the next stage."
 	else:
 		why += "."
-	return {"id": best, "why": why}
+	return {"id": best, "why": why + raid}
+
+
+## "6 scrap and 2 parts": what a project still lacks, in whole units ("" when nothing).
+func short_text(missing: Dictionary) -> String:
+	var parts: Array = []
+	for k in missing:
+		parts.append("%d %s" % [ceili(float(missing[k])), k])
+	return " and ".join(parts)
 
 
 func what_next() -> void:
@@ -1187,7 +1199,14 @@ func _checklist(base_on: bool) -> void:
 	for s in STEPS:
 		var ok: bool = did.get(s[0], false)
 		left += 0 if ok else 1
-		txt += "%s  %s\n" % ["[x]" if ok else "[ ]", s[1]]
+		var line := String(s[1])
+		if s[0] == "water" and not ok and econ.state("water1") == "available":
+			var miss: Dictionary = econ.can_start("water1").missing
+			if miss.size() == 1:    # (the first project is not affordable: say how to get it)
+				line = "Raid for %s (you need %d more): E at the truck" % [miss.keys()[0], ceili(float(miss.values()[0]))]
+			elif miss.size() > 1:
+				line = "Raid for %s first: E at the truck" % short_text(miss)
+		txt += "%s  %s\n" % ["[x]" if ok else "[ ]", line]
 	if left == 0:
 		steps_off = true
 	steps_panel.visible = on and not panel.visible and not game.guide.panel.visible

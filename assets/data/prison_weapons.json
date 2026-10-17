@@ -45,7 +45,7 @@
     "bag_scav": [6, 3],
     "tags": {
       "june": ["Scavenger", "Fighter"], "owen": ["Scavenger"], "tomas": ["Scavenger"], "ike": ["Scavenger"], "marcus": ["Scavenger"],
-      "walt": ["Fighter"], "dez": ["Fighter"], "rae": ["Fighter"], "sol": ["Fighter"], "hector": ["Fighter"], "cole": ["Fighter"], "bea": ["Fighter"],
+      "walt": ["Fighter"], "dez": ["Fighter"], "rae": ["Fighter"], "sol": ["Fighter"], "hector": ["Fighter"], "cole": ["Fighter"], "bea": ["Fighter"], "hal": ["Scavenger"], "wren": ["Fighter"],
       "ana": ["Medic"], "mia": [], "nia": []
     },
     "role_words": {

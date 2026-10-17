@@ -12,10 +12,10 @@ const PATH := "user://prison_ui.cfg"
 
 const CARDS := {
 	"clear": [
-		["Welcome to the prison", "You and three survivors hold the %SIDE% breach. The old prison is full of the dead. Clear it zone by zone, then lock the gate behind you."],
+		["Welcome to the prison", "You and five survivors hold the %SIDE% breach. The old prison is full of the dead. Clear it zone by zone, then lock the gate behind you."],
 		["Move, aim, shoot", "WASD walks. %AIM%. R reloads, F stabs with your knife, any time: it needs no ammo and is quiet, the wheel zooms, M shows the whole prison. The top bar keeps your ammo and meds."],
 		["Clear the zones", "The map at the bottom right marks six zones. A zone is clear when no dead are left in it. E searches containers for ammo, food and meds. The pulsing ring in the world and the Objectives list show where to go next."],
-		["Your party", "Cole, Bea and Ike follow you and shoot. Their hearts are on the top bar. When one goes down, hold E beside them to revive them (1 med). Press O to fold the Objectives list, H to see this guide again."],
+		["Your party", "Cole, Bea, Ike, Hal and Wren follow you and shoot. Their hearts are on the top bar. When one goes down, hold E beside them to revive them (1 med). Press O to fold the Objectives list, H to see this guide again."],
 	],
 	"managed": [
 		["The prison is yours", "The top bar shows what the base holds: each stock with its cap and the change per day. Amber means less than 3 days left, red less than 1. Hover a chip for what makes and uses it; a click opens the needs board."],

@@ -4,6 +4,8 @@
     "Cole": {"traits": ["steady", "veteran"], "bio": "Held a checkpoint on the east road until the road stopped leading anywhere."},
     "Bea": {"traits": ["sharp_eyed", "hothead"], "bio": "Hunted rabbits with her father. Does not like to wait for a clean shot."},
     "Ike": {"traits": ["scrounger"], "bio": "Drove a delivery van. Knows which back doors are never locked."},
+    "Hal": {"traits": ["tough", "optimist"], "bio": "Kept an allotment by the ring road. Grew more marrows than anyone wanted, and is sorry now that he gave them away."},
+    "Wren": {"traits": ["tinkerer", "nervous"], "bio": "Fixed lifts in the tower blocks. Can hear a loose bolt across a yard, and the dead on the stairs."},
     "Walt": {"traits": ["veteran"], "bio": "Thirty years on a prison gate. The dead are not the worst thing he has watched come up a road."},
     "Dez": {"traits": ["sharp_eyed"], "bio": "A hunting-club marksman who never shot at anything that shot back, until now."},
     "Rae": {"traits": ["nervous"], "bio": "A night nurse. Hears the wall in her sleep."},

@@ -65,8 +65,10 @@ const ALLIES := [
 	{"id": "cole", "name": "Cole", "role": "Ally", "key": "walt", "ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
 	{"id": "bea", "name": "Bea", "role": "Ally", "key": "ana", "ally": true, "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}},
 	{"id": "ike", "name": "Ike", "role": "Ally", "key": "hector", "ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}},
+	{"id": "hal", "name": "Hal", "role": "Ally", "key": "marcus", "ally": true, "look": {"top": "#7a6a3a", "pants": "#3a4a3a", "skin": "#5e3b2a", "hatColor": "#4a5a2a"}},
+	{"id": "wren", "name": "Wren", "role": "Ally", "key": "ana", "ally": true, "look": {"top": "#a0703a", "outer": "#4a3a5a", "pants": "#3a3a44", "skin": "#c69877"}},
 ]
-## MANAGED PHASE: the three allies are crew now: a name, a job and a place, no follow code, no "ally" key (so no health bar, no 'ready' tag, no revive). "ex_ally" only tells the siege to forget them when lost.
+## MANAGED PHASE: the five allies are crew now: a name, a job and a place, no follow code, no "ally" key (so no health bar, no 'ready' tag, no revive). "ex_ally" only tells the siege to forget them when lost.
 const CREW_FROM_ALLIES_FULL := [
 	{"id": "cole", "name": "Cole", "role": "Gate watch", "key": "walt", "ex_ally": true, "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
 		{"at": Vector2(19.5, 51.3), "secs": 20.0, "work": "watch", "face": "S", "say": "watching the gate"},
@@ -82,15 +84,31 @@ const CREW_FROM_ALLIES_FULL := [
 		{"at": "stores_out", "secs": 7.0, "work": "haul", "face": "N", "say": "carrying crates"},
 		{"at": "stores_in", "secs": 7.0, "work": "sort", "face": "N", "say": "counting the stores"},
 	]},
+	{"id": "hal", "name": "Hal", "role": "Gardener", "key": "marcus", "ex_ally": true, "look": {"top": "#7a6a3a", "pants": "#3a4a3a", "skin": "#5e3b2a", "hatColor": "#4a5a2a"}, "route": [
+		{"at": "garden1", "secs": 9.0, "work": "garden", "face": "S", "say": "turning the beds"},
+		{"at": "stores_in", "secs": 6.0, "work": "sort", "face": "N", "say": "sorting seed"},
+	]},
+	{"id": "wren", "name": "Wren", "role": "Mechanic", "key": "ana", "ex_ally": true, "look": {"top": "#a0703a", "outer": "#4a3a5a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
+		{"at": "bench2", "secs": 10.0, "work": "hammer", "face": "N", "say": "at the vise"},
+		{"at": "fence_m", "secs": 8.0, "work": "mend", "face": "S", "say": "checking the fence"},
+	]},
 ]
-## FIX ROUND 3: the managed phase starts with Ruth and these three only (the rest of the ROSTER below is a pool of survivors that raids can find, people.gd): Cole and Bea take the two towers by the
-## gate, Ike carries water. `--crew=full` brings back the old start (ROSTER and CREW_FROM_ALLIES_FULL).
+## FIX ROUND 3: the managed phase starts with Ruth and these five only (Hal and Wren joined after playtest 4; the rest of the ROSTER below is a pool of survivors that raids can find, people.gd): Cole and Bea take the two towers by the
+## gate, Ike carries water, Hal is the gardener and Wren the mechanic. `--crew=full` brings back the old start (ROSTER and CREW_FROM_ALLIES_FULL).
 const CREW_FROM_ALLIES := [
 	{"id": "cole", "name": "Cole", "role": "Tower guard", "key": "walt", "ex_ally": true, "stand": "tower_w", "work": "watch", "face": "S", "look": {"top": "#5a4a3a", "pants": "#3a3a44", "skin": "#c69877"}},
 	{"id": "bea", "name": "Bea", "role": "Tower guard", "key": "ana", "ex_ally": true, "stand": "tower_e", "work": "watch", "face": "S", "look": {"top": "#6a3a4a", "outer": "#3a4a5a", "pants": "#2c2c34", "skin": "#7a4e34"}},
 	{"id": "ike", "name": "Ike", "role": "Hauler", "key": "hector", "ex_ally": true, "look": {"top": "#3a5a4a", "pants": "#4a4036", "skin": "#e0b393"}, "route": [
 		{"at": "well", "secs": 6.0, "work": "haul", "face": "S", "give": {"water": 4.0}, "say": "drawing water"},
 		{"at": "stores_in", "secs": 5.0, "work": "haul", "face": "N", "say": "stacking crates"},
+	]},
+	{"id": "hal", "name": "Hal", "role": "Gardener", "key": "marcus", "ex_ally": true, "look": {"top": "#7a6a3a", "pants": "#3a4a3a", "skin": "#5e3b2a", "hatColor": "#4a5a2a"}, "route": [
+		{"at": "garden1", "secs": 9.0, "work": "garden", "face": "S", "say": "turning the beds"},
+		{"at": "stores_in", "secs": 6.0, "work": "sort", "face": "N", "say": "sorting seed"},
+	]},
+	{"id": "wren", "name": "Wren", "role": "Mechanic", "key": "ana", "ex_ally": true, "look": {"top": "#a0703a", "outer": "#4a3a5a", "pants": "#3a3a44", "skin": "#c69877"}, "route": [
+		{"at": "bench2", "secs": 10.0, "work": "hammer", "face": "N", "say": "at the vise"},
+		{"at": "fence_m", "secs": 8.0, "work": "mend", "face": "S", "say": "checking the fence"},
 	]},
 ]
 const ALLY_HP := 45.0
