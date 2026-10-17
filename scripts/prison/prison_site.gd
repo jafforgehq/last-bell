@@ -792,6 +792,7 @@ func _airport() -> void:
 			[Rect2i(16, hy + 2, 1, 5), Rect2i(5, hy + 8, 2, 1), Rect2i(12, hy + 8, 2, 1)], 2)
 		_shut(Rect2i(5, hy + 4, 8, 1))
 		_prop("smallplane", Rect2(4.6, hy + 1.6, 9.0, 5.8))
+		_prop("hangar_door", Rect2(17.0, hy + 0.1, 0.42, 12.8), {"open0": hy + 2.0, "open1": hy + 7.0, "text": "H%d" % (1 if hy == 17 else 2)})    # (drawn only, on the apron)
 		_furn("tool_chest", 4.0, float(hy) + 1.5, "s", "tool_chest")
 		_furn("workbench", 14.0, float(hy) + 1.5, "s", "workbench")
 		_furn("jerrycan", 15.5, float(hy) + 7.5)
@@ -991,7 +992,10 @@ func _hospital() -> void:
 	_dead_rooms(hp, 15.0)
 	_dead(Rect2i(15, 28, 8, 15), 4, "still")    # (the morgue is fuller)
 	for r in [Rect2i(38, 46, 5, 2), Rect2i(52, 46, 5, 2), Rect2i(38, 49, 5, 2)]:
+		_prop("bay", Rect2(r).grow(0.2))    # (the bay's paint, under the van)
 		_yard("ambulance", r, "pharmacy", "ambulance")
+	_prop("keepclear", Rect2(45.6, 45.2, 5.8, 1.6))    # (drawn only: the hatched box at the lobby doors and the sign beside them)
+	_prop("sign", Rect2(41.2, 44.1, 3.4, 0.8), {"text": "EMERGENCY", "c": Color(0.78, 0.13, 0.12)})
 	groups.append({"name": String(bcfg.get("ambulances", {}).get("name", "Ambulances")), "hint": String(bcfg.get("ambulances", {}).get("hint", "")), "type": "pharmacy", "rect": Rect2(38, 46, 19, 5)})
 	var gar := _bldg("garage", Rect2i(56, 26, 7, 12), [[Rect2i(57, 27, 5, 10), "garage", "hall"]], [Rect2i(56, 30, 1, 3)], 1)
 	_furn("workbench", 59.0, 27.5, "s", "workbench")
@@ -1024,6 +1028,11 @@ func _supermarket() -> void:
 	_fill(Rect2i(17, 4, 42, 30), "sidewalk")
 	_prop("parking", Rect2(12, 36, 48, 8), {"bay": 3.0})
 	_prop("parking", Rect2(12, 50, 48, 8), {"bay": 3.0})
+	_prop("zebra", Rect2(34.0, 34.2, 6.0, 1.6))    # (drawn only: the crossing from the car park to the doors, the lane arrows, the store's sign by the road in)
+	for ax in [18.0, 32.0, 46.0]:
+		_prop("arrow", Rect2(ax, 45.0, 2.4, 0.9))
+		_prop("arrow", Rect2(ax + 6.0, 48.1, 2.4, 0.9), {"west": true})
+	_prop("sign", Rect2(4.6, 42.2, 3.6, 1.0), {"text": "MARKET", "c": Color(0.75, 0.14, 0.12)})
 	var st := _bldg("store", Rect2i(18, 5, 40, 27), [
 		[Rect2i(19, 6, 20, 6), "stockroom", "hall", "stockroom"], [Rect2i(40, 6, 8, 6), "pharmacy", "kitchen", "pharmacy"], [Rect2i(49, 6, 8, 6), "office", "wood"],
 		[Rect2i(19, 13, 38, 18), "shop floor", "kitchen"]],
@@ -1210,11 +1219,19 @@ func _industrial() -> void:
 
 
 # ================================================================== THE PAINTER ==
+## SET PIECES (2026-10-17, the owner's "give everything proper love"): every thing here is drawn in one manner, the RimWorld flat style of the town's own sprites: flat colours with one
+## lighter and one darker shade, a dark outline (INK) round each silhouette, and a soft two-step drop shadow toward the south-east (SH: the town's light). A vehicle is drawn nose north in
+## its own frame (`draw_set_transform`, then back to the identity: the painter's DrawNode has none of its own) so a turned one is the same picture. Nothing here moves a tile, a wall or a
+## container: the walkable and solid grids are the layout functions' alone.
 
 const INK := Color(0.11, 0.09, 0.08)
+const SH := Vector2(10.0, 13.0)
+const WHITE_PAINT := Color(0.94, 0.94, 0.9, 0.92)
+const YELLOW_PAINT := Color(0.95, 0.78, 0.15, 0.9)
+const GLASS := Color(0.2, 0.27, 0.35)
 
 
-## The code-drawn things of a site (world px). `high`: only the things over the people (the crane booms); else the ground layer, under the people and the roofs.
+## The code-drawn things of a site (world px). `high`: only the things over the people (the crane booms, the floodlight heads); else the ground layer, under the people and the roofs.
 static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 	var s: Dictionary = town.get("site", {})
 	for p in s.get("props", []):
@@ -1223,17 +1240,14 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 		if high:
 			if k == "crane":
 				_crane_boom(c, r)
+			elif k == "bowl":
+				_bowl_high(c, r)
 			continue
 		match k:
 			"water":
 				_water(c, r)
 			"quay":
-				c.draw_rect(r, Color(0.62, 0.6, 0.55))
-				c.draw_rect(r, INK, false, 3.0)
-				for y in range(0, int(r.size.y), int(TILE * 4.0)):
-					c.draw_circle(r.position + Vector2(r.size.x * 0.5, float(y) + TILE), 9.0, INK)
-					c.draw_circle(r.position + Vector2(r.size.x * 0.5, float(y) + TILE), 6.0, Color(0.3, 0.3, 0.32))
-				c.draw_line(r.position + Vector2(-TILE * 0.5, 0), r.position + Vector2(-TILE * 0.5, r.size.y), Color(0.95, 0.8, 0.2, 0.8), 5.0)
+				_quay(c, r, s.get("props", []))
 			"hull":
 				_hull(c, r)
 			"crane":
@@ -1243,7 +1257,7 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 			"tank":
 				_tank(c, r)
 			"fuel_truck":
-				_truck(c, r, Color(0.85, 0.85, 0.82), Color(0.8, 0.2, 0.15), "FUEL", p.get("h", false))
+				_truck(c, r, Color(0.86, 0.87, 0.86), Color(0.78, 0.18, 0.14), bool(p.get("h", false)))
 			"ambulance":
 				_ambulance(c, r)
 			"patrol":
@@ -1251,31 +1265,24 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 			"runway":
 				_runway(c, r)
 			"taxi":
-				var my := r.position.y + r.size.y * 0.5
-				c.draw_line(Vector2(r.position.x, my), Vector2(r.end.x, my), Color(0.95, 0.78, 0.15), 5.0)
-				for cx in [10.0, 54.0]:
-					c.draw_line(Vector2(cx * TILE, my), Vector2(cx * TILE, 6.0 * TILE), Color(0.95, 0.78, 0.15), 5.0)
+				_taxi(c, r)
 			"apron":
 				for k2 in 6:
 					var x := r.position.x + (2.0 + float(k2) * 7.5) * TILE
 					c.draw_line(Vector2(x, r.position.y + TILE), Vector2(x, r.end.y - TILE * 2.0), Color(0.95, 0.78, 0.15, 0.7), 4.0)
+					c.draw_line(Vector2(x - TILE * 0.6, r.end.y - TILE * 2.0), Vector2(x + TILE * 0.6, r.end.y - TILE * 2.0), Color(0.95, 0.78, 0.15, 0.85), 6.0)
+					c.draw_string(ThemeDB.fallback_font, Vector2(x - TILE, r.end.y - TILE * 1.2), "A%d" % (k2 + 1), HORIZONTAL_ALIGNMENT_CENTER, TILE * 2.0, 28, Color(0.95, 0.78, 0.15, 0.8))
 				c.draw_rect(r.grow(-6.0), Color(0.95, 0.78, 0.15, 0.5), false, 3.0)
 			"plane":
 				_plane(c, r, p.get("c", Color(0.75, 0.2, 0.2)), false)
 			"smallplane":
 				_plane(c, r, Color(0.2, 0.5, 0.35), true)
 			"jetbridge":
-				c.draw_rect(Rect2(r.position + Vector2(6, 8), r.size), Color(0, 0, 0, 0.25))
-				c.draw_rect(r, Color(0.7, 0.72, 0.74))
-				for y in range(0, int(r.size.y), 22):
-					c.draw_line(r.position + Vector2(0, float(y)), r.position + Vector2(r.size.x, float(y)), Color(0.5, 0.52, 0.55), 2.0)
-				c.draw_rect(r, INK, false, 3.0)
+				_jetbridge(c, r)
+			"hangar_door":
+				_hangar_door(c, r, p)
 			"bagcart":
-				c.draw_rect(r.grow(-6.0), Color(0.45, 0.45, 0.5))
-				for k3 in 3:
-					c.draw_rect(Rect2(r.position + Vector2(10.0 + k3 * 58.0, 12.0), Vector2(48, r.size.y - 24.0)), Color(0.75, 0.55, 0.3))
-					c.draw_rect(Rect2(r.position + Vector2(10.0 + k3 * 58.0, 12.0), Vector2(48, r.size.y - 24.0)), INK, false, 2.0)
-				c.draw_rect(r.grow(-6.0), INK, false, 3.0)
+				_bagcart(c, r)
 			"parking":
 				var bay := float(p.get("bay", 3.0)) * TILE
 				if bool(p.get("v", false)):
@@ -1291,8 +1298,20 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 						c.draw_line(Vector2(x2, r.end.y - TILE * 2.6), Vector2(x2, r.end.y), Color(0.92, 0.92, 0.88, 0.6), 4.0)
 						x2 += bay
 			"canopy":
-				c.draw_rect(r, Color(0.9, 0.9, 0.88, 0.35))
-				c.draw_rect(r, Color(0.8, 0.2, 0.15, 0.9), false, 6.0)
+				_canopy(c, r)
+			"bay":
+				c.draw_rect(r, Color(0.95, 0.95, 0.92, 0.75), false, 5.0)
+			"keepclear":
+				_hatch(c, r, YELLOW_PAINT)
+			"sign":
+				_sign(c, r, String(p.get("text", "")), p.get("c", Color(0.8, 0.15, 0.12)))
+			"zebra":
+				var n := int(r.size.x / 26.0)
+				for k4 in n:
+					if k4 % 2 == 0:
+						c.draw_rect(Rect2(r.position.x + float(k4) * r.size.x / float(n), r.position.y, r.size.x / float(n), r.size.y), WHITE_PAINT)
+			"arrow":
+				_arrow(c, r, bool(p.get("west", false)))
 			"bowl":
 				_bowl(c, r)
 			"stall":
@@ -1312,8 +1331,88 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 				_scrap(c, r)
 
 
+# ------------------------------------------------------------------ the shared strokes --
+
+## A rounded rectangle as a polygon (clockwise from the top edge's right end).
+static func _rr(r: Rect2, rad: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	rad = minf(rad, minf(r.size.x, r.size.y) * 0.5 - 0.01)
+	var cs := [Vector2(r.end.x - rad, r.position.y + rad), Vector2(r.end.x - rad, r.end.y - rad), Vector2(r.position.x + rad, r.end.y - rad), Vector2(r.position.x + rad, r.position.y + rad)]
+	for i in 4:
+		for k in 5:
+			var a := -PI * 0.5 + (float(i) + float(k) / 4.0) * PI * 0.5
+			pts.append(cs[i] + Vector2(cos(a), sin(a)) * rad)
+	return pts
+
+
+static func _closed(pts: PackedVector2Array) -> PackedVector2Array:
+	var q := pts.duplicate()
+	q.append(pts[0])
+	return q
+
+
+## A filled shape with the dark outline.
+static func _shape(c: CanvasItem, pts: PackedVector2Array, col: Color, w: float = 3.0) -> void:
+	c.draw_colored_polygon(pts, col)
+	c.draw_polyline(_closed(pts), INK, w)
+
+
+## The soft drop shadow of a shape: two steps, the far one fainter. `lift` > 1 for a thing high off the ground (a plane, a crane).
+static func _drop_sh(c: CanvasItem, pts: PackedVector2Array, lift: float = 1.0) -> void:
+	for st in [[1.0, 0.12], [0.55, 0.16]]:
+		var q := PackedVector2Array()
+		for p in pts:
+			q.append(p + SH * lift * float(st[0]))
+		c.draw_colored_polygon(q, Color(0, 0, 0, float(st[1])))
+
+
 static func _shadow(c: CanvasItem, r: Rect2, off: float = 10.0) -> void:
-	c.draw_rect(Rect2(r.position + Vector2(off, off * 1.3), r.size), Color(0, 0, 0, 0.28))
+	_drop_sh(c, _rr(r, 4.0), off / 10.0)
+
+
+static func _unframe(c: CanvasItem) -> void:
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## A windscreen in a nose-north frame: wide at the bottom, narrow at the top, a glint.
+static func _windscreen(c: CanvasItem, w: float, y0: float, y1: float, inset_top: float, inset_bottom: float) -> void:
+	var pts := PackedVector2Array([Vector2(-w * 0.5 + inset_top, y0), Vector2(w * 0.5 - inset_top, y0), Vector2(w * 0.5 - inset_bottom, y1), Vector2(-w * 0.5 + inset_bottom, y1)])
+	_shape(c, pts, GLASS, 2.5)
+	c.draw_line(Vector2(-w * 0.5 + inset_top + 10.0, y1 - 4.0), Vector2(-w * 0.5 + inset_top + 24.0, y0 + 4.0), Color(0.6, 0.7, 0.78, 0.6), 3.0)
+
+
+## Yellow (or any) hatching inside a rectangle, with its frame: a box to keep clear.
+static func _hatch(c: CanvasItem, r: Rect2, col: Color) -> void:
+	c.draw_rect(r, col, false, 5.0)
+	var x := r.position.x - r.size.y
+	while x < r.end.x:
+		var a := Vector2(maxf(x, r.position.x), r.position.y + maxf(0.0, r.position.x - x))
+		var b := Vector2(minf(x + r.size.y, r.end.x), r.end.y - maxf(0.0, x + r.size.y - r.end.x))
+		c.draw_line(a, b, col, 5.0)
+		x += 26.0
+
+
+## A flat sign (a plaque on a post seen from above): a coloured board, a white rim, the word.
+static func _sign(c: CanvasItem, r: Rect2, text: String, col: Color) -> void:
+	_drop_sh(c, _rr(r, 6.0), 0.8)
+	_shape(c, _rr(r, 6.0), col, 3.0)
+	c.draw_polyline(_closed(_rr(r.grow(-5.0), 4.0)), Color(0.96, 0.96, 0.93), 2.5)
+	c.draw_string(ThemeDB.fallback_font, Vector2(r.position.x, r.get_center().y + 9.0), text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, int(clampf(r.size.y * 0.5, 14.0, 28.0)), Color(0.98, 0.98, 0.95))
+
+
+## A painted lane arrow, east (or west).
+static func _arrow(c: CanvasItem, r: Rect2, west: bool) -> void:
+	var cy := r.get_center().y
+	var t := r.size.y * 0.5
+	var x0 := r.position.x
+	var x1 := r.end.x
+	var head := r.size.x * 0.35
+	var pts := PackedVector2Array([Vector2(x0, cy - t * 0.35), Vector2(x1 - head, cy - t * 0.35), Vector2(x1 - head, cy - t), Vector2(x1, cy),
+		Vector2(x1 - head, cy + t), Vector2(x1 - head, cy + t * 0.35), Vector2(x0, cy + t * 0.35)])
+	if west:
+		for i in pts.size():
+			pts[i] = Vector2(x0 + x1 - pts[i].x, pts[i].y)
+	c.draw_colored_polygon(pts, WHITE_PAINT)
 
 
 static func _box(c: CanvasItem, r: Rect2, col: Color, vents: bool) -> void:
@@ -1326,115 +1425,229 @@ static func _box(c: CanvasItem, r: Rect2, col: Color, vents: bool) -> void:
 	c.draw_rect(r, INK, false, 3.5)
 
 
+# ------------------------------------------------------------------ the port --
+
 static func _water(c: CanvasItem, r: Rect2) -> void:
-	c.draw_rect(r, Color(0.16, 0.33, 0.48))
+	c.draw_rect(r, Color(0.15, 0.31, 0.46))
 	for k in 70:
 		var x := r.position.x + fposmod(float(k) * 173.7, r.size.x)
 		var y := r.position.y + fposmod(float(k) * 291.3, r.size.y)
 		c.draw_line(Vector2(x, y), Vector2(x + 46.0, y), Color(0.45, 0.62, 0.75, 0.45), 3.0)
 		c.draw_line(Vector2(x + 14.0, y + 9.0), Vector2(x + 36.0, y + 9.0), Color(0.45, 0.62, 0.75, 0.3), 2.0)
+	# the quay wall's shade on the water and the darker deep water past it
+	c.draw_rect(Rect2(r.position, Vector2(22.0, r.size.y)), Color(0.04, 0.1, 0.16, 0.45))
+	c.draw_rect(Rect2(r.position + Vector2(22.0, 0), Vector2(16.0, r.size.y)), Color(0.04, 0.1, 0.16, 0.2))
+
+
+## The quay's edge: the concrete cope with its yellow safety line, rubber fenders on the water side, bollards every three tiles and the ship's mooring lines.
+static func _quay(c: CanvasItem, r: Rect2, props: Array) -> void:
+	var hull := Rect2()
+	for p in props:
+		if String(p.k) == "hull":
+			hull = Rect2(Rect2(p.r).position * TILE, Rect2(p.r).size * TILE)
+	var edge := r.end.x
+	var cope := Rect2(Vector2(edge - 30.0, r.position.y), Vector2(30.0, r.size.y))
+	c.draw_rect(cope, Color(0.72, 0.7, 0.65))
+	c.draw_line(Vector2(cope.position.x + 4.0, r.position.y), Vector2(cope.position.x + 4.0, r.end.y), Color(0.82, 0.8, 0.75), 3.0)
+	for y in range(int(r.position.y), int(r.end.y), int(TILE * 2.0)):    # the cope's joints
+		c.draw_line(Vector2(cope.position.x, float(y)), Vector2(edge, float(y)), Color(0.5, 0.48, 0.45), 2.0)
+	c.draw_line(Vector2(cope.position.x, r.position.y), Vector2(cope.position.x, r.end.y), Color(0.3, 0.29, 0.27), 2.0)
+	c.draw_line(Vector2(edge, r.position.y), Vector2(edge, r.end.y), INK, 5.0)
+	c.draw_line(Vector2(edge - TILE * 0.9, r.position.y), Vector2(edge - TILE * 0.9, r.end.y), YELLOW_PAINT, 6.0)
+	for y in range(int(r.position.y + TILE), int(r.end.y), int(TILE * 2.0)):    # fenders
+		var f := Rect2(Vector2(edge, float(y)), Vector2(12.0, 44.0))
+		c.draw_rect(f, Color(0.14, 0.14, 0.15))
+		c.draw_rect(f, INK, false, 2.0)
+	for y in range(int(r.position.y + TILE * 1.5), int(r.end.y), int(TILE * 3.0)):    # bollards and the ship's lines
+		var b := Vector2(edge - 16.0, float(y))
+		if hull.size.x > 0.0 and b.y > hull.position.y + TILE * 2.0 and b.y < hull.end.y - TILE:
+			var to := Vector2(hull.position.x + 6.0, b.y + (TILE * 1.4 if int(b.y / TILE) % 2 == 0 else -TILE * 1.4))
+			c.draw_line(b, to, INK, 6.0)
+			c.draw_line(b, to, Color(0.82, 0.72, 0.5), 3.0)
+		c.draw_circle(b + Vector2(4, 6), 13.0, Color(0, 0, 0, 0.25))
+		c.draw_circle(b, 13.0, INK)
+		c.draw_circle(b, 10.0, Color(0.24, 0.25, 0.27))
+		c.draw_circle(b + Vector2(-2, -2), 6.5, Color(0.4, 0.41, 0.44))
 
 
 static func _hull(c: CanvasItem, r: Rect2) -> void:
 	var cx := r.position.x + r.size.x * 0.5
 	var pts := PackedVector2Array([Vector2(cx, r.position.y), Vector2(r.end.x, r.position.y + r.size.x * 1.2), Vector2(r.end.x, r.end.y - 20.0), Vector2(r.end.x - 20.0, r.end.y),
 		Vector2(r.position.x + 20.0, r.end.y), Vector2(r.position.x, r.end.y - 20.0), Vector2(r.position.x, r.position.y + r.size.x * 1.2)])
-	var sh := PackedVector2Array()
-	for q in pts:
-		sh.append(q + Vector2(14, 18))
-	c.draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
+	_drop_sh(c, pts, 1.4)
 	c.draw_colored_polygon(pts, Color(0.55, 0.16, 0.14))
 	var deck := PackedVector2Array()
 	for q in pts:
 		deck.append(Vector2(cx, r.position.y + r.size.y * 0.5) + (q - Vector2(cx, r.position.y + r.size.y * 0.5)) * Vector2(0.84, 0.96))
 	c.draw_colored_polygon(deck, Color(0.42, 0.44, 0.46))
-	var pl := pts.duplicate()
-	pl.append(pts[0])
-	c.draw_polyline(pl, INK, 5.0)
+	c.draw_polyline(_closed(deck), Color(0.3, 0.31, 0.33), 2.0)
+	c.draw_polyline(_closed(pts), INK, 5.0)
 	var cols := [Color(0.72, 0.24, 0.2), Color(0.2, 0.42, 0.66), Color(0.3, 0.55, 0.32), Color(0.85, 0.55, 0.18)]
 	var y := r.position.y + r.size.x * 1.6
 	var k := 0
 	while y < r.end.y - TILE * 9.0:
-		var row := Rect2(r.position.x + TILE * 1.1, y, r.size.x - TILE * 2.2, TILE * 1.6)
-		c.draw_rect(row, cols[k % cols.size()])
-		c.draw_rect(row, INK, false, 2.5)
+		_container(c, Rect2(r.position.x + TILE * 1.1, y, r.size.x - TILE * 2.2, TILE * 1.6), cols[k % cols.size()], k % 2 == 0)
 		y += TILE * 1.9
 		k += 1
 	var bridge := Rect2(r.position.x + TILE * 1.2, r.end.y - TILE * 7.0, r.size.x - TILE * 2.4, TILE * 4.0)
-	c.draw_rect(Rect2(bridge.position + Vector2(10, 14), bridge.size), Color(0, 0, 0, 0.3))
-	c.draw_rect(bridge, Color(0.92, 0.92, 0.88))
+	_drop_sh(c, _rr(bridge, 6.0), 1.4)
+	_shape(c, _rr(bridge, 6.0), Color(0.92, 0.92, 0.88), 3.5)
+	c.draw_rect(Rect2(bridge.position + Vector2(8, 8), Vector2(bridge.size.x - 16.0, 30.0)), Color(0.8, 0.8, 0.77))
 	for wx in range(int(bridge.position.x) + 16, int(bridge.end.x) - 16, 30):
-		c.draw_rect(Rect2(float(wx), bridge.position.y + 16.0, 16.0, 12.0), Color(0.2, 0.3, 0.4))
-	c.draw_rect(bridge, INK, false, 3.5)
+		c.draw_rect(Rect2(float(wx), bridge.position.y + 14.0, 16.0, 12.0), GLASS)
 	c.draw_circle(Vector2(cx, r.end.y - TILE * 1.6), TILE * 0.6, Color(0.2, 0.2, 0.22))
+	c.draw_circle(Vector2(cx - 6.0, r.end.y - TILE * 1.6 - 6.0), TILE * 0.3, Color(0.3, 0.3, 0.32))
 	c.draw_arc(Vector2(cx, r.end.y - TILE * 1.6), TILE * 0.6, 0, TAU, 20, INK, 3.0)
 
 
 const CRANE := Color(0.93, 0.6, 0.12)
 
 
+## A quay crane's four leg positions (the solid tiles of `_port`), land side first.
+static func _crane_legs(r: Rect2) -> Array:
+	var xl := r.position.x + TILE * 0.9
+	var xw := r.end.x - TILE * 0.9
+	var yt := r.position.y + TILE * 0.9
+	var yb := r.end.y - TILE * 0.9
+	return [Vector2(xl, yt), Vector2(xl, yb), Vector2(xw, yt), Vector2(xw, yb)]
+
+
+## The crane on the ground: its rails along the quay, the bogies of its four legs on them, and the shadow the boom casts.
 static func _crane_base(c: CanvasItem, r: Rect2) -> void:
-	c.draw_line(Vector2(r.position.x + 30.0, -TILE), Vector2(r.position.x + 30.0, 64.0 * TILE), Color(0.35, 0.33, 0.3, 0.6), 4.0)
-	c.draw_line(Vector2(r.end.x - 30.0, -TILE), Vector2(r.end.x - 30.0, 64.0 * TILE), Color(0.35, 0.33, 0.3, 0.6), 4.0)
-	for q in [r.position, Vector2(r.end.x - TILE, r.position.y), Vector2(r.position.x, r.end.y - TILE), Vector2(r.end.x - TILE, r.end.y - TILE)]:
-		var leg := Rect2(q + Vector2(6, 6), Vector2(TILE - 12.0, TILE - 12.0))
-		c.draw_rect(Rect2(leg.position + Vector2(8, 10), leg.size), Color(0, 0, 0, 0.3))
-		c.draw_rect(leg, CRANE)
-		c.draw_rect(leg, INK, false, 3.0)
-	for y in [r.position.y + TILE * 0.5, r.end.y - TILE * 0.5]:
-		c.draw_line(Vector2(r.position.x + TILE * 0.5, y), Vector2(r.end.x - TILE * 0.5, y), INK, 14.0)
-		c.draw_line(Vector2(r.position.x + TILE * 0.5, y), Vector2(r.end.x - TILE * 0.5, y), CRANE, 9.0)
-
-
-static func _crane_boom(c: CanvasItem, r: Rect2) -> void:
+	var legs := _crane_legs(r)
+	for lx in [legs[0].x, legs[2].x]:
+		for off in [-7.0, 7.0]:
+			c.draw_line(Vector2(lx + off, -TILE), Vector2(lx + off, 64.0 * TILE), Color(0.3, 0.3, 0.3), 3.0)
 	var y := r.position.y + r.size.y * 0.5
-	var a := Vector2(r.position.x - TILE * 3.0, y)
-	var b := Vector2(r.end.x + TILE * 13.0, y)
-	c.draw_rect(Rect2(a + Vector2(30, 60) - Vector2(0, 16), Vector2(b.x - a.x, 32)), Color(0, 0, 0, 0.18))
-	for off in [-16.0, 16.0]:
-		c.draw_line(a + Vector2(0, off), b + Vector2(0, off), INK, 9.0)
-		c.draw_line(a + Vector2(0, off), b + Vector2(0, off), CRANE, 5.0)
-	var x := a.x
+	var lift := Vector2(46.0, 60.0)    # (the boom is high: its shadow falls far)
+	c.draw_rect(Rect2(Vector2(r.position.x - TILE * 3.0, y - 24.0) + lift, Vector2(r.size.x + TILE * 16.0, 48.0)), Color(0, 0, 0, 0.16))
+	for lx in [legs[0].x, legs[2].x]:
+		c.draw_rect(Rect2(Vector2(lx - 14.0, legs[0].y) + lift * 0.6, Vector2(28.0, legs[1].y - legs[0].y)), Color(0, 0, 0, 0.12))
+	for q in legs:
+		var bog := Rect2(q - Vector2(22.0, 40.0), Vector2(44.0, 80.0))
+		_drop_sh(c, _rr(bog, 6.0), 0.8)
+		_shape(c, _rr(bog, 6.0), Color(0.3, 0.3, 0.32), 3.0)
+		for wy in [-26.0, -9.0, 9.0, 26.0]:
+			c.draw_rect(Rect2(q + Vector2(-17.0, wy - 6.0), Vector2(34.0, 12.0)), Color(0.18, 0.18, 0.2))
+		c.draw_rect(Rect2(q - Vector2(20.0, 20.0), Vector2(40.0, 40.0)), CRANE)
+		c.draw_rect(Rect2(q - Vector2(20.0, 20.0), Vector2(40.0, 40.0)), INK, false, 3.0)
+
+
+## The crane over the people: the legs' tops, the portal beams along the rails, the boom out over the water (a lattice between two chords), the machinery house at its back, the trolley
+## with its spreader and the driver's cab.
+static func _crane_boom(c: CanvasItem, r: Rect2) -> void:
+	var legs := _crane_legs(r)
+	for side in [[legs[0], legs[1]], [legs[2], legs[3]]]:
+		var a: Vector2 = side[0]
+		var b: Vector2 = side[1]
+		c.draw_line(a, b, INK, 24.0)
+		c.draw_line(a, b, CRANE.darkened(0.1), 17.0)
+		c.draw_line(a + Vector2(-4, 0), b + Vector2(-4, 0), CRANE.lightened(0.2), 4.0)
+		for t in [0.0, 1.0]:
+			var q: Vector2 = a.lerp(b, t)
+			c.draw_rect(Rect2(q - Vector2(22, 22), Vector2(44, 44)), CRANE)
+			c.draw_rect(Rect2(q - Vector2(22, 22), Vector2(44, 44)), INK, false, 3.0)
+	var y := r.position.y + r.size.y * 0.5
+	var x0 := r.position.x - TILE * 3.0
+	var x1 := r.end.x + TILE * 13.0
+	var hw := 34.0
+	c.draw_rect(Rect2(Vector2(x0, y - hw), Vector2(x1 - x0, hw * 2.0)), Color(0.12, 0.1, 0.08, 0.35))
+	var x := x0
 	var up := true
-	while x < b.x - 30.0:
-		c.draw_line(Vector2(x, y + (-16.0 if up else 16.0)), Vector2(x + 32.0, y + (16.0 if up else -16.0)), CRANE.darkened(0.25), 3.0)
-		x += 32.0
+	var lat := PackedVector2Array()
+	while x < x1 - 34.0:
+		lat.append(Vector2(x, y + (-hw if up else hw)))
+		lat.append(Vector2(x + 34.0, y + (hw if up else -hw)))
+		x += 34.0
 		up = not up
-	var cab := Rect2(Vector2(r.position.x + r.size.x * 0.55, y - 26.0), Vector2(70, 52))
-	c.draw_rect(cab, Color(0.95, 0.92, 0.85))
-	c.draw_rect(Rect2(cab.position + Vector2(8, 10), Vector2(30, 18)), Color(0.25, 0.4, 0.55))
-	c.draw_rect(cab, INK, false, 3.0)
-	c.draw_rect(Rect2(a - Vector2(0, 30), Vector2(TILE * 2.0, 60)), Color(0.45, 0.45, 0.47))
-	c.draw_rect(Rect2(a - Vector2(0, 30), Vector2(TILE * 2.0, 60)), INK, false, 3.0)
+	c.draw_multiline(lat, CRANE.darkened(0.3), 4.0)
+	c.draw_line(Vector2(x0, y), Vector2(x1, y), Color(0.45, 0.45, 0.47), 6.0)    # the walkway down the middle
+	for off in [-hw, hw]:
+		c.draw_line(Vector2(x0, y + off), Vector2(x1, y + off), INK, 13.0)
+		c.draw_line(Vector2(x0, y + off), Vector2(x1, y + off), CRANE, 8.0)
+	c.draw_line(Vector2(x1, y - hw - 6.0), Vector2(x1, y + hw + 6.0), INK, 8.0)
+	# the machinery house and the counterweight at the back
+	var mh := Rect2(Vector2(x0 - 10.0, y - 44.0), Vector2(TILE * 2.4, 88.0))
+	_drop_sh(c, _rr(mh, 6.0), 1.5)
+	_shape(c, _rr(mh, 6.0), Color(0.9, 0.88, 0.82), 3.5)
+	c.draw_rect(Rect2(mh.position + Vector2(8, 8), Vector2(mh.size.x - 16.0, 20.0)), Color(0.78, 0.76, 0.7))
+	for vx in range(int(mh.position.x) + 18, int(mh.end.x) - 12, 18):
+		c.draw_line(Vector2(float(vx), mh.position.y + 40.0), Vector2(float(vx), mh.end.y - 12.0), Color(0.55, 0.53, 0.5), 3.0)
+	_shape(c, _rr(Rect2(Vector2(mh.position.x - 26.0, y - 30.0), Vector2(30.0, 60.0)), 4.0), Color(0.36, 0.36, 0.38), 3.0)
+	# the trolley out over the ship, the spreader under it and the cab
+	var tx := r.end.x + TILE * 6.0
+	var spr := Rect2(Vector2(tx - TILE * 1.6, y - 22.0), Vector2(TILE * 3.2, 44.0))
+	c.draw_rect(Rect2(spr.position + Vector2(18, 24), spr.size), Color(0, 0, 0, 0.2))
+	c.draw_rect(spr, Color(0.95, 0.78, 0.15))
+	c.draw_rect(spr.grow(-10.0), Color(0.2, 0.2, 0.2, 0.5))
+	c.draw_rect(spr, INK, false, 3.0)
+	var tro := Rect2(Vector2(tx - 34.0, y - 34.0), Vector2(68.0, 68.0))
+	_shape(c, _rr(tro, 6.0), Color(0.55, 0.55, 0.57), 3.0)
+	for q in [spr.position + Vector2(8, 8), Vector2(spr.end.x - 8.0, spr.position.y + 8.0), Vector2(spr.position.x + 8.0, spr.end.y - 8.0), spr.end - Vector2(8, 8)]:
+		c.draw_line(tro.get_center() + (q - tro.get_center()) * 0.35, q, Color(0.15, 0.15, 0.15), 2.0)
+	var cab := Rect2(Vector2(tx - 28.0, y + hw + 2.0), Vector2(56.0, 46.0))
+	_shape(c, _rr(cab, 5.0), Color(0.96, 0.94, 0.88), 3.0)
+	c.draw_rect(Rect2(cab.position + Vector2(8, 22), Vector2(40, 16)), GLASS)
 
 
+## A shipping container from above (long side east-west): the corrugated roof, the end frames, the doors at one end with their lock bars, the corner castings.
+static func _container(c: CanvasItem, b: Rect2, col: Color, doors_east: bool = true) -> void:
+	c.draw_rect(b, col)
+	c.draw_rect(Rect2(b.position, Vector2(b.size.x, 5.0)), col.lightened(0.18))
+	c.draw_rect(Rect2(Vector2(b.position.x, b.end.y - 6.0), Vector2(b.size.x, 6.0)), col.darkened(0.28))
+	var ribs := PackedVector2Array()
+	var lite := PackedVector2Array()
+	var x := b.position.x + 16.0
+	while x < b.end.x - 14.0:
+		ribs.append(Vector2(x, b.position.y + 6.0))
+		ribs.append(Vector2(x, b.end.y - 7.0))
+		lite.append(Vector2(x + 4.0, b.position.y + 6.0))
+		lite.append(Vector2(x + 4.0, b.end.y - 7.0))
+		x += 12.0
+	c.draw_multiline(ribs, col.darkened(0.3), 3.0)
+	c.draw_multiline(lite, col.lightened(0.12), 1.5)
+	var ends := [Rect2(b.position, Vector2(10.0, b.size.y)), Rect2(Vector2(b.end.x - 10.0, b.position.y), Vector2(10.0, b.size.y))]
+	for e in ends:
+		c.draw_rect(e, col.darkened(0.22))
+	var dx := b.end.x - 8.0 if doors_east else b.position.x + 8.0
+	for k in 4:    # the lock bars
+		var ly := b.position.y + b.size.y * (0.18 + 0.21 * float(k))
+		c.draw_line(Vector2(dx - 4.0, ly), Vector2(dx + 4.0, ly), Color(0.85, 0.85, 0.82), 2.0)
+	for q in [b.position, Vector2(b.end.x - 9.0, b.position.y), Vector2(b.position.x, b.end.y - 9.0), b.end - Vector2(9, 9)]:
+		c.draw_rect(Rect2(q, Vector2(9, 9)), Color(0.2, 0.2, 0.22))
+	c.draw_rect(b, INK, false, 3.0)
+
+
+const STACK_PAL := [Color(0.72, 0.24, 0.2), Color(0.2, 0.42, 0.66), Color(0.3, 0.55, 0.32), Color(0.85, 0.55, 0.18), Color(0.25, 0.6, 0.62), Color(0.55, 0.55, 0.58)]
+
+
+## A container stack: one box, or two (`tall`: the lower one shows past the upper's offset, a deeper shadow). The open one's doors stand open at the west end.
 static func _stack(c: CanvasItem, r: Rect2, p: Dictionary) -> void:
 	var col: Color = p.get("c", Color(0.7, 0.3, 0.2))
-	var rr := r.grow(-3.0)
-	_shadow(c, rr, 12.0 if bool(p.get("tall", false)) else 7.0)
-	c.draw_rect(rr, col.darkened(0.12) if bool(p.get("tall", false)) else col)
-	var ribs := int(rr.size.x / 14.0)
-	for k in ribs:
-		var x := rr.position.x + 7.0 + float(k) * 14.0
-		c.draw_line(Vector2(x, rr.position.y + 4.0), Vector2(x, rr.end.y - 4.0), col.darkened(0.3), 2.0)
-	if bool(p.get("tall", false)):
-		var top := Rect2(rr.position + Vector2(6, -6), rr.size - Vector2(10, 8))
-		c.draw_rect(top, col.lightened(0.08))
-		for k in ribs - 1:
-			var x2 := top.position.x + 7.0 + float(k) * 14.0
-			c.draw_line(Vector2(x2, top.position.y + 4.0), Vector2(x2, top.end.y - 4.0), col.darkened(0.25), 2.0)
-		c.draw_rect(top, INK, false, 2.5)
-	c.draw_rect(rr, INK, false, 3.5)
+	var rr := r.grow(-4.0)
+	var tall := bool(p.get("tall", false))
+	_drop_sh(c, _rr(rr, 3.0), 1.7 if tall else 0.9)
+	if tall:
+		var under: Color = STACK_PAL[int(absf(r.position.x * 0.37 + r.position.y * 0.11)) % STACK_PAL.size()]
+		if under.is_equal_approx(col):
+			under = STACK_PAL[(STACK_PAL.find(under) + 2) % STACK_PAL.size()]
+		_container(c, rr, under.darkened(0.18))
+		_container(c, Rect2(rr.position + Vector2(-5, -7), rr.size), col, int(r.position.y) % 2 == 0)
+	else:
+		_container(c, rr, col)
 	if bool(p.get("open", false)):    # the open one: its doors stand open at the west end
-		c.draw_rect(Rect2(rr.position + Vector2(2, 4), Vector2(18, rr.size.y - 8.0)), Color(0.12, 0.1, 0.09))
-		c.draw_line(rr.position + Vector2(0, 2), rr.position + Vector2(-26, -10), col.darkened(0.2), 6.0)
-		c.draw_line(Vector2(rr.position.x, rr.end.y - 2.0), Vector2(rr.position.x - 26.0, rr.end.y + 10.0), col.darkened(0.2), 6.0)
+		var o := rr.position + (Vector2(-5, -7) if tall else Vector2.ZERO)
+		c.draw_rect(Rect2(o + Vector2(3, 5), Vector2(22, rr.size.y - 10.0)), Color(0.1, 0.09, 0.08))
+		for d in [[o + Vector2(0, 3), o + Vector2(-30, -14)], [o + Vector2(0, rr.size.y - 3.0), o + Vector2(-30, rr.size.y + 14.0)]]:
+			c.draw_line(d[0], d[1], INK, 9.0)
+			c.draw_line(d[0], d[1], col.darkened(0.15), 5.0)
 
 
 static func _tank(c: CanvasItem, r: Rect2) -> void:
 	var cc := r.get_center()
 	var rad := minf(r.size.x, r.size.y) * 0.46
-	c.draw_circle(cc + Vector2(12, 16), rad, Color(0, 0, 0, 0.3))
+	c.draw_circle(cc + SH * 1.2, rad, Color(0, 0, 0, 0.12))
+	c.draw_circle(cc + SH * 0.66, rad, Color(0, 0, 0, 0.16))
 	c.draw_circle(cc, rad, Color(0.82, 0.83, 0.8))
 	c.draw_circle(cc, rad * 0.62, Color(0.74, 0.75, 0.72))
 	c.draw_arc(cc, rad, 0, TAU, 32, INK, 4.0)
@@ -1443,54 +1656,150 @@ static func _tank(c: CanvasItem, r: Rect2) -> void:
 	c.draw_string(ThemeDB.fallback_font, cc + Vector2(-rad, 8), "FUEL", HORIZONTAL_ALIGNMENT_CENTER, rad * 2.0, 22, Color(0.75, 0.15, 0.12))
 
 
-## A truck from the north (a cab at the top) or the west (`h`): the cab, the tank or the box, the word.
-static func _truck(c: CanvasItem, r: Rect2, body: Color, stripe: Color, word: String, h: bool) -> void:
-	var rr := r.grow(-4.0)
-	_shadow(c, rr)
-	var cab := Rect2(rr.position, Vector2(rr.size.x, rr.size.y * 0.24)) if not h else Rect2(rr.position, Vector2(rr.size.x * 0.24, rr.size.y))
-	var box := Rect2(rr.position + Vector2(0, rr.size.y * 0.28), Vector2(rr.size.x, rr.size.y * 0.72)) if not h else Rect2(rr.position + Vector2(rr.size.x * 0.28, 0), Vector2(rr.size.x * 0.72, rr.size.y))
-	c.draw_rect(cab, stripe)
-	c.draw_rect(cab.grow(-10.0), Color(0.25, 0.35, 0.45))
-	c.draw_rect(cab, INK, false, 3.0)
-	c.draw_rect(box, body)
-	c.draw_rect(box.grow(-10.0), body.lightened(0.12))
-	if not h:
-		c.draw_line(Vector2(box.position.x + 6.0, box.get_center().y), Vector2(box.end.x - 6.0, box.get_center().y), stripe, 8.0)
-	else:
-		c.draw_line(Vector2(box.get_center().x, box.position.y + 6.0), Vector2(box.get_center().x, box.end.y - 6.0), stripe, 8.0)
-	c.draw_rect(box, INK, false, 3.5)
-	c.draw_string(ThemeDB.fallback_font, box.get_center() + Vector2(-50, 7), word, HORIZONTAL_ALIGNMENT_CENTER, 100, 18, stripe.darkened(0.2))
+# ------------------------------------------------------------------ the vehicles --
+
+## A tanker truck from the north (the cab at the top) or the west (`h`): the cab with its windscreen and mirrors, the hitch, the tank (a capsule with its bands, the walkway with
+## three hatches down its top, a hazard placard).
+static func _truck(c: CanvasItem, r: Rect2, body: Color, cab_col: Color, h: bool) -> void:
+	var rr := r.grow(-5.0)
+	var w := minf(rr.size.x, rr.size.y)
+	var L := maxf(rr.size.x, rr.size.y)
+	_drop_sh(c, _rr(rr, w * 0.4))
+	c.draw_set_transform(rr.get_center(), -PI * 0.5 if h else 0.0, Vector2.ONE)
+	var y0 := -L * 0.5
+	c.draw_rect(Rect2(-w * 0.22, y0 + L * 0.18, w * 0.44, L * 0.12), Color(0.18, 0.18, 0.2))    # the chassis at the hitch
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(Vector2(side * (w * 0.5 + 3.0) - 5.0, y0 + L * 0.07), Vector2(10.0, 14.0)), INK)
+	var cab := Rect2(-w * 0.5 + 2.0, y0, w - 4.0, L * 0.21)
+	_shape(c, _rr(cab, 14.0), cab_col, 3.0)
+	c.draw_rect(Rect2(cab.position.x + 8.0, y0 + 4.0, cab.size.x - 16.0, 6.0), cab_col.lightened(0.25))
+	_windscreen(c, w, y0 + L * 0.035, y0 + L * 0.09, 14.0, 9.0)
+	c.draw_rect(Rect2(-w * 0.32, y0 + L * 0.11, w * 0.64, L * 0.08), cab_col.darkened(0.15))
+	c.draw_rect(Rect2(-w * 0.32, y0 + L * 0.11, w * 0.64, L * 0.08), INK, false, 2.0)
+	var tank := Rect2(-w * 0.5 + 3.0, y0 + L * 0.25, w - 6.0, L * 0.75)
+	_shape(c, _rr(tank, w * 0.42), body, 3.5)
+	c.draw_rect(Rect2(tank.end.x - 18.0, tank.position.y + 20.0, 12.0, tank.size.y - 40.0), body.darkened(0.16))
+	c.draw_rect(Rect2(tank.position.x + 7.0, tank.position.y + 20.0, 6.0, tank.size.y - 40.0), body.lightened(0.18))
+	for k in 4:    # the bands round the tank
+		var by := tank.position.y + tank.size.y * (0.16 + 0.226 * float(k))
+		c.draw_line(Vector2(tank.position.x + 2.0, by), Vector2(tank.end.x - 2.0, by), body.darkened(0.3), 3.0)
+	c.draw_rect(Rect2(-9.0, tank.position.y + 14.0, 18.0, tank.size.y - 28.0), Color(0.45, 0.45, 0.47))
+	for k in 3:
+		var hc := Vector2(0, tank.position.y + tank.size.y * (0.22 + 0.28 * float(k)))
+		c.draw_circle(hc, 13.0, INK)
+		c.draw_circle(hc, 10.0, Color(0.62, 0.62, 0.64))
+	var dc := Vector2(w * 0.24, tank.end.y - L * 0.09)
+	var dia := PackedVector2Array([dc + Vector2(0, -15), dc + Vector2(15, 0), dc + Vector2(0, 15), dc + Vector2(-15, 0)])
+	_shape(c, dia, Color(0.85, 0.2, 0.15), 2.0)
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(side * w * 0.36 - 6.0, tank.end.y - 8.0, 12.0, 6.0), Color(0.8, 0.12, 0.1))
+	_unframe(c)
 
 
+## An ambulance van (nose east in a long-way-across bay, else north): the white body with its red side stripes, the cab's bonnet, headlights, windscreen and mirrors, the light bar at
+## the front of the box, the red cross on the roof, the roof's air unit and the rear doors.
 static func _ambulance(c: CanvasItem, r: Rect2) -> void:
-	var rr := r.grow(-4.0)
-	_shadow(c, rr)
-	c.draw_rect(rr, Color(0.95, 0.95, 0.92))
-	c.draw_rect(Rect2(rr.position + Vector2(0, rr.size.y * 0.42), Vector2(rr.size.x, rr.size.y * 0.16)), Color(0.85, 0.15, 0.12))
-	c.draw_rect(Rect2(Vector2(rr.end.x - rr.size.x * 0.22, rr.position.y + 8.0), Vector2(rr.size.x * 0.16, rr.size.y - 16.0)), Color(0.25, 0.35, 0.45))
-	var cc := rr.position + Vector2(rr.size.x * 0.4, rr.size.y * 0.5)
-	c.draw_rect(Rect2(cc - Vector2(9, 26), Vector2(18, 52)), Color(0.85, 0.15, 0.12))
-	c.draw_rect(Rect2(cc - Vector2(26, 9), Vector2(52, 18)), Color(0.85, 0.15, 0.12))
-	c.draw_rect(Rect2(Vector2(rr.end.x - rr.size.x * 0.3, rr.position.y + 4.0), Vector2(10, rr.size.y - 8.0)), Color(0.3, 0.5, 1.0))
-	c.draw_rect(rr, INK, false, 3.5)
-
-
-static func _patrol(c: CanvasItem, r: Rect2) -> void:
 	var rr := r.grow(-6.0)
-	_shadow(c, rr)
-	c.draw_rect(rr, Color(0.12, 0.14, 0.2))
-	c.draw_rect(Rect2(rr.position + Vector2(0, rr.size.y * 0.3), Vector2(rr.size.x, rr.size.y * 0.4)), Color(0.95, 0.95, 0.95))
-	c.draw_rect(Rect2(rr.position + Vector2(10, rr.size.y * 0.18), Vector2(rr.size.x - 20.0, rr.size.y * 0.12)), Color(0.3, 0.45, 0.6))
-	c.draw_rect(Rect2(rr.position + Vector2(10, rr.size.y * 0.72), Vector2(rr.size.x - 20.0, rr.size.y * 0.1)), Color(0.3, 0.45, 0.6))
-	var mid := rr.position + Vector2(rr.size.x * 0.5, rr.size.y * 0.45)
-	c.draw_rect(Rect2(mid - Vector2(rr.size.x * 0.4, 6), Vector2(rr.size.x * 0.4, 12)), Color(0.9, 0.15, 0.12))
-	c.draw_rect(Rect2(mid - Vector2(0, 6), Vector2(rr.size.x * 0.4, 12)), Color(0.15, 0.35, 0.95))
-	c.draw_string(ThemeDB.fallback_font, rr.position + Vector2(0, rr.size.y * 0.62), "POLICE", HORIZONTAL_ALIGNMENT_CENTER, rr.size.x, 14, Color(0.1, 0.12, 0.2))
-	c.draw_rect(rr, INK, false, 3.5)
+	var h := rr.size.x > rr.size.y
+	var w := minf(rr.size.x, rr.size.y)
+	var L := minf(maxf(rr.size.x, rr.size.y), w * 2.7)
+	_drop_sh(c, _rr(Rect2(rr.get_center() - (Vector2(L, w) if h else Vector2(w, L)) * 0.5, Vector2(L, w) if h else Vector2(w, L)), 16.0))
+	c.draw_set_transform(rr.get_center(), PI * 0.5 if h else 0.0, Vector2.ONE)
+	var y0 := -L * 0.5
+	var white := Color(0.96, 0.96, 0.93)
+	var red := Color(0.84, 0.14, 0.12)
+	for side in [-1.0, 1.0]:    # mirrors
+		c.draw_rect(Rect2(Vector2(side * (w * 0.5 + 4.0) - 5.0, y0 + L * 0.13), Vector2(10.0, 14.0)), INK)
+	var body := Rect2(-w * 0.5, y0, w, L)
+	c.draw_colored_polygon(_rr(body, 18.0), white)
+	c.draw_rect(Rect2(-w * 0.5 + 3.0, y0 + L * 0.3, 7.0, L * 0.66), Color(0.8, 0.8, 0.77))
+	c.draw_rect(Rect2(w * 0.5 - 10.0, y0 + L * 0.3, 7.0, L * 0.66), Color(0.8, 0.8, 0.77))
+	for side in [-1.0, 1.0]:    # the red stripe down each side
+		c.draw_rect(Rect2(side * (w * 0.5 - 9.0) - 5.0, y0 + L * 0.06, 10.0, L * 0.9), red)
+	c.draw_line(Vector2(-w * 0.3, y0 + 6.0), Vector2(w * 0.3, y0 + 6.0), Color(0.3, 0.3, 0.32), 5.0)    # the grille
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(side * w * 0.36 - 8.0, y0 + 3.0, 16.0, 8.0), Color(1.0, 0.95, 0.7))
+	_windscreen(c, w, y0 + L * 0.11, y0 + L * 0.19, 16.0, 10.0)
+	var box := Rect2(-w * 0.5 + 14.0, y0 + L * 0.3, w - 28.0, L * 0.66)
+	c.draw_rect(box, Color(0.99, 0.99, 0.97))
+	c.draw_rect(box, Color(0.72, 0.72, 0.7), false, 2.0)
+	var bar := Rect2(-w * 0.5 + 12.0, y0 + L * 0.24, w - 24.0, 16.0)    # the light bar
+	c.draw_rect(bar, INK)
+	c.draw_rect(Rect2(bar.position + Vector2(3, 3), Vector2(bar.size.x * 0.5 - 8.0, 10.0)), Color(0.95, 0.2, 0.15))
+	c.draw_rect(Rect2(Vector2(5.0, bar.position.y + 3.0), Vector2(bar.size.x * 0.5 - 8.0, 10.0)), Color(0.2, 0.45, 0.98))
+	c.draw_rect(Rect2(Vector2(-4.0, bar.position.y + 3.0), Vector2(8.0, 10.0)), Color(0.95, 0.95, 0.9))
+	var cc := Vector2(0, box.position.y + box.size.y * 0.42)    # the cross on the roof
+	var arm := w * 0.22
+	var th := w * 0.09
+	c.draw_rect(Rect2(cc - Vector2(th, arm), Vector2(th * 2.0, arm * 2.0)), red)
+	c.draw_rect(Rect2(cc - Vector2(arm, th), Vector2(arm * 2.0, th * 2.0)), red)
+	var ac := Rect2(-w * 0.2, box.end.y - L * 0.16, w * 0.4, L * 0.1)
+	_shape(c, _rr(ac, 4.0), Color(0.72, 0.73, 0.74), 2.0)
+	c.draw_circle(ac.get_center(), ac.size.y * 0.32, Color(0.35, 0.36, 0.38))
+	c.draw_line(Vector2(0, box.end.y), Vector2(0, L * 0.5 - 2.0), Color(0.5, 0.5, 0.5), 2.0)    # the rear doors
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(side * w * 0.38 - 6.0, L * 0.5 - 9.0, 12.0, 6.0), Color(0.8, 0.12, 0.1))
+	c.draw_polyline(_closed(_rr(body, 18.0)), INK, 3.5)
+	_unframe(c)
 
+
+## A patrol car (nose north), the town's car in the black-and-white: black bonnet and boot, white doors and roof, the light bar across the roof, a roof number.
+static func _patrol(c: CanvasItem, r: Rect2) -> void:
+	var rr := r.grow(-8.0)
+	var w := minf(rr.size.x, rr.size.y)
+	var L := minf(maxf(rr.size.x, rr.size.y), w * 2.35)
+	var body := Rect2(-w * 0.5, -L * 0.5, w, L)
+	_drop_sh(c, _rr(Rect2(rr.get_center() + body.position, body.size), 26.0))
+	c.draw_set_transform(rr.get_center(), 0.0, Vector2.ONE)
+	var y0 := -L * 0.5
+	var black := Color(0.13, 0.14, 0.18)
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(Vector2(side * (w * 0.5 + 3.0) - 5.0, y0 + L * 0.3), Vector2(10.0, 12.0)), INK)
+	c.draw_colored_polygon(_rr(body, 26.0), black)
+	c.draw_rect(Rect2(-w * 0.5, y0 + L * 0.27, w, L * 0.44), Color(0.94, 0.94, 0.92))    # the white doors
+	c.draw_line(Vector2(-w * 0.18, y0 + 14.0), Vector2(-w * 0.18, y0 + L * 0.22), Color(0.25, 0.26, 0.3), 2.0)    # the bonnet's creases
+	c.draw_line(Vector2(w * 0.18, y0 + 14.0), Vector2(w * 0.18, y0 + L * 0.22), Color(0.25, 0.26, 0.3), 2.0)
+	for side in [-1.0, 1.0]:
+		c.draw_rect(Rect2(side * w * 0.33 - 9.0, y0 + 4.0, 18.0, 8.0), Color(1.0, 0.96, 0.75))
+		c.draw_rect(Rect2(side * w * 0.33 - 9.0, L * 0.5 - 10.0, 18.0, 6.0), Color(0.82, 0.12, 0.1))
+	_windscreen(c, w, y0 + L * 0.22, y0 + L * 0.33, 16.0, 9.0)
+	var roof := Rect2(-w * 0.5 + 12.0, y0 + L * 0.33, w - 24.0, L * 0.3)
+	_shape(c, _rr(roof, 10.0), Color(0.98, 0.98, 0.96), 2.5)
+	var rear := PackedVector2Array([Vector2(-w * 0.5 + 12.0, roof.end.y), Vector2(w * 0.5 - 12.0, roof.end.y), Vector2(w * 0.5 - 18.0, roof.end.y + L * 0.08), Vector2(-w * 0.5 + 18.0, roof.end.y + L * 0.08)])
+	_shape(c, rear, GLASS, 2.5)
+	var bar := Rect2(-w * 0.5 + 8.0, roof.position.y + 8.0, w - 16.0, 18.0)
+	c.draw_rect(bar, INK)
+	c.draw_rect(Rect2(bar.position + Vector2(3, 3), Vector2(bar.size.x * 0.5 - 7.0, 12.0)), Color(0.95, 0.18, 0.14))
+	c.draw_rect(Rect2(Vector2(4.0, bar.position.y + 3.0), Vector2(bar.size.x * 0.5 - 7.0, 12.0)), Color(0.18, 0.4, 0.98))
+	c.draw_string(ThemeDB.fallback_font, Vector2(-w * 0.5, roof.end.y - 14.0), "%02d" % (int(r.position.x / TILE + r.position.y / TILE) % 90 + 10), HORIZONTAL_ALIGNMENT_CENTER, w, 26, Color(0.13, 0.14, 0.18))
+	c.draw_polyline(_closed(_rr(body, 26.0)), INK, 3.5)
+	_unframe(c)
+
+
+## A baggage train: a tug and two carts with their bags.
+static func _bagcart(c: CanvasItem, r: Rect2) -> void:
+	var rr := r.grow(-8.0)
+	var n := 3
+	var cw := rr.size.x / float(n)
+	for k in n:
+		var b := Rect2(rr.position + Vector2(float(k) * cw + 4.0, 0), Vector2(cw - 8.0, rr.size.y))
+		_drop_sh(c, _rr(b, 6.0), 0.7)
+		if k == n - 1:    # the tug
+			_shape(c, _rr(b, 8.0), Color(0.95, 0.72, 0.15), 3.0)
+			c.draw_rect(Rect2(b.position + Vector2(8, 10), Vector2(b.size.x * 0.45, b.size.y - 20.0)), GLASS)
+		else:
+			_shape(c, _rr(b, 4.0), Color(0.42, 0.43, 0.47), 3.0)
+			for q in [Rect2(b.position + Vector2(6, 8), Vector2(b.size.x * 0.42, b.size.y * 0.36)), Rect2(b.position + Vector2(b.size.x * 0.5, 12), Vector2(b.size.x * 0.4, b.size.y * 0.32)),
+				Rect2(b.position + Vector2(8, b.size.y * 0.52), Vector2(b.size.x * 0.8, b.size.y * 0.36))]:
+				_shape(c, _rr(q, 4.0), [Color(0.6, 0.3, 0.25), Color(0.25, 0.35, 0.55), Color(0.3, 0.3, 0.32)][int(q.position.y) % 3], 2.0)
+		if k > 0:
+			c.draw_line(Vector2(b.position.x - 8.0, b.get_center().y), Vector2(b.position.x, b.get_center().y), INK, 4.0)
+
+
+# ------------------------------------------------------------------ the airport --
 
 static func _runway(c: CanvasItem, r: Rect2) -> void:
-	var white := Color(0.94, 0.94, 0.9, 0.9)
+	var white := WHITE_PAINT
 	c.draw_line(Vector2(r.position.x, r.position.y + 18.0), Vector2(r.end.x, r.position.y + 18.0), white, 5.0)
 	c.draw_line(Vector2(r.position.x, r.end.y - 18.0), Vector2(r.end.x, r.end.y - 18.0), white, 5.0)
 	var my := r.position.y + r.size.y * 0.5
@@ -1501,138 +1810,403 @@ static func _runway(c: CanvasItem, r: Rect2) -> void:
 	for end in [r.position.x + TILE * 0.8, r.end.x - TILE * 4.0]:
 		for k in 8:
 			c.draw_rect(Rect2(end, r.position.y + 40.0 + float(k) * (r.size.y - 80.0) / 8.0, TILE * 3.2, (r.size.y - 80.0) / 16.0), white)
+	for dir in [1.0, -1.0]:    # the aiming point and the touchdown bars, from each end
+		var x0: float = r.position.x if dir > 0.0 else r.end.x
+		var ap: float = x0 + dir * TILE * 11.0
+		for s in [-1.0, 1.0]:
+			c.draw_rect(Rect2(ap - TILE * 1.4, my + s * r.size.y * 0.2 - 18.0, TILE * 2.8, 36.0), white)
+			for k in 3:
+				var tx: float = x0 + dir * TILE * (15.0 + float(k) * 3.0)
+				for b in 3 - k:
+					var ty: float = my + s * (r.size.y * 0.13 + float(b) * 22.0)
+					c.draw_rect(Rect2(tx - TILE * 0.8, ty - 6.0, TILE * 1.6, 12.0), white)
 	var font := ThemeDB.fallback_font
 	c.draw_string(font, Vector2(r.position.x + TILE * 4.4, my + 24.0), "09", HORIZONTAL_ALIGNMENT_CENTER, TILE * 2.0, 64, white)
 	c.draw_string(font, Vector2(r.end.x - TILE * 6.6, my + 24.0), "27", HORIZONTAL_ALIGNMENT_CENTER, TILE * 2.0, 64, white)
 	for k in 9:    # skid marks
 		var sx := r.position.x + TILE * (9.0 + float(k) * 1.3)
 		c.draw_line(Vector2(sx, my - 70.0 + float(k % 3) * 10.0), Vector2(sx + TILE * 2.0, my - 66.0 + float(k % 3) * 10.0), Color(0.08, 0.08, 0.08, 0.35), 6.0)
+	var lx := r.position.x + TILE
+	while lx < r.end.x:    # the edge lights
+		for ly in [r.position.y + 6.0, r.end.y - 6.0]:
+			c.draw_circle(Vector2(lx, ly), 5.0, INK)
+			c.draw_circle(Vector2(lx, ly), 3.5, Color(1.0, 0.95, 0.7))
+		lx += TILE * 3.0
 
 
-## An airliner nose east (or a small prop plane): the wings, the tail, the fuselage with its windows and a stripe of `col`, the engines.
+## The taxiway: its yellow centre line and the two lines from it up to the runway, the edges (double lines, blue lights), the holding marks across each link.
+static func _taxi(c: CanvasItem, r: Rect2) -> void:
+	var my := r.position.y + r.size.y * 0.5
+	c.draw_line(Vector2(r.position.x, my), Vector2(r.end.x, my), YELLOW_PAINT, 6.0)
+	var links := [10.0, 54.0]
+	for cx in links:
+		c.draw_line(Vector2(cx * TILE, my), Vector2(cx * TILE, 6.0 * TILE), YELLOW_PAINT, 6.0)
+		var hy := 11.6 * TILE    # the holding position marks: two solid, two dashed
+		for k in 2:
+			c.draw_line(Vector2((cx - 2.0) * TILE, hy + float(k) * 12.0), Vector2((cx + 2.0) * TILE, hy + float(k) * 12.0), YELLOW_PAINT, 5.0)
+		var dx: float = (cx - 2.0) * TILE
+		while dx < (cx + 2.0) * TILE:
+			for k in 2:
+				c.draw_line(Vector2(dx, hy + 30.0 + float(k) * 12.0), Vector2(dx + 22.0, hy + 30.0 + float(k) * 12.0), YELLOW_PAINT, 5.0)
+			dx += 38.0
+	for ey in [r.position.y + 8.0, r.end.y - 8.0]:
+		var x := r.position.x
+		while x < r.end.x:
+			var in_link := false
+			for cx in links:
+				if absf(x - cx * TILE) < TILE * 2.0 and ey < my:
+					in_link = true
+			if not in_link:
+				c.draw_line(Vector2(x, ey - 5.0), Vector2(minf(x + TILE, r.end.x), ey - 5.0), Color(0.95, 0.78, 0.15, 0.6), 3.0)
+				c.draw_line(Vector2(x, ey + 5.0), Vector2(minf(x + TILE, r.end.x), ey + 5.0), Color(0.95, 0.78, 0.15, 0.6), 3.0)
+				if int(x / TILE) % 4 == 0:
+					c.draw_circle(Vector2(x, ey), 5.0, INK)
+					c.draw_circle(Vector2(x, ey), 3.5, Color(0.35, 0.55, 1.0))
+			x += TILE
+
+
+## A jet bridge from the terminal: the ribbed tunnel, the rotunda at the terminal end, the cab at the head with its wheels.
+static func _jetbridge(c: CanvasItem, r: Rect2) -> void:
+	var cx := r.get_center().x
+	var tun := Rect2(cx - r.size.x * 0.24, r.position.y + 36.0, r.size.x * 0.48, r.size.y - 36.0)
+	_drop_sh(c, _rr(tun, 4.0), 1.6)
+	var head := Rect2(r.position.x + 6.0, r.position.y, r.size.x - 12.0, 46.0)
+	_drop_sh(c, _rr(head, 6.0), 1.6)
+	_shape(c, _rr(tun, 4.0), Color(0.72, 0.74, 0.76), 3.0)
+	var y := tun.position.y + 10.0
+	while y < tun.end.y - 6.0:
+		c.draw_line(Vector2(tun.position.x + 3.0, y), Vector2(tun.end.x - 3.0, y), Color(0.55, 0.57, 0.6), 3.0)
+		y += 14.0
+	c.draw_rect(Rect2(Vector2(cx - 30.0, tun.position.y + tun.size.y * 0.4), Vector2(60.0, 16.0)), Color(0.22, 0.22, 0.24))    # the wheel bogie
+	for s in [-1.0, 1.0]:
+		c.draw_circle(Vector2(cx + s * 30.0, tun.position.y + tun.size.y * 0.4 + 8.0), 10.0, INK)
+	_shape(c, _rr(head, 6.0), Color(0.62, 0.64, 0.67), 3.0)
+	c.draw_rect(Rect2(head.position + Vector2(8, 6), Vector2(head.size.x - 16.0, 12.0)), GLASS)
+	c.draw_circle(Vector2(cx, r.end.y - 4.0), r.size.x * 0.28, INK)
+	c.draw_circle(Vector2(cx, r.end.y - 4.0), r.size.x * 0.28 - 3.0, Color(0.66, 0.68, 0.7))
+
+
+## A hangar's big sliding doors, slid open to both sides of the opening (outside the east wall), the hazard stripes across the sill and the lead-in line out to the apron.
+static func _hangar_door(c: CanvasItem, r: Rect2, p: Dictionary) -> void:
+	var o0 := float(p.get("open0", 0.0)) * TILE
+	var o1 := float(p.get("open1", 0.0)) * TILE
+	c.draw_line(Vector2(r.position.x + 6.0, r.position.y), Vector2(r.position.x + 6.0, r.end.y), Color(0.25, 0.25, 0.27), 3.0)
+	c.draw_line(Vector2(r.end.x - 4.0, r.position.y), Vector2(r.end.x - 4.0, r.end.y), Color(0.25, 0.25, 0.27), 3.0)
+	for seg in [[r.position.y, o0], [o1, r.end.y]]:
+		var leaf := Rect2(Vector2(r.position.x, float(seg[0]) + 4.0), Vector2(r.size.x, float(seg[1]) - float(seg[0]) - 8.0))
+		if leaf.size.y <= 8.0:
+			continue
+		_drop_sh(c, _rr(leaf, 3.0), 0.8)
+		_shape(c, _rr(leaf, 3.0), Color(0.6, 0.63, 0.67), 3.0)
+		var y := leaf.position.y + 16.0
+		while y < leaf.end.y - 6.0:
+			c.draw_line(Vector2(leaf.position.x + 4.0, y), Vector2(leaf.end.x - 4.0, y), Color(0.45, 0.48, 0.52), 2.0)
+			y += 16.0
+	var sill := Rect2(Vector2(r.position.x, o0), Vector2(r.size.x * 0.6, o1 - o0))
+	c.draw_rect(sill, Color(0.95, 0.78, 0.15))
+	var y2 := sill.position.y
+	while y2 < sill.end.y:
+		c.draw_rect(Rect2(Vector2(sill.position.x, y2), Vector2(sill.size.x, 12.0)), Color(0.12, 0.11, 0.1))
+		y2 += 24.0
+	var mid := (o0 + o1) * 0.5
+	c.draw_line(Vector2(r.end.x, mid), Vector2(r.end.x + TILE * 4.0, mid), YELLOW_PAINT, 6.0)
+	c.draw_string(ThemeDB.fallback_font, Vector2(r.end.x + TILE * 0.6, o1 + TILE * 1.2), String(p.get("text", "")), HORIZONTAL_ALIGNMENT_LEFT, TILE * 3.0, 44, Color(0.95, 0.78, 0.15, 0.8))
+
+
+## An airliner nose east (or a small high-wing prop plane): the swept wings with their flaps and engines, the tailplane, the tapered fuselage with the cockpit glass and a livery stripe,
+## the fin. Its shadow falls far (it stands tall).
 static func _plane(c: CanvasItem, r: Rect2, col: Color, small: bool) -> void:
 	var cy := r.position.y + r.size.y * 0.5
 	var L := r.size.x
 	var x0 := r.position.x
-	var fw := r.size.y * (0.14 if not small else 0.16)
-	var wing := PackedVector2Array([Vector2(x0 + L * 0.42, cy - fw * 0.4), Vector2(x0 + L * 0.58, cy - fw * 0.4), Vector2(x0 + L * 0.42, r.position.y), Vector2(x0 + L * 0.34, r.position.y),
-		Vector2(x0 + L * 0.34, r.end.y), Vector2(x0 + L * 0.42, r.end.y), Vector2(x0 + L * 0.58, cy + fw * 0.4), Vector2(x0 + L * 0.42, cy + fw * 0.4)])
-	if small:
-		wing = PackedVector2Array([Vector2(x0 + L * 0.5, r.position.y), Vector2(x0 + L * 0.62, r.position.y), Vector2(x0 + L * 0.62, r.end.y), Vector2(x0 + L * 0.5, r.end.y)])
-	var tail := PackedVector2Array([Vector2(x0 + L * 0.1, cy), Vector2(x0, cy - r.size.y * 0.2), Vector2(x0 + L * 0.06, cy - r.size.y * 0.2), Vector2(x0 + L * 0.2, cy),
-		Vector2(x0 + L * 0.06, cy + r.size.y * 0.2), Vector2(x0, cy + r.size.y * 0.2)])
-	var body := Rect2(x0 + L * 0.03, cy - fw * 0.5, L * 0.92, fw)
-	for poly in [wing, tail]:
-		var sh := PackedVector2Array()
-		for q in poly:
-			sh.append(q + Vector2(22, 30))
-		c.draw_colored_polygon(sh, Color(0, 0, 0, 0.22))
-	c.draw_rect(Rect2(body.position + Vector2(22, 30), body.size), Color(0, 0, 0, 0.22))
-	c.draw_colored_polygon(wing, Color(0.82, 0.84, 0.86))
-	var wl := wing.duplicate()
-	wl.append(wing[0])
-	c.draw_polyline(wl, INK, 4.0)
-	c.draw_colored_polygon(tail, Color(0.86, 0.87, 0.88))
-	var tl := tail.duplicate()
-	tl.append(tail[0])
-	c.draw_polyline(tl, INK, 4.0)
+	var hs := r.size.y * 0.5 - 6.0
+	var fw := r.size.y * (0.14 if not small else 0.13)
+	var lite := Color(0.84, 0.86, 0.88)
+	var white := Color(0.96, 0.96, 0.94)
+	var body := PackedVector2Array()    # the fuselage: a cone at the tail, the round nose
+	var top := [[0.01, 0.16], [0.08, 0.5], [0.18, 0.92], [0.24, 1.0], [0.84, 1.0]]
+	for q in top:
+		body.append(Vector2(x0 + L * float(q[0]), cy - fw * 0.5 * float(q[1])))
+	for k in 9:
+		var a := -PI * 0.5 + float(k + 1) / 10.0 * PI
+		body.append(Vector2(x0 + L * 0.84 + cos(a) * L * 0.13, cy + sin(a) * fw * 0.5))
+	for i in range(top.size() - 1, -1, -1):
+		body.append(Vector2(x0 + L * float(top[i][0]), cy + fw * 0.5 * float(top[i][1])))
+	var wings: Array = []
+	var tails: Array = []
+	for s in [-1.0, 1.0]:
+		if small:
+			wings.append(PackedVector2Array([Vector2(x0 + L * 0.44, cy), Vector2(x0 + L * 0.58, cy), Vector2(x0 + L * 0.57, cy + s * hs), Vector2(x0 + L * 0.45, cy + s * hs)]))
+			tails.append(PackedVector2Array([Vector2(x0 + L * 0.04, cy), Vector2(x0 + L * 0.13, cy), Vector2(x0 + L * 0.11, cy + s * hs * 0.38), Vector2(x0 + L * 0.04, cy + s * hs * 0.38)]))
+		else:
+			wings.append(PackedVector2Array([Vector2(x0 + L * 0.37, cy + s * fw * 0.3), Vector2(x0 + L * 0.61, cy + s * fw * 0.3), Vector2(x0 + L * 0.41, cy + s * hs),
+				Vector2(x0 + L * 0.335, cy + s * hs)]))
+			tails.append(PackedVector2Array([Vector2(x0 + L * 0.03, cy + s * fw * 0.1), Vector2(x0 + L * 0.17, cy + s * fw * 0.1), Vector2(x0 + L * 0.07, cy + s * hs * 0.38),
+				Vector2(x0 + L * 0.02, cy + s * hs * 0.38)]))
+	var lift := 2.2 if not small else 1.4
+	for poly in wings + tails + [body]:
+		_drop_sh(c, poly, lift)
+	for poly in tails:
+		_shape(c, poly, lite, 3.5)
+	for poly in wings:
+		_shape(c, poly, lite, 3.5)
 	if not small:
-		for ey in [r.position.y + r.size.y * 0.22, r.end.y - r.size.y * 0.22]:
-			var eng := Rect2(x0 + L * 0.44, ey - fw * 0.28, L * 0.1, fw * 0.56)
-			c.draw_rect(eng, Color(0.42, 0.44, 0.47))
-			c.draw_rect(eng, INK, false, 3.0)
-	c.draw_rect(body, Color(0.95, 0.95, 0.93))
-	c.draw_circle(Vector2(body.end.x, cy), fw * 0.5, Color(0.95, 0.95, 0.93))
-	c.draw_arc(Vector2(body.end.x, cy), fw * 0.5, -PI * 0.5, PI * 0.5, 12, INK, 4.0)
-	c.draw_line(Vector2(body.position.x + L * 0.04, cy), Vector2(body.end.x - 6.0, cy), col, fw * 0.22)
-	if not small:
-		var wx := body.position.x + L * 0.08
-		while wx < body.end.x - L * 0.06:
-			c.draw_rect(Rect2(wx, cy - fw * 0.36, 6.0, 7.0), Color(0.2, 0.3, 0.42))
-			wx += 18.0
-	c.draw_rect(Rect2(body.end.x - fw * 0.3, cy - fw * 0.3, fw * 0.22, fw * 0.6), Color(0.2, 0.3, 0.42))
-	c.draw_line(body.position, Vector2(body.end.x, body.position.y), INK, 4.0)
-	c.draw_line(Vector2(body.position.x, body.end.y), body.end, INK, 4.0)
-	c.draw_line(body.position, Vector2(body.position.x, body.end.y), INK, 4.0)
+		for s in [-1.0, 1.0]:    # the flaps along the trailing edge, then the engines under the wing, ahead of it
+			var a := Vector2(x0 + L * 0.385, cy + s * fw * 0.6)
+			var b := Vector2(x0 + L * 0.345, cy + s * hs * 0.8)
+			c.draw_line(a + Vector2(14, 0), b + Vector2(12, 0), Color(0.62, 0.64, 0.67), 3.0)
+			var eng := Rect2(Vector2(x0 + L * 0.44, cy + s * hs * 0.6 - fw * 0.2), Vector2(L * 0.13, fw * 0.4))
+			_shape(c, _rr(eng, fw * 0.18), Color(0.58, 0.6, 0.63), 3.0)
+			c.draw_rect(Rect2(Vector2(eng.end.x - 12.0, eng.position.y + 6.0), Vector2(8.0, eng.size.y - 12.0)), Color(0.18, 0.18, 0.2))
+			c.draw_line(Vector2(eng.position.x + 8.0, eng.get_center().y), Vector2(eng.end.x - 16.0, eng.get_center().y), Color(0.45, 0.47, 0.5), 3.0)
+	_shape(c, body, white, 4.0)
+	for s in [-1.0, 1.0]:    # the livery stripe down each flank
+		c.draw_line(Vector2(x0 + L * 0.2, cy + s * fw * 0.36), Vector2(x0 + L * 0.9, cy + s * fw * 0.36), col, fw * 0.12)
+	var fin_end := x0 + L * (0.22 if not small else 0.15)    # the fin, edge on: thick at its foot aft, a point forward
+	_shape(c, PackedVector2Array([Vector2(x0 + L * 0.015, cy - fw * 0.1), Vector2(x0 + L * 0.1, cy - fw * 0.08), Vector2(fin_end, cy), Vector2(x0 + L * 0.1, cy + fw * 0.08),
+		Vector2(x0 + L * 0.015, cy + fw * 0.1)]), col, 2.5)
+	var nose := x0 + L * 0.84 + L * 0.13
+	var cock := PackedVector2Array([Vector2(nose - L * 0.06, cy - fw * 0.3), Vector2(nose - L * 0.025, cy - fw * 0.2), Vector2(nose - L * 0.025, cy + fw * 0.2), Vector2(nose - L * 0.06, cy + fw * 0.3)])
+	_shape(c, cock, GLASS, 2.5)
 	if small:
-		c.draw_line(Vector2(body.end.x + fw * 0.5, cy - fw * 1.6), Vector2(body.end.x + fw * 0.5, cy + fw * 1.6), INK, 6.0)
+		_shape(c, PackedVector2Array([Vector2(x0 + L * 0.58, cy - fw * 0.42), Vector2(x0 + L * 0.68, cy - fw * 0.36), Vector2(x0 + L * 0.68, cy + fw * 0.36), Vector2(x0 + L * 0.58, cy + fw * 0.42)]), GLASS, 2.5)
+		for s in [-1.0, 1.0]:    # the struts under the wing
+			c.draw_line(Vector2(x0 + L * 0.52, cy + s * fw * 0.5), Vector2(x0 + L * 0.5, cy + s * hs * 0.45), Color(0.45, 0.45, 0.47), 4.0)
+		c.draw_line(Vector2(nose + 6.0, cy - hs * 0.45), Vector2(nose + 6.0, cy + hs * 0.45), INK, 9.0)    # the propeller
+		c.draw_line(Vector2(nose + 6.0, cy - hs * 0.45), Vector2(nose + 6.0, cy + hs * 0.45), Color(0.3, 0.3, 0.32), 5.0)
+		c.draw_circle(Vector2(nose, cy), fw * 0.2, INK)
+		c.draw_circle(Vector2(nose, cy), fw * 0.2 - 3.0, col)
+	else:
+		for k in 2:    # the doors
+			var dx := x0 + L * (0.78 - 0.5 * float(k))
+			c.draw_rect(Rect2(dx, cy - fw * 0.5 + 4.0, 14.0, 10.0), Color(0.7, 0.7, 0.7), false, 2.0)
 
 
-## The stadium bowl: the outer wall's ring and its gates, the seats (rows in two club colours, the aisles), the track and the pitch with its lines and goals.
+# ------------------------------------------------------------------ the stadium --
+
+static func _ell(cc: Vector2, R: Vector2, e: float, a: float) -> Vector2:
+	return cc + Vector2(cos(a) * R.x, sin(a) * R.y) * e
+
+
+static func _ring_pts(cc: Vector2, R: Vector2, e: float, n: int = 120) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for k in n:
+		pts.append(_ell(cc, R, e, float(k) / float(n) * TAU))
+	return pts
+
+
+## A band of the bowl between two of its rings (e0 < e1) from angle a0 to a1.
+static func _band(cc: Vector2, R: Vector2, e0: float, e1: float, a0: float, a1: float, n: int = 10) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for k in n + 1:
+		pts.append(_ell(cc, R, e1, lerpf(a0, a1, float(k) / float(n))))
+	for k in n + 1:
+		pts.append(_ell(cc, R, e0, lerpf(a1, a0, float(k) / float(n))))
+	return pts
+
+
+## A straight strip `half_tiles` wide either side of the ray at angle a, from ring e0 out to ring e1 (an aisle, a gate's tunnel): e0's left, e1's left, e1's right, e0's right.
+static func _strip(cc: Vector2, R: Vector2, e0: float, e1: float, a: float, half_tiles: float) -> PackedVector2Array:
+	return PackedVector2Array([_ell(cc, R, e0, a - _gap_da(R, e0, half_tiles)), _ell(cc, R, e1, a - _gap_da(R, e1, half_tiles)),
+		_ell(cc, R, e1, a + _gap_da(R, e1, half_tiles)), _ell(cc, R, e0, a + _gap_da(R, e0, half_tiles))])
+
+
+## The angle half-width of a straight gap `half_tiles` wide at ring e (the bowl's mean radius in tiles, as `_stadium` measures its gates and aisles).
+static func _gap_da(R: Vector2, e: float, half_tiles: float) -> float:
+	return half_tiles * TILE / (e * (R.x + R.y) * 0.5)
+
+
+## The stadium bowl: the plaza round it, the outer wall (its piers and coping, the four gate tunnels with turnstiles and signs), the concourse, the stepped stands (rows of seats, red
+## along the sides and blue behind the goals, the risers' shade, the aisles' stairs), the track with its lanes, the pitch with its stripes and full markings, the goals with their nets,
+## and the feet of the four floodlight masts with their long shadows (the heads are drawn over the people, `_bowl_high`).
 static func _bowl(c: CanvasItem, r: Rect2) -> void:
 	var cc := r.get_center()
 	var R := r.size * 0.5
-	var ring := func(e: float, col: Color, w: float) -> void:
-		var pts := PackedVector2Array()
-		for k in 97:
-			var a := float(k) / 96.0 * TAU
-			pts.append(cc + Vector2(cos(a) * R.x, sin(a) * R.y) * e)
-		c.draw_polyline(pts, col, w)
-	var disc := func(e: float, col: Color) -> void:
-		var pts := PackedVector2Array()
-		for k in 96:
-			var a := float(k) / 96.0 * TAU
-			pts.append(cc + Vector2(cos(a) * R.x, sin(a) * R.y) * e)
-		c.draw_colored_polygon(pts, col)
-	disc.call(1.12, Color(0.6, 0.6, 0.58))    # (the plaza round the wall, smooth over the tiles' steps)
-	disc.call(0.995, Color(0.55, 0.55, 0.57))
-	disc.call(0.9, Color(0.66, 0.65, 0.62))
-	disc.call(0.72, Color(0.36, 0.38, 0.42))
-	var e := 0.715
-	var k2 := 0
-	while e > 0.475:    # the rows of seats
-		ring.call(e, Color(0.72, 0.18, 0.18) if (k2 / 3) % 2 == 0 else Color(0.92, 0.92, 0.9), 9.0)
-		e -= 0.0165
-		k2 += 1
-	disc.call(0.47, Color(0.66, 0.36, 0.26))
-	disc.call(0.4, Color(0.3, 0.52, 0.24))
+	c.draw_colored_polygon(_ring_pts(cc, R, 1.15), Color(0.6, 0.6, 0.57))    # the plaza, smooth over the tiles' steps
+	c.draw_polyline(_closed(_ring_pts(cc, R, 1.15)), Color(0.4, 0.4, 0.38), 3.0)
+	var outer := _ring_pts(cc, R, 1.0)
+	_drop_sh(c, outer, 1.6)
+	c.draw_colored_polygon(outer, Color(0.5, 0.5, 0.54))    # the outer wall
+	c.draw_colored_polygon(_ring_pts(cc, R, 0.9), Color(0.69, 0.68, 0.65))    # the concourse
+	var piers := PackedVector2Array()
+	for k in 72:
+		var a := float(k) / 72.0 * TAU
+		piers.append(_ell(cc, R, 0.905, a))
+		piers.append(_ell(cc, R, 0.995, a))
+	c.draw_multiline(piers, Color(0.38, 0.38, 0.42), 4.0)
+	c.draw_polyline(_closed(_ring_pts(cc, R, 0.975)), Color(0.66, 0.66, 0.7), 7.0)    # the coping
+	c.draw_polyline(_closed(_ring_pts(cc, R, 0.885)), Color(0, 0, 0, 0.16), 14.0)    # the wall's shade on the concourse
+	for e in [0.78, 0.84]:
+		c.draw_polyline(_closed(_ring_pts(cc, R, e)), Color(0.6, 0.59, 0.56), 2.0)
+	# the stands: rows of seats, stepped (the back of each row is a dark riser line)
+	var rows := 14
+	var e_in: float = ST_E[1]
+	var e_out: float = ST_E[2]
+	var d := (e_out - e_in) / float(rows)
+	var red := Color(0.7, 0.17, 0.16)
+	var blue := Color(0.18, 0.3, 0.56)
+	for i in rows:
+		var e0 := e_in + float(i) * d
+		for k in 8:
+			var a0 := float(k) * PI / 4.0
+			var ends := k == 0 or k == 3 or k == 4 or k == 7    # (the sections behind the goals, east and west)
+			var sc: Color = (blue if ends else red).lightened(0.07 if i % 2 == 0 else 0.0)
+			c.draw_colored_polygon(_band(cc, R, e0, e0 + d, a0, a0 + PI / 4.0, 12), sc)
+	var seats_r := PackedVector2Array()
+	var seats_b := PackedVector2Array()
+	for i in rows:
+		var e0 := e_in + float(i) * d
+		var rad := e0 * (R.x + R.y) * 0.5
+		var n := int(TAU * rad / 22.0)
+		for j in n:
+			var a := float(j) / float(n) * TAU
+			var sec := int(a / (PI / 4.0)) % 8
+			var into := (sec == 0 or sec == 3 or sec == 4 or sec == 7)
+			var p0 := _ell(cc, R, e0 + d * 0.2, a)
+			var p1 := _ell(cc, R, e0 + d * 0.62, a)
+			if into:
+				seats_b.append(p0)
+				seats_b.append(p1)
+			else:
+				seats_r.append(p0)
+				seats_r.append(p1)
+	c.draw_multiline(seats_r, red.darkened(0.35), 4.0)
+	c.draw_multiline(seats_b, blue.darkened(0.35), 4.0)
+	for i in rows:
+		c.draw_polyline(_closed(_ring_pts(cc, R, e_in + float(i + 1) * d - 0.002, 160)), Color(0.08, 0.06, 0.06, 0.6), 3.0)
+	# the aisles: stairs of light concrete with a handrail
+	for k in 8:
+		var a := float(k) * PI / 4.0
+		var aisle := _strip(cc, R, e_in, e_out, a, 1.0)
+		c.draw_colored_polygon(aisle, Color(0.76, 0.75, 0.72))
+		for s in rows:
+			var es := e_in + (float(s) + 1.0) * d
+			var da := _gap_da(R, es, 1.0)
+			c.draw_line(_ell(cc, R, es, a - da), _ell(cc, R, es, a + da), Color(0.52, 0.52, 0.5), 3.0)
+		c.draw_line(_ell(cc, R, e_in, a), _ell(cc, R, e_out, a), Color(0.85, 0.75, 0.3), 3.0)
+		c.draw_polyline(_closed(aisle), INK, 2.0)
+	# the track and its lanes, the grass and the pitch
+	c.draw_colored_polygon(_ring_pts(cc, R, ST_E[1]), Color(0.68, 0.35, 0.25))
+	for k in 5:
+		c.draw_polyline(_closed(_ring_pts(cc, R, ST_E[0] + 0.012 + float(k) * 0.0115)), Color(0.95, 0.9, 0.85, 0.55), 2.0)
+	c.draw_colored_polygon(_ring_pts(cc, R, ST_E[0]), Color(0.28, 0.5, 0.23))
 	var pitch := Rect2(cc - R * 0.4 * Vector2(0.78, 0.66), R * 0.8 * Vector2(0.78, 0.66))
-	var sw := pitch.size.x / 10.0
-	for k in 10:
-		if k % 2 == 0:
-			c.draw_rect(Rect2(pitch.position + Vector2(sw * k, 0), Vector2(sw, pitch.size.y)), Color(0.34, 0.58, 0.27))
-	var white := Color(0.95, 0.95, 0.92, 0.9)
-	c.draw_rect(pitch, white, false, 5.0)
-	c.draw_line(Vector2(cc.x, pitch.position.y), Vector2(cc.x, pitch.end.y), white, 5.0)
-	c.draw_arc(cc, pitch.size.y * 0.18, 0, TAU, 32, white, 5.0)
+	var sw := pitch.size.x / 12.0
+	for k in 12:
+		c.draw_rect(Rect2(pitch.position + Vector2(sw * k, 0), Vector2(sw, pitch.size.y)), Color(0.33, 0.57, 0.26) if k % 2 == 0 else Color(0.29, 0.52, 0.23))
+	var white := Color(0.96, 0.96, 0.93, 0.95)
+	var lw := 5.0
+	c.draw_rect(pitch, white, false, lw)
+	c.draw_line(Vector2(cc.x, pitch.position.y), Vector2(cc.x, pitch.end.y), white, lw)
+	var cr := pitch.size.y * 0.135
+	c.draw_arc(cc, cr, 0, TAU, 40, white, lw)
+	c.draw_circle(cc, 7.0, white)
 	for side in [-1.0, 1.0]:
 		var gx: float = cc.x + side * pitch.size.x * 0.5
-		var box := Rect2(Vector2(gx - (pitch.size.x * 0.16 if side > 0 else 0.0), cc.y - pitch.size.y * 0.3), Vector2(pitch.size.x * 0.16, pitch.size.y * 0.6))
-		c.draw_rect(box, white, false, 5.0)
-		var goal := Rect2(Vector2(gx + (0.0 if side > 0 else -24.0), cc.y - 60.0), Vector2(24, 120))
-		c.draw_rect(goal, Color(0.95, 0.95, 0.95, 0.5))
-		c.draw_rect(goal, INK, false, 3.0)
-	for k in 8:    # the aisles: steps of light concrete
-		var a := float(k) * PI / 4.0
-		var d := Vector2(cos(a) * R.x, sin(a) * R.y)
-		c.draw_line(cc + d * 0.47, cc + d * 0.72, Color(0.78, 0.77, 0.74), TILE * 1.3)
-		var steps := 6
-		for s in steps:
-			var q := cc + d * (0.49 + float(s) * 0.04)
-			var n := Vector2(-d.y, d.x).normalized() * TILE * 0.62
-			c.draw_line(q - n, q + n, Color(0.55, 0.55, 0.52), 3.0)
-	ring.call(1.0, INK, 6.0)
-	ring.call(0.9, INK, 4.0)
-	ring.call(0.72, INK, 4.0)
-	ring.call(0.47, INK, 3.0)
+		var pd := pitch.size.x * 0.157
+		var pbox := Rect2(Vector2(gx - (pd if side > 0 else 0.0), cc.y - pitch.size.y * 0.3), Vector2(pd, pitch.size.y * 0.6))
+		c.draw_rect(pbox, white, false, lw)
+		var gd := pitch.size.x * 0.052
+		c.draw_rect(Rect2(Vector2(gx - (gd if side > 0 else 0.0), cc.y - pitch.size.y * 0.135), Vector2(gd, pitch.size.y * 0.27)), white, false, lw)
+		var spot := Vector2(gx - side * pitch.size.x * 0.105, cc.y)
+		c.draw_circle(spot, 6.0, white)
+		var off := (pd - pitch.size.x * 0.105) / cr
+		var arc_a := acos(clampf(off, -1.0, 1.0))
+		var facing := 0.0 if side < 0 else PI
+		c.draw_arc(spot, cr, facing - arc_a, facing + arc_a, 16, white, lw)
+		for sy in [-1.0, 1.0]:    # the corner arcs
+			var corner := Vector2(gx, cc.y + sy * pitch.size.y * 0.5)
+			var a0 := atan2(-sy, -side)
+			c.draw_arc(corner, 16.0, a0 - PI * 0.25, a0 + PI * 0.25, 6, white, 4.0)
+		var goal := Rect2(Vector2(gx + (0.0 if side > 0 else -34.0), cc.y - pitch.size.y * 0.055), Vector2(34.0, pitch.size.y * 0.11))
+		c.draw_rect(goal, Color(0.9, 0.9, 0.9, 0.35))
+		var nx := goal.position.x + 6.0
+		while nx < goal.end.x:
+			c.draw_line(Vector2(nx, goal.position.y), Vector2(nx, goal.end.y), Color(0.95, 0.95, 0.95, 0.5), 1.5)
+			nx += 8.0
+		var ny := goal.position.y + 6.0
+		while ny < goal.end.y:
+			c.draw_line(Vector2(goal.position.x, ny), Vector2(goal.end.x, ny), Color(0.95, 0.95, 0.95, 0.5), 1.5)
+			ny += 8.0
+		c.draw_rect(goal, INK, false, 5.0)
+		c.draw_line(Vector2(gx, goal.position.y), Vector2(gx, goal.end.y), Color(1, 1, 1), 5.0)
+	# the outlines
+	c.draw_polyline(_closed(outer), INK, 6.0)
+	for e in [ST_E[3], ST_E[2], ST_E[1]]:
+		c.draw_polyline(_closed(_ring_pts(cc, R, e)), INK, 4.0 if e > 0.5 else 3.0)
+	c.draw_polyline(_closed(_ring_pts(cc, R, ST_E[1] + 0.006)), Color(0.82, 0.82, 0.8), 6.0)    # the pitch-side wall
+	# the gates: a tunnel through the wall (paving, side walls), the turnstiles, the sign
 	var font := ThemeDB.fallback_font
-	for k in 4:    # the gates
+	for k in 4:
 		var a := float(k) * PI * 0.5
-		var q := cc + Vector2(cos(a) * R.x, sin(a) * R.y) * 0.95
-		c.draw_circle(q, TILE * 0.5, Color(0.95, 0.8, 0.2, 0.6))
-		c.draw_string(font, q + Vector2(-60, -TILE * 0.9), "GATE %s" % ["E", "S", "W", "N"][k], HORIZONTAL_ALIGNMENT_CENTER, 120, 20, Color(0.95, 0.9, 0.7))
+		var da := _gap_da(R, 0.95, 1.95)
+		var tunnel := _strip(cc, R, 0.895, 1.008, a, 1.95)
+		c.draw_colored_polygon(tunnel, Color(0.66, 0.65, 0.62))
+		c.draw_line(tunnel[0], tunnel[1], INK, 7.0)
+		c.draw_line(tunnel[2], tunnel[3], INK, 7.0)
+		for t in 5:    # the turnstiles
+			var q := _ell(cc, R, 0.95, a + lerpf(-da * 0.75, da * 0.75, float(t) / 4.0))
+			c.draw_circle(q, 7.0, INK)
+			c.draw_circle(q, 4.5, Color(0.7, 0.72, 0.75))
+		var sp := _ell(cc, R, 1.06, a)
+		var sign_r := Rect2(sp - Vector2(TILE * 1.1, 18.0), Vector2(TILE * 2.2, 36.0))
+		_sign(c, sign_r, "GATE %s" % ["E", "S", "W", "N"][k], Color(0.18, 0.3, 0.56))
+	for k in 4:    # the floodlight masts' shadows (they are tall: long, over whatever is below)
+		var a := PI * 0.25 + float(k) * PI * 0.5
+		var base := _ell(cc, R, 0.95, a)
+		c.draw_line(base, base + SH.normalized() * TILE * 6.0, Color(0, 0, 0, 0.18), 12.0)
+		c.draw_rect(Rect2(base + SH.normalized() * TILE * 6.0 - Vector2(50, 26), Vector2(100, 52)), Color(0, 0, 0, 0.14))
+	for k in 4:    # the floodlight masts' feet on the wall
+		var base := _ell(cc, R, 0.95, PI * 0.25 + float(k) * PI * 0.5)
+		_shape(c, _rr(Rect2(base - Vector2(26, 26), Vector2(52, 52)), 6.0), Color(0.62, 0.62, 0.64), 3.0)
 
 
+## The floodlight heads, over the people: a lattice mast top and a bank of lamps turned to the pitch.
+static func _bowl_high(c: CanvasItem, r: Rect2) -> void:
+	var cc := r.get_center()
+	var R := r.size * 0.5
+	for k in 4:
+		var a := PI * 0.25 + float(k) * PI * 0.5
+		var base := _ell(cc, R, 0.95, a)
+		c.draw_set_transform(base, (cc - base).angle() + PI * 0.5, Vector2.ONE)
+		c.draw_rect(Rect2(-16, -16, 32, 32), Color(0.4, 0.4, 0.43))
+		c.draw_line(Vector2(-16, -16), Vector2(16, 16), Color(0.25, 0.25, 0.28), 3.0)
+		c.draw_line(Vector2(16, -16), Vector2(-16, 16), Color(0.25, 0.25, 0.28), 3.0)
+		c.draw_rect(Rect2(-16, -16, 32, 32), INK, false, 3.0)
+		var bank := Rect2(-62, -46, 124, 34)
+		c.draw_rect(bank, Color(0.3, 0.3, 0.33))
+		for i in 6:
+			for j in 2:
+				c.draw_rect(Rect2(bank.position + Vector2(6.0 + float(i) * 19.5, 4.0 + float(j) * 14.0), Vector2(14.0, 11.0)), Color(1.0, 0.96, 0.78))
+		c.draw_rect(bank, INK, false, 3.5)
+		c.draw_line(Vector2(0, -12), Vector2(0, -16), INK, 6.0)
+		_unframe(c)
+
+
+## A food stall: the striped awning over the counter, the hatch.
 static func _stall(c: CanvasItem, r: Rect2, col: Color) -> void:
-	var rr := r.grow(-4.0)
-	_shadow(c, rr)
+	var rr := r.grow(-5.0)
+	_drop_sh(c, _rr(rr, 4.0), 0.9)
 	c.draw_rect(rr, Color(0.95, 0.93, 0.88))
-	var n := 5
+	var n := 6
 	for k in n:
 		if k % 2 == 0:
 			c.draw_rect(Rect2(rr.position + Vector2(rr.size.x * k / n, 0), Vector2(rr.size.x / n, rr.size.y * 0.55)), col)
-	c.draw_rect(Rect2(rr.position + Vector2(8, rr.size.y * 0.62), Vector2(rr.size.x - 16.0, rr.size.y * 0.28)), Color(0.55, 0.38, 0.22))
+	c.draw_line(rr.position + Vector2(0, rr.size.y * 0.55), rr.position + Vector2(rr.size.x, rr.size.y * 0.55), INK, 2.5)
+	for k in n:    # the awning's scalloped edge
+		c.draw_arc(rr.position + Vector2(rr.size.x * (float(k) + 0.5) / n, rr.size.y * 0.55), rr.size.x / n * 0.5, 0, PI, 6, col.darkened(0.2) if k % 2 == 0 else Color(0.8, 0.78, 0.74), 3.0)
+	c.draw_rect(Rect2(rr.position + Vector2(8, rr.size.y * 0.66), Vector2(rr.size.x - 16.0, rr.size.y * 0.24)), Color(0.55, 0.38, 0.22))
 	c.draw_rect(rr, INK, false, 3.0)
+
+
+## A petrol station's canopy over the pumps (under the people, half see-through so the pumps show): the white roof, the red fascia round it, the lamp panels.
+static func _canopy(c: CanvasItem, r: Rect2) -> void:
+	c.draw_rect(Rect2(r.position + SH * 1.2, r.size), Color(0, 0, 0, 0.12))
+	c.draw_rect(r, Color(0.94, 0.94, 0.92, 0.38))
+	for k in 3:
+		c.draw_rect(Rect2(r.position + Vector2(r.size.x * (0.12 + 0.3 * float(k)), r.size.y * 0.35), Vector2(r.size.x * 0.16, r.size.y * 0.3)), Color(1.0, 0.97, 0.82, 0.45))
+	c.draw_rect(r.grow(-6.0), Color(0.82, 0.18, 0.14, 0.9), false, 12.0)
+	c.draw_rect(r, INK, false, 3.0)
 
 
 static func _excavator(c: CanvasItem, r: Rect2) -> void:
