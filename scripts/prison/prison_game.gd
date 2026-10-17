@@ -112,6 +112,7 @@ var frames := 0
 var sim_steps := 0
 var zoom_px := 40.0
 var play_zoom := 40.0
+var _night_zoomed := false    # NIGHT CAMERA: the attack zoomed out (eased back to play_zoom after it)
 var cam_center := Vector2(48, 48)
 var map_view := false
 var stores := {"food": 40.0, "water": 60.0, "ammo": 80.0, "meds": 6.0, "scrap": 30.0, "parts": 2.0, "fuel": 0.0}
@@ -122,6 +123,7 @@ var busy := false    # a cutscene is playing
 var overlay: Node2D    # world-space drawing (labels, exits, tower decks)
 var _flare_node: Node2D    # NOISE hook: the ground layer of the flares and alarms (redrawn each frame)
 var hud: CanvasLayer
+var _prompt_y := 1.0e6    # the prompt plate's eased top (far off at first, so the first frame snaps)
 var prompt_label: Label    # MESSAGE LANES (prompt lane): the E/F prompt, or else the current context hint, one at a time on a dark plate above the weapon panel
 var last_msg := ""    # the last toast or hint text (checks read it)
 var hint_text := ""    # the context hint waiting for the prompt lane (it shows after the banners, while no E prompt is up)
@@ -633,8 +635,12 @@ func _layout_labels() -> void:
 		var w := minf(f.get_string_size(prompt_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, prompt_label.get_theme_font_size("font_size")).x + 30.0, v.x * 0.6)
 		prompt_label.custom_minimum_size.x = w
 		prompt_label.size = Vector2(w, 0)
-		var pr := Rect2((v.x - w) / 2.0, v.y - 92.0 - prompt_label.size.y, w, prompt_label.size.y)
-		prompt_label.position = Vector2(pr.position.x, lane_dodge(pr, _lane_points(), v, -1.0))
+		var h := prompt_label.get_minimum_size().y    # (the wrapped height at this width: `size.y` still holds the one-line height for a frame, so a two-line plate sank onto Base (B))
+		prompt_label.size.y = h
+		var pr := Rect2(roundf((v.x - w) / 2.0), v.y - 112.0 - h, w, h)    # (112: clear of the search, revive and extraction bar and its text at v.y - 105 to v.y - 72)
+		var want := pr.position.y if map_view else lane_dodge(pr, _lane_points(), v, -1.0)    # (the overview keeps it home: Ruth is a dot there, and the place names keep clear of it)
+		_prompt_y = want if absf(_prompt_y - want) > v.y else lerpf(_prompt_y, want, 1.0 - exp(-10.0 * get_process_delta_time()))    # (eased and on whole pixels: it followed Ruth's sub-pixel screen spot every frame and shook)
+		prompt_label.position = Vector2(pr.position.x, roundf(_prompt_y))
 	cap_label.size = Vector2(v.x, 110)
 	cap_label.position = Vector2(0, v.y * 0.5 + 110)    # (under the truck, clear of Ruth at the centre)
 
@@ -1520,9 +1526,21 @@ func _tick(dt: float) -> void:
 		_trailer_cam(dt)
 	if not args.has("fixcam"):
 		var goal := Vector2(p.x, p.y) if not map_view else Vector2(float(world.W) / 2.0, float(world.H) / 2.0)
-		if siege.attacking and mode == "base" and phase == "managed" and not map_view:    # NIGHT CAMERA: an attack frames the south fence mid-screen, Ruth kept on screen; back when it ends
-			var half := _vp().y / 2.0 / zoom_px
-			goal.y = p.y + clampf(float(Base.FENCE.end.y) - 1.5 - p.y, -0.4 * half, 0.4 * half)
+		if siege.attacking and mode == "base" and phase == "managed" and not map_view and siege.focus() != Vector2.INF:    # NIGHT CAMERA: an attack frames the busiest attacked fence segment (any side): the first 4 s on the fence itself, then Ruth and the fence together, zoomed out up to half the play zoom; back when it ends
+			var d: Vector2 = siege.focus() - Vector2(p.x, p.y)
+			var fit := minf(_vp().x * 0.7 / (absf(d.x) + 4.0), _vp().y * 0.5 / (absf(d.y) + 4.0))
+			zoom_px = lerpf(zoom_px, clampf(fit, play_zoom * 0.5, play_zoom), 1.0 - exp(-2.0 * dt))
+			_night_zoomed = true
+			var half := _vp() / 2.0 / zoom_px
+			if siege.t_att > 4.0:    # (Ruth kept on screen, clear of the top bar and the bottom row)
+				d = (d * 0.5).clamp(-half * Vector2(0.75, 0.4), half * Vector2(0.75, 0.5))
+			goal = Vector2(p.x, p.y) + d
+			goal.y += 0.08 * half.y    # the top bar is shorter than the bottom row (weapon, prompts, Base, minimap): the fence sits a little above the middle
+		elif _night_zoomed and not map_view:    # (the attack is over: back to the play zoom)
+			zoom_px = lerpf(zoom_px, play_zoom, 1.0 - exp(-2.0 * dt))
+			_night_zoomed = absf(zoom_px - play_zoom) > 0.2
+			if not _night_zoomed:
+				zoom_px = play_zoom
 		cam_center += (goal - cam_center) * (1.0 - exp(-CAMERA_EASE * dt))
 	zoom_px = clampf(zoom_px, maxf(2.0, minf(_vp().x / (float(world.W) + 2.0), _vp().y / (float(world.H) + 2.0))), 84.0)
 	camera.position = cam_center * TILE
@@ -1581,6 +1599,8 @@ func _tick(dt: float) -> void:
 	var pt := String(_prompt.get("label", ""))
 	if siege.attacking and String(_prompt.get("kind", "")) == "gate":
 		pt = ""    # (no raid offer while the dead are at the fence)
+	if loadout.is_open:
+		pt = ""    # (the E prompt showed through the loadout card)
 	if pt == "" and hint_text != "" and not _ban_busy() and not loadout.is_open and not busy:
 		pt = hint_text
 		_hint_t -= dt
@@ -1827,10 +1847,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
 			zoom_px *= 1.12
-			play_zoom = zoom_px
+			play_zoom = zoom_px if not _night_zoomed else play_zoom * 1.12    # (NIGHT CAMERA: the wheel moves the play zoom, not the attack's zoomed-out one)
 		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			zoom_px /= 1.12
-			play_zoom = zoom_px
+			play_zoom = zoom_px if not _night_zoomed else play_zoom / 1.12
 
 
 func Inventory_name(id: String) -> String:
@@ -3327,9 +3347,9 @@ func _night_of(h: float) -> float:
 	return 1.0
 
 
-## ART: the colour of the light by the hour: neutral day, a long amber sunset (16:30 to 18:30), cold blue night, a pink dawn.
-const GRADE := [[0.0, Color(0.27, 0.33, 0.60)], [5.0, Color(0.27, 0.33, 0.60)], [6.2, Color(0.80, 0.62, 0.62)], [7.5, Color(1.0, 0.9, 0.8)], [9.0, Color(1, 1, 1)], [16.0, Color(1, 1, 1)],
-	[17.3, Color(1.0, 0.91, 0.78)], [18.4, Color(1.0, 0.80, 0.64)], [19.4, Color(0.56, 0.46, 0.60)], [20.6, Color(0.27, 0.33, 0.60)], [24.0, Color(0.27, 0.33, 0.60)]]
+## ART: the colour of the light by the hour: neutral day, a long amber sunset (16:30 to 18:30), cold blue night, a pink dawn. (The night was 0.27, 0.33, 0.60 until 2026-10-17: too dark to read.)
+const GRADE := [[0.0, Color(0.34, 0.40, 0.66)], [5.0, Color(0.34, 0.40, 0.66)], [6.2, Color(0.80, 0.62, 0.62)], [7.5, Color(1.0, 0.9, 0.8)], [9.0, Color(1, 1, 1)], [16.0, Color(1, 1, 1)],
+	[17.3, Color(1.0, 0.91, 0.78)], [18.4, Color(1.0, 0.80, 0.64)], [19.4, Color(0.56, 0.46, 0.60)], [20.6, Color(0.34, 0.40, 0.66)], [24.0, Color(0.34, 0.40, 0.66)]]
 
 
 func _grade(h: float) -> Color:
@@ -3354,7 +3374,7 @@ func _day_night(_dt: float) -> void:
 	if mode == "raid" and raidx != null:
 		night_rect.color = night_rect.color.darkened(raidx.dim())    # RAID EXTRAS: the raid's weather
 	if vignette != null:
-		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.45 * n if mode == "base" else 0.22 + 0.2 * n)
+		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.35 * n if mode == "base" else 0.22 + 0.2 * n)
 	if args.has("hour"):
 		tod = float(args.hour)
 	if sound != null:
@@ -3396,7 +3416,7 @@ func _draw_glow() -> void:
 		spots.append([l, 6.0, Color(1.0, 0.9, 0.6, 0.55 * n)])
 	for t in base.towers:
 		var r: Rect2 = t
-		spots.append([Tower.lamp_pos(r) / TILE, 5.0, Color(1.0, 0.95, 0.75, 0.4 * n)])
+		spots.append([Tower.lamp_pos(r) / TILE, 5.0, Color(1.0, 0.95, 0.75, 0.28 * n)])    # (0.4 with the floodlight cone over it washed the guard out)
 	if crew != null:    # a faint light on each guard and each one on a post, so the crew reads at night
 		for m in crew.members:
 			if m.def.has("stand"):

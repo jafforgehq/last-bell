@@ -477,6 +477,8 @@ func map_labels(c: Control, v: Vector2) -> void:
 	var tb = game.get("topbar")
 	if tb != null and tb.get("tracker") != null and tb.tracker.visible:
 		block.append(tb.tracker.get_global_rect().grow(8.0))
+	if game.prompt_label.visible:    # (the prompt plate where it is now: it can sit above its lane)
+		block.append(game.prompt_label.get_global_rect().grow(8.0))
 	var xf: Transform2D = game.world.get_global_transform_with_canvas()    # (the world as the camera shows it now: tiles to the screen)
 	var taken: Array = []
 	for pl in places:

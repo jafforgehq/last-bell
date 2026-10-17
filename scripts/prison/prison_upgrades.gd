@@ -980,11 +980,11 @@ func _cone(c: CanvasItem, o: Vector2, d: Vector2, length: float, half: float, k:
 	var l := o + d.rotated(-half) * length
 	var r := o + d.rotated(half) * length
 	var m := o + d * length * 1.05
-	var warm := Color(1.0, 0.95, 0.8, 0.32 * k)
+	var warm := Color(1.0, 0.95, 0.8, 0.2 * k)    # (0.32 and 0.16 added over the tower lamp's pool and clipped to white near the lamp)
 	var zero := Color(1.0, 0.95, 0.8, 0.0)
 	c.draw_polygon(PackedVector2Array([o, l, m]), PackedColorArray([warm, zero, zero]))
 	c.draw_polygon(PackedVector2Array([o, m, r]), PackedColorArray([warm, zero, zero]))
-	c.draw_polygon(PackedVector2Array([o, o + d.rotated(-half * 0.45) * length * 0.8, o + d.rotated(half * 0.45) * length * 0.8]), PackedColorArray([Color(1, 1, 0.92, 0.16 * k), zero, zero]))
+	c.draw_polygon(PackedVector2Array([o, o + d.rotated(-half * 0.45) * length * 0.8, o + d.rotated(half * 0.45) * length * 0.8]), PackedColorArray([Color(1, 1, 0.92, 0.07 * k), zero, zero]))
 
 
 func _paint_fx(c: CanvasItem) -> void:

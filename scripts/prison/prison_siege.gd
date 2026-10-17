@@ -249,6 +249,23 @@ func weakest() -> Dictionary:
 	return best
 
 
+## NIGHT CAMERA: the centre of the attacked segment with the most living dead of the wave (the first attacked one before any arrive); Vector2.INF when none.
+func focus() -> Vector2:
+	var best := Vector2.INF
+	var most := -1
+	for s in segs:
+		if not s.attacked:
+			continue
+		var n := 0
+		for w in wave:
+			if w.seg == s and _alive(w.z):
+				n += 1
+		if n > most:
+			most = n
+			best = s.center
+	return best
+
+
 func hud() -> String:
 	if not active_phase():
 		return ""
