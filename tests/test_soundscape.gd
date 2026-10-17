@@ -206,8 +206,8 @@ func test_groans_are_positional_varied_and_capped_and_the_nearest_are_kept() -> 
 		sc.groan({"x": cam.x + 4.0, "y": cam.y + 3.0, "kind": "walker"}, cam)
 		for v in sc.voices:
 			if v.kind == "groan" and v.p.stream != null:
-				files[v.p.stream.resource_path] = true
-	check(files.size() >= 6, "the eight groans are used: %d different files heard" % files.size())
+				files[v.p.stream.get_instance_id()] = true    # (a recorded groan is a randomizer of takes with no path of its own: scripts/audio/library.gd)
+	check(files.size() >= 6, "the eight groans are used: %d different sounds heard" % files.size())
 	# a stray of the streets is quiet and low
 	var quiet := _made()
 	for i in 60:
