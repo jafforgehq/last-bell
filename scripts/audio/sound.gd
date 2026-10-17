@@ -17,6 +17,7 @@ const Soundscape := preload("res://scripts/audio/soundscape.gd")
 const CombatSounds := preload("res://scripts/audio/combat_sounds.gd")
 const Foley := preload("res://scripts/audio/foley.gd")
 const FightSounds := preload("res://scripts/audio/fight_sounds.gd")
+const Library := preload("res://scripts/audio/library.gd")
 
 const POOL := 24
 ## The menu sounds have a small pool of their own, so a burst of clicks never takes a
@@ -122,6 +123,9 @@ func setup(sounds: Dictionary) -> void:
 			if not streams.has(name):
 				streams[name] = []
 			streams[name].append(s2)
+	# the recordings that stand in for the synthesised files (scripts/audio/library.gd), before the loops are set up
+	for name in streams:
+		streams[name] = Library.recorded_all(streams[name])
 	wind = _loop("wind_loop", 0.8)
 	crickets = _loop("crickets_loop", 0.0)
 	moan = _loop("moan_loop", 0.0)

@@ -11,6 +11,7 @@
 extends RefCounted
 
 const PM := preload("res://scripts/render/pawn_motion.gd")
+const Library := preload("res://scripts/audio/library.gd")
 
 ## The turn rate in radians a second: a shambler is slow, a runner quick, a brute heavy (each one has its own share of it, 0.8 to 1.25).
 const TURN := {"walker": 1.9, "runner": 6.0, "brute": 1.2}
@@ -54,7 +55,7 @@ func _load(prefix: String, n: int) -> Array:
 	for i in n:
 		var path := "res://assets/audio/%s_%d.wav" % [prefix, i]
 		if ResourceLoader.exists(path):
-			out.append(load(path))
+			out.append(Library.recorded(load(path)))
 	return out
 
 
