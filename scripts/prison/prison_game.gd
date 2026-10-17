@@ -927,6 +927,8 @@ func _enter_base() -> void:
 	crew = Crew.new()
 	crew.traits_cb = arc.traits_of
 	crew.setup(run.sim, world, base, data, clear, crew_full())
+	if clear:
+		crew.find_cb = doors.path    # DOORS: the freed crew walk through the shut doors, opening each one they come to (prison_doors.gd tick)
 	crew.econ_owned = ["food", "water"]    # ECON hook: food and water come from the economy, not from the crew's stops (and the freed crew eat nothing until the prison is secured)
 	if not clear:
 		for nm in econ_gone:    # (kept for good: a person who walked out does not come back with the next rebuild of the crew)
@@ -3102,9 +3104,9 @@ func _allies(dt: float) -> void:
 		if dist > 1.1:
 			if float(m.repath) <= 0.0:
 				m.repath = 0.4
-				m.path = run.sim.path_p.find(world.solid_p, g.x, g.y, slot.x, slot.y)
+				m.path = doors.path(at, slot)    # DOORS: through the shut doors (an ally opens the one it comes to)
 				if m.path.is_empty():
-					m.path = run.sim.path_p.find(world.solid_p, g.x, g.y, me.x, me.y)
+					m.path = doors.path(at, me)
 				m.pi = 0
 			crew._advance(m, dt, 5.0 if dist > 8.0 else ALLY_FOLLOW)
 			if best == null:

@@ -126,6 +126,7 @@ var play_t := 0.0
 var ball := Vector2(20.0, 45.0)    # the kids' ball
 var econ_owned: Array = []    # ECON hook: stock keys the economy (prison_econ.gd) owns; a stop's `give` of these is only for show
 var labor_cb: Callable    # WORLD hook: prison_upgrades.gd, called every frame a person works a project stop (m, stop, dt)
+var find_cb: Callable    # DOORS hook: prison_doors.gd `path` (a way through the shut doors of the clear phase, opened as the walker comes to them); the plain path finder when unset
 var busy_cb: Callable    # WORLD hook: has_work(m), true when m has a project of their role to build (they skip one meal, `skipped`)
 var traits_cb: Callable    # TRAITS hook: prison_game.gd sets it to arc.traits_of (name -> trait ids); the crew is rebuilt after every raid, so who has what is kept by name in the arc
 var _meal_id := -1    # what each stock got from the crew since the start
@@ -211,7 +212,7 @@ func release(id: String, at: Vector2) -> Dictionary:
 			var spot := _tower_spot(String(r.stand))
 			m.state = "walk"
 			m["to_post"] = spot
-			m.path = sim.path_p.find(world.solid_p, at.x, at.y, spot.x, spot.y + 2.0)
+			m.path = _find(at.x, at.y, spot.x, spot.y + 2.0)
 			m.pi = 0
 			m.p.work = ""
 		return m
@@ -302,7 +303,7 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 				stop = m.eat
 			# start walking to the stop (a stop that needs stock the base has not got is skipped after a short wait)
 			var tgt := _where(stop.at)
-			m.path = sim.path_p.find(world.solid_p, p.x, p.y, tgt.x, tgt.y)
+			m.path = _find(p.x, p.y, tgt.x, tgt.y)
 			m.pi = 0
 			m.state = "walk"
 			p.work = ""
@@ -345,6 +346,10 @@ func _step_member(m: Dictionary, dt: float, stores: Dictionary) -> void:
 				m.state = "wait"
 				p.work = ""
 				p.work_t = 0.0
+
+
+func _find(x0: float, y0: float, x1: float, y1: float) -> Array:
+	return find_cb.call(Vector2(x0, y0), Vector2(x1, y1)) if find_cb.is_valid() else sim.path_p.find(world.solid_p, x0, y0, x1, y1)
 
 
 ## One step along m.path at `speed`; true when the path is done.
@@ -436,7 +441,7 @@ func _play(m: Dictionary, dt: float) -> void:
 				if randf() < 0.3:
 					tgt = HOPSCOTCH
 				m.tgt = tgt
-		m.path = sim.path_p.find(world.solid_p, p.x, p.y, tgt.x, tgt.y)
+		m.path = _find(p.x, p.y, tgt.x, tgt.y)
 		m.pi = 0
 	_advance(m, dt, speed)
 	if m.role == "flee" and String(m.say) == "Kid":
@@ -544,7 +549,7 @@ func put_on_post(m: Dictionary, post: String, instant := false) -> Dictionary:
 	else:
 		m["to_post"] = spot
 		m.state = "walk"
-		m.path = sim.path_p.find(world.solid_p, p.x, p.y, spot.x, spot.y + (2.0 if post.begins_with("tower") else 0.0))
+		m.path = _find(p.x, p.y, spot.x, spot.y + (2.0 if post.begins_with("tower") else 0.0))
 		m.pi = 0
 		if from_tower and m.has("node") and is_instance_valid(m.node):
 			m.node.z_index = 0
@@ -646,7 +651,7 @@ func _apply_role(m: Dictionary, role: String, instant: bool) -> void:
 		else:
 			m["to_post"] = spot
 			m.state = "walk"
-			m.path = sim.path_p.find(world.solid_p, p.x, p.y, spot.x, spot.y + 2.0)
+			m.path = _find(p.x, p.y, spot.x, spot.y + 2.0)
 			m.pi = 0
 		m.say = "Tower guard"
 		return

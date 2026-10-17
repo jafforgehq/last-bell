@@ -888,3 +888,166 @@ func test_at_the_stash_the_panel_opens_and_a_full_pack_is_reminded_at_the_door()
 	Helpers.run(sim, 0.3)
 	check(sim.alerts.has("pack-home"), "walking home with a full pack tells her to use the stash")
 	g.world.free()
+
+
+# ------------------------------------------------------------- the prison doors --
+## (prison_doors.gd is tested here for want of a prison test file: no new test files.) A stand-in game with just what the doors read: the world's solid tiles, the path grids, Ruth, the crew, the dead.
+
+class _DoorPath:
+	func set_solid(_k: int, _s: bool) -> void:
+		pass
+
+
+class _DoorWorld:
+	var W := 67
+	var solid_p := PackedByteArray()
+	var solid_z := PackedByteArray()
+
+
+class _DoorSim:
+	var path_p
+	var path_z
+	var zombies: Array = []
+	var _regions_dirty := false
+
+
+class _DoorRun:
+	var sim
+	var avatar_p := {"x": 0.0, "y": 0.0}
+
+
+class _DoorCrew:
+	var members: Array = []
+
+
+class _DoorGame:
+	var world
+	var run
+	var crew
+	var audio = null
+
+
+func _door_game(clear: bool) -> Array:
+	var Doors = load("res://scripts/prison/prison_doors.gd")
+	var g := _DoorGame.new()
+	g.world = _DoorWorld.new()
+	g.world.solid_p.resize(67 * 70)
+	g.world.solid_z.resize(67 * 70)
+	g.run = _DoorRun.new()
+	g.run.sim = _DoorSim.new()
+	g.run.sim.path_p = _DoorPath.new()
+	g.run.sim.path_z = _DoorPath.new()
+	g.crew = _DoorCrew.new()
+	var d = Doors.new()
+	d.setup(g, clear)
+	return [g, d]
+
+
+func _door_tile(g, i: int) -> int:
+	var Base = load("res://scripts/prison/prison_base.gd")
+	var r: Rect2i = Base.doors()[i].rect
+	return g.world.solid_p[r.position.y * 67 + r.position.x]
+
+
+func test_a_prison_door_is_passable_from_the_start_of_opening_and_solid_only_at_the_end_of_shutting() -> void:
+	var gd: Array = _door_game(true)
+	var g = gd[0]
+	var d = gd[1]
+	g.run.avatar_p = {"x": 15.5, "y": 26.0}    # inside the infirmary, a step from its north door (door 1)
+	eq(_door_tile(g, 1), 1, "the clear phase starts the door shut and solid")
+	d.toggle(1)
+	eq(_door_tile(g, 1), 0, "opening: passable on the first frame")
+	d.tick(0.15)
+	check(d._k(1) > 0.6, "eased out: well over half open half way through the swing (%s)" % d._k(1))
+	d.tick(0.16)
+	eq(d._k(1), 1.0, "open after 0.3 s")
+	d.toggle(1)
+	d.tick(0.15)
+	eq(_door_tile(g, 1), 0, "shutting: still passable while the leaves swing")
+	d.tick(0.16)
+	eq(_door_tile(g, 1), 1, "solid once the swing has ended")
+	# E during the swing turns it back from where it is, with no jump
+	d.toggle(1)
+	d.tick(0.1)
+	var k: float = d._k(1)
+	d.toggle(1)
+	check(absf(d._k(1) - k) < 0.001, "a second E mid-swing turns it back smoothly (%s then %s)" % [k, d._k(1)])
+	d.tick(0.31)
+	eq(_door_tile(g, 1), 1, "and it ends shut")
+	# nobody gets shut in: a crew member who steps into the doorway while it swings shut opens it again
+	d.toggle(1)
+	d.tick(0.31)
+	d.toggle(1)
+	g.crew.members = [{"p": {"x": 15.5, "y": 25.7, "moving": false}}]
+	d.tick(0.31)
+	eq(_door_tile(g, 1), 0, "a person within a tile of the doorway at the end of the swing: it swings open again")
+	check(bool(d.open[1]), "and stays open")
+	eq(d.toggle(1), "Something is in the doorway.", "E will not shut it on them")
+	g.crew.members = []
+	g.run.avatar_p = {"x": 15.5, "y": 24.5}
+	eq(d.toggle(1), "Something is in the doorway.", "nor on Ruth standing in it")
+	# the crew open a shut door as they walk up to it, but one who only stands by leaves it shut
+	g.run.avatar_p = {"x": 15.5, "y": 27.0}
+	d.toggle(1)
+	d.tick(0.31)
+	eq(_door_tile(g, 1), 1, "shut again")
+	g.crew.members = [{"p": {"x": 15.5, "y": 23.0, "moving": false}}]
+	d.tick(0.1)
+	eq(_door_tile(g, 1), 1, "an ally standing a step outside does not open it")
+	g.crew.members[0].p.moving = true
+	d.tick(0.01)
+	eq(_door_tile(g, 1), 0, "walking up to it, they open it")
+
+
+func test_a_managed_base_door_opens_at_two_tiles_and_shuts_only_after_a_quiet_spell() -> void:
+	var gd: Array = _door_game(false)
+	var g = gd[0]
+	var d = gd[1]
+	g.run.avatar_p = {"x": 15.5, "y": 30.0}    # far from the infirmary's north door (door 1)
+	for n in 30:
+		d.tick(0.1)
+	check(not bool(d.shown[1]), "nobody near: shut")
+	g.run.avatar_p = {"x": 15.5, "y": 27.0}    # 2 tiles from the doorway
+	d.tick(0.05)
+	check(bool(d.shown[1]), "at 2 tiles it swings open")
+	g.run.avatar_p = {"x": 15.5, "y": 27.6}    # 2.6 tiles: past the open radius, inside the shut one
+	var flapped := false
+	for n in 50:
+		d.tick(0.1)
+		flapped = flapped or not bool(d.shown[1])
+	check(not flapped, "standing at the edge does not make it flap")
+	g.run.avatar_p = {"x": 15.5, "y": 29.0}    # 4 tiles away
+	d.tick(1.4)
+	check(bool(d.shown[1]), "still open 1.4 s after they left")
+	d.tick(0.2)
+	check(not bool(d.shown[1]), "shut after 1.5 s of nobody within 3 tiles")
+
+
+func test_every_prison_door_swings_into_its_building_and_no_leaf_crosses_a_wall_or_a_thing() -> void:
+	var Base = load("res://scripts/prison/prison_base.gd")
+	var Doors = load("res://scripts/prison/prison_doors.gd")
+	for east in [false, true]:
+		Base.east = east
+		var b = Base.new()
+		b.build(1, true)
+		for dr in Base.doors():
+			var r := Rect2(dr.rect)
+			var n: Vector2 = Doors.side(r)
+			var room: Vector2 = r.get_center() + n * 1.0
+			check(b.solid[int(room.y) * Base.W + int(room.x)] == 0, "%s door %s: the side it swings to is floor" % [dr.name, dr.rect])
+			for k in [0.25, 0.5, 0.75, 1.0]:
+				for q in Doors.leaves(r, n, k, 11.0 / 64.0):
+					var c: Vector2 = (q[0] + q[1] + q[2] + q[3]) / 4.0
+					for v in q:
+						var s: Vector2 = v + (c - v) * 0.1    # (a hair inside the leaf: its edge may touch a wall's face)
+						for f in [0.0, 0.25, 0.5, 0.75, 1.0]:
+							var pt: Vector2 = s.lerp(c, f)
+							var ti: int = int(pt.y) * Base.W + int(pt.x)
+							check(b.solid[ti] == 0, "%s door %s (east %s): a leaf at %s crosses a wall or a solid thing at %s" % [dr.name, dr.rect, east, k, pt])
+			for o in b.objects:
+				var ob := Rect2(float(o.cx) - 0.4, float(o.cy) - 0.4, 0.8, 0.8)
+				for k in [0.25, 0.5, 0.75, 1.0]:
+					for q in Doors.leaves(r, n, k, 11.0 / 64.0):
+						var c: Vector2 = (q[0] + q[1] + q[2] + q[3]) / 4.0
+						check(not ob.has_point(c) and not ob.has_point((q[1] + q[2]) / 2.0), "%s door %s: a leaf at %s sweeps over the %s at %s,%s" % [dr.name, dr.rect, k, o.kind, o.cx, o.cy])
+	Base.east = false
