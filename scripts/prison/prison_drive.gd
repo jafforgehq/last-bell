@@ -294,7 +294,7 @@ func _squad() -> void:
 	_check(g.squad.members.all(func(m): return String(m.cmd) == "spread"), "6 spreads them out")
 	g.squad.command_all("follow")
 	await _wait(30)
-	_check(g.squad.members.all(func(m): return String(m.say) in ["with you", "fighting", "firing"] or String(m.say).begins_with("hurt")), "the status line says what they do (%s)" % [g.squad.members.map(func(m): return m.say)])
+	_check(g.squad.members.all(func(m): return String(m.say) in ["with you", "fighting", "firing", "catching up"] or String(m.say).begins_with("hurt")), "the status line says what they do (%s)" % [g.squad.members.map(func(m): return m.say)])
 
 
 ## RAID EXTRAS: fuel refusal, Done and Avoid marks, Night, presets, weather, the retreat key, the hospital patient, the save round trip.

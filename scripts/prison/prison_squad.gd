@@ -8,7 +8,7 @@
 ##   cover   a tight slot beside Ruth, shoot sooner and farther, never fall back
 ##   scavenge  pick the nearest house with something left (waits when more than `dead_wait` awake dead are within `dead_wait_r` of it), then container by container, room by room (nearest first, staying in a room
 ##           until it is done): walk to the container's stand spot, SEARCH for the container's own seconds (`SearchRules.search_secs`: the number Ruth's session reads) with the work pose "sort", put what is in it in
-##           their own bag grid. The house is done, or the bag is full, or Ruth is more than `leash` tiles away: they go back to FOLLOW and say so.
+##           their own bag grid. The bag is full: they go back to FOLLOW and say so. The house is done, or none is near Ruth: the order stands, they stay beside her and look again (Y3).
 ##   spread  like follow, but a wider ring (`spread_r`) around Ruth
 ## SMARTER (raid feedback "the NPCs go alone and die"): `scavenge` means "scavenge here": only houses whose centre is within `scav_r` of Ruth and with no awake dead near them, and the order is kept while they are RECALLED
 ##   (any dead within `alarm_r`, or Ruth more than `leash` away: they walk back to her, and go on when it has been quiet for 3 s beside her). With `swarm_n` or more dead near, or under `retreat_hp`, they fall back to a slot
@@ -45,6 +45,7 @@ var _panel: PanelContainer
 var open := false
 var _t := 0.0
 var _test := {}
+var _view := Rect2()    # the screen in tiles (set by `sync`; empty headless, where nobody sees a jump)
 var stats := {"down": 0, "lost": 0}    # the measure of the raid bot (`--log` prints SQUADSTAT lines): companions downed and lost
 
 
@@ -235,9 +236,16 @@ func _spawn(c: Dictionary, at: Vector2) -> Dictionary:
 	var m := {"id": String(c.id), "name": String(c.name), "p": p, "node": n, "hp": float(c.hp), "max": float(c.hp), "state": "up", "cmd": "scavenge" if tags.has("Scavenger") else "follow", "tags": tags,
 		"bag": Inventory.make_grid(int(c.bag.x), int(c.bag.y)), "loose": {}, "say": "", "bark": "", "bark_t": 0.0, "cd": 1.0, "bite": 0.0, "path": [], "pi": 0, "repath": 0.0, "goal": Vector2.INF,
 		"scav": {}, "skip": {}, "down_t": 0.0, "fall": false, "found": false, "ref": null, "hold_at": Vector2(p.x, p.y), "wait": 0.0, "noammo_t": 0.0, "stuck_t": 0.0, "last": Vector2(p.x, p.y), "done_n": 0, "recall": false, "calm": 0.0, "def": c.def}
+	_fresh(m)
 	members.append(m)
 	_bark(m, "Ready." if String(m.cmd) == "follow" else "On it.")
 	return m
+
+
+## The keepers of the walk (Y3, "companions act weird"): the spot they hold beside Ruth (`anchor`, kept while it is still good), the swarm rule's hold-on time, the clock of no progress, the log clock.
+func _fresh(m: Dictionary) -> void:
+	m.merge({"anchor": Vector2.INF, "anchor_eff": "", "anchor_chk": 0.0, "swarm": false, "swarm_t": 0.0, "walking": false, "prog_t": 0.0, "log_t": 0.0, "scan_t": 0.0, "fight_t": 0.0,
+		"told": "", "eff": "", "flips": 0}, false)
 
 
 ## The survivor of this raid says yes: they are a member now (a bag of 4 by 2, follow). The survivor's own record `s` (prison_people.gd) keeps pointing at the same person and node.
@@ -245,6 +253,7 @@ func add_found(s: Dictionary) -> void:
 	var m := {"id": String(s.def.id), "name": String(s.name), "p": s.p, "node": s.node, "hp": float(s.hp), "max": float(game.people._c().survivor.hp), "state": "up", "cmd": "follow", "tags": [],
 		"bag": Inventory.make_grid(int(cfg.bag.default[0]), int(cfg.bag.default[1])), "loose": {}, "say": "", "bark": "", "bark_t": 0.0, "cd": 1.0, "bite": 0.0, "path": [], "pi": 0, "repath": 0.0, "goal": Vector2.INF,
 		"scav": {}, "skip": {}, "down_t": 0.0, "fall": false, "found": true, "ref": s, "hold_at": Vector2(s.p.x, s.p.y), "wait": 0.0, "noammo_t": 0.0, "stuck_t": 0.0, "last": Vector2(s.p.x, s.p.y), "done_n": 0, "recall": false, "calm": 0.0, "def": s.def}
+	_fresh(m)
 	members.append(m)
 	_bark(m, "I'm with you.")
 
@@ -293,6 +302,7 @@ func update(dt: float) -> void:
 		if m.state == "gone":
 			continue
 		_step(m, dt, me, zs, idx)
+		_log(m, dt, me)
 		if m.state == "up":
 			idx += 1
 		if m.ref != null:
@@ -301,6 +311,24 @@ func update(dt: float) -> void:
 	_revive(dt, me)
 	if not _test.is_empty():
 		_run_test(dt)
+
+
+## `--squadlog`: a line per companion every 0.5 s (what they do, their target, how far Ruth is, the path left, the time with no progress, the state changes so far): the check for jitter and stuck walkers.
+func _log(m: Dictionary, dt: float, me: Vector2) -> void:
+	var e := String(m.eff)
+	if e != String(m.told):
+		m.told = e
+		m.flips = int(m.flips) + 1
+	if not game.args.has("squadlog"):
+		return
+	m.log_t = float(m.log_t) - dt
+	if float(m.log_t) > 0.0:
+		return
+	m.log_t = 0.5
+	var p = m.p
+	var tgt := "none" if p.target == null else "dead@%s" % Vector2(snappedf(p.target.x, 0.1), snappedf(p.target.y, 0.1))
+	print("SQUADLOG t=", snappedf(_t, 0.1), " ", m.name, " ", m.state, " eff ", m.eff, " say '", m.say, "' tgt ", tgt, " ruth_d ", snappedf(Vector2(p.x, p.y).distance_to(me), 0.1),
+		" path ", maxi(0, (m.path as Array).size() - int(m.pi)), " stuck ", snappedf(float(m.prog_t), 0.1), " moving ", p.moving, " flips ", m.flips, " at ", Vector2(snappedf(p.x, 0.1), snappedf(p.y, 0.1)))
 
 
 func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
@@ -312,6 +340,7 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 	if m.state == "down":
 		m.down_t = float(m.down_t) - dt
 		m.say = "DOWN %ds" % int(ceil(float(m.down_t)))
+		m.eff = "down"
 		if float(m.down_t) <= 0.0:
 			_lose(m, "%s is gone." % String(m.name))
 		return
@@ -363,6 +392,7 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			else:
 				p.moving = false
 			m.say = "retreating"
+			m.eff = "retreat"
 			return
 	var cmd := String(m.cmd)
 	# the rules (see the header): count the awake dead near them; fall back to Ruth when hurt or when `swarm_n` or more are about
@@ -376,7 +406,15 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			threat += Vector2(z.x, z.y)
 			near_d = minf(near_d, dz0)
 	var retreat := float(m.hp) < float(cfg.retreat_hp) * float(m.max) and cmd != "cover"
-	var swarm := near_n >= int(cfg.swarm_n) and cmd != "cover"
+	# (hysteresis: the swarm rule switches on at `swarm_n` dead and off only after 2.5 s with fewer, so a dead one stepping in and out of the ring does not flip them)
+	if near_n >= int(cfg.swarm_n) and cmd != "cover":
+		m.swarm = true
+		m.swarm_t = 2.5
+	elif bool(m.swarm):
+		m.swarm_t = float(m.swarm_t) - dt
+		if float(m.swarm_t) <= 0.0 or cmd == "cover":
+			m.swarm = false
+	var swarm: bool = m.swarm
 	if retreat and not bool(m.fall):
 		m.fall = true
 		_bark(m, "Hurt! Falling back.", 3.0)
@@ -388,46 +426,55 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 		m.recall = true
 		m.scav = {}
 		p.work = ""
-		_bark(m, "Dead about! Back to you." if near_n > 0 else "Coming back!", 3.0)
+		if at.distance_to(me) > 4.0:    # (beside her already: nothing to shout)
+			_bark(m, "Dead about! Back to you." if near_n > 0 else "Coming back!", 3.0)
 	if bool(m.recall):
 		m.calm = float(m.calm) + dt if (near_n == 0 and at.distance_to(me) < float(cfg.follow_r) * 2.5) else 0.0
 		if float(m.calm) > 3.0:
 			m.recall = false
 	var eff := "follow" if (retreat or swarm or bool(m.recall) or bool(game.squad_regroup)) and cmd != "hold" else cmd
+	m.eff = eff
 	# the slot: beside Ruth and on the side away from the dead (never in front of her); "spread out" keeps a wider ring
 	var rad := float(cfg.follow_r) * (0.7 if eff == "cover" else (float(cfg.spread_r) / float(cfg.follow_r) if eff == "spread" else 1.0))
-	var slot := me + Vector2.from_angle(float(idx) * 2.1 + 0.5) * rad
+	var back := Vector2.ZERO
 	if near_n > 0 and me.distance_to(threat / float(near_n)) > 0.1:
-		var back := (me - threat / float(near_n)).normalized()
-		slot = me + back * rad * 0.8 + back.orthogonal() * (1.4 if idx % 2 == 0 else -1.4)
+		back = (me - threat / float(near_n)).normalized()
+	var slot := _slot(m, me, idx, rad, back, "follow" if eff == "scavenge" else eff, dt)    # (a scavenger with nothing to do keeps the follow spot)
 	# shooting: the nearest dead in sight
 	var reach := float(cfg.shoot_r) * (1.4 if eff == "cover" else 1.0)
 	var best = null
 	var bd := reach
 	for z in zs:
 		var dz := at.distance_to(Vector2(z.x, z.y))
-		if dz < bd and game.targetable(z) and game.focus_free(p, z, "squad") and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+		if dz < bd and game.targetable(z) and game.focus_free(p, z, "squad") and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15) and (bool(p.gun.get("melee", false)) or not _friend_in_line(m, at, Vector2(z.x, z.y), me)):
 			bd = dz
 			best = z
 	var fighting := false
 	m.fight_t = float(m.get("fight_t", 0.0)) - dt
 	if best != null and (bool(p.gun.get("melee", false)) or game.can_fire(p, best, "squad")) and float(m.cd) <= 0.0 and float(p.reloading) <= 0.0:
 		if _fire(m, best, bd, eff):
-			m.fight_t = 1.2
-	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold" and not retreat and not swarm and Vector2(best.x, best.y).distance_to(me) < float(cfg.melee_r):
+			m.fight_t = 2.0
+	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold" and not retreat and not swarm and Vector2(best.x, best.y).distance_to(me) < float(cfg.melee_r) and game.run.sim.clear_shot(me, Vector2(best.x, best.y), 0.15):    # (only a dead one Ruth can see: not one beyond her wall)
 		_goto(m, Vector2(best.x, best.y), dt, float(cfg.run))    # (a pike only reaches 1.9 tiles: they walk up to it)
 		m.say = "charging"
+		m.eff = "charge"
 		p.work = ""
 		return
+	if best != null and float(m.fight_t) > -2.0 and float(m.noammo_t) <= 0.0:    # (a fight goes on while the dead one is in sight between shots: no "with you" flash between two shots)
+		m.fight_t = maxf(float(m.fight_t), 0.2)
 	fighting = float(m.fight_t) > 0.0
+	# kite with hysteresis: on within `kite_r`, off beyond `kite_r` + 1.5
+	m.kiting = near_d < float(cfg.kite_r) or (bool(m.get("kiting", false)) and near_d < float(cfg.kite_r) + 1.5)
 	if fighting:
-		if eff != "hold" and not bool(p.gun.get("melee", false)) and (near_d < float(cfg.kite_r) or at.distance_to(me) > float(cfg.leash)):    # kite: shoot on the move toward Ruth
+		# kite (shoot on the move toward Ruth), and never stand in Ruth's line of fire while shooting
+		if eff != "hold" and not bool(p.gun.get("melee", false)) and (bool(m.kiting) or at.distance_to(me) > float(cfg.leash) or _in_fire(me, at, 0.35)) and at.distance_to(slot) > 0.4:
 			_goto(m, slot, dt, float(cfg.run))
 		else:
 			p.moving = false
 		if eff == "scavenge":
 			p.work = ""
 		m.say = "fighting"
+		m.eff = "fight"
 		if best != null and not bool(p.moving):
 			p.facing = game.run.sim.facing_of(best.x - p.x, best.y - p.y, p.facing)
 		return
@@ -436,24 +483,131 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			p.moving = false
 			p.work = ""
 			m.say = "holding here"
-			if at.distance_to(m.hold_at) > 1.5:
-				_goto(m, m.hold_at, dt, float(cfg.speed))
+			var hd := at.distance_to(m.hold_at)
+			if hd > (0.3 if bool(m.walking) else 1.5):    # (a deadzone: off at 1.5 tiles, back onto the spot; a run when far, as to a ping)
+				m.walking = not _goto(m, m.hold_at, dt, float(cfg.run) if hd > 3.0 else float(cfg.speed))
+			else:
+				m.walking = false
 		"scavenge":
-			_scavenge(m, dt, me, zs)
+			if not _scavenge(m, dt, me, zs):    # (no house near Ruth: they keep the order, stay with her and look again as she moves)
+				_keep_up(m, slot, me, dt, retreat, swarm, eff)
+				m.eff = "follow"
+				if m.say == "with you":
+					m.say = "with you, no safe house near"
 		_:
 			p.work = ""
-			var dist := at.distance_to(slot)
-			if at.distance_to(me) > 30.0:
-				p.x = me.x
-				p.y = me.y
-				m.path = []
-			elif dist > 1.1:
-				_goto(m, slot, dt, float(cfg.run) if (dist > 8.0 or bool(game.squad_regroup)) else float(cfg.speed))
-			else:
-				p.moving = false
-			m.say = "hurt, falling back" if retreat else ("falling back, dead about" if swarm else ("covering you" if eff == "cover" else ("spread out" if eff == "spread" else "with you")))
+			_keep_up(m, slot, me, dt, retreat, swarm, eff)
 	if eff != "hold":
 		m.hold_at = Vector2(p.x, p.y)
+	if not bool(p.moving) and p.target == null:    # standing: face the nearest dead about, else where Ruth looks (not the last step's way)
+		var look := (threat / float(near_n) - at) if near_n > 0 else (Vector2(game.run.avatar_p.input_aim) - me)
+		if look.length() <= 0.3:
+			look = at - me    # (Ruth aims nowhere: they watch outward, away from her)
+		if look.length() > 0.3:
+			p.facing = game.run.sim.facing_of(look.x, look.y, p.facing)
+
+
+## FOLLOW, COVER, SPREAD and the fall back: walk to the kept spot (with a deadzone: they start at 0.9 tiles off it and stop at 0.3), run when far, and as a last resort, only while they are off the screen
+## and have made no progress for 4 s (or are 30 tiles behind), they are put on their spot beside Ruth.
+func _keep_up(m: Dictionary, slot: Vector2, me: Vector2, dt: float, retreat: bool, swarm: bool, eff: String) -> void:
+	var p = m.p
+	var at := Vector2(p.x, p.y)
+	var dist := at.distance_to(slot)
+	if (float(m.prog_t) > 4.0 or at.distance_to(me) > 30.0) and not _view.has_point(at) and _open(slot):
+		p.x = slot.x
+		p.y = slot.y
+		m.path = []
+		m.prog_t = 0.0
+		m.walking = false
+		dist = 0.0
+	if dist > (0.3 if bool(m.walking) else 0.9):
+		m.walking = not _goto(m, slot, dt, float(cfg.run) if (dist > 6.0 or bool(game.squad_regroup)) else float(cfg.speed))
+	else:
+		m.walking = false
+		p.moving = false
+		m.prog_t = 0.0
+	if at.distance_to(me) > 7.0:
+		m.say = "stuck, finding a way" if float(m.prog_t) > 1.5 else "catching up"
+	else:
+		m.say = "hurt, falling back" if retreat else ("falling back, dead about" if swarm else ("covering you" if eff == "cover" else ("spread out" if eff == "spread" else "with you")))
+
+
+## The spot a member keeps beside Ruth: kept while it is still good, so Ruth moving a little does not send them walking; else a new one: open ground in Ruth's sight (so they come into the room she is in),
+## out of her line of fire, apart from her and the others, and on her far side from the dead when the dead are about (else behind her, away from where she aims).
+func _slot(m: Dictionary, me: Vector2, idx: int, rad: float, back: Vector2, eff: String, dt: float) -> Vector2:
+	var a: Vector2 = m.anchor
+	m.anchor_chk = float(m.anchor_chk) - dt
+	var keep := a != Vector2.INF and String(m.anchor_eff) == eff
+	if keep:
+		var d := a.distance_to(me)
+		keep = d > 0.8 and d < rad + 1.8 and not _in_fire(me, a, 0.35) and not _crowded(m, a, 1.0)
+		if keep and back != Vector2.ZERO and (a - me).normalized().dot(back) < -0.2:
+			keep = false    # (it is on the side of the dead now)
+		if keep and float(m.anchor_chk) <= 0.0:
+			m.anchor_chk = 0.5
+			keep = game.run.sim.clear_shot(me, a, 0.15)
+	if keep:
+		return a
+	var aim := Vector2(game.run.avatar_p.input_aim) - me
+	var base := Vector2.from_angle(float(idx) * 2.1 + 0.5)
+	if back != Vector2.ZERO:
+		base = back.rotated(0.7 if idx % 2 == 0 else -0.7)
+	elif aim.length() > 0.5:
+		base = (-aim.normalized()).rotated(0.9 if idx % 2 == 0 else -0.9)
+	for off in [0.0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.3, -2.3, PI]:
+		for rr in [rad, rad * 0.65, rad * 1.4]:
+			var c: Vector2 = me + base.rotated(off) * rr
+			if _open(c) and not _in_fire(me, c, 0.6) and not _crowded(m, c, 1.3) and game.run.sim.clear_shot(me, c, 0.15):
+				m.anchor = c
+				m.anchor_eff = eff
+				m.anchor_chk = 0.5
+				return c
+	m.anchor = me + base * 1.2    # (nowhere good: close behind her)
+	m.anchor_eff = eff
+	return m.anchor
+
+
+## Open ground: inside the map and not a wall, prop or water tile of the path finder's grid.
+func _open(c: Vector2) -> bool:
+	var w: int = game.world.W
+	var x := int(floor(c.x))
+	var y := int(floor(c.y))
+	if x < 1 or y < 1 or x >= w - 1 or y >= int(game.world.H) - 1:
+		return false
+	return int(game.world.solid_p[y * w + x]) == 0
+
+
+## In front of Ruth where she aims (within 10 tiles and `cone` radians of her aim).
+func _in_fire(me: Vector2, c: Vector2, cone: float) -> bool:
+	var aim := Vector2(game.run.avatar_p.input_aim) - me
+	var v := c - me
+	if aim.length() < 0.5 or v.length() > 10.0 or v.length() < 0.2:
+		return false
+	return absf(aim.angle_to(v)) < cone
+
+
+## Too near another companion (their spot or where they stand).
+func _crowded(m: Dictionary, c: Vector2, r: float) -> bool:
+	for o in members:
+		if is_same(o, m) or o.state != "up":
+			continue
+		if Vector2(o.p.x, o.p.y).distance_to(c) < r or (o.anchor != Vector2.INF and (o.anchor as Vector2).distance_to(c) < r):
+			return true
+	return false
+
+
+## Ruth or another companion stands between the shooter and the dead one (they hold the shot rather than fire past a friend's head).
+func _friend_in_line(m: Dictionary, from: Vector2, to: Vector2, me: Vector2) -> bool:
+	var pts: Array = [me]
+	for o in members:
+		if not is_same(o, m) and o.state == "up":
+			pts.append(Vector2(o.p.x, o.p.y))
+	var far := from.distance_to(to)
+	for q in pts:
+		var qd := from.distance_to(q)
+		if qd > 0.3 and qd < far and q.distance_to(Geometry2D.get_closest_point_to_segment(q, from, to)) < 0.6:
+			return true
+	return false
 
 
 ## One shot (or one blow) at a dead one. False when they could not (no ammo).
@@ -506,15 +660,22 @@ func _goto(m: Dictionary, goal: Vector2, dt: float, speed: float) -> bool:
 	var at := Vector2(p.x, p.y)
 	if at.distance_to(goal) < 0.3:
 		p.moving = false
+		m.prog_t = 0.0
 		return true
 	m.repath = float(m.repath) - dt
-	if (m.goal as Vector2).distance_to(goal) > 0.6 or float(m.repath) <= 0.0 or int(m.pi) >= (m.path as Array).size():
+	if (m.goal as Vector2).distance_to(goal) > 0.6 or float(m.repath) <= 0.0 or (int(m.pi) >= (m.path as Array).size() and at.distance_to(goal) > 1.2):    # (a path that ends near the goal is arrived: no new search every frame)
 		m.repath = 0.6
 		m.goal = goal
 		m.path = game.run.sim.path_p.find(game.world.solid_p, p.x, p.y, goal.x, goal.y)
 		m.pi = 0
+		if (m.path as Array).is_empty():    # (the goal is in a prop or a wall: the nearest open tile round it, out to 2 tiles)
+			for r in [1, 2]:
+				for off in [Vector2(r, 0), Vector2(-r, 0), Vector2(0, r), Vector2(0, -r), Vector2(r, r), Vector2(-r, r), Vector2(r, -r), Vector2(-r, -r)]:
+					if (m.path as Array).is_empty() and _open(goal + off):
+						m.path = game.run.sim.path_p.find(game.world.solid_p, p.x, p.y, goal.x + off.x, goal.y + off.y)
 		if (m.path as Array).is_empty():
 			p.moving = false
+			m.prog_t = float(m.prog_t) + dt
 			return false
 	# one step along the path
 	if int(m.pi) >= (m.path as Array).size():
@@ -527,6 +688,7 @@ func _goto(m: Dictionary, goal: Vector2, dt: float, speed: float) -> bool:
 		m.pi = int(m.pi) + 1
 		return false
 	var step := minf(d, speed * dt)
+	m.prog_t = 0.0 if step > 0.001 else float(m.prog_t) + dt
 	p.x += to.x / d * step
 	p.y += to.y / d * step
 	p.facing = game.run.sim.facing_of(to.x / d, to.y / d, p.facing)
@@ -550,28 +712,25 @@ func _house_center(h: int) -> Vector2:
 	return Rect2(hh.rect).get_center() if not hh.is_empty() else Vector2.ZERO
 
 
-## The scavenging machine, one frame (see the header).
-func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
+## The scavenging machine, one frame (see the header). False when there is no house to work near Ruth: the caller keeps them beside her (the order stands, the next look is 1.5 s later).
+func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> bool:
 	var p = m.p
 	var at := Vector2(p.x, p.y)
 	var s: Dictionary = m.scav
 	var sim = game.run.sim
 	if s.is_empty():
+		m.scan_t = float(m.scan_t) - dt
+		if float(m.scan_t) > 0.0:
+			return false
 		var pick := _pick_house(m, at, zs, me)
 		if pick.is_empty():
-			m.say = "waiting: dead about" if bool(m.get("wait_flag", false)) else "nothing left"
-			if bool(m.get("wait_flag", false)):
-				m.wait = float(m.wait) + dt
-				p.moving = false
-				p.work = ""
-				if float(m.wait) > float(cfg.wait_s):
-					m.cmd = "follow"
-					m.wait = 0.0
-					_bark(m, "Too many dead. Back to you.", 3.0)
-			else:
-				m.cmd = "follow"
-				_bark(m, "Nothing left to search.", 3.5)
-			return
+			m.scan_t = 1.5
+			if not bool(m.get("idle_said", false)):    # (said once, not every look)
+				m.idle_said = true
+				_bark(m, "Dead by the houses. I'll stay with you." if bool(m.get("wait_flag", false)) else "Nothing to search here. Lead on.", 3.5)
+			p.work = ""
+			return false
+		m.idle_said = false
 		m.wait = 0.0
 		m.scav = pick
 		s = pick
@@ -580,24 +739,24 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 	var cur_id := String(s.list[s.i]) if int(s.i) < (s.list as Array).size() else ""
 	if cur_id == "":
 		_house_done(m)
-		return
+		return true
 	var cont: Dictionary = sim.houses.container(cur_id)
 	var spot: Vector2 = Vector2(cont.pos)
 	if String(s.stage) == "go":
 		if sim.search.is_looted(cur_id) or _claimed(cur_id, m):
 			s.i = int(s.i) + 1    # (Ruth, or the other companion, got to it first)
-			return
+			return true
 		if _dead_near(spot, float(cfg.dead_wait_r), zs) > int(cfg.dead_wait):
 			p.moving = false
 			p.work = ""
 			m.say = "waiting: dead about"
 			m.wait = float(m.wait) + dt
-			if float(m.wait) > float(cfg.wait_s):
+			if float(m.wait) > float(cfg.wait_s):    # (this house is given up, not the order)
 				m.wait = 0.0
-				m.cmd = "follow"
 				m.scav = {}
-				_bark(m, "Too many dead. Back to you.", 3.0)
-			return
+				m.scan_t = 1.5
+				_bark(m, "Too many dead there. Back to you.", 3.0)
+			return true
 		m.wait = 0.0
 		p.work = ""
 		var arrived := _goto(m, spot, dt, float(cfg.speed))
@@ -606,7 +765,7 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 		if (m.path as Array).is_empty() and not arrived:
 			m.skip[cur_id] = true
 			s.i = int(s.i) + 1
-			return
+			return true
 		if Vector2(p.x, p.y).distance_to(m.last) < 0.01 * dt * 60.0 and not arrived:
 			m.stuck_t = float(m.stuck_t) + dt
 			if float(m.stuck_t) > 5.0:
@@ -620,7 +779,7 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 			s.stage = "search"
 			s.t = 0.0
 			_bark(m, "Searching...", 2.5)
-		return
+		return true
 	# search
 	p.moving = false
 	p.work = "sort"
@@ -641,6 +800,7 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> void:
 			game._say("%s: bag full. Back with you." % String(m.name), 3.0)
 		elif int(s.i) >= (s.list as Array).size():
 			_house_done(m)
+	return true
 
 
 ## Whether another companion is on this container (walking to it or searching it).
@@ -654,8 +814,8 @@ func _claimed(id: String, me: Dictionary) -> bool:
 
 func _house_done(m: Dictionary) -> void:
 	var h := int(m.scav.get("house", -1))
-	m.cmd = "follow"
-	m.scav = {}
+	m.scav = {}    # (the order stands: the next house near Ruth, if any, is looked for at once)
+	m.scan_t = 0.0
 	m.p.work = ""
 	_bark(m, "House %d done." % h, 4.0)
 	game._say("%s finished house %d (%s)." % [String(m.name), h, bag_text(m)], 3.5)
@@ -931,6 +1091,7 @@ func _forget(m: Dictionary) -> void:
 
 ## The frame's pawn sync for the companions (the game syncs the crew and the zombies; these are neither).
 func sync(view: Rect2, clock: float, sim_steps: int, alpha: float) -> void:
+	_view = view
 	for m in members:
 		var n = m.node
 		if n == null or not is_instance_valid(n):
@@ -1209,7 +1370,7 @@ func _run_test(dt: float) -> void:
 	if float(_test.log) <= 0.0:
 		_test.log = 2.0
 		print("SCAVTEST t=", snappedf(float(_test.t), 0.1), " ", m.name, " state ", m.state, " cmd ", m.cmd, " say '", m.say, "' bag ", bag_text(m), " at ", Vector2(snappedf(m.p.x, 0.1), snappedf(m.p.y, 0.1)), " loose ", m.loose)
-	if String(_test.stage) == "scav" and String(m.cmd) != "scavenge" and float(_test.t) > 1.0:
+	if String(_test.stage) == "scav" and (String(m.cmd) != "scavenge" or (int(m.done_n) > 0 and (m.scav as Dictionary).is_empty())) and float(_test.t) > 1.0:
 		_test.stage = "back"
 		print("SCAVTEST scavenging ended: ", m.say, " | ", bag_text(m))
 	if String(_test.stage) == "back":
