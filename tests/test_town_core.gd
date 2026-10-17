@@ -196,3 +196,37 @@ func test_the_prison_meta_files_follow_the_savefile_and_the_daily_seed_is_a_func
 	eq(PrisonMeta.daily(1760486400 + 3600).seed, a.seed, "the same day is the same seed")
 	check(PrisonMeta.daily(1760486400 + 86400).seed != a.seed, "the next day is another seed")
 	check(int(a.seed) >= 100000 and int(a.seed) <= 999999, "a six-digit seed")
+
+
+class _SquadSim:
+	func clear_shot(_a: Vector2, _b: Vector2, _r: float = 0.12) -> bool:
+		return true
+
+
+class _SquadGame:
+	var run := {"avatar_p": {"x": 10.0, "y": 10.0, "input_aim": Vector2(16, 10)}, "sim": _SquadSim.new()}
+	var world := {"W": 20, "H": 20, "solid_p": PackedByteArray()}
+
+
+## Y3 (companions act weird): the spot a companion keeps beside Ruth is out of her line of fire, apart from the other one and kept while she moves a little (a deadzone); a companion holds a shot
+## that would pass Ruth or the other one, and fires when the line is clear.
+func test_a_companion_keeps_a_spot_out_of_ruths_fire_and_holds_a_shot_past_a_friend() -> void:
+	var g := _SquadGame.new()
+	var open := PackedByteArray()
+	open.resize(400)
+	g.world["solid_p"] = open
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	var a := {"p": {"x": 9.0, "y": 11.0}, "state": "up", "anchor": Vector2.INF, "anchor_eff": "", "anchor_chk": 0.0}
+	var b := {"p": {"x": 9.0, "y": 9.0}, "state": "up", "anchor": Vector2.INF, "anchor_eff": "", "anchor_chk": 0.0}
+	sq.members = [a, b]
+	var me := Vector2(10, 10)
+	var sa: Vector2 = sq._slot(a, me, 0, 2.2, Vector2.ZERO, "follow", 0.016)
+	var sb: Vector2 = sq._slot(b, me, 1, 2.2, Vector2.ZERO, "follow", 0.016)
+	check(not sq._in_fire(me, sa, 0.6) and not sq._in_fire(me, sb, 0.6), "both spots are out of the line of fire (%s %s)" % [sa, sb])
+	check(sa.distance_to(sb) >= 1.3, "the two spots are apart (%s %s)" % [sa, sb])
+	check(sa.distance_to(me) > 0.8 and sa.distance_to(me) < 4.0, "beside Ruth, not on her (%s)" % sa)
+	eq(sq._slot(a, me + Vector2(0.5, 0.0), 0, 2.2, Vector2.ZERO, "follow", 0.016), sa, "Ruth steps half a tile: the spot is kept")
+	check(not sq._friend_in_line(a, Vector2(12, 10), Vector2(16, 10), me), "Ruth behind the shooter: the shot is clear")
+	b.p = {"x": 14.0, "y": 10.2}
+	check(sq._friend_in_line(a, Vector2(12, 10), Vector2(16, 10), me), "the other companion on the line: the shot is held")
+	check(sq._in_fire(me, Vector2(14, 10.5), 0.35), "a spot where Ruth aims is in her line of fire")
