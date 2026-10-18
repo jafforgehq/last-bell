@@ -1068,3 +1068,50 @@ func test_every_prison_door_swings_into_its_building_and_no_leaf_crosses_a_wall_
 						var c: Vector2 = (q[0] + q[1] + q[2] + q[3]) / 4.0
 						check(not ob.has_point(c) and not ob.has_point((q[1] + q[2]) / 2.0), "%s door %s: a leaf at %s sweeps over the %s at %s,%s" % [dr.name, dr.rect, k, o.kind, o.cx, o.cy])
 	Base.east = false
+
+
+# ------------------------------------------------------- the prison's Objectives panel --
+## (prison_topbar.gd is tested here for want of a prison test file.) UI POLISH A: O folds the Objectives to one line, the top task (not the phase heading); the fold is kept in the
+## settings; a new top task while folded makes the panel glow, a count going up does not.
+class _TbGame:
+	extends Node
+	var mode := "base"
+	var phase := "managed"
+	var siege := {"attacking": false}
+
+
+class _Tb:
+	extends "res://scripts/prison/prison_topbar.gd"
+	var items: Array = []
+
+	func objectives() -> Array:
+		return items
+
+
+func test_the_prison_objectives_fold_to_the_top_task_remember_it_and_glow_for_a_new_one() -> void:
+	var Prefs = load("res://scripts/prefs.gd")
+	var was = Prefs.get_value("ui", "objectives_folded", false)
+	var g := _TbGame.new()
+	var tb := _Tb.new(g)
+	tb.items = [{"t": "Phase I, day 1/30", "done": false, "head": true}, {"t": "Rescue survivors 0/6", "done": true}, {"t": "Build Bunks: 10%", "done": false}, {"t": "Survive night 1", "done": false}]
+	tb.tr_folded = false
+	tb._tracker(true)
+	eq(tb.tr_body.get_child_count(), 4, "open: every line")
+	tb.fold()
+	Prefs.forget()
+	check(Prefs.on("ui", "objectives_folded"), "the fold is kept in the settings")
+	tb._tracker(true)
+	eq(tb.tr_body.get_child_count(), 1, "folded: one line")
+	eq(tb.tr_body.get_child(0).get_child(1).text, "Build Bunks: 10%", "the top task, not the heading or a done line")
+	eq(tb._flash_t, 0.0, "folding is no new objective")
+	tb.items[2].t = "Build Bunks: 40%"
+	tb._tracker(true)
+	eq(tb._flash_t, 0.0, "a percent going up does not glow")
+	tb.items[2].done = true
+	tb._tracker(true)
+	check(tb._flash_t > 0.0, "a new top task while folded glows")
+	eq(_Tb.new(g).tr_folded, true, "a new game starts folded when the player left it folded")
+	tb.fold()
+	check(not Prefs.on("ui", "objectives_folded"), "and open again")
+	Prefs.set_value("ui", "objectives_folded", was)
+	g.free()

@@ -358,9 +358,9 @@ func objectives() -> Array:
 		return out
 	var ph := phase()
 	var left := days_left()
-	var head := "%s  -  day %d of %d%s" % [String(ph.name), day, days(), ("  (%d left to the convoy)" % left) if left > 0 and convoy == "none" else ""]
+	var head := "%s, day %d/%d" % [String(ph.name), day, days()]    # (UI POLISH A: short line, the rest on hover)
 	var late: bool = int(ph.by_day) > 0 and day > int(ph.by_day) and not bool(ph.done) and String(ph.id) != "evacuate"
-	out.append({"t": head, "done": false, "bad": late, "head": true})
+	out.append({"t": head, "done": false, "bad": late, "head": true, "tip": "%s: day %d of %d%s." % [String(ph.name), day, days(), (", %d left to the convoy" % left) if left > 0 and convoy == "none" else ""]})
 	if convoy == "none" and day >= 3:    # the rumour is out: the list and its parts total are on the tracker from day 3
 		var cp := convoy_parts()
 		var ok_n := 0
@@ -369,7 +369,7 @@ func objectives() -> Array:
 			if bool(r.must):
 				must_n += 1
 				ok_n += 1 if bool(r.ok) else 0
-		out.append({"t": "Convoy list: %d of %d ready. Parts %d in all, %d still to find" % [ok_n, must_n, int(cp.total), int(cp.left)], "done": ok_n == must_n, "bad": left <= 3 and ok_n < must_n, "bar": 1.0 - float(cp.left) / maxf(1.0, float(cp.total)), "list": true})
+		out.append({"t": "Convoy list %d/%d, parts %d left" % [ok_n, must_n, int(cp.left)], "tip": "Convoy list: %d of %d ready. Parts %d in all, %d still to find. L: the story log." % [ok_n, must_n, int(cp.total), int(cp.left)], "done": ok_n == must_n, "bad": left <= 3 and ok_n < must_n, "bar": 1.0 - float(cp.left) / maxf(1.0, float(cp.total)), "list": true})
 	if String(ph.id) == "evacuate":
 		var n := 0
 		for r in requirements():

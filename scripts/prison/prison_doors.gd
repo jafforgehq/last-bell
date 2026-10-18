@@ -87,7 +87,7 @@ func prompt(me: Vector2) -> Dictionary:
 			best = i
 	if best < 0:
 		return {}
-	return {"kind": "door", "i": best, "label": "E: %s door (%s)" % ["close" if bool(open[best]) else "open", String(Base.doors()[best].name)]}
+	return {"kind": "door", "i": best, "label": "E  %s %s door" % ["Close" if bool(open[best]) else "Open", String(Base.doors()[best].name)]}
 
 
 ## Whoever is in the way keeps it from shutting: a crew member or an ally within KEEP of the doorway, Ruth or a dead one in it.

@@ -1917,9 +1917,9 @@ func Inventory_name(id: String) -> String:
 	return preload("res://scripts/sim/inventory.gd").name_of(id)
 
 
-## The prompt of a use: its words, and for a search how long it takes ("E: Search the cupboard (3 s)"), with the room search on Shift+E where the room has two or more to search.
+## The prompt of a use: its words, and for a search how long it takes ("E  Search the cupboard (3 s)"), with the room search on Shift+E where the room has two or more to search.
 func _use_label(c: Dictionary) -> String:
-	var l := "E: %s" % String(c.label)
+	var l := "E  %s" % String(c.label)
 	if String(c.get("kind", "")) != "container" or not bool(c.get("session", false)) or run == null:
 		return l
 	var cont: Dictionary = run.sim.houses.container(String(c.get("id", "")))
@@ -1929,7 +1929,7 @@ func _use_label(c: Dictionary) -> String:
 	if rsm != null and not run.sim.uses.busy():
 		var o: Dictionary = rsm.offer()
 		if not o.is_empty() and bool(o.get("ok", false)):
-			l += "     Shift+E: search all %d in this room (%d s)" % [int(o.n), ceili(float(o.secs))]
+			l += "     Shift+E  Search room (%d, %d s)" % [int(o.n), ceili(float(o.secs))]
 	return l
 
 
@@ -2013,9 +2013,9 @@ func _base_logic(_dt: float) -> void:
 	var me := Vector2(p.x, p.y)
 	_prompt = {}
 	if me.distance_to(Base.GATE_POS) < 7.0 or me.distance_to(base.stations.truck) < 3.5:
-		_prompt = {"kind": "gate", "label": "E: take the truck out to raid (loot comes home at an exit)"}
+		_prompt = {"kind": "gate", "label": "E  Raid with the truck"}
 	elif me.distance_to(base.stations.stores) < 2.8:
-		_prompt = {"kind": "stores", "label": "E: open the stash (stock the stores, pack for a raid)"}
+		_prompt = {"kind": "stores", "label": "E  Open the stash"}
 	else:
 		_prompt = board.prompt(me)    # UI hook: the bench and the needs sign
 		if _prompt.is_empty() and cleaner != null:
@@ -3068,7 +3068,7 @@ func _clear_logic(dt: float) -> void:
 	var dn = _nearest_downed(me)
 	if dn != null:
 		var ok: bool = float(stores.meds) >= 1.0
-		_prompt = {"kind": "revive", "label": ("Hold E: revive %s (1 med)" % String(dn.def.name)) if ok else "%s is down. No meds to revive." % String(dn.def.name)}
+		_prompt = {"kind": "revive", "label": ("Hold E  Revive %s (1 med)" % String(dn.def.name)) if ok else "%s is down. No meds to revive." % String(dn.def.name)}
 		var held := Input.is_key_pressed(KEY_E) or (String(args.get("auto", "")) == "ally" and _auto_t > 14.0)
 		if ok and held:
 			revive_t += dt
