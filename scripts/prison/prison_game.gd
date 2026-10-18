@@ -338,7 +338,7 @@ func _ready() -> void:
 func _fit_window() -> void:
 	var win := get_window()
 	if win.mode == Window.MODE_WINDOWED and not OS.has_feature("web") and DisplayServer.get_name() != "headless":
-		var s := DisplayServer.screen_get_scale(win.current_screen)
+		var s: float = get_parent()._os_scale() if get_parent() != null and get_parent().has_method("_os_scale") else DisplayServer.screen_get_scale(win.current_screen)
 		var usable := DisplayServer.screen_get_usable_rect(win.current_screen)
 		var base_sz := Vector2(1280, 800)
 		if args.has("window"):    # --window=1024x640: a smaller window for layout checks
@@ -353,9 +353,13 @@ func _fit_window() -> void:
 	var sc := DisplayServer.screen_get_scale()
 	if sc <= 0.0:
 		sc = 1.0
-	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
-	win.content_scale_size = Vector2i(maxi(1, int(win.size.x / sc)), maxi(1, int(win.size.y / sc)))
+	if get_parent() != null and get_parent().has_method("_update_scale"):    # the shell's interface size (right scale on any screen, bigger on a big one), as it keeps it on every resize
+		sc = get_parent()._os_scale()
+		get_parent()._update_scale()
+	else:
+		win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+		win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+		win.content_scale_size = Vector2i(maxi(1, int(win.size.x / sc)), maxi(1, int(win.size.y / sc)))
 	if args.has("window") and win.mode == Window.MODE_WINDOWED and DisplayServer.get_name() != "headless":    # (layout checks: the UI is laid out at exactly WxH points, however small the real screen; the window keeps that shape)
 		var wq := String(args.window).split("x")
 		if wq.size() == 2:

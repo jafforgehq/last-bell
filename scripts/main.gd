@@ -896,7 +896,8 @@ func _start_window() -> void:
 func _os_scale() -> float:
 	if os_scale_override > 0.0:
 		return os_scale_override
-	var s := DisplayServer.screen_get_scale(get_window().current_screen)
+	# macOS sizes every window in pixels of the sharpest screen attached, so a plain monitor next to a Retina one still counts 2 pixels to a point
+	var s := DisplayServer.screen_get_max_scale() if OS.get_name() == "macOS" else DisplayServer.screen_get_scale(get_window().current_screen)
 	return s if s > 0.0 else 1.0
 
 
