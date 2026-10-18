@@ -15,21 +15,22 @@ const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one l
 const BOARD_AT := Vector2(31.0, 46.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
 const NAME_MAX := 14    # the longest name a person can be given in the Roster
-const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "power", "fence", "radio", "convoy"]
-const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
+const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "bench", "power", "fence", "radio", "convoy"]
+const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "bench": "Reloading bench", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
 const BLURB := {
 	"water": "Everyone drinks 1 water a day. The pump and barrels give more. Worked by a hauler.",
 	"garden": "Grows the food: everyone eats 1 a day and part of the stock spoils. Worked by a gardener.",
 	"kitchen": "Cooks the meals. A cook alive in a kitchen lifts morale every day; the larder keeps food from spoiling. Worked by a cook.",
 	"infirmary": "Cots and medicine. A medic alive in the infirmary lifts morale and treats bites. Worked by a medic.",
 	"dormitory": "Beds. More people than beds costs morale every day. Worked by a hauler.",
+	"bench": "Makes rounds for Ruth's gun from scrap every day (2 scrap for 5 rounds), as long as a mechanic works it and scrap lasts. Only Ruth uses them: guards, allies and raid companions fire for free. Worked by a mechanic.",
 	"power": "The generator runs the floodlights and the radio room. It burns 1 fuel a day. Worked by a mechanic.",
 	"fence": "Raises the hit points of every fence wall against the nightly attacks. Worked by a mechanic.",
 	"radio": "Calls survivors to the prison: the last step of the Hub stage. Needs power. Worked by a mechanic.",
 	"convoy": "The truck that joins the Harbor Convoy on day 30: 8 seats. Needs the generator and a mechanic. The convoy also wants fuel, parts, a radio room and a fence at tier 2 (the Story tab).",
 }
 const ROLES := ["gardener", "cook", "medic", "mechanic", "guard", "cleaner", "hauler"]
-const RES_NAME := {"food": "Food", "water": "Water", "fuel": "Fuel", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts"}
+const RES_NAME := {"food": "Food", "water": "Water", "fuel": "Fuel", "ammo": "Ruth's rounds", "meds": "Meds", "scrap": "Scrap", "parts": "Parts"}
 const DIM := Color("#8d927f")
 ## Where a crew stop is, in words (prison_crew.gd's `at` names without the number), for the roster's "walking to the ...".
 const STOP_WORD := {"bed": "infirmary", "bench": "workbench", "chat_a": "yard", "chat_b": "yard", "fence_e": "fence", "fence_m": "fence", "fence_w": "fence", "fridge": "kitchen",
@@ -897,7 +898,7 @@ func _needs_tab() -> void:
 	for h in ["", "Stock", "Made", "Used", "Spoiled", "Net", "Left"]:
 		g.add_child(_lab(h, UI.SMALL_PX, DIM))
 	var caps: Dictionary = econ.caps()
-	for r in ["food", "water", "fuel"]:
+	for r in ["food", "water", "ammo", "fuel"]:
 		var e: Dictionary = rep.res[r]
 		var mk := roundi(float(e.prod))
 		var us := roundi(float(e.cons))
@@ -915,7 +916,7 @@ func _needs_tab() -> void:
 	og.columns = 4
 	og.add_theme_constant_override("h_separation", 10)
 	og.add_theme_constant_override("v_separation", 1)
-	for r in ["ammo", "meds", "scrap", "parts"]:
+	for r in ["meds", "scrap", "parts"]:
 		og.add_child(_lab(RES_NAME[r], UI.BODY_PX, Hud.INK2))
 		og.add_child(_count("stock." + r, float(int(game.stores.get(r, 0.0))), "%d / " + str(int(caps.get(r, 0))), Hud.INK2))
 	lc.add_child(og)
@@ -1448,7 +1449,7 @@ func _morning_show() -> void:
 	if wire > 0:
 		rows.append(["Last night", "%d dead at the wire" % wire, Hud.INK])
 	var horde: bool = game.arc.is_horde_night(int(game.arc.day))
-	rows.append(["Tonight", "A HORDE NIGHT: the dead come in numbers, mend the walls and stock ammo." if horde else "A quiet night is expected.", Hud.DANGER_TEXT if horde else Hud.OK])
+	rows.append(["Tonight", "A HORDE NIGHT: the dead come in numbers, mend the walls." if horde else "A quiet night is expected.", Hud.DANGER_TEXT if horde else Hud.OK])
 	var g := GridContainer.new()
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 20)

@@ -696,15 +696,6 @@ func _fire(m: Dictionary, z, dist: float, eff: String) -> bool:
 		m.say = "knifing"
 		game.sound.play("stab", 0.6, 0.08)
 		return true
-	var inv = game.pack.inv
-	var cost := float(cfg.shot_cost)
-	if inv == null or inv.take_float("ammo", cost) < cost - 0.001:
-		if float(m.noammo_t) <= 0.0:
-			_bark(m, "Out of ammo!", 3.0)
-			m.noammo_t = 8.0
-		m.noammo_t = float(m.noammo_t) - 0.2
-		m.cd = 0.5
-		return false
 	game._shoot_at(p, z, game.gun_hit("squad", dist, z), float(Bal.role("squad").dmg))
 	game.run.field.noise(Vector2(p.x, p.y), null, float(gun.get("noise", 12.0)))
 	m.cd = Bal.roll(Bal.role("squad"), "cd") * (0.7 if eff == "cover" else 1.0)

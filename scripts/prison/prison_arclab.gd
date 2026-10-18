@@ -88,7 +88,6 @@ func _one_day() -> void:
 	_assign()
 	_mend(float(sk.mend))
 	_spend(float(sk.spend))
-	_ammo()
 	for i in 12:    # the crew's work through the day
 		econ._labor(30.0)
 	if d == arc.convoy_day():
@@ -138,7 +137,7 @@ func _raid(got: Dictionary) -> void:
 		got[k] = float(got.get(k, 0.0)) + v
 		if k == "scrap":
 			arc.stats.scrap = float(arc.stats.scrap) + v
-	game.stores["ammo"] = float(game.stores.ammo) - float(cfg.raid_ammo)
+	game.stores["ammo"] = maxf(0.0, float(game.stores.ammo) - float(cfg.raid_ammo))
 	if rng.randf() < float(arc.cfg.letter_chance):
 		arc.next_letter()
 	if rng.randf() < float(sk.rescue_p) and int(econ.beds().free) > 0:
@@ -184,8 +183,7 @@ func _pick_raid() -> Dictionary:
 
 ## What the base wants in stock now: the cost of the projects on the path, the convoy's list after day 8, a reserve of scrap and ammo.
 func _needs() -> Dictionary:
-	var need := {"scrap": 30.0, "ammo": maxf(60.0, 3.0 * float(arc.wave_plan(int(econ.day))["total"]) * float(cfg.night.ammo_per_kill)), "meds": 4.0}
-	need["scrap"] = float(need.scrap) + maxf(0.0, float(need.ammo) - float(game.stores.ammo)) / 2.0    # the bench turns scrap into rounds
+	var need := {"scrap": 30.0, "ammo": 40.0, "meds": 4.0}
 	var path := _path()
 	for id in path:
 		for k in econ.defs[id].cost:
@@ -283,13 +281,6 @@ func _mend(f: float) -> void:
 		s.hp = minf(float(s.max), float(s.hp) + (float(s.max) - float(s.hp)) * frac)
 
 
-## A mechanic at the bench turns scrap into rounds.
-func _ammo() -> void:
-	var want := float(_needs().ammo) - float(game.stores.ammo)
-	if want > 0.0 and econ.workers("mechanic") > 0 and float(game.stores.scrap) > float(cfg.scrap_reserve):
-		var k := minf(minf(float(cfg.bench_scrap), want / 2.0), float(game.stores.scrap) - float(cfg.scrap_reserve))
-		game.stores["scrap"] = float(game.stores.scrap) - k
-		game.stores["ammo"] = float(game.stores.ammo) + k * 2.0
 
 
 func _recruit() -> void:
@@ -339,11 +330,6 @@ func _night(d: int) -> void:
 	var fp := float(n.base_defense) + float(guards) * float(n.guard_kills) + float(n.ruth_kills) * float(skill.defense)
 	if econ.tier("power") >= 1 and econ.power_on and not arc.blackout_for(d):
 		fp *= 1.0 + float(n.light_bonus)
-	var ammo_need := total * float(n.ammo_per_kill)
-	var have := float(game.stores.ammo)
-	if have < ammo_need:
-		fp *= have / maxf(ammo_need, 1.0)
-	game.stores["ammo"] = maxf(0.0, have - minf(have, ammo_need))
 	var leak := maxf(0.0, total - fp)
 	var killed := minf(total, fp)
 	var segs: Array = game.siege.segs

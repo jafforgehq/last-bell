@@ -20,7 +20,7 @@ const RES := ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
 const RES_NAME := {"food": "Food", "water": "Water", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts", "fuel": "Fuel"}
 const RES_COL := {"food": Color("#e08a5a"), "water": Color("#6fb4e8"), "ammo": Color("#d9bf6a"), "meds": Color("#f27f72"), "scrap": Color("#b8bcc0"), "parts": Color("#8fd0a8"), "fuel": Color("#e8953a")}
 const RES_USE := {
-	"ammo": "Spent by your gun and by the guards at night. A mechanic at the workbench turns 1 scrap into 2 rounds.",
+	"ammo": "Ruth's rounds, for her own gun and her raid kit. Guards, allies and companions fire for free. A reloading bench with a mechanic turns scrap into rounds every day.",
 	"meds": "Treats bites and revives people. An infirmary with a medic makes a little from scrap.",
 	"scrap": "Pays for projects and fence repairs. A mechanic turns it into ammo.",
 	"parts": "Needed by the pump, generator and radio projects. Found in raids on garages.",
@@ -30,7 +30,7 @@ const RES_USE := {
 const RES_LOW := {
 	"food": "When low: build or staff the garden, or raid a shop or house for food.",
 	"water": "When low: build the well or pump, or raid for bottled water.",
-	"ammo": "When low: put a mechanic on the workbench (scrap to rounds) or raid a police station.",
+	"ammo": "When low: build the reloading bench and put a mechanic on it (scrap to rounds), or raid a police station.",
 	"meds": "When low: raid a pharmacy or hospital, or staff the infirmary.",
 	"scrap": "When low: raid industrial places and strip what you find.",
 	"parts": "When low: raid a garage.",
@@ -554,7 +554,9 @@ func _res_tip(r: String, rep: Dictionary, stock: float, cap: int, days: float) -
 		elif r == "fuel":
 			t += "\nMade: nothing. Fuel only comes from raids on petrol stations."
 		var per := float(econ.cfg.per_person.get(r, 0.0))
-		if r == "fuel":
+		if r == "ammo":
+			t += "\nUsed: only by Ruth, in raids and at the base (the kit you take out is not counted)."
+		elif r == "fuel":
 			t += "\nUsed: -%d a day by the generator%s" % [roundi(float(e.cons)), "" if econ.tier("power") >= 1 else " (not built yet)"]
 		else:
 			t += "\nUsed: -%d a day (%d people, %s each)" % [roundi(float(e.cons)), econ.people(), str(per)]
@@ -682,7 +684,7 @@ func _attack_chip() -> void:
 	var when := ("at %02d:00" % int(sg.NIGHT_H)) if hrs >= 1.0 else "in %d min" % ceili(hrs * 60.0)
 	var why := "The dead followed you in from the clear: they come for the fence on the first night. " if hn == 1 else ""
 	_put("attack", "bell", Hud.WARN if st == "warn" else Hud.INK2, head, when if horde else "night %d" % game.arc.next_horde_night(hn), Hud.WARN if st == "warn" else DIM, "", st,
-		why + "A horde comes at %02d:00 tonight. Mend the fence and keep ammo in the stores before it." % int(sg.NIGHT_H) if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
+		why + "A horde comes at %02d:00 tonight. Mend the fence before it." % int(sg.NIGHT_H) if horde else "Nobody breaks the fence tonight. The next horde comes on night %d: use the quiet days to raid and build." % game.arc.next_horde_night(hn))
 	(chips["attack"].main as Label).custom_minimum_size.x = 100
 
 

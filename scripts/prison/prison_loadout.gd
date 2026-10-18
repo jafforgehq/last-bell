@@ -149,7 +149,7 @@ func _refresh() -> void:
 	else:
 		_col.add_child(_lbl("Your pack is already packed from the stash: it goes as it is (ammo, medicine, food and water as you put them in).", 14, Color(0.8, 0.9, 1.0)))
 	# the squad
-	_col.add_child(_lbl("SQUAD: up to 2 come with you (number key or click). They carry their own bag and bring it back; they shoot with your ammo.", 15, Color(1, 0.85, 0.4)))
+	_col.add_child(_lbl("SQUAD: up to 2 come with you (number key or click). They carry their own bag and bring it back; they fire for free and never use your rounds.", 15, Color(1, 0.85, 0.4)))
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(680, maxf(0.0, minf(5.0, float(squad.cands.size())) * ROW_H - 2.0))    # (whole rows: five shown, the rest a scroll away)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

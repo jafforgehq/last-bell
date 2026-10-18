@@ -3460,8 +3460,7 @@ func _fence_guards(dt: float) -> void:
 		var gb: Dictionary = Bal.role("guard")
 		guard_cd[g.id] = (float(gb.cd_alarm) if alarm_t > 0.0 else Bal.roll(gb, "cd")) * tr.mult(g, "reload")
 		_shoot_at(g, best, clampf((gun_hit("guard", bd, best) + (econ.hit_bonus() if _night_of(tod) > 0.5 else 0.0)) * tr.mult(g, "aim") * post_aim, 0.05, 0.95), float(gb.dmg))    # ECON hook: floodlights
-		siege.guard_shot(g)    # SIEGE hook: a shot costs ammo
-		stores.ammo = maxf(0.0, float(stores.ammo) - (siege.GUARD_SHOT_COST if siege.attacking else siege.GUARD_SHOT_COST * 0.2) * (tr.mult(g, "ammo") - 1.0))
+		siege.guard_shot(g)    # SIEGE hook: counts the shot (guards fire for free)
 		m.say = "firing"
 		m.fired_at = clock    # (the Firing tag lasts 1.5 s after the shot)
 
