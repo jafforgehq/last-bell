@@ -41,6 +41,7 @@
     "revive_s": 2.0,
     "join_r": 10.0,
     "wait_s": 25.0,
+    "autoloot": {"r": 5.0, "dead_r": 10.0, "scan_s": 1.0, "max_stage": 1},
     "bag": {"Scavenger": [6, 3], "default": [4, 2]},
     "bag_scav": [6, 3],
     "tags": {
