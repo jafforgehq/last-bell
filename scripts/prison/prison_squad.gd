@@ -41,6 +41,7 @@ var cands: Array = []    # what the gate could offer (a snapshot of the crew, ta
 var picked: Array = []    # ids chosen at the gate
 var floaters: Array = []    # {text, pos (tiles), t, col}
 var revive_t := 0.0
+var rooms_seen := {}    # "house:room" -> true: the rooms Ruth has stood in this raid (the companions loot only there)
 var truck := {}    # res -> units the companions found by themselves this raid (already in the raid's stock, banked at the pickup)
 var wait_t := 0.0    # seconds the pickup has waited for them
 var left_behind := false    # E in the ring: the ones that are not here are left outside
@@ -189,6 +190,7 @@ func begin_raid() -> void:
 	members = []
 	floaters = []
 	truck = {}
+	rooms_seen = {}
 	revive_t = 0.0
 	wait_t = 0.0
 	left_behind = false
@@ -238,7 +240,7 @@ func _spawn(c: Dictionary, at: Vector2) -> Dictionary:
 	n.setup(p, false, game.data, String(c.key))
 	game.entities.add_child(n)
 	var tags: Array = c.tags
-	var m := {"id": String(c.id), "name": String(c.name), "p": p, "node": n, "hp": float(c.hp), "max": float(c.hp), "state": "up", "cmd": "scavenge" if tags.has("Scavenger") else "follow", "tags": tags,
+	var m := {"id": String(c.id), "name": String(c.name), "p": p, "node": n, "hp": float(c.hp), "max": float(c.hp), "state": "up", "cmd": "follow", "tags": tags,
 		"bag": Inventory.make_grid(int(c.bag.x), int(c.bag.y)), "loose": {}, "say": "", "bark": "", "bark_t": 0.0, "cd": 1.0, "bite": 0.0, "path": [], "pi": 0, "repath": 0.0, "goal": Vector2.INF,
 		"scav": {}, "skip": {}, "down_t": 0.0, "fall": false, "found": false, "ref": null, "hold_at": Vector2(p.x, p.y), "wait": 0.0, "noammo_t": 0.0, "stuck_t": 0.0, "last": Vector2(p.x, p.y), "done_n": 0, "recall": false, "calm": 0.0, "def": c.def}
 	_fresh(m)
@@ -249,7 +251,7 @@ func _spawn(c: Dictionary, at: Vector2) -> Dictionary:
 
 ## The keepers of the walk (Y3, "companions act weird"): the spot they hold beside Ruth (`anchor`, kept while it is still good), the swarm rule's hold-on time, the clock of no progress, the log clock.
 func _fresh(m: Dictionary) -> void:
-	m.merge({"anchor": Vector2.INF, "anchor_eff": "", "anchor_chk": 0.0, "swarm": false, "swarm_t": 0.0, "walking": false, "prog_t": 0.0, "log_t": 0.0, "scan_t": 0.0, "fight_t": 0.0,
+	m.merge({"anchor": Vector2.INF, "anchor_eff": "", "anchor_chk": 0.0, "swarm": false, "swarm_t": 0.0, "walking": false, "prog_t": 0.0, "log_t": 0.0, "scan_t": 0.0, "fight_t": 0.0, "al": {}, "al_scan": 0.0,
 		"told": "", "eff": "", "flips": 0}, false)
 
 
@@ -299,6 +301,11 @@ func update(dt: float) -> void:
 	_t += dt
 	var zs: Array = game._awake_dead()
 	var me := _me()
+	var hs = game.run.sim.houses
+	if hs != null:
+		var rm: int = hs.room_at(me.x, me.y)
+		if rm >= 0:
+			rooms_seen["%d:%d" % [hs.house_at(me.x, me.y), rm]] = true
 	if game.args.has("botshoot") and fmod(_t, 20.0) < dt:
 		for m in members:
 			print("SQUADSTAT tick t=", int(_t), " ", m.name, " hp ", int(m.hp), " ", m.state, " cmd ", m.cmd, " '", m.say, "' ruth_d ", snappedf(Vector2(m.p.x, m.p.y).distance_to(me), 0.1), " awake ", zs.size(), " ruth_hp ", int(game.run.avatar_p.hp))
@@ -511,8 +518,12 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 				if m.say == "with you":
 					m.say = "with you, no safe house near"
 		_:
-			p.work = ""
-			_keep_up(m, slot, me, dt, retreat, swarm, eff)
+			if not ((eff == "follow" or eff == "spread") and _autoloot(m, dt, me, zs)):
+				if not (m.al as Dictionary).is_empty():    # (stopped at once: back beside Ruth)
+					m.al = {}
+					_bark(m, "Dead about! Back to you.", 3.0)
+				p.work = ""
+				_keep_up(m, slot, me, dt, retreat, swarm, eff)
 	if cmd != "hold":    # (a hold that fell back to Ruth keeps its spot to go back to)
 		m.hold_at = Vector2(p.x, p.y)
 	if not bool(p.moving) and p.target == null:    # standing: face the nearest dead about, else where Ruth looks (not the last step's way)
@@ -852,9 +863,85 @@ func _scavenge(m: Dictionary, dt: float, me: Vector2, zs: Array) -> bool:
 	return true
 
 
+## AUTO-LOOT (docs/raid-heat-spec.md): may a companion at `at` search now? Only while no awake dead are within `dead_r` of it or of Ruth, and the raid is not Hunted or Overrun (`max_stage`).
+func loot_clear(at: Vector2, me: Vector2, zs: Array, stage: int) -> bool:
+	var a: Dictionary = cfg.autoloot
+	return stage <= int(a.max_stage) and _dead_near(at, float(a.dead_r), zs) == 0 and _dead_near(me, float(a.dead_r), zs) == 0
+
+
+## The container a companion would search on its own: not yet searched, with something in it, within `r` tiles of Ruth, in a room Ruth has stood in; the nearest to the companion. {} when none.
+func loot_pick(m: Dictionary, at: Vector2, me: Vector2) -> Dictionary:
+	var sim = game.run.sim
+	var best := {}
+	var bd := 1.0e9
+	for c in game.town.containers:
+		var id := String(c.id)
+		if int(c.house) < 0 or sim.search.is_looted(id) or m.skip.has(id) or (c.loot as Dictionary).is_empty() or _claimed(id, m):
+			continue
+		if not rooms_seen.has("%d:%d" % [int(c.house), int(c.room)]) or Vector2(c.pos).distance_to(me) > float(cfg.autoloot.r):
+			continue
+		var d := at.distance_to(Vector2(c.pos))
+		if d < bd:
+			bd = d
+			best = c
+	return best
+
+
+## One frame of looting on its own (a companion that follows): walk to the nearest container near Ruth, search it for the container's own seconds, and put what is in it into the truck (the raid's stock).
+## False when it does not loot now (dead about, Hunted or Overrun, nothing to search): the caller keeps it beside Ruth.
+func _autoloot(m: Dictionary, dt: float, me: Vector2, zs: Array) -> bool:
+	var p = m.p
+	var at := Vector2(p.x, p.y)
+	var sim = game.run.sim
+	var al: Dictionary = m.al
+	if game.mode != "raid" or float(m.hp) < float(cfg.retreat_hp) * float(m.max) or not loot_clear(at, me, zs, game.noise.rstage if game.noise != null else 0):
+		return false
+	if al.is_empty():
+		m.al_scan = float(m.al_scan) - dt
+		if float(m.al_scan) > 0.0:
+			return false
+		m.al_scan = float(cfg.autoloot.scan_s)
+		var c := loot_pick(m, at, me)
+		if c.is_empty():
+			return false
+		al = {"id": String(c.id), "stage": "go", "t": 0.0, "stuck": 0.0}
+		m.al = al
+	var cont: Dictionary = sim.houses.container(String(al.id))
+	if cont.is_empty() or sim.search.is_looted(String(al.id)) or _claimed(String(al.id), m) or Vector2(cont.pos).distance_to(me) > float(cfg.autoloot.r) + 1.5:
+		m.al = {}
+		return false
+	if String(al.stage) == "go":
+		var arrived := _goto(m, Vector2(cont.pos), dt, float(cfg.speed))
+		m.say = "going to loot"
+		al.stuck = float(al.stuck) + dt if (not arrived and ((m.path as Array).is_empty() or float(m.prog_t) > 0.5)) else 0.0
+		if float(al.stuck) > 3.0:
+			m.skip[String(al.id)] = true
+			m.al = {}
+			return false
+		if arrived:
+			al.stage = "search"
+			al.t = 0.0
+		return true
+	p.moving = false
+	p.work = "sort"
+	al.t = float(al.t) + dt
+	p.work_t = float(al.t)
+	m.say = "searching for the truck"
+	if float(al.t) >= SearchRules.search_secs(sim, cont):
+		p.work = ""
+		_take(m, String(al.id), true)
+		if game.noise != null:
+			game.noise.on_search(String(al.id), Vector2(cont.pos))    # (their searches make noise like Ruth's)
+		m.al = {}
+		m.al_scan = 0.3
+	return true
+
+
 ## Whether another companion is on this container (walking to it or searching it).
 func _claimed(id: String, me: Dictionary) -> bool:
 	for o in members:
+		if o != me and o.state == "up" and (o.al as Dictionary).get("id", "") == id and members.find(o) < members.find(me):
+			return true
 		if o != me and o.state == "up" and not (o.scav as Dictionary).is_empty() and int(o.scav.i) < (o.scav.list as Array).size() and String(o.scav.list[o.scav.i]) == id:
 			if members.find(o) < members.find(me) or String(o.scav.stage) == "search":    # (the first in the list keeps it)
 				return true
@@ -920,7 +1007,7 @@ func _pick_house(m: Dictionary, at: Vector2, zs: Array, me: Vector2) -> Dictiona
 
 
 ## The search of one container is done: its scrap and its items go to the member (items into the bag as far as it holds them; what does not fit stays in the container, which Ruth can open). True when the bag is full.
-func _take(m: Dictionary, id: String) -> bool:
+func _take(m: Dictionary, id: String, to_truck := false) -> bool:
 	var sim = game.run.sim
 	var inv = sim.inv
 	var cont: Dictionary = sim.houses.container(id)
@@ -928,13 +1015,26 @@ func _take(m: Dictionary, id: String) -> bool:
 	var loose := Inventory.loose_units(cont.get("loot", {}) if typeof(cont.get("loot", {})) == TYPE_DICTIONARY else {})
 	for k in loose:
 		if sim.stock.has(k):
-			m.loose[k] = int(m.loose.get(k, 0)) + int(loose[k])
+			if to_truck:
+				sim.stock[k] = float(sim.stock[k]) + float(loose[k])
+			else:
+				m.loose[k] = int(m.loose.get(k, 0)) + int(loose[k])
 			got[k] = int(got.get(k, 0)) + int(loose[k])
 	var g: Dictionary = inv.grid_of(id)
 	var full := false
 	var i := 0
 	while i < (g.cells as Array).size():
 		var pl: Dictionary = g.cells[i]
+		if to_truck:    # the truck takes what the stock counts; a gun or a letter stays in the container for Ruth
+			var rs := Inventory.res_of(String(pl.item))
+			if rs != "" and sim.stock.has(rs):
+				var u := Inventory.placement_units(pl)
+				sim.stock[rs] = float(sim.stock[rs]) + float(u)
+				got[rs] = int(got.get(rs, 0)) + u
+				(g.cells as Array).remove_at(i)
+			else:
+				i += 1
+			continue
 		var before := int(pl.count)
 		var left := Inventory.auto_add(m.bag, String(pl.item), before)
 		var moved := before - left
@@ -953,10 +1053,12 @@ func _take(m: Dictionary, id: String) -> bool:
 	inv.version = int(inv.version) + 1
 	var parts: Array = []
 	for k in got:
-		parts.append("+%d %s" % [int(got[k]), String(k).replace("gun_", "")])
+		parts.append(("%d %s" if to_truck else "+%d %s") % [int(got[k]), String(k).replace("gun_", "")])
+		if to_truck:
+			truck[k] = int(truck.get(k, 0)) + int(got[k])
 	if not parts.is_empty():
-		floaters.append({"text": ", ".join(parts), "pos": Vector2(m.p.x, m.p.y - 1.9), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
-	if Inventory.free_cells(m.bag) <= 0:
+		floaters.append({"text": (String(m.name) + ": " if to_truck else "") + ", ".join(parts), "pos": Vector2(m.p.x, m.p.y - 1.9), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
+	if not to_truck and Inventory.free_cells(m.bag) <= 0:
 		full = true
 	return full
 

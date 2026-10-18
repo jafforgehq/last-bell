@@ -1208,7 +1208,7 @@ func _stage_check() -> void:
 		rstage += 1
 		rfloor = float((cfg.raid_heat.stages as Array)[rstage - 1])
 		stage_log.append([snappedf(_raid_t, 0.1), rstage])
-		if game.args.has("log") or test_log:
+		if game.args.has("log") or game.args.has("heatlog") or test_log:
 			print("RAIDHEAT stage ", stage_name(), " at ", snappedf(_raid_t, 0.1), " s heat ", snappedf(rheat, 0.1))
 		_stage_enter(rstage)
 
@@ -1243,9 +1243,11 @@ func _raid_heat(dt: float) -> void:
 		rnoise = maxf(maxf(0.0, rfloor - rtime), rnoise - float(rc.cool_per_s) * dt)    # (never below the start of the stage reached)
 	rheat = minf(100.0, rnoise + rtime)
 	_stage_check()
+	if game.args.has("heatbot"):
+		_heatbot(dt)
 	if game.args.has("heatlog") and int(_raid_t) % 30 == 0 and int(_raid_t) != _logged:    # staging: a line every 30 s
 		_logged = int(_raid_t)
-		print("HEAT t=", _logged, " heat=", snappedf(rheat, 0.1), " stage=", stage_name(), " waves=", waves_n, " horde_alive=", hordes.size(), " emits=", stats.emits, " truck=", game.squad.truck)
+		print("HEAT t=", _logged, " heat=", snappedf(rheat, 0.1), " stage=", stage_name(), " waves=", waves_n, " horde_alive=", hordes.size(), " emits=", stats.emits, " truck=", game.squad.truck, " rooms=", game.squad.rooms_seen.size(), " me=", Vector2(game.run.avatar_p.x, game.run.avatar_p.y).snapped(Vector2(0.1, 0.1)))
 	if rstage >= 3:    # Overrun: waves until the party leaves
 		_wave_t -= dt
 		if _wave_t <= 0.0:
@@ -1336,3 +1338,25 @@ func draw_hud(c: Control, v: Vector2) -> void:
 		var at := v / 2.0 + dir * t
 		c.draw_colored_polygon(PackedVector2Array([at + dir * 18.0, at + dir.rotated(2.5) * 14.0, at + dir.rotated(-2.5) * 14.0]), col)
 		c.draw_string(font, at - dir * 24.0 - Vector2(40, -5), "HORDE %s" % String(h.name), HORIZONTAL_ALIGNMENT_CENTER, 80, 13, col)
+
+
+## STAGING (--heatbot=knife|shotgun|idle): a scripted noise schedule at Ruth's place, to time the stages. knife: a search every 20 s, a run of steps every 20 s, a knife kill every 30 s.
+## shotgun: the same plus a shell every 3 s. idle: nothing.
+var _bot_t := 0.0
+func _heatbot(dt: float) -> void:
+	var how := String(game.args.heatbot)
+	game.run.invulnerable = true
+	if how == "idle":
+		return
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var f = game.run.sim.field
+	var t0 := _bot_t
+	_bot_t += dt
+	if int(_bot_t / 20.0) != int(t0 / 20.0):
+		emit_at(me, 0.0, "search", Vector2.INF)
+		for i in 5:    # (a run of 10 s: a step every 2 s)
+			emit_at(me, 7.0, "step", Vector2.INF)
+	if int(_bot_t / 30.0) != int(t0 / 30.0):
+		f.noise(me, null, 3.0)
+	if how == "shotgun" and int(_bot_t / 3.0) != int(t0 / 3.0):
+		f.noise(me, null, 16.0)

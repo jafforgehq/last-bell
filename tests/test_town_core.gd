@@ -9,6 +9,8 @@ const Pathfinder := preload("res://scripts/sim/pathfinder.gd")
 const FxNull := preload("res://scripts/sim/fx_null.gd")
 const PrisonArms := preload("res://scripts/prison/prison_arms.gd")
 const PrisonMeta := preload("res://scripts/prison/prison_meta.gd")
+const PrisonNoise := preload("res://scripts/prison/prison_noise.gd")
+const Inventory := preload("res://scripts/sim/inventory.gd")
 
 var _town: Dictionary = {}
 
@@ -316,3 +318,179 @@ func test_the_prison_windows_share_one_button_and_motion_is_free_headless() -> v
 	UI.open_fx(p)
 	eq(p.modulate.a, 1.0, "a window opened with no display is not faded")
 	p.free()
+
+
+# ------------------------------------------------------------------ raid heat (docs/raid-heat-spec.md) --
+
+class _HeatPeople:
+	var banners: Array = []
+	func banner(t: String, _c = null, _s = 0.0) -> void:
+		banners.append(t)
+
+
+class _HeatGame:
+	var mode := "raid"
+	var args := {}
+	var busy := false
+	var clock := 0.0
+	var people := _HeatPeople.new()
+	var run := {"avatar_p": {"x": 10.0, "y": 10.0}}
+
+
+class _HeatNoise extends "res://scripts/prison/prison_noise.gd":
+	var edge_calls: Array = []
+	func _edge_horde(n: int, _to: Vector2, _speed: float) -> Dictionary:
+		edge_calls.append(n)
+		return {"name": "east"}
+	func _loudest() -> Vector2:
+		return Vector2(10, 10)
+	func sting(_name: String, _at := Vector2.INF) -> void:
+		pass
+
+
+func _heat() -> _HeatNoise:
+	var n := _HeatNoise.new(null)
+	n.game = _HeatGame.new()
+	return n
+
+
+func test_the_raid_heat_stages_start_at_30_60_and_90() -> void:
+	PrisonNoise.load_cfg()
+	eq(PrisonNoise.stage_of(0.0), 0, "0 is Quiet")
+	eq(PrisonNoise.stage_of(29.9), 0, "29.9 is still Quiet")
+	eq(PrisonNoise.stage_of(30.0), 1, "30 is Stirring")
+	eq(PrisonNoise.stage_of(60.0), 2, "60 is Hunted")
+	eq(PrisonNoise.stage_of(89.9), 2, "89.9 is still Hunted")
+	eq(PrisonNoise.stage_of(90.0), 3, "90 is Overrun")
+	check(PrisonNoise.raid_add("shot", 16.0) > PrisonNoise.raid_add("shot", 12.0), "a shotgun adds more than a pistol")
+	check(PrisonNoise.raid_add("melee", 3.0) < 0.2, "a knife blow adds almost nothing")
+	var n := _heat()
+	n.add_heat(35.0)
+	eq(n.rstage, 1, "35 points of noise: Stirring")
+	eq(n.game.people.banners, ["They're stirring"], "the banner comes once")
+	n.add_heat(1.0)
+	eq(n.game.people.banners.size(), 1, "and not again inside the stage")
+	n.game.mode = "base"
+	n.add_heat(50.0)
+	eq(n.rstage, 1, "heat is a raid thing: a noise at the base adds none")
+
+
+func test_raid_heat_cools_slowly_and_never_below_the_stage_reached() -> void:
+	var n := _heat()
+	n.add_heat(45.0)
+	eq(n.rstage, 1, "Stirring")
+	for i in 600:
+		n._raid_heat(1.0)
+	check(n.rheat < 45.0, "after ten quiet minutes it has cooled (%s)" % n.rheat)
+	check(n.rheat >= 30.0, "but not below the start of Stirring (%s)" % n.rheat)
+	eq(n.rstage, 1, "the stage is kept")
+	var t := _heat()
+	for i in 1740:
+		t._raid_heat(1.0)
+	eq(t.rstage, 0, "29 quiet minutes: still Quiet")
+	for i in 120:
+		t._raid_heat(1.0)
+	eq(t.rstage, 1, "a silent raid reaches Stirring after about half an hour: the time trickle")
+
+
+func test_overrun_sends_waves_until_the_party_leaves_and_hunted_sends_one_horde() -> void:
+	var n := _heat()
+	n.add_heat(65.0)
+	eq(n.rstage, 2, "Hunted")
+	eq(n.edge_calls.size(), 1, "one horde from an edge")
+	n._raid_heat(1.0)
+	eq(n.edge_calls.size(), 1, "and no second one while Hunted")
+	n.add_heat(30.0)
+	eq(n.rstage, 3, "Overrun")
+	for i in 200:
+		n._raid_heat(1.0)
+	check(n.waves_n >= 5, "waves keep coming (%d)" % n.waves_n)
+	check(n.rheat >= 90.0 and n.rstage == 3, "and it does not cool out of Overrun")
+	var w: int = n.waves_n
+	for i in 300:
+		n._raid_heat(1.0)
+	check(n.waves_n > w, "still coming until the party leaves")
+	n.game.mode = "base"
+	var w2: int = n.waves_n
+	for i in 100:
+		n._raid_heat(1.0)
+	eq(n.waves_n, w2, "the waves stop when the raid is over")
+
+
+class _TruckSearch:
+	var looted := {}
+	func is_looted(id: String) -> bool:
+		return looted.has(id)
+
+
+class _TruckInv:
+	var searched := {}
+	var version := 0
+	var grids := {}
+	func grid_of(id: String) -> Dictionary:
+		return grids.get(id, {"cells": []})
+
+
+class _TruckHouses:
+	var conts := {}
+	func container(id: String) -> Dictionary:
+		return conts.get(id, {})
+
+
+class _TruckSim:
+	var stock := {"scrap": 0.0, "fuel": 0.0, "ammo": 0.0}
+	var houses := _TruckHouses.new()
+	var inv := _TruckInv.new()
+	var search := _TruckSearch.new()
+
+
+class _TruckGame:
+	var args := {}
+	var noise = null
+	var town := {"containers": []}
+	var run := {"sim": _TruckSim.new()}
+
+
+func test_companions_loot_only_when_no_awake_dead_are_near_and_not_when_hunted() -> void:
+	var sq = load("res://scripts/prison/prison_squad.gd").new(_TruckGame.new())
+	var at := Vector2(20, 20)
+	var me := Vector2(24, 20)
+	check(sq.loot_clear(at, me, [], 0), "nobody about: they may search")
+	check(sq.loot_clear(at, me, [], 1), "Stirring still allows it")
+	check(not sq.loot_clear(at, me, [], 2), "Hunted: they stay with Ruth")
+	check(not sq.loot_clear(at, me, [], 3), "Overrun: the same")
+	check(not sq.loot_clear(at, me, [{"x": 20.0, "y": 29.0}], 0), "an awake dead one 9 tiles from the companion stops it")
+	check(not sq.loot_clear(at, me, [{"x": 24.0, "y": 14.0}], 0), "an awake dead one 6 tiles from Ruth stops it")
+	check(sq.loot_clear(at, me, [{"x": 40.0, "y": 40.0}], 0), "one far from both does not")
+
+
+func test_companions_pick_only_containers_near_ruth_in_rooms_she_has_entered() -> void:
+	var g := _TruckGame.new()
+	g.town = {"containers": [
+		{"id": "a", "house": 1, "room": 2, "pos": Vector2(12, 10), "loot": {"scrap": 3}},
+		{"id": "b", "house": 1, "room": 3, "pos": Vector2(11, 10), "loot": {"scrap": 3}},
+		{"id": "c", "house": 1, "room": 2, "pos": Vector2(19, 10), "loot": {"scrap": 3}}]}
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	var m := {"skip": {}, "al": {}}
+	sq.members = [m]
+	var me := Vector2(10, 10)
+	check(sq.loot_pick(m, me, me).is_empty(), "Ruth has not entered a room yet: nothing to search")
+	sq.rooms_seen["1:2"] = true
+	eq(String(sq.loot_pick(m, me, me).id), "a", "the container in her room within 5 tiles; not the other room's, not the far one")
+
+
+func test_what_a_companion_finds_goes_to_the_truck_not_the_bag() -> void:
+	var g := _TruckGame.new()
+	var sim: _TruckSim = g.run.sim
+	sim.houses.conts["c1"] = {"loot": {"scrap": 4}}
+	sim.inv.grids["c1"] = {"cells": [{"item": "fuel_can", "count": 2}, {"item": "unknownthing", "count": 1}]}
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	var m := {"name": "Ike", "p": {"x": 1.0, "y": 1.0}, "loose": {}, "bag": Inventory.make_grid(4, 2)}
+	sq._take(m, "c1", true)
+	eq(sim.stock.scrap, 4.0, "the scrap is in the raid's stock")
+	eq(sim.stock.fuel, 2.0, "so is the fuel")
+	check((m.bag.cells as Array).is_empty() and m.loose.is_empty(), "nothing went into their own bag")
+	eq(sq.truck, {"scrap": 4, "fuel": 2}, "the truck's tally")
+	eq((sim.inv.grids["c1"].cells as Array).size(), 1, "what the stock does not count stays in the container for Ruth")
+	check(sim.search.looted.has("c1") or sim.inv.searched.has("c1"), "and it is marked as searched")
+	eq(String(sq.floaters[0].text), "Ike: 4 scrap, 2 fuel", "the floater names who found what")
