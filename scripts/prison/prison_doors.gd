@@ -166,10 +166,12 @@ func _swing(i: int, cur: float, delay: float = 0.0) -> void:
 func _go(i: int, cur: float, delay: float = 0.0) -> void:
 	_from[i] = cur
 	_t0[i] = _now + delay
+	if not bool(shown[i]):
+		delay += DUR * cur * 0.8    # FEEL: a shut is heard when the leaves meet (near the end of the swing), not as they start to move
 	if delay <= 0.0:
 		_sound(i)
 	elif is_instance_valid(game) and game is Node and game.is_inside_tree():
-		game.get_tree().create_timer(delay).timeout.connect(_sound.bind(i))
+		game.get_tree().create_timer(delay).timeout.connect(_sound.bind(i, float(_t0[i])))
 
 
 ## Every frame. Clear phase: a crew member or an ally who comes to a shut door opens it, and a door that has swung shut turns solid (or, when someone stepped into it meanwhile, swings open again).
@@ -239,15 +241,15 @@ func _watch(dt: float) -> void:
 
 
 ## A short sound at the door, wood for a plain door and steel for a cell block's.
-func _sound(i: int) -> void:
-	if not is_instance_valid(game) or game.audio == null:
+func _sound(i: int, t0 := INF) -> void:
+	if not is_instance_valid(game) or game.audio == null or (t0 != INF and t0 != float(_t0[i])):    # (a late sound of a swing that was turned back meanwhile is dropped)
 		return
 	var at := Rect2(Base.doors()[i].rect).get_center()
 	var o := bool(shown[i])
 	var cell := String(Base.doors()[i].name) == "Cell block"
 	var rng := randf_range(0.95, 1.05)
 	if cell:
-		game.audio.sfx("pd_cell_open_0" if o else "pd_steel_clang_0", -5.0, rng, "SFX", 0.05, at, 26.0)
+		game.audio.sfx("pd_cell_open_0" if o else "pd_cell_slam_%d" % randi_range(0, 1), -5.0, rng, "SFX", 0.05, at, 26.0)    # (the slam: a recording that was imported and never played)
 	else:
 		game.audio.sfx("pd_wood_open_0" if o else "pd_wood_close_0", -1.0, rng, "SFX", 0.05, at, 24.0)
 

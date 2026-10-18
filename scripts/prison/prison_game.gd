@@ -113,6 +113,7 @@ var sim_steps := 0
 var zoom_px := 40.0
 var play_zoom := 40.0
 var _night_zoomed := false    # NIGHT CAMERA: the attack zoomed out (eased back to play_zoom after it)
+var _map_tw: Tween    # FEEL: the M map view's zoom ease
 var cam_center := Vector2(48, 48)
 var map_view := false
 var stores := {"food": 40.0, "water": 60.0, "ammo": 80.0, "meds": 6.0, "scrap": 30.0, "parts": 2.0, "fuel": 0.0}
@@ -1685,6 +1686,7 @@ func _step() -> void:
 	if zmove != null:
 		zmove.pre()
 	special.pre()    # SPECIAL hook
+	var hp0: float = run.avatar_p.hp
 	run.sim.update(StepClock.STEP)
 	if zmove != null:
 		zmove.post(StepClock.STEP)
@@ -1706,6 +1708,8 @@ func _step() -> void:
 					sound.play("reload", 0.8)
 			"bite", "crash":
 				sound.play(String(e.type))
+				if String(e.type) == "bite" and String(e.get("who", "")) == String(run.avatar_p.id):
+					_ruth_hurt(hp0 - float(run.avatar_p.hp), Vector2(float(e.x), float(e.y)))
 			"stab":
 				sound.play("melee_swing", 0.75, 0.08)    # (the slash's whoosh; the hit's wet thud, spark and blood puff and the camera's nudge are combat_fx.gd `hit` and `_melee_impact`)
 			"picked":
@@ -1717,6 +1721,8 @@ func _step() -> void:
 				for k in e.loot:
 					parts.append("+%d %s" % [int(e.loot[k]), k])
 				_say("Found: " + (", ".join(parts) if not parts.is_empty() else "nothing"), 2.5)
+				if mode == "base" and crew != null and not parts.is_empty():    # FEEL: the take pops up where she searched (a raid floats it from the pack count: _pickup_floaters)
+					crew.floaters.append({"text": ", ".join(parts), "pos": Vector2(float(e.get("x", run.avatar_p.x)), float(e.get("y", run.avatar_p.y)) - 1.8), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
 				if args.has("log"):
 					print("SEARCHED ", e.get("container"), " loot ", e.loot, " taken ", e.get("taken"), " pack ", pack.grid.cells.map(func(c): return "%s x%d" % [c.item, c.count]))
 				_auto_pick(String(e.get("container", "")))
@@ -1724,6 +1730,20 @@ func _step() -> void:
 	if run.invulnerable:
 		run.avatar_p.hp = 100.0
 		run.avatar_p.downed = false
+
+
+## FEEL: Ruth bitten: the camera jolts away from the bite and a red "-N" floats up from her (the crew's floaters at home, the squad's on a raid).
+func _ruth_hurt(dmg: float, at: Vector2) -> void:
+	if dmg < 1.0 or run.invulnerable:    # (the managed base heals her every step: no number for a bite that does nothing)
+		return
+	if args.has("log"):
+		print("HURT f=", frames, " dmg ", snappedf(dmg, 0.1), " push ", fx.combat.camera_push())
+	fx.combat.jolt(Vector2.from_angle(randf() * TAU) * minf(2.0 + dmg * 0.4, 7.0))
+	var fl := {"text": "-%d" % int(round(dmg)), "pos": Vector2(at.x, at.y - 1.6), "t": 0.0, "col": Color(1, 0.35, 0.3)}
+	if mode == "raid":
+		squad.floaters.append(fl)
+	elif crew != null:
+		crew.floaters.append(fl)
 
 
 func _hands(dt: float) -> void:
@@ -1841,18 +1861,20 @@ func _unhandled_input(ev: InputEvent) -> void:
 					loot.open_choice(String(_prompt.get("kind", "")) != "gate")
 				else:
 					map_view = not map_view
-					zoom_px = 6.0 if map_view else play_zoom
+					if _map_tw != null:
+						_map_tw.kill()
+					_map_tw = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)    # FEEL: the zoom eases out and back (it snapped while the camera eased)
+					_map_tw.tween_property(self, "zoom_px", 6.0 if map_view else play_zoom, 0.3)
 			KEY_ESCAPE:
 				pause_menu.open()
 	elif ev is InputEventMouseButton and ev.pressed:
 		if raidx.mouse(ev):
 			return
-		if ev.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom_px *= 1.12
-			play_zoom = zoom_px if not _night_zoomed else play_zoom * 1.12    # (NIGHT CAMERA: the wheel moves the play zoom, not the attack's zoomed-out one)
-		elif ev.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom_px /= 1.12
-			play_zoom = zoom_px if not _night_zoomed else play_zoom / 1.12
+		if ev.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+			var k := 1.12 if ev.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.12
+			zoom_px *= k
+			if not map_view:    # (the map view's wheel no longer becomes the play zoom: leaving the map it stayed zoomed far out)
+				play_zoom = clampf(zoom_px if not _night_zoomed else play_zoom * k, 8.0, 84.0)    # (NIGHT CAMERA: the wheel moves the play zoom, not the attack's zoomed-out one)
 
 
 func Inventory_name(id: String) -> String:
@@ -2026,7 +2048,10 @@ func _extract(alive: bool) -> void:
 	if busy:
 		return
 	busy = true
-	audio.gate_sound()
+	if alive:
+		audio.gate_sound()
+	else:    # FEEL: no gate sound for a fall in the street, and a moment to see her go down before the cut
+		await get_tree().create_timer(1.2).timeout
 	var loot_got := {}
 	pack.close()
 	var join_text: String = people.settle(alive)    # RAIDS hook: does the survivor join (a free bed, alive, at the ring)
@@ -2106,6 +2131,9 @@ func _cut_out(lines: Array, truck: bool) -> void:
 	if t2 != null:
 		t2.kill()
 	cap_label.modulate.a = 0.0
+	var dip := create_tween()    # FEEL: black for an instant while the stage is swapped (the swap no longer pops in under the 60 % veil); `_cut_in` fades it back
+	dip.tween_property(fade, "color:a", 1.0, 0.12)
+	await dip.finished
 	cut_x = -1.0
 	cut_art.queue_redraw()
 
@@ -2857,7 +2885,9 @@ func _shoot_at(g, z, hit_p: float, dmg := 55.0) -> void:
 	if PawnNode.hanim:
 		fx.casing(g.x, g.y - 0.15, ang, false)    # ROUND 11: the brass of the guard's shot lies on the deck
 	fx.tracer(mx, my, tx, ty)
-	fx.combat.shot_sound({"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y})
+	var se := {"type": "shot", "weapon": "rifle", "gun": "rifle", "x": g.x, "y": g.y}
+	fx.combat.shot_sound(se)
+	audio.on_event(se)    # FEEL: the guard's and the ally's shots get the same echo tail as hers (prison_audio.gd `_tail`)
 	shots_fired += 1
 	if args.has("shotlog"):
 		print("SHOTDBG ", g.id, " hit ", hit, " p ", hit_p, " z.hp ", z.hp, " state ", z.state, " d ", Vector2(g.x, g.y).distance_to(Vector2(z.x, z.y)))
@@ -3176,10 +3206,12 @@ func _allies(dt: float) -> void:
 			g.y = me.y
 			m.path = []
 			continue
-		if dist > 1.1:
+		var cut: bool = bool(m.get("no_slot", false)) and at.distance_to(me) < 1.4    # FEEL: her spot is in a wall (a corridor, a doorway): stop beside her, not on top of her
+		if dist > (0.5 if g.moving else 1.4) and not cut:    # FEEL: walk on to the spot once going, set off only when it has moved well away (no stop-start shuffle at her heels)
 			if float(m.repath) <= 0.0:
 				m.repath = 0.4
 				m.path = doors.path(at, slot)    # DOORS: through the shut doors (an ally opens the one it comes to)
+				m.no_slot = m.path.is_empty()
 				if m.path.is_empty():
 					m.path = doors.path(at, me)
 				m.pi = 0
