@@ -22,7 +22,7 @@ const RES_COL := {"food": Color("#e08a5a"), "water": Color("#6fb4e8"), "ammo": C
 const RES_USE := {
 	"ammo": "Ruth's rounds, for her own gun and her raid kit. Guards, allies and companions fire for free. A reloading bench with a mechanic turns scrap into rounds every day.",
 	"meds": "Treats bites and revives people. An infirmary with a medic makes a little from scrap.",
-	"scrap": "Pays for projects and fence repairs. A mechanic turns it into ammo.",
+	"scrap": "Pays for projects and fence repairs. The reloading bench turns it into rounds. A Salvage yard with a hauler makes a little each day.",
 	"parts": "Needed by the pump, generator and radio projects. Found in raids on garages.",
 	"fuel": "Burned by the generator once it is built (1 a day). Found in raids on petrol stations.",
 }
@@ -32,7 +32,7 @@ const RES_LOW := {
 	"water": "When low: build the well or pump, or raid for bottled water.",
 	"ammo": "When low: build the reloading bench and put a mechanic on it (scrap to rounds), or raid a police station.",
 	"meds": "When low: raid a pharmacy or hospital, or staff the infirmary.",
-	"scrap": "When low: raid industrial places and strip what you find.",
+	"scrap": "When low: raid a hardware store or industrial place, or build the Salvage yard for a steady trickle.",
 	"parts": "When low: raid a garage.",
 	"fuel": "When low: raid a petrol station before the generator stops.",
 	"people": "When over the beds: build a dormitory, or morale falls.",
@@ -554,7 +554,9 @@ func _res_tip(r: String, rep: Dictionary, stock: float, cap: int, days: float) -
 		elif r == "fuel":
 			t += "\nMade: nothing. Fuel only comes from raids on petrol stations."
 		var per := float(econ.cfg.per_person.get(r, 0.0))
-		if r == "ammo":
+		if r == "scrap":
+			t += "\nUsed: by projects, repairs and the reloading bench (-%d a day). The Salvage yard%s." % [roundi(float(e.cons)), " is not built yet" if econ.tier("yard") == 0 else " makes it"]
+		elif r == "ammo":
 			t += "\nUsed: only by Ruth, in raids and at the base (the kit you take out is not counted)."
 		elif r == "fuel":
 			t += "\nUsed: -%d a day by the generator%s" % [roundi(float(e.cons)), "" if econ.tier("power") >= 1 else " (not built yet)"]

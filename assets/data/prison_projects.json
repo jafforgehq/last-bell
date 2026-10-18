@@ -20,8 +20,8 @@
   },
   "generator_fuel": 1.0,
   "light_hit_bonus": 0.12,
-  "building_role": {"bench": "mechanic", "water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic", "convoy": "mechanic"},
-  "site": {"bench": "bench1", "water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores", "convoy": "truck"},
+  "building_role": {"yard": "hauler", "bench": "mechanic", "water": "hauler", "garden": "gardener", "kitchen": "cook", "infirmary": "medic", "dormitory": "hauler", "power": "mechanic", "fence": "mechanic", "radio": "mechanic", "convoy": "mechanic"},
+  "site": {"yard": "stores", "bench": "bench1", "water": "well", "garden": "garden1", "kitchen": "stove", "infirmary": "bed", "dormitory": "bed", "power": "bench1", "fence": "bench2", "radio": "stores", "convoy": "truck"},
   "crew_role": {"mia": "cook", "marcus": "gardener", "nia": "gardener", "ana": "medic", "hector": "mechanic", "tomas": "mechanic", "owen": "hauler", "ike": "hauler", "walt": "guard", "dez": "guard", "rae": "guard", "sol": "guard", "june": "guard", "cole": "guard", "bea": "guard", "hal": "gardener", "wren": "mechanic"},
   "production": {
     "food": [
@@ -32,11 +32,14 @@
     ],
     "ammo": [
       {"amt": 0.0}, {"amt": 10.0}, {"amt": 16.0}, {"amt": 24.0}
+    ],
+    "scrap": [
+      {"amt": 0.0}, {"amt": 5.0}, {"amt": 8.0}, {"amt": 10.0}
     ]
   },
   "ammo_scrap_per_round": 0.4,
-  "production_role": {"food": "gardener", "water": "hauler", "ammo": "mechanic"},
-  "production_building": {"food": "garden", "water": "water", "ammo": "bench"},
+  "production_role": {"food": "gardener", "water": "hauler", "ammo": "mechanic", "scrap": "hauler"},
+  "production_building": {"food": "garden", "water": "water", "ammo": "bench", "scrap": "yard"},
   "loot": {
     "house": {"food": 12, "water": 10, "scrap": 6, "meds": 1},
     "shop": {"food": 22, "water": 18, "scrap": 2},
@@ -67,6 +70,9 @@
     {"id": "bench1", "gives": "Ruth's own rounds: a mechanic loads 10 rounds a day from scrap (2 scrap for 5 rounds). Guards, allies and raid companions never use them.", "building": "bench", "tier": 1, "name": "Reloading bench", "cost": {"scrap": 12}, "labor": 20, "requires": [], "effect": {"note": "scrap into Ruth's rounds each day"}},
     {"id": "bench2", "gives": "A press and a better mould: 16 rounds a day.", "building": "bench", "tier": 2, "name": "Bench press", "cost": {"scrap": 24, "parts": 2}, "labor": 25, "requires": [], "effect": {}},
     {"id": "bench3", "gives": "A second bench in the workshop: 24 rounds a day.", "building": "bench", "tier": 3, "name": "Reloading line", "cost": {"scrap": 40, "parts": 4}, "labor": 30, "requires": [], "effect": {}},
+    {"id": "yard1", "gives": "A steady trickle of scrap: a hauler sorts the junk the crew clears, about 5 scrap a day. Raids on hardware stores and garages stay the way to big amounts, parts and fuel.", "building": "yard", "tier": 1, "name": "Salvage yard", "cost": {"scrap": 15}, "labor": 20, "requires": [], "effect": {"note": "a little scrap each day"}},
+    {"id": "yard2", "gives": "Sorting racks and a cutting table: about 8 scrap a day.", "building": "yard", "tier": 2, "name": "Sorting racks", "cost": {"scrap": 25, "parts": 1}, "labor": 25, "requires": [], "effect": {}},
+    {"id": "yard3", "gives": "A cutting line and a scrap press: about 10 scrap a day, the most a yard makes.", "building": "yard", "tier": 3, "name": "Scrap press", "cost": {"scrap": 40, "parts": 2}, "labor": 30, "requires": [], "effect": {}},
     {"id": "water1", "gives": "Fresh water every day (a hauler works the pump). Without water people leave within days.", "building": "water", "tier": 1, "name": "Well pump and rain barrels", "cost": {"scrap": 20}, "labor": 30, "requires": [], "effect": {"note": "water from the well each day, and more while it rains"}},
     {"id": "garden1", "gives": "Grows the food everyone eats (a gardener tends it). Hunger drags morale down fast.", "building": "garden", "tier": 1, "name": "Garden beds", "cost": {"scrap": 20}, "labor": 30, "requires": [], "effect": {}},
     {"id": "kitchen1", "gives": "A cook turns food into hot meals: morale up every day, and the larder stops half the spoilage.", "building": "kitchen", "tier": 1, "name": "Kitchen and larder", "cost": {"scrap": 25}, "labor": 30, "requires": [], "effect": {"spoil": 0.5, "cap": {"food": 40}, "note": "meals raise morale"}},

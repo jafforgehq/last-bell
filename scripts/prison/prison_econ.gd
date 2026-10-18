@@ -334,6 +334,12 @@ func ammo_plan() -> Dictionary:
 	return {"made": made, "scrap": made * per}
 
 
+## What the salvage yard sorts out at the next day change: whole scrap. Needs a hauler alive; stops at the scrap cap.
+func scrap_plan() -> float:
+	var room := maxf(0.0, float(caps().get("scrap", 250.0)) - float(game.stores.get("scrap", 0.0)))
+	return maxf(0.0, floorf(minf(_produce("scrap", false), room)))
+
+
 func _consume(r: String) -> float:
 	var n: float = float(people()) * float(cfg.per_person[r])
 	if r == "food" and game.arc != null:
@@ -374,6 +380,7 @@ func daily_report() -> Dictionary:
 			nxt = {"res": r, "days": days}
 	var am := ammo_plan()    # AMMO is Ruth's alone: the bench makes it, guards, allies and companions never use it
 	res["ammo"] = {"stock": float(game.stores.get("ammo", 0.0)), "prod": am.made, "cons": 0.0, "spoil": 0.0, "net": am.made, "days": -1.0}
+	res["scrap"] = {"stock": float(game.stores.get("scrap", 0.0)), "prod": scrap_plan(), "cons": float(am.scrap), "spoil": 0.0, "net": scrap_plan() - float(am.scrap), "days": -1.0}    # (the yard makes it, the bench uses it)
 	return {"day": day, "stage": _stage, "morale": morale, "people": people(), "beds": beds(), "power_on": _power_now(), "res": res, "next_shortage": nxt, "last": last}
 
 
@@ -497,6 +504,8 @@ func tick_day() -> void:
 			s["fuel"] = float(s.get("fuel", 0.0)) - _fuel_burn()
 		else:
 			shortage.emit("fuel")
+	var yard := scrap_plan()    # the salvage yard first, then the bench draws on what is there
+	s["scrap"] = float(s.get("scrap", 0.0)) + yard
 	var am := ammo_plan()    # the reloading bench: scrap into Ruth's rounds
 	s["scrap"] = float(s.get("scrap", 0.0)) - float(am.scrap)
 	s["ammo"] = float(s.get("ammo", 0.0)) + float(am.made)
@@ -510,7 +519,7 @@ func tick_day() -> void:
 			s[r] = float(cp[r])
 	if game.cleaner != null:
 		game.cleaner.daily()    # TRASH hook: a dirty dormitory makes someone ill
-	dawn_log = {"day": day, "ate": {"food": float(f.food.cons), "water": float(f.water.cons)}, "made": {"food": float(f.food.prod), "water": float(f.water.prod), "ammo": float(am.made)}, "built": _built_today.duplicate(), "spoiled": spoiled}
+	dawn_log = {"day": day, "ate": {"food": float(f.food.cons), "water": float(f.water.cons)}, "made": {"food": float(f.food.prod), "water": float(f.water.prod), "ammo": float(am.made), "scrap": yard}, "built": _built_today.duplicate(), "spoiled": spoiled}
 	_built_today.clear()
 	morning_new = true
 	_morale(short)

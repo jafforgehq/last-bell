@@ -1302,3 +1302,26 @@ func test_nobody_but_ruth_spends_the_ammo_stock() -> void:
 	var sq := FileAccess.get_file_as_string("res://scripts/prison/prison_squad.gd")
 	check(not sq.contains("take_float(\"ammo\""), "companions never take rounds from the pack")
 	check(not FileAccess.get_file_as_string("res://scripts/prison/prison_game.gd").contains("GUARD_SHOT_COST"), "no guard shot has a price")
+
+
+## The SALVAGE YARD (prison_econ.gd scrap_plan): a capped trickle of scrap (5, 8, 10 a day by tier) that needs a hauler alive and stops at the scrap cap.
+func test_the_salvage_yard_makes_a_capped_trickle_of_scrap_and_only_with_a_hauler() -> void:
+	var Econ = load("res://scripts/prison/prison_econ.gd")
+	var game := {"stores": {"ammo": 5.0, "scrap": 30.0, "parts": 10.0}, "crew": {"members": [{"def": {"id": "ike", "name": "Ike"}, "state": "post"}]}, "squad": null, "arc": null, "base": null}
+	var e = Econ.new(game)
+	eq(e.scrap_plan(), 0.0, "no yard built: nothing is made")
+	check(float(e.defs.yard1.cost.scrap) <= 20.0 and e.defs.yard1.cost.size() == 1, "the first tier is scrap only and cheap enough for day 2 to 3")
+	check(e.cfg.stages.all(func(s): return not s.tiers.has("yard")), "no stage asks for the yard")
+	e.debug_build("yard1")
+	eq(e.scrap_plan(), 5.0, "tier 1 with a hauler: 5 scrap a day")
+	e.debug_build("yard2")
+	eq(e.scrap_plan(), 8.0, "tier 2: 8")
+	e.debug_build("yard3")
+	eq(e.scrap_plan(), 10.0, "tier 3: 10")
+	game.stores.scrap = 245.0
+	eq(e.scrap_plan(), 5.0, "the cap (250) limits it")
+	game.stores.scrap = 250.0
+	eq(e.scrap_plan(), 0.0, "at the cap nothing is made")
+	game.stores.scrap = 30.0
+	game.crew.members = [{"def": {"id": "mia", "name": "Mia"}, "state": "post"}]    # a cook
+	eq(e.scrap_plan(), 0.0, "without a hauler nothing is made")
