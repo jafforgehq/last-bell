@@ -232,6 +232,53 @@ func test_a_companion_keeps_a_spot_out_of_ruths_fire_and_holds_a_shot_past_a_fri
 	check(sq._in_fire(me, Vector2(14, 10.5), 0.35), "a spot where Ruth aims is in her line of fire")
 
 
+## LEASH (playtest: Ike "attacked 3 breachers on his own"): a companion beside Ruth lets a dead one beyond the leash go (it is in their shoot range but not within the leash), and a pike
+## never steps out to one that is not on Ruth (the old rule charged anything within 5 tiles of her).
+func test_a_companion_does_not_chase_a_dead_one_beyond_the_leash() -> void:
+	var g := _SquadGame.new()
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	var me := Vector2(10, 10)
+	var at := Vector2(12, 10)
+	check(Vector2(19, 10).distance_to(at) < float(sq.cfg.shoot_r), "the far one is within their shoot range")
+	check(not sq._may_engage(at, me, me, Vector2(19, 10), false), "9 tiles from Ruth, beyond the leash: let go")
+	check(sq._may_engage(at, me, me, Vector2(14, 12), false), "within the leash: shot")
+	check(sq._may_engage(Vector2(30, 10), me, me, Vector2(32, 10), false), "one that is on them, far off: shot (it threatens them)")
+	check(not sq._may_charge(at, me, Vector2(14.5, 10), false), "a pike does not walk out to one 4.5 tiles from Ruth")
+	check(sq._may_charge(at, me, Vector2(12, 11), false), "it steps up to one that is on Ruth")
+	check(not sq._may_charge(Vector2(20, 10), me, Vector2(12, 11), false), "not from beyond the leash")
+	var hold := Vector2(30, 30)
+	check(sq._may_engage(Vector2(30, 31), hold, me, Vector2(33, 30), false), "a hold keeps its leash round its own spot")
+	check(not sq._may_engage(Vector2(30, 31), hold, me, Vector2(38, 30), false), "and lets go of one beyond it")
+
+
+## LEASH: a special infected in sight is called out once ("Breacher!") and is never charged; it may be shot while they fall back.
+func test_a_companion_calls_out_a_special_and_never_charges_it() -> void:
+	var g := _SquadGame.new()
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	var m := {"p": {"x": 11.0, "y": 10.0}, "bark": "", "bark_t": 0.0}
+	var z := {"x": 12.0, "y": 10.5}
+	check(sq._call_special(m, z, "breacher"), "the first sight is called out")
+	eq(m.bark, "Breacher!", "the bark names it")
+	eq(sq.floaters.size(), 1, "and floats over their head")
+	check(not sq._call_special(m, z, "breacher"), "the same one is called only once")
+	check(not sq._may_charge(Vector2(11, 10), Vector2(10, 10), Vector2(12, 10.5), true), "a special on Ruth is not charged")
+	check(sq._may_engage(Vector2(11, 10), Vector2(10, 10), Vector2(10, 10), Vector2(18, 10), true), "it is shot at while in range")
+	eq(sq._eff_of("hold", false, true, false, false), "follow", "a special in sight sends even a hold back to Ruth")
+
+
+## LEASH: below `retreat_hp` or with `swarm_n` dead on them, every order falls back to Ruth (a hold too); a recall leaves a hold where it is.
+func test_a_hurt_companion_falls_back_whatever_the_order() -> void:
+	var g := _SquadGame.new()
+	var sq = load("res://scripts/prison/prison_squad.gd").new(g)
+	for cmd in ["follow", "hold", "scavenge", "spread"]:
+		eq(sq._eff_of(cmd, true, false, false, false), "follow", "hurt on %s: back to Ruth" % cmd)
+		eq(sq._eff_of(cmd, false, true, false, false), "follow", "swarmed on %s: back to Ruth" % cmd)
+	eq(sq._eff_of("hold", false, false, true, false), "hold", "a recall does not move a hold")
+	eq(sq._eff_of("hold", false, false, false, false), "hold", "a calm hold holds")
+	eq(sq._eff_of("scavenge", false, false, true, false), "follow", "a recalled scavenger comes back")
+	check(float(sq.cfg.retreat_hp) >= 0.39 and float(sq.cfg.retreat_hp) <= 0.41, "the line is about 40 percent")
+
+
 func test_the_prison_zones_look_is_saved_and_an_old_save_loads_half_clean() -> void:
 	var Clean = load("res://scripts/prison/prison_clean.gd")
 	var a = Clean.new(null)
