@@ -193,7 +193,7 @@
       "average": {"raids": 1.0, "loot": 0.8, "rescue_p": 0.25, "mend": 0.8, "spend": 1.0, "defense": 0.7},
       "expert": {"raids": 1.0, "loot": 1.0, "rescue_p": 0.4, "mend": 1.0, "spend": 1.0, "defense": 1.0}
     },
-    "start_people": 5,
+    "start_people": 3,
     "start_stores": {"food": 40, "water": 30, "ammo": 40, "meds": 3, "scrap": 24, "parts": 2, "fuel": 0},
     "raid_places": 3, "raid_death_p": 0.02, "raid_ammo": 6, "raid_kills": 5, "arc_start_day": 6, "scrap_reserve": 15, "bench_scrap": 20,
     "night": {"base_defense": 0.0, "guard_kills": 5.0, "ruth_kills": 28.0, "ammo_per_kill": 0.5, "hp_per_dead": 8.0, "wear": 0.6, "casualty_p": 0.2, "light_bonus": 0.12}
