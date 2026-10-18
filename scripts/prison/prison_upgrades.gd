@@ -380,7 +380,7 @@ func _ruth(dt: float) -> void:
 			continue
 		if not game._prompt.is_empty():
 			return
-		game._prompt = {"kind": "help", "label": "Hold E: help build %s (%d%%, about %.1f h left)" % [String(econ.defs[id].name), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor)), econ.eta_h(id)]}
+		game._prompt = {"kind": "help", "label": "Hold E  Help build %s (%d%%)" % [String(econ.defs[id].name), int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor))]}
 		if Input.is_key_pressed(KEY_E) or game.args.has("autohelp"):
 			econ.add_labor(id, dt * float(econ.cfg.work.ruth_rate))
 			game.run.sim.avatar.set_input(Vector2.ZERO, Vector2(s.anchor), false)

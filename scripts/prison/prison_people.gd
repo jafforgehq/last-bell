@@ -180,12 +180,12 @@ func prompt() -> Dictionary:
 			continue
 		_cur = e
 		if bool(s.locked):
-			return {"kind": "survivor_locked", "label": "Hold E: force the door to %s (%d%%)" % [String(s.name), int(100.0 * float(s.lock_t) / float(_c().survivor.lock_secs))]}
+			return {"kind": "survivor_locked", "label": "Hold E  Force %s's door (%d%%)" % [String(s.name), int(100.0 * float(s.lock_t) / float(_c().survivor.lock_secs))]}
 		var free: int = int(game.econ.beds().free)
 		var tt: String = game.arc.events.trait_text(String(s.name))    # TRAITS: who they are, before the player asks
-		var lbl := "E: ask %s (%s%s) to come with you%s" % [String(s.name), String(s.who.skill), "; " + tt if tt != "" else "", "" if free > 0 else "  (no free bed at the base!)"]
+		var lbl := "E  Recruit %s (%s%s)%s" % [String(s.name), String(s.who.skill), ", " + tt if tt != "" else "", "" if free > 0 else "  No free bed!"]
 		if bool(s.hurt):
-			lbl = "E: give %s a med (they are hurt)" % String(s.name)
+			lbl = "E  Give %s a med" % String(s.name)
 		return {"kind": "survivor", "label": lbl}
 	return {}
 

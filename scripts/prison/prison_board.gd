@@ -289,9 +289,9 @@ func prompt(me: Vector2) -> Dictionary:
 		return {}
 	for s in ["bench1", "bench2"]:
 		if me.distance_to(game.base.stations[s]) < REACH:
-			return {"kind": "bench", "label": "E: open the project board (workbench): spend scrap and parts"}
+			return {"kind": "bench", "label": "E  Open projects"}
 	if me.distance_to(BOARD_AT) < REACH:
-		return {"kind": "board", "label": "E: open the needs board (what we lack, where to raid)"}
+		return {"kind": "board", "label": "E  Open needs board"}
 	return {}
 
 

@@ -348,7 +348,7 @@ func _dispatch(dt: float) -> void:
 func prompt(me: Vector2) -> Dictionary:
 	for s in spots:
 		if float(s.dirt) > PILE and (s.at as Vector2).distance_to(me) < 2.2:
-			return {"kind": "trash", "label": "E: clear the trash"}
+			return {"kind": "trash", "label": "E  Clear trash"}
 	return {}
 
 

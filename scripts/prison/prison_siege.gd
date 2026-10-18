@@ -817,9 +817,9 @@ func _repair(dt: float) -> void:
 	var holding: bool = (Input.is_key_pressed(KEY_E) or game.args.has("autorepair")) and not game.busy
 	var have := float(game.stores.scrap) >= 1.0
 	if not have:
-		game._prompt = {"kind": "repair", "label": "%s %d%%: no scrap in the stores" % [String(best.name).capitalize(), pct]}
+		game._prompt = {"kind": "repair", "label": "%s %d%%: no scrap" % [String(best.name).capitalize(), pct]}
 		return
-	game._prompt = {"kind": "repair", "label": "Hold E: repair %s (%d%%), 1 scrap per %d hp" % [String(best.name), pct, int(HP_PER_SCRAP)]}
+	game._prompt = {"kind": "repair", "label": "Hold E  Repair %s (%d%%)" % [String(best.name), pct]}
 	if holding:
 		_rep_acc += _mend(best, REPAIR_HPS * dt)
 		while _rep_acc >= HP_PER_SCRAP and float(game.stores.scrap) >= 1.0:

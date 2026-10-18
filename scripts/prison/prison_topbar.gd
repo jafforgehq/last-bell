@@ -13,6 +13,7 @@ const Icons := preload("res://scripts/prison/prison_icons.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
 const PHud := preload("res://scripts/prison/prison_hud.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
+const Prefs := preload("res://scripts/prefs.gd")
 
 const RES := ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
 const RES_NAME := {"food": "Food", "water": "Water", "ammo": "Ammo", "meds": "Meds", "scrap": "Scrap", "parts": "Parts", "fuel": "Fuel"}
@@ -37,11 +38,15 @@ const RES_LOW := {
 	"morale": "When low: fix hunger and thirst, tidy the base, build comforts; people leave below the limit.",
 	"noise": "When loud: stop shooting, use the knife (F) or move away.",
 }
-const ROW_ECON := ["clock", "speed", "food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
-const ROW_ECON2 := ["people", "morale", "stage", "attack", "fence", "noise", "convoy"]
+## UI POLISH A: the bar keeps the chips a player checks most (the clock, food, water, ammo, people, morale, the next attack; in a raid the pack, ammo, meds and the need).
+## The rest (EXTRA_*) sit in the hover text of the "More" chip and come back on the second row, pulsing, only while they warn (a stock running out, the fence hurt, noise loud).
+const ROW_ECON := ["clock", "food", "water", "ammo", "people", "morale", "attack", "more"]
+const EXTRA_ECON := ["meds", "scrap", "parts", "fuel", "fence", "noise", "convoy", "stage"]
 const ROW_CLEAR := ["clock", "zones", "party", "dead"]
 const ROW_CLEAR2 := ["c_ammo", "c_meds", "nextzone", "noise"]
-const ROW_RAID := ["clock", "dusk", "weather", "pack", "r_ammo", "r_meds", "need", "exits", "noise"]
+const ROW_RAID := ["clock", "dusk", "pack", "r_ammo", "r_meds", "need", "more"]
+const EXTRA_RAID := ["noise", "weather", "exits"]
+const EXTRA_NAME := {"meds": "Meds", "scrap": "Scrap", "parts": "Parts", "fuel": "Fuel", "fence": "", "noise": "Noise", "convoy": "", "stage": "Stage", "weather": "Weather", "exits": ""}
 const DIM := Color("#8d927f")
 
 var game
@@ -68,6 +73,8 @@ var _clock_sub: Label
 var _mood := []    # [time, morale] samples for the trend arrow
 var _fight_t := 0.0
 var _names := false
+var _top := ""    # the top objective's words, to see a new one arrive
+var _flash_t := 0.0    # a new top objective while folded: the tracker glows for this long (s)
 
 
 class IconBox extends Control:
@@ -134,15 +141,20 @@ func _init(g) -> void:
 	vb.add_child(row1)
 	vb.add_child(row2)
 	_build_clock()
-	_chip("speed", row1, 24, false)    # TIME hook
+	_chip("speed", row1, 24, false)    # TIME hook (never shown now: the clock says the speed, the More chip how to change it)
 	_chip("dusk", row1, 60, false)
-	for k in ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]:
+	for k in ["food", "water", "ammo"]:
 		_chip(k, row1, 46, true)
+	for k in ["people", "morale", "attack"]:
+		_chip(k, row1, 40, false)
 	for k in ["zones", "party", "dead"]:
 		_chip(k, row1, 40, false)
-	for k in ["weather", "pack", "r_ammo", "r_meds", "need", "exits"]:
+	for k in ["pack", "r_ammo", "r_meds", "need"]:
 		_chip(k, row1, 40, false)
-	for k in ["people", "morale", "stage", "attack", "fence", "convoy"]:
+	_chip("more", row1, 0, true)
+	for k in ["meds", "scrap", "parts", "fuel"]:
+		_chip(k, row2, 46, true)
+	for k in ["fence", "convoy", "stage", "weather", "exits"]:
 		_chip(k, row2, 40, false)
 	for k in ["c_ammo", "c_meds", "nextzone"]:
 		_chip(k, row2, 40, false)
@@ -274,8 +286,9 @@ func _build_tracker() -> void:
 	tr_head.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tr_head.gui_input.connect(func(ev):
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			tr_folded = not tr_folded)
+			fold())
 	vb.add_child(tr_head)
+	tr_folded = Prefs.on("ui", "objectives_folded")
 	tr_body = VBoxContainer.new()
 	tr_body.add_theme_constant_override("separation", 3)
 	vb.add_child(tr_body)
@@ -285,9 +298,16 @@ func _build_tracker() -> void:
 
 func key(ev: InputEvent) -> bool:
 	if ev is InputEventKey and ev.pressed and not ev.echo and (ev as InputEventKey).keycode == KEY_O and not game.board.is_open():
-		tr_folded = not tr_folded
+		fold()
 		return true
 	return false
+
+
+## O or a click on the header: fold the Objectives to their top line, or open them again. Kept in the settings (prefs.cfg), not the save: it is how the player likes the screen.
+func fold() -> void:
+	tr_folded = not tr_folded
+	_flash_t = 0.0
+	Prefs.set_value("ui", "objectives_folded", tr_folded)
 
 
 ## The mouse is over the bar or the tracker: the gun must not fire through it.
@@ -315,6 +335,14 @@ func frame(dt: float) -> void:
 			var q := kv.split("=")
 			if q.size() == 2:
 				game.stores[q[0]] = float(q[1])
+	if game.args.has("objfold") and game.frames == 4:    # staging: the Objectives folded, without touching the setting
+		tr_folded = true
+	if _flash_t > 0.0:    # a new objective while folded: a warm glow that fades (steady, not pulsing, with Reduce flashes)
+		_flash_t = maxf(0.0, _flash_t - dt)
+		var k := minf(1.0, _flash_t / 0.6) * (1.0 if Prefs.on("ui", "reduce_flashes") else 0.6 + 0.4 * sin(_t * 9.0))
+		tracker.modulate = Color(1, 1, 1).lerp(Color(1.5, 1.3, 0.75), maxf(0.0, k))
+	else:
+		tracker.modulate = Color.WHITE
 	if game.args.has("hover") and game.frames == 20:
 		hover = String(game.args.hover)
 		_show_tip()
@@ -372,10 +400,9 @@ func _refresh() -> void:
 	var mode: String = game.mode
 	var managed: bool = game.phase == "managed" and mode == "base"
 	var clear: bool = game.phase == "clear" and mode == "base"
-	var show: Array = ROW_RAID if mode == "raid" else (ROW_ECON + ROW_ECON2 if managed else ROW_CLEAR + ROW_CLEAR2)
+	var show: Array = ROW_RAID if mode == "raid" else (ROW_ECON if managed else ROW_CLEAR + ROW_CLEAR2)
 	for k in chips:
 		(chips[k].pc as Control).visible = show.has(k)
-	row2.visible = mode != "raid"
 	_clock()
 	_time_chips()
 	var rep: Dictionary = game.econ.daily_report() if game.econ != null else {}
@@ -388,6 +415,15 @@ func _refresh() -> void:
 	else:
 		_raid_chips(rep)
 	_noise_chip()
+	if managed or mode == "raid":
+		var extra: Array = EXTRA_RAID if mode == "raid" else EXTRA_ECON
+		for k in extra:    # a chip off the bar comes back while it warns
+			(chips[k].pc as Control).visible = String(chips[k].state) != "ok" and not (k == "convoy" and (game.arc == null or not game.arc.started))
+		_more_chip(extra)
+	var any2 := false
+	for c in row2.get_children():
+		any2 = any2 or (c as Control).visible
+	row2.visible = any2
 	_mood_sample()
 	_tracker(managed or clear or mode == "raid")
 	if hover != "" and tip.visible:
@@ -405,6 +441,8 @@ func _clock() -> void:
 		var dn: int = game.econ.day
 		var on_cd: bool = arc != null and dn == arc.convoy_day()
 		_clock_sub.text = ("Day %d of %d, %s" % [dn, arc.days(), "CONVOY" if on_cd else period]) if arc != null else "Day %d, %s" % [dn, period]
+		if game.speed > 1 and game.mode == "base":    # (the speed chip's word, now on the clock)
+			_clock_sub.text += ", %dx" % game.speed
 		_clock_sub.add_theme_color_override("font_color", Hud.ACCENT if on_cd else DIM)
 	else:
 		_clock_sub.text = "Clear phase"
@@ -572,6 +610,26 @@ func _econ_row2(rep: Dictionary) -> void:
 	_convoy_chip()
 
 
+## The "More" chip: how many values are off the bar, and every one of them in its hover text.
+func _more_chip(extra: Array) -> void:
+	var lines: Array = []
+	if game.mode == "base":
+		lines.append("Speed %dx (F1-F3)" % game.speed)
+	var hidden := 0
+	for k in extra:
+		if k == "convoy" and (game.arc == null or not game.arc.started):
+			continue
+		var c: Dictionary = chips[k]
+		var nm := String(EXTRA_NAME[k])
+		var main := (c.main as Label).text
+		lines.append(("%s %s  %s" % ["" if main.begins_with(nm) else nm, main, (c.sub as Label).text]).strip_edges())
+		if not (c.pc as Control).visible:
+			hidden += 1
+	if game.mode == "base":
+		lines.append("Click: the needs board. B: the Base screen.")
+	_put("more", "down", Hud.INK2, "More", "+%d" % hidden, DIM, "", "ok", "\n".join(lines))
+
+
 func _trend() -> float:
 	if _mood.size() < 2:
 		return 0.0
@@ -592,11 +650,6 @@ func _mood_sample() -> void:
 func _noise_chip() -> void:
 	if game.noise == null or not chips.has("noise"):
 		return
-	var want: Control = row1 if game.mode == "raid" else row2    # (the raid has one row)
-	var pc: Control = chips.noise.pc
-	if pc.get_parent() != want:
-		pc.get_parent().remove_child(pc)
-		want.add_child(pc)
 	var c: Array = game.noise.chip()
 	var st := String(c[2])
 	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM), "", st, String(c[3]) + "\n" + String(RES_LOW.noise), float(c[4]), Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK))
@@ -775,21 +828,22 @@ func objectives() -> Array:
 		var hint: String = game.loot.hint()
 		if not nd.is_empty():
 			var have := int(Inventory.units(game.pack.grid, String(nd.res)))
-			out.append({"t": "Search %s for %s (carrying %d, short %d)" % ["the marked buildings" if hint != "" else "buildings", nd.res, have, int(nd.get("short", 0))], "done": have >= int(nd.get("short", 1))})
+			out.append({"t": "Find %s: %d of %d" % [nd.res, have, int(nd.get("short", 0))], "done": have >= int(nd.get("short", 1)),
+				"tip": "Search %s for %s. Carrying %d, short %d." % ["the marked buildings" if hint != "" else "buildings", nd.res, have, int(nd.get("short", 0))]})
 		else:
-			out.append({"t": "Search buildings for loot", "done": false})
-		out.append({"t": "Reach an exit with the pack (%d marked)" % game.exits.size(), "done": false})
+			out.append({"t": "Search buildings", "done": false, "tip": "Search buildings for loot."})
+		out.append({"t": "Reach an exit (%d)" % game.exits.size(), "done": false, "tip": "Reach an exit with the pack: %d are marked." % game.exits.size()})
 		return out
 	if game.phase == "clear":
 		var n: int = game._cleared_n()
 		var total: int = Base.ZONES.size()
 		var nz := _next_zone()
-		out.append({"t": "Clear the %d zones (%d/%d)%s" % [total, n, total, (" - next: " + String(Base.ZONES[nz].name)) if nz >= 0 else ""], "done": n == total})
+		out.append({"t": "Clear zones %d/%d%s" % [n, total, (": " + String(Base.ZONES[nz].name)) if nz >= 0 else ""], "done": n == total, "tip": "Clear the %d zones. %s" % [total, ("Next: " + String(Base.ZONES[nz].name) + ".") if nz >= 0 else ""]})
 		out.append({"t": "Secure the gate", "done": false})
 		return out
 	var nd2: Dictionary = econ.needs()
 	if not nd2.is_empty() and float(nd2.get("days", -1.0)) >= 0.0:
-		out.append({"t": "Fix %s: %.1f days left - raid a %s" % [nd2.res, float(nd2.days), game.econ.place_word(String(nd2.place))], "done": false, "bad": true})
+		out.append({"t": "Fix %s: %.1f days" % [nd2.res, float(nd2.days)], "done": false, "bad": true, "tip": "%s runs out in %.1f days. Raid a %s." % [String(nd2.res).capitalize(), float(nd2.days), game.econ.place_word(String(nd2.place))]})
 	var arc_lines: Array = game.arc.objectives() if game.arc != null else []    # ARC hook: the phase and the convoy's list
 	out.append_array(arc_lines.filter(func(l): return bool(l.get("head", false))))
 	var evac: bool = game.arc != null and game.arc.started and String(game.arc.phase().id) == "evacuate"
@@ -802,33 +856,34 @@ func objectives() -> Array:
 		var st: String = econ.state(String(id))
 		var nm := String(econ.defs[id].name)
 		if st == "building" or st == "queued":
-			out.append({"t": "Building %s: %d%%" % [nm, int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor))], "done": false})
+			out.append({"t": "Build %s: %d%%" % [nm, int(100.0 * float(econ.st[id].done) / float(econ.defs[id].labor))], "done": false})
 		else:
 			var can: Dictionary = econ.can_start(String(id))
 			if bool(can.ok):
-				out.append({"t": "Start %s at the workbench (%s)" % [nm, _cost_text(String(id))], "done": false})
+				out.append({"t": "Start %s at the bench" % nm, "done": false, "tip": "Start %s at the workbench. It costs %s." % [nm, _cost_text(String(id))]})
 			else:
 				var miss: Array = []
 				for k in (can.missing as Dictionary):
 					miss.append("%s %d" % [k, int(can.missing[k])])
-				out.append({"t": "Build %s (needs %s)%s" % [nm, _cost_text(String(id)), (" - short " + ", ".join(miss)) if not miss.is_empty() else ""], "done": false})
+				out.append({"t": "Build %s%s" % [nm, (": short " + ", ".join(miss)) if not miss.is_empty() else ""], "done": false,
+					"tip": "Build %s: it needs %s.%s" % [nm, _cost_text(String(id)), (" Short " + ", ".join(miss) + ".") if not miss.is_empty() else ""]})
 		shown += 1
 		if shown >= (1 if evac else 2):
 			break
 	if not game.crew_full():
 		var rs: int = game.people.rescued
-		out.append({"t": "Rescue survivors on raids (%d/6)" % mini(rs, 6), "done": rs >= 6})
+		out.append({"t": "Rescue survivors %d/6" % mini(rs, 6), "done": rs >= 6, "tip": "Survivors are found and rescued on raids."})
 	var sg = game.siege
 	var nn: int = sg.night if sg.attacking else sg.nights_started + 1
 	if sg.attacking or game.arc.is_horde_night(nn):
 		out.append({"t": "Survive night %d" % nn, "done": false})
 	else:
-		out.append({"t": "Quiet nights: raid and build before the horde of night %d" % game.arc.next_horde_night(nn), "done": false})
+		out.append({"t": "Prepare for night %d" % game.arc.next_horde_night(nn), "done": false, "tip": "Quiet nights: raid and build before the horde of night %d." % game.arc.next_horde_night(nn)})
 	var m: float = econ.morale
-	out.append({"t": "%s morale above 60 (now %d)" % ["Keep" if m >= 60.0 else "Raise", int(m)], "done": m >= 60.0})
+	out.append({"t": "Morale above 60 (%d)" % int(m), "done": m >= 60.0, "tip": "%s morale above 60. It is %d now." % ["Keep" if m >= 60.0 else "Raise", int(m)]})
 	var bd: Dictionary = econ.beds()
 	if int(bd.free) < 0 and out.size() < 5:
-		out.append({"t": "More people than beds: build a dormitory", "done": false, "bad": true})
+		out.append({"t": "Build a dormitory", "done": false, "bad": true, "tip": "More people than beds: build a dormitory."})
 	return out.slice(0, 5)
 
 
@@ -875,20 +930,28 @@ func _tracker(on: bool) -> void:
 				_fight_t = 3.0
 				break
 	var items: Array = objectives()
-	var compact := _fighting() and not tr_folded
+	var compact := _fighting() or tr_folded    # folded or in a fight: one line, the top objective
+	var open: Array = items.filter(func(it): return not bool(it.done) and not bool(it.get("head", false)))    # (the arc's phase line is a heading, not a task)
+	var top_items: Array = open.slice(0, 1) if not open.is_empty() else items.slice(0, 1)
+	if compact:
+		items = top_items
+	var top := String(top_items[0].t) if not top_items.is_empty() else ""
+	for d in "0123456789":    # (a count or a percent going up is not a new objective)
+		top = top.replace(d, "")
+	if top != _top:
+		if _top != "" and tr_folded:
+			_flash_t = 2.5
+		_top = top
 	var sig := "%s|%s|%s" % [tr_folded, compact, str(items)]
-	tr_head.text = "OBJECTIVES  [O]%s" % ("   +" if tr_folded else "")
+	tr_head.text = "OBJECTIVES  [O]%s" % ("  +" if tr_folded else "")
 	if sig == _sig:
 		return
 	_sig = sig
 	for c in tr_body.get_children():
 		tr_body.remove_child(c)
 		c.queue_free()
-	tr_body.visible = not tr_folded
 	var k := 0
 	for it in items:
-		if compact and k >= 1:
-			break
 		k += 1
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 6)
@@ -897,6 +960,9 @@ func _tracker(on: bool) -> void:
 		hb.add_child(ib)
 		var l := _lab(String(it.t), 14, DIM if bool(it.done) else (Hud.INK if k == 1 else Hud.INK2), false)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if String(it.get("tip", "")) != "":    # the detail the short line left out, on hover
+			l.mouse_filter = Control.MOUSE_FILTER_PASS
+			l.tooltip_text = String(it.tip)
 		l.custom_minimum_size.x = 276
 		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(l)

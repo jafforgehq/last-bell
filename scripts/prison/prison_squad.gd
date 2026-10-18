@@ -978,7 +978,7 @@ func prompt() -> Dictionary:
 	if dn == null:
 		return {}
 	var meds: float = float(game.pack.inv.meds_available(game.run.avatar_p)) if game.pack.inv != null else 0.0
-	return {"kind": "revive", "label": ("Hold E: revive %s (1 med)" % String(dn.name)) if meds >= 1.0 else "%s is down. No meds to revive." % String(dn.name)}
+	return {"kind": "revive", "label": ("Hold E  Revive %s (1 med)" % String(dn.name)) if meds >= 1.0 else "%s is down. No meds to revive." % String(dn.name)}
 
 
 func _revive(dt: float, me: Vector2) -> void:
