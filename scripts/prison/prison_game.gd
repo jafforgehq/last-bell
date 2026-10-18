@@ -984,6 +984,8 @@ func _enter_base() -> void:
 		siege = Siege.new(self)    # SIEGE hook (kept over raids: fence hp, night count)
 	if not clear:
 		siege.setup()
+		if cleaner != null and Clean.pending.is_empty():
+			Clean.pending = {"zc": cleaner.zc, "kept": cleaner.kept}    # (back from a raid: the zones' look stays as it was; the piles start again as before)
 		cleaner = Clean.new(self)
 		cleaner.setup()
 		if barks == null:

@@ -32,6 +32,10 @@ var T := PackedByteArray()
 var GR := PackedByteArray()
 var lanes: Array = []
 var seed_i := 1
+var zc: Array = []    # LOOK: each zone's look 0..1 and its homely touches, the arrays of prison_clean.gd (empty in the clear phase: all dirty)
+var home: Array = []
+var dirt_nodes: Array = []
+var home_nodes: Array = []
 
 
 static func install(w, the_base, seed_v: int) -> void:
@@ -78,6 +82,18 @@ static func install(w, the_base, seed_v: int) -> void:
 				var wc := DrawNode.new()
 				wc.painter = Callable(p, "_walls").bind(cx, cy)
 				caps.add_child(wc)
+	if the_base != null:    # LOOK: one dirt layer (z 1, over the floors) and one homely layer (z 3, over the tables and the wall tops) per zone, redrawn by `refresh`
+		for zi in the_base.ZONES.size():
+			var dn := DrawNode.new()
+			dn.z_index = 1
+			dn.painter = Callable(p, "_zone_dirt").bind(zi)
+			w.add_child(dn)
+			p.dirt_nodes.append(dn)
+			var hn := DrawNode.new()
+			hn.z_index = 3
+			hn.painter = Callable(p, "_zone_home").bind(zi)
+			w.add_child(hn)
+			p.home_nodes.append(hn)
 
 
 # ------------------------------------------------------------------ helpers --
@@ -136,6 +152,8 @@ func _ground(c: CanvasItem, cx: int, cy: int) -> void:
 			var fx := float(x)
 			var fy := float(y)
 			var o := Vector2(_r(fx, fy, 1), _r(fx, fy, 2))
+			if base != null and (t == G_SIDEWALK or t == G_ASPHALT) and base.zone_at(fx + 0.5, fy + 0.5) >= 0:
+				continue    # (inside a zone the stains and oil are the zone's dirt: `_ground_dirt`)
 			match t:
 				G_ASPHALT:
 					if _in_lane(fx + 0.5, fy + 0.5):
@@ -347,12 +365,7 @@ func _floor_tile(c: CanvasItem, x: int, y: int, kind: String) -> void:
 			c.draw_texture_rect_region(CONCRETE, Rect2(fx, fy, 1, 1), src, tint)
 			c.draw_rect(Rect2(fx, fy + 0.96, 1, 0.04), Color(0, 0, 0, 0.35))    # slab joints
 			c.draw_rect(Rect2(fx + 0.96, fy, 0.04, 1), Color(0, 0, 0, 0.30))
-			c.draw_rect(Rect2(fx, fy, 1, 0.025), Color(1, 1, 1, 0.07))
-			if _r(fx, fy, 113) < 0.3:
-				_blob(c, Vector2(fx, fy) + o, 0.3 + o.x * 0.3, 0.25, o.y * 3.0, Color(0.08, 0.08, 0.07, 0.14))
-			if kind == "work" and _r(fx, fy, 114) < 0.12:
-				_blob(c, Vector2(fx, fy) + o, 0.15 + o.y * 0.3, 0.1 + o.x * 0.16, o.x * 6.0, Color(0.02, 0.02, 0.02, 0.34))    # oil
-				_blob(c, Vector2(fx, fy) + o + Vector2(-0.04, -0.03), 0.1, 0.06, o.x * 3.0, Color(0.4, 0.4, 0.55, 0.12), 2)
+			c.draw_rect(Rect2(fx, fy, 1, 0.025), Color(1, 1, 1, 0.07))    # (the scuffs and oil moved to `_zone_dirt`)
 		"tile", "lino", "ktile":
 			# canteen: worn cream and sage; infirmary: pale green lino, low contrast; kitchen: red quarry tiles
 			var a := Color(0.76, 0.73, 0.63) if kind == "tile" else (Color(0.77, 0.83, 0.80) if kind == "lino" else Color(0.55, 0.37, 0.29))
@@ -370,9 +383,7 @@ func _floor_tile(c: CanvasItem, x: int, y: int, kind: String) -> void:
 					c.draw_rect(Rect2(fx + q.x, fy + q.y, 0.5, 0.5), Color(col.r * v, col.g * v, col.b * v))
 				c.draw_rect(Rect2(fx, fy + 0.49, 1, 0.02), Color(0.2, 0.2, 0.18, 0.35))    # grout
 				c.draw_rect(Rect2(fx + 0.49, fy, 0.02, 1), Color(0.2, 0.2, 0.18, 0.35))
-			c.draw_rect(Rect2(fx, fy + 0.97, 1, 0.03), Color(0.1, 0.1, 0.08, 0.30))
-			if _r(fx, fy, 116) < 0.22:
-				_blob(c, Vector2(fx, fy) + o, 0.3, 0.22, o.y * 3.0, Color(0.15, 0.12, 0.08, 0.16))    # scuffs and grime
+			c.draw_rect(Rect2(fx, fy + 0.97, 1, 0.03), Color(0.1, 0.1, 0.08, 0.30))    # (the scuffs and grime moved to `_zone_dirt`)
 
 
 func _room_kind(x: int, y: int) -> String:
@@ -544,8 +555,27 @@ func _faces(c: CanvasItem, cx: int, cy: int) -> void:
 				c.draw_rect(Rect2(fx + 0.975, fy, 0.025, FACE), INK)
 
 
-## Doorways: a steel threshold plate across the opening and a fan of grime on both sides, where every boot goes.
+## Doorways: a steel threshold plate across the opening (the fan of grime on both sides, where every boot goes, is in `_zone_dirt`).
 func _thresholds(c: CanvasItem, cx: int, cy: int) -> void:
+	for r in _door_rects():
+		var rr: Rect2 = r
+		var m := rr.get_center()
+		if not _in(cx, cy, m):
+			continue
+		var horiz := rr.size.x >= rr.size.y
+		var along := Vector2(1, 0) if horiz else Vector2(0, 1)
+		var out := Vector2(0, 1) if horiz else Vector2(1, 0)
+		var span: float = rr.size.x if horiz else rr.size.y
+		var plate := Rect2(rr.position + (Vector2(0, 0.42) if horiz else Vector2(0.42, 0)), Vector2(rr.size.x, 0.16) if horiz else Vector2(0.16, rr.size.y))
+		c.draw_rect(plate, Color(0.5, 0.51, 0.52))
+		c.draw_rect(plate, INK, false, 0.025)
+		var n := int(span / 0.14)
+		for k in n:    # the tread of the plate
+			var p := plate.position + along * (0.07 + float(k) * 0.14) + out * 0.08
+			c.draw_line(p - out * 0.045 - along * 0.03, p + out * 0.045 + along * 0.03, Color(0.7, 0.72, 0.74, 0.8), 0.018)
+
+
+func _door_rects() -> Array:
 	var list: Array = []
 	for d in base.doors():
 		list.append(Rect2(d.rect))
@@ -556,25 +586,7 @@ func _thresholds(c: CanvasItem, cx: int, cy: int) -> void:
 		for row in 2:
 			for i in 6:
 				list.append(Rect2(float(r.position.x + 2 + i * 4), float(r.position.y + (5 if row == 0 else 9)), 1, 1))
-	for r in list:
-		var rr: Rect2 = r
-		var m := rr.get_center()
-		if not _in(cx, cy, m):
-			continue
-		var horiz := rr.size.x >= rr.size.y
-		var along := Vector2(1, 0) if horiz else Vector2(0, 1)
-		var out := Vector2(0, 1) if horiz else Vector2(1, 0)
-		var span: float = rr.size.x if horiz else rr.size.y
-		for s in [-1.0, 1.0]:
-			_blob(c, m + out * s * 0.85, (span * 0.5 + 0.2) if horiz else 0.45, 0.45 if horiz else (span * 0.5 + 0.2), 0.0, Color(0.10, 0.08, 0.05, 0.16))
-			_blob(c, m + out * s * 0.6 + along * (_r(m.x, m.y, 301) - 0.5) * span * 0.5, 0.25, 0.2, 0.0, Color(0.08, 0.06, 0.04, 0.18), 2)
-		var plate := Rect2(rr.position + (Vector2(0, 0.42) if horiz else Vector2(0.42, 0)), Vector2(rr.size.x, 0.16) if horiz else Vector2(0.16, rr.size.y))
-		c.draw_rect(plate, Color(0.5, 0.51, 0.52))
-		c.draw_rect(plate, INK, false, 0.025)
-		var n := int(span / 0.14)
-		for k in n:    # the tread of the plate
-			var p := plate.position + along * (0.07 + float(k) * 0.14) + out * 0.08
-			c.draw_line(p - out * 0.045 - along * 0.03, p + out * 0.045 + along * 0.03, Color(0.7, 0.72, 0.74, 0.8), 0.018)
+	return list
 
 
 ## Small things that say what each room is for (drawn on the floor, under the props and the people; nothing here is solid).
@@ -658,10 +670,7 @@ func _dress_canteen(c: CanvasItem, cx: int, cy: int) -> void:
 				c.draw_circle(mr.position + Vector2(0.1 + float(k) * 0.16, 0.12 + float(j) * 0.16), 0.03, Color(0.24, 0.24, 0.26))
 	var d := Vector2(46.5, 9.5)
 	if _in(cx, cy, d):
-		_drain(c, d)
-	var g := Vector2(49.0, 8.8)    # grease by the stoves
-	if _in(cx, cy, g):
-		_blob(c, g, 0.6, 0.3, 0.0, Color(0.15, 0.1, 0.03, 0.22))
+		_drain(c, d)    # (the grease by the stoves is in `_zone_dirt`)
 
 
 func _dress_infirmary(c: CanvasItem, cx: int, cy: int) -> void:
@@ -755,6 +764,310 @@ func _dress_stores(c: CanvasItem, cx: int, cy: int) -> void:
 		var dr: Rect2 = d
 		if _in(cx, cy, dr.position + Vector2(0.1, 0.05)):
 			_hazard(c, dr)
+
+
+# ------------------------------------------------------------ the zones' look --
+
+## prison_clean.gd calls this when a zone's look crosses a step: only that zone's two layers are drawn again.
+func refresh(zi: int) -> void:
+	if zi < dirt_nodes.size():
+		(dirt_nodes[zi] as CanvasItem).queue_redraw()
+		(home_nodes[zi] as CanvasItem).queue_redraw()
+
+
+func _zc(zi: int) -> float:
+	return float(zc[zi]) if zi < zc.size() else 0.0
+
+
+## The dirt of a zone, by its look `cl` (0 right after the clear, 1 tidy): scuffs, grime and grease fade with it; blood-like stains are gone by 0.6, bones by 0.35;
+## the debris of the fight (glass, knocked-over chairs and tables, papers, mattress stuffing, spent casings) by 0.8. Drawn flat, nothing here is solid.
+func _zone_dirt(c: CanvasItem, zi: int) -> void:
+	var cl := _zc(zi)
+	var d := 1.0 - cl
+	var z: Dictionary = base.ZONES[zi]
+	var r: Rect2i = z.rect
+	var sol: PackedByteArray = world.solid_p
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
+	for y in range(r.position.y, mini(r.end.y, H)):
+		for x in range(r.position.x, mini(r.end.x, W)):
+			if _wall(x, y) or _t(x, y) <= 0 or base.zone_at(float(x) + 0.5, float(y) + 0.5) != zi:
+				continue
+			var fx := float(x)
+			var fy := float(y)
+			var o := Vector2(_r(fx, fy, 110), _r(fx, fy, 111))
+			var p := Vector2(fx, fy) + o
+			var k := _room_kind(x, y)
+			if k == "cell" or k == "work" or k == "store":
+				if _r(fx, fy, 113) < 0.3:
+					_blob(c, p, 0.3 + o.x * 0.3, 0.25, o.y * 3.0, Color(0.08, 0.08, 0.07, 0.14 * d))
+				if k == "work" and _r(fx, fy, 114) < 0.12:
+					_blob(c, p, 0.15 + o.y * 0.3, 0.1 + o.x * 0.16, o.x * 6.0, Color(0.02, 0.02, 0.02, 0.34 * d))    # oil
+					_blob(c, p + Vector2(-0.04, -0.03), 0.1, 0.06, o.x * 3.0, Color(0.4, 0.4, 0.55, 0.12 * d), 2)
+			elif k != "":
+				if _r(fx, fy, 116) < 0.22:
+					_blob(c, p, 0.3, 0.22, o.y * 3.0, Color(0.15, 0.12, 0.08, 0.16 * d))    # scuffs and grime
+			else:
+				_ground_dirt(c, x, y, d)
+				if _r(fx, fy, 117) < 0.16:    # outdoors: trodden mud on the slabs
+					_blob(c, p, 0.35, 0.24, o.y * 3.0, Color(0.13, 0.09, 0.05, 0.2 * d))
+			if _r(fx, fy, 118) < 0.07 and _r(fx, fy, 119) * 0.6 >= cl:    # an old dark stain
+				_blob(c, p, 0.26 + o.x * 0.2, 0.18 + o.y * 0.1, o.x * 3.0, Color(0.27, 0.07, 0.05, 0.45))
+				_blob(c, p + Vector2(0.03, 0.02), 0.12, 0.08, o.x * 3.0, Color(0.16, 0.03, 0.02, 0.5), 2)
+				c.draw_circle(p + Vector2(0.32, 0.12), 0.035, Color(0.24, 0.06, 0.04, 0.6))
+				c.draw_circle(p + Vector2(-0.28, 0.2), 0.025, Color(0.24, 0.06, 0.04, 0.6))
+			if _r(fx, fy, 120) < 0.025 and cl < 0.35:    # a bone
+				var a := _r(fx, fy, 125) * TAU
+				var bd := Vector2(cos(a), sin(a)) * 0.13
+				c.draw_line(p - bd, p + bd, INK, 0.075)
+				c.draw_line(p - bd, p + bd, Color(0.86, 0.84, 0.74), 0.045)
+				for e in [p - bd, p + bd]:
+					c.draw_circle(e, 0.045, INK)
+					c.draw_circle(e, 0.03, Color(0.86, 0.84, 0.74))
+			if _r(fx, fy, 121) < 0.11 and _r(fx, fy, 122) * 0.8 >= cl and sol[y * W + x] == 0:
+				var kinds := [0, 1, 2, 3, 4, 5] if k != "" else [0, 3, 5, 5]    # (no chairs and tables outdoors)
+				_debris(c, Vector2(fx, fy) + Vector2(0.25, 0.25) + o * 0.5, int(kinds[int(_r(fx, fy, 123) * float(kinds.size())) % kinds.size()]), _r(fx, fy, 124) * TAU, x + y)
+	for dr in _door_rects():    # the fans of grime at the doorways, where every boot goes
+		var rr: Rect2 = dr
+		var m := rr.get_center()
+		if base.zone_at(m.x, m.y) != zi and not (base.zone_at(m.x, m.y) < 0 and Rect2(r).grow(1.0).has_point(m)):
+			continue
+		var horiz := rr.size.x >= rr.size.y
+		var along := Vector2(1, 0) if horiz else Vector2(0, 1)
+		var out := Vector2(0, 1) if horiz else Vector2(1, 0)
+		var span: float = rr.size.x if horiz else rr.size.y
+		for s in [-1.0, 1.0]:
+			_blob(c, m + out * s * 0.85, (span * 0.5 + 0.2) if horiz else 0.45, 0.45 if horiz else (span * 0.5 + 0.2), 0.0, Color(0.10, 0.08, 0.05, 0.16 * d))
+			_blob(c, m + out * s * 0.6 + along * (_r(m.x, m.y, 301) - 0.5) * span * 0.5, 0.25, 0.2, 0.0, Color(0.08, 0.06, 0.04, 0.18 * d), 2)
+	if String(z.id) == "canteen":
+		_blob(c, Vector2(49.0, 8.8), 0.6, 0.3, 0.0, Color(0.15, 0.1, 0.03, 0.22 * d))    # grease by the stoves
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## The ground stains and oil of `_ground` on a slab or asphalt tile of a zone; a tidy zone (`d` 0) keeps a third of them, so the ground still varies.
+func _ground_dirt(c: CanvasItem, x: int, y: int, d: float) -> void:
+	var fx := float(x)
+	var fy := float(y)
+	var o := Vector2(_r(fx, fy, 1), _r(fx, fy, 2))
+	var f := 0.35 + 0.65 * d
+	match _g(x, y):
+		G_SIDEWALK:
+			if _r(fx, fy, 6) < 0.22:
+				_blob(c, Vector2(fx, fy) + o, 0.35 + o.x * 0.4, 0.3 + o.y * 0.3, o.y * 3.0, Color(0.10, 0.09, 0.08, (0.10 + o.x * 0.08) * f))
+			if _r(fx, fy, 7) < 0.05:
+				_blob(c, Vector2(fx, fy) + o, 0.12, 0.09, o.x * 3.0, Color(0.03, 0.02, 0.02, 0.32 * d))    # oil
+			if _r(fx, fy, 8) < 0.04:
+				c.draw_rect(Rect2(fx, fy, 1, 1), Color(1, 1, 1, 0.045))
+		G_ASPHALT:
+			if _in_lane(fx + 0.5, fy + 0.5):
+				return
+			if _r(fx, fy, 3) < 0.10:    # oil
+				_blob(c, Vector2(fx, fy) + o, 0.22 + o.x * 0.2, 0.15 + o.y * 0.15, o.x * 3.0, Color(0.02, 0.02, 0.03, 0.30 * f))
+			elif _r(fx, fy, 4) < 0.05:    # a repaired patch
+				var pr := Rect2(fx + 0.1 + o.x * 0.2, fy + 0.15 + o.y * 0.2, 0.55 + o.y * 0.2, 0.4 + o.x * 0.2)
+				c.draw_rect(pr, Color(0.07, 0.07, 0.09, 0.14))
+				c.draw_rect(pr, Color(0.0, 0.0, 0.0, 0.2), false, 0.015)
+			elif _r(fx, fy, 5) < 0.025:    # a pothole (not dirt: it stays)
+				_blob(c, Vector2(fx, fy) + o, 0.3, 0.22, o.x * 3.0, Color(0.05, 0.05, 0.06, 0.35))
+				_blob(c, Vector2(fx, fy) + o + Vector2(0.03, 0.03), 0.17, 0.11, o.x * 3.0, Color(0.0, 0.0, 0.0, 0.55))
+
+
+## One piece of debris at `p` (tiles), turned by `rot`: 0 broken glass, 1 a chair on its side, 2 a table on its back, 3 papers, 4 mattress stuffing, 5 spent casings.
+func _debris(c: CanvasItem, p: Vector2, kind: int, rot: float, k: int) -> void:
+	c.draw_set_transform(p * TILE, rot, Vector2(TILE, TILE))
+	var wood := Color(0.5, 0.35, 0.22)
+	match kind:
+		0:
+			for i in 3:
+				var q := Vector2(float(i) * 0.09 - 0.09, _r(float(k), float(i), 401) * 0.1)
+				var pts := PackedVector2Array([q, q + Vector2(0.08, -0.04), q + Vector2(0.03, 0.07)])
+				c.draw_colored_polygon(pts, Color(0.72, 0.84, 0.88, 0.85))
+				c.draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[0]]), INK, 0.012)
+		1:
+			c.draw_rect(Rect2(-0.08, -0.04, 0.26, 0.26), Color(0, 0, 0, 0.2))
+			c.draw_rect(Rect2(-0.12, -0.1, 0.26, 0.26), wood)
+			c.draw_rect(Rect2(-0.12, -0.1, 0.26, 0.26), INK, false, 0.02)
+			for e in [Vector2(-0.1, -0.08), Vector2(0.12, -0.08), Vector2(-0.1, 0.14), Vector2(0.12, 0.14)]:
+				c.draw_line(e, e + Vector2(0.14, 0.05), INK, 0.045)
+				c.draw_line(e, e + Vector2(0.14, 0.05), wood.darkened(0.2), 0.025)
+		2:
+			c.draw_rect(Rect2(-0.32, -0.14, 0.7, 0.42), Color(0, 0, 0, 0.2))
+			c.draw_rect(Rect2(-0.36, -0.2, 0.7, 0.42), wood.darkened(0.15))
+			c.draw_rect(Rect2(-0.36, -0.2, 0.7, 0.42), INK, false, 0.022)
+			for e in [Vector2(-0.3, -0.15), Vector2(0.28, -0.15), Vector2(-0.3, 0.17), Vector2(0.28, 0.17)]:
+				c.draw_circle(e, 0.05, INK)
+				c.draw_circle(e, 0.032, wood)
+		3:
+			for i in 3:
+				var q := Vector2(float(i) * 0.12 - 0.12, _r(float(k), float(i), 402) * 0.12 - 0.06)
+				c.draw_set_transform(p * TILE + q.rotated(rot) * TILE, rot + float(i) * 0.5, Vector2(TILE, TILE))
+				c.draw_rect(Rect2(-0.08, -0.1, 0.16, 0.2), Color(0.9, 0.88, 0.8))
+				c.draw_rect(Rect2(-0.08, -0.1, 0.16, 0.2), INK, false, 0.012)
+				c.draw_line(Vector2(-0.05, -0.04), Vector2(0.05, -0.04), Color(0.4, 0.4, 0.45), 0.012)
+		4:
+			for i in 6:
+				var q := Vector2(_r(float(k), float(i), 403) - 0.5, _r(float(k), float(i), 404) - 0.5) * 0.4
+				c.draw_circle(q, 0.06, INK)
+				c.draw_circle(q, 0.045, Color(0.88, 0.86, 0.8))
+			c.draw_rect(Rect2(-0.18, -0.06, 0.3, 0.1), Color(0.4, 0.48, 0.6))    # a torn strip of ticking
+			c.draw_rect(Rect2(-0.18, -0.06, 0.3, 0.1), INK, false, 0.012)
+		_:
+			for i in 4:
+				var q := Vector2(_r(float(k), float(i), 405) - 0.5, _r(float(k), float(i), 406) - 0.5) * 0.35
+				c.draw_rect(Rect2(q, Vector2(0.06, 0.025)), Color(0.82, 0.64, 0.25))
+				c.draw_rect(Rect2(q, Vector2(0.06, 0.025)), INK, false, 0.008)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
+
+
+## Free floor tiles of a zone for homely touches, in an order fixed by the run's seed: `need` "wall" wants a brick wall to the north (a poster), "run" four free tiles to the east (a line).
+func _home_spots(zi: int, n: int, need: String) -> Array:
+	var r: Rect2i = base.ZONES[zi].rect
+	var sol: PackedByteArray = world.solid_p
+	var cand: Array = []
+	for y in range(r.position.y + 1, mini(r.end.y - 1, H)):
+		for x in range(r.position.x + 1, mini(r.end.x - 1, W)):
+			if _wall(x, y) or _t(x, y) <= 0 or sol[y * W + x] != 0 or base.zone_at(float(x) + 0.5, float(y) + 0.5) != zi:
+				continue
+			if need == "wall" and not _brick(x, y - 1):
+				continue
+			if need == "run":
+				var ok := true
+				for i in range(1, 4):
+					if _wall(x + i, y) or sol[y * W + x + i] != 0 or _wall(x, y - 1) or _wall(x + i, y + 1):
+						ok = false
+				if not ok:
+					continue
+			cand.append(Vector2i(x, y))
+	cand.sort_custom(func(a, b): return _r(float(a.x), float(a.y), 600 + zi) < _r(float(b.x), float(b.y), 600 + zi))
+	var out: Array = []
+	for t in cand:
+		var far := true
+		for q in out:
+			if Vector2(q).distance_to(Vector2(t)) < 3.0:
+				far = false
+		if far:
+			out.append(t)
+		if out.size() >= n:
+			break
+	return out
+
+
+## The homely touches of a zone kept clean (prison_clean.gd `home`): plants, a rug, posters and drawings, tablecloths, a washing line, flowers.
+func _zone_home(c: CanvasItem, zi: int) -> void:
+	if zi >= home.size() or not bool(home[zi]):
+		return
+	var id := String(base.ZONES[zi].id)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2(TILE, TILE))
+	if id == "canteen":
+		for rr in 2:
+			for cc in 3:
+				_cloth(c, Vector2(41.0 + float(cc) * 5.0, 14.5 + float(rr) * 3.0), rr * 3 + cc)
+	if id == "yard":
+		for t in _home_spots(zi, 1, "run"):
+			_line(c, Vector2(t) + Vector2(0.5, 0.5))
+	var floor_n := {"cells": [5, 0], "canteen": [2, 0], "infirmary": [2, 1], "workshop": [2, 0], "yard": [1, 5], "gate": [2, 3]}[id] as Array    # plants or rugs, flowers
+	var spots := _home_spots(zi, int(floor_n[0]) + int(floor_n[1]), "")
+	for i in spots.size():
+		var t: Vector2 = Vector2(spots[i]) + Vector2(0.5, 0.5)
+		if i >= int(floor_n[0]):
+			_flowers(c, t, i)
+		elif id == "cells" and i % 2 == 0 or id == "infirmary" and i == 1:
+			_rug(c, t, i + zi)
+		else:
+			_plant(c, t, i + zi)
+	var walls := _home_spots(zi, 4 if id == "cells" else (2 if id == "canteen" else 1), "wall")
+	for i in walls.size():
+		_poster(c, Vector2(walls[i]) + Vector2(0.5, 0.0), i + zi * 3, id == "cells" and i % 2 == 1)
+	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _plant(c: CanvasItem, p: Vector2, k: int) -> void:
+	c.draw_circle(p + Vector2(0.06, 0.12), 0.2, Color(0, 0, 0, 0.2))
+	var pot := PackedVector2Array([p + Vector2(-0.14, 0.02), p + Vector2(0.14, 0.02), p + Vector2(0.1, 0.24), p + Vector2(-0.1, 0.24)])
+	c.draw_colored_polygon(pot, Color(0.72, 0.4, 0.26))
+	c.draw_polyline(PackedVector2Array([pot[0], pot[1], pot[2], pot[3], pot[0]]), INK, 0.02)
+	var leaf: Color = [Color(0.3, 0.55, 0.25), Color(0.38, 0.62, 0.3), Color(0.25, 0.48, 0.22)][k % 3]
+	for i in 5:
+		var a := -PI * 0.5 + (float(i) - 2.0) * 0.55
+		var q := p + Vector2(cos(a), sin(a)) * 0.15 + Vector2(0, -0.02)
+		c.draw_circle(q, 0.1, INK)
+		c.draw_circle(q, 0.08, leaf.lightened(0.08 * float(i % 2)))
+
+
+func _rug(c: CanvasItem, p: Vector2, k: int) -> void:
+	var cols := [Color(0.62, 0.3, 0.26), Color(0.32, 0.42, 0.58), Color(0.55, 0.5, 0.3)]
+	var r := Rect2(p - Vector2(0.6, 0.38), Vector2(1.2, 0.76))
+	_box(c, r, cols[k % 3], true, 0.025)
+	c.draw_rect(r.grow(-0.09), Color(0.9, 0.84, 0.66), false, 0.03)
+	for i in 5:
+		c.draw_line(Vector2(r.position.x - 0.06, r.position.y + 0.1 + float(i) * 0.14), Vector2(r.position.x, r.position.y + 0.1 + float(i) * 0.14), Color(0.9, 0.84, 0.66), 0.02)
+		c.draw_line(Vector2(r.end.x, r.position.y + 0.1 + float(i) * 0.14), Vector2(r.end.x + 0.06, r.position.y + 0.1 + float(i) * 0.14), Color(0.9, 0.84, 0.66), 0.02)
+
+
+## A poster, or a child's drawing (a sun and a house), pinned to the foot of the wall north of `p`.
+func _poster(c: CanvasItem, p: Vector2, k: int, drawing: bool) -> void:
+	var r := Rect2(p + Vector2(-0.18 + (_r(float(k), 1.0, 610) - 0.5) * 0.3, -0.3), Vector2(0.36, 0.42))
+	_box(c, r, Color(0.94, 0.92, 0.84) if drawing else [Color(0.78, 0.5, 0.3), Color(0.35, 0.5, 0.6), Color(0.55, 0.62, 0.4)][k % 3], true, 0.02)
+	if drawing:
+		c.draw_circle(r.position + Vector2(0.09, 0.09), 0.05, Color(0.95, 0.75, 0.2))
+		c.draw_rect(Rect2(r.position + Vector2(0.14, 0.2), Vector2(0.14, 0.12)), Color(0.8, 0.3, 0.25))
+		c.draw_colored_polygon(PackedVector2Array([r.position + Vector2(0.12, 0.2), r.position + Vector2(0.21, 0.12), r.position + Vector2(0.3, 0.2)]), Color(0.3, 0.45, 0.7))
+	else:
+		c.draw_rect(Rect2(r.position + Vector2(0.06, 0.06), Vector2(0.24, 0.18)), Color(0.94, 0.9, 0.78, 0.8))
+		for i in 2:
+			c.draw_line(r.position + Vector2(0.07, 0.3 + float(i) * 0.05), r.position + Vector2(0.29, 0.3 + float(i) * 0.05), Color(0.94, 0.9, 0.78, 0.8), 0.02)
+	c.draw_circle(r.position + Vector2(0.18, 0.03), 0.025, Color(0.8, 0.2, 0.2))    # the pin
+
+
+## A clean checked cloth on a canteen table (centre `t`), a cup of wild flowers on some.
+func _cloth(c: CanvasItem, t: Vector2, k: int) -> void:
+	var r := Rect2(t - Vector2(0.82, 0.36), Vector2(1.64, 0.72))
+	c.draw_rect(r, Color(0.95, 0.94, 0.9))
+	var chk := Color(0.72, 0.3, 0.28, 0.55) if k % 2 == 0 else Color(0.3, 0.45, 0.65, 0.55)
+	for i in 8:
+		c.draw_rect(Rect2(r.position.x + float(i) * 0.205, r.position.y, 0.1, r.size.y), chk)
+	for j in 4:
+		c.draw_rect(Rect2(r.position.x, r.position.y + float(j) * 0.18, r.size.x, 0.09), chk)
+	c.draw_rect(r, INK, false, 0.022)
+	if k % 3 != 1:
+		_flowers(c, t + Vector2(0.0, 0.05), k, true)
+
+
+## Flowers: a few stems and bright heads (in a tin cup when `cup`).
+func _flowers(c: CanvasItem, p: Vector2, k: int, cup: bool = false) -> void:
+	if cup:
+		c.draw_circle(p, 0.08, INK)
+		c.draw_circle(p, 0.06, Color(0.62, 0.64, 0.66))
+	var heads := [Color(0.92, 0.78, 0.25), Color(0.86, 0.36, 0.42), Color(0.95, 0.95, 0.92), Color(0.6, 0.45, 0.8)]
+	for i in (3 if cup else 6):
+		var q := p + Vector2((_r(float(k), float(i), 620) - 0.5) * (0.22 if cup else 0.6), (_r(float(k), float(i), 621) - 0.5) * (0.12 if cup else 0.4)) - Vector2(0, 0.1 if cup else 0.0)
+		c.draw_line(q + Vector2(0, 0.14), q, Color(0.25, 0.45, 0.2), 0.02)
+		c.draw_circle(q, 0.055, INK)
+		c.draw_circle(q, 0.04, heads[(i + k) % 4])
+
+
+## A washing line on two posts across four tiles from `p`, shirts and sheets pegged on it.
+func _line(c: CanvasItem, p: Vector2) -> void:
+	var a := p + Vector2(-0.3, 0.0)
+	var b := p + Vector2(3.3, 0.0)
+	for e in [a, b]:
+		c.draw_circle(e + Vector2(0.05, 0.07), 0.08, Color(0, 0, 0, 0.25))
+		c.draw_circle(e, 0.07, INK)
+		c.draw_circle(e, 0.05, Color(0.5, 0.36, 0.22))
+	c.draw_line(a, b, INK, 0.03)
+	c.draw_line(a, b, Color(0.82, 0.8, 0.74), 0.015)
+	var cols := [Color(0.92, 0.92, 0.88), Color(0.45, 0.6, 0.75), Color(0.8, 0.45, 0.35), Color(0.9, 0.82, 0.5), Color(0.55, 0.68, 0.5)]
+	var x := 0.2
+	var i := 0
+	while x < 3.2:
+		var w := 0.36 if i % 2 == 0 else 0.5
+		var cloth := Rect2(a + Vector2(x, 0.0), Vector2(w, 0.32 if i % 2 == 0 else 0.42))
+		c.draw_rect(Rect2(cloth.position + Vector2(0.05, 0.08), cloth.size), Color(0, 0, 0, 0.18))
+		c.draw_rect(cloth, cols[i % 5])
+		c.draw_rect(cloth, INK, false, 0.018)
+		c.draw_line(cloth.position + Vector2(0.05, 0.0), cloth.position + Vector2(0.05, 0.05), INK, 0.02)    # the pegs
+		c.draw_line(cloth.position + Vector2(w - 0.05, 0.0), cloth.position + Vector2(w - 0.05, 0.05), INK, 0.02)
+		x += w + 0.14
+		i += 1
 
 
 # ------------------------------------------------------------ z 3: wall tops --

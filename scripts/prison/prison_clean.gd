@@ -22,6 +22,13 @@ const DRAG_MAX := 2.5    # ... but never more than this
 const TIDY := 0.5    # morale gained a day when there is no pile
 const LAUNDRY := Base.LAUNDRY
 const DUMP := Vector2(23.0, 50.5)
+## LOOK (flavour only, no rule reads it): how clean each of the six Base.ZONES looks, 0 right after the clear, 1 tidy. It only rises: a little each dawn, and more while someone
+## works a clean-up stop in the zone (the cleaner also takes the worst zones); prison_polish.gd draws the zone's dirt and debris by it, and a zone kept clean for two days (or with its project built) gets a few homely touches.
+const RISE := 0.004    # a second of a crew clean-up stop
+const RISE_CLEANER := 0.008    # a second of the cleaner's own stop
+const DAILY_TIDY := 0.12    # each dawn every zone looks this much cleaner anyway (the crew tidies off screen): tidy by about day 9 with no cleaner at all
+const HOME_DAYS := 2
+const ZONE_BUILDING := {"infirmary": "infirmary", "cells": "dormitory", "canteen": "kitchen", "workshop": "radio", "yard": "garden", "gate": "fence"}
 
 var game
 var spots: Array = []    # {at: Vector2, dirt: 0..1, area: String, by_t: when a cleaner took it}
@@ -33,6 +40,12 @@ var rounds := 0
 var _stage_t := 0.0
 var _staged := false
 var _logged := -1
+var zc: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]    # per zone, 0..1 (the LOOK above)
+var kept: Array = [0, 0, 0, 0, 0, 0]    # days in a row the zone was clean at dawn
+var home: Array = [false, false, false, false, false, false]
+var _zone_t: Array = [-99.0, -99.0, -99.0, -99.0, -99.0, -99.0]    # when the cleaner last took a zone
+var _sig: Array = [-1, -1, -1, -1, -1, -1]
+var _st := 0.0
 
 
 func _init(g) -> void:
@@ -58,6 +71,15 @@ func setup() -> void:
 	if game.args.has("trash"):
 		for s in spots:
 			s.dirt = float(game.args.trash)
+	if game.args.has("cleanall"):    # (a check: `--cleanall=0.5` sets every zone's look; 1 also shows the homely touches)
+		for i in zc.size():
+			zc[i] = clampf(float(game.args.cleanall), 0.0, 1.0)
+			kept[i] = HOME_DAYS if float(zc[i]) >= 1.0 else 0
+	var pol = game.world.get_meta("polish", null)
+	if pol != null:
+		pol.zc = zc    # (the same arrays: the painters read them when a zone is redrawn)
+		pol.home = home
+	_look(true)
 	_last_tod = game.tod
 	if game.args.has("cleannow"):
 		_last_tod = -2.0
@@ -85,6 +107,10 @@ func update(dt: float) -> void:
 				m.p.work = ""
 		_last_tod = game.tod
 		return
+	_st += dt
+	if _st > 0.5:
+		_st = 0.0
+		_look(false)
 	_dispatch(dt)
 	if game.args.has("log") and int(game.clock) % 10 == 0 and int(game.clock) != _logged:    # --log: the trash count every ten game seconds
 		_logged = int(game.clock)
@@ -114,6 +140,7 @@ func update(dt: float) -> void:
 			for s in spots:
 				if (s.at as Vector2).distance_to(Vector2(m.p.x, m.p.y)) < 1.3:
 					s.dirt = maxf(0.0, float(s.dirt) - dt / 3.0)
+			_tidy(Vector2(m.p.x, m.p.y), dt * RISE * 0.5)
 		if m.state == "work" and m.has("eat") and bool(m.eat.get("clean", false)):
 			_work_at(m, dt)
 			if game.args.has("log") and String(m.get("clean_seen", "")) != String(m.eat.say):
@@ -160,6 +187,9 @@ func _targets() -> Array:
 		var at: Vector2 = d.node.position / TILE
 		if F.has_point(at):
 			out.append({"at": at, "w": 1.0})
+	for zi in zc.size():    # LOOK: the zones that look worst get stops too
+		if float(zc[zi]) < 0.98:
+			out.append({"at": _zone_spot(zi), "w": 2.5 * (1.0 - float(zc[zi]))})
 	for s in spots:
 		if float(s.dirt) > 0.3:
 			out.append({"at": s.at, "w": 2.0 * float(s.dirt)})
@@ -198,6 +228,7 @@ func _work_at(m: Dictionary, dt: float) -> void:
 			if game.args.has("log") and not z.has_meta("logged"):
 				z.set_meta("logged", true)
 				print("CLEAN body being cleared by ", m.def.name)
+	_tidy(c, dt * (RISE_CLEANER if _is_cleaner(m) else RISE))
 	if _is_cleaner(m):    # (only the cleaner takes the rubbish away; the others' stops tidy the stains)
 		for s in spots:
 			if (s.at as Vector2).distance_to(c) < REACH:
@@ -297,6 +328,16 @@ func _dispatch(dt: float) -> void:
 		for s in free.slice(0, 3):
 			s.by_t = game.clock
 			q.append({"at": s.at, "secs": 6.0, "work": "clean", "face": "S", "say": "clearing the %s" % ("rubbish" if s.area == "yard" else "%s rubbish" % s.area), "clean": true})
+		var zs: Array = range(zc.size()).filter(func(i): return float(zc[i]) < 0.98 and game.clock - float(_zone_t[i]) > 25.0)
+		zs.sort_custom(func(a, b): return float(zc[a]) < float(zc[b]))
+		for zi in zs:    # LOOK: then the zones that look worst
+			if q.size() >= 3:
+				break
+			var at := _zone_spot(int(zi))
+			if game.run.sim.path_p.find(game.world.solid_p, from.x, from.y, at.x, at.y).is_empty():
+				continue
+			_zone_t[zi] = game.clock
+			q.append({"at": at, "secs": 8.0, "work": "clean", "face": "S", "say": "sweeping the %s" % String(Base.ZONES[zi].name).to_lower(), "clean": true})
 		if not q.is_empty():
 			m["clean_q"] = q
 
@@ -330,6 +371,11 @@ func spoil_mult() -> float:
 
 ## Once a day: a dirty dormitory or infirmary can make one person ill (the arc's `hurt`, one day off work).
 func daily() -> void:
+	for i in zc.size():
+		kept[i] = int(kept[i]) + 1 if float(zc[i]) >= 0.9 else 0
+		zc[i] = minf(1.0, float(zc[i]) + DAILY_TIDY)
+	if game.args.has("log"):
+		print("CLEAN look day ", game.econ.day, " ", zc.map(func(v): return snappedf(float(v), 0.01)), " kept ", kept)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9173 + int(game.econ.day) * 31
 	for s in spots:
@@ -359,7 +405,7 @@ func mini(c: CanvasItem, o: Vector2, sc: float) -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"spots": spots.map(func(s): return {"x": s.at.x, "y": s.at.y, "dirt": s.dirt}), "tag": _tag}
+	return {"spots": spots.map(func(s): return {"x": s.at.x, "y": s.at.y, "dirt": s.dirt}), "tag": _tag, "zc": zc.duplicate(), "kept": kept.duplicate()}
 
 
 ## Puts saved dirt back on the spots with the same place (the spots themselves come from the map).
@@ -369,3 +415,47 @@ func from_dict(d: Dictionary) -> void:
 		for s in spots:
 			if (s.at as Vector2).distance_to(at) < 0.1:
 				s.dirt = clampf(float(e.dirt), 0.0, 1.0)
+	var z: Array = d.get("zc", [])    # (a save from before the LOOK: half clean)
+	var k: Array = d.get("kept", [])
+	for i in zc.size():
+		zc[i] = clampf(float(z[i]) if i < z.size() else 0.5, 0.0, 1.0)
+		kept[i] = int(k[i]) if i < k.size() else 0
+
+
+# ------------------------------------------------------------------- look ------
+
+## Work at `at` makes its zone look cleaner (never dirtier).
+func _tidy(at: Vector2, amt: float) -> void:
+	var zi := Base.zone_at(at.x, at.y)
+	if zi >= 0:
+		zc[zi] = minf(1.0, float(zc[zi]) + amt)
+
+
+## A walkable tile in a zone for a stop (a different one each round).
+func _zone_spot(zi: int) -> Vector2:
+	var r: Rect2i = Base.ZONES[zi].rect
+	var w = game.world
+	for k in 16:
+		var x: int = r.position.x + 1 + (rounds * 7 + k * 13 + zi * 5) % maxi(1, r.size.x - 2)
+		var y: int = r.position.y + 1 + (rounds * 5 + k * 11 + zi * 3) % maxi(1, r.size.y - 2)
+		if w.solid_p[y * int(w.W) + x] == 0:
+			return Vector2(float(x) + 0.5, float(y) + 0.5)
+	return Base.ZONES[zi].rel
+
+
+## Redraws a zone's dirt layer only when its look crosses a step of 0.1 or its homely touches come (never per frame).
+func _look(force: bool) -> void:
+	var pol = game.world.get_meta("polish", null)
+	for i in zc.size():
+		home[i] = int(kept[i]) >= HOME_DAYS or game.econ.tier(String(ZONE_BUILDING[String(Base.ZONES[i].id)])) >= 1
+		var sg := int(float(zc[i]) * 10.0) + (100 if bool(home[i]) else 0)
+		if sg != int(_sig[i]) or force:
+			_sig[i] = sg
+			if pol != null:
+				pol.refresh(i)
+
+
+## 0..1 how dirty the zone at a point looks, the mean of all outside the zones (prison_upgrades.gd scales its litter by it).
+func dirt_at(p: Vector2) -> float:
+	var zi := Base.zone_at(p.x, p.y)
+	return 1.0 - (float(zc[zi]) if zi >= 0 else zc.reduce(func(a, v): return a + float(v), 0.0) / float(zc.size()))
