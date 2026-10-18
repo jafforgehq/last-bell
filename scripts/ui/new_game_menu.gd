@@ -236,9 +236,16 @@ func _pick_card(title_text: String, line_text: String, min_h: float = 104.0) -> 
 	col.add_child(s)
 	margin.add_child(col)
 	b.add_child(margin)
+	s.resized.connect(_fit_card.bind(b, col, min_h), CONNECT_DEFERRED)    # (a button does not grow with what is in it: the third line of a card ran out under its edge)
 	b.set_meta("title", t)
 	b.set_meta("sub", s)
 	return b
+
+
+## A pick card as tall as its words at its width (never below `min_h`).
+func _fit_card(b: Button, col: Control, min_h: float) -> void:
+	if is_instance_valid(b) and is_instance_valid(col):
+		b.custom_minimum_size.y = maxf(min_h, col.get_combined_minimum_size().y + 18.0)
 
 
 func _style_edit(e: LineEdit) -> void:
