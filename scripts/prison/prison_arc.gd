@@ -785,7 +785,8 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 	if cs.is_empty():
 		return
 	var entry := Vector2(t.entry.pos)
-	if not set_piece.is_empty():
+	_first_stash(t)
+	if not set_piece.is_empty() and not bool(set_piece.get("stash", false)):
 		var best: Dictionary = {}
 		var bd := -1.0
 		for ct in cs:
@@ -810,6 +811,22 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 			(ct2.loot as Dictionary)["note"] = 1
 			if game.args.has("arclog"):
 				print("ARC letter hidden in ", ct2.id, " at ", ct2.pos)
+
+
+## The first raids each hold one marked stash of ammo (prison_loot.gd `first_stash`): a set-piece cache of its own (marked, logged when found), dropped when the raid ends, found or not.
+## An event's cache that waits for the raid keeps the slot (shortcut: no stash then; events with a cache come from day 8, after the first raids).
+func _first_stash(t: Dictionary) -> void:
+	if not set_piece.is_empty():
+		return
+	set_piece = game.loot.first_stash(t, int(game.raids))
+	if game.args.has("arclog") and not set_piece.is_empty():
+		print("ARC stash in ", set_piece.id, " at ", set_piece.pos)
+
+
+## The destination map's line for the next raid ("" when it holds no stash).
+func stash_line() -> String:
+	var fs: Dictionary = game.loot.cfg().get("first_stash", {})
+	return String(fs.map) if not fs.is_empty() and started and set_piece.is_empty() and int(game.raids) < int(fs.raids) else ""
 
 
 ## Back from a raid: the notes in the pack are read (and leave the pack); returns how many.
@@ -849,6 +866,8 @@ func on_raid(alive: bool, loot_got: Dictionary) -> void:
 		log_entries.append({"day": day, "kind": "note", "title": sp_name, "from": "the raid", "text": String(set_piece.get("found", "")), "tag": "cache", "result": ""})
 		set_piece = {}
 		story.log_changed()
+	if bool(set_piece.get("stash", false)):
+		set_piece = {}    # (a stash belongs to its own raid)
 	if not alive:
 		stats.ruth_deaths = int(stats.ruth_deaths) + 1
 		if int(stats.ruth_deaths) >= int(game.Bal.dm("ruth_deaths", cfg.rules.ruth_deaths)):
