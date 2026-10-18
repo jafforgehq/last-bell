@@ -43,6 +43,18 @@ var _streams := {}
 var _toasted := {}
 var _hold_msg := ""
 var test_log := false
+# RAID HEAT (docs/raid-heat-spec.md): one value for the whole raid, 0 to 100
+var rheat := 0.0    # = rnoise + rtime, at most 100
+var rnoise := 0.0    # what noise added (it cools)
+var rtime := 0.0    # the slow trickle of time (it does not cool)
+var rstage := 0    # 0 Quiet, 1 Stirring, 2 Hunted, 3 Overrun
+var rfloor := 0.0    # the start of the stage already reached: heat cools no lower
+var _quiet_t := 0.0    # seconds since something loud
+var _wave_t := 0.0
+var _raid_t := 0.0
+var _logged := -1
+var waves_n := 0    # Overrun waves sent so far
+var stage_log: Array = []    # [[seconds, stage]]: for the staged runs and the tests
 var usec := 0    # microseconds spent in `update` (--perf prints the share of a frame)
 
 
@@ -89,6 +101,16 @@ func bind() -> void:
 
 
 func _reset_run() -> void:
+	rheat = 0.0
+	rnoise = 0.0
+	rtime = 0.0
+	rstage = 0
+	rfloor = 0.0
+	_quiet_t = 0.0
+	_wave_t = 0.0
+	_raid_t = 0.0
+	waves_n = 0
+	stage_log = []
 	inv.clear()
 	hordes.clear()
 	alarms.clear()
@@ -151,6 +173,9 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 	var k: Dictionary = _kind(kind)
 	var field = game.run.sim.field
 	stats.emits += 1
+	var raw_r: float = loud if loud > 0.0 else float(k.loud)
+	if kind != "shot":
+		add_heat(raid_add(kind, raw_r))
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var r: float = (loud if loud > 0.0 else float(k.loud)) * float(field.noise_mult) * (float(game.loot.noise_mult()) if game.mode == "raid" and game.loot != null else 1.0) * game.raidx.noise_mult()
 	heat[_hkey(pos)] = float(heat.get(_hkey(pos), 0.0)) + float(k.heat)
@@ -165,9 +190,11 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 		if _shot_t > 0.0:
 			return 0
 		_shot_t = 0.2
+		add_heat(raid_add(kind, raw_r))
 	var cap := int(round(float(k.cap) * (1.0 + minf(heat_at(pos) * float(cfg.heat.cap_per_heat), float(cfg.heat.cap_max)))))
 	var waves := _wave_set()
 	var cand: Array = []    # [heard, zombie or null, record]
+	var rs: float = r if (game.mode != "raid" or rstage > 0) else minf(r, float(cfg.raid_heat.quiet_r))    # (Quiet: a sleeper wakes only to a noise right beside it)
 	var w: Dictionary = cfg.wake
 	var see := float(k.see)
 	for z in game.run.sim.zombies:
@@ -176,32 +203,33 @@ func emit_at(pos: Vector2, loud: float, kind: String, goto: Vector2) -> int:
 			continue
 		if waves.has(z) or (game.special != null and game.special.locked(z)):
 			continue
+		var rz: float = rs if st == "still" else r
 		var dd := Vector2(z.x - pos.x, z.y - pos.y).length()
-		if dd >= r:
+		if dd >= rz:
 			continue
 		var heard := dd + float(_walls(pos, Vector2(z.x, z.y))) * float(w.wall)
-		if heard >= r:
+		if heard >= rz:
 			continue
-		var p := float(k.wake) * pow(1.0 - heard / r, float(w.fall)) * 1.15
+		var p := float(k.wake) * pow(1.0 - heard / rz, float(w.fall)) * 1.15
 		if rng.randf() < minf(p, 1.0) and rng.randf() < see + (1.0 - see) * 0.3:
 			cand.append([heard, z, -1])
 	if not field.pause_wake:
 		var C: int = field.CELL
-		var c0 := clampi(floori((pos.x - r) / float(C)), 0, field.cols - 1)
-		var c1 := clampi(floori((pos.x + r) / float(C)), 0, field.cols - 1)
-		var r0 := clampi(floori((pos.y - r) / float(C)), 0, field.rows - 1)
-		var r1 := clampi(floori((pos.y + r) / float(C)), 0, field.rows - 1)
+		var c0 := clampi(floori((pos.x - rs) / float(C)), 0, field.cols - 1)
+		var c1 := clampi(floori((pos.x + rs) / float(C)), 0, field.cols - 1)
+		var r0 := clampi(floori((pos.y - rs) / float(C)), 0, field.rows - 1)
+		var r1 := clampi(floori((pos.y + rs) / float(C)), 0, field.rows - 1)
 		for cy in range(r0, r1 + 1):
 			for cx in range(c0, c1 + 1):
 				for i in field.cells[cy * field.cols + cx]:
 					var q := Vector2(field.xs[i], field.ys[i])
 					var dd2 := q.distance_to(pos)
-					if dd2 >= r:
+					if dd2 >= rs:
 						continue
 					var heard2 := dd2 + float(_walls(pos, q)) * float(w.wall)
-					if heard2 >= r:
+					if heard2 >= rs:
 						continue
-					if rng.randf() < float(k.wake) * pow(1.0 - heard2 / r, float(w.fall)):
+					if rng.randf() < float(k.wake) * pow(1.0 - heard2 / rs, float(w.fall)):
 						cand.append([heard2, null, int(i)])
 	cand.sort_custom(func(a, b): return a[0] < b[0])
 	var room: int = maxi(0, field.active_cap - field.active_of.size())
@@ -335,6 +363,7 @@ func _update(dt: float) -> void:
 		heat[kk] = float(heat[kk]) - dec * (1.0 + float(heat[kk]) * 0.08)
 		if float(heat[kk]) <= 0.0:
 			heat.erase(kk)
+	_raid_heat(dt)
 	_interest(dt)
 	_throws(dt)
 	_pops(dt)
@@ -753,6 +782,8 @@ func toast_first(kind: String) -> void:
 
 ## The top bar's noise chip: [main, sub, state, tip, meter].
 func chip() -> Array:
+	if game.mode == "raid":
+		return raid_chip()
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var lv := level(me)
 	var h := heat_at(me)
@@ -1139,3 +1170,169 @@ func _alert_table() -> void:
 						cand += 1
 			sum += minf(cand, float(_kind("shot").cap))
 		print("NTEST ", gun[0], " called per shot (crowd 1 per 4 tiles^2, cap ", _kind("shot").cap, "): ", snappedf(sum / float(T), 0.1))
+
+
+# ----------------------------------------------------------------------------- raid heat --
+
+static func stage_of(h: float) -> int:
+	var n := 0
+	for t in (cfg.raid_heat.stages as Array):
+		if h >= float(t):
+			n += 1
+	return n
+
+
+## The heat a noise of this kind adds (a shot by the square of the gun's radius over 12 tiles).
+static func raid_add(kind: String, r: float) -> float:
+	var a := float(cfg.raid_heat.add.get(kind, 0.0))
+	return a * pow(r / 12.0, 2.0) if kind == "shot" else a
+
+
+func stage_name() -> String:
+	return String(cfg.raid_heat.names[rstage])
+
+
+## Heat goes up (raids only); a stage reached is announced once and keeps its floor.
+func add_heat(amount: float) -> void:
+	if game == null or game.mode != "raid" or amount <= 0.0:
+		return
+	_quiet_t = 0.0
+	rnoise = minf(100.0, rnoise + amount)
+	rheat = minf(100.0, rnoise + rtime)
+	_stage_check()
+
+
+func _stage_check() -> void:
+	var s := stage_of(rheat)
+	while rstage < s:
+		rstage += 1
+		rfloor = float((cfg.raid_heat.stages as Array)[rstage - 1])
+		stage_log.append([snappedf(_raid_t, 0.1), rstage])
+		if game.args.has("log") or test_log:
+			print("RAIDHEAT stage ", stage_name(), " at ", snappedf(_raid_t, 0.1), " s heat ", snappedf(rheat, 0.1))
+		_stage_enter(rstage)
+
+
+func _stage_enter(st: int) -> void:
+	if game.run == null:
+		return
+	var red := Color(1.0, 0.45, 0.35)
+	if st == 1:
+		game.people.banner("They're stirring", Color(1.0, 0.8, 0.35), 4.0)
+	elif st == 2:
+		var h := _edge_horde(int(randi_range_cfg(cfg.raid_heat.hunted.size)), _loudest(), float(cfg.raid_heat.hunted.speed))
+		game.people.banner("A horde is coming" + ((" from the " + String(h.name)) if not h.is_empty() else ""), red, 5.0)
+		sting("horde")
+	elif st == 3:
+		_wave_t = float(cfg.raid_heat.overrun.first_s)
+		game.people.banner("Get out", Color(1.0, 0.3, 0.25), 6.0)
+
+
+func randi_range_cfg(a: Array) -> int:
+	return rng.randi_range(int(a[0]), int(a[1]))
+
+
+func _raid_heat(dt: float) -> void:
+	if game.mode != "raid" or game.busy:
+		return
+	var rc: Dictionary = cfg.raid_heat
+	_raid_t += dt
+	_quiet_t += dt
+	rtime += float(rc.trickle_per_min) / 60.0 * dt
+	if _quiet_t > float(rc.cool_after_s):
+		rnoise = maxf(maxf(0.0, rfloor - rtime), rnoise - float(rc.cool_per_s) * dt)    # (never below the start of the stage reached)
+	rheat = minf(100.0, rnoise + rtime)
+	_stage_check()
+	if game.args.has("heatlog") and int(_raid_t) % 30 == 0 and int(_raid_t) != _logged:    # staging: a line every 30 s
+		_logged = int(_raid_t)
+		print("HEAT t=", _logged, " heat=", snappedf(rheat, 0.1), " stage=", stage_name(), " waves=", waves_n, " horde_alive=", hordes.size(), " emits=", stats.emits, " truck=", game.squad.truck)
+	if rstage >= 3:    # Overrun: waves until the party leaves
+		_wave_t -= dt
+		if _wave_t <= 0.0:
+			_wave_t = float(rc.overrun.every_s)
+			waves_n += 1
+			var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+			_edge_horde(randi_range_cfg(rc.overrun.size), me, float(rc.overrun.speed))
+
+
+## The middle of the region with the most noise heat (Ruth's place when it is all quiet).
+func _loudest() -> Vector2:
+	var best := -1.0
+	var at := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var c := float(cfg.heat.cell)
+	for kk in heat:
+		if float(heat[kk]) > best:
+			best = float(heat[kk])
+			at = Vector2(float(int(kk) % 1000) + 0.5, float(int(kk) / 1000) + 0.5) * c
+	return _free(at)
+
+
+## A horde of `n` enters from a map edge far from Ruth and walks to `to`. Returns it ({} when the town had no room).
+func _edge_horde(n: int, to: Vector2, speed: float) -> Dictionary:
+	var W := float(game.world.W)
+	var H := float(game.world.H)
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var far := float(cfg.raid_horde.far)
+	var from := Vector2.INF
+	for tries in 40:
+		var side := rng.randi() % 4
+		var t := rng.randf_range(0.15, 0.85)
+		var cand := _free(Vector2(8.0 if side == 0 else (W - 8.0 if side == 1 else t * W), 8.0 if side == 2 else (H - 8.0 if side == 3 else t * H)))
+		if cand.distance_to(me) < far * (1.0 if tries < 30 else 0.5):
+			continue
+		if tries < 30 and game.run.sim.path_z.find(game.world.solid_z, cand.x, cand.y, to.x, to.y).size() <= 2:    # (an open road, not a yard shut by walls)
+			continue
+		from = cand
+		break
+	if from == Vector2.INF:
+		return {}
+	var h := spawn_horde(n, from, to, speed, "raid")
+	if h.is_empty():
+		return {}
+	h["name"] = _dir_word(from - Vector2(W, H) / 2.0)
+	h["edge"] = from
+	h["heat"] = true
+	return h
+
+
+## The raid top bar's heat chip: [stage + percent, truck tally, state, tip, meter, pulse].
+func raid_chip() -> Array:
+	var tally := 0
+	for k in game.squad.truck:
+		tally += int(game.squad.truck[k])
+	var sts := ["ok", "warn", "danger", "danger"]
+	var tips := [
+		"Quiet. The dead sleep: only a noise right beside one wakes it.",
+		"Stirring. The dead near each noise wake and walk to it.",
+		"Hunted. A horde is coming from the map edge, for the loudest place.",
+		"Overrun. Waves keep coming until you leave. Get to the pickup ring."]
+	var tip := "Raid heat %d of 100. Shots, glass, alarms and running fill it; a minute of time adds a little. It cools slowly, never below the stage reached.\n%s" % [int(rheat), String(tips[rstage])]
+	var hz := raid_horde_text()
+	if hz != "":
+		tip += "\n" + hz + "."
+	if tally > 0:
+		tip += "\nThe companions have put %d into the truck." % tally
+	return ["%s %d%%" % [stage_name(), int(rheat)], ("truck %d" % tally) if tally > 0 else "", sts[rstage], tip, rheat / 100.0, rstage >= 3]
+
+
+## An arrow at the screen edge toward a horde that is off screen, with its side (while Hunted or Overrun).
+func draw_hud(c: Control, v: Vector2) -> void:
+	if game.mode != "raid" or game.busy or game.run == null or rstage < 2:
+		return
+	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
+	var font := ThemeDB.fallback_font
+	var pulse := 0.5 + 0.5 * sin(float(game.clock) * 6.0)
+	for h in hordes:
+		if not h.has("heat") or (h.members as Array).is_empty():
+			continue
+		var cc := centroid(h)
+		var d := me.distance_to(cc)
+		var dir := (cc - me).normalized() if d > 0.1 else Vector2.DOWN
+		var half := v / 2.0 - Vector2(46, 46)
+		var t := minf(half.x / maxf(0.001, absf(dir.x)), half.y / maxf(0.001, absf(dir.y)))
+		if t > d * float(game.zoom_px):
+			continue    # (on screen: its own red rings show it)
+		var col := Color(1.0, 0.3 + 0.2 * pulse, 0.25)
+		var at := v / 2.0 + dir * t
+		c.draw_colored_polygon(PackedVector2Array([at + dir * 18.0, at + dir.rotated(2.5) * 14.0, at + dir.rotated(-2.5) * 14.0]), col)
+		c.draw_string(font, at - dir * 24.0 - Vector2(40, -5), "HORDE %s" % String(h.name), HORIZONTAL_ALIGNMENT_CENTER, 80, 13, col)
