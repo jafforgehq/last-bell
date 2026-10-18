@@ -57,17 +57,31 @@ func test_the_prison_flare_and_event_odds_data() -> void:
 				check(ch.has("chance") and is_equal_approx(float(ch.chance[0].p), odds), "%s: the shown chance is the rolled one" % String(ch.id))
 
 
-## PLAYTEST 4: Ruth starts with five allies, each with a bio and a base job, and the stores of the clear always pay for the first project (the water pump).
-func test_the_prison_starts_with_five_allies_and_the_first_project_affordable() -> void:
+## PLAYTEST 6: Ruth starts with three allies (Cole, Bea, Ike), each with a bio and a base job; Hal and Wren, who walked in with her in playtest 5, lead the pool raids find, with their
+## bios, base roles and weapon tags; and the stores of the clear always pay for the first project (the water pump).
+func test_the_prison_starts_with_three_allies_and_the_first_project_affordable() -> void:
 	var Crew = load("res://scripts/prison/prison_crew.gd")
 	var G = load("res://scripts/prison/prison_game.gd")
-	eq(Crew.ALLIES.size(), 5, "five allies walk in with Ruth")
-	eq(Crew.CREW_FROM_ALLIES.size(), 5, "and all five join the base crew")
+	var B = load("res://scripts/prison/prison_base.gd")
+	eq(Crew.ALLIES.map(func(a): return String(a.id)), ["cole", "bea", "ike"], "three allies walk in with Ruth")
 	var bios = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_bios.json"))
 	var proj = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_projects.json"))
+	var raids = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_raids.json"))
+	var story = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_story.json"))
+	var wpn = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_weapons.json"))
 	for a in Crew.ALLIES:
 		check(bios.people.has(String(a.name)), "%s has a bio" % String(a.name))
 		check(proj.crew_role.has(String(a.id)), "%s has a base role" % String(a.name))
+	eq(int(story.lab.start_people), 3, "the arc lab starts with the same three")
+	var dead := 0
+	for z in B.ZONES:
+		dead += int(z.dead)
+	eq(dead, 62, "62 dead in the clear, for a party of three")
+	var early: Array = (raids.people as Array).filter(func(q): return bool(q.get("early", false))).map(func(q): return String(q.name))
+	eq(early, ["Hal", "Wren"], "Hal, then Wren, are the first people raids find")
+	for q in raids.people:
+		if bool(q.get("early", false)):
+			check(bios.people.has(String(q.name)) and proj.crew_role.has(String(q.id)) and (wpn.squad.tags as Dictionary).has(String(q.id)), "%s keeps a bio, a base role and weapon tags" % String(q.name))
 	var water := 0.0
 	for p in proj.projects:
 		if String(p.id) == "water1":
