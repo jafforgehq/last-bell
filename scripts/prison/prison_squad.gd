@@ -27,6 +27,7 @@ const Inventory := preload("res://scripts/sim/inventory.gd")
 const SearchRules := preload("res://scripts/town/search.gd")
 const TILE := 64.0
 const Bal := preload("res://scripts/prison/prison_bal.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
 const CMDS := ["follow", "hold", "scavenge", "cover", "quiet", "spread"]
 const CMD_WORD := {"follow": "Stay close", "hold": "Hold", "scavenge": "Scavenge here", "cover": "Cover me", "quiet": "Quiet", "spread": "Spread out"}
 const CMD_COL := {"follow": Color(0.55, 0.85, 1.0), "hold": Color(1.0, 0.8, 0.35), "scavenge": Color(0.55, 1.0, 0.6), "cover": Color(1.0, 0.55, 0.5), "quiet": Color(0.7, 0.7, 1.0), "spread": Color(0.85, 0.7, 1.0)}
@@ -1243,11 +1244,14 @@ func toggle_orders() -> void:
 	if _panel == null:
 		_build_panel()
 	open = not open
+	if not open:
+		UI.close_fx(_panel)
 	_panel.visible = open
 	if open:
 		_refresh_panel()
 		_panel.reset_size()
 		_panel.position = _orders_at(game.get_viewport().get_mouse_position(), _panel.size, game._vp())
+		UI.open_fx(_panel)
 
 
 ## Where the orders panel goes: beside the pointer (right and below, flipped at the window's edges), and off the middle of the screen where Ruth stands.
@@ -1264,13 +1268,7 @@ static func _orders_at(m: Vector2, sz: Vector2, vp: Vector2) -> Vector2:
 
 func _build_panel() -> void:
 	_panel = PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.05, 0.06, 0.07, 0.94)
-	st.border_color = Color(0.85, 0.7, 0.3)
-	st.set_border_width_all(2)
-	st.set_corner_radius_all(6)
-	st.set_content_margin_all(8)
-	_panel.add_theme_stylebox_override("panel", st)
+	_panel.add_theme_stylebox_override("panel", UI.frame_box(10))
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 5)
 	col.name = "col"
@@ -1300,6 +1298,7 @@ func _order_btn(text: String, cmd: String, lit: bool) -> Button:
 		b.add_theme_stylebox_override(state, sb)
 	b.add_theme_color_override("font_color", c if lit else Color(0.9, 0.9, 0.82))
 	b.add_theme_color_override("font_hover_color", c)
+	UI.feedback(b)    # (its own colours: the order's; the press and the click are the windows')
 	return b
 
 
@@ -1309,11 +1308,13 @@ func _refresh_panel() -> void:
 	for ch in col.get_children():
 		col.remove_child(ch)
 		ch.queue_free()
-	var t := Label.new()
-	t.text = "ORDERS   keys 1-6: everyone   C or Esc: close"
-	t.add_theme_font_size_override("font_size", 13)
-	t.add_theme_color_override("font_color", Color(0.94, 0.76, 0.29))
-	col.add_child(t)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 10)
+	head.add_child(UI.title("ORDERS", UI.HEAD_PX))
+	var t := UI.label("keys 1-6: everyone   C or Esc: close", UI.SMALL_PX, Color(0.75, 0.75, 0.7))
+	t.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(t)
+	col.add_child(head)
 	var g := GridContainer.new()
 	g.columns = 1 + members.size()
 	g.add_theme_constant_override("h_separation", 4)

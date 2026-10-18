@@ -10,6 +10,7 @@ const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
 const Topbar := preload("res://scripts/prison/prison_topbar.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
 
 const BOARD_AT := Vector2(31.0, 46.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
@@ -86,7 +87,9 @@ var _whynext := ""
 var _clean_rounds := 0    # the cleaner's rounds at the last dawn
 var scroll: ScrollContainer    # the page under the tabs
 var more_lab: Label    # "More below": the page runs on under the fold
-var _bar_head: Control    # the Barricades header of the Defence tab (its jump button scrolls to it)
+var legend: Label    # the keys at the foot (left out, with the tab's hint line, in a short window)
+var compact := false    # a short window (under 700 points): no hint line and no legend, the Needs and Defence tabs in two columns that fit without a scroll
+var _num := {}    # Label -> [counter key, value, format]: the numbers of the page that count to a new value (UI.tick)
 
 
 func _init(g) -> void:
@@ -101,7 +104,7 @@ func _init(g) -> void:
 	layer.add_child(root)
 	panel = PanelContainer.new()
 	panel.visible = false
-	panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 1.0), Hud.LINE2, 14, 6))    # (opaque: at 0.97 the world's labels still read through it)
+	panel.add_theme_stylebox_override("panel", UI.frame_box(14))    # (the chalkboard frame is opaque: the world's labels do not read through it)
 	root.add_child(panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
@@ -109,12 +112,13 @@ func _init(g) -> void:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 6)
 	v.add_child(head)
-	title = _lab("PRISON", 24, Hud.ACCENT, true)
+	title = UI.title("PRISON")
 	title.custom_minimum_size.x = 150
 	head.add_child(title)
 	for t in [["projects", "Projects"], ["needs", "Needs"], ["roster", "Roster"], ["defence", "Defence"], ["story", "Story (L)"]]:
 		var b := _btn(String(t[1]))
 		b.toggle_mode = true
+		UI.skin(b)    # (again: a toggle's pressed look is its "on" look)
 		b.pressed.connect(func(): _show(String(t[0])))
 		tab_btns[t[0]] = b
 		head.add_child(b)
@@ -128,7 +132,7 @@ func _init(g) -> void:
 	var x := _btn("Close (Esc)")
 	x.pressed.connect(close)
 	head.add_child(x)
-	tabhint = _lab("", 14, Hud.INFO)
+	tabhint = _lab("", UI.SMALL_PX + 1, Hud.INFO)
 	tabhint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(tabhint)
 	scroll = ScrollContainer.new()
@@ -144,9 +148,9 @@ func _init(g) -> void:
 	more_lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	more_lab.visible = false
 	v.add_child(more_lab)
-	var leg := _lab(LEGEND, 12, DIM)
-	leg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(leg)
+	legend = _lab(LEGEND, 12, DIM)
+	legend.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	v.add_child(legend)
 	hint = _btn("Base (B)")
 	hint.visible = false
 	hint.pressed.connect(func(): open("projects"))
@@ -223,23 +227,12 @@ func _rich(text: String, size: int = 15) -> RichTextLabel:
 
 
 func _btn(text: String) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE    # (keys stay the game's: no Space or Enter on a button)
-	b.add_theme_font_override("font", Fonts.cond(600))
-	b.add_theme_font_size_override("font_size", 16)
-	return b
+	return UI.button(text)    # (no keyboard focus: the keys stay the game's, no Space or Enter on a button)
 
 
 ## The main choice of a card: a gold fill with dark words (the menus' Start).
 func _accent(b: Button) -> void:
-	for st in ["normal", "hover", "pressed"]:
-		var bx := _box(Hud.ACCENT.lightened(0.14) if st == "hover" else (Hud.ACCENT.darkened(0.1) if st == "pressed" else Hud.ACCENT), Hud.ACCENT, 8, 5)
-		bx.content_margin_top = 4
-		bx.content_margin_bottom = 4
-		b.add_theme_stylebox_override(st, bx)
-	for c in ["font_color", "font_hover_color", "font_pressed_color"]:
-		b.add_theme_color_override(c, Hud.ACCENT_INK)
+	UI.skin(b, true)
 
 
 ## A small pencil (the rename mark by a name in the Roster), drawn once.
@@ -299,7 +292,10 @@ func open(which: String) -> void:
 	if game.phase != "managed" or game.mode != "base":
 		return
 	game.pack.close()
+	var was := panel.visible
 	panel.visible = true
+	if not was:
+		UI.open_fx(panel)
 	_dot_acked = true
 	did["open"] = true
 	_show(which)
@@ -323,9 +319,11 @@ func _dot_frame(base_on: bool) -> void:
 
 
 func close() -> void:
+	UI.close_fx(panel)
 	panel.visible = false
 	_bars.clear()
 	_etas.clear()
+	_num.clear()
 
 
 func is_open() -> bool:
@@ -429,6 +427,7 @@ func key(ev: InputEvent) -> bool:
 		return false
 	var k := ev as InputEventKey
 	if morning != null and morning.visible:    # MORNING: any key puts the card away
+		UI.close_fx(morning)
 		morning.visible = false
 		return true
 	if k.keycode == KEY_U and game.phase == "managed" and game.mode == "base" and not game.busy and econ.can_undo():    # UNDO
@@ -487,6 +486,9 @@ func frame(_dt: float) -> void:
 		close()
 		return
 	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y + 6.0) if game.topbar != null and game.topbar.plate.visible else 12.0    # under the top bar: its chips (morale) stay in sight
+	compact = v.y < 700.0
+	tabhint.visible = not compact
+	legend.visible = not compact
 	var want := (panel.get_child(0) as Control).get_combined_minimum_size().y + 28.0 + body.get_combined_minimum_size().y    # (the panel's margins are 14;as tall as the page needs, so a short tab leaves no empty slab under it; a long one scrolls)
 	var sz := Vector2(minf(980.0, v.x - 24.0), clampf(want, 360.0, minf(660.0, v.y - top - 12.0)))
 	panel.custom_minimum_size = sz
@@ -510,6 +512,9 @@ func frame(_dt: float) -> void:
 		_bars[id].value = clampf(float(econ.st.get(id, {}).get("done", 0.0)) / float(d.labor), 0.0, 1.0)
 		if _etas.has(id):
 			(_etas[id] as Label).text = "about %.1f h left" % econ.eta_h(id)
+	for l in _num:    # the numbers that count to a new value
+		var q: Array = _num[l]
+		(l as Label).text = String(q[2]) % int(round(UI.tick(String(q[0]), float(q[1]))))
 
 
 func _any_popup(n: Node) -> bool:
@@ -525,7 +530,7 @@ func _any_popup(n: Node) -> bool:
 
 ## Everything the rows show except the progress bars, as one string.
 func _signature() -> String:
-	var s := "%s|%s|%s|%s|%s|" % [tab, sel, game.siege.attacking, _hl, _whynext]
+	var s := "%s|%s|%s|%s|%s|%s|" % [tab, sel, game.siege.attacking, _hl, _whynext, compact]
 	for k in game.stores:
 		s += "%d," % int(game.stores[k])
 	for id in econ.order:
@@ -548,6 +553,7 @@ func _signature() -> String:
 func _rebuild() -> void:
 	_bars.clear()
 	_etas.clear()
+	_num.clear()
 	for c in body.get_children():
 		body.remove_child(c)
 		c.queue_free()
@@ -615,6 +621,7 @@ func _projects_tab() -> void:
 				ready = true
 		var btn := _btn("%s   %d/%d%s" % [TITLES[b], econ.tier(b), n, "  +" if ready else ""])
 		btn.toggle_mode = true
+		UI.skin(btn)
 		btn.button_pressed = (b == sel)
 		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		btn.pressed.connect(func():
@@ -628,7 +635,7 @@ func _projects_tab() -> void:
 	hb.add_child(right)
 	var th := HBoxContainer.new()
 	th.add_theme_constant_override("separation", 12)
-	th.add_child(_lab(TITLES[sel], 22, Hud.INK, true))
+	th.add_child(_lab(TITLES[sel], UI.HEAD_PX + 2, Hud.INK, true))
 	var wn := _btn("What next?")
 	wn.tooltip_text = "Jumps to the one project that helps most right now: one you can afford first, otherwise the nearest to affordable."
 	wn.pressed.connect(what_next)
@@ -833,11 +840,11 @@ func top_needs() -> Array:
 
 func _needs_header() -> void:
 	var pc := PanelContainer.new()
-	pc.add_theme_stylebox_override("panel", _box(Color(0.12, 0.09, 0.05, 0.9), Hud.ACCENT, 10, 6))
+	pc.add_theme_stylebox_override("panel", _box(Color(0.12, 0.09, 0.05, 0.9), Hud.ACCENT, 8, 6))
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 5)
+	vb.add_theme_constant_override("separation", 2)
 	pc.add_child(vb)
-	vb.add_child(_lab("WHAT DO WE NEED", 18, Hud.ACCENT, true))
+	vb.add_child(_lab("WHAT DO WE NEED", UI.HEAD_PX, Hud.ACCENT, true))
 	var needs := top_needs()
 	if needs.is_empty():
 		vb.add_child(_lab("Nothing is short. Build the next project or stock up before the night.", 15, Hud.OK))
@@ -846,14 +853,14 @@ func _needs_header() -> void:
 		var hb := HBoxContainer.new()
 		hb.add_theme_constant_override("separation", 8)
 		vb.add_child(hb)
-		hb.add_child(_lab("%d" % i, 18, Hud.INK3, true))
+		hb.add_child(_lab("%d" % i, 16, Hud.INK3, true))
 		var ib := Topbar.IconBox.new(20)
 		ib.set_icon(String(n.res) if Topbar.RES.has(String(n.res)) else "target", Topbar.RES_COL.get(String(n.res), Hud.ACCENT))
 		hb.add_child(ib)
-		var l := _lab(String(n.line), 16, Hud.INK)
+		var l := _lab(String(n.line), UI.BODY_PX, Hud.INK)
 		l.custom_minimum_size.x = 330
 		hb.add_child(l)
-		hb.add_child(_lab("-> " + String(n.action), 16, Hud.WARN))
+		hb.add_child(_lab("-> " + String(n.action), UI.BODY_PX, Hud.WARN))
 		i += 1
 	body.add_child(pc)
 
@@ -866,17 +873,29 @@ func _needs_tab() -> void:
 	for id in goal:
 		names.append(_pname(String(id)))
 	_needs_header()
-	body.add_child(_lab("Day %d    Stage: %s" % [int(rep.day), rep.stage], 22, Hud.INK, true))
-	body.add_child(_rich(("Next stage: [b]%s[/b]. Still to build: %s." % [nx, ", ".join(names)]) if nx != "" else "The prison is a Hub. Nothing more to reach.", 15))
+	# two columns under the header: the day, its stage and the stock on the left; morale, people, the next horde and the shortage on the right (fits a 600 point window)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 24)
+	body.add_child(cols)
+	var lc := VBoxContainer.new()
+	lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lc.add_theme_constant_override("separation", 4)
+	cols.add_child(lc)
+	var rc := VBoxContainer.new()
+	rc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rc.add_theme_constant_override("separation", 4)
+	cols.add_child(rc)
+	lc.add_child(_lab("Day %d    Stage: %s" % [int(rep.day), rep.stage], UI.HEAD_PX, Hud.INK, true))
+	lc.add_child(_rich(("Next stage: [b]%s[/b]. Still to build: %s." % [nx, ", ".join(names)]) if nx != "" else "The prison is a Hub. Nothing more to reach.", 14))
 	# production against consumption per day
-	body.add_child(_lab("Per day", 17, Hud.ACCENT, true))
+	lc.add_child(_lab("Per day", 16, Hud.ACCENT, true))
 	var g := GridContainer.new()
 	g.columns = 7
-	g.add_theme_constant_override("h_separation", 22)
-	g.add_theme_constant_override("v_separation", 3)
-	body.add_child(g)
+	g.add_theme_constant_override("h_separation", 16)
+	g.add_theme_constant_override("v_separation", 1)
+	lc.add_child(g)
 	for h in ["", "Stock", "Made", "Used", "Spoiled", "Net", "Left"]:
-		g.add_child(_lab(h, 13, DIM))
+		g.add_child(_lab(h, UI.SMALL_PX, DIM))
 	var caps: Dictionary = econ.caps()
 	for r in ["food", "water", "fuel"]:
 		var e: Dictionary = rep.res[r]
@@ -884,47 +903,67 @@ func _needs_tab() -> void:
 		var us := roundi(float(e.cons))
 		var sp := roundi(float(e.get("spoil", 0.0)))
 		var net := mk - us - sp    # (the shown parts add up to the shown net)
-		g.add_child(_lab(RES_NAME[r], 15, Hud.INK))
-		g.add_child(_lab("%d / %d" % [int(e.stock), int(caps.get(r, 0))], 15, Hud.INK2))
-		g.add_child(_lab("+%d" % mk, 15, Hud.INK2))
-		g.add_child(_lab("-%d" % us if us > 0 else "0", 15, Hud.INK2))
-		g.add_child(_lab("-%d" % sp if sp > 0 else "0", 15, Hud.INK2))
-		g.add_child(_lab("%+d" % net, 15, Hud.OK if net >= 0 else Hud.DANGER_TEXT))
+		g.add_child(_lab(RES_NAME[r], UI.BODY_PX, Hud.INK))
+		g.add_child(_count("stock." + r, float(int(e.stock)), "%d / " + str(int(caps.get(r, 0))), Hud.INK2))
+		g.add_child(_lab("+%d" % mk, UI.BODY_PX, Hud.INK2))
+		g.add_child(_lab("-%d" % us if us > 0 else "0", UI.BODY_PX, Hud.INK2))
+		g.add_child(_lab("-%d" % sp if sp > 0 else "0", UI.BODY_PX, Hud.INK2))
+		g.add_child(_lab("%+d" % net, UI.BODY_PX, Hud.OK if net >= 0 else Hud.DANGER_TEXT))
 		var days := float(e.days)
-		g.add_child(_lab("steady" if days < 0.0 else "%.1f days" % days, 15, Hud.INK2 if days < 0.0 or days >= 3.0 else Hud.DANGER_TEXT))
-	var others := ""
+		g.add_child(_lab("steady" if days < 0.0 else "%.1f days" % days, UI.BODY_PX, Hud.INK2 if days < 0.0 or days >= 3.0 else Hud.DANGER_TEXT))
+	var og := GridContainer.new()    # the other stores, two to a row
+	og.columns = 4
+	og.add_theme_constant_override("h_separation", 10)
+	og.add_theme_constant_override("v_separation", 1)
 	for r in ["ammo", "meds", "scrap", "parts"]:
-		others += "%s %d / %d      " % [RES_NAME[r], int(game.stores.get(r, 0.0)), int(caps.get(r, 0))]
-	body.add_child(_lab(others, 15, Hud.INK2))
+		og.add_child(_lab(RES_NAME[r], UI.BODY_PX, Hud.INK2))
+		og.add_child(_count("stock." + r, float(int(game.stores.get(r, 0.0))), "%d / " + str(int(caps.get(r, 0))), Hud.INK2))
+	lc.add_child(og)
 	# morale
 	var m := float(rep.morale)
-	body.add_child(_lab("Morale  %d / 100" % int(m), 17, Hud.ACCENT, true))
-	var mb := _bar(m / 100.0, Hud.OK if m >= 50.0 else (Hud.WARN if m >= 25.0 else Hud.DANGER), 14.0)
+	var ml := _count("morale", float(int(m)), "Morale  %d / 100", Hud.ACCENT)
+	ml.add_theme_font_override("font", Fonts.cond(700))
+	ml.add_theme_font_size_override("font_size", 16)
+	rc.add_child(ml)
+	var mb := _bar(m / 100.0, Hud.OK if m >= 50.0 else (Hud.WARN if m >= 25.0 else Hud.DANGER), 12.0)
 	mb.custom_minimum_size.x = 300
 	mb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	body.add_child(mb)
+	rc.add_child(mb)
 	for r in morale_reasons(rep):
-		body.add_child(_lab("%s %s" % ["+" if r[1] else "-", r[0]], 15, Hud.OK if r[1] else Hud.DANGER_TEXT))
+		rc.add_child(_lab("%s %s" % ["+" if r[1] else "-", r[0]], 14, Hud.OK if r[1] else Hud.DANGER_TEXT))
 	# people and beds, attack, shortage
 	var bd: Dictionary = rep.beds
-	body.add_child(_lab("People %d      Beds %d / %d%s" % [int(rep.people), int(bd.used), int(bd.cap), "   (too many people)" if int(bd.free) < 0 else ""], 16, Hud.INK if int(bd.free) >= 0 else Hud.DANGER_TEXT))
-	body.add_child(_lab("Next horde: " + next_attack(), 16, Hud.INK if not game.siege.attacking else Hud.DANGER_TEXT))
+	rc.add_child(_lab("People %d      Beds %d / %d%s" % [int(rep.people), int(bd.used), int(bd.cap), "   (too many people)" if int(bd.free) < 0 else ""], UI.BODY_PX, Hud.INK if int(bd.free) >= 0 else Hud.DANGER_TEXT))
+	var hl := _lab("Next horde: " + next_attack(), UI.BODY_PX, Hud.INK if not game.siege.attacking else Hud.DANGER_TEXT)
+	hl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rc.add_child(hl)
 	var nd: Dictionary = econ.needs()
 	if nd.is_empty():
-		body.add_child(_lab("Biggest shortage: none", 16, Hud.OK))
+		rc.add_child(_lab("Biggest shortage: none", UI.BODY_PX, Hud.OK))
 	else:
 		var s := "Biggest shortage: %s, short by about %d" % [nd.res, int(nd.get("short", 0))]
 		if float(nd.get("days", -1.0)) >= 0.0:
 			s += " (%.1f days left)" % float(nd.days)
 		if nd.get("place", "") != "":
 			s += ".  Raid a %s." % econ.place_word(String(nd.place))
-		body.add_child(_lab(s, 16, Hud.WARN))
-		if String(nd.get("reason", "")) != "":
-			body.add_child(_lab(String(nd.reason), 14, DIM))
+		var sl := _lab(s, UI.BODY_PX, Hud.WARN)
+		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rc.add_child(sl)
+		if String(nd.get("reason", "")) != "" and not compact:
+			var rl := _lab(String(nd.reason), UI.SMALL_PX, DIM)
+			rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			rc.add_child(rl)
 	var rb := _btn("Roster")
 	rb.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	rb.pressed.connect(func(): _show("roster"))
-	body.add_child(rb)
+	rc.add_child(rb)
+
+
+## A number of the page that counts to its new value when it changes (UI.tick; `fmt` takes one whole number).
+func _count(key: String, value: float, fmt: String, col: Color, size: int = UI.BODY_PX) -> Label:
+	var l := _lab(fmt % int(round(UI.tick(key, value))), size, col)
+	_num[l] = [key, value, fmt]
+	return l
 
 
 ## The stage part of the HUD's second line (food and water days left and the biggest need live on the needs board).
@@ -994,6 +1033,7 @@ func _roster_tab() -> void:
 				ob.add_item("-")
 				ob.selected = ob.item_count - 1
 			ob.disabled = locked
+			UI.feedback(ob)
 			ob.pressed.connect(func(): _popup_open = true)
 			ob.item_selected.connect(func(i):
 				_popup_open = false
@@ -1045,6 +1085,8 @@ func _name_cell(nm: String) -> Control:
 	b.add_theme_font_override("font", Fonts.sans(500))
 	b.add_theme_font_size_override("font_size", 16)
 	b.add_theme_color_override("font_color", Hud.INK)
+	b.add_theme_color_override("font_hover_color", Hud.ACCENT)
+	UI.feedback(b)
 	b.pressed.connect(func():
 		_popup_open = true
 		var le := LineEdit.new()
@@ -1086,6 +1128,7 @@ func _pick(items: Array, cur: int, on_pick: Callable, disabled := false) -> Opti
 		ob.add_item(String(it))
 	ob.selected = cur
 	ob.disabled = disabled
+	UI.feedback(ob)
 	ob.pressed.connect(func(): _popup_open = true)
 	ob.item_selected.connect(func(i):
 		_popup_open = false
@@ -1099,18 +1142,20 @@ func _defence_tab() -> void:
 	var siege = game.siege
 	var locked: bool = siege.attacking
 	body.add_child(_rich("Post a person on a spot of the compound. They shoot only the dead in the post's field of fire, take fewer bites in cover, and shoot better or worse by their traits; a coward on an open post can break and run. Somebody with no post is a tower guard. Nobody can be moved or built for during an attack.", 14))
-	var heads := HBoxContainer.new()    # the two parts of the tab, named above the fold
-	heads.add_theme_constant_override("separation", 12)
-	heads.add_child(_lab("Posts", 22, Hud.INK, true))
-	var sp := Control.new()
-	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	heads.add_child(sp)
-	var jb := _btn("Barricades (below)")
-	jb.pressed.connect(func():
-		if is_instance_valid(_bar_head):
-			scroll.scroll_vertical = int(_bar_head.position.y))
-	heads.add_child(jb)
-	body.add_child(heads)
+	# two columns: the posts on the left, the barricades on the right (the whole tab fits a 600 point window; it used to scroll down to the barricades)
+	var cols := HBoxContainer.new()
+	cols.add_theme_constant_override("separation", 20)
+	body.add_child(cols)
+	var lc := VBoxContainer.new()
+	lc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lc.size_flags_stretch_ratio = 1.15
+	lc.add_theme_constant_override("separation", 3)
+	cols.add_child(lc)
+	var rc := VBoxContainer.new()
+	rc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rc.add_theme_constant_override("separation", 4)
+	cols.add_child(rc)
+	lc.add_child(_lab("Posts", UI.HEAD_PX, Hud.INK, true))
 	var people: Array = []
 	for m in game.crew.members:
 		if not m.def.has("play") and not m.def.has("ally"):
@@ -1119,20 +1164,20 @@ func _defence_tab() -> void:
 		var pid := String(p.id)
 		var hold: Dictionary = siege.posts.holder(pid)
 		var pc := PanelContainer.new()
-		pc.add_theme_stylebox_override("panel", _box(Hud.PANEL_HI, Hud.OK if not hold.is_empty() else Hud.LINE2, 10))
+		pc.add_theme_stylebox_override("panel", _box(Hud.PANEL_HI, Hud.OK if not hold.is_empty() else Hud.LINE2, 5))
+		pc.mouse_filter = Control.MOUSE_FILTER_PASS
+		pc.tooltip_text = "%s\n%s" % [String(p.blurb), siege.posts.fit_text(p)]    # (the whole story of the post on hover: the card keeps to two lines so the tab fits without a scroll)
 		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 12)
+		hb.add_theme_constant_override("separation", 10)
 		pc.add_child(hb)
 		var col := VBoxContainer.new()
 		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_theme_constant_override("separation", 0)
 		hb.add_child(col)
-		col.add_child(_lab(String(p.name), 18, Hud.INK, true))
-		var bl := _lab("%s  Cover %d%%, reach %d tiles, field %d degrees%s." % [String(p.blurb), int(100.0 * float(p.cover)), int(p.range), int(2.0 * float(p.arc)), ", open ground" if bool(p.exposed) else ""], 13, Hud.INK2)
-		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART    # (wrapped: the Defence tab is as wide as the others)
+		col.add_child(_lab(String(p.name), 16, Hud.INK, true))
+		var bl := _lab("Cover %d%%   reach %d tiles   field %d\u00b0%s" % [int(100.0 * float(p.cover)), int(p.range), int(2.0 * float(p.arc)), "   open ground" if bool(p.exposed) else ""], UI.SMALL_PX, Hud.INK2)
+		bl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		col.add_child(bl)
-		var fl := _lab(siege.posts.fit_text(p), 13, DIM)
-		fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		col.add_child(fl)
 		var names: Array = ["Nobody"]
 		var cur := 0
 		for m in people:
@@ -1150,11 +1195,14 @@ func _defence_tab() -> void:
 				toast(String(res.why), Hud.WARN)
 			elif i > 0:
 				did["post"] = true
-		hb.add_child(_pick(names, cur, on_pick, locked))
-		body.add_child(pc)
-	_bar_head = _lab("Barricades", 22, Hud.INK, true)
-	body.add_child(_bar_head)
-	body.add_child(_rich("One in front of a fence segment. Each wears out as it works and a little every night, and is lost if the wire falls. Buy again when it is gone.", 14))
+		var ob := _pick(names, cur, on_pick, locked)
+		ob.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ob.fit_to_longest_item = false    # (a name with its traits is long: the box keeps its width and cuts the words; the list shows them whole)
+		ob.clip_text = true
+		hb.add_child(ob)
+		lc.add_child(pc)
+	rc.add_child(_lab("Barricades", UI.HEAD_PX, Hud.INK, true))
+	rc.add_child(_rich("One in front of a fence segment. Each wears out as it works and a little every night, and is lost if the wire falls. Buy again when it is gone.", 14))
 	var bars = siege.bars
 	var segs: Array = []
 	var names2: Array = []
@@ -1165,31 +1213,37 @@ func _defence_tab() -> void:
 	_bseg = clampi(_bseg, 0, segs.size() - 1)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
-	row.add_child(_lab("Segment", 15, Hud.INK2))
+	row.add_child(_lab("Segment", UI.BODY_PX, Hud.INK2))
 	row.add_child(_pick(names2, _bseg, func(i): _bseg = i))
-	body.add_child(row)
+	rc.add_child(row)
 	var cur_seg: Dictionary = segs[_bseg]
 	for id in bars.order:
 		var d: Dictionary = bars.defs[id]
 		var can: Dictionary = bars.can_build(cur_seg, String(id))
 		var r2 := HBoxContainer.new()
-		r2.add_theme_constant_override("separation", 12)
+		r2.add_theme_constant_override("separation", 10)
 		var tx := VBoxContainer.new()
 		tx.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tx.add_child(_lab("%s   (%s)" % [String(d.name), bars.cost_text(String(id))], 16, Hud.INK))
-		tx.add_child(_lab(String(d.blurb), 13, Hud.INK2))
+		tx.add_theme_constant_override("separation", 0)
+		tx.add_child(_lab("%s   (%s)" % [String(d.name), bars.cost_text(String(id))], UI.BODY_PX, Hud.INK))
+		var dl := _lab(String(d.blurb), UI.SMALL_PX - 1, Hud.INK2)
+		dl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tx.add_child(dl)
 		r2.add_child(tx)
 		var bb := _btn("Build")
 		bb.disabled = not bool(can.ok)
 		bb.tooltip_text = String(can.why)
+		bb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		bb.pressed.connect(func():
 			var res: Dictionary = bars.build(cur_seg, String(id))
 			toast(("Built: %s at the %s" % [String(d.name), String(cur_seg.name)]) if bool(res.ok) else String(res.why), Hud.INFO if bool(res.ok) else Hud.WARN)
 			_sig = "")
 		r2.add_child(bb)
-		body.add_child(r2)
+		rc.add_child(r2)
 	var sm: String = bars.summary()
-	body.add_child(_lab("Standing now: " + (sm if sm != "" else "none"), 14, Hud.INFO))
+	var sml := _lab("Standing now: " + (sm if sm != "" else "none"), 14, Hud.INFO)
+	sml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	rc.add_child(sml)
 
 
 # ------------------------------------------------------------------------------- the first-day list --
@@ -1254,7 +1308,7 @@ func _stage_card(stage: String) -> void:
 	var v: Vector2 = game._vp()
 	card = PanelContainer.new()
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel", _box(Color(0.06, 0.09, 0.08, 0.95), Hud.ACCENT, 28, 8))
+	card.add_theme_stylebox_override("panel", UI.frame_box(28))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
 	vb.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1262,7 +1316,7 @@ func _stage_card(stage: String) -> void:
 	var small := _lab("NEW STAGE", 16, Hud.INK3, true)
 	small.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(small)
-	var big := _lab(stage.to_upper(), 56, Hud.ACCENT, true)
+	var big := UI.title(stage.to_upper(), UI.CARD_TITLE_PX + 14)    # (a stage is a big moment: the largest card title)
 	big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(big)
 	var built: Array = []
@@ -1325,11 +1379,11 @@ func _morning_show() -> void:
 	var lg: Dictionary = econ.dawn_log
 	var pc := PanelContainer.new()
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	pc.add_theme_stylebox_override("panel", _box(Color(0.05, 0.075, 0.065, 0.985), Hud.ACCENT, 24, 8))
+	pc.add_theme_stylebox_override("panel", UI.frame_box(24))
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 8)
 	pc.add_child(vb)
-	vb.add_child(_lab("MORNING  -  DAY %d" % int(game.arc.day), 38, Hud.ACCENT, true))
+	vb.add_child(UI.title("MORNING  -  DAY %d" % int(game.arc.day), UI.CARD_TITLE_PX))
 	var rule := ColorRect.new()
 	rule.color = Hud.LINE2
 	rule.custom_minimum_size = Vector2(0, 1)
@@ -1373,8 +1427,8 @@ func _morning_show() -> void:
 	g.add_theme_constant_override("h_separation", 20)
 	g.add_theme_constant_override("v_separation", 8)
 	for r in rows:
-		g.add_child(_lab(String(r[0]), 17, DIM, true))
-		var l := _lab(String(r[1]), 18, r[2])
+		g.add_child(_lab(String(r[0]), 16, DIM, true))
+		var l := _lab(String(r[1]), UI.PROSE_PX, r[2])
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = 520
 		g.add_child(l)
@@ -1383,6 +1437,7 @@ func _morning_show() -> void:
 	root.add_child(pc)
 	morning = pc
 	pc.reset_size()
+	UI.open_fx(pc)
 
 
 # --------------------------------------------------------------------------------------- the sign --
