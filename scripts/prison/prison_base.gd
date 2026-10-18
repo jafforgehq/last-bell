@@ -191,6 +191,8 @@ func _obj(kind: String, cx: float, cy: float, facing: String = "s", variant: int
 			var tmp := w
 			w = h
 			h = tmp
+			o["w"] = float(w)    # the painter (town_chunk_paint.gd draw_kit) lays the turned picture by w and h: kept with the footprint, or the car is drawn off its solid tiles
+			o["h"] = float(h)
 		var x0 := int(floor(cx - float(w) / 2.0 + 0.01))
 		var y0 := int(floor(cy - float(h) / 2.0 + 0.01))
 		for yy in range(y0, y0 + h):
@@ -320,7 +322,7 @@ func build(seed_i: int = 1, clear: bool = false) -> Dictionary:
 	_building(WORKSHOP, T_CONCRETE, G_HALL, [Rect2i(32, 24, 5, 1)])
 	_obj("workbench", 29.0, 27.0, "s")
 	_obj("workbench", 39.0, 27.0, "s")
-	_obj("tool_chest", 42.0, 29.0, "w")
+	_obj("tool_chest", 42.0, 28.5, "s")    # (the kit draws a tool chest facing north or south only: turned west it lay off its tiles)
 	_obj("toolbox", 28.5, 33.5, "s")
 	_obj("woodpile", 36.0, 34.5, "n")
 	_obj("crate", 41.5, 34.5, "n")

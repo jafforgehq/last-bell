@@ -1115,3 +1115,55 @@ func test_the_prison_objectives_fold_to_the_top_task_remember_it_and_glow_for_a_
 	check(not Prefs.on("ui", "objectives_folded"), "and open again")
 	Prefs.set_value("ui", "objectives_folded", was)
 	g.free()
+
+
+
+## CAR FOOTPRINT (playtest 7): the parked car by the gate (prison_base.gd, turned "e", drawn along y) was solid on tiles the picture did not cover and Ruth walked over the
+## rest of it. Every solid kit thing of the base and of the seven raid sites is drawn over its solid footprint: every tile of the footprint is solid, and the picture (as
+## town_chunk_paint.gd `draw_kit` lays it) runs past the footprint by less than a tile on any side.
+func _kit_drawn_on_footprint(where: String, objs: Array, solid: Array, w: int) -> int:
+	var TownArt = load("res://scripts/town/town_art.gd")
+	var n := 0
+	for o in objs:
+		if not bool(o.get("solid", false)) or String(o.get("kit", "")) == "" or o.has("turn"):
+			continue
+		var lk: Dictionary = TownArt.look(String(o.kit), String(o.get("facing", o.get("orient", ""))), String(o.get("state", "")), int(o.get("variant", 0)))
+		if lk.is_empty():
+			continue
+		var ow := int(round(float(o.w)))
+		var oh := int(round(float(o.h)))
+		var x0 := int(floor(float(o.cx) - float(ow) / 2.0 + 0.01))
+		var y0 := int(floor(float(o.cy) - float(oh) / 2.0 + 0.01))
+		var all_solid := true
+		for yy in range(y0, y0 + oh):
+			for xx in range(x0, x0 + ow):
+				all_solid = all_solid and int(solid[yy * w + xx]) != 0
+		check(all_solid, "%s: the %s at %s,%s (%s) is solid on every tile of its %dx%d footprint" % [where, o.kind, o.cx, o.cy, o.get("facing", ""), ow, oh])
+		var tl := Vector2(float(o.cx) - float(o.w) * 0.5, float(o.cy) - float(o.h) * 0.5) + Vector2(lk.off) / 64.0
+		var pic := Rect2(tl, Vector2(lk.size) / 64.0)
+		var fp := Rect2(x0, y0, ow, oh)
+		var past := maxf(maxf(fp.position.x - pic.position.x, fp.position.y - pic.position.y), maxf(pic.end.x - fp.end.x, pic.end.y - fp.end.y))
+		check(past < 1.0, "%s: the %s at %s,%s (%s) is drawn at %s, over its footprint %s (%.2f tiles past it)" % [where, o.kind, o.cx, o.cy, o.get("facing", ""), pic, fp, past])
+		n += 1
+	return n
+
+
+func test_every_solid_thing_of_the_prison_and_the_raid_sites_is_drawn_on_its_footprint() -> void:
+	var Base = load("res://scripts/prison/prison_base.gd")
+	var Loot = load("res://scripts/prison/prison_loot.gd")
+	var Site = load("res://scripts/prison/prison_site.gd")
+	for clear in [false, true]:
+		var b = Base.new()
+		var t: Dictionary = b.build(1, clear)
+		var car: Array = b.objects.filter(func(o): return String(o.kind) == "car_h")
+		eq(car.size(), 1, "one parked car by the gate")
+		if car.size() == 1:
+			eq([float(car[0].w), float(car[0].h)], [2.0, 4.0], "the car turned east is 2 wide and 4 long, as it is drawn")
+			for y in range(44, 48):
+				for x in range(14, 16):
+					check(int(t.data.solidP[y * Base.W + x]) != 0, "the car's tile %d,%d is solid" % [x, y])
+		check(_kit_drawn_on_footprint("base clear %s" % clear, b.objects, t.data.solidP, Base.W) > 20, "the base has its kit things")
+	for id in Loot.place_ids():
+		if Site.LAYOUTS.has(String(Loot.place_cfg(id).get("layout", ""))):
+			var st: Dictionary = Loot.make_town(1, id)
+			_kit_drawn_on_footprint(id, st.data.objects, st.data.solidP, int(st.data.W))
