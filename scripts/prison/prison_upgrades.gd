@@ -300,6 +300,11 @@ func _lit() -> bool:
 	return econ.tier("power") >= 1 and float(game.stores.get("fuel", 0.0)) > 0.0
 
 
+## The electric lights burn: the generator runs and it is not the storm's blackout (prison_arc.gd; the blackout is a look only here, the generator's rules are `_lit`'s).
+func lights_on() -> bool:
+	return _lit() and not (game.arc != null and game.arc.blackout())
+
+
 func _calm() -> bool:
 	return not game.siege.attacking and game.tod >= CALM_FROM and game.tod < CALM_TO and game.phase == "managed"
 
@@ -499,7 +504,7 @@ func glow_spots(n: float) -> Array:
 				out.append([Vector2(t), 3.2, Color(1.0, 0.85, 0.5, 0.35 * n)])
 	if _lit():
 		out.append([Vector2(25.4, 33.2) + Base.OFF_ROW2, 2.0, Color(1.0, 0.8, 0.4, 0.4 * n)])    # the shed's window
-		if econ.tier("power") >= 1:
+		if econ.tier("power") >= 1 and lights_on():
 			for p in POLES:
 				out.append([Vector2(float(p[0]), float(p[1])), 4.0, Color(1.0, 0.97, 0.8, 0.35 * n)])
 		if econ.tier("radio") >= 1:
@@ -942,7 +947,7 @@ func _paint_top(c: CanvasItem) -> void:
 			_ln(c, pp, pp - Vector2(0, 0.9), WOOD_D, 5.0)
 			var head: Vector2 = pp - Vector2(0, 0.95) + out_v * 0.18
 			_r(c, head.x - 0.2, head.y - 0.12, 0.4, 0.24, Color(0.25, 0.26, 0.28), true, 2.0)
-			c.draw_rect(Rect2((head - Vector2(0.13, 0.05)) * T, Vector2(0.26, 0.1) * T), Color(1.0, 0.97, 0.8) if _lit() else Color(0.4, 0.4, 0.38))
+			c.draw_rect(Rect2((head - Vector2(0.13, 0.05)) * T, Vector2(0.26, 0.1) * T), Color(1.0, 0.97, 0.8) if lights_on() else Color(0.4, 0.4, 0.38))
 	if econ.tier("radio") >= 1:    # the mast: a lattice, guy wires, a red light (the blink is in fx)
 		var m := Vector2(61.9, 29.3) + Base.OFF_ROW2
 		_shadow(c, m.x - 0.3, m.y - 0.2, 0.7, 0.4)
@@ -969,7 +974,7 @@ func _paint_top(c: CanvasItem) -> void:
 
 ## Floodlight cones, drawn by the game's glow layer (prison_game.gd `_draw_glow`) which is ABOVE the night tint: the warm white is added to the dark picture instead of being tinted blue by it.
 func draw_cones(c: CanvasItem, cam: Vector2, zoom: float, vp: Vector2, n: float) -> void:
-	if n <= 0.02 or econ.tier("power") < 1 or not _lit():
+	if n <= 0.02 or econ.tier("power") < 1 or not lights_on():
 		return
 	c.draw_set_transform(vp / 2.0 - cam * zoom, 0.0, Vector2.ONE * zoom / T)
 	for t in game.base.towers:    # towers throw their cones outward too

@@ -395,16 +395,11 @@ func _ground_at(x: float, y: float) -> String:
 
 func _weather(dt: float) -> void:
 	var day := int(floor(game.siege.abs_h / 24.0)) if game.siege != null else 0
-	var h: float = game.tod
 	var r := 0.0
 	if rain_force >= 0.0:
 		r = rain_force
-	elif not norain:
-		var a := _hash01(day * 7 + 3)
-		if a < 0.4:
-			var start := 9.0 + _hash01(day * 13 + 1) * 8.0
-			var len_h := 3.0 + _hash01(day * 5 + 2) * 5.0
-			r = smoothstep(start, start + 0.7, h) * (1.0 - smoothstep(start + len_h, start + len_h + 1.0, h)) * (0.45 + 0.55 * _hash01(day * 3 + 9))
+	elif not norain and game.get("rain") != null:
+		r = game.rain.level    # (the rain you see: prison_rain.gd)
 	_rain = move_toward(_rain, r, 0.15 * dt)
 	var gust := 0.5 + 0.5 * sin(_t * 0.07 + 1.3) * sin(_t * 0.031)
 	var w := 0.3 + 0.25 * _hash01(day * 11 + 4) + 0.2 * gust + 0.3 * _rain
