@@ -3456,7 +3456,7 @@ func _draw_glow() -> void:
 	var v := _vp()
 	var spots: Array = []
 	for f in base.fires:
-		spots.append([f, 7.0, Color(1.0, 0.55, 0.2, 0.85 * n * (0.85 + 0.15 * sin(clock * 11.0 + f.x)))])
+		spots.append([f, 4.5, Color(1.0, 0.66, 0.38, 0.55 * n * (0.85 + 0.15 * sin(clock * 11.0 + f.x)))])    # (a fire barrel: a warm pool round it, not the whole yard)
 	lamps.draw(glow, lamps.lamps(n), Transform2D(0.0, Vector2.ONE * zoom_px / TILE, 0.0, v / 2.0 - cam_center * zoom_px), zoom_px, v, rain.wet, rain.haze(), clock)    # LAMPS: the yard lamps and the towers
 	if crew != null:    # a faint light on each guard and each one on a post, so the crew reads at night
 		for m in crew.members:
