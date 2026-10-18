@@ -72,6 +72,8 @@ var dead: Array = []
 var windows: Array = []
 var props: Array = []
 var groups: Array = []
+## The site's lamps at night: [x, y, kind] in tiles (kind: lamp, flood, mast, crane or edge). Which burn is prison_lamps.gd's (the power is out: a seed picks the few that still run).
+var lamps: Array = []
 var entry := Vector2(4.5, 31.5)
 var entry_road := Rect2i(0, 30, 12, 4)
 var exit_at := Vector2(59.5, 31.5)
@@ -258,6 +260,13 @@ func _keep(r: Rect2i) -> void:
 		for x in range(r.position.x, r.end.x):
 			if _in(x, y):
 				keep[_i(x, y)] = 1
+
+
+## A lamp at (x, y) tiles; a pole lamp or a floodlight mast also gets its foot painted on the ground (`post`).
+func _lamp(x: float, y: float, kind: String = "lamp") -> void:
+	lamps.append([x, y, kind])
+	if kind == "lamp" or kind == "flood":
+		_prop("post", Rect2(x - 0.2, y - 0.2, 0.4, 0.4), {"big": kind == "flood"})
 
 
 func _entry(r: Rect2i, at: Vector2) -> void:
@@ -683,7 +692,7 @@ func _result() -> Dictionary:
 		"entry": {"pos": entry, "face": "E", "road": entry_road, "label": "The way in", "sign": Vector2(-1, -1), "arrows": []},
 		"candidates": [], "rescue_for": {}, "rescue": [], "tile_house": th, "tile_room": tr, "fields": [], "lots": [], "landmarks": [],
 		"streets": {"pitch": 32, "block": 28, "road": 4, "names_x": [], "names_y": [], "roads": [], "avenue": -1},
-		"site": {"layout": lay, "props": props, "groups": groups, "exit": exit_at, "drop": drop},
+		"site": {"layout": lay, "props": props, "groups": groups, "exit": exit_at, "drop": drop, "lamps": lamps},
 	}
 
 
@@ -766,6 +775,13 @@ func _port() -> void:
 	_dead(Rect2i(12, 1, 24, 62), 30, "mix")
 	_dead(Rect2i(36, 1, 15, 62), 16, "mix")
 	_dead(Rect2i(1, 25, 11, 12), 4, "wander")
+	for y in [10.5, 18.5, 31.0, 38.0, 48.5, 60.0]:    # the quay lamps along the water, the yard lamps in the aisles, the crane lights on the booms
+		_lamp(50.1, y)
+	for q in [Vector2(20.0, 13.0), Vector2(28.0, 25.0), Vector2(20.0, 39.0), Vector2(28.0, 51.0)]:
+		_lamp(q.x, q.y)
+	for cy in [5, 21, 41]:
+		_lamp(42.0, float(cy) + 3.0, "crane")
+		_lamp(57.0, float(cy) + 3.0, "crane")
 
 
 ## THE AIRPORT: a runway and a taxiway across the north, the apron with two airliners and their fuel trucks, the terminal (three gate lounges with jet bridges, the hall, duty free, first aid,
@@ -847,6 +863,13 @@ func _airport() -> void:
 	_dead(Rect2i(17, 17, 46, 21), 20, "mix")
 	_dead(Rect2i(1, 2, 62, 15), 12, "wander")
 	_dead(Rect2i(2, 46, 18, 16), 6, "mix")
+	for q in [Vector2(17.6, 17.6), Vector2(42.6, 17.6), Vector2(62.2, 17.6), Vector2(17.6, 37.2), Vector2(62.2, 37.2)]:    # the apron floodlights, the runway's edge lights, the car park lamps
+		_lamp(q.x, q.y, "flood")
+	for x in range(3, 62, 4):
+		_lamp(float(x), 2.3, "edge")
+		_lamp(float(x), 10.7, "edge")
+	for q in [Vector2(2.6, 47.0), Vector2(11.0, 47.0), Vector2(19.4, 47.0), Vector2(2.6, 61.2), Vector2(19.4, 61.2)]:
+		_lamp(q.x, q.y)
 
 
 ## THE STADIUM: an oval bowl round (32, 30). From the middle out: the pitch (the crowd of dead), the track, the seats (solid but low: a shot goes over; eight aisles), the concourse (food stalls),
@@ -937,6 +960,12 @@ func _stadium() -> void:
 		var q: Vector2i = conc[rng.randi() % conc.size()]
 		_dead(Rect2i(q, Vector2i.ONE), 1, "wander")
 	_dead(Rect2i(1, 5, 62, 51), 8, "wander")
+	for k in 4:    # the four floodlight masts' heads (painted by `_bowl_high`), the road lamps
+		var base := _ell(ST_C, ST_R, 0.95, PI * 0.25 + float(k) * PI * 0.5)
+		var hd := base + (ST_C - base).normalized() * 0.45
+		lamps.append([hd.x, hd.y, "mast"])
+	for q in [Vector2(20.0, 5.2), Vector2(44.0, 5.2), Vector2(20.0, 55.7), Vector2(44.0, 55.7)]:
+		_lamp(q.x, q.y)
 
 
 ## THE HOSPITAL: one big building of wards round two corridors that cross, the pharmacy and the staff room, the theatre, the morgue (its dead lie in rows), the lobby with the main doors and
@@ -1017,6 +1046,8 @@ func _hospital() -> void:
 	_keep(Rect2i(58, 1, 5, 5))
 	_dead(Rect2i(1, 1, 62, 62), 14, "wander")
 	_dead(Rect2i(14, 45, 44, 15), 8, "mix")
+	for q in [Vector2(15.0, 51.2), Vector2(25.0, 51.2), Vector2(35.0, 51.2), Vector2(57.5, 51.2), Vector2(15.0, 59.6), Vector2(35.0, 59.6), Vector2(57.5, 59.6), Vector2(45.3, 44.6)]:    # the car park lamps, the lamp at the lobby doors
+		_lamp(q.x, q.y)
 
 
 ## THE SUPERMARKET: the big store (the sales floor with four aisles of shelves and a cross aisle, the checkouts, the stockroom, a pharmacy counter, the office), the car park with its bays,
@@ -1080,6 +1111,10 @@ func _supermarket() -> void:
 	_keep(Rect2i(58, 1, 5, 3))
 	_dead(Rect2i(10, 34, 52, 27), 14, "mix")
 	_dead(Rect2i(17, 1, 46, 4), 4, "wander")
+	for x in [12.0, 24.0, 36.0, 48.0, 60.0]:    # the car park lamps between the rows of bays
+		_lamp(x, 44.6)
+	for x in [12.0, 30.0, 48.0]:
+		_lamp(x, 59.6)
 
 
 ## THE POLICE STATION: the station (the armoury, the evidence store, the locker room along the north; the cell block with four cells, the offices and the front lobby along the south), sandbags and
@@ -1152,6 +1187,8 @@ func _police() -> void:
 	_dead(Rect2i(16, 34, 32, 6), 8, "still", 0.15)
 	_dead(Rect2i(50, 6, 12, 34), 8, "mix")
 	_dead(Rect2i(1, 1, 62, 62), 10, "wander")
+	for q in [Vector2(50.4, 8.0), Vector2(50.4, 20.0), Vector2(50.4, 32.0), Vector2(61.6, 14.0), Vector2(61.6, 38.0), Vector2(47.6, 35.0), Vector2(12.0, 39.7), Vector2(30.0, 44.3)]:    # the car park, the door, the road
+		_lamp(q.x, q.y)
 
 
 ## THE INDUSTRIAL YARD: a chain-link fence round the yard (a gate on the west, one on the east), the workshop, the garage with a car on the ramp, the warehouse, the security hut, machinery
@@ -1215,6 +1252,8 @@ func _industrial() -> void:
 	exit_at = Vector2(60.5, 47.5)
 	_keep(Rect2i(57, 45, 6, 6))
 	_dead(yard.grow(-1), 30, "mix", 0.08, 0.06)
+	for q in [Vector2(9.6, 5.6), Vector2(54.4, 5.6), Vector2(9.6, 56.4), Vector2(54.4, 56.4), Vector2(30.0, 27.4)]:    # the yard floodlights
+		_lamp(q.x, q.y, "flood")
 	_dead(Rect2i(1, 1, 62, 62), 6, "wander")
 
 
@@ -1329,6 +1368,12 @@ static func paint(c: CanvasItem, town: Dictionary, high: bool) -> void:
 					c.draw_line(Vector2(float(x), r.position.y + 6.0), Vector2(float(x), r.end.y - 6.0), Color(0.2, 0.2, 0.22), 3.0)
 			"scrap":
 				_scrap(c, r)
+			"post":    # a lamp's pole (a mast when big), seen from above: its shadow and its foot
+				var cc := r.get_center()
+				var rad := 14.0 if bool(p.get("big", false)) else 7.0
+				c.draw_line(cc, cc + SH.normalized() * TILE * (3.0 if bool(p.get("big", false)) else 1.4), Color(0, 0, 0, 0.2), rad)
+				c.draw_circle(cc, rad + 3.0, INK)
+				c.draw_circle(cc, rad, Color(0.5, 0.51, 0.53))
 
 
 # ------------------------------------------------------------------ the shared strokes --

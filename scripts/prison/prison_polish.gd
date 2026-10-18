@@ -170,8 +170,8 @@ func _ground(c: CanvasItem, cx: int, cy: int) -> void:
 						_blob(c, Vector2(fx, fy) + o + Vector2(0.03, 0.03), 0.17, 0.11, o.x * 3.0, Color(0.0, 0.0, 0.0, 0.55))
 						_blob(c, Vector2(fx, fy) + o + Vector2(-0.05, -0.04), 0.07, 0.04, o.x * 3.0, Color(0.5, 0.58, 0.7, 0.22), 2)
 				G_SIDEWALK:
-					if _r(fx, fy, 6) < 0.22:    # damp or stained slab: breaks the repeat of the texture
-						_blob(c, Vector2(fx, fy) + o, 0.35 + o.x * 0.4, 0.3 + o.y * 0.3, o.y * 3.0, Color(0.10, 0.09, 0.08, 0.10 + o.x * 0.08))
+					if _r(fx, fy, 6) < 0.22:    # damp or stained slab: breaks the repeat of the texture (small and faint: big dark ones read as dirt that never goes)
+						_blob(c, Vector2(fx, fy) + o, 0.22 + o.x * 0.22, 0.18 + o.y * 0.16, o.y * 3.0, Color(0.10, 0.09, 0.08, 0.04 + o.x * 0.04))
 					if _r(fx, fy, 7) < 0.05:
 						_blob(c, Vector2(fx, fy) + o, 0.12, 0.09, o.x * 3.0, Color(0.03, 0.02, 0.02, 0.32))    # oil
 					if _r(fx, fy, 8) < 0.04:    # a lighter, swept slab
@@ -314,10 +314,10 @@ func _yard_ground(c: CanvasItem, cx: int, cy: int) -> void:
 					c.draw_line(b, b + Vector2(-0.06, -0.1), col, 0.025)
 					c.draw_line(b, b + Vector2(0.0, -0.13), col, 0.025)
 					c.draw_line(b, b + Vector2(0.06, -0.09), col, 0.025)
-			elif rc > 0.988:    # a shallow puddle with the sky in it
+			elif rc > 0.988:    # a shallow dip where a puddle stands after rain (faint: dark, it read as a grey blotch on a clean, dry yard)
 				var pp := Vector2(fx, fy) + Vector2(0.5, 0.5)
-				_blob(c, pp, 0.45, 0.28, _r(fx, fy, 370) * 3.0, Color(0.12, 0.13, 0.14, 0.35))
-				_blob(c, pp + Vector2(-0.06, -0.05), 0.3, 0.16, _r(fx, fy, 370) * 3.0, Color(0.55, 0.62, 0.7, 0.18), 2)
+				_blob(c, pp, 0.36, 0.22, _r(fx, fy, 370) * 3.0, Color(0.12, 0.13, 0.14, 0.1))
+				_blob(c, pp + Vector2(-0.05, -0.04), 0.24, 0.13, _r(fx, fy, 370) * 3.0, Color(0.55, 0.62, 0.7, 0.07), 2)
 
 
 ## Tyre ruts and oil where the truck stands, a scorch ring at each fire.
@@ -843,16 +843,16 @@ func _zone_dirt(c: CanvasItem, zi: int) -> void:
 	c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## The ground stains and oil of `_ground` on a slab or asphalt tile of a zone; a tidy zone (`d` 0) keeps a third of them, so the ground still varies.
+## The ground stains and oil of `_ground` on a slab or asphalt tile of a zone; a tidy zone (`d` 0) keeps them small and faint, so the ground still varies but looks clean.
 func _ground_dirt(c: CanvasItem, x: int, y: int, d: float) -> void:
 	var fx := float(x)
 	var fy := float(y)
 	var o := Vector2(_r(fx, fy, 1), _r(fx, fy, 2))
-	var f := 0.35 + 0.65 * d
+	var f := 0.15 + 0.85 * d
 	match _g(x, y):
 		G_SIDEWALK:
-			if _r(fx, fy, 6) < 0.22:
-				_blob(c, Vector2(fx, fy) + o, 0.35 + o.x * 0.4, 0.3 + o.y * 0.3, o.y * 3.0, Color(0.10, 0.09, 0.08, (0.10 + o.x * 0.08) * f))
+			if _r(fx, fy, 6) < 0.22:    # (dirty: the old big stain; tidy: shrinks to the faint small mark of the open yard)
+				_blob(c, Vector2(fx, fy) + o, (0.35 + o.x * 0.4) * (0.6 + 0.4 * d), (0.3 + o.y * 0.3) * (0.6 + 0.4 * d), o.y * 3.0, Color(0.10, 0.09, 0.08, (0.10 + o.x * 0.08) * f))
 			if _r(fx, fy, 7) < 0.05:
 				_blob(c, Vector2(fx, fy) + o, 0.12, 0.09, o.x * 3.0, Color(0.03, 0.02, 0.02, 0.32 * d))    # oil
 			if _r(fx, fy, 8) < 0.04:
