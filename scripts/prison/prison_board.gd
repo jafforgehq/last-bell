@@ -15,14 +15,15 @@ const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one l
 const BOARD_AT := Vector2(31.0, 46.0)    # the needs sign, inside the gate (outside the gate prompt's reach)
 const REACH := 2.8
 const NAME_MAX := 14    # the longest name a person can be given in the Roster
-const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "bench", "power", "fence", "radio", "convoy"]
-const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "bench": "Reloading bench", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
+const BUILDINGS := ["water", "garden", "kitchen", "infirmary", "dormitory", "yard", "bench", "power", "fence", "radio", "convoy"]
+const TITLES := {"water": "Water", "garden": "Garden", "kitchen": "Kitchen", "infirmary": "Infirmary", "dormitory": "Dormitory", "yard": "Salvage yard", "bench": "Reloading bench", "power": "Power", "fence": "Fence", "radio": "Radio", "convoy": "Convoy"}
 const BLURB := {
 	"water": "Everyone drinks 1 water a day. The pump and barrels give more. Worked by a hauler.",
 	"garden": "Grows the food: everyone eats 1 a day and part of the stock spoils. Worked by a gardener.",
 	"kitchen": "Cooks the meals. A cook alive in a kitchen lifts morale every day; the larder keeps food from spoiling. Worked by a cook.",
 	"infirmary": "Cots and medicine. A medic alive in the infirmary lifts morale and treats bites. Worked by a medic.",
 	"dormitory": "Beds. More people than beds costs morale every day. Worked by a hauler.",
+	"yard": "Sorts the junk the crew clears into a steady trickle of scrap every day (about 5, 8 or 10), as long as a hauler is alive and scrap is under the cap. Hardware stores and garages stay the way to big amounts, parts and fuel. Worked by a hauler.",
 	"bench": "Makes rounds for Ruth's gun from scrap every day (2 scrap for 5 rounds), as long as a mechanic works it and scrap lasts. Only Ruth uses them: guards, allies and raid companions fire for free. Worked by a mechanic.",
 	"power": "The generator runs the floodlights and the radio room. It burns 1 fuel a day. Worked by a mechanic.",
 	"fence": "Raises the hit points of every fence wall against the nightly attacks. Worked by a mechanic.",
@@ -653,6 +654,11 @@ func _projects_tab() -> void:
 		right.add_child(_card(p))
 
 
+## ", or build the Salvage yard" for a scrap shortage while no yard stands (the raid is still the way to big amounts).
+func _yard_hint(res: String) -> String:
+	return ", or build the Salvage yard" if res == "scrap" and econ.tier("yard") == 0 else ""
+
+
 func _card(p: Dictionary) -> Control:
 	var id := String(p.id)
 	var state := String(p.state)
@@ -825,7 +831,7 @@ func top_needs() -> Array:
 	for k in total:
 		var sh: float = float(total[k]) - float(game.stores.get(k, 0.0))
 		if sh > 0.0:
-			rows.append([100.0 + 1000.0 / maxf(1.0, sh), k, "%s: short by %d for %s" % [RES_NAME.get(k, k), int(ceil(sh)), first_for[k]], "Raid a %s" % econ.place_word(String(econ.cfg.fixes.get(k, "house")))])
+			rows.append([100.0 + 1000.0 / maxf(1.0, sh), k, "%s: short by %d for %s" % [RES_NAME.get(k, k), int(ceil(sh)), first_for[k]], "Raid a %s%s" % [econ.place_word(String(econ.cfg.fixes.get(k, "house"))), _yard_hint(String(k))]])
 	for r in econ.cfg.needs.low:
 		var have: float = float(game.stores.get(r, 0.0))
 		if have < float(econ.cfg.needs.low[r]) and not rows.any(func(q): return q[1] == r):
@@ -898,7 +904,7 @@ func _needs_tab() -> void:
 	for h in ["", "Stock", "Made", "Used", "Spoiled", "Net", "Left"]:
 		g.add_child(_lab(h, UI.SMALL_PX, DIM))
 	var caps: Dictionary = econ.caps()
-	for r in ["food", "water", "ammo", "fuel"]:
+	for r in ["food", "water", "scrap", "ammo", "fuel"]:
 		var e: Dictionary = rep.res[r]
 		var mk := roundi(float(e.prod))
 		var us := roundi(float(e.cons))
@@ -916,7 +922,7 @@ func _needs_tab() -> void:
 	og.columns = 4
 	og.add_theme_constant_override("h_separation", 10)
 	og.add_theme_constant_override("v_separation", 1)
-	for r in ["meds", "scrap", "parts"]:
+	for r in ["meds", "parts"]:
 		og.add_child(_lab(RES_NAME[r], UI.BODY_PX, Hud.INK2))
 		og.add_child(_count("stock." + r, float(int(game.stores.get(r, 0.0))), "%d / " + str(int(caps.get(r, 0))), Hud.INK2))
 	lc.add_child(og)
@@ -946,7 +952,7 @@ func _needs_tab() -> void:
 		if float(nd.get("days", -1.0)) >= 0.0:
 			s += " (%.1f days left)" % float(nd.days)
 		if nd.get("place", "") != "":
-			s += ".  Raid a %s." % econ.place_word(String(nd.place))
+			s += ".  Raid a %s%s." % [econ.place_word(String(nd.place)), _yard_hint(String(nd.res))]
 		var sl := _lab(s, UI.BODY_PX, Hud.WARN)
 		sl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		rc.add_child(sl)
