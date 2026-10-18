@@ -740,22 +740,13 @@ func _gate(e: Dictionary) -> void:
 		get_tree().create_timer(0.4, true, false, true).timeout.connect(func(): sfx("pd_rolling_0", -4.0, 1.0, "SFX", 0.05, at, 30.0))
 
 
-## A door of a building: a cell block's is a barred steel door (unlocked, then slammed behind her), any other a wooden one.
-func _door(house: int, entering: bool) -> void:
-	var cell := false
-	if house >= 0 and game.town != null and house < (game.town.houses as Array).size():
-		var r: Rect2i = game.town.houses[house].get("rect", Rect2i())
-		var c := Vector2(r.get_center())
-		if game.mode == "base":
-			for z in game.base.ZONES:
-				if z.id == "cells" and Rect2(z.rect).has_point(c):
-					cell = true
-	if cell:
-		sfx("pd_cell_open_0", -5.0, _rng.randf_range(0.96, 1.04), "SFX", 0.3)
-		get_tree().create_timer(0.55, true, false, true).timeout.connect(func(): sfx("pd_steel_clang_0", -6.0, _rng.randf_range(0.97, 1.03), "SFX", 0.3))
-	else:
-		sfx("pd_wood_open_0", -2.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3)
-		get_tree().create_timer(0.6, true, false, true).timeout.connect(func(): sfx("pd_wood_close_0", -3.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3))
+## A door of a raid's building as she goes in or out: a wooden one opened and let swing shut. Not at home: the prison's zones are "houses" too (the yard and the gate
+## among them) and their real doors make their own sound (prison_doors.gd), so this played a phantom door on every zone line.
+func _door(_house: int, _entering: bool) -> void:
+	if game.mode == "base":
+		return
+	sfx("pd_wood_open_0", -2.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3)
+	get_tree().create_timer(0.6, true, false, true).timeout.connect(func(): sfx("pd_wood_close_0", -3.0, _rng.randf_range(0.95, 1.05), "SFX", 0.3))
 
 
 ## The prison gate (the truck goes out, the truck comes back): the chain, then the rolling door.

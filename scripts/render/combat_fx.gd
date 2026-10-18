@@ -343,6 +343,12 @@ func camera_push() -> Vector2:
 	return _push * shake_k if enabled and not calm else Vector2.ZERO
 
 
+## A jolt of the camera from outside a shot (the avatar bitten): `v` screen pixels, capped like a shot's kick; nothing under "reduce motion".
+func jolt(v: Vector2) -> void:
+	if enabled and not calm:
+		_push = (_push + v).limit_length(KICK_MAX)
+
+
 ## Whether the picture is frozen for a close kill (real seconds left); nothing under "reduce motion".
 func frozen() -> bool:
 	return enabled and not calm and hitstop > 0.0
