@@ -186,7 +186,7 @@ var dog
 var phase := "managed"    # "clear" (clear the prison) then "managed" (the base loop). See the header.
 var zone_done: Array = []    # bool per Base.ZONES
 var _zone_t := 0.0
-var allies_alive: Array = ["cole", "bea", "ike", "hal", "wren"]
+var allies_alive: Array = ["cole", "bea", "ike"]
 var ally_chasers := {}    # Zombie -> member: dead that go for an ally instead of Ruth (see _step)
 var revive_t := 0.0
 var _hurt_t := 0.0
@@ -921,7 +921,7 @@ func _radial_texture() -> Texture2D:
 
 # ----------------------------------------------------------------------- modes --
 
-## `--crew=full`: the old start (all fourteen of the roster and the five allies, 20 beds), so that the old checks run.
+## `--crew=full`: the old start (all fourteen of the roster and the three allies, 18 beds), so that the old checks run.
 func crew_full() -> bool:
 	return String(args.get("crew", "")) == "full"
 

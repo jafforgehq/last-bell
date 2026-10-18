@@ -1385,6 +1385,32 @@
   },
   "people": [
     {
+      "name": "Hal",
+      "id": "hal",
+      "early": true,
+      "key": "marcus",
+      "look": {
+        "top": "#7a6a3a",
+        "pants": "#3a4a3a",
+        "skin": "#5e3b2a",
+        "hatColor": "#4a5a2a"
+      },
+      "skill": "gardener"
+    },
+    {
+      "name": "Wren",
+      "id": "wren",
+      "early": true,
+      "key": "ana",
+      "look": {
+        "top": "#a0703a",
+        "outer": "#4a3a5a",
+        "pants": "#3a3a44",
+        "skin": "#c69877"
+      },
+      "skill": "mechanic"
+    },
+    {
       "name": "Ivo",
       "key": "hector",
       "look": {

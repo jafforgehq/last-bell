@@ -1,7 +1,7 @@
 ## SAVE (Steam audit C1, idea 1): the prison's one save slot. A versioned JSON file in user:// of its own (not the old games' saves, not prison_arc.json), written by `prison_game.gd` at dawn, on a return from a raid and
 ## when the pause menu asks, and read by the title's Continue and `--prison --continue`.
 ## WHAT IS SAVED: the managed base only: the clock and the night count, the stores, the economy (projects, tiers, roles, morale), the story (beats seen, choices, letters, log, stats), the fence's hit points, the crew
-## (the five first people by `allies_alive`, who walked out or died by `econ_gone`, the people raids brought by `people.recruits`), the weapon rack, the backpack and the belt.
+## (the three first people by `allies_alive` (five in a save of playtest 5), who walked out or died by `econ_gone`, the people raids brought by `people.recruits`), the weapon rack, the backpack and the belt.
 ## ALSO (no version change: an older file lacks the key and loads with empty defaults): `raidx`, the destination map's Done and Avoid marks and the three loadout presets.
 ## WHAT IS NOT: a raid, a night attack and the clear phase (a save is refused in all three; the clear phase starts again from its beginning); a crew member's place on the floor (the crew is rebuilt at the gate, as at every
 ## return from a raid); the dead of the pen; the gate's choice of target.

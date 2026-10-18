@@ -68,14 +68,14 @@ const OFF_KITCHEN := Vector2(-30.0, -2.0)    # the kitchen end of the canteen (r
 const OFF_BARRELS := Vector2(-31.0, -2.0)
 ## The six zones of the clear phase: rect (tiles), dead (dormant records), dead_rect (where they stand: a rect or an array of rects), loot (containers), crew (roster ids freed when it is cleared), rel (where they
 ## appear), stash (the zone's first container holds this instead: a sure find). The infirmary's dead stand only in its east end so that the first room is a few dead for the party. The last zone
-## is the gate. Since playtest 4 the party is five, so every zone after the first has two or three more dead.
+## is the gate. The party was five in playtest 5 (two or three more dead a zone); since playtest 6 it is three again and so are the counts (62 on the west map).
 const ZONES := [
 	{"id": "infirmary", "name": "Infirmary", "rect": Rect2i(8, 24, 15, 13), "dead": 3, "dead_rect": Rect2i(15, 25, 7, 11), "loot": 3, "crew": ["ana", "tomas"], "rel": Vector2(14.5, 31.0), "keys": ["meds", "food", "scrap"]},
-	{"id": "cells", "name": "Cell block", "rect": Rect2i(9, 6, 26, 15), "dead": 20, "loot": 5, "crew": ["june", "dez", "rae"], "rel": Vector2(22.0, 13.5), "keys": ["food", "water", "scrap", "ammo", "ammo"]},
-	{"id": "canteen", "name": "Canteen and kitchen", "rect": Rect2i(37, 6, 20, 15), "dead": 13, "loot": 4, "crew": ["mia", "kit"], "rel": Vector2(44.5, 12.5), "keys": ["food", "water", "food", "scrap"]},
-	{"id": "workshop", "name": "Workshop and stores", "rect": Rect2i(26, 24, 33, 13), "dead": 14, "dead_rect": [Rect2i(27, 25, 16, 11), Rect2i(49, 25, 9, 9)], "loot": 6, "crew": ["hector", "owen"], "rel": Vector2(34.5, 31.0), "keys": ["scrap", "ammo", "scrap", "food", "ammo", "meds"], "stash": {"scrap": 10}},
-	{"id": "yard", "name": "Yard and garden", "rect": Rect2i(31, 38, 29, 15), "dead": 13, "loot": 4, "crew": ["marcus", "nia", "pip"], "rel": Vector2(36.0, 47.0), "keys": ["food", "water", "scrap", "ammo"]},
-	{"id": "gate", "name": "Gate area", "rect": Rect2i(8, 40, 22, 13), "dead": 10, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(23.0, 45.0), "keys": ["ammo", "meds", "water"]},
+	{"id": "cells", "name": "Cell block", "rect": Rect2i(9, 6, 26, 15), "dead": 17, "loot": 5, "crew": ["june", "dez", "rae"], "rel": Vector2(22.0, 13.5), "keys": ["food", "water", "scrap", "ammo", "ammo"]},
+	{"id": "canteen", "name": "Canteen and kitchen", "rect": Rect2i(37, 6, 20, 15), "dead": 11, "loot": 4, "crew": ["mia", "kit"], "rel": Vector2(44.5, 12.5), "keys": ["food", "water", "food", "scrap"]},
+	{"id": "workshop", "name": "Workshop and stores", "rect": Rect2i(26, 24, 33, 13), "dead": 12, "dead_rect": [Rect2i(27, 25, 16, 11), Rect2i(49, 25, 9, 9)], "loot": 6, "crew": ["hector", "owen"], "rel": Vector2(34.5, 31.0), "keys": ["scrap", "ammo", "scrap", "food", "ammo", "meds"], "stash": {"scrap": 10}},
+	{"id": "yard", "name": "Yard and garden", "rect": Rect2i(31, 38, 29, 15), "dead": 11, "loot": 4, "crew": ["marcus", "nia", "pip"], "rel": Vector2(36.0, 47.0), "keys": ["food", "water", "scrap", "ammo"]},
+	{"id": "gate", "name": "Gate area", "rect": Rect2i(8, 40, 22, 13), "dead": 8, "loot": 3, "crew": ["walt", "sol"], "rel": Vector2(23.0, 45.0), "keys": ["ammo", "meds", "water"]},
 ]
 ## The doors: one in every doorway of a building (name = the building it shuts). The clear phase starts them all shut (prison_doors.gd); the managed base has them open.
 const DOORS := [

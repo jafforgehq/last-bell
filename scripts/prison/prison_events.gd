@@ -1,5 +1,5 @@
 ## EXPERIMENT (event deck + traits of the people): two small things the 30-day arc (prison_arc.gd, `events`) owns.
-## 1. WHO PEOPLE ARE: assets/data/prison_bios.json gives every person of the prison (the roster, the five allies, the pool raids find) one to two traits (assets/data/traits.json, the ten of the
+## 1. WHO PEOPLE ARE: assets/data/prison_bios.json gives every person of the prison (the roster, the three allies, the pool raids find) one to two traits (assets/data/traits.json, the ten of the
 ##    colony plus coward, hothead, scrounger, thief, veteran, pacifist) and a one-line background. `traits_of(name)` is that list plus what events added (`arc.person_traits`). The rules ask by name
 ##    (`mult`, `sum`, `has`): the crew is rebuilt after every raid, so nothing here lives on a pawn.
 ## 2. THE DECK: assets/data/prison_events.json, a card each for a morning with no story beat. `draw(day)` picks one (seeded by `arc.run_seed` and the day, never the same card twice, filtered by
@@ -332,7 +332,7 @@ func _add(op: Dictionary, ctx: Dictionary) -> bool:
 	var who: Dictionary = {}
 	for q in people._c().people:
 		var nm := String(q.name)
-		if used.has(nm):
+		if used.has(nm) or (bool(q.get("early", false)) and not op.has("name")):    # (Hal and Wren are kept for the raids)
 			continue
 		if (op.has("name") and nm == String(op.name)) or (not op.has("name") and (not op.has("skill") or String(q.skill) == String(op.skill))):
 			who = q
