@@ -31,7 +31,7 @@
     "alarm_r": 9.0,
     "swarm_n": 3,
     "kite_r": 3.0,
-    "melee_r": 5.0,
+    "leash_r": 6.0,
     "shoot_r": 8.0,
     "shot_cost": 0.1,
     "dead_wait": 0,
