@@ -34,7 +34,7 @@ const ROSTER := [
 		{"at": "meds", "secs": 9.0, "work": "sort", "face": "S", "need": {"scrap": 1.0}, "give": {"scrap": -1.0, "meds": 0.5}, "say": "mixing meds"},
 	]},
 	{"id": "hector", "name": "Hector", "role": "Mechanic", "key": "hector", "look": {}, "route": [
-		{"at": "bench1", "secs": 14.0, "work": "bench", "face": "N", "need": {"scrap": 1.0}, "give": {"scrap": -1.0, "ammo": 2.0}, "say": "loading rounds"},
+		{"at": "bench1", "secs": 14.0, "work": "bench", "face": "N", "say": "loading rounds"},
 		{"at": "bench2", "secs": 8.0, "work": "hammer", "face": "N", "say": "at the vise"},
 	]},
 	{"id": "tomas", "name": "Tomas", "role": "Fence crew", "key": "dez", "look": {"top": "#6a5a44", "pants": "#3a4a5a", "hatColor": "#8a5a2a", "skin": "#9a6a48"}, "route": [

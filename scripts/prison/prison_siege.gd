@@ -20,7 +20,6 @@ const AMBIENT_DPS := 0.012    # the pen's crowd leaning on the fence by day
 const REPAIR_HPS := 8.0    # the player's hand
 const TOMAS_HPS := 3.0
 const HP_PER_SCRAP := 8.0
-const GUARD_SHOT_COST := 0.25    # rounds out of the stores for one guard shot
 const NIGHT_H := 21.0    # hour of the first attack (the bell is 20:30)
 const DAWN_H := 6.5
 const SEC_PER_HOUR := 15.0    # DAY_MIN_PER_SEC 4.0 in prison_game.gd
@@ -47,7 +46,6 @@ var _bell_t := 0.0
 var _clear_t := 0.0
 var stats := {"hp0": 0.0, "killed": 0, "ammo": 0.0, "shots": 0, "lost": [], "crew": [], "n": 0, "where": ""}
 var _small_at := -100.0    # abs_h of the last small horde a noise called
-var _last_ammo := -1.0
 var _fl := 0
 var _spot_t := 0.0
 var _rep_acc := 0.0
@@ -139,7 +137,6 @@ func apply_fence(mult: float, patch: bool) -> void:
 ## Called by prison_game.gd each time the base is built (after a raid too): the fence is solid again in the new world, a segment that fell stays a gap.
 func setup() -> void:
 	wave.clear()
-	_last_ammo = -1.0
 	var run = game.run
 	run.sim.stock = game.stores    # Ruth's rounds and the guards' rounds are the same stock
 	for s in segs:
@@ -203,7 +200,7 @@ func can_fire() -> bool:
 
 
 func guard_ok(m: Dictionary) -> bool:
-	return not guards_off and not m.has("down") and not m.has("broke") and float(game.stores.ammo) >= GUARD_SHOT_COST
+	return not guards_off and not m.has("down") and not m.has("broke")
 
 
 ## Where a guard shoots: the strip of ground 5 tiles outside the fence and everything inside it (the dead that got in).
@@ -215,7 +212,6 @@ func in_guard_zone(z) -> bool:
 
 
 func guard_shot(_g) -> void:
-	game.stores.ammo = maxf(0.0, float(game.stores.ammo) - (GUARD_SHOT_COST if attacking else GUARD_SHOT_COST * 0.2))
 	stats["shots"] = int(stats.get("shots", 0)) + 1
 
 
@@ -317,10 +313,6 @@ func update(dt: float) -> void:
 			_start_attack(n)
 		else:
 			_resolve_missed(n)
-	var ammo := float(game.stores.ammo)
-	if _last_ammo >= 0.0 and ammo < _last_ammo:
-		stats["ammo"] = float(stats.get("ammo", 0.0)) + _last_ammo - ammo
-	_last_ammo = ammo
 	if attacking:
 		t_att += dt
 		_spawn_batches(dt)
@@ -493,12 +485,6 @@ func _resolve_missed(n: int) -> void:
 		return
 	var sent: int = maxi(2, roundi(float(plan.per) * f)) * k + int(game.noise.base_horde_size(n, f))
 	var fire := float(armed) * float(lb.guard_kills)
-	var need := float(sent) * float(lb.ammo_per_kill)
-	var have := float(game.stores.ammo)
-	if have < need:
-		fire *= have / maxf(need, 1.0)
-	var used := minf(have, need)
-	game.stores.ammo = have - used
 	var killed: int = mini(sent, int(fire))
 	var leak := float(sent - killed)
 	var dmg_each := (leak * float(lb.hp_per_dead) + float(sent) * float(lb.wear)) / float(k)
@@ -521,12 +507,11 @@ func _resolve_missed(n: int) -> void:
 	for s in segs:
 		hp1 += float(s.hp)
 	bars.night_wear()
-	stats = {"hp0": hp0, "killed": killed, "ammo": used, "shots": 0, "lost": lost, "crew": crew_lost, "n": sent, "where": "Night %d (you were out)" % n}
+	stats = {"hp0": hp0, "killed": killed, "ammo": 0.0, "shots": 0, "lost": lost, "crew": crew_lost, "n": sent, "where": "Night %d (you were out)" % n}
 	var txt := "MORNING.  Night %d came while you were out.\nThe guards held it alone.\n\n" % n
 	txt += "Fence lost:   %s\n" % (", ".join(lost) if not lost.is_empty() else "none")
 	txt += "Fence damage: %d hp\n" % maxi(0, int(hp0 - hp1))
 	txt += "Dead killed:  %d of %d sent\n" % [killed, sent]
-	txt += "Ammo used:    %d rounds\n" % int(used)
 	txt += "Crew lost:    %s" % (", ".join(crew_lost.map(game.arc.events.label)) if not crew_lost.is_empty() else "nobody")    # (TRAITS, as the night's own card)
 	for nm in crew_lost:
 		if game.arc.events.bio_of(String(nm)) != "":
@@ -534,7 +519,7 @@ func _resolve_missed(n: int) -> void:
 	_card_label.text = txt
 	_card.visible = true
 	_card_t = 16.0
-	print("SIEGE MISSED night=%d sent=%d killed=%d ammo=%.1f lost=%s crew_lost=%s hp0=%.0f hp1=%.0f" % [n, sent, killed, used, lost, crew_lost, hp0, hp1])
+	print("SIEGE MISSED night=%d sent=%d killed=%d lost=%s crew_lost=%s hp0=%.0f hp1=%.0f" % [n, sent, killed, lost, crew_lost, hp0, hp1])
 	game.arc.night_over(n, stats)    # ARC hook
 
 
@@ -880,7 +865,7 @@ func _end_attack() -> void:
 	txt += "Fence lost:   %s\n" % (", ".join(lost) if not lost.is_empty() else "none")
 	txt += "Fence damage: %d hp\n" % maxi(0, int(float(stats.hp0) - hp1))
 	txt += "Dead killed:  %d of %d sent\n" % [int(stats.killed), int(stats.n)]
-	txt += "Ammo used:    %d rounds (guards fired %d shots)\n" % [int(float(stats.ammo)), int(stats.shots)]
+	txt += "Guards fired: %d shots\n" % int(stats.shots)
 	txt += "Crew lost:    %s\n\n" % (", ".join(crew_lost.map(game.arc.events.label)) if not crew_lost.is_empty() else "nobody")    # (TRAITS: "Cole (Steady, Veteran)" and who they were, one line each)
 	txt = txt.trim_suffix("\n\n") + "\n"
 	for nm in crew_lost:

@@ -1259,3 +1259,46 @@ func test_every_solid_thing_of_the_prison_and_the_raid_sites_is_drawn_on_its_foo
 		if Site.LAYOUTS.has(String(Loot.place_cfg(id).get("layout", ""))):
 			var st: Dictionary = Loot.make_town(1, id)
 			_kit_drawn_on_footprint(id, st.data.objects, st.data.solidP, int(st.data.W))
+
+
+## AMMO IS RUTH'S (prison_econ.gd, prison_siege.gd, prison_squad.gd): the reloading bench turns scrap into her rounds each day (2 scrap for 5) with a mechanic at work and not without one;
+## guards, allies and companions fire for free and never read the stores.
+func test_the_reloading_bench_makes_rounds_from_scrap_and_only_with_a_mechanic() -> void:
+	var Econ = load("res://scripts/prison/prison_econ.gd")
+	var game := {"stores": {"ammo": 5.0, "scrap": 30.0, "parts": 10.0}, "crew": {"members": [{"def": {"id": "hector", "name": "Hector"}, "state": "post"}]}, "squad": null, "arc": null, "base": null}
+	var e = Econ.new(game)
+	eq(e.ammo_plan().made, 0.0, "no bench built: nothing is made")
+	var b1: Dictionary = e.defs.bench1
+	check(float(b1.cost.scrap) <= 20.0 and b1.cost.size() == 1, "the first tier is scrap only and cheap enough for day 2 to 4")
+	e.debug_build("bench1")
+	var p: Dictionary = e.ammo_plan()
+	eq(p.made, 10.0, "tier 1 with a mechanic: 10 rounds a day")
+	near(float(p.scrap), 4.0, 0.001, "2 scrap for every 5 rounds")
+	game.stores.scrap = 2.0
+	p = e.ammo_plan()
+	eq(p.made, 5.0, "scrap limits the rounds")
+	near(float(p.scrap), 2.0, 0.001, "and all of it is spent")
+	game.stores.scrap = 0.0
+	eq(e.ammo_plan().made, 0.0, "no scrap, no rounds")
+	game.stores.scrap = 30.0
+	e.debug_build("bench2")
+	eq(e.ammo_plan().made, 16.0, "tier 2 raises the output")
+	game.stores.ammo = 395.0
+	eq(e.ammo_plan().made, 5.0, "the cap (400) limits it too")
+	game.stores.ammo = 5.0
+	game.crew.members = [{"def": {"id": "mia", "name": "Mia"}, "state": "post"}]    # a cook
+	eq(e.ammo_plan().made, 0.0, "without a mechanic nothing is made")
+
+
+func test_nobody_but_ruth_spends_the_ammo_stock() -> void:
+	# (the siege needs a whole base to be built, so its code is read: the guard's checks and the shot name no stock)
+	var src := FileAccess.get_file_as_string("res://scripts/prison/prison_siege.gd")
+	var gok := src.substr(src.find("func guard_ok"), src.find("func in_guard_zone") - src.find("func guard_ok"))
+	check(not gok.contains("ammo"), "a guard needs no rounds in the stores to fire")
+	var gsh := src.substr(src.find("func guard_shot"), 200)
+	check(not gsh.contains("stores"), "a guard shot takes nothing from the stores")
+	var missed := src.substr(src.find("func _resolve_missed"), 3500)
+	check(not missed.contains("stores.ammo"), "a night that passed while she was out draws no rounds")
+	var sq := FileAccess.get_file_as_string("res://scripts/prison/prison_squad.gd")
+	check(not sq.contains("take_float(\"ammo\""), "companions never take rounds from the pack")
+	check(not FileAccess.get_file_as_string("res://scripts/prison/prison_game.gd").contains("GUARD_SHOT_COST"), "no guard shot has a price")

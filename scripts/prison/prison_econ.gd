@@ -325,6 +325,15 @@ func _produce(r: String, power: bool) -> float:
 	return amt + float(e.get("passive", 0.0))
 
 
+## What the reloading bench makes at the next day change: {made rounds, scrap spent}. Needs a mechanic; stops when scrap or the cap runs out.
+func ammo_plan() -> Dictionary:
+	var per := float(cfg.get("ammo_scrap_per_round", 0.4))
+	var room := maxf(0.0, float(caps().get("ammo", 400.0)) - float(game.stores.get("ammo", 0.0)))
+	var made := minf(minf(_produce("ammo", false), float(game.stores.get("scrap", 0.0)) / per), room)
+	made = maxf(0.0, floorf(made))
+	return {"made": made, "scrap": made * per}
+
+
 func _consume(r: String) -> float:
 	var n: float = float(people()) * float(cfg.per_person[r])
 	if r == "food" and game.arc != null:
@@ -363,6 +372,8 @@ func daily_report() -> Dictionary:
 		res[r] = {"stock": stock, "prod": f[r].prod, "cons": f[r].cons, "spoil": f[r].spoil, "net": f[r].net, "days": days}
 		if days >= 0.0 and (nxt.is_empty() or days < float(nxt.days)) and float(f[r].cons) > 0.0:
 			nxt = {"res": r, "days": days}
+	var am := ammo_plan()    # AMMO is Ruth's alone: the bench makes it, guards, allies and companions never use it
+	res["ammo"] = {"stock": float(game.stores.get("ammo", 0.0)), "prod": am.made, "cons": 0.0, "spoil": 0.0, "net": am.made, "days": -1.0}
 	return {"day": day, "stage": _stage, "morale": morale, "people": people(), "beds": beds(), "power_on": _power_now(), "res": res, "next_shortage": nxt, "last": last}
 
 
@@ -486,6 +497,9 @@ func tick_day() -> void:
 			s["fuel"] = float(s.get("fuel", 0.0)) - _fuel_burn()
 		else:
 			shortage.emit("fuel")
+	var am := ammo_plan()    # the reloading bench: scrap into Ruth's rounds
+	s["scrap"] = float(s.get("scrap", 0.0)) - float(am.scrap)
+	s["ammo"] = float(s.get("ammo", 0.0)) + float(am.made)
 	var spoiled: float = float(s.food) * _spoil_rate()
 	s["food"] = float(s.food) - spoiled
 	var lost := 0.0
@@ -496,7 +510,7 @@ func tick_day() -> void:
 			s[r] = float(cp[r])
 	if game.cleaner != null:
 		game.cleaner.daily()    # TRASH hook: a dirty dormitory makes someone ill
-	dawn_log = {"day": day, "ate": {"food": float(f.food.cons), "water": float(f.water.cons)}, "made": {"food": float(f.food.prod), "water": float(f.water.prod)}, "built": _built_today.duplicate(), "spoiled": spoiled}
+	dawn_log = {"day": day, "ate": {"food": float(f.food.cons), "water": float(f.water.cons)}, "made": {"food": float(f.food.prod), "water": float(f.water.prod), "ammo": float(am.made)}, "built": _built_today.duplicate(), "spoiled": spoiled}
 	_built_today.clear()
 	morning_new = true
 	_morale(short)
