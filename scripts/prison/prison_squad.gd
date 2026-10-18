@@ -89,8 +89,8 @@ func snapshot() -> Array:
 			if String(pd.id) == String(r.key):
 				body = pd
 		if not body.is_empty():
-			gun_name = String(game.data.weapons[String(body.weapon)].get("name", body.weapon))
-			melee = bool(game.data.weapons[String(body.weapon)].get("melee", false))
+			gun_name = String(game.data.weapons["rifle"].get("name", "rifle"))    # (the crew's own gun, prison_crew.gd: the people file's pike sent Ike charging)
+			melee = false
 		var watch: bool = game.crew != null and role == "guard" and game.crew.day_watch(m)    # (a tower kept on Day watch keeps its guard home)
 		cands.append({"id": id, "name": String(r.name), "key": String(r.key), "look": r.get("look", {}), "role": String(r.get("role", "")), "econ_role": role, "tags": tags, "hp": float(cfg.fighter_hp if fighter else cfg.hp),
 			"gun": gun_name, "melee": melee, "bag": Vector2i(int(bag[0]), int(bag[1])), "ok": true, "why": "", "def": r, "state": String(m.state), "watch": watch})
@@ -219,6 +219,7 @@ func _spawn(c: Dictionary, at: Vector2) -> Dictionary:
 	src["id"] = String(c.id)
 	src["name"] = String(c.name)
 	src["unarmed"] = false
+	src["weapon"] = "rifle"    # the crew's gun at the base too (prison_crew.gd); the people file gave some keys the pike
 	var look: Dictionary = (src.look as Dictionary).duplicate(true)
 	for k in c.look:
 		look[k] = c.look[k]
