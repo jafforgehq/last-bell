@@ -1106,6 +1106,26 @@ func test_every_prison_door_swings_into_its_building_and_no_leaf_crosses_a_wall_
 	Base.east = false
 
 
+## DOORS READ AT A GLANCE (2026-10-18): a raid map's doorways become rects with the way in, and the minimap ticks every prison door in the base and only the outside doors in a raid.
+func test_raid_doors_and_the_minimap_door_ticks() -> void:
+	var Doors = load("res://scripts/prison/prison_doors.gd")
+	var Base = load("res://scripts/prison/prison_base.gd")
+	var G = load("res://scripts/prison/prison_game.gd")
+	var hs := [{"doors": [
+		{"tiles": [Vector2i(18, 20), Vector2i(19, 20)], "exterior": true, "side": "S", "out": Vector2i(18, 21), "in": Vector2i(18, 19)},
+		{"tiles": [Vector2i(10, 17)], "exterior": false, "side": "V", "out": Vector2i(9, 17), "in": Vector2i(11, 17)}]}]
+	var rd: Array = Doors.raid_doors(hs)
+	eq(rd.size(), 2, "one record per doorway")
+	eq(rd[0].rect, Rect2(18, 20, 2, 1), "a two-tile doorway is one rect")
+	eq(rd[0].norm, Vector2(0, -1), "it opens from the outside tile toward the inside one")
+	eq(rd[1].norm, Vector2(1, 0), "an inside doorway opens from `out` to `in`")
+	eq(G.mini_door_rects("raid", rd), [Rect2(18, 20, 2, 1)], "a raid's minimap ticks only the outside doors")
+	eq(G.mini_door_rects("base", []).size(), Base.doors().size(), "the base's minimap ticks every prison door")
+	var Loot = load("res://scripts/prison/prison_loot.gd")
+	var t: Dictionary = Loot.make_town(1, "police")
+	check(Doors.raid_doors(t.houses).filter(func(d): return bool(d.exterior)).size() >= 1, "the police station has an outside door to tick")
+
+
 # ------------------------------------------------------- the prison's Objectives panel --
 ## (prison_topbar.gd is tested here for want of a prison test file.) UI POLISH A: O folds the Objectives to one line, the top task (not the phase heading); the fold is kept in the
 ## settings; a new top task while folded makes the panel glow, a count going up does not.

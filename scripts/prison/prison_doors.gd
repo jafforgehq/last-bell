@@ -265,8 +265,92 @@ func open_all() -> float:
 
 
 func paint(c: CanvasItem) -> void:
+	var night: float = game._night_of(game.tod) if game.has_method("_night_of") else 0.0
+	var pr = game.get("_prompt")
+	var hl := int(pr.get("i", -1)) if pr is Dictionary and String(pr.get("kind", "")) == "door" else -1    # the door E would answer (drawn in the world, so it shows wherever the prompt plate went)
 	for i in open.size():
-		_paint_door(c, i, _k(i))
+		var r := Rect2(Base.doors()[i].rect)
+		draw_door(c, game.TILE, r, side(r), _k(i), String(Base.doors()[i].name) == "Cell block", night, i == hl, _now)
+
+
+## RAID DOORS: the doorways of a raid map's houses (TownGen or prison_site.gd records: tiles, exterior, out, in) as [{rect: Rect2 in tiles, norm: unit Vector2 into the building or
+## from `out` to `in`, exterior: bool}]. A raid's doorways have no leaf that shuts (only floor), so they are drawn standing open.
+static func raid_doors(houses: Array) -> Array:
+	var out: Array = []
+	for h in houses:
+		for d in h.get("doors", []):
+			var ts: Array = d.get("tiles", [])
+			if ts.is_empty():
+				continue
+			var r := Rect2(Vector2(ts[0]), Vector2.ONE)
+			for t in ts:
+				r = r.merge(Rect2(Vector2(t), Vector2.ONE))
+			var n := (Vector2(d.get("in", ts[0])) - Vector2(d.get("out", ts[0]))).normalized()
+			if n == Vector2.ZERO:
+				n = Vector2(0, -1) if r.size.x >= r.size.y else Vector2(-1, 0)
+			out.append({"rect": r, "norm": n, "exterior": bool(d.get("exterior", false))})
+	return out
+
+
+## One door in the RimWorld flat style, in pixels of `t` per tile: a stone sill across the doorway, a dark jamb post at each end with a warm rim facing the opening (brighter at
+## night so the doorway still reads under the blue grade), then the two leaves at progress k (0 shut, 1 open: a dark gap shows between the jambs), and, for the door E would answer,
+## a soft pale outline. `gap` false leaves out the dark fill (a door drawn over a roof's edge). `steel`: a cell block's blue steel instead of wood.
+static func draw_door(c: CanvasItem, t: float, r: Rect2, norm: Vector2, k: float, steel: bool, night: float, hl: bool, now: float, gap := true) -> void:
+	var edge := Color(0.07, 0.06, 0.05)
+	var px := Rect2(r.position * t, r.size * t)
+	var horiz := r.size.x >= r.size.y
+	var along := Vector2(1, 0) if horiz else Vector2(0, 1)
+	var across := Vector2(0, 1) if horiz else Vector2(1, 0)
+	var span: float = px.size.x if horiz else px.size.y
+	var deep: float = px.size.y if horiz else px.size.x
+	var mid := px.get_center()
+	if k > 0.0 and gap:
+		c.draw_rect(px, Color(0.0, 0.0, 0.0, 0.38 * k))    # the gap the open doorway shows
+	var sill := Rect2(mid - along * span * 0.5 - across * 4.0, along * span + across * 8.0).abs()
+	c.draw_rect(sill, Color(0.5, 0.46, 0.4).lerp(Color(0.72, 0.68, 0.6), night * 0.6))    # the threshold
+	c.draw_rect(sill, edge, false, 2.0)
+	var rim := Color(1.0, 0.86, 0.55, 0.55 + 0.4 * night)
+	for sgn in [-1.0, 1.0]:    # the jambs: posts on the wall at both ends of the opening
+		var face: Vector2 = mid + along * span * 0.5 * sgn
+		var post := Rect2(face + along * (5.0 * sgn) - along * 5.0 - across * deep * 0.5, along * 10.0 + across * deep).abs()
+		c.draw_rect(post, Color(0.22, 0.15, 0.1).lerp(Color(0.42, 0.3, 0.2), night * 0.5))
+		c.draw_rect(post, edge, false, 2.0)
+		c.draw_line(face + along * (1.5 * sgn) - across * (deep * 0.5 - 3.0), face + along * (1.5 * sgn) + across * (deep * 0.5 - 3.0), rim, 2.0)
+	var fill := Color(0.78, 0.5, 0.22) if not steel else Color(0.45, 0.56, 0.7)
+	fill = fill.lerp(Color(1.0, 0.85, 0.6), night * 0.2)
+	var grain := Color(0.36, 0.22, 0.1) if not steel else Color(0.24, 0.3, 0.4)
+	var hw := LEAF * 0.5
+	for lq in leaves(r, norm, k, LEAF / t):
+		var q := PackedVector2Array()
+		for v in lq:
+			q.append(v * t)
+		var hinge := (q[0] + q[3]) * 0.5
+		var tip := (q[1] + q[2]) * 0.5
+		var ll := hinge.distance_to(tip)
+		if ll < 1.0:
+			continue
+		var d := (tip - hinge) / ll
+		var nrm := Vector2(-d.y, d.x)
+		var sh := PackedVector2Array()
+		for v in q:
+			sh.append(v + Vector2(2, 3))
+		c.draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
+		c.draw_colored_polygon(q, fill)
+		for s in range(1, int(ll / 8.0)):
+			var m := hinge + d * (float(s) * 8.0)
+			c.draw_line(m + nrm * (hw - 1.0), m - nrm * (hw - 1.0), grain, 1.5)
+		q.append(q[0])
+		c.draw_polyline(q, edge, 3.0)
+		c.draw_rect(Rect2(hinge - Vector2(hw + 1.0, hw + 1.0), Vector2(hw + 1.0, hw + 1.0) * 2.0), edge)    # the hinge: a dark plate with a brass pin
+		c.draw_circle(hinge, 2.5, Color(0.85, 0.7, 0.35))
+	if k < 0.5:
+		for sgn in [-1.0, 1.0]:
+			c.draw_circle(mid + along * 6.0 * sgn, 2.5, Color(0.95, 0.82, 0.35, 1.0 - 2.0 * k))    # the handles
+	if hl:
+		var a := 0.55 + 0.2 * sin(now * 4.0)
+		var box := px.grow(10.0)
+		c.draw_rect(box, Color(1.0, 0.93, 0.62, a * 0.3), false, 7.0)
+		c.draw_rect(box, Color(1.0, 0.95, 0.7, a), false, 2.0)
 
 
 ## Which way door i swings: always into the building it belongs to (the side of the doorway inside one of the building rects), else the north or west side. Returns the unit normal.
@@ -298,43 +382,3 @@ static func leaves(r: Rect2, norm: Vector2, k: float, thick: float) -> Array:
 		var nrm := Vector2(-d.y, d.x)
 		out.append(PackedVector2Array([hinge + nrm * hw, hinge + d * ll + nrm * hw, hinge + d * ll - nrm * hw, hinge - nrm * hw]))
 	return out
-
-
-## One door at progress k: two leaves (a thick plank slab with a dark outline) with a hinge plate and pin each, the handles while shut.
-func _paint_door(c: CanvasItem, i: int, k: float) -> void:
-	var t: float = game.TILE
-	var edge := Color(0.07, 0.06, 0.05)
-	var r := Rect2(Base.doors()[i].rect)
-	var steel := String(Base.doors()[i].name) == "Cell block"
-	var px := Rect2(r.position * t, r.size * t)
-	if k > 0.0:
-		c.draw_rect(px, Color(0.0, 0.0, 0.0, 0.18 * k))    # the dark threshold the open doorway shows
-	var fill := Color(0.6, 0.42, 0.22) if not steel else Color(0.52, 0.55, 0.6)
-	var grain := Color(0.26, 0.18, 0.1) if not steel else Color(0.25, 0.27, 0.3)
-	var hw := LEAF * 0.5
-	for lq in leaves(r, side(r), k, LEAF / t):
-		var q := PackedVector2Array()
-		for v in lq:
-			q.append(v * t)
-		var hinge := (q[0] + q[3]) * 0.5
-		var tip := (q[1] + q[2]) * 0.5
-		var ll := hinge.distance_to(tip)
-		var d := (tip - hinge) / ll
-		var nrm := Vector2(-d.y, d.x)
-		var sh := PackedVector2Array()
-		for v in q:
-			sh.append(v + Vector2(2, 3))
-		c.draw_colored_polygon(sh, Color(0, 0, 0, 0.3))
-		c.draw_colored_polygon(q, fill)
-		for s in range(1, int(ll / 8.0)):
-			var m := hinge + d * (float(s) * 8.0)
-			c.draw_line(m + nrm * (hw - 1.0), m - nrm * (hw - 1.0), grain, 1.5)
-		q.append(q[0])
-		c.draw_polyline(q, edge, 3.0)
-		c.draw_rect(Rect2(hinge - Vector2(hw + 1.0, hw + 1.0), Vector2(hw + 1.0, hw + 1.0) * 2.0), edge)    # the hinge: a dark plate with a brass pin
-		c.draw_circle(hinge, 2.5, Color(0.85, 0.7, 0.35))
-	if k < 0.5:
-		var horiz := r.size.x >= r.size.y
-		var along := Vector2(1, 0) if horiz else Vector2(0, 1)
-		for sgn in [-1.0, 1.0]:
-			c.draw_circle(px.get_center() + along * 6.0 * sgn, 2.5, Color(0.8, 0.7, 0.3, 1.0 - 2.0 * k))    # the handles
