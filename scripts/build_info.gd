@@ -1,4 +1,4 @@
 ## The build's version string, shown on the title and put in the playtest report. Bump it by hand when a build goes to testers.
 extends RefCounted
 
-const VERSION := "playtest-7 (2026-10-18)"
+const VERSION := "playtest-8 (2026-10-18)"
