@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Last Bell</title>
+<meta name="description" content="Last Bell is a top-down survival game: clear an old prison, run it as a base for 30 days, raid a town full of the dead and hold out until the convoy comes.">
+<meta property="og:title" content="Last Bell">
+<meta property="og:description" content="Clear an old prison, run it as a base for 30 days, raid a town full of the dead and hold out until the convoy comes.">
+<meta property="og:image" content="img/03-horde-night-fence.jpg">
+<meta name="theme-color" content="#14201f">
+<style>
+:root {
+  --bg: #121b1a;
+  --panel: #1a2726;
+  --panel-2: #213331;
+  --line: #34504c;
+  --ink: #e9efe9;
+  --dim: #9db3ad;
+  --accent: #e6a93a;
+  --danger: #d9573f;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 17px/1.6 "Avenir Next", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+.hero {
+  position: relative;
+  min-height: 78vh;
+  display: flex;
+  align-items: flex-end;
+  background: #0b1110 url("img/03-horde-night-fence.jpg") center 38% / cover no-repeat;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--bg) 0%, rgba(18, 27, 26, 0.82) 30%, rgba(18, 27, 26, 0.15) 70%, rgba(18, 27, 26, 0.35) 100%);
+}
+.hero .wrap { position: relative; z-index: 1; padding-bottom: 56px; padding-top: 120px; }
+.kicker { color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.8rem; font-weight: 700; }
+h1 {
+  margin: 6px 0 14px;
+  font-size: clamp(3rem, 9vw, 6rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-family: "Arial Narrow", "Helvetica Neue Condensed", Impact, "Haettenschweiler", sans-serif;
+  font-weight: 800;
+}
+.tag { max-width: 40rem; font-size: clamp(1.1rem, 2.6vw, 1.45rem); color: #f2f6f1; margin: 0; }
+.badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.badge {
+  border: 1px solid var(--line);
+  background: rgba(26, 39, 38, 0.85);
+  color: var(--dim);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+section { padding: 64px 0 8px; }
+h2 {
+  margin: 0 0 8px;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: "Arial Narrow", "Helvetica Neue Condensed", Impact, sans-serif;
+}
+h2 + p.lead { color: var(--dim); margin: 0 0 28px; max-width: 46rem; }
+.about p { max-width: 46rem; color: #d5dfd8; }
+
+.features { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px 20px 18px;
+}
+.card h3 { margin: 0 0 6px; font-size: 1.1rem; color: var(--accent); }
+.card p { margin: 0; color: #d0dad3; font-size: 0.97rem; line-height: 1.55; }
+
+.stages { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-top: 8px; }
+.stage { border-radius: 10px; padding: 14px 16px; background: var(--panel-2); border-left: 6px solid var(--line); }
+.stage b { display: block; font-size: 1.05rem; }
+.stage span { color: var(--dim); font-size: 0.93rem; }
+.s1 { border-color: #5fae6a; } .s2 { border-color: #e6a93a; } .s3 { border-color: #d9573f; } .s4 { border-color: #ff3b2f; }
+
+.gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.gallery figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.gallery figure.wide { grid-column: 1 / -1; }
+.gallery img { display: block; width: 100%; height: auto; }
+.gallery figcaption { padding: 10px 14px 12px; color: var(--dim); font-size: 0.92rem; }
+@media (max-width: 720px) { .gallery { grid-template-columns: 1fr; } }
+
+.status { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; max-width: 46rem; }
+.status p { margin: 0 0 10px; color: #d5dfd8; }
+.status p:last-child { margin: 0; }
+footer { margin-top: 64px; padding: 28px 0 48px; border-top: 1px solid var(--line); color: var(--dim); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="kicker">Top-down survival, colony and raids</div>
+    <h1>Last Bell</h1>
+    <p class="tag">An old prison. A town full of the dead. A convoy that will pass on day 30, for one hour only.</p>
+    <div class="badges">
+      <span class="badge">30 days to survive</span>
+      <span class="badge">7 places to raid</span>
+      <span class="badge">Built in Godot 4</span>
+      <span class="badge">Early playtest build</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section class="about" id="about">
+  <h2>The game</h2>
+  <p>You are Ruth. You and three survivors reach the west fence of an abandoned prison. Break in, clear it zone by zone, lock the gate behind you and turn it into a fort.</p>
+  <p>Then the real work starts. Run the base for thirty days: build projects, give people jobs, hold the fence on horde nights and raid the dead town for scrap, parts, fuel and, above all, more people. On day 30 a convoy passes for one hour. How you leave depends on what you built and who is still alive.</p>
+</section>
+
+<section id="features">
+  <h2>Features</h2>
+  <p class="lead">A base you manage and a town you fight your way through, played from above.</p>
+  <div class="features">
+    <div class="card">
+      <h3>Clear it, then run it</h3>
+      <p>Break into the prison and clear six zones of dormant dead with a shotgun, a rifle or an SMG. Then manage the base: a long list of projects, needs, a roster and a defence plan.</p>
+    </div>
+    <div class="card">
+      <h3>Raid the dead town</h3>
+      <p>Seven places with their own maps: a supermarket, a hospital, a police station, an industrial yard, a port with a quay, an airport with a runway and a stadium. Go by day or by night, in clear weather, rain or fog.</p>
+    </div>
+    <div class="card">
+      <h3>The heat meter</h3>
+      <p>Every shot, door and car alarm adds heat. Stay quiet and the dead sleep. Get loud and they stir, then hunt you, then overrun the place. Loot slowly with a knife, or grab fast and run.</p>
+    </div>
+    <div class="card">
+      <h3>A squad that thinks</h3>
+      <p>Companions stay close, call out special infected and fall back to you instead of chasing. When the coast is clear they search containers on their own and carry the loot to the truck.</p>
+    </div>
+    <div class="card">
+      <h3>A crew with jobs</h3>
+      <p>Guards help build by day and climb back to their towers at dusk or when the dead come. Gardeners, haulers, cooks and mechanics keep the base alive. Every person you rescue counts.</p>
+    </div>
+    <div class="card">
+      <h3>Horde nights</h3>
+      <p>Hordes hit the fence on set nights, with screamers, bloaters, hunters and breachers among them. Mend the fence, hold the gate, light the yard and keep the towers manned.</p>
+    </div>
+    <div class="card">
+      <h3>A prison that lives</h3>
+      <p>Rain and storms roll through, lamps glow at dusk, and the crew slowly clears the filth and makes the place feel like home. The prison looks different on day 20 than on day 1.</p>
+    </div>
+    <div class="card">
+      <h3>Scarcity that bites</h3>
+      <p>Scrap, parts, fuel, food, water and morale all run down. Reload your own rounds, salvage a trickle of scrap, and decide what is worth a risky trip.</p>
+    </div>
+    <div class="card">
+      <h3>Day 30</h3>
+      <p>The convoy arrives for one hour. Its parts and fuel list, your people and your walls decide which ending you get.</p>
+    </div>
+  </div>
+</section>
+
+<section id="heat">
+  <h2>Loud or quiet</h2>
+  <p class="lead">Each raid has one meter that tells you how close the dead are to noticing you.</p>
+  <div class="stages">
+    <div class="stage s1"><b>Quiet</b><span>The dead sleep. Only a noise right beside one wakes it.</span></div>
+    <div class="stage s2"><b>Stirring</b><span>Dead within earshot walk to every sound you make.</span></div>
+    <div class="stage s3"><b>Hunted</b><span>A horde enters from the edge of the map and heads your way.</span></div>
+    <div class="stage s4"><b>Overrun</b><span>Waves keep coming until you are back at the truck.</span></div>
+  </div>
+</section>
+
+<section id="screenshots">
+  <h2>Screenshots</h2>
+  <p class="lead">Taken from the game itself, unedited.</p>
+  <div class="gallery">
+    <figure class="wide"><a href="img/01-base-day-overview.jpg"><img loading="lazy" src="img/01-base-day-overview.jpg" alt="The whole prison compound by day, from above"></a><figcaption>The prison compound: cell blocks, canteen, infirmary, workshop, stores and a garden inside the fence.</figcaption></figure>
+    <figure><a href="img/02-base-dusk-lamps.jpg"><img loading="lazy" src="img/02-base-dusk-lamps.jpg" alt="The prison yard at dusk with glowing lamps"></a><figcaption>Dusk in the yard: lamps and floodlights start to glow.</figcaption></figure>
+    <figure><a href="img/03-horde-night-fence.jpg"><img loading="lazy" src="img/03-horde-night-fence.jpg" alt="A horde at the south fence at night"></a><figcaption>Horde night: the dead crowd the gate while the guards fire from the towers.</figcaption></figure>
+    <figure><a href="img/04-rain-on-the-base.jpg"><img loading="lazy" src="img/04-rain-on-the-base.jpg" alt="Rain falling on the prison yard"></a><figcaption>Rain on the base. The well fills faster in a downpour.</figcaption></figure>
+    <figure><a href="img/05-base-screen-projects.jpg"><img loading="lazy" src="img/05-base-screen-projects.jpg" alt="The Base screen on the Projects tab"></a><figcaption>The Base screen: projects, needs, roster, defence and the story so far.</figcaption></figure>
+    <figure class="wide"><a href="img/06-raid-town-residential.jpg"><img loading="lazy" src="img/06-raid-town-residential.jpg" alt="A raid in a residential street with parked cars and houses"></a><figcaption>A raid in town: roofs, parked cars, doors, your squad beside you and the heat meter in the top bar.</figcaption></figure>
+    <figure class="wide"><a href="img/07-raid-stadium.jpg"><img loading="lazy" src="img/07-raid-stadium.jpg" alt="A raid at the stadium"></a><figcaption>The stadium: stands, a running track and a pitch.</figcaption></figure>
+    <figure><a href="img/08-raid-port.jpg"><img loading="lazy" src="img/08-raid-port.jpg" alt="A raid at the port with container stacks and a ship"></a><figcaption>The port: container stacks, quay cranes and a moored ship.</figcaption></figure>
+    <figure><a href="img/11-raid-airport-extra.jpg"><img loading="lazy" src="img/11-raid-airport-extra.jpg" alt="A raid at the airport with two airliners"></a><figcaption>The airport: a runway, two airliners and hangars.</figcaption></figure>
+    <figure><a href="img/09-destination-map.jpg"><img loading="lazy" src="img/09-destination-map.jpg" alt="The map of places to raid"></a><figcaption>Where to? Each place says what you may find, how dangerous it is and what to watch for.</figcaption></figure>
+    <figure><a href="img/10-dead-at-the-gate.jpg"><img loading="lazy" src="img/10-dead-at-the-gate.jpg" alt="The dead gathering outside the prison gate"></a><figcaption>Late afternoon on day 14: the dead gather outside the gate before the night.</figcaption></figure>
+  </div>
+</section>
+
+<section id="status">
+  <h2>Status</h2>
+  <div class="status">
+    <p><b>Early playtest build.</b> The whole game plays from the first clear to the day-30 ending, but the balance is unproven and it has been tested mostly by bots so far.</p>
+    <p><b>How it is made.</b> Built in Godot 4 with GDScript. Much of the code and text was written with an AI coding assistant. The pixel-style art is drawn by code and scripts. The sound effects are real recordings from free libraries (Kenney, CC0, and the Sonniss GDC game audio bundles).</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">Last Bell &middot; early playtest build</div>
+</footer>
+
+</body>
+</html>
