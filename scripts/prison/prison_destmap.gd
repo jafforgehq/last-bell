@@ -6,6 +6,7 @@
 extends RefCounted
 
 const PIcons := preload("res://scripts/prison/prison_icons.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
 
 const TAGS := {"often": Color(0.5, 0.88, 0.5), "sometimes": Color(0.95, 0.82, 0.4), "rarely": Color(0.7, 0.7, 0.75)}
 const DANGER_WORD := ["", "Low", "Moderate", "High", "Very high", "Deadly"]
@@ -44,6 +45,7 @@ var pick_time := ""    # "day" or "night": kept between visits to the map
 var time_btns: Array = []
 var mark_btn: Button
 var fuel_c: Canvas
+var hover_i := -1    # the marker under the pointer (a soft ring, and the pointing hand)
 
 
 func _init(l, g) -> void:
@@ -72,7 +74,10 @@ func open(view: bool, forced_id: String) -> void:
 	if want != "" and ids.has(want):
 		sel = ids.find(want)
 	is_open = true
+	var was := root.visible
 	root.visible = true
+	if not was:
+		UI.open_fx(root)
 	root.reset_size()
 	root.position = Vector2(10.0, maxf(100.0, (game._vp().y - root.size.y) / 2.0))    # (clear of the top bar and the objectives list on the right)
 	_refresh()
@@ -82,6 +87,7 @@ func close() -> void:
 	is_open = false
 	loot.choosing = false
 	if root != null:
+		UI.close_fx(root)
 		root.visible = false
 
 
@@ -140,22 +146,18 @@ func _refuel_text(fuel: float) -> String:
 
 func _build() -> void:
 	root = PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.05, 0.06, 0.07, 1.0)
-	st.border_color = Color(0.85, 0.7, 0.3)
-	st.set_border_width_all(2)
-	st.set_content_margin_all(12)
-	root.add_theme_stylebox_override("panel", st)
+	root.add_theme_stylebox_override("panel", UI.frame_box(12))
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 6)
 	root.add_child(col)
-	var title := Label.new()
-	title.text = "WHERE TO?   Click a place. Left/Right or Tab to move, Enter or E to go, Esc to stay."
-	title.add_theme_font_size_override("font_size", 17)
-	col.add_child(title)
-	sub = Label.new()
-	sub.add_theme_font_size_override("font_size", 15)
-	sub.modulate = Color(1, 0.85, 0.5)
+	var head := HBoxContainer.new()    # the title, and the keys beside it in small print
+	head.add_theme_constant_override("separation", 14)
+	head.add_child(UI.title("WHERE TO?"))
+	var keys := UI.label("Click a place. Left/Right or Tab to move, Enter or E to go, Esc to stay.", UI.SMALL_PX, Color(0.75, 0.75, 0.7))
+	keys.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(keys)
+	col.add_child(head)
+	sub = UI.label("", UI.BODY_PX, Color(1, 0.85, 0.5))
 	col.add_child(sub)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
@@ -167,6 +169,7 @@ func _build() -> void:
 	canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	canvas.draw_cb = _draw_map
 	canvas.input_cb = _map_input
+	canvas.mouse_exited.connect(func(): hover_i = -1)
 	row.add_child(canvas)
 	var sc := VBoxContainer.new()
 	sc.custom_minimum_size = Vector2(300, 0)
@@ -183,16 +186,11 @@ func _build() -> void:
 	var trow := HBoxContainer.new()    # RAID EXTRAS: when to go, and the player's mark of the place
 	trow.add_theme_constant_override("separation", 6)
 	for tid in ["day", "night"]:
-		var tb := Button.new()
-		tb.focus_mode = Control.FOCUS_NONE
-		tb.add_theme_font_size_override("font_size", 16)
-		tb.text = String(game.raidx.time_cfg(tid).get("name", tid))
+		var tb := UI.button(String(game.raidx.time_cfg(tid).get("name", tid)))
 		tb.pressed.connect(func(): set_time(tid))
 		trow.add_child(tb)
 		time_btns.append(tb)
-	mark_btn = Button.new()
-	mark_btn.focus_mode = Control.FOCUS_NONE
-	mark_btn.add_theme_font_size_override("font_size", 15)
+	mark_btn = UI.button("")
 	mark_btn.pressed.connect(cycle_mark)
 	trow.add_child(mark_btn)
 	sc.add_child(trow)
@@ -202,16 +200,12 @@ func _build() -> void:
 	fuel_c.draw_cb = _draw_fuel
 	fuel_c.input_cb = func(_ev): pass
 	sc.add_child(fuel_c)
-	note = Label.new()
+	note = UI.label("", UI.SMALL_PX + 1, Color(1, 0.6, 0.5))
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size.x = 300.0
-	note.add_theme_font_size_override("font_size", 14)
-	note.modulate = Color(1, 0.6, 0.5)
 	sc.add_child(note)
-	go_btn = Button.new()
-	go_btn.focus_mode = Control.FOCUS_NONE
-	go_btn.add_theme_font_size_override("font_size", 20)
-	go_btn.text = "Go"
+	go_btn = UI.button("Go", true, UI.BUTTON_PX + 2)
+	go_btn.custom_minimum_size.y = 40
 	go_btn.pressed.connect(go)
 	sc.add_child(go_btn)
 	root.visible = false
@@ -343,16 +337,26 @@ func _pos(id: String, sz: Vector2) -> Vector2:
 
 
 func _map_input(ev: InputEvent) -> void:
+	if ev is InputEventMouseMotion:
+		hover_i = _near(ev.position)
+		canvas.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if hover_i >= 0 else Control.CURSOR_ARROW
 	if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-		var best := -1
-		var bd := 30.0
-		for i in ids.size():
-			var d := _pos(String(ids[i]), canvas.size).distance_to(ev.position)
-			if d < bd:
-				bd = d
-				best = i
+		var best := _near(ev.position)
 		if best >= 0:
+			UI.click(game)
 			select(best)
+
+
+## The marker within 30 points of `at` on the map (the nearest), or -1.
+func _near(at: Vector2) -> int:
+	var best := -1
+	var bd := 30.0
+	for i in ids.size():
+		var d := _pos(String(ids[i]), canvas.size).distance_to(at)
+		if d < bd:
+			bd = d
+			best = i
+	return best
 
 
 const FOOT_H := 46.0    # the band at the foot of the map: what the hour and the weather mean
@@ -404,6 +408,8 @@ func _draw_map(c: Canvas) -> void:
 		c.draw_string(font, p + Vector2(-14, 5), String(pc.get("tag", "??")), HORIZONTAL_ALIGNMENT_CENTER, 28, 14, Color(0.05, 0.05, 0.05) if bool(stt.open) else Color(0.6, 0.6, 0.62))
 		if i == sel:
 			c.draw_arc(p, 19.0 + 1.5 * sin(t * 6.0), 0, TAU, 32, Color(1, 1, 1), 3.0)
+		elif i == hover_i:    # (the pointer is on it: a click picks it)
+			c.draw_arc(p, 19.0, 0, TAU, 32, Color(1, 0.9, 0.6, 0.7), 2.0)
 		var lab := String(pc.name) if bool(stt.open) else "%s (day %d)" % [String(pc.name), int(pc.get("unlock_day", 1))]
 		var lc := Color(0.95, 0.95, 0.9) if bool(stt.open) else Color(0.55, 0.55, 0.58)
 		var ly := p.y + 32.0 if p.y + 44.0 < sz.y - FOOT_H else p.y - 34.0    # (a name that would run into the two lines at the foot of the map goes over its marker)

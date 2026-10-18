@@ -7,6 +7,8 @@ extends RefCounted
 
 const PIcons := preload("res://scripts/prison/prison_icons.gd")
 const Inventory := preload("res://scripts/sim/inventory.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
+const Fonts := preload("res://scripts/ui/fonts.gd")
 const AMMO_STEPS := [0, 20, 40, 60, 80, 120]
 const ROW_H := 36.0    # one squad row and its gap on the loadout card
 
@@ -36,18 +38,16 @@ func open(target: String = "", only_weapon: bool = false) -> void:
 	is_open = true
 	if _panel == null:
 		_build()
+	var was := _panel.visible
 	_panel.visible = true
 	_refresh()
+	if not was:
+		UI.open_fx(_panel)
 
 
 func _build() -> void:
 	_panel = PanelContainer.new()
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.05, 0.06, 0.07, 0.96)
-	st.border_color = Color(0.85, 0.7, 0.3)
-	st.set_border_width_all(2)
-	st.set_content_margin_all(14)
-	_panel.add_theme_stylebox_override("panel", st)
+	_panel.add_theme_stylebox_override("panel", UI.frame_box(14))
 	_col = VBoxContainer.new()
 	_col.add_theme_constant_override("separation", 6)
 	_panel.add_child(_col)
@@ -57,30 +57,22 @@ func _build() -> void:
 func close() -> void:
 	is_open = false
 	if _panel != null:
+		UI.close_fx(_panel)
 		_panel.visible = false
 
 
-func _lbl(text: String, size: int = 16, col: Color = Color(1, 1, 0.9), wide: bool = true) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.add_theme_font_size_override("font_size", size)
-	l.modulate = col
+func _lbl(text: String, size: int = UI.BODY_PX, col: Color = Color(1, 1, 0.9), wide: bool = true) -> Label:
+	var l := UI.label(text, size, col)
 	if wide:
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size = Vector2(680, 0)
 	return l
 
 
+## A button of the card: `on` (the gun in her hands, a companion who comes) is the gold main-choice look.
 func _btn(text: String, on: bool, cb: Callable, enabled: bool = true) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.toggle_mode = false
-	b.focus_mode = Control.FOCUS_NONE
+	var b := UI.button(text, on)
 	b.disabled = not enabled
-	b.add_theme_font_size_override("font_size", 16)
-	if on:
-		b.add_theme_color_override("font_color", Color(1, 0.85, 0.3))
-		b.add_theme_color_override("font_hover_color", Color(1, 0.9, 0.5))
 	b.pressed.connect(cb)
 	return b
 
@@ -88,7 +80,7 @@ func _btn(text: String, on: bool, cb: Callable, enabled: bool = true) -> Button:
 func _row(label: String, key: String) -> HBoxContainer:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
-	var l := _lbl(("%s  [%s]" % [label, key]) if key != "" else label, 16, Color(0.85, 0.85, 0.75), false)
+	var l := _lbl(("%s  [%s]" % [label, key]) if key != "" else label, UI.BODY_PX, Color(0.85, 0.85, 0.75), false)
 	l.custom_minimum_size = Vector2(170, 0)
 	h.add_child(l)
 	return h
@@ -101,7 +93,13 @@ func _refresh() -> void:
 	var arms = game.arms
 	var squad = game.squad
 	_scroll = null
-	_col.add_child(_lbl("PICK YOUR WEAPON   (Enter: start   W: next gun)" if weapon_only else "LOADOUT - going for: %s     (Enter: go out   Esc: back)" % target_name, 20, Color(1, 0.85, 0.4)))
+	var head := HBoxContainer.new()    # the title, and the keys beside it in small print
+	head.add_theme_constant_override("separation", 14)
+	head.add_child(UI.title("PICK YOUR WEAPON" if weapon_only else "LOADOUT - going for: %s" % target_name))
+	var keys := _lbl("Enter: start   W: next gun" if weapon_only else "Enter: go out   Esc: back", UI.SMALL_PX, Color(0.75, 0.75, 0.7), false)
+	keys.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(keys)
+	_col.add_child(head)
 	# the gun in her hands
 	var wr := _row("Weapon", "W")
 	for id in arms.choices():
@@ -131,20 +129,20 @@ func _refresh() -> void:
 	if Inventory.is_empty(game.pack.grid):
 		var ar := _row("Ammo", "A")
 		ar.add_child(_btn("-", false, func(): _step("ammo", -1)))
-		ar.add_child(_lbl("%d units  (%s)" % [int(kit.ammo), _rounds_text(int(kit.ammo))], 16, Color(1, 1, 0.9), false))
+		ar.add_child(_lbl("%d units  (%s)" % [int(kit.ammo), _rounds_text(int(kit.ammo))], UI.BODY_PX, Color(1, 1, 0.9), false))
 		ar.add_child(_btn("+", false, func(): _step("ammo", 1)))
 		_col.add_child(ar)
 		var mr := _row("Medicine", "H")
 		mr.add_child(_btn("-", false, func(): _step("meds", -1)))
-		mr.add_child(_lbl("%d" % int(kit.meds), 16, Color(1, 1, 0.9), false))
+		mr.add_child(_lbl("%d" % int(kit.meds), UI.BODY_PX, Color(1, 1, 0.9), false))
 		mr.add_child(_btn("+", false, func(): _step("meds", 1)))
-		mr.add_child(_lbl("Food [F]", 16, Color(0.85, 0.85, 0.75), false))
+		mr.add_child(_lbl("Food [F]", UI.BODY_PX, Color(0.85, 0.85, 0.75), false))
 		mr.add_child(_btn("-", false, func(): _step("food", -1)))
-		mr.add_child(_lbl("%d" % int(kit.food), 16, Color(1, 1, 0.9), false))
+		mr.add_child(_lbl("%d" % int(kit.food), UI.BODY_PX, Color(1, 1, 0.9), false))
 		mr.add_child(_btn("+", false, func(): _step("food", 1)))
-		mr.add_child(_lbl("Water [D]", 16, Color(0.85, 0.85, 0.75), false))
+		mr.add_child(_lbl("Water [D]", UI.BODY_PX, Color(0.85, 0.85, 0.75), false))
 		mr.add_child(_btn("-", false, func(): _step("water", -1)))
-		mr.add_child(_lbl("%d" % int(kit.water), 16, Color(1, 1, 0.9), false))
+		mr.add_child(_lbl("%d" % int(kit.water), UI.BODY_PX, Color(1, 1, 0.9), false))
 		mr.add_child(_btn("+", false, func(): _step("water", 1)))
 		_col.add_child(mr)
 		_col.add_child(_lbl("From the stores: ammo %d, meds %d, food %d, water %d." % [int(game.stores.ammo), int(game.stores.meds), int(game.stores.food), int(game.stores.water)], 13, Color(0.75, 0.75, 0.7)))
@@ -173,6 +171,8 @@ func _refresh() -> void:
 		var b := _btn(("> " if sel else "   ") + text, sel, func(): _toggle(id), bool(can.ok) or sel)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.add_theme_font_override("font", Fonts.sans(500))    # (a row of the list reads as text, not as a label on a button)
+		b.add_theme_font_size_override("font_size", UI.BODY_PX)
 		var prow := HBoxContainer.new()    # PORTRAIT
 		prow.custom_minimum_size.y = ROW_H - 2.0
 		prow.add_child(PIcons.portrait_box(id, 26.0))

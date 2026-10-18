@@ -11,6 +11,7 @@ const Access := preload("res://scripts/access.gd")
 const BuildInfo := preload("res://scripts/build_info.gd")
 const Buses := preload("res://scripts/audio/buses.gd")
 const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: Save and Save and quit
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
 ## ROUND 12: the volume sliders (label, Prefs key in section audio) and the bus each one sets.
 const VOLUMES := [["Master", "master"], ["Music", "music"], ["Ambience", "ambience"], ["Effects", "sfx"]]
 const BUS_OF := {"master": "Master", "music": "Music", "ambience": "Ambience", "sfx": "SFX"}
@@ -49,13 +50,7 @@ func setup(g) -> void:
 	layer.add_child(centre)
 	panel = PanelContainer.new()
 	panel.custom_minimum_size = Vector2(380, 0)
-	var fr: StyleBox = Hud.frame("panel")    # the chalkboard in oak trim of the title, New game and Settings screens (flat when the picture is missing)
-	if fr != null:
-		fr.content_margin_left = 30
-		fr.content_margin_right = 30
-		fr.content_margin_top = 26
-		fr.content_margin_bottom = 26
-	panel.add_theme_stylebox_override("panel", fr if fr != null else _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 22, 8))
+	panel.add_theme_stylebox_override("panel", UI.frame_box(26))    # the chalkboard in oak trim of the title, New game and Settings screens (flat when the picture is missing)
 	centre.add_child(panel)
 	body = VBoxContainer.new()
 	body.add_theme_constant_override("separation", 10)
@@ -74,6 +69,7 @@ func open(which: String = "main") -> void:
 	if game.audio != null:
 		game.audio.ui_open()
 	layer.visible = true
+	UI.open_fx(panel)
 	if game.prompt_label != null:
 		game.prompt_label.visible = false    # (the tree stops: the E prompt would stay up, peeking out at both sides of the menu)
 	get_tree().paused = not game.args.has("shot")    # (a screenshot run counts frames in the paused tree)
@@ -83,6 +79,7 @@ func open(which: String = "main") -> void:
 func close() -> void:
 	if not is_open():
 		return
+	UI.close_fx(panel)
 	layer.visible = false
 	get_tree().paused = false
 	_quit_armed = false
@@ -106,7 +103,7 @@ func _page(which: String) -> void:
 	_quit_armed = false
 	for c in body.get_children():
 		c.queue_free()
-	body.add_child(_lab("PAUSED" if which == "main" else which.to_upper(), 30, Hud.ACCENT, true))
+	body.add_child(UI.title("PAUSED" if which == "main" else which.to_upper()))
 	body.add_child(_rule())
 	match which:
 		"controls":
@@ -328,18 +325,6 @@ func _quit() -> void:
 
 # -------------------------------------------------------------- builders --
 
-func _box(bg: Color, line: Color, margin: int, radius: int = 4) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = bg
-	s.border_color = line
-	s.set_border_width_all(1)
-	s.set_corner_radius_all(radius)
-	s.set_content_margin_all(margin)
-	s.shadow_color = Color(0, 0, 0, 0.5)
-	s.shadow_size = 14
-	return s
-
-
 func _lab(text: String, size: int, col: Color, cond := false) -> Label:
 	var l := Label.new()
 	l.text = text
@@ -359,32 +344,7 @@ func _rule() -> ColorRect:
 
 
 func _btn(text: String, action: Callable, primary := false) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.custom_minimum_size = Vector2(0, 44)
-	b.add_theme_font_override("font", Fonts.cond(700))
-	b.add_theme_font_size_override("font_size", 22)
-	var base := _box(Hud.ACCENT if primary else Color(Hud.PANEL_HI, 0.9), Hud.LINE2, 8, 5)
-	base.shadow_size = 0
-	var hover := base.duplicate() as StyleBoxFlat
-	hover.bg_color = (Hud.ACCENT.lightened(0.15) if primary else Color(0.26, 0.34, 0.3, 0.96))
-	hover.border_color = Hud.ACCENT
-	var press := hover.duplicate() as StyleBoxFlat
-	press.bg_color = press.bg_color.darkened(0.2)
-	var looks: Array = [base, hover, press]
-	var kinds: Array = ["button_primary", "button_primary_hover", "button_primary_pressed"] if primary else ["button", "button_hover", "button_pressed"]
-	for i in 3:    # the menus' framed buttons when their pictures are there
-		var f: StyleBox = Hud.frame(String(kinds[i]))
-		if f != null:
-			f.content_margin_top = 0
-			f.content_margin_bottom = 0
-			looks[i] = f
-	b.add_theme_stylebox_override("normal", looks[0])
-	b.add_theme_stylebox_override("hover", looks[1])
-	b.add_theme_stylebox_override("pressed", looks[2])
-	b.add_theme_color_override("font_color", Hud.ACCENT_INK if primary else Hud.INK)
-	b.add_theme_color_override("font_hover_color", Hud.ACCENT_INK if primary else Hud.ACCENT)
-	b.add_theme_color_override("font_pressed_color", Hud.ACCENT_INK if primary else Hud.ACCENT)
+	var b := UI.button(text, primary)
+	b.custom_minimum_size = Vector2(0, 40)
 	b.pressed.connect(action)
 	return b
