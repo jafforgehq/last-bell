@@ -12,7 +12,9 @@
 ##   spread  like follow, but a wider ring (`spread_r`) around Ruth
 ## SMARTER (raid feedback "the NPCs go alone and die"): `scavenge` means "scavenge here": only houses whose centre is within `scav_r` of Ruth and with no awake dead near them, and the order is kept while they are RECALLED
 ##   (any dead within `alarm_r`, or Ruth more than `leash` away: they walk back to her, and go on when it has been quiet for 3 s beside her). With `swarm_n` or more dead near, or under `retreat_hp`, they fall back to a slot
-##   beside Ruth on the side away from the dead (so the dead go for Ruth, not them), shooting as they go; a dead one within `kite_r` is kited (they shoot on the move); a pike only charges a dead one within `melee_r` of Ruth.
+##   beside Ruth on the side away from the dead (so the dead go for Ruth, not them), shooting as they go; a dead one within `kite_r` is kited (they shoot on the move); a pike only steps up to a dead one within `kite_r` of Ruth.
+## LEASH (playtest: Ike charged three breachers alone): they keep within `leash_r` of Ruth (of the hold spot for a hold or a ping), shoot only dead within the leash or on Ruth or on them, never walk out
+##   to a target, and run back when beyond it. A special infected in sight is called out ("Breacher!") and sends them back to Ruth shooting. A hold falls back to Ruth when hurt or swarmed.
 ##   fall back (not a command): below `retreat_hp` of their health they walk to Ruth whatever the order, and say so.   down: 20 s to be revived (hold E, one med from the pack), else gone.
 ## INVENTORY (inventory-system skill): the bag is a grid of the same data-driven inventory as the pack (scripts/sim/inventory.gd, w by h cells: 6 by 3 for a Scavenger, 4 by 2 for the rest), filled by the container's
 ## own grid (`sim.inv.grid_of`), emptied into the raid's stock at the pickup (`deposit_all`), and a gun in it goes to the weapon rack. Scrap is not an item: it is kept as a number in the member (`loose`).
@@ -433,8 +435,17 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 		m.calm = float(m.calm) + dt if (near_n == 0 and at.distance_to(me) < float(cfg.follow_r) * 2.5) else 0.0
 		if float(m.calm) > 3.0:
 			m.recall = false
-	var eff := "follow" if (retreat or swarm or bool(m.recall) or bool(game.squad_regroup)) and cmd != "hold" else cmd
+	# LEASH: a special infected in sight is called out once ("Breacher!") and sends them back to Ruth for 3 s, whatever the order; they never chase it
+	for z in zs:
+		var sk: String = game.special_kind(z)
+		if sk != "" and at.distance_to(Vector2(z.x, z.y)) < float(cfg.shoot_r) and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+			_call_special(m, z, sk)
+			m.spec_t = 3.0
+	m.spec_t = float(m.get("spec_t", 0.0)) - dt
+	var eff := _eff_of(cmd, retreat, swarm or float(m.spec_t) > 0.0, bool(m.recall), bool(game.squad_regroup))
 	m.eff = eff
+	var center: Vector2 = m.hold_at if eff == "hold" else me    # (the leash: a hold or a ping keeps its own spot, the rest keep to Ruth)
+	var leashed := at.distance_to(center) > float(cfg.leash_r)
 	# the slot: beside Ruth and on the side away from the dead (never in front of her); "spread out" keeps a wider ring
 	var rad := float(cfg.follow_r) * (0.7 if eff == "cover" else (float(cfg.spread_r) / float(cfg.follow_r) if eff == "spread" else 1.0))
 	var back := Vector2.ZERO
@@ -447,7 +458,7 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 	var bd := reach
 	for z in zs:
 		var dz := at.distance_to(Vector2(z.x, z.y))
-		if dz < bd and game.targetable(z) and game.focus_free(p, z, "squad") and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15) and (bool(p.gun.get("melee", false)) or not _friend_in_line(m, at, Vector2(z.x, z.y), me)):
+		if dz < bd and _may_engage(at, center, me, Vector2(z.x, z.y), game.special_kind(z) != "") and game.targetable(z) and game.focus_free(p, z, "squad") and game.run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15) and (bool(p.gun.get("melee", false)) or not _friend_in_line(m, at, Vector2(z.x, z.y), me)):
 			bd = dz
 			best = z
 	var fighting := false
@@ -455,8 +466,8 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 	if best != null and (bool(p.gun.get("melee", false)) or game.can_fire(p, best, "squad")) and float(m.cd) <= 0.0 and float(p.reloading) <= 0.0:
 		if _fire(m, best, bd, eff):
 			m.fight_t = 2.0
-	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold" and not retreat and not swarm and Vector2(best.x, best.y).distance_to(me) < float(cfg.melee_r) and game.run.sim.clear_shot(me, Vector2(best.x, best.y), 0.15):    # (only a dead one Ruth can see: not one beyond her wall)
-		_goto(m, Vector2(best.x, best.y), dt, float(cfg.run))    # (a pike only reaches 1.9 tiles: they walk up to it)
+	if best != null and bool(p.gun.get("melee", false)) and bd > 1.7 and eff != "hold" and not retreat and not swarm and _may_charge(at, me, Vector2(best.x, best.y), game.special_kind(best) != "") and game.run.sim.clear_shot(me, Vector2(best.x, best.y), 0.15):    # (only a dead one Ruth can see: not one beyond her wall)
+		_goto(m, Vector2(best.x, best.y), dt, float(cfg.run))    # (a pike only reaches 1.9 tiles: they step up to one that is on Ruth)
 		m.say = "charging"
 		m.eff = "charge"
 		p.work = ""
@@ -468,7 +479,9 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 	m.kiting = near_d < float(cfg.kite_r) or (bool(m.get("kiting", false)) and near_d < float(cfg.kite_r) + 1.5)
 	if fighting:
 		# kite (shoot on the move toward Ruth), and never stand in Ruth's line of fire while shooting
-		if eff != "hold" and not bool(p.gun.get("melee", false)) and (bool(m.kiting) or at.distance_to(me) > float(cfg.leash) or _in_fire(me, at, 0.35)) and at.distance_to(slot) > 0.4:
+		if eff == "hold" and leashed:    # (LEASH: a fight never keeps them off their spot: back to it at a run, shooting)
+			_goto(m, m.hold_at, dt, float(cfg.run))
+		elif eff != "hold" and (leashed or retreat or swarm or (not bool(p.gun.get("melee", false)) and (bool(m.kiting) or _in_fire(me, at, 0.35)))) and at.distance_to(slot) > 0.4:
 			_goto(m, slot, dt, float(cfg.run))
 		else:
 			p.moving = false
@@ -498,7 +511,7 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 		_:
 			p.work = ""
 			_keep_up(m, slot, me, dt, retreat, swarm, eff)
-	if eff != "hold":
+	if cmd != "hold":    # (a hold that fell back to Ruth keeps its spot to go back to)
 		m.hold_at = Vector2(p.x, p.y)
 	if not bool(p.moving) and p.target == null:    # standing: face the nearest dead about, else where Ruth looks (not the last step's way)
 		var look := (threat / float(near_n) - at) if near_n > 0 else (Vector2(game.run.avatar_p.input_aim) - me)
@@ -506,6 +519,39 @@ func _step(m: Dictionary, dt: float, me: Vector2, zs: Array, idx: int) -> void:
 			look = at - me    # (Ruth aims nowhere: they watch outward, away from her)
 		if look.length() > 0.3:
 			p.facing = game.run.sim.facing_of(look.x, look.y, p.facing)
+
+
+## LEASH (playtest: Ike "attacked 3 breachers on his own"): the order a member acts on. Hurt (`retreat_hp`), swarmed (`swarm_n` dead) or a special in sight: back to Ruth whatever the
+## order, a hold too (its spot is kept for later). Recalled or called to the pickup: back to Ruth, except a hold.
+func _eff_of(cmd: String, retreat: bool, swarm: bool, recall: bool, regroup: bool) -> String:
+	if retreat or swarm or ((recall or regroup) and cmd != "hold"):
+		return "follow"
+	return cmd
+
+
+## LEASH: may a member at `at`, kept to `center` (Ruth, or a hold spot), shoot the dead one at `zp` (already within its shoot range)? Only within `leash_r` of the centre, or one that is on
+## Ruth or on them (within `kite_r`), or a special (shot at while they fall back). Nothing beyond the leash is engaged: they let it go.
+func _may_engage(at: Vector2, center: Vector2, me: Vector2, zp: Vector2, special: bool) -> bool:
+	return special or zp.distance_to(center) <= float(cfg.leash_r) or zp.distance_to(me) < float(cfg.kite_r) or zp.distance_to(at) < float(cfg.kite_r)
+
+
+## LEASH: a pike steps up only to a dead one that is on Ruth (within `kite_r` of her), only from within the leash, and never to a special.
+func _may_charge(at: Vector2, me: Vector2, zp: Vector2, special: bool) -> bool:
+	return not special and zp.distance_to(me) < float(cfg.kite_r) and at.distance_to(me) <= float(cfg.leash_r)
+
+
+## LEASH: the call-out of a special ("Breacher!"), once per special per member. True when it was called now.
+func _call_special(m: Dictionary, z, kind: String) -> bool:
+	var seen: Array = m.get("called", [])
+	for o in seen:
+		if is_same(o, z):
+			return false
+	seen.append(z)
+	m.called = seen
+	var text := kind.capitalize() + "!"
+	_bark(m, text, 2.5)
+	floaters.append({"text": text, "pos": Vector2(m.p.x, m.p.y - 1.9), "t": 0.0, "col": Color(1.0, 0.75, 0.3)})
+	return true
 
 
 ## FOLLOW, COVER, SPREAD and the fall back: walk to the kept spot (with a deadzone: they start at 0.9 tiles off it and stop at 0.3), run when far, and as a last resort, only while they are off the screen
@@ -522,7 +568,7 @@ func _keep_up(m: Dictionary, slot: Vector2, me: Vector2, dt: float, retreat: boo
 		m.walking = false
 		dist = 0.0
 	if dist > (0.3 if bool(m.walking) else 0.9):
-		m.walking = not _goto(m, slot, dt, float(cfg.run) if (dist > 6.0 or bool(game.squad_regroup)) else float(cfg.speed))
+		m.walking = not _goto(m, slot, dt, float(cfg.run) if (at.distance_to(me) > float(cfg.leash_r) or dist > 6.0 or bool(game.squad_regroup)) else float(cfg.speed))    # (beyond the leash: back at a run)
 	else:
 		m.walking = false
 		p.moving = false

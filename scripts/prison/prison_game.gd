@@ -76,6 +76,7 @@ const RELOAD_EVERY := 5    # a crew gun is reloaded after this many shots
 const RELOAD_SECS := 1.7
 const ALLY_FOLLOW := 3.6
 const ALLY_RANGE := 9.0
+const ALLY_LEASH := 6.0    # LEASH: the tiles an ally keeps within Ruth (or a ping) while fighting
 const ALLY_REVIVE_HP := 30.0
 const BITE_R := 0.95
 const BITE_DMG := 8.0
@@ -2974,6 +2975,12 @@ func _miss_point(from: Vector2, z) -> Vector2:
 var _react := {}    # shooter id -> {z, until, last}: who looks at which dead one, since when it may fire
 
 
+## LEASH: the kind of a special infected (breacher, bloater, hunter, screamer), else "". Companions and allies call one out and fall back to Ruth; they never go after it.
+func special_kind(z) -> String:
+	var k: String = special.kind_of(z) if special != null else ""
+	return k if k in ["breacher", "bloater", "hunter", "screamer"] else ""
+
+
 ## Whether a dead one can be shot at all: awake, not falling, and (when `rise_wait` is on) its rise from the ground is over.
 func targetable(z) -> bool:
 	if z.state == "dying" or z.state == "dead":
@@ -3216,12 +3223,31 @@ func _allies(dt: float) -> void:
 		var biters := 0
 		var best = null
 		var bd := 1.0e9
-		var hang: bool = float(m.hp) < 0.3 * Crew.ALLY_HP
+		var hang: bool = float(m.hp) < 0.4 * Crew.ALLY_HP    # (LEASH: below 40 percent they hang back behind Ruth, a ping or not)
+		var pg: Vector2 = raidx.ally_spot(allies.find(m))    # RAID EXTRAS: a ping, they stand about it
+		var swarm := 0
+		m.spec_t = float(m.get("spec_t", 0.0)) - dt
 		for z in zs:
 			var d := at.distance_to(Vector2(z.x, z.y))
 			if d < BITE_R:
 				biters += 1
-			if d < (6.5 if hang else ALLY_RANGE) and d < bd and targetable(z) and focus_free(g, z, "ally") and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
+			if d < ALLY_RANGE and z.state == "chase":
+				swarm += 1
+			var sk := special_kind(z)
+			if sk != "" and d < ALLY_RANGE and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):    # LEASH: a special is called out once and sends them back to Ruth
+				m.spec_t = 3.0
+				var seen: Array = m.get("called", [])
+				if not seen.any(func(o): return is_same(o, z)):
+					seen.append(z)
+					m.called = seen
+					crew.floaters.append({"text": sk.capitalize() + "!", "pos": Vector2(g.x, g.y - 1.9), "t": 0.0, "col": Color(1.0, 0.75, 0.3)})
+		var to_ruth: bool = hang or swarm >= 3 or float(m.spec_t) > 0.0 or pg == Vector2.INF    # (hurt, three or more dead on them, or a special about: the ping is dropped for Ruth)
+		var center: Vector2 = me if to_ruth else pg
+		for z in zs:
+			var zp := Vector2(z.x, z.y)
+			var d := at.distance_to(zp)
+			var near_ok := zp.distance_to(center) <= ALLY_LEASH or zp.distance_to(me) < 3.0 or d < 3.0 or special_kind(z) != ""    # LEASH: only dead within the leash, on Ruth or on them, or a special
+			if near_ok and d < (6.5 if hang else ALLY_RANGE) and d < bd and targetable(z) and focus_free(g, z, "ally") and run.sim.clear_shot(at, Vector2(z.x, z.y), 0.15):
 				bd = d
 				best = z
 		if biters > 0 and float(m.bite) <= 0.0:
@@ -3248,14 +3274,13 @@ func _allies(dt: float) -> void:
 			m.hold = 0.35
 			m.say = "firing"
 			m.fired_at = clock    # (the Firing tag lasts 1.5 s after the shot)
-		if float(m.hold) > 0.0:
+		if float(m.hold) > 0.0 and at.distance_to(center) <= ALLY_LEASH and float(m.spec_t) <= 0.0:    # LEASH: a shot never keeps them standing off the leash
 			g.moving = false
 			continue
 		# follow
 		var idx := allies.find(m)
 		var slot := me - aim * 3.0 + aim.orthogonal() * (float(idx) - float(allies.size() - 1) / 2.0) * 1.2 if hang else me + Vector2.from_angle(float(idx) * TAU / float(allies.size()) + 0.5) * 2.2    # (spread evenly round her, however many are left)
-		var pg: Vector2 = raidx.ally_spot(idx)    # RAID EXTRAS: a ping, they stand about it
-		if pg != Vector2.INF and not hang:
+		if not to_ruth:
 			slot = pg
 		var dist := at.distance_to(slot)
 		if at.distance_to(me) > 18.0:
@@ -3272,7 +3297,7 @@ func _allies(dt: float) -> void:
 				if m.path.is_empty():
 					m.path = doors.path(at, me)
 				m.pi = 0
-			crew._advance(m, dt, 5.0 if dist > 8.0 else ALLY_FOLLOW)
+			crew._advance(m, dt, 5.0 if (dist > 8.0 or at.distance_to(center) > ALLY_LEASH) else ALLY_FOLLOW)    # (beyond the leash: back at a run)
 			if best == null:
 				m.say = "hanging back" if hang else "following"
 		else:
