@@ -39,6 +39,13 @@ static func _walk(n: Node, ratio: Vector2, layer: int, alpha: float, out: Array,
 			}
 			var vp_size := ctl.get_viewport_rect().size
 			rec["full"] = r.size.x >= vp_size.x * 0.9 and r.size.y >= vp_size.y * 0.9
+			if ctl is Label or ctl is Button:    # (the prison's layout check: the width the text wants on one line, to find clipped words)
+				var fnt := ctl.get_theme_font("font")
+				var fs := ctl.get_theme_font_size("font_size")
+				rec["tw"] = fnt.get_multiline_string_size(String(ctl.text), HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x * ratio.x if fnt != null else 0.0
+				rec["clip"] = bool(ctl.clip_text) if ctl is Label else bool((ctl as Button).clip_text)
+				rec["wrap"] = int((ctl as Label).autowrap_mode) if ctl is Label else 0
+				rec["fs"] = fs
 			out.append(rec)
 		elif c is Node2D and not (c is Camera2D):
 			var n2 := c as Node2D

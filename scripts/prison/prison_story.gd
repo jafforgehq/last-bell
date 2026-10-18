@@ -322,6 +322,7 @@ func show_card(d: Dictionary) -> void:
 			cb.call(i))
 	layer.add_child(root)
 	card = root
+	game.prompt_label.visible = false    # (the tree stops: the E prompt would stay up under the card)
 	game.get_tree().paused = not game.args.has("shot")
 	game.sound.play("bell", 0.35, 0.0)
 
@@ -510,10 +511,11 @@ func close_log() -> void:
 
 func _log_frame() -> void:
 	var v := _vp()
-	var sz := Vector2(minf(820.0, v.x - 24.0), minf(660.0, v.y - 24.0))
+	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y + 6.0) if game.topbar.plate.visible else 12.0    # (under the top bar, as the Base screen is: it covered the chips)
+	var sz := Vector2(minf(820.0, v.x - 24.0), minf(660.0, v.y - top - 12.0))
 	log_panel.custom_minimum_size = sz
 	log_panel.size = sz
-	log_panel.position = ((v - sz) / 2.0).round()
+	log_panel.position = Vector2(round((v.x - sz.x) / 2.0), round(top))
 	var sig: int = arc.log_entries.size() * 1000 + arc.day * 10 + int(game.stores.get("fuel", 0.0)) * 3 + int(game.stores.get("parts", 0.0)) + int(game.stores.get("meds", 0.0)) + arc.people_alive() * 7
 	if _log_dirty or sig != _log_sig:
 		_log_dirty = false
