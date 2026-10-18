@@ -245,3 +245,27 @@ func test_the_prison_zones_look_is_saved_and_an_old_save_loads_half_clean() -> v
 	old.from_dict({"spots": [], "tag": 0})
 	eq(old.zc, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], "a save from before the look loads half clean")
 	eq(old.kept, [0, 0, 0, 0, 0, 0], "with no clean days")
+
+
+## UI POLISH (scripts/prison/prison_ui.gd): the windows' shared look. A framed button sinks a pixel and darkens while held and comes back on release; with no display there is no motion, so a
+## counter shows its new value at once and a window opened headless is whole (no fade, no slide) the frame it opens.
+func test_the_prison_windows_share_one_button_and_motion_is_free_headless() -> void:
+	var UI = load("res://scripts/prison/prison_ui.gd")
+	check(UI.frame_box(14) != null, "the window frame exists (the chalkboard, or the flat stand-in)")
+	var b: Button = UI.button("Close")
+	eq(b.get_theme_font_size("font_size"), UI.BUTTON_PX, "one button size for every window")
+	check(b.has_meta("ui_fb") and b.offset_transform_enabled, "the press feedback is on the button")
+	b.button_down.emit()
+	eq(b.offset_transform_position, Vector2(0, 1), "held: it sinks a pixel")
+	check(b.self_modulate.r < 1.0, "held: it darkens")
+	b.button_up.emit()
+	eq(b.offset_transform_position, Vector2.ZERO, "released: back in place")
+	eq(b.self_modulate, Color.WHITE, "released: its own colour")
+	b.free()
+	eq(UI.tick("test.count", 5.0), 5.0, "a new counter shows its value")
+	eq(UI.tick("test.count", 12.0), 12.0, "headless, a changed counter shows the new value at once")
+	check(not UI.ticking(), "and nothing is left counting")
+	var p := PanelContainer.new()
+	UI.open_fx(p)
+	eq(p.modulate.a, 1.0, "a window opened with no display is not faded")
+	p.free()
