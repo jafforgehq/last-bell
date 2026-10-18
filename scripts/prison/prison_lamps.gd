@@ -6,6 +6,8 @@
 ## THE BASE. With the generator built and fuelled (prison_upgrades.gd `_lit`, and no storm blackout) the yard lamps and the towers burn electric, warm white; without power the gate pair, the
 ## lamp by the canteen and the towers are oil lanterns (smaller, oranger, a flame's flicker) and the two far yard lamps are dark.
 ## A RAID. A street lamp of the town (`streetlamp` objects of the town kit, `lamppost` of the site layouts) burns at night if its seed says so (about three in five: a solar cell, a generator left running), with the same look; the rest are dark.
+## A hand-laid site (prison_site.gd `lamps`: quay and car park lamps, floodlight masts, crane lights, runway edge lights) has no power: by the site's seed and the lamp's place about two in five
+## still burn, about one in five shows only its emergency light (small, dim and cold), the rest are dark; a runway edge light either burns (a battery) or not.
 extends RefCounted
 
 const Tower := preload("res://scripts/prison/prison_tower.gd")
@@ -13,13 +15,17 @@ const Upg := preload("res://scripts/prison/prison_upgrades.gd")
 
 const TILE := 64.0
 const ELECTRIC := Color(1.0, 0.8, 0.52)
-const OIL := Color(1.0, 0.6, 0.28)
+const OIL := Color(1.0, 0.74, 0.48)    # (softer than a flame orange: the pools read warm without washing the yard)
 ## Where a lamppost picture's head is, as a share of the picture (assets/objects/243 to 249_lamppost.png): the three upright ones and the two pairs of arms.
 const HEAD := {"243": Vector2(0.16, 0.62), "244": Vector2(0.16, 0.62), "245": Vector2(0.16, 0.62), "246": Vector2(0.70, 0.12), "247": Vector2(0.70, 0.12), "248": Vector2(0.09, 0.12), "249": Vector2(0.09, 0.12)}
 
 var game
 var pool_tex: GradientTexture2D
-var _raid_lamps: Array = []    # [head (tiles), seed]
+var _raid_lamps: Array = []    # [head (tiles), pool radius (tiles), colour, brightness, seed]
+const FLOOD := Color(0.95, 0.93, 0.84)
+const EMERGENCY := Color(0.7, 0.84, 1.0)
+## A site lamp's kind: pool radius (tiles), colour, brightness.
+const SITE_KIND := {"lamp": [5.0, ELECTRIC, 0.5], "flood": [8.5, FLOOD, 0.55], "crane": [3.5, ELECTRIC, 0.45], "edge": [0.9, Color(0.9, 0.95, 1.0), 0.6], "mast": [9.5, FLOOD, 0.6]}
 var _raid_seen = null
 
 
@@ -52,10 +58,10 @@ func lamps(n: float) -> Array:
 			if pw:
 				out.append([Vector2(l), 5.5, ELECTRIC, 0.5 * n, i, false])
 			elif i < 3:
-				out.append([Vector2(l), 3.4, OIL, 0.55 * n, i, true])
+				out.append([Vector2(l), 2.5, OIL, 0.45 * n, i, true])
 			i += 1
 		for t in game.base.towers:
-			out.append([Tower.lamp_pos(t) / TILE, 4.0 if pw else 2.8, ELECTRIC if pw else OIL, (0.3 if pw else 0.38) * n, i, not pw])    # (dim under the floodlight cone: it washed the guard out at 0.4)
+			out.append([Tower.lamp_pos(t) / TILE, 4.0 if pw else 2.2, ELECTRIC if pw else OIL, (0.3 if pw else 0.34) * n, i, not pw])    # (dim under the floodlight cone: it washed the guard out at 0.4)
 			i += 1
 		if pw:
 			for p in Upg.POLES:
@@ -65,7 +71,7 @@ func lamps(n: float) -> Array:
 		if _raid_seen != game.world:
 			_find_raid_lamps()
 		for l in _raid_lamps:
-			out.append([l[0], 5.5, ELECTRIC, 0.5 * n, l[1], false])
+			out.append([l[0], l[1], l[2], float(l[3]) * n, l[4], false])
 	return out
 
 
@@ -80,7 +86,7 @@ func _find_raid_lamps() -> void:
 		if sd % 5 >= 3:    # (two in five are dark)
 			continue
 		if kd == "streetlamp":    # (the town kit's: a one-tile picture seen from above, the head in the middle)
-			_raid_lamps.append([Vector2(float(o.cx), float(o.cy)), sd])
+			_raid_lamps.append([Vector2(float(o.cx), float(o.cy)), 5.5, ELECTRIC, 0.5, sd])
 			continue
 		if (o.get("pieces", []) as Array).is_empty():
 			continue
@@ -89,9 +95,25 @@ func _find_raid_lamps() -> void:
 		var h: Vector2 = HEAD.get(f, Vector2(0.5, 0.5))
 		if bool(pc.get("flip_h", false)):
 			h.x = 1.0 - h.x
-		_raid_lamps.append([Vector2(float(pc.x) + h.x * float(pc.w), float(pc.y) + h.y * float(pc.h)), sd])
+		_raid_lamps.append([Vector2(float(pc.x) + h.x * float(pc.w), float(pc.y) + h.y * float(pc.h)), 5.5, ELECTRIC, 0.5, sd])
+	var site: Dictionary = game.town.get("site", {})
+	var ts := int(game.town.get("seed", 1))
+	for i in (site.get("lamps", []) as Array).size():
+		var sl: Array = site.lamps[i]
+		var kind: Array = SITE_KIND.get(String(sl[2]), SITE_KIND.lamp)
+		var at := Vector2(float(sl[0]), float(sl[1]))
+		var sd := site_roll(ts, i)
+		if sd < (75 if String(sl[2]) == "mast" else 42):    # (a stadium mast had its own generator: three in four burn)
+			_raid_lamps.append([at, kind[0], kind[1], kind[2], sd])
+		elif sd < 64 and String(sl[2]) != "edge":    # the emergency light on a battery: small, dim, cold
+			_raid_lamps.append([at, float(kind[0]) * 0.45, EMERGENCY, 0.2, sd])
 	if game.args.has("log"):
 		print("LAMPS raid lamps lit ", _raid_lamps.size(), " at ", _raid_lamps.map(func(l): return l[0]))
+
+
+## A site lamp's roll 0..99 (deterministic per site seed and lamp): under 42 it burns, under 64 only its emergency light.
+static func site_roll(town_seed: int, i: int) -> int:
+	return absi(hash(Vector2i(town_seed, i * 7 + 3))) % 100
 
 
 ## A lamp's brightness factor now (1 most of the time): oil breathes; one electric lamp in four stutters for a moment every few seconds.

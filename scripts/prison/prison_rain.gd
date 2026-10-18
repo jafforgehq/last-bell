@@ -6,7 +6,8 @@
 ## (prison_audio.gd) follows `target()`, so what you hear is what you see.
 ## THE LOOK. Two layers of streaks slanted by the wind (a far layer, thin, short, slow and faint; a near one, longer and brighter), both lit like the world (dark blue at night); rings that
 ## open on the outdoor ground round the view (never on a floor under a roof); a faint grey veil that flattens the colours; a cooler, darker grade (`grade`); the ground gets wet and the lamps
-## show a sheen and a halo (`wet` and `haze`, read by prison_lamps.gd). Under a roof on a raid the streaks thin to a third.
+## show a sheen and a halo (`wet` and `haze`, read by prison_lamps.gd). Under a roof on a raid the streaks thin to a third. On the base no streak and no ring falls inside a building (its walls
+## and its floor, `ROOFED`), and no ring opens on a tile next to a wall, a fence or anything solid south of it (the top of a wall is drawn over the tile north of it).
 ## STORMS. In a storm (level 0.95 and up) a strike every 9 to 25 seconds: two quick pulses of light (rain_view.gd's `flash_curve`) that lift the night grade and a pale veil, then the thunder,
 ## 1 to 3 s later (the synthesized thunders of scripts/audio/foley.gd, on the Rain bus).
 ## STAGING: `--baserain=0..1` rains on the base at that level (1 is a storm), `--rainflash` holds a strike at its peak for a screenshot.
@@ -23,6 +24,9 @@ const RIP_LIFE := 0.6
 ## The terrain ids of open ground (scripts/prison/prison_base.gd T_*): asphalt, sidewalk, yard, grass, soil, concrete, dirt. A ring never opens on any other.
 const OUTDOOR := {1: true, 2: true, 3: true, 4: true, 5: true, 12: true, 13: true}
 const STORM := 0.95
+const Base := preload("res://scripts/prison/prison_base.gd")
+## The base's roofed buildings (prison_base.gd), walls included: no rain falls in them.
+const ROOFED := [Base.CELLS, Base.CANTEEN, Base.INFIRMARY, Base.WORKSHOP, Base.STORES]
 
 var game
 var level := 0.0    # the rain drawn now (0 to 1), eased toward `target()`
@@ -130,9 +134,19 @@ func _ripples(dt: float) -> void:
 		if tx < 0 or ty < 0 or tx >= int(w.W) or ty >= int(w.H):
 			continue
 		var ix := ty * int(w.W) + tx
-		if not OUTDOOR.has(int(w.terrain[ix])) or int(w.solid_p[ix]) != 0:
+		if not OUTDOOR.has(int(w.terrain[ix])) or int(w.solid_p[ix]) != 0 or roofed(p) or (ty + 1 < int(w.H) and int(w.solid_p[ix + int(w.W)]) != 0):
 			continue
 		_rip.append([p, 0.0, _rng.randf_range(0.18, 0.34)])
+
+
+## Whether a point (tiles) is under a roof of the base (always false on a raid: the raid's own rule is `indoor`).
+func roofed(p: Vector2) -> bool:
+	if game.mode != "base":
+		return false
+	for r in ROOFED:
+		if Rect2(r).has_point(p):
+			return true
+	return false
 
 
 # ------------------------------------------------------------------ storms --
@@ -207,17 +221,20 @@ func paint(c: CanvasItem, v: Vector2) -> void:
 		c.draw_multiline_colors(pts, cols, 1.5)
 	var wind := 0.22 + 0.08 * sin(t * 0.4)    # the slant: x per unit of fall
 	var u := v.y / 800.0    # (a big window: longer, faster, wider streaks, the same look)
-	_streaks(c, v, t, int(260.0 * k), 380.0 * u, 12.0 * u, wind, Color(0.72, 0.8, 0.95, 0.3) * lit, maxf(1.0, u), 17)
-	_streaks(c, v, t, int(90.0 * k), 720.0 * u, 28.0 * u, wind * 1.15, Color(0.82, 0.88, 1.0, 0.5) * lit, 1.8 * u, 53)
+	var inv := Transform2D()    # (the base: a streak whose foot is over a building is not drawn)
+	if game.mode == "base" and game.world != null:
+		inv = game.world.get_global_transform_with_canvas().affine_inverse().scaled(Vector2.ONE / TILE)
+	_streaks(c, v, t, int(260.0 * k), 380.0 * u, 12.0 * u, wind, Color(0.72, 0.8, 0.95, 0.3) * lit, maxf(1.0, u), 17, inv)
+	_streaks(c, v, t, int(90.0 * k), 720.0 * u, 28.0 * u, wind * 1.15, Color(0.82, 0.88, 1.0, 0.5) * lit, 1.8 * u, 53, inv)
 	if flash > 0.0:
 		c.draw_rect(Rect2(Vector2.ZERO, v), Color(0.75, 0.82, 1.0, 0.22 * flash))
 
 
-static func _streaks(c: CanvasItem, v: Vector2, t: float, n: int, speed: float, length: float, wind: float, col: Color, width: float, salt: int) -> void:
+func _streaks(c: CanvasItem, v: Vector2, t: float, n: int, speed: float, length: float, wind: float, col: Color, width: float, salt: int, inv: Transform2D) -> void:
 	if n <= 0:
 		return
+	var mask := inv != Transform2D()
 	var pts := PackedVector2Array()
-	pts.resize(n * 2)
 	var span := Vector2(v.x + 80.0, v.y + 60.0)
 	for i in n:
 		var f := float(i + salt)
@@ -226,6 +243,9 @@ static func _streaks(c: CanvasItem, v: Vector2, t: float, n: int, speed: float, 
 		var x := fposmod(f * 97.31 + fall * wind, span.x) - 40.0
 		var y := fposmod(f * 53.17 + fall, span.y) - 30.0
 		var l := length * sp
-		pts[i * 2] = Vector2(x, y)
-		pts[i * 2 + 1] = Vector2(x - wind * l, y - l)
-	c.draw_multiline(pts, col, width)
+		if mask and roofed(inv * Vector2(x, y)):
+			continue
+		pts.append(Vector2(x, y))
+		pts.append(Vector2(x - wind * l, y - l))
+	if not pts.is_empty():
+		c.draw_multiline(pts, col, width)
