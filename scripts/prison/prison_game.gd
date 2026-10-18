@@ -170,6 +170,9 @@ var night_rect: ColorRect
 var glow: Control
 var radial_tex: Texture2D
 var mini_tex: ImageTexture
+var mini_doors: Array = []    # DOORS: [Rect2 in tiles] of the doorways ticked on the minimap (the base's doors, or a raid's outside doors)
+var raid_doors: Array = []    # RAID DOORS: Doors.raid_doors() of the raid map
+var _raid_door_node: Node2D    # RAID DOORS: the layer over the roofs
 var guard_cd := {}
 var aiming_now := false    # the weapon is up and aimed (right button / Shift held, weapon drawn): the HUD marks show only then; other systems: right-click orders only when not aiming
 var _aim_cur := 0.0
@@ -867,6 +870,11 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 		roofs = TownRoofs.new()
 		world.add_child(roofs)
 		roofs.setup(town, data, "house")
+		var rd := DrawNode.new()    # RAID DOORS: the outside doors over the roofs' edges (same z, after the roofs), so a shut house shows its doors
+		rd.z_index = 7
+		rd.painter = _paint_raid_doors.bind(true)
+		world.add_child(rd)
+		_raid_door_node = rd
 	run = TownRun.new(town, world, fx, 100, true, true)
 	run.sim.feel = fx.combat
 	Arms.apply_knife(run.sim.avatar.melee_rules)    # (F is the knife: always carried, a half-second swing, quiet)
@@ -878,6 +886,8 @@ func _make_stage(the_town: Dictionary, with_roofs: bool) -> void:
 		print("GUN ", gp.weapon, " mag ", gp.mag, " cost ", run.sim.shot_cost(gp), " noise ", run.field.noise_radius_for(gp), " shots per unit ", snappedf(1.0 / run.sim.shot_cost(gp), 0.1), " cooldown ", gp.gun.cooldown, " spread ", run.sim.avatar.spread_of(gp, gp.gun))
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
 	mini_tex = _mini_texture(town.data)
+	raid_doors = Doors.raid_doors(town.get("houses", [])) if mode == "raid" else []
+	mini_doors = mini_door_rects(mode, raid_doors)
 	if dog != null:
 		dog = null
 	for tr in town.data.trees:
@@ -1563,6 +1573,10 @@ func _tick(dt: float) -> void:
 		fx.update(dt)
 	if doors != null and mode == "base":
 		doors.tick(dt)
+	elif mode == "raid" and _decks_node != null:
+		_decks_node.queue_redraw()    # RAID DOORS: the view moves over them
+		if is_instance_valid(_raid_door_node):
+			_raid_door_node.queue_redraw()
 	var p = run.avatar_p
 	if args.has("trailercam"):
 		_trailer_cam(dt)
@@ -2325,6 +2339,22 @@ func _paint_decks(c: CanvasItem) -> void:
 			doors.paint(c)
 		for t in base.towers:
 			Tower.draw_deck(c, t)
+	elif mode == "raid":
+		_paint_raid_doors(c, false)
+
+
+## RAID DOORS: every doorway of the raid map drawn standing open (frame, sill, leaves swung in). The inside doors are drawn under the roofs (`top` false); the outside doors over
+## them (`top` true), without the dark gap, so a shut house still shows where its doors are. Only the doors near the view are drawn.
+func _paint_raid_doors(c: CanvasItem, top: bool) -> void:
+	if mode != "raid":
+		return
+	var hr: float = raidx.hour() if raidx != null else tod
+	var night := _night_of(hr)
+	var view := Rect2(cam_center - _vp() / zoom_px, _vp() / zoom_px * 2.0).grow(2.0)
+	for d in raid_doors:
+		var r: Rect2 = d.rect
+		if bool(d.exterior) == top and view.intersects(r):
+			Doors.draw_door(c, TILE, r, d.norm, 1.0, false, night, false, 0.0, not top)
 
 
 func _paint_overlay(c: CanvasItem) -> void:
@@ -2847,6 +2877,19 @@ func _mini_texture(d: Dictionary) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
+## The doorways the minimap ticks: every door of the prison in the base, the outside doors of the houses in a raid.
+static func mini_door_rects(m: String, rd: Array) -> Array:
+	var out: Array = []
+	if m == "base":
+		for d in Base.doors():
+			out.append(Rect2(d.rect))
+	else:
+		for d in rd:
+			if bool(d.exterior):
+				out.append(d.rect)
+	return out
+
+
 func _draw_minimap(v: Vector2) -> void:
 	if mini_tex == null:
 		return
@@ -2861,6 +2904,10 @@ func _draw_minimap(v: Vector2) -> void:
 			var zr := Rect2(Base.ZONES[zi].rect)
 			bars.draw_rect(Rect2(o + zr.position * sc, zr.size * sc), Color(0.3, 0.9, 0.4, 0.4) if zone_done[zi] else Color(0.55, 0.55, 0.58, 0.45))
 			bars.draw_rect(Rect2(o + zr.position * sc, zr.size * sc), Color(0.3, 0.9, 0.4, 0.9) if zone_done[zi] else Color(0.7, 0.7, 0.72, 0.8), false, 1.0)
+	for dr in mini_doors:    # DOORS: a bright tick on the building's outline at each doorway (a dark rim so it stands off the dead's orange dots)
+		var tk := Rect2(o + dr.position * sc, dr.size * sc).grow(0.5)
+		bars.draw_rect(tk.grow(0.8), Color(0.05, 0.04, 0.03, 0.9))
+		bars.draw_rect(tk, Color(1.0, 0.96, 0.7))
 	if mode == "base":
 		bars.draw_circle(o + Base.GATE_POS * sc, 3.5, Color(1, 0.85, 0.3))
 		for m in crew.members:
