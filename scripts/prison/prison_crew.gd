@@ -251,6 +251,7 @@ func update(dt: float, stores: Dictionary) -> void:
 	_meal_id = _meal_window()
 	play_t += dt
 	for m in members:
+		_shift(m)
 		if m.state == "post":
 			m.p.work_t = float(m.p.work_t) + dt
 			continue
@@ -379,6 +380,73 @@ func _to_post(m: Dictionary, dt: float) -> void:
 		m.state = "post"
 		if m.has("node") and is_instance_valid(m.node):
 			m.node.z_index = 1 if String(r.get("stand", "tower")).begins_with("tower") else 0
+
+
+# ------------------------------------------------------------------ shifts ------
+## DAY AND NIGHT SHIFTS (managed base only: `posts` is set): a tower guard climbs down at SHIFT_FROM for a day job (a project of any role, prison_upgrades.gd `_assign`, else the
+## hauler's round) and walks back up at SHIFT_TO, or at once when `alert` is set (an attack, the dead at the fence, a gap open). A tower in `posts.day_watch` keeps its guard up all day.
+const SHIFT_FROM := 7.0
+const SHIFT_TO := 19.0    # dusk: two hours before the first bell (prison_siege.gd NIGHT_H)
+var alert := false    # set by the game every frame
+
+
+## On their post now (a tower guard on a day job is not: no shots, no "on watch").
+func on_post(m: Dictionary) -> bool:
+	return m.def.has("stand") and not m.has("day")
+
+
+func day_watch(m: Dictionary) -> bool:
+	return posts != null and bool(posts.day_watch.get(String(m.def.get("stand", "")), false))
+
+
+func _wants_day(m: Dictionary) -> bool:
+	if posts == null or not String(m.def.get("stand", "")).begins_with("tower") or m.has("down") or m.def.has("ally"):
+		return false
+	return not alert and tod >= SHIFT_FROM and tod < SHIFT_TO and not day_watch(m)
+
+
+## Roster text of a tower guard: "Tower guard (days: building)", "(day watch)"; "" for anybody else.
+func shift_text(m: Dictionary) -> String:
+	if posts == null or not String(m.def.get("stand", "")).begins_with("tower"):
+		return ""
+	if day_watch(m):
+		return "Tower guard (day watch)"
+	var job := "hauling"
+	if m.has("eat") and (m.eat as Dictionary).has("build"):
+		job = "building"
+	return "Tower guard (days: %s)" % job
+
+
+func _shift(m: Dictionary) -> void:
+	var want := _wants_day(m)
+	if want and m.state == "post":
+		var d: Dictionary = (m.def as Dictionary).duplicate(true)
+		d["route"] = route_for("hauler")
+		m.def = d
+		m["day"] = true
+		var spot := _tower_spot(String(d.stand))
+		m.p.x = spot.x
+		m.p.y = spot.y + 2.0    # down the ladder
+		m.p.work = ""
+		m.i = 0
+		m.state = "wait"
+		m.say = "day job"
+		if m.has("node") and is_instance_valid(m.node):
+			m.node.z_index = 0
+	elif not want and m.has("day") and not m.has("down") and not ["leaving", "down", "downed"].has(String(m.state)):
+		var d2: Dictionary = (m.def as Dictionary).duplicate(true)
+		d2.erase("route")
+		m.def = d2
+		m.erase("day")
+		m.erase("eat")
+		m.erase("clean_q")
+		var spot2 := _tower_spot(String(d2.stand))
+		m["to_post"] = spot2
+		m.state = "walk"
+		m.path = _find(m.p.x, m.p.y, spot2.x, spot2.y + 2.0)
+		m.pi = 0
+		m.p.work = ""
+		m.say = "back to the tower"
 
 
 ## The kids: tag in the yard (one runs, one chases; a touch swaps them), a ball that rolls along, a hopscotch that the runner visits. Never armed, never on a route.
@@ -511,6 +579,7 @@ func put_on_post(m: Dictionary, post: String, instant := false) -> Dictionary:
 	m.erase("eat")
 	m.erase("clean_q")
 	m.erase("to_post")
+	m.erase("day")
 	m.erase("broke")
 	d.erase("route")
 	d["stand"] = post
@@ -612,16 +681,17 @@ func sync_roles(econ) -> void:
 
 
 func _apply_role(m: Dictionary, role: String, instant: bool) -> void:
+	if role == "guard" and m.def.has("stand"):
+		return    # (already a guard: a day job or a walk up goes on)
 	var d: Dictionary = (m.def as Dictionary).duplicate(true)
 	var p = m.p
 	m.erase("eat")
 	m.erase("clean_q")
 	m.erase("to_post")
+	m.erase("day")
 	p.work = ""
 	p.moving = false
 	if role == "guard":
-		if d.has("stand"):
-			return
 		var post := free_post()
 		d.erase("route")
 		d["stand"] = post

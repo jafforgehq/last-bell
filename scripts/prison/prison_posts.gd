@@ -118,6 +118,7 @@ func fit_text(p: Dictionary) -> String:
 	return s
 
 
+var day_watch := {}    # tower post id -> true: its guard keeps the tower all day (the Defence tab); off by default, so the guard takes a day job (prison_crew.gd shifts)
 var assign := {}    # person id -> post id; kept by the crew's `put_on_post` and role changes so that a rebuilt crew (a raid return, a load) goes back to its posts
 
 

@@ -82,7 +82,7 @@ func job_of(m: Dictionary) -> Array:
 			return [j[1], j[2]]
 	if st == "post":
 		return ["shield", "Guard"]
-	var role := role_of(m)
+	var role := "hauler" if m.has("day") else role_of(m)    # SHIFTS: a tower guard on a day job
 	if ROLE_JOB.has(role):
 		return ROLE_JOB[role]
 	return ["rest", "Idle"]
