@@ -252,18 +252,11 @@ func _fog_tex() -> GradientTexture2D:
 	return _fog
 
 
-## The weather layer over the world (under the HUD): rain streaks, or the fog with the clear patch round Ruth.
+## The weather layer over the world (under the HUD): the fog with the clear patch round Ruth (the rain is prison_rain.gd's, drawn after it).
 func paint_weather(c: CanvasItem, v: Vector2) -> void:
 	if game.mode != "raid" or game.run == null or game.busy:
 		return
-	var t: float = float(game.clock)
-	if weather == "rain":
-		for i in 150:
-			var f := float(i)
-			var sp := 0.8 + 0.5 * fposmod(f * 0.37, 1.0)
-			var x := fposmod(f * 97.3 + t * 40.0, v.x + 40.0) - 20.0
-			var y := fposmod(f * 53.1 + t * 560.0 * sp, v.y + 40.0) - 20.0
-			c.draw_line(Vector2(x, y), Vector2(x - 4.0, y + 15.0 * sp), Color(0.78, 0.86, 1.0, 0.3), 1.2)
+	var t: float = float(game.clock)    # (the rain itself is prison_rain.gd's)
 	var vt := vision_tiles()
 	if vt > 0.0:
 		var xf: Transform2D = game.world.get_global_transform_with_canvas()    # (where the camera really shows her: it stops at the map's edge, so she is not always mid-screen)

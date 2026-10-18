@@ -64,6 +64,8 @@ const SearchRules := preload("res://scripts/town/search.gd")
 const Doors := preload("res://scripts/prison/prison_doors.gd")    # DOORS: the doors of the clear phase
 const Save := preload("res://scripts/prison/prison_save.gd")    # SAVE: the one save slot (prison_save.gd)
 const Loadout := preload("res://scripts/prison/prison_loadout.gd")    # SQUAD hook: the loadout card
+const PRain := preload("res://scripts/prison/prison_rain.gd")    # RAIN: the rain on the base and the raids
+const PLamps := preload("res://scripts/prison/prison_lamps.gd")    # LAMPS: the lamps' light at night
 const RaidX := preload("res://scripts/prison/prison_raidx.gd")    # RAID EXTRAS: day or night, weather, the retreat key, the map's marks, loadout presets
 const DAY_MIN_PER_SEC := 4.0    # 6 real minutes a day
 const GUARD_RANGE := 11.0
@@ -216,6 +218,8 @@ var squad    # SQUAD hook: prison_squad.gd (the companions of a raid)
 var loadout    # SQUAD hook: prison_loadout.gd (the card at the gate and at the start of the clear phase)
 var raidx    # RAID EXTRAS: prison_raidx.gd
 var wx: Control    # the weather layer (rain, fog) over the world
+var rain    # RAIN: prison_rain.gd
+var lamps    # LAMPS: prison_lamps.gd
 var save_day := -1    # SAVE: the economy day of the last save (the dawn autosave is once a day)
 var loadout_kit := {}    # what the card chose to take from the stores for the next raid ({} = the standard kit)
 var squad_regroup := false    # the call to the pickup: the companions run to Ruth
@@ -278,6 +282,8 @@ func _ready() -> void:
 	squad = Squad.new(self)
 	loadout = Loadout.new(self)
 	raidx = RaidX.new(self)
+	rain = PRain.new(self)
+	lamps = PLamps.new(self)
 	upg = Upg.new(self)    # WORLD hook
 	econ.person_left.connect(_econ_left)
 	econ.project_done.connect(_econ_done)
@@ -3375,6 +3381,8 @@ func _day_night(_dt: float) -> void:
 		night_rect.color = night_rect.color.darkened(arc.dim())    # ARC hook: rain, fog and the storm darken the day
 	if mode == "raid" and raidx != null:
 		night_rect.color = night_rect.color.darkened(raidx.dim())    # RAID EXTRAS: the raid's weather
+	rain.update(_dt)    # RAIN: cooler and darker in the rain, a strike's light
+	night_rect.color = rain.grade(night_rect.color)
 	if vignette != null:
 		(vignette.material as ShaderMaterial).set_shader_parameter("strength", 0.30 + 0.35 * n if mode == "base" else 0.22 + 0.2 * n)
 	if args.has("hour"):
@@ -3387,6 +3395,7 @@ func _day_night(_dt: float) -> void:
 func _draw_wx() -> void:
 	if raidx != null:
 		raidx.paint_weather(wx, _vp())
+	rain.paint(wx, _vp())
 
 
 ## ART: the lamps and fires come on before the dark (a warm pool at dusk) and go out after dawn.
@@ -3406,6 +3415,8 @@ func _draw_glow() -> void:
 			var sc: Vector2 = xf * (Vector2(sp[0]) * TILE)
 			var rr: float = float(sp[1]) * TILE * xf.get_scale().x
 			glow.draw_texture_rect(radial_tex, Rect2(sc - Vector2(rr, rr), Vector2(rr, rr) * 2.0), false, sp[2])
+		var xr: Transform2D = world.get_global_transform_with_canvas()    # LAMPS: the town's lampposts that still burn
+		lamps.draw(glow, lamps.lamps(_lamp_of(raidx.hour())), xr, TILE * xr.get_scale().x, _vp(), rain.wet, rain.haze(), clock)
 		return
 	var n := _lamp_of(tod)
 	if n <= 0.02 or mode != "base":
@@ -3414,11 +3425,7 @@ func _draw_glow() -> void:
 	var spots: Array = []
 	for f in base.fires:
 		spots.append([f, 7.0, Color(1.0, 0.55, 0.2, 0.85 * n * (0.85 + 0.15 * sin(clock * 11.0 + f.x)))])
-	for l in base.lamps:
-		spots.append([l, 6.0, Color(1.0, 0.9, 0.6, 0.55 * n)])
-	for t in base.towers:
-		var r: Rect2 = t
-		spots.append([Tower.lamp_pos(r) / TILE, 5.0, Color(1.0, 0.95, 0.75, 0.28 * n)])    # (0.4 with the floodlight cone over it washed the guard out)
+	lamps.draw(glow, lamps.lamps(n), Transform2D(0.0, Vector2.ONE * zoom_px / TILE, 0.0, v / 2.0 - cam_center * zoom_px), zoom_px, v, rain.wet, rain.haze(), clock)    # LAMPS: the yard lamps and the towers
 	if crew != null:    # a faint light on each guard and each one on a post, so the crew reads at night
 		for m in crew.members:
 			if m.def.has("stand"):
