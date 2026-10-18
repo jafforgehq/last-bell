@@ -6,6 +6,7 @@ extends RefCounted
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look
 const REC := "user://prison_arc.json"
 
 var game
@@ -175,7 +176,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(centre)
 	var pc := PanelContainer.new()
-	pc.add_theme_stylebox_override("panel", S._box(Color(0.045, 0.065, 0.058, 0.99), col, 28, 8))
+	pc.add_theme_stylebox_override("panel", UI.frame_box(28))
 	centre.add_child(pc)
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 12)
@@ -202,7 +203,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	left.add_theme_constant_override("separation", 10)
 	cols.add_child(left)
 	for l in lines:
-		var t: Label = S._lab(String(l), 18, Hud.INK, false)
+		var t: Label = S._lab(String(l), UI.PROSE_PX, Hud.INK, false)
 		t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		t.custom_minimum_size = Vector2(lw, 0)
 		left.add_child(t)

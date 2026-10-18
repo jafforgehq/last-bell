@@ -7,6 +7,7 @@ extends RefCounted
 
 const Hud := preload("res://scripts/ui/hud.gd")
 const Fonts := preload("res://scripts/ui/fonts.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # the windows' one look and motion
 
 var game
 var arc
@@ -129,14 +130,14 @@ func _init(g, a) -> void:
 	g.add_child(layer)
 	log_panel = PanelContainer.new()
 	log_panel.visible = false
-	log_panel.add_theme_stylebox_override("panel", _box(Color(Hud.PANEL, 0.985), Hud.LINE2, 14, 6))
+	log_panel.add_theme_stylebox_override("panel", UI.frame_box(14))
 	layer.add_child(log_panel)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 8)
 	log_panel.add_child(v)
 	var head := HBoxContainer.new()
 	v.add_child(head)
-	head.add_child(_lab("THE STORY  [L]", 24, Hud.ACCENT, true))
+	head.add_child(UI.title("THE STORY  [L]"))
 	var sp := Control.new()
 	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	head.add_child(sp)
@@ -190,23 +191,8 @@ func _rich(text: String, size: int = 15) -> RichTextLabel:
 
 
 func _btn(text: String) -> Button:
-	var b := Button.new()
-	b.text = text
-	b.focus_mode = Control.FOCUS_NONE
-	b.process_mode = Node.PROCESS_MODE_ALWAYS
-	b.add_theme_font_override("font", Fonts.cond(700))
-	b.add_theme_font_size_override("font_size", 19)
-	var base := _box(Color(Hud.PANEL_HI, 0.95), Hud.LINE2, 9, 5)
-	var hover := base.duplicate() as StyleBoxFlat
-	hover.border_color = Hud.ACCENT
-	hover.bg_color = Color(0.26, 0.34, 0.3, 0.96)
-	b.add_theme_stylebox_override("normal", base)
-	b.add_theme_stylebox_override("hover", hover)
-	b.add_theme_stylebox_override("pressed", hover)
-	b.add_theme_stylebox_override("disabled", _box(Color(0.1, 0.12, 0.11, 0.9), Hud.LINE, 9, 5))
-	b.add_theme_color_override("font_color", Hud.INK)
-	b.add_theme_color_override("font_hover_color", Hud.ACCENT)
-	b.add_theme_color_override("font_disabled_color", Hud.INK3)
+	var b := UI.button(text)
+	b.process_mode = Node.PROCESS_MODE_ALWAYS    # (a card stops the tree)
 	return b
 
 
@@ -269,8 +255,7 @@ func show_card(d: Dictionary) -> void:
 	var pc := PanelContainer.new()
 	var tone := String(d.get("tone", "radio"))
 	var line := Hud.ACCENT if tone != "letter" else Hud.BRASS
-	var bg := Color(0.05, 0.075, 0.065, 0.985) if tone != "letter" else Color(0.1, 0.085, 0.06, 0.985)
-	pc.add_theme_stylebox_override("panel", _box(bg, line, 26, 8))
+	pc.add_theme_stylebox_override("panel", UI.frame_box(26))
 	centre.add_child(pc)
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 10)
@@ -281,7 +266,7 @@ func show_card(d: Dictionary) -> void:
 	top.add_child(bars)
 	top.add_child(_lab(String(d.get("kicker", "RADIO")), 16, Hud.INK3, true))
 	vb.add_child(top)
-	var title := _lab(String(d.title).to_upper(), 46, line, true)
+	var title := UI.title(String(d.title).to_upper(), UI.CARD_TITLE_PX, line)
 	vb.add_child(title)
 	if String(d.get("from", "")) != "":
 		vb.add_child(_lab("from " + String(d.from), 17, Hud.INK3))
@@ -290,7 +275,7 @@ func show_card(d: Dictionary) -> void:
 	rule.custom_minimum_size = Vector2(0, 1)
 	vb.add_child(rule)
 	var tw := minf(640.0, v.x - 120.0)
-	var text := _lab(String(d.text), 20, Hud.INK if tone != "letter" else Color("#e9dcb8"), false)
+	var text := _lab(String(d.text), UI.PROSE_PX, Hud.INK if tone != "letter" else Color("#e9dcb8"), false)
 	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text.custom_minimum_size = Vector2(tw, 0)
 	text.visible_characters = 0
@@ -322,6 +307,7 @@ func show_card(d: Dictionary) -> void:
 			cb.call(i))
 	layer.add_child(root)
 	card = root
+	UI.open_fx(pc)
 	game.prompt_label.visible = false    # (the tree stops: the E prompt would stay up under the card)
 	game.get_tree().paused = not game.args.has("shot")
 	game.sound.play("bell", 0.35, 0.0)
@@ -329,6 +315,7 @@ func show_card(d: Dictionary) -> void:
 
 func _close_card() -> void:
 	if card_open():
+		UI.close_fx(card)
 		card.queue_free()
 	card = null
 	game.get_tree().paused = false
@@ -500,12 +487,16 @@ func open_log() -> void:
 	game.pack.close()
 	if game.board.is_open():
 		game.board.close()
+	var was := log_panel.visible
 	log_panel.visible = true
 	_log_dirty = true
 	_log_frame()
+	if not was:
+		UI.open_fx(log_panel)
 
 
 func close_log() -> void:
+	UI.close_fx(log_panel)
 	log_panel.visible = false
 
 

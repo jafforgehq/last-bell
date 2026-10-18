@@ -12,6 +12,7 @@ const Fonts := preload("res://scripts/ui/fonts.gd")
 const Icons := preload("res://scripts/prison/prison_icons.gd")
 const Base := preload("res://scripts/prison/prison_base.gd")
 const PHud := preload("res://scripts/prison/prison_hud.gd")
+const UI := preload("res://scripts/prison/prison_ui.gd")    # COUNTERS: a stock that changes counts to its new value
 const Inventory := preload("res://scripts/sim/inventory.gd")
 
 const RES := ["food", "water", "ammo", "meds", "scrap", "parts", "fuel"]
@@ -68,6 +69,7 @@ var _clock_sub: Label
 var _mood := []    # [time, morale] samples for the trend arrow
 var _fight_t := 0.0
 var _names := false
+var _rep := {}    # COUNTERS: the last daily report, for the stock chips redrawn while they count
 
 
 class IconBox extends Control:
@@ -321,6 +323,9 @@ func frame(dt: float) -> void:
 	if _acc >= 0.2:
 		_acc = 0.0
 		_refresh()
+	elif UI.ticking() and game.phase == "managed" and game.mode == "base" and not _rep.is_empty():    # COUNTERS: every frame while a number counts
+		for r in RES:
+			_res_chip(r, _rep)
 	# the warning pulse
 	for k in chips:
 		var c: Dictionary = chips[k]
@@ -379,6 +384,7 @@ func _refresh() -> void:
 	_clock()
 	_time_chips()
 	var rep: Dictionary = game.econ.daily_report() if game.econ != null else {}
+	_rep = rep
 	if managed:
 		for r in RES:
 			_res_chip(r, rep)
@@ -491,7 +497,7 @@ func _res_chip(r: String, rep: Dictionary) -> void:
 		state = "danger"
 	elif state == "ok" and low.has(r) and stock < float(low[r]):
 		state = "warn"
-	var amt := "%d/%d" % [int(stock), cap]
+	var amt := "%d/%d" % [int(round(UI.tick("hud." + r, float(int(stock))))), cap]
 	if _names:
 		amt = "%s %s" % [RES_NAME[r], amt]
 	(chips[r].main as Label).custom_minimum_size.x = 46 if not _names else 92
