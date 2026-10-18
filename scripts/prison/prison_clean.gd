@@ -151,18 +151,20 @@ func update(dt: float) -> void:
 func _start_round() -> void:
 	rounds += 1
 	var dirty := _targets()
-	var plans := {
-		"mia": [{"at": game.base.stations.serve, "work": "clean", "say": "sweeping the canteen"}, _pick(dirty, "clean", "mopping up")],
-		"nia": [{"at": LAUNDRY, "work": "sort", "face": "N", "say": "washing the laundry"}, _pick(dirty, "clean", "sweeping up")],
-		"owen": [_pick(dirty, "haul", "gathering rubbish"), {"at": DUMP, "work": "haul", "face": "S", "say": "carrying rubbish out"}],
-		"ike": [_pick(dirty, "clean", "scrubbing the stains"), {"at": game.base.stations.stores_in + Vector2(0.0, 1.0), "work": "sort", "face": "N", "say": "wiping down the stores"}],
-	}
-	for m in game.crew.members:
+	var plans := [
+		[{"at": game.base.stations.serve, "work": "clean", "say": "sweeping the canteen"}, _pick(dirty, "clean", "mopping up")],
+		[{"at": LAUNDRY, "work": "sort", "face": "N", "say": "washing the laundry"}, _pick(dirty, "clean", "sweeping up")],
+		[_pick(dirty, "haul", "gathering rubbish"), {"at": DUMP, "work": "haul", "face": "S", "say": "carrying rubbish out"}],
+		[_pick(dirty, "clean", "scrubbing the stains"), {"at": game.base.stations.stores_in + Vector2(0.0, 1.0), "work": "sort", "face": "N", "say": "wiping down the stores"}],
+	]
+	# the chores go to whoever is here (the five-person start has none of the old roster's Mia, Nia or Owen): up to four of the crew who walk a route (a guard on a post stays there),
+	# never one who is down or the cleaner (he has his own queue of piles from `_dispatch`; a round must not overwrite it); the chores turn round from one round to the next
+	var who: Array = game.crew.members.filter(func(m): return not m.has("down") and not _is_cleaner(m) and not m.def.has("stand"))
+	for i in mini(who.size(), plans.size()):
+		var m: Dictionary = who[i]
 		var id := String(m.def.id)
-		if not plans.has(id) or m.has("down") or _is_cleaner(m):    # (the cleaner has his own queue of piles from `_dispatch`; a round must not overwrite it)
-			continue
 		var q: Array = []
-		for st in plans[id]:
+		for st in plans[(i + rounds) % plans.size()]:
 			var stop: Dictionary = (st as Dictionary).duplicate()
 			stop["secs"] = 9.0
 			stop["clean"] = true
