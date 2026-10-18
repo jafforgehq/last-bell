@@ -1185,7 +1185,7 @@ static func stage_of(h: float) -> int:
 ## The heat a noise of this kind adds (a shot by the square of the gun's radius over 12 tiles).
 static func raid_add(kind: String, r: float) -> float:
 	var a := float(cfg.raid_heat.add.get(kind, 0.0))
-	return a * pow(r / 12.0, 2.0) if kind == "shot" else a
+	return a * pow(minf(r, 20.0) / 12.0, 2.0) if kind == "shot" else a
 
 
 func stage_name() -> String:
@@ -1245,6 +1245,9 @@ func _raid_heat(dt: float) -> void:
 	_stage_check()
 	if game.args.has("heatbot"):
 		_heatbot(dt)
+	if game.args.has("heatset") and _raid_t > 1.0 and not _heat_set:    # staging: --heatset=45 puts that much noise heat on at 1 s
+		_heat_set = true
+		add_heat(float(game.args.heatset))
 	if game.args.has("heatlog") and int(_raid_t) % 30 == 0 and int(_raid_t) != _logged:    # staging: a line every 30 s
 		_logged = int(_raid_t)
 		print("HEAT t=", _logged, " heat=", snappedf(rheat, 0.1), " stage=", stage_name(), " waves=", waves_n, " horde_alive=", hordes.size(), " emits=", stats.emits, " truck=", game.squad.truck, " rooms=", game.squad.rooms_seen.size(), " me=", Vector2(game.run.avatar_p.x, game.run.avatar_p.y).snapped(Vector2(0.1, 0.1)))
@@ -1324,16 +1327,23 @@ func draw_hud(c: Control, v: Vector2) -> void:
 	var me := Vector2(game.run.avatar_p.x, game.run.avatar_p.y)
 	var font := ThemeDB.fallback_font
 	var pulse := 0.5 + 0.5 * sin(float(game.clock) * 6.0)
+	var shown: Array = []    # (one arrow for hordes that come from the same way)
 	for h in hordes:
 		if not h.has("heat") or (h.members as Array).is_empty():
 			continue
 		var cc := centroid(h)
 		var d := me.distance_to(cc)
 		var dir := (cc - me).normalized() if d > 0.1 else Vector2.DOWN
-		var half := v / 2.0 - Vector2(46, 46)
+		var half := v / 2.0 - Vector2(90, 46)
 		var t := minf(half.x / maxf(0.001, absf(dir.x)), half.y / maxf(0.001, absf(dir.y)))
 		if t > d * float(game.zoom_px):
 			continue    # (on screen: its own red rings show it)
+		var dup := false
+		for o in shown:
+			dup = dup or (o as Vector2).dot(dir) > 0.9
+		if dup:
+			continue
+		shown.append(dir)
 		var col := Color(1.0, 0.3 + 0.2 * pulse, 0.25)
 		var at := v / 2.0 + dir * t
 		c.draw_colored_polygon(PackedVector2Array([at + dir * 18.0, at + dir.rotated(2.5) * 14.0, at + dir.rotated(-2.5) * 14.0]), col)
@@ -1343,6 +1353,7 @@ func draw_hud(c: Control, v: Vector2) -> void:
 ## STAGING (--heatbot=knife|shotgun|idle): a scripted noise schedule at Ruth's place, to time the stages. knife: a search every 20 s, a run of steps every 20 s, a knife kill every 30 s.
 ## shotgun: the same plus a shell every 3 s. idle: nothing.
 var _bot_t := 0.0
+var _heat_set := false
 func _heatbot(dt: float) -> void:
 	var how := String(game.args.heatbot)
 	game.run.invulnerable = true
