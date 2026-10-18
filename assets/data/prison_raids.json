@@ -1,5 +1,17 @@
 {
   "_doc": "Raids and people of the prison (scripts/prison/prison_loot.gd, prison_people.gd). natural: the generator's building kind -> place type. min_places: a raid town always has at least this many places of a type (buildings of the surplus are retagged by a stable hash). rolls: for each place type, what ONE container of it holds: [res, chance, min, max]. kinds: a container kind narrows the rolls (only) or changes a chance (p). names/hints: shown on the raid map. options: the gate's choice (name, place types marked, the shortages it answers). people: the pool of survivors. A town is made with `town_opts`. survivor (fix round 3, people come ONLY by rescue): first = the chance of the first survivor in a raid, extra = [[from raid N, chance], ...] one more each, max, hurt = share that need a med to get up (hurt_hp their hit points), locked = share shut in a room (hold E lock_secs, lock_dead dead stand around), skill = what a person does at the base (people entries).",
+  "first_stash": {
+    "_doc": "The first raids each hold one marked stash (scripts/prison/prison_arc.gd `begin_raid`, as a set-piece cache): raids 1 to `raids`, a container of one of `kinds` (a car's trunk, a locker) between `near` and `far` tiles of the drop-off, else the container nearest `want` tiles away. `loot` is added to what it already holds. `map` is the line on the destination map, `name` the label over it in the raid, `found` the log entry.",
+    "raids": 2,
+    "loot": {"ammo": 30},
+    "kinds": ["trunk", "car_h", "car_v", "car_wreck", "wardrobe", "tool_chest", "toolbox"],
+    "near": 10.0,
+    "far": 30.0,
+    "want": 18.0,
+    "name": "A stash",
+    "map": "Someone left a stash here: a box of rounds. It is marked when you get there.",
+    "found": "Somebody packed this to come back for it and never did: a box of rounds, wrapped in a coat."
+  },
   "town_opts": {
     "blocks": 2
   },

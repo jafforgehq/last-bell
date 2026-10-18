@@ -42,6 +42,7 @@ var revive_t := 0.0
 var wait_t := 0.0    # seconds the pickup has waited for them
 var left_behind := false    # E in the ring: the ones that are not here are left outside
 var out: Array = []    # ids of the people who are out on this raid (the economy counts them as not at work)
+var was_out: Array = []    # ids of the last raid's party, kept past its end: a night that passed while they were out is reckoned without them (prison_siege.gd `_resolve_missed`)
 var _panel: PanelContainer
 var open := false
 var _t := 0.0
@@ -62,7 +63,6 @@ func _init(g) -> void:
 func snapshot() -> Array:
 	cands = []
 	var by_id := {}
-	var guards := 0
 	if game.crew != null:
 		for m in game.crew.members:
 			if m.def.has("ally") or m.def.has("play"):
@@ -77,8 +77,6 @@ func snapshot() -> Array:
 		var m: Dictionary = by_id[id]
 		var r: Dictionary = m.def
 		var role := String(roles.get(id, "guard" if r.has("stand") else ""))
-		if role == "guard":
-			guards += 1
 		var tags: Array = (cfg.tags as Dictionary).get(id, [])
 		var fighter := tags.has("Fighter")
 		var bag: Array = cfg.bag.get("Scavenger" if tags.has("Scavenger") else "default", cfg.bag.default)
@@ -91,8 +89,9 @@ func snapshot() -> Array:
 		if not body.is_empty():
 			gun_name = String(game.data.weapons[String(body.weapon)].get("name", body.weapon))
 			melee = bool(game.data.weapons[String(body.weapon)].get("melee", false))
+		var watch: bool = game.crew != null and role == "guard" and game.crew.day_watch(m)    # (a tower kept on Day watch keeps its guard home)
 		cands.append({"id": id, "name": String(r.name), "key": String(r.key), "look": r.get("look", {}), "role": String(r.get("role", "")), "econ_role": role, "tags": tags, "hp": float(cfg.fighter_hp if fighter else cfg.hp),
-			"gun": gun_name, "melee": melee, "bag": Vector2i(int(bag[0]), int(bag[1])), "ok": true, "why": "", "def": r, "state": String(m.state)})
+			"gun": gun_name, "melee": melee, "bag": Vector2i(int(bag[0]), int(bag[1])), "ok": true, "why": "", "def": r, "state": String(m.state), "watch": watch})
 	for c in cands:
 		var why := ""
 		if game.phase != "managed":
@@ -101,8 +100,8 @@ func snapshot() -> Array:
 			why = "a night attack is on"
 		elif String(c.state) == "down" or String(c.state) == "leaving":
 			why = "hurt"
-		elif String(c.econ_role) == "guard" and guards - 1 < 2:
-			why = "two guards must stay on the towers"
+		elif bool(c.watch):
+			why = "on Day watch (Base screen, Defence tab)"
 		c["why"] = why
 		c["ok"] = why == ""
 	cands.sort_custom(func(a, b):    # (the ones who can go first, then Scavengers, then Fighters, then by name)
@@ -119,7 +118,7 @@ func cand(id: String) -> Dictionary:
 	return {}
 
 
-## May `id` be added to the picked ones now? ({ok, why}): two at most, and the guards left on the towers stay at two.
+## May `id` be added to the picked ones now? ({ok, why}): two at most. A tower guard may go (his tower stands empty until he is back); one on Day watch may not (`snapshot`).
 func can_pick(id: String) -> Dictionary:
 	var c := cand(id)
 	if c.is_empty() or not bool(c.ok):
@@ -128,16 +127,6 @@ func can_pick(id: String) -> Dictionary:
 		return {"ok": true, "why": ""}
 	if picked.size() >= int(cfg.max):
 		return {"ok": false, "why": "two companions at most"}
-	if String(c.econ_role) == "guard":
-		var guards := 0
-		var out := 0
-		for k in cands:
-			if String(k.econ_role) == "guard":
-				guards += 1
-				if picked.has(String(k.id)):
-					out += 1
-		if guards - out - 1 < 2:
-			return {"ok": false, "why": "two guards must stay on the towers"}
 	return {"ok": true, "why": ""}
 
 
@@ -169,11 +158,21 @@ func loss_lines() -> Array:
 			if others > 0 and role != "guard":
 				line += ": %d other%s still work%s as %s" % [others, "" if others == 1 else "s", "s" if others == 1 else "", role]
 			elif role == "guard":
-				line += ": %s (%d guards stay)" % [word, others]
+				line += ": %s (%d guard%s)" % [word, others, " stays" if others == 1 else "s stay"]
 			else:
 				line += ": %s" % word
 		out.append(line)
 	return out
+
+
+## The amber line of the loadout for each picked tower guard: his tower is empty while he is away.
+func tower_warnings() -> Array:
+	var lines: Array = []
+	for id in picked:
+		var c := cand(String(id))
+		if not c.is_empty() and String(c.econ_role) == "guard":
+			lines.append("%s's tower stands empty tonight if you are not back by 19:00." % String(c.name))
+	return lines
 
 
 func out_ids() -> Array:
@@ -1107,6 +1106,7 @@ func sync(view: Rect2, clock: float, sim_steps: int, alpha: float) -> void:
 func end_raid() -> void:
 	members = []
 	floaters = []
+	was_out = out.duplicate()
 	out = []
 	open = false
 	if _panel != null:

@@ -265,6 +265,8 @@ func _refresh() -> void:
 		b += "[color=#80e080][b]Covers what the base lacks:[/b] %s[/color]\n" % ", ".join(cv)
 	if bool(pc.get("convoy", false)):
 		b += "[color=#9ab8ff]The convoy's list is filled fastest here.[/color]\n"
+	if bool(stt.open) and game.arc.stash_line() != "":
+		b += "[color=#ffc040]%s[/color]\n" % game.arc.stash_line()
 	var mk: String = game.raidx.mark_of(id)
 	if mk == "done":
 		b += "[color=#80e080]You marked this place done.[/color]\n"

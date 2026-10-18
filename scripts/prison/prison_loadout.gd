@@ -184,6 +184,8 @@ func _refresh() -> void:
 		_col.add_child(_lbl("Nobody at the base can be spared.", 14))
 	for line in squad.loss_lines():
 		_col.add_child(_lbl("The base: %s." % line, 14, Color(1, 0.7, 0.55)))
+	for line in squad.tower_warnings():
+		_col.add_child(_lbl(line, 14, Color(1.0, 0.75, 0.25)))
 	_place()
 
 

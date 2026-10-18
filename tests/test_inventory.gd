@@ -125,6 +125,42 @@ func test_the_prison_tower_guards_work_by_day_and_watch_by_night() -> void:
 	check(cole.has("day") and crew.on_post(bea), "at dawn he goes back to work, Bea keeps watch")
 
 
+## PLAYTEST 8 (A): a tower guard may come on a raid (his tower stands empty, the loadout warns in amber); one on Day watch stays home. (B): the first two raids each hold one marked stash of ammo.
+func test_the_prison_guards_may_raid_and_the_first_raids_hold_a_stash() -> void:
+	var Crew = load("res://scripts/prison/prison_crew.gd")
+	var Squad = load("res://scripts/prison/prison_squad.gd")
+	var crew = Crew.new()
+	crew.posts = {"day_watch": {}}
+	for a in Crew.CREW_FROM_ALLIES:
+		crew.members.append({"def": (a as Dictionary).duplicate(true), "state": "post" if a.has("stand") else "wait"})
+	var proj = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_projects.json"))
+	var game := {"crew": crew, "econ": {"cfg": {"crew_role": proj.crew_role}}, "data": {"people": [], "weapons": {}}, "phase": "managed", "siege": null, "args": {}}
+	var sq = Squad.new(game)
+	sq.snapshot()
+	check(bool(sq.can_pick("cole").ok) and bool(sq.can_pick("bea").ok), "both tower guards may come")
+	check(sq.toggle("cole") and sq.toggle("bea"), "Cole and Bea both picked")
+	eq(String(sq.can_pick("ike").why), "two companions at most", "the squad stays at two")
+	eq(sq.tower_warnings(), ["Cole's tower stands empty tonight if you are not back by 19:00.", "Bea's tower stands empty tonight if you are not back by 19:00."], "an amber line for each empty tower")
+	sq.picked = []
+	crew.posts.day_watch["tower_e"] = true    # Bea's tower keeps its guard
+	sq.snapshot()
+	check(not bool(sq.can_pick("bea").ok) and String(sq.can_pick("bea").why).contains("Day watch"), "a guard on Day watch stays and the card says why")
+	check(bool(sq.can_pick("cole").ok), "Cole may still go")
+	eq(sq.tower_warnings(), [], "no warning with nobody picked")
+	var fs: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets/data/prison_raids.json")).first_stash
+	eq(int(fs.raids), 2, "the first two raids hold a stash")
+	check(int(fs.loot.ammo) >= 20, "a fair box of ammo (%d units)" % int(fs.loot.ammo))
+	var Loot = load("res://scripts/prison/prison_loot.gd")
+	var t: Dictionary = Loot.make_town(1, "")
+	Loot.prepare(t, 1)
+	for raid in [1, 2]:
+		var sp: Dictionary = Loot.first_stash(t, raid)
+		check(bool(sp.get("stash", false)), "raid %d: a stash is marked" % raid)
+		var ct: Dictionary = (t.containers as Array).filter(func(c): return String(c.id) == String(sp.get("id", "")))[0]
+		check(int(ct.loot.get("ammo", 0)) >= int(fs.loot.ammo), "its container holds the ammo (%s, %s, %.0f tiles from the drop)" % [String(ct.kind), str(ct.loot), Vector2(ct.pos).distance_to(Vector2(t.entry.pos))])
+	check(Loot.first_stash(t, 3).is_empty(), "raid 3: no stash")
+
+
 func test_placement_bounds_overlap_and_rotation() -> void:
 	var g := Inventory.make_grid(3, 2)
 	check(Inventory.can_place(g, "water_jug", 1, 0, 0), "a jug fits in the corner")

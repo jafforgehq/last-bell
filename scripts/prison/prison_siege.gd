@@ -480,6 +480,11 @@ func _resolve_missed(n: int) -> void:
 	var lb: Dictionary = game.arc.cfg.lab.night
 	var plan: Dictionary = game.arc.wave_plan(n)
 	var armed := armed_count()
+	if game.squad != null and game.crew != null:    # a tower guard who was out on the raid all that night left his tower empty
+		for m in game.crew.members:
+			if m.def.has("stand") and game.squad.was_out.has(String(m.def.id)):
+				armed = maxi(0, armed - 1)
+		game.squad.was_out = []
 	var f := guard_factor(armed)
 	var live: Array = segs.filter(func(s): return float(s.hp) > 0.0)
 	live.shuffle()

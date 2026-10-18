@@ -243,6 +243,29 @@ static func _prepare_site(t: Dictionary, seed_i: int, c: Dictionary) -> Array:
 	return out
 
 
+## The stash of raid number `raid` (prison_raids.json `first_stash`, raids 1 to `raids`): a container of one of its kinds (a car's trunk, a locker) between `near` and `far` tiles of the
+## drop-off, else the one nearest `want` tiles away, gets the stash's loot on top of its own. Returns the set-piece record for the arc ({} when this raid has none).
+static func first_stash(t: Dictionary, raid: int) -> Dictionary:
+	var fs: Dictionary = cfg().get("first_stash", {})
+	if fs.is_empty() or raid < 1 or raid > int(fs.raids):
+		return {}
+	var drop: Vector2 = Vector2(t.site.drop) if t.has("site") else Vector2(t.entry.pos)
+	var best: Dictionary = {}
+	var bs := INF
+	for ct in t.containers:
+		var d := Vector2(ct.pos).distance_to(drop)
+		var score := absf(d - float(fs.want)) + (0.0 if (fs.kinds as Array).has(String(ct.kind)) and d >= float(fs.near) and d <= float(fs.far) else 1000.0)
+		if score < bs:
+			bs = score
+			best = ct
+	if best.is_empty():
+		return {}
+	var loot: Dictionary = best.loot
+	for k in fs.loot:
+		loot[k] = int(loot.get(k, 0)) + int(fs.loot[k])
+	return {"name": String(fs.name), "loot": {}, "note": false, "found": String(fs.found), "stash": true, "pos": Vector2(best.pos), "id": String(best.id)}
+
+
 ## The doorway tile nearest to a room (its own house's doors, inside ones too): where a sign for a room that stands in for a place goes.
 static func _room_door(t: Dictionary, rm: int) -> Vector2:
 	var room: Dictionary = t.rooms[rm]
