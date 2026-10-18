@@ -162,7 +162,7 @@ func _build() -> void:
 	col.add_child(row)
 	canvas = Canvas.new()
 	var vp: Vector2 = game._vp()
-	var cw := clampf(vp.x - 700.0, 360.0, 600.0)
+	var cw := clampf(vp.x - 724.0, 330.0, 600.0)    # (narrow enough that the objectives list on the right is not overlapped at 1024 wide)
 	canvas.custom_minimum_size = Vector2(cw, clampf(cw * 0.78, 280.0, vp.y - 130.0))
 	canvas.mouse_filter = Control.MOUSE_FILTER_STOP
 	canvas.draw_cb = _draw_map
@@ -175,7 +175,7 @@ func _build() -> void:
 	side = RichTextLabel.new()
 	side.bbcode_enabled = true
 	side.fit_content = false
-	side.scroll_active = false
+	side.scroll_active = true    # (a small window: the place's words ran on under the hour buttons, cut off)
 	side.custom_minimum_size = Vector2(300, canvas.custom_minimum_size.y - 110.0)
 	side.add_theme_font_size_override("normal_font_size", 14)
 	side.add_theme_font_size_override("bold_font_size", 15)
@@ -355,6 +355,9 @@ func _map_input(ev: InputEvent) -> void:
 			select(best)
 
 
+const FOOT_H := 46.0    # the band at the foot of the map: what the hour and the weather mean
+
+
 func _draw_map(c: Canvas) -> void:
 	var sz := c.size
 	var font := ThemeDB.fallback_font
@@ -384,6 +387,7 @@ func _draw_map(c: Canvas) -> void:
 	c.draw_rect(Rect2(base - Vector2(15, 11), Vector2(30, 22)), Color(0.28, 0.3, 0.34))    # the prison
 	c.draw_rect(Rect2(base - Vector2(15, 11), Vector2(30, 22)), Color(0.9, 0.85, 0.7), false, 2.0)
 	c.draw_string(font, base + Vector2(-60, 28), "THE PRISON", HORIZONTAL_ALIGNMENT_CENTER, 120, 13, Color(0.95, 0.9, 0.75))
+	var placed: Array = []    # the names already written: a name that would run into one goes to the other side of its marker
 	for i in ids.size():
 		var id := String(ids[i])
 		var pc: Dictionary = loot.place_cfg(id)
@@ -402,10 +406,24 @@ func _draw_map(c: Canvas) -> void:
 			c.draw_arc(p, 19.0 + 1.5 * sin(t * 6.0), 0, TAU, 32, Color(1, 1, 1), 3.0)
 		var lab := String(pc.name) if bool(stt.open) else "%s (day %d)" % [String(pc.name), int(pc.get("unlock_day", 1))]
 		var lc := Color(0.95, 0.95, 0.9) if bool(stt.open) else Color(0.55, 0.55, 0.58)
-		var ly := p.y + 32.0 if p.y < sz.y - 40.0 else p.y - 22.0
-		c.draw_string(font, Vector2(p.x - 80.0, ly), lab, HORIZONTAL_ALIGNMENT_CENTER, 160, 14, lc)
+		var ly := p.y + 32.0 if p.y + 44.0 < sz.y - FOOT_H else p.y - 34.0    # (a name that would run into the two lines at the foot of the map goes over its marker)
+		var lw := font.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+		var clash := func(y: float) -> bool:
+			if y + 12.0 > sz.y - FOOT_H:
+				return true
+			for pr in placed:
+				if (pr as Rect2).intersects(Rect2(p.x - lw / 2.0, y - 14.0, lw, 26.0)):
+					return true
+			return false
+		if clash.call(ly):
+			ly = p.y - 34.0 if ly > p.y else p.y + 32.0
+		var named: bool = not clash.call(ly)    # (no room on either side, on a small map: the marker's letters alone; the side panel names it when it is picked)
+		if named:
+			placed.append(Rect2(p.x - lw / 2.0, ly - 14.0, lw, 26.0))
+		if named:
+			c.draw_string(font, Vector2(p.x - 80.0, ly), lab, HORIZONTAL_ALIGNMENT_CENTER, 160, 14, lc)
 		var dg := clampi(int(pc.danger), 1, 5)
-		for d in 5:    # (danger pips under the name)
+		for d in (5 if named else 0):    # (danger pips under the name)
 			c.draw_circle(Vector2(p.x - 20.0 + d * 10.0, ly + 8.0), 3.0, Color(0.9, 0.3, 0.25) if d < dg and bool(stt.open) else (Color(0.4, 0.2, 0.2) if d < dg else Color(0.25, 0.25, 0.25)))
 		var mk: String = game.raidx.mark_of(id)    # the player's mark: a badge on the marker
 		if mk != "":
@@ -424,6 +442,7 @@ func _draw_map(c: Canvas) -> void:
 	c.draw_string(font, Vector2(36, 26), "%s, %s" % [String(game.raidx.weather_cfg(wid).get("name", "")), String(game.raidx.time_cfg(pick_time).get("name", "")).to_lower()], HORIZONTAL_ALIGNMENT_LEFT, 200, 15, Color(0.92, 0.92, 0.88))
 	var wc: Dictionary = game.raidx.weather_cfg(wid)    # what the choices mean, in the map's corner
 	var tc: Dictionary = game.raidx.time_cfg(pick_time)
+	c.draw_rect(Rect2(0, sz.y - FOOT_H, sz.x, FOOT_H), Color(0.05, 0.06, 0.07, 0.72))    # (their own dark band: the airport's name ran under them)
 	c.draw_string(font, Vector2(10, sz.y - 30), "%s: %s" % [String(tc.get("name", "")), String(tc.get("note", ""))], HORIZONTAL_ALIGNMENT_LEFT, sz.x - 20, 13, Color(0.92, 0.92, 0.88))
 	c.draw_string(font, Vector2(10, sz.y - 12), "%s: %s" % [String(wc.get("name", "")), String(wc.get("note", ""))], HORIZONTAL_ALIGNMENT_LEFT, sz.x - 20, 13, wcol)
 	if pick_time == "night":    # (a dark wash over the map: the night choice is felt)
@@ -445,4 +464,4 @@ func _draw_fuel(c: Canvas) -> void:
 	if cost > 0.0:    # (the trip's cost: a white tick on the bar)
 		var x := bar.position.x + bar.size.x * clampf(cost / cap, 0.0, 1.0)
 		c.draw_line(Vector2(x, 3), Vector2(x, 23), Color(1, 1, 1), 2.0)
-	c.draw_string(font, Vector2(70, 18), "%d now / trip %d" % [int(fuel), int(cost)], HORIZONTAL_ALIGNMENT_LEFT, 220, 13, Color(1, 1, 1))
+	c.draw_string(font, Vector2(bar.position.x, 18), "%d now / trip %d" % [int(fuel), int(cost)], HORIZONTAL_ALIGNMENT_RIGHT, bar.size.x - 6.0, 13, Color(1, 1, 1))    # (at the right end: the trip's tick sits at the left end of a big tank and cut through the words)

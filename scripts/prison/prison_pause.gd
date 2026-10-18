@@ -74,6 +74,8 @@ func open(which: String = "main") -> void:
 	if game.audio != null:
 		game.audio.ui_open()
 	layer.visible = true
+	if game.prompt_label != null:
+		game.prompt_label.visible = false    # (the tree stops: the E prompt would stay up, peeking out at both sides of the menu)
 	get_tree().paused = not game.args.has("shot")    # (a screenshot run counts frames in the paused tree)
 	_page(which)
 

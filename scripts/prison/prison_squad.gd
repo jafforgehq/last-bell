@@ -1145,21 +1145,46 @@ static func icon(c: CanvasItem, cmd: String, at: Vector2, r: float, col: Color) 
 func paint(c: CanvasItem) -> void:
 	var font := ThemeDB.fallback_font
 	var ci := -1
+	var taken: Array = []    # LAYOUT: the words already drawn this frame (world px), the EXTRACTION signs first: two companions side by side no longer print over each other
+	for e in game.exits:
+		taken.append(Rect2(Vector2(e) * TILE - Vector2(60, 2.2 * TILE + 26.0), Vector2(120, 24)))    # (2.2: prison_game.gd EXTRACT_R)
+	var hits := func(r: Rect2) -> bool:
+		for t in taken:
+			if (t as Rect2).intersects(r):
+				return true
+		return false
 	for m in members:
 		ci += 1
 		if m.state == "gone":
 			continue
 		var p = m.p
 		var at := Vector2(p.x, p.y - 1.45) * TILE
+		var nw := font.get_string_size(String(m.name), HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+		for k in 2:    # (the name steps up a line while it would sit on another's words)
+			if not hits.call(Rect2(at + Vector2(-nw / 2.0 - 2.0, -18.0), Vector2(nw + 4.0, 20.0))):
+				break
+			at.y -= 20.0
+		taken.append(Rect2(at + Vector2(-nw / 2.0 - 2.0, -18.0), Vector2(nw + 4.0, 20.0)))
 		var col: Color = CMD_COL[String(m.cmd)]
 		c.draw_string(font, at + Vector2(-60, -2), String(m.name), HORIZONTAL_ALIGNMENT_CENTER, 120, 16, Color(1, 0.55, 0.5) if m.state == "down" else NAME_COLS[ci % NAME_COLS.size()])
 		icon(c, String(m.cmd), at + Vector2(-36 - 0.0, -8), 7.0, col)
 		var f := clampf(float(m.hp) / float(m.max), 0.0, 1.0)
 		c.draw_rect(Rect2(at + Vector2(-22, 3), Vector2(44, 5)), Color(0, 0, 0, 0.7))
 		c.draw_rect(Rect2(at + Vector2(-22, 3), Vector2(44.0 * f, 5)), Color(0.4, 0.9, 0.5) if f > 0.35 else Color(0.95, 0.35, 0.3))
-		c.draw_string(font, at + Vector2(-80, 22), String(m.say), HORIZONTAL_ALIGNMENT_CENTER, 160, 13, Color(0.85, 0.95, 1.0, 0.9))
+		var sw := font.get_string_size(String(m.say), HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+		var sr := Rect2(at + Vector2(-sw / 2.0, 10.0), Vector2(sw, 16.0))
+		if not hits.call(sr):    # (what they are doing is on the squad card too: in a crowd it is left out here)
+			taken.append(sr)
+			c.draw_string(font, at + Vector2(-130, 22), String(m.say), HORIZONTAL_ALIGNMENT_CENTER, 260, 13, Color(0.85, 0.95, 1.0, 0.9))
 		if String(m.bark) != "":
-			c.draw_string(font, at + Vector2(-90, -24), String(m.bark), HORIZONTAL_ALIGNMENT_CENTER, 180, 16, Color(1, 0.95, 0.55))
+			var bw := minf(font.get_string_size(String(m.bark), HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x, 260.0)
+			var br := Rect2(at + Vector2(-bw / 2.0, -40.0), Vector2(bw, 20.0))
+			for k in 2:
+				if not hits.call(br):
+					break
+				br.position.y -= 20.0
+			taken.append(br)
+			c.draw_string(font, Vector2(at.x - 130.0, br.position.y + 16.0), String(m.bark), HORIZONTAL_ALIGNMENT_CENTER, 260, 16, Color(1, 0.95, 0.55))
 		if m.state == "up" and not (m.scav as Dictionary).is_empty() and String(m.scav.stage) == "search":
 			var sim = game.run.sim
 			var cont: Dictionary = sim.houses.container(String(m.scav.list[m.scav.i]))
@@ -1234,7 +1259,7 @@ static func _orders_at(m: Vector2, sz: Vector2, vp: Vector2) -> Vector2:
 		p.y = m.y - 22.0 - sz.y
 	if Rect2(p, sz).grow(40.0).has_point(vp / 2.0):    # (it would cover Ruth: to the other side of the pointer)
 		p.x = m.x - 22.0 - sz.x if p.x > m.x else m.x + 22.0
-	return Vector2(clampf(p.x, 8.0, maxf(8.0, vp.x - sz.x - 8.0)), clampf(p.y, 8.0, maxf(8.0, vp.y - sz.y - 8.0)))
+	return Vector2(clampf(p.x, 8.0, maxf(8.0, vp.x - sz.x - 8.0)), clampf(p.y, 96.0, maxf(96.0, vp.y - sz.y - 108.0)))    # (between the top bar and the weapon panel: its foot ran over the gun's readout)
 
 
 func _build_panel() -> void:
