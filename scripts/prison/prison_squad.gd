@@ -41,6 +41,7 @@ var cands: Array = []    # what the gate could offer (a snapshot of the crew, ta
 var picked: Array = []    # ids chosen at the gate
 var floaters: Array = []    # {text, pos (tiles), t, col}
 var revive_t := 0.0
+var truck := {}    # res -> units the companions found by themselves this raid (already in the raid's stock, banked at the pickup)
 var wait_t := 0.0    # seconds the pickup has waited for them
 var left_behind := false    # E in the ring: the ones that are not here are left outside
 var out: Array = []    # ids of the people who are out on this raid (the economy counts them as not at work)
@@ -187,6 +188,7 @@ func out_ids() -> Array:
 func begin_raid() -> void:
 	members = []
 	floaters = []
+	truck = {}
 	revive_t = 0.0
 	wait_t = 0.0
 	left_behind = false

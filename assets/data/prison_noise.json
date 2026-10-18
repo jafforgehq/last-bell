@@ -15,6 +15,18 @@
     "alarm":     {"loud": 24, "heat": 6.0, "cap": 8, "wake": 0.95, "see": 0.9, "ripple": false},
     "scream":    {"loud": 30, "heat": 8.0, "cap": 40, "wake": 0.97, "see": 1.0, "ripple": false}
   },
+  "raid_heat": {
+    "_doc": "RAID HEAT (docs/raid-heat-spec.md): one 0 to 100 value for a raid, filled by the same Noise.emit calls (add: points per kind; a shot scales with the square of the gun's radius over 12 tiles, once per 0.2 s) and by a slow trickle (trickle_per_min). Stages begin at `stages` (Stirring, Hunted, Overrun). Heat cools `cool_per_s` after `cool_after_s` of nothing loud, never below the start of the stage already reached. quiet_r: in Quiet a noise wakes a sleeper only this near. hunted: the one horde from a map edge (size, speed). overrun: a wave from an edge every `every_s` seconds (size) until the party leaves, the first after `first_s`. loot: companions' auto-loot (prison_squad.gd) is read from prison_weapons.json `squad`.",
+    "stages": [30, 60, 90],
+    "names": ["Quiet", "Stirring", "Hunted", "Overrun"],
+    "trickle_per_min": 1.0,
+    "cool_after_s": 20.0,
+    "cool_per_s": 0.08,
+    "quiet_r": 3.0,
+    "add": {"shot": 2.0, "glass": 4.0, "alarm": 0.6, "throw": 2.0, "scream": 6.0, "melee": 0.05, "step": 0.06, "search": 0.8, "build": 1.0, "bell": 0.0},
+    "hunted": {"size": [24, 40], "speed": 2.0},
+    "overrun": {"every_s": 30.0, "first_s": 8.0, "size": [10, 18], "speed": 2.2}
+  },
   "guns": {"shotgun": 1.0, "service": 1.0, "smg": 0.9, "suppressed": 0.35},
   "wake": {"fall": 1.2, "wall": 2.6, "wall_max": 3, "indoor_share": 1.0, "rain": 0.8},
   "heat": {"decay": 0.25, "cell": 16, "loud_at": 5.0, "very_at": 12.0, "cap_per_heat": 0.12, "cap_max": 3.0},

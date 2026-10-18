@@ -774,6 +774,7 @@ func _draw_bars() -> void:
 	if mode == "raid":
 		squad.draw_hud(bars, v)    # SQUAD hook: the card of the companions
 		raidx.draw_hud(bars, v)    # RAID EXTRAS: the retreat arrow
+		noise.draw_hud(bars, v)    # RAID HEAT: the arrow to a horde off screen
 	if mode == "raid" and not busy:
 		# arrows to the pickups at the edge of the screen
 		for e in exits:
@@ -1997,6 +1998,8 @@ func _use() -> void:
 	if String(_prompt.get("kind", "")) == "survivor":    # RAIDS hook
 		people.talk()
 		return
+	if String(_prompt.get("kind", "")) == "ring":
+		return    # RAID HEAT: only a label; standing in the ring leaves
 	if String(_prompt.get("kind", "")) == "leave":    # SQUAD hook: E in the pickup ring: leave the ones that are not here
 		squad.abandon()
 		return
@@ -2074,6 +2077,8 @@ func _raid_logic(dt: float) -> void:
 		if in_ring and not run.sim.uses.busy():
 			var rs: Dictionary = squad.ring_state(dt) if squad.any() else {"ok": true, "text": ""}
 			if bool(rs.ok):
+				if _prompt.is_empty():    # RAID HEAT: leaving is offered at any heat (the ring takes 2 s; V first calls the squad in)
+					_prompt = {"kind": "ring", "label": "Leave: stay in the ring" + ("  (V: call everyone back)" if squad.any() and not raidx.retreating else "")}
 				extract_t += dt
 				if extract_t >= EXTRACT_S:
 					_extract(true)

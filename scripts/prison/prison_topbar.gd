@@ -424,7 +424,7 @@ func _refresh() -> void:
 	if managed or mode == "raid":
 		var extra: Array = EXTRA_RAID if mode == "raid" else EXTRA_ECON
 		for k in extra:    # a chip off the bar comes back while it warns
-			(chips[k].pc as Control).visible = String(chips[k].state) != "ok" and not (k == "convoy" and (game.arc == null or not game.arc.started))
+			(chips[k].pc as Control).visible = (String(chips[k].state) != "ok" or (k == "noise" and mode == "raid")) and not (k == "convoy" and (game.arc == null or not game.arc.started))    # (the heat chip of a raid is always there)
 		_more_chip(extra)
 	var any2 := false
 	for c in row2.get_children():
@@ -658,7 +658,10 @@ func _noise_chip() -> void:
 		return
 	var c: Array = game.noise.chip()
 	var st := String(c[2])
-	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM), "", st, String(c[3]) + "\n" + String(RES_LOW.noise), float(c[4]), Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK))
+	var raid: bool = game.mode == "raid"    # RAID HEAT: the stage and percent, the truck's tally, a bar that pulses when overrun
+	var hot: bool = raid and c.size() > 5 and bool(c[5]) and int(game.clock * 3.0) % 2 == 0
+	var mcol: Color = Hud.DANGER if st == "danger" else (Hud.WARN if st == "warn" else Hud.OK)
+	_put("noise", "bell", Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else Hud.INK2), String(c[0]), String(c[1]), Hud.INK2 if raid else (Hud.DANGER_TEXT if st == "danger" else (Hud.WARN if st == "warn" else DIM)), "", st, String(c[3]) + ("" if raid else "\n" + String(RES_LOW.noise)), float(c[4]), mcol.lightened(0.35) if hot else mcol)
 
 
 func _attack_chip() -> void:
