@@ -48,7 +48,7 @@ func begin_raid(t: Dictionary, seed_i: int) -> void:
 		if game.raids >= int(ex[0]) and float(Loot._h(seed_i, 4243 + int(ex[0])) % 1000) / 1000.0 < float(ex[1]):
 			n += 1
 	n = mini(n, int(sv.max))
-	if game.args.has("survivor"):
+	if game.args.has("survivor") or game.raids <= 1:    # (the first raid always has somebody: Hal, see _pick)
 		n = maxi(n, 1)
 	var entry: Vector2 = Vector2(t.entry.pos)
 	var cands: Array = []
@@ -124,7 +124,7 @@ func _place_one(t: Dictionary, h: Dictionary, seed_i: int, k: int) -> Dictionary
 		"lock_t": 0.0, "def": {"id": String(src.id), "name": String(who.name)}}
 
 
-## The first of the pool (from a hash of the seed) whose name is not in the crew or among the recruits.
+## The first of the pool (the "early" ones in order, then from a hash of the seed) whose name is not in the crew or among the recruits.
 func _used() -> Array:
 	var used: Array = game.econ_gone.duplicate()
 	for e in all:
@@ -140,6 +140,9 @@ func _used() -> Array:
 func _pick(seed_i: int) -> Dictionary:
 	var pool: Array = _c().people
 	var used := _used()
+	for cand in pool:    # (playtest 6: Hal, then Wren, the two who walked in with Ruth in playtest 5, are the first a raid finds; one not brought home is there again on the next raid)
+		if bool(cand.get("early", false)) and not used.has(String(cand.name)):
+			return cand
 	for i in pool.size():
 		var cand: Dictionary = pool[(Loot._h(seed_i, 99) + i) % pool.size()]
 		if not used.has(String(cand.name)):
@@ -454,7 +457,7 @@ func _make_recruit(who: Dictionary) -> Dictionary:
 			for stop in r.route:
 				if not bool(stop.get("chat", false)):
 					route.append((stop as Dictionary).duplicate(true))
-	var id := "r_" + String(who.name).to_lower()
+	var id := String(who.get("id", "r_" + String(who.name).to_lower()))    # (Hal and Wren keep their own ids: their weapon tags and portraits)
 	game.econ.cfg.crew_role[id] = pick
 	return {"id": id, "name": String(who.name), "role": String(c.roles[pick][1]), "key": String(who.key), "look": who.look, "route": route, "recruit": true, "arrive": true}
 

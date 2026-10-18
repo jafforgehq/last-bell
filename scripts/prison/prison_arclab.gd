@@ -56,7 +56,7 @@ func step(_dt: float) -> void:
 func _setup() -> void:
 	_init_done = true
 	econ.person_left.connect(func(nm): game._econ_remove(String(nm)))    # no frames run: the walk to the gate is skipped
-	var keep := ["cole", "bea", "ike", "hal", "wren"]
+	var keep := ["cole", "bea", "ike"]
 	var n_keep := int(cfg.start_people)
 	var kept := 0
 	for m in game.crew.members.duplicate():
