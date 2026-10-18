@@ -762,7 +762,7 @@ func _bites(dt: float) -> void:
 			if Vector2(z.x, z.y).distance_to(Vector2(p.x, p.y)) < posts.bite_r(m, BITE_R):    # POSTS hook: cover shrinks the reach
 				m["down"] = {"t": DOWN_SECS, "z": z}
 				m["prev"] = m.state
-				if not m.def.has("stand") and m.def.has("route"):    # (allies and kids have no route: they keep their state)
+				if not game.crew.on_post(m) and m.def.has("route"):    # (a tower guard on a day job walks a route like anybody)    # (allies and kids have no route: they keep their state)
 					m.state = "down"    # a guard keeps "post" (the crew code has no route for it)
 				p.downed = true
 				p.work = ""
@@ -1006,7 +1006,7 @@ func to_dict() -> Dictionary:
 	var fence := {}
 	for s in segs:
 		fence[String(s.name)] = {"hp": float(s.hp), "max": float(s.max)}
-	return {"posts": posts.to_dict(), "barricades": bars.to_dict(), "fence": fence, "nights_started": nights_started, "night": night, "abs_h": abs_h, "report_done": _report_done}
+	return {"posts": posts.to_dict(), "day_watch": posts.day_watch.duplicate(), "barricades": bars.to_dict(), "fence": fence, "nights_started": nights_started, "night": night, "abs_h": abs_h, "report_done": _report_done}
 
 
 ## Puts the saved fence back (before the base is built: `setup` opens the gap of a segment with no hp left).
@@ -1017,6 +1017,7 @@ func from_dict(d: Dictionary) -> void:
 			s.max = float(fence[String(s.name)].max)
 			s.hp = clampf(float(fence[String(s.name)].hp), 0.0, float(s.max))
 	posts.from_dict(d.get("posts", {}))
+	posts.day_watch = (d.get("day_watch", {}) as Dictionary).duplicate()    # (an older save has none: every tower on day jobs)
 	bars.from_dict(d.get("barricades", {}))
 	nights_started = int(d.get("nights_started", 0))
 	night = int(d.get("night", 0))

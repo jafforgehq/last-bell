@@ -332,7 +332,7 @@ func _assign() -> void:
 		for m in game.crew.members:
 			if not ["wait", "walk", "arrive", "idle"].has(String(m.state)) or m.has("down") or m.has("eat"):
 				continue
-			if String(roles.get(String(m.def.id), "")) != role or m.def.has("stand") or m.def.has("play"):
+			if (String(roles.get(String(m.def.id), "")) != role and not m.has("day")) or game.crew.on_post(m) or m.def.has("play"):    # SHIFTS: a tower guard on a day job helps build anything
 				continue
 			cands.append(m)
 		cands.sort_custom(func(x, y): return Vector2(x.p.x, x.p.y).distance_to(s.stand) < Vector2(y.p.x, y.p.y).distance_to(s.stand))
@@ -363,7 +363,7 @@ func has_work(m: Dictionary) -> bool:
 		return false
 	var role := String(econ.cfg.crew_role.get(String(m.def.id), ""))
 	for id in econ.queue:
-		if String(econ.defs[id].role) == role and workers_on(id) < int(econ.cfg.work.max_workers):
+		if (String(econ.defs[id].role) == role or m.has("day")) and workers_on(id) < int(econ.cfg.work.max_workers):
 			return true
 	return false
 

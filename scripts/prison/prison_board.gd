@@ -1050,7 +1050,7 @@ func _roster_tab() -> void:
 		if game.siege.attacking and m.def.has("stand"):
 			note = "on the wall"
 		elif m.def.has("stand"):
-			note = String(m.def.role).to_lower() if not String(m.def.stand).begins_with("tower") else "tower guard"
+			note = String(m.def.role).to_lower() if not String(m.def.stand).begins_with("tower") else game.crew.shift_text(m).to_lower()    # SHIFTS: "tower guard (days: building)"
 		var who := String(m.def.name)    # TRAITS: the traits after the note, the background under it
 		if game.arc.hurt_now(who):
 			note = ("hurt, " + note) if note != "" else "hurt"
@@ -1117,6 +1117,32 @@ func rename(nm: String, shown: String) -> void:
 
 
 # --------------------------------------------------------------------------------- defence tab --
+
+## SHIFTS: a "Day watch" toggle per manned tower (off: the guard takes a day job from 07:00 to 19:00 and is back up at dusk or when the dead come).
+func _towers(lc: VBoxContainer, people: Array, locked: bool) -> void:
+	lc.add_child(_lab("Towers (by day: work, or Day watch)", UI.BODY_PX, Hud.INK, true))    # (the whole story is on each box's tooltip: the tab stays short)
+	var row := HFlowContainer.new()    # (side by side: the tab fits without a scroll)
+	lc.add_child(row)
+	for m in people:
+		var st := String(m.def.get("stand", ""))
+		if not st.begins_with("tower"):
+			continue
+		var on0 := bool(game.siege.posts.day_watch.get(st, false))
+		var cb := _btn("%s, %s tower: Day watch %s" % [game.arc.dn(String(m.def.name)), st.trim_prefix("tower_").to_upper(), "ON" if on0 else "off"])    # (a plain toggle button: the theme's CheckBox box does not show on the dark board)
+		cb.toggle_mode = true
+		cb.button_pressed = on0
+		cb.disabled = locked
+		if on0:
+			_accent(cb)
+		cb.tooltip_text = "On: %s stays on the tower around the clock.\nOff: %s works a day job (a project, else hauling) and walks back up at dusk." % [String(m.def.name), String(m.def.name)]
+		cb.toggled.connect(func(on: bool):
+			if on:
+				game.siege.posts.day_watch[st] = true
+			else:
+				game.siege.posts.day_watch.erase(st)
+			_sig = "")
+		row.add_child(cb)
+
 
 func _pick(items: Array, cur: int, on_pick: Callable, disabled := false) -> OptionButton:
 	var ob := OptionButton.new()
@@ -1244,6 +1270,7 @@ func _defence_tab() -> void:
 	var sml := _lab("Standing now: " + (sm if sm != "" else "none"), 14, Hud.INFO)
 	sml.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	rc.add_child(sml)
+	_towers(rc, people, locked)    # (in the right column: the left one is full)
 
 
 # ------------------------------------------------------------------------------- the first-day list --

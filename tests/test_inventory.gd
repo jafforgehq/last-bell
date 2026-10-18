@@ -89,6 +89,42 @@ func test_the_prison_starts_with_three_allies_and_the_first_project_affordable()
 	check(float(G.CLEAR_STORES.scrap) >= water, "the clear's own stores pay for the water pump (%d of %d scrap)" % [int(G.CLEAR_STORES.scrap), int(water)])
 
 
+## SHIFTS (prison_crew.gd): a tower guard climbs down for a day job in daylight, walks back up at dusk and at once when the dead come, and a tower with Day watch keeps its guard.
+func test_the_prison_tower_guards_work_by_day_and_watch_by_night() -> void:
+	var Crew = load("res://scripts/prison/prison_crew.gd")
+	var crew = Crew.new()
+	crew.base = {"stations": {"canteen": Vector2(30.0, 30.0)}}
+	crew.find_cb = func(_a, _b): return []
+	crew.posts = {"day_watch": {}}
+	var mk := func(i: int) -> Dictionary:
+		var a: Dictionary = Crew.CREW_FROM_ALLIES[i]
+		var spot: Vector2 = crew._tower_spot(String(a.stand))
+		return {"p": {"x": spot.x, "y": spot.y, "work": "watch", "work_t": 0.0, "moving": false, "facing": "S", "walk_phase": 0.0}, "def": a.duplicate(true), "i": 0, "state": "post", "path": [], "pi": 0, "t": 0.0, "say": "Tower guard"}
+	var cole: Dictionary = mk.call(0)
+	var bea: Dictionary = mk.call(1)
+	crew.members = [cole, bea]
+	crew.posts.day_watch["tower_e"] = true    # Bea's tower keeps its guard
+	crew.tod = 10.0
+	crew.update(0.1, {})
+	check(cole.has("day") and not crew.on_post(cole) and cole.def.has("route"), "by day Cole climbs down for a day job")
+	eq(crew.shift_text(cole), "Tower guard (days: hauling)", "and the roster says so")
+	check(crew.on_post(bea) and bea.state == "post", "Bea's tower has Day watch: she stays up")
+	eq(crew.shift_text(bea), "Tower guard (day watch)", "and the roster says so")
+	crew.alert = true    # an attack by day
+	crew.update(0.1, {})
+	check(not cole.has("day") and not cole.def.has("route") and cole.state == "post", "an attack by day sends Cole straight back up his tower (an empty path here: he arrives at once)")
+	crew.alert = false
+	crew.update(0.1, {})
+	check(cole.has("day"), "the danger over, it is still day: back to work")
+	crew.tod = 19.5
+	crew.update(0.1, {})
+	crew.update(0.1, {})
+	check(cole.state == "post" and crew.on_post(cole), "at dusk Cole is back on his tower")
+	crew.tod = 7.5
+	crew.update(0.1, {})
+	check(cole.has("day") and crew.on_post(bea), "at dawn he goes back to work, Bea keeps watch")
+
+
 func test_placement_bounds_overlap_and_rotation() -> void:
 	var g := Inventory.make_grid(3, 2)
 	check(Inventory.can_place(g, "water_jug", 1, 0, 0), "a jug fits in the corner")

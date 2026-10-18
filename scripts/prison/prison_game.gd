@@ -1545,6 +1545,7 @@ func _tick(dt: float) -> void:
 	back_t = maxf(0.0, back_t - dt)
 	if crew != null:
 		crew.tod = tod
+		crew.alert = siege != null and (siege.attacking or siege._alive_wave() > 0 or siege._any_open())    # SHIFTS: the tower guards go up at once
 	fx.combat.listener = Vector2(run.avatar_p.x, run.avatar_p.y)
 	if crew != null:
 		_gun_poses(dt)
@@ -3350,7 +3351,7 @@ func _fence_guards(dt: float) -> void:
 			if m.def.has("stand"):
 				m.say = "Contact! Contact!"
 	for m in crew.members:
-		if not m.def.has("stand") or not siege.guard_ok(m):    # SIEGE hook
+		if not crew.on_post(m) or not siege.guard_ok(m):    # SIEGE hook (a tower guard on a day job does not shoot)
 			continue
 		var post_aim: float = siege.posts.aim_mult(m)    # POSTS hook: the post's fit for this person; a ground post shoots only in its field of fire
 		var g = m.p
