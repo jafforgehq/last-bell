@@ -266,7 +266,7 @@ func _sig_of(key: String) -> int:
 	if key.begins_with("fence"):
 		return econ.tier("fence")
 	if key.begins_with("dirt"):
-		return int(float(DIRT_BY_STAGE[econ.stage()]) * 100.0)
+		return int(_dirt_share(int(key.substr(4))) * 10.0)
 	if key.begins_with("bed"):
 		var a: Array = [econ.tier("garden")]
 		for b in beds:
@@ -536,7 +536,7 @@ func _pg(c: CanvasItem, key: String) -> void:
 	if key.begins_with("fence"):
 		_fence(c, econ.tier("fence"), int(key.substr(5)))
 	elif key.begins_with("dirt"):
-		_dirt(c, float(DIRT_BY_STAGE[econ.stage()]), int(key.substr(4)))
+		_dirt(c, _dirt_share(int(key.substr(4))), int(key.substr(4)))
 	elif key.begins_with("bed"):
 		if econ.tier("garden") >= 1:
 			for b in beds:
@@ -561,6 +561,12 @@ func _pg(c: CanvasItem, key: String) -> void:
 			"scaf":
 				for id in econ.queue:
 					_scaffold(c, id)
+
+
+## The share of a dirt zone's litter drawn: falls with the stage and with the look of its zone (prison_clean.gd `dirt_at`).
+func _dirt_share(zi: int) -> float:
+	var s := float(DIRT_BY_STAGE[econ.stage()])
+	return s * game.cleaner.dirt_at((DIRT_ZONES[zi] as Rect2).get_center()) if game.cleaner != null else s
 
 
 ## Stains, crumbs, litter and puddles; the share drawn falls with the stage (the cleaner's rubbish piles are capped in `update`).

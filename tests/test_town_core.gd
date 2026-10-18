@@ -230,3 +230,18 @@ func test_a_companion_keeps_a_spot_out_of_ruths_fire_and_holds_a_shot_past_a_fri
 	b.p = {"x": 14.0, "y": 10.2}
 	check(sq._friend_in_line(a, Vector2(12, 10), Vector2(16, 10), me), "the other companion on the line: the shot is held")
 	check(sq._in_fire(me, Vector2(14, 10.5), 0.35), "a spot where Ruth aims is in her line of fire")
+
+
+func test_the_prison_zones_look_is_saved_and_an_old_save_loads_half_clean() -> void:
+	var Clean = load("res://scripts/prison/prison_clean.gd")
+	var a = Clean.new(null)
+	a.zc = [0.1, 0.2, 0.3, 0.4, 0.5, 1.0]
+	a.kept = [0, 0, 0, 0, 1, 3]
+	var b = Clean.new(null)
+	b.from_dict(a.to_dict())
+	eq(b.zc, a.zc, "the zones' look comes back")
+	eq(b.kept, a.kept, "and the days each was kept clean")
+	var old = Clean.new(null)
+	old.from_dict({"spots": [], "tag": 0})
+	eq(old.zc, [0.5, 0.5, 0.5, 0.5, 0.5, 0.5], "a save from before the look loads half clean")
+	eq(old.kept, [0, 0, 0, 0, 0, 0], "with no clean days")
