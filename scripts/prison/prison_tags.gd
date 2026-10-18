@@ -44,6 +44,8 @@ var near_id := ""    # the one nearest person within 6 tiles gets the full name 
 var _font: Font
 var _words := {}    # person id -> [state word, msec it changed]: the word shows for 3 s after a change, or on hover
 var _plate_box: StyleBoxFlat
+var _taken: Array = []    # LAYOUT: this frame's plates and the HUD's panels (screen rects): a plate that would land on one steps up a line, or is left out
+var _icons: Array = []    # LAYOUT: this frame's job icons (a plate keeps off them; an icon keeps off the plates and the HUD, not off another icon)
 
 
 func _init(g) -> void:
@@ -103,9 +105,28 @@ func _to_scr(p: Vector2, v: Vector2) -> Vector2:
 
 func _text_plate(at: Vector2, text: String, size: int, col: Color, left_pad := 0.0) -> float:
 	var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	c.draw_style_box(_plate_box, Rect2(at + Vector2(-4.0, -float(size) + 1.0), Vector2(w + 8.0 + left_pad, float(size) + 5.0)))
-	c.draw_string(_font, at + Vector2(left_pad, 0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
+	var r := Rect2(at + Vector2(-4.0, -float(size) + 1.0), Vector2(w + 8.0 + left_pad, float(size) + 5.0))
+	for i in 3:    # (a crowd: the plate steps up a line at a time, past the names already drawn)
+		if not _blocked(r, true):
+			break
+		r.position.y -= r.size.y + 1.0
+	if _blocked(r, true):
+		return w    # (no room: left out this frame rather than drawn over another name or under the HUD)
+	_taken.append(r)
+	c.draw_style_box(_plate_box, r)
+	c.draw_string(_font, r.position + Vector2(4.0 + left_pad, float(size) - 1.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, col)
 	return w
+
+
+func _blocked(r: Rect2, by_icons: bool) -> bool:
+	for t in _taken:
+		if (t as Rect2).grow(-1.0).intersects(r):
+			return true
+	if by_icons:
+		for t in _icons:
+			if (t as Rect2).grow(-2.0).intersects(r):
+				return true
+	return false
 
 
 func _draw() -> void:
@@ -120,6 +141,8 @@ func _draw() -> void:
 		if not tm.is_empty():
 			mouse = _to_scr(Vector2(tm.p.x, tm.p.y - 0.8), v)
 	var is_base: bool = game.mode == "base"
+	_taken = game.hud_rects()
+	_icons = []
 	if is_base:
 		_plates(me, v, zoom)
 	hover_id = ""
@@ -143,12 +166,18 @@ func _draw() -> void:
 			if d < best:
 				best = d
 				hover_id = String(m.def.id)
-		for m in game.crew.members:
+		var order: Array = game.crew.members.duplicate()    # (the one under the pointer, then the nearest, place their words first: in a crowd the others give way)
+		order.sort_custom(func(a, b): return _rank(a) < _rank(b))
+		for m in order:
 			_member(m, me, v, zoom)
 		_guide(me, v, zoom)
 		_floaters(v, zoom)
 		if game.barks != null:
 			game.barks.paint(c, func(p: Vector2) -> Vector2: return _to_scr(p, v))
+
+
+func _rank(m: Dictionary) -> int:
+	return 0 if String(m.def.id) == hover_id else (1 if String(m.def.id) == near_id else 2)
 
 
 ## The crew's floaters ("+clean", the fence damage "-N"), in screen space over the night layer, with a dark outline.
@@ -218,9 +247,13 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	var downed: bool = String(m.state) == "downed" or String(m.state) == "down"
 	var icol: Color = Color("#ff8a7a") if downed else col
 	var cc := top + Vector2(0, -2)
-	c.draw_circle(cc, 10.5, Color(0.03, 0.05, 0.04, 0.82))
-	c.draw_arc(cc, 10.5, 0.0, TAU, 20, icol, 2.0, true)
-	Icons.draw(c, String(job[0]), cc, 14.0, icol.lightened(0.15))
+	var ir := Rect2(cc - Vector2(11, 11), Vector2(22, 22))
+	var icon_on := not _blocked(ir, false)
+	if icon_on:    # (an icon that would sit on a name plate or under the HUD is left out: the ring under the feet still says the role)
+		_icons.append(ir)
+		c.draw_circle(cc, 10.5, Color(0.03, 0.05, 0.04, 0.82))
+		c.draw_arc(cc, 10.5, 0.0, TAU, 20, icol, 2.0, true)
+		Icons.draw(c, String(job[0]), cc, 14.0, icol.lightened(0.15))
 	if leaver_id == String(m.def.id):    # a small amber badge: this one is close to leaving (low morale)
 		var bc := cc + Vector2(-20, -2)
 		c.draw_circle(bc, 8.5, Color(0.03, 0.05, 0.04, 0.88))
@@ -235,7 +268,7 @@ func _member(m: Dictionary, me: Vector2, v: Vector2, zoom: float) -> void:
 	if wk.is_empty() or String(wk[0]) != word:
 		wk = [word, now]
 		_words[String(m.def.id)] = wk
-	var show_word: bool = hov or (mid and now - int(wk[1]) < 3000)    # the state word only on a change (3 s) or on hover: the icon says it the rest of the time
+	var show_word: bool = hov or (mid and icon_on and now - int(wk[1]) < 3000)    # the state word only on a change (3 s) or on hover: the icon says it the rest of the time
 	if show_word:
 		_text_plate(Vector2(cc.x + 14.0, cc.y + 4.0), word, 12, Color(icol.lightened(0.3), 1.0))
 	if near and not m.def.has("ally"):    # (an ally's name is already over the head)
@@ -272,7 +305,8 @@ func _guide(me: Vector2, v: Vector2, zoom: float) -> void:
 	var sp := _to_scr(tp, v)
 	var pulse := 0.5 + 0.5 * sin(game.clock * 4.0)
 	var gold := Color(0.99, 0.82, 0.3)
-	var margin := Rect2(Vector2(28, 90), (v - Vector2(56, 130)).max(Vector2.ONE))
+	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y) if game.topbar.plate.visible else 0.0    # (the edge arrow and its words stay under the top bar, not behind it)
+	var margin := Rect2(Vector2(28, top + 40.0), (v - Vector2(56, top + 150.0)).max(Vector2.ONE))
 	if margin.has_point(sp):
 		var r := maxf(18.0, 1.1 * zoom) * (0.92 + 0.12 * pulse)
 		c.draw_set_transform(sp, 0.0, Vector2(1.0, 0.55))
@@ -287,7 +321,8 @@ func _guide(me: Vector2, v: Vector2, zoom: float) -> void:
 		_text_plate(Vector2(sp.x - tw / 2.0, by - 6.0), text, 13, gold)
 	else:
 		var dir := (sp - v / 2.0).normalized()
-		var edge := v / 2.0 + dir * minf((v.x / 2.0 - 46.0) / maxf(absf(dir.x), 0.001), (v.y / 2.0 - 70.0) / maxf(absf(dir.y), 0.001))
+		var hy := (v.y / 2.0 - top - 44.0) if dir.y < 0.0 else (v.y / 2.0 - 100.0)
+		var edge := v / 2.0 + dir * minf((v.x / 2.0 - 46.0) / maxf(absf(dir.x), 0.001), maxf(hy, 10.0) / maxf(absf(dir.y), 0.001))
 		c.draw_colored_polygon(PackedVector2Array([edge + dir * 16, edge + dir.rotated(2.45) * 14, edge + dir.rotated(-2.45) * 14]), Color(0, 0, 0, 0.6))
 		c.draw_colored_polygon(PackedVector2Array([edge + dir * 13, edge + dir.rotated(2.45) * 10, edge + dir.rotated(-2.45) * 10]), Color(gold, 0.6 + 0.4 * pulse))
 		var text2 := "%s  %d" % [String(f.label), int(me.distance_to(tp))]

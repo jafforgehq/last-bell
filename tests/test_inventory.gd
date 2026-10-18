@@ -355,6 +355,9 @@ func test_raid_sites_set_ruth_down_inside_and_the_lanes_dodge_her() -> void:
 	var top := Rect2(440, 60, 400, 60)
 	var yb: float = G.lane_dodge(top, [Vector2(640, 90)], v, 1.0)
 	check(yb >= 90.0 + G.LANE_CLEAR - 0.1, "Ruth under the banner: it goes below her (%s)" % yb)
+	var short := Vector2(1024, 600)
+	var home := Rect2(312, 125, 400, 100)
+	check(G.lane_dodge(home, [Vector2(512, 300)], short, 1.0) >= 125.0, "a short window, Ruth in the middle: the banner never rises above its home under the top bar")
 
 
 # ------------------------------------------------------------------- the pack in the rules --

@@ -356,6 +356,13 @@ func _fit_window() -> void:
 	win.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	win.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
 	win.content_scale_size = Vector2i(maxi(1, int(win.size.x / sc)), maxi(1, int(win.size.y / sc)))
+	if args.has("window") and win.mode == Window.MODE_WINDOWED and DisplayServer.get_name() != "headless":    # (layout checks: the UI is laid out at exactly WxH points, however small the real screen; the window keeps that shape)
+		var wq := String(args.window).split("x")
+		if wq.size() == 2:
+			var ask := Vector2(float(wq[0]), float(wq[1]))
+			var k := minf(1.0, minf(float(win.size.x) / (ask.x * sc), float(win.size.y) / (ask.y * sc)))
+			win.size = Vector2i(ask * sc * k)
+			win.content_scale_size = Vector2i(ask)
 
 
 func _vp() -> Vector2:
@@ -544,6 +551,8 @@ func _ban_tick(dt: float) -> void:
 	if topbar != null:
 		top = topbar.plate.position.y + topbar.plate.size.y + 10.0
 	var br := Rect2((v.x - ban_box.size.x) / 2.0, top, ban_box.size.x, ban_box.size.y)
+	if topbar != null and topbar.tracker.visible and br.intersects(topbar.tracker.get_global_rect()):    # (a narrow window: a wide title does not wrap, so the plate moves left of the Objectives instead of over them)
+		br.position.x = maxf(8.0, topbar.tracker.position.x - 12.0 - br.size.x)
 	ban_box.position = Vector2(br.position.x, lane_dodge(br, _lane_points(), v, 1.0))
 	if _ban_t >= secs:
 		_ban_cur = {}
@@ -631,8 +640,27 @@ static func lane_dodge(r: Rect2, pts: Array, v: Vector2, dir: float) -> float:
 		var high := v.y
 		for p in pts:
 			high = minf(high, (p as Vector2).y)
-		y = high - LANE_CLEAR - r.size.y if high - LANE_CLEAR - r.size.y > 8.0 else r.position.y
+		y = high - LANE_CLEAR - r.size.y if high - LANE_CLEAR - r.size.y >= r.position.y else r.position.y    # (never above its home: in a short window it went up over the top bar)
 	return y
+
+
+## A page is up over the game (the Base screen, the map of places, the loadout card, the story log): the weapon panel, the hp bar and the minimap are not drawn, half hidden, under its edges.
+func _page_open() -> bool:
+	return (board != null and board.is_open()) or (loot != null and loot.choosing) or (loadout != null and loadout.is_open and not loadout.weapon_only) or (arc != null and arc.story.log_panel.visible)
+
+
+## LAYOUT: the screen rects of the HUD's panels (the weapon panel and hp bar, the minimap, the top bar, the objectives, the toasts, the Base button, the prompt plate), for the words drawn
+## over the world (prison_tags.gd) to keep out of.
+func hud_rects() -> Array:
+	var v := _vp()
+	var out: Array = [Rect2(10, v.y - 100, 240, 90)]
+	if world != null:
+		var ms := Vector2(float(world.W), float(world.H)) * (2.0 if mode == "base" else 2.6)
+		out.append(Rect2(v - ms - Vector2(17, 17), ms + Vector2(6, 6)))
+	for ctl in [topbar.plate, topbar.tracker, board.toasts, board.hint, prompt_label]:
+		if ctl != null and (ctl as Control).is_visible_in_tree() and (ctl as Control).size.y > 1.0:
+			out.append((ctl as Control).get_global_rect())
+	return out
 
 
 func _layout_labels() -> void:
@@ -681,7 +709,7 @@ func _econ_done(id: String) -> void:
 
 
 func _draw_bars() -> void:
-	if run == null:
+	if run == null or _page_open():
 		return
 	var v := _vp()
 	var p = run.avatar_p
@@ -1608,9 +1636,10 @@ func _tick(dt: float) -> void:
 	var pt := String(_prompt.get("label", ""))
 	if siege.attacking and String(_prompt.get("kind", "")) == "gate":
 		pt = ""    # (no raid offer while the dead are at the fence)
-	if loadout.is_open:
-		pt = ""    # (the E prompt showed through the loadout card)
-	if pt == "" and hint_text != "" and not _ban_busy() and not loadout.is_open and not busy:
+	var covered: bool = _page_open() or loadout.is_open or squad.open or pause_menu.is_open() or (is_instance_valid(board.morning) and board.morning.visible) or arc.story.card_open() or arc.endings.is_open()    # (the E prompt and the hints showed through the loadout card, and peeked out at both sides of the Base screen, the pause menu and the cards)
+	if covered:
+		pt = ""
+	if pt == "" and hint_text != "" and not _ban_busy() and not covered and not busy:
 		pt = hint_text
 		_hint_t -= dt
 		if _hint_t <= 0.0:
@@ -1726,7 +1755,8 @@ func _step() -> void:
 				var parts: Array = []
 				for k in e.loot:
 					parts.append("+%d %s" % [int(e.loot[k]), k])
-				_say("Found: " + (", ".join(parts) if not parts.is_empty() else "nothing"), 2.5)
+				if parts.is_empty():    # (what was found is the loot toast's "Water bottle x1" and the loot window's own list: a second "Found: +1 water" said it twice)
+					_say("Found: nothing", 2.5)
 				if mode == "base" and crew != null and not parts.is_empty():    # FEEL: the take pops up where she searched (a raid floats it from the pack count: _pickup_floaters)
 					crew.floaters.append({"text": ", ".join(parts), "pos": Vector2(float(e.get("x", run.avatar_p.x)), float(e.get("y", run.avatar_p.y)) - 1.8), "t": 0.0, "col": Color(0.7, 1.0, 0.7)})
 				if args.has("log"):
@@ -2357,6 +2387,8 @@ func _paint_overlay(c: CanvasItem) -> void:
 			var p: Vector2 = Vector2(e) * TILE
 			c.draw_circle(p, EXTRACT_R * TILE, Color(0.3, 1, 0.45, 0.12 + 0.1 * pulse))
 			c.draw_arc(p, EXTRACT_R * TILE, 0, TAU, 40, Color(0.4, 1, 0.5, 0.9), 3.0)
+			var ew := font.get_string_size("EXTRACTION", HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+			c.draw_rect(Rect2(p - Vector2(ew / 2.0 + 6.0, EXTRACT_R * TILE + 26.0), Vector2(ew + 12.0, 24.0)), Color(0.03, 0.05, 0.04, 0.78))    # (a dark plate: the word sat unreadable on the parked cars)
 			c.draw_string(font, p - Vector2(60, EXTRACT_R * TILE + 8), "EXTRACTION", HORIZONTAL_ALIGNMENT_CENTER, 120, 18, Color(0.6, 1, 0.7))
 		loot.paint(c)    # RAIDS hook
 		people.paint(c)
@@ -2426,6 +2458,17 @@ func _scripts(dt: float) -> void:
 		var fa := String(args.flareat).split(",")
 		preload("res://scripts/sim/inventory.gd").auto_add(pack.grid, "flare", 1)
 		noise.throw_at(Vector2(float(fa[0]), float(fa[1])), "flare")
+	if args.has("press"):    # staging (layout checks): --press=FRAME:KEY,FRAME:KEY taps those keys (H, L, M, TAB, C...) at those frames, as a player would
+		for pk in String(args.press).split(","):
+			var pkv := pk.split(":")
+			if pkv.size() == 2 and int(pkv[0]) == frames:
+				for down in [true, false]:
+					var kev := InputEventKey.new()
+					kev.keycode = OS.find_keycode_from_string(pkv[1])
+					kev.pressed = down
+					Input.parse_input_event(kev)
+	if args.has("secured") and frames == 30 and phase == "clear":    # staging: the PRISON SECURED banner and the hand-over to the managed base, as if the last zone fell
+		_secure()
 	if args.has("orders") and frames == int(args.orders):    # staging: the orders panel
 		squad.toggle_orders()
 	if args.has("pick") and frames == 32 and loadout.is_open:    # staging: --pick=june,owen ticks companions on the card
@@ -2757,6 +2800,9 @@ func _save_shot() -> void:
 		print("shot skipped: headless")
 		return
 	get_viewport().get_texture().get_image().save_png(String(args.shot))
+	if args.has("uidump"):    # layout checks: every visible Control's rectangle in points, beside the shot (tools/ui_audit/tree_probe.gd)
+		var f := FileAccess.open(String(args.shot).trim_suffix(".png") + ".json", FileAccess.WRITE)
+		f.store_string(JSON.stringify({"vp": [_vp().x, _vp().y], "nodes": preload("res://tools/ui_audit/tree_probe.gd").walk(self, Vector2.ONE)}))
 	print("shot saved: %s | mode %s stores %s sim stock %s" % [String(args.shot), mode, stores, run.sim.stock])
 
 

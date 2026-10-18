@@ -17,6 +17,7 @@ var kit := {"ammo": 40, "meds": 1, "food": 1, "water": 1}
 var target_name := ""
 var _panel: PanelContainer
 var _col: VBoxContainer
+var _scroll: ScrollContainer    # the squad's rows (shortened in a small window)
 
 
 func _init(g) -> void:
@@ -99,6 +100,7 @@ func _refresh() -> void:
 		ch.queue_free()
 	var arms = game.arms
 	var squad = game.squad
+	_scroll = null
 	_col.add_child(_lbl("PICK YOUR WEAPON   (Enter: start   W: next gun)" if weapon_only else "LOADOUT - going for: %s     (Enter: go out   Esc: back)" % target_name, 20, Color(1, 0.85, 0.4)))
 	# the gun in her hands
 	var wr := _row("Weapon", "W")
@@ -153,6 +155,7 @@ func _refresh() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(680, maxf(0.0, minf(5.0, float(squad.cands.size())) * ROW_H - 2.0))    # (whole rows: five shown, the rest a scroll away)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll = scroll
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 2)
 	scroll.add_child(list)
@@ -221,7 +224,13 @@ func apply_preset(i: int) -> void:
 
 func _place() -> void:
 	_panel.reset_size()
-	_panel.position = game._vp() / 2.0 - _panel.size / 2.0
+	var v: Vector2 = game._vp()
+	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y + 6.0) if game.topbar.plate.visible else 8.0
+	var room := v.y - top - 8.0
+	if _scroll != null and _panel.size.y > room:    # (a small window: fewer squad rows show, the rest a scroll away, so the card's top no longer sits under the top bar)
+		_scroll.custom_minimum_size.y = maxf(2.0 * ROW_H - 2.0, _scroll.custom_minimum_size.y - (_panel.size.y - room))
+		_panel.reset_size()
+	_panel.position = Vector2(round((v.x - _panel.size.x) / 2.0), round(clampf((v.y - _panel.size.y) / 2.0, top, maxf(top, v.y - 8.0 - _panel.size.y))))
 
 
 func _rack_text() -> String:

@@ -269,6 +269,7 @@ func _build(id: String, e: Dictionary, f: Dictionary, lines: Array, sc: Dictiona
 	if narrow:
 		outer.add_child(S._lab("Score %d   (best %d)" % [int(sc.total), int(rec.best)], 16, col, true))
 	S.layer.add_child(root)
+	game.prompt_label.visible = false    # (the tree stops: the E prompt would stay up under the card)
 	game.get_tree().paused = not game.args.has("shot")
 	root.modulate.a = 0.0
 	var tw := root.create_tween()

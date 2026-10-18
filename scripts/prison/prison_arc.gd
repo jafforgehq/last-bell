@@ -460,6 +460,10 @@ func frame(dt: float) -> void:
 			story.show_letter(next_letter())
 		else:
 			story.show_beat(String(game.args.story))
+	if game.args.has("event") and game.frames == 20:    # staging: --event=ID shows that morning card (prison_events.json) for the first crew member
+		var crew_n: Array = alive_names()
+		event_pending = {"id": String(game.args.event), "who": String(crew_n[mini(1, crew_n.size() - 1)])}
+		story.show_event()
 	if game.args.has("ending") and game.frames == 20:
 		endings.show_test(String(game.args.ending))
 

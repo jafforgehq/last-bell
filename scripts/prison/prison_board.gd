@@ -465,9 +465,13 @@ func frame(_dt: float) -> void:
 	var v: Vector2 = game._vp()
 	toasts.position = Vector2(v.x - 330.0, game.topbar.toast_y() if game.topbar != null else 14.0)
 	toasts.size.x = 316.0
+	while toasts.get_child_count() > 1 and toasts.position.y + toasts.get_combined_minimum_size().y > v.y - 160.0:    # (a short window: the oldest toast goes rather than the stack running onto the minimap)
+		var old := toasts.get_child(0)
+		toasts.remove_child(old)
+		old.queue_free()
 	_stage_flags()
 	var base_on: bool = game.phase == "managed" and game.mode == "base" and not game.busy
-	hint.visible = base_on and not panel.visible
+	hint.visible = base_on and not panel.visible and not game._page_open()    # (not peeking out under the map of places, the loadout card or the story log)
 	hint.position = Vector2((v.x - hint.size.x) / 2.0, v.y - 46.0)
 	_dot_frame(base_on)
 	_checklist(base_on)
@@ -483,7 +487,8 @@ func frame(_dt: float) -> void:
 		close()
 		return
 	var top: float = (game.topbar.plate.position.y + game.topbar.plate.size.y + 6.0) if game.topbar != null and game.topbar.plate.visible else 12.0    # under the top bar: its chips (morale) stay in sight
-	var sz := Vector2(minf(980.0, v.x - 24.0), minf(660.0, v.y - top - 12.0))
+	var want := (panel.get_child(0) as Control).get_combined_minimum_size().y + 28.0 + body.get_combined_minimum_size().y    # (the panel's margins are 14;as tall as the page needs, so a short tab leaves no empty slab under it; a long one scrolls)
+	var sz := Vector2(minf(980.0, v.x - 24.0), clampf(want, 360.0, minf(660.0, v.y - top - 12.0)))
 	panel.custom_minimum_size = sz
 	panel.size = sz
 	panel.position = Vector2(round((v.x - sz.x) / 2.0), round(top))
@@ -1406,6 +1411,9 @@ func _stage_flags() -> void:
 				game.stores[p[0]] = float(game.stores.get(p[0], 0.0)) + float(p[1])
 	if _frames == 6 and a.has("board-start"):
 		econ.start(String(a["board-start"]))
+	if _frames == 8 and a.has("longnames"):    # staging (layout checks): every crew member gets the longest name the Roster allows, Ruth included
+		for nm in game.arc.alive_names():
+			rename(String(nm), "Wilhelmina Moe")
 	if _frames == 10 and a.has("board"):
 		var bp := String(a.board).split(":")
 		if bp.size() > 1:
