@@ -1,4 +1,4 @@
-## The recorded sounds (tools/import_library_sounds.py, from Kenney's CC0 packs and the Sonniss GDC bundles): assets/audio/lib/library.json maps a file the game
+## The recorded sounds (tools/import_library_sounds.py, from Kenney's CC0 packs): assets/audio/lib/library.json maps a file the game
 ## already loads (a synthesised one) to the recordings that stand in for it. `recorded(stream)` is called where a sound is loaded: a one-shot becomes an
 ## AudioStreamRandomizer of its 3 to 6 takes, each play a little higher or lower (about 6 percent) and louder or softer (about 2 dB); a loop becomes the
 ## recorded loop (a plain AudioStreamWAV, so the code that sets its loop points still works). A file with no recording, or a missing map, is left as it was.

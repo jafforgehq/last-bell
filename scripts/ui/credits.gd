@@ -9,7 +9,7 @@ const TAGLINE := "Hold the schoolyard for thirty nights."
 const ENTRIES := [
 	["Engine", "Godot 4.7, under the MIT licence"],
 	["Type", "Barlow, by The Barlow Project Authors, under the SIL Open Font Licence 1.1"],
-	["Sound", "Recordings from Kenney's Impact Sounds, RPG Audio and Interface Sounds (CC0) and the Sonniss GDC Game Audio Bundles 2017 to 2020 (royalty free); the rest synthesised in-house"],
+	["Sound", "Recordings from Kenney's Impact Sounds, RPG Audio and Interface Sounds (CC0); the rest synthesised in-house"],
 	["Pictures", "Drawn in-house, in code and in Blender"],
 ]
 const THANKS := "Thank you for playing."
