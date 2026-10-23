@@ -10,7 +10,7 @@ A top-down zombie survival game in Godot 4.7 (GDScript). You play Ruth, a surviv
 | ![Rain](site/img/04-rain-on-the-base.jpg) | ![Base screen](site/img/05-base-screen-projects.jpg) |
 | ![Raid on a residential street](site/img/06-raid-town-residential.jpg) | ![Raid at the stadium](site/img/07-raid-stadium.jpg) |
 
-Play it in the browser or download it: see the page on itch.io (link on the repo's About box once it is set). More screenshots are in [`site/`](site/index.html).
+Play it in the browser on itch.io: <https://jafforge.itch.io/last-bell>. More screenshots are in [`site/`](site/index.html).
 
 ## Run it
 
