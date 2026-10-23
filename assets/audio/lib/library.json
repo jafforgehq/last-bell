@@ -1,174 +1,41 @@
 {
- "about": "made by tools/import_library_sounds.py; sources and licences in docs/assets-log.md",
+ "about": "made by tools/import_library_sounds.py; only the CC0 Kenney takes ship in this repo (see docs/assets-log.md)",
  "sounds": {
-  "res://assets/audio/bite_0.wav": [
-   "res://assets/audio/lib/bite_0.wav",
-   "res://assets/audio/lib/bite_1.wav",
-   "res://assets/audio/lib/bite_2.wav",
-   "res://assets/audio/lib/bite_3.wav"
-  ],
-  "res://assets/audio/bite_1.wav": [
-   "res://assets/audio/lib/bite_0.wav",
-   "res://assets/audio/lib/bite_1.wav",
-   "res://assets/audio/lib/bite_2.wav",
-   "res://assets/audio/lib/bite_3.wav"
-  ],
-  "res://assets/audio/blast_in_0.wav": [
-   "res://assets/audio/lib/shot_shotgun_room_0.wav",
-   "res://assets/audio/lib/shot_shotgun_room_1.wav",
-   "res://assets/audio/lib/shot_shotgun_room_2.wav"
-  ],
-  "res://assets/audio/blast_in_1.wav": [
-   "res://assets/audio/lib/shot_shotgun_room_0.wav",
-   "res://assets/audio/lib/shot_shotgun_room_1.wav",
-   "res://assets/audio/lib/shot_shotgun_room_2.wav"
-  ],
-  "res://assets/audio/blast_in_2.wav": [
-   "res://assets/audio/lib/shot_shotgun_room_0.wav",
-   "res://assets/audio/lib/shot_shotgun_room_1.wav",
-   "res://assets/audio/lib/shot_shotgun_room_2.wav"
-  ],
-  "res://assets/audio/blast_out_0.wav": [
-   "res://assets/audio/lib/shot_shotgun_0.wav",
-   "res://assets/audio/lib/shot_shotgun_1.wav",
-   "res://assets/audio/lib/shot_shotgun_2.wav",
-   "res://assets/audio/lib/shot_shotgun_3.wav"
-  ],
-  "res://assets/audio/blast_out_1.wav": [
-   "res://assets/audio/lib/shot_shotgun_0.wav",
-   "res://assets/audio/lib/shot_shotgun_1.wav",
-   "res://assets/audio/lib/shot_shotgun_2.wav",
-   "res://assets/audio/lib/shot_shotgun_3.wav"
-  ],
-  "res://assets/audio/blast_out_2.wav": [
-   "res://assets/audio/lib/shot_shotgun_0.wav",
-   "res://assets/audio/lib/shot_shotgun_1.wav",
-   "res://assets/audio/lib/shot_shotgun_2.wav",
-   "res://assets/audio/lib/shot_shotgun_3.wav"
-  ],
-  "res://assets/audio/bolt_0.wav": [
-   "res://assets/audio/lib/bolt_0.wav",
-   "res://assets/audio/lib/bolt_1.wav",
-   "res://assets/audio/lib/bolt_2.wav",
-   "res://assets/audio/lib/bolt_3.wav",
-   "res://assets/audio/lib/bolt_4.wav"
-  ],
-  "res://assets/audio/brute_roar_0.wav": [
-   "res://assets/audio/lib/zbrute_0.wav",
-   "res://assets/audio/lib/zbrute_1.wav",
-   "res://assets/audio/lib/zbrute_2.wav",
-   "res://assets/audio/lib/zbrute_3.wav",
-   "res://assets/audio/lib/zbrute_4.wav"
-  ],
-  "res://assets/audio/brute_roar_1.wav": [
-   "res://assets/audio/lib/zbrute_0.wav",
-   "res://assets/audio/lib/zbrute_1.wav",
-   "res://assets/audio/lib/zbrute_2.wav",
-   "res://assets/audio/lib/zbrute_3.wav",
-   "res://assets/audio/lib/zbrute_4.wav"
-  ],
-  "res://assets/audio/casing_0.wav": [
-   "res://assets/audio/lib/casing_0.wav",
-   "res://assets/audio/lib/casing_1.wav",
-   "res://assets/audio/lib/casing_2.wav",
-   "res://assets/audio/lib/casing_3.wav",
-   "res://assets/audio/lib/casing_4.wav"
-  ],
-  "res://assets/audio/casing_1.wav": [
-   "res://assets/audio/lib/casing_0.wav",
-   "res://assets/audio/lib/casing_1.wav",
-   "res://assets/audio/lib/casing_2.wav",
-   "res://assets/audio/lib/casing_3.wav",
-   "res://assets/audio/lib/casing_4.wav"
-  ],
-  "res://assets/audio/crash_0.wav": [
-   "res://assets/audio/lib/crash_0.wav",
-   "res://assets/audio/lib/crash_1.wav",
-   "res://assets/audio/lib/crash_2.wav"
-  ],
-  "res://assets/audio/crow_0.wav": [
-   "res://assets/audio/lib/crow_0.wav",
-   "res://assets/audio/lib/crow_1.wav",
-   "res://assets/audio/lib/crow_2.wav",
-   "res://assets/audio/lib/crow_3.wav"
-  ],
-  "res://assets/audio/crow_1.wav": [
-   "res://assets/audio/lib/crow_0.wav",
-   "res://assets/audio/lib/crow_1.wav",
-   "res://assets/audio/lib/crow_2.wav",
-   "res://assets/audio/lib/crow_3.wav"
-  ],
-  "res://assets/audio/crow_2.wav": [
-   "res://assets/audio/lib/crow_0.wav",
-   "res://assets/audio/lib/crow_1.wav",
-   "res://assets/audio/lib/crow_2.wav",
-   "res://assets/audio/lib/crow_3.wav"
-  ],
-  "res://assets/audio/dead_drag_0.wav": [
-   "res://assets/audio/lib/dead_drag_0.wav",
-   "res://assets/audio/lib/dead_drag_1.wav",
-   "res://assets/audio/lib/dead_drag_2.wav",
-   "res://assets/audio/lib/dead_drag_3.wav"
-  ],
-  "res://assets/audio/dead_drag_1.wav": [
-   "res://assets/audio/lib/dead_drag_0.wav",
-   "res://assets/audio/lib/dead_drag_1.wav",
-   "res://assets/audio/lib/dead_drag_2.wav",
-   "res://assets/audio/lib/dead_drag_3.wav"
-  ],
   "res://assets/audio/dead_hard_0.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/dead_hard_1.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/dead_hard_2.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/dead_soft_0.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/dead_soft_1.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/dead_soft_2.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
-  ],
-  "res://assets/audio/dry_click_0.wav": [
-   "res://assets/audio/lib/dry_click_0.wav",
-   "res://assets/audio/lib/dry_click_1.wav",
-   "res://assets/audio/lib/dry_click_2.wav",
-   "res://assets/audio/lib/dry_click_3.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/fs_carpet_0.wav": [
    "res://assets/audio/lib/fs_carpet_0.wav",
@@ -206,40 +73,30 @@
    "res://assets/audio/lib/fs_carpet_run_4.wav"
   ],
   "res://assets/audio/fs_dirt_0.wav": [
-   "res://assets/audio/lib/fs_dirt_0.wav",
-   "res://assets/audio/lib/fs_dirt_1.wav",
    "res://assets/audio/lib/fs_dirt_2.wav",
    "res://assets/audio/lib/fs_dirt_3.wav",
    "res://assets/audio/lib/fs_dirt_4.wav",
    "res://assets/audio/lib/fs_dirt_5.wav"
   ],
   "res://assets/audio/fs_dirt_1.wav": [
-   "res://assets/audio/lib/fs_dirt_0.wav",
-   "res://assets/audio/lib/fs_dirt_1.wav",
    "res://assets/audio/lib/fs_dirt_2.wav",
    "res://assets/audio/lib/fs_dirt_3.wav",
    "res://assets/audio/lib/fs_dirt_4.wav",
    "res://assets/audio/lib/fs_dirt_5.wav"
   ],
   "res://assets/audio/fs_dirt_2.wav": [
-   "res://assets/audio/lib/fs_dirt_0.wav",
-   "res://assets/audio/lib/fs_dirt_1.wav",
    "res://assets/audio/lib/fs_dirt_2.wav",
    "res://assets/audio/lib/fs_dirt_3.wav",
    "res://assets/audio/lib/fs_dirt_4.wav",
    "res://assets/audio/lib/fs_dirt_5.wav"
   ],
   "res://assets/audio/fs_dirt_run_0.wav": [
-   "res://assets/audio/lib/fs_dirt_run_0.wav",
-   "res://assets/audio/lib/fs_dirt_run_1.wav",
    "res://assets/audio/lib/fs_dirt_run_2.wav",
    "res://assets/audio/lib/fs_dirt_run_3.wav",
    "res://assets/audio/lib/fs_dirt_run_4.wav",
    "res://assets/audio/lib/fs_dirt_run_5.wav"
   ],
   "res://assets/audio/fs_dirt_run_1.wav": [
-   "res://assets/audio/lib/fs_dirt_run_0.wav",
-   "res://assets/audio/lib/fs_dirt_run_1.wav",
    "res://assets/audio/lib/fs_dirt_run_2.wav",
    "res://assets/audio/lib/fs_dirt_run_3.wav",
    "res://assets/audio/lib/fs_dirt_run_4.wav",
@@ -279,41 +136,6 @@
    "res://assets/audio/lib/fs_grass_run_2.wav",
    "res://assets/audio/lib/fs_grass_run_3.wav",
    "res://assets/audio/lib/fs_grass_run_4.wav"
-  ],
-  "res://assets/audio/fs_gravel_0.wav": [
-   "res://assets/audio/lib/fs_gravel_0.wav",
-   "res://assets/audio/lib/fs_gravel_1.wav",
-   "res://assets/audio/lib/fs_gravel_2.wav",
-   "res://assets/audio/lib/fs_gravel_3.wav",
-   "res://assets/audio/lib/fs_gravel_4.wav"
-  ],
-  "res://assets/audio/fs_gravel_1.wav": [
-   "res://assets/audio/lib/fs_gravel_0.wav",
-   "res://assets/audio/lib/fs_gravel_1.wav",
-   "res://assets/audio/lib/fs_gravel_2.wav",
-   "res://assets/audio/lib/fs_gravel_3.wav",
-   "res://assets/audio/lib/fs_gravel_4.wav"
-  ],
-  "res://assets/audio/fs_gravel_2.wav": [
-   "res://assets/audio/lib/fs_gravel_0.wav",
-   "res://assets/audio/lib/fs_gravel_1.wav",
-   "res://assets/audio/lib/fs_gravel_2.wav",
-   "res://assets/audio/lib/fs_gravel_3.wav",
-   "res://assets/audio/lib/fs_gravel_4.wav"
-  ],
-  "res://assets/audio/fs_gravel_run_0.wav": [
-   "res://assets/audio/lib/fs_gravel_run_0.wav",
-   "res://assets/audio/lib/fs_gravel_run_1.wav",
-   "res://assets/audio/lib/fs_gravel_run_2.wav",
-   "res://assets/audio/lib/fs_gravel_run_3.wav",
-   "res://assets/audio/lib/fs_gravel_run_4.wav"
-  ],
-  "res://assets/audio/fs_gravel_run_1.wav": [
-   "res://assets/audio/lib/fs_gravel_run_0.wav",
-   "res://assets/audio/lib/fs_gravel_run_1.wav",
-   "res://assets/audio/lib/fs_gravel_run_2.wav",
-   "res://assets/audio/lib/fs_gravel_run_3.wav",
-   "res://assets/audio/lib/fs_gravel_run_4.wav"
   ],
   "res://assets/audio/fs_pave_0.wav": [
    "res://assets/audio/lib/fs_pave_0.wav",
@@ -420,118 +242,6 @@
    "res://assets/audio/lib/fs_wood_run_3.wav",
    "res://assets/audio/lib/fs_wood_run_4.wav"
   ],
-  "res://assets/audio/groan_0.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_1.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_2.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_3.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_4.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_5.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_6.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/groan_7.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
   "res://assets/audio/hammer_0.wav": [
    "res://assets/audio/lib/hammer_0.wav",
    "res://assets/audio/lib/hammer_1.wav",
@@ -560,27 +270,6 @@
    "res://assets/audio/lib/hammer_3.wav",
    "res://assets/audio/lib/hammer_4.wav"
   ],
-  "res://assets/audio/hit_flesh_0.wav": [
-   "res://assets/audio/lib/hit_flesh_0.wav",
-   "res://assets/audio/lib/hit_flesh_1.wav",
-   "res://assets/audio/lib/hit_flesh_2.wav",
-   "res://assets/audio/lib/hit_flesh_3.wav",
-   "res://assets/audio/lib/hit_flesh_4.wav"
-  ],
-  "res://assets/audio/hit_flesh_1.wav": [
-   "res://assets/audio/lib/hit_flesh_0.wav",
-   "res://assets/audio/lib/hit_flesh_1.wav",
-   "res://assets/audio/lib/hit_flesh_2.wav",
-   "res://assets/audio/lib/hit_flesh_3.wav",
-   "res://assets/audio/lib/hit_flesh_4.wav"
-  ],
-  "res://assets/audio/hit_flesh_2.wav": [
-   "res://assets/audio/lib/hit_flesh_0.wav",
-   "res://assets/audio/lib/hit_flesh_1.wav",
-   "res://assets/audio/lib/hit_flesh_2.wav",
-   "res://assets/audio/lib/hit_flesh_3.wav",
-   "res://assets/audio/lib/hit_flesh_4.wav"
-  ],
   "res://assets/audio/hit_plate_0.wav": [
    "res://assets/audio/lib/hit_plate_0.wav",
    "res://assets/audio/lib/hit_plate_1.wav",
@@ -602,143 +291,30 @@
    "res://assets/audio/lib/hit_plate_3.wav",
    "res://assets/audio/lib/hit_plate_4.wav"
   ],
-  "res://assets/audio/hit_wall_0.wav": [
-   "res://assets/audio/lib/hit_wall_0.wav",
-   "res://assets/audio/lib/hit_wall_1.wav",
-   "res://assets/audio/lib/hit_wall_2.wav",
-   "res://assets/audio/lib/hit_wall_3.wav",
-   "res://assets/audio/lib/hit_wall_4.wav"
-  ],
-  "res://assets/audio/hit_wall_1.wav": [
-   "res://assets/audio/lib/hit_wall_0.wav",
-   "res://assets/audio/lib/hit_wall_1.wav",
-   "res://assets/audio/lib/hit_wall_2.wav",
-   "res://assets/audio/lib/hit_wall_3.wav",
-   "res://assets/audio/lib/hit_wall_4.wav"
-  ],
-  "res://assets/audio/mag_in_0.wav": [
-   "res://assets/audio/lib/mag_in_0.wav",
-   "res://assets/audio/lib/mag_in_1.wav",
-   "res://assets/audio/lib/mag_in_2.wav",
-   "res://assets/audio/lib/mag_in_3.wav"
-  ],
-  "res://assets/audio/mag_out_0.wav": [
-   "res://assets/audio/lib/mag_out_0.wav",
-   "res://assets/audio/lib/mag_out_1.wav",
-   "res://assets/audio/lib/mag_out_2.wav"
-  ],
   "res://assets/audio/melee_hit_0.wav": [
    "res://assets/audio/lib/melee_hit_0.wav",
    "res://assets/audio/lib/melee_hit_1.wav",
-   "res://assets/audio/lib/melee_hit_2.wav",
-   "res://assets/audio/lib/melee_hit_3.wav",
-   "res://assets/audio/lib/melee_hit_4.wav",
-   "res://assets/audio/lib/melee_hit_5.wav"
+   "res://assets/audio/lib/melee_hit_2.wav"
   ],
   "res://assets/audio/melee_hit_1.wav": [
    "res://assets/audio/lib/melee_hit_0.wav",
    "res://assets/audio/lib/melee_hit_1.wav",
-   "res://assets/audio/lib/melee_hit_2.wav",
-   "res://assets/audio/lib/melee_hit_3.wav",
-   "res://assets/audio/lib/melee_hit_4.wav",
-   "res://assets/audio/lib/melee_hit_5.wav"
-  ],
-  "res://assets/audio/melee_kill_0.wav": [
-   "res://assets/audio/lib/melee_kill_0.wav",
-   "res://assets/audio/lib/melee_kill_1.wav",
-   "res://assets/audio/lib/melee_kill_2.wav",
-   "res://assets/audio/lib/melee_kill_3.wav",
-   "res://assets/audio/lib/melee_kill_4.wav",
-   "res://assets/audio/lib/melee_kill_5.wav"
-  ],
-  "res://assets/audio/melee_kill_1.wav": [
-   "res://assets/audio/lib/melee_kill_0.wav",
-   "res://assets/audio/lib/melee_kill_1.wav",
-   "res://assets/audio/lib/melee_kill_2.wav",
-   "res://assets/audio/lib/melee_kill_3.wav",
-   "res://assets/audio/lib/melee_kill_4.wav",
-   "res://assets/audio/lib/melee_kill_5.wav"
-  ],
-  "res://assets/audio/melee_kill_2.wav": [
-   "res://assets/audio/lib/melee_kill_0.wav",
-   "res://assets/audio/lib/melee_kill_1.wav",
-   "res://assets/audio/lib/melee_kill_2.wav",
-   "res://assets/audio/lib/melee_kill_3.wav",
-   "res://assets/audio/lib/melee_kill_4.wav",
-   "res://assets/audio/lib/melee_kill_5.wav"
-  ],
-  "res://assets/audio/melee_swing_0.wav": [
-   "res://assets/audio/lib/melee_swing_0.wav",
-   "res://assets/audio/lib/melee_swing_1.wav",
-   "res://assets/audio/lib/melee_swing_2.wav",
-   "res://assets/audio/lib/melee_swing_3.wav",
-   "res://assets/audio/lib/melee_swing_4.wav"
-  ],
-  "res://assets/audio/melee_swing_1.wav": [
-   "res://assets/audio/lib/melee_swing_0.wav",
-   "res://assets/audio/lib/melee_swing_1.wav",
-   "res://assets/audio/lib/melee_swing_2.wav",
-   "res://assets/audio/lib/melee_swing_3.wav",
-   "res://assets/audio/lib/melee_swing_4.wav"
-  ],
-  "res://assets/audio/melee_swoosh_0.wav": [
-   "res://assets/audio/lib/melee_swing_0.wav",
-   "res://assets/audio/lib/melee_swing_1.wav",
-   "res://assets/audio/lib/melee_swing_2.wav",
-   "res://assets/audio/lib/melee_swing_3.wav",
-   "res://assets/audio/lib/melee_swing_4.wav"
-  ],
-  "res://assets/audio/melee_swoosh_1.wav": [
-   "res://assets/audio/lib/melee_swing_0.wav",
-   "res://assets/audio/lib/melee_swing_1.wav",
-   "res://assets/audio/lib/melee_swing_2.wav",
-   "res://assets/audio/lib/melee_swing_3.wav",
-   "res://assets/audio/lib/melee_swing_4.wav"
-  ],
-  "res://assets/audio/melee_swoosh_2.wav": [
-   "res://assets/audio/lib/melee_swing_0.wav",
-   "res://assets/audio/lib/melee_swing_1.wav",
-   "res://assets/audio/lib/melee_swing_2.wav",
-   "res://assets/audio/lib/melee_swing_3.wav",
-   "res://assets/audio/lib/melee_swing_4.wav"
+   "res://assets/audio/lib/melee_hit_2.wav"
   ],
   "res://assets/audio/melee_thud_0.wav": [
    "res://assets/audio/lib/melee_hit_0.wav",
    "res://assets/audio/lib/melee_hit_1.wav",
-   "res://assets/audio/lib/melee_hit_2.wav",
-   "res://assets/audio/lib/melee_hit_3.wav",
-   "res://assets/audio/lib/melee_hit_4.wav",
-   "res://assets/audio/lib/melee_hit_5.wav"
+   "res://assets/audio/lib/melee_hit_2.wav"
   ],
   "res://assets/audio/melee_thud_1.wav": [
    "res://assets/audio/lib/melee_hit_0.wav",
    "res://assets/audio/lib/melee_hit_1.wav",
-   "res://assets/audio/lib/melee_hit_2.wav",
-   "res://assets/audio/lib/melee_hit_3.wav",
-   "res://assets/audio/lib/melee_hit_4.wav",
-   "res://assets/audio/lib/melee_hit_5.wav"
+   "res://assets/audio/lib/melee_hit_2.wav"
   ],
   "res://assets/audio/melee_thud_2.wav": [
    "res://assets/audio/lib/melee_hit_0.wav",
    "res://assets/audio/lib/melee_hit_1.wav",
-   "res://assets/audio/lib/melee_hit_2.wav",
-   "res://assets/audio/lib/melee_hit_3.wav",
-   "res://assets/audio/lib/melee_hit_4.wav",
-   "res://assets/audio/lib/melee_hit_5.wav"
-  ],
-  "res://assets/audio/moan_far_0.wav": [
-   "res://assets/audio/lib/zgroan_far_0.wav",
-   "res://assets/audio/lib/zgroan_far_1.wav",
-   "res://assets/audio/lib/zgroan_far_2.wav",
-   "res://assets/audio/lib/zgroan_far_3.wav",
-   "res://assets/audio/lib/zgroan_far_4.wav"
-  ],
-  "res://assets/audio/moan_far_1.wav": [
-   "res://assets/audio/lib/zgroan_far_0.wav",
-   "res://assets/audio/lib/zgroan_far_1.wav",
-   "res://assets/audio/lib/zgroan_far_2.wav",
-   "res://assets/audio/lib/zgroan_far_3.wav",
-   "res://assets/audio/lib/zgroan_far_4.wav"
+   "res://assets/audio/lib/melee_hit_2.wav"
   ],
   "res://assets/audio/prison/pa_clatter_0.wav": [
    "res://assets/audio/lib/clatter_0.wav",
@@ -764,67 +340,6 @@
    "res://assets/audio/lib/clatter_4.wav",
    "res://assets/audio/lib/clatter_5.wav"
   ],
-  "res://assets/audio/prison/pa_owl_0.wav": [
-   "res://assets/audio/lib/owl_0.wav",
-   "res://assets/audio/lib/owl_1.wav",
-   "res://assets/audio/lib/owl_2.wav"
-  ],
-  "res://assets/audio/prison/pa_owl_1.wav": [
-   "res://assets/audio/lib/owl_0.wav",
-   "res://assets/audio/lib/owl_1.wav",
-   "res://assets/audio/lib/owl_2.wav"
-  ],
-  "res://assets/audio/prison/pd_cell_open_0.wav": [
-   "res://assets/audio/lib/door_cell_open_0.wav",
-   "res://assets/audio/lib/door_cell_open_1.wav",
-   "res://assets/audio/lib/door_cell_open_2.wav"
-  ],
-  "res://assets/audio/prison/pd_cell_slam_0.wav": [
-   "res://assets/audio/lib/door_steel_slam_0.wav",
-   "res://assets/audio/lib/door_steel_slam_1.wav",
-   "res://assets/audio/lib/door_steel_slam_2.wav",
-   "res://assets/audio/lib/door_steel_slam_3.wav"
-  ],
-  "res://assets/audio/prison/pd_cell_slam_1.wav": [
-   "res://assets/audio/lib/door_steel_slam_0.wav",
-   "res://assets/audio/lib/door_steel_slam_1.wav",
-   "res://assets/audio/lib/door_steel_slam_2.wav",
-   "res://assets/audio/lib/door_steel_slam_3.wav"
-  ],
-  "res://assets/audio/prison/pd_chain_0.wav": [
-   "res://assets/audio/lib/chain_0.wav",
-   "res://assets/audio/lib/chain_1.wav",
-   "res://assets/audio/lib/chain_2.wav",
-   "res://assets/audio/lib/chain_3.wav",
-   "res://assets/audio/lib/chain_4.wav"
-  ],
-  "res://assets/audio/prison/pd_push_0.wav": [
-   "res://assets/audio/lib/fence_push_0.wav",
-   "res://assets/audio/lib/fence_push_1.wav",
-   "res://assets/audio/lib/fence_push_2.wav",
-   "res://assets/audio/lib/fence_push_3.wav",
-   "res://assets/audio/lib/fence_push_4.wav",
-   "res://assets/audio/lib/fence_push_5.wav"
-  ],
-  "res://assets/audio/prison/pd_push_1.wav": [
-   "res://assets/audio/lib/fence_push_0.wav",
-   "res://assets/audio/lib/fence_push_1.wav",
-   "res://assets/audio/lib/fence_push_2.wav",
-   "res://assets/audio/lib/fence_push_3.wav",
-   "res://assets/audio/lib/fence_push_4.wav",
-   "res://assets/audio/lib/fence_push_5.wav"
-  ],
-  "res://assets/audio/prison/pd_rolling_0.wav": [
-   "res://assets/audio/lib/rolling_door_0.wav",
-   "res://assets/audio/lib/rolling_door_1.wav",
-   "res://assets/audio/lib/rolling_door_2.wav"
-  ],
-  "res://assets/audio/prison/pd_steel_clang_0.wav": [
-   "res://assets/audio/lib/door_steel_slam_0.wav",
-   "res://assets/audio/lib/door_steel_slam_1.wav",
-   "res://assets/audio/lib/door_steel_slam_2.wav",
-   "res://assets/audio/lib/door_steel_slam_3.wav"
-  ],
   "res://assets/audio/prison/pd_wood_close_0.wav": [
    "res://assets/audio/lib/door_wood_close_0.wav",
    "res://assets/audio/lib/door_wood_close_1.wav",
@@ -837,92 +352,29 @@
    "res://assets/audio/lib/door_wood_open_2.wav",
    "res://assets/audio/lib/door_wood_open_3.wav"
   ],
-  "res://assets/audio/prison/pf_drag_0.wav": [
-   "res://assets/audio/lib/dead_drag_0.wav",
-   "res://assets/audio/lib/dead_drag_1.wav",
-   "res://assets/audio/lib/dead_drag_2.wav",
-   "res://assets/audio/lib/dead_drag_3.wav"
-  ],
-  "res://assets/audio/prison/pf_drag_1.wav": [
-   "res://assets/audio/lib/dead_drag_0.wav",
-   "res://assets/audio/lib/dead_drag_1.wav",
-   "res://assets/audio/lib/dead_drag_2.wav",
-   "res://assets/audio/lib/dead_drag_3.wav"
-  ],
-  "res://assets/audio/prison/pf_mud_0.wav": [
-   "res://assets/audio/lib/pf_mud_0.wav",
-   "res://assets/audio/lib/pf_mud_1.wav",
-   "res://assets/audio/lib/pf_mud_2.wav",
-   "res://assets/audio/lib/pf_mud_3.wav",
-   "res://assets/audio/lib/pf_mud_4.wav"
-  ],
-  "res://assets/audio/prison/pf_mud_1.wav": [
-   "res://assets/audio/lib/pf_mud_0.wav",
-   "res://assets/audio/lib/pf_mud_1.wav",
-   "res://assets/audio/lib/pf_mud_2.wav",
-   "res://assets/audio/lib/pf_mud_3.wav",
-   "res://assets/audio/lib/pf_mud_4.wav"
-  ],
-  "res://assets/audio/prison/pf_mud_2.wav": [
-   "res://assets/audio/lib/pf_mud_0.wav",
-   "res://assets/audio/lib/pf_mud_1.wav",
-   "res://assets/audio/lib/pf_mud_2.wav",
-   "res://assets/audio/lib/pf_mud_3.wav",
-   "res://assets/audio/lib/pf_mud_4.wav"
-  ],
-  "res://assets/audio/prison/pf_mud_3.wav": [
-   "res://assets/audio/lib/pf_mud_0.wav",
-   "res://assets/audio/lib/pf_mud_1.wav",
-   "res://assets/audio/lib/pf_mud_2.wav",
-   "res://assets/audio/lib/pf_mud_3.wav",
-   "res://assets/audio/lib/pf_mud_4.wav"
-  ],
   "res://assets/audio/prison/pf_shuffle_0.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/prison/pf_shuffle_1.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/prison/pf_shuffle_2.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/prison/pf_shuffle_3.wav": [
    "res://assets/audio/lib/dead_step_0.wav",
    "res://assets/audio/lib/dead_step_1.wav",
    "res://assets/audio/lib/dead_step_2.wav",
-   "res://assets/audio/lib/dead_step_3.wav",
-   "res://assets/audio/lib/dead_step_4.wav",
-   "res://assets/audio/lib/dead_step_5.wav"
-  ],
-  "res://assets/audio/prison/pt_tail_0.wav": [
-   "res://assets/audio/lib/tail_pistol_0.wav",
-   "res://assets/audio/lib/tail_pistol_1.wav",
-   "res://assets/audio/lib/tail_pistol_2.wav"
-  ],
-  "res://assets/audio/prison/pt_tail_1.wav": [
-   "res://assets/audio/lib/tail_rifle_0.wav",
-   "res://assets/audio/lib/tail_rifle_1.wav",
-   "res://assets/audio/lib/tail_rifle_2.wav"
-  ],
-  "res://assets/audio/prison/pt_tail_2.wav": [
-   "res://assets/audio/lib/tail_shotgun_0.wav",
-   "res://assets/audio/lib/tail_shotgun_1.wav",
-   "res://assets/audio/lib/tail_shotgun_2.wav"
+   "res://assets/audio/lib/dead_step_3.wav"
   ],
   "res://assets/audio/prison/pu_glass_0.wav": [
    "res://assets/audio/lib/glass_0.wav",
@@ -976,133 +428,21 @@
    "res://assets/audio/lib/rustle_2.wav",
    "res://assets/audio/lib/rustle_3.wav"
   ],
-  "res://assets/audio/pump_0.wav": [
-   "res://assets/audio/lib/pump_0.wav",
-   "res://assets/audio/lib/pump_1.wav",
-   "res://assets/audio/lib/pump_2.wav"
-  ],
-  "res://assets/audio/pump_rack_0.wav": [
-   "res://assets/audio/lib/pump_0.wav",
-   "res://assets/audio/lib/pump_1.wav",
-   "res://assets/audio/lib/pump_2.wav"
-  ],
-  "res://assets/audio/pump_rack_1.wav": [
-   "res://assets/audio/lib/pump_0.wav",
-   "res://assets/audio/lib/pump_1.wav",
-   "res://assets/audio/lib/pump_2.wav"
-  ],
-  "res://assets/audio/reload_0.wav": [
-   "res://assets/audio/lib/mag_in_0.wav",
-   "res://assets/audio/lib/mag_in_1.wav",
-   "res://assets/audio/lib/mag_in_2.wav",
-   "res://assets/audio/lib/mag_in_3.wav"
-  ],
-  "res://assets/audio/shot_hunting_0.wav": [
-   "res://assets/audio/lib/shot_hunting_0.wav",
-   "res://assets/audio/lib/shot_hunting_1.wav",
-   "res://assets/audio/lib/shot_hunting_2.wav",
-   "res://assets/audio/lib/shot_hunting_3.wav"
-  ],
-  "res://assets/audio/shot_pistol_0.wav": [
-   "res://assets/audio/lib/shot_pistol_0.wav",
-   "res://assets/audio/lib/shot_pistol_1.wav",
-   "res://assets/audio/lib/shot_pistol_2.wav",
-   "res://assets/audio/lib/shot_pistol_3.wav",
-   "res://assets/audio/lib/shot_pistol_4.wav",
-   "res://assets/audio/lib/shot_pistol_5.wav"
-  ],
-  "res://assets/audio/shot_pistol_1.wav": [
-   "res://assets/audio/lib/shot_pistol_0.wav",
-   "res://assets/audio/lib/shot_pistol_1.wav",
-   "res://assets/audio/lib/shot_pistol_2.wav",
-   "res://assets/audio/lib/shot_pistol_3.wav",
-   "res://assets/audio/lib/shot_pistol_4.wav",
-   "res://assets/audio/lib/shot_pistol_5.wav"
-  ],
-  "res://assets/audio/shot_rifle_0.wav": [
-   "res://assets/audio/lib/shot_rifle_0.wav",
-   "res://assets/audio/lib/shot_rifle_1.wav",
-   "res://assets/audio/lib/shot_rifle_2.wav",
-   "res://assets/audio/lib/shot_rifle_3.wav",
-   "res://assets/audio/lib/shot_rifle_4.wav"
-  ],
-  "res://assets/audio/shot_rifle_1.wav": [
-   "res://assets/audio/lib/shot_rifle_0.wav",
-   "res://assets/audio/lib/shot_rifle_1.wav",
-   "res://assets/audio/lib/shot_rifle_2.wav",
-   "res://assets/audio/lib/shot_rifle_3.wav",
-   "res://assets/audio/lib/shot_rifle_4.wav"
-  ],
-  "res://assets/audio/shot_rifle_2.wav": [
-   "res://assets/audio/lib/shot_rifle_0.wav",
-   "res://assets/audio/lib/shot_rifle_1.wav",
-   "res://assets/audio/lib/shot_rifle_2.wav",
-   "res://assets/audio/lib/shot_rifle_3.wav",
-   "res://assets/audio/lib/shot_rifle_4.wav"
-  ],
-  "res://assets/audio/shot_service_0.wav": [
-   "res://assets/audio/lib/shot_service_0.wav",
-   "res://assets/audio/lib/shot_service_1.wav",
-   "res://assets/audio/lib/shot_service_2.wav",
-   "res://assets/audio/lib/shot_service_3.wav"
-  ],
-  "res://assets/audio/shot_shotgun_0.wav": [
-   "res://assets/audio/lib/shot_shotgun_0.wav",
-   "res://assets/audio/lib/shot_shotgun_1.wav",
-   "res://assets/audio/lib/shot_shotgun_2.wav",
-   "res://assets/audio/lib/shot_shotgun_3.wav"
-  ],
-  "res://assets/audio/shot_shotgun_1.wav": [
-   "res://assets/audio/lib/shot_shotgun_0.wav",
-   "res://assets/audio/lib/shot_shotgun_1.wav",
-   "res://assets/audio/lib/shot_shotgun_2.wav",
-   "res://assets/audio/lib/shot_shotgun_3.wav"
-  ],
-  "res://assets/audio/shot_smg_0.wav": [
-   "res://assets/audio/lib/shot_smg_0.wav",
-   "res://assets/audio/lib/shot_smg_1.wav",
-   "res://assets/audio/lib/shot_smg_2.wav",
-   "res://assets/audio/lib/shot_smg_3.wav",
-   "res://assets/audio/lib/shot_smg_4.wav",
-   "res://assets/audio/lib/shot_smg_5.wav"
-  ],
   "res://assets/audio/stab_0.wav": [
-   "res://assets/audio/lib/stab_0.wav",
-   "res://assets/audio/lib/stab_1.wav",
    "res://assets/audio/lib/stab_2.wav",
    "res://assets/audio/lib/stab_3.wav"
   ],
   "res://assets/audio/stab_1.wav": [
-   "res://assets/audio/lib/stab_0.wav",
-   "res://assets/audio/lib/stab_1.wav",
    "res://assets/audio/lib/stab_2.wav",
    "res://assets/audio/lib/stab_3.wav"
   ],
   "res://assets/audio/thud_0.wav": [
-   "res://assets/audio/lib/thud_0.wav",
-   "res://assets/audio/lib/thud_1.wav",
-   "res://assets/audio/lib/thud_2.wav",
    "res://assets/audio/lib/thud_3.wav",
    "res://assets/audio/lib/thud_4.wav"
   ],
   "res://assets/audio/thud_1.wav": [
-   "res://assets/audio/lib/thud_0.wav",
-   "res://assets/audio/lib/thud_1.wav",
-   "res://assets/audio/lib/thud_2.wav",
    "res://assets/audio/lib/thud_3.wav",
    "res://assets/audio/lib/thud_4.wav"
-  ],
-  "res://assets/audio/trigger_click_0.wav": [
-   "res://assets/audio/lib/dry_click_0.wav",
-   "res://assets/audio/lib/dry_click_1.wav",
-   "res://assets/audio/lib/dry_click_2.wav",
-   "res://assets/audio/lib/dry_click_3.wav"
-  ],
-  "res://assets/audio/trigger_click_1.wav": [
-   "res://assets/audio/lib/dry_click_0.wav",
-   "res://assets/audio/lib/dry_click_1.wav",
-   "res://assets/audio/lib/dry_click_2.wav",
-   "res://assets/audio/lib/dry_click_3.wav"
   ],
   "res://assets/audio/ui_click_0.wav": [
    "res://assets/audio/lib/ui_click_0.wav",
@@ -1140,349 +480,17 @@
    "res://assets/audio/lib/ui_open_2.wav",
    "res://assets/audio/lib/ui_open_3.wav"
   ],
-  "res://assets/audio/zbrute_growl_0.wav": [
-   "res://assets/audio/lib/zbrute_0.wav",
-   "res://assets/audio/lib/zbrute_1.wav",
-   "res://assets/audio/lib/zbrute_2.wav",
-   "res://assets/audio/lib/zbrute_3.wav",
-   "res://assets/audio/lib/zbrute_4.wav"
-  ],
-  "res://assets/audio/zbrute_growl_1.wav": [
-   "res://assets/audio/lib/zbrute_0.wav",
-   "res://assets/audio/lib/zbrute_1.wav",
-   "res://assets/audio/lib/zbrute_2.wav",
-   "res://assets/audio/lib/zbrute_3.wav",
-   "res://assets/audio/lib/zbrute_4.wav"
-  ],
-  "res://assets/audio/zgroan_0.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_1.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_2.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_3.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_4.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_5.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_6.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_7.wav": [
-   "res://assets/audio/lib/zgroan_0.wav",
-   "res://assets/audio/lib/zgroan_1.wav",
-   "res://assets/audio/lib/zgroan_2.wav",
-   "res://assets/audio/lib/zgroan_3.wav",
-   "res://assets/audio/lib/zgroan_4.wav",
-   "res://assets/audio/lib/zgroan_5.wav",
-   "res://assets/audio/lib/zgroan_6.wav",
-   "res://assets/audio/lib/zgroan_7.wav",
-   "res://assets/audio/lib/zgroan_8.wav",
-   "res://assets/audio/lib/zgroan_9.wav",
-   "res://assets/audio/lib/zgroan_10.wav",
-   "res://assets/audio/lib/zgroan_11.wav"
-  ],
-  "res://assets/audio/zgroan_far_0.wav": [
-   "res://assets/audio/lib/zgroan_far_0.wav",
-   "res://assets/audio/lib/zgroan_far_1.wav",
-   "res://assets/audio/lib/zgroan_far_2.wav",
-   "res://assets/audio/lib/zgroan_far_3.wav",
-   "res://assets/audio/lib/zgroan_far_4.wav"
-  ],
-  "res://assets/audio/zgroan_far_1.wav": [
-   "res://assets/audio/lib/zgroan_far_0.wav",
-   "res://assets/audio/lib/zgroan_far_1.wav",
-   "res://assets/audio/lib/zgroan_far_2.wav",
-   "res://assets/audio/lib/zgroan_far_3.wav",
-   "res://assets/audio/lib/zgroan_far_4.wav"
-  ],
-  "res://assets/audio/zgroan_far_2.wav": [
-   "res://assets/audio/lib/zgroan_far_0.wav",
-   "res://assets/audio/lib/zgroan_far_1.wav",
-   "res://assets/audio/lib/zgroan_far_2.wav",
-   "res://assets/audio/lib/zgroan_far_3.wav",
-   "res://assets/audio/lib/zgroan_far_4.wav"
-  ],
-  "res://assets/audio/zgrowl_0.wav": [
-   "res://assets/audio/lib/zgrowl_0.wav",
-   "res://assets/audio/lib/zgrowl_1.wav",
-   "res://assets/audio/lib/zgrowl_2.wav",
-   "res://assets/audio/lib/zgrowl_3.wav",
-   "res://assets/audio/lib/zgrowl_4.wav"
-  ],
-  "res://assets/audio/zgrowl_1.wav": [
-   "res://assets/audio/lib/zgrowl_0.wav",
-   "res://assets/audio/lib/zgrowl_1.wav",
-   "res://assets/audio/lib/zgrowl_2.wav",
-   "res://assets/audio/lib/zgrowl_3.wav",
-   "res://assets/audio/lib/zgrowl_4.wav"
-  ],
-  "res://assets/audio/zgrowl_2.wav": [
-   "res://assets/audio/lib/zgrowl_0.wav",
-   "res://assets/audio/lib/zgrowl_1.wav",
-   "res://assets/audio/lib/zgrowl_2.wav",
-   "res://assets/audio/lib/zgrowl_3.wav",
-   "res://assets/audio/lib/zgrowl_4.wav"
-  ],
-  "res://assets/audio/zgrowl_3.wav": [
-   "res://assets/audio/lib/zgrowl_0.wav",
-   "res://assets/audio/lib/zgrowl_1.wav",
-   "res://assets/audio/lib/zgrowl_2.wav",
-   "res://assets/audio/lib/zgrowl_3.wav",
-   "res://assets/audio/lib/zgrowl_4.wav"
-  ],
-  "res://assets/audio/zrun_hiss_0.wav": [
-   "res://assets/audio/lib/zrun_hiss_0.wav",
-   "res://assets/audio/lib/zrun_hiss_1.wav",
-   "res://assets/audio/lib/zrun_hiss_2.wav"
-  ],
-  "res://assets/audio/zrun_hiss_1.wav": [
-   "res://assets/audio/lib/zrun_hiss_0.wav",
-   "res://assets/audio/lib/zrun_hiss_1.wav",
-   "res://assets/audio/lib/zrun_hiss_2.wav"
-  ],
   "res://assets/audio/zrun_screech_0.wav": [
-   "res://assets/audio/lib/zrun_screech_0.wav",
-   "res://assets/audio/lib/zrun_screech_1.wav",
    "res://assets/audio/lib/zrun_screech_2.wav"
   ],
   "res://assets/audio/zrun_screech_1.wav": [
-   "res://assets/audio/lib/zrun_screech_0.wav",
-   "res://assets/audio/lib/zrun_screech_1.wav",
    "res://assets/audio/lib/zrun_screech_2.wav"
   ]
  },
  "loops": {
-  "res://assets/audio/crickets_loop.wav": "res://assets/audio/lib/crickets_0.wav",
-  "res://assets/audio/moan_loop.wav": "res://assets/audio/lib/horde_0.wav",
-  "res://assets/audio/night_bed.wav": "res://assets/audio/lib/night_bed_0.wav",
-  "res://assets/audio/prison/pa_fire.wav": "res://assets/audio/lib/fire_0.wav",
-  "res://assets/audio/prison/pa_rain_concrete.wav": "res://assets/audio/lib/rain_concrete_0.wav",
-  "res://assets/audio/prison/pa_rain_grass.wav": "res://assets/audio/lib/rain_grass_0.wav",
-  "res://assets/audio/prison/pa_rain_roof.wav": "res://assets/audio/lib/rain_roof_0.wav",
-  "res://assets/audio/prison/pa_wind_gust.wav": "res://assets/audio/lib/wind_gust_0.wav",
-  "res://assets/audio/prison/pa_wind_low.wav": "res://assets/audio/lib/wind_low_0.wav",
-  "res://assets/audio/rain_loop.wav": "res://assets/audio/lib/rain_concrete_0.wav",
-  "res://assets/audio/wind_loop.wav": "res://assets/audio/lib/wind_day_0.wav"
+  "res://assets/audio/moan_loop.wav": "res://assets/audio/lib/horde_0.wav"
  },
  "takes": {
-  "bite_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/DsoundE - House of Horrors - Complete Pack/Zombie biting neck guts.wav",
-   "seconds": 0.8,
-   "peak_db": -7.01,
-   "level_db": -23.93,
-   "target_db": -23.35
-  },
-  "bite_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/DsoundE - House of Horrors - Complete Pack/Zombie biting neck guts.wav",
-   "seconds": 0.8,
-   "peak_db": -7.13,
-   "level_db": -23.43,
-   "target_db": -23.35
-  },
-  "bite_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/DsoundE - House of Horrors - Complete Pack/Zombie biting neck guts.wav",
-   "seconds": 0.8,
-   "peak_db": -8.13,
-   "level_db": -23.35,
-   "target_db": -23.35
-  },
-  "bite_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Monsters/Monster Bite 3.wav",
-   "seconds": 0.8,
-   "peak_db": -16.26,
-   "level_db": -23.35,
-   "target_db": -23.35
-  },
-  "bolt_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Springfield 1903A3 bolt-action rifle/M1903A3, Handling, Cycling Bolt, MKH416.wav",
-   "seconds": 0.09,
-   "peak_db": -5.23,
-   "level_db": -24.71,
-   "target_db": -24.07
-  },
-  "bolt_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Springfield 1903A3 bolt-action rifle/M1903A3, Handling, Cycling Bolt, MKH416.wav",
-   "seconds": 0.57,
-   "peak_db": -5.03,
-   "level_db": -25.13,
-   "target_db": -24.07
-  },
-  "bolt_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Tokarev PPSh-41 submachine gun/PPSh41, Handling, Pulling Back Bolt, MKH416.wav",
-   "seconds": 0.07,
-   "peak_db": -5.09,
-   "level_db": -24.81,
-   "target_db": -24.07
-  },
-  "bolt_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - MP 40 submachine gun/MP 40, Handling, Cocking, MKH416.wav",
-   "seconds": 0.34,
-   "peak_db": -5.13,
-   "level_db": -24.73,
-   "target_db": -24.07
-  },
-  "bolt_4.wav": {
-   "from": "sonniss/GDC_2017_-_Game_Audio_Bundle_Part_4of9/Sonniss.com - GDC 2017 - Game Audio Bundle Part 4of9/Gamemaster Audio -  Gun Sound Pack/gun_semi_auto_rifle_cock_02.wav",
-   "seconds": 0.2,
-   "peak_db": -5.17,
-   "level_db": -24.67,
-   "target_db": -24.07
-  },
-  "casing_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/SculpTunes \u2013 Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
-   "seconds": 0.66,
-   "peak_db": -11.0,
-   "level_db": -38.56,
-   "target_db": -30.56
-  },
-  "casing_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/SculpTunes \u2013 Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
-   "seconds": 0.7,
-   "peak_db": -11.0,
-   "level_db": -33.82,
-   "target_db": -30.56
-  },
-  "casing_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/SculpTunes \u2013 Cartridges & Casings Shell/9 mm x 21  - Casings Shell & Cartdridges - Roll on Concrete Floor - Outdoor.wav",
-   "seconds": 0.67,
-   "peak_db": -11.0,
-   "level_db": -36.92,
-   "target_db": -30.56
-  },
-  "casing_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 3of8/Gamemaster Audio - Silenced Gun Sounds/bullet_shell_bounce_wood2_05.wav",
-   "seconds": 0.8,
-   "peak_db": -11.0,
-   "level_db": -31.79,
-   "target_db": -30.56
-  },
-  "casing_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_8of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 8of8/Watson Wu - Battle Rifles & Pistols/Casing 50BMG Dirt.wav",
-   "seconds": 0.35,
-   "peak_db": -11.02,
-   "level_db": -30.8,
-   "target_db": -30.56
-  },
-  "chain_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/Conor Bradley - Metal Chains/Dog_Chain-Hits.wav",
-   "seconds": 1.0,
-   "peak_db": -6.12,
-   "level_db": -20.61,
-   "target_db": -20.31
-  },
-  "chain_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/Conor Bradley - Metal Chains/Dog_Chain-Hits.wav",
-   "seconds": 0.32,
-   "peak_db": -6.0,
-   "level_db": -20.96,
-   "target_db": -20.31
-  },
-  "chain_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/Conor Bradley - Metal Chains/Dog_Chain-Hits.wav",
-   "seconds": 1.0,
-   "peak_db": -6.0,
-   "level_db": -21.31,
-   "target_db": -20.31
-  },
-  "chain_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 1of8/Articulated Sounds - Ghosts Return/METAL CHAIN Old Barn, Manipulation, Clinking 04.wav",
-   "seconds": 0.43,
-   "peak_db": -6.06,
-   "level_db": -20.9,
-   "target_db": -20.31
-  },
-  "chain_4.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/Conor Bradley - Metal Chains/Jingle_Chain-Sustained_Foley.wav",
-   "seconds": 1.0,
-   "peak_db": -6.17,
-   "level_db": -20.75,
-   "target_db": -20.31
-  },
   "clatter_0.wav": {
    "from": "kenney/impact/Audio/impactTin_medium_000.ogg",
    "seconds": 0.16,
@@ -1525,90 +533,6 @@
    "level_db": -29.54,
    "target_db": -29.54
   },
-  "crash_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/InspectorJ - Wooden Fence Destruction/Destruction_Wooden_2.wav",
-   "seconds": 1.1,
-   "peak_db": -10.06,
-   "level_db": -21.46,
-   "target_db": -21.46
-  },
-  "crash_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 1of8/Airborne Sound - Elements Metal/Metal,Crash,Concrete,Sheet Metal,20 Gauge,Slow,Complex.wav",
-   "seconds": 1.29,
-   "peak_db": -6.69,
-   "level_db": -21.47,
-   "target_db": -21.46
-  },
-  "crash_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/InspectorJ - Wooden Fence Destruction/WoodenFence_Thud_Multi_1.wav",
-   "seconds": 1.6,
-   "peak_db": -6.56,
-   "level_db": -21.89,
-   "target_db": -21.46
-  },
-  "crickets_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/justsoundeffects - Crickets and Cicadas/JSE_Single Cricket Night Countryside Italy_05.wav",
-   "seconds": 16.0,
-   "peak_db": -26.53,
-   "level_db": -41.94,
-   "target_db": -41.94
-  },
-  "crow_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Ambience/0002_Ambience_Forest_Crows_Birds_Chirping_.wav",
-   "seconds": 1.6,
-   "peak_db": -11.55,
-   "level_db": -23.19,
-   "target_db": -23.19
-  },
-  "crow_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Ambience/0002_Ambience_Forest_Crows_Birds_Chirping_.wav",
-   "seconds": 1.6,
-   "peak_db": -16.36,
-   "level_db": -23.19,
-   "target_db": -23.19
-  },
-  "crow_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Ambience/0002_Ambience_Forest_Crows_Birds_Chirping_.wav",
-   "seconds": 1.6,
-   "peak_db": -10.47,
-   "level_db": -23.19,
-   "target_db": -23.19
-  },
-  "crow_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Ambience/0002_Ambience_Forest_Crows_Birds_Chirping_.wav",
-   "seconds": 1.6,
-   "peak_db": -10.01,
-   "level_db": -23.19,
-   "target_db": -23.19
-  },
-  "dead_drag_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/PMSFX - STEPS Dry Grass & Shrubs/PM_SDGS_213 Footstep Step Dry Grass Skid Drag.wav",
-   "seconds": 0.9,
-   "peak_db": -11.49,
-   "level_db": -29.25,
-   "target_db": -29.06
-  },
-  "dead_drag_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Extras_Doormat_Scrapes_01.wav",
-   "seconds": 0.9,
-   "peak_db": -14.55,
-   "level_db": -29.06,
-   "target_db": -29.06
-  },
-  "dead_drag_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Extras_Doormat_Scrapes_01.wav",
-   "seconds": 0.9,
-   "peak_db": -14.14,
-   "level_db": -29.06,
-   "target_db": -29.06
-  },
-  "dead_drag_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Extras_Doormat_Scrapes_01.wav",
-   "seconds": 0.9,
-   "peak_db": -15.5,
-   "level_db": -29.06,
-   "target_db": -29.06
-  },
   "dead_step_0.wav": {
    "from": "kenney/rpg/Audio/footstep04.ogg",
    "seconds": 0.28,
@@ -1636,69 +560,6 @@
    "peak_db": -13.48,
    "level_db": -32.56,
    "target_db": -32.01
-  },
-  "dead_step_4.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Extras_Doormat_Scrapes_01.wav",
-   "seconds": 0.5,
-   "peak_db": -13.86,
-   "level_db": -32.01,
-   "target_db": -32.01
-  },
-  "dead_step_5.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Extras_Doormat_Scrapes_01.wav",
-   "seconds": 0.5,
-   "peak_db": -14.61,
-   "level_db": -32.01,
-   "target_db": -32.01
-  },
-  "door_cell_open_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/344 Audio - Practical Doors/Exterior Metal Door Gate Bolt Latch 7.wav",
-   "seconds": 1.25,
-   "peak_db": -8.81,
-   "level_db": -26.23,
-   "target_db": -26.23
-  },
-  "door_cell_open_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/344 Audio - Practical Doors/Dungeon Door Open, Close, Locked.wav",
-   "seconds": 1.16,
-   "peak_db": -13.85,
-   "level_db": -26.23,
-   "target_db": -26.23
-  },
-  "door_cell_open_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/RZ Post - The Creepy Door/Creepy Door, Fast Metal Creak_02.wav",
-   "seconds": 1.1,
-   "peak_db": -11.86,
-   "level_db": -26.23,
-   "target_db": -26.23
-  },
-  "door_steel_slam_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/344 Audio - Practical Doors/Exterior Metal Door Gate Close, Rattle 2.wav",
-   "seconds": 1.6,
-   "peak_db": -4.9,
-   "level_db": -21.29,
-   "target_db": -21.29
-  },
-  "door_steel_slam_1.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/RZ Post - The Creepy Door/Creepy Door, Metal,Door,Medium,Impact_01.wav",
-   "seconds": 1.6,
-   "peak_db": -12.76,
-   "level_db": -21.29,
-   "target_db": -21.29
-  },
-  "door_steel_slam_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Alex Lane - Resonant Rusty Door/ResonantRustyDoor_impact_hard_11.wav",
-   "seconds": 1.6,
-   "peak_db": -7.9,
-   "level_db": -21.29,
-   "target_db": -21.29
-  },
-  "door_steel_slam_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Alex Lane - Resonant Rusty Door/ResonantRustyDoor_impact_soft_01.wav",
-   "seconds": 1.4,
-   "peak_db": -10.26,
-   "level_db": -21.29,
-   "target_db": -21.29
   },
   "door_wood_close_0.wav": {
    "from": "kenney/rpg/Audio/doorClose_1.ogg",
@@ -1755,83 +616,6 @@
    "peak_db": -12.72,
    "level_db": -25.21,
    "target_db": -25.21
-  },
-  "dry_click_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part6of14/Pole Position - Colt M1911A1 semi-automatic pistol/M1911A1, Handling, Dry Fire, MKH416.wav",
-   "seconds": 0.08,
-   "peak_db": -1.7,
-   "level_db": -24.35,
-   "target_db": -24.35
-  },
-  "dry_click_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part6of14/Pole Position - Colt M1911A1 semi-automatic pistol/M1911A1, Handling, Dry Fire, MKH416.wav",
-   "seconds": 0.08,
-   "peak_db": -1.72,
-   "level_db": -24.5,
-   "target_db": -24.35
-  },
-  "dry_click_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Thompson 1928A1 automatic submachine gun/1928A1, Handling, Dry Fire, MKH416.wav",
-   "seconds": 0.11,
-   "peak_db": -3.42,
-   "level_db": -24.35,
-   "target_db": -24.35
-  },
-  "dry_click_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Thompson 1928A1 automatic submachine gun/1928A1, Handling, Dry Fire, MKH416.wav",
-   "seconds": 0.12,
-   "peak_db": -3.33,
-   "level_db": -24.35,
-   "target_db": -24.35
-  },
-  "fence_push_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/RZ Post - The Creepy Door/Creepy Door, Metal Light Rattle_05.wav",
-   "seconds": 1.0,
-   "peak_db": -12.13,
-   "level_db": -23.45,
-   "target_db": -23.45
-  },
-  "fence_push_1.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/RZ Post - The Creepy Door/Creepy Door, Metal Light Rattle_05.wav",
-   "seconds": 1.0,
-   "peak_db": -13.01,
-   "level_db": -23.45,
-   "target_db": -23.45
-  },
-  "fence_push_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/344 Audio - Practical Doors/Exterior Metal Door Gate Close, Rattle 2.wav",
-   "seconds": 1.0,
-   "peak_db": -10.58,
-   "level_db": -23.45,
-   "target_db": -23.45
-  },
-  "fence_push_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/InspectorJ - Wooden Fence Destruction/WoodenFence_Thud_Multi_1.wav",
-   "seconds": 1.0,
-   "peak_db": -7.06,
-   "level_db": -23.7,
-   "target_db": -23.45
-  },
-  "fence_push_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Airborne Sound - Household/Door,Wood,Bathroom,Exterior POV,Hit,Pound,x5,Impatient.wav",
-   "seconds": 0.53,
-   "peak_db": -7.62,
-   "level_db": -23.68,
-   "target_db": -23.45
-  },
-  "fence_push_5.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Airborne Sound - Household/Door,Wood,Bathroom,Exterior POV,Hit,Pound,x5,Impatient.wav",
-   "seconds": 0.6,
-   "peak_db": -8.69,
-   "level_db": -23.45,
-   "target_db": -23.45
-  },
-  "fire_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Burning House Library/Burning_House_t4_Fire_low_intensity_with_crackling_MKH8060.wav",
-   "seconds": 12.0,
-   "peak_db": -1.0,
-   "level_db": -31.47,
-   "target_db": -31.04
   },
   "fs_carpet_0.wav": {
    "from": "kenney/impact/Audio/footstep_carpet_000.ogg",
@@ -1903,20 +687,6 @@
    "level_db": -25.57,
    "target_db": -25.35
   },
-  "fs_dirt_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - STEPS Dirt & Gravel/PM_SDNG_Single_Step_Footstep_46.wav",
-   "seconds": 0.5,
-   "peak_db": -9.57,
-   "level_db": -28.66,
-   "target_db": -28.66
-  },
-  "fs_dirt_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - STEPS Dirt & Gravel/PM_SDNG_Single_Step_Footstep_19.wav",
-   "seconds": 0.5,
-   "peak_db": -10.99,
-   "level_db": -28.66,
-   "target_db": -28.66
-  },
   "fs_dirt_2.wav": {
    "from": "kenney/rpg/Audio/footstep00.ogg",
    "seconds": 0.23,
@@ -1944,20 +714,6 @@
    "peak_db": -8.81,
    "level_db": -28.66,
    "target_db": -28.66
-  },
-  "fs_dirt_run_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - STEPS Dirt & Gravel/PM_SDNG_Single_Step_Footstep_46.wav",
-   "seconds": 0.5,
-   "peak_db": -6.58,
-   "level_db": -25.67,
-   "target_db": -25.67
-  },
-  "fs_dirt_run_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - STEPS Dirt & Gravel/PM_SDNG_Single_Step_Footstep_19.wav",
-   "seconds": 0.5,
-   "peak_db": -8.0,
-   "level_db": -25.67,
-   "target_db": -25.67
   },
   "fs_dirt_run_2.wav": {
    "from": "kenney/rpg/Audio/footstep00.ogg",
@@ -2056,76 +812,6 @@
    "peak_db": -7.37,
    "level_db": -28.18,
    "target_db": -26.55
-  },
-  "fs_gravel_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -13.44,
-   "level_db": -28.65,
-   "target_db": -28.65
-  },
-  "fs_gravel_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -10.31,
-   "level_db": -28.65,
-   "target_db": -28.65
-  },
-  "fs_gravel_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.37,
-   "peak_db": -7.95,
-   "level_db": -28.65,
-   "target_db": -28.65
-  },
-  "fs_gravel_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.44,
-   "peak_db": -5.45,
-   "level_db": -28.93,
-   "target_db": -28.65
-  },
-  "fs_gravel_4.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -13.23,
-   "level_db": -28.65,
-   "target_db": -28.65
-  },
-  "fs_gravel_run_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -10.45,
-   "level_db": -25.66,
-   "target_db": -25.66
-  },
-  "fs_gravel_run_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -7.32,
-   "level_db": -25.66,
-   "target_db": -25.66
-  },
-  "fs_gravel_run_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.37,
-   "peak_db": -4.96,
-   "level_db": -25.66,
-   "target_db": -25.66
-  },
-  "fs_gravel_run_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.44,
-   "peak_db": -3.81,
-   "level_db": -26.17,
-   "target_db": -25.66
-  },
-  "fs_gravel_run_4.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 6of8/Studio 23 - Ultimate Footstep Collection/S23_SFX_Footsteps_Gravel_Loafers_Loops_Walk_Normal.wav",
-   "seconds": 0.45,
-   "peak_db": -10.24,
-   "level_db": -25.66,
-   "target_db": -25.66
   },
   "fs_pave_0.wav": {
    "from": "kenney/impact/Audio/footstep_concrete_000.ogg",
@@ -2400,41 +1086,6 @@
    "level_db": -28.46,
    "target_db": -28.46
   },
-  "hit_flesh_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
-   "seconds": 0.3,
-   "peak_db": -11.47,
-   "level_db": -25.5,
-   "target_db": -25.5
-  },
-  "hit_flesh_1.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 3of8/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
-   "seconds": 0.35,
-   "peak_db": -12.07,
-   "level_db": -25.5,
-   "target_db": -25.5
-  },
-  "hit_flesh_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Sound Spark LLC \u2013 Gore/Smash_Gore_Juicy_Smash_07.wav",
-   "seconds": 0.6,
-   "peak_db": -14.74,
-   "level_db": -25.5,
-   "target_db": -25.5
-  },
-  "hit_flesh_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Sound Spark LLC \u2013 Gore/Attack_Gore_Flesh_Rip_01.wav",
-   "seconds": 0.6,
-   "peak_db": -6.07,
-   "level_db": -25.69,
-   "target_db": -25.5
-  },
-  "hit_flesh_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Guns & Explosions/Bullet Impact 22.wav",
-   "seconds": 0.6,
-   "peak_db": -14.65,
-   "level_db": -25.5,
-   "target_db": -25.5
-  },
   "hit_plate_0.wav": {
    "from": "kenney/impact/Audio/impactPlate_heavy_000.ogg",
    "seconds": 0.44,
@@ -2469,41 +1120,6 @@
    "peak_db": -3.03,
    "level_db": -22.26,
    "target_db": -20.22
-  },
-  "hit_wall_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Dirt_3.wav",
-   "seconds": 0.6,
-   "peak_db": -8.66,
-   "level_db": -28.53,
-   "target_db": -28.53
-  },
-  "hit_wall_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/Olivier Girardot - Hand Guns Sound Effects Pack/Bullet rock Impact 4.wav",
-   "seconds": 0.6,
-   "peak_db": -14.63,
-   "level_db": -28.53,
-   "target_db": -28.53
-  },
-  "hit_wall_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/Olivier Girardot - Hand Guns Sound Effects Pack/Bullet Impact 16 - Light Version.wav",
-   "seconds": 0.19,
-   "peak_db": -12.46,
-   "level_db": -28.53,
-   "target_db": -28.53
-  },
-  "hit_wall_3.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Olivier Girardot - Natural Disasters/Guns & Explosions Album - Bullet Impacts - Multiple 1.wav",
-   "seconds": 0.5,
-   "peak_db": -14.86,
-   "level_db": -28.53,
-   "target_db": -28.53
-  },
-  "hit_wall_4.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Olivier Girardot - Natural Disasters/Guns & Explosions Album - Bullet Impacts - Multiple 1.wav",
-   "seconds": 0.5,
-   "peak_db": -18.75,
-   "level_db": -28.53,
-   "target_db": -28.53
   },
   "horde_0.wav": {
    "from": "the zgroan takes above, layered",
@@ -2540,55 +1156,6 @@
    "level_db": -27.86,
    "target_db": -27.24
   },
-  "mag_in_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Tokarev TT-33 semi-automatic pistol/TT33, Handling, Clearing, MK012.wav",
-   "seconds": 0.53,
-   "peak_db": -4.29,
-   "level_db": -31.49,
-   "target_db": -31.0
-  },
-  "mag_in_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Tokarev TT-33 semi-automatic pistol/TT33, Handling, Clearing, MK012.wav",
-   "seconds": 0.22,
-   "peak_db": -4.59,
-   "level_db": -31.21,
-   "target_db": -31.0
-  },
-  "mag_in_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - Mauser Karabiner 98 kurz K98k bolt-action rifle/K98k, Handling, Various, t2, 1m, Right, MKH8060.wav",
-   "seconds": 0.6,
-   "peak_db": -4.78,
-   "level_db": -31.03,
-   "target_db": -31.0
-  },
-  "mag_in_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - Mauser Karabiner 98 kurz K98k bolt-action rifle/K98k, Handling, Various, t2, 1m, Right, MKH8060.wav",
-   "seconds": 0.49,
-   "peak_db": -4.83,
-   "level_db": -31.0,
-   "target_db": -31.0
-  },
-  "mag_out_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Walther P38 semi automatic pistol/P38, Handling, Removing Magazine, 1m, Right, MKH8060.wav",
-   "seconds": 0.49,
-   "peak_db": -6.0,
-   "level_db": -34.2,
-   "target_db": -31.49
-  },
-  "mag_out_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Walther P38 semi automatic pistol/P38, Handling, Removing Magazine, 1m, Right, MKH8060.wav",
-   "seconds": 0.6,
-   "peak_db": -7.1,
-   "level_db": -31.59,
-   "target_db": -31.49
-  },
-  "mag_out_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Walther P38 semi automatic pistol/P38, Handling, Removing Magazine, 1m, Right, MKH8060.wav",
-   "seconds": 0.47,
-   "peak_db": -7.07,
-   "level_db": -31.49,
-   "target_db": -31.49
-  },
   "melee_hit_0.wav": {
    "from": "kenney/impact/Audio/impactPunch_heavy_000.ogg",
    "seconds": 0.5,
@@ -2609,132 +1176,6 @@
    "peak_db": -8.44,
    "level_db": -22.24,
    "target_db": -22.24
-  },
-  "melee_hit_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_6of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 6of8/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Deep Punch 02.wav",
-   "seconds": 0.18,
-   "peak_db": -6.81,
-   "level_db": -22.24,
-   "target_db": -22.24
-  },
-  "melee_hit_4.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Rock The Speakerbox - Melee/MELEE - DESIGNED - BASEBALL BAT Aluminum Hit Head.wav",
-   "seconds": 0.39,
-   "peak_db": -10.46,
-   "level_db": -22.24,
-   "target_db": -22.24
-  },
-  "melee_hit_5.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 3of8/FLYSOUND \u2013 Ice Fury/IC0271 CROWBAR HIT DEBRIS 12.wav",
-   "seconds": 0.7,
-   "peak_db": -1.22,
-   "level_db": -22.24,
-   "target_db": -22.24
-  },
-  "melee_kill_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Sound Spark LLC \u2013 Gore/Melee_Deep_Wound_05.wav",
-   "seconds": 0.8,
-   "peak_db": -6.93,
-   "level_db": -20.96,
-   "target_db": -20.96
-  },
-  "melee_kill_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Sound Spark LLC \u2013 Gore/Smash_Gore_Juicy_Smash_07.wav",
-   "seconds": 0.8,
-   "peak_db": -12.77,
-   "level_db": -20.96,
-   "target_db": -20.96
-  },
-  "melee_kill_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/DsoundE - House of Horrors - Complete Pack/Body flesh stabbed with a screwdriver.wav",
-   "seconds": 0.8,
-   "peak_db": -2.8,
-   "level_db": -20.96,
-   "target_db": -20.96
-  },
-  "melee_kill_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/DsoundE - House of Horrors - Complete Pack/Body flesh stabbed with a screwdriver.wav",
-   "seconds": 0.8,
-   "peak_db": -1.43,
-   "level_db": -20.96,
-   "target_db": -20.96
-  },
-  "melee_kill_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Bones & Blood - Gore Elements/GORE Impact stab dagger in bodyparts flesh.wav",
-   "seconds": 0.8,
-   "peak_db": -1.05,
-   "level_db": -21.83,
-   "target_db": -20.96
-  },
-  "melee_kill_5.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Bones & Blood - Gore Elements/GORE Impact stab dagger in bodyparts flesh.wav",
-   "seconds": 0.75,
-   "peak_db": -1.05,
-   "level_db": -21.52,
-   "target_db": -20.96
-  },
-  "melee_swing_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav",
-   "seconds": 0.6,
-   "peak_db": -10.02,
-   "level_db": -24.42,
-   "target_db": -24.42
-  },
-  "melee_swing_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav",
-   "seconds": 0.32,
-   "peak_db": -6.88,
-   "level_db": -24.42,
-   "target_db": -24.42
-  },
-  "melee_swing_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_LowSwings31.wav",
-   "seconds": 0.6,
-   "peak_db": -14.56,
-   "level_db": -24.42,
-   "target_db": -24.42
-  },
-  "melee_swing_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_NormalSwings39.wav",
-   "seconds": 0.6,
-   "peak_db": -12.4,
-   "level_db": -24.42,
-   "target_db": -24.42
-  },
-  "melee_swing_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 3of8/Gamemaster Audio - Punch and Combat Sounds/whoosh_weapon_knife_swing_04.wav",
-   "seconds": 0.2,
-   "peak_db": -5.89,
-   "level_db": -24.42,
-   "target_db": -24.42
-  },
-  "night_bed_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 2of8/Discover Oregon - Wilderness Crickets/Crickets quiet lime hill 1.WAV",
-   "seconds": 20.0,
-   "peak_db": -18.14,
-   "level_db": -33.17,
-   "target_db": -33.01
-  },
-  "owl_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Ivo Vicic - Natural ambiences vol.1/43 Little owl_river_night_distant.WAV",
-   "seconds": 2.0,
-   "peak_db": -12.16,
-   "level_db": -21.65,
-   "target_db": -21.65
-  },
-  "owl_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Ivo Vicic - Natural ambiences vol.1/43 Little owl_river_night_distant.WAV",
-   "seconds": 2.0,
-   "peak_db": -13.29,
-   "level_db": -21.65,
-   "target_db": -21.65
-  },
-  "owl_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Ivo Vicic - Natural ambiences vol.1/43 Little owl_river_night_distant.WAV",
-   "seconds": 2.0,
-   "peak_db": -12.63,
-   "level_db": -21.65,
-   "target_db": -21.65
   },
   "pack_close_0.wav": {
    "from": "kenney/rpg/Audio/clothBelt2.ogg",
@@ -2778,41 +1219,6 @@
    "level_db": -28.45,
    "target_db": -27.52
   },
-  "pf_mud_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Footsteps/0014_Footsteps_water_puddle_single_splashes.wav",
-   "seconds": 0.6,
-   "peak_db": -13.0,
-   "level_db": -33.23,
-   "target_db": -31.83
-  },
-  "pf_mud_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Footsteps/0014_Footsteps_water_puddle_single_splashes.wav",
-   "seconds": 0.6,
-   "peak_db": -13.0,
-   "level_db": -33.86,
-   "target_db": -31.83
-  },
-  "pf_mud_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Footsteps/0014_Footsteps_water_puddle_single_splashes.wav",
-   "seconds": 0.6,
-   "peak_db": -13.0,
-   "level_db": -34.15,
-   "target_db": -31.83
-  },
-  "pf_mud_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Footsteps/0014_Footsteps_water_puddle_single_splashes.wav",
-   "seconds": 0.6,
-   "peak_db": -13.13,
-   "level_db": -33.11,
-   "target_db": -31.83
-  },
-  "pf_mud_4.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Footsteps/0014_Footsteps_water_puddle_single_splashes.wav",
-   "seconds": 0.6,
-   "peak_db": -13.0,
-   "level_db": -35.43,
-   "target_db": -31.83
-  },
   "pickup_0.wav": {
    "from": "kenney/rpg/Audio/handleSmallLeather.ogg",
    "seconds": 0.14,
@@ -2840,69 +1246,6 @@
    "peak_db": -15.79,
    "level_db": -32.63,
    "target_db": -32.63
-  },
-  "pump_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
-   "seconds": 0.51,
-   "peak_db": -2.08,
-   "level_db": -21.5,
-   "target_db": -21.34
-  },
-  "pump_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
-   "seconds": 0.07,
-   "peak_db": -6.99,
-   "level_db": -21.34,
-   "target_db": -21.34
-  },
-  "pump_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0019_Shotgun_Pump_Action_1.wav",
-   "seconds": 0.12,
-   "peak_db": -3.48,
-   "level_db": -21.34,
-   "target_db": -21.34
-  },
-  "rain_concrete_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_8of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 8of8/2496SoundEffects - Surround The Rain 5.1- Stereo/Rain On Concrete, Distant Traffic, alley 1_Stereo.wav",
-   "seconds": 16.0,
-   "peak_db": -14.43,
-   "level_db": -31.05,
-   "target_db": -31.05
-  },
-  "rain_grass_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Invisible - Storm, gale and thunderstorm/rain_shower of rain_steady rain_forest_leaves.wav",
-   "seconds": 16.0,
-   "peak_db": -10.46,
-   "level_db": -34.97,
-   "target_db": -30.0
-  },
-  "rain_roof_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Sound Spark LLC \u2013 FOREST AMBIENCE 1 CENTRAL FLORIDA/Urban_Apartment_Porch_Rain_03.wav",
-   "seconds": 16.0,
-   "peak_db": -12.21,
-   "level_db": -30.02,
-   "target_db": -30.0
-  },
-  "rolling_door_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Doors/0016_Garage_Door_Following_Door_Interior.wav",
-   "seconds": 2.5,
-   "peak_db": -6.72,
-   "level_db": -26.1,
-   "target_db": -26.1
-  },
-  "rolling_door_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Doors/0016_Garage_Door_Following_Door_Interior.wav",
-   "seconds": 1.34,
-   "peak_db": -6.74,
-   "level_db": -26.3,
-   "target_db": -26.1
-  },
-  "rolling_door_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Doors/0016_Garage_Door_Following_Door_Interior.wav",
-   "seconds": 2.5,
-   "peak_db": -10.06,
-   "level_db": -26.1,
-   "target_db": -26.1
   },
   "rustle_0.wav": {
    "from": "kenney/rpg/Audio/cloth1.ogg",
@@ -2932,244 +1275,6 @@
    "level_db": -32.19,
    "target_db": -32.19
   },
-  "shot_hunting_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0104 MOSIN-NAGANT 1m close front right shots.wav",
-   "seconds": 1.6,
-   "peak_db": -1.79,
-   "level_db": -8.0,
-   "target_db": -7.82
-  },
-  "shot_hunting_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0104 MOSIN-NAGANT 1m close front right shots.wav",
-   "seconds": 1.6,
-   "peak_db": -1.68,
-   "level_db": -7.82,
-   "target_db": -7.82
-  },
-  "shot_hunting_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0104 MOSIN-NAGANT 1m close front right shots.wav",
-   "seconds": 1.6,
-   "peak_db": -1.77,
-   "level_db": -8.05,
-   "target_db": -7.82
-  },
-  "shot_hunting_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0104 MOSIN-NAGANT 1m close front right shots.wav",
-   "seconds": 1.6,
-   "peak_db": -1.51,
-   "level_db": -7.82,
-   "target_db": -7.82
-  },
-  "shot_pistol_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - Weapons of World War II - Designed/STDSGN_WoWW2_Wep_Pistol_Luger_Shot_X5.wav",
-   "seconds": 1.1,
-   "peak_db": -5.93,
-   "level_db": -15.61,
-   "target_db": -15.61
-  },
-  "shot_pistol_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - Weapons of World War II - Designed/STDSGN_WoWW2_Wep_Pistol_Luger_Shot_X5.wav",
-   "seconds": 1.1,
-   "peak_db": -5.06,
-   "level_db": -15.61,
-   "target_db": -15.61
-  },
-  "shot_pistol_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - Weapons of World War II - Designed/STDSGN_WoWW2_Wep_Pistol_Luger_Shot_X5.wav",
-   "seconds": 1.1,
-   "peak_db": -5.65,
-   "level_db": -15.61,
-   "target_db": -15.61
-  },
-  "shot_pistol_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/Olivier Girardot - Hand Guns Sound Effects Pack/Hand Gun 6.wav",
-   "seconds": 0.8,
-   "peak_db": -2.9,
-   "level_db": -15.61,
-   "target_db": -15.61
-  },
-  "shot_pistol_4.wav": {
-   "from": "sonniss/GDC_2017_-_Game_Audio_Bundle_Part_4of9/Sonniss.com - GDC 2017 - Game Audio Bundle Part 4of9/Gamemaster Audio -  Gun Sound Pack/gun_revolver_pistol_shot_04.wav",
-   "seconds": 0.94,
-   "peak_db": -6.57,
-   "level_db": -15.61,
-   "target_db": -15.61
-  },
-  "shot_pistol_5.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part9of14/Pole Position - Walther P38 semi automatic pistol/P38, Firing, t1, 2m, Behind, LS5.wav",
-   "seconds": 0.51,
-   "peak_db": -1.01,
-   "level_db": -18.5,
-   "target_db": -15.61
-  },
-  "shot_rifle_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - Mauser Karabiner 98 kurz K98k bolt-action rifle/K98k, Firing, t2, MKH416.wav",
-   "seconds": 0.81,
-   "peak_db": -1.01,
-   "level_db": -15.52,
-   "target_db": -11.43
-  },
-  "shot_rifle_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - Mauser Karabiner 98 kurz K98k bolt-action rifle/K98k, Firing, t2, MKH416.wav",
-   "seconds": 0.3,
-   "peak_db": -1.01,
-   "level_db": -15.53,
-   "target_db": -11.43
-  },
-  "shot_rifle_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part7of14/Pole Position - Mauser Karabiner 98 kurz K98k bolt-action rifle/K98k, Firing, t2, MKH416.wav",
-   "seconds": 0.3,
-   "peak_db": -1.01,
-   "level_db": -15.62,
-   "target_db": -11.43
-  },
-  "shot_rifle_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
-   "seconds": 1.3,
-   "peak_db": -2.2,
-   "level_db": -11.43,
-   "target_db": -11.43
-  },
-  "shot_rifle_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
-   "seconds": 0.89,
-   "peak_db": -1.1,
-   "level_db": -12.74,
-   "target_db": -11.43
-  },
-  "shot_service_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Springfield 1903A3 bolt-action rifle/M1903A3, Firing, t2, 1m, Right, Above, MKH8060.wav",
-   "seconds": 1.4,
-   "peak_db": -1.02,
-   "level_db": -13.65,
-   "target_db": -11.25
-  },
-  "shot_service_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Springfield 1903A3 bolt-action rifle/M1903A3, Firing, t2, 1m, Right, Above, MKH8060.wav",
-   "seconds": 1.4,
-   "peak_db": -1.01,
-   "level_db": -13.7,
-   "target_db": -11.25
-  },
-  "shot_service_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part8of14/Pole Position - Springfield 1903A3 bolt-action rifle/M1903A3, Firing, t2, 1m, Right, Above, MKH8060.wav",
-   "seconds": 1.4,
-   "peak_db": -1.01,
-   "level_db": -13.69,
-   "target_db": -11.25
-  },
-  "shot_service_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK47_big_open_area_2m_above_behind_gun_RSM191_M.wav",
-   "seconds": 1.3,
-   "peak_db": -2.64,
-   "level_db": -11.25,
-   "target_db": -11.25
-  },
-  "shot_shotgun_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0003_Shotgun_Fire_3.wav",
-   "seconds": 1.6,
-   "peak_db": -1.02,
-   "level_db": -13.76,
-   "target_db": -11.2
-  },
-  "shot_shotgun_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0003_Shotgun_Fire_3.wav",
-   "seconds": 1.49,
-   "peak_db": -1.03,
-   "level_db": -13.45,
-   "target_db": -11.2
-  },
-  "shot_shotgun_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/SoundMorph - STEAMPUNK WEAPONS/Steampunk Weapons - Shotgun 2 - Shot - 03.wav",
-   "seconds": 1.6,
-   "peak_db": -3.99,
-   "level_db": -11.2,
-   "target_db": -11.2
-  },
-  "shot_shotgun_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0003_Shotgun_Fire_3.wav",
-   "seconds": 1.49,
-   "peak_db": -1.02,
-   "level_db": -13.68,
-   "target_db": -11.2
-  },
-  "shot_shotgun_room_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0003_Shotgun_Fire_3.wav",
-   "seconds": 1.6,
-   "peak_db": -1.79,
-   "level_db": -15.75,
-   "target_db": -15.44
-  },
-  "shot_shotgun_room_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part14of14/Wav Junction Sound Effects - Shotguns/0003_Shotgun_Fire_3.wav",
-   "seconds": 1.6,
-   "peak_db": -1.1,
-   "level_db": -15.44,
-   "target_db": -15.44
-  },
-  "shot_shotgun_room_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/SoundMorph - STEAMPUNK WEAPONS/Steampunk Weapons - Shotgun 2 - Shot - 03.wav",
-   "seconds": 1.6,
-   "peak_db": -3.92,
-   "level_db": -15.44,
-   "target_db": -15.44
-  },
-  "shot_smg_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - M3 Grease Gun Recorded Source/STSRC_WoWW2_Wep_SMG_M3_GreaseGun_Submachine_Gun_Single_Shot_X10_Comp_Full.wav",
-   "seconds": 0.7,
-   "peak_db": -4.42,
-   "level_db": -17.84,
-   "target_db": -17.84
-  },
-  "shot_smg_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - M3 Grease Gun Recorded Source/STSRC_WoWW2_Wep_SMG_M3_GreaseGun_Submachine_Gun_Single_Shot_X10_Comp_Full.wav",
-   "seconds": 0.7,
-   "peak_db": -4.85,
-   "level_db": -17.84,
-   "target_db": -17.84
-  },
-  "shot_smg_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - M3 Grease Gun Recorded Source/STSRC_WoWW2_Wep_SMG_M3_GreaseGun_Submachine_Gun_Single_Shot_X10_Comp_Full.wav",
-   "seconds": 0.7,
-   "peak_db": -2.83,
-   "level_db": -17.84,
-   "target_db": -17.84
-  },
-  "shot_smg_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part13of14/Super Thump - M3 Grease Gun Recorded Source/STSRC_WoWW2_Wep_SMG_M3_GreaseGun_Submachine_Gun_Single_Shot_X10_Comp_Full.wav",
-   "seconds": 0.7,
-   "peak_db": -2.89,
-   "level_db": -17.84,
-   "target_db": -17.84
-  },
-  "shot_smg_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
-   "seconds": 0.8,
-   "peak_db": -1.68,
-   "level_db": -18.02,
-   "target_db": -17.84
-  },
-  "shot_smg_5.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/MP5_forest_road_10m_behind_gun_pointing_at_forest_off_axis_MKH8060.wav",
-   "seconds": 0.8,
-   "peak_db": -1.73,
-   "level_db": -18.04,
-   "target_db": -17.84
-  },
-  "stab_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - BLOODBATH/PM_BB_CLEAN_STABS_20.wav",
-   "seconds": 0.6,
-   "peak_db": -9.04,
-   "level_db": -27.48,
-   "target_db": -26.45
-  },
-  "stab_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 3of8/PMSFX - BLOODBATH/PM_BB_CLEAN_STABS_20.wav",
-   "seconds": 0.6,
-   "peak_db": -9.0,
-   "level_db": -28.77,
-   "target_db": -26.45
-  },
   "stab_2.wav": {
    "from": "kenney/rpg/Audio/knifeSlice.ogg",
    "seconds": 0.39,
@@ -3183,90 +1288,6 @@
    "peak_db": -9.12,
    "level_db": -26.45,
    "target_db": -26.45
-  },
-  "tail_pistol_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part6of14/Pole Position - Colt M1911A1 semi-automatic pistol/M1911A1, Firing, t2, 200m, Front, Target, M10.wav",
-   "seconds": 0.67,
-   "peak_db": -11.01,
-   "level_db": -29.73,
-   "target_db": -26.76
-  },
-  "tail_pistol_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part6of14/Pole Position - Colt M1911A1 semi-automatic pistol/M1911A1, Firing, t2, 200m, Front, Target, M10.wav",
-   "seconds": 0.66,
-   "peak_db": -11.0,
-   "level_db": -29.81,
-   "target_db": -26.76
-  },
-  "tail_pistol_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part6of14/Pole Position - Colt M1911A1 semi-automatic pistol/M1911A1, Firing, t2, 200m, Front, Target, M10.wav",
-   "seconds": 0.87,
-   "peak_db": -11.0,
-   "level_db": -30.57,
-   "target_db": -26.76
-  },
-  "tail_rifle_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
-   "seconds": 2.0,
-   "peak_db": -12.08,
-   "level_db": -26.64,
-   "target_db": -26.49
-  },
-  "tail_rifle_1.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
-   "seconds": 2.0,
-   "peak_db": -11.18,
-   "level_db": -27.97,
-   "target_db": -26.49
-  },
-  "tail_rifle_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Pole Position - The Outdoor Gun Acoustics Library/AK5_valley_field_forest_50m_behind_gun_off_axis_behind_buildings_M10.wav",
-   "seconds": 2.0,
-   "peak_db": -11.24,
-   "level_db": -27.92,
-   "target_db": -26.49
-  },
-  "tail_shotgun_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0115 MOSIN-NAGANT 50m distant front left shots.wav",
-   "seconds": 2.0,
-   "peak_db": -11.19,
-   "level_db": -27.2,
-   "target_db": -26.16
-  },
-  "tail_shotgun_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0115 MOSIN-NAGANT 50m distant front left shots.wav",
-   "seconds": 2.0,
-   "peak_db": -12.02,
-   "level_db": -26.5,
-   "target_db": -26.16
-  },
-  "tail_shotgun_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part4of14/FLYSOUND - Mosin Nagant/MN0115 MOSIN-NAGANT 50m distant front left shots.wav",
-   "seconds": 2.0,
-   "peak_db": -11.62,
-   "level_db": -26.68,
-   "target_db": -26.16
-  },
-  "thud_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Red Libraries - Bodyfall/RL_bodyfall_Concrete_Generic_Feet_Mid_Mono_Med_Impact_02.wav",
-   "seconds": 0.76,
-   "peak_db": -5.07,
-   "level_db": -22.31,
-   "target_db": -21.86
-  },
-  "thud_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Red Libraries - Bodyfall/RL_bodyfall_Dirt_M4_Close_Stereo_Hard_Impact_10.wav",
-   "seconds": 0.73,
-   "peak_db": -5.69,
-   "level_db": -21.97,
-   "target_db": -21.86
-  },
-  "thud_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 5of8/Red Libraries - Bodyfall/RL_bodyfall_Wood_Rustic_M2_Distant_Mono_Soft_Impact_07.wav",
-   "seconds": 0.79,
-   "peak_db": -8.43,
-   "level_db": -21.86,
-   "target_db": -21.86
   },
   "thud_3.wav": {
    "from": "kenney/impact/Audio/impactSoft_heavy_000.ogg",
@@ -3449,251 +1470,6 @@
    "peak_db": -9.23,
    "level_db": -20.08,
    "target_db": -20.08
-  },
-  "wind_day_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Soundrangers - Wind/wind_desert_01_60_loop.wav",
-   "seconds": 20.0,
-   "peak_db": -16.91,
-   "level_db": -31.01,
-   "target_db": -31.01
-  },
-  "wind_gust_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Soundrangers - Wind/wind_blustery_08_loop.wav",
-   "seconds": 16.0,
-   "peak_db": -17.02,
-   "level_db": -32.0,
-   "target_db": -32.0
-  },
-  "wind_low_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_5of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 5of8/Soundrangers - Wind/wind_desert_01_60_loop.wav",
-   "seconds": 20.0,
-   "peak_db": -18.26,
-   "level_db": -31.0,
-   "target_db": -31.0
-  },
-  "zbrute_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part2of14/Audiomeals - Dark Creature Sounds/Dinosaur Growl 3_Mono.wav",
-   "seconds": 2.4,
-   "peak_db": -1.72,
-   "level_db": -12.63,
-   "target_db": -12.55
-  },
-  "zbrute_1.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Monsters/Monster Growls 4.wav",
-   "seconds": 2.0,
-   "peak_db": -4.79,
-   "level_db": -12.55,
-   "target_db": -12.55
-  },
-  "zbrute_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Monsters/Monster Growls 4.wav",
-   "seconds": 0.68,
-   "peak_db": -5.05,
-   "level_db": -12.55,
-   "target_db": -12.55
-  },
-  "zbrute_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part10of14/SmartSoundFX - Monsters/BEAST 01 Attack 08.wav",
-   "seconds": 1.18,
-   "peak_db": -4.76,
-   "level_db": -12.55,
-   "target_db": -12.55
-  },
-  "zbrute_4.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part12of14/Sounds Great - Orc Creature Library/attack_7.WAV",
-   "seconds": 1.21,
-   "peak_db": -3.24,
-   "level_db": -12.55,
-   "target_db": -12.55
-  },
-  "zgroan_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Glitchedtones - Zombie/Zombie Groan Pitched Down (6).wav",
-   "seconds": 1.27,
-   "peak_db": -5.22,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_1.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Glitchedtones - Zombie/Zombie Subject C Zombie Brat Groan (9).wav",
-   "seconds": 1.43,
-   "peak_db": -4.96,
-   "level_db": -19.29,
-   "target_db": -19.19
-  },
-  "zgroan_10.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel C, Grunt, Groan, Roar, Expressive x10.wav 05.wav",
-   "seconds": 1.6,
-   "peak_db": -12.25,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_11.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_3of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 3of8/Gamemaster Audio - Animal Sounds/bear_pain_hurt_groan_01.wav",
-   "seconds": 1.02,
-   "peak_db": -8.34,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Glitchedtones - Zombie/Zombie Subject B Groan (8).wav",
-   "seconds": 1.33,
-   "peak_db": -5.0,
-   "level_db": -19.32,
-   "target_db": -19.19
-  },
-  "zgroan_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part10of14/SmartSoundFX - Monsters/ZOMBIE Idle 04.wav",
-   "seconds": 1.53,
-   "peak_db": -6.29,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_4.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Yeti Monster/MONSTER Yeti groan 21.wav",
-   "seconds": 2.2,
-   "peak_db": -7.1,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_5.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Yeti Monster/MONSTER Yeti groan 21.wav",
-   "seconds": 2.2,
-   "peak_db": -9.66,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_6.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Fun Monsters/FUN MONSTER Piggy bestial sad groan 02.wav",
-   "seconds": 2.0,
-   "peak_db": -7.05,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_7.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel A, Grunt, Groan, Roar x13.wav 12.wav",
-   "seconds": 1.6,
-   "peak_db": -10.33,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_8.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel A, Grunt, Groan, Roar x13.wav 12.wav",
-   "seconds": 1.6,
-   "peak_db": -11.66,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_9.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel C, Grunt, Groan, Roar, Expressive x10.wav 05.wav",
-   "seconds": 1.6,
-   "peak_db": -13.71,
-   "level_db": -19.19,
-   "target_db": -19.19
-  },
-  "zgroan_far_0.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_1of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 1of8/Articulated Sounds - Yeti Monster/MONSTER Yeti grumble 02.wav",
-   "seconds": 0.77,
-   "peak_db": -9.89,
-   "level_db": -23.59,
-   "target_db": -23.59
-  },
-  "zgroan_far_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part2of14/Audiomeals - Dark Creature Sounds/Corroded Thorat_Mono.wav",
-   "seconds": 2.2,
-   "peak_db": -13.68,
-   "level_db": -23.59,
-   "target_db": -23.59
-  },
-  "zgroan_far_2.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel D, Grunt, Groan, Roar, Gargle x10.wav 07.wav",
-   "seconds": 1.8,
-   "peak_db": -13.85,
-   "level_db": -23.59,
-   "target_db": -23.59
-  },
-  "zgroan_far_3.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Camel Growl Vocalizations/ANIMAL WILD Camel D, Grunt, Groan, Roar, Gargle x10.wav 07.wav",
-   "seconds": 1.8,
-   "peak_db": -15.02,
-   "level_db": -23.59,
-   "target_db": -23.59
-  },
-  "zgroan_far_4.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part1of14/Articulated Sounds - Pig Farm Animal Groan/ANIMAL FARM Pig Groan 03, Martvili Georgia.wav",
-   "seconds": 1.72,
-   "peak_db": -10.24,
-   "level_db": -23.59,
-   "target_db": -23.59
-  },
-  "zgrowl_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part2of14/Audiomeals - Dark Creature Sounds/Creature Snarl 2_Mono.wav",
-   "seconds": 1.4,
-   "peak_db": -3.98,
-   "level_db": -16.6,
-   "target_db": -16.6
-  },
-  "zgrowl_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part10of14/SmartSoundFX - Monsters/BEAST 01 Threaten Short 06.wav",
-   "seconds": 0.63,
-   "peak_db": -9.05,
-   "level_db": -16.6,
-   "target_db": -16.6
-  },
-  "zgrowl_2.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Monsters/Monster Growls 4.wav",
-   "seconds": 0.8,
-   "peak_db": -10.99,
-   "level_db": -16.6,
-   "target_db": -16.6
-  },
-  "zgrowl_3.wav": {
-   "from": "sonniss/GDC_2018_-_Game_Audio_Bundle_Part_4of8/Sonniss.com - GDC 2018 - Game Audio Bundle Part 4of8/Olivier Girardot - Monsters/Monster Growls 4.wav",
-   "seconds": 1.4,
-   "peak_db": -8.29,
-   "level_db": -16.6,
-   "target_db": -16.6
-  },
-  "zgrowl_4.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Monster Sound FX Pack 1/Monster1_Breathing3.wav",
-   "seconds": 0.99,
-   "peak_db": -5.37,
-   "level_db": -16.6,
-   "target_db": -16.6
-  },
-  "zrun_hiss_0.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Glitchedtones - Zombie/Zombie Subject B Hiss (1).wav",
-   "seconds": 0.7,
-   "peak_db": -11.23,
-   "level_db": -24.17,
-   "target_db": -24.17
-  },
-  "zrun_hiss_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Monster Sound FX Pack 1/Monster1_Breathing3.wav",
-   "seconds": 0.31,
-   "peak_db": -7.72,
-   "level_db": -24.29,
-   "target_db": -24.17
-  },
-  "zrun_hiss_2.wav": {
-   "from": "sonniss/GDC_2019_-_Game_Audio_Bundle_Part_2of8/Sonniss.com - GDC 2019 - Game Audio Bundle Part 2of8/Glitchedtones - Zombie/Zombie Subject B Hiss (1).wav",
-   "seconds": 0.32,
-   "peak_db": -9.89,
-   "level_db": -24.17,
-   "target_db": -24.17
-  },
-  "zrun_screech_0.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/Olivier Girardot - Monster Sounds & Atmospheres/Screeching Monster 2-1.wav",
-   "seconds": 0.67,
-   "peak_db": -5.11,
-   "level_db": -17.89,
-   "target_db": -17.89
-  },
-  "zrun_screech_1.wav": {
-   "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part5of14/Phase 4 Libraries - Monster Roars/MR - Banshee Damage VO 07.wav",
-   "seconds": 0.54,
-   "peak_db": -7.27,
-   "level_db": -17.89,
-   "target_db": -17.89
   },
   "zrun_screech_2.wav": {
    "from": "sonniss/GDC_2020_-_Game_Audio_Bundle_Part3of14/David Dumais Audio - Monster Sound FX Pack 1/Monster9_Death10.wav",

@@ -84,3 +84,11 @@ finished-project chime (`pb_*`); the room tone, floodlight hum, washing line and
 and the menu's card, notification and radio tones. These had no good recording in the downloaded set. The synthesised files
 that do have a recording stay on disk as the fallback (the town and school games and the tests
 still read them), and `scripts/audio/library.gd` plays the recording in their place.
+
+## Open-source release (2026-10-23)
+
+The Sonniss-derived takes (196 files in `assets/audio/lib/`) were removed from the repository and from
+all git history before it was made public, because the Sonniss licence forbids redistributing the
+raw sounds. `assets/audio/lib/library.json` lists only the Kenney (CC0) takes that remain; where a
+sound has no take left, `scripts/audio/library.gd` plays the synthesised file. The itch.io builds of
+playtest-6 and later still contain the Sonniss sounds, which the licence allows inside a game.

@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GODOT_VERSION: 4.7.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot
+        run: |
+          curl -sSLf -o godot.zip "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import assets
+        run: '"$GODOT" --headless --path . --import || true'
+      - name: Run tests
+        run: '"$GODOT" --headless --path . --script res://tests/run.gd'
