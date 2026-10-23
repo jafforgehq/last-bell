@@ -596,6 +596,7 @@ func test_the_toast_shows_for_a_moment() -> void:
 # ---------------------------------------------------------------- settings --
 
 func test_the_volumes_are_kept_and_applied_at_once() -> void:
+	Buses.set_duck("Ambience", 0.0)    # an earlier test's loud SFX can leave the ambience dip on
 	var ctx := Fakes.build()
 	var screen = ctx.shell.open_settings()
 	await HudKit.settle()
