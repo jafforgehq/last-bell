@@ -8,6 +8,10 @@ on:
 
 jobs:
   test:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -21,5 +25,5 @@ jobs:
           echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
       - name: Import assets
         run: '"$GODOT" --headless --path . --import || true'
-      - name: Run tests
-        run: '"$GODOT" --headless --path . --script res://tests/run.gd'
+      - name: Run tests (shard ${{ matrix.shard }} of 6)
+        run: '"$GODOT" --headless --path . --script res://tests/run.gd -- --shard=${{ matrix.shard }}/6'

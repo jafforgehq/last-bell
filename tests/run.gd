@@ -1,5 +1,5 @@
 ## Runs every test_* method in tests/test_*.gd and exits non-zero if any fail:
-##   Godot --headless --path . --script res://tests/run.gd [-- --only=text[,text...]]
+##   Godot --headless --path . --script res://tests/run.gd [-- --only=text[,text...]] [--shard=I/N]
 ## Test methods may await (for example a few process frames).
 extends SceneTree
 
@@ -48,14 +48,19 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var only := PackedStringArray()
+	var shard := PackedStringArray()
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--only="):
 			only = a.trim_prefix("--only=").split(",", false)
+		elif a.begins_with("--shard="):    # --shard=I/N runs every Nth file from I, so CI can split the suite
+			shard = a.trim_prefix("--shard=").split("/")
 	var files: Array = []
 	for f in DirAccess.get_files_at("res://tests"):
 		if f.begins_with("test_") and f.ends_with(".gd"):
 			files.append(f)
 	files.sort()
+	if shard.size() == 2:
+		files = files.filter(func(f): return files.find(f) % int(shard[1]) == int(shard[0]))
 	_find_globals("res://scripts")
 	_check_globals()    # notes what the shared data caches hold now
 	errors.count = 0
