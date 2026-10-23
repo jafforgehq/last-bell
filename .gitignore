@@ -3,3 +3,5 @@
 /android/
 build/
 .DS_Store
+.claude/
+.worktrees/
